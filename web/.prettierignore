@@ -1,0 +1,8 @@
+dist/
+node_modules/
+.impeccable/
+test-results/
+playwright-report/
+src/assets/
+public/
+package-lock.json

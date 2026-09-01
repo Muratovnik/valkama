@@ -1,0 +1,95 @@
+# Build output and runtime noise.
+__pycache__/
+*.py[cod]
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+.venv/
+node_modules/
+*.tsbuildinfo
+test-results/
+playwright-report/
+/.playwright-mcp/
+.eslintcache
+.pytest_cache/
+*.log
+
+# One ignored home for everything the development tools cache: ruff, mypy,
+# import-linter, coverage's raw arc data and the Hypothesis constants store.
+# Each of them is pointed here by pyproject.toml or by tests/property_settings.py
+# rather than left to scatter a dotted directory across the repository root.
+# Nothing here is an input to anything: delete it and the next gate run rebuilds it.
+/.cache/
+
+# Electron build output: a 90 MB installer does not belong in git.
+release/
+
+# Nothing here today, and the point is that the first one is never a decision
+# made in a hurry. A public repository is the wrong place to notice a key.
+.env
+.env.*
+*.pem
+*.key
+
+# Both operating systems, because this repository is worked on from both.
+# macOS writes .DS_Store into every directory Finder has opened, and ._* on
+# volumes that cannot hold its metadata natively.
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+desktop.ini
+
+# Editor state is per-person, not per-project.
+/.vscode/
+/.idea/
+*.swp
+
+# An agent tool's configuration directory is machine wiring: it names paths on
+# one workstation and services only this workstation runs, so it is private and
+# versioned elsewhere. The rule is the category, not the list — a new tool's
+# directory joins this block in the same commit that introduces the tool.
+/.claude/
+/.codex/
+/.cursor/
+/.gemini/
+/.windsurf/
+/.continue/
+/.serena/
+/.aider*
+**/.impeccable/
+
+# Instructions themselves are public; their local overlay is not. `*.local.md`
+# is the convention several tools converged on independently, and
+# AGENTS.override.md is the one Codex reads *instead of* AGENTS.md — it must
+# never reach a clone, or that clone stops reading the real instructions.
+**/*.local.md
+**/AGENTS.override.md
+/.agents/local/
+
+# The one test that exercises private configuration rather than this product.
+# tests/test_codex_config.py reads .codex/config.toml, which is ignored above, so
+# in a clone it could only ever skip -- and its comments describe one
+# workstation's wiring. It stays on disk here, where `unittest discover` still
+# finds it and still holds that configuration to its contract.
+/tests/test_codex_config.py
+
+# The private repository, when it is checked out inside this working tree.
+# Git does not descend into an ignored directory, so a repository living here
+# is invisible to this one: no gitlink, no submodule, no accidental staging.
+/.private/
+
+# The planning trail lives in the private repository. This rule guards the
+# habit of writing a plan at the address it used to have.
+/docs/plans/
+/docs/audits/
+
+# web/dist is deliberately committed: the desktop app and any plain browser
+# open the built UI straight from a clone, with no build step first.
+
+# Review reports and other working artifacts a task writes for itself.
+# A finding that outlives its task belongs in docs/audits/ with the
+# frontmatter that says whose work it was.
+/tmp/
+/.state/

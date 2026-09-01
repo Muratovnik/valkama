@@ -1,0 +1,212 @@
+/* Reset and bare element defaults. Anything that names an application
+   surface belongs in shell.css or a component's own scoped block. */
+
+/* Element defaults. These replace Tailwind's preflight, which the app was
+   built against: every rule below existed in it and something here relies on
+   it. Anything the app does not depend on was left out rather than copied. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+
+  /* Preflight zeroed borders and made the style solid, so a rule that sets
+     only a width or only a colour still renders the way it always has. */
+  border: 0 solid var(--color-rule);
+}
+
+* {
+  margin: 0;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+ul,
+ol {
+  padding: 0;
+  list-style: none;
+}
+
+a {
+  color: inherit;
+  text-decoration: inherit;
+}
+
+img,
+svg,
+video,
+canvas {
+  display: block;
+  max-width: 100%;
+}
+
+table {
+  border-collapse: collapse;
+}
+
+::placeholder {
+  color: var(--color-text-tertiary);
+  opacity: 1;
+}
+
+/* One owner for text that only assistive technology should reach. Five
+   components had grown their own copy of this, three of them still using the
+   deprecated clip property. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+}
+
+/* The window is the chrome, and the workspace is a panel laid on it. What
+   shows before the shell paints — and in the corner the panel rounds away
+   from — is therefore the chrome color, not the canvas. */
+html {
+  background: var(--color-navigation);
+}
+
+body {
+  margin: 0;
+  color: var(--color-text);
+  font: var(--font-size-section)/var(--line-height-normal) var(--font-family-interface);
+  font-variant-numeric: tabular-nums;
+  background: var(--color-navigation);
+  overflow: hidden;
+  text-rendering: optimizelegibility;
+}
+
+#app {
+  min-width: 0;
+  min-height: 0;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+/* The row a control stands in, not the area a pointer must be able to hit.
+   These carried `--size-control-target` while it meant both, which set the floor for
+   every control in the product at the size of an accessibility target. */
+button,
+select,
+input:not([type='checkbox'], [type='radio']) {
+  min-block-size: var(--size-control-height);
+}
+
+textarea {
+  min-block-size: calc(var(--size-control-height) * 2);
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible,
+[tabindex='0']:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+::selection {
+  color: var(--color-text-on-action);
+  background: var(--color-accent);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+/* The bar takes its ground from whatever it scrolls over. Naming a color here
+   painted a canvas-dark stripe down the side of every lighter panel, and the
+   thumb's inset was drawn in that same color, so the gutter announced itself
+   on six surfaces that were not the canvas. */
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  background: var(--color-scrollbar-thumb);
+  background-clip: padding-box;
+  border-radius: var(--radius-status);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-scrollbar-thumb-hover);
+}
+
+/* One offset at every rail width. `shell.css` used to move this 4px left when the
+   rail narrowed, which was the shell's only remaining reason to ask the window
+   how wide it was — for a link that is fixed to the window, revealed on focus,
+   and lies over the rail at either width. */
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 72px;
+  z-index: 200;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-rule-strong);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border-radius: var(--radius-control);
+  transform: translateY(-150%);
+
+  &:focus {
+    transform: translateY(0);
+  }
+}
+
+/* Mono is for what a person compares character by character: ids, hashes,
+   paths, code. A timestamp is read, not compared, and setting six of them in
+   mono was what made the ledger look like a log file. */
+code,
+pre,
+.session-id,
+.scope-id,
+.scope-fraction,
+.flow-node-id,
+.doc-path {
+  font-family: var(--font-family-mono);
+}
+
+@keyframes work-pulse {
+  0%,
+  70%,
+  100% {
+    opacity: 0.72;
+    transform: translateY(0);
+  }
+
+  35% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+/* `refresh-spin` was here beside it. One control spins, the connection button on
+   the rail, and a scoped block names its own keyframes — so the animation went
+   home with the rule that plays it. `work-pulse` stays because four components
+   render `.work-dots`. */

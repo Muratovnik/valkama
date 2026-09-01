@@ -1,0 +1,10 @@
+# Every tracked file is stored LF. An editor in this workspace has silently
+# rewritten whole files to CRLF more than once and only human review caught it.
+# Normalising on the way into the index means such a rewrite cannot reach
+# history, with no hook, no tool and no network involved.
+* text=auto eol=lf
+
+# Vite bundles can preserve trailing spaces inside third-party multiline string
+# literals. They are generated artifacts; source and every other tracked file
+# remain covered by the repository-wide whitespace checks.
+web/dist/assets/*.js -whitespace

@@ -1,0 +1,83 @@
+.inspector-frame {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.inspector {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 100%;
+}
+
+.inspector-meta {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  min-height: var(--size-control-height-compact);
+  margin-top: var(--space-2);
+}
+
+.head-back {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+  min-height: var(--size-control-target);
+  padding: 0;
+  border: 0;
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+  background: none;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    color: var(--color-text);
+  }
+}
+
+.head-claim {
+  margin-inline-start: auto;
+  color: var(--color-success);
+  font: var(--font-detail);
+  overflow-wrap: anywhere;
+}
+
+.head-reference {
+  color: var(--color-text-muted);
+  font: var(--font-line);
+  font-variant-numeric: tabular-nums;
+}
+
+.head-actions {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: end;
+  min-width: 0;
+}
+
+.state-choice {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.inspector-tabs {
+  width: 100%;
+  padding-bottom: var(--space-3);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.inspector-write-error {
+  margin: 0 0 var(--space-3);
+  color: var(--color-danger);
+  font: var(--font-detail);
+}
+
+.inspector-read-recovery {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--space-3);
+}

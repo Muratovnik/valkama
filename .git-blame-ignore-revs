@@ -1,0 +1,11 @@
+# Commits that reformatted large parts of the tree without changing intent.
+# `git config blame.ignoreRevsFile .git-blame-ignore-revs` makes blame skip them.
+#
+# Each entry is predominantly mechanical. Where such a commit also carried the
+# small repairs its formatter made necessary, they are named in its message.
+
+# style(web): apply prettier and stylelint across the tree
+ac1f6b938d98a58d2ee7470099331a55165040e7
+
+# build: add ruff, and fix the defects it found
+7080f9149cbc5180eac718232bd4274a8a081d01

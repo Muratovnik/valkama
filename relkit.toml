@@ -1,0 +1,51 @@
+[exposure]
+private_paths = [
+  ".agents/local",
+  ".claude",
+  ".codex",
+  ".continue",
+  ".cursor",
+  ".gemini",
+  ".private",
+  ".serena",
+  ".windsurf",
+  "docs/audits",
+  "docs/plans",
+]
+private_files = ["AGENTS.local.md", "tests/test_codex_config.py"]
+private_suffixes = [".local.md", ".override.md"]
+required_ignores = [
+  ".agents/local/private.md",
+  ".claude/settings.json",
+  ".codex/config.toml",
+  ".continue/config.json",
+  ".cursor/rules.json",
+  ".env",
+  ".gemini/settings.json",
+  ".private/manifest.json",
+  ".serena/project.yml",
+  ".windsurf/rules.md",
+  "AGENTS.local.md",
+  "docs/audits/report.md",
+  "docs/plans/private.md",
+  "private.key",
+  "tests/test_codex_config.py",
+]
+allowed_identities = [
+  "Nikolai Muratov <el.muratovnik@gmail.com>",
+  "Muratovnik <68428072+Muratovnik@users.noreply.github.com>",
+]
+allowed_users = ["...", "name", "operator"]
+forbid_ai_attribution = true
+# Planning references and kb anchors are part of Valkama's public product
+# protocol, so the generic planning rule is intentionally not enabled here.
+# Owner-specific workflow names and data remain private-policy findings.
+forbid_internal_planning = false
+# "installation" is public product vocabulary throughout setup and adapter
+# contracts. Exact owner observations are supplied by the private policy.
+forbid_machine_observations = false
+betterleaks_config = ".betterleaks.toml"
+
+[exposure.providers.AgentMemory]
+role = "product-data-provider"
+allowed_surfaces = ["docs/*", "server/*", "tests/*", "web/*"]

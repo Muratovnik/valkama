@@ -1,0 +1,17 @@
+title = "Valkama secret scanning"
+betterleaksMinVersion = "1.8.1"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "The scanner configuration contains only a reviewed fixture pattern"
+targetRules = ["generic-password"]
+paths = ['''(?:^|/)\.betterleaks\.toml$''']
+
+[[allowlists]]
+description = "A URL credential fixture verifies that secureFetch rejects credentials"
+targetRules = ["generic-password"]
+regexTarget = "line"
+paths = ['''web/tests/secureFetch\.test\.ts''']
+regexes = ['''credentialTarget\.password = 'secret'$''']

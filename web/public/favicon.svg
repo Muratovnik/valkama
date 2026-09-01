@@ -1,0 +1,23 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- The same mark as shared/ui/BrandMark.vue, in literal colors because a
+       browser tab resolves no custom property. The colors are written by
+       scripts/sync-tokens.mjs from tokens.css; tests/brandMark.test.ts keeps
+       the path data and the placement equal across both and windows/make_icon.py. -->
+  <rect width="64" height="64" rx="14" fill="#181818"/>
+  <defs>
+    <linearGradient id="mark" x1="4" y1="279" x2="359" y2="19" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ececec"/>
+      <stop offset="0.55" stop-color="#b9cdf5"/>
+      <stop offset="1" stop-color="#7cacf8"/>
+    </linearGradient>
+    <linearGradient id="spark" x1="324" y1="46.5" x2="353" y2="21.5" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7cacf8"/>
+      <stop offset="1" stop-color="#ececec"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(9 12) scale(0.13031)">
+    <path d="M0 0H88L230 239L190 306L0 0Z" fill="url(#mark)"/>
+    <path d="M210 175L240 225L339 67L284 67L210 175Z" fill="url(#mark)"/>
+    <path d="M338.5 21C340 29.5 344 33.5 353 35C344 36.5 340 40.5 338.5 49C337 40.5 333 36.5 324 35C333 33.5 337 29.5 338.5 21Z" fill="url(#spark)"/>
+  </g>
+</svg>

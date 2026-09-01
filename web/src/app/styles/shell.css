@@ -1,0 +1,95 @@
+/* Application chrome: the shell grid, and the few recipes more than one
+   component spends. Component-owned rules live with their component.
+
+   The navigation rail and its connection strip were here, in 190 lines naming
+   `.app-nav-item`, `.nav-label`, `.connection-dot` and a bare `svg` inside a
+   `VIcon` — a stylesheet describing the insides of a component it cannot see,
+   which is the one failure scoped styles exist to prevent. They live in
+   `widgets/app-nav/` now, one file per part. */
+
+/* `.page-title` and `.module-placeholder` lived here: a display heading and a
+   stand-in screen that every module printed above the name the context bar had
+   already said. Their last users are gone, and the classes go with them rather
+   than waiting for the next one. */
+
+/* The chrome is the ground of the whole window; the workspace is a panel the
+   shell lays on top of it. Both columns paint the chrome, and only
+   `.module-stage` breaks out of it. */
+.app-shell {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  background: var(--color-navigation);
+}
+
+/* Everything right of the rail measures against `main`, and the workspace panel
+   inside it against `workspace`. Neither is the viewport: the rail is 260px or
+   64px depending on a state the window knows nothing about, so a viewport
+   threshold describes the wrong box by up to 196px. */
+.app-main {
+  display: flex;
+  flex-direction: column;
+  grid-column: 2;
+  min-width: 0;
+  min-height: 0;
+  color: var(--color-text-on-dark);
+  background: var(--color-navigation);
+  overflow: hidden;
+  container: main / inline-size;
+}
+
+/* Four components render this — a card's presence mark, the platform state
+   panel, the drawer and a graph node — so it is a recipe that belongs to no one
+   of them and stays here, as the owner order in DESIGN.md has it.
+
+   Three dots at a fixed size: a squashed pulse reads as a rendering fault
+   rather than as a narrower one, so this is the one part of a presence block
+   that does not give way. */
+.work-dots {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: var(--space-1);
+  align-items: center;
+  height: 10px;
+
+  i {
+    width: 5px;
+    height: 5px;
+    background: currentcolor;
+    border-radius: 50%;
+    animation: work-pulse 1.15s ease-out infinite;
+
+    &:nth-child(2) {
+      animation-delay: 0.15s;
+    }
+
+    &:nth-child(3) {
+      animation-delay: 0.3s;
+    }
+  }
+
+  &.still i {
+    opacity: 0.5;
+    animation: none;
+  }
+}
+
+.sortable-ghost {
+  opacity: 0.35;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    /* stylelint-disable declaration-no-important -- a reader who asked for less
+       motion is overruling every component, which is what !important is for */
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    /* stylelint-enable declaration-no-important */
+  }
+}

@@ -1,0 +1,55 @@
+/* Layout for the Playwright UI harness page. It is not part of the app,
+   so it must not travel in the product stylesheet. */
+
+.harness-shell {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  width: 100vw;
+  height: 100vh;
+  background: var(--color-canvas);
+  overflow: hidden;
+}
+
+.harness-main {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+
+  & > :is(.monitor, .analytics-dashboard) {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
+
+.surface-test-trigger {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 20;
+}
+
+.context-harness-main {
+  min-width: 0;
+  min-height: 0;
+}
+
+.harness-card-list {
+  position: fixed;
+  right: 300px;
+  bottom: 16px;
+  z-index: 5;
+  width: 270px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.edge-choice {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 80;
+  width: 260px;
+}

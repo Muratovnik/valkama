@@ -1,0 +1,15 @@
+{
+  "path": ["src", "../server", "../tests", "../desktop"],
+  "ignore": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/release/**",
+    "**/test-results/**",
+    "**/playwright-report/**"
+  ],
+  "format": ["typescript", "vue", "javascript", "python", "css"],
+  "minTokens": 60,
+  "noTips": true,
+  "reporters": ["console"],
+  "absolute": false
+}

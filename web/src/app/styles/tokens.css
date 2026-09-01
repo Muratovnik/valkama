@@ -1,0 +1,446 @@
+/* Design tokens, in two tiers. The palette, type ramp, spacing and radii named
+   by DESIGN.md; nothing here selects an element.
+
+   Primitive tokens are raw values with no meaning attached — a gray ramp, a
+   blue, a step on a size scale. Semantic tokens say what a value is for and
+   resolve to a primitive. Everything outside this file names a semantic token,
+   which is what makes the whole palette movable from one place: the fact that
+   the raised chrome and the canvas are the same step used to be invisible,
+   spelled as `#181818` twice, and a chrome that tints has to be able to move
+   without dragging the canvas with it.
+
+   Two tiers rather than three: Primer and Pajamas both mark their component
+   tier "limited in use", and USWDS ships two, which is the right size for one
+   product on one platform. `uiSystem.ts` maps a state to a tone and is the
+   semantic tier reaching code, not a third tier.
+
+   Every name begins with the CSS dimension it measures — `--color-`,
+   `--font-size-`, `--font-family-`, `--line-height-`, `--space-`, `--size-`,
+   `--radius-`, `--duration-`, `--ease-`, `--shadow-` — and only then says what
+   it is for. The dimension goes first because a prefix that carries two of them
+   cannot be checked: four here did. `--text-*` held the foreground tones and
+   the type ramp, so stylelint's `font-size` allowed-list accepted a text colour
+   as a size; `--control-*` held a fill and two lengths; and
+   `--overlay-*` held a colour and a shadow. `--navigation-muted` was text on
+   the rail while `--navigation-raised` was the rail itself, which is one word
+   deciding a dimension.
+
+   Names carry no tier marker. Which tier a token belongs to is a fact about its
+   value — a literal is primitive, a `var()` is semantic — and `check:ui-system`
+   reads the value rather than the name, so a token can be promoted without
+   being renamed. */
+
+@font-face {
+  font-family: 'Onest Workbench';
+  font-weight: 100 900;
+  font-style: normal;
+  src: url('../../assets/fonts/Onest-Variable.ttf') format('truetype');
+  font-display: swap;
+}
+
+:root {
+  /* ─────────────────────────────────────────────────────────────────────
+     Primitive: raw values. Nothing outside this file names one.
+     ───────────────────────────────────────────────────────────────────── */
+
+  /* Codex's own gray ramp, read out of the installed desktop app rather than
+     approximated by eye. Higher is darker, which is how the reference numbers
+     its own steps. The ramp used to hold two entries one unit apart — #393939
+     and #3a3a3a — which is not a step, so the scrollbar thumb now sits on the
+     step it was already indistinguishable from. */
+  --color-gray-1000: #0d0d0d;
+  --color-gray-900: #181818;
+  --color-gray-800: #212121;
+  --color-gray-750: #282828;
+  --color-gray-700: #303030;
+  --color-gray-650: #393939;
+  --color-gray-600: #414141;
+  --color-gray-550: #4f4f4f;
+  --color-gray-450: #767676;
+  --color-gray-400: #8f8f8f;
+  --color-gray-300: #b3b3b3;
+  --color-gray-100: #ececec;
+  --color-gray-50: #f2f2f2;
+
+  /* The quiet blue that carries selection, focus and links, its light mid-stop
+     for the brand ramp, and the near-black blue a selected row sits on. */
+  --color-blue-500: #7cacf8;
+  --color-blue-300: #b9cdf5;
+  --color-blue-950: #22303f;
+
+  /* One hue per state, and no more: green, amber, red. */
+  --color-green-500: #7bd6a1;
+  --color-amber-500: #d9b06a;
+  --color-red-500: #ef8479;
+
+  /* The categorical ramp for slices that mean a name rather than a state. */
+  --color-cyan-400: #7fb4d3;
+  --color-mint-400: #78c7a0;
+  --color-sand-400: #d8ad62;
+  --color-periwinkle-400: #9ea8e8;
+  --color-haze-400: #aab4bb;
+
+  /* The cold near-black the chrome is painted from, on the same rungs as the
+     gray ramp above it (16.6 / 26.4 / 37.4 against 13 / 24 / 33). A neutral
+     #0d0d0d read as absence rather than as a surface — the owner asked twice
+     for a color under the rail — so the chrome carries a blue-grey cast while
+     the workspace stays neutral, which is what makes the panel read as lying
+     on something rather than as a hole cut in it.
+     The cast is small on purpose: ten points between the coldest and warmest
+     channel is a temperature, and forty would be a color the product does not
+     mean. It has made that mistake once, in violet, on every panel at once.
+     To go back to a neutral chrome, point the three `--color-navigation*` tokens
+     below at `--color-gray-1000`/`-900`/`-800`; nothing else needs to move, which is
+     what the tier split is for. */
+  --color-slate-1000: #0d1117;
+  --color-slate-900: #161b22;
+  --color-slate-800: #21262d;
+  --color-slate-450: #64737c;
+
+  /* Rules are a percentage of white rather than a fixed grey, so one hairline
+     reads the same weight on every step of the surface ladder instead of
+     hardening as the surface under it lightens. */
+  --color-white-8: rgb(255 255 255 / 8%);
+  --color-white-18: rgb(255 255 255 / 18%);
+
+  /* And the two darks that lie over the interface rather than under it: the
+     scrim a modal drops on the whole window, and the color a floating surface
+     casts. Four components had written their own — `rgb(21 24 27 / 42%)`,
+     `rgb(17 23 28 / 22%)`, `rgb(25 29 32 / 22%)`, `rgb(26 31 35 / 16%)` — each
+     a different near-black at a different strength, and the guard never saw
+     them because it read `#hex` and these are `rgb()`. The scrim was the
+     weakest of the four, which is why a dialog did not read as modal. */
+  --color-black-68: rgb(3 6 10 / 68%);
+  --color-black-42: rgb(0 0 0 / 42%);
+
+  /* The type ramp, as tokens rather than as a paragraph in DESIGN.md.
+     The document has named these steps all along and every component still
+     wrote the number, which is how one overlay title came to exist at 19, 20,
+     20 and 21px in four files, and how 0.8rem — a 12.8px step the ramp does
+     not contain — survived in the palette itself.
+     stylelint now rejects a literal size, so the ramp is the only way to spell
+     one. 12px is chrome, 13px is the reading floor. */
+  --font-size-meta: 12px;
+  --font-size-dense: 13px;
+  --font-size-interface: 14px;
+  --font-size-emphasis: 15px;
+  --font-size-section: 16px;
+  --font-size-module: 18px;
+  --font-size-page: 24px;
+  --font-size-figure: 28px;
+
+  /* Leading is chosen by what the text is, not by its size: a one-line chip
+     sets solid, a heading closes up, a scan row wants room for descenders,
+     prose wants a line the eye can find its way back to. Sixteen ad-hoc values
+     had grown across seven sizes, from 1 to 1.65, and every one of them lands
+     within 0.06 of a step here — under a pixel at every size on the ramp. */
+  --line-height-flat: 1;
+  --line-height-tight: 1.2;
+  --line-height-snug: 1.3;
+  --line-height-normal: 1.45;
+  --line-height-prose: 1.6;
+
+  /* The spacing ladder. Four-pixel grid, numbered in grid units, plus the two
+     sub-grid steps the grid has no room for: a hairline seam between adjacent
+     surfaces, and a half step. 509 literals were written by hand against a grid
+     that existed only in prose, 299 of them off it entirely; every one now
+     names a step, and stylelint refuses a new literal.
+     Ties broke upward when they snapped, because the interface read as crowded
+     against its own reference and the remedy for that is air.
+     The gaps — 10, 11, 13, 14, 16, 20 — are steps nothing spends. A declared
+     token that nothing uses fails `check:ui-system`, which is what keeps this
+     ladder a record of the interface rather than a wish list: 16 was here
+     until the settings page stopped padding itself on top of the frame that
+     had already padded it. */
+  --space-hair: 1px;
+  --space-half: 2px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --space-9: 36px;
+  --space-12: 48px;
+  --space-15: 60px;
+  --space-24: 96px;
+
+  /* Motion, in two durations and one curve.
+     The values are Open Props' (MIT, open-props.style), copied rather than
+     depended on: this is one product on one platform and the whole need is
+     three custom properties, so a build-time dependency would cost more than
+     it carries. The names say what the movement is for, not how long it takes:
+     `--duration-quick` is a control answering a click and `--duration-surface` a
+     drawer or dialog arriving.
+
+     Nothing here eases *in*. A movement that starts slowly reads as hesitation
+     in an interface someone is working in, so everything that moves is already
+     moving when you notice it and slows as it lands.
+
+     A looping indicator's period is not one of these and must not be made into
+     one. A spinner's 0.7s and the working pulse's 1.15s are rhythms chosen so
+     the eye reads them as waiting rather than as urgency; spending a transition
+     duration on them made the spinner turn three times as fast, which is a
+     different message about how the system is doing.
+
+     One rule the tokens cannot state: a background refresh is never animated.
+     Motion belongs to what the operator did, and a screen that moves on its
+     own while being read is the "Refreshing…" banner in another costume. */
+  --duration-quick: 0.14s;
+  --duration-surface: 0.24s;
+  --ease-out: cubic-bezier(0.25, 0, 0.4, 1);
+  --radius-control: 8px;
+  --radius-card: 10px;
+  --radius-status: 6px;
+
+  /* The corner where the chrome hands over to the workspace. One radius, on
+     the one panel that has an outside corner; everything inside it is a
+     control or a card and keeps the two radii above. */
+  --radius-shell: 12px;
+
+  /* Two families, where there were four names for two values. `display`, `body`
+     and `utility` were byte-identical, so 63 rules picked one of three names for
+     one font and the choice carried nothing a reader could act on. What this
+     product actually distinguishes is stated in DESIGN.md: the interface font,
+     and the metadata font for what a person compares character by character. */
+  --font-family-interface: 'Inter Variable', 'Onest Workbench', sans-serif;
+  --font-family-mono: 'Cascadia Mono', consolas, monospace;
+
+  /* Type roles: a whole `font` shorthand under one name.
+     ─────────────────────────────────────────────────────────────────────
+     A size, a leading and a weight are read together and mean nothing apart,
+     so a type style is one token rather than three declarations a component
+     assembles by hand. 139 rules were assembling them, and they produced 47
+     distinct styles out of 8 sizes, 5 leadings and 4 weights — 22 of those
+     styles more than once, which is the duplication these names end.
+     `scanTypeStyles` in the UI-system guard is what keeps it ended: two rules
+     that assemble the same style now fail, and naming it here is the fix.
+
+     Every value below is exactly what its sites already rendered, because
+     removing duplication and changing a design are two different commits.
+     That leaves an honest finding in plain sight: the reading size carries four
+     leadings and the 600 weight carries four more, which is more type styles
+     than one product needs. Merging them is a design decision with an owner,
+     and it is now one decision in one file instead of 139.
+
+     A style written once is not duplication and stays where it is written; a
+     rule that sets a size alone is naming a step on the ramp and stays too. */
+
+  /* What the operator reads to understand something. */
+  --font-paragraph: 400 var(--font-size-interface)/var(--line-height-prose)
+    var(--font-family-interface);
+  --font-paragraph-dense: 400 var(--font-size-dense)/var(--line-height-prose)
+    var(--font-family-interface);
+  --font-note: 400 var(--font-size-dense)/var(--line-height-normal) var(--font-family-interface);
+
+  /* What names something else: a heading, a label, a title in a list. */
+  --font-section-title: 600 var(--font-size-section)/var(--line-height-normal)
+    var(--font-family-interface);
+  --font-drawer-title: 400 var(--font-size-module)/var(--line-height-snug)
+    var(--font-family-interface);
+  --font-emphasis: 600 var(--font-size-emphasis)/var(--line-height-normal)
+    var(--font-family-interface);
+  --font-row-title: 600 var(--font-size-interface)/var(--line-height-snug)
+    var(--font-family-interface);
+  --font-name: 500 var(--font-size-interface)/var(--line-height-normal) var(--font-family-interface);
+  --font-label: 600 var(--font-size-dense)/var(--line-height-normal) var(--font-family-interface);
+  --font-field-label: 500 var(--font-size-dense)/var(--line-height-snug)
+    var(--font-family-interface);
+  --font-group-heading: 500 var(--font-size-dense)/var(--line-height-tight)
+    var(--font-family-interface);
+  --font-column-head: 500 var(--font-size-dense)/var(--line-height-normal)
+    var(--font-family-interface);
+
+  /* What a control says about itself, and what a card or row says beside it. */
+  --font-control: 500 var(--font-size-interface)/var(--line-height-tight)
+    var(--font-family-interface);
+  --font-detail: 400 var(--font-size-dense)/var(--line-height-snug) var(--font-family-interface);
+  --font-line: 400 var(--font-size-dense)/var(--line-height-tight) var(--font-family-interface);
+  --font-strong: 600 var(--font-size-dense)/var(--line-height-snug) var(--font-family-interface);
+  --font-context: 600 var(--font-size-dense)/var(--line-height-tight) var(--font-family-interface);
+  --font-chip: 600 var(--font-size-dense)/var(--line-height-flat) var(--font-family-interface);
+  --font-count: 400 var(--font-size-dense)/var(--line-height-flat) var(--font-family-interface);
+  --font-chrome: 500 var(--font-size-meta)/var(--line-height-normal) var(--font-family-interface);
+
+  /* What a person compares character by character. */
+  --font-code: 400 var(--font-size-dense)/var(--line-height-normal) var(--font-family-mono);
+  --font-code-meta: 400 var(--font-size-meta)/var(--line-height-prose) var(--font-family-mono);
+
+  /* ─────────────────────────────────────────────────────────────────────
+     Semantic: what a value is for. This is the tier the application names.
+     ───────────────────────────────────────────────────────────────────── */
+
+  /* Zones are steps on the one ramp. The chrome — the navigation rail and the
+     context bar — is one dark backing, and the workspace is a lighter panel
+     lying on it. Neither zone carries a hue.
+
+     The direction used to run the other way, chrome above workspace, and the
+     two zones came within 1.33 of each other: the shell read as one dark mass
+     with the header, the rail and the board all meeting in an unlit corner.
+     (A violet cast was an earlier attempt at the same separation and tinted
+     every panel instead, which is a color the product does not mean.)
+
+     The direction comes from the reference too: it paints the window with an
+     under-color and lays the content on it as a lighter rounded panel.
+     tests/designTokens.test.ts asserts the relationship and the direction.
+
+     The chrome is the tinted one and the workspace stays neutral. Both are
+     zones on the same ladder; the cast is what says which of the two is the
+     backing, at a lightness distance the eye reads as a step rather than as a
+     second black. The oracle accepts either a tinted chrome above a neutral
+     workspace or two neutrals further apart, and rejects everything the
+     palette has actually shipped wrong. */
+  --color-navigation: var(--color-slate-1000);
+  --color-navigation-raised: var(--color-slate-900);
+  --color-navigation-active: var(--color-slate-800);
+  --color-canvas: var(--color-gray-900);
+  --color-surface: var(--color-gray-800);
+  --color-surface-muted: var(--color-gray-750);
+  --color-surface-hover: var(--color-gray-700);
+  --color-surface-active: var(--color-gray-650);
+  --color-surface-selected: var(--color-blue-950);
+  --color-text: var(--color-gray-100);
+  --color-text-muted: var(--color-gray-300);
+  --color-text-tertiary: var(--color-gray-400);
+  --color-text-on-dark: var(--color-gray-50);
+  --color-text-on-dark-muted: var(--color-gray-300);
+  --color-navigation-text-muted: var(--color-gray-400);
+  --color-rule: var(--color-white-8);
+  --color-rule-strong: var(--color-white-18);
+  --color-accent: var(--color-blue-500);
+  --color-action-primary: var(--color-gray-100);
+  --color-action-danger: var(--color-red-500);
+  --color-danger: var(--color-red-500);
+  --color-success: var(--color-green-500);
+  --color-info: var(--color-blue-500);
+  --color-warning: var(--color-amber-500);
+  --color-focus-ring: var(--color-blue-500);
+  --color-text-on-action: var(--color-gray-1000);
+
+  /* Controls are fills, so the control tier lives above every static ground:
+     the grounds are 900/800/750 and a resting control is 700, hovered 650.
+     It sat level with the muted ground once, which nobody saw while every
+     control also wore an outline — remove the outlines and a filled button
+     standing on a sheet vanished into it. Disabled recedes a step toward the
+     ground instead of rising above the resting fill.
+     tests/designTokens.test.ts holds the relation. */
+  --color-control-surface: var(--color-gray-700);
+  --color-control-disabled-surface: var(--color-gray-750);
+  --shadow-overlay: 0 20px 56px rgb(0 0 0 / 55%);
+
+  /* What a modal drops on the window, and what a floating surface casts. The
+     geometry of a cast stays with the element — a drawer throws sideways and a
+     menu downward — but its color is one decision, and it was four. */
+  --color-overlay-scrim: var(--color-black-68);
+  --color-shadow: var(--color-black-42);
+
+  /* A tooltip floats above every ground in the ladder, so it is lighter than
+     all of them rather than darker than one. It used to be #0a0a0a, which was
+     a step below the darkest surface in the app; now that the chrome itself is
+     near-black, a tooltip over the rail would have been a shadow with text. */
+  --color-tooltip-surface: var(--color-gray-700);
+  --color-tooltip-text: var(--color-gray-50);
+  --color-tooltip-border: var(--color-gray-550);
+  --color-scrollbar-thumb: var(--color-gray-650);
+  --color-scrollbar-thumb-hover: var(--color-gray-550);
+
+  /* The two ladder *roles*, as distinct from the steps above them.
+     A step says which tone; a role says where a thing stands, and a container
+     may move a role without moving the palette. That is the whole difference,
+     and it is why both exist: `.overlay-surface-drawer` re-points `sheet`
+     because the drawer is its own ground, while a rule that must be exactly
+     this tone wherever it renders names the step instead.
+
+     A sheet is an object lying on a container, so it sits one step above the
+     container rather than level with it: workspace → lane ground → card. When a
+     sheet and its ground were the same value, a column of cards on the board
+     had nothing to be a column of.
+
+     A recess is the one move that goes the other way — an epic well cut into
+     the lane, a blocked strip cut into a card — so it is a step *down* from the
+     ground it is cut into. It was called `--surface-context` while meaning
+     this, which read as the context bar's surface and named nothing about
+     depth.
+
+     `--surface-panel` and `--surface-raised` used to sit here too, resolving
+     to a step each without adding a role: the ladder had five names for three
+     tones, so a panel and a sheet were the same thing spelled twice.
+     `tests/designTokens.test.ts` now fails if two roles land on one tone. */
+  --color-surface-sheet: var(--color-surface-muted);
+  --color-surface-recess: var(--color-canvas);
+  --color-text-disabled: var(--color-gray-450);
+  --color-graph-line: var(--color-cyan-400);
+  --color-graph-line-muted: var(--color-slate-450);
+
+  /* The brand mark's own ramp: light to accent, over a near-black shell.
+     The drawing arrived in a teal the product does not otherwise use, and
+     running the ramp the other way — dark to light — sank the mark's heaviest
+     stroke into the chrome behind it. It starts at the tone that carries the
+     primary action and ends at the accent, so the mark reads at 16px and still
+     belongs to the palette of the focus ring it sits above.
+     `windows/make_icon.py` and `public/favicon.svg` copy these literally, because an
+     ICO and a browser tab resolve no custom property; `sync-tokens.mjs`
+     rewrites both from here. */
+  --color-brand-gradient-from: var(--color-gray-100);
+  --color-brand-gradient-mid: var(--color-blue-300);
+  --color-brand-gradient-to: var(--color-blue-500);
+  --color-brand-spark-from: var(--color-blue-500);
+  --color-brand-spark-to: var(--color-gray-100);
+
+  /* Canvas has no cascade: a chart resolves nothing, so `chartOptions.ts`
+     mirrors these literally and `sync-tokens.mjs` keeps the copies equal. */
+  --color-chart-axis: var(--color-gray-600);
+  --color-chart-grid: var(--color-gray-700);
+  --color-chart-zoom-fill: var(--color-gray-700);
+
+  /* Five categorical series for charts whose slices mean a name, not a state.
+     Semantic status colors must never stand in for a category. */
+  --color-series-1: var(--color-cyan-400);
+  --color-series-2: var(--color-mint-400);
+  --color-series-3: var(--color-sand-400);
+  --color-series-4: var(--color-periwinkle-400);
+  --color-series-5: var(--color-haze-400);
+
+  /* The margin a module keeps from the panel edge, and how wide its content
+     column grows before it stops. Five files had written one or the other out
+     longhand and no two agreed: the column existed at 1360, 1120, 1180 and
+     1440, and the gutter as two different clamps. A reader moving between
+     modules saw the text start in a different place each time. */
+  --size-page-gutter: clamp(20px, 2.5vw, 32px);
+  --size-module-column: 1360px;
+
+  /* How far apart two columns of one record stand. A real `<table>` spends half
+     of it inside each cell and a grid spends all of it as the gap, which is why
+     the two had drifted to 24px and 12px for the same idea: in the grid the
+     values of one row touched the heading of the next column. Like the page
+     gutter, this is a property of the layout rather than a step in the
+     rhythm, so it is named rather than spelled. */
+  --size-column-gutter: 24px;
+
+  /* The control tier: how tall a control stands, and how large a pointer has to
+     be able to hit it. One token used to answer both — `--size-control-target`, the
+     44px accessibility target — so every control was drawn at the size of its
+     own hit area, and the two measurements could never disagree even where they
+     mean different things.
+
+     That is what put a 48px tab track beside a 44px button in the same row: the
+     height was set on the *segment*, and the track around it added its 2px
+     inset on top. A wrapper was structurally taller than the thing it wrapped.
+     So `--size-control-height` is the row a control occupies and it belongs on the
+     outermost box; a track takes it and derives its segments by subtracting its
+     own inset. `--size-control-height-compact` is the second size, for a control
+     riding a dense header that is already shorter than a form row.
+
+     `--size-control-target` is now only the pointer target, and only where there is
+     no label to widen the box: an icon button, a tag in a card foot, a 22px
+     switch. It is spent on the hit area rather than on the drawing — an icon
+     button paints 40px and answers a click across 44. WCAG 2.5.8 asks 24px at
+     AA and 44 at AAA, so a labelled 40px control clears both by its width. */
+  --size-control-height: 40px;
+  --size-control-height-compact: 36px;
+  --size-control-target: 44px;
+
+  color-scheme: dark;
+}

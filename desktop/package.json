@@ -1,0 +1,51 @@
+{
+  "name": "valkama-desktop",
+  "version": "1.0.1",
+  "private": true,
+  "description": "Native window for Valkama",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test attention.test.js opener_catalog.test.js preload.test.js project_registry.test.js runtime_contract.test.js session_opener.test.js shell_hardening.test.js source_reference.test.js source_opener.test.js",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^43.2.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "local.valkama",
+    "productName": "Valkama",
+    "files": [
+      "main.js",
+      "preload.js",
+      "attention.js",
+      "opener_catalog.js",
+      "project_registry.js",
+      "runtime_contract.js",
+      "session_opener.js",
+      "source_opener.js",
+      "source_reference.js",
+      "package.json"
+    ],
+    "directories": { "output": "release" },
+    "electronFuses": {
+      "runAsNode": false,
+      "enableCookieEncryption": true,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true,
+      "loadBrowserProcessSpecificV8Snapshot": false,
+      "grantFileProtocolExtraPrivileges": false
+    },
+    "win": { "target": "nsis", "icon": "../windows/valkama.ico" },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": false,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Valkama"
+    }
+  }
+}

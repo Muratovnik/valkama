@@ -1,0 +1,283 @@
+# Ruff is a development tool only. The Valkama server runs on the system Python
+# with no virtualenv and no third-party imports, so nothing here may become a
+# runtime dependency.
+
+# Every tool configured here writes its cache under `.cache/`, which is the one
+# ignored directory this repository declares for machine-local state. Left to
+# themselves these five scatter `.ruff_cache/`, `.mypy_cache/`,
+# `.import_linter_cache/`, `.hypothesis/` and `.coverage` across the root, and
+# none of them appear in `.gitignore`: they stay invisible to Git only because
+# each tool writes a `.gitignore` inside its own cache. That is a courtesy, not
+# a contract, and it leaves the root reading like scratch space.
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+cache-dir = ".cache/ruff"
+exclude = [
+  "web",
+  "desktop",
+  "**/node_modules",
+  "**/dist",
+  # Ruff also formats Python fenced in Markdown. Plans and audits quote code as
+  # it was at the time, so reformatting them would rewrite the record.
+  "**/*.md",
+]
+
+[tool.ruff.lint]
+# Preview is on only so the named rules below exist; explicit-preview-rules
+# keeps every other preview rule off, so a ruff release cannot quietly add work
+# to this gate.
+preview = true
+explicit-preview-rules = true
+# The second row is chosen by the defect rather than by the tool that owns it,
+# and every one of these reports nothing today. What they refuse is the residue
+# a generated edit leaves behind: a naive timestamp that compares wrong against
+# a stored one (DTZ), a blanket `# type: ignore` or bare `# noqa` that hides
+# whatever the next edit breaks (PGH), a marker left as a note to nobody when
+# the board is where work has an owner (TD, FIX), a name shadowing a builtin
+# (A), an unnecessary pass or duplicate class field (PIE), a needlessly
+# parenthesised raise (RSE), and logging built by f-string so the message can no
+# longer be grouped by its template (G, LOG).
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM", "RUF", "S"]
+extend-select = [
+  "DTZ",
+  "PGH",
+  "TD",
+  "FIX",
+  "A",
+  "PIE",
+  "RSE",
+  "G",
+  "LOG",
+  # Left-behind output and left-behind code, the two most visible residues of an
+  # edit nobody finished. Printing is the whole interface of `cli.py` and the
+  # icon generator, so T20 is lifted there rather than at each of their calls.
+  "T20",
+  "RET",
+  # An exception class says it is one in its name. The eighteen here read as
+  # sentences at the raise site — `raise TransitionRefused(...)` — which is why
+  # they were written that way, but the suffix is what tells a reader scanning an
+  # import list which of those symbols can be caught.
+  "N",
+  # A broad `except Exception` is either a boundary or a swallowed defect, and
+  # the difference is which module it is in. The ones lifted below are the
+  # boundaries; everywhere else this now has to be argued for at the site.
+  "BLE",
+  # `subprocess.run` ignores a non-zero exit unless told otherwise, and this
+  # repository has forty-six call sites that read the code themselves. Making
+  # `check` explicit means the next one states which it wants.
+  "PLW1510",
+  # Reaching into another object's underscore. Tests do it on purpose and are
+  # lifted below; in the server it meant a method three modules called was
+  # claiming to be private, which `improvements.connect` no longer does.
+  "SLF001",
+  # A lambda or a method that names a parameter it never reads. In tests it is
+  # usually a stub that outgrew its signature; in the server it is a caller
+  # contract nobody trimmed.
+  "ARG",
+  # The dangerous-import block, minus S404. Nothing here imports telnetlib,
+  # ftplib, pickle or an unhardened XML parser, and these rules are what keeps
+  # it that way; S404 is left out because importing subprocess is what the
+  # runner and the evaluation worker are for.
+  "S401",
+  "S402",
+  "S403",
+  "S405",
+  "S406",
+  "S407",
+  "S408",
+  "S409",
+  "S411",
+  "S412",
+  "S413",
+  "S415",
+]
+ignore = [
+  # Long strings carry SQL and wire payloads that read worse when wrapped.
+  "E501",
+  # Reviewed and rejected: these four suggestions cost more than they buy here.
+  # Lock and temporary files are handed to subprocesses or held for a lease, so
+  # they must outlive the block a context manager would give them (SIM115).
+  # The nested conditions carry explanatory comments or would merge into
+  # unreadable single lines (SIM102, SIM117), and an explicit try/except states
+  # the ignored failure more plainly than a suppress() wrapper (SIM105).
+  "SIM102",
+  "SIM105",
+  "SIM115",
+  "SIM117",
+  # Every subprocess call here passes an argv list, never a shell string, so the
+  # injection S603 describes cannot happen; and the partial paths S607 objects
+  # to are the point, because git, npm, node and python are resolved from the
+  # operator's PATH on purpose. Forty-six call sites, one structural answer.
+  "S603",
+  "S607",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Printing is what these are: the command-line surface writes its answer to
+# stdout, and the icon generator reports what it rendered.
+"server/cli.py" = ["T201"]
+"windows/make_icon.py" = ["T201"]
+# The reference adapter is a service somebody starts in a terminal; the address
+# it prints is how they learn where it came up.
+"examples/**" = ["T201"]
+# Where catching everything is the module's job rather than an oversight. A
+# request handler that lets an exception escape drops the connection instead of
+# answering it; a process teardown that raises leaves the child alive; a worker
+# that dies on one bad job stops reaping every other. Each of these files exists
+# to convert whatever happened into an answer, and BLE001 cannot tell that from
+# a defect being hidden.
+"server/http_surface.py" = ["BLE001"]
+"server/mcp_surface.py" = ["BLE001"]
+"server/processes.py" = ["BLE001"]
+"server/improvements/improvements_integration.py" = ["BLE001"]
+"server/improvements/job_supervisor.py" = ["BLE001"]
+"server/improvements/evaluations.py" = ["BLE001"]
+"tests/test_job_supervisor.py" = ["BLE001"]
+# The adapter directory is the one part of the installation an owner
+# edits by hand, and every way a file there can be wrong is one answer:
+# this manifest is not usable. Letting the first bad file raise would
+# stop the installation starting, which is the failure the doctor met.
+"server/platform/installed.py" = ["BLE001"]
+# A test may reach into what it is testing. That is the difference between a
+# test and a caller, and 115 of the 118 hits were exactly that.
+"tests/**" = ["SLF001"]
+# The whitelist is a list of names vulture must see read. They are undefined
+# here by construction, and every line is an expression on purpose.
+"vulture_whitelist.py" = ["F821", "B018"]
+# These three prepare sys.path before importing the package, which is exactly
+# the ordering E402 forbids. The entry point does it because its own path is
+# registered outside the repository, the evaluation worker because the job
+# supervisor launches it as a script, and the tests so they also run directly.
+"valkama.py" = ["E402"]
+"server/improvements/improvements_eval_worker.py" = ["E402"]
+# Fixtures assert, name temporary paths, and build the same bounded SQL as the
+# modules they exercise.
+"tests/*.py" = ["E402", "S101", "S108", "S608"]
+# S608 named per module rather than globally, so a new module that interpolates
+# SQL is still reported. In these six the interpolated text is a placeholder run
+# sized from a value count, or a column or table name taken from a literal tuple
+# in the same expression; every value is still bound.
+"server/platform/core.py" = ["S608"]
+# The store-history module reads a source table whose name carries the `hub_`
+# or `platform_` prefix of the generation being migrated, and a payload column
+# whose name is the generation's. Both come from literal tuples in this file;
+# every value is still bound.
+"server/platform/migrations.py" = ["S608"]
+"server/platform/relations.py" = ["S608"]
+"server/improvements/improvements.py" = ["S608"]
+"server/sessions.py" = ["S608"]
+"server/store.py" = ["S608"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+# The one-way import rule the repository instructions state in prose, here so a tool can refuse
+# it: a surface may import domain, domain may never import a surface, and no
+# surface imports another. `cli` is the single exception by construction, since
+# choosing between the other two is what it is for, so it sits above both.
+# Its cache is the one that cannot be set here: import-linter reads `cache_dir`
+# from the command line only, and silently ignores it in this file. Both callers
+# pass `--cache-dir .cache/import-linter` instead — `tools/quality.py` and the
+# command list in the repository instructions.
+[tool.importlinter]
+root_package = "server"
+
+[[tool.importlinter.contracts]]
+name = "Surfaces sit above the domain and never reach sideways"
+type = "layers"
+layers = [
+  "cli",
+  "http_surface | mcp_surface",
+  "analytics : documents : executions : federation : memory : ops : planning : platform : improvements : processes : projects : refs : runner : sessions : skills : static_assets : store : telemetry : watchers",
+]
+containers = ["server"]
+
+[tool.mypy]
+python_version = "3.11"
+cache_dir = ".cache/mypy"
+files = ["server", "valkama.py"]
+check_untyped_defs = true
+strict_equality = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_unused_configs = true
+
+# What is left of the typing backlog, with what each module owed the day mypy
+# was adopted. Fourteen of the seventeen have come off since, so thirty-five of
+# the thirty-eight files are checked, including every data and wire owner and
+# all three surfaces. Removing a name from this list is the ratchet; a module
+# not named here — including every new one — is checked already. Card #306 owns
+# emptying it.
+#
+# What remains is a different kind of work from the fourteen. Those needed an
+# annotation on an inferred container, a narrowing the checker could not see, or
+# a protocol where a seam had been left as `object`. These take
+# `Mapping[str, object]` payloads and index them, so every fix is a decision
+# about what the payload is allowed to be — worth making deliberately rather
+# than in a sweep.
+#
+# The list is longer than it was and covers less: splitting the improvements
+# store and the dashboard projection moved code out from under two entries, and
+# the modules it moved into are checked. `server.analytics.*` had to become five
+# names for that to be true, because a wildcard would have adopted them.
+[[tool.mypy.overrides]]
+module = [
+  "server.improvements.improvements",             # 24, was 56 before the split
+  "server.improvements.improvements_integration", # 24
+  # Named one by one rather than as `server.analytics.*`: the wildcard would
+  # have swallowed the five modules the projection was split into, and four of
+  # them are clean. A new module here is checked, which is what this list is for.
+  "server.analytics.cache",                       # 1
+  "server.analytics.flow",                        # 8
+  "server.analytics.journal",                     # 4
+  "server.analytics.scope",                       # 1
+  "server.analytics.timeline",                    # 7
+]
+ignore_errors = true
+
+# Branch coverage of the server, measured by the suite that already exists. The
+# floor is a ratchet: it is the number the suite actually reaches, so a change
+# that removes a test fails here instead of passing quietly. Raise it when the
+# measured figure rises; never lower it to make a run green.
+[tool.coverage.run]
+branch = true
+source = ["server"]
+data_file = ".cache/coverage/data"
+
+[tool.coverage.report]
+# The floor is the whole number under the measured figure, raised as that
+# figure rises. 76.13% when this was adopted, 77.68% once card #307 gave the
+# two surfaces that had no tests some: cli went from 0% to 97% and mcp_surface
+# from 27% to 60%. Layer 1 took it to 79.56% and layer 2 to 79.64%, which is
+# what this now holds. What is left below the line is http_surface and watchers.
+fail_under = 79
+precision = 2
+skip_covered = true
+exclude_also = [
+  # Unreachable by construction on this platform or in this process, and a
+  # coverage floor that counts them would be measuring the wrong thing.
+  "if TYPE_CHECKING:",
+  "raise NotImplementedError",
+]
+
+[tool.typos.files]
+extend-exclude = [
+  # web/dist is committed on purpose so a clone opens the built UI with no
+  # build step first. It is minified output, not authored text.
+  "web/dist",
+]
+
+[tool.typos.default]
+extend-ignore-re = [
+  # Git hashes quoted in documentation split into short words that read as
+  # misspellings: `ba5ba23` yields `ba` twice. An all-hex run of commit length
+  # is an identifier, never prose.
+  "\\b[0-9a-f]{7,40}\\b",
+]
+
+[tool.typos.default.extend-words]
+# Both spellings are current English and this one is what the wire validators
+# and their tests have said since they were written.
+unparseable = "unparseable"

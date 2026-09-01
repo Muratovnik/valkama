@@ -1,0 +1,20 @@
+{
+  "projects": [
+    {
+      "canonical_root": "C:\\workspace\\alpha",
+      "display_name": "Alpha",
+      "planning_binding": {
+        "kind": "planning-space",
+        "resource_id": "opaque-alpha-planning-identity"
+      },
+      "project_id": "alpha"
+    },
+    {
+      "canonical_root": "C:\\workspace\\beta",
+      "display_name": "Beta",
+      "planning_binding": null,
+      "project_id": "beta"
+    }
+  ],
+  "schema_version": 3
+}
