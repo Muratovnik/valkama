@@ -57,16 +57,18 @@ cd ../desktop
 npm test
 ```
 
-On the owner workstation, also install and verify the private-value gate before
-the first push: `python .github/relkit.pyz protect install`, then
+On the owner workstation, install the private-value gate only when the user
+explicitly authorizes that hook mutation and its rollback:
+`python .github/relkit.pyz protect install`. Before the first push, verify with
 `python .github/relkit.pyz audit --history --owner`.
 
 `npm run build` is mandatory, and it is not the last step. The server serves the
 snapshot of `web/dist` it read when it started, so a browser check against a
 listener that predates the build inspects the bundle that build replaced, and a
-green screenshot means nothing. Rebuild, then restart the listener actually in
-use — the one on port 8642 — before verifying anything live and again before
-handing the task over. Leaving it stale is not a cosmetic loss: the tray
+green screenshot means nothing. Rebuild, then prove that the listener on port
+8642 is the Valkama-managed process in scope before restarting it for live
+verification and handoff. If ownership cannot be proved, do not stop it and
+report live acceptance blocked. Leaving it stale is not a cosmetic loss: the tray
 compares runtime identities, so a stale listener makes it refuse every click,
 and the refusal used to be silent. When anything under `desktop/` changed, run
 `npm run dist` there as well; the installed app is a separate artifact that no
@@ -214,12 +216,17 @@ force, and the gates hold each:
   configuration changes.
 - Keep generated `node_modules`, release bundles, databases, WAL files, logs,
   and user runtime state out of Git. The one deliberate exception is `web/dist`,
-  committed so a clone serves the built UI with no build step; rebuild and
-  commit it whenever `web/src` changes.
+  committed so a clone serves the built UI with no build step; rebuild it
+  whenever `web/src` changes and include it in the next incremental local
+  commit after a coherent task-owned green boundary.
 - Commit subjects are Conventional Commits with the Angular type set: `build`,
   `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`,
   `test`, an optional lowercase scope, and `!` for a break.
-- Do not commit or push unless the user explicitly requests it.
+- After each coherent task-owned green boundary, create an incremental local
+  commit by default. Staging is transient and only inside one uninterrupted
+  stage → inspect → commit step; never hand off task-owned staged changes, and
+  preserve any pre-existing staged state. Push only when the user explicitly
+  requests it.
 
 ## Artifact placement
 
