@@ -316,9 +316,16 @@ writer and recovery owner, at the fixed path
 rewriting them and accepts the project set only when the complete file matches
 the canonical schema. An absent or malformed file therefore exposes no partial
 projects to Planning, Memory, Skills, or desktop launchers. Recover it through
-Host Runtime's `tools/workflow_sync.py sync --apply --project <root>` and
-`tools/workflow_sync.py doctor`; there is no Valkama path override or legacy
-registry import.
+the installed Host Runtime
+[project-registry owner](https://github.com/Muratovnik/agent-host-runtime/blob/main/tools/project_registry.py):
+
+```powershell
+$registryTool = Join-Path $env:LOCALAPPDATA "AgentHostRuntime\current\tools\project_registry.py"
+python "$registryTool" apply
+python "$registryTool" doctor
+```
+
+There is no Valkama path override or legacy registry import.
 
 The rest are environment-only, because each is either a one-shot switch or
 belongs to a process rather than to an installation:

@@ -14,8 +14,9 @@ the parent has no gate in a standalone checkout.
 
 from __future__ import annotations
 
+import re
 import unittest
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 DOCS = Path(__file__).resolve().parent.parent / "docs"
 ROOT = DOCS.parent
@@ -52,6 +53,17 @@ OBSOLETE_PRODUCT_CONTRACT_NAMES = (
     "hub-modules-v2",
     "platform-modules",
     "project-board-binding-v1",
+)
+PUBLIC_DOCS = (
+    ROOT / "README.md",
+    ROOT / "SERVICE.md",
+    ROOT / "CONTRIBUTING.md",
+    ROOT / "CHANGELOG.md",
+    ROOT / "DESIGN.md",
+    *sorted(DOCS.rglob("*.md")),
+)
+DIRECT_PYTHON_TARGET = re.compile(
+    r"(?m)^\s*python\s+[\"']?(?!-m\b)([^\s\"']+\.py)(?=[\"']?(?:\s|$))"
 )
 
 
@@ -112,6 +124,30 @@ class DocsLifecycleTests(unittest.TestCase):
                 self.assertIsNotNone(lifecycle_problem(text))
         accepted = "---\nstatus: adopted\ncard: 147, 150\n---\n\n# Title\n"
         self.assertIsNone(lifecycle_problem(accepted))
+
+    def test_direct_python_commands_reference_existing_repository_files(self) -> None:
+        problems: list[str] = []
+        for document in PUBLIC_DOCS:
+            text = document.read_text(encoding="utf-8")
+            for match in DIRECT_PYTHON_TARGET.finditer(text):
+                raw = match.group(1)
+                if "$" in raw or "%" in raw:
+                    continue
+                if (
+                    Path(raw).is_absolute()
+                    or PurePosixPath(raw).is_absolute()
+                    or PureWindowsPath(raw).is_absolute()
+                ):
+                    continue
+                relative = raw.replace("\\", "/")
+                while relative.startswith("./"):
+                    relative = relative[2:]
+                target = ROOT / relative
+                if not target.is_file():
+                    problems.append(
+                        f"{document.relative_to(ROOT).as_posix()}: missing python target {raw}"
+                    )
+        self.assertEqual([], problems)
 
 
 class ProductModelDocsTests(unittest.TestCase):
