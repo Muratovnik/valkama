@@ -38,7 +38,7 @@ class ImprovementsTests(unittest.TestCase):
                 "enabled": True,
                 "purpose": "Improve agent reliability",
                 "expected_behavior": "Repeated workflow failures stop recurring",
-                "planning_space": "AW",
+                "planning_space": "QA",
             }
         )
         values.update(changes)
@@ -443,7 +443,7 @@ class ImprovementsTests(unittest.TestCase):
                 },
             )
         conn = sqlite3.connect(blocked.path)
-        conn.execute("UPDATE cases SET planning_work_item='EX-99' WHERE id=?", (held["id"],))
+        conn.execute("UPDATE cases SET planning_work_item='QA-99' WHERE id=?", (held["id"],))
         conn.commit()
         conn.close()
         held = blocked.record_signal(
@@ -602,7 +602,7 @@ class ImprovementsTests(unittest.TestCase):
 
         def ensure(request):
             calls.append(request)
-            return {"epic_work_item": "EX-7", "work_item": "EX-8", "created": True}
+            return {"epic_work_item": "QA-7", "work_item": "QA-8", "created": True}
 
         result = self.store.approve(case["id"], case["revision"], ensure)
         again = self.store.approve(case["id"], 0, ensure)
@@ -610,7 +610,7 @@ class ImprovementsTests(unittest.TestCase):
         self.assertTrue(result["created"])
         self.assertFalse(result["launched"])
         self.assertFalse(again["created"])
-        self.assertEqual("EX-8", again["work_item"])
+        self.assertEqual("QA-8", again["work_item"])
         serialized = json.dumps(calls[0])
         self.assertIn("improvement://planning/", calls[0]["epic_source"])
         self.assertEqual(f"improvement://personal/{case['case_key']}", calls[0]["work_source"])
@@ -627,7 +627,7 @@ class ImprovementsTests(unittest.TestCase):
             nonlocal creations, calls
             calls += 1
             if request["work_source"] not in items:
-                items[request["work_source"]] = ("EX-11", "EX-12")
+                items[request["work_source"]] = ("QA-11", "QA-12")
                 creations += 1
                 created = True
             else:
@@ -643,7 +643,7 @@ class ImprovementsTests(unittest.TestCase):
             self.store.approve(case["id"], case["revision"], ensure, crash)
         recovered = self.store.approve(case["id"], case["revision"], ensure)
         self.assertEqual((2, 1), (calls, creations))
-        self.assertEqual("EX-12", recovered["work_item"])
+        self.assertEqual("QA-12", recovered["work_item"])
         self.assertFalse(recovered["created"])
 
     def test_eval_guard_matrix(self):
@@ -652,7 +652,7 @@ class ImprovementsTests(unittest.TestCase):
             case["id"], {"targets": ["validator-eval"]}, self.eval_pack(), case["revision"]
         )
         case = self.store.approve(
-            case["id"], case["revision"], lambda _: {"epic_work_item": "EX-1", "work_item": "EX-2"}
+            case["id"], case["revision"], lambda _: {"epic_work_item": "QA-1", "work_item": "QA-2"}
         )["case"]
 
         def finished_eval_job(phase, git_ref):
@@ -873,7 +873,7 @@ class ImprovementsTests(unittest.TestCase):
         def ensure(request):
             nonlocal calls
             calls += 1
-            items.setdefault(request["work_source"], ("EX-21", "EX-22"))
+            items.setdefault(request["work_source"], ("QA-21", "QA-22"))
             return {
                 "epic_work_item": items[request["work_source"]][0],
                 "work_item": items[request["work_source"]][1],
@@ -1041,7 +1041,7 @@ class ImprovementsTests(unittest.TestCase):
             case["id"], {"targets": ["validator-eval"]}, self.eval_pack(), case["revision"]
         )
         case = self.store.approve(
-            case["id"], case["revision"], lambda _: {"epic_work_item": "EX-1", "work_item": "EX-2"}
+            case["id"], case["revision"], lambda _: {"epic_work_item": "QA-1", "work_item": "QA-2"}
         )["case"]
 
         def job(phase, git_ref):

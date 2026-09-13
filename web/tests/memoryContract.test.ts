@@ -55,10 +55,10 @@ test('memory links identify attachments by work item and pointer', async () => {
     attached_at: '2026-08-30T00:00:00Z',
     author: 'agent',
     label: 'Shared evidence',
-    space_key: 'AW',
+    space_key: 'QA',
     value: 'memory://record/shared',
     work_item_id: 'work-1',
-    work_item_key: 'EX-1',
+    work_item_key: 'QA-1',
     work_item_title: 'First use',
   }
   respond({
@@ -69,7 +69,7 @@ test('memory links identify attachments by work item and pointer', async () => {
       {
         ...attachment,
         work_item_id: 'work-2',
-        work_item_key: 'EX-2',
+        work_item_key: 'QA-2',
         work_item_title: 'Second use',
       },
     ],

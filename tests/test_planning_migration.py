@@ -45,12 +45,12 @@ class PlanningMigrationTests(unittest.TestCase):
         registers.
         """
 
-        workbench = board_era.seed(self.conn, "Alpha Workspace")
+        qa_board = board_era.seed(self.conn, "Quality Assurance")
         elsewhere = board_era.seed(self.conn, "Unregistered Board")
-        epic = board_era.add_card(self.conn, workbench, "The epic")
+        epic = board_era.add_card(self.conn, qa_board, "The epic")
         child = board_era.add_card(
             self.conn,
-            workbench,
+            qa_board,
             "The child",
             parent_id=epic,
             lane="review",
@@ -77,7 +77,7 @@ class PlanningMigrationTests(unittest.TestCase):
             ),
             summary=json.dumps({"done": "d", "next": "n", "why": "w"}),
         )
-        blocker = board_era.add_card(self.conn, workbench, "The blocker")
+        blocker = board_era.add_card(self.conn, qa_board, "The blocker")
         self.conn.executemany(
             "INSERT INTO links(from_id,to_id,kind) VALUES(?,?,?)",
             [(blocker, child, "blocks"), (epic, blocker, "discovered_from")],
@@ -112,7 +112,7 @@ class PlanningMigrationTests(unittest.TestCase):
         return migration.migrate_board_domain(
             self.conn,
             project_for_space={
-                "AW": "example-workspace",
+                "QA": "example-workspace",
                 "UB": "unregistered-workspace",
             },
         )
@@ -133,9 +133,9 @@ class PlanningMigrationTests(unittest.TestCase):
     def test_a_board_becomes_a_space_only_with_an_explicit_project_binding(self) -> None:
         self.migrate()
         spaces = {space["name"]: space for space in service.list_planning_spaces(self.conn)}
-        self.assertEqual("example-workspace", spaces["Alpha Workspace"]["project_id"])
+        self.assertEqual("example-workspace", spaces["Quality Assurance"]["project_id"])
         self.assertEqual("unregistered-workspace", spaces["Unregistered Board"]["project_id"])
-        self.assertEqual("AW", spaces["Alpha Workspace"]["key"])
+        self.assertEqual("QA", spaces["Quality Assurance"]["key"])
 
     def test_an_unbound_board_refuses_instead_of_inferring_a_project_from_its_title(self) -> None:
         with self.assertRaisesRegex(
@@ -144,48 +144,48 @@ class PlanningMigrationTests(unittest.TestCase):
         ):
             migration.migrate_board_domain(
                 self.conn,
-                project_for_space={"AW": "example-workspace"},
+                project_for_space={"QA": "example-workspace"},
             )
 
     def test_lanes_become_that_space_workflow_states(self) -> None:
         self.migrate()
-        space = service.get_planning_space(self.conn, "Alpha Workspace")
+        space = service.get_planning_space(self.conn, "Quality Assurance")
         self.assertEqual(
             ["backlog", "todo", "dev", "review", "done", "blocked"],
             [state["key"] for state in space["workflow"]["states"]],
         )
-        moved = service.get_work_item(self.conn, "EX-2")
+        moved = service.get_work_item(self.conn, "QA-2")
         self.assertEqual("review", moved["state"]["key"])
         self.assertEqual("review", moved["state"]["category"])
 
     def test_numbers_follow_the_original_order_within_each_space(self) -> None:
         self.migrate()
-        items = service.list_work_items(self.conn, space="AW")
+        items = service.list_work_items(self.conn, space="QA")
         by_title = {item["title"]: item["reference"] for item in items}
-        self.assertEqual("EX-1", by_title["The epic"])
-        self.assertEqual("EX-2", by_title["The child"])
-        self.assertEqual("EX-3", by_title["The blocker"])
+        self.assertEqual("QA-1", by_title["The epic"])
+        self.assertEqual("QA-2", by_title["The child"])
+        self.assertEqual("QA-3", by_title["The blocker"])
         self.assertEqual("UB-1", service.list_work_items(self.conn, space="UB")[0]["reference"])
 
     def test_the_next_number_continues_where_the_board_stopped(self) -> None:
         self.migrate()
-        created = service.create_work_item(self.conn, space="AW", title="After the migration")
-        self.assertEqual("EX-4", created["reference"])
+        created = service.create_work_item(self.conn, space="QA", title="After the migration")
+        self.assertEqual("QA-4", created["reference"])
 
     def test_a_parent_becomes_an_epic_and_keeps_its_child(self) -> None:
         self.migrate()
-        epic = service.get_work_item(self.conn, "EX-1")
-        child = service.get_work_item(self.conn, "EX-2")
+        epic = service.get_work_item(self.conn, "QA-1")
+        child = service.get_work_item(self.conn, "QA-2")
         self.assertEqual("epic", epic["kind"])
         self.assertEqual("task", child["kind"])
         self.assertEqual(epic["work_item_id"], child["parent_id"])
 
     def test_links_keep_their_direction_and_gain_the_neutral_name(self) -> None:
         self.migrate()
-        child = service.get_work_item(self.conn, "EX-2")
-        blocker = service.get_work_item(self.conn, "EX-3")
+        child = service.get_work_item(self.conn, "QA-2")
+        blocker = service.get_work_item(self.conn, "QA-3")
         self.assertEqual(
-            [("blocks", "incoming", "EX-3")],
+            [("blocks", "incoming", "QA-3")],
             [(link["kind"], link["direction"], link["reference"]) for link in child["links"]],
         )
         kinds = {link["kind"] for link in blocker["links"]}
@@ -193,7 +193,7 @@ class PlanningMigrationTests(unittest.TestCase):
 
     def test_a_checklist_step_keeps_its_identity_through_the_rename(self) -> None:
         self.migrate()
-        child = service.get_work_item(self.conn, "EX-2")
+        child = service.get_work_item(self.conn, "QA-2")
         original = self.steps[0]["id"]
         self.assertTrue(original.startswith("ci_"))
         digits = original[3:]
@@ -204,12 +204,12 @@ class PlanningMigrationTests(unittest.TestCase):
 
     def test_a_summary_survives_with_all_three_fields(self) -> None:
         self.migrate()
-        child = service.get_work_item(self.conn, "EX-2")
+        child = service.get_work_item(self.conn, "QA-2")
         self.assertEqual({"done": "d", "why": "w", "next": "n"}, child["summary"])
 
     def test_a_lane_change_reads_as_a_transition_afterwards(self) -> None:
         self.migrate()
-        child = service.get_work_item(self.conn, "EX-2")
+        child = service.get_work_item(self.conn, "QA-2")
         actions = [event["action"] for event in child["events"]]
         self.assertIn("transitioned", actions)
         self.assertNotIn("moved", actions)
@@ -217,19 +217,19 @@ class PlanningMigrationTests(unittest.TestCase):
 
     def test_the_claim_and_the_revision_carry_over(self) -> None:
         self.migrate()
-        child = service.get_work_item(self.conn, "EX-2")
+        child = service.get_work_item(self.conn, "QA-2")
         self.assertEqual("one", child["claim_ref"])
         self.assertEqual(0, child["revision"])
 
     def test_the_read_model_answers_immediately_after_the_migration(self) -> None:
         self.migrate()
-        payload = views.planning_payload(self.conn, space="AW")
+        payload = views.planning_payload(self.conn, space="QA")
         self.assertEqual(3, len(payload["work_items"]))
         self.assertEqual(2, len(payload["links"]))
-        graph = views.graph_payload(self.conn, space="AW")
+        graph = views.graph_payload(self.conn, space="QA")
         ready = {node["reference"]: node["ready"] for node in graph["nodes"]}
-        self.assertFalse(ready["EX-2"])
-        self.assertTrue(ready["EX-3"])
+        self.assertFalse(ready["QA-2"])
+        self.assertTrue(ready["QA-3"])
 
     # -- what a real store turned out to hold --------------------------------
 
@@ -256,7 +256,7 @@ class PlanningMigrationTests(unittest.TestCase):
             ),
         )
         self.migrate()
-        steps = service.get_work_item(self.conn, "EX-2")["checklist"]
+        steps = service.get_work_item(self.conn, "QA-2")["checklist"]
         self.assertEqual("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", steps[0]["id"])
         self.assertEqual(
             migration._step_id("ci_44_0", self.child_id),
@@ -277,7 +277,7 @@ class PlanningMigrationTests(unittest.TestCase):
             ),
         )
         self.migrate()
-        steps = service.get_work_item(self.conn, "EX-2")["checklist"]
+        steps = service.get_work_item(self.conn, "QA-2")["checklist"]
         self.assertEqual(long_step, steps[0]["text"])
 
     def test_an_author_that_is_not_an_identifier_survives(self) -> None:
@@ -293,7 +293,7 @@ class PlanningMigrationTests(unittest.TestCase):
             ("/task/card3_writer", self.child_id),
         )
         self.migrate()
-        child = service.get_work_item(self.conn, "EX-2")
+        child = service.get_work_item(self.conn, "QA-2")
         self.assertEqual(recorded, child["claim_ref"])
         self.assertEqual({"Codex /task"}, {event["author"] for event in child["events"]})
         self.assertEqual(["/task/card3_writer"], [note["author"] for note in child["comments"]])
@@ -350,32 +350,32 @@ class PlanningMigrationTests(unittest.TestCase):
     def test_the_project_that_binds_the_exact_space_owns_it(self) -> None:
         """The canonical resource binding decides, not a matching title.
 
-        Two projects name the board `Alpha Workspace`: the umbrella workspace,
+        Two projects name the board `Quality Assurance`: the umbrella workspace,
         which binds it, and an independent project whose sessions record there
         and which binds nothing.
         """
 
         data_scope_id = read_store_metadata(self.conn)["data_scope_id"]
-        resource_ref = _space_ref(data_scope_id, "AW")
+        resource_ref = _space_ref(data_scope_id, "QA")
         root = os.path.dirname(self.path)
         with self.registry(
             project_entry(
                 "example-workspace",
                 root,
-                board="Alpha Workspace",
+                board="Quality Assurance",
                 bindings=[project_binding("example-workspace", resource_ref)],
             ),
             project_entry(
                 "sample-project",
                 root + "-sample",
-                board="Alpha Workspace",
+                board="Quality Assurance",
             ),
         ):
-            self.assertEqual({"AW": "example-workspace"}, store._project_for_space(data_scope_id))
+            self.assertEqual({"QA": "example-workspace"}, store._project_for_space(data_scope_id))
 
     def test_competing_exact_space_bindings_reject_the_whole_registry(self) -> None:
         data_scope_id = read_store_metadata(self.conn)["data_scope_id"]
-        resource_ref = _space_ref(data_scope_id, "AW")
+        resource_ref = _space_ref(data_scope_id, "QA")
         root = os.path.dirname(self.path)
         with self.registry(
             project_entry(
@@ -393,7 +393,7 @@ class PlanningMigrationTests(unittest.TestCase):
 
     def test_a_binding_for_another_data_scope_cannot_claim_the_space(self) -> None:
         data_scope_id = read_store_metadata(self.conn)["data_scope_id"]
-        other_ref = _space_ref("33333333-3333-4333-8333-333333333333", "AW")
+        other_ref = _space_ref("33333333-3333-4333-8333-333333333333", "QA")
         root = os.path.dirname(self.path)
         with self.registry(
             project_entry(
@@ -470,7 +470,7 @@ class PlanningMigrationCommandTests(unittest.TestCase):
             resource_ref = planning_space_entity(
                 {
                     "data_scope_id": read_store_metadata(conn)["data_scope_id"],
-                    "space_key": "AW",
+                    "space_key": "QA",
                 }
             )
             registry = registry_bytes(
@@ -488,7 +488,7 @@ class PlanningMigrationCommandTests(unittest.TestCase):
             )
             registry_patch.start()
             self.addCleanup(registry_patch.stop)
-            board_id = board_era.seed(conn, "Alpha Workspace")
+            board_id = board_era.seed(conn, "Quality Assurance")
             board_era.add_card(conn, board_id, "One card")
             conn.commit()
         finally:

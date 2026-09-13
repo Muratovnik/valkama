@@ -38,7 +38,7 @@ class PlanningConcurrencyTests(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = self.open()
         self.space = service.create_planning_space(
-            self.conn, project_id="example-workspace", name="Alpha Workspace"
+            self.conn, project_id="example-workspace", name="Quality Assurance"
         )
         self.conn.commit()
 
@@ -74,15 +74,15 @@ class PlanningConcurrencyTests(unittest.TestCase):
     def test_a_claim_decided_from_a_stale_row_is_refused_naming_the_holder(self) -> None:
         self.item("Land the guarded write")
         first = self.open()
-        stale = read_model.item_row(first, "EX-1")
+        stale = read_model.item_row(first, "QA-1")
         second = self.open()
-        service.claim_work_item(second, "EX-1", author="agent-two")
+        service.claim_work_item(second, "QA-1", author="agent-two")
         second.commit()
         with mock.patch.object(read_model, "item_row", return_value=stale):
             with self.assertRaisesRegex(model.PlanningError, "already held by agent-two"):
-                service.claim_work_item(first, "EX-1", author="agent-one")
+                service.claim_work_item(first, "QA-1", author="agent-one")
         first.rollback()
-        self.assertEqual("agent-two", self.holder("EX-1"))
+        self.assertEqual("agent-two", self.holder("QA-1"))
         self.assertEqual(1, self.events("claimed"))
 
     def test_two_connections_racing_one_item_produce_one_holder(self) -> None:
@@ -129,7 +129,7 @@ class PlanningConcurrencyTests(unittest.TestCase):
             conn = store.connect()
             try:
                 outcomes[author] = str(
-                    service.claim_work_item(conn, "EX-1", author=author)["claim_ref"]
+                    service.claim_work_item(conn, "QA-1", author=author)["claim_ref"]
                 )
                 conn.commit()
             except model.PlanningError as refusal:
@@ -151,7 +151,7 @@ class PlanningConcurrencyTests(unittest.TestCase):
                     thread.join(timeout=30)
         self.assertEqual("agent-one", outcomes["agent-one"])
         self.assertIn("already held by agent-one", outcomes["agent-two"])
-        self.assertEqual("agent-one", self.holder("EX-1"))
+        self.assertEqual("agent-one", self.holder("QA-1"))
         self.assertEqual(1, self.events("claimed"))
 
     def test_losing_the_race_to_your_own_earlier_claim_is_not_a_refusal(self) -> None:
@@ -164,47 +164,47 @@ class PlanningConcurrencyTests(unittest.TestCase):
 
         self.item("Idempotent")
         first = self.open()
-        stale = read_model.item_row(first, "EX-1")
+        stale = read_model.item_row(first, "QA-1")
         second = self.open()
-        service.claim_work_item(second, "EX-1", author="agent-one")
+        service.claim_work_item(second, "QA-1", author="agent-one")
         second.commit()
         with mock.patch.object(read_model, "item_row", return_value=stale):
-            answered = service.claim_work_item(first, "EX-1", author="agent-one")
+            answered = service.claim_work_item(first, "QA-1", author="agent-one")
         first.rollback()
         self.assertEqual("agent-one", answered["claim_ref"])
         self.assertEqual(1, self.events("claimed"))
 
     def test_a_release_decided_from_a_stale_row_reports_the_conflict(self) -> None:
         self.item("Released twice")
-        service.claim_work_item(self.conn, "EX-1", author="agent-one")
+        service.claim_work_item(self.conn, "QA-1", author="agent-one")
         self.conn.commit()
         first = self.open()
-        stale = read_model.item_row(first, "EX-1")
+        stale = read_model.item_row(first, "QA-1")
         second = self.open()
-        service.claim_work_item(second, "EX-1", author="agent-one", release=True)
+        service.claim_work_item(second, "QA-1", author="agent-one", release=True)
         second.commit()
         with mock.patch.object(read_model, "item_row", return_value=stale):
             with self.assertRaises(model.RevisionConflictError):
-                service.claim_work_item(first, "EX-1", author="agent-one", release=True)
+                service.claim_work_item(first, "QA-1", author="agent-one", release=True)
         first.rollback()
 
     # -- the other verbs, which share the one guarded write ------------------
 
     def test_a_checklist_step_claim_decided_from_a_stale_row_is_refused(self) -> None:
         self.item("Split work")
-        service.set_checklist(self.conn, "EX-1", ["read", "write"], author="tester")
+        service.set_checklist(self.conn, "QA-1", ["read", "write"], author="tester")
         self.conn.commit()
         first = self.open()
-        stale = read_model.item_row(first, "EX-1")
+        stale = read_model.item_row(first, "QA-1")
         step = model.checklist(stale["checklist"])[0]["id"]
         second = self.open()
-        service.claim_checklist_item(second, "EX-1", step, author="agent-two")
+        service.claim_checklist_item(second, "QA-1", step, author="agent-two")
         second.commit()
         with mock.patch.object(read_model, "item_row", return_value=stale):
             with self.assertRaises(model.RevisionConflictError):
-                service.claim_checklist_item(first, "EX-1", step, author="agent-one")
+                service.claim_checklist_item(first, "QA-1", step, author="agent-one")
         first.rollback()
-        steps = service.get_work_item(self.conn, "EX-1")["checklist"]
+        steps = service.get_work_item(self.conn, "QA-1")["checklist"]
         self.assertEqual(["agent-two", ""], [entry["claimed_by"] for entry in steps])
 
     def test_a_tick_decided_from_a_stale_row_does_not_overwrite_the_other_step(self) -> None:
@@ -216,58 +216,58 @@ class PlanningConcurrencyTests(unittest.TestCase):
         """
 
         self.item("Two steps")
-        service.set_checklist(self.conn, "EX-1", ["read", "write"], author="tester")
+        service.set_checklist(self.conn, "QA-1", ["read", "write"], author="tester")
         self.conn.commit()
         first = self.open()
-        stale = read_model.item_row(first, "EX-1")
+        stale = read_model.item_row(first, "QA-1")
         steps = model.checklist(stale["checklist"])
         second = self.open()
-        service.tick_checklist_item(second, "EX-1", steps[1]["id"], author="agent-two")
+        service.tick_checklist_item(second, "QA-1", steps[1]["id"], author="agent-two")
         second.commit()
         with mock.patch.object(read_model, "item_row", return_value=stale):
             with self.assertRaises(model.RevisionConflictError):
-                service.tick_checklist_item(first, "EX-1", steps[0]["id"], author="agent-one")
+                service.tick_checklist_item(first, "QA-1", steps[0]["id"], author="agent-one")
         first.rollback()
-        done = [entry["done"] for entry in service.get_work_item(self.conn, "EX-1")["checklist"]]
+        done = [entry["done"] for entry in service.get_work_item(self.conn, "QA-1")["checklist"]]
         self.assertEqual([False, True], done)
 
     def test_a_transition_decided_from_a_stale_row_is_refused(self) -> None:
         self.item("Moved twice")
         first = self.open()
-        stale = read_model.item_row(first, "EX-1")
+        stale = read_model.item_row(first, "QA-1")
         second = self.open()
-        service.claim_work_item(second, "EX-1", author="agent-two")
-        service.transition_work_item(second, "EX-1", "dev", author="agent-two")
+        service.claim_work_item(second, "QA-1", author="agent-two")
+        service.transition_work_item(second, "QA-1", "dev", author="agent-two")
         second.commit()
         with mock.patch.object(read_model, "item_row", return_value=stale):
             with self.assertRaises(model.RevisionConflictError):
-                service.transition_work_item(first, "EX-1", "todo", author="agent-one")
+                service.transition_work_item(first, "QA-1", "todo", author="agent-one")
         first.rollback()
-        self.assertEqual("dev", service.get_work_item(self.conn, "EX-1")["state"]["key"])
+        self.assertEqual("dev", service.get_work_item(self.conn, "QA-1")["state"]["key"])
 
     def test_an_edit_decided_from_a_stale_row_is_refused(self) -> None:
         self.item("Retitled twice")
         first = self.open()
-        stale = read_model.item_row(first, "EX-1")
+        stale = read_model.item_row(first, "QA-1")
         second = self.open()
-        service.update_work_item(second, "EX-1", title="Named by two", author="agent-two")
+        service.update_work_item(second, "QA-1", title="Named by two", author="agent-two")
         second.commit()
         with mock.patch.object(read_model, "item_row", return_value=stale):
             with self.assertRaises(model.RevisionConflictError):
-                service.update_work_item(first, "EX-1", title="Named by one", author="agent-one")
+                service.update_work_item(first, "QA-1", title="Named by one", author="agent-one")
         first.rollback()
-        self.assertEqual("Named by two", service.get_work_item(self.conn, "EX-1")["title"])
+        self.assertEqual("Named by two", service.get_work_item(self.conn, "QA-1")["title"])
 
     def test_a_write_whose_item_was_deleted_says_so(self) -> None:
         self.item("Gone")
         first = self.open()
-        stale = read_model.item_row(first, "EX-1")
+        stale = read_model.item_row(first, "QA-1")
         second = self.open()
-        service.delete_work_item(second, "EX-1")
+        service.delete_work_item(second, "QA-1")
         second.commit()
         with mock.patch.object(read_model, "item_row", return_value=stale):
             with self.assertRaisesRegex(model.PlanningError, "deleted"):
-                service.claim_work_item(first, "EX-1", author="agent-one")
+                service.claim_work_item(first, "QA-1", author="agent-one")
         first.rollback()
 
     # -- the take-next queue ------------------------------------------------
@@ -309,8 +309,8 @@ class PlanningConcurrencyTests(unittest.TestCase):
         self.assertEqual("agent-two", taken["claim_ref"])
         self.assertNotEqual(taken_first[0], taken["work_item_id"])
         queue.commit()
-        self.assertEqual("agent-one", self.holder("EX-1"))
-        self.assertEqual("agent-two", self.holder("EX-2"))
+        self.assertEqual("agent-one", self.holder("QA-1"))
+        self.assertEqual("agent-two", self.holder("QA-2"))
 
     def test_the_queue_reports_the_race_it_keeps_losing(self) -> None:
         """A caller that can never win is told so, rather than looped on.
@@ -336,7 +336,7 @@ class PlanningConcurrencyTests(unittest.TestCase):
             with self.assertRaises(model.RevisionConflictError):
                 service.claim_ready_work_item(queue, space=self.space["key"], author="agent-two")
         queue.rollback()
-        self.assertEqual("", self.holder("EX-1"))
+        self.assertEqual("", self.holder("QA-1"))
 
     def test_an_empty_queue_still_answers_with_nothing(self) -> None:
         self.assertIsNone(

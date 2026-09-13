@@ -8,7 +8,7 @@ import { validateSessionFeed, validateSessionsPayload } from '@/shared/api/sessi
 
 const resourceRef = planningSpaceEntity({
   data_scope_id: '22222222-2222-4222-8222-222222222222',
-  space_key: 'AW',
+  space_key: 'QA',
 })
 
 function session() {
@@ -35,7 +35,7 @@ function session() {
     },
     started_at: '2026-08-24T12:00:00Z',
     status: 'active',
-    work_item: 'EX-308',
+    work_item: 'QA-308',
   }
 }
 
@@ -74,7 +74,7 @@ test('session roots require the canonical Planning resource identity', () => {
     () =>
       validateSessionsPayload({
         inbox: [],
-        sessions: [{ ...session(), planning_space: 'AW' }],
+        sessions: [{ ...session(), planning_space: 'QA' }],
       }),
     /planning_space: unknown field/,
   )
@@ -85,7 +85,7 @@ test('session roots require the canonical Planning resource identity', () => {
         sessions: [
           {
             ...session(),
-            space_root: { ...session().space_root, resource_ref: null, space: 'AW' },
+            space_root: { ...session().space_root, resource_ref: null, space: 'QA' },
           },
         ],
       }),

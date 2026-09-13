@@ -61,8 +61,8 @@ describe('session detail entity state', () => {
     await flushPromises()
 
     const input = wrapper.get('input')
-    await input.setValue('EX-308')
-    expect(input.element.value).toBe('EX-308')
+    await input.setValue('QA-308')
+    expect(input.element.value).toBe('QA-308')
 
     await wrapper.setProps({
       session: session('session-two'),

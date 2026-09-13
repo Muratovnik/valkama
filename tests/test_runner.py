@@ -235,10 +235,10 @@ class ArgvTests(unittest.TestCase):
 
 class EnvironmentTests(unittest.TestCase):
     def test_the_spawned_session_learns_which_work_item_it_serves(self) -> None:
-        environment = runner.launch_environment({"PATH": "x"}, "EX-42", "launch-abc", "AW")
-        self.assertEqual("EX-42", environment["VALKAMA_LAUNCH_WORK_ITEM"])
+        environment = runner.launch_environment({"PATH": "x"}, "QA-42", "launch-abc", "QA")
+        self.assertEqual("QA-42", environment["VALKAMA_LAUNCH_WORK_ITEM"])
         self.assertEqual("launch-abc", environment["VALKAMA_LAUNCH_ID"])
-        self.assertEqual("AW", environment["VALKAMA_LAUNCH_SPACE"])
+        self.assertEqual("QA", environment["VALKAMA_LAUNCH_SPACE"])
         self.assertEqual("x", environment["PATH"], "the base environment survives")
 
     def test_a_worktree_lands_beside_its_repository_never_inside(self) -> None:
@@ -269,47 +269,47 @@ class RunnerLifecycleTests(unittest.TestCase):
         return {"client": "claude", "repo": self.repo, **overrides}
 
     def test_a_launch_records_its_shape_without_leaking_the_prompt(self) -> None:
-        started = self.runner.launch("EX-11", self.packet(prompt="secret plan details"))
+        started = self.runner.launch("QA-11", self.packet(prompt="secret plan details"))
         self.assertTrue(started["launch_id"].startswith("launch-"))
         self.assertEqual(self.repo, started["cwd"])
         self.assertNotIn("secret", " ".join(started["argv_shape"]))
         argv, cwd, environment = self.spawned[0]
         self.assertTrue(any("secret plan details" in item for item in argv))
-        self.assertEqual("EX-11", environment["VALKAMA_LAUNCH_WORK_ITEM"])
+        self.assertEqual("QA-11", environment["VALKAMA_LAUNCH_WORK_ITEM"])
         self.assertEqual(self.repo, cwd)
 
     def test_one_work_item_cannot_be_launched_twice_while_it_runs(self) -> None:
-        self.runner.launch("EX-12", self.packet())
+        self.runner.launch("QA-12", self.packet())
         with self.assertRaisesRegex(runner.LaunchError, "already has a running launch"):
-            self.runner.launch("EX-12", self.packet())
+            self.runner.launch("QA-12", self.packet())
 
     def test_a_finished_launch_can_be_relaunched(self) -> None:
-        self.runner.launch("EX-13", self.packet())
+        self.runner.launch("QA-13", self.packet())
         self.process._code = 0
-        self.runner.launch("EX-13", self.packet())
+        self.runner.launch("QA-13", self.packet())
         self.assertEqual(2, len(self.spawned))
 
     def test_stopping_forgets_the_launch_and_reports_it(self) -> None:
-        self.runner.launch("EX-14", self.packet())
-        stopped = self.runner.stop("EX-14")
+        self.runner.launch("QA-14", self.packet())
+        stopped = self.runner.stop("QA-14")
         self.assertTrue(stopped["stopped"])
         self.assertEqual([], self.runner.running())
         with self.assertRaisesRegex(runner.LaunchError, "no launch in this platform"):
-            self.runner.stop("EX-14")
+            self.runner.stop("QA-14")
 
     def test_stopping_an_already_finished_launch_is_honest_about_it(self) -> None:
-        self.runner.launch("EX-15", self.packet())
+        self.runner.launch("QA-15", self.packet())
         self.process._code = 3
-        stopped = self.runner.stop("EX-15")
+        stopped = self.runner.stop("QA-15")
         self.assertFalse(stopped["stopped"])
         self.assertEqual(3, stopped["exit_code"])
 
     def test_reap_reports_each_ending_once(self) -> None:
-        self.runner.launch("EX-16", self.packet())
+        self.runner.launch("QA-16", self.packet())
         self.assertEqual([], self.runner.reap())
         self.process._code = 1
         ended = self.runner.reap()
-        self.assertEqual(["EX-16"], [item["reference"] for item in ended])
+        self.assertEqual(["QA-16"], [item["reference"] for item in ended])
         self.assertEqual(1, ended[0]["exit_code"])
         self.assertEqual([], self.runner.reap(), "an ending is reported once")
 
@@ -333,7 +333,7 @@ class RunnerLifecycleTests(unittest.TestCase):
             },
         }
         self.process.stdout = io.BytesIO((json.dumps(payload) + "\n").encode())
-        started = self.runner.launch("EX-18", self.packet())
+        started = self.runner.launch("QA-18", self.packet())
         self.process._code = 0
         ended = self.runner.reap()[0]
         self.assertEqual("complete", ended["result"]["outcome"])
@@ -344,7 +344,7 @@ class RunnerLifecycleTests(unittest.TestCase):
         # The verdict itself is `executions.results`' answer and is tested
         # against that module; what belongs here is that the runner hands over
         # the output it captured and the exit code it saw.
-        self.runner.launch("EX-19", self.packet())
+        self.runner.launch("QA-19", self.packet())
         self.process._code = 0
         ended = self.runner.reap()[0]
         self.assertEqual("unexpected_no_change", ended["result"]["outcome"])
@@ -358,14 +358,14 @@ class RunnerLifecycleTests(unittest.TestCase):
         os.environ["VALKAMA_CODEX_BIN"] = sys.executable
         self.addCleanup(os.environ.pop, "VALKAMA_CODEX_BIN", None)
 
-        assigned = self.runner.launch("EX-34", self.packet())
+        assigned = self.runner.launch("QA-34", self.packet())
         self.assertTrue(assigned["client_session_id"], "claude assigns its identity up front")
-        self.assertEqual("", self.runner._running["EX-34"].result_path)
+        self.assertEqual("", self.runner._running["QA-34"].result_path)
 
         self.process = FakeProcess()
-        observed = self.runner.launch("EX-35", self.packet(client="codex"))
+        observed = self.runner.launch("QA-35", self.packet(client="codex"))
         self.assertEqual("", observed["client_session_id"], "codex mints and announces its own")
-        live = self.runner._running["EX-35"]
+        live = self.runner._running["QA-35"]
         self.assertTrue(live.result_path.endswith("result.json"))
         self.assertTrue(
             os.path.isfile(os.path.join(os.path.dirname(live.result_path), "result.schema.json"))
@@ -375,7 +375,7 @@ class RunnerLifecycleTests(unittest.TestCase):
         # Two threads share the registry. Before the claim was atomic, a stop
         # arriving while the watcher reaped reported a cancellation over a
         # verdict that had already been observed.
-        self.runner.launch("EX-33", self.packet())
+        self.runner.launch("QA-33", self.packet())
         self.process._code = 0
         start = threading.Barrier(2)
         claims: list[str] = []
@@ -383,7 +383,7 @@ class RunnerLifecycleTests(unittest.TestCase):
         def stopper() -> None:
             start.wait(5)
             try:
-                self.runner.stop("EX-33")
+                self.runner.stop("QA-33")
             except runner.LaunchError:
                 return
             claims.append("stop")

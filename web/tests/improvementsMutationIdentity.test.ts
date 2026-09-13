@@ -25,8 +25,8 @@ test('mutation responses preserve the requested operation kind, scope, and ident
       interface_version: 'improvements-api',
       case: improvementCaseDetail(99, { state: 'approved' }),
       created: true,
-      epic_work_item: 'EX-1',
-      work_item: 'EX-2',
+      epic_work_item: 'QA-1',
+      work_item: 'QA-2',
       launched: false,
     },
   ]

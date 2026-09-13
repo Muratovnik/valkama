@@ -15,7 +15,7 @@ function workItem(overrides: Partial<WorkItemBrief> = {}): WorkItemBrief {
   return {
     work_item_id: '00000000-0000-4000-8000-000000000340',
     planning_space_id: '00000000-0000-4000-8000-000000000001',
-    reference: 'EX-340',
+    reference: 'QA-340',
     number: 340,
     title: 'Centralize semantic presentation',
     kind: 'task',

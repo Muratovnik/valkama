@@ -41,7 +41,7 @@ function record(title: string, revision: number): WorkItem {
   return {
     work_item_id: '00000000-0000-4000-8000-000000000320',
     planning_space_id: '00000000-0000-4000-8000-000000000001',
-    reference: 'EX-320',
+    reference: 'QA-320',
     number: 320,
     title,
     kind: 'task',
@@ -88,7 +88,7 @@ function mountInspector() {
       canGoBack: false,
       kernel: null,
       projectId: 'sample',
-      reference: 'EX-320',
+      reference: 'QA-320',
       refreshToken: 0,
       resourceRef,
       workflow: null,
@@ -120,7 +120,7 @@ describe('WorkItemInspector resource state', () => {
     vi.mocked(fetchWorkItem).mockReset()
     vi.mocked(fetchExecutionHistory).mockReset().mockResolvedValue({
       interface_version: 'valkama-execution-api',
-      work_item: 'EX-320',
+      work_item: 'QA-320',
       executions: [],
     })
   })

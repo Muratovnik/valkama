@@ -66,7 +66,7 @@ test('EntityRef shapes and adapter resource identity validate', () => {
     /data_scope_id/,
   )
   // A key is uppercase, two to eight characters, and holds no separator: the
-  // reference splits on the hyphen, so a key carrying one would make `EX-1-2`
+  // reference splits on the hyphen, so a key carrying one would make `QA-1-2`
   // two readings of the same text.
   for (const space_key of ['main', 'M', 'MAIN-2', 'TOOLONGKEY', 'MA IN']) {
     assert.throws(

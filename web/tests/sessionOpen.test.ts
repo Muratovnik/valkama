@@ -15,7 +15,7 @@ import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
 
 const resourceRef = planningSpaceEntity({
   data_scope_id: '22222222-2222-4222-8222-222222222222',
-  space_key: 'AW',
+  space_key: 'QA',
 }) as PlanningSpaceEntityRef
 
 function mappedRoot(canonicalRoot: string) {

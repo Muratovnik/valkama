@@ -273,7 +273,7 @@ class ContractTests(unittest.TestCase):
             validate_planning_space_ref({"data_scope_id": UUID.upper(), "space_key": "MAIN"})
         # A key is uppercase, two to eight characters, and carries no
         # separator: the reference splits on the hyphen, so a key holding one
-        # would make `EX-1-2` two readings of the same text.
+        # would make `QA-1-2` two readings of the same text.
         for space_key in ("main", "M", "MAIN-2", "TOOLONGKEY", "MA IN", " MAIN"):
             with self.subTest(space_key=space_key), self.assertRaises(ContractError):
                 validate_planning_space_ref({"data_scope_id": UUID, "space_key": space_key})

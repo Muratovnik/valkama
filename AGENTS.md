@@ -230,6 +230,12 @@ force, and the gates hold each:
 
 ## Artifact placement
 
+- Durable owner-private plans, research and acceptance records belong in the
+  private document directory selected by repository-local `releasekit.privateRoot`
+  when configured; otherwise use ignored `.private/`. Resolve that setting locally
+  without copying its value into tracked files. Never include private location
+  mappings, owner planning references or private diagnostics in public source,
+  commits, PRs, release notes or artifacts. Raw evidence remains ignored.
 - This repository's documentation: `docs/` here. Every document under `docs/`
   declares its lifecycle in frontmatter — `status: draft | adopted | superseded`
   and the `card:` ids of the work it belongs to.

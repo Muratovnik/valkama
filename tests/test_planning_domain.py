@@ -22,7 +22,7 @@ class PlanningDomainTests(unittest.TestCase):
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
         self.space = service.create_planning_space(
-            self.conn, project_id="example-workspace", name="Alpha Workspace"
+            self.conn, project_id="example-workspace", name="Quality Assurance"
         )
 
     def item(self, title: str, **kwargs) -> dict:
@@ -33,36 +33,36 @@ class PlanningDomainTests(unittest.TestCase):
     # -- vocabulary ----------------------------------------------------------
 
     def test_a_space_key_is_derived_and_never_shared(self) -> None:
-        self.assertEqual("AW", self.space["key"])
+        self.assertEqual("QA", self.space["key"])
         second = service.create_planning_space(
-            self.conn, project_id="other", name="Alpha Workspace Two"
+            self.conn, project_id="other", name="Quality Assurance Two"
         )
         third = service.create_planning_space(self.conn, project_id="third", name="Valkama")
-        self.assertEqual("AWT", second["key"])
+        self.assertEqual("QAT", second["key"])
         self.assertEqual("VAL", third["key"])
         keys = {row[0] for row in self.conn.execute("SELECT key FROM planning_spaces")}
         self.assertEqual(3, len(keys))
 
     def test_a_derived_key_that_collides_is_numbered(self) -> None:
-        service.create_planning_space(self.conn, project_id="p2", name="Agent Workflow")
+        service.create_planning_space(self.conn, project_id="p2", name="Quick Analysis")
         keys = sorted(row[0] for row in self.conn.execute("SELECT key FROM planning_spaces"))
-        self.assertEqual(["AW", "AW2"], keys)
+        self.assertEqual(["QA", "QA2"], keys)
 
     def test_a_human_reference_round_trips(self) -> None:
         created = self.item("Land the planning domain")
-        self.assertEqual("EX-1", created["reference"])
+        self.assertEqual("QA-1", created["reference"])
         self.assertEqual(
-            created["work_item_id"], service.get_work_item(self.conn, "EX-1")["work_item_id"]
+            created["work_item_id"], service.get_work_item(self.conn, "QA-1")["work_item_id"]
         )
-        self.assertEqual(("AW", 1), model.parse_human_id("EX-1"))
+        self.assertEqual(("QA", 1), model.parse_human_id("QA-1"))
         with self.assertRaisesRegex(model.PlanningError, "KEY-NUMBER"):
-            model.parse_human_id("EX-1")
+            model.parse_human_id("qa-1")
 
     def test_a_number_is_never_handed_out_twice(self) -> None:
         first = self.item("First")
         service.delete_work_item(self.conn, first["reference"])
         second = self.item("Second")
-        self.assertEqual("EX-2", second["reference"])
+        self.assertEqual("QA-2", second["reference"])
 
     # -- workflow is data ----------------------------------------------------
 
@@ -152,7 +152,7 @@ class PlanningDomainTests(unittest.TestCase):
     def test_review_warns_without_evidence_instead_of_refusing(self) -> None:
         created = self.item("Land the planning domain")
         moved = service.transition_work_item(self.conn, created["reference"], "review")
-        self.assertEqual(["EX-1 enters Review with no session or commit ref"], moved["warnings"])
+        self.assertEqual(["QA-1 enters Review with no session or commit ref"], moved["warnings"])
         service.attach_ref(self.conn, created["reference"], "commit", "abc1234", author="tester")
         again = service.transition_work_item(self.conn, created["reference"], "todo")
         self.assertEqual([], again["warnings"])
@@ -287,7 +287,7 @@ class PlanningDomainTests(unittest.TestCase):
         service.link_work_items(self.conn, first["reference"], second["reference"], "relates-to")
         payload = views.planning_payload(self.conn)
         self.assertEqual(views.READ_MODEL_INTERFACE, payload["interface_version"])
-        self.assertEqual("AW", payload["planning_space"]["key"])
+        self.assertEqual("QA", payload["planning_space"]["key"])
         self.assertEqual(6, len(payload["workflow"]["states"]))
         self.assertEqual(2, len(payload["work_items"]))
         self.assertEqual(
@@ -335,7 +335,7 @@ class PlanningDomainTests(unittest.TestCase):
         service.claim_work_item(self.conn, created["reference"], author="tester")
         feed = views.activity_feed(self.conn, limit=10)
         self.assertEqual(["claimed", "created"], [entry["action"] for entry in feed])
-        self.assertEqual("EX-1", feed[0]["reference"])
+        self.assertEqual("QA-1", feed[0]["reference"])
 
     def test_a_project_gets_its_space_on_first_use(self) -> None:
         self.assertIsNone(views.space_for_project(self.conn, "sims"))

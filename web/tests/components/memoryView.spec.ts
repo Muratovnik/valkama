@@ -53,8 +53,8 @@ const links = {
       attached_at: '2026-08-22T00:00:00Z',
       work_item_id: 'wi-0001',
       work_item_title: 'Convert the Board domain',
-      work_item_key: 'EX-264',
-      space_key: 'AW',
+      work_item_key: 'QA-264',
+      space_key: 'QA',
     },
   ],
   truncated: false,
@@ -155,7 +155,7 @@ describe('MemoryView', () => {
     const link = present(wrapper.find('.link-row').element, 'the attached pointer')
     expect(link.textContent).toContain('Why the cutover was one-way')
     expect(link.textContent).toContain('memory://record/abc123')
-    expect(link.textContent).toContain('EX-264')
+    expect(link.textContent).toContain('QA-264')
   })
 
   it('reaching a pointer means reaching the work item it belongs to', async () => {
@@ -165,7 +165,7 @@ describe('MemoryView', () => {
 
     await wrapper.get('.link-row button').trigger('click')
     expect(wrapper.emitted('open-work-item')).toEqual([
-      [{ planning_space: 'AW', reference: 'EX-264' }],
+      [{ planning_space: 'QA', reference: 'QA-264' }],
     ])
   })
 

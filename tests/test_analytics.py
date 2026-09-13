@@ -1586,21 +1586,21 @@ class PortfolioAnalyticsTests(unittest.TestCase):
     def test_a_space_is_resolved_by_its_key_and_not_by_its_name(self) -> None:
         """The live store is where this failed, because a fixture hid it.
 
-        A space's name and its key are different strings — "Alpha Workspace" is
-        keyed `AW` — and the projection resolves by key. Every case here had
+        A space's name and its key are different strings — "Quality Assurance" is
+        keyed `QA` — and the projection resolves by key. Every case here had
         named a space after its own key, so passing the name looked correct
         until it met a real store and raised on the first project.
         """
 
         planning.create_planning_space(
-            self.conn, project_id="alpha", name="Alpha Workspace", key="AW"
+            self.conn, project_id="alpha", name="Quality Assurance", key="QA"
         )
-        planning.create_work_item(self.conn, space="AW", title="one", state="todo")
+        planning.create_work_item(self.conn, space="QA", title="one", state="todo")
         self.conn.commit()
 
         (row,) = analytics_portfolio.portfolio(self.conn)["projects"]
-        self.assertEqual("AW", row["space_key"])
-        self.assertEqual("Alpha Workspace", row["space_name"])
+        self.assertEqual("QA", row["space_key"])
+        self.assertEqual("Quality Assurance", row["space_name"])
         self.assertEqual(1, row["inventory"])
 
     def test_a_store_with_no_spaces_reads_as_empty_rather_than_failing(self) -> None:

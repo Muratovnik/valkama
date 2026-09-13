@@ -41,7 +41,7 @@ UUIDS = st.uuids(version=4).map(str)
 TEXT_ALPHABET = string.ascii_letters + string.digits + " -_."
 SAFE_TEXT = st.text(alphabet=TEXT_ALPHABET, min_size=1, max_size=60).map(str.strip).filter(bool)
 # A planning space key: uppercase, two to eight characters, no separator. Mirrors
-# _SPACE_KEY_RE, which is what makes `EX-142` split into exactly two readings.
+# _SPACE_KEY_RE, which is what makes `QA-142` split into exactly two readings.
 SPACE_KEYS = st.from_regex(r"[A-Z][A-Z0-9]{1,7}", fullmatch=True)
 
 PROJECT_REFS = st.fixed_dictionaries({"project_id": PROJECT_IDS})
@@ -174,7 +174,7 @@ class ContractLawTests(unittest.TestCase):
 class SpaceKeyLawTests(unittest.TestCase):
     @given(SPACE_REFS, st.sampled_from((" ", "	", "  ", " 	")))
     def test_a_space_key_is_never_accepted_with_padding(self, ref, padding) -> None:
-        # A space is addressed by key, so " AW" and "AW" must not both resolve;
+        # A space is addressed by key, so " QA" and "QA" must not both resolve;
         # one of them is a typo.
         with self.assertRaises(platform_contracts.ContractError):
             platform_contracts.validate_planning_space_ref(
