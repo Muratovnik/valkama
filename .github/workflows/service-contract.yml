@@ -9,7 +9,10 @@ permissions:
   contents: read
 
 jobs:
+  # Hosted jobs are not run while this repository is private. Each job skips itself
+  # unless its event proves the repository public; a scheduled event never does.
   check:
+    if: ${{ github.event.repository && !github.event.repository.private }}
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:

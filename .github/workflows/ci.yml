@@ -8,7 +8,10 @@ permissions:
   contents: read
 
 jobs:
+  # Hosted jobs are not run while this repository is private. Each job skips itself
+  # unless its event proves the repository public; a scheduled event never does.
   python:
+    if: ${{ github.event.repository && !github.event.repository.private }}
     name: Python quality and tests
     runs-on: windows-2025
     timeout-minutes: 30
@@ -48,6 +51,7 @@ jobs:
         run: python -m coverage report
 
   web:
+    if: ${{ github.event.repository && !github.event.repository.private }}
     name: Web quality, Settings smoke, and build
     runs-on: windows-2025
     timeout-minutes: 30
@@ -82,6 +86,7 @@ jobs:
         run: git diff --exit-code -- web/dist
 
   desktop:
+    if: ${{ github.event.repository && !github.event.repository.private }}
     name: Desktop tests
     runs-on: windows-2025
     timeout-minutes: 20
