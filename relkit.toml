@@ -31,7 +31,9 @@ required_ignores = [
   "private.key",
   "tests/test_codex_config.py",
 ]
-allowed_identities = [
+# The owner's own commits must not credit an AI; a contributor's pull request,
+# and the test merge the host builds for it, carry the contributor's own.
+owner_identities = [
   "Nikolai Muratov <el.muratovnik@gmail.com>",
   "Muratovnik <68428072+Muratovnik@users.noreply.github.com>",
 ]
