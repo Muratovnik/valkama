@@ -46,6 +46,9 @@ forbid_internal_planning = false
 # "installation" is public product vocabulary throughout setup and adapter
 # contracts. Exact owner observations are supplied by the private policy.
 forbid_machine_observations = false
+# No hosted jobs run while this repository is private; a skipped run is the
+# configured state, not a failure. The audit holds every workflow job to that.
+hosted_ci = "public-only"
 betterleaks_config = ".betterleaks.toml"
 
 [exposure.providers.AgentMemory]

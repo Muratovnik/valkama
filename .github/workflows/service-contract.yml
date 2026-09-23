@@ -11,6 +11,7 @@ permissions:
 jobs:
   # Hosted jobs are not run while this repository is private. Each job skips itself
   # unless its event proves the repository public; a scheduled event never does.
+  # relkit.toml declares hosted_ci = "public-only", and its audit holds every job to it.
   check:
     if: ${{ github.event.repository && !github.event.repository.private }}
     name: ${{ matrix.os }}
