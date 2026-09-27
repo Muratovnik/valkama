@@ -21,7 +21,6 @@ const projects = [
     binding_state: 'mapped' as const,
     project_id: 'project-alpha',
     resources,
-    source_hash: 'source-hash',
     title: 'Alpha',
   },
 ]

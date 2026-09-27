@@ -15,8 +15,8 @@ directory, and the MCP server only exists while a client is talking to it.
 ## What it does
 
 - **Planning with Kanban, list, and graph views.** Its MCP tools create, move,
-  claim, comment, link, and summarise work; `claim_card` remains atomic on the
-  current Planning wire.
+  claim, comment, link, and summarise work; `claim_work_item` refuses a
+  competing claim on the current Planning wire.
 - **Sessions and execution tracking.** Launches carry an explicit delivery
   contract, and outcomes are typed results rather than exit codes.
 - **A visible integration registry.** Settings distinguishes Modules, Adapters,
@@ -115,10 +115,10 @@ client a different one, or every Planning card will say `agent`.
 
 ### 4. Check that it worked
 
-Restart the client, then ask it to list Planning boards. In Claude Code:
+Restart the client, then ask it to list Planning spaces. In Claude Code:
 
 ```
-> use the valkama mcp server to list boards
+> use the valkama mcp server to list planning spaces
 ```
 
 You should get an empty list rather than an error. If the tools are missing,
@@ -131,7 +131,31 @@ For local diagnostics without opening or migrating the database:
 python valkama.py status
 ```
 
-### 5. Optional: the desktop app (Windows)
+### 5. Register a project for project views
+
+Valkama keeps a local project inventory. Register an existing directory, using
+your own lowercase project id, display name, and absolute path. Replace the
+example values, including the path, with your project's values:
+
+```powershell
+python valkama.py projects add my-project --name "My Project" --root "C:\path\to\my-project"
+python valkama.py projects check
+```
+
+The check reports `"ok": true` when Valkama's inventory and the projection
+used by its modules agree. To connect the project to Planning, use the MCP
+`create_planning_space` tool with `project_id` set to `my-project`, then bind
+the returned space key:
+
+```powershell
+python valkama.py projects bind my-project --space MY
+```
+
+Replace `MY` with the key returned for your Planning space. A binding must
+point to a space whose project id matches the registered project. Run
+`python valkama.py projects list` to inspect the result.
+
+### 6. Optional: the desktop app (Windows)
 
 ```powershell
 cd desktop
@@ -152,8 +176,8 @@ anything else is reported and left alone.
 
 ## Commands
 
-The board- and card-named commands below are the current Planning-specific CLI
-and MCP wire. They do not define Kernel entities used by other modules.
+These commands cover the current CLI. Planning MCP tools use spaces and work
+items; a Kanban card is one view of a work item.
 
 ```
 python valkama.py <command> [options]
@@ -169,8 +193,9 @@ python valkama.py <command> [options]
 | `launcher status [--directory DIR]` | verify launcher ownership and hashes |
 | `launcher listener status\|stop [--port 8642]` | inspect or stop only the Windows listener proven to run through the managed shim |
 | `launcher uninstall [--directory DIR] [--force]` | remove only the managed launcher files |
-| `summary [--board NAME]` | a short text report, meant for session hooks |
+| `summary [--space KEY]` | a short Planning-space report, meant for session hooks |
 | `runtime` | print this checkout's backend and static identity |
+| `projects list\|add\|update\|remove\|bind\|check\|apply\|doctor\|rollback\|import` | manage the local project inventory and its projection; see [Project registry](#project-registry) |
 | `config [--json]` | every setting, the layer it came from, and the value in use |
 | `setup [--json] [--apply]` | what this installation needs, and the exact command for each gap |
 | `adapter check --at URL \| --command ARGV \| --mcp ARGV \| --record FILE` | ask an adapter for its manifest, then probe it for the calls it should refuse |
@@ -178,14 +203,12 @@ python valkama.py <command> [options]
 | `adapter remove ADAPTER_ID` | stop declaring an installed adapter |
 | `adapter list` | the adapters this installation declares |
 | `doctor [--json] [--no-probe]` | check this installation in four levels — Installation, Projects, Capabilities, Connections — and say what to do about each problem |
-| `dump [--out FILE]` | export the whole database as JSONL |
-| `graph [--board NAME] [--format mermaid\|json]` | the dependency graph of one board |
-| `merge-boards --target NAME --source OLD [--source ...]` | consolidate boards, keeping every id |
+| `export [--section planning\|relations\|settings\|improvements]` | write the selected sections as one export; repeat `--section`, or omit it for all sections |
+| `migrate planning-model [--dry-run]` | explicitly convert a Board-era store to Planning once; dry run converts a copy |
 | `attach NAME PATH [--label TEXT]` | attach another database file as a scope |
 | `detach NAME` | drop a scope from every view; the file is untouched |
-| `scopes [--json]` | list attached scopes and their boards |
+| `scopes [--json]` | list attached scopes and their Planning spaces |
 | `purge-stream [--session ID] [--include-active] [--retention]` | delete purgeable stream events; analytics rows stay |
-| `import-routa FILE` | import a Routa export |
 
 ## External adapters
 
@@ -230,18 +253,12 @@ people's products with their own APIs; Valkama reaches one through a provider
 written on this side that knows that product's shape. Asking a backend to
 answer the three calls above would be asking it to become a Valkama plugin.
 
-```
-python valkama.py adapter check manifest.json
-```
-
-The manifest half of the check is offline. The half that matters needs the
-adapter running, and every case in it is a refusal: a capability the manifest
-never declared, a payload that is not an object. An adapter that answers those
-cheerfully is the one that produces a plausible wrong result months later, when
-it is already in a projection and nothing says which call made it. The check
-also compares the manifest it was handed against the one the address serves — a
-file describing one adapter while the endpoint runs another installs a
-registration that reaches somewhere else.
+`adapter check` needs a destination: `--at`, `--command`, `--mcp`, or an installed
+record supplied with `--record`. It fetches and validates the manifest, then
+probes the running adapter for calls it should refuse, such as an undeclared
+capability or a payload that is not an object. It also checks that the manifest
+still identifies the adapter at that destination. A record describing one
+adapter while its destination runs another cannot establish a valid connection.
 
 Check a maintained adapter at the destination its owner documents, then install
 that same destination only after the check passes:
@@ -282,8 +299,9 @@ Four settings have a file. Everything else is an environment variable, and the
 environment overrides the file for every setting, so automation and a
 development shell never have to edit anything to change one run.
 
-The file is `~/.valkama/config.json`, and it may not exist — the defaults below
-are what you get:
+The file is `~/.valkama/config.json`, and it may not exist. This example puts
+the store on another drive and points at Claude Code journals; it is not the
+default configuration:
 
 ```json
 {
@@ -310,22 +328,27 @@ rather than falling back to a default, and `python valkama.py doctor` says why.
 | `claude_session_root` | `VALKAMA_CLAUDE_SESSION_ROOT` | none | where Claude Code keeps its session journals |
 | `codex_rollout_root` | `VALKAMA_CODEX_ROLLOUT_ROOT` | none | where Codex keeps its rollout journals |
 
-The project registry is not Valkama configuration. Host Runtime is its only
-writer and recovery owner, at the fixed path
-`%LOCALAPPDATA%\Valkama\projects.json`. Valkama reads those bytes without
-rewriting them and accepts the project set only when the complete file matches
-the canonical schema. An absent or malformed file therefore exposes no partial
-projects to Planning, Memory, Skills, or desktop launchers. Recover it through
-the installed Host Runtime
-[project-registry owner](https://github.com/Muratovnik/agent-host-runtime/blob/main/tools/project_registry.py):
+### Project registry
 
-```powershell
-$registryTool = Join-Path $env:LOCALAPPDATA "AgentHostRuntime\current\tools\project_registry.py"
-python "$registryTool" apply
-python "$registryTool" doctor
-```
+The project registry is managed by Valkama's `projects` command, separate from
+`config.json`. On Windows, Valkama keeps the authoritative project inventory at
+`%LOCALAPPDATA%\Valkama\project-registry.toml` and publishes a schema-v3
+projection at `%LOCALAPPDATA%\Valkama\projects.json`. Planning, Memory, Skills,
+and the desktop read that complete projection. A missing or malformed projection
+exposes no partial project list.
 
-There is no Valkama path override or legacy registry import.
+Use `projects add` to register an existing directory and `projects bind` to
+connect it to an existing Planning space. `projects update ID --name NAME`
+changes its display name; `--root ABS` moves its root to an existing directory,
+even if the old root is gone. `projects remove ID` removes only the registration,
+leaving the Planning store untouched. `projects check` compares the inventory
+and projection; `projects doctor` reports the same health result.
+`projects apply` republishes the current inventory, and `projects rollback`
+restores the exact inventory and projection bytes saved before the preceding
+change. For a one-time transfer from an existing schema-1 TOML inventory, use
+`projects import --source <absolute-path-to-inventory>`. Import refuses to
+overwrite an inventory or projection with different project data. There is no
+project-registry path override.
 
 The rest are environment-only, because each is either a one-shot switch or
 belongs to a process rather than to an installation:
@@ -372,21 +395,24 @@ epic id on every card.
 
 Three things make a card honest about its own progress:
 
-- **A checklist with stable ids.** Agents claim an item (`claim_checklist_item`)
-  and complete it by id (`tick_item`). No invented percentages, and two agents
-  splitting a card each hold their own item.
+- **A checklist with stable ids.** Agents claim a step with
+  `claim_work_item_checklist_item` and complete it by id with
+  `tick_work_item_checklist_item`. No invented percentages, and two agents
+  splitting a work item each hold their own step.
 - **Typed refs** — commit hashes, session ids, memory entry ids — attached with
-  `attach_ref`, so the next agent reads pointers instead of doing archaeology.
+  `attach_work_item_ref`, so the next agent reads pointers instead of doing
+  archaeology.
 - **An activity trace.** Creations, moves, claims, takeovers, releases,
-  completions and link changes are all recorded with an author. `get_card`
+  completions and link changes are all recorded with an author. `get_work_item`
   returns it, so nobody has to guess who did what. Reordering within a lane is
   deliberately *not* history.
 
-Cards relate to each other the way [beads](https://github.com/steveyegge/beads)
-proved useful for agents. `blocked_by` / `blocks` feed `list_cards(ready=true)`
-— the take-next queue of cards that are queued, unclaimed and unblocked.
-`discovered_from` records where work found en route came from. Blockers that
-aren't cards stay comments.
+Work items relate to each other the way
+[beads](https://github.com/steveyegge/beads) proved useful for agents. A
+`blocks` link keeps unfinished dependencies out of `claim_ready_work_item`,
+which chooses and claims a ready item in one step. `discovered-from` records
+where work found en route came from. Blockers that are not work items stay
+comments.
 
 Guards refuse a move the board could not honestly report: `dev` needs an
 executor, `done` needs every checklist item closed and a summary, `blocked`
@@ -398,17 +424,24 @@ was in when you grabbed it. If it has since moved, the server answers `409` with
 who moved it where, and the drop is refused rather than silently undoing an
 agent's work.
 
-### Rolling back a merge
+### Migrating an older store
 
-`merge-boards` writes a clean SQLite backup before it touches anything. To undo
-one: stop every client, delete any `-wal` / `-shm` file beside
-`~/.valkama/valkama.sqlite3`, then copy the `kanban-premerge-*.sqlite3` snapshot
-named in that merge's own result over the database.
-`test_a_merge_can_be_rolled_back_from_the_snapshot_it_takes` runs exactly that
-sequence, so the path is tested rather than assumed.
+A store that still contains the Board-era model refuses to open until you
+authorize its one-way conversion. Inspect the conversion first, then apply it:
 
-Schema upgrades snapshot the database into `~/.valkama/backups/` before any
-`ALTER` runs, keeping the last five.
+```bash
+python valkama.py migrate planning-model --dry-run
+python valkama.py migrate planning-model
+```
+
+The dry run converts a temporary copy. Before changing the actual store, the
+migration takes a clean SQLite snapshot in the `backups/` directory beside the
+configured database. The generated filename begins `valkama-` and includes a
+migration label such as `preproductmodel` or `preupgrade`. To check recovery
+without replacing your working store, copy the snapshot to a separate path,
+set `VALKAMA_DB` to the copy, and run the same dry run and migration there. The
+database path may differ from the default when `store` or `VALKAMA_DB` is
+configured. Generated snapshots retain the last five files per migration label.
 
 ## Planning: launching agents from a card
 
@@ -420,7 +453,9 @@ Both clients get an enforced JSON result schema. The persisted outcome is one of
 `launch_failed`, `refused`, `expected_no_change`, `unexpected_no_change`,
 `partial` or `complete` — **exit code zero is not delivery.** Only `complete`, or
 an `expected_no_change` the contract allows, moves Dev to Review. A spawn failure
-restores the exact pre-launch lane and claim and stays visible on the card.
+restores the pre-launch lane and claim while they still belong to that launch.
+If someone changed the item meanwhile, their state is preserved and the failed
+attempt records why compensation was skipped.
 
 Resume works only with the client's own stored session identity: a generated
 UUID for fresh Claude launches, the thread id from Codex's JSON event stream.
@@ -434,8 +469,9 @@ registration.
 
 ## Analytics dashboard
 
-`?board=<name>&view=dashboard` is a read-only projection over the same cards and
-events: status visits, flow, throughput, cycle/reopen/blocked KPIs, and an
+Open Analytics from the module navigation to see a read-only projection over
+the project's work items and events: status visits, flow, throughput,
+cycle/reopen/blocked KPIs, and an
 `as_of` timestamp.
 
 Its rule is that missing history stays missing. Coverage is reported as

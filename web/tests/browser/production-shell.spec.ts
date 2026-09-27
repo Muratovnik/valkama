@@ -49,6 +49,22 @@ test('cold start honors the saved server-side route preference', async ({ page }
   await expect(page.locator('.route-recovery')).toHaveCount(0)
 })
 
+test('global Planning opens a mapped project using the current context wire contract', async ({
+  page,
+}) => {
+  const { platformReads } = await installBackend(page)
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: globalScope }))
+  const project = page.locator('.portfolio-project').filter({ hasText: projectId })
+  await expect(project).toBeVisible()
+  await project.getByRole('button', { name: /Open project/i }).click()
+  await expect(page).toHaveURL(new RegExp(`/modules/planning/project/${projectId}$`))
+  await expect(page.locator('.operating-scope [role="combobox"]')).toContainText('Example Project')
+  await expect(page.locator('.work-item-board')).toBeVisible()
+  expect(platformReads.find((entry) => entry.startsWith('/api/planning?'))).toContain(
+    `data_scope_id=${dataScopeId}`,
+  )
+})
+
 /**
  * Reads the open work item's reference out of the URL.
  *
@@ -290,6 +306,11 @@ test("a work item's plan anchor is readable and can be opened where it lives", a
 test('an attached same-key space stays readable but never reaches primary-only projections or writes', async ({
   page,
 }) => {
+  const executionReads: string[] = []
+  page.on('request', (request) => {
+    const path = new URL(request.url()).pathname
+    if (path.startsWith('/api/execution/')) executionReads.push(path)
+  })
   const { legacyRequests, platformReads } = await installBackend(page, {
     includeAttachedDuplicate: true,
     activity: 'unbound',
@@ -308,6 +329,10 @@ test('an attached same-key space stays readable but never reaches primary-only p
   await expect(page.locator('.workspace-note')).toContainText(
     'attached data stores remain read-only',
   )
+  await expect(page.locator('.work-item-list')).toContainText('Attached:')
+  expect(platformReads.find((entry) => entry.startsWith('/api/planning?'))).toContain(
+    `data_scope_id=${attachedDataScopeId}`,
+  )
   await page.locator('.work-item-list .list-open').first().click()
   await expect(page.locator('.drawer')).toBeVisible()
   await expect
@@ -315,12 +340,20 @@ test('an attached same-key space stays readable but never reaches primary-only p
       platformReads.findLast((entry) => entry.startsWith('/api/modules/planning/work-item?')),
     )
     .toContain(`data_scope_id=${attachedDataScopeId}`)
+  await expect(page.locator('.drawer')).toContainText('Attached:')
   await expect(page.locator('.drawer .head-actions')).toHaveCount(0)
+  await expect(page.locator('.drawer').getByRole('button', { name: /^Execution$/i })).toHaveCount(0)
+  expect(executionReads).toEqual([])
   await page
     .locator('.drawer')
     .getByRole('button', { name: /Activity/i })
     .click()
   await expect(page.locator('.drawer .note-form')).toHaveCount(0)
+  await page
+    .locator('.drawer')
+    .getByRole('button', { name: /Relations/i })
+    .click()
+  await expect(page.locator('.drawer')).toContainText('Attached: Release notes')
 
   const dashboardRequests: string[] = []
   page.on('request', (request) => {

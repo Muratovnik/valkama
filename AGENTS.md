@@ -187,6 +187,13 @@ Add a setting there and nowhere else; a second reader once moved the Kernel's
 view of the projects registry and nothing else's. Defaults stay with the module that owns them, so
 the store's path is not in a module the store imports.
 
+The project inventory and its schema-v3 projection are Valkama-owned user state,
+managed through `valkama.py projects`. Keep one writer, a fixed projection path
+for server and desktop consumers, atomic writes, and exact-byte rollback.
+Host Runtime may invoke the public command for compatibility but must not write
+the projection independently. Do not add a path override or infer a Planning
+binding from a project name or directory.
+
 The kernel names the module platform, not a former product: `server/platform/`
 is the package, `platform_*` the tables, `platform.*` the i18n key space, and
 `valkama-*` the interface ids, none with a version suffix. Four literals are

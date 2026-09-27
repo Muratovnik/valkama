@@ -256,7 +256,7 @@ test('analytics serves live projections for both operating levels', () => {
 test('planning projects three views from one read of the space', () => {
   // The three views take the same model apart rather than each fetching their
   // own: one `/api/planning` answer carries the workflow, the items and the links.
-  assert.match(planningSurface, /fetchPlanning\(\{ project \}\)/)
+  assert.match(planningSurface, /fetchPlanning\(\{ project, \.\.\.space \}\)/)
   assert.match(workspace, /<WorkItemBoard/)
   assert.match(workspace, /<WorkItemList/)
   assert.match(workspace, /<WorkItemGraph/)

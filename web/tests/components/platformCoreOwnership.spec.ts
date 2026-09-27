@@ -97,7 +97,6 @@ const context = {
         { resource_ref: planningSpaceEntity(primary), state: 'mapped' },
         { resource_ref: planningSpaceEntity(attached), state: 'mapped' },
       ],
-      source_hash: 'a'.repeat(64),
       title: 'Example',
     },
   ],

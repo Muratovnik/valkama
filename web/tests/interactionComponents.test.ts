@@ -162,7 +162,10 @@ test('the inspector exposes its emits, related navigation, and shared focus owne
   // keyed entity keeps the current panel and only reloads its data.
   assert.match(planningSurface, /:key="openIdentity"/)
   assert.match(drawer, /:key="reference"/)
-  assert.match(drawer, /`\$\{props\.reference\}:\$\{props\.refreshToken\}`/)
+  assert.match(
+    drawer,
+    /`\$\{props\.projectId\}:\$\{props\.resourceRef\.resource_id\}:\$\{props\.reference\}:\$\{props\.refreshToken\}`/,
+  )
 })
 
 test('the work-item inspector is persisted and bounded by its actual workspace', () => {

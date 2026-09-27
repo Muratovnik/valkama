@@ -11,10 +11,11 @@ import {
   readPending,
   readRefusal,
   validateReadModel,
-  validateWorkItem,
   validateWorkItemRecord,
 } from '@/shared/api/planningModel.ts'
 import type { PlanningReadModel, WorkItem } from '@/shared/api/planningModel.ts'
+import { fetchPlanningWorkItem } from '@/shared/api/platformPlanningApi.ts'
+import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import { secureFetch } from '@/shared/api/secureFetch.ts'
 
 /** The cutover has not run, so the Board domain is still the live one. */
@@ -86,18 +87,25 @@ async function write(path: string, body: Record<string, unknown>): Promise<unkno
 // -- reads -------------------------------------------------------------------
 
 /**
- * One space's whole read model, named either outright or by the project that
- * binds it. A browser knows its project before it knows a space id, so the
- * translation stays on the server rather than in every caller.
+ * One space's whole read model, resolved through its exact project binding.
  */
 export async function fetchPlanning(
-  target: { project: string } | { space: string },
+  target: { project: string } & PlanningSpaceRef,
 ): Promise<PlanningReadModel> {
   return validateReadModel(await request(`/api/planning${query({ ...target })}`))
 }
 
-export async function fetchWorkItem(reference: string): Promise<WorkItem> {
-  return validateWorkItem(await request(`/api/planning/work-item${query({ id: reference })}`))
+export async function fetchWorkItem(
+  reference: string,
+  target: { project: string; space: PlanningSpaceRef },
+): Promise<WorkItem> {
+  const payload = await fetchPlanningWorkItem(
+    { kind: 'project', project_ref: { project_id: target.project } },
+    { reference, space_ref: target.space },
+  )
+  if (payload.state.status !== 'ready')
+    throw new PlanningRefusedError('unavailable', 'Exact work item is unavailable', 409)
+  return payload.state.payload.work_item
 }
 
 // -- writes ------------------------------------------------------------------

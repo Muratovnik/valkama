@@ -38,6 +38,7 @@ from .planning import model as planning_model
 from .planning import service as planning_service
 from .planning import views as planning_views
 from .platform import core as platform_core
+from .platform.contracts import ContractError
 from .projects import scopes
 from .refs import resolve_ref
 from .sessions import (
@@ -423,7 +424,23 @@ def _publishes(notify: _Notify | None, path: str) -> bool:
 
 
 def _planning_read(call: _Call) -> _Answer | None:
+    if {"data_scope_id", "space_key"} & call.parameters.keys():
+        if call.path != "/api/planning":
+            raise planning_api.PlanningHttpError(
+                400, "invalid_request", "Exact scope is supported by the Planning model read"
+            )
+        platform = platform_core.Platform(call.store(), db_path())
+        return 200, platform.planning_read_model(
+            call.parameters,
+            lambda conn, key: planning_views.planning_payload(conn, space=key),
+        )
     return planning_api.handle_get(call.store(), call.path, call.parameters)
+
+
+def _planning_read_error(error: Exception) -> _Answer:
+    if isinstance(error, (platform_core.PlatformHttpError, ContractError)):
+        return platform_core.error_response(error)
+    return planning_api.error_response(error)
 
 
 def _memory_read(call: _Call) -> _Answer | None:
@@ -619,7 +636,7 @@ _GET_BOUNDARIES: tuple[_Boundary, ...] = (
     _Boundary(
         prefix="/api/planning",
         handler=_planning_read,
-        errors=planning_api.error_response,
+        errors=_planning_read_error,
         commit=_Commit.READ_ONLY,
     ),
     _Boundary(

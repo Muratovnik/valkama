@@ -81,7 +81,6 @@ const contextProjects = [
     binding_state: 'mapped' as const,
     project_id: 'project-alpha',
     resources: contextResources,
-    source_hash: 'context-harness',
     title: 'Проект с длинным рабочим названием',
   },
 ]
@@ -245,6 +244,7 @@ const Harness = defineComponent({
           ]),
           itemHarness
             ? h(WorkItemInspector, {
+                projectId: 'example-project',
                 reference: testItem.reference,
                 resourceRef: sessionResourceRef,
                 canGoBack: false,

@@ -2160,6 +2160,26 @@ class Platform:
             "work_items": work_items,
         }
 
+    def planning_read_model(
+        self,
+        parameters: Mapping[str, list[str]],
+        loader: Callable[[sqlite3.Connection, str], dict],
+    ) -> dict:
+        """Read Planning's model through the exact owner binding and store.
+
+        Planning owns the model; the Kernel owns which connection may answer.
+        Attached connections are opened read-only by the shared store resolver.
+        """
+
+        if set(parameters) != {"project", "data_scope_id", "space_key"}:
+            raise PlatformHttpError(400, "error", "Exact Planning query fields are required")
+        project_id = self._one(parameters, "project")
+        self._project(project_id)
+        space_ref = self._space_ref_parameters(parameters)
+        self._require_mapping(project_id, space_ref)
+        with self._store_connection(space_ref) as store:
+            return loader(store, space_ref["space_key"])
+
     def planning_work_item_payload(
         self,
         parameters: Mapping[str, list[str]],

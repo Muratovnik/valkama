@@ -43,7 +43,9 @@ class FakeProcess:
 
 class PacketTests(unittest.TestCase):
     def setUp(self) -> None:
-        self._dir = tempfile.TemporaryDirectory()
+        scratch = os.path.join(ROOT, "tmp")
+        os.makedirs(scratch, exist_ok=True)
+        self._dir = tempfile.TemporaryDirectory(dir=scratch)
         self.repo = self._dir.name
 
     def tearDown(self) -> None:
@@ -103,8 +105,9 @@ class PacketTests(unittest.TestCase):
         self.assertEqual((), senior.warnings)
 
     def test_a_worktree_needs_a_git_repository(self) -> None:
-        with self.assertRaisesRegex(runner.LaunchError, "Git repository"):
-            runner.validate_packet(self.packet(environment="worktree"))
+        with mock.patch.dict(os.environ, {"GIT_CEILING_DIRECTORIES": os.path.join(ROOT, "tmp")}):
+            with self.assertRaisesRegex(runner.LaunchError, "Git repository"):
+                runner.validate_packet(self.packet(environment="worktree"))
 
     def test_control_characters_are_stripped_from_a_prompt(self) -> None:
         noisy = "do" + chr(0) + " the thing" + chr(7)

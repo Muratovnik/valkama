@@ -20,8 +20,9 @@ changed in it.
   Analytics, Improvements, Skills, and Settings share one Kernel vocabulary,
   persisted module registry, and normalized integration records.
 - **A Planning module agents use over MCP.** Its Kanban view has six fixed
-  columns, atomic `claim_card`, epics as parent cards, and transition guards
-  that refuse a move the Planning workflow could not honestly report.
+  columns, competing claims are refused by `claim_work_item`, epics are parent
+  work items, and transition guards refuse a move the Planning workflow could
+  not honestly report.
 - **An activity trace on every Planning card** — creations, moves, claims,
   takeovers, releases, checklist completions and link changes, each with its
   author, beside typed refs for commits, sessions and memory entries.
@@ -43,6 +44,10 @@ changed in it.
   bound to canonical pack snapshots.
 - **A skills inventory** over registered projects, and normalized registry
   views for Modules, Adapters, Services, Connections, and Assignments.
+- **Local project registration owned by Valkama.** The `projects` CLI adds
+  existing roots, binds Planning spaces, checks and publishes a fixed schema-v3
+  projection, and can restore the preceding inventory and projection bytes.
+  An explicit import accepts an existing schema-1 TOML inventory.
 - **An Electron desktop window and a Windows tray icon.** The tray appears while
   an agent holds a session and disappears when the last one ends; a click always
   produces a visible outcome, including a refusal when the listener cannot prove
@@ -54,11 +59,14 @@ changed in it.
   process that went stale while it ran, `store.STORE_SCHEMA_VERSION` for a build
   that was already old when it started.
 - **A CLI** covering the current Planning lifecycle and product diagnostics:
-  `serve`, `mcp`, `summary`, `runtime`, `dump`, `graph`, `merge-boards`, `attach`,
-  `detach`, `scopes`, `purge-stream`, `import-routa`.
-- **Backups that are tested, not assumed.** A schema upgrade snapshots the
-  database before any `ALTER`; `merge-boards` writes a clean snapshot first, and
-  a test performs the documented rollback end to end.
+  `serve`, `mcp`, `summary`, `runtime`, `export`, `migrate`, `attach`, `detach`,
+  `scopes`, `purge-stream`, `config`, `setup`, `doctor`, `adapter`, `capabilities`,
+  `status`, `launcher`, and `projects`.
+- **Migration recovery points.** Store migrations take clean SQLite snapshots
+  before changing existing data. The Board-to-Planning conversion is explicit;
+  `migrate planning-model --dry-run` converts a temporary copy first. Tests
+  restore a pre-migration product-model snapshot into a separate store and
+  replay the migration.
 
 ### Notes on the history
 

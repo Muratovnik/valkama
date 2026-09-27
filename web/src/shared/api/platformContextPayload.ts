@@ -28,7 +28,6 @@ const projectResourceSchema = strictObject({
 const projectDirectorySchema = strictObject({
   project_id: boundedText(PROJECT_ID, 160),
   title: boundedText(/^[^\u{0}-\u{1F}<>]{1,160}$/u, 160),
-  source_hash: boundedText(SHA256, 64),
   binding_state: z.enum([...BINDING_STATES] as [BindingState, ...BindingState[]], {
     message: 'unknown binding state',
   }),
@@ -124,7 +123,7 @@ export function validatePlatformContextPayload(
   }
 }
 import { invalid } from '@/shared/api/platformActionRef.ts'
-import { BINDING_STATES, PROJECT_ID, SHA256, UUID } from '@/shared/api/platformApiGuards.ts'
+import { BINDING_STATES, PROJECT_ID, UUID } from '@/shared/api/platformApiGuards.ts'
 import {
   CONTEXT_INTERFACE,
   REGISTRY_INTERFACE,

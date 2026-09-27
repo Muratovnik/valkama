@@ -4,6 +4,7 @@
     "tests/**/*.test.ts",
     "tests/browser/**/*.spec.ts",
     "tests/browser/harness.ts",
+    "tests/browser/vite.config.ts",
     "scripts/*.mjs"
   ],
   "project": ["src/**/*.{ts,vue}", "tests/**/*.ts", "scripts/**/*.mjs"]

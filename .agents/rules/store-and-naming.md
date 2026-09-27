@@ -20,8 +20,8 @@ still spelled the old way name what earlier generations wrote on real disks:
 `tests/test_store_migration.py`'s `build_legacy_root` fixture, and
 `OPERATING_SCOPE_INTERFACE = "project-resource-binding"`. A concrete namespace
 owned by an external provider belongs only in local configuration and is neither
-enumerated nor inferred here. The operating-scope interface id discriminates an envelope the workspace
-projects registry authors and this product only reads, so spelling it
+enumerated nor inferred here. The operating-scope interface id discriminates
+the registry's binding envelope, so spelling it
 `valkama-project-resource-binding` would rename nothing and stop matching the
 documents on disk.
 

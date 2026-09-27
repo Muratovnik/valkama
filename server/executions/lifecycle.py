@@ -53,40 +53,59 @@ def launch_work_item(conn: sqlite3.Connection, payload: dict) -> dict:
     """
 
     reference = str(payload.get("work_item") or "")
-    record = planning_service.get_work_item(conn, reference)
     packet = runner.validate_packet(payload)
+    launcher = runner.RUNNER
+    with launcher.reserve(reference) as reservation:
+        return _launch_reserved(conn, payload, reference, packet, launcher, reservation)
+
+
+def _launch_reserved(
+    conn: sqlite3.Connection,
+    payload: dict,
+    reference: str,
+    packet: runner.LaunchPacket,
+    launcher: runner.Runner,
+    reservation: object,
+) -> dict:
+    """Persist and spawn while this process owns the item reservation."""
+
     actor = f"{packet.client}:{packet.role}"
-    resume_session_id = _resumable_session(conn, record, packet.client) if packet.resume else ""
     # A reference is `KEY-NUMBER`, so its prefix is the space key exactly; the
     # runner wants that key for the launch environment it hands the client.
     space_key = _reference_parts(reference)[0]
-    state_before = str(record["state"]["key"])
-    claim_before = str(record["claim_ref"] or "")
-
-    planning_service.claim_work_item(
-        conn, reference, author=actor, force=bool(payload.get("force"))
-    )
-    if record["state"]["category"] in _STARTABLE_CATEGORIES:
-        started_state = _first_state(conn, record, _ACTIVE_CATEGORY)
-        if started_state is not None:
-            planning_service.transition_work_item(
-                conn, reference, started_state, author=actor, reason="launched"
-            )
-    conn.commit()
 
     # The attempt exists before the process does: evidence about a launch has to
-    # be taken from before the launch.
+    # be taken from before the launch. The claim, move and attempt must commit
+    # together, so an attempt-insert failure cannot strand an active item.
     execution_id = execution_service.new_execution_id()
-    work_item_id = str(record["work_item_id"])
-    execution_service.open_execution(
-        conn,
-        execution_id=execution_id,
-        work_item_id=work_item_id,
-        project_id=_project_id(conn, str(record["planning_space_id"])),
-        packet=packet.as_dict(),
-        adapter_lineage_id=capabilities_for(packet.client).adapter_lineage_id,
-    )
-    conn.commit()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        record = planning_service.get_work_item(conn, reference)
+        resume_session_id = _resumable_session(conn, record, packet.client) if packet.resume else ""
+        state_before = str(record["state"]["key"])
+        claim_before = str(record["claim_ref"] or "")
+        planning_service.claim_work_item(
+            conn, reference, author=actor, force=bool(payload.get("force"))
+        )
+        if record["state"]["category"] in _STARTABLE_CATEGORIES:
+            started_state = _first_state(conn, record, _ACTIVE_CATEGORY)
+            if started_state is not None:
+                planning_service.transition_work_item(
+                    conn, reference, started_state, author=actor, reason="launched"
+                )
+        launched = planning_service.get_work_item(conn, reference)
+        execution_service.open_execution(
+            conn,
+            execution_id=execution_id,
+            work_item_id=str(record["work_item_id"]),
+            project_id=_project_id(conn, str(record["planning_space_id"])),
+            packet=packet.as_dict(),
+            adapter_lineage_id=capabilities_for(packet.client).adapter_lineage_id,
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
     try:
         # The same rule applied to the checkout, which is why it is resolved
@@ -101,7 +120,16 @@ def launch_work_item(conn: sqlite3.Connection, payload: dict) -> dict:
             conn, execution_id, execution_service.observe_baseline(directory[0])
         )
         conn.commit()
-        started = runner.RUNNER.launch(
+    except Exception as error:
+        # Baseline preparation can fail outside LaunchError (for example Git or
+        # SQLite). No process exists yet. Discard any partial baseline write
+        # before compensation starts its own guarded transaction.
+        conn.rollback()
+        _restore(conn, reference, state_before, claim_before, launched, actor, execution_id, error)
+        raise
+
+    try:
+        started = launcher.launch(
             reference,
             payload,
             space_key,
@@ -109,27 +137,13 @@ def launch_work_item(conn: sqlite3.Connection, payload: dict) -> dict:
             execution_id=execution_id,
             correlation=_correlation(conn, execution_id, record),
             directory=directory,
+            reservation=reservation,
         )
     except runner.LaunchError as error:
         # A process that never started must not leave a phantom executor or a
-        # false move into an active state. Restore the exact prior state and
-        # claim, and keep the failure itself visible as history — including on
-        # the attempt, which is now the record that says a launch was tried.
-        execution_service.close_execution(
-            conn,
-            execution_id,
-            status="failed",
-            outcome="launch_failed",
-            result={
-                "outcome": "launch_failed",
-                "delivery": "",
-                "oracle": f"the client never started: {error}",
-                "unresolved": "nothing ran; the item keeps the state it had",
-                "structured": False,
-            },
-        )
-        conn.commit()
-        _restore(conn, reference, state_before, claim_before, actor, error)
+        # false move into an active state. The launch-owned revision decides
+        # whether restoring the prior state and claim is still safe.
+        _restore(conn, reference, state_before, claim_before, launched, actor, execution_id, error)
         raise
 
     session_identity = started["client_session_id"] or started["launch_id"]
@@ -345,7 +359,22 @@ def _record_ending(conn: sqlite3.Connection, item: dict) -> None:
     )
     conn.commit()  # the transition below starts its own
     if accepted:
-        _move_to_review(conn, reference)
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            # A completed launch may be reaped after a newer launch has already
+            # started on the same item. Its delivery closes its own attempt,
+            # but must not move the newer attempt's active work to review.
+            work_item = planning_service.get_work_item(conn, reference)
+            newer_open = conn.execute(
+                "SELECT 1 FROM executions WHERE work_item_id = ? AND ended_at IS NULL LIMIT 1",
+                (str(work_item["work_item_id"]),),
+            ).fetchone()
+            if newer_open is None:
+                _move_to_review(conn, reference)
+            conn.commit()  # finish this attempt before the next session-end ingest
+        except Exception:
+            conn.rollback()
+            raise
 
 
 def _report_ending_failure(conn: sqlite3.Connection, item: dict, failure: BaseException) -> None:
@@ -426,21 +455,73 @@ def _restore(
     reference: str,
     state: str,
     claim: str,
+    launched: dict,
     actor: str,
+    execution_id: str,
     error: BaseException,
 ) -> None:
-    """Put back the exact state and claim a failed launch had already taken."""
+    """Compensate only the unchanged launch-owned item, with the write lock held."""
 
-    planning_service.transition_work_item(
-        conn, reference, state, author=actor, reason="launch_failed", force=True
-    )
-    if claim:
-        planning_service.claim_work_item(conn, reference, author=claim, force=True)
-    else:
-        planning_service.claim_work_item(conn, reference, author=actor, release=True, force=True)
-    conn.commit()
-    planning_service.comment_work_item(conn, reference, f"launch_failed: {error}", author=actor)
-    conn.commit()
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        current = planning_service.get_work_item(conn, reference)
+        owned = (
+            current["revision"] == launched["revision"]
+            and current["state"]["state_id"] == launched["state"]["state_id"]
+            and current["claim_ref"] == launched["claim_ref"] == actor
+        )
+        if owned:
+            restored = planning_service.transition_work_item(
+                conn,
+                reference,
+                state,
+                author=actor,
+                reason="launch_failed",
+                force=True,
+                expected_revision=int(launched["revision"]),
+            )
+            if claim:
+                planning_service.claim_work_item(
+                    conn,
+                    reference,
+                    author=claim,
+                    force=True,
+                    expected_revision=int(restored["revision"]),
+                )
+            else:
+                planning_service.claim_work_item(
+                    conn,
+                    reference,
+                    author=actor,
+                    release=True,
+                    expected_revision=int(restored["revision"]),
+                )
+        unresolved = (
+            "nothing ran; the prior state and claim were restored"
+            if owned
+            else "nothing ran; work item changed after launch, so its current state and claim were kept"
+        )
+        execution_service.close_execution(
+            conn,
+            execution_id,
+            status="failed",
+            outcome="launch_failed",
+            result={
+                "outcome": "launch_failed",
+                "delivery": "",
+                "oracle": f"the client never started: {error}",
+                "unresolved": unresolved,
+                "structured": False,
+            },
+        )
+        note = f"launch_failed: {error}"
+        if not owned:
+            note += "; compensation skipped because the work item changed after launch"
+        planning_service.comment_work_item(conn, reference, note, author=actor)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
 
 def _start_note(packet: runner.LaunchPacket, started: dict, resumed_from: str) -> str:

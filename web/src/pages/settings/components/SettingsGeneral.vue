@@ -252,7 +252,12 @@ onMounted(() => void settingsStore.loadOpenerCatalog())
           class="settings-general-permission"
         >
           <p class="settings-general-permission-copy">{{ t('settings.permissionIntro') }}</p>
-          <VButton @click="askPermission">{{ t('settings.permissionAsk') }}</VButton>
+          <VButton
+            class="settings-general-permission-action"
+            @click="askPermission"
+          >
+            {{ t('settings.permissionAsk') }}
+          </VButton>
         </div>
         <p
           v-else-if="permission === 'denied' && settings.notifyEnabled"
@@ -407,6 +412,12 @@ onMounted(() => void settingsStore.loadOpenerCatalog())
   margin: 0;
   color: var(--color-danger);
   font: var(--font-detail);
+}
+
+.settings-general-permission-action {
+  max-width: 100%;
+  padding-block: var(--space-2);
+  white-space: normal;
 }
 
 @container workspace (width <= 696px) {

@@ -1,10 +1,11 @@
-r"""Strict, read-only consumption of Host Runtime's minimal project registry.
+r"""Strict, read-only consumption of Valkama's project registry projection.
 
-Host Runtime is the only writer and recovery owner. Valkama reads the fixed
-``%LOCALAPPDATA%\Valkama\projects.json`` projection and accepts the whole
+Valkama owns the inventory, writer and recovery path. Consumers read the fixed
+``%LOCALAPPDATA%\Valkama\projects.json`` projection and accept the whole
 schema-v3 snapshot or none of it. The registry carries project identity and one
 optional opaque Planning binding; hook configuration, index commands, memory
 namespaces and source-manifest provenance are deliberately not part of it.
+The ``host_runtime`` source value remains as a legacy wire discriminator.
 """
 
 from __future__ import annotations
@@ -29,7 +30,7 @@ class RegistryResult(TypedDict):
 
 
 class RegistryError(ValueError):
-    """The registry bytes do not satisfy Host Runtime's canonical schema."""
+    """The registry bytes do not satisfy the canonical schema."""
 
 
 _DOCUMENT_KEYS = {"schema_version", "projects"}
@@ -71,11 +72,9 @@ def read_registry(*, reader: RegistryReader | None = None) -> RegistryResult:
     try:
         raw = (reader or _read_registry_bytes)()
     except FileNotFoundError:
-        return _result("absent", reason="Host Runtime project registry is absent")
+        return _result("absent", reason="Valkama project registry is absent")
     except OSError as error:
-        return _result(
-            "unavailable", reason=f"Host Runtime project registry cannot be read: {error}"
-        )
+        return _result("unavailable", reason=f"Valkama project registry cannot be read: {error}")
     return parse_registry(raw)
 
 
@@ -83,7 +82,7 @@ def parse_registry(raw: bytes | None) -> RegistryResult:
     """Validate exact schema-v3 bytes and return the complete set or no projects."""
 
     if raw is None:
-        return _result("absent", reason="Host Runtime project registry is absent")
+        return _result("absent", reason="Valkama project registry is absent")
     if not isinstance(raw, bytes):
         return _result("malformed", reason="project registry reader must return bytes")
     try:
@@ -96,7 +95,7 @@ def parse_registry(raw: bytes | None) -> RegistryResult:
             raise RegistryError("registry.projects must be an array")
         validated = _validate_projects(projects)
     except (UnicodeDecodeError, json.JSONDecodeError, RegistryError) as error:
-        return _result("malformed", reason=f"Host Runtime project registry is malformed: {error}")
+        return _result("malformed", reason=f"Valkama project registry is malformed: {error}")
     return _result("available", projects=validated)
 
 
@@ -201,7 +200,7 @@ def _space_result(
 def resolve_space_root(
     resource_ref: object | None, *, reader: RegistryReader | None = None
 ) -> dict:
-    """Resolve one canonical Planning identity from Host Runtime's binding."""
+    """Resolve one canonical Planning identity from the registry binding."""
 
     if resource_ref is None:
         return _space_result(None, "missing", reason="planning space binding is absent")

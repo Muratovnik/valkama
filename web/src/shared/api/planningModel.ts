@@ -261,11 +261,6 @@ const activityEntrySchema = strictObject({
 })
 
 const apiVersion = z.literal(PLANNING_API, { message: `expected ${PLANNING_API}` })
-const workItemEnvelopeSchema = strictObject({
-  interface_version: apiVersion,
-  work_item: workItemSchema,
-})
-
 /** The refusal shape every neutral write answers with when it says no. */
 const refusalSchema = strictObject({
   error: strictObject({
@@ -299,10 +294,6 @@ export type PlanningPending = z.infer<typeof pendingSchema>
 
 export function validateReadModel(value: unknown, path = 'planning'): PlanningReadModel {
   return parseContract(readModelSchema, value, path, invalid)
-}
-
-export function validateWorkItem(value: unknown, path = 'planning.workItem'): WorkItem {
-  return parseContract(workItemEnvelopeSchema, value, path, invalid).work_item
 }
 
 export function validateWorkItemRecord(value: unknown, path = 'planning.workItem'): WorkItem {

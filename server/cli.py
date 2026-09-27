@@ -23,8 +23,11 @@ import contextlib
 import json
 import os
 import shutil
+import sqlite3
 import sys
 import tempfile
+from pathlib import Path
+from typing import Any
 
 from . import documents, launcher, static_assets, store
 from .analytics import journal
@@ -32,10 +35,13 @@ from .federation import federated_spaces
 from .http_surface import serve_main
 from .mcp_surface import LEGACY_PROTOCOLS, MODERN_PROTOCOL, catalogue, mcp_main
 from .ops import adapter_check, configuration, doctor, export, setup
+from .planning import service as planning_service
 from .planning import views as planning_views
 from .platform import core as platform_core
 from .platform import installed
-from .projects import scopes
+from .platform import scope as platform_scope
+from .platform.contracts import planning_space_entity
+from .projects import registry_owner, scopes
 from .sessions import purge_stream_events
 from .static_assets import DIST_DIR, SOURCE_ROOT
 from .store import connect, data_root, db_path
@@ -362,6 +368,90 @@ def _launcher_main(parser: argparse.ArgumentParser, options: argparse.Namespace)
     print(json.dumps(result, ensure_ascii=False, indent=1, sort_keys=True))
 
 
+def _projects_main(options: argparse.Namespace) -> None:
+    inventory = registry_owner.inventory_path()
+    target = registry_owner.projection_path()
+    command = options.projects_command
+    try:
+        payload: dict[str, Any]
+        if command == "list":
+            raw = inventory.read_bytes()
+            payload = {"projects": registry_owner.parse_inventory(raw)}
+        elif command in {"check", "doctor"}:
+            payload = registry_owner.check(inventory, target)
+        elif command == "rollback":
+            payload = {"changed": registry_owner.rollback(inventory, target)}
+        elif command == "import":
+            payload = {
+                "changed": registry_owner.update(
+                    inventory, target, source=Path(options.source).expanduser()
+                )
+            }
+        elif command == "add":
+            payload = {
+                "changed": registry_owner.update(
+                    inventory,
+                    target,
+                    add={
+                        "project_id": options.project_id,
+                        "display_name": options.name,
+                        "canonical_root": options.root,
+                        "planning_binding": None,
+                    },
+                )
+            }
+        elif command == "update":
+            payload = {
+                "changed": registry_owner.update(
+                    inventory,
+                    target,
+                    edit=(options.project_id, options.name, options.root),
+                )
+            }
+        elif command == "remove":
+            payload = {
+                "changed": registry_owner.update(inventory, target, remove=options.project_id)
+            }
+        elif command == "bind":
+            selected = next(
+                (entry for entry in scopes.load(db_path()) if entry["name"] == options.scope),
+                None,
+            )
+            if selected is None or (
+                not selected["primary"] and not os.path.isfile(selected["path"])
+            ):
+                raise registry_owner.RegistryOwnerError(
+                    f"data scope is unavailable: {options.scope}"
+                )
+            database = Path(selected["path"])
+            with contextlib.closing(
+                sqlite3.connect(database.as_uri() + "?mode=ro", uri=True)
+            ) as conn:
+                conn.row_factory = sqlite3.Row
+                space = planning_service.get_planning_space(conn, options.space)
+                if space["project_id"] != options.project_id:
+                    raise registry_owner.RegistryOwnerError(
+                        "planning space belongs to a different project id"
+                    )
+                metadata = platform_scope.read_store_metadata(conn)
+            binding = planning_space_entity(
+                {"data_scope_id": metadata["data_scope_id"], "space_key": space["key"]}
+            )
+            payload = {
+                "changed": registry_owner.update(
+                    inventory, target, bind=(options.project_id, binding)
+                ),
+                "planning_binding": binding,
+            }
+        else:
+            payload = {"changed": registry_owner.update(inventory, target)}
+        print(json.dumps(payload, ensure_ascii=False, indent=1, sort_keys=True))
+        if command in {"check", "doctor"} and not payload["ok"]:
+            raise SystemExit(1)
+    except (OSError, ValueError, sqlite3.Error) as error:
+        raise SystemExit(f"projects: {error}") from error
+
+
 def main(argv: list[str] | None = None) -> None:
     """Route one command line. `argv` defaults to this process's, as usual.
 
@@ -389,6 +479,30 @@ def main(argv: list[str] | None = None) -> None:
         "runtime",
         help="print the canonical backend/static identity for the local checkout",
     )
+    projects_cmd = commands.add_parser("projects", help="manage the local project inventory")
+    projects_sub = projects_cmd.add_subparsers(dest="projects_command", required=True)
+    projects_sub.add_parser("list", help="list registered projects")
+    add_cmd = projects_sub.add_parser("add", help="register an existing project root")
+    add_cmd.add_argument("project_id")
+    add_cmd.add_argument("--name", required=True)
+    add_cmd.add_argument("--root", required=True)
+    update_cmd = projects_sub.add_parser("update", help="change a project name or root")
+    update_cmd.add_argument("project_id")
+    update_details = update_cmd.add_argument_group("changes")
+    update_details.add_argument("--name")
+    update_details.add_argument("--root")
+    remove_cmd = projects_sub.add_parser("remove", help="remove only the project registration")
+    remove_cmd.add_argument("project_id")
+    bind_cmd = projects_sub.add_parser("bind", help="bind an existing Planning space")
+    bind_cmd.add_argument("project_id")
+    bind_cmd.add_argument("--space", required=True)
+    bind_cmd.add_argument("--scope", default=scopes.PRIMARY_SCOPE)
+    projects_sub.add_parser("check", help="compare inventory and projection")
+    projects_sub.add_parser("apply", help="project the current inventory")
+    projects_sub.add_parser("doctor", help="report inventory and projection health")
+    projects_sub.add_parser("rollback", help="restore exact prior inventory and projection bytes")
+    import_cmd = projects_sub.add_parser("import", help="import an existing inventory once")
+    import_cmd.add_argument("--source", required=True)
     summary = commands.add_parser("summary")
     summary.add_argument("--space", default=None)
     scopes_cmd = commands.add_parser(
@@ -519,6 +633,8 @@ def main(argv: list[str] | None = None) -> None:
         _launcher_main(parser, options)
     elif options.command == "runtime":
         runtime_main()
+    elif options.command == "projects":
+        _projects_main(options)
     elif options.command == "export":
         conn = connect()
         try:

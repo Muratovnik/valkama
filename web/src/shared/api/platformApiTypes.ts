@@ -35,7 +35,6 @@ type ProjectDirectory = {
   binding_state: BindingState
   project_id: string
   resources: ProjectDirectoryResource[]
-  source_hash: string
   title: string
 }
 

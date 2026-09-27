@@ -718,7 +718,9 @@ class GitEvidenceTests(unittest.TestCase):
     """A delivery claim is checkable only against the checkout it was made in."""
 
     def setUp(self) -> None:
-        self._dir = tempfile.TemporaryDirectory()
+        scratch = os.path.join(ROOT, "tmp")
+        os.makedirs(scratch, exist_ok=True)
+        self._dir = tempfile.TemporaryDirectory(dir=scratch)
         self.repo = os.path.join(self._dir.name, "repo")
         os.makedirs(self.repo)
         self.addCleanup(self._dir.cleanup)
@@ -743,12 +745,13 @@ class GitEvidenceTests(unittest.TestCase):
         )
 
     def test_a_directory_that_is_not_a_repository_says_unknown_rather_than_zero(self) -> None:
-        base = artifacts.baseline(self.repo)
-        self.assertEqual("unknown", base["quality"])
-        self.assertIsNone(base["dirty"])
-        after = artifacts.outcome(self.repo, base)
-        self.assertEqual("unknown", after["quality"])
-        self.assertIsNone(after["changed_files"], "nobody looked, so it is not zero")
+        with mock.patch.dict(os.environ, {"GIT_CEILING_DIRECTORIES": os.path.join(ROOT, "tmp")}):
+            base = artifacts.baseline(self.repo)
+            self.assertEqual("unknown", base["quality"])
+            self.assertIsNone(base["dirty"])
+            after = artifacts.outcome(self.repo, base)
+            self.assertEqual("unknown", after["quality"])
+            self.assertIsNone(after["changed_files"], "nobody looked, so it is not zero")
 
     def test_an_uncommitted_edit_still_counts_as_a_change(self) -> None:
         self.git("init", "-b", "main")
@@ -1004,6 +1007,27 @@ with open(os.path.join(os.getcwd(), "delivered.txt"), "w", encoding="utf-8") as 
         completed = processes.run_text(["git", "-C", self.repo, "init", "-b", "main"])
         if completed.returncode != 0:
             raise unittest.SkipTest("git is unavailable here")
+        with open(
+            os.path.join(self.repo, "seed.txt"), "w", encoding="utf-8", newline="\n"
+        ) as handle:
+            handle.write("initial\n")
+        added = processes.run_text(["git", "-C", self.repo, "add", "seed.txt"])
+        self.assertEqual(0, added.returncode, added.stderr)
+        committed = processes.run_text(
+            [
+                "git",
+                "-C",
+                self.repo,
+                "-c",
+                "user.name=Test User",
+                "-c",
+                "user.email=test@example.invalid",
+                "commit",
+                "-m",
+                "initial",
+            ]
+        )
+        self.assertEqual(0, committed.returncode, committed.stderr)
         reference = self.item("end to end")
         started = executions.launch_work_item(
             self.conn, self.packet(reference, prompt="write the file", model="opus", effort="high")

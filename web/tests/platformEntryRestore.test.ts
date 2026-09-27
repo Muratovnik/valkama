@@ -82,7 +82,6 @@ function restoredProjectResource(mappedResourceId: string) {
             state: 'mapped',
           },
         ],
-        source_hash: 'a'.repeat(64),
         title: 'Alpha',
       },
     ],

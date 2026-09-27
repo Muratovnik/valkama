@@ -112,7 +112,11 @@ const {
   load: loadResource,
   retryable: readRetryable,
   state,
-} = useWorkItemResource(() => props.reference, readFailureReason)
+} = useWorkItemResource(
+  () => props.reference,
+  () => ({ project: props.projectId, resource: props.resourceRef }),
+  readFailureReason,
+)
 
 async function load() {
   error.value = ''
@@ -144,16 +148,23 @@ const {
 
 /** The refusal is worded here, where the catalog is, not inside the composable. */
 function submitLaunch(packet: LaunchPacket) {
+  if (!props.writable) return
   void startLaunch(packet, (message) => t('execution.launchFailed', { message }))
 }
 
 // A string key, because a getter that returns a fresh array compares two new
 // references every time and fires on any dependency touch rather than a change.
 watch(
-  () => `${props.reference}:${props.refreshToken}`,
+  [
+    () =>
+      `${props.projectId}:${props.resourceRef.resource_id}:${props.reference}:${props.refreshToken}`,
+    () => props.writable,
+  ],
   () => {
     void load()
-    void loadExecutions()
+    // Execution endpoints name primary-store items by reference only.
+    if (props.writable) void loadExecutions()
+    else if (section.value === 'execution' || section.value === 'usage') section.value = 'overview'
   },
   { immediate: true },
 )
@@ -180,8 +191,12 @@ async function write(operation: () => Promise<unknown>) {
 
 const sections = computed<ChoiceOption[]>(() => [
   { value: 'overview' as const, label: t('workItem.overview') },
-  { value: 'execution' as const, label: t('workItem.section.execution') },
-  { value: 'usage' as const, label: t('workItem.section.usage') },
+  ...(props.writable
+    ? [
+        { value: 'execution' as const, label: t('workItem.section.execution') },
+        { value: 'usage' as const, label: t('workItem.section.usage') },
+      ]
+    : []),
   { value: 'memory' as const, label: t('workItem.section.memory') },
   { value: 'relations' as const, label: t('workItem.relations') },
   { value: 'activity' as const, label: t('workItem.activity') },

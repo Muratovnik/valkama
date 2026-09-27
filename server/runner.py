@@ -34,7 +34,7 @@ import tempfile
 import threading
 import uuid
 from collections import deque
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
 from typing import IO, Protocol
 from urllib.parse import quote
@@ -532,9 +532,36 @@ class Runner:
     def __init__(self, spawn=None) -> None:
         self._spawn = spawn or self._default_spawn
         self._running: dict[str, RunningLaunch] = {}
+        self._starting: dict[str, object] = {}
+        self._finished: deque[tuple[str, RunningLaunch, int]] = deque()
         # Reentrant because `launch` polls through its own accessor while
         # holding it, and a plain lock would deadlock on the second acquire.
         self._lock = threading.RLock()
+
+    @contextlib.contextmanager
+    def reserve(self, reference: str) -> Iterator[object]:
+        """Keep one launch per item from claim through process registration."""
+
+        token = object()
+        with self._lock:
+            live = self._running.get(reference)
+            if reference in self._starting:
+                raise LaunchError(f"work item {reference} already has a running launch")
+            if live is not None:
+                code = live.process.poll()
+                if code is None:
+                    raise LaunchError(f"work item {reference} already has a running launch")
+                # A completed process can be relaunched before the watcher runs.
+                # Keep its exact result and resources for the next reap instead
+                # of letting the new registration overwrite its only owner.
+                self._finished.append((reference, self._running.pop(reference), code))
+            self._starting[reference] = token
+        try:
+            yield token
+        finally:
+            with self._lock:
+                if self._starting.get(reference) is token:
+                    del self._starting[reference]
 
     @staticmethod
     def _default_spawn(argv: list[str], cwd: str, environment: dict[str, str]):
@@ -563,6 +590,7 @@ class Runner:
         execution_id: str = "",
         correlation: Mapping[str, str] | None = None,
         directory: tuple[str, dict] | None = None,
+        reservation: object | None = None,
     ) -> dict:
         """Spawn one client for this work item.
 
@@ -572,17 +600,27 @@ class Runner:
         computations that agree by luck. A caller that has none resolves it here.
         """
 
+        if reservation is None:
+            with self.reserve(reference) as owned:
+                return self.launch(
+                    reference,
+                    payload,
+                    planning_space,
+                    resume_session_id,
+                    execution_id=execution_id,
+                    correlation=correlation,
+                    directory=directory,
+                    reservation=owned,
+                )
         with self._lock:
-            live = self._running.get(reference)
-            if live is not None and live.process.poll() is None:
-                raise LaunchError(f"work item {reference} already has a running launch")
+            if self._starting.get(reference) is not reservation:
+                raise LaunchError(f"work item {reference} has no matching launch reservation")
         packet = validate_packet(payload)
         capabilities = drivers.capabilities_for(packet.client)
         if packet.resume and not resume_session_id:
             raise LaunchError("resume requires an exact client session id")
         if not packet.resume and resume_session_id:
             raise LaunchError("a resume session id was supplied for a fresh launch")
-        cwd, preflight = directory if directory is not None else launch_directory(packet, reference)
         launch_id = f"launch-{uuid.uuid4().hex[:12]}"
         client_session_id = resume_session_id
         # Asked of the capability rather than of the client's name: whether the
@@ -595,34 +633,45 @@ class Runner:
         result_path = ""
         # Same reason: a file transport is a client that needs somewhere to
         # write, and that is the fact, not which client it happens to be.
-        if capabilities.result_transport == "file":
-            runtime = tempfile.TemporaryDirectory(prefix="valkama-launch-")
-            schema_path = os.path.join(runtime.name, "result.schema.json")
-            result_path = os.path.join(runtime.name, "result.json")
-            with open(schema_path, "w", encoding="utf-8", newline="\n") as handle:
-                json.dump(
-                    results.result_schema(packet.review_mode),
-                    handle,
-                    ensure_ascii=False,
-                    separators=(",", ":"),
-                )
-                handle.write("\n")
-        argv = client_argv(
-            packet,
-            client_session_id=client_session_id,
-            schema_path=schema_path,
-            result_path=result_path,
-        )
-        if packet.environment == "wsl":
-            argv = wsl_argv(argv, cwd, packet.distro)
-        environment = launch_environment(
-            dict(os.environ),
-            reference,
-            launch_id,
-            planning_space,
-            correlation,
-            telemetry_attributes=capabilities.telemetry_configuration == "environment",
-        )
+        try:
+            cwd, preflight = (
+                directory if directory is not None else launch_directory(packet, reference)
+            )
+            if capabilities.result_transport == "file":
+                runtime = tempfile.TemporaryDirectory(prefix="valkama-launch-")
+                schema_path = os.path.join(runtime.name, "result.schema.json")
+                result_path = os.path.join(runtime.name, "result.json")
+                with open(schema_path, "w", encoding="utf-8", newline="\n") as handle:
+                    json.dump(
+                        results.result_schema(packet.review_mode),
+                        handle,
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    )
+                    handle.write("\n")
+            argv = client_argv(
+                packet,
+                client_session_id=client_session_id,
+                schema_path=schema_path,
+                result_path=result_path,
+            )
+            if packet.environment == "wsl":
+                argv = wsl_argv(argv, cwd, packet.distro)
+            environment = launch_environment(
+                dict(os.environ),
+                reference,
+                launch_id,
+                planning_space,
+                correlation,
+                telemetry_attributes=capabilities.telemetry_configuration == "environment",
+            )
+        except Exception as error:
+            if runtime is not None:
+                with contextlib.suppress(OSError):
+                    runtime.cleanup()
+            if isinstance(error, LaunchError):
+                raise
+            raise LaunchError(f"cannot prepare {packet.client} launch: {error}") from error
         try:
             process = self._spawn(argv, cwd, environment)
         except OSError as error:
@@ -754,7 +803,8 @@ class Runner:
         """
 
         with self._lock:
-            claimed = []
+            claimed = list(self._finished)
+            self._finished.clear()
             for reference, live in list(self._running.items()):
                 code = live.process.poll()
                 if code is None:

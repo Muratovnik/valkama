@@ -56,7 +56,6 @@ test('context validates exact primary and project bindings without path-shaped l
           {
             project_id: 'example-project',
             title: 'Example Project',
-            source_hash: 'a'.repeat(64),
             binding_state: 'mapped',
             resources: [{ resource_ref: planningSpaceEntity(spaceRef), state: 'mapped' }],
           },

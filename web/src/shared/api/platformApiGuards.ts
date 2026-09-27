@@ -28,7 +28,6 @@ export const ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/u
  */
 export const MESSAGE_KEY = /^[a-z][A-Za-z0-9._-]{0,95}$/u
 export const PROJECT_ID = /^[a-z][a-z0-9-]{0,159}$/u
-export const SHA256 = /^[0-9a-f]{64}$/u
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
 /**
  * Full SemVer 2.0.0, which refuses a leading zero where `contractGuards.SEMVER`

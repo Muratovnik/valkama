@@ -18,7 +18,7 @@
  * How deep the operator went to get there stays local. A trail is navigation
  * history, not identity, and the browser already owns history.
  */
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import PlanningPortfolio from '@/pages/planning/PlanningPortfolio.vue'
@@ -45,6 +45,13 @@ import type { PlatformRelation } from '@/shared/api/platformRelations.ts'
 import type { OperatingScope, PlatformRoute } from '@/shared/api/platformRoute.ts'
 import { uiError, uiLoading, uiUnavailable } from '@/shared/api/platformUiState.ts'
 import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
+import {
+  beginResource,
+  cancelResource,
+  createResource,
+  rejectResource,
+  resolveResource,
+} from '@/shared/api/resourceState.ts'
 import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 
@@ -124,8 +131,9 @@ const portfolio = ref<PlatformUiState<PlatformPlanningReady>>(uiLoading())
  * model that legitimately carries two thousand items. The status drives the
  * panel; the model is what the views read.
  */
-const model = ref<PlanningReadModel | null>(null)
-const stale = ref(false)
+const resource = shallowRef(createResource<PlanningReadModel>())
+const model = computed(() => resource.value.data)
+const stale = computed(() => resource.value.status === 'refreshing')
 const planning = ref<PlatformUiState>(uiLoading())
 const version = ref(0)
 
@@ -146,13 +154,15 @@ const openIdentity = computed(() => {
   const reference = open.value
   return space === undefined || reference === null
     ? ''
-    : `${space.data_scope_id}:${space.space_key}:${reference}`
+    : `${projectId.value}:${space.data_scope_id}:${space.space_key}:${reference}`
 })
 const trail = ref<string[]>([])
 const composerOpen = ref(false)
 
 let portfolioSerial = 0
-let planningSerial = 0
+const planningKey = computed(() =>
+  JSON.stringify([props.scope, boundSpace.value, routeSelection.value.status]),
+)
 
 async function loadPortfolio() {
   const mine = ++portfolioSerial
@@ -168,38 +178,39 @@ async function loadPortfolio() {
 
 async function loadPlanning() {
   const project = projectId.value
-  if (routeSelection.value.status === 'unavailable' || project === undefined) {
-    model.value = null
+  const space = boundSpace.value
+  const key = planningKey.value
+  resource.value = beginResource(resource.value, key)
+  const generation = resource.value.generation
+  if (
+    routeSelection.value.status === 'unavailable' ||
+    project === undefined ||
+    space === undefined
+  ) {
+    resource.value = { ...cancelResource(resource.value), data: null }
     planning.value = uiUnavailable(t('platform.planning.bindingRequired'))
     return
   }
-  const mine = ++planningSerial
-  // A refresh keeps the drawn space up. Blanking it here is what made the tab
-  // look like it reloads forever while agents write.
   if (model.value === null) planning.value = uiLoading()
-  else stale.value = true
   try {
-    const next = await fetchPlanning({ project })
-    if (mine !== planningSerial) return
+    const next = await fetchPlanning({ project, ...space })
+    if (generation !== resource.value.generation) return
     version.value += 1
-    stale.value = false
     if (next.planning_space === null) {
-      model.value = null
+      resource.value = { ...cancelResource(resource.value), data: null }
       planning.value = uiUnavailable(t('workItem.noSpace'))
       return
     }
-    model.value = next
+    resource.value = resolveResource(resource.value, generation, key, next)
   } catch (error) {
-    if (mine !== planningSerial) return
-    stale.value = false
-    // A store whose cutover has not run is not an error: it is a store that
-    // still answers on the Board domain, and it says which command fixes that.
+    if (generation !== resource.value.generation) return
     if (error instanceof CutoverPendingError) {
-      model.value = null
+      resource.value = { ...cancelResource(resource.value), data: null }
       planning.value = uiUnavailable(t('workItem.cutoverPending'))
       return
     }
     const reason = error instanceof Error ? error.message : String(error)
+    resource.value = rejectResource(resource.value, generation, key, reason)
     if (model.value === null) planning.value = uiError(reason)
     else emit('notice', reason)
   }
@@ -225,8 +236,9 @@ watch(
   () => {
     trail.value = []
     composerOpen.value = false
+    portfolioSerial += 1
+    void loadPlanning()
     if (props.scope.kind === 'global') void loadPortfolio()
-    else void loadPlanning()
   },
   { immediate: true },
 )
@@ -234,6 +246,7 @@ watch(
 const writable = computed(
   () =>
     props.scope.kind === 'project' &&
+    model.value !== null &&
     boundSpace.value !== undefined &&
     props.primaryWriteScopeId === boundSpace.value.data_scope_id,
 )
@@ -256,6 +269,8 @@ const relations = ref<readonly PlatformRelation[] | null>(null)
 let relationsSerial = 0
 
 async function loadRelations() {
+  const mine = ++relationsSerial
+  relations.value = null
   const space = boundSpace.value
   const reference = open.value
   const scope = props.scope
@@ -263,7 +278,6 @@ async function loadRelations() {
     relations.value = null
     return
   }
-  const mine = ++relationsSerial
   try {
     const payload = await fetchPlanningWorkItem(scope, { space_ref: space, reference })
     if (mine !== relationsSerial) return
@@ -276,7 +290,14 @@ async function loadRelations() {
   }
 }
 
-watch([open, version], loadRelations, { immediate: true })
+const relationsKey = computed(() => JSON.stringify([readKey.value, openIdentity.value]))
+watch([relationsKey, version], loadRelations, { immediate: true })
+
+onBeforeUnmount(() => {
+  portfolioSerial += 1
+  relationsSerial += 1
+  resource.value = cancelResource(resource.value)
+})
 
 /**
  * The Kernel prop, present exactly while every part of it is known: the project

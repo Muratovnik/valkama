@@ -250,9 +250,9 @@ data_file = ".cache/coverage/data"
 # The floor is the whole number under the measured figure, raised as that
 # figure rises. 76.13% when this was adopted, 77.68% once card #307 gave the
 # two surfaces that had no tests some: cli went from 0% to 97% and mcp_surface
-# from 27% to 60%. Layer 1 took it to 79.56% and layer 2 to 79.64%, which is
-# what this now holds. What is left below the line is http_surface and watchers.
-fail_under = 79
+# from 27% to 60%. Layer 1 took it to 79.56% and layer 2 to 79.64%.
+# Execution, scoped-read and registry regressions now hold the floor at 81%.
+fail_under = 81
 precision = 2
 skip_covered = true
 exclude_also = [
