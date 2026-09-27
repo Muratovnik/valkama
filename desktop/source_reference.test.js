@@ -21,7 +21,7 @@ test('a plan anchor resolves inside the approved root and maps to its exact line
     await fs.writeFile(file, '# Plan\n\n<!-- kb:kui02 -->\n## Follow-up\n', 'utf8')
 
     const located = await locateSourceReference(root, 'docs/plans/plan.md#kb:kui02')
-    assert.equal(located.absolutePath, file)
+    assert.equal(located.absolutePath, await fs.realpath(file))
     assert.equal(located.line, 3)
     assert.equal(located.column, 1)
     assert.match(toVsCodeUrl(located.absolutePath, located.line), /^vscode:\/\/file\/.*:3:1$/)
