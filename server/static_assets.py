@@ -25,6 +25,12 @@ SOURCE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DIST_DIR = os.path.join(SOURCE_ROOT, "web", "dist")
 
 
+def release_version() -> str:
+    """Read the one release number shared by the server and packaging."""
+
+    return (Path(SOURCE_ROOT) / "VERSION").read_text(encoding="utf-8").strip()
+
+
 @dataclass(frozen=True)
 class AssetSnapshot:
     """One immutable response representation captured before the server starts."""
@@ -65,11 +71,19 @@ def _source_candidates(source_root: str | os.PathLike[str]) -> tuple[Path, list[
     root = Path(source_root)
     if root.is_file():
         return root.parent, [root]
-    return root, [
+    # Only the deployed backend contributes to its identity. Development
+    # dependencies, tests and private recovery copies can change independently
+    # of the running service and must not make a reusable listener look stale.
+    modules = [
         path
-        for path in root.rglob("*.py")
+        for path in (root / "server").rglob("*.py")
         if path.is_file() and "__pycache__" not in path.parts and not path.name.startswith("test_")
     ]
+    for name in ("valkama.py", "VERSION"):
+        runtime_file = root / name
+        if runtime_file.is_file():
+            modules.append(runtime_file)
+    return root, modules
 
 
 def _source_entries(source_root: str | os.PathLike[str]) -> list[dict[str, str]]:

@@ -4,11 +4,13 @@ Notable changes to Valkama. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-The MCP server reports itself as `1.0.0+<build>`, where the build is a digest
+The MCP server reports itself as `<release>+<build>`, where the build is a digest
 over the modules the running process started with. Two servers from different
 checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
+
+## [1.0.2] - 2026-09-27
 
 The first public release. There is no earlier public version to compare
 against, so this entry describes what the repository contains rather than what
@@ -17,7 +19,7 @@ changed in it.
 ### Added
 
 - **A local modular control surface for agent work.** Planning, Sessions,
-  Analytics, Improvements, Skills, and Settings share one Kernel vocabulary,
+  Analytics, Improvements, Skills, Memory, and Settings share one Kernel vocabulary,
   persisted module registry, and normalized integration records.
 - **A Planning module agents use over MCP.** Its Kanban view has six fixed
   columns, competing claims are refused by `claim_work_item`, epics are parent
@@ -68,21 +70,8 @@ changed in it.
   restore a pre-migration product-model snapshot into a separate store and
   replay the migration.
 
-### Notes on the history
+### Notes
 
-The repository carries its full development history from 2026-07-26, and it
-records two renames — Kanban, then Agent Hub, then Valkama. Store migrations
-carry data across both, and four literals are still deliberately spelled the old
-way because they name what earlier versions wrote to real disks.
-
-Four commits are marked breaking. They predate any public release, so nothing
-outside this repository depended on what they changed:
-
-- `feat!: speak MCP 2026-07-28 only, and drop the handshake it removed` — since
-  reverted; the handshake is served again, and why is in the connection
-  contract.
-- `refactor(server)!: name the module platform and publish the contract as
-  valkama`
-- `refactor(web)!: rebuild on the renamed contract and give the style system one
-  grammar`
-- `refactor(web)!: give every element one component that decides how it looks`
+This is the first public release. The source archive contains the Python service
+and the built web UI. The Windows installer contains the desktop window; it uses
+the Python service and managed launcher installed from the source archive.

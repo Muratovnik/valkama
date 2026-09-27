@@ -50,6 +50,12 @@ The tray and desktop calculate runtime identity and start `serve` with the
 verified Python/shim pair from launcher status. They do not use a checkout entry
 point, desktop install record, `VALKAMA_SCRIPT` or interpreter override.
 
+The backend identity covers `valkama.py`, Python modules under `server/`, and
+`VERSION`; the UI identity covers the built files under `web/dist/`. Development
+dependencies, tests and local recovery copies do not change a running service's
+identity. A changed release version does, and an existing MCP process keeps the
+release label and build identity it captured at startup.
+
 On Windows, the launcher can report or stop the listener on the configured
 port:
 

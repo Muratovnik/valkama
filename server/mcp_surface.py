@@ -250,6 +250,7 @@ def _mcp_loop(
     # handshake version afterwards. The specification scopes that choice to the
     # stdio process, and one process only ever has one client.
     legacy_era: str | None = None
+    release_version = static_assets.release_version()
     # The tray module holds the mutex handles for as long as this session
     # does; releasing them is what lets the next session own the icon.
     tray.start()
@@ -305,7 +306,7 @@ def _mcp_loop(
                             # could tell them apart.
                             "io.modelcontextprotocol/serverInfo": {
                                 "name": "valkama",
-                                "version": f"1.0.0+{source_watch.build_id}",
+                                "version": f"{release_version}+{source_watch.build_id}",
                             }
                         },
                     },
@@ -330,7 +331,7 @@ def _mcp_loop(
                             "capabilities": {"tools": {}},
                             "serverInfo": {
                                 "name": "valkama",
-                                "version": f"1.0.0+{source_watch.build_id}",
+                                "version": f"{release_version}+{source_watch.build_id}",
                             },
                             "instructions": instructions,
                         },

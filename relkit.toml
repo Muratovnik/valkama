@@ -54,3 +54,22 @@ betterleaks_config = ".betterleaks.toml"
 [exposure.providers.AgentMemory]
 role = "product-data-provider"
 allowed_surfaces = ["docs/*", "server/*", "tests/*", "web/*"]
+
+[changelog]
+profile = "strict"
+first_version = "1.0.2"
+
+[release]
+publisher = "github"
+repository = "Muratovnik/valkama"
+branch = "main"
+version_file = "VERSION"
+version_pattern = '^([0-9]+\.[0-9]+\.[0-9]+)$'
+assets = ["valkama-{version}-source.zip", "Valkama-Setup-{version}.exe", "SHA256SUMS"]
+checksum_file = "SHA256SUMS"
+checks = [["{python}", "windows/release.py", "check"]]
+build = [["{python}", "windows/release.py", "build", "--assets", "{assets}", "--version", "{version}", "--work-dir", "{temp}"]]
+smoke = [["{python}", "windows/release.py", "smoke", "--assets", "{assets}", "--version", "{version}", "--work-dir", "{temp}"]]
+smoke_platforms = ["win32"]
+command_timeout = 7200
+require_provenance = false

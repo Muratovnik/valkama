@@ -6,6 +6,7 @@ import io
 import os
 import tempfile
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
@@ -13,6 +14,31 @@ from server import http_surface, static_assets
 
 
 class StaticAssetTests(unittest.TestCase):
+    def test_runtime_identity_ignores_files_outside_the_backend(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "server").mkdir()
+            (root / "server" / "service.py").write_text("VALUE = 1\n", encoding="utf-8")
+            (root / "valkama.py").write_text("from server import service\n", encoding="utf-8")
+            (root / "VERSION").write_text("1.0.2\n", encoding="utf-8")
+            original = static_assets.runtime_identity(root, root / "web" / "dist")
+            stamp = static_assets.source_stamp(root)
+            watch = static_assets.SourceWatch(root, interval=0)
+            for relative in (
+                ".private/evidence.py",
+                "tmp/candidate/server/service.py",
+                "web/node_modules/dependency/build.py",
+                "desktop/node_modules/dependency/build.py",
+                "tests/fixtures.py",
+                "windows/release.py",
+            ):
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("UNRELATED = True\n", encoding="utf-8")
+            self.assertEqual(original, static_assets.runtime_identity(root, root / "web" / "dist"))
+            self.assertEqual(stamp, static_assets.source_stamp(root))
+            self.assertFalse(watch.drifted())
+
     def test_runtime_snapshot_keeps_old_bytes_when_dist_is_rebuilt(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             dist = os.path.join(directory, "dist")

@@ -189,6 +189,22 @@ class DiscoveryTests(McpSurfaceTestCase):
         info = result["_meta"]["io.modelcontextprotocol/serverInfo"]
         self.assertEqual("valkama", info["name"])
 
+    def test_running_process_keeps_its_release_label(self) -> None:
+        request = {"jsonrpc": "2.0", "method": "server/discover", "params": {"_meta": META}}
+        with mock.patch.object(
+            mcp_surface.static_assets,
+            "release_version",
+            side_effect=["1.0.2", "9.9.9"],
+        ) as read_version:
+            answers = self.converse({**request, "id": 1}, {**request, "id": 2})
+        read_version.assert_called_once_with()
+        labels = [
+            answer["result"]["_meta"]["io.modelcontextprotocol/serverInfo"]["version"]
+            for answer in answers
+        ]
+        self.assertEqual(labels[0], labels[1])
+        self.assertTrue(labels[0].startswith("1.0.2+"))
+
     def test_the_instructions_tell_the_next_agent_how_the_board_is_used(self) -> None:
         result = self.discover(META)["result"]
         self.assertIn("claim_work_item before starting", result["instructions"])
@@ -527,7 +543,7 @@ class StaleBuildWarningTests(McpSurfaceTestCase):
                 {"jsonrpc": "2.0", "id": 1, "method": "server/discover", "params": params()}
             )
         info = answer["result"]["_meta"]["io.modelcontextprotocol/serverInfo"]
-        self.assertEqual("1.0.0+abc123def456", info["version"])
+        self.assertEqual("1.0.2+abc123def456", info["version"])
 
     def test_a_current_build_appends_nothing(self) -> None:
         result = self.answer(False)

@@ -51,7 +51,8 @@ class SourceWatchTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tree = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.addCleanup(self.tree.cleanup)
-        self.module = os.path.join(self.tree.name, "thing.py")
+        os.mkdir(os.path.join(self.tree.name, "server"))
+        self.module = os.path.join(self.tree.name, "server", "thing.py")
         self.write("value = 1\n")
         self.clock = Clock()
         self.watch = static_assets.SourceWatch(self.tree.name, interval=5.0, clock=self.clock)
@@ -75,10 +76,24 @@ class SourceWatchTests(unittest.TestCase):
         self.assertTrue(self.watch.drifted())
 
     def test_a_new_module_is_drift(self) -> None:
-        with open(os.path.join(self.tree.name, "another.py"), "w", encoding="utf-8") as handle:
+        with open(
+            os.path.join(self.tree.name, "server", "another.py"), "w", encoding="utf-8"
+        ) as handle:
             handle.write("value = 3\n")
         self.clock.advance(60)
         self.assertTrue(self.watch.drifted())
+
+    def test_a_release_version_change_is_drift(self) -> None:
+        release_file = os.path.join(self.tree.name, "VERSION")
+        with open(release_file, "w", encoding="utf-8") as handle:
+            handle.write("1.0.2\n")
+        self.watch = static_assets.SourceWatch(self.tree.name, interval=5.0, clock=self.clock)
+        initial = self.watch.build_id
+        with open(release_file, "w", encoding="utf-8") as handle:
+            handle.write("1.0.3\n")
+        self.clock.advance(60)
+        self.assertTrue(self.watch.drifted())
+        self.assertNotEqual(initial, static_assets.backend_digest(self.tree.name)[:12])
 
     def test_identical_bytes_at_a_new_mtime_are_not_drift(self) -> None:
         # What `git checkout` does to a file it restores unchanged. Warning here

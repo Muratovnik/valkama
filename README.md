@@ -55,13 +55,18 @@ are Windows-only by design — see [Limitations](#limitations).
 
 ## Install
 
-### 1. Clone it
+### 1. Get the source
+
+Clone the repository or download `valkama-<version>-source.zip` from a release
+and extract it. The source archive includes the Python service and built web UI;
+it does not need Node.js to run. From the resulting directory:
 
 ```bash
-git clone https://github.com/Muratovnik/valkama.git
-cd valkama
 python valkama.py serve
 ```
+
+For a Git clone, first run `git clone https://github.com/Muratovnik/valkama.git`
+and `cd valkama`.
 
 Open `http://127.0.0.1:8642/`. You should see the module navigation and an empty
 Planning directory. Stop the server with `Ctrl+C` — agents spawn their own copy
@@ -157,6 +162,15 @@ point to a space whose project id matches the registered project. Run
 
 ### 6. Optional: the desktop app (Windows)
 
+The release's `Valkama-Setup-<version>.exe` installs the desktop window. It
+requires the source service, Python 3.11+, and the managed launcher from step 2;
+the installer does not bundle a Python backend. For a fresh installation, run
+the installer after installing the launcher. If an older Agent Kanban or Agent
+Hub desktop app is installed, use the migration script below from the source
+directory to remove those registered copies before installing the new one.
+
+To build the desktop installer from source:
+
 ```powershell
 cd desktop
 npm ci
@@ -166,7 +180,7 @@ cd ..
 .\windows\install-desktop.ps1 -Build    # rebuild, remove older copies, install
 ```
 
-The installer is not a double-click because each past rename changed the NSIS
+The migration script is needed across past renames because each changed the NSIS
 `appId`, so a new installer lands *beside* the old copy instead of over it.
 `install-desktop.ps1` reads what is actually registered under `HKCU`, stops
 anything running from those directories, runs each old copy's own uninstaller,
