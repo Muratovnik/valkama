@@ -87,10 +87,12 @@ class SourceWatchTests(unittest.TestCase):
         release_file = os.path.join(self.tree.name, "VERSION")
         with open(release_file, "w", encoding="utf-8") as handle:
             handle.write("1.0.2\n")
+        os.utime(release_file, (1_000_000, 1_000_000))
         self.watch = static_assets.SourceWatch(self.tree.name, interval=5.0, clock=self.clock)
         initial = self.watch.build_id
         with open(release_file, "w", encoding="utf-8") as handle:
             handle.write("1.0.3\n")
+        os.utime(release_file, (2_000_000, 2_000_000))
         self.clock.advance(60)
         self.assertTrue(self.watch.drifted())
         self.assertNotEqual(initial, static_assets.backend_digest(self.tree.name)[:12])
