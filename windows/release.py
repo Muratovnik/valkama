@@ -157,7 +157,11 @@ def check() -> None:
         sys.stdout.flush()
         # Gate output is not parsed; inherit pipes to preserve the tool's text.
         if command[1:4] == ("-m", "coverage", "run"):
-            temp_root = Path(tempfile.gettempdir()).resolve()
+            temp_root = (
+                (Path(os.environ["LOCALAPPDATA"]) / "Temp").resolve()
+                if sys.platform == "win32"
+                else Path(tempfile.gettempdir()).resolve()
+            )
             task_parent = temp_root / "codex"
             if task_parent.resolve().parent != temp_root:
                 raise ValueError("check workspace must stay inside the temporary directory")
@@ -165,6 +169,18 @@ def check() -> None:
             with tempfile.TemporaryDirectory(prefix="valkama-check-", dir=task_parent) as task:
                 environment = isolated_environment(Path(task) / "user-state")
                 environment["GIT_CEILING_DIRECTORIES"] = task
+                subprocess.run(command, cwd=cwd, env=environment, check=True)
+        elif command[0] == "semgrep" and sys.platform == "win32":
+            # semgrep-core's native socketpair fails when its temporary socket
+            # path is too long. Release coordinators often supply a deeply
+            # nested TEMP; give only this process a short owned OS temp path.
+            native_temp = (Path(os.environ["LOCALAPPDATA"]) / "Temp").resolve()
+            task_parent = native_temp / "codex"
+            if task_parent.resolve().parent != native_temp:
+                raise ValueError("Semgrep workspace must stay inside the OS temporary directory")
+            task_parent.mkdir(exist_ok=True)
+            with tempfile.TemporaryDirectory(prefix="sg-", dir=task_parent) as task:
+                environment = {**os.environ, "TEMP": task, "TMP": task, "TMPDIR": task}
                 subprocess.run(command, cwd=cwd, env=environment, check=True)
         else:
             subprocess.run(command, cwd=cwd, check=True)
