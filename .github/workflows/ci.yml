@@ -78,7 +78,7 @@ jobs:
         run: npm run typecheck
         working-directory: web
       - name: Production Settings browser smoke
-        run: npm run test:browser -- --project=production --grep "^Settings"
+        run: npm run test:browser -- --project=production production-settings.spec.ts
         working-directory: web
       - name: Build committed web artifact
         run: npm run build
