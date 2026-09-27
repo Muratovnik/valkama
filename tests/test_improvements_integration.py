@@ -34,6 +34,8 @@ from tests import SUITE_STORE
 
 class ImprovementsIntegrationTests(unittest.TestCase):
     def setUp(self) -> None:
+        # Analysis processes are fakes; discovery must not depend on host tools.
+        self.enterContext(mock.patch.dict(os.environ, {"VALKAMA_CLAUDE_BIN": sys.executable}))
         self.tmp = tempfile.TemporaryDirectory()
         self.primary = os.path.join(self.tmp.name, "primary.sqlite3")
         os.environ["VALKAMA_DB"] = self.primary

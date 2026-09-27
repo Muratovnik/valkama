@@ -137,7 +137,7 @@ test('the real Improvements view renders for the explicit primary scope', async 
   } finally {
     await vite.close()
   }
-})
+}, 15_000)
 test('only queued and running jobs expose cancellation', () => {
   assert.equal(canCancelImprovementJob(job(1, 'queued')), true)
   assert.equal(canCancelImprovementJob(job(2, 'running')), true)

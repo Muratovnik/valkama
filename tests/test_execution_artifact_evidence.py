@@ -21,7 +21,7 @@ class ArtifactEvidenceTests(unittest.TestCase):
         scratch_root = _PROJECT / "tmp"
         self.assertTrue(git_worktrees.contains(str(scratch_root), str(_PROJECT)))
         self.assertFalse(git_worktrees.is_reparse_point(str(scratch_root)))
-        ignored = processes.run_text(["git", "-C", str(_PROJECT), "check-ignore", "tmp"])
+        ignored = processes.run_text(["git", "-C", str(_PROJECT), "check-ignore", "tmp/"])
         self.assertEqual(0, ignored.returncode, "test scratch must be ignored")
         scratch_root.mkdir(exist_ok=True)
         self.scratch = tempfile.TemporaryDirectory(dir=scratch_root)
