@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import http.client
 import json
@@ -91,6 +92,57 @@ class PlanningScopeHttpTests(unittest.TestCase):
 
     def model_path(self, source: str) -> str:
         return "/api/planning?" + urlencode({"project": "example-project", **self.refs[source]})
+
+    def stream_path(self, source: str) -> str:
+        return "/api/events?" + urlencode(
+            {"view": "planning", "project": "example-project", **self.refs[source]}
+        )
+
+    def read_frame(self, response: http.client.HTTPResponse) -> dict:
+        for _ in range(20):
+            line = response.readline()
+            if line.startswith(b"data: "):
+                return json.loads(line[6:])
+            if line == b"":
+                raise AssertionError("Planning stream closed before its next snapshot")
+        raise AssertionError("Planning stream did not publish the changed model")
+
+    def test_exact_stream_reads_and_observes_attached_store_without_primary_fallback(self) -> None:
+        self.bind("attached")
+        before = hashlib.sha256(self.attached.read_bytes()).digest()
+        client = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=3)
+        self.addCleanup(client.close)
+        client.request("GET", self.stream_path("attached"))
+        response = client.getresponse()
+        self.addCleanup(response.close)
+        self.assertEqual(200, response.status)
+        first = self.read_frame(response)
+        self.assertEqual(["attached-only"], [item["title"] for item in first["work_items"]])
+        self.assertEqual(before, hashlib.sha256(self.attached.read_bytes()).digest())
+        with contextlib.closing(sqlite3.connect(self.attached)) as changed:
+            changed.execute("UPDATE work_items SET title='External update'")
+            changed.commit()
+        updated = self.read_frame(response)
+        self.assertEqual(["External update"], [item["title"] for item in updated["work_items"]])
+        self.bind("primary")
+        http_surface.watchers.WATCHERS.publish("changed")
+        for _ in range(20):
+            if response.readline() == b"":
+                break
+        else:
+            self.fail("Stream stayed open after its exact binding was revoked")
+
+    def test_exact_stream_refuses_invalid_or_stale_scope_before_streaming(self) -> None:
+        self.bind("attached")
+        self.assertEqual(409, self.request(self.stream_path("primary"))[0])
+        path = self.stream_path("attached")
+        for suffix in ("&space=OTHER", "&space_key=SAME", "&extra=1", "&view=planning"):
+            with self.subTest(suffix=suffix):
+                self.assertEqual(400, self.request(path + suffix)[0])
+        self.assertEqual(400, self.request(path.replace("view=planning", "view=spaces"))[0])
+        for query in ("project=", "project=&data_scope_id=&space_key=", "project=&project=x"):
+            with self.subTest(query=query):
+                self.assertEqual(400, self.request("/api/events?view=planning&" + query)[0])
 
     def test_context_directory_matches_the_current_project_contract(self) -> None:
         status, context = self.request("/api/platform/context?scope_kind=global")

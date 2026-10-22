@@ -45,10 +45,10 @@ function portfolio(locale: 'en' | 'ru' = 'en') {
 }
 
 describe('PlanningPortfolio', () => {
-  it('keeps every registered project visible with identity before presentation title', () => {
+  it('keeps every registered project visible with its human name before its identifier', () => {
     const rows = portfolio().findAll('.portfolio-project')
     expect(rows).toHaveLength(bindingStates.length)
-    expect(rows[1]?.find('.project-head > div').text()).toBe('unbound-projectunbound Project')
+    expect(rows[1]?.find('.project-head > div').text()).toBe('unbound Projectunbound-project')
     const binding = rows[1]?.get('[data-dimension="project-binding"]')
     expect(binding?.attributes('data-state')).toBe('unbound')
     expect(binding?.text()).toBe('Unbound')

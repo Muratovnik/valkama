@@ -200,7 +200,8 @@ test('the planning workspace is the one scroll owner and wears shared controls',
   assert.match(workspace, /:aria-busy="countsBusy"/)
   // The header row stays and each view scrolls inside the stage. Two scroll
   // containers is how the board used to take the page sideways with it.
-  assert.match(compactCss(workspace), /\.workspace\{[^}]*grid-template-rows:autominmax\(0,1fr\)/)
+  assert.match(compactCss(workspace), /\.workspace\{[^}]*flex-direction:column/)
+  assert.match(compactCss(workspace), /\.workspace-stage\{[^}]*flex:11auto/)
   assert.match(compactCss(workspace), /\.workspace-stage\{[^}]*min-height:0/)
 })
 

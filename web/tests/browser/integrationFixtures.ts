@@ -71,18 +71,6 @@ export const builtInConnections: RegistryConnection[] = [
     capabilities: ['memory.open', 'memory.health'],
   }),
   builtInConnection({
-    id: 'codex-skills',
-    name: 'platform.integrations.codexSkills',
-    transport: 'local-file',
-    capabilities: ['skills.catalog', 'skills.activate'],
-  }),
-  builtInConnection({
-    id: 'claude-skills',
-    name: 'platform.integrations.claudeSkills',
-    transport: 'local-file',
-    capabilities: ['skills.catalog', 'skills.activate'],
-  }),
-  builtInConnection({
     id: 'git-artifacts',
     name: 'platform.integrations.git',
     transport: 'built-in',

@@ -46,7 +46,7 @@ export interface GraphLayout {
 }
 
 /** Keep the interaction floor low enough for wide spaces to fit without clipping. */
-export const GRAPH_ZOOM_MIN = 0.1
+export const GRAPH_ZOOM_MIN = 0.01
 export const GRAPH_ZOOM_MAX = 1.45
 
 /** Vue Flow's built-in edge and marker contract for every dependency wire. */

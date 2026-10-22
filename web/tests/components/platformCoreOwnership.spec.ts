@@ -10,6 +10,11 @@ import { planningSpaceEntity, planningWorkItemEntity } from '@/shared/api/platfo
 import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
+vi.mock('@/shared/api/planningApi.ts', async (load) => ({
+  ...(await load<typeof import('@/shared/api/planningApi.ts')>()),
+  subscribePlanning: vi.fn(() => vi.fn()),
+}))
+
 /**
  * Write ownership is one derivation, and this is the case that made it one.
  *

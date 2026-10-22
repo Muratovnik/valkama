@@ -90,8 +90,6 @@ const installationAssignments = [
   assignment('telemetry.query', [builtInIdentity('codex-rollout-telemetry')], {
     kind: 'installation',
   }),
-  assignment('skills.catalog', [builtInIdentity('codex-skills')], { kind: 'installation' }),
-  assignment('skills.activate', [builtInIdentity('codex-skills')], { kind: 'installation' }),
   assignment('memory.open', [builtInIdentity('agentmemory-reference-v1')], {
     kind: 'installation',
   }),

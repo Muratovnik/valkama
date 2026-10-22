@@ -2,10 +2,7 @@
 /**
  * Vue Flow's camera controls, drawn in this product's chrome.
  *
- * The three glyphs are text rather than icons because `VIcon` has no zoom pair and
- * inventing one for three buttons in one widget is a worse trade than a plus, a
- * minus and a return arrow. Each carries its own accessible name, since a glyph is
- * hidden from the reader.
+ * The zoom glyphs carry accessible names; camera destinations have visible labels.
  *
  * The rules below reach into the library's own DOM, which is why this file is on
  * `scopeEscapeOwners`: `.vue-flow__controls` and its buttons are Vue Flow's
@@ -13,18 +10,21 @@
  */
 import { useI18n } from 'vue-i18n'
 
-import { Controls } from '@vue-flow/controls'
+import { ControlButton, Controls } from '@vue-flow/controls'
+import { useVueFlow } from '@vue-flow/core'
 import type { FitViewParams } from '@vue-flow/core'
 
-defineProps<{ fitOptions: FitViewParams }>()
+const props = defineProps<{ fitOptions: FitViewParams }>()
+const emit = defineEmits<{ 'focus-work': [] }>()
 const { t } = useI18n()
+const { fitView } = useVueFlow()
 </script>
 
 <template>
   <Controls
     position="bottom-left"
     :show-interactive="false"
-    :fit-view-params="fitOptions"
+    :show-fit-view="false"
   >
     <template #icon-zoom-in>
       <span
@@ -42,14 +42,18 @@ const { t } = useI18n()
       >
       <span class="visually-hidden">{{ t('graph.zoomOut') }}</span>
     </template>
-    <template #icon-fit-view>
-      <span
-        class="control-glyph fit"
-        aria-hidden="true"
-        >↺</span
-      >
-      <span class="visually-hidden">{{ t('graph.zoomReset') }}</span>
-    </template>
+    <ControlButton
+      class="control-action"
+      @click="emit('focus-work')"
+    >
+      {{ t('graph.focusWork') }}
+    </ControlButton>
+    <ControlButton
+      class="control-action"
+      @click="fitView(props.fitOptions)"
+    >
+      {{ t('graph.zoomReset') }}
+    </ControlButton>
   </Controls>
 </template>
 
@@ -57,14 +61,15 @@ const { t } = useI18n()
 .control-glyph {
   display: block;
   color: var(--color-text);
-  font: 600 var(--font-size-module)/var(--line-height-flat) var(--font-family-interface);
+  font: 600 var(--font-size-emphasis)/var(--line-height-flat) var(--font-family-interface);
+}
 
-  &.fit {
-    font-size: var(--font-size-section);
-  }
+.control-action {
+  font: var(--font-chip);
 }
 
 :deep(.vue-flow__controls) {
+  display: flex;
   margin: 0 0 var(--space-4) var(--space-4);
   border: 1px solid var(--color-rule);
   overflow: hidden;
@@ -84,6 +89,11 @@ const { t } = useI18n()
 
 :deep(.vue-flow__controls-button:last-child) {
   border-bottom: 0;
+}
+
+:deep(.vue-flow__controls-button.control-action) {
+  width: auto;
+  padding: 0 var(--space-3);
 }
 
 :deep(

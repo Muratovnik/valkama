@@ -34,8 +34,12 @@ function bindingRecoveryRoute(projectId: string) {
     >
       <header class="project-head">
         <div>
-          <strong class="project-id">{{ project.project_id }}</strong
-          ><small class="project-title">{{ project.title }}</small>
+          <strong class="project-title">{{ project.title || project.project_id }}</strong>
+          <small
+            v-if="project.title && project.title !== project.project_id"
+            class="project-id"
+            >{{ project.project_id }}</small
+          >
         </div>
         <SemanticState
           dimension="project-binding"
@@ -50,7 +54,11 @@ function bindingRecoveryRoute(projectId: string) {
           :key="`${space.space_ref.data_scope_id}:${space.space_ref.space_key}`"
           class="project-space"
         >
-          <span class="space-name">{{ space.title }}</span>
+          <span
+            v-if="space.title !== project.title && space.title !== project.project_id"
+            class="space-name"
+            >{{ space.title }}</span
+          >
           <span class="space-count">{{
             t('platform.planning.workItemCount', { count: space.work_item_count })
           }}</span>
@@ -113,15 +121,14 @@ function bindingRecoveryRoute(projectId: string) {
 
 .project-id {
   display: block;
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size-emphasis);
+  margin-top: var(--space-1);
+  color: var(--color-text-muted);
+  font: var(--font-detail);
 }
 
 .project-title {
   display: block;
-  margin-top: var(--space-1);
-  color: var(--color-text-muted);
-  font-size: var(--font-size-meta);
+  font: var(--font-name);
 }
 
 .project-spaces {

@@ -7,7 +7,7 @@
  * failure belong to whoever owns that fetch; this component draws a field or
  * says the field is empty.
  */
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { Background } from '@vue-flow/background'
@@ -21,6 +21,7 @@ import GraphBar from '@/widgets/work-item-graph/components/GraphBar.vue'
 import GraphControls from '@/widgets/work-item-graph/components/GraphControls.vue'
 import GraphNodeCard from '@/widgets/work-item-graph/components/GraphNodeCard.vue'
 import { useGraphProjection } from '@/widgets/work-item-graph/composables/useGraphProjection.ts'
+import { graphCameraView } from '@/widgets/work-item-graph/utils/graphCamera.ts'
 import { NODE_HEIGHT, NODE_WIDTH } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import {
@@ -42,6 +43,7 @@ const props = defineProps<{
   scopeKind: GraphScope['kind']
   space: string
   version: number
+  selectedId?: string | null
 }>()
 
 const emit = defineEmits<{ open: [reference: string] }>()
@@ -147,8 +149,13 @@ const flowEdges = computed<FlowEdge<{ kind: PlanningEdge['kind'] }>[]>(() => {
 
 // Vue Flow owns the camera and all viewport math. The store is keyed so the
 // Controls child and this component share one camera instance.
-const { fitView } = useVueFlow({ id: GRAPH_FLOW_ID })
+const { dimensions, setViewport } = useVueFlow({ id: GRAPH_FLOW_ID })
 const fitOptions = graphFitViewOptions()
+let cameraRequest = 0
+
+onBeforeUnmount(() => {
+  cameraRequest += 1
+})
 
 function onFlowNodeMouseEnter(event: { node: { id: string } }) {
   applyFocus({ type: 'pointer-enter', id: event.node.id })
@@ -183,16 +190,18 @@ function onFieldPointerLeave() {
  * cards at full size before the graph appeared. The pane stays hidden until
  * the camera has actually been placed.
  */
-function scheduleFitView() {
-  if (!flowReady.value) return
-  if (!flowNodes.value.length) {
-    fitted.value = true
-    return
-  }
+function scheduleFitView(focusOnly = false) {
+  if (!flowReady.value || (fitted.value && !focusOnly)) return
+  const request = ++cameraRequest
   void nextTick(async () => {
-    if (!flowReady.value) return
-    await fitView(fitOptions)
-    fitted.value = true
+    if (!flowReady.value || request !== cameraRequest || !placed.value) return
+    const camera = graphCameraView(placed.value, dimensions.value, readyIdSet.value, {
+      selectedId: props.selectedId,
+      focusOnly,
+    })
+    if (!camera) return
+    const positioned = await setViewport(camera, { duration: 0 })
+    if (request === cameraRequest && positioned) fitted.value = true
   })
 }
 
@@ -207,12 +216,17 @@ watch(
   () => placed.value,
   (projection) => {
     if (projection) return
+    cameraRequest += 1
     flowReady.value = false
     fitted.value = false
   },
 )
 
-watch([placed, () => props.scopeKind, () => props.epicId, showDone], scheduleFitView)
+watch([placed, dimensions], () => scheduleFitView())
+watch([() => props.space, () => props.scopeKind, () => props.epicId, showDone], () => {
+  fitted.value = false
+  scheduleFitView()
+})
 </script>
 
 <template>
@@ -281,7 +295,6 @@ watch([placed, () => props.scopeKind, () => props.epicId, showDone], scheduleFit
         :prevent-scrolling="true"
         :min-zoom="GRAPH_ZOOM_MIN"
         :max-zoom="GRAPH_ZOOM_MAX"
-        :fit-view-on-init="true"
         :apply-default="false"
         @init="onFlowInit"
         @node-mouse-enter="onFlowNodeMouseEnter"
@@ -317,7 +330,10 @@ watch([placed, () => props.scopeKind, () => props.epicId, showDone], scheduleFit
           :gap="24"
           :size="1"
         />
-        <GraphControls :fit-options="fitOptions" />
+        <GraphControls
+          :fit-options="fitOptions"
+          @focus-work="scheduleFitView(true)"
+        />
       </VueFlow>
     </div>
   </section>

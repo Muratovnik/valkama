@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppContextBar from '@/app/components/AppContextBar.vue'
@@ -21,6 +21,7 @@ import SessionContext from '@/features/session-open/SessionContext.vue'
 import { resolveSessionWorkItemRoute } from '@/features/session-open/sessionWorkItemRoute.ts'
 
 import { fetchSessionContext } from '@/shared/api/api.ts'
+import type { PlanningConnectionState } from '@/shared/api/planningApi.ts'
 import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
 import { failureMessage } from '@/shared/api/typedFailure.ts'
 import type { TypedFailure } from '@/shared/api/typedFailure.ts'
@@ -66,6 +67,8 @@ const mappedProjectResources = computed(() => {
   )
 })
 const moduleAuthorityReady = ref(false)
+const moduleStage = ref<InstanceType<typeof AppModuleStage> | null>(null)
+const planningConnection = ref<PlanningConnectionState>('connecting')
 const { contextState, registryState, loadContext, loadRegistry, syncRouteResources } =
   usePlatformReadModels({
     route,
@@ -88,11 +91,28 @@ const {
   moduleAuthorityReady,
   syncRouteResources,
   loadContext,
+  refreshSurface: async () => {
+    await nextTick()
+    if (!['empty', 'ready'].includes(contextState.value.status))
+      throw new Error('Context refresh failed')
+    if (
+      activeModule.value === 'settings' &&
+      !['empty', 'ready'].includes(registryState.value.status)
+    )
+      throw new Error('Registry refresh failed')
+    await moduleStage.value?.refresh()
+  },
   text: {
     failure: localizedFailure,
     refreshed: () => t('refresh.done'),
   },
 })
+
+const displayedConnection = computed(() =>
+  activeModule.value === 'planning' && operatingScope.value.kind === 'project'
+    ? planningConnection.value
+    : connectionState.value,
+)
 
 const {
   activeManifest,
@@ -236,7 +256,7 @@ usePlatformEntryRestore({
     <AppNav
       :modules="modules"
       :active="activeModule"
-      :connection="connectionState"
+      :connection="displayedConnection"
       :refreshing="refreshing"
       @navigate="switchModule"
       @home="goHome"
@@ -271,6 +291,7 @@ usePlatformEntryRestore({
 
         <AppModuleStage
           v-else-if="modulesAuthoritative && activeManifest"
+          ref="moduleStage"
           :active-module="activeModule"
           :module-title="moduleTitle"
           :scope="operatingScope"
@@ -280,6 +301,7 @@ usePlatformEntryRestore({
           :route="route"
           :locale="locale"
           :reload-modules="reloadModuleState"
+          @connection="(state) => (planningConnection = state)"
           @retry-registry="loadRegistry"
           @entity="openEntity"
           @open-session="openSession"

@@ -41,6 +41,7 @@ const busy = ref(false)
 const failure = ref('')
 const results = ref<readonly MemoryResult[]>([])
 const provider = ref('')
+const source = ref('')
 const capabilities = ref<readonly string[]>([])
 const health = ref('')
 const reason = ref('')
@@ -70,6 +71,7 @@ async function search() {
     const answer = await searchMemory(props.projectId, query.value.trim())
     results.value = answer.results
     provider.value = answer.provider_id
+    source.value = answer.root
     capabilities.value = answer.capabilities
     health.value = answer.health
     reason.value = answer.reason?.message ?? ''
@@ -151,10 +153,18 @@ function when(value: string): string {
         v-else-if="searched"
         class="quiet"
       >
-        {{ t('memory.provider', { provider, capabilities: capabilityList }) }}
+        {{ t('memory.source', { source: t('memory.projectKnowledge') }) }}
         <span v-if="health !== 'ready'"> · {{ reason || t('memory.unavailable') }}</span>
       </p>
 
+      <details
+        v-if="searched && !failure"
+        class="quiet"
+      >
+        <summary>{{ t('memory.technicalDetails') }}</summary>
+        <p>{{ t('memory.provider', { provider, capabilities: capabilityList }) }}</p>
+        <p>{{ source }}</p>
+      </details>
       <ul
         v-if="results.length"
         class="memory-results"

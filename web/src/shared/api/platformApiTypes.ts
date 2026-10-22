@@ -7,6 +7,7 @@
  */
 
 import type { ActionRef } from '@/shared/api/platformActionRef.ts'
+import type { KernelCapabilityId } from '@/shared/api/platformCapabilityDefinitions.ts'
 import type {
   AdapterResourceRef,
   ConnectionRef,
@@ -135,17 +136,7 @@ export type RegistryConnection = KernelConnection & {
 
 export type RegistryAssignment = {
   assignment_id: string
-  capability_id:
-    | 'execution.launch'
-    | 'execution.resume'
-    | 'execution.stop'
-    | 'session.observe'
-    | 'telemetry.query'
-    | 'skills.catalog'
-    | 'skills.activate'
-    | 'memory.open'
-    | 'memory.health'
-    | 'artifact.inspect'
+  capability_id: KernelCapabilityId
   changed_by: string
   connection_ids: string[]
   revision: number
@@ -224,6 +215,7 @@ export type RegistryAudit = {
     | Record<string, never>
     | { adapter_lineage_id: string }
     | { revoked_by: string }
+    | { reason: 'work-focus' }
     | { state: 'enabled' | 'disabled' }
     | {
         binding: {

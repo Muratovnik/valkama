@@ -217,6 +217,7 @@ const COLUMNS: { key: SortKey; label: string; numeric?: boolean }[] = [
 
 .list-table {
   width: 100%;
+  min-width: 1120px;
   border-collapse: collapse;
 }
 
@@ -280,6 +281,7 @@ const COLUMNS: { key: SortKey; label: string; numeric?: boolean }[] = [
   padding: var(--space-2) var(--space-3);
   color: var(--color-text-muted);
   font: var(--font-line);
+  white-space: nowrap;
 }
 
 .list-open {
@@ -298,7 +300,10 @@ const COLUMNS: { key: SortKey; label: string; numeric?: boolean }[] = [
 }
 
 .list-title {
+  min-width: 28ch;
   color: var(--color-text);
+  overflow-wrap: anywhere;
+  white-space: normal;
 
   .list-kind {
     margin-inline-start: var(--space-2);
@@ -311,6 +316,6 @@ const COLUMNS: { key: SortKey; label: string; numeric?: boolean }[] = [
 }
 
 .list-claim {
-  overflow-wrap: anywhere;
+  min-width: 20ch;
 }
 </style>

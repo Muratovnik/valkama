@@ -95,6 +95,48 @@ export async function fetchPlanning(
   return validateReadModel(await request(`/api/planning${query({ ...target })}`))
 }
 
+export type PlanningConnectionState = 'connecting' | 'live' | 'reconnecting'
+
+export function subscribePlanning(
+  target: { project: string } & PlanningSpaceRef,
+  callbacks: {
+    connection: (state: PlanningConnectionState) => void
+    invalid?: (error: unknown) => void
+    snapshot: (model: PlanningReadModel) => void
+  },
+): () => void {
+  callbacks.connection('connecting')
+  const source = new EventSource(`/api/events${query({ view: 'planning', ...target })}`)
+  let closed = false
+  function close() {
+    if (closed) return
+    closed = true
+    source.removeEventListener('message', onMessage)
+    source.removeEventListener('error', onError)
+    source.close()
+  }
+  function onMessage(event: MessageEvent<string>) {
+    if (closed) return
+    try {
+      const model = validateReadModel(JSON.parse(event.data) as unknown)
+      if (model.planning_space?.key !== target.space_key)
+        throw new Error('Planning stream returned a different space')
+      callbacks.snapshot(model)
+      callbacks.connection('live')
+    } catch (error) {
+      close()
+      callbacks.connection('reconnecting')
+      callbacks.invalid?.(error)
+    }
+  }
+  function onError() {
+    if (!closed) callbacks.connection('reconnecting')
+  }
+  source.addEventListener('message', onMessage)
+  source.addEventListener('error', onError)
+  return close
+}
+
 export async function fetchWorkItem(
   reference: string,
   target: { project: string; space: PlanningSpaceRef },

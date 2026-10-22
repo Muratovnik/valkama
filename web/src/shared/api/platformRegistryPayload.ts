@@ -90,7 +90,7 @@ const adapterSchema = strictObject({
  * A Connection as the Kernel stores it. A capability resolution names
  * Connections with exactly this record; the display facts below belong to the
  * registry's own connection list, which the view joins by identity rather than
- * carrying a second copy inside all ten resolutions.
+ * carrying a second copy inside every resolution.
  */
 const kernelConnectionFields = {
   connection_ref: fromValidator(validateConnectionRef),
@@ -328,9 +328,12 @@ const registryReadySchema = strictObject({
   adapters: boundedList(adapterSchema),
   connections: boundedList(connectionSchema),
   assignments: boundedList(assignmentSchema),
-  capabilities: boundedList(capabilityResolutionSchema, 10).length(10, {
-    message: 'expected all Kernel capabilities',
-  }),
+  capabilities: boundedList(capabilityResolutionSchema, KERNEL_CAPABILITY_IDS.length).length(
+    KERNEL_CAPABILITY_IDS.length,
+    {
+      message: 'expected all Kernel capabilities',
+    },
+  ),
   grants: boundedList(grantSchema),
   packages: boundedList(packageDescriptorSchema),
   actions: boundedList(fromValidator(validateActionRef)),

@@ -57,6 +57,7 @@ const metadataDetailSchema = z.union([
   strictObject({ revoked_by: boundedText(ID) }),
   strictObject({ state: enumField(['enabled', 'disabled'] as const) }),
 ])
+const retiredFeatureDetailSchema = strictObject({ reason: z.literal('work-focus') })
 
 const auditSchema = strictObject({
   sequence: positiveInt(),
@@ -67,12 +68,18 @@ const auditSchema = strictObject({
   at: boundedText(ISO, 96),
 })
 
+function detailSchema(eventKind: string) {
+  if (eventKind === 'action.invoked') return actionDetailSchema
+  if (eventKind === 'feature.retired') return retiredFeatureDetailSchema
+  return metadataDetailSchema
+}
+
 /** Validate the event envelope and the exact detail family its event may carry. */
 export function validateRegistryAudit(value: unknown, path: string): RegistryAudit {
   const record = parseContract(auditSchema, value, path, invalid)
   // Only action invocation events carry the authorization decision. Registry
   // lifecycle events use one of the Kernel's small, exact metadata records.
-  const schema = record.event_kind === 'action.invoked' ? actionDetailSchema : metadataDetailSchema
+  const schema = detailSchema(record.event_kind)
   const detail = parseContract(schema, record.detail, `${path}.detail`, invalid)
   return { ...record, detail }
 }

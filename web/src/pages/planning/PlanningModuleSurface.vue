@@ -15,12 +15,13 @@
  * the Kernel encodes — `{space_ref, reference}` — so there is one spelling of the
  * identity and the route carries it.
  *
- * How deep the operator went to get there stays local. A trail is navigation
- * history, not identity, and the browser already owns history.
+ * The local trail holds navigation depth; the route holds the item's identity.
  */
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { usePlanningPortfolio } from '@/pages/planning/composables/usePlanningPortfolio.ts'
+import { usePlanningSubscription } from '@/pages/planning/composables/usePlanningSubscription.ts'
 import PlanningPortfolio from '@/pages/planning/PlanningPortfolio.vue'
 import PlanningWorkspace from '@/pages/planning/PlanningWorkspace.vue'
 import type { PlanningViewMode } from '@/pages/planning/PlanningWorkspace.vue'
@@ -30,17 +31,17 @@ import WorkItemInspector from '@/widgets/work-item-inspector/components/WorkItem
 import WorkItemComposer from '@/features/work-item-compose/WorkItemComposer.vue'
 
 import { CutoverPendingError, fetchPlanning, transitionWorkItem } from '@/shared/api/planningApi.ts'
+import type { PlanningConnectionState } from '@/shared/api/planningApi.ts'
 import type { PlanningReadModel } from '@/shared/api/planningModel.ts'
 import type { PlatformContextReady, PlatformRegistryReady } from '@/shared/api/platformApiTypes.ts'
 import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
-import { fetchPlanningWorkItem, fetchPlatformPlanning } from '@/shared/api/platformPlanningApi.ts'
+import { fetchPlanningWorkItem } from '@/shared/api/platformPlanningApi.ts'
 import {
   planningSpaceEntity,
   planningWorkItemEntity,
   resolvePlanningRouteSelection,
 } from '@/shared/api/platformPlanningRefs.ts'
 import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
-import type { PlatformPlanningReady } from '@/shared/api/platformPlanningTypes.ts'
 import type { PlatformRelation } from '@/shared/api/platformRelations.ts'
 import type { OperatingScope, PlatformRoute } from '@/shared/api/platformRoute.ts'
 import { uiError, uiLoading, uiUnavailable } from '@/shared/api/platformUiState.ts'
@@ -64,6 +65,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
+  'connection': [state: PlanningConnectionState]
   'entity': [entity?: EntityRef]
   'notice': [message: string]
   'open-project': [projectId: string]
@@ -121,8 +123,11 @@ const view = computed<PlanningViewMode>(() => {
   return value === 'graph' || value === 'list' ? value : 'kanban'
 })
 
-/** The Kernel's directory of projects and their spaces, which global scope shows. */
-const portfolio = ref<PlatformUiState<PlatformPlanningReady>>(uiLoading())
+const {
+  state: portfolio,
+  load: loadPortfolio,
+  invalidate: invalidatePortfolio,
+} = usePlanningPortfolio(() => props.scope)
 /**
  * Planning's own read model, held beside its status rather than inside one.
  *
@@ -159,22 +164,29 @@ const openIdentity = computed(() => {
 const trail = ref<string[]>([])
 const composerOpen = ref(false)
 
-let portfolioSerial = 0
 const planningKey = computed(() =>
   JSON.stringify([props.scope, boundSpace.value, routeSelection.value.status]),
 )
 
-async function loadPortfolio() {
-  const mine = ++portfolioSerial
-  portfolio.value = uiLoading()
-  try {
-    const payload = await fetchPlatformPlanning(props.scope)
-    if (mine === portfolioSerial) portfolio.value = payload.state
-  } catch (error) {
-    if (mine !== portfolioSerial) return
-    portfolio.value = uiError(error instanceof Error ? error.message : String(error))
-  }
-}
+const selectedId = computed(
+  () => model.value?.work_items.find((item) => item.reference === open.value)?.work_item_id ?? null,
+)
+
+const streamTarget = computed(() =>
+  projectId.value !== undefined && boundSpace.value !== undefined
+    ? { project: projectId.value, ...boundSpace.value }
+    : null,
+)
+const { connection: liveConnection, reconnect } = usePlanningSubscription(streamTarget, (next) => {
+  const key = planningKey.value
+  resource.value = beginResource(resource.value, key)
+  resource.value = resolveResource(resource.value, resource.value.generation, key, next)
+  version.value += 1
+})
+const liveWarning = computed(() =>
+  liveConnection.value === 'reconnecting' ? t('workItem.liveUnavailable') : undefined,
+)
+watch(liveConnection, (state) => emit('connection', state), { immediate: true })
 
 async function loadPlanning() {
   const project = projectId.value
@@ -194,6 +206,7 @@ async function loadPlanning() {
   if (model.value === null) planning.value = uiLoading()
   try {
     const next = await fetchPlanning({ project, ...space })
+    if (generation !== resource.value.generation) return
     if (generation !== resource.value.generation) return
     version.value += 1
     if (next.planning_space === null) {
@@ -236,7 +249,7 @@ watch(
   () => {
     trail.value = []
     composerOpen.value = false
-    portfolioSerial += 1
+    invalidatePortfolio()
     void loadPlanning()
     if (props.scope.kind === 'global') void loadPortfolio()
   },
@@ -274,10 +287,7 @@ async function loadRelations() {
   const space = boundSpace.value
   const reference = open.value
   const scope = props.scope
-  if (space === undefined || reference === null || scope.kind !== 'project') {
-    relations.value = null
-    return
-  }
+  if (space === undefined || reference === null || scope.kind !== 'project') return
   try {
     const payload = await fetchPlanningWorkItem(scope, { space_ref: space, reference })
     if (mine !== relationsSerial) return
@@ -294,7 +304,6 @@ const relationsKey = computed(() => JSON.stringify([readKey.value, openIdentity.
 watch([relationsKey, version], loadRelations, { immediate: true })
 
 onBeforeUnmount(() => {
-  portfolioSerial += 1
   relationsSerial += 1
   resource.value = cancelResource(resource.value)
 })
@@ -378,6 +387,21 @@ function itemCreated(reference: string) {
   void loadPlanning()
   show(reference)
 }
+
+async function refresh() {
+  if (props.scope.kind === 'global') {
+    await loadPortfolio()
+    if (!['empty', 'ready'].includes(portfolio.value.status))
+      throw new Error('Planning directory refresh failed')
+    return
+  }
+  await loadPlanning()
+  if (resource.value.status !== 'ready' || resource.value.data === null || resource.value.error)
+    throw new Error('Planning refresh failed')
+  reconnect()
+}
+
+defineExpose({ refresh })
 </script>
 
 <template>
@@ -410,6 +434,9 @@ function itemCreated(reference: string) {
   >
     <PlanningWorkspace
       :model="model"
+      :scope-key="planningKey"
+      :selected-id="selectedId"
+      :warning="liveWarning"
       :stale="stale"
       :version="version"
       :view="view"

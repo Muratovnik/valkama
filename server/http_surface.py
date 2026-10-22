@@ -864,11 +864,17 @@ class Handler(BaseHTTPRequestHandler):
             finally:
                 conn.close()
         elif url.path == "/api/events":
-            parameters = parse_qs(url.query)
+            parameters = parse_qs(url.query, keep_blank_values=True)
             view = (parameters.get("view") or ["planning"])[0]
+            exact = bool({"project", "data_scope_id", "space_key"} & parameters.keys())
+            if exact and (view != "planning" or len(parameters.get("view", [view])) != 1):
+                self._send_json(400, {"error": "Exact scope requires one Planning view"})
+                return
+            scoped = {key: value for key, value in parameters.items() if key != "view"}
             self._stream_events(
                 _first_value(parameters, "space"),
                 view=view,
+                exact_parameters=scoped if exact else None,
             )
         else:
             self._send(404, b"not found", "text/plain")
@@ -877,55 +883,74 @@ class Handler(BaseHTTPRequestHandler):
         self,
         board: str | None,
         view: str = "planning",
+        exact_parameters: Mapping[str, list[str]] | None = None,
     ) -> None:
         """Push one live read model on every database change; clients never poll."""
-        self.send_response(200)
-        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
-        self.send_header("Cache-Control", "no-cache")
-        self.send_header("Connection", "keep-alive")
-        self.end_headers()
+        with contextlib.ExitStack() as cleanup:
+            conn = connect()
+            cleanup.callback(conn.close)
+            source = conn
+            try:
+                if exact_parameters is not None:
+                    source, _key = cleanup.enter_context(
+                        platform_core.Platform(conn, db_path()).planning_store(exact_parameters)
+                    )
+            except (platform_core.PlatformHttpError, ContractError) as error:
+                self._answer(platform_core.error_response(error))
+                return
 
-        stream = watchers.WATCHERS.subscribe()
-        conn = connect()
-        frames = EventFrames()
-        owner = _sse_view_owner(view)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Connection", "keep-alive")
+            self.end_headers()
 
-        def push() -> None:
-            platform_core.require_module_enabled(conn, owner)
-            current: object
-            if view == "activity":
-                current = planning_views.activity_feed(conn)
-            elif view == "spaces":
-                current = {"planning_spaces": planning_service.list_planning_spaces(conn)}
-            else:
-                current = planning_views.planning_payload(conn, space=board)
-            frame = frames.frame(json.dumps(current, ensure_ascii=False))
-            if frame is not None:
-                self.wfile.write(frame)
-                self.wfile.flush()
+            stream = watchers.WATCHERS.subscribe()
+            cleanup.callback(watchers.WATCHERS.unsubscribe, stream)
+            frames = EventFrames()
+            owner = _sse_view_owner(view)
+            observed_version = source.execute("PRAGMA data_version").fetchone()[0]
 
-        try:
-            push()  # the current board first, so the client never renders empty
-            while True:
-                try:
-                    stream.get(timeout=0.4)
-                    push()
-                except queue.Empty:
-                    platform_core.require_module_enabled(conn, owner)
-                    # A comment frame keeps the connection from idling out and
-                    # tells us at once when the browser has gone away.
-                    platform_core.require_module_enabled(conn, owner)
-                    self.wfile.write(b": keep-alive\n\n")
+            def push() -> None:
+                platform_core.require_module_enabled(conn, owner)
+                current: object
+                if exact_parameters is not None:
+                    current = platform_core.Platform(conn, db_path()).planning_read_model(
+                        exact_parameters,
+                        lambda selected, key: planning_views.planning_payload(selected, space=key),
+                    )
+                elif view == "activity":
+                    current = planning_views.activity_feed(conn)
+                elif view == "spaces":
+                    current = {"planning_spaces": planning_service.list_planning_spaces(conn)}
+                else:
+                    current = planning_views.planning_payload(conn, space=board)
+                frame = frames.frame(json.dumps(current, ensure_ascii=False))
+                if frame is not None:
+                    self.wfile.write(frame)
                     self.wfile.flush()
-        except platform_core.PlatformHttpError:
-            # Authority changed after the stream opened.  The response already
-            # advertised keep-alive, so explicitly close it without another frame.
-            self.close_connection = True
-        except CLIENT_DISCONNECT_ERRORS:
-            pass  # the page was closed or the board vanished; nothing to report
-        finally:
-            watchers.WATCHERS.unsubscribe(stream)
-            conn.close()
+
+            try:
+                push()
+                while True:
+                    changed = False
+                    try:
+                        stream.get(timeout=0.4)
+                        changed = True
+                    except queue.Empty:
+                        pass
+                    current_version = source.execute("PRAGMA data_version").fetchone()[0]
+                    if changed or current_version != observed_version:
+                        observed_version = current_version
+                        push()
+                    else:
+                        platform_core.require_module_enabled(conn, owner)
+                        self.wfile.write(b": keep-alive\n\n")
+                        self.wfile.flush()
+            except platform_core.PlatformHttpError:
+                self.close_connection = True
+            except CLIENT_DISCONNECT_ERRORS:
+                pass
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path

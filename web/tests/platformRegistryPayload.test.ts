@@ -4,6 +4,8 @@ import { test } from 'vitest'
 
 import { validatePlatformRegistryPayload } from '@/shared/api/platformRegistryPayload.ts'
 
+import { globalScope, projectScope } from './browser/planningFixtures.ts'
+import { globalRegistry, projectRegistry } from './browser/platformFixtures.ts'
 import { moduleRegistrations } from './support/moduleRegistrations.ts'
 import { unavailableCapabilityResolutions } from './support/platformCapabilities.ts'
 
@@ -125,6 +127,22 @@ function registryPayload() {
   }
 }
 
+test('browser registry fixtures satisfy the same contract as the live registry', () => {
+  for (const [scope, registry] of [
+    [globalScope, globalRegistry],
+    [projectScope, projectRegistry],
+  ]) {
+    assert.equal(
+      validatePlatformRegistryPayload({
+        interface_version: 'valkama-registry',
+        scope,
+        state: { interface_version: 'valkama-ui-state', status: 'ready', payload: registry },
+      }).state.status,
+      'ready',
+    )
+  }
+})
+
 test('registry requires one exact structurally complete resolution per Kernel capability', () => {
   const payload = registryPayload()
   assert.equal(validatePlatformRegistryPayload(payload).state.status, 'ready')
@@ -134,12 +152,34 @@ test('registry requires one exact structurally complete resolution per Kernel ca
   assert.throws(() => validatePlatformRegistryPayload(missing), /Kernel capabilities/)
 
   const duplicate = structuredClone(payload)
-  duplicate.state.payload.capabilities[9] = structuredClone(duplicate.state.payload.capabilities[0])
+  duplicate.state.payload.capabilities[duplicate.state.payload.capabilities.length - 1] =
+    structuredClone(duplicate.state.payload.capabilities[0])
   assert.throws(() => validatePlatformRegistryPayload(duplicate), /duplicate capability/)
 
   const wrongDefinition = structuredClone(payload)
   wrongDefinition.state.payload.capabilities[0].capability.cardinality = 'one-or-more'
   assert.throws(() => validatePlatformRegistryPayload(wrongDefinition), /Kernel definition/)
+})
+
+test('registry accepts the current Kernel after skills capabilities were retired', () => {
+  const payload = registryPayload()
+  payload.state.payload.capabilities = payload.state.payload.capabilities.filter(
+    ({ capability }) => !capability.capability_id.startsWith('skills.'),
+  )
+  assert.equal(validatePlatformRegistryPayload(payload).state.status, 'ready')
+  assert.deepEqual(
+    payload.state.payload.capabilities.map(({ capability }) => capability.capability_id).sort(),
+    [
+      'artifact.inspect',
+      'execution.launch',
+      'execution.resume',
+      'execution.stop',
+      'memory.health',
+      'memory.open',
+      'session.observe',
+      'telemetry.query',
+    ],
+  )
 })
 
 test('authorization targets include provider resources without widening EntityRef', () => {
@@ -266,6 +306,16 @@ test('registry lifecycle audit accepts the Kernel metadata shapes', () => {
       detail: { adapter_lineage_id: 'lineage-example-external' },
       at: '2026-08-13T09:01:00Z',
     },
+    {
+      sequence: 2,
+      event_kind: 'feature.retired',
+      entity_kind: 'adapter',
+      entity_id: 'example-external',
+      detail: { reason: 'work-focus' },
+      at: '2026-08-13T09:01:00Z',
+    },
   ]
   assert.equal(validatePlatformRegistryPayload(payload).state.status, 'ready')
+  payload.state.payload.audit[1].detail = { reason: 'unexpected' }
+  assert.throws(() => validatePlatformRegistryPayload(payload), /detail/)
 })

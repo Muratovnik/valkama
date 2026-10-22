@@ -18,6 +18,7 @@ interface LiveFeedInputs {
   notice: Ref<string>
   text: { failure: (failure: TypedFailure) => string; refreshed: () => string }
   loadContext: () => Promise<void>
+  refreshSurface: () => Promise<void>
   syncRouteResources: () => Promise<void>
 }
 export function usePlatformLiveFeed(inputs: LiveFeedInputs) {
@@ -60,7 +61,9 @@ export function usePlatformLiveFeed(inputs: LiveFeedInputs) {
     if (refreshing.value) return
     refreshing.value = true
     try {
-      await Promise.all([loadModules(), inputs.loadContext(), inputs.syncRouteResources()])
+      await Promise.all([loadModules(), inputs.loadContext()])
+      await inputs.syncRouteResources()
+      await inputs.refreshSurface()
       connectionState.value = 'live'
       inputs.notice.value = inputs.text.refreshed()
     } catch (error) {

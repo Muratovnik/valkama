@@ -20,7 +20,7 @@ import hashlib
 import json
 import os
 import sqlite3
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from copy import deepcopy
 from datetime import UTC, datetime
 
@@ -2180,6 +2180,14 @@ class Platform:
         Attached connections are opened read-only by the shared store resolver.
         """
 
+        with self.planning_store(parameters) as (store, key):
+            return loader(store, key)
+
+    @contextlib.contextmanager
+    def planning_store(
+        self, parameters: Mapping[str, list[str]]
+    ) -> Iterator[tuple[sqlite3.Connection, str]]:
+        """Hold the authorized exact store for a read or a live subscription."""
         if set(parameters) != {"project", "data_scope_id", "space_key"}:
             raise PlatformHttpError(400, "error", "Exact Planning query fields are required")
         project_id = self._one(parameters, "project")
@@ -2187,7 +2195,7 @@ class Platform:
         space_ref = self._space_ref_parameters(parameters)
         self._require_mapping(project_id, space_ref)
         with self._store_connection(space_ref) as store:
-            return loader(store, space_ref["space_key"])
+            yield store, space_ref["space_key"]
 
     def planning_work_item_payload(
         self,

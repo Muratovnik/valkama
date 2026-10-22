@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 import PlanningModuleSurface from '@/pages/planning/PlanningModuleSurface.vue'
 import SettingsView from '@/pages/settings/SettingsView.vue'
@@ -23,6 +23,7 @@ const props = defineProps<{
   reloadModules: () => Promise<void>
 }>()
 const emit = defineEmits<{
+  'connection': [state: 'connecting' | 'live' | 'reconnecting']
   'entity': [entity?: EntityRef]
   'locale': [value: string]
   'notice': [message: string]
@@ -36,18 +37,25 @@ const registryReady = computed(() =>
     ? props.registryState.payload
     : null,
 )
+const planningSurface = ref<InstanceType<typeof PlanningModuleSurface> | null>(null)
+async function refresh() {
+  await planningSurface.value?.refresh()
+}
 function stateValue(key: string, fallback = '') {
   return String(props.route.state?.[key] ?? fallback)
 }
+defineExpose({ refresh })
 </script>
 <template>
   <PlanningModuleSurface
     v-if="activeModule === 'planning'"
+    ref="planningSurface"
     :scope="scope"
     :route="route"
     :context="context"
     :registry="registryReady"
     :primary-write-scope-id="primaryWriteScopeId"
+    @connection="(state) => emit('connection', state)"
     @entity="(entity) => emit('entity', entity)"
     @state="(state) => emit('state', state)"
     @notice="(message) => emit('notice', message)"

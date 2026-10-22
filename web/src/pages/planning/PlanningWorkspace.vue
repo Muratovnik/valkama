@@ -8,7 +8,7 @@
  * and the links arrive once and each view projects what it needs. That is why a
  * state renamed in the workflow renames a column, a row and a node together.
  */
-import { computed, defineAsyncComponent, ref } from 'vue'
+import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import WorkItemBoard from '@/widgets/work-item-views/components/WorkItemBoard.vue'
@@ -16,17 +16,21 @@ import WorkItemList from '@/widgets/work-item-views/components/WorkItemList.vue'
 
 import { inWorkQueue } from '@/shared/api/planningModel.ts'
 import type { PlanningReadModel, WorkQueue } from '@/shared/api/planningModel.ts'
+import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
+import VTextInput from '@/shared/ui/VTextInput.vue'
 
 const props = defineProps<{
   model: PlanningReadModel
-  /** True while a refresh is in flight over an already drawn space. */
   stale: boolean
   version: number
   view: PlanningViewMode
   writable: boolean
+  scopeKey?: string
+  selectedId?: string | null
+  warning?: string
 }>()
 
 const emit = defineEmits<{
@@ -46,12 +50,34 @@ export type PlanningViewMode = 'graph' | 'kanban' | 'list'
 const { t } = useI18n()
 
 const queue = ref<WorkQueue>('all')
+const query = ref('')
+const searchTerm = computed(() => query.value.trim().toLocaleLowerCase())
+watch(
+  () => props.scopeKey ?? props.model.planning_space?.planning_space_id,
+  () => {
+    query.value = ''
+  },
+)
+const filtered = computed(() => Boolean(searchTerm.value) || queue.value !== 'all')
+const emptyTitle = computed(() =>
+  t(searchTerm.value ? 'workItem.searchEmpty' : 'workItem.queueEmpty'),
+)
+function resetFilters() {
+  query.value = ''
+  queue.value = 'all'
+}
 const queues: WorkQueue[] = ['all', 'ready', 'assigned', 'blocked', 'review']
 const queueOptions = computed(() =>
   queues.map((value) => ({ value, label: t(`workItem.queue.${value}`) })),
 )
 const visibleItems = computed(() =>
-  props.model.work_items.filter((item) => inWorkQueue(item, queue.value)),
+  props.model.work_items.filter(
+    (item) =>
+      inWorkQueue(item, queue.value) &&
+      (!searchTerm.value ||
+        item.reference.toLocaleLowerCase().includes(searchTerm.value) ||
+        item.title.toLocaleLowerCase().includes(searchTerm.value)),
+  ),
 )
 
 const VIEW_MODES: readonly PlanningViewMode[] = ['kanban', 'list', 'graph']
@@ -73,7 +99,7 @@ const counts = computed(() => {
   return {
     total: items.length,
     open: items.filter((item) => !item.state.is_terminal).length,
-    held: items.filter((item) => item.claim_ref !== '').length,
+    held: items.filter((item) => item.claim_ref !== '' && !item.state.is_terminal).length,
   }
 })
 </script>
@@ -122,9 +148,46 @@ const counts = computed(() => {
       </p>
     </header>
 
+    <p
+      v-if="warning"
+      class="workspace-note"
+      role="status"
+    >
+      {{ warning }}
+    </p>
+    <div class="workspace-search">
+      <VTextInput
+        v-model="query"
+        :label="t('workItem.searchLabel')"
+        :placeholder="t('workItem.searchPlaceholder')"
+      />
+      <VButton
+        v-if="query"
+        @click="query = ''"
+        >{{ t('workItem.clearSearch') }}</VButton
+      >
+      <span
+        v-if="filtered"
+        class="workspace-counts"
+        role="status"
+        >{{
+          t('workItem.matchCount', { count: visibleItems.length, total: model.work_items.length })
+        }}</span
+      >
+    </div>
     <div class="workspace-stage">
+      <DataEmptyState
+        v-if="!visibleItems.length && filtered"
+        :title="emptyTitle"
+        :description="t('workItem.filterContext', { queue: t(`workItem.queue.${queue}`) })"
+      >
+        <template #action
+          ><VButton @click="resetFilters">{{ t('workItem.resetFilters') }}</VButton></template
+        >
+      </DataEmptyState>
       <WorkItemBoard
         v-if="view === 'kanban' && model.workflow"
+        v-show="visibleItems.length || !filtered"
         :workflow="model.workflow"
         :items="visibleItems"
         :links="model.links"
@@ -133,15 +196,18 @@ const counts = computed(() => {
       />
       <WorkItemList
         v-else-if="view === 'list'"
+        v-show="visibleItems.length || !filtered"
         :items="visibleItems"
         :links="model.links"
         @open="(reference) => emit('open', reference)"
       />
       <WorkItemGraph
         v-else-if="view === 'graph'"
+        v-show="visibleItems.length || !filtered"
         scope-kind="all"
         :space="model.planning_space?.planning_space_id ?? ''"
         :items="visibleItems"
+        :selected-id="selectedId"
         :edges="model.links"
         :epic-id="null"
         :open="true"
@@ -156,9 +222,9 @@ const counts = computed(() => {
 /* The stage owns the remaining height and each view scrolls inside it, so the
    header row never leaves and the page itself never scrolls sideways. */
 .workspace {
-  display: grid;
+  display: flex;
   flex: 1 1 auto;
-  grid-template-rows: auto minmax(0, 1fr);
+  flex-direction: column;
   gap: var(--space-3);
   min-width: 0;
   min-height: 0;
@@ -186,6 +252,13 @@ const counts = computed(() => {
   max-width: 100%;
 }
 
+.workspace-search {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: end;
+}
+
 .workspace-counts {
   color: var(--color-text-muted);
   font: var(--font-count);
@@ -194,6 +267,7 @@ const counts = computed(() => {
 
 .workspace-stage {
   display: grid;
+  flex: 1 1 auto;
   min-height: 0;
 }
 

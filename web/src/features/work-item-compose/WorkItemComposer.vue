@@ -95,7 +95,6 @@ async function submit() {
     :busy="busy"
     :error="error"
     :title="t('workItem.newTitle')"
-    :subtitle="t('workItem.newSubtitle')"
     :close-label="t('workItem.cancel')"
     @close="emit('close')"
     @submit="submit"
