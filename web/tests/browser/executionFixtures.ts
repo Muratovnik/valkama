@@ -236,3 +236,24 @@ export const executionUsage = {
     coverage: { time: 'confirmed', tokens: 'partial', cost: 'unknown', tools: 'confirmed' },
   },
 }
+
+export function sessionContextFor(id: string | null) {
+  const session = monitorSessions.find((candidate) => candidate.id === id)
+  return {
+    kind: 'session',
+    value: id,
+    resolved: Boolean(session),
+    detail: session?.label ?? 'Exact session unavailable',
+    ...(session
+      ? {
+          session: session.id,
+          client: session.client,
+          status: session.status,
+          cwd: session.cwd,
+          work_item: session.work_item,
+          space_root: session.space_root,
+          at: session.last_seen,
+        }
+      : {}),
+  }
+}

@@ -12,7 +12,6 @@ import unittest
 
 from server.executions import drivers
 from server.executions.drivers import claude, contract
-from server.improvements import improvements_integration, job_supervisor
 
 
 class DriverRegistryTests(unittest.TestCase):
@@ -166,21 +165,6 @@ class StdoutDialectTests(unittest.TestCase):
     def test_a_session_identity_longer_than_an_identity_is_bounded(self) -> None:
         reading = drivers.driver_for("claude").read_stdout_event({"session_id": "x" * 500})
         self.assertEqual(contract.MAX_SESSION_ID_CHARS, len(reading.session_id))
-
-
-class SecondCopyTests(unittest.TestCase):
-    """The analyzer used to carry its own copy of the command line, already drifted."""
-
-    def test_the_analyzer_gets_the_flag_its_private_copy_had_dropped(self) -> None:
-        argv = improvements_integration.analyzer_client_argv("codex", "prompt", binary="codex")
-        self.assertIn("--json", argv)
-
-    def test_the_analyzer_refuses_an_effort_through_the_same_driver(self) -> None:
-        with self.assertRaises(job_supervisor.JobError) as raised:
-            improvements_integration.analyzer_client_argv(
-                "codex", "prompt", effort="max", binary="codex"
-            )
-        self.assertIn("max", str(raised.exception))
 
 
 if __name__ == "__main__":

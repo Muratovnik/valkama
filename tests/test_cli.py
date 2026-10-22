@@ -128,26 +128,6 @@ class ScopeTests(CliTestCase):
         self.assertEqual([scopes.PRIMARY_SCOPE], json.loads(self.invoke("detach", "other")))
 
 
-class SessionStreamTests(CliTestCase):
-    def stream_event(self, session: str, klass: str) -> None:
-        self.conn.execute(
-            "INSERT OR IGNORE INTO sessions(id, client, status) VALUES (?, 'claude', 'ended')",
-            (session,),
-        )
-        self.conn.execute(
-            "INSERT INTO session_events(session_id, klass, kind) VALUES (?,?,'tick')",
-            (session, klass),
-        )
-        self.conn.commit()
-
-    def test_purging_a_stream_leaves_the_analytics_history(self) -> None:
-        self.stream_event("session-1", "stream")
-        self.stream_event("session-1", "analytics")
-        json.loads(self.invoke("purge-stream"))
-        remaining = self.conn.execute("SELECT klass FROM session_events ORDER BY id").fetchall()
-        self.assertEqual(["analytics"], [row["klass"] for row in remaining])
-
-
 class ConsoleEncodingTests(CliTestCase):
     def test_output_stays_utf8_when_the_console_says_otherwise(self) -> None:
         # Card #292: `summary` printed an arrow out of a title and raised

@@ -37,7 +37,7 @@ class PlanningCatalogueTests(unittest.TestCase):
     def test_the_tools_planning_does_not_own_are_published_too(self) -> None:
         published = self.names()
         self.assertIn("list_platform_modules", published)
-        self.assertIn("run_improvement_eval", published)
+        self.assertNotIn("run_improvement_eval", published)
 
     def test_every_published_tool_has_a_handler(self) -> None:
         for tool in mcp_surface.catalogue():

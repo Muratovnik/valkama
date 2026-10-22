@@ -34,7 +34,6 @@ function manifest(moduleId: string) {
 function mountBar(moduleId: string) {
   return mount(AppContextBar, {
     props: {
-      activities: [],
       description: 'Description',
       projects,
       resources: selectableProjectResources(manifest(moduleId), resources),
@@ -63,7 +62,6 @@ function mountBar(moduleId: string) {
         }),
       ],
       stubs: {
-        ActivityBell: true,
         ChoiceSelect: { template: '<button class="choice-select-stub" />' },
       },
     },
@@ -71,13 +69,12 @@ function mountBar(moduleId: string) {
 }
 
 describe('AppContextBar manifest-owned project resources', () => {
-  it('shows two mapped planning spaces for Planning and Analytics', () => {
+  it('shows two mapped planning spaces for Work', () => {
     expect(mountBar('planning').find('.resource-scope').exists()).toBe(true)
-    expect(mountBar('analytics').find('.resource-scope').exists()).toBe(true)
   })
 
   it('hides Planning resources from modules whose manifests do not own them', () => {
-    for (const moduleId of ['skills', 'sessions', 'improvements', 'settings'])
+    for (const moduleId of ['memory', 'settings'])
       expect(mountBar(moduleId).find('.resource-scope').exists()).toBe(false)
   })
 })

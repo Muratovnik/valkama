@@ -140,8 +140,8 @@ class HttpSecurityBoundaryTests(unittest.TestCase):
         ("POST", "/api/modules/improvements/jobs/1/cancel"),
         ("POST", "/api/modules/improvements/cases/1/actions"),
         ("POST", "/api/ingest"),
-        ("POST", "/api/session-seen"),
-        ("POST", "/api/session-seen"),
+        ("POST", "/api/execution/launch"),
+        ("POST", "/api/execution/launch"),
         ("POST", "/api/launch"),
         ("POST", "/api/stop"),
         ("POST", "/api/card"),
@@ -232,7 +232,7 @@ class HttpSecurityBoundaryTests(unittest.TestCase):
                 )
                 status, response_headers, response_body = self.request(
                     method,
-                    "/api/session-seen",
+                    "/api/execution/launch",
                     host="hostile.example",
                     request_headers=request_headers,
                     body=body,
@@ -297,7 +297,7 @@ class HttpSecurityBoundaryTests(unittest.TestCase):
                 }
                 status, _, _ = self.request(
                     "POST",
-                    "/api/session-seen",
+                    "/api/execution/launch",
                     host=self.authority,
                     request_headers=request_headers,
                     body=b"{}",
@@ -355,7 +355,7 @@ class HttpSecurityBoundaryTests(unittest.TestCase):
         self.assertEqual("application/json", response_headers["content-type"])
         self.assertEqual(expected, json.loads(body))
 
-        with mock.patch.object(http_surface.improvements_api, "handle_put", return_value=None):
+        with mock.patch.object(http_surface.Handler, "_module_gate", return_value=True):
             status, response_headers, body = self.request(
                 "PUT",
                 "/api/unknown",
@@ -376,14 +376,14 @@ class HttpSecurityBoundaryTests(unittest.TestCase):
             mock.patch.object(http_surface.Handler, "_module_gate", return_value=True),
             mock.patch.object(http_surface, "connect", return_value=connection),
             mock.patch.object(
-                http_surface,
-                "op_mark_attention_seen",
+                http_surface.execution_lifecycle,
+                "launch_work_item",
                 side_effect=RuntimeError("database password leaked"),
             ),
         ):
             status, response_headers, body = self.request(
                 "POST",
-                "/api/session-seen",
+                "/api/execution/launch",
                 host=self.authority,
                 request_headers=request_headers,
                 body=payload,
@@ -410,7 +410,7 @@ class HttpSecurityBoundaryTests(unittest.TestCase):
         ):
             status, response_headers, body = self.request(
                 "POST",
-                "/api/session-seen",
+                "/api/execution/launch",
                 host=self.authority,
                 request_headers=request_headers,
                 body=payload,
@@ -468,14 +468,14 @@ class HttpSecurityBoundaryTests(unittest.TestCase):
             mock.patch.object(http_surface.Handler, "_module_gate", return_value=True),
             mock.patch.object(http_surface, "connect", return_value=connection),
             mock.patch.object(
-                http_surface,
-                "op_mark_attention_seen",
+                http_surface.execution_lifecycle,
+                "launch_work_item",
                 side_effect=ValueError("session id names no session"),
             ),
         ):
             status, _, body = self.request(
                 "POST",
-                "/api/session-seen",
+                "/api/execution/launch",
                 host=self.authority,
                 request_headers=request_headers,
                 body=payload,
@@ -504,7 +504,7 @@ class HttpSecurityBoundaryTests(unittest.TestCase):
         bearer_on_browser["Authorization"] = f"Bearer {installation}"
         status, _, _ = self.request(
             "POST",
-            "/api/session-seen",
+            "/api/execution/launch",
             host=self.authority,
             request_headers=bearer_on_browser,
             body=b"{}",
@@ -539,7 +539,7 @@ class HttpSecurityBoundaryTests(unittest.TestCase):
 
         status, _, _ = self.request(
             "POST",
-            "/api/session-seen",
+            "/api/execution/launch",
             host=self.authority,
             request_headers=adapter_headers,
             body=b"{}",
@@ -548,7 +548,7 @@ class HttpSecurityBoundaryTests(unittest.TestCase):
 
     def test_preflight_has_no_cors_or_authenticated_fallback(self) -> None:
         status, response_headers, _ = self.request(
-            "OPTIONS", "/api/session-seen", host=self.authority
+            "OPTIONS", "/api/execution/launch", host=self.authority
         )
         self.assertEqual(405, status)
         self.assertFalse(any(name.startswith("access-control-") for name in response_headers))

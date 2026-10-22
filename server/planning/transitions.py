@@ -13,7 +13,6 @@ override, so overriding is a decision on the record rather than a workaround.
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Callable
 
 from . import model
 
@@ -23,11 +22,6 @@ _STARTABLE = frozenset({"backlog", "queued"})
 
 Finding = tuple[str, str]
 
-# What Improvements needs to say about closing an item raised from a case. It is
-# passed in rather than imported: Planning owns the choke point, not the policy
-# of another module, and a Planning test should not need an Improvements store.
-ImprovementGuard = Callable[[str, str], dict | None]
-
 
 def findings(
     conn: sqlite3.Connection,
@@ -35,7 +29,6 @@ def findings(
     target: sqlite3.Row,
     *,
     reason: str = "",
-    improvement_guard: ImprovementGuard | None = None,
 ) -> tuple[list[Finding], list[str]]:
     """Hard refusals and soft warnings for moving `item` to `target` state."""
 
@@ -106,16 +99,6 @@ def findings(
                     " comes next before closing it",
                 )
             )
-        source = str(item["source"] or "")
-        if improvement_guard is not None and source.startswith("improvement://"):
-            verdict = improvement_guard(source, str(item["summary"] or ""))
-            if verdict is not None and not verdict.get("allowed"):
-                refusals.append(
-                    (
-                        str(verdict.get("guard") or "improvement_eval"),
-                        str(verdict.get("message") or "Improvement evaluation is incomplete"),
-                    )
-                )
     if target["category"] == "blocked" and entering:
         blocker = conn.execute(
             "SELECT 1 FROM work_item_links l"

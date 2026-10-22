@@ -1,12 +1,10 @@
 /**
  * `tokens.css` is the palette; every other copy of a token is generated from it.
  *
- * Copies exist for reasons that will not go away: a canvas chart resolves no
- * custom property, a browser tab and a Windows ICO resolve none either, the
+ * Copies exist for reasons that will not go away: a browser tab and a Windows ICO resolve none either, the
  * Electron window paints before the stylesheet loads, and DESIGN.md has to
- * state the palette to be readable as a design document. Seven of them, and
- * every one has drifted at least once — the chart blue and the token blue were
- * two different blues for months.
+ * state the palette to be readable as a design document. The remaining mirrors, and
+ * every one has drifted at least once — literal colors and the token palette had drifted.
  *
  * Tests already caught that drift. What they could not do is fix it, so a
  * palette change meant editing seven files by hand and running the suite to
@@ -119,16 +117,6 @@ function keyedLiterals(body, map, tokens, format = (raw) => raw) {
   return next
 }
 
-/** Rewrite a positional array of literals from a parallel array of token names. */
-function positionalLiterals(body, names, tokens) {
-  const literals = [...body.matchAll(/'([^']*)'/g)]
-  if (literals.length !== names.length) {
-    throw new Error(`expected ${names.length} literals, found ${literals.length}`)
-  }
-  let index = 0
-  return body.replaceAll(/'([^']*)'/g, () => `'${value(tokens, names[index], names[index++])}'`)
-}
-
 /**
  * The type ramp: every `--font-size-*` that declares a length.
  *
@@ -146,35 +134,6 @@ const rampSteps = (tokens) =>
   )
 
 const MIRRORS = [
-  {
-    file: 'web/src/widgets/analytics-dashboard/utils/chartOptions.ts',
-    sites: [
-      {
-        anchor: /const ANALYTICS_CHART_THEME = \{([^}]*)\}/,
-        replace: (tokens, source) =>
-          keyedLiterals(
-            bodyOf(source, 'ANALYTICS_CHART_THEME'),
-            tokenMap(source, 'ANALYTICS_CHART_THEME_TOKENS'),
-            tokens,
-          ),
-      },
-      {
-        anchor: /const CHART_SERIES_PALETTE = \[([^\]]*)\]/,
-        replace: (tokens, source) =>
-          positionalLiterals(
-            bodyOf(source, 'CHART_SERIES_PALETTE', '\\[', '\\]'),
-            [
-              ...bodyOf(source, 'CHART_SERIES_TOKENS', '\\[', '\\]').matchAll(/'(--[a-z\d-]+)'/g),
-            ].map(([, name]) => name),
-            tokens,
-          ),
-      },
-      {
-        anchor: /const CHART_FONT_FAMILY = "([^"]*)"/,
-        replace: (tokens) => value(tokens, '--font-family-interface', 'CHART_FONT_FAMILY'),
-      },
-    ],
-  },
   {
     file: 'web/src/shared/lib/uiSystem.ts',
     sites: [

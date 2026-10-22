@@ -244,22 +244,6 @@ const readModelSchema = strictObject({
     { message: 'every item names a state its workflow declares' },
   )
 
-const activityEntrySchema = strictObject({
-  // The event's own row id: what lets a reader say "newer than what I already
-  // showed" without comparing timestamps that several events share.
-  event_id: positiveInt(),
-  work_item_id: boundedText(UUID, 36),
-  reference: boundedText(WORK_ITEM_REFERENCE, 20),
-  title: boundedText(TITLE, 200),
-  action: enumField(EVENT_ACTIONS),
-  detail: blankable(512),
-  // The category of the state the detail names, when it names one; an event
-  // that is not a transition has none.
-  state_category: enumField(STATE_CATEGORIES).nullable(),
-  author: actor(),
-  at: boundedText(ISO, 96),
-})
-
 const apiVersion = z.literal(PLANNING_API, { message: `expected ${PLANNING_API}` })
 /** The refusal shape every neutral write answers with when it says no. */
 const refusalSchema = strictObject({
@@ -284,10 +268,8 @@ const pendingSchema = strictObject({
 export type WorkflowState = z.infer<typeof workflowStateSchema>
 export type WorkItemBrief = z.infer<typeof workItemBriefSchema>
 export type WorkItem = z.infer<typeof workItemSchema>
-export type PlanningSpaceBrief = z.infer<typeof spaceBriefSchema>
 export type PlanningWorkflow = z.infer<typeof workflowSchema>
 export type PlanningReadModel = z.infer<typeof readModelSchema>
-export type PlanningActivityEntry = z.infer<typeof activityEntrySchema>
 export type PlanningEdge = z.infer<typeof edgeSchema>
 export type PlanningRefusal = z.infer<typeof refusalSchema>
 export type PlanningPending = z.infer<typeof pendingSchema>
@@ -333,4 +315,13 @@ export function byState(
  */
 export function readyIds(items: readonly WorkItemBrief[]): Set<string> {
   return new Set(items.filter((item) => item.ready).map((item) => item.work_item_id))
+}
+
+export type WorkQueue = 'all' | 'ready' | 'assigned' | 'blocked' | 'review'
+export function inWorkQueue(item: WorkItemBrief, queue: WorkQueue): boolean {
+  if (queue === 'all') return true
+  if (queue === 'ready') return item.ready
+  if (queue === 'assigned') return !item.state.is_terminal && item.claim_ref !== ''
+  if (queue === 'blocked') return item.state.category === 'blocked'
+  return item.state.category === 'review'
 }

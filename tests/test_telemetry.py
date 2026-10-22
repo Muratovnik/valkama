@@ -19,11 +19,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from server import sessions, store
-from server.analytics import LocalJournalUsageProvider
 from server.executions import service as execution_service
 from server.planning import service as planning
 from server.platform import providers as platform_providers
 from server.telemetry import contracts, projections
+from server.telemetry.journal import LocalJournalUsageProvider
 from tests import SUITE_STORE
 
 
@@ -59,6 +59,22 @@ class VocabularyTests(unittest.TestCase):
 
 class ExecutionUsageTests(unittest.TestCase):
     """The projection over one attempt, against real journal files."""
+
+    def historical_tool_event(self, payload: dict) -> None:
+        self.conn.execute(
+            "INSERT INTO sessions(id,client) VALUES(?,?) ON CONFLICT(id) DO NOTHING",
+            (payload["session_id"], payload["client"]),
+        )
+        self.conn.execute(
+            "INSERT INTO session_events(session_id,klass,kind,tool,server,status) VALUES(?,'analytics','tool_end',?,?,?)",
+            (
+                payload["session_id"],
+                payload.get("tool", ""),
+                payload.get("server", ""),
+                payload.get("status", ""),
+            ),
+        )
+        self.conn.commit()
 
     def setUp(self) -> None:
         self._dir = tempfile.TemporaryDirectory()
@@ -216,8 +232,7 @@ class ExecutionUsageTests(unittest.TestCase):
         execution_service.link_session(self.conn, execution_id, "codex-4", "launched")
         self.conn.commit()
         for tool, status in (("Read", "ok"), ("Read", "ok"), ("Read", "error"), ("Edit", "")):
-            sessions.op_ingest_session_event(
-                self.conn,
+            self.historical_tool_event(
                 {
                     "session_id": "codex-4",
                     "client": "codex",
@@ -225,7 +240,7 @@ class ExecutionUsageTests(unittest.TestCase):
                     "tool": tool,
                     "server": "builtin",
                     "status": status,
-                },
+                }
             )
 
         usage = projections.execution_usage(self.conn, execution_id)
@@ -248,15 +263,14 @@ class ExecutionUsageTests(unittest.TestCase):
         execution_service.link_session(self.conn, theirs, "codex-6", "launched")
         self.conn.commit()
         for session_id in ("codex-5", "codex-6"):
-            sessions.op_ingest_session_event(
-                self.conn,
+            self.historical_tool_event(
                 {
                     "session_id": session_id,
                     "client": "codex",
                     "event": "tool_end",
                     "tool": "Read",
                     "status": "ok",
-                },
+                }
             )
 
         usage = projections.execution_usage(self.conn, mine)

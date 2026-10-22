@@ -75,14 +75,6 @@ export function typedFailure(error: unknown, fallbackCode = 'request_failed'): T
   return { code: stableCode(sourceCode, 'unknown_failure'), status, retryable: true }
 }
 
-export function responseFailure(response: Response, fallbackCode = 'request_failed'): TypedFailure {
-  if (response.status === 401 || response.status === 403)
-    return { code: 'permission_denied', status: response.status, retryable: false }
-  if (response.status === 404 || response.status === 501)
-    return { code: 'dependency_unavailable', status: response.status, retryable: false }
-  return { code: fallbackCode, status: response.status, retryable: response.status >= 500 }
-}
-
 const KNOWN_FAILURE_KEYS: Readonly<Record<string, string>> = {
   contract_invalid: 'platform.failures.contractInvalid',
   dependency_unavailable: 'platform.failures.dependencyUnavailable',

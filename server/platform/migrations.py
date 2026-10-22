@@ -78,62 +78,87 @@ _RELEASED_SCHEMA2_MODULE_MANIFEST_HASHES = {
     "settings": "77b7fde917d933f290208eb69dbe665f5a28fa5f91616726bac3dcba1ba4c959",
 }
 
-_RELEASED_SKILLS_ROUTE_STATE_KEYS = ["query", "source_scope", "activation"]
-_CURRENT_SKILLS_ROUTE_STATE_KEYS = ["query", "status", "view"]
+RETIRED_MODULE_IDS = frozenset({"analytics", "improvements", "skills", "sessions"})
 
 
-def _skills_route_state_manifest(conn: sqlite3.Connection) -> dict | None:
-    """Read the one built-in Skills descriptor a pre-ratchet store may hold."""
+def retire_work_support_modules(conn: sqlite3.Connection) -> bool:
+    """Retire removed surfaces once, retaining work, refs, sessions and audit history.
 
-    if not _table_present(conn, "platform_modules"):
-        return None
-    row = conn.execute(
-        "SELECT record_json FROM platform_modules WHERE module_id='skills'"
-    ).fetchone()
-    if row is None:
-        return None
-    try:
-        manifest = validate_module_manifest(json.loads(row["record_json"]))
-    except (TypeError, json.JSONDecodeError, ContractError) as error:
-        raise RegistryError("persisted Skills module descriptor is malformed") from error
-    if manifest["module_id"] != "skills":
-        raise RegistryError("persisted Skills module identity is malformed")
-    return manifest
-
-
-def skills_route_state_migration_needed(conn: sqlite3.Connection) -> bool:
-    """Whether Skills still carries the one released pre-schema-6 route shape.
-
-    The two accepted answers are deliberately exact. An unknown list is not
-    treated as another spelling of either generation, and the current reader
-    never accepts the former keys once this transaction has stamped the store.
+    The caller owns the pre-write verified snapshot and schema ratchet. Only
+    explicit module ownership and the two former built-in Skills adapters are
+    retired; other integrations and their authorization remain unchanged.
     """
+    changed = False
 
-    manifest = _skills_route_state_manifest(conn)
-    if manifest is None:
-        return False
-    allowed_keys = manifest["state_schema"]["allowed_keys"]
-    if allowed_keys == _CURRENT_SKILLS_ROUTE_STATE_KEYS:
-        return False
-    if allowed_keys != _RELEASED_SKILLS_ROUTE_STATE_KEYS:
-        raise RegistryError("persisted Skills route state generation is unrecognized")
-    return True
+    def discard(table: str, key: str, identity: str, kind: str) -> None:
+        nonlocal changed
+        conn.execute(f"DELETE FROM {table} WHERE {key}=?", (identity,))
+        conn.execute(
+            "INSERT INTO platform_registry_audit"
+            "(event_kind,entity_kind,entity_id,detail_json,at) VALUES(?,?,?,?,?)",
+            ("feature.retired", kind, identity, _json({"reason": "work-focus"}), _now()),
+        )
+        changed = True
 
-
-def migrate_skills_route_state(conn: sqlite3.Connection) -> bool:
-    """Write the schema-6 Skills route vocabulary once, preserving row state."""
-
-    if not skills_route_state_migration_needed(conn):
-        return False
-    manifest = _skills_route_state_manifest(conn)
-    if manifest is None:  # pragma: no cover - fenced by the predicate above
-        return False
-    manifest["state_schema"]["allowed_keys"] = list(_CURRENT_SKILLS_ROUTE_STATE_KEYS)
-    conn.execute(
-        "UPDATE platform_modules SET record_json=? WHERE module_id='skills'",
-        (_json(manifest),),
-    )
-    return True
+    retired_lineages = set()
+    retired_services = set()
+    retired_packages = set()
+    for row in conn.execute("SELECT * FROM platform_adapters").fetchall():
+        record = json.loads(row["record_json"])
+        adapter_id = row["adapter_id"]
+        if (
+            adapter_id in {"codex-skills", "claude-skills"}
+            and record.get("package_id") == f"valkama.{adapter_id}"
+        ):
+            retired_lineages.add(row["adapter_lineage_id"])
+            retired_services.add(f"{record['configuration_owner']}:{adapter_id}")
+            retired_packages.add(f"{record['publisher_id']}:{record['package_id']}")
+    retired_actions = set()
+    for row in conn.execute("SELECT * FROM platform_actions").fetchall():
+        record = json.loads(row["record_json"])
+        if (
+            record.get("owner_kind") == "module" and record.get("owner_id") in RETIRED_MODULE_IDS
+        ) or (record.get("owner_kind") == "adapter" and record.get("owner_id") in retired_lineages):
+            retired_actions.add(row["action_id"])
+    # Inputs reference actions, so retire dependents first with FK checks on.
+    for action_id in sorted(retired_actions):
+        if conn.execute(
+            "SELECT 1 FROM platform_action_inputs WHERE action_id=?", (action_id,)
+        ).fetchone():
+            discard("platform_action_inputs", "action_id", action_id, "action-input")
+        discard("platform_actions", "action_id", action_id, "action")
+    for table, key, kind in (
+        ("platform_assignments", "assignment_id", "assignment"),
+        ("platform_grants", "grant_id", "grant"),
+        ("platform_core_ref_bindings", "core_ref_kind", "core-ref"),
+        ("platform_connections", "connection_key", "connection"),
+    ):
+        for row in conn.execute(f"SELECT * FROM {table}").fetchall():
+            record = json.loads(row["record_json"])
+            connection = record.get("connection_ref") or {}
+            if (
+                record.get("adapter_lineage_id") in retired_lineages
+                or connection.get("adapter_lineage_id") in retired_lineages
+                or record.get("capability_id") in {"skills.catalog", "skills.activate"}
+                or record.get("module_id") in RETIRED_MODULE_IDS
+            ):
+                discard(table, key, row[key], kind)
+    for lineage in sorted(retired_lineages):
+        discard("platform_adapters", "adapter_lineage_id", lineage, "adapter")
+    for table, key, identities, kind in (
+        ("platform_services", "service_key", retired_services, "service"),
+        ("platform_packages", "package_key", retired_packages, "package"),
+    ):
+        for identity in sorted(identities):
+            if conn.execute(f"SELECT 1 FROM {table} WHERE {key}=?", (identity,)).fetchone():
+                discard(table, key, identity, kind)
+    for row in conn.execute("SELECT key,record_json FROM platform_ui_prefs").fetchall():
+        if json.loads(row["record_json"]).get("module_id") in RETIRED_MODULE_IDS:
+            discard("platform_ui_prefs", "key", row["key"], "ui-preference")
+    for row in conn.execute("SELECT module_id FROM platform_modules").fetchall():
+        if row["module_id"] in RETIRED_MODULE_IDS:
+            discard("platform_modules", "module_id", row["module_id"], "module")
+    return changed
 
 
 def _legacy_board_names(values) -> None:
@@ -162,6 +187,16 @@ def module_registry_migration_needed(conn: sqlite3.Connection) -> bool:
 
 def _normalize_schema2_module_manifest(module_id: str, value: object) -> dict:
     current_manifests = {item["module_id"]: item for item in platform_modules.module_manifests()}
+    if module_id in RETIRED_MODULE_IDS:
+        digest = hashlib.sha256(_json(value).encode("utf-8")).hexdigest()
+        if _RELEASED_SCHEMA2_MODULE_MANIFEST_HASHES.get(module_id) == digest and isinstance(
+            value, dict
+        ):
+            return value
+        try:
+            return validate_module_manifest(value)
+        except ContractError as error:
+            raise RegistryError("persisted module descriptor is malformed") from error
     if module_id not in current_manifests:
         raise RegistryError("persisted module has no current manifest")
     try:
@@ -738,7 +773,10 @@ def _neutral_adapter_record(row: Mapping[str, object]) -> dict:
     elif (
         not isinstance(capabilities, list)
         or not capabilities
-        or any(item not in CAPABILITY_DEFINITIONS for item in capabilities)
+        or any(
+            item not in set(CAPABILITY_DEFINITIONS) | {"skills.catalog", "skills.activate"}
+            for item in capabilities
+        )
         or len(capabilities) != len(set(capabilities))
     ):
         raise RegistryError("legacy adapter capability values are unmapped")
@@ -896,7 +934,10 @@ def _neutral_ui_prefs_record(row: Mapping[str, object], *, legacy: bool) -> dict
         allowed = {"module_id", "scope", "board_ref" if legacy else "resource_ref"}
         if not {"module_id", "scope"} <= set(record) or set(record) - allowed:
             raise TypeError("UI preference fields are not exact")
-        if row["key"] != "last-route" or record["module_id"] not in platform_modules.module_ids():
+        if (
+            row["key"] != "last-route"
+            or record["module_id"] not in platform_modules.module_ids() | RETIRED_MODULE_IDS
+        ):
             raise TypeError("UI preference identity is invalid")
         result = {
             "module_id": record["module_id"],
@@ -984,7 +1025,7 @@ def _validate_product_model_source_rows(
 ) -> None:
     module_rows = conn.execute(f"SELECT * FROM {prefix}modules").fetchall()
     identities = set()
-    known_modules = platform_modules.module_ids()
+    known_modules = platform_modules.module_ids() | RETIRED_MODULE_IDS
     for row in module_rows:
         try:
             manifest = json.loads(row["record_json"])
@@ -993,7 +1034,7 @@ def _validate_product_model_source_rows(
         if (
             not isinstance(manifest, dict)
             or manifest.get("module_id") != row["module_id"]
-            or row["module_id"] not in known_modules
+            or (modules == _SCHEMA2_MODULE_COLUMNS and row["module_id"] not in known_modules)
             or row["module_id"] in identities
         ):
             raise RegistryError("persisted module identity is malformed")
@@ -1230,7 +1271,7 @@ def migrate_product_model(
     module_rows = conn.execute(
         "SELECT module_id,record_json,state,mutable,revision,updated_at FROM platform_modules"
     ).fetchall()
-    if {row["module_id"] for row in module_rows} - set(manifests):
+    if {row["module_id"] for row in module_rows} - set(manifests) - RETIRED_MODULE_IDS:
         raise RegistryError("persisted module has no neutral manifest")
     for row in module_rows:
         if (
@@ -1244,7 +1285,10 @@ def migrate_product_model(
             raise RegistryError("persisted module row is malformed")
         conn.execute(
             "UPDATE platform_modules SET record_json=? WHERE module_id=?",
-            (_json(manifests[row["module_id"]]), row["module_id"]),
+            (
+                _json(manifests.get(row["module_id"], json.loads(row["record_json"]))),
+                row["module_id"],
+            ),
         )
 
     for row in conn.execute(

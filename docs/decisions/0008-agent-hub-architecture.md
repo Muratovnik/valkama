@@ -1,9 +1,15 @@
 ---
-status: adopted
+status: superseded
 card: 199
 ---
 
 # ADR 0008: The agent hub grows around the kanban core
+
+> Historical record. The work-focused product supersedes the standalone
+> Sessions, Analytics, Improvements, and Skills surfaces described here.
+> This document preserves the earlier contract, not current support. See the
+> [product model](../product-model.md) and [README](../../README.md)
+> for the supported work-item, session-context, and lifecycle boundaries.
 
 Status: accepted on 2026-08-06 by owner direction.
 

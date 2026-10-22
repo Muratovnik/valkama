@@ -1,9 +1,15 @@
 ---
-status: adopted
+status: superseded
 card: 232
 ---
 
 # ADR 0009: Agent Hub separates modules, adapters, services, and configuration
+
+> Historical record. The work-focused product supersedes the standalone
+> Sessions, Analytics, Improvements, and Skills surfaces described here.
+> This document preserves the earlier contract, not current support. See the
+> [product model](../product-model.md) and [README](../../README.md)
+> for the supported work-item, session-context, and lifecycle boundaries.
 
 ## Context
 

@@ -120,10 +120,15 @@ class LaunchLifecycleTests(LaunchHarness):
         )
         self.assertIn("launched on claude", detail["comments"][-1]["body"])
 
-        monitor = sessions.sessions_payload(self.conn)["sessions"]
-        row = next(item for item in monitor if item["id"] == started["client_session_id"])
+        row = sessions.session_context(self.conn, started["client_session_id"])
         self.assertEqual(reference, row["work_item"], "the monitor row knows its work item")
-        self.assertTrue(row["label"].startswith(reference))
+        self.assertTrue(
+            self.conn.execute(
+                "SELECT label FROM sessions WHERE id=?", (started["client_session_id"],)
+            )
+            .fetchone()[0]
+            .startswith(reference)
+        )
 
     def test_a_launch_cannot_take_an_item_another_agent_holds(self) -> None:
         reference = self.item("taken")
@@ -158,11 +163,7 @@ class LaunchLifecycleTests(LaunchHarness):
         self.assertTrue(stopped["stopped"])
         detail = planning.get_work_item(self.conn, reference)
         self.assertIn("launch stopped from the platform", detail["comments"][-1]["body"])
-        row = next(
-            item
-            for item in sessions.sessions_payload(self.conn)["sessions"]
-            if item["id"] == started["client_session_id"]
-        )
+        row = sessions.session_context(self.conn, started["client_session_id"])
         self.assertEqual("ended", row["status"])
 
     def test_a_finished_launch_moves_its_item_to_review(self) -> None:
@@ -265,11 +266,8 @@ class LaunchLifecycleTests(LaunchHarness):
         executions.reap_launches(self.conn)
         detail = planning.get_work_item(self.conn, reference)
         self.assertEqual("dev", detail["state"]["key"], "a failure is not progress")
-        inbox = sessions.sessions_payload(self.conn)["inbox"]
-        self.assertEqual(
-            [("failed", started["client_session_id"])],
-            [(item["attention"], item["id"]) for item in inbox],
-        )
+        context = sessions.session_context(self.conn, started["client_session_id"])
+        self.assertEqual("failed", context["status"])
 
 
 class ExecutionRecordTests(LaunchHarness):
@@ -375,7 +373,11 @@ class ExecutionRecordTests(LaunchHarness):
         # the execution row in either direction.
         sessions.op_ingest_session_event(
             self.conn,
-            {"session_id": started["client_session_id"], "client": "claude", "event": "step"},
+            {
+                "session_id": started["client_session_id"],
+                "client": "claude",
+                "event": "session_start",
+            },
         )
         self.assertEqual("live", self.attempts(reference)[0]["presence"])
 
@@ -908,10 +910,8 @@ class ExecutionApiTests(LaunchHarness):
         )
         detail = planning.get_work_item(self.conn, reference)
         self.assertIn("outside-1", [ref["value"] for ref in detail["refs"]])
-        # And the monitor row can now name the attempt it belongs to.
-        monitor = sessions.sessions_payload(self.conn)["sessions"]
-        row = next(item for item in monitor if item["id"] == "outside-1")
-        self.assertEqual(payload["execution_id"], row["execution_id"])
+        linked = execution_service.execution_for_session(self.conn, "outside-1")
+        self.assertEqual(payload["execution_id"], linked["execution_id"])
 
     def test_attaching_refuses_a_session_nobody_observed(self) -> None:
         reference = self.item("no such session")
@@ -923,13 +923,13 @@ class ExecutionApiTests(LaunchHarness):
             )
         self.assertEqual(404, raised.exception.status)
 
-    def test_every_execution_path_is_owned_by_the_sessions_module(self) -> None:
+    def test_every_execution_path_is_owned_by_planning(self) -> None:
         # A module gate that does not know a path refuses it silently, so the
         # declaration and the dispatch have to be checked against each other.
         for path in execution_api.READ_PATHS:
-            self.assertEqual("sessions", http_surface._HTTP_ROUTE_MODULES[("GET", path)], path)
+            self.assertEqual("planning", http_surface._HTTP_ROUTE_MODULES[("GET", path)], path)
         for path in execution_api.WRITE_PATHS:
-            self.assertEqual("sessions", http_surface._HTTP_ROUTE_MODULES[("POST", path)], path)
+            self.assertEqual("planning", http_surface._HTTP_ROUTE_MODULES[("POST", path)], path)
 
 
 class EndToEndLaunchTests(LaunchHarness):

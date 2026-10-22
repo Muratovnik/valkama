@@ -143,8 +143,8 @@ MIGRATIONS = {
     "launch": "ALTER TABLE cards ADD COLUMN launch TEXT NOT NULL DEFAULT ''",
 }
 # The store's own schema generation, stamped into `PRAGMA user_version`. The
-# improvements database keeps its own version in its own file, so the two never
-# meet. Raise this in the same commit that changes what an existing row means,
+# lifecycle and registry meanings share this ratchet. Raise it in the same
+# commit that changes what an existing row means,
 # and a build made before that change refuses the store instead of reading it
 # wrongly. Migrations here are forward-only and idempotent, which is why an
 # older build gets away with so much: it is the change of meaning, not the added
@@ -155,7 +155,7 @@ MIGRATIONS = {
 # copy left behind. A server that was current when it started and went stale
 # while it ran already holds its connection; `static_assets.SourceWatch` is what
 # notices that one.
-STORE_SCHEMA_VERSION = 6
+STORE_SCHEMA_VERSION = 7
 
 
 class StoreTooNewError(RuntimeError):
@@ -522,19 +522,11 @@ def connect() -> sqlite3.Connection:
             product_model_migration = not first_store and stored_version < STORE_SCHEMA_VERSION
             source_identity = None
             source_generation = None
-            skills_route_state_migration = False
             pretable_backup = None
             if product_model_migration:
                 source_generation = platform_migrations.classify_product_model_source(
                     conn, stored_version
                 )
-                # The current-shape pre-ratchet store needs one narrow descriptor
-                # rewrite, not a reader alias. Schema 2/3 descriptors are instead
-                # replaced by the broad product-model migrations below.
-                if source_generation == "current-unstamped":
-                    skills_route_state_migration = (
-                        platform_migrations.skills_route_state_migration_needed(conn)
-                    )
                 _, source_identity = store_backups.verified_snapshot(
                     conn, "preproductmodel", locate=_backups
                 )
@@ -609,8 +601,8 @@ def connect() -> sqlite3.Connection:
                 "current-unstamped",
             }:
                 platform_migrations.migrate_product_model(conn)
-            if skills_route_state_migration:
-                platform_migrations.migrate_skills_route_state(conn)
+            if product_model_migration:
+                platform_migrations.retire_work_support_modules(conn)
             # No "is this a new store" flag: the Kernel writes whichever
             # module rows are missing, which is the same answer for a store
             # being created and one that predates a module.

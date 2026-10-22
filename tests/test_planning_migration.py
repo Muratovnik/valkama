@@ -101,7 +101,6 @@ class PlanningMigrationTests(unittest.TestCase):
         )
         board_era.add_card(self.conn, elsewhere, "Elsewhere")
         self.conn.commit()
-        self.epic_id = epic
         self.child_id = child
         self.blocker_id = blocker
         self.steps = json.loads(

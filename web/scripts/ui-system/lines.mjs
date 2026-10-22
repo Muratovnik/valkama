@@ -60,10 +60,10 @@ export const LINE_BUDGET = new Map([
   ['pages/improvements/components/ImprovementJobs.vue', 3],
   ['pages/sessions/SessionsView.vue', 1],
   ['pages/sessions/SessionTable.vue', 3],
-  // Settings General uses one earned divider between its three preference
-  // groups and two row families. Diagnostics uses section and row dividers,
+  // Settings General uses one earned divider between its two preference
+  // groups and one row family. Diagnostics uses section and row dividers,
   // plus status edges for initial-load and refresh failures.
-  ['pages/settings/components/SettingsGeneral.vue', 3],
+  ['pages/settings/components/SettingsGeneral.vue', 2],
   ['widgets/settings-registry/components/installation-health.css', 5],
   // Six across the module, where there were thirteen: one divider between table
   // rows that share the panel's ground, three status edges, and two lines that

@@ -14,9 +14,8 @@ from pathlib import Path
 from urllib.parse import quote
 
 from .. import git_worktrees, runner
-from ..analytics import LocalJournalUsageProvider
 from ..executions import drivers
-from ..skills import skills_inventory
+from ..telemetry.journal import LocalJournalUsageProvider
 from . import installed
 from .adapters import ProviderError as ProviderError
 from .adapters import ProviderUnavailableError as ProviderUnavailableError
@@ -536,27 +535,6 @@ class BuiltinCapabilityProvider:
                 "connection_ref": self.connection_ref,
                 "value": result,
             }
-        if self.implementation == "skills":
-            if capability_id == "skills.catalog":
-                result = skills_inventory.inventory_payload(
-                    user_home=payload.get("user_home"),
-                )
-            else:
-                activation_key = payload.get("key")
-                if not isinstance(activation_key, str) or not activation_key:
-                    raise ProviderError("skills activation requires key")
-                result = skills_inventory.update_skill_activation(
-                    key=activation_key,
-                    client=self.client,
-                    enabled=payload.get("enabled"),
-                    user_home=payload.get("user_home"),
-                )
-            return {
-                "result_type": "skill",
-                "provider": self.adapter_id,
-                "connection_ref": self.connection_ref,
-                "catalog": result,
-            }
         if self.implementation == "git":
             repo = payload.get("repo")
             git_ref = payload.get("git_ref", "HEAD")
@@ -645,32 +623,6 @@ def _builtin_capability_providers() -> tuple[BuiltinCapabilityProvider, ...]:
             "codex",
         ),
         BuiltinCapabilityProvider(
-            "codex-skills",
-            "codex-skills",
-            "openai",
-            "codex-skills",
-            "skills-provider",
-            "platform.integrations.codexSkills",
-            "valkama.codex-skills",
-            ("skills.catalog", "skills.activate"),
-            "local-process",
-            "skills",
-            "codex",
-        ),
-        BuiltinCapabilityProvider(
-            "claude-skills",
-            "claude-skills",
-            "anthropic",
-            "claude-skills",
-            "skills-provider",
-            "platform.integrations.claudeSkills",
-            "valkama.claude-skills",
-            ("skills.catalog", "skills.activate"),
-            "local-file",
-            "skills",
-            "claude",
-        ),
-        BuiltinCapabilityProvider(
             "git-artifacts",
             "git-artifacts",
             "git",
@@ -748,8 +700,6 @@ class ProviderCatalog:
             "execution.stop": "codex-execution",
             "session.observe": "codex-execution",
             "telemetry.query": "codex-rollout-telemetry",
-            "skills.catalog": "codex-skills",
-            "skills.activate": "codex-skills",
             "memory.open": "agentmemory-reference-v1",
             "memory.health": "agentmemory-reference-v1",
             "artifact.inspect": "git-artifacts",

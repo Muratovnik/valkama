@@ -17,10 +17,7 @@ import {
 } from '@/shared/api/platformModuleContract.ts'
 import type { ModuleId, ModuleManifest } from '@/shared/api/platformModuleContract.ts'
 import { OFFLINE_MODULE_FALLBACK } from '@/shared/api/platformModules.ts'
-import {
-  resolveManifestRouteAuthority,
-  validateManifestRouteState,
-} from '@/shared/api/platformRoute.ts'
+import { resolveManifestRouteAuthority } from '@/shared/api/platformRoute.ts'
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { moduleRegistrations, modulesPayload } from './support/moduleRegistrations.ts'
@@ -38,11 +35,11 @@ const EXPECTED_SECONDARY_CONTEXTS = {
   settings: { global: ['connection', 'registry'], project: ['connection', 'registry'] },
 } as const
 
-test('valkama-modules has exactly seven built-ins with both operating levels', () => {
-  assert.equal(OFFLINE_MODULE_FALLBACK.length, 7)
+test('valkama-modules has exactly three registrations with both operating levels', () => {
+  assert.equal(OFFLINE_MODULE_FALLBACK.length, 3)
   assert.deepEqual(
     OFFLINE_MODULE_FALLBACK.map((module) => module.module_id),
-    ['planning', 'sessions', 'analytics', 'improvements', 'skills', 'memory', 'settings'],
+    ['planning', 'memory', 'settings'],
   )
   for (const module of OFFLINE_MODULE_FALLBACK) {
     assert.equal(module.interface_version, MODULES_INTERFACE)
@@ -77,19 +74,9 @@ test('offline secondary contexts exactly mirror the authoritative scoped contrac
   }
 })
 
-test('Skills route state keeps search, status, and view as one canonical shape', () => {
-  const skills = OFFLINE_MODULE_FALLBACK.find((module) => module.module_id === 'skills')
-  assert.ok(skills)
-  const state = { query: 'review', status: 'issues', view: 'matrix' }
-  assert.deepEqual(skills.state_schema.allowed_keys, ['query', 'status', 'view'])
-  assert.deepEqual(validateManifestRouteState(skills, state), state)
-  for (const stale of [{ source_scope: 'global' }, { activation: 'enabled' }]) {
-    assert.throws(() => validateManifestRouteState(skills, stale), /unknown module-local state key/)
-  }
-})
 test('valkama-modules payload validates and rejects additive fields', () => {
   const payload = modulesPayload()
-  assert.equal(validateModulesPayload(payload).modules.length, 7)
+  assert.equal(validateModulesPayload(payload).modules.length, 3)
   const additive = structuredClone(payload) as Record<string, unknown>
   additive.extra = true
   assert.throws(() => validateModulesPayload(additive), /unknown field/)
@@ -197,9 +184,7 @@ test('validated future registration remains authoritative with typed unsupported
 
 test('authoritative manifests reject unsupported entity and scoped secondary context', () => {
   const planning = OFFLINE_MODULE_FALLBACK.find((module) => module.module_id === 'planning')
-  const skills = OFFLINE_MODULE_FALLBACK.find((module) => module.module_id === 'skills')
   assert.ok(planning)
-  assert.ok(skills)
   assert.deepEqual(
     resolveManifestRouteAuthority(planning, {
       module_id: 'planning',
@@ -208,15 +193,6 @@ test('authoritative manifests reject unsupported entity and scoped secondary con
     }),
     { status: 'unavailable', reason: 'incompatible-entity' },
   )
-  assert.deepEqual(
-    resolveManifestRouteAuthority(skills, {
-      module_id: 'skills',
-      scope: { kind: 'global' },
-      entity: { kind: 'planning-space', resource_id: 'opaque-resource' },
-    }),
-    { status: 'unavailable', reason: 'incompatible-entity' },
-  )
-
   const noSecondaryContext = structuredClone(planning)
   noSecondaryContext.secondary_context.project = { behavior: 'none', kinds: [] }
   assert.equal(
@@ -265,25 +241,12 @@ test('each module accepts only the entity routes its scoped UI owns', () => {
     resolveManifestRouteAuthority(manifests[module_id], { module_id, scope, entity }).status ===
     'ready'
 
-  assert.equal(accepts('skills', global, entities.globalSkill), true)
-  assert.equal(accepts('skills', project, entities.projectSkill), true)
   assert.equal(accepts('settings', global, entities.registry), true)
   assert.equal(accepts('settings', project, entities.connection), true)
   assert.equal(accepts('planning', project, entities.planningSpace), true)
   assert.equal(accepts('planning', project, entities.workItem), true)
-  assert.equal(accepts('analytics', project, entities.workItem), true)
-  assert.equal(accepts('analytics', project, entities.planningSpace), true)
-  assert.equal(accepts('analytics', project, entities.artifact), true)
-  assert.equal(accepts('sessions', global, entities.session), true)
-  assert.equal(accepts('sessions', global, entities.execution), true)
-  assert.equal(accepts('improvements', global, entities.improvement), true)
-  assert.equal(accepts('improvements', global, entities.workItem), true)
 
   assert.equal(accepts('planning', project, entities.session), false)
-  assert.equal(accepts('sessions', project, entities.session), false)
-  assert.equal(accepts('analytics', global, entities.artifact), false)
-  assert.equal(accepts('improvements', project, entities.improvement), false)
-  assert.equal(accepts('skills', global, entities.planningSpace), false)
 })
 
 test('App resource emissions are derived from and rechecked against the active manifest', () => {
@@ -300,25 +263,24 @@ test('App resource emissions are derived from and rechecked against the active m
   }
 
   assert.deepEqual(selectableProjectResources(manifests.planning, resources), resources)
-  assert.deepEqual(selectableProjectResources(manifests.analytics, resources), resources)
-  for (const module_id of ['skills', 'sessions', 'improvements', 'settings'] as const)
+  for (const module_id of ['memory', 'settings'] as const)
     assert.deepEqual(selectableProjectResources(manifests[module_id], resources), [])
 
   assert.deepEqual(
     resolveResourceSelection(
-      manifests.analytics,
-      { module_id: 'analytics', scope: projectScope },
+      manifests.planning,
+      { module_id: 'planning', scope: projectScope },
       resources[1],
     ),
     {
-      module_id: 'analytics',
+      module_id: 'planning',
       scope: projectScope,
       entity: resources[1].resource_ref,
     },
   )
   assert.equal(
     resolveResourceSelection(
-      manifests.analytics,
+      manifests.planning,
       { module_id: 'skills', scope: projectScope },
       resources[0],
     ),

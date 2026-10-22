@@ -127,6 +127,11 @@ function plugins() {
   return [createI18n({ legacy: false, locale: 'en', messages })]
 }
 
+function registryPayload(diagnostics?: string) {
+  const result = payload(diagnostics)
+  for (const connection of result.connections) connection.capabilities = ['execution.launch']
+  return result
+}
 describe('ProjectAssignmentsSection', () => {
   beforeEach(() => {
     vi.mocked(resetProjectAssignment)
@@ -142,7 +147,7 @@ describe('ProjectAssignmentsSection', () => {
 
   it('uses the shared labelled keyboard control and writes the selected override', async () => {
     const wrapper = mount(ProjectAssignmentsSection, {
-      props: { payload: payload(), projectId: 'alpha' },
+      props: { payload: registryPayload(), projectId: 'alpha' },
       global: { plugins: plugins() },
     })
     const select = wrapper.getComponent(ChoiceSelect)
@@ -241,7 +246,7 @@ describe('ProjectAssignmentsSection', () => {
         scope: { kind: 'global' },
         state: {
           interface_version: 'valkama-ui-state',
-          payload: payload(diagnostic),
+          payload: registryPayload(diagnostic),
           status: 'ready',
         },
       },
@@ -261,14 +266,13 @@ describe('ProjectAssignmentsSection', () => {
         scope: { kind: 'global' },
         state: {
           interface_version: 'valkama-ui-state',
-          payload: payload(),
+          payload: registryPayload(),
           status: 'ready',
         },
       },
       global: { plugins: plugins() },
     })
-    expect(telemetryOnly.find('.integrations-telemetry').exists()).toBe(true)
-    expect(telemetryOnly.find('.integrations-execution').exists()).toBe(false)
+    expect(telemetryOnly.find('.integrations-execution').exists()).toBe(true)
     expect(telemetryOnly.find('.integrations-skills').exists()).toBe(false)
     expect(telemetryOnly.find('.registry-section.modules').exists()).toBe(false)
 

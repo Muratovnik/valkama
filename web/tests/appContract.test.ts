@@ -15,7 +15,6 @@ const entryRestore = source('../src/app/composables/usePlatformEntryRestore.ts')
 const readModels = source('../src/app/composables/usePlatformReadModels.ts')
 const liveFeed = source('../src/app/composables/usePlatformLiveFeed.ts')
 const sessionWorkItemRoute = source('../src/features/session-open/sessionWorkItemRoute.ts')
-const activityBell = source('../src/widgets/activity-bell/ActivityBell.vue')
 const moduleAuthority = source('../src/app/composables/useModuleRouteAuthority.ts')
 const api = source('../src/shared/api/platformApi.ts')
 const planningApi = source('../src/shared/api/platformPlanningApi.ts')
@@ -48,20 +47,6 @@ const registry = [
 // How a connection reads is derived in the slice's composable and spent in its
 // component, so the naming half of the registry contract is asserted there.
 const registryLabels = source('../src/widgets/settings-registry/composables/useRegistryLabels.ts')
-// The skills module is seven files, and what is asserted about it below is that
-// it does not contain something. Reading one file would be satisfied by moving
-// that thing to a sibling, so the whole slice is read as one text.
-const skills = [
-  'SkillsView',
-  'SkillsToolbar',
-  'SkillCatalogue',
-  'SkillDetailDrawer',
-  'SkillActivation',
-  'SkillClientRow',
-  'SkillPreview',
-]
-  .map((name) => source(`../src/pages/skills/components/${name}.vue`))
-  .join('\n')
 
 test('platformRoute is the sole route owner for the six-module shell', () => {
   assert.match(navigation, /resolvePlatformRoute/)
@@ -181,29 +166,14 @@ test('source opening carries only canonical Planning-space authority', () => {
   assert.doesNotMatch(`${planningSurface}\n${inspector}\n${overview}`, /sourceRoot|source_root/)
 })
 
-test('activity and session navigation each refuse ambiguous project ownership', () => {
-  assert.match(liveFeed, /binding_state === 'mapped'/)
-  assert.match(liveFeed, /candidates\.length !== 1/)
-  assert.match(liveFeed, /resolveManifestRouteAuthority/)
-  assert.match(liveFeed, /planningWorkItemEntity\(\{ space_ref: space, reference \}/)
-  // Minting the entity through the refs module rather than writing the literal is
-  // what keeps one spelling of a work-item identity in the app.
-  // Activity is old reference-only evidence, so it can only fail closed on a
-  // unique space key. A session carries more authority: its separate resolver
-  // must match the complete canonical resource id and never drop back to key.
-  assert.match(liveFeed, /export function resolveWorkItemRoute/)
+test('session navigation refuses ambiguous project ownership', () => {
+  assert.match(sessionWorkItemRoute, /binding_state === 'mapped'/)
+  assert.match(sessionWorkItemRoute, /resolveManifestRouteAuthority/)
+  assert.match(sessionWorkItemRoute, /planningWorkItemEntity\(\{ space_ref: space, reference \}/)
   assert.match(sessionWorkItemRoute, /resource_ref\.resource_id === resourceRef\.resource_id/)
   assert.match(sessionWorkItemRoute, /candidates\.length !== 1/)
   assert.match(app, /resolveSessionWorkItemRoute\(/)
-  assert.match(moduleStage, /open-session-work-item/)
   assert.doesNotMatch(liveFeed, /kind: 'work-item'/)
-  for (const genericActivitySource of [contextBar, liveFeed, activityBell]) {
-    assert.doesNotMatch(
-      genericActivitySource,
-      /AgentActivity|item\.(?:board|card_id|card_title|column)/,
-    )
-    assert.doesNotMatch(genericActivitySource, /BoardRef|CardRef|board_name|board_ref|card_ref/)
-  }
 })
 
 test('Settings renders modules, grouped integrations, and project assignments', () => {
@@ -226,33 +196,6 @@ test('registry presents neutral connections and owns lifecycle and selection', (
   assert.doesNotMatch(registry, /strong>\{\{ connection\.connection_ref\.connection_id \}\}/)
 })
 
-test('Skills uses canonical shell scope and route entity instead of an internal all-scope selector', () => {
-  assert.match(app, /updateSkillRoute/)
-  assert.match(navigation, /kind: 'skill'/)
-  assert.match(moduleStage, /:view="stateValue\('view', 'catalog'\)"/)
-  assert.doesNotMatch(
-    skills,
-    /scopeOptions|chooseProject|value: ['"]['"], label: t\('skills\.all'\)/,
-  )
-  assert.doesNotMatch(skills, /localStorage|improvements_scope/)
-})
-
-test('analytics serves live projections for both operating levels', () => {
-  assert.match(moduleStage, /AnalyticsView/)
-  assert.doesNotMatch(app, /globalPending|exactProjectionUnavailable/)
-  const analytics = source('../src/pages/analytics/AnalyticsView.vue')
-  assert.match(analytics, /AnalyticsDashboard/)
-  assert.match(analytics, /fetchSpaceAnalytics/)
-  // The global level is its own component now, and it is one read rather than
-  // one dashboard request per project: the combining rule is coverage, and a
-  // second implementation of coverage is a second answer.
-  assert.match(analytics, /AnalyticsPortfolio/)
-  const portfolio = source('../src/pages/analytics/components/AnalyticsPortfolio.vue')
-  assert.match(portfolio, /fetchAnalyticsPortfolio/)
-  assert.match(portfolio, /openProject/)
-  assert.doesNotMatch(portfolio, /fetchSpaceAnalytics/)
-})
-
 test('planning projects three views from one read of the space', () => {
   // The three views take the same model apart rather than each fetching their
   // own: one `/api/planning` answer carries the workflow, the items and the links.
@@ -260,7 +203,7 @@ test('planning projects three views from one read of the space', () => {
   assert.match(workspace, /<WorkItemBoard/)
   assert.match(workspace, /<WorkItemList/)
   assert.match(workspace, /<WorkItemGraph/)
-  assert.match(workspace, /:items="model\.work_items"/)
+  assert.match(workspace, /:items="visibleItems"/)
   assert.doesNotMatch(workspace, /fetchPlanning|fetchPlanningGraph|secureFetch/)
   assert.match(planningSurface, /transitionWorkItem/)
   // `openProject` is the portfolio's own event; the surface's part is routing it on.
@@ -287,7 +230,6 @@ test('clean entry restores the last server-side route without legacy storage', (
   // The restored destination must still resolve, or the app lands on a dead one.
   assert.match(entryRestore, /binding_state === 'mapped'/)
   assert.match(entryRestore, /modulesSettled/)
-  assert.match(moduleStage, /:retryable="false"/)
   assert.match(contextBar, /resourceOptions\.length > 1/)
   for (const shellSource of [app, entryRestore]) {
     assert.doesNotMatch(

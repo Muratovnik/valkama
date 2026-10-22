@@ -18,7 +18,7 @@ import sqlite3
 from collections.abc import Callable, Mapping
 
 from .. import query_params
-from . import migration, model, service, transitions, views
+from . import migration, model, service, views
 
 PLANNING_API_INTERFACE = f"{model.PLANNING_INTERFACE}-api"
 
@@ -277,7 +277,7 @@ def _delete(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
 
 
 def _transition(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
-    record = service.transition_work_item(
+    return service.transition_work_item(
         conn,
         _text(payload, "id"),
         _text(payload, "state"),
@@ -285,42 +285,7 @@ def _transition(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict
         force=_flag(payload, "force"),
         expected_revision=_optional_int(payload, "expected_revision"),
         author=_author(payload),
-        improvement_guard=_IMPROVEMENT_GUARD,
     )
-    if _TRANSITION_OBSERVER is not None and str(record.get("source") or ""):
-        # Advisory: a linked case that cannot follow says so, and the transition
-        # that already happened is not undone by it.
-        _TRANSITION_OBSERVER(str(record["source"]), str(record["state"]["category"]))
-    return record
-
-
-#: The guard an Improvements case puts on closing its own work item, injected by
-#: whichever surface is running. Planning does not import Improvements: they are
-#: independent modules, and a module that had to know about another to close an
-#: item would make that item's rules depend on what else happens to be
-#: installed.
-_IMPROVEMENT_GUARD: transitions.ImprovementGuard | None = None
-
-
-#: What else wants to know that an item moved, by source marker and by the
-#: category it moved into. Advisory by construction: the transition is already
-#: committed, so a refusal here is reported and never rolled back.
-TransitionObserver = Callable[[str, str], str | None]
-_TRANSITION_OBSERVER: TransitionObserver | None = None
-
-
-def use_improvement_guard(guard: transitions.ImprovementGuard | None) -> None:
-    """Install the process-wide guard. Called once, by a surface, at startup."""
-
-    global _IMPROVEMENT_GUARD
-    _IMPROVEMENT_GUARD = guard
-
-
-def use_transition_observer(observer: TransitionObserver | None) -> None:
-    """Install the process-wide post-transition observer."""
-
-    global _TRANSITION_OBSERVER
-    _TRANSITION_OBSERVER = observer
 
 
 def _claim(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:

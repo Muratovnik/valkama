@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import datetime as dt
 import io
 import json
 import os
@@ -24,7 +23,6 @@ sys.path.insert(0, ROOT)
 from http.server import BaseHTTPRequestHandler
 
 from server import (
-    analytics,
     documents,
     federation,
     http_surface,
@@ -424,25 +422,9 @@ class StdioTests(unittest.TestCase):
             )
             self.assertNotIn("list_cards", names)
             self.assertNotIn("create_board", names)
-            self.assertLessEqual(
-                {
-                    "list_platform_modules",
-                    "get_improvements_profile",
-                    "list_improvement_cases",
-                    "get_improvement_case",
-                    "update_improvements_profile",
-                    "analyze_improvements",
-                    "improvements_cancel_job",
-                    "act_on_improvement_case",
-                    "run_improvement_eval",
-                },
-                names,
-            )
-            # A floor against silent growth. The Planning era offers one tool
-            # fewer than the Board era: it replaced `delete_board` and
-            # `merge_boards` with nothing and added `claim_ready_work_item`.
-            # Space deletion and merge have no neutral equivalent yet.
-            self.assertEqual(29, len(names))
+            self.assertIn("list_platform_modules", names)
+            self.assertFalse(any("improvement" in name for name in names))
+            self.assertEqual(20, len(names))
             self.assertIn("set_work_item_summary", names)
             for reply in (3, 4, 5):
                 self.assertFalse(by_id[reply]["result"]["isError"], by_id[reply]["result"])
@@ -725,7 +707,7 @@ class WorkItemGraphTests(unittest.TestCase):
         )
 
 
-class SessionMonitorTests(unittest.TestCase):
+class SessionContextTests(unittest.TestCase):
     """The normalized session ingest and the monitor read model."""
 
     def setUp(self) -> None:
@@ -740,6 +722,10 @@ class SessionMonitorTests(unittest.TestCase):
         os.environ["VALKAMA_DB"] = SUITE_STORE
         self._dir.cleanup()
 
+    def observed(self) -> dict:
+        row = self.conn.execute("SELECT * FROM sessions ORDER BY rowid LIMIT 1").fetchone()
+        return {**dict(row), **sessions.session_context(self.conn, row["id"])}
+
     def ingest(self, **payload) -> dict:
         return sessions.op_ingest_session_event(self.conn, payload)
 
@@ -748,211 +734,66 @@ class SessionMonitorTests(unittest.TestCase):
         self.conn.commit()
         return str(record["reference"])
 
-    def test_session_lifecycle_and_stream_autopurge(self) -> None:
-        self.ingest(
-            session_id="s1",
-            client="claude",
-            event="session_start",
-            cwd="C:/work",
-            label="fix the parser",
-        )
-        self.ingest(session_id="s1", client="claude", event="tool_start", tool="Bash")
-        self.ingest(session_id="s1", client="claude", event="tool_end", tool="Bash", status="ok")
-        live = sessions.sessions_payload(self.conn)
-        self.assertEqual(1, len(live["sessions"]))
-        row = live["sessions"][0]
-        self.assertEqual("active", row["status"])
-        self.assertEqual("Bash", row["current_step"])
-        self.assertEqual("fix the parser", row["label"])
-        self.assertEqual([], live["inbox"], "a healthy live session rings nothing")
-
-        self.ingest(session_id="s1", client="claude", event="session_end")
-        after = sessions.sessions_payload(self.conn)
-        row = after["sessions"][0]
-        self.assertEqual("ended", row["status"])
-        self.assertEqual("ended", row["attention"])
-        self.assertEqual([row["id"]], [item["id"] for item in after["inbox"]])
-        kinds = [(e["klass"], e["kind"]) for e in sessions.session_feed(self.conn, "s1")["events"]]
-        self.assertNotIn(
-            "stream", {klass for klass, _ in kinds}, "an ended session keeps analytics only"
-        )
-        self.assertIn(("analytics", "tool_end"), kinds)
-
     def test_session_identity_is_typed_and_a_new_start_repairs_stale_reporter_identity(
         self,
     ) -> None:
-        self.ingest(session_id="identity", client="codex", event="tool_start", tool="Read")
-        first = sessions.sessions_payload(self.conn)["sessions"][0]
+        self.ingest(session_id="identity", client="codex", event="attention")
+        first = self.observed()
         self.assertEqual("codex", first["client"])
         self.assertEqual("codex", first["client_family"])
-        self.assertEqual("codex-sessions", first["adapter_id"])
 
         self.ingest(session_id="identity", client="claude-code", event="session_start")
-        repaired = sessions.sessions_payload(self.conn)["sessions"][0]
+        repaired = self.observed()
         self.assertEqual("claude-code", repaired["client"])
         self.assertEqual("claude", repaired["client_family"])
-        self.assertEqual("claude-sessions", repaired["adapter_id"])
 
     def test_a_finished_turn_waits_without_ending_the_session(self) -> None:
         self.ingest(session_id="t1", client="claude", event="session_start")
         self.ingest(session_id="t1", client="claude", event="turn_end")
-        row = sessions.sessions_payload(self.conn)["sessions"][0]
+        row = self.observed()
         self.assertEqual("active", row["status"], "a turn is not a session")
         self.assertEqual("waiting", row["attention"])
         self.assertIsNone(row["ended_at"])
 
         # The owner replied and the session went back to work: the inbox must
         # clear itself rather than requiring an acknowledgement per turn.
-        self.ingest(session_id="t1", client="claude", event="tool_start", tool="Read")
-        after = sessions.sessions_payload(self.conn)
+        self.ingest(session_id="t1", client="claude", event="session_start")
+        after = {"sessions": [self.observed()]}
         self.assertEqual("", after["sessions"][0]["attention"])
-        self.assertEqual([], after["inbox"])
 
     def test_a_turn_end_never_downgrades_a_finished_session(self) -> None:
         self.ingest(session_id="t2", client="claude", event="session_end", status="error")
         self.ingest(session_id="t2", client="claude", event="turn_end")
-        row = sessions.sessions_payload(self.conn)["sessions"][0]
+        row = self.observed()
         self.assertEqual("failed", row["status"])
         self.assertEqual("failed", row["attention"])
-
-    def test_resumed_work_clears_an_active_attention_reason(self) -> None:
-        self.ingest(session_id="t3", client="claude", event="attention", status="blocked")
-        self.ingest(session_id="t3", client="claude", event="tool_end", tool="Bash")
-        row = sessions.sessions_payload(self.conn)["sessions"][0]
-        self.assertEqual("", row["attention"])
-        self.assertEqual("", row["current_step"])
-
-    def test_durable_boundary_hides_prior_step_until_new_work(self) -> None:
-        self.ingest(session_id="boundary", client="claude", event="tool_start", tool="Read")
-        self.assertEqual(
-            "Read", sessions.sessions_payload(self.conn)["sessions"][0]["current_step"]
-        )
-        self.ingest(session_id="boundary", client="claude", event="attention", status="blocked")
-        row = sessions.sessions_payload(self.conn)["sessions"][0]
-        self.assertEqual("blocked", row["attention"])
-        self.assertEqual("", row["current_step"])
-
-        self.ingest(session_id="boundary", client="claude", event="step", detail="retrying")
-        row = sessions.sessions_payload(self.conn)["sessions"][0]
-        self.assertEqual("", row["attention"])
-        self.assertEqual("step", row["current_step"])
-
-        self.ingest(session_id="boundary", client="claude", event="turn_end")
-        row = sessions.sessions_payload(self.conn)["sessions"][0]
-        self.assertEqual("waiting", row["attention"])
-        self.assertEqual("", row["current_step"])
-
-        self.ingest(session_id="boundary", client="claude", event="tool_start", tool="Bash")
-        self.assertEqual(
-            "Bash", sessions.sessions_payload(self.conn)["sessions"][0]["current_step"]
-        )
-        self.ingest(session_id="boundary", client="claude", event="session_end")
-        row = sessions.sessions_payload(self.conn)["sessions"][0]
-        self.assertEqual("ended", row["status"])
-        self.assertEqual("", row["current_step"])
 
     def test_failed_terminal_requires_explicit_session_start_to_reopen(self) -> None:
         self.ingest(session_id="terminal", client="claude", event="session_end", status="failed")
         self.ingest(session_id="terminal", client="claude", event="attention", status="blocked")
-        self.ingest(session_id="terminal", client="claude", event="tool_start", tool="Read")
+        self.ingest(session_id="terminal", client="claude", event="attention")
         self.ingest(session_id="terminal", client="claude", event="session_end", status="ok")
-        row = sessions.sessions_payload(self.conn)["sessions"][0]
+        row = self.observed()
         self.assertEqual("failed", row["status"])
         self.assertEqual("failed", row["attention"])
-        self.assertEqual("", row["current_step"], "a late step cannot reopen a terminal session")
 
         self.ingest(session_id="terminal", client="claude", event="session_start")
-        self.ingest(session_id="terminal", client="claude", event="step", detail="resumed")
-        row = sessions.sessions_payload(self.conn)["sessions"][0]
+        self.ingest(session_id="terminal", client="claude", event="session_start", detail="resumed")
+        row = self.observed()
         self.assertEqual("active", row["status"])
         self.assertEqual("", row["attention"])
-        self.assertEqual("step", row["current_step"])
-
-    def test_stale_is_a_controlled_read_model_not_a_status(self) -> None:
-        self.ingest(session_id="quiet", client="codex", event="tool_start", tool="Read")
-        self.conn.execute(
-            "UPDATE sessions SET last_seen = ? WHERE id = 'quiet'",
-            ("2026-01-01T00:00:00Z",),
-        )
-        self.conn.commit()
-        fresh = sessions.sessions_payload(
-            self.conn, now=dt.datetime(2026, 1, 1, 0, 4, 59, tzinfo=dt.UTC)
-        )["sessions"][0]
-        self.assertEqual("active", fresh["status"])
-        self.assertEqual("connected", fresh["presence"])
-        self.assertNotIn("stale", fresh)
-        self.assertEqual("Read", fresh["current_step"])
-
-        stale = sessions.sessions_payload(
-            self.conn, now=dt.datetime(2026, 1, 1, 0, 5, 0, tzinfo=dt.UTC)
-        )["sessions"][0]
-        self.assertEqual("active", stale["status"])
-        self.assertEqual("stale", stale["presence"])
-        self.assertNotIn("stale", stale)
-        self.assertEqual("", stale["current_step"])
-
-    def test_analytics_environment_and_tool_queries_are_forwarded_without_epic(self) -> None:
-        calls = []
-        original = analytics.project_space
-        analytics.project_space = lambda _conn, space, **kwargs: (
-            calls.append((space, kwargs)) or {"space": space}
-        )
-        try:
-            result = http_surface.dashboard_projection(
-                self.conn,
-                {"space": ["TST"], "environment": ["worktree"], "tool": ["Read"], "epic": ["9"]},
-            )
-        finally:
-            analytics.project_space = original
-        self.assertEqual({"space": "TST"}, result)
-        self.assertEqual("worktree", calls[0][1]["environment"])
-        self.assertEqual("Read", calls[0][1]["tool"])
-        self.assertNotIn("epic", calls[0][1])
-        self.assertEqual(
-            {"space": "TST", "environment": "worktree", "tool": "Read"},
-            http_surface._dashboard_sse_parameters(
-                "TST", {"environment": ["worktree"], "tool": ["Read"], "epic": ["9"]}
-            ),
-        )
-
-    def test_analytics_records_the_mcp_server_and_tool(self) -> None:
-        self.ingest(
-            session_id="s2",
-            client="claude",
-            event="tool_end",
-            tool="claim_card",
-            server="valkama",
-            status="ok",
-        )
-        events = sessions.session_feed(self.conn, "s2")["events"]
-        self.assertEqual("valkama", events[0]["server"])
-        self.assertEqual("claim_card", events[0]["tool"])
-        self.assertEqual("analytics", events[0]["klass"])
-
-    def test_attention_rings_the_inbox_until_seen(self) -> None:
-        self.ingest(
-            session_id="s3",
-            client="claude",
-            event="attention",
-            status="blocked",
-            detail={"message": "permission needed"},
-        )
-        inbox = sessions.sessions_payload(self.conn)["inbox"]
-        self.assertEqual(["blocked"], [item["attention"] for item in inbox])
-        sessions.op_mark_attention_seen(self.conn, "s3")
-        self.assertEqual([], sessions.sessions_payload(self.conn)["inbox"])
 
     def test_a_resumed_session_clears_stale_attention(self) -> None:
         self.ingest(session_id="s4", client="codex", event="session_end")
         self.ingest(session_id="s4", client="codex", event="session_start")
-        row = sessions.sessions_payload(self.conn)["sessions"][0]
+        row = self.observed()
         self.assertEqual("active", row["status"])
         self.assertEqual("", row["attention"])
         self.assertIsNone(row["ended_at"])
 
     def test_failed_end_is_distinguished(self) -> None:
         self.ingest(session_id="s5", client="codex", event="session_end", status="error")
-        row = sessions.sessions_payload(self.conn)["sessions"][0]
+        row = self.observed()
         self.assertEqual("failed", row["status"])
         self.assertEqual("failed", row["attention"])
 
@@ -965,7 +806,7 @@ class SessionMonitorTests(unittest.TestCase):
             work_item=reference,
             launch_id="launch-abc",
         )
-        row = sessions.sessions_payload(self.conn)["sessions"][0]
+        row = self.observed()
         self.assertEqual(reference, row["work_item"])
 
     def test_session_root_uses_only_the_exact_owner_binding_resource_ref(self) -> None:
@@ -1007,7 +848,7 @@ class SessionMonitorTests(unittest.TestCase):
             ]
         )
         with mock.patch.object(project_registry, "_read_registry_bytes", return_value=bound):
-            root = sessions.sessions_payload(self.conn)["sessions"][0]["space_root"]
+            root = self.observed()["space_root"]
         self.assertEqual("mapped", root["status"])
         self.assertEqual(resource_ref, root["resource_ref"])
         self.assertEqual(canonical, root["effective_cwd"])
@@ -1018,7 +859,7 @@ class SessionMonitorTests(unittest.TestCase):
             [project_entry("test", canonical, board="TST", source_hash=source_hash)]
         )
         with mock.patch.object(project_registry, "_read_registry_bytes", return_value=title_only):
-            refused = sessions.sessions_payload(self.conn)["sessions"][0]["space_root"]
+            refused = self.observed()["space_root"]
         self.assertEqual("missing", refused["status"])
         self.assertEqual("", refused["effective_cwd"])
 
@@ -1034,7 +875,7 @@ class SessionMonitorTests(unittest.TestCase):
         planning.attach_ref(self.conn, second, "session", "cross-space")
         self.conn.commit()
 
-        row = sessions.sessions_payload(self.conn)["sessions"][0]
+        row = self.observed()
         self.assertNotIn("planning_space", row)
         self.assertIsNone(row["work_item"])
         self.assertEqual("ambiguous", row["space_root"]["status"])
@@ -1053,79 +894,30 @@ class SessionMonitorTests(unittest.TestCase):
 
     def test_an_unknown_work_item_is_ignored_rather_than_written(self) -> None:
         self.ingest(session_id="ls2", client="claude", event="session_start", work_item="TST-9999")
-        self.assertIsNone(sessions.sessions_payload(self.conn)["sessions"][0]["work_item"])
+        self.assertIsNone(self.observed()["work_item"])
         with self.assertRaisesRegex(ValueError, "work_item must be a reference"):
-            self.ingest(session_id="ls3", client="claude", event="step", work_item=7)
+            self.ingest(session_id="ls3", client="claude", event="session_start", work_item=7)
 
     def test_sessions_link_to_work_items_through_session_refs(self) -> None:
         reference = self.item("watched work")
         planning.attach_ref(self.conn, reference, "session", "s6")
         self.conn.commit()
-        self.ingest(session_id="s6", client="claude", event="step", detail="thinking")
-        row = sessions.sessions_payload(self.conn)["sessions"][0]
+        self.ingest(session_id="s6", client="claude", event="session_start", detail="thinking")
+        row = self.observed()
         self.assertEqual(reference, row["work_item"])
-
-    def test_stream_tail_is_bounded_and_analytics_is_not(self) -> None:
-        for index in range(sessions.STREAM_TAIL_PER_SESSION + 25):
-            self.ingest(session_id="s7", client="claude", event="tool_start", tool=f"Tool{index}")
-            self.ingest(
-                session_id="s7", client="claude", event="tool_end", tool=f"Tool{index}", status="ok"
-            )
-        counts = dict(
-            self.conn.execute(
-                "SELECT klass, COUNT(*) FROM session_events WHERE session_id = 's7' GROUP BY klass"
-            ).fetchall()
-        )
-        self.assertEqual(sessions.STREAM_TAIL_PER_SESSION, counts["stream"])
-        self.assertEqual(sessions.STREAM_TAIL_PER_SESSION + 25, counts["analytics"])
-
-    def test_manual_purge_spares_active_sessions_by_default(self) -> None:
-        self.ingest(session_id="live", client="claude", event="tool_start", tool="Bash")
-        self.ingest(session_id="gone", client="claude", event="tool_start", tool="Bash")
-        # End "gone" without the autopurge wiping what this test measures.
-        self.conn.execute("UPDATE sessions SET status = 'ended' WHERE id = 'gone'")
-        self.conn.commit()
-        purged = sessions.purge_stream_events(self.conn)
-        self.assertEqual(1, purged["purged_stream_events"])
-        remaining = [
-            r[0]
-            for r in self.conn.execute(
-                "SELECT session_id FROM session_events WHERE klass = 'stream'"
-            ).fetchall()
-        ]
-        self.assertEqual(["live"], remaining)
-        purged_all = sessions.purge_stream_events(self.conn, include_active=True)
-        self.assertEqual(1, purged_all["purged_stream_events"])
-
-    def test_retention_keeps_the_recent_tail_and_never_analytics(self) -> None:
-        self.ingest(session_id="r1", client="claude", event="tool_start", tool="Old")
-        self.ingest(session_id="r1", client="claude", event="tool_end", tool="Old")
-        self.conn.execute(
-            "UPDATE session_events SET created_at = '2026-06-01T00:00:00Z' WHERE session_id = 'r1'"
-        )
-        self.conn.commit()
-        self.ingest(session_id="r1", client="claude", event="tool_start", tool="New")
-
-        purged = sessions.purge_stream_events(self.conn, include_active=True, older_than_days=14)
-        self.assertEqual(1, purged["purged_stream_events"], "only the old stream row")
-        remaining = [
-            (event["klass"], event["tool"])
-            for event in sessions.session_feed(self.conn, "r1")["events"]
-        ]
-        self.assertIn(("stream", "New"), remaining)
-        self.assertIn(("analytics", "Old"), remaining)
-        self.assertNotIn(("stream", "Old"), remaining)
 
     def test_ingest_rejects_garbage(self) -> None:
         with self.assertRaisesRegex(ValueError, "unknown session event"):
             self.ingest(session_id="x", client="claude", event="explode")
         with self.assertRaisesRegex(ValueError, "session_id is required"):
-            self.ingest(session_id="", client="claude", event="step")
+            self.ingest(session_id="", client="claude", event="session_start")
         with self.assertRaisesRegex(ValueError, "client is required"):
-            self.ingest(session_id="x", client="", event="step")
+            self.ingest(session_id="x", client="", event="session_start")
         oversized = {"blob": "x" * (sessions.SESSION_DETAIL_LIMIT + 100)}
-        self.ingest(session_id="x", client="claude", event="step", detail=oversized)
-        stored = sessions.session_feed(self.conn, "x")["events"][0]["detail"]
+        self.ingest(session_id="x", client="claude", event="session_start", detail=oversized)
+        stored = self.conn.execute(
+            "SELECT detail FROM session_events WHERE session_id='x' ORDER BY id DESC"
+        ).fetchone()[0]
         self.assertEqual('{"truncated":true}', stored)
 
 

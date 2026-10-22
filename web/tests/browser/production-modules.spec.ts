@@ -18,27 +18,39 @@ test('module disablement persists through reload, removes navigation, and has ty
 }) => {
   await installBackend(page)
   await openWorkspaceSettings(page)
-  const analyticsToggle = page.getByRole('switch', { name: 'Analytics' })
+  const planningToggle = page.getByRole('switch', { name: 'Work' })
   await expect(page.getByRole('switch', { name: 'Settings' })).toHaveCount(0)
-  await expect(analyticsToggle).toBeChecked()
-  await analyticsToggle.click()
-  await expect(page.getByRole('button', { name: 'Analytics' })).toHaveCount(0)
+  await expect(planningToggle).toBeChecked()
+  await planningToggle.click()
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Product areas' })
+      .getByRole('button', { name: 'Work', exact: true }),
+  ).toHaveCount(0)
   await page.reload()
-  await expect(page.getByRole('button', { name: 'Analytics' })).toHaveCount(0)
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Product areas' })
+      .getByRole('button', { name: 'Work', exact: true }),
+  ).toHaveCount(0)
 
-  await page.goto(serializePlatformRoute({ module_id: 'analytics', scope: globalScope }))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: globalScope }))
   await expect(page.locator('.route-recovery')).toBeVisible()
-  await expect(page.locator('.module-stage')).toContainText('analytics')
+  await expect(page.locator('.module-stage')).toContainText('planning')
 
   await openWorkspaceSettings(page)
-  const disabledToggle = page.getByRole('switch', { name: 'Analytics' })
+  const disabledToggle = page.getByRole('switch', { name: 'Work' })
   await expect(disabledToggle).not.toBeChecked()
   await disabledToggle.click()
-  await expect(page.getByRole('button', { name: 'Analytics' })).toBeVisible()
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Product areas' })
+      .getByRole('button', { name: 'Work', exact: true }),
+  ).toBeVisible()
 })
 
 test('stale module revisions reload authority before the control is reusable', async ({ page }) => {
-  await installBackend(page, { moduleConflictOnce: 'analytics' })
+  await installBackend(page, { moduleConflictOnce: 'planning' })
   // The control is busy only while its own write is in flight. Against a stub
   // that answers at once that window can close before the first assertion
   // polls, so the first write is held until this test has seen the busy state.
@@ -55,32 +67,17 @@ test('stale module revisions reload authority before the control is reusable', a
     await route.fallback()
   })
   await openWorkspaceSettings(page)
-  const analyticsToggle = page.getByRole('switch', { name: 'Analytics' })
-  await analyticsToggle.click()
-  await expect(analyticsToggle).toHaveAttribute('aria-busy', 'true')
+  const planningToggle = page.getByRole('switch', { name: 'Work' })
+  await planningToggle.click()
+  await expect(planningToggle).toHaveAttribute('aria-busy', 'true')
   releaseWrite?.()
-  await expect(analyticsToggle).not.toHaveAttribute('aria-busy', 'true')
-  await expect(analyticsToggle).toBeEnabled()
-  await expect(analyticsToggle).toBeChecked()
-  await analyticsToggle.click()
-  await expect(page.getByRole('button', { name: 'Analytics' })).toHaveCount(0)
-})
-
-test('owned live feeds close on disable and sessions restart on re-enable', async ({ page }) => {
-  await installBackend(page)
-  await openWorkspaceSettings(page)
-  const sessionsToggle = page.getByRole('switch', { name: 'Sessions' })
-  await sessionsToggle.click()
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () =>
-          (window as unknown as { __closedStreams?: string[] }).__closedStreams?.filter((url) =>
-            url.includes('view=sessions'),
-          ).length ?? 0,
-      ),
-    )
-    .toBeGreaterThan(0)
-  await sessionsToggle.click()
-  await expect(sessionsToggle).toBeChecked()
+  await expect(planningToggle).not.toHaveAttribute('aria-busy', 'true')
+  await expect(planningToggle).toBeEnabled()
+  await expect(planningToggle).toBeChecked()
+  await planningToggle.click()
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Product areas' })
+      .getByRole('button', { name: 'Work', exact: true }),
+  ).toHaveCount(0)
 })

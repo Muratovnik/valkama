@@ -1,4 +1,4 @@
-export type SemanticTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger'
+type SemanticTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger'
 type SemanticEmphasis = 'quiet' | 'strong'
 
 export type ClosedStateDimension =
@@ -57,10 +57,6 @@ const SEMANTIC_TONE_COLORS: Record<SemanticTone, string> = {
   success: '#7bd6a1',
   warning: '#d9b06a',
   danger: '#ef8479',
-}
-
-export function toneColor(tone: SemanticTone): string {
-  return SEMANTIC_TONE_COLORS[tone]
 }
 
 const STATE_PRESENTATION = {

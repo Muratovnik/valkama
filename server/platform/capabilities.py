@@ -48,8 +48,6 @@ CAPABILITY_DEFINITIONS = {
         ("execution.stop", "one", "write", "execution"),
         ("session.observe", "one-or-more", "read", "session"),
         ("telemetry.query", "one-or-more", "read", "telemetry"),
-        ("skills.catalog", "one-or-more", "read", "skill"),
-        ("skills.activate", "one-or-more", "write", "skill"),
         ("memory.open", "one", "read", "memory-resource"),
         ("memory.health", "one", "read", "health"),
         ("artifact.inspect", "one", "read", "artifact"),

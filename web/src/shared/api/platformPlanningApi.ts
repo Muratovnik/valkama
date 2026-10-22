@@ -21,6 +21,7 @@ export async function fetchPlatformPlanning(
   if (scope.kind === 'project' && space === undefined)
     invalid('space_ref', 'Project planning requires an exact space binding')
   const query = scopeQuery(scope)
+  if (scope.kind === 'global') query.set('directory_only', 'true')
   if (space !== undefined) {
     query.set('data_scope_id', space.data_scope_id)
     query.set('space_key', space.space_key)

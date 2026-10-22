@@ -11,24 +11,20 @@ import {
   useModuleRouteAuthority,
 } from '@/app/composables/useModuleRouteAuthority.ts'
 import { usePlatformEntryRestore } from '@/app/composables/usePlatformEntryRestore.ts'
-import { resolveWorkItemRoute, usePlatformLiveFeed } from '@/app/composables/usePlatformLiveFeed.ts'
+import { usePlatformLiveFeed } from '@/app/composables/usePlatformLiveFeed.ts'
 import { DEFAULT_ROUTE, usePlatformNavigation } from '@/app/composables/usePlatformNavigation.ts'
 import { usePlatformReadModels } from '@/app/composables/usePlatformReadModels.ts'
 
 import AppNav from '@/widgets/app-nav/components/AppNav.vue'
 
+import SessionContext from '@/features/session-open/SessionContext.vue'
 import { resolveSessionWorkItemRoute } from '@/features/session-open/sessionWorkItemRoute.ts'
 
-import { monitorTotals } from '@/entities/session/sessionDerivations.ts'
-
+import { fetchSessionContext } from '@/shared/api/api.ts'
 import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
-import type { ModuleId } from '@/shared/api/platformModuleContract.ts'
 import { failureMessage } from '@/shared/api/typedFailure.ts'
 import type { TypedFailure } from '@/shared/api/typedFailure.ts'
-import type {
-  SessionWorkItemNavigationTarget,
-  WorkItemNavigationTarget,
-} from '@/shared/types/reference.ts'
+import type { ResolvedRef } from '@/shared/types/reference.ts'
 
 const { t, te, locale } = useI18n()
 const notice = ref('')
@@ -44,6 +40,7 @@ const {
   goHome,
   openProject,
   operatingScope,
+  pendingSession,
   route,
   routeBlocked,
   routeFailure,
@@ -51,7 +48,6 @@ const {
   switchModule,
   switchScope,
   updateModuleState,
-  updateSkillRoute,
   writeRoute,
 } = usePlatformNavigation(() => t('platform.route.invalid'))
 
@@ -60,9 +56,6 @@ const contextReady = computed(() =>
     ? contextState.value.payload
     : null,
 )
-const moduleBadges = computed<Partial<Record<ModuleId, number>>>(() => ({
-  sessions: monitorTotals(sessions.value).attention || monitorTotals(sessions.value).live,
-}))
 const mappedProjectResources = computed(() => {
   const scope = operatingScope.value
   if (scope.kind !== 'project') return []
@@ -86,28 +79,18 @@ const {
   modulesAuthoritative,
   modulesSettled,
   modulesFailure,
-  activities,
-  sessions,
-  sessionsState,
-  sessionRevisions,
   connectionState,
   refreshing,
   loadModules,
   refreshAll,
-  retrySessions,
-  activityNavigable,
-  selectActivity,
 } = usePlatformLiveFeed({
   notice,
-  contextReady,
   moduleAuthorityReady,
-  writeRoute,
   syncRouteResources,
   loadContext,
   text: {
     failure: localizedFailure,
     refreshed: () => t('refresh.done'),
-    primaryBindingRequired: () => t('platform.activity.primaryBindingRequired'),
   },
 })
 
@@ -183,57 +166,34 @@ function openEntity(entity?: EntityRef) {
   })
 }
 
-/**
- * A session opened from the work item that names it.
- *
- * Sessions are a global surface — a project scope has nothing for them to show —
- * so the jump switches the scope as well as the module. Doing one without the
- * other lands on the refusal panel, which reads as a broken link.
- */
-function openSession(sessionId: string, clientFamily: string) {
-  writeRoute({
-    module_id: 'sessions',
-    scope: { kind: 'global' },
-    entity: { kind: 'session', session_id: sessionId, client_family: clientFamily },
-  })
-}
-
-/**
- * And the way back: the item a session was working, in its own project.
- *
- * The session supplies one canonical Planning resource ref. Exactly one mapped
- * Project may own that complete identity; a matching key in another store is
- * never a candidate.
- */
-function openWorkItemFromSession(target: SessionWorkItemNavigationTarget) {
-  const next = resolveSessionWorkItemRoute(
-    target.resource_ref,
-    target.reference,
-    contextReady.value,
-    moduleRegistrations.value,
-  )
-  if (next === null) {
-    notice.value = t('monitor.workItemUnreachable', { reference: target.reference })
-    return
+async function openSession(sessionId: string, _clientFamily: string, navigate = false) {
+  try {
+    const context = await fetchSessionContext(sessionId)
+    if (navigate && context.resolved && context.work_item && context.space_root?.resource_ref) {
+      const next = resolveSessionWorkItemRoute(
+        context.space_root.resource_ref,
+        context.work_item,
+        contextReady.value,
+        moduleRegistrations.value,
+      )
+      if (next) {
+        writeRoute(next)
+        return
+      }
+    }
+    sessionContext.value = context
+  } catch (error) {
+    notice.value = localizedFailure({ code: 'request_failed', status: null, retryable: true })
+    console.error(error)
   }
-  writeRoute(next)
 }
-
-/** Memory links carry historical reference text, so their key-only resolver remains fail-closed. */
-function openWorkItemFromMemory(target: WorkItemNavigationTarget) {
-  const next = resolveWorkItemRoute(
-    target.planning_space,
-    target.reference,
-    contextReady.value,
-    moduleRegistrations.value,
-  )
-  if (next === null) {
-    notice.value = t('monitor.workItemUnreachable', { reference: target.reference })
-    return
-  }
-  writeRoute(next)
-}
-
+const sessionContext = ref<ResolvedRef | null>(null)
+watch([pendingSession, modulesSettled, contextReady], () => {
+  if (!pendingSession.value || !modulesSettled.value || !contextReady.value) return
+  const id = pendingSession.value
+  pendingSession.value = ''
+  void openSession(id, '', true)
+})
 function selectLocale(requested: string) {
   const value = requested === 'ru' ? 'ru' : 'en'
   locale.value = value
@@ -276,7 +236,6 @@ usePlatformEntryRestore({
     <AppNav
       :modules="modules"
       :active="activeModule"
-      :badges="moduleBadges"
       :connection="connectionState"
       :refreshing="refreshing"
       @navigate="switchModule"
@@ -292,11 +251,8 @@ usePlatformEntryRestore({
         :resource-ref="selectedResourceRef"
         :resources="availableProjectResources"
         :projects="contextReady?.projects ?? []"
-        :activities="activities"
-        :activity-navigable="activityNavigable"
         @scope="switchScope"
         @resource="selectResource"
-        @select-activity="selectActivity"
       />
 
       <div
@@ -321,26 +277,25 @@ usePlatformEntryRestore({
           :primary-write-scope-id="primaryWriteScopeId"
           :registry-state="registryState"
           :context="contextReady"
-          :sessions-state="sessionsState"
-          :session-revisions="sessionRevisions"
           :route="route"
           :locale="locale"
           :reload-modules="reloadModuleState"
           @retry-registry="loadRegistry"
-          @retry-sessions="retrySessions"
           @entity="openEntity"
           @open-session="openSession"
-          @open-session-work-item="openWorkItemFromSession"
-          @open-work-item="openWorkItemFromMemory"
           @notice="(message) => (notice = message)"
           @open-project="openProject"
           @switch-scope="switchScope"
           @state="updateModuleState"
-          @skill-route="updateSkillRoute"
           @locale="selectLocale"
         />
       </div>
 
+      <SessionContext
+        v-if="sessionContext"
+        :context="sessionContext"
+        @close="sessionContext = null"
+      />
       <div
         v-if="notice"
         class="notice"

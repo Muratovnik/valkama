@@ -10,23 +10,6 @@
  * the only reason a wrong type can sit in a repository this long.
  */
 
-import type { PlanningSpaceBrief } from '@/shared/api/planningModel.ts'
-
-interface ScopeEntry {
-  available: boolean
-  detail: string
-  label: string
-  name: string
-  path: string
-  primary: boolean
-}
-
-/** Attached database files and the planning spaces each one holds. */
-export interface ScopeListing {
-  planning_spaces: Array<PlanningSpaceBrief & { scope: string }>
-  scopes: ScopeEntry[]
-}
-
 type LaunchRole = 'executor' | 'orchestrator'
 type RunEnvironment = 'workdir' | 'worktree' | 'wsl'
 type ExpectedEffect = 'change_required' | 'no_change_acceptable' | 'read_only_finding'

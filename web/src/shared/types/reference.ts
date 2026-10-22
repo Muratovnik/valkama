@@ -29,40 +29,6 @@ export interface SpaceRootResolution {
   validated?: boolean
 }
 
-/** Where a surface asks the shell to navigate: one item, in one space. */
-export interface WorkItemNavigationTarget {
-  planning_space: string
-  reference: string
-  scope?: string
-}
-
-/** A session may navigate only through the exact Planning identity it carries. */
-export interface SessionWorkItemNavigationTarget {
-  reference: string
-  resource_ref: PlanningSpaceEntityRef
-  scope?: string
-}
-
-interface DocumentHit {
-  line: number
-  path: string
-  root: string
-  text: string
-}
-
-export interface SearchPayload {
-  documents: DocumentHit[]
-  query: string
-  work_items: Array<{
-    labels: string[]
-    reference: string
-    title: string
-    comment_hit?: string
-    scope?: string
-    summary_hit?: boolean
-  }>
-}
-
 export interface ResolvedRef {
   detail: string
   kind: RefKind

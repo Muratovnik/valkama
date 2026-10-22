@@ -10,7 +10,6 @@ from pathlib import Path
 from unittest import mock
 
 from server import http_surface, store
-from server.improvements import api as improvements_api
 from server.memory import service as memory_service
 from server.planning import service as planning_service
 from server.platform import core as platform_core
@@ -228,7 +227,7 @@ class PlatformTests(unittest.TestCase):
         modules = self.platform.modules_payload()
         self.assertEqual("valkama-modules", modules["interface_version"])
         self.assertEqual(
-            ["analytics", "improvements", "memory", "planning", "sessions", "settings", "skills"],
+            ["memory", "planning", "settings"],
             [item["manifest"]["module_id"] for item in modules["modules"]],
         )
         context = self.platform.context_payload(self._query())
@@ -240,7 +239,7 @@ class PlatformTests(unittest.TestCase):
 
         registry = self.platform.registry_payload(self._query())
         ready = registry["state"]["payload"]
-        self.assertEqual(10, len(ready["assignments"]))
+        self.assertEqual(8, len(ready["assignments"]))
         self.assertTrue(
             all(item["scope"] == {"kind": "installation"} for item in ready["assignments"])
         )
@@ -286,7 +285,7 @@ class PlatformTests(unittest.TestCase):
         global_ready = self.platform.registry_payload({"scope_kind": ["global"]})["state"][
             "payload"
         ]
-        self.assertEqual(10, len(global_ready["assignments"]))
+        self.assertEqual(8, len(global_ready["assignments"]))
         self.assertEqual(len(configured["grants"]), len(global_ready["grants"]))
         self.assertTrue(all("applicability" in item for item in global_ready["connections"]))
 
@@ -345,6 +344,61 @@ class PlatformTests(unittest.TestCase):
         self.assertEqual("unbound", unbound["binding_state"])
         self.assertNotIn("binding_reason", unbound)
         self.assertEqual([], unbound["planning_spaces"])
+
+    def test_global_planning_directory_stays_bounded_without_reading_work_items(self) -> None:
+        for number in range(1200):
+            planning_service.create_work_item(
+                self.conn, space="EXA", title=f"Portfolio work {number}"
+            )
+        self.conn.commit()
+        with mock.patch.object(
+            self.platform, "_space_view", side_effect=AssertionError("full item read")
+        ) as read_items:
+            directory = self.platform.planning_payload(
+                {"scope_kind": ["global"], "directory_only": ["true"]}
+            )
+        read_items.assert_not_called()
+        self.assertEqual("ready", directory["state"]["status"])
+        payload = directory["state"]["payload"]
+        self.assertEqual([], payload["planning_spaces"])
+        self.assertEqual(1201, payload["projects"][0]["planning_spaces"][0]["work_item_count"])
+        self.assertEqual("Example Board", payload["projects"][0]["title"])
+        self.assertEqual("Example Space", payload["projects"][0]["planning_spaces"][0]["title"])
+        self.assertLess(len(json.dumps(payload).encode("utf-8")), 256 * 1024)
+
+        def value_count(value):
+            if isinstance(value, dict):
+                return 1 + sum(value_count(child) for child in value.values())
+            if isinstance(value, list):
+                return 1 + sum(value_count(child) for child in value)
+            return 1
+
+        self.assertLess(value_count(payload), 16_384)
+        default = self.platform.planning_payload({"scope_kind": ["global"]})
+        self.assertEqual(payload["projects"], default["state"]["payload"]["projects"])
+        items = default["state"]["payload"]["planning_spaces"][0]["work_items"]
+        self.assertEqual(1201, len(items))
+        self.assertIn(self.item_ref, [item["work_item_ref"] for item in items])
+        self.assertGreater(value_count(default["state"]["payload"]), 16_384)
+
+    def test_planning_directory_query_is_exact_and_only_global(self) -> None:
+        for parameters in (
+            {"scope_kind": ["global"], "directory_only": ["false"]},
+            {"scope_kind": ["global"], "directory_only": ["true", "true"]},
+            {"scope_kind": ["global"], "directory_only": []},
+            {"scope_kind": ["global", "global"], "directory_only": ["true"]},
+            {"directory_only": ["true"]},
+            {"scope_kind": ["global"], "directory_only": ["true"], "unknown": ["x"]},
+            self._query(data_scope_id=self.data_scope_id, space_key="EXA", directory_only="true"),
+        ):
+            with (
+                self.subTest(parameters=parameters),
+                self.assertRaises(platform_core.PlatformHttpError) as refusal,
+            ):
+                self.platform.planning_payload(parameters)
+            self.assertEqual(400, refusal.exception.status)
+        with self.assertRaises(platform_core.PlatformHttpError):
+            self.platform.context_payload({"scope_kind": ["global"], "directory_only": ["true"]})
 
     def test_generic_relation_attach_open_remove_is_atomic(self) -> None:
         self._authorize(self.platform, self.notes)
@@ -460,7 +514,7 @@ class PlatformTests(unittest.TestCase):
 
     def test_binding_discovery_is_default_deny_across_restart(self) -> None:
         ready = self.platform.registry_payload(self._query())["state"]["payload"]
-        self.assertEqual(10, len(ready["assignments"]))
+        self.assertEqual(8, len(ready["assignments"]))
         self.assertEqual([], ready["grants"])
         self.assertTrue(all(item["trust"] == "unknown" for item in ready["connections"]))
         revision = planning_service.get_work_item(self.conn, self.item["reference"])["revision"]
@@ -475,7 +529,7 @@ class PlatformTests(unittest.TestCase):
             providers=self.providers,
         )
         restarted = fresh.registry_payload(self._query())["state"]["payload"]
-        self.assertEqual(10, len(restarted["assignments"]))
+        self.assertEqual(8, len(restarted["assignments"]))
         self.assertEqual([], restarted["grants"])
         self.assertTrue(all(item["trust"] == "unknown" for item in restarted["connections"]))
 
@@ -895,7 +949,6 @@ class PlatformTests(unittest.TestCase):
             )
 
     def test_legacy_platform_api_has_no_second_owner(self) -> None:
-        self.assertIsNone(improvements_api.handle_get(self.db, "/api/modules", {}))
         self.assertIsNone(platform_core.handle_get(self.conn, self.db, "/api/integrations", {}))
 
     def test_context_reports_absent_ui_prefs_as_null(self) -> None:
@@ -922,7 +975,7 @@ class PlatformTests(unittest.TestCase):
         self.platform.save_ui_prefs(
             {
                 "interface_version": "valkama-ui-prefs",
-                "module_id": "skills",
+                "module_id": "planning",
                 "scope": {"kind": "global"},
             }
         )
@@ -933,7 +986,7 @@ class PlatformTests(unittest.TestCase):
             providers=self.providers,
         )
         prefs = restarted.ui_prefs_record()
-        self.assertEqual(prefs, {"module_id": "skills", "scope": {"kind": "global"}})
+        self.assertEqual(prefs, {"module_id": "planning", "scope": {"kind": "global"}})
 
     def test_ui_prefs_reject_unknown_module_version_and_fields(self) -> None:
         with self.assertRaises(platform_core.PlatformHttpError):
@@ -1282,7 +1335,7 @@ class PlatformHttpBoundaryTests(unittest.TestCase):
         conn = store.connect()
         try:
             platform = platform_core.Platform(conn, self.db)
-            for module_id in ("planning", "sessions", "analytics", "improvements"):
+            for module_id in ("planning",):
                 platform.module_state_command(
                     {"module_id": module_id, "state": "disabled", "expected_revision": 1}
                 )
@@ -1291,19 +1344,23 @@ class PlatformHttpBoundaryTests(unittest.TestCase):
         for path in (
             "/api/planning",
             "/api/planning/spaces",
-            "/api/dashboard",
+            "/api/session?id=missing",
             "/api/scopes",
-            "/api/sessions",
             "/api/events?view=planning",
-            "/api/events?view=dashboard",
-            "/api/events?view=sessions",
-            "/api/events?view=improvements&scope=personal",
         ):
             with self.subTest(path=path):
                 self.assertEqual(409, self._get(path)[0])
+        for path in (
+            "/api/dashboard",
+            "/api/sessions",
+            "/api/modules/skills",
+            "/api/modules/improvements",
+        ):
+            self.assertEqual(404, self._get(path)[0])
+        for view in ("sessions", "analytics", "dashboard", "improvements"):
+            self.assertEqual(400, self._get(f"/api/events?view={view}")[0])
         self.assertEqual(
-            409,
-            self._put("/api/modules/improvements/profile", {"scope": "personal"})[0],
+            404, self._put("/api/modules/improvements/profile", {"scope": "personal"})[0]
         )
 
     def test_unknown_sse_view_is_rejected(self) -> None:
@@ -1312,7 +1369,7 @@ class PlatformHttpBoundaryTests(unittest.TestCase):
     def test_open_sse_stream_terminates_after_module_is_disabled(self) -> None:
         client = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=3)
         try:
-            client.request("GET", "/api/events?view=sessions")
+            client.request("GET", "/api/events?view=planning")
             response = client.getresponse()
             self.assertEqual(200, response.status)
             self.assertTrue(response.readline().startswith(b"data: "))
@@ -1320,7 +1377,7 @@ class PlatformHttpBoundaryTests(unittest.TestCase):
             conn = store.connect()
             try:
                 platform_core.Platform(conn, self.db).module_state_command(
-                    {"module_id": "sessions", "state": "disabled", "expected_revision": 1}
+                    {"module_id": "planning", "state": "disabled", "expected_revision": 1}
                 )
             finally:
                 conn.close()

@@ -108,8 +108,8 @@ The server lives in `server/`, split into domain and surfaces. Domain modules
 answer questions about the store and know nothing about who asked: `store`,
 `sessions`, `federation`, `refs`, `documents`, `runner`, `processes`,
 `git_worktrees`, `static_assets`, `watchers`, plus the `planning/`,
-`executions/`, `platform/`, `analytics/`, `improvements/`, `memory/`,
-`projects/`, `ops/`, `telemetry/` and `skills/` subpackages. The three
+`executions/`, `platform/`, `memory/`, `projects/`, `ops/` and `telemetry/`
+subpackages. The three
 surfaces own no domain rule: `mcp_surface`, `http_surface` and `cli`.
 
 `store` keeps what only it can own — the schema, the ratchet, the store's own
@@ -150,8 +150,8 @@ is the single exception by construction — choosing between the other two is wh
 it is for.
 
 Read a shared mutable singleton through its own module, never by binding it:
-`runner.RUNNER` and `watchers.IMPROVEMENTS_RUNTIME`, not `from .runner import
-RUNNER`. A test that swaps one in has to reach every reader, and `from X import
+`runner.RUNNER`, not `from .runner import RUNNER`. A test that swaps one in
+has to reach every reader, and `from X import
 Y` gives each importer a private copy that the swap cannot see.
 
 `valkama.py` is the source entry-point shim and stays at the repository root.
@@ -165,11 +165,15 @@ every client and project configuration. Tests mirror the package under `tests/`,
 and they import from the module that owns what they exercise rather than through
 one facade.
 
-The product is Valkama; planning is one of its seven modules. A module is a
-row in `platform_modules`, and the Kernel writes the ones this build declares
+Planning owns the work loop, including execution and exact session context.
+Memory and Settings supply its supporting capabilities. A module is a row in
+`platform_modules`, and the Kernel writes the ones this build declares
 that the store has never known — so adding one is a code change rather than a
 code change plus a hand-written INSERT. A row that was removed stays removed:
-the audit is what tells a removal apart from a module that is new.
+the audit is what tells a removal apart from a module that is new. Retired
+Analytics, Improvements, Skills management and Sessions monitoring must not be
+reseeded on upgrade. Removing their screens does not remove session identity,
+work-item history, execution links or installed client skills and settings.
 
 The product has now been renamed twice — Kanban, then Agent Hub, then this —
 and the lesson of the second one is written into the gates here: it renamed the

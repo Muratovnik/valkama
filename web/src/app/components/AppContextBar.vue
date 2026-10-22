@@ -15,9 +15,6 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import ActivityBell from '@/widgets/activity-bell/ActivityBell.vue'
-
-import type { PlatformActivity } from '@/shared/api/platformActivity.ts'
 import type {
   PlatformContextReady,
   ProjectDirectoryResource,
@@ -28,21 +25,17 @@ import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 
 const props = defineProps<{
-  activities: PlatformActivity[]
   description: string
   projects: PlatformContextReady['projects']
   resources: ProjectDirectoryResource[]
   scope: OperatingScope
   title: string
   resourceRef?: EntityRef
-  /** Whether an activity row leads anywhere; the shell owns that judgement. */
-  activityNavigable: (item: PlatformActivity) => boolean
 }>()
 
 const emit = defineEmits<{
-  'resource': [value: string]
-  'scope': [value: string]
-  'select-activity': [item: PlatformActivity]
+  resource: [value: string]
+  scope: [value: string]
 }>()
 
 const { t } = useI18n()
@@ -119,12 +112,6 @@ const selectedResourceValue = computed(() =>
           @update:model-value="(value) => emit('resource', value)"
         />
       </div>
-      <ActivityBell
-        class="context-activity"
-        :items="activities"
-        :navigable="props.activityNavigable"
-        @select="(item) => emit('select-activity', item)"
-      />
     </div>
   </header>
 </template>
@@ -276,14 +263,10 @@ const selectedResourceValue = computed(() =>
     grid-column: 1;
     min-width: 0;
     max-width: none;
-  }
 
-  .context-activity {
-    grid-area: 1 / 2;
-  }
-
-  :is(.operating-scope, .resource-scope) :deep(.choice-select) {
-    width: 100%;
+    & :deep(.choice-select) {
+      width: 100%;
+    }
   }
 
   .module-title {

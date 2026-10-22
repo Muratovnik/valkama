@@ -26,6 +26,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   link: [value: { kind: string; other: string }]
   open: [reference: string]
+  session: [id: string, family: string]
   unlink: [value: { kind: string; other: string }]
 }>()
 
@@ -158,7 +159,18 @@ function addLink() {
           class="ref-row"
         >
           <span class="ref-kind">{{ t(`reference.${reference.kind}`) }}</span>
-          <span class="ref-value">{{ reference.label || reference.value }}</span>
+          <button
+            v-if="reference.kind === 'session'"
+            type="button"
+            class="ref-value"
+            @click="emit('session', reference.value, '')"
+          >
+            {{ reference.label || reference.value }}</button
+          ><span
+            v-else
+            class="ref-value"
+            >{{ reference.label || reference.value }}</span
+          >
           <span class="ref-meta">{{
             t('workItem.refAttached', {
               author: actorName(reference.author),

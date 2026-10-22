@@ -301,8 +301,6 @@ class ProductModelMigrationTests(unittest.TestCase):
                 "codex-execution",
                 "claude-journal-telemetry",
                 "codex-rollout-telemetry",
-                "codex-skills",
-                "claude-skills",
                 "git-artifacts",
             }
             <= capabilities_by_lineage.keys()
@@ -785,7 +783,23 @@ class NeutralKernelContractTests(unittest.TestCase):
             },
             set(ENTITY_KINDS),
         )
-        self.assertEqual(set(capabilities.CAPABILITY_DEFINITIONS), set(CAPABILITY_IDS))
+        self.assertEqual(
+            {
+                "execution.launch",
+                "execution.resume",
+                "execution.stop",
+                "session.observe",
+                "telemetry.query",
+                "memory.open",
+                "memory.health",
+                "artifact.inspect",
+            },
+            set(capabilities.CAPABILITY_DEFINITIONS),
+        )
+        self.assertEqual(
+            set(capabilities.CAPABILITY_DEFINITIONS) | {"skills.catalog", "skills.activate"},
+            set(CAPABILITY_IDS),
+        )
         assignment = {
             "assignment_id": "telemetry-default",
             "capability_id": "telemetry.query",

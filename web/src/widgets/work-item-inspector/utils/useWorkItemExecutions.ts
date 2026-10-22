@@ -4,15 +4,10 @@ import type { Ref } from 'vue'
 import {
   fetchExecutionCapabilities,
   fetchExecutionHistory,
-  fetchExecutionUsage,
   launchWorkItem,
   stopLaunch,
 } from '@/shared/api/executionApi.ts'
-import type {
-  Execution,
-  ExecutionCapabilities,
-  ExecutionUsage,
-} from '@/shared/api/executionModel.ts'
+import type { Execution, ExecutionCapabilities } from '@/shared/api/executionModel.ts'
 import type { LaunchPacket } from '@/shared/types/launch.ts'
 
 /**
@@ -37,9 +32,6 @@ export function useWorkItemExecutions(
   const error = ref('')
   const loading = ref(false)
   const capabilities = ref<ExecutionCapabilities | null>(null)
-  const usage = ref<ExecutionUsage | null>(null)
-  const usageError = ref('')
-  const usageLoading = ref(false)
   const launchOpen = ref(false)
   const launchError = ref('')
 
@@ -55,41 +47,12 @@ export function useWorkItemExecutions(
       const payload = await fetchExecutionHistory(reference())
       if (mine !== serial) return
       executions.value = payload.executions
-      void readUsage(payload.executions[0]?.execution_id ?? '', mine)
     } catch (error_) {
       if (mine !== serial) return
       executions.value = []
       error.value = error_ instanceof Error ? error_.message : String(error_)
     } finally {
       if (mine === serial) loading.value = false
-    }
-  }
-
-  /**
-   * The newest attempt's cost, read after the history that names it.
-   *
-   * Separate from the history because it opens journal files on disk: the list
-   * of attempts is what the section opens with, and the cost of one of them is
-   * a second question with a second answer.
-   */
-  async function readUsage(executionId: string, generation: number) {
-    if (!executionId) {
-      usage.value = null
-      usageError.value = ''
-      return
-    }
-    usageLoading.value = true
-    usageError.value = ''
-    try {
-      const answer = await fetchExecutionUsage(executionId)
-      if (generation !== serial) return
-      usage.value = answer
-    } catch (error_) {
-      if (generation !== serial) return
-      usage.value = null
-      usageError.value = error_ instanceof Error ? error_.message : String(error_)
-    } finally {
-      if (generation === serial) usageLoading.value = false
     }
   }
 
@@ -142,9 +105,6 @@ export function useWorkItemExecutions(
     capabilities,
     error,
     executions,
-    usage,
-    usageError,
-    usageLoading,
     launchError,
     launchOpen,
     load,

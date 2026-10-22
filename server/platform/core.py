@@ -2038,6 +2038,15 @@ class Platform:
         learning the Planning read model.
         """
 
+        directory_only = "directory_only" in parameters
+        if directory_only:
+            if self._one(parameters, "directory_only") != "true":
+                raise PlatformHttpError(400, "error", "directory_only must be true")
+            if self._one(parameters, "scope_kind") != "global":
+                raise PlatformHttpError(400, "error", "directory_only requires global scope")
+            parameters = {
+                key: values for key, values in parameters.items() if key != "directory_only"
+            }
         scope = self._scope_parameters(parameters, project_extras=("data_scope_id", "space_key"))
         if self.projects_result["status"] != "available":
             return {
@@ -2048,7 +2057,7 @@ class Platform:
         if scope["kind"] == "global":
             projects = [self._planning_project(item) for item in self.projects]
             spaces = []
-            for project in self.projects:
+            for project in () if directory_only else self.projects:
                 binding = project["planning_binding"]
                 if binding is not None:
                     space_ref = planning_space_ref(binding)

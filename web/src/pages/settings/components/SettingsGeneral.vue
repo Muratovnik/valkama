@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type {
@@ -12,7 +12,6 @@ import type {
 import {
   availableOpenerCapabilities,
   MAX_CUSTOM_COMMAND_LENGTH,
-  NOTIFY_EVENTS,
   validateCustomCommand,
 } from '@/shared/lib/settings.ts'
 import { useSettingsStore } from '@/shared/stores/settingsStore.ts'
@@ -21,8 +20,6 @@ import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
 import SelectionControl from '@/shared/ui/SelectionControl.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
-import ToggleSwitch from '@/shared/ui/ToggleSwitch.vue'
-import VButton from '@/shared/ui/VButton.vue'
 import VTextInput from '@/shared/ui/VTextInput.vue'
 
 defineProps<{ locale: string }>()
@@ -31,9 +28,6 @@ const { t } = useI18n()
 const settingsStore = useSettingsStore()
 const { openerCatalog, openerCatalogFallback, openerCatalogLoading, settings } =
   storeToRefs(settingsStore)
-const permission = ref<NotificationPermission>(
-  typeof Notification === 'undefined' ? 'denied' : Notification.permission,
-)
 
 const openerClients: readonly OpenerClient[] = ['claude', 'codex', 'other']
 const openerIcons: Record<OpenerKind, ControlIconName> = {
@@ -101,11 +95,6 @@ function selectOpener(client: OpenerClient, value: string) {
 
 function editCommand(client: OpenerClient, value: string) {
   settings.value.openers[client].command = value
-}
-
-async function askPermission() {
-  if (typeof Notification === 'undefined') return
-  permission.value = await Notification.requestPermission()
 }
 
 onMounted(() => void settingsStore.loadOpenerCatalog())
@@ -213,59 +202,6 @@ onMounted(() => void settingsStore.loadOpenerCatalog())
           compact
         />
       </section>
-
-      <section class="settings-general-group">
-        <header class="settings-general-head">
-          <SectionHeading as="h3">{{ t('settings.notifications') }}</SectionHeading>
-          <p class="settings-general-description">{{ t('settings.notificationsIntro') }}</p>
-        </header>
-        <div class="settings-general-row">
-          <span class="settings-general-identity">
-            <strong class="settings-general-label">{{ t('settings.notifyEnabled') }}</strong>
-            <small class="settings-general-hint">{{ t('settings.notifyEnabledHint') }}</small>
-          </span>
-          <ToggleSwitch
-            v-model="settings.notifyEnabled"
-            class="settings-general-toggle"
-            :label="t('settings.notifyEnabled')"
-            :on-label="t('settings.enabled')"
-            :off-label="t('settings.disabled')"
-          />
-        </div>
-        <div class="settings-general-events">
-          <label
-            v-for="event in NOTIFY_EVENTS"
-            :key="event"
-            class="settings-general-event"
-          >
-            <span>{{ t(`settings.event.${event}`) }}</span>
-            <input
-              v-model="settings.notify[event]"
-              class="settings-general-checkbox"
-              type="checkbox"
-              :disabled="!settings.notifyEnabled"
-            />
-          </label>
-        </div>
-        <div
-          v-if="permission === 'default' && settings.notifyEnabled"
-          class="settings-general-permission"
-        >
-          <p class="settings-general-permission-copy">{{ t('settings.permissionIntro') }}</p>
-          <VButton
-            class="settings-general-permission-action"
-            @click="askPermission"
-          >
-            {{ t('settings.permissionAsk') }}
-          </VButton>
-        </div>
-        <p
-          v-else-if="permission === 'denied' && settings.notifyEnabled"
-          class="settings-general-denied"
-        >
-          {{ t('settings.permissionDenied') }}
-        </p>
-      </section>
     </div>
   </section>
 </template>
@@ -360,80 +296,11 @@ onMounted(() => void settingsStore.loadOpenerCatalog())
   font: var(--font-detail);
 }
 
-.settings-general-toggle {
-  justify-self: start;
-}
-
-.settings-general-events {
-  display: grid;
-}
-
-.settings-general-event {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--size-column-gutter);
-  align-items: center;
-  min-height: var(--size-control-target);
-  padding: var(--space-2) var(--space-4);
-  border-bottom: 1px solid var(--color-rule);
-  font-size: var(--font-size-dense);
-
-  .settings-general-checkbox {
-    justify-self: start;
-    width: 18px;
-    height: 18px;
-    accent-color: var(--color-accent);
-
-    &:disabled {
-      cursor: not-allowed;
-      accent-color: var(--color-text-disabled);
-    }
-  }
-}
-
-.settings-general-permission {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--space-3) var(--space-4);
-
-  .settings-general-permission-copy {
-    max-width: 58ch;
-    margin: 0;
-    color: var(--color-text-muted);
-    font: var(--font-detail);
-  }
-}
-
-.settings-general-denied {
-  padding: var(--space-3) var(--space-4);
-  margin: 0;
-  color: var(--color-danger);
-  font: var(--font-detail);
-}
-
-.settings-general-permission-action {
-  max-width: 100%;
-  padding-block: var(--space-2);
-  white-space: normal;
-}
-
 @container workspace (width <= 696px) {
   .settings-general-row {
     grid-template-columns: 1fr;
     gap: var(--space-3);
     align-items: start;
-  }
-
-  .settings-general-toggle {
-    justify-self: start;
-  }
-
-  .settings-general-event {
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: var(--space-3);
   }
 }
 </style>

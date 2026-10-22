@@ -14,7 +14,6 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import InspectorReserved from '@/widgets/work-item-inspector/components/InspectorReserved.vue'
 import InspectorSummary from '@/widgets/work-item-inspector/components/InspectorSummary.vue'
 import { checklistProgress } from '@/widgets/work-item-inspector/utils/inspectorActivity.ts'
 
@@ -39,6 +38,10 @@ const emit = defineEmits<{
 
 const { t, d } = useI18n()
 
+const blockers = computed(() =>
+  props.item.links.filter((link) => link.kind === 'blocks' && link.direction === 'incoming'),
+)
+const nextStep = computed(() => props.item.checklist.find((step) => !step.done))
 const steps = computed(() => checklistProgress(props.item))
 /** Who holds the item, or the phrase for nobody — never a blank cell. */
 const claimLabel = computed(() =>
@@ -74,6 +77,27 @@ function when(value: string): string {
 
 <template>
   <div class="overview">
+    <section v-if="blockers.length">
+      <SectionHeading
+        as="h3"
+        level="panel"
+        >{{ t('workItem.queue.blocked') }}</SectionHeading
+      >
+      <p
+        v-for="link in blockers"
+        :key="link.reference"
+      >
+        {{ link.reference }} — {{ link.title }}
+      </p>
+    </section>
+    <section v-if="nextStep">
+      <SectionHeading
+        as="h3"
+        level="panel"
+        >{{ t('workItem.summaryNext') }}</SectionHeading
+      >
+      <p>{{ nextStep?.text }}</p>
+    </section>
     <dl class="facts">
       <div class="fact">
         <dt class="fact-term">{{ t('workItem.state') }}</dt>
@@ -218,8 +242,6 @@ function when(value: string): string {
       :writable="writable"
       @summary="(value) => emit('summary', value)"
     />
-
-    <InspectorReserved />
   </div>
 </template>
 

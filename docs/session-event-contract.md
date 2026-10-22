@@ -1,9 +1,15 @@
 ---
-status: adopted
+status: superseded
 card: 200
 ---
 
 # Нормализованное событие сессии (контракт ингеста)
+
+> Historical record. The work-focused product supersedes the standalone
+> Sessions, Analytics, Improvements, and Skills surfaces described here.
+> This document preserves the earlier contract, not current support. See the
+> [product model](product-model.md) and [README](../README.md)
+> for the supported work-item, session-context, and lifecycle boundaries.
 
 Владелец: этот репозиторий (сервер — авторитет контракта); адаптеры клиентов
 живут в других репозиториях и подключаются без изменения ядра. Происхождение —

@@ -80,9 +80,8 @@ class McpSurfaceTestCase(unittest.TestCase):
     def converse(self, *messages: dict | bytes) -> list[dict]:
         """Drive the loop over these messages and read back what it wrote.
 
-        The tray and the improvements runtime are replaced: one competes for a
-        machine-wide mutex and the other starts a thread, and neither has
-        anything to do with what a request is answered with.
+        The tray is replaced because its machine-wide mutex is unrelated to
+        the response contract exercised here.
         """
         lines = [
             message if isinstance(message, bytes) else json.dumps(message).encode("utf-8")
@@ -93,7 +92,6 @@ class McpSurfaceTestCase(unittest.TestCase):
             mock.patch.object(sys, "stdin", Stdin(b"\n".join(lines) + b"\n")),
             mock.patch.object(sys, "stdout", stdout),
             mock.patch.object(tray, "start", return_value=None),
-            mock.patch.object(mcp_surface.watchers, "IMPROVEMENTS_RUNTIME"),
         ):
             mcp_surface.mcp_main()
         written = stdout.buffer.getvalue().decode("utf-8")
@@ -104,71 +102,29 @@ class McpSurfaceTestCase(unittest.TestCase):
         platform.module_state_command(
             {"module_id": "planning", "state": "disabled", "expected_revision": 1}
         )
-        platform.module_state_command(
-            {"module_id": "improvements", "state": "disabled", "expected_revision": 1}
-        )
-        for tool, arguments in (
-            ("list_planning_spaces", {}),
-            ("get_improvements_profile", {"scope": "personal"}),
-        ):
-            with self.subTest(tool=tool), self.assertRaises(platform_core.PlatformHttpError):
-                mcp_surface.call_tool(self.conn, tool, arguments)
+        with self.assertRaises(platform_core.PlatformHttpError):
+            mcp_surface.call_tool(self.conn, "list_planning_spaces", {})
+        with self.assertRaisesRegex(ValueError, "unknown tool"):
+            mcp_surface.call_tool(self.conn, "get_improvements_profile", {})
 
-    def test_stdio_eof_stops_joins_and_closes_owned_runtime(self) -> None:
-        runtime = mock.Mock()
+    def test_stdio_eof_closes_the_owned_connection(self) -> None:
         connection = mock.Mock()
-        thread = mock.Mock()
-
-        def start() -> None:
-            thread._target(*thread._args)
-
-        thread.start.side_effect = start
-
-        def make_thread(*, target, args, daemon):
-            self.assertTrue(daemon)
-            thread._target = target
-            thread._args = args
-            return thread
-
         with (
             mock.patch.object(sys, "stdin", Stdin(b"")),
             mock.patch.object(mcp_surface, "connect", return_value=connection),
             mock.patch.object(tray, "start", return_value=None),
-            mock.patch.object(mcp_surface.watchers, "IMPROVEMENTS_RUNTIME", runtime),
-            mock.patch.object(mcp_surface.threading, "Thread", side_effect=make_thread),
         ):
             mcp_surface.mcp_main()
-
-        runtime.run.assert_called_once_with(mcp_surface.db_path())
-        runtime.stop.assert_called_once_with()
-        thread.join.assert_called_once_with(timeout=2)
         connection.close.assert_called_once_with()
 
-    def test_stdio_exception_still_tears_down_owned_runtime(self) -> None:
-        class BrokenBuffer:
-            def __iter__(self):
-                return self
-
-            def __next__(self):
-                raise RuntimeError("stdin failed")
-
-        runtime = mock.Mock()
+    def test_stdio_exception_still_closes_the_owned_connection(self) -> None:
         connection = mock.Mock()
-        thread = mock.Mock()
-        thread.start.side_effect = lambda: None
-        broken_stdin = mock.Mock(buffer=BrokenBuffer())
         with (
-            mock.patch.object(sys, "stdin", broken_stdin),
             mock.patch.object(mcp_surface, "connect", return_value=connection),
-            mock.patch.object(tray, "start", return_value=None),
-            mock.patch.object(mcp_surface.watchers, "IMPROVEMENTS_RUNTIME", runtime),
-            mock.patch.object(mcp_surface.threading, "Thread", return_value=thread),
+            mock.patch.object(mcp_surface, "_mcp_loop", side_effect=RuntimeError("stdin failed")),
             self.assertRaisesRegex(RuntimeError, "stdin failed"),
         ):
             mcp_surface.mcp_main()
-
-        runtime.stop.assert_called_once_with()
-        thread.join.assert_called_once_with(timeout=2)
         connection.close.assert_called_once_with()
 
 

@@ -1,1 +1,0 @@
-"""Skills inventory and activation."""

@@ -19,7 +19,6 @@ import InspectorExecution from '@/widgets/work-item-inspector/components/Inspect
 import InspectorMemory from '@/widgets/work-item-inspector/components/InspectorMemory.vue'
 import InspectorOverview from '@/widgets/work-item-inspector/components/InspectorOverview.vue'
 import InspectorRelations from '@/widgets/work-item-inspector/components/InspectorRelations.vue'
-import InspectorUsage from '@/widgets/work-item-inspector/components/InspectorUsage.vue'
 import KernelRelationsPanel from '@/widgets/work-item-inspector/components/KernelRelationsPanel.vue'
 import { useWorkItemExecutions } from '@/widgets/work-item-inspector/utils/useWorkItemExecutions.ts'
 import { useWorkItemResource } from '@/widgets/work-item-inspector/utils/useWorkItemResource.ts'
@@ -90,7 +89,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-type Section = 'activity' | 'execution' | 'memory' | 'overview' | 'relations' | 'usage'
+type Section = 'activity' | 'execution' | 'memory' | 'overview' | 'relations'
 
 const error = ref('')
 const busy = ref(false)
@@ -132,9 +131,6 @@ const {
   load: loadExecutions,
   loading: executionsLoading,
   openLaunch,
-  usage,
-  usageError,
-  usageLoading,
   start: startLaunch,
   stop: stopExecution,
 } = useWorkItemExecutions(
@@ -164,7 +160,7 @@ watch(
     void load()
     // Execution endpoints name primary-store items by reference only.
     if (props.writable) void loadExecutions()
-    else if (section.value === 'execution' || section.value === 'usage') section.value = 'overview'
+    else if (section.value === 'execution') section.value = 'overview'
   },
   { immediate: true },
 )
@@ -192,10 +188,7 @@ async function write(operation: () => Promise<unknown>) {
 const sections = computed<ChoiceOption[]>(() => [
   { value: 'overview' as const, label: t('workItem.overview') },
   ...(props.writable
-    ? [
-        { value: 'execution' as const, label: t('workItem.section.execution') },
-        { value: 'usage' as const, label: t('workItem.section.usage') },
-      ]
+    ? [{ value: 'execution' as const, label: t('workItem.section.execution') }]
     : []),
   { value: 'memory' as const, label: t('workItem.section.memory') },
   { value: 'relations' as const, label: t('workItem.relations') },
@@ -406,6 +399,7 @@ function unlink(value: { kind: string; other: string }) {
                 :writable="writable && !busy"
                 @link="link"
                 @unlink="unlink"
+                @session="(id, family) => emit('session', id, family)"
                 @open="(target) => emit('open', target)"
               />
               <KernelRelationsPanel
@@ -429,12 +423,6 @@ function unlink(value: { kind: string; other: string }) {
               @launch="openLaunch"
               @stop="stopExecution"
               @session="(id, family) => emit('session', id, family)"
-            />
-            <InspectorUsage
-              v-else-if="section === 'usage'"
-              :error="usageError"
-              :loading="usageLoading"
-              :usage="usage"
             />
             <InspectorMemory
               v-else-if="section === 'memory'"

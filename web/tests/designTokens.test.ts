@@ -4,8 +4,6 @@ import { fileURLToPath } from 'node:url'
 
 import { test } from 'vitest'
 
-import { CHART_FONT_FAMILY } from '@/widgets/analytics-dashboard/utils/chartOptions.ts'
-
 // @ts-expect-error - the generator is a plain script, and the tokens it reads
 // are the same ones this file asserts relationships about.
 import { readTokens } from '../scripts/sync-tokens.mjs'
@@ -278,11 +276,4 @@ test('destructive actions use an action role instead of an operational status ro
   assert.ok(dangerVariant, 'VButton no longer declares its destructive action variant')
   assert.match(dangerVariant[1], /color:\s*var\(--color-action-danger\);/)
   assert.doesNotMatch(dangerVariant[1], /var\(--color-danger\)/)
-})
-
-test('a chart names a family canvas can actually read', () => {
-  // Equality with `--font-family-interface` belongs to the generator. What stays here is
-  // the reason the mirror exists at all: `var(--font-family-interface)` reached this
-  // constant for a long time and never resolved, because canvas has no cascade.
-  assert.ok(!CHART_FONT_FAMILY.includes('var('))
 })

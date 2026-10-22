@@ -8,11 +8,11 @@ questions about the store and knows nothing about who asked:
     executions/     one attempt at a work item: its lifecycle and the drivers
                     that know how each agent client is invoked
     runner.py       process shape for a launched client, and stopping it
-    sessions.py     agent session ingest, the monitor read model, retention
+    sessions.py     essential lifecycle ingestion and exact work association
     federation.py   spaces and search across attached databases
     refs.py         resolving a work item ref into what it points at
     documents.py    repository documents, for search and for evidence
-    analytics/      flow, agent usage and work-item-age read models
+    telemetry/      execution usage from bounded read-only client journals
     git_worktrees.py  the worktree preflight a launch has to pass
     processes.py    decoded subprocess text and stopping a process tree
     http_security.py  the loopback write guard: host, origin, token, body size
@@ -21,10 +21,7 @@ questions about the store and knows nothing about who asked:
     watchers.py     change fan-out, shared by every surface
     platform/       the kernel: contracts, registry, relations, scope,
                     providers and the module manifest
-    improvements/   the improvements store, its integration with Planning,
-                    job supervision, evaluation and the evaluation worker
     projects/       project and scope registries
-    skills/         skills inventory and activation
 
 And below it the three surfaces, which own no domain rule of their own:
 

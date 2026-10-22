@@ -12,11 +12,10 @@
 # `log_message` is BaseHTTPRequestHandler's logging hook, `do_PUT` is dispatched
 # by method name, and `row_factory` is read by sqlite3 on every fetch.
 _.log_message  # unused method (server\http_surface.py)
+_.do_POST  # unused method (server\http_surface.py)
 _.do_PUT  # unused method (server\http_surface.py)
 _.do_OPTIONS  # unused method (server\http_surface.py)
 _.close_connection  # unused attribute (server\http_surface.py)
-_.row_factory  # unused attribute (server\improvements\improvements.py)
-_.row_factory  # unused attribute (server\improvements\improvements_integration.py)
 _.row_factory  # unused attribute (server\projects\scopes.py)
 _.row_factory  # unused attribute (server\store.py)
 _.row_factory  # unused attribute (tests\test_platform_black_box.py)
@@ -40,6 +39,7 @@ _.a_revision_never_goes_backwards  # unused method (tests\test_board_properties.
 # redirect means overriding it to return None, which reads as dead code from
 # outside and is the only way to say no.
 _.redirect_request  # unused method (server\platform	ransports.py)
+_.msg  # unused variable (server\platform\transports.py)
 _.req  # unused variable (server\platform	ransports.py)
 _.fp  # unused variable (server\platform	ransports.py)
 _.newurl  # unused variable (server\platform	ransports.py)

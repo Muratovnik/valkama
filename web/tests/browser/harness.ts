@@ -3,9 +3,6 @@ import { createApp, defineComponent, h, ref } from 'vue'
 
 import AppContextBar from '@/app/components/AppContextBar.vue'
 
-import SessionsView from '@/pages/sessions/SessionsView.vue'
-
-import AnalyticsDashboard from '@/widgets/analytics-dashboard/components/AnalyticsDashboard.vue'
 import AppNav from '@/widgets/app-nav/components/AppNav.vue'
 import WorkItemInspector from '@/widgets/work-item-inspector/components/WorkItemInspector.vue'
 import WorkItemTile from '@/widgets/work-item-views/components/WorkItemTile.vue'
@@ -14,58 +11,25 @@ import type { PlanningWorkflow, WorkItemBrief } from '@/shared/api/planningModel
 import type { ModuleId } from '@/shared/api/platformModuleContract.ts'
 import { OFFLINE_MODULE_FALLBACK } from '@/shared/api/platformModules.ts'
 import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
-import { uiReady } from '@/shared/api/platformUiState.ts'
 import { i18n } from '@/shared/i18n/index.ts'
-import type { AgentSession } from '@/shared/types/session.ts'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
 import InspectorFrame from '@/shared/ui/InspectorFrame.vue'
 import OverlayHost from '@/shared/ui/OverlayHost.vue'
 import SelectionControl from '@/shared/ui/SelectionControl.vue'
 import '@/app/styles/index.css'
 
-import { analyticsPayload } from './analyticsFixtures.ts'
+import { now } from './planningFixtures.ts'
 
 import './harness.css'
 
-/** The two fixture rows whose status is not the default, by their index. */
-const FIXTURE_STATUS_BY_INDEX: Record<number, string> = { 2: 'failed', 5: 'ended' }
-
-const now = new Date().toISOString()
-const modules = structuredClone(OFFLINE_MODULE_FALLBACK)
+const modules = structuredClone(OFFLINE_MODULE_FALLBACK).filter((module) =>
+  ['planning', 'settings'].includes(module.module_id),
+)
 const sessionSpaceRef = {
   data_scope_id: '00000000-0000-4000-8000-000000000700',
   space_key: 'MAIN',
 }
 const sessionResourceRef = planningSpaceEntity(sessionSpaceRef)
-/** Which session the harness has open, standing in for the route entity. */
-const openSession = ref<string | null>(null)
-const sessions: AgentSession[] = Array.from({ length: 6 }, (_, index) => ({
-  id: `session-${index}`,
-  client: index % 2 ? 'claude' : 'codex',
-  client_family: index % 2 ? 'claude' : 'codex',
-  adapter_id: index % 2 ? 'claude-sessions' : 'codex-sessions',
-  cwd: 'C:/workspace/example-project',
-  label:
-    index === 0
-      ? 'Длинное название рабочей сессии для проверки переполнения'
-      : `example-project-${index}`,
-  work_item: `MAIN-${index + 200}`,
-  status: FIXTURE_STATUS_BY_INDEX[index] ?? 'active',
-  attention: index < 4 ? 'waiting' : '',
-  attention_seen: index === 5,
-  started_at: now,
-  last_seen: now,
-  ended_at: index === 5 ? now : null,
-  quiet_seconds: 840,
-  current_step: index === 0 ? 'Проверяет длинный статус без наложения текста' : '',
-  space_root: {
-    canonical_root: 'C:/workspace/example-project',
-    reason: '',
-    resource_ref: sessionResourceRef,
-    status: 'mapped',
-  },
-  scope: 'example-project',
-}))
 const contextResources = [
   { resource_ref: sessionResourceRef, state: 'mapped' as const },
   {
@@ -142,10 +106,9 @@ function inspectorBody(openCommand: () => void) {
 const Harness = defineComponent({
   setup() {
     const requestedSurface = new URLSearchParams(location.search).get('surface')
-    const analyticsHarness = requestedSurface === 'analytics'
     const contextHarness = requestedSurface === 'context-bar'
     const itemHarness = requestedSurface === 'work-item'
-    const active = ref<ModuleId>('sessions')
+    const active = ref<ModuleId>('planning')
     const surfaceInspector = ref(false)
     const surfaceDialog = ref(false)
     const openSurfaceDialog = () => {
@@ -157,14 +120,12 @@ const Harness = defineComponent({
         h('main', { class: 'harness-shell' }, [
           h(AppNav, {
             modules,
+            badges: { planning: 2 },
             active: active.value,
-            badges: { sessions: 18 },
             connection: 'live',
           }),
           h('div', { class: 'app-main context-harness-main' }, [
             h(AppContextBar, {
-              activities: [],
-              activityNavigable: () => false,
               description:
                 'Follow live agents and intervene when work requires a careful operator response.',
               projects: contextProjects,
@@ -183,8 +144,8 @@ const Harness = defineComponent({
       h('main', { class: 'harness-shell' }, [
         h(AppNav, {
           modules,
+          badges: { planning: 2 },
           active: active.value,
-          badges: { sessions: 18 },
           connection: 'live',
           onNavigate: (module: ModuleId) => {
             active.value = module
@@ -202,26 +163,6 @@ const Harness = defineComponent({
             },
             'Открыть тестовую панель',
           ),
-          analyticsHarness || active.value === 'analytics'
-            ? h(AnalyticsDashboard, {
-                open: true,
-                payload: analyticsPayload,
-                state: uiReady(true),
-              })
-            : h(SessionsView, {
-                state: uiReady({ inbox: [], sessions }),
-                selected: openSession.value,
-                revisions: Object.fromEntries(
-                  sessions.map((session) => [session.id, session.last_seen]),
-                ),
-                // The harness plays the stage here: the open session lives in
-                // the route, and this is the route it has.
-                // Only the id is needed here; naming the whole session type in a
-                // callback position is what the type-aware pass cannot resolve.
-                onSelect: (session: { id: string } | null) => {
-                  openSession.value = session?.id ?? null
-                },
-              }),
           h('ul', { class: 'harness-card-list' }, [
             h('li', {}, [h(WorkItemTile, { item: testItem, blocked: false, ready: false })]),
           ]),

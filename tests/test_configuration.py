@@ -10,8 +10,8 @@ from pathlib import Path
 from unittest import mock
 
 from server import documents, store
-from server.analytics import journal
 from server.ops import configuration
+from server.telemetry import journal
 
 
 class ConfigurationFileTests(unittest.TestCase):

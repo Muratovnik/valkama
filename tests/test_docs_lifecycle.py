@@ -182,16 +182,18 @@ class ProductModelDocsTests(unittest.TestCase):
     def test_current_product_copy_is_not_board_first(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         introduction = readme.split("## What it does", 1)[0].lower()
-        self.assertIn("modular control surface", introduction)
+        self.assertIn(
+            "planning, executing, and reviewing agent work", " ".join(introduction.split())
+        )
         self.assertIn("planning", introduction)
         self.assertNotIn("kanban board", introduction)
         self.assertNotIn("board attached", introduction)
 
         changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-        added = changelog.split("### Added", 1)[1]
-        first_bullet = next(line for line in added.splitlines() if line.startswith("- **"))
-        self.assertIn("modular control surface", first_bullet.lower())
-        self.assertNotIn("kanban board", first_bullet.lower())
+        unreleased = changelog.split("## [Unreleased]", 1)[1].split("## [", 1)[0]
+        self.assertIn("Navigation contains Work and Settings", unreleased)
+        self.assertIn("Planning read model", unreleased)
+        self.assertIn("exact session context", unreleased)
 
     def test_current_public_contracts_do_not_publish_obsolete_product_names(self) -> None:
         current_contracts = (

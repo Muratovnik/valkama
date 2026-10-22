@@ -7,7 +7,6 @@
   launcher ...             install, inspect and supervise the stable service command
   runtime                  canonical backend/static identity for this checkout
   summary [--space KEY]    short planning-space report for session hooks
-  purge-stream             drop purgeable stream session events (analytics stay)
   scopes | attach | detach attachable database files, federated at read time
   migrate planning-model   one-way Board -> Planning conversion, once, on request
                            (--dry-run converts a copy and reports)
@@ -30,7 +29,6 @@ from pathlib import Path
 from typing import Any
 
 from . import documents, launcher, static_assets, store
-from .analytics import journal
 from .federation import federated_spaces
 from .http_surface import serve_main
 from .mcp_surface import LEGACY_PROTOCOLS, MODERN_PROTOCOL, catalogue, mcp_main
@@ -42,9 +40,9 @@ from .platform import installed
 from .platform import scope as platform_scope
 from .platform.contracts import planning_space_entity
 from .projects import registry_owner, scopes
-from .sessions import purge_stream_events
 from .static_assets import DIST_DIR, SOURCE_ROOT
 from .store import connect, data_root, db_path
+from .telemetry import journal
 
 # --- session-probe summary and routa import ---------------------------------
 
@@ -188,7 +186,6 @@ def capabilities_main() -> None:
             "scopes",
             "attach",
             "detach",
-            "purge-stream",
         ],
     }
     print(static_assets.canonical_json(payload))
@@ -517,21 +514,6 @@ def main(argv: list[str] | None = None) -> None:
         "detach", help="remove a scope from every view; the file is untouched"
     )
     detach_cmd.add_argument("name")
-    purge_cmd = commands.add_parser(
-        "purge-stream",
-        help="delete purgeable stream session events; analytics rows stay",
-    )
-    purge_cmd.add_argument("--session", default=None)
-    purge_cmd.add_argument(
-        "--include-active",
-        action="store_true",
-        help="also purge live sessions' stream tails (default: ended only)",
-    )
-    purge_cmd.add_argument(
-        "--retention",
-        action="store_true",
-        help="apply this scope's configured stream_retention_days instead of purging all",
-    )
     doctor_cmd = commands.add_parser(
         "doctor",
         help="check this installation and say what to do about each problem",
@@ -639,11 +621,7 @@ def main(argv: list[str] | None = None) -> None:
         conn = connect()
         try:
             sections = tuple(options.section or export.SECTIONS)
-            print(
-                export.render(
-                    export.export_installation(conn, sections=sections, db_path=db_path())
-                )
-            )
+            print(export.render(export.export_installation(conn, sections=sections)))
         finally:
             conn.close()
     elif options.command == "setup":
@@ -712,12 +690,6 @@ def main(argv: list[str] | None = None) -> None:
     elif options.command == "detach":
         remaining = scopes.detach(db_path(), options.name)
         print(json.dumps([item["name"] for item in remaining]))
-    elif options.command == "purge-stream":
-        conn = connect()
-        days = None
-        if options.retention:
-            days = scopes.find(db_path(), scopes.PRIMARY_SCOPE)["stream_retention_days"]
-        print(json.dumps(purge_stream_events(conn, options.session, options.include_active, days)))
     else:
         mcp_main()
 

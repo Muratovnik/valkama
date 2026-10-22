@@ -68,7 +68,7 @@ Every tool carries a `title`, a description, a JSON Schema, and MCP behaviour
 
 | Set | `readOnlyHint` | `destructiveHint` | `idempotentHint` | Tools |
 | --- | --- | --- | --- | --- |
-| read-only | `true` | — | `true` | the nine reading tools: `list_planning_spaces`, `get_planning_space`, `get_work_item`, `list_work_items`, `search_work_items`, `list_platform_modules`, `list_improvement_cases`, `get_improvement_case`, `get_improvements_profile` |
+| read-only | `true` | — | `true` | the reading tools: `list_planning_spaces`, `get_planning_space`, `get_work_item`, `list_work_items`, `search_work_items`, `list_platform_modules` |
 | writing | `false` | `false` | — | everything else |
 | destructive | `false` | `true` | — | `delete_work_item` |
 
@@ -119,9 +119,8 @@ Drift is one-way. A process cannot become current again.
 `store.STORE_SCHEMA_VERSION` covers the opposite case: a checkout moved back, an
 installed copy left behind.
 
-The generation lives in `PRAGMA user_version` — the improvements database keeps
-its own, in its own file — and is read before the first write of any kind,
-including the schema script. A store written by a newer build raises
+The generation lives in `PRAGMA user_version` and is read before the first
+write of any kind, including the schema script. A store written by a newer build raises
 `StoreTooNew` and is not touched.
 
 Raise the number in the same commit that changes what an existing row *means*.

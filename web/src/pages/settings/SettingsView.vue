@@ -49,6 +49,7 @@ function selectSection(section: SettingsSection) {
   >
     <header class="settings-page-head">
       <SegmentedControl
+        class="settings-page-sections"
         :model-value="activeSection"
         :options="sectionOptions"
         :label="t('settings.sectionLabel')"
@@ -82,6 +83,7 @@ function selectSection(section: SettingsSection) {
 <style scoped>
 .settings-page {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-5);
   width: 100%;
   min-width: 0;
@@ -102,6 +104,12 @@ function selectSection(section: SettingsSection) {
     color: var(--color-text-muted);
     font: var(--font-note);
   }
+}
+
+.settings-page-sections {
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .settings-system {

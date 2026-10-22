@@ -21,7 +21,6 @@ class FakeProcess:
     def __init__(self, code: int | None = None, stdout: bytes | None = None) -> None:
         self.pid = 4242
         self._code = code
-        self.terminated = False
         self.killed = False
         self.stderr = None
         self.stdout = io.BytesIO(stdout) if stdout is not None else None
@@ -30,7 +29,6 @@ class FakeProcess:
         return self._code
 
     def terminate(self) -> None:
-        self.terminated = True
         self._code = -15
 
     def kill(self) -> None:

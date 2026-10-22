@@ -9,7 +9,7 @@ export const NOTIFY_EVENTS = [
   'agentWaiting',
 ] as const
 
-export type NotifyEvent = (typeof NOTIFY_EVENTS)[number]
+type NotifyEvent = (typeof NOTIFY_EVENTS)[number]
 
 const OPENER_KINDS = ['vscode', 'codex-app', 'terminal', 'cursor', 'custom'] as const
 export type OpenerKind = (typeof OPENER_KINDS)[number]

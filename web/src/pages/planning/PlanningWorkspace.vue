@@ -8,13 +8,14 @@
  * and the links arrive once and each view projects what it needs. That is why a
  * state renamed in the workflow renames a column, a row and a node together.
  */
-import { computed, defineAsyncComponent } from 'vue'
+import { computed, defineAsyncComponent, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import WorkItemBoard from '@/widgets/work-item-views/components/WorkItemBoard.vue'
 import WorkItemList from '@/widgets/work-item-views/components/WorkItemList.vue'
 
-import type { PlanningReadModel } from '@/shared/api/planningModel.ts'
+import { inWorkQueue } from '@/shared/api/planningModel.ts'
+import type { PlanningReadModel, WorkQueue } from '@/shared/api/planningModel.ts'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
@@ -43,6 +44,15 @@ const WorkItemGraph = defineAsyncComponent(
 export type PlanningViewMode = 'graph' | 'kanban' | 'list'
 
 const { t } = useI18n()
+
+const queue = ref<WorkQueue>('all')
+const queues: WorkQueue[] = ['all', 'ready', 'assigned', 'blocked', 'review']
+const queueOptions = computed(() =>
+  queues.map((value) => ({ value, label: t(`workItem.queue.${value}`) })),
+)
+const visibleItems = computed(() =>
+  props.model.work_items.filter((item) => inWorkQueue(item, queue.value)),
+)
 
 const VIEW_MODES: readonly PlanningViewMode[] = ['kanban', 'list', 'graph']
 
@@ -80,6 +90,12 @@ const counts = computed(() => {
         :label="t('workItem.viewLabel')"
         @update:model-value="(mode) => emit('view', mode)"
       />
+      <SegmentedControl
+        v-model="queue"
+        class="workspace-queue"
+        :options="queueOptions"
+        :label="t('workItem.queueLabel')"
+      />
       <span
         class="workspace-counts"
         :aria-busy="countsBusy"
@@ -110,14 +126,14 @@ const counts = computed(() => {
       <WorkItemBoard
         v-if="view === 'kanban' && model.workflow"
         :workflow="model.workflow"
-        :items="model.work_items"
+        :items="visibleItems"
         :links="model.links"
         @open="(reference) => emit('open', reference)"
         @transition="(reference, stateKey) => emit('transition', reference, stateKey)"
       />
       <WorkItemList
         v-else-if="view === 'list'"
-        :items="model.work_items"
+        :items="visibleItems"
         :links="model.links"
         @open="(reference) => emit('open', reference)"
       />
@@ -125,7 +141,7 @@ const counts = computed(() => {
         v-else-if="view === 'graph'"
         scope-kind="all"
         :space="model.planning_space?.planning_space_id ?? ''"
-        :items="model.work_items"
+        :items="visibleItems"
         :edges="model.links"
         :epic-id="null"
         :open="true"
@@ -154,6 +170,7 @@ const counts = computed(() => {
    starts, and the one primary action on the right. */
 .workspace-head {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-3);
   align-items: center;
   min-width: 0;
@@ -161,6 +178,12 @@ const counts = computed(() => {
   & > :last-child {
     margin-inline-start: auto;
   }
+}
+
+.workspace-queue {
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .workspace-counts {

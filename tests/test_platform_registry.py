@@ -212,8 +212,6 @@ class RegistryTests(unittest.TestCase):
             "execution.stop": ("write", "execution"),
             "session.observe": ("read", "session"),
             "telemetry.query": ("read", "telemetry"),
-            "skills.catalog": ("read", "skill"),
-            "skills.activate": ("write", "skill"),
             "memory.open": ("read", "memory-resource"),
             "memory.health": ("read", "health"),
         }

@@ -15,7 +15,6 @@ import type { Page } from '@playwright/test'
 import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 
 import { moduleRegistrations } from '../support/moduleRegistrations.ts'
-import { portfolioPayload } from './analyticsFixtures.ts'
 import type { AssignmentSelectionInput } from './assignmentFixture.ts'
 import { applyAssignmentSelection } from './assignmentFixture.ts'
 import { installBrowserDoubles } from './browserDoubles.ts'
@@ -25,6 +24,7 @@ import {
   executionHistory,
   executionUsage,
   monitorSessions,
+  sessionContextFor,
 } from './executionFixtures.ts'
 import { memoryLinks, memoryProviders, memorySearch } from './memoryFixtures.ts'
 import {
@@ -33,7 +33,6 @@ import {
   attachedWorkItemRef,
   blockedFullWorkItem,
   blockedWorkItem,
-  dashboardPayload,
   dataScopeId,
   existingRelation,
   globalScope,
@@ -191,8 +190,6 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
       }
 
       const routes: Record<string, () => Promise<void> | void> = {
-        '/api/dashboard': () => fulfill(structuredClone(dashboardPayload)),
-        '/api/dashboard/portfolio': () => fulfill(structuredClone(portfolioPayload)),
         '/api/modules': () =>
           fulfill({
             interface_version: 'valkama-modules',
@@ -207,10 +204,7 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
         '/api/planning/activity': () =>
           fulfill({ interface_version: 'valkama-planning-api', activity: activityRows() }),
         '/api/sessions': () => fulfill({ sessions: structuredClone(monitorSessions), inbox: [] }),
-        '/api/session': () => fulfill({ session: url.searchParams.get('id'), events: [] }),
-        // The execution half of the inspector. Answered by the fixture rather
-        // than left to 404 because a section that fails to load looks the same
-        // as a section with nothing in it, and only one of those is a defect.
+        '/api/session': () => fulfill(sessionContextFor(url.searchParams.get('id'))),
         '/api/execution/capabilities': () => fulfill(structuredClone(executionCapabilities)),
         '/api/execution/usage': () => fulfill(structuredClone(executionUsage)),
         '/api/memory/search': () => fulfill(structuredClone(memorySearch)),
@@ -313,6 +307,9 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
             }
             exactSpaceRef = requestedScopeId === attachedDataScopeId ? attachedSpaceRef : spaceRef
           }
+          const payload = planningReadyFor(exactSpaceRef, options.includeUnboundPlanningProject)
+          if (scope.kind === 'global' && url.searchParams.get('directory_only') === 'true')
+            payload.planning_spaces = []
           platformReads.push(`${path}?${url.searchParams.toString()}`)
           return fulfill({
             interface_version: 'valkama-planning',
@@ -320,7 +317,7 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
             state: {
               interface_version: 'valkama-ui-state',
               status: 'ready',
-              payload: planningReadyFor(exactSpaceRef, options.includeUnboundPlanningProject),
+              payload,
             },
           })
         },

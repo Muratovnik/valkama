@@ -13,7 +13,6 @@ import unittest
 from unittest import mock
 
 from server import mcp_surface, store, watchers
-from server.improvements import improvements_integration
 from server.planning import service as planning_service
 from server.platform import core as platform_core
 from server.platform import migrations as platform_migrations
@@ -22,27 +21,15 @@ from server.platform.contracts import planning_space_entity
 from server.platform.scope import read_store_metadata
 from tests import board_era
 from tests.registry_fixtures import project_binding, project_entry, registry_bytes
+from tests.retired_modules import FORMER_MODULES
 
 _EXPECTED_SECONDARY_CONTEXTS = {
     "planning": {
         "global": ["project", "planning-space"],
         "project": ["planning-space", "work-item"],
     },
-    "sessions": {"global": ["execution", "session"], "project": []},
-    "analytics": {
-        "global": [],
-        "project": ["planning-space", "work-item", "artifact"],
-    },
-    "improvements": {"global": ["work-item", "improvement-case"], "project": []},
-    "skills": {"global": ["skill"], "project": ["skill"]},
-    "memory": {
-        "global": ["memory-resource"],
-        "project": ["memory-resource", "work-item"],
-    },
-    "settings": {
-        "global": ["connection", "registry"],
-        "project": ["connection", "registry"],
-    },
+    "memory": {"global": ["memory-resource"], "project": ["memory-resource", "work-item"]},
+    "settings": {"global": ["connection", "registry"], "project": ["connection", "registry"]},
 }
 
 
@@ -83,9 +70,7 @@ def _released_schema2_planning_manifest() -> dict:
 def _released_schema2_skills_manifest() -> dict:
     """The exact Skills manifest persisted by the released schema-2 store."""
 
-    manifest = next(
-        item for item in platform_modules.module_manifests() if item["module_id"] == "skills"
-    )
+    manifest = next(item for item in FORMER_MODULES.values() if item["module_id"] == "skills")
     manifest["state_schema"]["allowed_keys"] = ["query", "source_scope", "activation"]
     manifest["secondary_context"] = {
         "global": {"kinds": ["project", "board"], "behavior": "all"},
@@ -195,21 +180,11 @@ class ModuleRegistryTests(unittest.TestCase):
             self.assertEqual(values["supported_entity_kinds"], manifest["supported_entity_kinds"])
             self.assertEqual(values["feature_capabilities"], manifest["feature_capabilities"])
 
-    def test_skills_route_state_is_the_canonical_search_filter_and_view(self) -> None:
-        manifest = next(
-            item for item in platform_modules.module_manifests() if item["module_id"] == "skills"
-        )
-        self.assertEqual(["query", "status", "view"], manifest["state_schema"]["allowed_keys"])
-
     def test_first_install_defaults_and_response_are_persisted_rows(self) -> None:
         registrations = self.registrations()
         self.assertEqual(
             {
                 "planning",
-                "sessions",
-                "analytics",
-                "improvements",
-                "skills",
                 "memory",
                 "settings",
             },
@@ -220,18 +195,18 @@ class ModuleRegistryTests(unittest.TestCase):
         self.assertTrue(registrations["planning"]["mutable"])
 
         row = self.conn.execute(
-            "SELECT record_json FROM platform_modules WHERE module_id='analytics'"
+            "SELECT record_json FROM platform_modules WHERE module_id='memory'"
         ).fetchone()
         manifest = json.loads(row[0])
-        manifest["title_key"] = "platform.modules.analytics-persisted"
+        manifest["title_key"] = "platform.modules.memory-persisted"
         self.conn.execute(
-            "UPDATE platform_modules SET record_json=? WHERE module_id='analytics'",
+            "UPDATE platform_modules SET record_json=? WHERE module_id='memory'",
             (json.dumps(manifest, sort_keys=True),),
         )
         self.conn.commit()
         self.assertEqual(
-            "platform.modules.analytics-persisted",
-            self.registrations()["analytics"]["manifest"]["title_key"],
+            "platform.modules.memory-persisted",
+            self.registrations()["memory"]["manifest"]["title_key"],
         )
 
     def test_settings_immutability_optimistic_revision_and_restart_persistence(self) -> None:
@@ -293,19 +268,17 @@ class ModuleRegistryTests(unittest.TestCase):
         )
 
     def test_deleted_runtime_rows_remain_absent_and_are_not_reseeded(self) -> None:
-        self.conn.execute("DELETE FROM platform_modules WHERE module_id='analytics'")
+        self.conn.execute("DELETE FROM platform_modules WHERE module_id='memory'")
         self.conn.commit()
-        self.assertNotIn("analytics", self.registrations())
+        self.assertNotIn("memory", self.registrations())
         self.conn.close()
         self.conn = store.connect()
         self.assertIsNone(
-            self.conn.execute(
-                "SELECT 1 FROM platform_modules WHERE module_id='analytics'"
-            ).fetchone()
+            self.conn.execute("SELECT 1 FROM platform_modules WHERE module_id='memory'").fetchone()
         )
         with self.assertRaises(platform_core.PlatformHttpError):
             self.platform().module_state_command(
-                {"module_id": "analytics", "state": "enabled", "expected_revision": 1}
+                {"module_id": "memory", "state": "enabled", "expected_revision": 1}
             )
 
     def test_a_module_added_after_an_installation_exists_appears_on_the_next_open(self) -> None:
@@ -395,9 +368,7 @@ class ModuleRegistryTests(unittest.TestCase):
         audit_before = self.conn.execute(
             "SELECT COUNT(*) FROM platform_registry_audit WHERE entity_kind='module'"
         ).fetchone()[0]
-        self.conn.execute(
-            "UPDATE platform_modules SET record_json='{}' WHERE module_id='analytics'"
-        )
+        self.conn.execute("UPDATE platform_modules SET record_json='{}' WHERE module_id='memory'")
         self.conn.commit()
         with self.assertRaises(platform_core.RegistryError):
             platform_core.require_module_enabled(self.conn, "planning")
@@ -431,23 +402,16 @@ class ModuleRegistryTests(unittest.TestCase):
         ).fetchone()
         self.assertEqual((before["state"], before["revision"], before["updated_at"]), tuple(row))
 
-    def test_improvements_runtime_checks_module_before_queueing(self) -> None:
-        runtime = improvements_integration.ImprovementsRuntime(module_enabled=lambda _path: False)
-        with self.assertRaisesRegex(
-            improvements_integration.ImprovementError, "Improvements module is disabled"
-        ):
-            runtime.queue_analysis(self.path, "personal", "manual")
-
     def test_sessions_disable_suppresses_and_reenable_resumes_reaper(self) -> None:
         platform = self.platform()
         platform.module_state_command(
-            {"module_id": "sessions", "state": "disabled", "expected_revision": 1}
+            {"module_id": "planning", "state": "disabled", "expected_revision": 1}
         )
         with mock.patch.object(watchers, "reap_launches", return_value=True) as reaper:
             self.assertFalse(watchers.reap_sessions_if_enabled(self.conn))
             reaper.assert_not_called()
             platform.module_state_command(
-                {"module_id": "sessions", "state": "enabled", "expected_revision": 2}
+                {"module_id": "planning", "state": "enabled", "expected_revision": 2}
             )
             self.assertTrue(watchers.reap_sessions_if_enabled(self.conn))
             reaper.assert_called_once_with(self.conn)
@@ -460,17 +424,6 @@ class ModuleRegistryTests(unittest.TestCase):
             self.assertFalse(self.conn.in_transaction)
         self.assertEqual(2, reaper.call_count)
 
-    def test_improvements_disable_requests_owned_cancellation_once(self) -> None:
-        runtime = improvements_integration.ImprovementsRuntime()
-        runtime._bindings["personal:analysis:1"] = {
-            "primary_db": self.path,
-            "sidecar_job_id": 1,
-        }
-        runtime._supervisor.cancel = mock.Mock()  # type: ignore[method-assign]
-        runtime.module_state_changed(self.path, "disabled")
-        runtime.module_state_changed(self.path, "disabled")
-        runtime._supervisor.cancel.assert_called_once_with("personal:analysis:1")
-
     def test_observer_failure_cannot_report_a_committed_transition_as_rolled_back(self) -> None:
         def fail_observer(_path: str, _module_id: str, _state: str) -> None:
             raise RuntimeError("observer failed")
@@ -480,14 +433,14 @@ class ModuleRegistryTests(unittest.TestCase):
             self.assertLogs("server.platform.modules", level="ERROR"),
         ):
             result = self.platform().module_state_command(
-                {"module_id": "sessions", "state": "disabled", "expected_revision": 1}
+                {"module_id": "planning", "state": "disabled", "expected_revision": 1}
             )
         self.assertEqual("disabled", result["module"]["state"])
         self.assertEqual(
             ("disabled", 2),
             tuple(
                 self.conn.execute(
-                    "SELECT state,revision FROM platform_modules WHERE module_id='sessions'"
+                    "SELECT state,revision FROM platform_modules WHERE module_id='planning'"
                 ).fetchone()
             ),
         )
@@ -512,7 +465,7 @@ class ModuleRegistryTests(unittest.TestCase):
 
         def disable() -> None:
             platform.module_state_command(
-                {"module_id": "sessions", "state": "disabled", "expected_revision": 1}
+                {"module_id": "planning", "state": "disabled", "expected_revision": 1}
             )
             disabled.set()
 
@@ -533,98 +486,6 @@ class ModuleRegistryTests(unittest.TestCase):
             self.assertTrue(disabled.is_set())
             self.assertFalse(watchers.reap_sessions_if_enabled(reaper_conn))
             self.assertEqual(1, reaper.call_count)
-
-
-class SkillsRouteStateMigrationTests(unittest.TestCase):
-    """The schema-6 ratchet replaces the released Skills route vocabulary."""
-
-    def setUp(self) -> None:
-        self.directory = tempfile.TemporaryDirectory()
-        self.addCleanup(self.directory.cleanup)
-        self.path = os.path.join(self.directory.name, "valkama.sqlite3")
-        patch = mock.patch.dict(os.environ, {"VALKAMA_DB": self.path})
-        patch.start()
-        self.addCleanup(patch.stop)
-
-        conn = store.connect()
-        row = conn.execute(
-            "SELECT record_json,state,mutable,revision,updated_at"
-            " FROM platform_modules WHERE module_id='skills'"
-        ).fetchone()
-        manifest = json.loads(row["record_json"])
-        manifest["title_key"] = "platform.modules.skills-persisted"
-        manifest["state_schema"]["allowed_keys"] = [
-            "query",
-            "source_scope",
-            "activation",
-        ]
-        conn.execute(
-            "UPDATE platform_modules SET record_json=? WHERE module_id='skills'",
-            (json.dumps(manifest, sort_keys=True),),
-        )
-        conn.execute("PRAGMA user_version=5")
-        conn.commit()
-        self.lifecycle = tuple(row[key] for key in ("state", "mutable", "revision", "updated_at"))
-        conn.close()
-
-    def backups(self) -> list[str]:
-        return glob.glob(
-            os.path.join(self.directory.name, "backups", "*-preproductmodel-*.sqlite3")
-        )
-
-    def test_rewrites_only_route_keys_then_stamps_once(self) -> None:
-        migrated = store.connect()
-        row = migrated.execute(
-            "SELECT record_json,state,mutable,revision,updated_at"
-            " FROM platform_modules WHERE module_id='skills'"
-        ).fetchone()
-        manifest = json.loads(row["record_json"])
-
-        self.assertEqual(["query", "status", "view"], manifest["state_schema"]["allowed_keys"])
-        self.assertEqual("platform.modules.skills-persisted", manifest["title_key"])
-        self.assertEqual(
-            self.lifecycle,
-            tuple(row[key] for key in ("state", "mutable", "revision", "updated_at")),
-        )
-        self.assertEqual(6, migrated.execute("PRAGMA user_version").fetchone()[0])
-        migrated.close()
-        self.assertEqual(1, len(self.backups()))
-
-        store.connect().close()
-        self.assertEqual(1, len(self.backups()))
-
-    def test_unknown_route_generation_refuses_before_snapshot_or_stamp(self) -> None:
-        conn = sqlite3.connect(self.path)
-        manifest = json.loads(
-            conn.execute(
-                "SELECT record_json FROM platform_modules WHERE module_id='skills'"
-            ).fetchone()[0]
-        )
-        manifest["state_schema"]["allowed_keys"] = ["query", "activation"]
-        conn.execute(
-            "UPDATE platform_modules SET record_json=? WHERE module_id='skills'",
-            (json.dumps(manifest, sort_keys=True),),
-        )
-        conn.commit()
-        conn.close()
-
-        with self.assertRaisesRegex(
-            platform_core.RegistryError, "Skills route state generation is unrecognized"
-        ):
-            store.connect()
-
-        self.assertEqual([], self.backups())
-        check = sqlite3.connect(self.path)
-        try:
-            self.assertEqual(5, check.execute("PRAGMA user_version").fetchone()[0])
-            saved = json.loads(
-                check.execute(
-                    "SELECT record_json FROM platform_modules WHERE module_id='skills'"
-                ).fetchone()[0]
-            )
-            self.assertEqual(["query", "activation"], saved["state_schema"]["allowed_keys"])
-        finally:
-            check.close()
 
 
 class ProductModelMigrationTests(unittest.TestCase):
@@ -786,8 +647,6 @@ class ProductModelMigrationTests(unittest.TestCase):
                 "claude-journal-telemetry",
                 "codex-rollout-telemetry",
                 "agentmemory-reference-v1",
-                "codex-skills",
-                "claude-skills",
                 "git-artifacts",
             }
             <= {
@@ -835,24 +694,6 @@ class ProductModelMigrationTests(unittest.TestCase):
             )
         finally:
             restored.close()
-
-    def test_exact_released_schema2_skills_manifest_uses_broad_normalization(self) -> None:
-        migrated = store.connect()
-        self.addCleanup(migrated.close)
-        manifest = json.loads(
-            migrated.execute(
-                "SELECT record_json FROM platform_modules WHERE module_id='skills'"
-            ).fetchone()[0]
-        )
-        self.assertEqual(
-            next(
-                item
-                for item in platform_modules.module_manifests()
-                if item["module_id"] == "skills"
-            ),
-            manifest,
-        )
-        self.assertEqual(["query", "status", "view"], manifest["state_schema"]["allowed_keys"])
 
     def test_near_match_released_manifest_refuses_before_snapshot(self) -> None:
         conn = sqlite3.connect(self.path)

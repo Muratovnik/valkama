@@ -10,19 +10,16 @@ from __future__ import annotations
 import json
 import sqlite3
 import sys
-import threading
 from collections.abc import Callable
 
-from . import static_assets, watchers
-from .improvements import improvements_integration
-from .improvements import tools as improvement_tools
+from . import static_assets
 from .ops import tray
 from .planning import api as planning_api
 from .planning import model as planning_model
 from .planning import tools as planning_tools
 from .platform import core as platform_core
 from .platform import tools as platform_tools
-from .store import connect, db_path
+from .store import connect
 
 # --- MCP over stdio ---------------------------------------------------------
 
@@ -61,7 +58,6 @@ _OPS: dict[str, Callable[[sqlite3.Connection, dict], object]] = {
     # The neutral vocabulary, delegating to the same boundary the HTTP surface
     # uses. A name shared with a Board tool would shadow one silently, so the
     # assertion below refuses that rather than trusting the two lists to differ.
-    **improvement_tools.OPS,
     **planning_tools.OPS,
 }
 
@@ -110,7 +106,7 @@ def catalogue() -> list[dict]:
     change. One domain means one list.
     """
 
-    return [*platform_tools.TOOLS, *improvement_tools.TOOLS, *planning_tools.TOOLS]
+    return [*platform_tools.TOOLS, *planning_tools.TOOLS]
 
 
 def call_tool(conn: sqlite3.Connection, name: str, arguments: dict) -> object:
@@ -118,8 +114,6 @@ def call_tool(conn: sqlite3.Connection, name: str, arguments: dict) -> object:
         raise ValueError(f"unknown tool {name!r}")
     if name in _PLANNING_TOOLS:
         platform_core.require_module_enabled(conn, "planning")
-    elif name in improvement_tools.TOOL_NAMES:
-        platform_core.require_module_enabled(conn, "improvements")
     return _OPS[name](conn, arguments or {})
 
 
@@ -203,39 +197,13 @@ def _append_stale_warning(result: dict[str, object]) -> dict[str, object]:
 
 
 def mcp_main() -> None:
-    """Own the stdio session, its Improvements scheduler, and its database handle."""
-
-    # Planning holds the seam; a surface decides what fills it. Installed once
-    # per process so a transition made here is guarded exactly as one made
-    # through the other surface.
-    planning_api.use_improvement_guard(
-        lambda source, summary: improvements_integration.improvement_guard_for_work_item(
-            db_path(), source, summary
-        )
-    )
-    planning_api.use_transition_observer(
-        lambda source, category: improvements_integration.sync_case_from_work_item(
-            db_path(), source, category
-        )
-    )
+    """Own the stdio session and its database handle."""
     conn = connect()
-    source_watch = static_assets.SourceWatch(static_assets.SOURCE_ROOT)
-    runtime = watchers.IMPROVEMENTS_RUNTIME
-    runtime_thread = threading.Thread(target=runtime.run, args=(db_path(),), daemon=True)
-    started = False
     try:
-        runtime_thread.start()
-        started = True
+        source_watch = static_assets.SourceWatch(static_assets.SOURCE_ROOT)
         _mcp_loop(conn, source_watch, catalogue())
     finally:
-        try:
-            runtime.stop()
-        finally:
-            try:
-                if started:
-                    runtime_thread.join(timeout=2)
-            finally:
-                conn.close()
+        conn.close()
 
 
 def _mcp_loop(

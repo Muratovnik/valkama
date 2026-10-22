@@ -46,7 +46,7 @@ export interface MemorySearch {
 }
 
 /** One project's knowledge provider, and whether it can be asked at all. */
-export interface MemoryProvider {
+interface MemoryProvider {
   capabilities: string[]
   health: string
   project_id: string
@@ -68,7 +68,7 @@ export interface MemoryProviders {
  * what lets the row still read when nothing can resolve the pointer, which is
  * exactly when a reader is looking.
  */
-export interface MemoryLink {
+interface MemoryLink {
   attached_at: string
   author: string
   label: string

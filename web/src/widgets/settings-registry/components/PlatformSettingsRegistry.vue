@@ -25,7 +25,7 @@ import ToggleSwitch from '@/shared/ui/ToggleSwitch.vue'
 type CapabilityId = RegistryAssignment['capability_id']
 type IntegrationGroup = {
   icon: string
-  key: 'execution' | 'telemetry' | 'skills' | 'memory' | 'artifacts'
+  key: 'execution' | 'memory' | 'artifacts'
   owns: (capability: CapabilityId) => boolean
 }
 
@@ -46,8 +46,6 @@ const integrationGroups: IntegrationGroup[] = [
     icon: 'play',
     owns: (id) => id.startsWith('execution.') || id === 'session.observe',
   },
-  { key: 'telemetry', icon: 'activity', owns: (id) => id === 'telemetry.query' },
-  { key: 'skills', icon: 'sparkles', owns: (id) => id.startsWith('skills.') },
   { key: 'memory', icon: 'database', owns: (id) => id.startsWith('memory.') },
   { key: 'artifacts', icon: 'git-branch', owns: (id) => id === 'artifact.inspect' },
 ]

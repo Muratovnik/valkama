@@ -41,8 +41,6 @@
  */
 const scopeEscapeOwners = new Set([
   'app/components/AppContextBar.vue',
-  'features/improvement-profile/components/ImprovementProfileDialog.vue',
-  'pages/skills/components/SkillPreview.vue',
   'widgets/work-item-graph/components/GraphControls.vue',
   'widgets/work-item-graph/components/GraphView.vue',
 ])

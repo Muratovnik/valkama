@@ -71,7 +71,7 @@ const UNSAFE_TEXT =
   // where the flag sits eighty characters away, at the end of the pattern.
   // eslint-disable-next-line sonarjs/duplicates-in-character-class -- see above
   /<[^>]*>|\b(?:javascript|data|file)\s*:|(?:^|\s)(?:[A-Za-z]:[\\/]|\\\\)[^\s]+|(?:^|\s)\/[^\s/]+\/[^\s]+/iu
-export const MAX_UI_STATE_REASON_LENGTH = 240
+const MAX_UI_STATE_REASON_LENGTH = 240
 export const MAX_UI_STATE_STRING_LENGTH = 8192
 /** Deterministic UTF-8 JSON ceiling for every validated ready/degraded payload. */
 export const MAX_UI_STATE_PAYLOAD_BYTES = 256 * 1024

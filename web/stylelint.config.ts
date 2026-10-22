@@ -99,7 +99,6 @@ const spacing = (extra = '') =>
 const SPACING = spacing()
 
 /** Prose sets its own rhythm from its own size, so the markdown owner adds `em`. */
-const PROSE_SPACING = spacing(String.raw`|[\d.]+em`)
 
 /**
  * A transition names its duration and its curve from the scale.
@@ -142,18 +141,7 @@ const RADIUS = new RegExp(`^${RADIUS_PART}(?:\\s+${RADIUS_PART})*$`)
  * exactly the same way whether the exception is a scope escape or a bare type
  * selector.
  */
-export const typeSelectorDebt = [
-  'src/app/styles/shell.css',
-  'src/pages/sessions/SessionTable.vue',
-  'src/widgets/activity-bell/ActivityBell.vue',
-  'src/widgets/analytics-dashboard/components/AnalyticsCardTable.vue',
-  'src/widgets/analytics-dashboard/components/AnalyticsFilterBar.vue',
-  'src/widgets/analytics-dashboard/components/AnalyticsTableInspector.vue',
-  'src/widgets/analytics-dashboard/components/DataTableTrigger.vue',
-  'src/widgets/improvement-case/components/ImprovementCaseDetail.vue',
-  'src/widgets/improvement-case/components/ImprovementCaseList.vue',
-  'src/widgets/improvement-case/components/ImprovementEvidence.vue',
-]
+export const typeSelectorDebt = ['src/app/styles/shell.css']
 
 export default {
   extends: ['stylelint-config-standard'],
@@ -195,28 +183,6 @@ export default {
       // Card #322 empties this list.
       files: typeSelectorDebt,
       rules: { 'selector-max-type': null },
-    },
-    {
-      // The one file that renders prose it did not write. `markdown-it`'s output
-      // is headings, lists, code blocks and tables with no class on any of
-      // them, so a type selector is the only handle there is — every selector
-      // this file writes for its own markup names a class. And a heading's
-      // margin in prose follows the heading's own size rather than the
-      // interface grid, which is what `em` is for and what the ladder cannot
-      // express.
-      files: ['src/pages/skills/components/SkillPreview.vue'],
-      rules: {
-        'selector-max-type': null,
-        'declaration-property-value-allowed-list': {
-          'font-size': [RAMP_SIZE, 'inherit'],
-          'line-height': [RAMP_LEADING],
-          'font': [TYPE_ROLE, RAMP_FONT, 'inherit'],
-          '/^(?:padding|margin)/': [PROSE_SPACING],
-          '/^(?:row-|column-)?gap$/': [PROSE_SPACING],
-          '/^border(?:-[a-z]+)*-radius$/': [RADIUS],
-          'border-radius': [RADIUS],
-        },
-      },
     },
   ],
   ignoreFiles: ['dist/**', 'node_modules/**', 'test-results/**', 'playwright-report/**'],

@@ -7,9 +7,11 @@ card: 351
 
 # Valkama product model
 
-Valkama is a local, single-user, modular control surface for agent work and the
-tools that support it. Planning is one Valkama module. Kanban is one Planning
-view; neither a board nor a card is a product-wide Kernel entity.
+Valkama is a local, single-user workspace for project work: plan an item, claim
+it, settle blockers, execute it, and record a result for review. The Work
+destination presents Planning through board, list, and graph views of one read
+model. Settings is the other navigation destination. Memory references and exact
+session context are part of a work item.
 
 ## Vocabulary
 
@@ -61,14 +63,12 @@ multi-source capability never silently selects a first Connection.
 
 ## Module registry and enablement
 
-The persisted server registry is the only runtime authority for built-in and
-future modules. `GET /api/modules` returns every registration with its manifest,
-enablement state, mutability, revision, and update time. Navigation and routing
-consume that validated response. Settings is always enabled and cannot be
-disabled. Planning and Sessions are enabled on first installation; optional
-modules may be disabled without deleting their data. A disabled module has no
-navigation entry and its direct route yields typed recovery UI; it cannot run
-module actions or background work until it is enabled again.
+The persisted server registry declares `planning`, `memory`, and `settings`.
+`GET /api/modules` returns their manifests, enablement state, mutability,
+revision, and update time. Settings is always enabled and cannot be disabled.
+Memory contributes references inside work-item context rather than a standalone
+navigation destination. Analytics, Improvements, Skills, and standalone Sessions
+registrations, pages, and APIs are retired.
 
 The semantic interface identifier remains `valkama-modules`. The payload is cut
 over atomically across server, validators, UI, tests, and built artifacts; no
@@ -91,13 +91,33 @@ technical store-generation guard.
   Valkama projections with provenance and bounded diagnostics.
 - OTel and provider hooks are observational feeds, not authoritative session
   identity or lifecycle state.
-- Skill display names are not durable identities; Valkama owns installation
-  identity and retains the provider/source locator.
 
-## Example composition
+## Work-item context
 
-Planning is a Module; Kanban is one of its Views. Claude Code and Codex are
-Adapters that can expose execution and telemetry Capabilities through separate
-Connections. A Project Assignment can select a Claude journal Connection for
-telemetry while another Project selects a Codex rollout Connection, without
-changing either Module.
+Historical session events remain stored; retiring the monitor does not erase
+that history. New ingestion is lifecycle-only.
+
+Planning owns session lifecycle ingestion and compact context resolution.
+`POST /api/ingest` accepts only `session_start`, `session_end`, `attention`, and
+`turn_end`. The request is a UTF-8 JSON object with required string fields
+`session_id`, `client`, and `event`. Optional fields are `cwd`, `label`,
+`status`, `detail`, and an exact `work_item` reference. `session_start` opens
+or resumes the session; `session_end` records `ended` or `failed`;
+`turn_end` records waiting without ending the session; `attention` records a
+lifecycle attention reason. A failed terminal outcome remains until an explicit
+new start. The installation bearer and loopback requirements are documented in
+the [README](../README.md#local-http-security).
+
+`GET /api/session?id=<id>` resolves an exact stored identity or unique prefix
+and returns its work item, client family, and project-root resolution; it exposes
+no event feed. Missing or ambiguous identities fail resolution. A session linked
+across Planning spaces also fails as ambiguous. An observed session directory
+never grants root authority: native opening resolves the exact Planning-space
+binding again through the project registry. Missing, malformed, unavailable, or
+ambiguous bindings cannot supply an effective project root. Session refs, native
+opening, and execution launch, stop, resume, history, and typed results remain
+supported.
+
+Memory uses the existing provider and relation APIs. A work item keeps a typed
+pointer and stored label, including when the provider is unavailable. Retiring
+the Skills catalogue does not alter installed skill files or client enablement.

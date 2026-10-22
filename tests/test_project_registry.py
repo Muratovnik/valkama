@@ -296,10 +296,7 @@ class ProjectRegistryTests(unittest.TestCase):
             root / "web" / "src" / "app" / "App.vue",
             root / "web" / "src" / "features" / "session-open" / "sessionOpen.ts",
             root / "web" / "src" / "features" / "session-open" / "sessionWorkItemRoute.ts",
-            root / "web" / "src" / "shared" / "api" / "sessionContract.ts",
-            root / "web" / "src" / "shared" / "types" / "session.ts",
-            root / "web" / "src" / "widgets" / "session-detail" / "SessionActions.vue",
-            root / "web" / "src" / "widgets" / "session-detail" / "SessionFacts.vue",
+            root / "web" / "src" / "features" / "session-open" / "SessionContext.vue",
         ]
         session_aliases = ('"planning_space":', "planning_space:", "session.planning_space")
         for source in session_sources:

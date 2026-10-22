@@ -1,11 +1,11 @@
 # Valkama
 
-**A local, modular control surface for agent work and its supporting tools.**
+**A local workspace for planning, executing, and reviewing agent work.**
 
-Valkama connects Claude Code, Codex, and local services through one web and
-desktop workspace. Planning, Sessions, Analytics, Improvements, Skills, Memory,
-and Settings are modules over the same Kernel contracts. Kanban is one Planning
-view, not the definition of the product.
+Valkama connects projects, work items, agent executions, and results in one web
+and desktop workspace. Work brings board, list, and graph views over one
+Planning read model; Settings manages the local installation and integrations.
+Memory and session references stay with the work item they support.
 
 It is built for one person: whoever runs a local development loop and is tired
 of the work living in three places at once. There is no account, no cloud and no
@@ -17,12 +17,10 @@ directory, and the MCP server only exists while a client is talking to it.
 - **Planning with Kanban, list, and graph views.** Its MCP tools create, move,
   claim, comment, link, and summarise work; `claim_work_item` refuses a
   competing claim on the current Planning wire.
-- **Sessions and execution tracking.** Launches carry an explicit delivery
+- **Execution tracking on work items.** Launches carry an explicit delivery
   contract, and outcomes are typed results rather than exit codes.
 - **A visible integration registry.** Settings distinguishes Modules, Adapters,
   Services, Connections, and Assignments, including health and ownership.
-- **Analytics and Improvements.** Missing history stays unknown, and recurring
-  failures retain bounded evidence instead of raw private transcripts.
 - **Memory that points rather than copies.** Each project's knowledge is
   searched through whichever provider answers for it, and what is attached to
   a work item is a pointer with a stored label — so it still reads when the
@@ -68,8 +66,8 @@ python valkama.py serve
 For a Git clone, first run `git clone https://github.com/Muratovnik/valkama.git`
 and `cd valkama`.
 
-Open `http://127.0.0.1:8642/`. You should see the module navigation and an empty
-Planning directory. Stop the server with `Ctrl+C` — agents spawn their own copy
+Open `http://127.0.0.1:8642/`. You should see Work and Settings navigation and
+an empty Planning directory. Stop the server with `Ctrl+C` — agents spawn their own copy
 and do not need this one running.
 
 ### 2. Install the stable launcher
@@ -217,12 +215,11 @@ python valkama.py <command> [options]
 | `adapter remove ADAPTER_ID` | stop declaring an installed adapter |
 | `adapter list` | the adapters this installation declares |
 | `doctor [--json] [--no-probe]` | check this installation in four levels — Installation, Projects, Capabilities, Connections — and say what to do about each problem |
-| `export [--section planning\|relations\|settings\|improvements]` | write the selected sections as one export; repeat `--section`, or omit it for all sections |
+| `export [--section planning\|relations\|settings]` | write the selected sections as one export; repeat `--section`, or omit it for all sections |
 | `migrate planning-model [--dry-run]` | explicitly convert a Board-era store to Planning once; dry run converts a copy |
 | `attach NAME PATH [--label TEXT]` | attach another database file as a scope |
 | `detach NAME` | drop a scope from every view; the file is untouched |
 | `scopes [--json]` | list attached scopes and their Planning spaces |
-| `purge-stream [--session ID] [--include-active] [--retention]` | delete purgeable stream events; analytics rows stay |
 
 ## External adapters
 
@@ -347,7 +344,7 @@ rather than falling back to a default, and `python valkama.py doctor` says why.
 The project registry is managed by Valkama's `projects` command, separate from
 `config.json`. On Windows, Valkama keeps the authoritative project inventory at
 `%LOCALAPPDATA%\Valkama\project-registry.toml` and publishes a schema-v3
-projection at `%LOCALAPPDATA%\Valkama\projects.json`. Planning, Memory, Skills,
+projection at `%LOCALAPPDATA%\Valkama\projects.json`. Planning, Memory,
 and the desktop read that complete projection. A missing or malformed projection
 exposes no partial project list.
 
@@ -481,24 +478,25 @@ repository top level and not a submodule, and the sibling target must not
 escape, traverse a symlink or junction, or already exist without a real worktree
 registration.
 
-## Analytics dashboard
+## Session context on a work item
 
-Open Analytics from the module navigation to see a read-only projection over
-the project's work items and events: status visits, flow, throughput,
-cycle/reopen/blocked KPIs, and an
-`as_of` timestamp.
+Execution history, launch, stop, resume, and native session opening belong to
+work-item context. A session reference retains the client's exact stored
+identity; resume never chooses a session by title, directory, time, or recency.
 
-Its rule is that missing history stays missing. Coverage is reported as
-`confirmed`, `inferred`, `partial` or `unknown`; a gap is `null` or a lower
-bound, never a made-up zero. A contradictory move invalidates the preceding
-segment at the gap and resumes at the observed destination, so no duration is
-fabricated across a hole.
+`GET /api/session?id=<id>` resolves compact session context by exact identity
+or a unique stored prefix. A successful
+response has `resolved: true` and includes `session`, `client_family`,
+`work_item`, `space_root`, `status`, `detail`, and `at`. Missing or ambiguous
+identity returns `resolved: false` with the corresponding status. This endpoint
+does not return an event feed.
 
-The optional usage panel reads local Codex rollout or Claude JSONL journals,
-if you configure the roots. It is deliberately conservative: exact card-linked
-session refs only, no newest-file heuristics, data marked
-`source=local_journal`. Cost appears only when a journal states it. Sessions
-linked to several cards are labelled non-exclusive and counted once.
+Planning owns `POST /api/ingest`, which accepts only `session_start`,
+`session_end`, `attention`, and `turn_end` lifecycle events. The standalone
+session fleet, inbox, tool stream, `/api/sessions`, `/api/session-seen`, and
+Sessions SSE view are retired. Analytics dashboards and exports, Improvements,
+and the Skills catalogue and activation API are also retired. This does not
+change installed skill files or agent-client settings.
 
 ## The desktop app and the tray
 
@@ -597,7 +595,7 @@ files and process memory.
 PowerShell, an `.ico` and an NSIS installer, and the Electron app is one of its
 consumers rather than its owner.
 
-Seven documents state what code cannot:
+The maintained product contracts are:
 
 - [`SERVICE.md`](SERVICE.md) — launcher ownership, client registration and
   relocation.
@@ -609,9 +607,9 @@ Seven documents state what code cannot:
   levels and the object kinds a module may not confuse.
 - [`docs/connection-contract.md`](docs/connection-contract.md) — what a client
   learns on connect, and how the server refuses to answer from a stale build.
-- [`docs/improvements-contract.md`](docs/improvements-contract.md) and
-  [`docs/session-event-contract.md`](docs/session-event-contract.md) — the
-  improvements payload and the session event.
+
+The superseded Improvements and session-event contracts remain in `docs/` as
+historical records; they do not describe supported endpoints.
 
 ## Limitations
 

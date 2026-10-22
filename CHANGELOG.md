@@ -10,6 +10,31 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+### Changed
+
+- Focus the workspace on projects, work items, claims, blockers, execution,
+  results, and review. Navigation contains Work and Settings; board, list, and
+  graph share the Planning read model. Memory refs and exact session context
+  remain inside work-item context.
+- Keep session lifecycle ingestion in Planning, accepting `session_start`,
+  `session_end`, `attention`, and `turn_end`. `/api/session` resolves compact
+  stored context rather than an event feed.
+
+### Fixed
+
+- Load the global Work directory from project and space counts, keeping large
+  work histories within the bounded UI response. The full directory API remains
+  available without the optional `directory_only=true` query.
+- Wrap work-queue filters and Settings controls in narrow windows.
+
+### Removed
+
+- Standalone Analytics dashboard and export/read model; Improvements signals,
+  analysis, evaluation, monitoring, jobs, API, and MCP tools; Skills catalogue
+  and activation UI/API; standalone Sessions fleet, inbox, and tool event feed.
+- `/api/sessions`, `/api/session-seen`, and the Sessions SSE view. Installed
+  skill files and existing client enablement settings are unchanged.
+
 ## [1.0.2] - 2026-09-27
 
 The first public release. There is no earlier public version to compare

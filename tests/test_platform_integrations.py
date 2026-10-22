@@ -8,7 +8,6 @@ from pathlib import Path
 from unittest import mock
 
 from server import store
-from server.analytics import LocalJournalUsageProvider
 from server.platform import core
 from server.platform.capabilities import CAPABILITY_DEFINITIONS
 from server.platform.providers import (
@@ -17,6 +16,7 @@ from server.platform.providers import (
     NotesReferenceProvider,
     ProviderCatalog,
 )
+from server.telemetry.journal import LocalJournalUsageProvider
 from tests.registry_fixtures import project_entry, registry_bytes
 
 REQUIRED_LINEAGES = {
@@ -25,8 +25,6 @@ REQUIRED_LINEAGES = {
     "claude-journal-telemetry",
     "codex-rollout-telemetry",
     "agentmemory-reference-v1",
-    "codex-skills",
-    "claude-skills",
     "git-artifacts",
 }
 
@@ -85,7 +83,7 @@ class PlatformIntegrationTests(unittest.TestCase):
             {item["connection_ref"]["adapter_lineage_id"] for item in payload["connections"]},
         )
         self.assertNotIn("notes-reference-v1", json.dumps(payload))
-        self.assertEqual(10, len(payload["assignments"]))
+        self.assertEqual(8, len(payload["assignments"]))
         self.assertEqual(
             set(CAPABILITY_DEFINITIONS),
             {item["capability"]["capability_id"] for item in payload["capabilities"]},

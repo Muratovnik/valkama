@@ -3,8 +3,6 @@ import { expect, test } from '@playwright/test'
 
 import { expectNoSilentClipping } from './overflow.ts'
 
-const centerX = (box: { width: number; x: number }) => box.x + box.width / 2
-
 test.beforeEach(async ({ page }) => {
   await page.route('**/api/agent-sessions/**', async (route) =>
     route.fulfill({
@@ -133,8 +131,8 @@ test('grouped navigation keeps one optical icon box and corner badge without per
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/tests/browser/harness.html?lang=ru')
   const icons = page.locator('.nav-item .nav-item-icon')
-  await expect(icons).toHaveCount(7)
-  for (let index = 0; index < 7; index += 1) {
+  await expect(icons).toHaveCount(2)
+  for (let index = 0; index < 2; index += 1) {
     await expect(icons.nth(index)).toHaveCSS('width', '20px')
     await expect(icons.nth(index)).toHaveCSS('height', '20px')
   }
@@ -142,89 +140,20 @@ test('grouped navigation keeps one optical icon box and corner badge without per
   // past the middle of the row, which is where a track pushed to the rail's far
   // edge put it: a two-word entry's own number an inch away from itself, and
   // six numbers in a right-hand column that means nothing read on its own.
-  const sessionItem = page.locator('.module-sessions')
+  const sessionItem = page.locator('.module-planning')
   const labelBox = await sessionItem.locator('.nav-item-label').boundingBox()
   const badgeBox = await sessionItem.locator('.count-badge').boundingBox()
   expect(labelBox && badgeBox && badgeBox.x >= labelBox.x + labelBox.width).toBeTruthy()
   expect(labelBox && badgeBox && badgeBox.x - (labelBox.x + labelBox.width) <= 16).toBeTruthy()
-  // Four groups: the three destination groups and Settings, which is a
+  // Two groups: Work and Settings, which is a
   // destination too and stands under the last of them rather than in the
   // footer beside the connection state.
-  await expect(page.locator('.nav-group')).toHaveCount(4)
+  await expect(page.locator('.nav-group')).toHaveCount(2)
   await expect(page.locator('.nav-utility .nav-item')).toHaveCount(0)
   // `.collapsed` was a class no template had rendered for some time, and the
   // rules that dressed it were dead in `shell.css` beside it. The rail narrows by
   // its own width now, so there is nothing left to assert the absence of.
   await expect(page.locator('.nav-item-count')).toHaveCount(1)
-})
-
-test('session ledger uses a bounded readable measure and opens the row itself', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1840, height: 920 })
-  await page.goto('/tests/browser/harness.html?lang=ru')
-  const ledger = page.locator('.session-ledger')
-  const list = page.locator('.session-table-wrap').first()
-  const ledgerBox = await ledger.boundingBox()
-  const listBox = await list.boundingBox()
-  // The bound is the column every module shares, read from the palette rather
-  // than repeated here. It used to be 1180 — one of four widths the product
-  // had for the same idea, which is why the text started somewhere new in each
-  // module — and a number in this file was one of the four.
-  const column = await page.evaluate(() =>
-    Number.parseFloat(
-      getComputedStyle(document.documentElement).getPropertyValue('--size-module-column'),
-    ),
-  )
-  expect(column).toBeGreaterThan(0)
-  expect(ledgerBox && listBox && listBox.width <= column).toBeTruthy()
-  expect(
-    ledgerBox &&
-      listBox &&
-      Math.abs(listBox.x - ledgerBox.x - (ledgerBox.width - listBox.width) / 2) < 3,
-  ).toBeTruthy()
-  await expect(page.locator('td.client-cell').first()).toHaveCSS('display', 'table-cell')
-  await page.locator('.session-open').first().click()
-  await expect(page.locator('.resizable-inspector')).toBeVisible()
-  await expect(page.locator('.inspector-frame > header')).toBeVisible()
-  // The filter is named the way it is rendered — label first, count after the
-  // separator. This read `/0.*работают/` from before the sessions filters
-  // became a segmented control, and had been unmatchable ever since.
-  const workingFilter = page.getByRole('button', { name: /работают · 0/i })
-  const filterBox = await workingFilter.boundingBox()
-  const track = await page.locator('.segmented').first().boundingBox()
-  // A segment fills its track less the track's own inset, and the track is the
-  // row every control in the toolbar stands in. This read 44 — the pointer
-  // target — as if it were the drawing, which is the conflation that made the
-  // track 48px tall beside a 44px button. What a segment owes is the WCAG 2.5.8
-  // minimum of 24px, and the row it belongs to is what makes the toolbar line
-  // up.
-  expect(filterBox?.height).toBeGreaterThanOrEqual(24)
-  const row = await page.evaluate(() =>
-    Number.parseFloat(
-      getComputedStyle(document.documentElement).getPropertyValue('--size-control-height'),
-    ),
-  )
-  expect(track?.height).toBe(row)
-  expect(filterBox && track && track.height - filterBox.height).toBe(4)
-  await workingFilter.click()
-  await expect(workingFilter).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.locator('.session-group')).toHaveCount(1)
-  const filterEmpty = page.locator('.filter-empty')
-  await expect(filterEmpty).toContainText('нет сессий')
-  // One sentence, said once: the empty status used to add a generic headline
-  // over the reason, so the same absence was announced twice in two voices.
-  await expect(filterEmpty.locator('.empty-title')).toHaveCount(1)
-  await expect(filterEmpty.locator('.platform-state-title')).toHaveCount(0)
-  // And said in the middle of the space the rows would occupy. The old band
-  // put the icon at the left wall, the headline at the table's center and the
-  // reason inside a left-anchored measure — three pieces in three places.
-  const wrapBox = await page.locator('.session-table-wrap').first().boundingBox()
-  const messageBox = await filterEmpty.locator('.empty-title').boundingBox()
-  const markBox = await filterEmpty.locator('.empty-mark').boundingBox()
-  expect(wrapBox && messageBox && Math.abs(centerX(messageBox) - centerX(wrapBox)) < 3).toBeTruthy()
-  expect(markBox && messageBox && Math.abs(centerX(markBox) - centerX(messageBox)) < 3).toBeTruthy()
-  expect(markBox && messageBox && markBox.y + markBox.height <= messageBox.y + 1).toBeTruthy()
 })
 
 test('long Russian copy remains readable at narrow and 200 percent text layouts', async ({
@@ -237,8 +166,7 @@ test('long Russian copy remains readable at narrow and 200 percent text layouts'
   })
   const bodyWidth = await page.evaluate(() => document.documentElement.scrollWidth)
   expect(bodyWidth).toBeLessThanOrEqual(620)
-  await expect(page.locator('td.client-cell').first()).toHaveCSS('display', 'block')
-  await expect(page.locator('.session-open').first()).toBeVisible()
+  await expect(page.locator('.work-item-tile')).toBeVisible()
 })
 
 for (const locale of ['en', 'ru']) {
@@ -249,7 +177,7 @@ for (const locale of ['en', 'ru']) {
       await page.setViewportSize({ width, height: 800 })
       await page.goto(`/tests/browser/harness.html?lang=${locale}&surface=context-bar`)
       await expect(page.locator('.context-bar')).toBeVisible()
-      await expect(page.locator('.context-activity')).toBeVisible()
+      await expect(page.locator('.context-activity')).toHaveCount(0)
       const geometry = await page.evaluate(() => ({
         client: document.documentElement.clientWidth,
         scroll: document.documentElement.scrollWidth,
@@ -266,7 +194,7 @@ test('the note field spans its form and its action keeps a full pointer target',
   await page.goto('/tests/browser/harness.html?lang=ru&surface=work-item')
   const drawer = page.locator('.drawer')
   const workspaceBox = await page.locator('.harness-main').boundingBox()
-  const workSurfaceBox = await page.locator('.monitor').boundingBox()
+  const workSurfaceBox = await page.locator('.harness-main').boundingBox()
   const drawerBox = await drawer.boundingBox()
   expect(
     workspaceBox &&
@@ -293,18 +221,6 @@ test('the note field spans its form and its action keeps a full pointer target',
   expect(fieldBox && fieldBox.height > 44).toBeTruthy()
   expect(submitBox && submitBox.height === 40).toBeTruthy()
   expect(formBox && submitBox && submitBox.width < formBox.width).toBeTruthy()
-})
-
-test('Sessions to Analytics navigation is free of page and console errors', async ({ page }) => {
-  const errors: string[] = []
-  page.on('pageerror', (error) => errors.push(error.message))
-  page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(message.text())
-  })
-  await page.goto('/tests/browser/harness.html?lang=ru')
-  await page.getByRole('button', { name: /аналитика/i }).click()
-  await expect(page.locator('.analytics-dashboard')).toBeVisible()
-  expect(errors).toEqual([])
 })
 
 test('a command dialog layers over its inspector and Escape closes only the active choice', async ({
@@ -353,71 +269,13 @@ test('custom selection portals and flips without moving page content', async ({ 
 // labels are text: there is nothing here to point at any more. The case comes
 // back with the search screen, not before.
 
-test('analytics data opens in a URL-owned drawer without reflowing the chart', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 800 })
-  await page.goto('/tests/browser/harness.html?lang=ru&surface=analytics')
-  const chart = page.locator('.throughput-card .echarts-chart')
-  const before = await chart.boundingBox()
-  await page.locator('.throughput-card .data-inspector-trigger').click()
-  await expect(page).toHaveURL(/analyticsTable=throughput/)
-  await expect(page.locator('.analytics-table-drawer')).toBeVisible()
-  const drawerBox = await page.locator('.analytics-table-drawer').boundingBox()
-  expect(drawerBox?.width).toBeGreaterThanOrEqual(800)
-  const tableOverflow = await page
-    .locator('.analytics-table-scroll')
-    .evaluate((element) => getComputedStyle(element).overflowX)
-  expect(tableOverflow).toBe('auto')
-  await expect(chart).toBeVisible()
-  const after = await chart.boundingBox()
-  expect(after && before && { width: after.width, height: after.height }).toEqual({
-    width: before?.width,
-    height: before?.height,
-  })
-  await page.locator('.analytics-table-drawer').getByRole('button', { name: 'Закрыть' }).click()
-  await expect(page).not.toHaveURL(/analyticsTable=/)
-})
-
-test('the attempt totals open the rows behind them, each with its own provenance', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1280, height: 800 })
-  await page.goto('/tests/browser/harness.html?lang=ru&surface=analytics')
-  await page.locator('.execution-analytics .data-inspector-trigger').click()
-  await expect(page).toHaveURL(/analyticsTable=executions/)
-
-  const drawer = page.locator('.analytics-table-drawer')
-  await expect(drawer).toBeVisible()
-  const rows = drawer.locator('tbody tr')
-  await expect(rows).toHaveCount(2)
-
-  // The observed attempt names who answered and the session to go and read.
-  await expect(rows.first()).toContainText('MAIN-1')
-  await expect(rows.first()).toContainText('claude-journal-telemetry')
-  await expect(rows.first()).toContainText('sess-claude-1')
-
-  // The unobserved one says so in its own row rather than borrowing the
-  // block's coverage line, which is the question a reader opens this to ask.
-  await expect(rows.nth(1)).toContainText('MAIN-2')
-  await expect(rows.nth(1)).not.toContainText('claude-journal-telemetry')
-
-  await drawer.getByRole('button', { name: 'Закрыть' }).click()
-  await expect(page).not.toHaveURL(/analyticsTable=/)
-})
-
 /**
  * The static rules read the template; axe reads what the browser built from it,
  * which is where contrast, computed roles and generated ids live. The harness
  * is the surface to point it at because it renders the shared primitives with
  * no server behind them.
- *
- * One known violation is allowed through by name. The KPI ledger puts a `small`
- * note beside `dt` and `dd` inside a `dl > div`, which may hold only those two;
- * moving it is a layout change rather than an attribute swap, so card #305 owns
- * it. Naming the rule keeps every other violation failing, including a second
- * instance of this one somewhere new.
  */
-const KNOWN_VIOLATIONS = new Set(['definition-list'])
-for (const surface of ['', 'card', 'analytics']) {
+for (const surface of ['', 'work-item', 'context-bar']) {
   const query = surface ? `&surface=${surface}` : ''
 
   test(`the ${surface || 'default'} harness surface has no serious axe violations`, async ({
@@ -428,9 +286,7 @@ for (const surface of ['', 'card', 'analytics']) {
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
       .analyze()
     const blocking = results.violations.filter(
-      (violation) =>
-        (violation.impact === 'critical' || violation.impact === 'serious') &&
-        !KNOWN_VIOLATIONS.has(violation.id),
+      (violation) => violation.impact === 'critical' || violation.impact === 'serious',
     )
     expect(
       blocking.map(

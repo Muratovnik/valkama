@@ -443,3 +443,9 @@ export function serializePlatformRoute(value: unknown): string {
 export function roundTripPlatformRoute(value: unknown): PlatformRoute {
   return parsePlatformRoute(serializePlatformRoute(value))
 }
+
+export function recoverWorkRoute(route: PlatformRoute): PlatformRoute {
+  return ['analytics', 'improvements', 'memory', 'sessions', 'skills'].includes(route.module_id)
+    ? { module_id: 'planning', scope: route.scope }
+    : route
+}

@@ -2,7 +2,7 @@
 
 OPS-006. What leaves is the record a person would be sorry to lose and could
 not reconstruct: the planning trail, what the Kernel links to what, which
-modules are on, and the decisions Improvements reached. What does not leave is
+modules are on. What does not leave is
 anything a store should not have held in the first place.
 
 The secret rule is absolute and cheap to state: no connection configuration
@@ -22,12 +22,11 @@ from __future__ import annotations
 import json
 import sqlite3
 
-from ..improvements import improvements
 from ..planning import service as planning_service
 
 #: What one export may carry, so a caller asks for what it wants rather than
 #: getting everything and filtering afterwards.
-SECTIONS = ("planning", "relations", "settings", "improvements")
+SECTIONS = ("planning", "relations", "settings")
 
 #: How many rows one section will carry. An export is a record, not a database
 #: dump, and a file nobody can open is a file nobody keeps.
@@ -38,7 +37,6 @@ def export_installation(
     conn: sqlite3.Connection,
     *,
     sections: tuple[str, ...] = SECTIONS,
-    db_path: str = "",
 ) -> dict:
     """Everything named, in one JSON-shaped record with its own version."""
 
@@ -55,9 +53,8 @@ def export_installation(
         "excluded": [
             "connection configuration and any secret reference",
             "raw telemetry, which belongs to the backend that stores it",
-            "session event streams, which are a purgeable tail",
+            "historical session event records",
             "execution records and execution-session links",
-            "most Improvements sidecar state; this is a decision export, not a backup",
         ],
     }
     if "planning" in sections:
@@ -66,8 +63,6 @@ def export_installation(
         payload["relations"] = _rows(conn, "platform_adapter_links")
     if "settings" in sections:
         payload["settings"] = _settings(conn)
-    if "improvements" in sections:
-        payload["improvements"] = _improvements(db_path)
     return payload
 
 
@@ -102,23 +97,6 @@ def _settings(conn: sqlite3.Connection) -> dict:
         "modules": _rows(conn, "platform_modules"),
         "integrations": _rows(conn, "integration_settings"),
     }
-
-
-def _improvements(db_path: str) -> dict:
-    """The decisions Improvements reached, from its own sidecar store.
-
-    Its own database on purpose, so an absent one is an empty section rather
-    than an error: an installation that never enabled Improvements has nothing
-    to export and is not broken.
-    """
-
-    if not db_path:
-        return {"cases": [], "reason": "no store path was given"}
-    try:
-        store = improvements.ImprovementStore(db_path, "personal")
-        return {"cases": store.cases(limit=100)}
-    except Exception as failure:  # noqa: BLE001 -- an absent sidecar is a normal answer
-        return {"cases": [], "reason": str(failure)}
 
 
 def _rows(conn: sqlite3.Connection, table: str) -> list[dict]:

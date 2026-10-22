@@ -5,7 +5,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { globalScope, projectScope } from './planningFixtures.ts'
+import { projectScope } from './planningFixtures.ts'
 
 async function openSettingsSection(page: Page, name: 'Diagnostics' | 'General' | 'Workspace') {
   await page.getByRole('group', { name: 'Settings section' }).getByRole('button', { name }).click()
@@ -106,6 +106,10 @@ test('Settings sections share one measure and one compact control lane', async (
     for (const section of ['General', 'Workspace', 'Diagnostics'] as const) {
       await openSettingsSection(page, section)
       await expectNoSilentClipping(page, `English Settings ${section} at ${width}px`)
+      const stage = await page.locator('.module-stage').boundingBox()
+      const content = await page.locator('.settings-page').boundingBox()
+      expect(content && stage && content.x >= stage.x).toBeTruthy()
+      expect(content && stage && content.x + content.width <= stage.x + stage.width).toBeTruthy()
     }
   }
 })
@@ -117,7 +121,7 @@ test('Settings groups Connections by capability and keeps project assignments di
   await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
   await expect(page.getByRole('heading', { name: 'Interface', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Opening sessions', exact: true })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Notifications', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Notifications', exact: true })).toHaveCount(0)
   await expect(page.getByRole('heading', { name: 'Modules', exact: true })).toBeHidden()
 
   await openSettingsSection(page, 'Workspace')
@@ -125,8 +129,6 @@ test('Settings groups Connections by capability and keeps project assignments di
     'Modules',
     'Integrations',
     'Execution',
-    'Telemetry',
-    'Skills',
     'Memory',
     'Artifacts',
     'Project assignments',
@@ -198,16 +200,7 @@ test('Settings presents every built-in Connection fact and accessible bounded di
   await page.setViewportSize({ width: 1280, height: 900 })
   await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
   await openSettingsSection(page, 'Workspace')
-  for (const name of [
-    'Claude Code execution',
-    'Codex execution',
-    'Claude local journal',
-    'Codex rollout telemetry',
-    'AgentMemory',
-    'Codex skills',
-    'Claude skills',
-    'Git artifacts',
-  ])
+  for (const name of ['Claude Code execution', 'Codex execution', 'AgentMemory', 'Git artifacts'])
     await expect(page.locator('.registry-name').filter({ hasText: name })).toBeVisible()
 
   const git = page
@@ -286,81 +279,4 @@ test('project assignment override survives reload, resets to installation, and r
   await expect(unavailable).toContainText('No tool assigned')
   await expect(unavailable).not.toContainText('assignment-missing')
   await unavailablePage.close()
-})
-
-test('Skills keeps inventory primary and bounds comparison to one responsive skill', async ({
-  page,
-}) => {
-  await installBackend(page)
-  await page.goto(serializePlatformRoute({ module_id: 'skills', scope: globalScope }))
-  await expect(page.locator('.catalog-pane')).toBeVisible()
-  await expect(page.locator('.skill-table-head [role="columnheader"]')).toHaveCount(3)
-  await expect(page.locator('.skill-table-head')).not.toContainText('Codex')
-  await expectNoSilentClipping(page, 'Skills inventory at 1280x900')
-
-  await page.goto(
-    serializePlatformRoute({
-      module_id: 'skills',
-      scope: globalScope,
-      state: { query: 'review', status: 'enabled', view: 'matrix' },
-    }),
-  )
-
-  const matrix = page.locator('.skill-matrix')
-  await expect(matrix).toBeVisible()
-
-  // The server fixture carries eighteen skills, but comparison discloses one
-  // of them across the four project rows instead of drawing 144 peer cells.
-  await expect(matrix.locator('.matrix-project')).toHaveCount(4)
-  await expect(matrix.locator('.matrix-cell')).toHaveCount(8)
-  await expect(matrix.locator('[role="switch"]')).toHaveCount(4)
-  await expect(matrix.locator('.matrix-client-scope').first()).toContainText(
-    'One setting everywhere',
-  )
-
-  await expectNoSilentClipping(page, 'Skills applicability at 1280x900')
-
-  // Query, status, and view have one route owner: reload returns to the same
-  // comparison, and Inventory below receives the two still-active filters.
-  await page.reload()
-  await expect(page.locator('.skill-matrix')).toBeVisible()
-
-  await page.setViewportSize({ width: 360, height: 900 })
-  await expect(matrix.locator('.matrix-client-name').first()).toBeVisible()
-  await expect
-    .poll(() =>
-      matrix
-        .locator('.matrix-scroll')
-        .evaluate((element) => element.scrollWidth - element.clientWidth),
-    )
-    .toBeLessThanOrEqual(1)
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      ),
-    )
-    .toBeLessThanOrEqual(1)
-  await expectNoSilentClipping(page, 'Skills applicability at 360x900')
-
-  await page.getByRole('button', { name: 'Inventory' }).click()
-  await expect(page.locator('.catalog-pane')).toBeVisible()
-  await expect(page.getByRole('searchbox', { name: 'Search skills' })).toHaveValue('review')
-  await expect(page.getByRole('combobox', { name: 'Skill status' })).toContainText(
-    'Enabled somewhere',
-  )
-  await expect
-    .poll(() =>
-      page
-        .locator('.skill-results')
-        .evaluate((element) => element.scrollWidth - element.clientWidth),
-    )
-    .toBeLessThanOrEqual(1)
-  await expectNoSilentClipping(page, 'Skills inventory at 360x900')
-
-  await page.locator('.skill-row').first().click()
-  await expect(page.locator('.skill-drawer')).toBeVisible()
-  await page.reload()
-  await expect(page.locator('.skill-drawer')).toBeVisible()
-  await expect(page.getByRole('searchbox', { name: 'Search skills' })).toHaveValue('review')
 })

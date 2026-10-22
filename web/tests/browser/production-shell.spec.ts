@@ -43,9 +43,9 @@ test('cold start at "/" restores a canonical route with no error states', async 
 })
 
 test('cold start honors the saved server-side route preference', async ({ page }) => {
-  await installBackend(page, { uiPrefs: { module_id: 'skills', scope: globalScope } })
+  await installBackend(page, { uiPrefs: { module_id: 'settings', scope: globalScope } })
   await page.goto('/')
-  await expect(page).toHaveURL(/\/modules\/skills\/global$/u)
+  await expect(page).toHaveURL(/\/modules\/settings\/global$/u)
   await expect(page.locator('.route-recovery')).toHaveCount(0)
 })
 
@@ -90,8 +90,6 @@ function openReferenceReader(page: Page): () => string | null {
  * the test keeps every generated test asserting one thing unconditionally.
  */
 const ROUTE_MARKERS: Record<string, string> = {
-  'analytics:global': '.portfolio-total',
-  'analytics:project': '.analytics-dashboard',
   'planning:global': '.portfolio-project',
   'planning:project': '.work-item-board',
 }
@@ -107,9 +105,6 @@ for (const moduleId of PLATFORM_MODULE_IDS) {
       const href = serializePlatformRoute({
         module_id: moduleId,
         scope: scopeKind === 'global' ? globalScope : projectScope,
-        ...(moduleId === 'analytics' && scopeKind === 'project'
-          ? { entity: planningSpaceEntity(spaceRef) }
-          : {}),
       })
       await page.goto(href)
       await expect(page.locator('.app-shell')).toBeVisible()
@@ -313,7 +308,6 @@ test('an attached same-key space stays readable but never reaches primary-only p
   })
   const { legacyRequests, platformReads } = await installBackend(page, {
     includeAttachedDuplicate: true,
-    activity: 'unbound',
   })
   await page.goto(
     serializePlatformRoute({
@@ -355,93 +349,12 @@ test('an attached same-key space stays readable but never reaches primary-only p
     .click()
   await expect(page.locator('.drawer')).toContainText('Attached: Release notes')
 
-  const dashboardRequests: string[] = []
-  page.on('request', (request) => {
-    const url = new URL(request.url())
-    if (url.pathname === '/api/dashboard') dashboardRequests.push(`${url.pathname}${url.search}`)
-  })
-  await page.goto(
-    serializePlatformRoute({
-      module_id: 'analytics',
-      scope: projectScope,
-      entity: planningSpaceEntity(attachedSpaceRef),
-    }),
-  )
-  await expect(page.getByRole('status').filter({ hasText: 'writable primary store' })).toBeVisible()
-  expect(dashboardRequests).toEqual([])
-
-  await page.goto(
-    serializePlatformRoute({
-      module_id: 'planning',
-      scope: projectScope,
-      entity: planningSpaceEntity(spaceRef),
-    }),
-  )
-  await page.locator('.bell-trigger').click()
-  // The row names a space no mapped project answers to, so it leads nowhere.
-  await expect(page.locator('.activity-panel .activity-list button')).toBeDisabled()
-  await expect(page.locator('.drawer')).toHaveCount(0)
   expect(legacyRequests).toEqual([])
 })
 
-test('bound neutral activity opens its exact mapped Planning work item', async ({ page }) => {
-  await installBackend(page, { activity: 'bound' })
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
-  await page.locator('.bell-trigger').click()
-  await page.locator('.activity-panel .activity-list button').click()
-  await expect(page.locator('.drawer')).toBeVisible()
-  await expect(page.locator('.drawer .head-reference')).toHaveText(workItemRef.reference)
-})
-
-/**
- * Every module, at the width the shell actually gets, checked for content that
- * is being cut off without saying so. The oracle is in `overflow.ts`; what this
- * adds is the surfaces to point it at and the widths to point it at them from.
- *
- * 1280 is a laptop and 900 is the narrowest the rail still stands beside a
- * board. A column has a 250px floor in both, so a tile is the one thing here
- * that does not get roomier as the window does — which is why it is where a
- * clipped word keeps turning up.
- */
-/** Sessions and improvements have no project-scoped read model of their own. */
-test('the portfolio combines projects that were not configured alike', async ({ page }) => {
-  await installBackend(page)
-  // One reading rather than one dashboard request per project.
-  const dashboards: string[] = []
-  page.on('request', (request) => {
-    const url = new URL(request.url())
-    if (url.pathname.startsWith('/api/dashboard')) {
-      dashboards.push(`${url.pathname}${url.search}`)
-    }
-  })
-  await page.goto(serializePlatformRoute({ module_id: 'analytics', scope: globalScope }))
-
-  const projects = page.locator('.portfolio-project')
-  await expect(projects).toHaveCount(2)
-  expect(dashboards).toEqual(['/api/dashboard/portfolio'])
-
-  // The combined figures are the sums, and the coverage is recomputed rather
-  // than merged: one project of the two answered, so the portfolio is partial.
-  const totals = page.locator('.portfolio-total')
-  await expect(totals).toContainText('6')
-  await expect(totals).toContainText('claude-journal-telemetry')
-
-  // The project nothing measured says so in its own row, where a zero would
-  // have read as a cheap project rather than an unobserved one.
-  await expect(projects.nth(1)).toContainText('Unmeasured')
-  await expect(projects.nth(1)).toContainText('—')
-
-  await projects.first().getByRole('button').click()
-  await expect(page).toHaveURL(/project/)
-  await expect
-    .poll(() => dashboards.filter((url) => url === '/api/dashboard?space=MAIN'))
-    .toHaveLength(1)
-})
-
-const GLOBAL_ONLY_MODULES = new Set(['sessions', 'improvements'])
 const MODULE_SCOPES = PLATFORM_MODULE_IDS.map((moduleId) => ({
   moduleId,
-  scope: GLOBAL_ONLY_MODULES.has(moduleId) ? globalScope : projectScope,
+  scope: projectScope,
 }))
 
 for (const width of [1280, 900]) {

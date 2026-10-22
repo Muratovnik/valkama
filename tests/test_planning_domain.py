@@ -426,26 +426,6 @@ class PlanningDomainTests(unittest.TestCase):
                 ),
             )
 
-    def test_an_improvement_guard_is_asked_only_for_an_improvement_source(self) -> None:
-        asked: list[str] = []
-
-        def guard(source: str, _summary: str) -> dict | None:
-            asked.append(source)
-            return {"allowed": False, "guard": "improvement_eval", "message": "not evaluated"}
-
-        plain = self.item("Plain work")
-        service.set_summary(self.conn, plain["reference"], {"done": "d", "next": "n"})
-        service.transition_work_item(self.conn, plain["reference"], "done", improvement_guard=guard)
-        self.assertEqual([], asked)
-
-        raised = self.item("Raised work", source="improvement://case/7")
-        service.set_summary(self.conn, raised["reference"], {"done": "d", "next": "n"})
-        with self.assertRaisesRegex(model.WorkflowGuardError, "not evaluated"):
-            service.transition_work_item(
-                self.conn, raised["reference"], "done", improvement_guard=guard
-            )
-        self.assertEqual(["improvement://case/7"], asked)
-
 
 if __name__ == "__main__":  # pragma: no cover - unittest discovery owns this
     unittest.main()

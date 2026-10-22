@@ -292,14 +292,11 @@ def transition_work_item(
     force: bool = False,
     expected_revision: int | None = None,
     author: str | None = None,
-    improvement_guard: transitions.ImprovementGuard | None = None,
 ) -> dict:
     row = read_model.item_row(conn, reference)
     _require_revision(row, expected_revision)
     target = _state_row(conn, str(row["workflow_id"]), state)
-    refusals, warnings = transitions.findings(
-        conn, row, target, reason=reason, improvement_guard=improvement_guard
-    )
+    refusals, warnings = transitions.findings(conn, row, target, reason=reason)
     if refusals and not force:
         raise model.WorkflowGuardError(
             "; ".join(f"[{guard}] {message}" for guard, message in refusals)

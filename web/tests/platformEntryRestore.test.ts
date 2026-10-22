@@ -17,7 +17,7 @@ type EntryInputs = Parameters<typeof usePlatformEntryRestore>[0]
 type ContextReady = NonNullable<EntryInputs['contextReady']['value']>
 
 const preferred = {
-  ui_prefs: { module_id: 'skills', scope: { kind: 'global' } },
+  ui_prefs: { module_id: 'settings', scope: { kind: 'global' } },
   projects: [],
 } as unknown as ContextReady
 
@@ -129,33 +129,32 @@ test('entry restore removes an entity the authoritative module cannot consume', 
     resolvedPreferredRoute(
       context,
       {
-        module_id: 'skills',
+        module_id: 'settings',
         scope: { kind: 'global' },
         resource_ref: { kind: 'planning-space', resource_id: 'opaque-resource' },
       },
       moduleRegistrations().map((item) => item.manifest),
     ),
-    { module_id: 'skills', scope: { kind: 'global' } },
+    { module_id: 'settings', scope: { kind: 'global' } },
   )
 })
 
-test('entry restore retains a valid scoped Skill entity', () => {
+test('entry restore retains a valid scoped registry entity', () => {
   const context = {
     primary: { data_scope_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', is_writable: true },
     projects: [],
     ui_prefs: null,
   } as ContextReady
   const resource_ref = {
-    kind: 'skill' as const,
-    skill_key: 'catalogue.skill',
-    source_scope: 'global' as const,
+    kind: 'registry' as const,
+    registry_id: 'registry-1',
   }
   assert.deepEqual(
     resolvedPreferredRoute(
       context,
-      { module_id: 'skills', scope: { kind: 'global' }, resource_ref },
+      { module_id: 'settings', scope: { kind: 'global' }, resource_ref },
       moduleRegistrations().map((item) => item.manifest),
     ),
-    { module_id: 'skills', scope: { kind: 'global' }, entity: resource_ref },
+    { module_id: 'settings', scope: { kind: 'global' }, entity: resource_ref },
   )
 })

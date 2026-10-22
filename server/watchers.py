@@ -1,6 +1,6 @@
 """Change fan-out shared by every surface.
 
-One watcher registry, and the improvements runtime bound to it. All three
+One watcher registry shared by the surfaces. All three
 surfaces publish through the same instance, so this cannot live inside any one
 of them without making the other two import it.
 """
@@ -14,7 +14,6 @@ import threading
 import time
 
 from .executions.lifecycle import reap_launches
-from .improvements import improvements_integration
 from .platform import core as platform_core
 from .platform import modules as platform_modules
 from .store import connect
@@ -23,10 +22,10 @@ from .store import connect
 def reap_sessions_if_enabled(conn) -> bool:
     database_row = next(row for row in conn.execute("PRAGMA database_list") if row[1] == "main")
     primary_db = os.path.abspath(database_row[2]) if database_row[2] else ":memory:"
-    with platform_modules.module_state_fence(primary_db, "sessions"):
+    with platform_modules.module_state_fence(primary_db, "planning"):
         try:
             conn.execute("BEGIN IMMEDIATE")
-            if not platform_core.is_module_enabled(conn, "sessions"):
+            if not platform_core.is_module_enabled(conn, "planning"):
                 conn.rollback()
                 return False
             changed = bool(reap_launches(conn))
@@ -131,27 +130,3 @@ class Watchers:
 
 
 WATCHERS = Watchers()
-
-
-def _improvements_enabled(_primary_db: str) -> bool:
-    conn = connect()
-    try:
-        platform_core.require_module_enabled(conn, "improvements")
-        return True
-    except platform_core.PlatformHttpError:
-        return False
-    finally:
-        conn.close()
-
-
-IMPROVEMENTS_RUNTIME = improvements_integration.ImprovementsRuntime(
-    WATCHERS.publish, _improvements_enabled
-)
-
-
-def _module_state_changed(primary_db: str, module_id: str, state: str) -> None:
-    if module_id == "improvements":
-        IMPROVEMENTS_RUNTIME.module_state_changed(primary_db, state)
-
-
-platform_modules.register_state_observer(_module_state_changed)

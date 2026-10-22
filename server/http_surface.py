@@ -22,15 +22,11 @@ from pathlib import Path
 from typing import NamedTuple
 from urllib.parse import parse_qs, urlparse
 
-from . import analytics, http_security, runner, static_assets, watchers
-from .analytics import export as analytics_export
-from .analytics import portfolio as analytics_portfolio
+from . import http_security, runner, static_assets, watchers
 from .executions import api as execution_api
 from .executions import lifecycle as execution_lifecycle
 from .executions import service as execution_service
 from .federation import federated_search, federated_spaces
-from .improvements import api as improvements_api
-from .improvements import improvements_integration
 from .memory import api as memory_api
 from .ops import doctor
 from .planning import api as planning_api
@@ -41,14 +37,7 @@ from .platform import core as platform_core
 from .platform.contracts import ContractError
 from .projects import scopes
 from .refs import resolve_ref
-from .sessions import (
-    op_ingest_session_event,
-    op_mark_attention_seen,
-    session_feed,
-    sessions_payload,
-)
-from .skills import matrix as skills_matrix
-from .skills import skill_activation, skills_inventory
+from .sessions import op_ingest_session_event, session_context
 from .static_assets import DIST_DIR, SOURCE_ROOT
 from .store import connect, db_path
 
@@ -133,35 +122,23 @@ _HTTP_ROUTE_MODULES = {
     **{("POST", path): "planning" for path in planning_api.WRITE_PATHS},
     ("GET", "/api/search"): "planning",
     ("GET", "/api/scopes"): "planning",
-    ("GET", "/api/dashboard"): "analytics",
-    ("GET", "/api/dashboard/export"): "analytics",
-    # Several projects in one reading. Its own route rather than a parameter
-    # on the space dashboard: it answers a different question and returns a
-    # different shape, and overloading one path would make both unreadable.
-    ("GET", "/api/dashboard/portfolio"): "analytics",
     # The installation's own health belongs to the module that shows the
     # registry: Settings is where an operator already goes to see what is
     # connected and why something is not.
     ("GET", "/api/doctor"): "settings",
-    ("GET", "/api/sessions"): "sessions",
-    ("GET", "/api/session"): "sessions",
-    ("POST", "/api/ingest"): "sessions",
-    ("POST", "/api/session-seen"): "sessions",
-    # Starting and stopping an attempt belongs to the module that already owns
-    # the execution and session entities. Layer 2 gives Execution a module of
-    # its own; until then these two routes move with `sessions`, so switching
-    # that module off switches off launching with it rather than leaving a
-    # spawn nobody records.
-    ("POST", "/api/execution/launch"): "sessions",
-    ("POST", "/api/execution/stop"): "sessions",
-    **{("GET", path): "sessions" for path in execution_api.READ_PATHS},
+    ("GET", "/api/session"): "planning",
+    ("POST", "/api/ingest"): "planning",
+    # Planning owns attempts and their essential session lifecycle.
+    ("POST", "/api/execution/launch"): "planning",
+    ("POST", "/api/execution/stop"): "planning",
+    **{("GET", path): "planning" for path in execution_api.READ_PATHS},
     # Knowledge belongs to Memory wherever it is read from. The work item
     # inspector shows some of it, but the module that owns a capability is the
     # module that gates it: disabling Memory has to take the knowledge out of
     # the inspector too, or "disabled" means one thing on its own page and
     # another everywhere else.
     **{("GET", path): "memory" for path in memory_api.READ_PATHS},
-    **{("POST", path): "sessions" for path in execution_api.WRITE_PATHS},
+    **{("POST", path): "planning" for path in execution_api.WRITE_PATHS},
     # One work item and the Kernel relations attached to it. Planning's own
     # loader supplies the record and the Kernel owns the scope, the binding and
     # the relation read, so the route is the Kernel's and the module is
@@ -172,10 +149,6 @@ _SSE_VIEW_MODULES = {
     "planning": "planning",
     "spaces": "planning",
     "activity": "planning",
-    "sessions": "sessions",
-    "dashboard": "analytics",
-    "analytics": "analytics",
-    "improvements": "improvements",
 }
 
 
@@ -191,10 +164,6 @@ def _sse_view_owner(view: str) -> str:
 def _http_module_owner(
     method: str, path: str, parameters: Mapping[str, list[str]] | None = None
 ) -> str | None:
-    if path.startswith("/api/modules/skills"):
-        return "skills"
-    if path.startswith("/api/modules/improvements"):
-        return "improvements"
     if method == "GET" and path == "/api/events":
         return _sse_view_owner(_first_value(parameters or {}, "view") or "planning")
     return _HTTP_ROUTE_MODULES.get((method, path))
@@ -210,64 +179,6 @@ def _first_value(parameters: Mapping[str, list[str]], key: str) -> str | None:
     """
     values = parameters.get(key)
     return values[0] if values else None
-
-
-def dashboard_projection(
-    conn: sqlite3.Connection, parameters: Mapping[str, object] | None = None
-) -> dict:
-    """Server-side analytics read model used by both HTTP and tests."""
-
-    args = dict(parameters or {})
-    for old, canonical in (("from", "date_from"), ("to", "date_to")):
-        if old in args:
-            raise ValueError(f"{old} is not supported; use {canonical}")
-
-    def one(key: str) -> object:
-        value = args.get(key)
-        if isinstance(value, (list, tuple)):
-            if len(value) > 1:
-                raise ValueError(f"{key} must appear exactly once")
-            return value[0] if value else None
-        return value
-
-    # These filters belong to the analytics contract. Do not translate a
-    # legacy query name: callers get exactly the documented keys.
-    return analytics.project_space(
-        conn,
-        str(one("space") or "") or None,
-        as_of=one("as_of"),
-        date_from=one("date_from"),
-        date_to=one("date_to"),
-        client=str(one("client") or "") or None,
-        agent=str(one("agent") or "") or None,
-        status=str(one("status") or "") or None,
-        environment=str(one("environment") or "") or None,
-        tool=str(one("tool") or "") or None,
-    )
-
-
-def _dashboard_sse_parameters(
-    space: str | None, parameters: Mapping[str, list[str]] | None
-) -> dict[str, object]:
-    """Keep the analytics SSE query surface identical to its HTTP GET peer."""
-    for old, canonical in (("from", "date_from"), ("to", "date_to")):
-        if old in (parameters or {}):
-            raise ValueError(f"{old} is not supported; use {canonical}")
-    result: dict[str, object] = {"space": space} if space else {}
-    for key in (
-        "as_of",
-        "date_from",
-        "date_to",
-        "client",
-        "agent",
-        "status",
-        "environment",
-        "tool",
-    ):
-        values = (parameters or {}).get(key)
-        if values:
-            result[key] = values[0]
-    return result
 
 
 # --- one boundary, declared once ---------------------------------------------
@@ -461,29 +372,6 @@ def _platform_read(call: _Call) -> _Answer | None:
     )
 
 
-def _skill_detail_read(call: _Call) -> _Answer | None:
-    # Blank values are dropped here on purpose: `?key=` names no skill, so this
-    # route refuses rather than looking one up.
-    keys = parse_qs(call.query).get("key", [])
-    if len(keys) != 1:
-        raise skill_activation.SkillActivationError("skill_detail_invalid", status=422)
-    return 200, skills_inventory.skill_detail(key=keys[0])
-
-
-def _skills_matrix_read(_call: _Call) -> _Answer | None:
-    return 200, skills_matrix.activation_matrix()
-
-
-def _skills_inventory_read(_call: _Call) -> _Answer | None:
-    return 200, skills_inventory.inventory_payload()
-
-
-def _improvements_read(call: _Call) -> _Answer | None:
-    # Improvements owns its own store and is reached by path, which is why this
-    # boundary holds no connection of its own.
-    return improvements_api.handle_get(db_path(), call.path, parse_qs(call.query))
-
-
 def _execution_write(call: _Call) -> _Answer | None:
     return execution_api.handle_post(call.store(), call.path, call.payload)
 
@@ -494,39 +382,6 @@ def _planning_write(call: _Call) -> _Answer | None:
 
 def _platform_write(call: _Call) -> _Answer | None:
     return platform_core.handle_post(call.store(), db_path(), call.path, call.payload)
-
-
-def _skills_activation_write(call: _Call) -> _Answer | None:
-    payload = call.payload
-    # `project` is optional and exact: absent means the owner's own answer,
-    # present means that project's. A client that cannot hold a per-project
-    # answer refuses it rather than writing the owner-wide value under a
-    # project's name.
-    if not {"key", "client", "enabled"} <= set(payload) or not set(payload) <= {
-        "key",
-        "client",
-        "enabled",
-        "project",
-    }:
-        raise skill_activation.SkillActivationError("skill_activation_invalid", status=422)
-    return 200, skills_inventory.update_skill_activation(
-        key=payload["key"],
-        client=payload["client"],
-        enabled=payload["enabled"],
-        project=payload.get("project"),
-    )
-
-
-def _improvements_write(call: _Call) -> _Answer | None:
-    return improvements_api.handle_post(
-        watchers.IMPROVEMENTS_RUNTIME, db_path(), call.path, call.payload
-    )
-
-
-def _improvements_replace(call: _Call) -> _Answer | None:
-    return improvements_api.handle_put(
-        watchers.IMPROVEMENTS_RUNTIME, db_path(), call.path, call.payload
-    )
 
 
 def _ingest_write(call: _Call) -> _Answer | None:
@@ -543,60 +398,14 @@ def _execution_lifecycle_write(call: _Call) -> _Answer | None:
     return _Raw(200, json.dumps(result, ensure_ascii=False).encode("utf-8"), "application/json")
 
 
-def _session_seen_write(call: _Call) -> _Answer | None:
-    result = op_mark_attention_seen(call.store(), str(call.payload.get("id", "")))
-    return _Raw(200, json.dumps(result).encode("utf-8"), "application/json")
-
-
 # The error mappers. A boundary that already publishes one lists it directly;
 # these are the ones this surface owns.
-
-
-def _stable_failure(_error: Exception) -> _Answer:
-    return _generic_failure()
 
 
 def _platform_write_error(error: Exception) -> _Answer:
     response = platform_core.error_response(error)
     # A Kernel 500 says only that; whatever produced it stays in the process.
     return _generic_failure(500) if response[0] == 500 else response
-
-
-def _skill_detail_error(error: Exception) -> _Answer:
-    if isinstance(error, skill_activation.SkillActivationError):
-        return error.status, {"interface_version": "skill-detail", "error": {"code": error.code}}
-    return 500, {
-        "interface_version": "skill-detail",
-        "error": {"code": "skill_detail_unavailable"},
-    }
-
-
-def _skills_matrix_error(_error: Exception) -> _Answer:
-    return 500, {"interface_version": "skills", "error": {"code": "skills_matrix_unavailable"}}
-
-
-def _skills_inventory_error(_error: Exception) -> _Answer:
-    return 500, {"interface_version": "skills", "error": {"code": "skills_inventory_unavailable"}}
-
-
-def _skills_activation_error(error: Exception) -> _Answer:
-    if isinstance(error, skill_activation.SkillActivationError):
-        return error.status, {"interface_version": "skills", "error": {"code": error.code}}
-    return 400, {
-        "error": {
-            "code": "skill_activation_invalid",
-            "message": "skill activation request is invalid",
-        }
-    }
-
-
-def _improvements_write_error(error: Exception) -> _Answer:
-    if isinstance(
-        error,
-        (improvements_integration.ImprovementError, improvements_integration.JobError),
-    ):
-        return improvements_api.error_response(error)
-    return _generic_failure(422)
 
 
 def _ingest_error(error: Exception) -> _Answer:
@@ -659,31 +468,6 @@ _GET_BOUNDARIES: tuple[_Boundary, ...] = (
         commit=_Commit.READ_ONLY,
         missing=_PLAIN_NOT_FOUND,
     ),
-    _Boundary(
-        exact=frozenset({"/api/modules/skills/detail"}),
-        handler=_skill_detail_read,
-        errors=_skill_detail_error,
-        commit=_Commit.NO_STORE,
-    ),
-    _Boundary(
-        exact=frozenset({"/api/modules/skills/matrix"}),
-        handler=_skills_matrix_read,
-        errors=_skills_matrix_error,
-        commit=_Commit.NO_STORE,
-    ),
-    _Boundary(
-        exact=frozenset({"/api/modules/skills"}),
-        handler=_skills_inventory_read,
-        errors=_skills_inventory_error,
-        commit=_Commit.NO_STORE,
-    ),
-    _Boundary(
-        prefix="/api/modules/improvements",
-        handler=_improvements_read,
-        errors=improvements_api.error_response,
-        commit=_Commit.NO_STORE,
-        missing=_PLAIN_NOT_FOUND,
-    ),
 )
 
 _POST_BOUNDARIES: tuple[_Boundary, ...] = (
@@ -708,19 +492,6 @@ _POST_BOUNDARIES: tuple[_Boundary, ...] = (
         notify=_Notify(frozenset({"/api/platform/relations"})),
     ),
     _Boundary(
-        exact=frozenset({"/api/modules/skills/activation"}),
-        handler=_skills_activation_write,
-        errors=_skills_activation_error,
-        commit=_Commit.NO_STORE,
-    ),
-    _Boundary(
-        prefix="/api/modules/improvements",
-        handler=_improvements_write,
-        errors=_improvements_write_error,
-        commit=_Commit.NO_STORE,
-        notify=_Notify(),
-    ),
-    _Boundary(
         exact=frozenset({"/api/ingest"}),
         handler=_ingest_write,
         errors=_ingest_error,
@@ -735,25 +506,9 @@ _POST_BOUNDARIES: tuple[_Boundary, ...] = (
         commit=_Commit.DOMAIN,
         notify=_Notify(),
     ),
-    _Boundary(
-        exact=frozenset({"/api/session-seen"}),
-        handler=_session_seen_write,
-        errors=_stable_failure,
-        commit=_Commit.DOMAIN,
-        notify=_Notify(),
-    ),
 )
 
-#: Every PUT this surface answers is Improvements'; an unknown path reaches the
-#: same handler, which declines it, exactly as the copied block did.
-_PUT_BOUNDARIES: tuple[_Boundary, ...] = (
-    _Boundary(
-        prefix="/",
-        handler=_improvements_replace,
-        errors=_improvements_write_error,
-        commit=_Commit.NO_STORE,
-    ),
-)
+_PUT_BOUNDARIES: tuple[_Boundary, ...] = ()
 
 
 class PlatformHTTPServer(ThreadingHTTPServer):
@@ -939,7 +694,7 @@ class Handler(BaseHTTPRequestHandler):
         return http_security.read_json_object(
             self.headers,
             self.rfile,
-            max_bytes=max_bytes or improvements_integration.MAX_HTTP_BODY,
+            max_bytes=max_bytes or 64 * 1024,
         )
 
     def _send_asset(self, relative: str) -> None:
@@ -1055,15 +810,6 @@ class Handler(BaseHTTPRequestHandler):
                     static_assets.canonical_json(snapshot.identity).encode("utf-8"),
                     "application/json",
                 )
-        elif url.path == "/api/dashboard":
-            conn = connect()
-            try:
-                body = json.dumps(dashboard_projection(conn, parameters), ensure_ascii=False)
-                self._send(200, body.encode("utf-8"), "application/json")
-            except (ValueError, TypeError) as error:
-                self._send(400, str(error).encode("utf-8"), "text/plain")
-            finally:
-                conn.close()
         elif url.path == "/api/doctor":
             # The probe is off here on purpose: this request *is* a listener,
             # so asking the port would be the server checking itself and
@@ -1071,39 +817,6 @@ class Handler(BaseHTTPRequestHandler):
             # outside, where the answer means something.
             body = json.dumps(doctor.diagnose(probe=False), ensure_ascii=False)
             self._send(200, body.encode("utf-8"), "application/json")
-        elif url.path == "/api/dashboard/portfolio":
-            conn = connect()
-            try:
-                body = json.dumps(analytics_portfolio.portfolio(conn), ensure_ascii=False)
-                self._send(200, body.encode("utf-8"), "application/json")
-            finally:
-                conn.close()
-        elif url.path == "/api/dashboard/export":
-            # The same projection the screen reads, in a shape a person can take
-            # elsewhere. A second aggregation here would be a second answer.
-            conn = connect()
-            try:
-                payload = dashboard_projection(
-                    conn, {key: value for key, value in parameters.items() if key != "format"}
-                )
-                if _first_value(parameters, "format") == "csv":
-                    self._send(
-                        200,
-                        analytics_export.dashboard_csv(payload).encode("utf-8"),
-                        "text/csv; charset=utf-8",
-                        headers={"Content-Disposition": 'attachment; filename="valkama.csv"'},
-                    )
-                else:
-                    self._send(
-                        200,
-                        json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-                        "application/json",
-                        headers={"Content-Disposition": 'attachment; filename="valkama.json"'},
-                    )
-            except (ValueError, TypeError) as error:
-                self._send(400, str(error).encode("utf-8"), "text/plain")
-            finally:
-                conn.close()
         elif url.path == "/api/scopes":
             try:
                 body = json.dumps(federated_spaces(), ensure_ascii=False)
@@ -1139,22 +852,12 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, body.encode("utf-8"), "application/json")
             except ValueError as error:
                 self._send(400, str(error).encode("utf-8"), "text/plain")
-        elif url.path == "/api/sessions":
-            conn = connect()
-            try:
-                body = json.dumps(sessions_payload(conn), ensure_ascii=False)
-                self._send(200, body.encode("utf-8"), "application/json")
-            finally:
-                conn.close()
         elif url.path == "/api/session":
             parameters = parse_qs(url.query)
             session_id = _first_value(parameters, "id") or ""
-            raw_limit = (parameters.get("limit") or ["50"])[0]
             conn = connect()
             try:
-                body = json.dumps(
-                    session_feed(conn, session_id, int(raw_limit)), ensure_ascii=False
-                )
+                body = json.dumps(session_context(conn, session_id), ensure_ascii=False)
                 self._send(200, body.encode("utf-8"), "application/json")
             except (ValueError, TypeError) as error:
                 self._send(404, str(error).encode("utf-8"), "text/plain")
@@ -1163,18 +866,9 @@ class Handler(BaseHTTPRequestHandler):
         elif url.path == "/api/events":
             parameters = parse_qs(url.query)
             view = (parameters.get("view") or ["planning"])[0]
-            if view == "improvements":
-                try:
-                    improvements_integration.resolve_store(
-                        db_path(), (_first_value(parameters, "scope") or "")
-                    )
-                except Exception as error:
-                    self._send_json(*improvements_api.error_response(error))
-                    return
             self._stream_events(
                 _first_value(parameters, "space"),
                 view=view,
-                parameters=parameters,
             )
         else:
             self._send(404, b"not found", "text/plain")
@@ -1182,8 +876,7 @@ class Handler(BaseHTTPRequestHandler):
     def _stream_events(
         self,
         board: str | None,
-        view: str = "board",
-        parameters: Mapping[str, list[str]] | None = None,
+        view: str = "planning",
     ) -> None:
         """Push one live read model on every database change; clients never poll."""
         self.send_response(200)
@@ -1194,16 +887,8 @@ class Handler(BaseHTTPRequestHandler):
 
         stream = watchers.WATCHERS.subscribe()
         conn = connect()
-        improvement_store = None
-        improvement_conn = None
-        improvement_version = None
-        last_keepalive = time.monotonic()
         frames = EventFrames()
         owner = _sse_view_owner(view)
-        if view == "improvements":
-            improvement_store = improvements_integration.resolve_store(
-                db_path(), (_first_value(parameters or {}, "scope") or "")
-            )
 
         def push() -> None:
             platform_core.require_module_enabled(conn, owner)
@@ -1212,12 +897,6 @@ class Handler(BaseHTTPRequestHandler):
                 current = planning_views.activity_feed(conn)
             elif view == "spaces":
                 current = {"planning_spaces": planning_service.list_planning_spaces(conn)}
-            elif view == "sessions":
-                current = sessions_payload(conn)
-            elif view == "improvements" and improvement_store is not None:
-                current = improvement_store.read_model()
-            elif view in ("dashboard", "analytics"):
-                current = dashboard_projection(conn, _dashboard_sse_parameters(board, parameters))
             else:
                 current = planning_views.planning_payload(conn, space=board)
             frame = frames.frame(json.dumps(current, ensure_ascii=False))
@@ -1233,30 +912,6 @@ class Handler(BaseHTTPRequestHandler):
                     push()
                 except queue.Empty:
                     platform_core.require_module_enabled(conn, owner)
-                    if view == "improvements":
-                        if (
-                            improvement_store is not None
-                            and improvement_conn is None
-                            and improvement_store.path.exists()
-                        ):
-                            improvement_conn = improvement_store.connect()
-                            if improvement_conn is not None:
-                                improvement_version = improvement_conn.execute(
-                                    "PRAGMA data_version"
-                                ).fetchone()[0]
-                                push()
-                                continue
-                        if improvement_conn is not None:
-                            current_version = improvement_conn.execute(
-                                "PRAGMA data_version"
-                            ).fetchone()[0]
-                            if current_version != improvement_version:
-                                improvement_version = current_version
-                                push()
-                                continue
-                        if time.monotonic() - last_keepalive < 20:
-                            continue
-                        last_keepalive = time.monotonic()
                     # A comment frame keeps the connection from idling out and
                     # tells us at once when the browser has gone away.
                     platform_core.require_module_enabled(conn, owner)
@@ -1270,8 +925,6 @@ class Handler(BaseHTTPRequestHandler):
             pass  # the page was closed or the board vanished; nothing to report
         finally:
             watchers.WATCHERS.unsubscribe(stream)
-            if improvement_conn is not None:
-                improvement_conn.close()
             conn.close()
 
     def do_POST(self) -> None:
@@ -1284,14 +937,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.server.security_context,
                 adapter_endpoint=path == "/api/ingest",
             )
-            if path == "/api/modules/skills/activation":
-                body_limit = 4096
-            elif path == "/api/modules/improvements/signals":
-                body_limit = improvements_integration.MAX_SIGNAL_PACKET_BYTES
-            elif path == "/api/ingest" or path in _PLATFORM_WRITE_PATHS:
-                body_limit = 64 * 1024
-            else:
-                body_limit = improvements_integration.MAX_HTTP_BODY
+            body_limit = 64 * 1024
             payload = self._read_json(body_limit)
         except http_security.RequestRefusedError as error:
             self._refuse(error)
@@ -1334,19 +980,6 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def serve_main(port: int, *, development_origin: str | None = None) -> None:
-    # Planning holds the seam; a surface decides what fills it. Installed once
-    # per process so a transition made here is guarded exactly as one made
-    # through the other surface.
-    planning_api.use_improvement_guard(
-        lambda source, summary: improvements_integration.improvement_guard_for_work_item(
-            db_path(), source, summary
-        )
-    )
-    planning_api.use_transition_observer(
-        lambda source, category: improvements_integration.sync_case_from_work_item(
-            db_path(), source, category
-        )
-    )
     runtime_snapshot = static_assets.capture_runtime_snapshot(SOURCE_ROOT, DIST_DIR)
     if "index.html" not in runtime_snapshot.assets:
         # This process has no logger and no caller to return to: it is the
@@ -1373,10 +1006,6 @@ def serve_main(port: int, *, development_origin: str | None = None) -> None:
         )
     server = PlatformHTTPServer(("127.0.0.1", port), Handler, development_origin=development_origin)
     threading.Thread(target=watchers.WATCHERS.run, daemon=True).start()
-    improvements_thread = threading.Thread(
-        target=watchers.IMPROVEMENTS_RUNTIME.run, args=(db_path(),), daemon=True
-    )
-    improvements_thread.start()
     # Handler reads only this immutable startup capture. The mutable dist tree
     # can be rebuilt for the next process without changing this listener.
     server.runtime_snapshot = runtime_snapshot
@@ -1386,6 +1015,4 @@ def serve_main(port: int, *, development_origin: str | None = None) -> None:
     try:
         server.serve_forever()
     finally:
-        watchers.IMPROVEMENTS_RUNTIME.stop()
-        improvements_thread.join(timeout=5)
         server.server_close()

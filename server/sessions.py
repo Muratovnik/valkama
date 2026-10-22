@@ -1,14 +1,10 @@
-"""Agent sessions: ingest, the monitor read model, and stream retention.
+"""Essential session lifecycle and exact Planning association context.
 
-Hooks post one event per lifecycle step from the agent's own process. Events
-are classified as they arrive: `analytics` rows are kept for reporting and
-`stream` rows are a bounded tail that `purge_stream_events` can drop without
-touching the analytics history.
+Historical session events remain stored; current ingestion admits lifecycle only.
 """
 
 from __future__ import annotations
 
-import datetime as dt
 import json
 import sqlite3
 
@@ -16,36 +12,20 @@ from .platform.contracts import planning_space_entity
 from .platform.scope import read_store_metadata
 from .projects import project_registry
 
-# --- session monitor: normalized ingest, live view, stream hygiene -----------
-
-# The published contract lives in docs/session-event-contract.md. The server is
-# the authority for the analytics/stream split: adapters name what happened,
-# retention policy stays in one place.
+# The current contract is docs/product-model.md#work-item-context. The historic
+# class value is retained for lifecycle rows so existing durable records keep
+# their identity; this is not an analytics or universal stream admission path.
 SESSION_EVENT_KINDS = {
     "session_start": "analytics",
     "session_end": "analytics",
     "turn_end": "analytics",
-    "tool_end": "analytics",
     "attention": "analytics",
-    "tool_start": "stream",
-    "step": "stream",
 }
 
 # A finished turn is a session waiting for its owner, not a finished session --
 # clients end a turn many times per session. It rings the inbox, and the next
 # sign of work clears it again without anyone acknowledging anything.
 WAITING_ATTENTION = "waiting"
-
-RESUMES_WORK = frozenset({"tool_start", "tool_end", "step"})
-
-# This is a presentation threshold, not a fourth durable status.  An active
-# session remains active until a client explicitly ends it, even if its client
-# has disconnected or stopped reporting events.
-SESSION_STALE_AFTER_SECONDS = 5 * 60
-
-# A long interactive session emits thousands of stream rows; only the recent
-# tail has any monitor value, so inserts self-trim. Analytics is never trimmed.
-STREAM_TAIL_PER_SESSION = 300
 
 SESSION_FIELD_LIMITS = {
     "session_id": 128,
@@ -74,11 +54,6 @@ def client_family(client: str) -> str:
     if value.startswith("claude"):
         return "claude"
     return "other"
-
-
-def session_adapter_id(client: str) -> str:
-    family = client_family(client)
-    return f"{family}-sessions" if family != "other" else "unknown"
 
 
 def _session_text(payload: dict, key: str, required: bool = False) -> str:
@@ -191,14 +166,6 @@ def op_ingest_session_event(conn: sqlite3.Connection, payload: dict) -> dict:
             updates.append(
                 "attention_seen = CASE WHEN status = 'active' THEN 0 ELSE attention_seen END"
             )
-        elif kind in RESUMES_WORK:
-            # New observed work makes every nonterminal attention reason
-            # obsolete.  Terminal state is intentionally left untouched; only
-            # session_start is allowed to reopen it.
-            updates.append("attention = CASE WHEN status = 'active' THEN '' ELSE attention END")
-            updates.append(
-                "attention_seen = CASE WHEN status = 'active' THEN 0 ELSE attention_seen END"
-            )
         elif kind == "attention":
             # A terminal status owns its presentation until an explicit new
             # session_start.  In particular a late blocked event cannot hide
@@ -217,21 +184,6 @@ def op_ingest_session_event(conn: sqlite3.Connection, payload: dict) -> dict:
             " VALUES (?,?,?,?,?,?,?)",
             (session_id, klass, kind, tool, server, status, detail),
         )
-        if klass == "stream":
-            conn.execute(
-                "DELETE FROM session_events WHERE session_id = ? AND klass = 'stream'"
-                " AND id NOT IN (SELECT id FROM session_events"
-                " WHERE session_id = ? AND klass = 'stream'"
-                " ORDER BY id DESC LIMIT ?)",
-                (session_id, session_id, STREAM_TAIL_PER_SESSION),
-            )
-        if kind == "session_end":
-            # The ended session's live tail is noise now; its analytics rows
-            # keep the durable record of what it called.
-            conn.execute(
-                "DELETE FROM session_events WHERE session_id = ? AND klass = 'stream'",
-                (session_id,),
-            )
         conn.commit()
     except Exception:
         conn.rollback()
@@ -333,113 +285,6 @@ def _session_root_context(
     }
 
 
-def _monitor_clock(now: dt.datetime | None = None) -> dt.datetime:
-    """Return an injectable UTC clock for the derived monitor presentation."""
-    if now is None:
-        return dt.datetime.now(dt.UTC)
-    if not isinstance(now, dt.datetime):
-        raise TypeError("monitor clock must be a datetime")
-    if now.tzinfo is None:
-        raise ValueError("monitor clock must be timezone-aware")
-    return now.astimezone(dt.UTC)
-
-
-def _session_time(value: str) -> dt.datetime:
-    return dt.datetime.fromisoformat(value)
-
-
-def sessions_payload(
-    conn: sqlite3.Connection,
-    recent_ended: int = 30,
-    *,
-    now: dt.datetime | None = None,
-) -> dict:
-    """The monitor read model: live sessions, their current step, the inbox."""
-    rows = conn.execute(
-        "SELECT s.*,"
-        " (SELECT p.key || '-' || w.number FROM work_item_refs r"
-        "  JOIN work_items w ON w.work_item_id = r.work_item_id"
-        "  JOIN planning_spaces p ON p.planning_space_id = w.planning_space_id"
-        "  WHERE r.kind = 'session' AND r.value = s.id"
-        "  ORDER BY r.id DESC LIMIT 1) AS ref_work_item,"
-        " (SELECT p.key || '-' || w.number FROM work_items w"
-        "  JOIN planning_spaces p ON p.planning_space_id = w.planning_space_id"
-        "  WHERE w.work_item_id = s.work_item_id) AS own_work_item"
-        " FROM sessions s ORDER BY (s.status = 'active') DESC, s.last_seen DESC"
-    ).fetchall()
-    # A stream row is a current step only when it follows every durable
-    # boundary.  This prevents a pre-attention step from leaking into the
-    # waiting/blocked view and suppresses late stream events after session_end.
-    current_steps = dict(
-        conn.execute(
-            "SELECT session_id, COALESCE(NULLIF(tool, ''), kind) FROM session_events"
-            " WHERE klass = 'stream' AND id IN ("
-            "  SELECT MAX(stream.id) FROM session_events stream"
-            "  WHERE stream.klass = 'stream' AND stream.id > COALESCE(("
-            "   SELECT MAX(boundary.id) FROM session_events boundary"
-            "   WHERE boundary.session_id = stream.session_id"
-            "    AND boundary.klass = 'analytics'"
-            "    AND boundary.kind IN ('attention','turn_end','session_end')"
-            "  ), 0) GROUP BY stream.session_id"
-            " )"
-        ).fetchall()
-    )
-    # Which attempt each session belongs to, read once rather than per row. A
-    # session belongs to at most one: the link is written by the launch that
-    # created it or by a person attaching it, never inferred.
-    attempts = dict(
-        conn.execute(
-            "SELECT session_id, execution_id FROM execution_sessions"
-            " GROUP BY session_id HAVING MAX(linked_at)"
-        ).fetchall()
-    )
-    clock = _monitor_clock(now)
-    sessions = []
-    ended_kept = 0
-    for row in rows:
-        if row["status"] != "active":
-            ended_kept += 1
-            if ended_kept > recent_ended and not (row["attention"] and not row["attention_seen"]):
-                continue
-        last_seen = _session_time(row["last_seen"])
-        quiet_seconds = max(0, int((clock - last_seen).total_seconds()))
-        stale = row["status"] == "active" and quiet_seconds >= SESSION_STALE_AFTER_SECONDS
-        healthy = row["status"] == "active" and not row["attention"] and not stale
-        scope = _session_associations(conn, row["id"], row["own_work_item"] or row["ref_work_item"])
-        ambiguous_scope = scope["status"] == "ambiguous"
-        sessions.append(
-            {
-                "id": row["id"],
-                "execution_id": attempts.get(row["id"], ""),
-                "client": row["client"],
-                "client_family": client_family(row["client"]),
-                "adapter_id": session_adapter_id(row["client"]),
-                "cwd": row["cwd"],
-                "label": row["label"],
-                "work_item": None if ambiguous_scope else scope["work_item"],
-                "space_root": _session_root_context(
-                    scope["resource_ref"], row["cwd"], ambiguous=ambiguous_scope
-                ),
-                "status": row["status"],
-                "attention": row["attention"],
-                "attention_seen": bool(row["attention_seen"]),
-                "started_at": row["started_at"],
-                "last_seen": row["last_seen"],
-                "ended_at": row["ended_at"],
-                "quiet_seconds": quiet_seconds,
-                # status stays the durable active|ended|failed enum. Presence
-                # expresses reporter connectivity without fabricating a
-                # terminal event or duplicating the same fact in a boolean.
-                "presence": "stale"
-                if stale
-                else ("connected" if row["status"] == "active" else "terminal"),
-                "current_step": current_steps.get(row["id"], "") if healthy else "",
-            }
-        )
-    inbox = [item for item in sessions if item["attention"] and not item["attention_seen"]]
-    return {"sessions": sessions, "inbox": inbox}
-
-
 def session_context(conn: sqlite3.Connection, value: str) -> dict:
     """Resolve one exact/prefix session and the space its work item names.
 
@@ -513,68 +358,3 @@ def session_context(conn: sqlite3.Connection, value: str) -> dict:
         "detail": f"{row['client']} · {row['status']} · {row['cwd'] or 'no directory'}",
         "at": row["last_seen"],
     }
-
-
-def session_feed(conn: sqlite3.Connection, session_id: str, limit: int = 50) -> dict:
-    """One session's recent actions, newest first: the expanded monitor row."""
-    row = conn.execute("SELECT * FROM sessions WHERE id = ?", (session_id,)).fetchone()
-    if not row:
-        raise ValueError(f"no session {session_id!r}")
-    bounded = max(1, min(int(limit), 200))
-    events = [
-        {
-            "id": e["id"],
-            "klass": e["klass"],
-            "kind": e["kind"],
-            "tool": e["tool"],
-            "server": e["server"],
-            "status": e["status"],
-            "detail": e["detail"],
-            "at": e["created_at"],
-        }
-        for e in conn.execute(
-            "SELECT * FROM session_events WHERE session_id = ? ORDER BY id DESC LIMIT ?",
-            (session_id, bounded),
-        ).fetchall()
-    ]
-    return {"session": session_id, "events": events}
-
-
-def op_mark_attention_seen(conn: sqlite3.Connection, session_id: str) -> dict:
-    changed = conn.execute(
-        "UPDATE sessions SET attention_seen = 1 WHERE id = ? AND attention != ''",
-        (session_id,),
-    ).rowcount
-    conn.commit()
-    return {"session": session_id, "seen": bool(changed)}
-
-
-def purge_stream_events(
-    conn: sqlite3.Connection,
-    session_id: str | None = None,
-    include_active: bool = False,
-    older_than_days: int | None = None,
-) -> dict:
-    """Manual stream hygiene; analytics rows are deliberately untouchable here.
-
-    `older_than_days` is the per-scope retention policy from the registry. It
-    can only be applied to the scope this process owns as its primary store,
-    because federation reads attached files read-only: the platform that owns a file
-    is the one allowed to prune it.
-    """
-    where = ["klass = 'stream'"]
-    values: list = []
-    if session_id:
-        where.append("session_id = ?")
-        values.append(session_id)
-    elif not include_active:
-        where.append("session_id IN (SELECT id FROM sessions WHERE status != 'active')")
-    if older_than_days is not None:
-        where.append("julianday('now') - julianday(created_at) >= ?")
-        values.append(int(older_than_days))
-    cursor = conn.execute(
-        f"DELETE FROM session_events WHERE {' AND '.join(where)}",
-        values,
-    )
-    conn.commit()
-    return {"purged_stream_events": cursor.rowcount}

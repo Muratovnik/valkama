@@ -17,14 +17,6 @@ const drawerCss = readFileSync(
   new URL('../src/widgets/work-item-inspector/components/WorkItemInspector.css', import.meta.url),
   'utf8',
 )
-const monitor = readFileSync(
-  new URL('../src/pages/sessions/SessionsView.vue', import.meta.url),
-  'utf8',
-)
-const sessionDrawer = readFileSync(
-  new URL('../src/widgets/session-detail/SessionDetailDrawer.vue', import.meta.url),
-  'utf8',
-)
 const card = readFileSync(
   new URL('../src/widgets/work-item-views/components/WorkItemTile.vue', import.meta.url),
   'utf8',
@@ -43,14 +35,6 @@ const graphNode = readFileSync(
 )
 const graphProjection = readFileSync(
   new URL('../src/widgets/work-item-graph/composables/useGraphProjection.ts', import.meta.url),
-  'utf8',
-)
-const sessionTable = readFileSync(
-  new URL('../src/pages/sessions/SessionTable.vue', import.meta.url),
-  'utf8',
-)
-const sessionFeed = readFileSync(
-  new URL('../src/widgets/session-detail/SessionFeed.vue', import.meta.url),
   'utf8',
 )
 const kernelRelations = readFileSync(
@@ -91,10 +75,6 @@ const lane = readFileSync(
   new URL('../src/widgets/work-item-views/components/WorkItemColumn.vue', import.meta.url),
   'utf8',
 )
-const improvementStatus = readFileSync(
-  new URL('../src/entities/improvement/components/ImprovementStatusBadge.vue', import.meta.url),
-  'utf8',
-)
 const countBadge = readFileSync(new URL('../src/shared/ui/CountBadge.vue', import.meta.url), 'utf8')
 const semanticState = readFileSync(
   new URL('../src/shared/ui/SemanticState.vue', import.meta.url),
@@ -107,17 +87,6 @@ const settings = readFileSync(
 const appIcon = readFileSync(new URL('../src/shared/ui/VIcon.vue', import.meta.url), 'utf8')
 const navList = readFileSync(
   new URL('../src/widgets/app-nav/components/NavModuleList.vue', import.meta.url),
-  'utf8',
-)
-const dataTableTrigger = readFileSync(
-  new URL('../src/widgets/analytics-dashboard/components/DataTableTrigger.vue', import.meta.url),
-  'utf8',
-)
-const analyticsInspector = readFileSync(
-  new URL(
-    '../src/widgets/analytics-dashboard/components/AnalyticsTableInspector.vue',
-    import.meta.url,
-  ),
   'utf8',
 )
 
@@ -250,11 +219,6 @@ test('every Kernel relation action is confirmed through one dialog component', (
 })
 
 test('operational statuses reserve invariant geometry instead of stretching their rows', () => {
-  assert.doesNotMatch(improvementStatus, /class="improvement-status"/)
-  // The badge is the default and the list opts out of it: one state beside a
-  // heading keeps its ground, a state repeated down every row does not.
-  assert.match(improvementStatus, /variant: 'badge'/)
-  assert.match(improvementStatus, /:variant="variant"/)
   assert.match(semanticState, /variant\?: 'inline' \| 'badge' \| 'dot'/)
   assert.match(graphNode, /class="flow-node-meta"/)
   assert.match(graphNode, /\.flow-node-line\s*\{[^}]*display:\s*grid/s)
@@ -266,98 +230,14 @@ test('operational statuses reserve invariant geometry instead of stretching thei
 
 test('count badges own inline and overlay geometry without per-screen overrides', () => {
   assert.match(countBadge, /placement\?: 'overlay' \| 'inline'/)
-  assert.match(monitor, /placement="inline"/)
-  assert.doesNotMatch(monitor, /group-count-wrap/)
-})
-
-test('the session row is the disclosure control and acknowledgement stays separate', () => {
-  // The static class list holds more than one name since prefer-separate-static-class
-  // moved the literal out of the :class array, so this asks for the class itself.
-  assert.match(sessionTable, /class="[^"]*\bsession-open\b/)
-  // The row asks and the page decides: `select` carries the session, so the table
-  // holds no selection state of its own.
-  assert.match(sessionTable, /@click="emit\('select', session\)"/)
-  assert.doesNotMatch(sessionTable, /selectedId\.value/)
-  // aria-current, not aria-expanded: the row opens a drawer rather than
-  // revealing nested content, and aria-expanded on a table row is only defined
-  // inside a treegrid, which axe reports as a conditional-attribute violation.
-  // Named, because the mark has to be absent rather than false on every other row
-  // and the template is not where that gets decided.
-  assert.match(sessionTable, /:aria-current="currentMark\(session\)"/)
-  // One name for "this row is the one the drawer is showing", spent by the mark
-  // and by the selected class, which were two copies of the same comparison.
-  assert.match(sessionTable, /isSelected\(session\) \? 'true' : undefined/)
-  assert.match(sessionTable, /\{ selected: isSelected\(session\) \}/)
-  assert.match(sessionTable, /class="ack-inline"/)
-  assert.match(sessionTable, /monitor\.markRead/)
-  assert.doesNotMatch(sessionTable, /expand-action|monitor\.openReason|monitor\.showDetails/)
-  assert.doesNotMatch(sessionTable, /row-chevron/)
-  // Counted across both, because "one acknowledgement path" stops meaning
-  // anything if splitting the file is enough to satisfy it.
-  assert.equal(
-    (`${monitor}${sessionTable}`.match(/markSessionSeen\(/g) ?? []).length,
-    1,
-    'one explicit acknowledgement path',
-  )
-  assert.doesNotMatch(`${monitor}${sessionTable}`, /class="session-detail"|fetchSessionFeed\(/)
-  assert.match(monitor, /<SessionDetailDrawer/)
-})
-
-test('session ledger is a compact semantic table with interactive stat filters', () => {
-  assert.match(sessionTable, /<table[^>]*class="session-table"/)
-  assert.match(sessionTable, /<th scope="col"/)
-  // The filter row is the shared segmented control, and it carries each count
-  // in its own label rather than restyling four buttons locally.
-  assert.match(monitor, /<SegmentedControl\s+v-model="activeGroup"/)
-  assert.match(monitor, /label: `\$\{stat\.label\} · \$\{stat\.value\}`/)
-  assert.doesNotMatch(monitor, /class="head-stat"/)
-  assert.match(sessionTable, /t\('monitor\.client'\)/)
-  // The ledger centres itself inside a frame it deliberately fills edge to
-  // edge, and it centres on the one column every module shares. It used to
-  // spell 1180 while the frame said 1360 and the settings page said 1440, so a
-  // reader moving between modules found the text starting in a new place.
-  assert.match(
-    sessionTable,
-    /\.session-table-wrap\s*\{[^}]*max-width:\s*var\(--size-module-column\)[^}]*margin:\s*0 auto/s,
-  )
-  assert.match(sessionTable, /overflow-wrap:\s*anywhere/)
 })
 
 test('session filters, module icons, inspector facts, and analytics inspector use explicit action grammar', () => {
-  assert.match(monitor, /monitor\.groups\.all/)
-  assert.match(monitor, /filteredSessionGroups/)
-  assert.match(sessionTable, /monitor\.filterEmpty/)
-  assert.match(sessionTable, /class="state-cell"/)
-  assert.equal(
-    (`${monitor}${sessionTable}`.match(/<SemanticState/g) ?? []).length,
-    1,
-    'session state belongs to one dedicated column',
-  )
-  assert.doesNotMatch(sessionTable, /class="client-cell"><span class="tone-mark"/)
   assert.match(navList, /module\.icon_key/)
   assert.doesNotMatch(appIcon, /sessions:\s*Activity/)
   assert.doesNotMatch(appIcon, /improvements:\s*Activity/)
   assert.doesNotMatch(drawer, /context-working[^\n]+work\.active/)
   assert.match(drawer, /<InspectorRelations/)
-  // Every chart card reaches the numbers behind it through one trigger, so the
-  // dialog grammar is asserted on that component rather than per chart.
-  // The trigger belongs to the card shell all five charts wear, so it is asserted
-  // once rather than per chart.
-  assert.match(
-    readFileSync(
-      new URL(
-        '../src/widgets/analytics-dashboard/components/AnalyticsChartCard.vue',
-        import.meta.url,
-      ),
-      'utf8',
-    ),
-    /<DataTableTrigger/,
-  )
-  assert.match(dataTableTrigger, /aria-haspopup="dialog"/)
-  assert.match(dataTableTrigger, /dashboard\.openDataTable/)
-  assert.match(analyticsInspector, /ANALYTICS_INSPECTOR_STORAGE_KEY/)
-  assert.match(analyticsInspector, /min-width:/)
-  assert.doesNotMatch(analyticsInspector, /th,td\{[^}]*overflow-wrap:anywhere/)
 })
 
 test('settings registry is read-only and has no legacy integration activation path', () => {
@@ -365,18 +245,7 @@ test('settings registry is read-only and has no legacy integration activation pa
   assert.doesNotMatch(settings, /toggleIntegration|updateIntegration|settings\.integrations/)
 })
 
-test('session details retain their keyed feed request lifecycle', () => {
-  // The feed fetches for itself, and the keyed shared resource generation rejects
-  // late callbacks; the drawer only hands over the session id and refresh revision.
-  assert.match(sessionFeed, /fetchSessionFeed\(id\)/)
-  assert.match(sessionFeed, /resource\.value\.generation/)
-  assert.match(sessionFeed, /resourceUiState/)
-  assert.match(sessionDrawer, /<SessionFeed/)
-  assert.doesNotMatch(sessionDrawer, /fetchSessionFeed/)
-})
-
 test('session details use a persistent resizable inspector rather than a modal overlay', () => {
-  assert.match(sessionDrawer, /<ResizableInspector/)
   assert.match(inspector, /role="separator"/)
   assert.match(inspector, /aria-orientation="vertical"/)
   assert.match(inspector, /SESSION_INSPECTOR_STORAGE_KEY/)
@@ -386,11 +255,9 @@ test('session details use a persistent resizable inspector rather than a modal o
   assert.match(inspector, /ResizeObserver/)
   assert.match(inspector, /surface\.value\?\.parentElement/)
   assert.doesNotMatch(inspector, /@media\s*\(max-width:\s*860px\)/)
-  assert.doesNotMatch(sessionDrawer, /<InspectorDrawer/)
 })
 
 test('the session inspector separates identity from controls and detail content through the shared frame', () => {
-  assert.match(sessionDrawer, /<InspectorFrame/)
   // The head is one component both overlays wear, so its rule and padding are
   // asserted where they live rather than once per surface that shows them.
   assert.match(inspectorFrame, /<OverlayHeader/)
@@ -402,15 +269,6 @@ test('the session inspector separates identity from controls and detail content 
     compactCss(inspectorFrame),
     /\.inspector-frame-body\{[^}]*padding:var\(--space-6\)[^}]*overflow-y:auto/s,
   )
-})
-
-test('the session monitor is a one-column ledger and keeps the selected inspector beside it', () => {
-  assert.match(monitor, /class="session-ledger[^"]*"/)
-  assert.match(monitor, /class="monitor-workspace[^"]*"/)
-  assert.match(monitor, /<SessionDetailDrawer/)
-  assert.match(monitor, /container-type:\s*inline-size/)
-  assert.match(monitor, /@container\s+session-ledger/)
-  assert.doesNotMatch(monitor, /grid-template-columns:\s*repeat\(2/)
 })
 
 test('info tips escape clipped ancestors and calculate a viewport-fixed position', () => {

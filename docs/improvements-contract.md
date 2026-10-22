@@ -1,9 +1,15 @@
 ---
-status: adopted
+status: superseded
 card: 217, 351
 ---
 
 # Valkama Improvements contract
+
+> Historical record. The work-focused product supersedes the standalone
+> Sessions, Analytics, Improvements, and Skills surfaces described here.
+> This document preserves the earlier contract, not current support. See the
+> [product model](product-model.md) and [README](../README.md)
+> for the supported work-item, session-context, and lifecycle boundaries.
 
 This document freezes the single canonical interface used by the backend and
 web packets for the built-in Continuous Improvements module. The established

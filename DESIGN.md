@@ -1,6 +1,6 @@
 ---
 name: Valkama
-description: A near-black, Codex-look operations console for planning, supervising, and improving agent work.
+description: A near-black, Codex-look operations console for planning, executing, and reviewing agent work.
 colors:
   navigation: "#0d1117"
   navigation-raised: "#161b22"
@@ -10,7 +10,6 @@ colors:
   surface-muted: "#282828"
   surface-hover: "#303030"
   surface-active: "#393939"
-  surface-selected: "#22303f"
   text: "#ececec"
   text-muted: "#b3b3b3"
   text-tertiary: "#8f8f8f"
@@ -29,11 +28,7 @@ colors:
   danger: "#ef8479"
   success: "#7bd6a1"
   warning: "#d9b06a"
-  series-1: "#7fb4d3"
-  series-2: "#78c7a0"
-  series-3: "#d8ad62"
-  series-4: "#9ea8e8"
-  series-5: "#aab4bb"
+
 typography:
   scale:
     meta: "12px"
@@ -42,8 +37,6 @@ typography:
     emphasis: "15px"
     section: "16px"
     module: "18px"
-    page: "24px"
-    figure: "28px"
   display:
     fontFamily: "'Inter Variable', 'Onest Workbench', sans-serif"
     fontSize: "1.5rem"
@@ -225,11 +218,6 @@ glass, gradients, glow, oversized marketing headings, or game-like chrome.
   state to a tone; components render the tone. A second mapping keyed on the
   same state in CSS is how `todo` came to have a dot and no border while `dev`
   had a border that disagreed with its dot.
-- Charts read the same palette. Canvas resolves no custom property, so
-  `chartOptions.ts` mirrors the tokens literally; the mirror is generated rather
-  than maintained, and `npm run check:tokens` fails when it drifts. Slices that
-  mean a name use the categorical `--series-*` ramp; a status color never stands
-  in for a category.
 - The palette has two tiers and the application only ever names the upper one.
   Primitives are raw values — the gray ramp, the blues, the size scales — and
   semantic tokens say what a value is for and resolve to a primitive.
@@ -243,9 +231,9 @@ glass, gradients, glow, oversized marketing headings, or game-like chrome.
   and Pajamas both mark their component tier "limited in use" and USWDS ships
   two, which is the right size for one product on one platform.
 - `tokens.css` is the source and every other copy of a token is generated from
-  it by `scripts/sync-tokens.mjs` — the chart theme, the tone map, the favicon,
+  it by `scripts/sync-tokens.mjs` — the semantic tone map, the favicon,
   the Windows ICO, the Electron window and its offline page, and this document's
-  own frontmatter. Copies exist because canvas, a browser tab, an ICO and a
+  own frontmatter. Copies exist because a browser tab, an ICO and a
   window frame resolve no custom property, and every one of them had drifted at
   least once; tests caught that drift but could not fix it, so a palette change
   meant editing seven files by hand. Each site names an anchor that must match
@@ -326,7 +314,7 @@ glass, gradients, glow, oversized marketing headings, or game-like chrome.
   shell, and a dialog was rearranging its fields on news about the monitor.
   Named containers: `main` right of the rail, `workspace` for the module panel,
   `overlay` for a dialog, drawer or inspector, plus `nav`, `card`,
-  `session-ledger`, `skills-catalog` and `filters`. A shared primitive queries
+  `filters`. A shared primitive queries
   the nearest unnamed container, because it stands in more than one of them.
   The two exceptions are the elements that size themselves — the rail and the
   drawer — and `check:ui-system` owns that list.
@@ -450,7 +438,7 @@ a right-hand column of six numbers that means nothing read on its own. Only the
 compact state moves a count to the top-right of the icon box, which is the one
 place left once the label is gone; it never reserves unexplained space below it.
 
-Each module owns a distinct icon. Settings is a destination like any other and
+Work and Settings own distinct icons. Settings is a destination like any other and
 stands under the last navigation group; the rail's footer holds the connection
 state and refresh and nothing you navigate to. The context bar keeps the
 selected Planning space or operating scope and global activity controls in
@@ -464,7 +452,7 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
 - **Rows and tables:** repeated comparable records use aligned columns. The
   whole row is the disclosure target when it opens a detail surface.
 - **Status:** one semantic-state primitive owns label, dot/badge geometry, and
-  palette across Planning, Sessions, Improvements, Analytics, and Skills.
+  palette across work items, executions, references, and Settings.
 - **Choice controls:** one accessible custom control owns search, icons,
   keyboard behavior, and collision-aware portal positioning. Native selects or
   local popovers must not reappear in feature code.
@@ -507,40 +495,18 @@ the one-off cheaper than the shared thing.
 
 ## Module composition
 
-### Planning
+### Work
 
-Planning pairs a collapsible epic index with a horizontally scrollable board.
+Work presents board, list, and graph views from the same Planning read model.
+It pairs a collapsible epic index with a horizontally scrollable board.
 Epic progress, lane state, and active work share the same semantic palette.
 Aggregate epic activity belongs only to the epic index, including its compact
 state; bundle headers on the board do not repeat a “working” label.
 Cards do not reserve empty tag or source regions. Graph nodes allocate separate
 rows for status, title, and relationship metadata so labels cannot collide.
 The related work/session/evidence context is one grouped relationship region,
-not a decorative sequence.
-
-### Sessions
-
-Sessions is a centered, bounded ledger of mutually exclusive attention,
-working, waiting, and recent groups. Its compact table uses client, session,
-activity, and acknowledgement columns. Clicking a row opens the persistent
-inspector; acknowledgement stays a separate quiet control. When the inspector
-is closed, the ledger keeps a readable maximum width instead of stretching
-across the whole monitor.
-
-### Improvements
-
-Improvements uses a compact job ledger, a single readiness summary, and a
-list/detail case workspace. Profile settings live in the shared dialog opened
-beside Run analysis. Case states use the shared semantic primitive; the same
-state never changes shape or color between rows.
-
-### Analytics
-
-Analytics groups flow, agent usage, and card age into distinct sections. Charts
-reserve most of their panel for data, keep readable labels, and offer only
-meaningful alternative encodings. Data tables open in the shared inspector;
-they do not expand the page. Every chart retains a textual/table equivalent and
-shows data-quality notices only when they affect the current metric.
+not a decorative sequence. Execution history and native session opening stay
+inside work-item context; Memory is a typed reference there.
 
 ### Settings
 
@@ -555,21 +521,6 @@ observed health from Kernel-owned intake state. A switch is shown only when the
 Kernel actually owns that setting. Session opener choices show application identity,
 availability, and a single collision-aware selector. Impossible destinations
 are omitted for that client family rather than displayed as unusable choices.
-
-### Skills
-
-Skills is a dense searchable, filterable inventory table with details in the
-shared resizable overlay drawer. The inventory has stable identity, scope,
-and aggregate-status columns; it never grows a column per client. Client
-availability and activation controls are generated from the selected skill's
-client catalog in the drawer, which never reallocates inventory width.
-Project-owned user-scoped sources are
-attributed to their project even when their runtime projection is global.
-Validation or availability failures show their concrete reason beside the
-affected skill. The default inventory remains metadata-only. An explicit
-selection may request one bounded `SKILL.md` body for the drawer; the server
-strips frontmatter, returns no absolute path, and never reads referenced files
-or executes content. Script contents never cross either contract.
 
 ## Accessibility
 

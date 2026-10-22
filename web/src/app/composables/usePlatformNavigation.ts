@@ -17,6 +17,7 @@ import { router } from '@/app/router.ts'
 import type { ModuleId } from '@/shared/api/platformModuleContract.ts'
 import {
   isPlatformRouteUnavailable,
+  recoverWorkRoute,
   resolvePlatformRoute,
   serializePlatformRoute,
 } from '@/shared/api/platformRoute.ts'
@@ -45,6 +46,7 @@ export function usePlatformNavigation(invalidRouteMessage: () => string) {
   const routeUnavailable = ref<PlatformRouteUnavailable | null>(null)
   const routeFailure = ref('')
   const entryRestorePending = ref(false)
+  const pendingSession = ref('')
 
   function currentLocation(): PlatformRoute | PlatformRouteUnavailable {
     return resolvePlatformRoute(new URL(router.currentRoute.value.fullPath, location.origin))
@@ -68,7 +70,15 @@ export function usePlatformNavigation(invalidRouteMessage: () => string) {
         route.value = { module_id: 'planning', scope: resolved.input_scope }
       } else {
         routeUnavailable.value = null
-        route.value = resolved
+        const recovered = recoverWorkRoute(resolved)
+        if (recovered === resolved) {
+          route.value = resolved
+        } else {
+          pendingSession.value =
+            resolved.entity?.kind === 'session' ? resolved.entity.session_id : ''
+          route.value = recovered
+          void router.replace(serializePlatformRoute(route.value))
+        }
       }
     } catch {
       routeUnavailable.value = null
@@ -118,28 +128,6 @@ export function usePlatformNavigation(invalidRouteMessage: () => string) {
     writeRoute({ ...route.value, state: Object.keys(state).length ? state : undefined }, 'replace')
   }
 
-  function updateSkillRoute(
-    skill: { key: string; scope: 'global' | 'project'; project_id?: string } | null,
-  ) {
-    writeRoute(
-      {
-        module_id: 'skills',
-        scope: operatingScope.value,
-        entity:
-          skill === null
-            ? undefined
-            : {
-                kind: 'skill',
-                skill_key: skill.key,
-                source_scope: skill.scope,
-                ...(skill.project_id ? { project_id: skill.project_id } : {}),
-              },
-        state: route.value.state,
-      },
-      'replace',
-    )
-  }
-
   // Back, forward and any navigation the shell did not initiate land here.
   watch(() => router.currentRoute.value.fullPath, applyLocation)
 
@@ -149,6 +137,7 @@ export function usePlatformNavigation(invalidRouteMessage: () => string) {
     goHome,
     openProject,
     operatingScope,
+    pendingSession,
     route,
     routeBlocked,
     routeFailure,
@@ -156,7 +145,6 @@ export function usePlatformNavigation(invalidRouteMessage: () => string) {
     switchModule,
     switchScope,
     updateModuleState,
-    updateSkillRoute,
     writeRoute,
   }
 }

@@ -8,12 +8,11 @@ the top down:
     app/       what exists once: entry point, root component, router, the
                shell's own composables, and the global stylesheet
     pages/     one slice per platform module, each holding that module's screen
-    widgets/   composite blocks a page arranges: nav, drawers, the board, the
-               graph, the analytics dashboard
+    widgets/   composite blocks a page arranges: nav, drawers, the board and graph
     features/  one thing the operator does: compose a card, write a summary,
-               launch a session, edit the analyzer profile
-    entities/  what the product is about: board and its cards, sessions,
-               improvements, skills, analytics
+               launch an attempt, open its client session
+    entities/  what the product is about: work items, session identity and
+               references to project knowledge
     shared/    segments with no business context: api, ui, lib, i18n, types,
                stores
 

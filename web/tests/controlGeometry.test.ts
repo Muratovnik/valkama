@@ -3,8 +3,6 @@ import { readFileSync } from 'node:fs'
 
 import { test } from 'vitest'
 
-import { messages } from '@/shared/i18n/index.ts'
-
 import { compactCss } from './support/source.ts'
 
 /**
@@ -27,7 +25,6 @@ const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'u
 const button = source('../src/shared/ui/VButton.vue')
 const segmented = source('../src/shared/ui/SegmentedControl.vue')
 const choice = source('../src/shared/ui/ChoiceSelect.vue')
-const bell = source('../src/widgets/activity-bell/ActivityBell.vue')
 const badge = source('../src/shared/ui/CountBadge.vue')
 const nav = source('../src/widgets/app-nav/components/AppNav.vue')
 const navList = source('../src/widgets/app-nav/components/NavModuleList.vue')
@@ -36,9 +33,6 @@ const contextBar = source('../src/app/components/AppContextBar.vue')
 const lane = source('../src/widgets/work-item-views/components/WorkItemColumn.vue')
 const stack = source('../src/widgets/work-item-views/components/WorkItemColumn.vue')
 const card = source('../src/widgets/work-item-views/components/WorkItemTile.vue')
-const evaluationRequest = source(
-  '../src/widgets/improvement-case/components/EvaluationRequestForm.vue',
-)
 
 test('a track owns the row and derives its segments, so it matches the button beside it', () => {
   const css = compactCss(segmented)
@@ -84,28 +78,7 @@ test('every labelled control in the family names the row, never the pointer targ
   )
 })
 
-test('an icon button is as tall as its neighbours and still answers a 44px click', () => {
-  const css = compactCss(bell)
-  assert.match(css, /\.bell-trigger\{[^}]*min-width:var\(--size-control-height\)/)
-  assert.match(
-    css,
-    /\.bell-trigger::after\{[^}]*inset:calc\(\(var\(--size-control-height\)-var\(--size-control-target\)\)\/2\)/,
-  )
-})
-
 test('the unread count sits on the bell, cut out of the ground the bar names', () => {
-  // It stood beside the glyph as a bare number, which widened the control past
-  // everything else in the bar and read as a second label.
-  assert.doesNotMatch(bell, /placement="inline"/)
-  // `.bell-count`, not `.count-badge`: the badge's own class belongs to the
-  // badge, and a host that spells it is one rename away from styling nothing.
-  assert.match(
-    compactCss(bell),
-    /\.bell-trigger\.bell-count\{inset-block-start:var\(--space-half\);inset-inline-end:var\(--space-half\)/,
-  )
-  // Capped at one digit: a badge standing on a 20px glyph inside a 40px button
-  // has room for "9+" and not for "99+", which covered the bell it counts.
-  assert.match(bell, /:limit="9"/)
   // The ring is the ground under the badge, and only the container knows which
   // ground that is; a two-value prop could not name a third one.
   assert.match(badge, /var\(--color-count-badge-ring, var\(--color-navigation\)\)/)
@@ -167,65 +140,4 @@ test('a row carrying anything but text aligns by centre', () => {
   // carry shared semantic primitives, so neither may align by text baseline.
   assert.match(compactCss(card), /\.tile-facts\{[^}]*align-items:center/)
   assert.match(compactCss(card), /\.tile-line\{[^}]*align-items:center/)
-})
-
-test('a bounded action form wraps controls instead of widening its module', () => {
-  const css = compactCss(evaluationRequest)
-  assert.match(css, /\.eval-form\{[^}]*min-width:0/)
-  assert.match(css, /\.eval-actions\{[^}]*flex-wrap:wrap/)
-})
-
-test('skill inventory issues name their source before their project context', () => {
-  const view = source('../src/pages/skills/components/SkillsView.vue')
-  assert.match(view, /title: t\(`skills\.sources\.\$\{root\.source\}`\)/)
-  assert.match(view, /context: root\.project_title/)
-  assert.match(view, /class="notice-context"/)
-})
-
-test('a caption places its count instead of welding one into the copy', () => {
-  // "Skills · 37" over "Projects · 3" reads as a pair of tabs, which is what the
-  // designer asked about first: is this navigation or a sentence? A separator
-  // glyph inside a translation is also the reason no layout could answer —
-  // there was nothing for it to place.
-  for (const key of ['count', 'projectCount', 'clientCount'] as const) {
-    for (const catalog of [messages.en.skills, messages.ru.skills] as Record<string, string>[]) {
-      assert.doesNotMatch(catalog[key], /·|\{count\}/, `skills.${key} still carries its own count`)
-    }
-  }
-  const view = readFileSync(
-    new URL('../src/pages/skills/components/SkillsView.vue', import.meta.url),
-    'utf8',
-  )
-  const catalogue = readFileSync(
-    new URL('../src/pages/skills/components/SkillCatalogue.vue', import.meta.url),
-    'utf8',
-  )
-  const toolbar = readFileSync(
-    new URL('../src/pages/skills/components/SkillsToolbar.vue', import.meta.url),
-    'utf8',
-  )
-  assert.match(toolbar, /\{\{ t\('skills\.count'\) \}\}\s*<CountBadge/)
-  // And the band that stood between the filters and the table is gone: it said
-  // how many rows the table below it had, and which scope the context bar had
-  // already named.
-  assert.doesNotMatch(view + toolbar + catalogue, /list-summary|visibleCount|selectedScopeLabel/)
-})
-
-test('two columns of one record stand one gutter apart, whichever table they are in', () => {
-  const skills = compactCss(
-    readFileSync(
-      new URL('../src/pages/skills/components/SkillCatalogue.vue', import.meta.url),
-      'utf8',
-    ),
-  )
-  const sessions = compactCss(
-    readFileSync(new URL('../src/pages/sessions/SessionTable.vue', import.meta.url), 'utf8'),
-  )
-  // A grid spends the whole gutter as its gap; a real table spends half of it
-  // inside each cell. They had drifted to 12px and 24px for the same idea.
-  assert.match(skills, /\.skill-row\{[^}]*gap:var\(--size-column-gutter\)/)
-  assert.match(
-    sessions,
-    /\.sessiontd\{[^}]*padding:var\(--space-2\)calc\(var\(--size-column-gutter\)\/2\)/,
-  )
 })

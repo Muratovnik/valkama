@@ -17,7 +17,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-INTERFACE_VERSION = "kernel-security-2026-08-20"
 INSTALLATION_TOKEN_PATH = Path.home() / ".valkama" / "installation-token"
 GLOBAL_JSON_LIMIT = 1_048_576
 _TOKEN_PATTERN = re.compile(r"[A-Za-z0-9_-]{64}")
