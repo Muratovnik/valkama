@@ -319,17 +319,13 @@ class VisibleFailureTests(unittest.TestCase):
 
 
 BOARD = re.compile(r"\bboards?\b", re.IGNORECASE)
-# Planning really does have boards, and a card toast carries one across IPC.
-# That is the wire, not the product's name.
-WIRE = (re.compile(r"toast\.board"), re.compile(r"valkama:navigate-card"))
 
 
 class ProductVoiceTests(unittest.TestCase):
     """The desktop surface calls the product Valkama.
 
-    Planning is one of seven modules, so a tray item, a window title or a failure
-    message that calls the whole product "the board" names the whole after one
-    of its parts. The domain keeps the word where it means a board.
+    A tray item, window title or failure message names the workspace, while a
+    board is one view of its work. The domain keeps the word for that view.
     """
 
     def test_no_desktop_surface_string_calls_the_product_a_board(self) -> None:
@@ -337,7 +333,7 @@ class ProductVoiceTests(unittest.TestCase):
         for path in (TRAY, MAIN_JS, DESKTOP_PACKAGE):
             with open(path, encoding="utf-8") as handle:
                 for number, line in enumerate(handle, start=1):
-                    if not BOARD.search(line) or any(rule.search(line) for rule in WIRE):
+                    if not BOARD.search(line):
                         continue
                     offenders.append(f"{os.path.relpath(path, ROOT)}:{number}: {line.strip()}")
         self.assertEqual([], offenders)

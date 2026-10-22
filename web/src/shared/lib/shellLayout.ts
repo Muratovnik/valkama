@@ -2,8 +2,6 @@ export const SESSION_INSPECTOR_STORAGE_KEY = 'valkama-session-inspector-width'
 // The value keeps its old spelling on purpose: it is a key in the operator's
 // browser storage, and renaming it would throw away the width they set.
 export const INSPECTOR_DRAWER_STORAGE_KEY = 'valkama-card-drawer-width'
-export const ANALYTICS_INSPECTOR_STORAGE_KEY = 'valkama-analytics-inspector-width'
-export const SKILLS_DRAWER_STORAGE_KEY = 'valkama-skills-drawer-width'
 
 export const INSPECTOR_MIN_WIDTH = 360
 export const INSPECTOR_DEFAULT_WIDTH = 440
@@ -17,9 +15,6 @@ export const DRAWER_DEFAULT_WIDTH = 650
 export const DRAWER_MAX_WIDTH = 960
 export const DRAWER_VIEWPORT_GUTTER = 40
 export const DRAWER_NARROW_BREAKPOINT = 620
-export const ANALYTICS_INSPECTOR_MIN_WIDTH = 640
-export const ANALYTICS_INSPECTOR_DEFAULT_WIDTH = 880
-export const ANALYTICS_INSPECTOR_MAX_WIDTH = 1200
 
 export type InspectorLayout = { maximum: number; mode: 'inline' | 'contained' }
 

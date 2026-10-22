@@ -1,8 +1,8 @@
 import { afterEach, expect, test, vi } from 'vitest'
 
 import { fetchSessionContext, resolveRef } from '@/shared/api/api.ts'
-import { fetchExecutionUsage } from '@/shared/api/executionApi.ts'
 import { inWorkQueue, validateReadModel } from '@/shared/api/planningModel.ts'
+import type { PlanningReadModel } from '@/shared/api/planningModel.ts'
 import { fetchPlatformPlanning } from '@/shared/api/platformPlanningApi.ts'
 import {
   parsePlatformRoute,
@@ -10,8 +10,7 @@ import {
   serializePlatformRoute,
 } from '@/shared/api/platformRoute.ts'
 
-import { executionUsage } from './browser/executionFixtures.ts'
-import { dataScopeId, spaceRef } from './browser/planningFixtures.ts'
+import { dataScopeId, planningReadModel, spaceRef } from './browser/planningFixtures.ts'
 import { planningReadFor } from './browser/planningReadFixture.ts'
 afterEach(() => vi.unstubAllGlobals())
 test('retired deep routes recover into Work in the same operating scope', () => {
@@ -65,6 +64,54 @@ test('queue slices use ready, claim, and workflow category facts independently',
   ).toBe(true)
   expect(inWorkQueue(item, 'all')).toBe(true)
 })
+
+test('the Planning model retains review work beyond 2,000 items', () => {
+  const model = structuredClone(planningReadModel) as PlanningReadModel
+  const baseItem = model.work_items[0]
+  if (!baseItem) throw new Error('Planning fixture needs a work item')
+
+  const reviewState: PlanningReadModel['work_items'][number]['state'] = {
+    state_id: '00000000-0000-4000-8000-000000000903',
+    key: 'review',
+    name: 'Review',
+    category: 'review',
+    is_terminal: false,
+  }
+  const workflow = model.workflow
+  if (!workflow) throw new Error('Planning fixture needs a workflow')
+  model.workflow = {
+    ...workflow,
+    states: [...workflow.states, { ...reviewState, position: workflow.states.length }],
+  }
+  model.work_items = Array.from({ length: 2001 }, (_, index) => {
+    const number = index + 1
+    const identity = 5000 + number
+    return {
+      ...baseItem,
+      work_item_id: `00000000-0000-4000-8000-${String(identity).padStart(12, '0')}`,
+      reference: `MAIN-${number}`,
+      number,
+      state: index === 2000 ? reviewState : baseItem.state,
+    }
+  })
+  model.links = []
+  model.stale_claims = []
+
+  const space = model.planning_spaces[0]
+  if (!space) throw new Error('Planning fixture needs a space summary')
+  space.work_items = 2001
+  space.open = 2001
+  space.active = 2000
+
+  const validated = validateReadModel(model)
+  expect(validated.work_items).toHaveLength(2001)
+  expect(
+    validated.work_items
+      .filter((item) => inWorkQueue(item, 'review'))
+      .map((item) => item.reference),
+  ).toEqual(['MAIN-2001'])
+})
+
 test('exact-session context and retained refs do not request a session fleet or event feed', async () => {
   const payload = {
     kind: 'session',
@@ -81,13 +128,6 @@ test('exact-session context and retained refs do not request a session fleet or 
     '/api/ref?kind=session&value=exact%20id',
   ])
 })
-test('the retained execution usage client still validates the Planning-owned wire', async () => {
-  const fetch = vi.fn(async () => new Response(JSON.stringify(executionUsage)))
-  vi.stubGlobal('fetch', fetch)
-  expect(await fetchExecutionUsage('attempt 1')).toEqual(executionUsage.usage)
-  expect(fetch).toHaveBeenCalledWith('/api/execution/usage?execution_id=attempt%201', undefined)
-})
-
 test('the global Work portfolio requests the bounded project directory without full space items', async () => {
   const payload = {
     interface_version: 'valkama-planning',

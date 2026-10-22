@@ -30,19 +30,6 @@ contextBridge.exposeInMainWorld('valkamaDesktop', {
     }
     return ipcRenderer.invoke('valkama:open-source', request)
   },
-  // The page owns the live session stream, so it reports the inbox and the
-  // shell decides which reasons are new enough to raise a Windows toast.
-  reportAttention(inbox) {
-    ipcRenderer.send('valkama:attention', inbox)
-  },
-  // Page-decided toasts: the renderer filters by the owner's settings and this
-  // shell only shows them natively and routes clicks back as navigation.
-  notify(toasts) {
-    ipcRenderer.send('valkama:notify', toasts)
-  },
-  onNavigateCard(callback) {
-    ipcRenderer.on('valkama:navigate-card', (_event, target) => callback(target))
-  },
   openSession(request) {
     return ipcRenderer.invoke('valkama:open-session', request)
   },

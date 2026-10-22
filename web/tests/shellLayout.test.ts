@@ -3,8 +3,6 @@ import assert from 'node:assert/strict'
 import { test } from 'vitest'
 
 import {
-  ANALYTICS_INSPECTOR_DEFAULT_WIDTH,
-  ANALYTICS_INSPECTOR_STORAGE_KEY,
   clampDrawerWidth,
   clampInspectorWidth,
   DRAWER_DEFAULT_WIDTH,
@@ -19,18 +17,7 @@ import {
   inspectorMaximumForWorkspace,
   inspectorWidthFromKey,
   inspectorWidthFromPointer,
-  SKILLS_DRAWER_STORAGE_KEY,
 } from '@/shared/lib/shellLayout.ts'
-
-test('analytics tables own a wider preference independent from the card drawer', () => {
-  assert.notEqual(ANALYTICS_INSPECTOR_STORAGE_KEY, 'valkama-card-drawer-width')
-  assert.ok(ANALYTICS_INSPECTOR_DEFAULT_WIDTH >= 820)
-})
-
-test('skill previews persist their drawer width without changing the card drawer preference', () => {
-  assert.notEqual(SKILLS_DRAWER_STORAGE_KEY, 'valkama-card-drawer-width')
-  assert.notEqual(SKILLS_DRAWER_STORAGE_KEY, ANALYTICS_INSPECTOR_STORAGE_KEY)
-})
 
 test('the card drawer keeps a persisted useful width inside the actual viewport', () => {
   assert.equal(clampDrawerWidth(DRAWER_DEFAULT_WIDTH, 1440), DRAWER_DEFAULT_WIDTH)

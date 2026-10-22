@@ -77,8 +77,10 @@ def list_work_items(
     category: str | None = None,
     kind: str | None = None,
     owner: str | None = None,
-    limit: int = 200,
+    limit: int | None = 200,
 ) -> list[dict]:
+    """A bounded search, or the complete first-party model when limit is None."""
+
     clauses: list[str] = []
     parameters: list[object] = []
     if space is not None:
@@ -96,12 +98,14 @@ def list_work_items(
     if owner is not None:
         clauses.append("i.claim_ref = ?")
         parameters.append(model.actor(owner, "owner"))
-    bounded = max(1, min(int(limit), 1000))
     query = with_clauses(
         "SELECT i.* FROM work_items i JOIN workflow_states s ON s.state_id = i.state_id", clauses
     )
-    query += " ORDER BY s.position, i.position, i.number LIMIT ?"
-    rows = conn.execute(query, (*parameters, bounded)).fetchall()
+    query += " ORDER BY s.position, i.position, i.number"
+    if limit is not None:
+        query += " LIMIT ?"
+        parameters.append(max(1, min(int(limit), 1000)))
+    rows = conn.execute(query, parameters).fetchall()
     return [read_model.present(conn, row) for row in rows]
 
 

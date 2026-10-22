@@ -4,13 +4,12 @@
 // only makes sure the local Python server is listening and shows its page in a
 // Chromium window, so nothing here duplicates what the page already does.
 
-const { app, BrowserWindow, Menu, Notification, ipcMain, shell } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron')
 const { spawn } = require('node:child_process')
 const { createHash } = require('node:crypto')
 const { readFileSync, statSync } = require('node:fs')
 const { request: httpRequest } = require('node:http')
 const path = require('node:path')
-const { newAttention } = require('./attention')
 const {
   LAUNCHER_COMMAND_NAME,
   LAUNCHER_MANIFEST_NAME,
@@ -82,8 +81,6 @@ const launcherCandidate = launcherBootstrap.launcher
 let serverProcess = null
 let mainWindow = null
 let serverFailureReason = ''
-/** Attention reasons already notified, so a stream push cannot repeat a toast. */
-let notifiedAttention = new Set()
 
 function isValkamaSender(event) {
   const senderUrl = event.senderFrame?.url || event.sender.getURL()
@@ -93,50 +90,6 @@ function isValkamaSender(event) {
 ipcMain.handle('valkama:open-source', async (event, request) => {
   const senderUrl = event.senderFrame?.url || event.sender.getURL()
   return openSourceRequest({ senderUrl, appUrl: URL, request, shell })
-})
-
-ipcMain.on('valkama:attention', (event, inbox) => {
-  // Same trust boundary as the source opener: only the Valkama page may make
-  // this process raise notifications.
-  if (!isValkamaSender(event) || !Notification.isSupported()) return
-  const { toasts, keys } = newAttention(notifiedAttention, inbox)
-  notifiedAttention = keys
-  for (const toast of toasts) {
-    const notification = new Notification({ title: toast.title, body: toast.body })
-    notification.on('click', () => {
-      if (!mainWindow) return
-      if (mainWindow.isMinimized()) mainWindow.restore()
-      mainWindow.focus()
-    })
-    notification.show()
-  }
-})
-
-const MAX_NOTIFY_PER_PUSH = 6
-
-// Page-decided toasts: the renderer already filtered and capped them by the
-// owner's settings, so this side only guards shape and routes clicks back.
-ipcMain.on('valkama:notify', (event, toasts) => {
-  if (!isValkamaSender(event) || !Notification.isSupported()) return
-  const list = Array.isArray(toasts) ? toasts.slice(0, MAX_NOTIFY_PER_PUSH) : []
-  for (const toast of list) {
-    if (!toast || typeof toast.title !== 'string' || typeof toast.body !== 'string') continue
-    const board = typeof toast.board === 'string' ? toast.board : ''
-    const cardId = Number.isInteger(toast.card_id) && toast.card_id > 0 ? toast.card_id : 0
-    const notification = new Notification({
-      title: toast.title.slice(0, 120),
-      body: toast.body.slice(0, 240),
-    })
-    notification.on('click', () => {
-      if (!mainWindow) return
-      if (mainWindow.isMinimized()) mainWindow.restore()
-      mainWindow.focus()
-      if (cardId) {
-        mainWindow.webContents.send('valkama:navigate-card', { board, card_id: cardId })
-      }
-    })
-    notification.show()
-  }
 })
 
 function directoryExists(dir) {

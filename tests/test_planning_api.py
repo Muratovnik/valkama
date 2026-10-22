@@ -102,6 +102,37 @@ class PlanningApiTests(unittest.TestCase):
         )
         self.assertEqual(0, len(self.get("/api/planning/work-items", state="done")["work_items"]))
 
+    def test_the_whole_read_model_keeps_queues_and_graph_beyond_the_list_limit(self) -> None:
+        for number in range(1000):
+            service.create_work_item(self.conn, space="QA", title=f"Backlog {number}")
+        review = service.create_work_item(self.conn, space="QA", title="Review me", state="review")
+        blocked = service.create_work_item(self.conn, space="QA", title="Blocked", state="blocked")
+        assigned = service.create_work_item(self.conn, space="QA", title="Assigned", state="dev")
+        service.claim_work_item(self.conn, assigned["reference"], author="one")
+        service.link_work_items(self.conn, blocked["reference"], review["reference"], "blocks")
+
+        payload = self.get("/api/planning")
+        items = {item["reference"]: item for item in payload["work_items"]}
+        self.assertEqual(1003, len(items))
+        self.assertEqual("review", items[review["reference"]]["state"]["category"])
+        self.assertEqual("blocked", items[blocked["reference"]]["state"]["category"])
+        self.assertEqual("one", items[assigned["reference"]]["claim_ref"])
+        self.assertEqual(1003, payload["planning_spaces"][0]["work_items"])
+        graph = self.get("/api/planning/graph")
+        self.assertEqual(set(items), {node["reference"] for node in graph["nodes"]})
+        self.assertIn(
+            {"from": blocked["work_item_id"], "to": review["work_item_id"], "kind": "blocks"},
+            graph["edges"],
+        )
+        self.assertEqual(200, len(self.get("/api/planning/work-items")["work_items"]))
+        self.assertEqual(
+            1000, len(self.get("/api/planning/work-items", limit="5000")["work_items"])
+        )
+
+    def test_a_complete_model_refuses_a_partial_list_limit(self) -> None:
+        with self.assertRaisesRegex(planning_api.PlanningHttpError, "complete read model"):
+            planning_api.handle_get(self.conn, "/api/planning", {"limit": ["1"]})
+
     def test_an_exact_read_answers_by_reference_or_by_id(self) -> None:
         created = self.post("/api/planning/work-items", space="QA", title="First")
         by_reference = self.get("/api/planning/work-item", id=created["reference"])["work_item"]
@@ -153,7 +184,7 @@ class PlanningApiTests(unittest.TestCase):
         with self.assertRaisesRegex(planning_api.PlanningHttpError, "id is required"):
             planning_api.handle_get(self.conn, "/api/planning/work-item", {})
         with self.assertRaisesRegex(planning_api.PlanningHttpError, "must be an integer"):
-            planning_api.handle_get(self.conn, "/api/planning", {"limit": ["soon"]})
+            planning_api.handle_get(self.conn, "/api/planning/work-items", {"limit": ["soon"]})
 
     # -- writes --------------------------------------------------------------
 

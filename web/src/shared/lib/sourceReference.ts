@@ -17,14 +17,6 @@ interface SourceOpenRequest {
 interface ValkamaDesktopBridge {
   /** Report the current shell's authoritative session-opening capabilities. */
   listSessionOpeners(): Promise<OpenerCapability[]>
-  /** Generic toasts decided by the page; absent in older installed shells. */
-  notify?(
-    toasts: Array<{ body: string; key: string; title: string; board?: string; card_id?: number }>,
-  ): void
-  /** Toast clicks routed back from the shell; absent in older installed shells. */
-  onNavigateCard?(
-    callback: (target: { board?: string; card_id?: number; scope?: string }) => void,
-  ): void
   openSession?(request: {
     client: string
     id: string
@@ -40,8 +32,6 @@ interface ValkamaDesktopBridge {
     source?: Record<string, unknown>
   }>
   openSource(request: SourceOpenRequest): Promise<SourceOpenResult>
-  /** Absent in older installed shells, so every caller must treat it as optional. */
-  reportAttention?(inbox: unknown[]): void
 }
 
 declare global {

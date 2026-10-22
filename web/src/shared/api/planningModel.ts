@@ -226,12 +226,12 @@ const readModelSchema = strictObject({
   interface_version: z.literal(PLANNING_READ_MODEL, {
     message: `expected ${PLANNING_READ_MODEL}`,
   }),
-  planning_spaces: boundedList(spaceBriefSchema, 128),
+  planning_spaces: z.array(spaceBriefSchema),
   planning_space: spaceIdentitySchema.nullable(),
   workflow: workflowSchema.nullable(),
-  work_items: boundedList(workItemBriefSchema, 2000),
-  links: boundedList(edgeSchema, 8000),
-  stale_claims: boundedList(staleClaimSchema, 500),
+  work_items: z.array(workItemBriefSchema),
+  links: z.array(edgeSchema),
+  stale_claims: z.array(staleClaimSchema),
 })
   .refine((payload) => (payload.planning_space === null) === (payload.workflow === null), {
     message: 'a space and its workflow arrive together or not at all',

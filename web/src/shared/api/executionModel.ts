@@ -190,82 +190,6 @@ const attachedSchema = strictObject({
   execution_id: boundedText(NAME, 64),
 })
 
-/**
- * A number and how it was obtained. Never bare: a zero that was measured and a
- * zero that means nobody looked are opposite facts, and only the quality tells
- * them apart.
- */
-const quantitySchema = strictObject({
-  value: z.number().nullable(),
-  quality: enumField(['observed', 'derived', 'estimated', 'unknown', 'unsupported']),
-})
-
-const usageSchema = strictObject({
-  scope: strictObject({
-    project_id: blank(160),
-    work_item: boundedText(WORK_ITEM_REFERENCE, 20),
-    work_item_id: blank(36),
-    execution_id: boundedText(NAME, 64),
-  }),
-  window: strictObject({
-    started_at: boundedText(ISO, 64),
-    ended_at: boundedText(ISO, 64).nullable(),
-  }),
-  duration: strictObject({ wall_ms: quantitySchema, active_ms: quantitySchema }),
-  tokens: strictObject({
-    input: quantitySchema,
-    cached_read: quantitySchema,
-    cache_write: quantitySchema,
-    output: quantitySchema,
-    reasoning: quantitySchema,
-    total: quantitySchema,
-  }),
-  cost: strictObject({ amount: quantitySchema, currency: blank(16).nullable() }),
-  models: boundedList(
-    strictObject({ id: blank(120), sessions: positiveInt(true), quality: blank(32) }),
-    40,
-  ),
-  tools: boundedList(
-    strictObject({
-      name: blank(128),
-      server: blank(128),
-      calls: positiveInt(true),
-      errors: positiveInt(true),
-      unknown: positiveInt(true),
-      quality: blank(32),
-    }),
-    200,
-  ),
-  sessions: boundedList(
-    strictObject({
-      session_id: blank(128),
-      client: blank(32),
-      observed: z.boolean(),
-      reason: blankSafe(400),
-    }),
-    50,
-  ),
-  provenance: strictObject({
-    adapter_id: blank(120),
-    connection_id: blank(120),
-    observed_at: blank(64),
-    source_quality: blank(32),
-  }),
-  coverage: strictObject({
-    time: blank(32),
-    tokens: blank(32),
-    cost: blank(32),
-    tools: blank(32),
-  }),
-})
-
-const usageEnvelopeSchema = strictObject({
-  interface_version: z.literal(EXECUTION_API),
-  usage: usageSchema,
-})
-
-export type ExecutionUsage = z.infer<typeof usageSchema>
-
 export type ExecutionDriver = z.infer<typeof driverSchema>
 export type ExecutionCapabilities = z.infer<typeof capabilitiesSchema>
 export type Execution = z.infer<typeof executionSchema>
@@ -281,8 +205,4 @@ export function validateHistory(value: unknown): ExecutionHistory {
 
 export function validateAttached(value: unknown): z.infer<typeof attachedSchema> {
   return parseContract(attachedSchema, value, 'attached session', invalid)
-}
-
-export function validateUsage(value: unknown): ExecutionUsage {
-  return parseContract(usageEnvelopeSchema, value, 'execution usage', invalid).usage
 }

@@ -160,11 +160,13 @@ def _chosen_space(conn: sqlite3.Connection, parameters: Mapping[str, list[str]])
 
 
 def _read_model(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
-    return views.planning_payload(
-        conn,
-        space=_chosen_space(conn, parameters),
-        limit=_int(_first(parameters, "limit"), "limit", 1000),
-    )
+    if _first(parameters, "limit") is not None:
+        raise PlanningHttpError(
+            400,
+            "invalid_request",
+            "The complete read model does not accept limit; use /api/planning/work-items",
+        )
+    return views.planning_payload(conn, space=_chosen_space(conn, parameters))
 
 
 def _graph(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:

@@ -26,6 +26,11 @@ checkouts are therefore distinguishable even at the same version.
   work histories within the bounded UI response. The full directory API remains
   available without the optional `directory_only=true` query.
 - Wrap work-queue filters and Settings controls in narrow windows.
+- Keep every work item in a space's board, list, graph, and work queues, including
+  spaces with more than 1000 items. Bounded item searches retain their limits.
+- Decode Git reference context after byte capture while preserving its timeout.
+- Check subprocess byte capture and explicit decoding policy, write ownership,
+  and document lifecycle without pinning private expressions or release-note text.
 
 ### Removed
 
@@ -34,6 +39,8 @@ checkouts are therefore distinguishable even at the same version.
   and activation UI/API; standalone Sessions fleet, inbox, and tool event feed.
 - `/api/sessions`, `/api/session-seen`, and the Sessions SSE view. Installed
   skill files and existing client enablement settings are unchanged.
+- Unused desktop inbox notification wiring, frontend remnants of the retired
+  Analytics and Skills screens, and the unused usage client with its test fixtures.
 
 ## [1.0.2] - 2026-09-27
 

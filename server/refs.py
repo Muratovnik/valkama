@@ -14,6 +14,7 @@ import sqlite3
 import subprocess
 import time
 
+from . import processes
 from .documents import REF_RESOLVE_TIMEOUT, doc_roots
 from .projects import project_registry
 from .sessions import session_context
@@ -42,7 +43,9 @@ def resolve_ref(
             if not os.path.isdir(os.path.join(root, ".git")):
                 continue
             try:
-                completed = subprocess.run(
+                # Git's stat is human-facing context; replacement preserves a
+                # diagnostic when an older commit carries invalid UTF-8.
+                completed = processes.run_text(
                     [
                         "git",
                         "-C",
@@ -53,12 +56,9 @@ def resolve_ref(
                         "--format=%h %an %ad%n%s",
                         value,
                     ],
-                    capture_output=True,
-                    text=True,
                     encoding="utf-8",
                     errors="replace",
                     timeout=REF_RESOLVE_TIMEOUT,
-                    check=False,
                 )
             except (OSError, subprocess.SubprocessError) as error:
                 return {

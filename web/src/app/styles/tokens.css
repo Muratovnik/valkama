@@ -276,6 +276,7 @@
      workspace or two neutrals further apart, and rejects everything the
      palette has actually shipped wrong. */
   --color-navigation: var(--color-slate-1000);
+  --color-count-badge-ring: var(--color-navigation);
   --color-navigation-raised: var(--color-slate-900);
   --color-navigation-active: var(--color-slate-800);
   --color-canvas: var(--color-gray-900);

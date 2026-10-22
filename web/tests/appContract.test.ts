@@ -139,19 +139,6 @@ test('attach eligibility mirrors exact connection and permission-grant authoriza
   assert.match(attachRoutes, /scopeEquals\(grant\.applicability, scope\)/)
 })
 
-test('planning writes fail closed outside the exact writable primary store', () => {
-  assert.match(app, /primaryWriteScopeId/)
-  // One derivation, spent in three places: the create action, the drag, and every
-  // write the inspector makes. A view that decided for itself is how the Board
-  // era ended up with three answers to one question.
-  assert.match(planningSurface, /props\.primaryWriteScopeId === boundSpace\.value\.data_scope_id/)
-  assert.match(planningSurface, /boundSpace\.value !== undefined/)
-  assert.match(planningSurface, /platform\.coreWrites\.primaryOwnerRequired/)
-  assert.match(workspace, /v-if="writable"/)
-  assert.match(workspace, /platform\.coreWrites\.primaryOwnerRequired/)
-  assert.match(inspector, /!props\.writable \|\| busy\.value/)
-})
-
 test('source opening carries only canonical Planning-space authority', () => {
   assert.match(planningSurface, /boundSpaceResourceRef/)
   assert.match(planningSurface, /planningSpaceEntity\(space\)/)

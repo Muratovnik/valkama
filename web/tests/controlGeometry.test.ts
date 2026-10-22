@@ -61,11 +61,10 @@ test('every labelled control in the family names the row, never the pointer targ
   assert.match(compactCss(button), /\.button\{[^}]*min-height:var\(--size-control-height\)/)
   assert.match(compactCss(button), /\.button\{[^}]*font:var\(--font-control\)/)
   assert.match(compactCss(choice), /\.choice-trigger\{[^}]*min-height:var\(--size-control-height\)/)
-  // The bar states the family for both triggers at once, so the two names sit in
-  // one `:is()` rather than in two members that spelled `.context-bar` twice.
+  // The bar gives its choice control the same height inside its own scope.
   assert.match(
     compactCss(contextBar),
-    /:is\(\.choice-trigger,\.bell-trigger\)\)\{[^}]*min-height:var\(--size-control-height\)/,
+    /:deep\(\.choice-trigger\)\{[^}]*min-height:var\(--size-control-height\)/,
   )
   // Both rail controls are asserted where they are now written: the entry in the
   // list that renders it, the connection button in its own file. They used to be
@@ -78,12 +77,9 @@ test('every labelled control in the family names the row, never the pointer targ
   )
 })
 
-test('the unread count sits on the bell, cut out of the ground the bar names', () => {
-  // The ring is the ground under the badge, and only the container knows which
-  // ground that is; a two-value prop could not name a third one.
+test('a count badge uses its surrounding color for the cutout ring', () => {
   assert.match(badge, /var\(--color-count-badge-ring, var\(--color-navigation\)\)/)
   assert.doesNotMatch(badge, /surface\?:/)
-  assert.match(compactCss(contextBar), /--color-count-badge-ring:var\(--color-navigation-raised\)/)
 })
 
 test('a count stands beside what it counts, not at the far edge of the row', () => {

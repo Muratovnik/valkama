@@ -126,6 +126,26 @@ class PlanningScopeHttpTests(unittest.TestCase):
         self.assertEqual(before, hashlib.sha256(self.attached.read_bytes()).digest())
         self.assertEqual(409, self.request(self.model_path("primary"))[0])
 
+    def test_exact_http_model_keeps_work_after_a_thousand_backlog_items(self) -> None:
+        conn = store.connect()
+        self.addCleanup(conn.close)
+        for number in range(999):
+            service.create_work_item(conn, space="SAME", title=f"Backlog {number}")
+        review = service.create_work_item(conn, space="SAME", title="Review me", state="review")
+        conn.commit()
+
+        status, payload = self.request(self.model_path("primary"))
+        self.assertEqual(200, status)
+        self.assertEqual(1001, len(payload["work_items"]))
+        self.assertEqual(
+            [review["reference"]],
+            [
+                item["reference"]
+                for item in payload["work_items"]
+                if item["state"]["category"] == "review"
+            ],
+        )
+
     def test_changed_binding_and_detached_store_refuse_without_primary_fallback(self) -> None:
         self.bind("attached")
         self.assertEqual(200, self.request(self.model_path("attached"))[0])

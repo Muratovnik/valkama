@@ -179,22 +179,6 @@ class ProductModelDocsTests(unittest.TestCase):
             with self.subTest(statement=statement):
                 self.assertIn(statement, normalized)
 
-    def test_current_product_copy_is_not_board_first(self) -> None:
-        readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        introduction = readme.split("## What it does", 1)[0].lower()
-        self.assertIn(
-            "planning, executing, and reviewing agent work", " ".join(introduction.split())
-        )
-        self.assertIn("planning", introduction)
-        self.assertNotIn("kanban board", introduction)
-        self.assertNotIn("board attached", introduction)
-
-        changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-        unreleased = changelog.split("## [Unreleased]", 1)[1].split("## [", 1)[0]
-        self.assertIn("Navigation contains Work and Settings", unreleased)
-        self.assertIn("Planning read model", unreleased)
-        self.assertIn("exact session context", unreleased)
-
     def test_current_public_contracts_do_not_publish_obsolete_product_names(self) -> None:
         current_contracts = (
             ROOT / "README.md",
@@ -207,6 +191,13 @@ class ProductModelDocsTests(unittest.TestCase):
             for obsolete in OBSOLETE_PRODUCT_CONTRACT_NAMES:
                 with self.subTest(path=path.name, obsolete=obsolete):
                     self.assertNotIn(obsolete, text)
+
+    def test_retired_contracts_are_marked_superseded(self) -> None:
+        for name in ("improvements-contract.md", "session-event-contract.md"):
+            with self.subTest(name=name):
+                text = (DOCS / name).read_text(encoding="utf-8")
+                self.assertIsNone(lifecycle_problem(text))
+                self.assertEqual("superseded", frontmatter(text)["status"])
 
 
 if __name__ == "__main__":

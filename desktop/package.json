@@ -6,7 +6,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "test": "node --test attention.test.js opener_catalog.test.js preload.test.js project_registry.test.js runtime_contract.test.js session_opener.test.js shell_hardening.test.js source_reference.test.js source_opener.test.js",
+    "test": "node --test opener_catalog.test.js preload.test.js project_registry.test.js runtime_contract.test.js session_opener.test.js shell_hardening.test.js source_reference.test.js source_opener.test.js",
     "dist": "electron-builder"
   },
   "devDependencies": {
@@ -19,7 +19,6 @@
     "files": [
       "main.js",
       "preload.js",
-      "attention.js",
       "opener_catalog.js",
       "project_registry.js",
       "runtime_contract.js",

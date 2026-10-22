@@ -129,10 +129,14 @@ const selectedResourceValue = computed(() =>
   color: var(--color-text);
   background: var(--color-navigation);
 
-  /* Side padding is the one thing the family cannot share: a control with a
-     caption keeps its text off the fill, and an icon button is square. */
+  /* Choice selectors need space on either side of their visible values. */
   :deep(.choice-trigger) {
+    min-height: var(--size-control-height);
     padding: 0 var(--space-3);
+    border: 0;
+    color: var(--color-text);
+    background: var(--color-navigation-raised);
+    border-radius: var(--radius-control);
   }
 }
 
@@ -154,12 +158,8 @@ const selectedResourceValue = computed(() =>
   font-size: var(--font-size-dense);
 }
 
-/* One cluster on the right, not three tracks.
-   The bar used to be four grid columns, and the resource selector's column exists
-   only for projects with multiple resources — so on every other screen an
-   empty track sat between the workspace selector and the bell, adding its two
-   gaps to theirs. Three related controls are one group with one gap, and the
-   group is what the bar lays out. */
+/* Keep the optional resource selector in the scope-control cluster so it takes
+   space only when a project has multiple resources. */
 .context-controls {
   display: flex;
   flex-wrap: wrap;
@@ -176,9 +176,6 @@ const selectedResourceValue = computed(() =>
   max-width: 340px;
 }
 
-/* Доска-селектор появляется только у проектов с несколькими досками; его
-   ширину ограничивает сам элемент, а не грид-трек, иначе пустой трек
-   резервирует место и колокольчик уезжает от правого края. */
 .resource-scope {
   min-width: 180px;
   max-width: 280px;
@@ -188,41 +185,7 @@ const selectedResourceValue = computed(() =>
   }
 }
 
-/* One recipe for every control standing in the chrome.
-   The selector and the bell were two different objects: 8px against 6px of
-   radius, a filled `--color-surface` ground against the canvas tone, an 18% hairline
-   against an 8% one, and two unrelated hovers. Read together they looked like
-   two applications sharing a strip. They are one control family now, and the
-   family is stated by the bar that holds them rather than by either of them,
-   because "a control in the chrome looks like this" is a fact about the bar.
-   A control here is a fill on the chrome's own ladder — one slate step above
-   the bar at rest, one more under the pointer. The first version of this
-   family drew each control as an outline on a transparent ground, which is
-   the drawn-not-filled treatment the design review called out. */
-.context-bar :deep(:is(.choice-trigger, .bell-trigger)) {
-  /* The ground a badge overlapping one of these has to cut itself out of. The
-     bar owns it for the same reason it owns the fill: which ground a chrome
-     control stands on is a fact about the bar. */
-  --color-count-badge-ring: var(--color-navigation-raised);
-
-  min-height: var(--size-control-height);
-  border: 0;
-  color: var(--color-text);
-  background: var(--color-navigation-raised);
-  border-radius: var(--radius-control);
-}
-
-.context-bar
-  :deep(
-    :is(
-      .choice-trigger:hover,
-      .choice-trigger[data-state='open'],
-      .bell-trigger:hover,
-      .bell-trigger.active
-    )
-  ) {
-  --color-count-badge-ring: var(--color-navigation-active);
-
+.context-bar :deep(:is(.choice-trigger:hover, .choice-trigger[data-state='open'])) {
   color: var(--color-text);
   background: var(--color-navigation-active);
 }

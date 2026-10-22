@@ -16,9 +16,7 @@ from . import model, service, store
 READ_MODEL_INTERFACE = f"{model.PLANNING_INTERFACE}-read-model"
 
 
-def planning_payload(
-    conn: sqlite3.Connection, *, space: str | None = None, limit: int = 1000
-) -> dict:
+def planning_payload(conn: sqlite3.Connection, *, space: str | None = None) -> dict:
     """One space's whole graph: its workflow, its items, and the edges between."""
 
     spaces = service.list_planning_spaces(conn)
@@ -34,7 +32,7 @@ def planning_payload(
         }
     chosen = service.get_planning_space(conn, space or spaces[0]["planning_space_id"])
     space_id = str(chosen["planning_space_id"])
-    items = service.list_work_items(conn, space=space_id, limit=limit)
+    items = service.list_work_items(conn, space=space_id, limit=None)
     return {
         "interface_version": READ_MODEL_INTERFACE,
         "planning_spaces": spaces,

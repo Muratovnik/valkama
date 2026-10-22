@@ -18,8 +18,8 @@ const OPENER_CLIENTS: readonly OpenerClient[] = ['claude', 'codex', 'other']
  * Owner settings, shared by every screen that reads or writes them.
  *
  * Two useStorage instances on one key do not observe each other inside a single
- * window, so the settings panel and the notification wiring must hold the same
- * ref. A store is what guarantees that; the hand-rolled module-level singleton
+ * window, so the settings page and session-opening flow must hold the same ref.
+ * A store is what guarantees that; the hand-rolled module-level singleton
  * this replaces guaranteed it only for as long as nobody imported it twice.
  */
 export const useSettingsStore = defineStore('settings', () => {

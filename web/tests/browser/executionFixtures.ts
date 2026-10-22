@@ -183,60 +183,6 @@ export const monitorSessions = [
   },
 ]
 
-/**
- * What the attempt above cost, as the local journal reported it.
- *
- * Deliberately not all observed: `reasoning` has no value and the second
- * session answered nothing, because the states worth rendering are the ones
- * where a number is absent rather than zero.
- */
-export const executionUsage = {
-  interface_version: 'valkama-execution-api',
-  usage: {
-    scope: {
-      project_id: projectId,
-      work_item: workItemRef.reference,
-      work_item_id: '00000000-0000-4000-8000-000000000264',
-      execution_id: 'exec-0f1e2d3c4b5a69788796a5b4c3d2e1f0',
-    },
-    window: { started_at: now, ended_at: now },
-    duration: {
-      wall_ms: { value: 642_000, quality: 'observed' },
-      active_ms: { value: null, quality: 'unsupported' },
-    },
-    tokens: {
-      input: { value: 180_000, quality: 'observed' },
-      cached_read: { value: 1_416_131_861, quality: 'observed' },
-      cache_write: { value: 120_000, quality: 'observed' },
-      output: { value: 14_000, quality: 'observed' },
-      reasoning: { value: null, quality: 'unknown' },
-      total: { value: 216_000, quality: 'observed' },
-    },
-    cost: { amount: { value: null, quality: 'unknown' }, currency: null },
-    models: [{ id: 'opus', sessions: 1, quality: 'observed' }],
-    tools: [
-      { name: 'Read', server: '', calls: 42, errors: 1, unknown: 0, quality: 'observed' },
-      { name: 'Edit', server: '', calls: 7, errors: 0, unknown: 0, quality: 'observed' },
-    ],
-    sessions: [
-      { session_id: launchedSessionId, client: 'claude', observed: true, reason: '' },
-      {
-        session_id: 'a-resumed-one',
-        client: 'claude',
-        observed: false,
-        reason: 'no exact local journal file configured for this session',
-      },
-    ],
-    provenance: {
-      adapter_id: 'claude-journal-telemetry',
-      connection_id: 'local',
-      observed_at: now,
-      source_quality: 'partial',
-    },
-    coverage: { time: 'confirmed', tokens: 'partial', cost: 'unknown', tools: 'confirmed' },
-  },
-}
-
 export function sessionContextFor(id: string | null) {
   const session = monitorSessions.find((candidate) => candidate.id === id)
   return {

@@ -274,4 +274,19 @@ describe('planning write ownership', () => {
     expect(createButtons(wrapper)).toHaveLength(0)
     expect(wrapper.findAll('[data-state="unavailable"]')).toHaveLength(1)
   })
+
+  it.each([
+    { owner: primary.data_scope_id, space: attached },
+    { owner: null, space: primary },
+  ])('refuses a transition without write ownership ($owner)', async ({ owner, space }) => {
+    const wrapper = await render(owner, space)
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockClear()
+
+    wrapper.findComponent({ name: 'PlanningWorkspace' }).vm.$emit('transition', 'MAIN-264', 'dev')
+    await flushPromises()
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(wrapper.emitted('notice')).toHaveLength(1)
+  })
 })

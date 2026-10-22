@@ -11,13 +11,8 @@ import {
   validateAttached,
   validateCapabilities,
   validateHistory,
-  validateUsage,
 } from '@/shared/api/executionModel.ts'
-import type {
-  ExecutionCapabilities,
-  ExecutionHistory,
-  ExecutionUsage,
-} from '@/shared/api/executionModel.ts'
+import type { ExecutionCapabilities, ExecutionHistory } from '@/shared/api/executionModel.ts'
 import { secureFetch } from '@/shared/api/secureFetch.ts'
 import type {
   LaunchPacket,
@@ -50,18 +45,6 @@ export async function fetchExecutionCapabilities(
 ): Promise<ExecutionCapabilities> {
   const query = reference ? `?work_item=${encodeURIComponent(reference)}` : ''
   return validateCapabilities(await read(`/api/execution/capabilities${query}`))
-}
-
-/**
- * What one attempt cost, from whatever local source observed it.
- *
- * Its own read rather than a field on the history: it opens journal files on
- * disk, and a reader who never opens the Usage section never pays for it.
- */
-export async function fetchExecutionUsage(executionId: string): Promise<ExecutionUsage> {
-  return validateUsage(
-    await read(`/api/execution/usage?execution_id=${encodeURIComponent(executionId)}`),
-  )
 }
 
 /** Every attempt at one work item, newest first. */

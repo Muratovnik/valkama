@@ -1,8 +1,6 @@
 """The subprocess boundary of the Unicode text and transport contract.
 
-`docs/architecture/unicode-text-transport-contract.md` in the parent workspace
-requires each repository to keep its own vector for this boundary, and clause 3
-requires a decode failure to propagate rather than turn into something quieter.
+`.agents/rules/subprocess-encoding.md` requires a decode failure to propagate.
 Capturing a child's output as text does the opposite: the failure lands in a
 reader thread, that thread dies, and the stream comes back as None with the
 exit code intact. Nothing raises, so nothing is noticed.
@@ -25,11 +23,13 @@ import threading
 import unittest
 from unittest import mock
 
+from server import processes
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 SERVER = os.path.join(ROOT, "server")
-DECODING_KEYWORDS = ("text", "universal_newlines", "encoding")
+DECODING_KEYWORDS = ("text", "universal_newlines", "encoding", "errors")
 # The first bytes of taskkill's "process not found" message on a Russian
 # Windows, in CP866. Written by a child this test controls, because pointing a
 # real taskkill at a PID to provoke the message means guessing a PID.
@@ -83,6 +83,34 @@ def taskkill_calls(tree: ast.AST) -> list[ast.Call]:
     return found
 
 
+def subprocess_text_problem(call: ast.Call) -> str | None:
+    for keyword in call.keywords:
+        if keyword.arg not in DECODING_KEYWORDS:
+            continue
+        value = keyword.value
+        if isinstance(value, ast.Constant) and (
+            value.value is None
+            or (keyword.arg in ("text", "universal_newlines") and not value.value)
+        ):
+            continue
+        return (
+            f"{keyword.arg} enables subprocess decoding; capture bytes and use processes.run_text"
+        )
+    return None
+
+
+def output_decode_problem(call: ast.Call) -> str | None:
+    for index, name in enumerate(("encoding", "errors")):
+        value = (
+            call.args[index]
+            if len(call.args) > index
+            else next((keyword.value for keyword in call.keywords if keyword.arg == name), None)
+        )
+        if value is None or (isinstance(value, ast.Constant) and not value.value):
+            return f"output decode does not name {name}"
+    return None
+
+
 def server_modules():
     """Every server source file, parsed, with the path it came from."""
     for directory, _folders, names in os.walk(SERVER):
@@ -95,47 +123,98 @@ def server_modules():
 
 
 class SourceGuardTests(unittest.TestCase):
-    """Source guards, because the defect is a keyword that reads as harmless.
-
-    Nothing observable changes when one of these reappears, so no test of
-    behavior can catch it; what catches it is reading the call itself.
-    """
+    """Keep byte capture and explicit caller decoding at the source boundary."""
 
     def test_no_server_module_decodes_what_taskkill_writes(self) -> None:
         calls = 0
         for relative, tree in server_modules():
             for call in taskkill_calls(tree):
                 calls += 1
-                used = {keyword.arg for keyword in call.keywords}
-                for forbidden in DECODING_KEYWORDS:
-                    self.assertNotIn(
-                        forbidden,
-                        used,
-                        f"{relative}:{call.lineno} decodes taskkill output,"
-                        " which is console OEM text",
-                    )
+                self.assertIsNone(
+                    subprocess_text_problem(call),
+                    f"{relative}:{call.lineno} decodes taskkill output, which is console OEM text",
+                )
         self.assertGreaterEqual(calls, 1, "the guard found no taskkill call to check")
 
     def test_a_call_that_decodes_names_both_its_codec_and_its_policy(self) -> None:
-        # `text=True` alone follows the locale, so the same line means UTF-8
-        # under the gate and CP1251 under a plain shell here. Naming the codec
-        # is what makes a call site mean one thing; naming the error policy is
-        # what makes a lenient boundary a declaration instead of an accident.
         calls = 0
+        decoded_outputs = 0
+        scanned = set()
         for relative, tree in server_modules():
-            for call in child_process_calls(tree):
+            scanned.add(relative.replace(os.sep, "/"))
+            child_calls = child_process_calls(tree)
+            for call in child_calls:
                 calls += 1
-                used = {keyword.arg for keyword in call.keywords}
-                if not used & set(DECODING_KEYWORDS) and "errors" not in used:
-                    continue  # captures bytes; nothing is being decoded
-                for required in ("encoding", "errors"):
-                    self.assertIn(
-                        required,
-                        used,
-                        f"{relative}:{call.lineno} decodes a child's output"
-                        f" without naming {required}",
+                self.assertIsNone(
+                    subprocess_text_problem(call),
+                    f"{relative}:{call.lineno}: {subprocess_text_problem(call)}",
+                )
+            captured = {
+                target.id
+                for node in ast.walk(tree)
+                if isinstance(node, ast.Assign)
+                and isinstance(node.value, ast.Call)
+                and node.value in child_calls
+                for target in node.targets
+                if isinstance(target, ast.Name)
+            }
+            for call in ast.walk(tree):
+                if not isinstance(call, ast.Call) or not isinstance(call.func, ast.Attribute):
+                    continue
+                stream = call.func.value
+                if (
+                    call.func.attr == "decode"
+                    and isinstance(stream, ast.Attribute)
+                    and stream.attr in ("stdout", "stderr")
+                    and isinstance(stream.value, ast.Name)
+                    and stream.value.id in captured
+                ):
+                    decoded_outputs += 1
+                    self.assertIsNone(
+                        output_decode_problem(call),
+                        f"{relative}:{call.lineno}: {output_decode_problem(call)}",
                     )
-        self.assertGreaterEqual(calls, 6, "the guard found no child process to check")
+        self.assertIn("server/processes.py", scanned, "the subprocess boundary was not scanned")
+        self.assertGreater(calls, 0, "the guard found no child process to check")
+        self.assertGreater(decoded_outputs, 0, "the guard found no captured-output decode to check")
+
+    def test_the_guard_distinguishes_bytes_from_text_mode_values(self) -> None:
+        accepted = (
+            "subprocess.run(['x'], capture_output=True)",
+            "subprocess.run(['x'], capture_output=True, text=False)",
+            "subprocess.Popen(['x'], stdout=subprocess.PIPE, universal_newlines=None)",
+            "runner(['x'], capture_output=True, text=None, encoding=None, errors=None)",
+        )
+        rejected = (
+            "subprocess.run(['x'], capture_output=True, text=True)",
+            "subprocess.run(['x'], capture_output=True, text=True, encoding='utf-8', errors='strict')",
+            "subprocess.run(['x'], capture_output=True, text=False, encoding='utf-8')",
+            "subprocess.Popen(['x'], stdout=subprocess.PIPE, universal_newlines=True)",
+            "runner(['x'], capture_output=True, encoding=None, errors='strict')",
+            "runner(['x'], capture_output=True, text=choose_mode)",
+        )
+        for source in accepted + rejected:
+            with self.subTest(source=source):
+                found = child_process_calls(ast.parse(source))
+                self.assertEqual(1, len(found))
+                self.assertEqual(source in accepted, subprocess_text_problem(found[0]) is None)
+
+    def test_output_decoding_names_codec_and_error_policy(self) -> None:
+        accepted = (
+            "done.stdout.decode('utf-8', 'strict')",
+            "done.stdout.decode('utf-8', errors='replace')",
+            "done.stderr.decode(encoding=encoding, errors=errors)",
+        )
+        rejected = (
+            "done.stdout.decode()",
+            "done.stdout.decode('utf-8')",
+            "done.stderr.decode(errors='strict')",
+            "done.stdout.decode(encoding=None, errors='strict')",
+        )
+        for source in accepted + rejected:
+            with self.subTest(source=source):
+                call = ast.parse(source).body[0].value
+                self.assertEqual(source in accepted, output_decode_problem(call) is None)
 
     def test_the_guard_catches_a_decoding_call_routed_through_a_callable_parameter(self) -> None:
         """The exact shape `skill_activation._codex_request` had before its fix.
@@ -152,12 +231,7 @@ class SourceGuardTests(unittest.TestCase):
         )
         found = child_process_calls(tree)
         self.assertEqual(1, len(found), "a capture_output call through a callable was missed")
-        used = {keyword.arg for keyword in found[0].keywords}
-        self.assertNotIn(
-            "errors",
-            used,
-            "this synthetic call already names errors, so it no longer proves the catch",
-        )
+        self.assertIsNotNone(subprocess_text_problem(found[0]))
 
 
 class ChildOutputDecodingTests(unittest.TestCase):
@@ -173,6 +247,15 @@ class ChildOutputDecodingTests(unittest.TestCase):
         done = self.child()
         self.assertEqual(0, done.returncode)
         self.assertEqual(OEM_BYTES, done.stdout)
+
+    def test_run_text_honours_the_callers_timeout(self) -> None:
+        with self.assertRaises(subprocess.TimeoutExpired):
+            processes.run_text(
+                [sys.executable, "-c", "import time; time.sleep(10)"],
+                encoding="utf-8",
+                errors="strict",
+                timeout=0.05,
+            )
 
     def test_a_strict_text_capture_loses_the_stream_without_raising(self) -> None:
         # The reason the three call sites take bytes. The exit code survives, so

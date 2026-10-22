@@ -22,7 +22,6 @@ import { doctorReport } from './doctorFixtures.ts'
 import {
   executionCapabilities,
   executionHistory,
-  executionUsage,
   monitorSessions,
   sessionContextFor,
 } from './executionFixtures.ts'
@@ -206,7 +205,6 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
         '/api/sessions': () => fulfill({ sessions: structuredClone(monitorSessions), inbox: [] }),
         '/api/session': () => fulfill(sessionContextFor(url.searchParams.get('id'))),
         '/api/execution/capabilities': () => fulfill(structuredClone(executionCapabilities)),
-        '/api/execution/usage': () => fulfill(structuredClone(executionUsage)),
         '/api/memory/search': () => fulfill(structuredClone(memorySearch)),
         '/api/memory/providers': () => fulfill(structuredClone(memoryProviders)),
         '/api/memory/linked': () => fulfill(structuredClone(memoryLinks)),
