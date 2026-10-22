@@ -378,6 +378,46 @@ class DispatchTests(McpSurfaceTestCase):
         self.assertEqual("workflow_guard", result["structuredContent"]["error"]["code"])
         self.assertIn("executor", result["structuredContent"]["error"]["message"])
 
+    def check_compact_json(self, text: str) -> None:
+        """One line, no padding after separators, and still the same document."""
+
+        self.assertEqual(
+            json.dumps(json.loads(text), ensure_ascii=False, separators=(",", ":")), text
+        )
+        self.assertNotIn("\n", text)
+
+    def test_every_kind_of_tool_result_is_serialized_without_indentation(self) -> None:
+        item = planning_service.create_work_item(
+            self.conn, space=SPACE_KEY, title="кириллица", description="two\nlines"
+        )
+        bare = planning_service.create_work_item(self.conn, space=SPACE_KEY, title="bare")
+        self.conn.commit()
+        reference = item["reference"]
+        results = [
+            self.call("get_work_item", {"id": reference}),
+            self.call("list_work_items", {"space": SPACE_KEY}),
+            self.call("list_platform_modules"),
+            self.call("claim_work_item", {"id": reference, "author": "one"}),
+            self.call("claim_work_item", {"id": reference, "author": "one", "verbose": True}),
+            self.call("transition_work_item", {"id": bare["reference"], "state": "dev"}),
+        ]
+        self.assertFalse(any(result["isError"] for result in results[:-1]))
+        self.assertTrue(results[-1]["isError"])
+        for result in results:
+            self.check_compact_json(result["content"][0]["text"])
+        self.assertIn("кириллица", results[0]["content"][0]["text"])
+
+    def test_a_write_answers_with_far_less_than_the_item_it_wrote(self) -> None:
+        item = planning_service.create_work_item(
+            self.conn, space=SPACE_KEY, title="sized", description="d" * 400
+        )
+        planning_service.set_checklist(self.conn, item["reference"], ["one", "two", "three"])
+        self.conn.commit()
+        arguments = {"id": item["reference"], "author": "one"}
+        short = self.call("claim_work_item", arguments)["content"][0]["text"]
+        full = self.call("claim_work_item", {**arguments, "verbose": True})["content"][0]["text"]
+        self.assertLess(len(short) * 2, len(full))
+
 
 class FramingTests(McpSurfaceTestCase):
     def test_a_blank_line_and_unparseable_bytes_are_skipped_not_answered(self) -> None:

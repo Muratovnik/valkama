@@ -74,6 +74,33 @@ Every tool carries a `title`, a description, a JSON Schema, and MCP behaviour
 
 `openWorldHint` is `false` throughout, because nothing here leaves the machine.
 
+### Tool results
+
+A tool result is one line of JSON text, without indentation.
+
+A write to a work item answers with a short acknowledgement instead of the whole
+item: `reference`, `work_item_id`, `revision`, `state` (`key`, `name`,
+`is_terminal`) and `claim_ref`, plus what that call changed. `revision` is the
+value to pass as `expected_revision` on the next write.
+
+| Tool | Also carries |
+| --- | --- |
+| `create_work_item` | `title`, `kind`, `priority` |
+| `update_work_item` | `updated`, the names of the fields it edited |
+| `transition_work_item` | `warnings` and `overridden` when there are any |
+| `claim_work_item` | nothing more; `claim_ref` is the holder |
+| `set_work_item_checklist` | `checklist`, the new steps as `item_id` and `text` |
+| `claim_work_item_checklist_item`, `tick_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by` |
+| `set_work_item_summary` | `summary_recorded: true` |
+
+Each of these tools takes an optional boolean `verbose`, false by default. With
+`verbose: true` the answer is the full item that `get_work_item` returns. The
+reads, `claim_ready_work_item` (the agent needs the item it just took),
+`create_planning_space`, `delete_work_item` and the tools that already answer
+briefly (`link_work_items`, `attach_work_item_ref`, `comment_work_item`) are
+unchanged, and so is every refusal. The HTTP API is unchanged: it always
+answers with the full item.
+
 Prompts and resources are deliberately not offered. Planning tools manage work;
 project context belongs elsewhere.
 

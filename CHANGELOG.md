@@ -12,6 +12,14 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Changed
 
+- **Breaking for MCP clients:** the work-item write tools (`create_work_item`,
+  `update_work_item`, `transition_work_item`, `claim_work_item`,
+  `set_work_item_checklist`, `claim_work_item_checklist_item`,
+  `tick_work_item_checklist_item`, `set_work_item_summary`) answer with a short
+  acknowledgement (reference, revision, state, holder and what the call changed)
+  instead of the whole item. Pass `verbose: true` for the full item. Every MCP
+  tool result is now serialized on one line without indentation. The HTTP API
+  and the read tools are unchanged.
 - Focus the workspace on projects, work items, claims, blockers, execution,
   results, and review. Navigation contains Work and Settings; board, list, and
   graph share the Planning read model. Memory refs and exact session context

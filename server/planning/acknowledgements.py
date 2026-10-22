@@ -1,0 +1,103 @@
+"""What an agent is told after a write, short enough to read on every call.
+
+A write answers with the whole record at the HTTP boundary, because a browser
+redraws from it. An agent needs far less: that the write landed, the revision to
+pass as `expected_revision` on the next one, and what this call changed. Handing
+it the checklist, comments and event trail after every tick made those answers
+the largest repeating part of a long session.
+
+These functions only narrow an already-presented item, so they cannot disagree
+with it, and they sit above the HTTP boundary: the same service result serves
+both, and only the MCP vocabulary in `tools` asks for the short form.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable, Mapping
+
+#: The arguments of `update_work_item` that edit the record, in the order the
+#: tool declares them. An argument that is absent or null changes nothing.
+UPDATABLE_FIELDS = ("title", "description", "source", "priority", "labels", "kind", "parent")
+
+Acknowledge = Callable[[dict, Mapping[str, object]], dict]
+
+
+def _base(item: dict) -> dict:
+    """Identity, the revision the next write must name, and who holds the item."""
+
+    state = item["state"]
+    return {
+        "reference": item["reference"],
+        "work_item_id": item["work_item_id"],
+        "revision": item["revision"],
+        "state": {
+            "key": state["key"],
+            "name": state["name"],
+            "is_terminal": state["is_terminal"],
+        },
+        "claim_ref": item["claim_ref"],
+    }
+
+
+def created(item: dict, _arguments: Mapping[str, object]) -> dict:
+    """A new item: the defaults the caller may not have named are the news."""
+
+    return {
+        **_base(item),
+        "title": item["title"],
+        "kind": item["kind"],
+        "priority": item["priority"],
+    }
+
+
+def updated(item: dict, arguments: Mapping[str, object]) -> dict:
+    """Names of the edited fields; the caller sent the values and can read them back."""
+
+    names = [name for name in UPDATABLE_FIELDS if arguments.get(name) is not None]
+    return {**_base(item), "updated": names}
+
+
+def transitioned(item: dict, _arguments: Mapping[str, object]) -> dict:
+    """The state is already in the base; add the findings a caller must not miss."""
+
+    answer = _base(item)
+    if item.get("warnings"):
+        answer["warnings"] = item["warnings"]
+    if item.get("overridden"):
+        answer["overridden"] = item["overridden"]
+    return answer
+
+
+def claimed(item: dict, _arguments: Mapping[str, object]) -> dict:
+    """The holder is `claim_ref`, which the base already carries."""
+
+    return _base(item)
+
+
+def checklist_replaced(item: dict, _arguments: Mapping[str, object]) -> dict:
+    """The new steps, because their ids are what every later call names."""
+
+    steps = [{"item_id": step["id"], "text": step["text"]} for step in item["checklist"]]
+    return {**_base(item), "checklist": steps}
+
+
+def step_changed(item: dict, arguments: Mapping[str, object]) -> dict:
+    """The one step a claim or tick touched, by the id the caller named."""
+
+    wanted = arguments["item_id"]
+    step = next(entry for entry in item["checklist"] if entry["id"] == wanted)
+    return {
+        **_base(item),
+        "step": {
+            "item_id": step["id"],
+            "done": step["done"],
+            "claimed_by": step["claimed_by"],
+            "done_by": step["done_by"],
+        },
+    }
+
+
+def summarized(item: dict, _arguments: Mapping[str, object]) -> dict:
+    """That the summary is recorded; its text is the caller's own."""
+
+    return {**_base(item), "summary_recorded": True}

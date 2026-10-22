@@ -6,7 +6,8 @@ rule cannot hold in one and not the other. The Board era wrote the same
 decisions twice and they drifted.
 
 Declarative on purpose: the definitions are data and the handlers are one call
-each. The MCP surface decides *which* catalogue to publish; nothing here knows
+each. A write to a work item narrows its answer to an acknowledgement unless the
+caller passes `verbose`; the boundary underneath still answers in full. The MCP surface decides *which* catalogue to publish; nothing here knows
 that a catalogue can change.
 """
 
@@ -15,7 +16,7 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Callable, Mapping
 
-from . import api, model
+from . import acknowledgements, api, model
 
 READ_ONLY = {"readOnlyHint": True, "idempotentHint": True, "openWorldHint": False}
 WRITES = {"readOnlyHint": False, "destructiveHint": False, "openWorldHint": False}
@@ -47,6 +48,10 @@ _AUTHOR = {"type": "string", "description": "Who is acting. Recorded, not resolv
 _FORCE = {
     "type": "boolean",
     "description": "Carry a refusal through. The override is recorded as an event.",
+}
+_VERBOSE = {
+    "type": "boolean",
+    "description": "Answer with the full work item instead of the short acknowledgement.",
 }
 
 
@@ -119,6 +124,7 @@ TOOLS = [
             },
             "parent": _REFERENCE,
             "author": _AUTHOR,
+            "verbose": _VERBOSE,
         },
         ["space", "title"],
     ),
@@ -174,6 +180,7 @@ TOOLS = [
             "parent": _REFERENCE,
             "expected_revision": _EXPECTED_REVISION,
             "author": _AUTHOR,
+            "verbose": _VERBOSE,
         },
         ["id"],
     ),
@@ -195,6 +202,7 @@ TOOLS = [
             "force": _FORCE,
             "expected_revision": _EXPECTED_REVISION,
             "author": _AUTHOR,
+            "verbose": _VERBOSE,
         },
         ["id", "state"],
     ),
@@ -210,6 +218,7 @@ TOOLS = [
             "force": _FORCE,
             "release": _BOOL,
             "expected_revision": _EXPECTED_REVISION,
+            "verbose": _VERBOSE,
         },
         ["id"],
     ),
@@ -234,6 +243,7 @@ TOOLS = [
             "force": _FORCE,
             "expected_revision": _EXPECTED_REVISION,
             "author": _AUTHOR,
+            "verbose": _VERBOSE,
         },
         ["id", "items"],
     ),
@@ -250,6 +260,7 @@ TOOLS = [
             "force": _FORCE,
             "release": _BOOL,
             "expected_revision": _EXPECTED_REVISION,
+            "verbose": _VERBOSE,
         },
         ["id", "item_id"],
     ),
@@ -266,6 +277,7 @@ TOOLS = [
             "author": _AUTHOR,
             "force": _FORCE,
             "expected_revision": _EXPECTED_REVISION,
+            "verbose": _VERBOSE,
         },
         ["id", "item_id"],
     ),
@@ -317,6 +329,7 @@ TOOLS = [
             },
             "expected_revision": _EXPECTED_REVISION,
             "author": _AUTHOR,
+            "verbose": _VERBOSE,
         },
         ["id", "summary"],
     ),
@@ -347,6 +360,30 @@ def _post(path: str) -> Callable[[sqlite3.Connection, Mapping[str, object]], obj
         if answer is None:  # pragma: no cover - the path table above is closed
             raise ValueError(f"no planning write at {path}")
         return answer[1]
+
+    return run
+
+
+def _acknowledged(
+    path: str, acknowledge: acknowledgements.Acknowledge
+) -> Callable[[sqlite3.Connection, Mapping[str, object]], object]:
+    """A write that answers briefly unless the caller asks for the whole item.
+
+    The full record is what the HTTP boundary returns and what `verbose` still
+    returns here; the short form is cut from it afterwards, so the write itself
+    is the same either way.
+    """
+
+    write = _post(path)
+
+    def run(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
+        verbose = arguments.get("verbose", False)
+        if not isinstance(verbose, bool):
+            raise api.PlanningHttpError(400, "invalid_request", "verbose must be a boolean")
+        item = write(conn, {name: value for name, value in arguments.items() if name != "verbose"})
+        if verbose or not isinstance(item, dict):
+            return item
+        return acknowledge(item, arguments)
 
     return run
 
@@ -398,22 +435,32 @@ OPS: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], object]] = {
     "list_planning_spaces": _get("/api/planning/spaces"),
     "get_planning_space": _space,
     "create_planning_space": _post("/api/planning/spaces"),
-    "create_work_item": _post("/api/planning/work-items"),
+    "create_work_item": _acknowledged("/api/planning/work-items", acknowledgements.created),
     "get_work_item": _get("/api/planning/work-item", "id", unwrap="work_item"),
     "list_work_items": _get(
         "/api/planning/work-items", "space", "state", "category", "kind", "owner", "limit"
     ),
     "search_work_items": _search,
-    "update_work_item": _post("/api/planning/work-item/update"),
-    "transition_work_item": _post("/api/planning/work-item/transition"),
-    "claim_work_item": _post("/api/planning/work-item/claim"),
+    "update_work_item": _acknowledged("/api/planning/work-item/update", acknowledgements.updated),
+    "transition_work_item": _acknowledged(
+        "/api/planning/work-item/transition", acknowledgements.transitioned
+    ),
+    "claim_work_item": _acknowledged("/api/planning/work-item/claim", acknowledgements.claimed),
     "claim_ready_work_item": _post("/api/planning/work-item/claim-ready"),
-    "set_work_item_checklist": _post("/api/planning/work-item/checklist"),
-    "claim_work_item_checklist_item": _post("/api/planning/work-item/checklist/claim"),
-    "tick_work_item_checklist_item": _post("/api/planning/work-item/checklist/tick"),
+    "set_work_item_checklist": _acknowledged(
+        "/api/planning/work-item/checklist", acknowledgements.checklist_replaced
+    ),
+    "claim_work_item_checklist_item": _acknowledged(
+        "/api/planning/work-item/checklist/claim", acknowledgements.step_changed
+    ),
+    "tick_work_item_checklist_item": _acknowledged(
+        "/api/planning/work-item/checklist/tick", acknowledgements.step_changed
+    ),
     "link_work_items": _post("/api/planning/work-item/link"),
     "attach_work_item_ref": _post("/api/planning/work-item/ref"),
-    "set_work_item_summary": _post("/api/planning/work-item/summary"),
+    "set_work_item_summary": _acknowledged(
+        "/api/planning/work-item/summary", acknowledgements.summarized
+    ),
     "comment_work_item": _post("/api/planning/work-item/comment"),
     "delete_work_item": _post("/api/planning/work-item/delete"),
 }

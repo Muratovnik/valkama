@@ -92,7 +92,11 @@ PLANNING_INSTRUCTIONS = (
     " reverse relation inside AgentMemory."
     " Every transition, claim, takeover, release and link change is recorded with"
     " its author; get_work_item returns that history, so consult it before assuming"
-    " who did what. Finished work reaches a terminal state; delete_work_item is"
+    " who did what. A write answers with a short acknowledgement: the reference,"
+    " the revision to pass as expected_revision on the next write, the state, the"
+    " holder and what the call changed. Pass verbose=true to get the full item"
+    " back instead, or read it with get_work_item."
+    " Finished work reaches a terminal state; delete_work_item is"
     " only for an item that should never have existed."
 )
 
@@ -115,6 +119,16 @@ def call_tool(conn: sqlite3.Connection, name: str, arguments: dict) -> object:
     if name in _PLANNING_TOOLS:
         platform_core.require_module_enabled(conn, "planning")
     return _OPS[name](conn, arguments or {})
+
+
+def _compact(payload: object) -> str:
+    """A tool result as one line of JSON.
+
+    The client is a model reading the text, and indentation is tokens it pays for
+    on every call without learning anything from them.
+    """
+
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
 
 def _write_message(payload: dict) -> None:
@@ -332,7 +346,7 @@ def _mcp_loop(
                 # to its caller, so without this every tool write an agent made
                 # was rolled back when the process ended.
                 conn.commit()
-                content = json.dumps(data, ensure_ascii=False, indent=1)
+                content = _compact(data)
                 result = {"content": [{"type": "text", "text": content}], "isError": False}
             except planning_model.PlanningError as error:
                 # A guard refusal and a stale write are answers, not crashes, so
@@ -340,7 +354,7 @@ def _mcp_loop(
                 conn.rollback()
                 payload = planning_api.error_response(error)[1]
                 result = {
-                    "content": [{"type": "text", "text": json.dumps(payload, ensure_ascii=False)}],
+                    "content": [{"type": "text", "text": _compact(payload)}],
                     "structuredContent": payload,
                     "isError": True,
                 }
