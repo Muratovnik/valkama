@@ -216,6 +216,51 @@ describe('task description and discussion', () => {
     expect(outcome.get('a').attributes('href')).toBe('#work-report-11')
   })
 
+  it('places backfilled reports by recorded time and labels missing historical metadata', () => {
+    const item: WorkItem = {
+      ...record('Task', 1),
+      comments: [
+        {
+          id: 1,
+          kind: 'comment',
+          report: null,
+          body: 'Later comment',
+          author: 'user',
+          at: '2026-08-27T13:00:00Z',
+        },
+        {
+          id: 100,
+          kind: 'report',
+          report: { done: 'Earlier report', next: 'Review' },
+          body: '',
+          author: 'writer',
+          at: '2026-08-27T15:00:00+03:00',
+        },
+        {
+          id: 99,
+          kind: 'report',
+          report: { done: 'Historical report', next: 'Review' },
+          body: '',
+          author: '',
+          at: null,
+        },
+      ],
+    }
+    const wrapper = mount(InspectorDiscussion, {
+      props: { item, writable: false },
+      global: editingPlugins(),
+    })
+    const entries = wrapper.findAll('.discussion-entry')
+    expect(entries.map((entry) => entry.attributes('id'))).toEqual([
+      'work-report-99',
+      'work-report-100',
+      'work-report-1',
+    ])
+    expect(entries[0].text()).toContain('Author not recorded')
+    expect(entries[0].text()).toContain('Unknown time')
+    expect(item.comments.map((entry) => entry.id)).toEqual([1, 100, 99])
+  })
+
   it('shows read-only descriptions and reports without edit actions', () => {
     const item: WorkItem = {
       ...record('Task', 1),

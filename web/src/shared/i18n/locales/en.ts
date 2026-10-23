@@ -735,6 +735,7 @@ export const en = {
     comment: 'Comment',
     publishReport: 'Publish report',
     unknownTime: 'Unknown time',
+    unknownAuthor: 'Author not recorded',
     related: {
       add: 'Add related task',
       pickerTitle: 'Related task',

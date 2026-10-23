@@ -23,6 +23,15 @@ const note = ref('')
 const reporting = ref(false)
 const makeCurrent = ref(false)
 const report = reactive({ done: '', next: '', why: '' })
+function commentTime(at: string | null) {
+  const time = at === null ? Number.NaN : Date.parse(at)
+  return Number.isNaN(time) ? Number.NEGATIVE_INFINITY : time
+}
+const comments = computed(() =>
+  [...props.item.comments].sort(
+    (left, right) => commentTime(left.at) - commentTime(right.at) || left.id - right.id,
+  ),
+)
 watch(
   () => props.item.work_item_id,
   () => {
@@ -102,14 +111,14 @@ function select(commentId: number) {
       class="discussion-feed"
     >
       <li
-        v-for="entry in item.comments"
+        v-for="entry in comments"
         :id="`work-report-${entry.id}`"
         :key="entry.id"
         class="discussion-entry"
       >
         <div class="discussion-meta">
           <span
-            >{{ actorName(entry.author) }}
+            >{{ actorName(entry.author) || t('workItem.unknownAuthor') }}
             <span v-if="actorSession(entry.author)">{{ actorSession(entry.author) }}</span></span
           >
           <span>{{ when(entry.at) }}</span>

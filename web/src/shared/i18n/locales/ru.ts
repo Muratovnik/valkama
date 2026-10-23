@@ -736,6 +736,7 @@ export const ru = {
     comment: 'Комментарий',
     publishReport: 'Опубликовать отчёт',
     unknownTime: 'Время неизвестно',
+    unknownAuthor: 'Автор не указан',
     related: {
       add: 'Добавить связанную задачу',
       pickerTitle: 'Связанная задача',
