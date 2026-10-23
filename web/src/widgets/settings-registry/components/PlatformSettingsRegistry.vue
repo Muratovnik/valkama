@@ -279,11 +279,13 @@ function noteLifecycle(message: string) {
 .registry-stack,
 .integration-stack {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-section);
 }
 
 .integrations-head {
-  margin-block-end: var(--space-3);
+  display: grid;
+  gap: var(--space-heading-content);
+  margin-block-end: var(--space-heading-content);
 }
 
 .integrations-titleline {

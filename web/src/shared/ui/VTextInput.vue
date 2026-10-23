@@ -32,7 +32,7 @@ withDefaults(
     maxlength?: number
     min?: string
     placeholder?: string
-    /** Any positive value makes this a textarea of that many rows. */
+    /** Any positive value selects a textarea; content determines its height. */
     rows?: number
     spellcheck?: boolean
     type?: 'text' | 'number' | 'date' | 'datetime-local'
@@ -124,8 +124,9 @@ textarea.control {
      than its root, so no class could carry it. The host declares the property on
      whatever it already puts a class on and inheritance does the rest. */
   min-height: var(--size-text-area-min-height);
+  field-sizing: content;
   font: var(--font-editor);
-  resize: vertical;
+  resize: none;
 }
 
 .control:hover:not(:disabled) {

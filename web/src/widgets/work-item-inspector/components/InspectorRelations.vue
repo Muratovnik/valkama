@@ -192,12 +192,12 @@ function addLink() {
 <style scoped>
 .relations {
   display: grid;
-  gap: var(--space-5);
+  gap: var(--space-section);
 }
 
 .relation-section {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-heading-content);
 }
 
 .quiet {
@@ -210,7 +210,7 @@ function addLink() {
   display: grid;
   gap: var(--space-2);
   padding: 0;
-  margin: var(--space-2) 0 0;
+  margin: 0;
   list-style: none;
 }
 
@@ -219,7 +219,7 @@ function addLink() {
 .link-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-hair) var(--space-2);
+  gap: var(--space-label-value);
   align-items: baseline;
 }
 
@@ -279,7 +279,6 @@ function addLink() {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
   gap: var(--space-2);
   align-items: end;
-  padding-top: var(--space-3);
 }
 
 .link-form-hint {
@@ -293,13 +292,13 @@ function addLink() {
   display: grid;
   gap: var(--space-3);
   padding: 0;
-  margin: var(--space-2) 0 0;
+  margin: 0;
   list-style: none;
 }
 
 .ref-row {
   display: grid;
-  gap: var(--space-hair);
+  gap: var(--space-label-value);
   min-width: 0;
 }
 

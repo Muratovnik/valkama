@@ -84,7 +84,7 @@ function selectSection(section: SettingsSection) {
 .settings-page {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-5);
+  gap: var(--space-section);
   width: 100%;
   min-width: 0;
   color: var(--color-text);
@@ -114,7 +114,7 @@ function selectSection(section: SettingsSection) {
 
 .settings-system {
   display: grid;
-  gap: var(--space-5);
+  gap: var(--space-section);
   min-width: 0;
 }
 </style>

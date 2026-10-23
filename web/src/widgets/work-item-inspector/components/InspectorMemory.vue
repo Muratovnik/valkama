@@ -350,7 +350,7 @@ function when(value: string): string {
 <style scoped>
 .memory {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-heading-content);
 }
 
 .memory-source {
@@ -391,7 +391,7 @@ function when(value: string): string {
 .memory-row,
 .memory-result {
   display: grid;
-  gap: var(--space-hair);
+  gap: var(--space-label-value);
   min-width: 0;
 }
 
@@ -423,6 +423,6 @@ function when(value: string): string {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-2);
   align-items: end;
-  padding-top: var(--space-3);
+  margin-top: var(--space-heading-content);
 }
 </style>

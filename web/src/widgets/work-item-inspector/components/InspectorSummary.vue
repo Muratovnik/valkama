@@ -80,7 +80,7 @@ function save() {
 </script>
 
 <template>
-  <section>
+  <section class="summary">
     <SectionHeading
       as="h3"
       level="panel"
@@ -123,8 +123,13 @@ function save() {
 </template>
 
 <style scoped>
+.summary {
+  display: grid;
+  gap: var(--space-heading-content);
+}
+
 .quiet {
-  margin: 0 0 var(--space-3);
+  margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
 }

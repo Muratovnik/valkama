@@ -36,7 +36,7 @@ withDefaults(defineProps<{ label: string; as?: 'label' | 'div'; hint?: string }>
 <style scoped>
 .field {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-label-value);
   min-width: 0;
 }
 

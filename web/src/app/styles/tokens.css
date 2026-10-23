@@ -39,7 +39,10 @@
 }
 
 :root {
-  --size-text-area-min-height: 140px;
+  --size-text-area-min-height: calc(2lh + var(--space-4) + 2px);
+  --space-label-value: var(--space-2);
+  --space-heading-content: var(--space-3);
+  --space-section: var(--space-6);
 
   /* ─────────────────────────────────────────────────────────────────────
      Primitive: raw values. Nothing outside this file names one.

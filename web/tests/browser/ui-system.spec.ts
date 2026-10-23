@@ -54,7 +54,11 @@ test.beforeEach(async ({ page }) => {
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
               description: 'A deterministic inspector fixture.',
-              summary: null,
+              summary: {
+                done: 'First loaded line\nSecond loaded line\nThird loaded line\nFourth loaded line\nFifth loaded line\nSixth loaded line',
+                next: 'Continue review',
+                why: '',
+              },
               links: [],
               refs: [],
               comments: [],
@@ -213,7 +217,7 @@ test('the note field spans its form and its action keeps a full pointer target',
   // every other button in the product occupies. It used to be one line beside a
   // button, and the shared baseline is what that geometry asserted.
   expect(formBox && fieldBox && Math.abs(fieldBox.width - formBox.width) < 1).toBeTruthy()
-  expect(fieldBox && fieldBox.height >= 140).toBeTruthy()
+  expect(fieldBox && fieldBox.height >= 60 && fieldBox.height < 100).toBeTruthy()
   expect(submitBox && submitBox.height === 40).toBeTruthy()
   expect(formBox && submitBox && submitBox.width < formBox.width).toBeTruthy()
 })
@@ -308,3 +312,66 @@ for (const surface of ['', 'work-item']) {
     await expectNoSilentClipping(page, `${surface || 'default'} harness`)
   })
 }
+
+test('inspector textareas fit loaded and edited content and shrink after deletion or widening', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.goto('/tests/browser/harness.html?lang=en&surface=work-item')
+  const drawer = page.locator('.drawer')
+  const field = drawer.getByRole('textbox', { name: 'What was done', exact: true })
+  await expect(field).toHaveValue(/Sixth loaded line$/)
+  const height = () => field.evaluate((element) => element.getBoundingClientRect().height)
+  const fits = () => field.evaluate((element) => element.scrollHeight <= element.clientHeight + 1)
+  await expect.poll(height).toBeGreaterThan(140)
+  await expect.poll(fits).toBe(true)
+  const loadedHeight = await height()
+  await field.fill('Edited line 0')
+  for (let index = 1; index < 16; index += 1) {
+    await field.press('End')
+    await field.press('Enter')
+    await field.pressSequentially(`Edited line ${index}`)
+  }
+  await expect.poll(height).toBeGreaterThan(loadedHeight)
+  await expect.poll(fits).toBe(true)
+  await field.fill('Short')
+  await expect.poll(height).toBeLessThan(100)
+  await expect(field).toHaveCSS('font-size', '15px')
+  const shortHeight = await height()
+  await field.fill('')
+  await expect.poll(height).toBe(shortHeight)
+  const splitter = drawer.getByRole('separator')
+  await splitter.press('End')
+  await field.fill(
+    'A readable paragraph must wrap naturally as the inspector width changes. '.repeat(8),
+  )
+  const wideHeight = await height()
+  await splitter.press('Home')
+  await expect.poll(height).toBeGreaterThan(wideHeight)
+  await expect.poll(fits).toBe(true)
+  await splitter.press('End')
+  await expect.poll(height).toBe(wideHeight)
+})
+
+test('inspector facts and section headings keep a shared spacing rhythm', async ({ page }) => {
+  await page.goto('/tests/browser/harness.html?lang=en&surface=work-item')
+  const drawer = page.locator('.drawer')
+  await expect(drawer.locator('.fact').first()).toBeVisible()
+  const gaps = await Promise.all(
+    ['.fact dt', '.summary h3', '.overview-section h3'].map((selector) =>
+      drawer
+        .locator(selector)
+        .first()
+        .evaluate((element) => {
+          const next = element.nextElementSibling
+          if (!next) throw new Error('Expected content after the label or heading')
+          return next.getBoundingClientRect().top - element.getBoundingClientRect().bottom
+        }),
+    ),
+  )
+  expect(gaps).toEqual([8, 12, 12])
+  const labelHeights = await drawer
+    .locator('.fact dt')
+    .evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().height))
+  expect(Math.max(...labelHeights) - Math.min(...labelHeights)).toBeLessThan(1)
+})

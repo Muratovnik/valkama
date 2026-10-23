@@ -132,7 +132,7 @@ function stateLabel(state: PlatformRelation['state']): string {
 
 .relation-copy {
   display: grid;
-  gap: var(--space-half);
+  gap: var(--space-label-value);
   min-width: 0;
 }
 

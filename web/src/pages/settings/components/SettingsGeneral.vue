@@ -227,13 +227,15 @@ onMounted(() => void settingsStore.loadOpenerCatalog())
 }
 
 .settings-general-head {
+  display: grid;
+  gap: var(--space-heading-content);
   padding: var(--space-4);
   background: var(--color-surface-muted);
 
   .settings-general-description,
   .settings-general-catalog-note {
     max-width: 72ch;
-    margin: var(--space-1) 0 0;
+    margin: 0;
     color: var(--color-text-muted);
     font: var(--font-note);
   }
@@ -255,7 +257,7 @@ onMounted(() => void settingsStore.loadOpenerCatalog())
 
 .settings-general-identity {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-label-value);
   min-width: 0;
 
   .settings-general-label {
@@ -282,7 +284,7 @@ onMounted(() => void settingsStore.loadOpenerCatalog())
 
 .settings-general-opener-state {
   display: grid;
-  gap: var(--space-half);
+  gap: var(--space-label-value);
 }
 
 .settings-general-lane-label {

@@ -386,8 +386,8 @@ async function removeRelation() {
 <style scoped>
 .platform-relations {
   display: grid;
-  gap: var(--space-3);
-  margin-top: var(--space-5);
+  gap: var(--space-heading-content);
+  margin-top: var(--space-section);
 
   .relations-head {
     display: flex;

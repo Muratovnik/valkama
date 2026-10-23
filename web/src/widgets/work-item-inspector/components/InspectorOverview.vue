@@ -264,14 +264,14 @@ function when(value: string): string {
 <style scoped>
 .overview {
   display: grid;
-  gap: var(--space-5);
+  gap: var(--space-section);
 }
 
 /* Several columns of short facts, each a term over its value. A single column
    made the drawer scroll past five one-word answers before the description. */
 .overview-section {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-heading-content);
 }
 
 .facts {
@@ -283,7 +283,8 @@ function when(value: string): string {
 
 .fact {
   display: grid;
-  gap: var(--space-hair);
+  gap: var(--space-label-value);
+  align-content: start;
   min-width: 0;
 }
 
@@ -303,6 +304,8 @@ function when(value: string): string {
 }
 
 .source-anchor {
+  display: flex;
+  align-items: start;
   padding: 0;
   border: 0;
   color: var(--color-action-primary);

@@ -63,7 +63,7 @@ const { t } = useI18n()
 }
 
 .registry-section-intro {
-  margin: var(--space-1) 0 0;
+  margin: var(--space-heading-content) 0 0;
   color: var(--color-text-muted);
   font: var(--font-note);
 }

@@ -203,7 +203,7 @@ function evidence(attempt: Execution): string {
 <style scoped>
 .executions {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-heading-content);
 }
 
 .quiet {
@@ -282,7 +282,7 @@ function evidence(attempt: Execution): string {
 
 .attempt-fact {
   display: grid;
-  gap: var(--space-hair);
+  gap: var(--space-label-value);
   min-width: 0;
 }
 

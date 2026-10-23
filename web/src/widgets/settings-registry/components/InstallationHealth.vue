@@ -119,7 +119,7 @@ onMounted(load)
     :aria-label="t('health.heading')"
   >
     <header class="health-head">
-      <div>
+      <div class="health-head-copy">
         <SectionHeading as="h3">{{ t('health.heading') }}</SectionHeading>
         <p class="health-intro">{{ t('health.intro') }}</p>
       </div>

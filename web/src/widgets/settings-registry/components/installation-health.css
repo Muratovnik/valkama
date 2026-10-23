@@ -1,6 +1,6 @@
 .installation-health {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-section);
   width: 100%;
   min-width: 0;
 }
@@ -11,6 +11,11 @@
   gap: var(--space-3);
   justify-content: space-between;
   align-items: start;
+}
+
+.health-head-copy {
+  display: grid;
+  gap: var(--space-heading-content);
 }
 
 .health-section-head,
@@ -113,7 +118,7 @@
 
 .health-finding {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-heading-content);
   min-width: 0;
   padding: var(--space-5);
 
@@ -124,7 +129,7 @@
 
 .health-action {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-label-value);
   padding: var(--space-3);
   color: var(--color-text);
   font: var(--font-note);

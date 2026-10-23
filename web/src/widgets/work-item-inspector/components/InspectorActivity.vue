@@ -116,7 +116,7 @@ function send() {
 <style scoped>
 .activity {
   display: grid;
-  gap: var(--space-5);
+  gap: var(--space-section);
 }
 
 .feed {
@@ -131,7 +131,7 @@ function send() {
    ground of its own; a lifecycle event is a line in a log. */
 .entry {
   display: grid;
-  gap: var(--space-hair);
+  gap: var(--space-label-value);
   min-width: 0;
 
   &[data-kind='comment'] {
