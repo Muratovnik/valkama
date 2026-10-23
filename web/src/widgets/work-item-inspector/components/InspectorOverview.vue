@@ -1,19 +1,9 @@
 <script setup lang="ts">
-/**
- * What one work item is, and the two things that decide whether it can close.
- *
- * The checklist and the closing summary are here rather than behind a dialog
- * because the terminal guard refuses on exactly those two, and an operator told
- * "every step must be closed" should be looking at the steps. The summary form
- * is its own component because it is the only part of this panel that holds
- * state rather than showing the record.
- *
- * The reserved sections at the bottom are their own component, which is where
- * the argument for naming them lives.
- */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import InspectorDescription from '@/widgets/work-item-inspector/components/InspectorDescription.vue'
+import InspectorDiscussion from '@/widgets/work-item-inspector/components/InspectorDiscussion.vue'
 import InspectorSummary from '@/widgets/work-item-inspector/components/InspectorSummary.vue'
 import { checklistProgress } from '@/widgets/work-item-inspector/utils/inspectorActivity.ts'
 
@@ -33,7 +23,8 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  summary: [value: { done: string; next: string; why: string }]
+  changed: []
+  refresh: []
   tick: [itemId: string, done: boolean]
 }>()
 
@@ -175,17 +166,12 @@ function when(value: string): string {
       </li>
     </ul>
 
-    <section
-      v-if="item.description"
-      class="overview-section"
-    >
-      <SectionHeading
-        as="h3"
-        level="panel"
-        >{{ t('workItem.description') }}</SectionHeading
-      >
-      <p class="description">{{ item.description }}</p>
-    </section>
+    <InspectorDescription
+      :item="item"
+      :writable="writable"
+      @changed="emit('changed')"
+      @refresh="emit('refresh')"
+    />
 
     <section class="overview-section">
       <div class="section-line">
@@ -253,10 +239,12 @@ function when(value: string): string {
       </p>
     </section>
 
-    <InspectorSummary
+    <InspectorSummary :item="item" />
+    <InspectorDiscussion
       :item="item"
       :writable="writable"
-      @summary="(value) => emit('summary', value)"
+      @changed="emit('changed')"
+      @refresh="emit('refresh')"
     />
   </div>
 </template>
@@ -361,14 +349,6 @@ function when(value: string): string {
   color: var(--color-text-muted);
   font: var(--font-count);
   font-variant-numeric: tabular-nums;
-}
-
-.description {
-  margin: 0;
-  color: var(--color-text);
-  font: var(--font-line);
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
 }
 
 .quiet {

@@ -106,9 +106,20 @@ def logical_identity(conn: sqlite3.Connection) -> str:
     """Hash the complete logical store, independent of SQLite page layout."""
 
     digest = sha256()
+    # VACUUM can move triggers after indexes without changing either. iterdump
+    # orders these by sqlite_master insertion order, which is not store data.
+    schema_tail = []
     for line in conn.iterdump():
         if line in {"BEGIN TRANSACTION;", "COMMIT;"}:
             continue
+        if line.startswith(
+            ("CREATE INDEX ", "CREATE UNIQUE INDEX ", "CREATE TRIGGER ", "CREATE VIEW ")
+        ):
+            schema_tail.append(line)
+            continue
+        digest.update(line.encode("utf-8"))
+        digest.update(b"\n")
+    for line in sorted(schema_tail):
         digest.update(line.encode("utf-8"))
         digest.update(b"\n")
     return digest.hexdigest()

@@ -1,12 +1,5 @@
 <script setup lang="ts">
-/**
- * One chronological record: what the lifecycle did, what evidence was attached,
- * and what a person wrote, newest first.
- *
- * The three streams share one list because a reader reconstructing what happened
- * does not care which table an entry came from.
- */
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { buildActivity } from '@/widgets/work-item-inspector/utils/inspectorActivity.ts'
@@ -14,32 +7,17 @@ import { buildActivity } from '@/widgets/work-item-inspector/utils/inspectorActi
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { actorName, actorSession } from '@/shared/lib/actor.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
-import VButton from '@/shared/ui/VButton.vue'
-import VTextInput from '@/shared/ui/VTextInput.vue'
 
 const props = defineProps<{
   item: WorkItem
-  writable: boolean
 }>()
-
-const emit = defineEmits<{ comment: [body: string] }>()
 
 const { t, d } = useI18n()
 
 const entries = computed(() => buildActivity(props.item))
-const note = ref('')
-const canSend = computed(() => note.value.trim().length > 0)
-
 function when(value: string): string {
   const date = new Date(value)
   return Number.isNaN(date.valueOf()) ? value : d(date, 'activity')
-}
-
-function send() {
-  const body = note.value.trim()
-  if (!body || !props.writable) return
-  emit('comment', body)
-  note.value = ''
 }
 </script>
 
@@ -89,27 +67,6 @@ function send() {
       :title="t('workItem.noActivity')"
       compact
     />
-
-    <form
-      v-if="writable"
-      class="note-form"
-      @submit.prevent="send"
-    >
-      <VTextInput
-        v-model="note"
-        :label="t('workItem.note')"
-        :hint="t('workItem.noteHint')"
-        :rows="3"
-        :maxlength="8000"
-      />
-      <VButton
-        class="note-action"
-        type="submit"
-        :disabled="!canSend"
-      >
-        {{ t('workItem.noteSend') }}
-      </VButton>
-    </form>
   </div>
 </template>
 
@@ -127,18 +84,10 @@ function send() {
   list-style: none;
 }
 
-/* A comment is the one entry a person wrote, so it is the one entry that gets a
-   ground of its own; a lifecycle event is a line in a log. */
 .entry {
   display: grid;
   gap: var(--space-label-value);
   min-width: 0;
-
-  &[data-kind='comment'] {
-    padding: var(--space-2) var(--space-3);
-    background: var(--color-surface-sheet);
-    border-radius: var(--radius-card);
-  }
 }
 
 .entry-line {
@@ -187,18 +136,5 @@ function send() {
 
 .entry-session {
   font-variant-numeric: tabular-nums;
-}
-
-/* The field takes the column and the action does not: a note is a paragraph, and
-   a button as wide as one reads as the form's own edge. */
-.note-form {
-  display: grid;
-  gap: var(--space-2);
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--color-rule);
-
-  .note-action {
-    justify-self: start;
-  }
 }
 </style>

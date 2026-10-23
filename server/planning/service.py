@@ -121,24 +121,27 @@ def search_work_items(
 
     text = model.text_field(query, "query", limit=200)
     like = f"%{text}%"
-    parameters: list[object] = [like]
+    parameters: list[object] = [like, like]
     clauses = [
         "(i.title LIKE ? OR i.description LIKE ? OR i.labels LIKE ? OR i.source LIKE ?"
         " OR i.summary LIKE ?"
+        " OR (p.key || '-' || CAST(i.number AS TEXT)) LIKE ?"
         " OR EXISTS (SELECT 1 FROM work_item_comments m"
-        "  WHERE m.work_item_id = i.work_item_id AND m.body LIKE ?))"
+        "  WHERE m.work_item_id = i.work_item_id AND (m.body LIKE ? OR m.report LIKE ?)))"
     ]
-    parameters.extend([like] * 6)
+    parameters.extend([like] * 8)
     if space is not None:
         clauses.append("i.planning_space_id = ?")
         parameters.append(str(_space_row(conn, space)["planning_space_id"]))
     query = with_clauses(
         "SELECT i.*, ("
-        "  SELECT m.body FROM work_item_comments m"
-        "  WHERE m.work_item_id = i.work_item_id AND m.body LIKE ?"
+        "  SELECT CASE WHEN m.report != '' THEN m.report ELSE m.body END"
+        "  FROM work_item_comments m"
+        "  WHERE m.work_item_id = i.work_item_id AND (m.body LIKE ? OR m.report LIKE ?)"
         "  ORDER BY m.id DESC LIMIT 1"
         " ) AS comment_hit"
-        " FROM work_items i JOIN workflow_states s ON s.state_id = i.state_id",
+        " FROM work_items i JOIN workflow_states s ON s.state_id = i.state_id"
+        " JOIN planning_spaces p ON p.planning_space_id = i.planning_space_id",
         clauses,
     )
     query += " ORDER BY i.updated_at DESC LIMIT ?"
@@ -621,7 +624,7 @@ def comment_work_item(
     conn: sqlite3.Connection, reference: str, body: str, *, author: str | None = None
 ) -> dict:
     row = read_model.item_row(conn, reference)
-    conn.execute(
+    inserted = conn.execute(
         "INSERT INTO work_item_comments(work_item_id,author,body) VALUES(?,?,?)",
         (
             str(row["work_item_id"]),
@@ -632,6 +635,7 @@ def comment_work_item(
     return {
         "work_item": read_model.reference(conn, row),
         "comment_count": read_model.comment_count(conn, row),
+        "comment_id": inserted.lastrowid,
     }
 
 
@@ -643,11 +647,87 @@ def set_summary(
     expected_revision: int | None = None,
     author: str | None = None,
 ) -> dict:
+    return report_work_item(
+        conn,
+        reference,
+        payload,
+        make_current=True,
+        expected_revision=expected_revision,
+        author=author,
+        require_revision=False,
+    )
+
+
+def report_work_item(
+    conn: sqlite3.Connection,
+    reference: str,
+    payload: object,
+    *,
+    make_current: bool = False,
+    expected_revision: int | None = None,
+    author: str | None = None,
+    require_revision: bool = True,
+) -> dict:
     row = read_model.item_row(conn, reference)
+    if make_current and require_revision and expected_revision is None:
+        raise model.PlanningError("expected_revision is required when making a report current")
     _require_revision(row, expected_revision)
     record = model.summary(payload)
-    _write(conn, row, ["summary = ?"], [model.dumps(record)])
-    _log(conn, str(row["work_item_id"]), "summarized", "", author)
+    identity = str(row["work_item_id"])
+    # Keep the report and the guarded current-outcome write indivisible even
+    # when a caller catches a refusal and commits its surrounding transaction.
+    if not conn.in_transaction:
+        conn.execute("BEGIN")
+    conn.execute("SAVEPOINT planning_report")
+    try:
+        inserted = conn.execute(
+            "INSERT INTO work_item_comments(work_item_id,author,body,report) VALUES(?,?,?,?)",
+            (identity, model.actor(author), "", model.dumps(record)),
+        )
+        updates = ["summary = ?", "summary_comment_id = ?"] if make_current else []
+        parameters: list[object] = [model.dumps(record), inserted.lastrowid] if make_current else []
+        _write(conn, row, updates, parameters)
+        if make_current:
+            _log(conn, identity, "summarized", "", author)
+    except BaseException:
+        conn.execute("ROLLBACK TO planning_report")
+        conn.execute("RELEASE planning_report")
+        raise
+    conn.execute("RELEASE planning_report")
+    return read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
+
+
+def select_summary(
+    conn: sqlite3.Connection,
+    reference: str,
+    comment_id: int,
+    *,
+    expected_revision: int | None = None,
+    author: str | None = None,
+) -> dict:
+    row = read_model.item_row(conn, reference)
+    if expected_revision is None:
+        raise model.PlanningError("expected_revision is required when selecting a report")
+    _require_revision(row, expected_revision)
+    if not isinstance(comment_id, int) or isinstance(comment_id, bool) or comment_id < 1:
+        raise model.PlanningError("comment_id must be a positive integer")
+    report = conn.execute(
+        "SELECT report FROM work_item_comments WHERE id=? AND work_item_id=? AND report != ''",
+        (comment_id, row["work_item_id"]),
+    ).fetchone()
+    if report is None:
+        raise model.PlanningError("that comment is not a report belonging to this work item")
+    if not conn.in_transaction:
+        conn.execute("BEGIN")
+    conn.execute("SAVEPOINT planning_summary")
+    try:
+        _write(conn, row, ["summary = ?", "summary_comment_id = ?"], [report["report"], comment_id])
+        _log(conn, str(row["work_item_id"]), "summarized", "", author)
+    except BaseException:
+        conn.execute("ROLLBACK TO planning_summary")
+        conn.execute("RELEASE planning_summary")
+        raise
+    conn.execute("RELEASE planning_summary")
     return read_model.present(
         conn, read_model.item_by_id(conn, str(row["work_item_id"])), full=True
     )
@@ -764,7 +844,7 @@ def _write(
     query = "UPDATE work_items SET"
     for index, update in enumerate(updates):
         query += f"{'' if index == 0 else ','} {update}"
-    query += ", revision = revision + 1, updated_at = " + _NOW
+    query += (", " if updates else " ") + "revision = revision + 1, updated_at = " + _NOW
     query += " WHERE work_item_id = ? AND revision = ?"
     identity = str(row["work_item_id"])
     expected = int(row["revision"])

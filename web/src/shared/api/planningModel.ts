@@ -143,11 +143,23 @@ const refSchema = strictObject({
   at: boundedText(ISO, 96),
 })
 
-const commentSchema = strictObject({
-  author: actor(),
-  body: boundedText(/^[^\u{0}]{1,8000}$/u, 8000),
-  at: boundedText(ISO, 96),
-})
+const commentIdentity = { id: positiveInt(), author: actor() }
+const commentSchema = z.union([
+  strictObject({
+    ...commentIdentity,
+    kind: z.literal('comment'),
+    report: z.null(),
+    body: boundedText(/^[^\u{0}]{1,8000}$/u, 8000),
+    at: boundedText(ISO, 96),
+  }),
+  strictObject({
+    ...commentIdentity,
+    kind: z.literal('report'),
+    report: summarySchema,
+    body: blankable(8000),
+    at: boundedText(ISO, 96).nullable(),
+  }),
+])
 
 const eventSchema = strictObject({
   action: enumField(EVENT_ACTIONS),
@@ -161,6 +173,7 @@ const workItemSchema = strictObject({
   comment_count: positiveInt(true).optional(),
   description: blankable(20_000),
   summary: summarySchema.nullable(),
+  summary_comment_id: positiveInt().nullable(),
   links: boundedList(linkSchema, 200),
   refs: boundedList(refSchema, 200),
   comments: boundedList(commentSchema, 500),

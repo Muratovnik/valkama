@@ -100,4 +100,16 @@ def step_changed(item: dict, arguments: Mapping[str, object]) -> dict:
 def summarized(item: dict, _arguments: Mapping[str, object]) -> dict:
     """That the summary is recorded; its text is the caller's own."""
 
-    return {**_base(item), "summary_recorded": True}
+    return {
+        **_base(item),
+        "summary_recorded": True,
+        "summary_comment_id": item["summary_comment_id"],
+    }
+
+
+def reported(item: dict, _arguments: Mapping[str, object]) -> dict:
+    return {
+        **_base(item),
+        "comment_id": item["comments"][-1]["id"],
+        "summary_comment_id": item["summary_comment_id"],
+    }

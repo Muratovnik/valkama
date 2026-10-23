@@ -1,12 +1,4 @@
-/**
- * One chronological record per work item, out of the three streams that are
- * stored separately: lifecycle events, evidence refs, and human comments.
- *
- * They are merged rather than shown as three lists because a reader asking what
- * happened to an item does not care which table an entry came from — the Board
- * era proved that by shipping three panels and having operators read them in
- * parallel to reconstruct one order.
- */
+/** System events and attached evidence; human discussion has its own feed. */
 
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 
@@ -17,7 +9,7 @@ export interface ActivityEntry {
   author: string
   detail: string
   key: string
-  kind: 'comment' | 'event' | 'ref'
+  kind: 'event' | 'ref'
   /** Message key naming what happened; the entry never spells its own label. */
   titleKey: string
   reference?: Ref
@@ -48,17 +40,7 @@ export function buildActivity(item: WorkItem): ActivityEntry[] {
     detail: reference.label,
     reference,
   }))
-  const comments = item.comments.map((comment, index): ActivityEntry => ({
-    key: `comment-${index}-${comment.at}`,
-    kind: 'comment',
-    at: comment.at,
-    author: comment.author,
-    titleKey: 'activity.comment',
-    detail: comment.body,
-  }))
-  return [...events, ...refs, ...comments].sort(
-    (left, right) => Date.parse(right.at) - Date.parse(left.at),
-  )
+  return [...events, ...refs].sort((left, right) => Date.parse(right.at) - Date.parse(left.at))
 }
 
 /** Progress over the checklist, which two sections and one tile all ask for. */

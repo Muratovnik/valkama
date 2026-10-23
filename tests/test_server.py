@@ -424,8 +424,10 @@ class StdioTests(unittest.TestCase):
             self.assertNotIn("create_board", names)
             self.assertIn("list_platform_modules", names)
             self.assertFalse(any("improvement" in name for name in names))
-            self.assertEqual(20, len(names))
+            self.assertEqual(22, len(names))
             self.assertIn("set_work_item_summary", names)
+            self.assertIn("report_work_item", names)
+            self.assertIn("select_work_item_summary", names)
             for reply in (3, 4, 5):
                 self.assertFalse(by_id[reply]["result"]["isError"], by_id[reply]["result"])
             created = json.loads(by_id[4]["result"]["content"][0]["text"])

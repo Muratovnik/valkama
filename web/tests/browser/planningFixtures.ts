@@ -180,6 +180,7 @@ export const workItem = {
   ...briefFields,
   description: 'Deliver the exact project vertical slice.',
   summary: null,
+  summary_comment_id: null,
   links: [
     {
       kind: 'blocks',
@@ -198,6 +199,7 @@ export const blockedFullWorkItem = {
   ...blockedWorkItem,
   description: '',
   summary: null,
+  summary_comment_id: null,
   links: [
     {
       kind: 'blocks',

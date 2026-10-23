@@ -216,15 +216,6 @@ export async function linkWorkItems(input: {
   await write('/api/planning/work-item/link', { ...input })
 }
 
-export async function setWorkItemSummary(input: {
-  id: string
-  summary: { done: string; next: string; why?: string }
-  author?: string
-  expected_revision?: number
-}): Promise<WorkItem> {
-  return validateWorkItemRecord(await write('/api/planning/work-item/summary', { ...input }))
-}
-
 /**
  * Point this item at something outside Planning: a commit, a session, a memory
  * record, a URL. The pointer is Valkama's own act — the provider is not asked
@@ -246,5 +237,39 @@ export async function commentWorkItem(input: {
   id: string
   author?: string
 }): Promise<void> {
-  await write('/api/planning/work-item/comment', { ...input })
+  await write('/api/planning/work-item/comment', { author: 'user', ...input })
+}
+
+export async function updateWorkItemDescription(input: {
+  description: string
+  expected_revision: number
+  id: string
+  author?: string
+}): Promise<WorkItem> {
+  return validateWorkItemRecord(
+    await write('/api/planning/work-item/update', { author: 'user', ...input }),
+  )
+}
+
+export async function publishWorkItemReport(input: {
+  id: string
+  make_current: boolean
+  report: { done: string; next: string; why?: string }
+  author?: string
+  expected_revision?: number
+}): Promise<WorkItem> {
+  return validateWorkItemRecord(
+    await write('/api/planning/work-item/report', { author: 'user', ...input }),
+  )
+}
+
+export async function selectWorkItemSummary(input: {
+  comment_id: number
+  expected_revision: number
+  id: string
+  author?: string
+}): Promise<WorkItem> {
+  return validateWorkItemRecord(
+    await write('/api/planning/work-item/summary/select', { author: 'user', ...input }),
+  )
 }

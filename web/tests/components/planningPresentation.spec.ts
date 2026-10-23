@@ -51,6 +51,7 @@ function fullWorkItem(overrides: Partial<WorkItem> = {}): WorkItem {
     ...workItem(),
     description: '',
     summary: null,
+    summary_comment_id: null,
     links: [],
     refs: [],
     comments: [],

@@ -138,7 +138,9 @@ class WorkFocusMigrationTests(unittest.TestCase):
         ]
         self.conn.close()
         self.conn = store.connect()
-        self.assertEqual(7, self.conn.execute("PRAGMA user_version").fetchone()[0])
+        self.assertEqual(
+            store.STORE_SCHEMA_VERSION, self.conn.execute("PRAGMA user_version").fetchone()[0]
+        )
         self.assertEqual(
             {"planning", "memory", "settings"},
             {row[0] for row in self.conn.execute("SELECT module_id FROM platform_modules")},

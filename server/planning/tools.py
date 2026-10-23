@@ -334,6 +334,40 @@ TOOLS = [
         ["id", "summary"],
     ),
     _tool(
+        "report_work_item",
+        "Publish a work report",
+        "Add an immutable report to the discussion. make_current selects it as"
+        " the current outcome atomically and requires expected_revision.",
+        WRITES,
+        {
+            "id": _REFERENCE,
+            "report": {
+                "type": "object",
+                "properties": {"done": _STR, "next": _STR, "why": _STR},
+                "required": ["done", "next"],
+            },
+            "make_current": _BOOL,
+            "expected_revision": _EXPECTED_REVISION,
+            "author": _AUTHOR,
+            "verbose": _VERBOSE,
+        },
+        ["id", "report"],
+    ),
+    _tool(
+        "select_work_item_summary",
+        "Use a report as the current outcome",
+        "Select an existing report belonging to this work item without retyping it.",
+        WRITES,
+        {
+            "id": _REFERENCE,
+            "comment_id": {"type": "integer", "minimum": 1},
+            "expected_revision": _EXPECTED_REVISION,
+            "author": _AUTHOR,
+            "verbose": _VERBOSE,
+        },
+        ["id", "comment_id", "expected_revision"],
+    ),
+    _tool(
         "comment_work_item",
         "Comment on a work item",
         "A note on the record, for anything the fields have no place for.",
@@ -462,5 +496,9 @@ OPS: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], object]] = {
         "/api/planning/work-item/summary", acknowledgements.summarized
     ),
     "comment_work_item": _post("/api/planning/work-item/comment"),
+    "report_work_item": _acknowledged("/api/planning/work-item/report", acknowledgements.reported),
+    "select_work_item_summary": _acknowledged(
+        "/api/planning/work-item/summary/select", acknowledgements.summarized
+    ),
     "delete_work_item": _post("/api/planning/work-item/delete"),
 }

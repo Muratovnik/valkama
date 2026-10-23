@@ -45,6 +45,7 @@ test('Russian relations keep one hierarchy, aligned controls, and narrow content
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
   const drawer = page.locator('.drawer')
   await expect(drawer.locator('.head-claim')).toContainText('Ответственный: codex')
+  await drawer.getByRole('checkbox', { name: 'Отчёт о работе', exact: true }).check()
   const result = drawer.getByRole('textbox', { name: 'Что сделано', exact: true })
   const longDraft =
     'Проверены связи между задачами, история решений и подробное описание результата. '.repeat(8)
@@ -54,36 +55,24 @@ test('Russian relations keep one hierarchy, aligned controls, and narrow content
   const resultBox = await result.boundingBox()
   expect(resultBox?.height).toBeGreaterThanOrEqual(140)
   await drawer.getByRole('button', { name: 'Связи', exact: true }).click()
-  await expect(drawer.getByRole('heading', { name: 'Связанная работа', exact: true })).toHaveCount(
-    1,
-  )
+  await expect(drawer.getByRole('heading', { name: /^Связанная работа/ })).toHaveCount(1)
   await expect(drawer.getByRole('heading', { name: 'Свидетельства', exact: true })).toHaveCount(1)
   await expect(drawer.getByRole('heading', { name: 'Внешние ресурсы', exact: true })).toHaveCount(1)
   const splitter = drawer.getByRole('separator')
   await splitter.press('End')
-  const input = drawer.getByRole('textbox', { name: 'Единица работы', exact: true })
-  const select = drawer.getByRole('combobox', { name: 'Тип связи', exact: true })
-  const submit = drawer.getByRole('button', { name: 'Связать', exact: true })
-  const inputBox = (await input.boundingBox()) ?? { x: 0, y: Infinity, width: 0, height: Infinity }
-  const selectBox = (await select.boundingBox()) ?? {
-    x: 0,
-    y: Infinity,
-    width: 0,
-    height: Infinity,
-  }
-  const submitBox = (await submit.boundingBox()) ?? {
-    x: 0,
-    y: Infinity,
-    width: 0,
-    height: Infinity,
-  }
-  expect(
-    Math.abs(inputBox.y + inputBox.height - selectBox.y - selectBox.height),
-  ).toBeLessThanOrEqual(1)
-  expect(
-    Math.abs(inputBox.y + inputBox.height - submitBox.y - submitBox.height),
-  ).toBeLessThanOrEqual(1)
+  const add = drawer.getByRole('button', { name: 'Добавить связанную задачу', exact: true })
+  await add.click()
+  const picker = page.getByRole('dialog', { name: 'Связанная задача', exact: true })
+  await expect(picker).toBeVisible()
+  await expect(picker.getByRole('combobox', { name: 'Тип связи', exact: true })).toBeVisible()
+  await expect(picker.getByRole('combobox', { name: 'Направление', exact: true })).toBeVisible()
   await page.setViewportSize({ width: 390, height: 900 })
   await expectNoSilentClipping(page, 'Russian inspector relations at 390px')
-  await expect(drawer.locator('.link-form-hint')).toBeVisible()
+  await expect(
+    picker.getByRole('textbox', { name: 'Ссылка, номер или название', exact: true }),
+  ).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(picker).toHaveCount(0)
+  await expect(drawer).toBeVisible()
+  await expect(add).toBeFocused()
 })

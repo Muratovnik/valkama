@@ -338,11 +338,12 @@ test('an attached same-key space stays readable but never reaches primary-only p
   await expect(page.locator('.drawer .head-actions')).toHaveCount(0)
   await expect(page.locator('.drawer').getByRole('button', { name: /^Execution$/i })).toHaveCount(0)
   expect(executionReads).toEqual([])
-  await page
-    .locator('.drawer')
-    .getByRole('button', { name: /Activity/i })
-    .click()
-  await expect(page.locator('.drawer .note-form')).toHaveCount(0)
+  await expect(page.locator('.drawer .discussion-form')).toHaveCount(0)
+  await expect(
+    page.locator('.drawer').getByRole('button', { name: 'Edit description' }),
+  ).toHaveCount(0)
+  await page.locator('.drawer').getByRole('button', { name: 'System events', exact: true }).click()
+  await expect(page.locator('.drawer .discussion-form')).toHaveCount(0)
   await page
     .locator('.drawer')
     .getByRole('button', { name: /Relations/i })

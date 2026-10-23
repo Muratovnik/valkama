@@ -164,6 +164,7 @@ def present(conn: sqlite3.Connection, row: sqlite3.Row, *, full: bool = False) -
         return record
     record["description"] = row["description"]
     record["summary"] = model.summary(row["summary"], required=False)
+    record["summary_comment_id"] = row["summary_comment_id"]
     record["links"] = links(conn, str(row["work_item_id"]))
     record["refs"] = [
         {
@@ -179,7 +180,14 @@ def present(conn: sqlite3.Connection, row: sqlite3.Row, *, full: bool = False) -
         )
     ]
     record["comments"] = [
-        {"author": item["author"], "body": item["body"], "at": item["created_at"]}
+        {
+            "id": item["id"],
+            "kind": "report" if item["report"] else "comment",
+            "report": model.summary(item["report"], required=False),
+            "author": item["author"],
+            "body": item["body"],
+            "at": item["created_at"] or None,
+        }
         for item in conn.execute(
             "SELECT * FROM work_item_comments WHERE work_item_id = ? ORDER BY id",
             (str(row["work_item_id"]),),

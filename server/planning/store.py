@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS work_items(
     title TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
     summary TEXT NOT NULL DEFAULT '',
+    summary_comment_id INTEGER REFERENCES work_item_comments(id) ON DELETE SET NULL,
     labels TEXT NOT NULL DEFAULT '[]',
     source TEXT NOT NULL DEFAULT '',
     checklist TEXT NOT NULL DEFAULT '[]',
@@ -96,6 +97,7 @@ CREATE TABLE IF NOT EXISTS work_items(
 );
 CREATE INDEX IF NOT EXISTS work_items_state
   ON work_items(planning_space_id, state_id, position);
+CREATE INDEX IF NOT EXISTS work_items_parent ON work_items(parent_id);
 -- One work item per improvement case, enforced by the store rather than by the
 -- caller that happens to check first. The Board era carried the same partial
 -- index on `cards(source)`; two rows for one case is a duplicate the
@@ -115,8 +117,10 @@ CREATE TABLE IF NOT EXISTS work_item_comments(
     work_item_id TEXT NOT NULL REFERENCES work_items(work_item_id) ON DELETE CASCADE,
     author TEXT NOT NULL DEFAULT 'agent',
     body TEXT NOT NULL,
+    report TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT {_NOW}
 );
+CREATE INDEX IF NOT EXISTS work_item_comments_item ON work_item_comments(work_item_id, id);
 CREATE TABLE IF NOT EXISTS work_item_refs(
     id INTEGER PRIMARY KEY,
     work_item_id TEXT NOT NULL REFERENCES work_items(work_item_id) ON DELETE CASCADE,
@@ -137,6 +141,63 @@ CREATE TABLE IF NOT EXISTS work_item_events(
 );
 CREATE INDEX IF NOT EXISTS work_item_events_item ON work_item_events(work_item_id, id);
 """
+
+
+def migrate_discussion(conn: sqlite3.Connection) -> None:
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(work_item_comments)")}
+    if "report" not in columns:
+        conn.execute("ALTER TABLE work_item_comments ADD COLUMN report TEXT NOT NULL DEFAULT ''")
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(work_items)")}
+    if "summary_comment_id" not in columns:
+        conn.execute(
+            "ALTER TABLE work_items ADD COLUMN summary_comment_id INTEGER"
+            " REFERENCES work_item_comments(id) ON DELETE SET NULL"
+        )
+    for item in conn.execute(
+        "SELECT work_item_id,summary FROM work_items"
+        " WHERE summary != '' AND summary_comment_id IS NULL"
+    ).fetchall():
+        report = model.summary(item["summary"])
+        event = conn.execute(
+            "SELECT author,created_at FROM work_item_events"
+            " WHERE work_item_id=? AND action='summarized' ORDER BY id DESC LIMIT 1",
+            (item["work_item_id"],),
+        ).fetchone()
+        inserted = conn.execute(
+            "INSERT INTO work_item_comments(work_item_id,author,body,report,created_at)"
+            " VALUES(?,?,?,?,?)",
+            (
+                item["work_item_id"],
+                event["author"] if event else "",
+                "",
+                model.dumps(report),
+                event["created_at"] if event else "",
+            ),
+        )
+        conn.execute(
+            "UPDATE work_items SET summary_comment_id=? WHERE work_item_id=?",
+            (inserted.lastrowid, item["work_item_id"]),
+        )
+    conn.execute("""
+        CREATE TRIGGER IF NOT EXISTS work_items_summary_matches_report
+        BEFORE UPDATE OF summary,summary_comment_id ON work_items
+        WHEN (NEW.summary = '' AND NEW.summary_comment_id IS NOT NULL)
+          OR (NEW.summary != '' AND NOT EXISTS (
+            SELECT 1 FROM work_item_comments report
+            WHERE report.id = NEW.summary_comment_id
+              AND report.work_item_id = NEW.work_item_id
+              AND CASE WHEN json_valid(report.report) AND json_valid(NEW.summary) THEN
+                json_extract(report.report,'$.done') = json_extract(NEW.summary,'$.done')
+                AND json_extract(report.report,'$.next') = json_extract(NEW.summary,'$.next')
+                AND coalesce(json_extract(report.report,'$.why'),'') =
+                    coalesce(json_extract(NEW.summary,'$.why'),'')
+              ELSE 0 END
+          ))
+        BEGIN
+            SELECT RAISE(ABORT, 'work item summary must match its selected report');
+        END
+    """)
+
 
 SCHEMA_TABLES = (
     "planning_spaces",

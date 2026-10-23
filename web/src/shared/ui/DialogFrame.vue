@@ -73,6 +73,7 @@ const busyMark = computed(() => props.busy || undefined)
 .dialog-frame {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   max-height: calc(100dvh - 40px);
   border: 1px solid var(--color-rule-strong);
   color: var(--color-text);

@@ -196,6 +196,8 @@ ACKNOWLEDGED = (
     "claim_work_item_checklist_item",
     "tick_work_item_checklist_item",
     "set_work_item_summary",
+    "report_work_item",
+    "select_work_item_summary",
 )
 
 
@@ -246,6 +248,19 @@ class PlanningAcknowledgementTests(unittest.TestCase):
 
     def arguments_for(self, tool: str) -> dict:
         ref, step = self.ref, self.step
+        if tool == "select_work_item_summary":
+            full = self.call("get_work_item", id=ref)
+            reports = [comment for comment in full["comments"] if comment["kind"] == "report"]
+            if not reports:
+                full = self.call(
+                    "report_work_item", id=ref, report={"done": "d", "next": "n"}, verbose=True
+                )
+                reports = full["comments"]
+            return {
+                "id": ref,
+                "comment_id": reports[-1]["id"],
+                "expected_revision": full["revision"],
+            }
         return {
             "create_work_item": {"space": "QA", "title": "Another", "author": "one"},
             "update_work_item": {"id": ref, "title": "Edited", "labels": ["two"]},
@@ -255,6 +270,7 @@ class PlanningAcknowledgementTests(unittest.TestCase):
             "claim_work_item_checklist_item": {"id": ref, "item_id": step, "author": "one"},
             "tick_work_item_checklist_item": {"id": ref, "item_id": step, "author": "one"},
             "set_work_item_summary": {"id": ref, "summary": {"done": "d", "next": "n"}},
+            "report_work_item": {"id": ref, "report": {"done": "d", "next": "n"}},
         }[tool]
 
     def test_exactly_the_acknowledged_tools_publish_verbose_as_a_boolean(self) -> None:
@@ -386,7 +402,7 @@ class PlanningAcknowledgementTests(unittest.TestCase):
         ref = self.call("attach_work_item_ref", id=self.ref, kind="commit", value="def5678")
         self.assertEqual({"work_item", "kind", "value"}, set(ref))
         comment = self.call("comment_work_item", id=self.ref, body="again")
-        self.assertEqual({"work_item", "comment_count"}, set(comment))
+        self.assertEqual({"work_item", "comment_count", "comment_id"}, set(comment))
 
     def test_the_reads_and_the_take_next_queue_still_answer_in_full(self) -> None:
         full = self.call("get_work_item", id=self.ref)

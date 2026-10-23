@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
 
-import { test } from 'vitest'
+import { expect, test } from 'vitest'
 
 import { validatePlanningWorkItemPayload } from '@/shared/api/platformPlanningPayload.ts'
 
-test('Planning work-item payload accepts the populated shape without compatibility fields', () => {
+function planningWorkItemPayload() {
   const spaceRef = {
     data_scope_id: '123e4567-e89b-42d3-a456-426614174000',
     space_key: 'MAIN',
@@ -44,10 +44,14 @@ test('Planning work-item payload accepts the populated shape without compatibili
           updated_at: '2026-08-13T09:00:00Z',
           description: '',
           summary: null,
+          summary_comment_id: null,
           links: [],
           refs: [],
           comments: [
             {
+              id: 1,
+              kind: 'comment',
+              report: null,
               author: 'codex',
               body: 'Use /api/platform/<module> as inert text.',
               at: '2026-08-13T09:00:00Z',
@@ -61,7 +65,44 @@ test('Planning work-item payload accepts the populated shape without compatibili
       },
     },
   }
-  const result = validatePlanningWorkItemPayload(payload)
+  return payload
+}
+
+test('Planning work-item payload accepts the populated shape without compatibility fields', () => {
+  const result = validatePlanningWorkItemPayload(planningWorkItemPayload())
   assert.equal(result.state.status, 'ready')
   assert.equal(result.work_item_ref.reference, 'MAIN-264')
+})
+
+test.each([
+  { kind: 'report', report: null, body: '', at: null },
+  {
+    kind: 'comment',
+    report: { done: 'Result', next: 'Next' },
+    body: 'Text',
+    at: '2026-08-13T09:00:00Z',
+  },
+  { kind: 'comment', report: null, body: '', at: '2026-08-13T09:00:00Z' },
+  { kind: 'comment', report: null, body: 'Text', at: null },
+])('rejects a malformed typed discussion entry: %o', (invalidEntry) => {
+  const payload = planningWorkItemPayload()
+  const entry = payload.state.payload.work_item.comments[0]
+  if (entry === undefined) throw new Error('Expected discussion fixture')
+  Object.assign(entry, invalidEntry)
+  expect(() => validatePlanningWorkItemPayload(payload)).toThrow()
+})
+
+test('accepts an imported report with unknown time and rejects extra fields', () => {
+  const payload = planningWorkItemPayload()
+  const entry = payload.state.payload.work_item.comments[0]
+  if (entry === undefined) throw new Error('Expected discussion fixture')
+  Object.assign(entry, {
+    kind: 'report',
+    report: { done: 'Historical result', next: 'Review' },
+    body: '',
+    at: null,
+  })
+  expect(() => validatePlanningWorkItemPayload(payload)).not.toThrow()
+  Object.assign(entry, { arbitrary: true })
+  expect(() => validatePlanningWorkItemPayload(payload)).toThrow()
 })

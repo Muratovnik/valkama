@@ -53,7 +53,9 @@ test.beforeEach(async ({ page }) => {
               revision: 1,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
-              description: 'A deterministic inspector fixture.',
+              description:
+                'First loaded line\nSecond loaded line\nThird loaded line\nFourth loaded line\nFifth loaded line\nSixth loaded line',
+              summary_comment_id: 1,
               summary: {
                 done: 'First loaded line\nSecond loaded line\nThird loaded line\nFourth loaded line\nFifth loaded line\nSixth loaded line',
                 next: 'Continue review',
@@ -61,7 +63,20 @@ test.beforeEach(async ({ page }) => {
               },
               links: [],
               refs: [],
-              comments: [],
+              comments: [
+                {
+                  id: 1,
+                  kind: 'report',
+                  report: {
+                    done: 'First loaded line\nSecond loaded line\nThird loaded line\nFourth loaded line\nFifth loaded line\nSixth loaded line',
+                    next: 'Continue review',
+                    why: '',
+                  },
+                  body: '',
+                  author: 'user',
+                  at: null,
+                },
+              ],
               events: [],
             },
           },
@@ -205,11 +220,9 @@ test('the note field spans its form and its action keeps a full pointer target',
   await expect(drawer).toHaveAttribute('role', 'dialog')
   await expect(drawer.locator('.drawer-frame-body')).toHaveCount(1)
   await expect(drawer.locator('.drawer-frame-body')).toHaveCSS('overflow-y', 'auto')
-  // The sections are the shared segmented control, so a section is a button.
-  await drawer.getByRole('button', { name: /история/i }).click()
-  const field = drawer.locator('.note-form textarea')
-  const submit = drawer.locator('.note-form button[type="submit"]')
-  const formBox = await drawer.locator('.note-form').boundingBox()
+  const field = drawer.locator('.discussion-form textarea')
+  const submit = drawer.locator('.discussion-form button[type="submit"]')
+  const formBox = await drawer.locator('.discussion-form').boundingBox()
   const fieldBox = await field.boundingBox()
   const submitBox = await submit.boundingBox()
   // A note is several lines, so the form is a column: the field takes the width
@@ -319,7 +332,8 @@ test('inspector textareas fit loaded and edited content and shrink after deletio
   await page.setViewportSize({ width: 1440, height: 1000 })
   await page.goto('/tests/browser/harness.html?lang=en&surface=work-item')
   const drawer = page.locator('.drawer')
-  const field = drawer.getByRole('textbox', { name: 'What was done', exact: true })
+  await drawer.getByRole('button', { name: 'Edit description', exact: true }).click()
+  const field = drawer.getByRole('textbox', { name: 'Description', exact: true })
   await expect(field).toHaveValue(/Sixth loaded line$/)
   const height = () => field.evaluate((element) => element.getBoundingClientRect().height)
   const fits = () => field.evaluate((element) => element.scrollHeight <= element.clientHeight + 1)
@@ -358,7 +372,7 @@ test('inspector facts and section headings keep a shared spacing rhythm', async 
   const drawer = page.locator('.drawer')
   await expect(drawer.locator('.fact').first()).toBeVisible()
   const gaps = await Promise.all(
-    ['.fact dt', '.summary h3', '.overview-section h3'].map((selector) =>
+    ['.fact dt', '.outcome h3', '.overview-section .section-line'].map((selector) =>
       drawer
         .locator(selector)
         .first()

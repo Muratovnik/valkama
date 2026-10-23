@@ -375,6 +375,30 @@ def _comment(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     )
 
 
+def _report(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
+    return service.report_work_item(
+        conn,
+        _text(payload, "id"),
+        _field(payload, "report"),
+        make_current=_flag(payload, "make_current"),
+        expected_revision=_optional_int(payload, "expected_revision"),
+        author=_author(payload),
+    )
+
+
+def _select_summary(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
+    comment_id = _field(payload, "comment_id")
+    if not isinstance(comment_id, int) or isinstance(comment_id, bool):
+        raise PlanningHttpError(400, "invalid_request", "comment_id must be an integer")
+    return service.select_summary(
+        conn,
+        _text(payload, "id"),
+        comment_id,
+        expected_revision=_optional_int(payload, "expected_revision"),
+        author=_author(payload),
+    )
+
+
 def _ref(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     return service.attach_ref(
         conn,
@@ -418,6 +442,8 @@ _WRITES: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], dict]] =
     "/api/planning/work-item/link": _link,
     "/api/planning/work-item/summary": _summary,
     "/api/planning/work-item/comment": _comment,
+    "/api/planning/work-item/report": _report,
+    "/api/planning/work-item/summary/select": _select_summary,
     "/api/planning/work-item/ref": _ref,
 }
 

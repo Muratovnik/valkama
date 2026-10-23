@@ -88,7 +88,8 @@ export const LINE_BUDGET = new Map([
   // Kernel relations panel is a section of its own with a status edge; and the
   // list's sticky header stands on the rule that stops it melting into row one.
   ['widgets/work-item-inspector/components/InspectorHead.vue', 1],
-  ['widgets/work-item-inspector/components/InspectorActivity.vue', 1],
+  ['widgets/work-item-inspector/components/InspectorDiscussion.vue', 1],
+  ['widgets/work-item-inspector/components/InspectorSummary.vue', 1],
   ['widgets/work-item-inspector/components/InspectorOverview.vue', 1],
   ['widgets/work-item-inspector/components/InspectorReserved.vue', 1],
   ['widgets/work-item-inspector/components/InspectorExecution.vue', 1],

@@ -28,9 +28,6 @@ import LaunchDialog from '@/features/work-item-launch/LaunchDialog.vue'
 import {
   attachWorkItemRef,
   claimWorkItem,
-  commentWorkItem,
-  linkWorkItems,
-  setWorkItemSummary,
   tickChecklistStep,
   transitionWorkItem,
 } from '@/shared/api/planningApi.ts'
@@ -245,10 +242,6 @@ function moveTo(stateKey: string) {
   void write(() => transitionWorkItem({ id: props.reference, state: stateKey }))
 }
 
-function saveSummary(summary: { done: string; next: string; why: string }) {
-  void write(() => setWorkItemSummary({ id: props.reference, summary }))
-}
-
 function tick(itemId: string, done: boolean) {
   void write(() => tickChecklistStep({ id: props.reference, item_id: itemId, done }))
 }
@@ -269,16 +262,9 @@ function attachMemory(entry: { label: string; value: string }) {
   )
 }
 
-function comment(body: string) {
-  void write(() => commentWorkItem({ id: props.reference, body }))
-}
-
-function link(value: { kind: string; other: string }) {
-  void write(() => linkWorkItems({ id: props.reference, ...value }))
-}
-
-function unlink(value: { kind: string; other: string }) {
-  void write(() => linkWorkItems({ id: props.reference, ...value, remove: true }))
+async function discussionChanged() {
+  await load()
+  emit('changed')
 }
 </script>
 
@@ -392,19 +378,19 @@ function unlink(value: { kind: string; other: string }) {
               </VButton>
             </div>
             <InspectorOverview
-              v-if="section === 'overview'"
+              v-show="section === 'overview'"
               :item="payload"
               :resource-ref="resourceRef"
               :writable="writable && !busy"
-              @summary="saveSummary"
+              @changed="discussionChanged"
+              @refresh="load"
               @tick="tick"
             />
-            <template v-else-if="section === 'relations'">
+            <template v-if="section === 'relations'">
               <InspectorRelations
                 :item="payload"
                 :writable="writable && !busy"
-                @link="link"
-                @unlink="unlink"
+                @changed="discussionChanged"
                 @session="(id, family) => emit('session', id, family)"
                 @open="(target) => emit('open', target)"
               />
@@ -439,10 +425,8 @@ function unlink(value: { kind: string; other: string }) {
               @attach="attachMemory"
             />
             <InspectorActivity
-              v-else
+              v-else-if="section === 'activity'"
               :item="payload"
-              :writable="writable && !busy"
-              @comment="comment"
             />
           </template>
         </PlatformStatePanel>

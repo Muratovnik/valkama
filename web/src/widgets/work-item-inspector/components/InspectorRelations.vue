@@ -1,145 +1,165 @@
 <script setup lang="ts">
-/**
- * How this item stands to the others, and what it points at outside Valkama.
- *
- * A link is directional and the direction is the whole meaning: `blocks`
- * outgoing is work this item holds up, `blocks` incoming is work holding this
- * one up. The Board era grouped them into four named buckets, which is the same
- * four facts spelled twice; here the kind and the direction pick the phrase.
- */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { LINK_KINDS, WORK_ITEM_REFERENCE } from '@/shared/api/planningModel.ts'
+import RelatedWorkPicker from '@/widgets/work-item-inspector/components/RelatedWorkPicker.vue'
+
+import { linkWorkItems } from '@/shared/api/planningApi.ts'
+import { LINK_KINDS } from '@/shared/api/planningModel.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { actorName } from '@/shared/lib/actor.ts'
-import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
 import VButton from '@/shared/ui/VButton.vue'
-import VTextInput from '@/shared/ui/VTextInput.vue'
 
-const props = defineProps<{
-  item: WorkItem
-  writable: boolean
-}>()
-
+const props = defineProps<{ item: WorkItem; writable: boolean }>()
 const emit = defineEmits<{
-  link: [value: { kind: string; other: string }]
+  changed: []
   open: [reference: string]
   session: [id: string, family: string]
-  unlink: [value: { kind: string; other: string }]
 }>()
-
 const { t, d } = useI18n()
-
-const linkKind = ref<string>('blocks')
-const linkOther = ref('')
-
-const kindOptions = computed(() =>
-  LINK_KINDS.map((kind) => ({ value: kind, label: t(`workItem.link.${kind}`) })),
+type Link = WorkItem['links'][number]
+const pickerOpen = ref(false)
+const initialKind = ref<Link['kind']>('relates-to')
+const initialDirection = ref<Link['direction']>('outgoing')
+const busy = ref(false)
+const error = ref('')
+const grouped = computed(() =>
+  LINK_KINDS.flatMap((kind) =>
+    (['outgoing', 'incoming'] as const)
+      .map((direction) => ({
+        kind,
+        direction,
+        links: props.item.links.filter(
+          (link) => link.kind === kind && link.direction === direction,
+        ),
+      }))
+      .filter((group) => group.links.length),
+  ),
 )
-
-/**
- * A reference typed by hand is checked against the shape the server accepts
- * before the request, so a typo answers immediately instead of as a refusal.
- */
-const linkable = computed(
-  () => props.writable && WORK_ITEM_REFERENCE.test(linkOther.value.trim().toUpperCase()),
-)
-
-const grouped = computed(() => {
-  const order = new Map(LINK_KINDS.map((kind, index) => [kind, index]))
-  return [...props.item.links].sort(
-    (left, right) =>
-      (order.get(left.kind) ?? 0) - (order.get(right.kind) ?? 0) ||
-      left.direction.localeCompare(right.direction) ||
-      left.reference.localeCompare(right.reference),
-  )
-})
-
-function phrase(link: WorkItem['links'][number]): string {
-  return t(`workItem.relation.${link.kind}.${link.direction}`)
+function add(kind: Link['kind'] = 'relates-to', direction: Link['direction'] = 'outgoing') {
+  if (!props.writable || busy.value) return
+  initialKind.value = kind
+  initialDirection.value = direction
+  pickerOpen.value = true
 }
-
+async function remove(link: Link) {
+  if (!props.writable || busy.value) return
+  busy.value = true
+  error.value = ''
+  try {
+    await linkWorkItems({
+      id: link.direction === 'incoming' ? link.work_item_id : props.item.work_item_id,
+      other: link.direction === 'incoming' ? props.item.work_item_id : link.work_item_id,
+      kind: link.kind,
+      remove: true,
+    })
+    emit('changed')
+  } catch (error_) {
+    error.value = error_ instanceof Error ? error_.message : String(error_)
+  } finally {
+    busy.value = false
+  }
+}
 function when(value: string): string {
   const date = new Date(value)
   return Number.isNaN(date.valueOf()) ? value : d(date, 'activity')
-}
-
-function addLink() {
-  if (!linkable.value) return
-  emit('link', { other: linkOther.value.trim().toUpperCase(), kind: linkKind.value })
-  linkOther.value = ''
 }
 </script>
 
 <template>
   <div class="relations">
     <section class="relation-section">
-      <SectionHeading
-        as="h3"
-        level="panel"
-        >{{ t('workItem.links') }}</SectionHeading
-      >
-      <ul
-        v-if="grouped.length"
-        class="link-list"
-      >
-        <li
-          v-for="link in grouped"
-          :key="`${link.kind}-${link.direction}-${link.work_item_id}`"
-          class="link-row"
+      <header class="relations-heading">
+        <SectionHeading
+          as="h3"
+          level="panel"
+          >{{ t('workItem.links') }}
+          <span class="relation-count">{{ item.links.length }}</span></SectionHeading
         >
-          <span class="link-phrase">{{ phrase(link) }}</span>
-          <button
-            class="link-open"
-            type="button"
-            @click="emit('open', link.reference)"
-          >
-            <span class="link-reference">{{ link.reference }}</span>
-            <span class="link-title">{{ link.title }}</span>
-          </button>
-          <button
-            v-if="writable"
-            class="link-remove"
-            type="button"
-            :title="t('workItem.unlink')"
-            @click="emit('unlink', { other: link.reference, kind: link.kind })"
-          >
-            {{ t('workItem.unlink') }}
-          </button>
-        </li>
-      </ul>
+        <VButton
+          v-if="writable"
+          variant="ghost"
+          :disabled="busy"
+          :title="t('workItem.related.add')"
+          :aria-label="t('workItem.related.add')"
+          @click="add()"
+          >+</VButton
+        >
+      </header>
       <p
-        v-else
+        v-if="error"
+        class="relation-error"
+        role="alert"
+      >
+        {{ error }}
+      </p>
+      <section
+        v-for="group in grouped"
+        :key="group.kind + group.direction"
+        class="relation-group"
+      >
+        <header class="relations-heading">
+          <h4 class="group-heading">
+            {{ t(`workItem.relation.${group.kind}.${group.direction}`) }}
+            <span class="relation-count">{{ group.links.length }}</span>
+          </h4>
+          <VButton
+            v-if="writable"
+            variant="ghost"
+            :disabled="busy"
+            :title="t('workItem.related.add')"
+            :aria-label="`${t('workItem.related.add')}: ${t(
+              `workItem.relation.${group.kind}.${group.direction}`,
+            )}`"
+            @click="add(group.kind, group.direction)"
+            >+</VButton
+          >
+        </header>
+        <ul class="link-list">
+          <li
+            v-for="link in group.links"
+            :key="link.work_item_id"
+            class="link-row"
+          >
+            <button
+              class="link-open"
+              type="button"
+              @click="emit('open', link.reference)"
+            >
+              <span class="link-reference">{{ link.reference }}</span
+              ><span class="link-title">{{ link.title }}</span>
+            </button>
+            <button
+              v-if="writable"
+              class="link-remove"
+              type="button"
+              :disabled="busy"
+              :aria-label="t('workItem.related.remove', { reference: link.reference })"
+              @click="remove(link)"
+            >
+              {{ t('workItem.unlink') }}
+            </button>
+          </li>
+        </ul>
+      </section>
+      <p
+        v-if="!grouped.length"
         class="quiet"
       >
         {{ t('workItem.noLinks') }}
       </p>
-
-      <form
-        v-if="writable"
-        class="link-form"
-        @submit.prevent="addLink"
-      >
-        <ChoiceSelect
-          v-model="linkKind"
-          :label="t('workItem.linkKind')"
-          :options="kindOptions"
-        />
-        <VTextInput
-          v-model="linkOther"
-          :label="t('workItem.linkOther')"
-          :maxlength="20"
-        />
-        <VButton
-          type="submit"
-          :disabled="!linkable"
-        >
-          {{ t('workItem.linkAdd') }}
-        </VButton>
-        <p class="link-form-hint">{{ t('workItem.linkOtherHint') }}</p>
-      </form>
+      <RelatedWorkPicker
+        :key="item.work_item_id"
+        :item="item"
+        :writable="writable"
+        :open="pickerOpen"
+        :initial-kind="initialKind"
+        :initial-direction="initialDirection"
+        @close="pickerOpen = false"
+        @changed="emit('changed')"
+        @open="emit('open', $event)"
+      />
     </section>
 
     <section class="relation-section">
@@ -188,7 +208,6 @@ function addLink() {
     </section>
   </div>
 </template>
-
 <style scoped>
 .relations {
   display: grid;
@@ -206,6 +225,35 @@ function addLink() {
   font: var(--font-detail);
 }
 
+.relations-heading {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: space-between;
+  align-items: center;
+}
+
+.relation-count {
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+}
+
+.relation-group {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.group-heading {
+  margin: 0;
+  color: var(--color-text-tertiary);
+  font: var(--font-control);
+}
+
+.relation-error {
+  margin: 0;
+  color: var(--color-danger);
+  font: var(--font-detail);
+}
+
 .link-list {
   display: grid;
   gap: var(--space-2);
@@ -214,19 +262,11 @@ function addLink() {
   list-style: none;
 }
 
-/* The phrase leads, because "blocked by" is what the reader is looking for; the
-   reference and title follow it as one target. */
 .link-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-label-value);
+  gap: var(--space-2);
   align-items: baseline;
-}
-
-.link-phrase {
-  grid-column: 1 / -1;
-  color: var(--color-text-tertiary);
-  font: var(--font-detail);
 }
 
 .link-open {
@@ -240,10 +280,6 @@ function addLink() {
   text-align: start;
   background: none;
   cursor: pointer;
-
-  &:is(:hover, :focus-visible) .link-title {
-    text-decoration: underline;
-  }
 }
 
 .link-reference {
@@ -255,7 +291,7 @@ function addLink() {
 
 .link-title {
   color: var(--color-text);
-  font: var(--font-line);
+  font: var(--font-editor);
   overflow-wrap: anywhere;
 }
 
@@ -274,18 +310,8 @@ function addLink() {
   }
 }
 
-.link-form {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-  gap: var(--space-2);
-  align-items: end;
-}
-
-.link-form-hint {
-  grid-column: 1 / -1;
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-note);
+.link-open:is(:hover, :focus-visible) .link-title {
+  text-decoration: underline;
 }
 
 .ref-list {
@@ -316,12 +342,5 @@ function addLink() {
 .ref-meta {
   color: var(--color-text-tertiary);
   font: var(--font-detail);
-}
-
-@container overlay (width <= 586px) {
-  .link-form {
-    grid-template-columns: minmax(0, 1fr);
-    justify-items: start;
-  }
 }
 </style>

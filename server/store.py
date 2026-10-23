@@ -155,7 +155,7 @@ MIGRATIONS = {
 # copy left behind. A server that was current when it started and went stale
 # while it ran already holds its connection; `static_assets.SourceWatch` is what
 # notices that one.
-STORE_SCHEMA_VERSION = 7
+STORE_SCHEMA_VERSION = 8
 
 
 class StoreTooNewError(RuntimeError):
@@ -568,6 +568,7 @@ def connect() -> sqlite3.Connection:
                 _migrate(conn)
                 migrate_planning_cutover(conn)
             _execute_script(conn, SCHEMA)
+            planning_store.migrate_discussion(conn)
             audit_migration = platform_migrations.schema_migration_needed(conn)
             audit_order_migration = platform_migrations.registry_audit_order_migration_needed(conn)
             authorization_migration = platform_migrations.authorization_owner_migration_needed(conn)
