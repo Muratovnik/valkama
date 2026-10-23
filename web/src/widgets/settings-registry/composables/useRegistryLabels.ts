@@ -132,10 +132,79 @@ export function useRegistryLabels() {
     ]
   }
 
+  function capabilityTitle(id: RegistryAssignment['capability_id']): string {
+    return t(`platform.registry.capabilityNames.${id.replace('.', '_')}`)
+  }
+
+  function connectionName(connection: RegistryConnection): string {
+    if (connection.connection_ref.adapter_lineage_id === 'notes-reference-v1')
+      return t('platform.integrations.demoNotes')
+    if (i18n.te(connection.name)) return t(connection.name)
+    if (i18n.te(connection.service.title_key)) return t(connection.service.title_key)
+    if (
+      connection.service.owner_id === 'agentmemory' &&
+      connection.service.service_id === 'local-reference-service'
+    )
+      return t('platform.integrations.agentMemory')
+    return connection.name === connection.service.title_key
+      ? connection.service.service_id
+      : connection.name
+  }
+
+  function connectionOrigin(
+    connection: RegistryConnection,
+    payload: PlatformRegistryReady,
+  ): string {
+    if (connection.connection_ref.adapter_lineage_id === 'notes-reference-v1')
+      return t('platform.registry.demo')
+    const adapter = payload.adapters.find(
+      (entry) => entry.adapter_lineage_id === connection.connection_ref.adapter_lineage_id,
+    )
+    const service = payload.services.find(
+      (entry) =>
+        entry.service_ref.owner_id === connection.service.owner_id &&
+        entry.service_ref.service_id === connection.service.service_id,
+    )
+    if (service?.discovery_provenance === 'external-endpoint')
+      return t('platform.registry.external')
+    if (adapter?.publisher_id === 'valkama' || connection.transport === 'built-in')
+      return t('platform.registry.builtIn')
+    return t('platform.registry.providerOwned')
+  }
+
+  function connectionSetup(connection: RegistryConnection, payload: PlatformRegistryReady): string {
+    if (connection.connection_ref.adapter_lineage_id === 'notes-reference-v1')
+      return t('platform.registry.demoSetup')
+    if (
+      connection.service.owner_id === 'agentmemory' &&
+      connection.connection_ref.adapter_lineage_id === 'agentmemory-reference-v1'
+    )
+      return t('platform.registry.agentMemorySetup')
+    const service = payload.services.find(
+      (entry) =>
+        entry.service_ref.owner_id === connection.service.owner_id &&
+        entry.service_ref.service_id === connection.service.service_id,
+    )
+    if (service?.discovery_provenance === 'external-endpoint')
+      return t('platform.registry.externalSetup')
+    const builtin =
+      connection.transport === 'built-in' ||
+      payload.adapters.some(
+        (entry) =>
+          entry.adapter_lineage_id === connection.connection_ref.adapter_lineage_id &&
+          entry.publisher_id === 'valkama',
+      )
+    return t(builtin ? 'platform.registry.builtinSetup' : 'platform.registry.providerSetup')
+  }
+
   function connectionDetails(connection: RegistryConnection) {
     return [
       { label: t('platform.registry.transport'), value: connection.transport },
-      { label: t('platform.registry.capabilities'), value: connection.capabilities.join(', ') },
+      { label: t('platform.registry.technicalId'), value: connection.capabilities.join(', ') },
+      {
+        label: t('platform.registry.capabilities'),
+        value: connection.capabilities.map((id) => capabilityTitle(id)).join(', '),
+      },
       {
         label: t('platform.registry.state'),
         value: t(`platform.registry.lifecycle.${connection.state}`),
@@ -180,6 +249,10 @@ export function useRegistryLabels() {
     assignmentDetails,
     assignmentSubtitle,
     bindingSubtitle,
+    capabilityTitle,
+    connectionName,
+    connectionOrigin,
+    connectionSetup,
     connectionDetails,
     connectionSubtitle,
     connectionTitle,

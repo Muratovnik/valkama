@@ -64,25 +64,26 @@ function i18n() {
 }
 
 describe('Planning semantic presentation', () => {
-  it('renders priority through the shared work-item-priority presentation', async () => {
+  it('keeps priority readable without colouring the whole card', async () => {
     const wrapper = mount(WorkItemTile, {
       props: { item: workItem({ priority: 'urgent' }) },
       global: { plugins: [i18n()] },
     })
 
-    expect(wrapper.get('.work-item-tile').attributes('data-tone')).toBe('danger')
+    expect(wrapper.get('.tile-priority').text()).toBe('Urgent')
+    expect(wrapper.get('.work-item-tile').attributes('data-tone')).toBeUndefined()
 
     await wrapper.setProps({ item: workItem({ priority: 'high' }) })
-    expect(wrapper.get('.work-item-tile').attributes('data-tone')).toBe('warning')
+    expect(wrapper.get('.tile-priority').text()).toBe('High')
 
     await wrapper.setProps({ item: workItem({ priority: 'medium' }) })
-    expect(wrapper.get('.work-item-tile').attributes('data-tone')).toBe('neutral')
+    expect(wrapper.get('.tile-priority').text()).toBe('Medium')
   })
 
   it('gives ready and active ownership precedence over the workflow marker', async () => {
     const wrapper = mount(GraphNodeCard, {
       props: { node: placedNode(), ready: false, recessed: false },
-      global: { plugins: [i18n()] },
+      global: { plugins: [i18n()], stubs: { Handle: true } },
     })
 
     expect(wrapper.get('.flow-node-card').attributes('data-tone')).toBe('danger')

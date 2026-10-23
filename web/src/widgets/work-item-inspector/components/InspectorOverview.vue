@@ -23,6 +23,7 @@ import { openSourceReference, sourceFeedback } from '@/shared/lib/sourceReferenc
 import { statePresentation } from '@/shared/lib/uiSystem.ts'
 import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
+import SemanticState from '@/shared/ui/SemanticState.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
@@ -43,6 +44,9 @@ const blockers = computed(() =>
 )
 const nextStep = computed(() => props.item.checklist.find((step) => !step.done))
 const steps = computed(() => checklistProgress(props.item))
+function stepState(done: boolean) {
+  return done ? 'selected' : 'unselected'
+}
 /** Who holds the item, or the phrase for nobody — never a blank cell. */
 const claimLabel = computed(() =>
   props.item.claim_ref ? actorName(props.item.claim_ref) : t('workItem.noClaim'),
@@ -77,7 +81,10 @@ function when(value: string): string {
 
 <template>
   <div class="overview">
-    <section v-if="blockers.length">
+    <section
+      v-if="blockers.length"
+      class="overview-section"
+    >
       <SectionHeading
         as="h3"
         level="panel"
@@ -90,7 +97,10 @@ function when(value: string): string {
         {{ link.reference }} — {{ link.title }}
       </p>
     </section>
-    <section v-if="nextStep">
+    <section
+      v-if="nextStep"
+      class="overview-section"
+    >
       <SectionHeading
         as="h3"
         level="panel"
@@ -101,11 +111,13 @@ function when(value: string): string {
     <dl class="facts">
       <div class="fact">
         <dt class="fact-term">{{ t('workItem.state') }}</dt>
-        <dd
-          class="fact-value fact-state"
-          :data-tone="statePresentation('work-item-state', props.item.state.category).tone"
-        >
-          {{ item.state.name }}
+        <dd class="fact-value">
+          <SemanticState
+            class="fact-state"
+            dimension="work-item-state"
+            :state="item.state.category"
+            :label="item.state.name"
+          />
         </dd>
       </div>
       <div class="fact">
@@ -117,7 +129,7 @@ function when(value: string): string {
         <dd class="fact-value">{{ t(`workItem.kind.${item.kind}`) }}</dd>
       </div>
       <div class="fact">
-        <dt class="fact-term">{{ t('workItem.claim') }}</dt>
+        <dt class="fact-term">{{ t('workItem.owner') }}</dt>
         <dd class="fact-value">
           {{ claimLabel }}
         </dd>
@@ -163,7 +175,10 @@ function when(value: string): string {
       </li>
     </ul>
 
-    <section v-if="item.description">
+    <section
+      v-if="item.description"
+      class="overview-section"
+    >
       <SectionHeading
         as="h3"
         level="panel"
@@ -172,7 +187,7 @@ function when(value: string): string {
       <p class="description">{{ item.description }}</p>
     </section>
 
-    <section>
+    <section class="overview-section">
       <div class="section-line">
         <SectionHeading
           as="h3"
@@ -201,6 +216,7 @@ function when(value: string): string {
             type="button"
             role="checkbox"
             :class="{ done: step.done }"
+            :data-tone="statePresentation('control-selection', stepState(step.done)).tone"
             :disabled="!writable"
             :aria-checked="step.done"
             @click="emit('tick', step.id, !step.done)"
@@ -253,6 +269,11 @@ function when(value: string): string {
 
 /* Several columns of short facts, each a term over its value. A single column
    made the drawer scroll past five one-word answers before the description. */
+.overview-section {
+  display: grid;
+  gap: var(--space-3);
+}
+
 .facts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
@@ -279,36 +300,6 @@ function when(value: string): string {
   margin: 0;
   color: var(--color-text);
   font: var(--font-line);
-}
-
-.fact-state {
-  display: inline-flex;
-  gap: var(--space-2);
-  align-items: baseline;
-}
-
-.fact-state::before {
-  content: '';
-  width: 7px;
-  height: 7px;
-  background: var(--color-text-muted);
-  border-radius: 50%;
-}
-
-.fact-state[data-tone='info']::before {
-  background: var(--color-info);
-}
-
-.fact-state[data-tone='success']::before {
-  background: var(--color-success);
-}
-
-.fact-state[data-tone='warning']::before {
-  background: var(--color-warning);
-}
-
-.fact-state[data-tone='danger']::before {
-  background: var(--color-danger);
 }
 
 .source-anchor {
@@ -424,9 +415,9 @@ function when(value: string): string {
   color: var(--color-surface);
   border-radius: var(--radius-status);
 
-  .step.done & {
-    background: var(--color-accent);
-    border-color: var(--color-accent);
+  .step[data-tone='success'] & {
+    background: var(--color-success);
+    border-color: var(--color-success);
   }
 }
 

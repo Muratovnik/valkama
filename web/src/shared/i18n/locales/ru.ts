@@ -76,6 +76,8 @@ export const ru = {
       mutationFailed: 'Изменение не сохранено. Повторите после подключения локального сервиса.',
       permissionDenied: 'Локальный сервис отклонил этот запрос.',
       requestFailed: 'Локальный сервис не завершил запрос.',
+      requestTimeout:
+        'Локальный сервис не ответил вовремя. Проверьте, что Valkama запущен, и повторите.',
       sessionFeedFailed: 'Не удалось загрузить активность сессии.',
       sessionsRequestFailed: 'Не удалось загрузить сессии.',
       streamDisconnected: 'Поток обновлений сессий прерван.',
@@ -145,7 +147,7 @@ export const ru = {
     },
     relations: {
       kicker: 'Внешние ресурсы',
-      title: 'Связи',
+      title: 'Внешние ресурсы',
       attach: 'Прикрепить',
       open: 'Открыть',
       remove: 'Удалить',
@@ -168,7 +170,8 @@ export const ru = {
       resourceTarget: 'Цель',
       targetPending: 'Введите стабильный внешний ID',
       empty: 'Внешние связи не прикреплены.',
-      unavailable: 'В этой проектной области нет доступного действия прикрепления.',
+      unavailable:
+        'Чтобы прикрепить ресурс, включите адаптер с действием прикрепления в настройках проекта → Интеграции.',
       action: 'Действие',
       openBlocked: 'Браузер заблокировал открытие внешнего ресурса.',
       states: {
@@ -213,6 +216,10 @@ export const ru = {
     cancel: 'Отмена',
   },
   graph: {
+    claimedBy: 'Закреплено за',
+    layoutLoading: 'Строим граф…',
+    layoutFailed: 'Не удалось построить граф.',
+    retry: 'Повторить',
     title: 'Граф работ',
     openOnly: 'Открытые · {count}',
     all: 'Все · {count}',
@@ -480,6 +487,25 @@ export const ru = {
     },
   },
   memory: {
+    searchProvider: 'Поиск в документах проекта',
+    documentSource: 'Документы Markdown · {project}/docs',
+    sourcePending: 'Проверяем источник зарегистрированного проекта…',
+    sourceFailed: 'Не удалось проверить источник проекта. Повторите проверку.',
+    sourceRetry: 'Повторить проверку источника',
+    sourceSetup:
+      'Поиск читает docs/ в корне проекта из реестра Valkama. Зарегистрируйте или исправьте корень через CLI Valkama projects и создайте docs/ в проекте, если каталога нет.',
+    referenceProvider: 'Сохранённые ссылки памяти',
+    referenceSelection: '{provider} · {source}',
+    referenceUnavailable: 'Открытие сохранённых ссылок недоступно. Их подписи остаются в задаче.',
+    workspaceSettings: 'Открыть настройки рабочей среды',
+    markdownProvider: 'Документы Markdown проекта',
+    noProvider: 'Провайдер не выбран',
+    referenceScope: {
+      installation: 'по умолчанию для установки',
+      project: 'переопределение проекта',
+      unavailable: 'нет действующего подключения',
+    },
+
     heading: 'Память',
     intro: 'На что ссылается элемент. Valkama хранит ссылку, а не копию.',
     none: 'К этому элементу ничего не прикреплено.',
@@ -740,6 +766,9 @@ export const ru = {
     kindLabel: 'Тип',
     state: 'Состояние',
     priority: 'Приоритет',
+    holder: 'Ответственный: {holder}',
+    owner: 'Ответственный',
+    previousHolder: 'Ранее отвечал: {holder}',
     claim: 'Взять',
     release: 'Освободить',
     noClaim: 'Никто не взял',

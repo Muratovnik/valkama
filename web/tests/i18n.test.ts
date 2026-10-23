@@ -130,7 +130,7 @@ test('English and Russian catalogs translate checklist actors, activity, source 
   assert.equal(i18n.global.t('activity.checklistClaimed'), 'Пункт чек-листа взят в работу')
   assert.equal(i18n.global.t('workItem.noClaim'), 'Никто не взял')
   assert.equal(i18n.global.t('refresh.title'), 'Обновить доски, активность и текущий вид сейчас')
-  assert.equal(i18n.global.t('platform.relations.title'), 'Связи')
+  assert.equal(i18n.global.t('platform.relations.title'), 'Внешние ресурсы')
   assert.equal(i18n.global.t('workItem.view.kanban'), 'Канбан')
   assert.equal(i18n.global.t('graph.frontier', { count: 2 }), 'Можно брать сейчас · 2')
   assert.equal(i18n.global.t('graph.openOnly', { count: 14 }), 'Открытые · 14')

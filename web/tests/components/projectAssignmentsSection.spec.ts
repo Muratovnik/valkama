@@ -150,8 +150,16 @@ describe('ProjectAssignmentsSection', () => {
       props: { payload: registryPayload(), projectId: 'alpha' },
       global: { plugins: plugins() },
     })
+    expect(wrapper.get('.registry-name').text()).toBe('Read usage and activity')
+    expect(wrapper.get('.registry-sub').text()).toBe('Selected for this project')
+    expect(
+      wrapper
+        .findAll('.registry-fact')
+        .find((fact) => fact.text().startsWith('Selected connection'))
+        ?.text(),
+    ).toBe('Selected connectionclaude')
     const select = wrapper.getComponent(ChoiceSelect)
-    expect(select.get('[role="combobox"]').attributes('aria-label')).toBe('telemetry.query')
+    expect(select.get('[role="combobox"]').attributes('aria-label')).toBe('Read usage and activity')
 
     select.vm.$emit('update:modelValue', codexId)
     await flushPromises()
@@ -180,6 +188,13 @@ describe('ProjectAssignmentsSection', () => {
       global: { plugins: plugins() },
     })
 
+    expect(wrapper.get('.registry-sub').text()).toBe('Inherited from installation')
+    expect(
+      wrapper
+        .findAll('.registry-fact')
+        .find((fact) => fact.text().startsWith('Selected connection'))
+        ?.text(),
+    ).toBe('Selected connectioncodex')
     wrapper.getComponent(ChoiceSelect).vm.$emit('update:modelValue', claudeId)
     await flushPromises()
 
@@ -228,7 +243,7 @@ describe('ProjectAssignmentsSection', () => {
     // `connection-unhealthy` reach the screen in the shipped build.
     expect(wrapper.text()).toContain('Tool not healthy')
     expect(wrapper.text()).not.toContain('connection-unhealthy')
-    expect(wrapper.text()).toContain('Effective source: Unavailable')
+    expect(wrapper.text()).toContain('No effective connection')
 
     const reset = wrapper.findAll('button').find((button) => button.text() === 'Reset to default')
     expect(reset).toBeDefined()

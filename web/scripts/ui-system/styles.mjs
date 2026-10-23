@@ -5,7 +5,7 @@
  */
 
 const svgOwners = new Set(['shared/ui/VIcon.vue', 'shared/ui/BrandMark.vue'])
-const overlayOwners = new Set(['shared/ui/DialogFrame.vue', 'shared/ui/InspectorDrawer.vue'])
+const overlayOwners = new Set(['shared/ui/DialogFrame.vue', 'shared/ui/ResizableInspector.vue'])
 const dialogOwners = new Set(['shared/ui/OverlayHost.vue'])
 const selectionOwners = new Set(['shared/ui/ChoiceSelect.vue'])
 const segmentedOwners = new Set(['shared/ui/SegmentedControl.vue'])

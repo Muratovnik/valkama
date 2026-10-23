@@ -3,6 +3,9 @@ import { createI18n } from 'vue-i18n'
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import InspectorRelations from '@/widgets/work-item-inspector/components/InspectorRelations.vue'
+import InspectorSummary from '@/widgets/work-item-inspector/components/InspectorSummary.vue'
+import KernelRelationsPanel from '@/widgets/work-item-inspector/components/KernelRelationsPanel.vue'
 import WorkItemInspector from '@/widgets/work-item-inspector/components/WorkItemInspector.vue'
 
 import { fetchExecutionHistory } from '@/shared/api/executionApi.ts'
@@ -185,5 +188,109 @@ describe('WorkItemInspector resource state', () => {
     expect(wrapper.get('.overview-probe').text()).toBe(
       `Updated work item:${resourceRef.resource_id}`,
     )
+  })
+})
+
+describe('InspectorSummary draft reconciliation', () => {
+  it('preserves an unsaved Russian draft when the same item receives a changed remote summary', async () => {
+    const item = record('Длинное описание работ и связанных решений', 1)
+    const wrapper = mount(InspectorSummary, {
+      props: { item, writable: true },
+      global: { plugins: [createI18n({ legacy: false, locale: 'ru', messages })] },
+    })
+    const doneField = wrapper.get('textarea[aria-label="Что сделано"]')
+    const nextField = wrapper.get('textarea[aria-label="Что дальше"]')
+    await doneField.setValue('Локальное описание результата, которое ещё не сохранено')
+    await nextField.setValue('Проверить все связанные задачи и сохранить изменения')
+    await wrapper.setProps({
+      item: {
+        ...item,
+        revision: 2,
+        summary: {
+          done: 'Изменено другим участником',
+          next: 'Другая следующая задача',
+          why: '',
+        },
+      },
+    })
+    expect((doneField.element as HTMLTextAreaElement).value).toBe(
+      'Локальное описание результата, которое ещё не сохранено',
+    )
+    expect((nextField.element as HTMLTextAreaElement).value).toBe(
+      'Проверить все связанные задачи и сохранить изменения',
+    )
+    wrapper.unmount()
+  })
+
+  it('refreshes pristine fields and reseeds when the item identity changes', async () => {
+    const item = record('First', 1)
+    const wrapper = mount(InspectorSummary, {
+      props: { item, writable: true },
+      global: { plugins: [createI18n({ legacy: false, locale: 'en', messages })] },
+    })
+    await wrapper.setProps({
+      item: {
+        ...item,
+        summary: {
+          done: 'Remote result',
+          next: 'Remote next',
+          why: '',
+        },
+      },
+    })
+    expect(
+      wrapper.findAll('textarea').map((field) => (field.element as HTMLTextAreaElement).value),
+    ).toEqual(['Remote result', 'Remote next', ''])
+    await wrapper.get('textarea').setValue('Local draft')
+    await wrapper.setProps({ item: { ...record('Second', 1), work_item_id: 'second' } })
+    expect(
+      wrapper.findAll('textarea').map((field) => (field.element as HTMLTextAreaElement).value),
+    ).toEqual(['', '', ''])
+    wrapper.unmount()
+  })
+})
+
+describe('inspector relations hierarchy', () => {
+  it('names work and evidence independently and validates a link before emitting', async () => {
+    const wrapper = mount(InspectorRelations, {
+      props: { item: record('Связанная работа', 1), writable: true },
+      global: { plugins: [createI18n({ legacy: false, locale: 'ru', messages })] },
+    })
+    expect(wrapper.findAll('h3').map((heading) => heading.text())).toEqual([
+      'Связанная работа',
+      'Свидетельства',
+    ])
+    expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('input').setValue('qa-321')
+    expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeUndefined()
+    await wrapper.get('form').trigger('submit')
+    expect(wrapper.emitted('link')).toEqual([[{ kind: 'blocks', other: 'QA-321' }]])
+    wrapper.unmount()
+  })
+
+  it('explains recovery when no external attach provider is available', () => {
+    const wrapper = mount(KernelRelationsPanel, {
+      props: {
+        invocationScope: { kind: 'global' },
+        viewScope: { kind: 'global' },
+        registry: null,
+        relations: [],
+        revision: 1,
+        workItemRef: {
+          reference: 'QA-320',
+          space_ref: {
+            data_scope_id: '22222222-2222-4222-8222-222222222222',
+            space_key: 'QA',
+          },
+        },
+      },
+      global: { plugins: [createI18n({ legacy: false, locale: 'ru', messages })] },
+    })
+    expect(wrapper.findAll('h3').map((heading) => heading.text())).toEqual(['Внешние ресурсы'])
+    expect(wrapper.text()).toContain('настройках проекта → Интеграции')
+    expect(
+      wrapper.findAll('button').filter((button) => button.text() === 'Прикрепить'),
+    ).toHaveLength(0)
+    wrapper.unmount()
   })
 })

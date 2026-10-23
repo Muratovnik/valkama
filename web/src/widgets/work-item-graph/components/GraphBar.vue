@@ -66,7 +66,7 @@ function updateFilter(value: 'all' | 'open') {
   flex: 0 0 auto;
   gap: var(--space-5);
   align-items: center;
-  padding: var(--space-1) var(--space-5) var(--space-3);
+  padding: var(--space-1) 0 var(--space-3);
 }
 
 .graph-legend {
@@ -101,7 +101,6 @@ function updateFilter(value: 'all' | 'open') {
   .graph-bar {
     flex-wrap: wrap;
     gap: var(--space-2);
-    padding-inline: var(--space-3);
   }
 
   .graph-legend {

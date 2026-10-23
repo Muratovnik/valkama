@@ -75,7 +75,7 @@ function addLink() {
 
 <template>
   <div class="relations">
-    <section>
+    <section class="relation-section">
       <SectionHeading
         as="h3"
         level="panel"
@@ -130,7 +130,6 @@ function addLink() {
         <VTextInput
           v-model="linkOther"
           :label="t('workItem.linkOther')"
-          :hint="t('workItem.linkOtherHint')"
           :maxlength="20"
         />
         <VButton
@@ -139,10 +138,11 @@ function addLink() {
         >
           {{ t('workItem.linkAdd') }}
         </VButton>
+        <p class="link-form-hint">{{ t('workItem.linkOtherHint') }}</p>
       </form>
     </section>
 
-    <section>
+    <section class="relation-section">
       <SectionHeading
         as="h3"
         level="panel"
@@ -195,6 +195,11 @@ function addLink() {
   gap: var(--space-5);
 }
 
+.relation-section {
+  display: grid;
+  gap: var(--space-3);
+}
+
 .quiet {
   margin: 0;
   color: var(--color-text-muted);
@@ -229,6 +234,7 @@ function addLink() {
   gap: var(--space-2);
   align-items: baseline;
   min-width: 0;
+  min-height: var(--size-control-target);
   padding: 0;
   border: 0;
   text-align: start;
@@ -254,6 +260,7 @@ function addLink() {
 }
 
 .link-remove {
+  min-height: var(--size-control-target);
   padding: 0 var(--space-1);
   border: 0;
   color: var(--color-text-tertiary);
@@ -273,6 +280,13 @@ function addLink() {
   gap: var(--space-2);
   align-items: end;
   padding-top: var(--space-3);
+}
+
+.link-form-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--color-text-muted);
+  font: var(--font-note);
 }
 
 .ref-list {
@@ -305,7 +319,7 @@ function addLink() {
   font: var(--font-detail);
 }
 
-@container workspace (width <= 586px) {
+@container overlay (width <= 586px) {
   .link-form {
     grid-template-columns: minmax(0, 1fr);
     justify-items: start;

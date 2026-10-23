@@ -22,6 +22,7 @@ const { fitView } = useVueFlow()
 
 <template>
   <Controls
+    class="graph-controls"
     position="bottom-left"
     :show-interactive="false"
     :show-fit-view="false"
@@ -68,8 +69,10 @@ const { fitView } = useVueFlow()
   font: var(--font-chip);
 }
 
-:deep(.vue-flow__controls) {
+.graph-controls {
   display: flex;
+  flex-flow: row wrap;
+  max-width: calc(100% - var(--space-8));
   margin: 0 0 var(--space-4) var(--space-4);
   border: 1px solid var(--color-rule);
   overflow: hidden;
@@ -82,13 +85,13 @@ const { fitView } = useVueFlow()
   height: 34px;
   padding: 0;
   border: 0;
-  border-bottom: 1px solid var(--color-rule);
+  border-right: 1px solid var(--color-rule);
   color: var(--color-text-muted);
   background: var(--color-surface-sheet);
 }
 
 :deep(.vue-flow__controls-button:last-child) {
-  border-bottom: 0;
+  border-right: 0;
 }
 
 :deep(.vue-flow__controls-button.control-action) {

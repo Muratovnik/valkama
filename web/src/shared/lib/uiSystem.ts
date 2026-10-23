@@ -3,6 +3,7 @@ type SemanticEmphasis = 'quiet' | 'strong'
 
 export type ClosedStateDimension =
   | 'connection-lifecycle'
+  | 'control-selection'
   | 'platform-ui-state'
   | 'project-binding'
   | 'relation-state'
@@ -60,6 +61,10 @@ const SEMANTIC_TONE_COLORS: Record<SemanticTone, string> = {
 }
 
 const STATE_PRESENTATION = {
+  'control-selection': {
+    selected: { tone: 'success', emphasis: 'quiet' },
+    unselected: { tone: 'neutral', emphasis: 'quiet' },
+  },
   /**
    * A work item's state, keyed by its *category* rather than its name.
    *
@@ -168,7 +173,7 @@ const STATE_PRESENTATION = {
     'unavailable': { tone: 'danger', emphasis: 'strong' },
   },
   'integration-intake': {
-    enabled: { tone: 'info', emphasis: 'quiet' },
+    enabled: { tone: 'success', emphasis: 'quiet' },
     disabled: { tone: 'neutral', emphasis: 'quiet' },
   },
   'connection-lifecycle': {
@@ -251,6 +256,7 @@ type WorkItemReadinessState = keyof (typeof STATE_PRESENTATION)['work-item-readi
  */
 export type SemanticStatePair =
   | { dimension: 'connection-lifecycle'; state: ConnectionLifecycleState }
+  | { dimension: 'control-selection'; state: 'selected' | 'unselected' }
   | { dimension: 'platform-ui-state'; state: PlatformUiState }
   | { dimension: 'project-binding'; state: ProjectBindingState }
   | { dimension: 'relation-state'; state: RelationState }
@@ -262,6 +268,7 @@ export type SemanticStatePair =
 
 const CLOSED_STATE_DIMENSIONS = {
   'connection-lifecycle': true,
+  'control-selection': true,
   'platform-ui-state': true,
   'project-binding': true,
   'relation-state': true,

@@ -39,7 +39,7 @@
 }
 
 :root {
-  --size-text-area-min-height: auto;
+  --size-text-area-min-height: 140px;
 
   /* ─────────────────────────────────────────────────────────────────────
      Primitive: raw values. Nothing outside this file names one.
@@ -132,6 +132,7 @@
   --line-height-tight: 1.2;
   --line-height-snug: 1.3;
   --line-height-normal: 1.45;
+  --line-height-reading: 1.6;
 
   /* The spacing ladder. Four-pixel grid, numbered in grid units, plus the two
      sub-grid steps the grid has no room for: a hairline seam between adjacent
@@ -221,6 +222,10 @@
 
   /* What the operator reads to understand something. */
   --font-note: 400 var(--font-size-dense)/var(--line-height-normal) var(--font-family-interface);
+  --font-editor: 400 var(--font-size-emphasis)/var(--line-height-reading)
+    var(--font-family-interface);
+  --font-panel-title: 600 var(--font-size-emphasis)/var(--line-height-normal)
+    var(--font-family-interface);
 
   /* What names something else: a heading, a label, a title in a list. */
   --font-section-title: 600 var(--font-size-section)/var(--line-height-normal)

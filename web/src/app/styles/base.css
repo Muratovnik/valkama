@@ -82,6 +82,7 @@ body,
    from — is therefore the chrome color, not the canvas. */
 html {
   background: var(--color-navigation);
+  color-scheme: dark;
 }
 
 body {
@@ -117,6 +118,10 @@ input:not([type='checkbox'], [type='radio']) {
 
 textarea {
   min-block-size: calc(var(--size-control-height) * 2);
+}
+
+input:is([type='checkbox'], [type='radio']) {
+  accent-color: var(--color-success);
 }
 
 button:focus-visible,

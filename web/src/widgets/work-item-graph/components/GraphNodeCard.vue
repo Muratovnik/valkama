@@ -1,23 +1,9 @@
 <script setup lang="ts">
-/**
- * One work item on the field, and the four states it can be in.
- *
- * The state used to be five classes on Vue Flow's node wrapper, with nine rules
- * reaching back down through `:deep()` to colour a dot inside this card. The card
- * derives what it can from the node it was handed — claimed, which state — and
- * takes `ready`, `recessed` and the parent's reference as props, because each is
- * a fact about the whole field rather than about this item.
- *
- * The shared marker presentation owns priority too: ready outranks an active
- * claim, and an active claim outranks the state's category. A resting marker
- * still uses category rather than name, so renaming a lane cannot lose its
- * meaning and a second blocked state does not need another local selector.
- *
- * The button does not emit open. Vue Flow emits one `nodeClick` for it, and that
- * is what keeps mouse and keyboard activation exactly-once.
- */
+/** The card owns claim/state presentation; Vue Flow owns exactly-once activation. */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+
+import { Handle, Position } from '@vue-flow/core'
 
 import type { PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 
@@ -57,14 +43,23 @@ const markerState = computed<WorkItemNodeMarkerState>(() => {
  * the sentence once the field has told you it can be picked up.
  */
 const stateLabel = computed(() => (ready ? t('graph.readyMark') : node.state.name))
-
-/** An executor is at work while the state is one somebody works inside. */
-const inFlight = computed(
-  () => node.state.category === 'active' || node.state.category === 'review',
-)
 </script>
 
 <template>
+  <Handle
+    id="target"
+    class="graph-handle"
+    type="target"
+    :position="Position.Left"
+    :connectable="false"
+  />
+  <Handle
+    id="source"
+    class="graph-handle"
+    type="source"
+    :position="Position.Right"
+    :connectable="false"
+  />
   <button
     class="flow-node-card nopan"
     type="button"
@@ -99,20 +94,18 @@ const inFlight = computed(
       v-if="node.claim_ref"
       class="flow-node-owner"
     >
-      <template v-if="inFlight">
-        <span
-          class="work-dots"
-          aria-hidden="true"
-          ><i /><i /><i
-        /></span>
-        <span class="flow-node-owner-state">{{ t('work.active') }}</span>
-      </template>
+      <span class="flow-node-owner-state">{{ t('graph.claimedBy') }}</span>
       <span class="flow-node-owner-name">{{ actorName(node.claim_ref) }}</span>
     </span>
   </button>
 </template>
 
 <style scoped>
+.graph-handle {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .flow-node-card {
   position: relative;
   display: grid;
@@ -121,7 +114,8 @@ const inFlight = computed(
   align-content: stretch;
   width: 100%;
   height: 100%;
-  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-6);
+  padding: var(--space-3);
+  border: 1px solid var(--color-rule);
   color: var(--color-text);
   text-align: left;
   background: color-mix(in srgb, var(--color-surface-sheet) 92%, var(--color-surface-recess));
@@ -130,22 +124,6 @@ const inFlight = computed(
     opacity var(--duration-quick) var(--ease-out),
     background-color var(--duration-quick) var(--ease-out);
   cursor: pointer;
-
-  /* The state dot, at the left edge of the card. */
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 11px auto auto 8px;
-    width: 7px;
-    height: 7px;
-    background: var(--color-rule);
-    border-radius: 50%;
-  }
-
-  /* Workable outranks both: it is the one state that tells a reader to act. */
-  &.ready::before {
-    background: var(--color-action-primary);
-  }
 
   &.is-terminal {
     opacity: 0.55;
@@ -169,16 +147,6 @@ const inFlight = computed(
   }
 }
 
-/* The canonical marker presentation supplies status tones. Workable keeps the
-   action accent above them because it is the one state that asks for action. */
-.flow-node-card[data-tone='success']:not(.ready)::before {
-  background: var(--color-success);
-}
-
-.flow-node-card[data-tone='danger']:not(.ready)::before {
-  background: var(--color-danger);
-}
-
 .flow-node-line {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -191,14 +159,18 @@ const inFlight = computed(
 
 .flow-node-meta {
   display: flex;
-  gap: var(--space-2);
+  gap: var(--space-1) var(--space-2);
   align-items: baseline;
   min-width: 0;
   overflow: hidden;
 }
 
 :is(.flow-node-id, .flow-node-state) {
-  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 
   /* Workable is the one state worth a weight change: it says work could start. */
   .flow-node-card.ready & {
@@ -227,15 +199,14 @@ const inFlight = computed(
   min-width: 0;
   max-width: 100%;
   min-height: 16px;
-  color: var(--color-success);
+  color: var(--color-text-muted);
   font: var(--font-line);
   overflow: hidden;
 }
 
 .flow-node-owner-state {
   flex: 0 0 auto;
-  max-width: 72px;
-  font-weight: 700;
+  font-weight: 400;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -248,19 +219,25 @@ const inFlight = computed(
 }
 
 .flow-node-epic {
-  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 80px;
   padding: var(--space-hair) var(--space-1);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
   background: var(--color-control-surface);
+  overflow: hidden;
+  text-overflow: ellipsis;
   border-radius: var(--radius-status);
 }
 
 .flow-node-title {
+  display: -webkit-box;
   align-self: center;
   font: var(--font-detail);
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   overflow: hidden;
-  text-overflow: ellipsis;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onUnmounted, ref, useId, watch } from 'vue'
+import { computed, nextTick, onUnmounted, ref, shallowRef, useId, watch } from 'vue'
 
 import { useEventListener } from '@vueuse/core'
 
@@ -54,7 +54,8 @@ const props = withDefaults(
 const emit = defineEmits<{ close: [] }>()
 const surface = ref<HTMLElement | null>(null)
 const titleId = `overlay-title-${useId()}`
-let ownership: OverlayOwnership | null = null
+const ownership = shallowRef<OverlayOwnership | null>(null)
+const active = computed(() => props.open && props.interactive && ownsOverlay(ownership.value))
 const preferredDrawerWidth = ref(props.drawerDefaultWidth)
 const viewportWidth = ref(typeof window === 'undefined' ? 1440 : window.innerWidth)
 const resizing = ref(false)
@@ -92,7 +93,7 @@ const surfaceStyle = computed(() =>
  * case it does not apply — `aria-hidden="false"` is a claim, not a default.
  */
 const modality = computed(() =>
-  props.interactive
+  active.value
     ? ({
         'role': 'dialog',
         'aria-modal': 'true',
@@ -102,9 +103,11 @@ const modality = computed(() =>
     : ({ 'aria-hidden': true, 'inert': true } as const),
 )
 
-/** Escape closes an overlay that takes input, and does nothing to one that does not. */
-function closeOnEscape() {
-  if (props.interactive) emit('close')
+function closeOverlay(event: Event) {
+  if (!active.value || event.defaultPrevented) return
+  event.preventDefault()
+  event.stopPropagation()
+  emit('close')
 }
 
 function focusable(): HTMLElement[] {
@@ -113,16 +116,15 @@ function focusable(): HTMLElement[] {
     surface.value.querySelectorAll<HTMLElement>(
       'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
     ),
-  ).filter((item) => !item.hasAttribute('aria-hidden'))
+  ).filter((item) => !item.closest('[inert], [aria-hidden="true"]'))
 }
 
 async function focusSurface() {
   await nextTick()
-  if (!ownsOverlay(ownership)) return
-  const controls = focusable()
-  const preferred = controls.find((control) => !Object.hasOwn(control.dataset, 'overlayResizer'))
-  preferred?.focus()
-  if (!preferred) surface.value?.focus()
+  resizing.value &&= active.value
+  if (!active.value || surface.value?.contains(document.activeElement)) return
+  const preferred = focusable().find((control) => control.dataset.overlayResizer === undefined)
+  ;(preferred ?? surface.value)?.focus()
 }
 
 function measureViewport() {
@@ -142,7 +144,7 @@ function storeDrawerWidth() {
 }
 
 function beginResize(event: PointerEvent) {
-  if (!isResizableDrawer.value || event.button !== 0) return
+  if (!active.value || !isResizableDrawer.value || event.button !== 0) return
   event.preventDefault()
   resizeStartX = event.clientX
   resizeStartWidth = drawerWidth.value
@@ -170,63 +172,63 @@ useEventListener(window, 'pointerup', () => {
 })
 
 function resizeFromKeyboard(event: KeyboardEvent) {
-  if (!['ArrowLeft', 'ArrowRight', 'End', 'Home'].includes(event.key)) return
+  const requested = new Map([
+    ['Home', drawerMinimum.value],
+    ['End', drawerMaximum.value],
+    ['ArrowLeft', drawerWidth.value + INSPECTOR_KEYBOARD_STEP],
+    ['ArrowRight', drawerWidth.value - INSPECTOR_KEYBOARD_STEP],
+  ])
+  const target = requested.get(event.key)
+  if (!active.value || target === undefined) return
   event.preventDefault()
-  if (event.key === 'Home') preferredDrawerWidth.value = drawerMinimum.value
-  if (event.key === 'End') preferredDrawerWidth.value = drawerMaximum.value
-  if (event.key === 'ArrowLeft')
-    preferredDrawerWidth.value = Math.min(
-      drawerMaximum.value,
-      drawerWidth.value + INSPECTOR_KEYBOARD_STEP,
-    )
-  if (event.key === 'ArrowRight')
-    preferredDrawerWidth.value = Math.max(
-      drawerMinimum.value,
-      drawerWidth.value - INSPECTOR_KEYBOARD_STEP,
-    )
+  preferredDrawerWidth.value = Math.min(drawerMaximum.value, Math.max(drawerMinimum.value, target))
   storeDrawerWidth()
 }
 
 function trapFocus(event: KeyboardEvent) {
-  if (event.key !== 'Tab' || !ownsOverlay(ownership)) return
+  if (event.key !== 'Tab' || !active.value) return
   const controls = focusable()
   const first = controls[0]
   const last = controls.at(-1)
   // Nothing to trap between when the surface holds no focusable control, and
   // asking for both ends is the same check the length test was standing in for.
-  if (!first || !last) return
-  const active = document.activeElement
-  if (event.shiftKey && (active === first || !surface.value?.contains(active))) {
+  if (!first || !last) {
+    event.preventDefault()
+    surface.value?.focus()
+    return
+  }
+  const focused = document.activeElement
+  if (event.shiftKey && (focused === first || !surface.value?.contains(focused))) {
     event.preventDefault()
     last.focus()
-  } else if (!event.shiftKey && (active === last || !surface.value?.contains(active))) {
+  } else if (!event.shiftKey && (focused === last || !surface.value?.contains(focused))) {
     event.preventDefault()
     first.focus()
   }
 }
 
 function release() {
-  if (!ownership) return
-  releaseOverlayOwnership(ownership)
-  ownership = null
+  releaseOverlayOwnership(ownership.value)
+  ownership.value = null
 }
 
 watch(
   [() => props.open, () => props.interactive],
-  async ([open, interactive]) => {
+  ([open, interactive]) => {
     if (open && interactive) {
       // Only the top surface claims focus and scroll. A mounted drawer can remain
       // visible under a command dialog without becoming a second dialog owner.
-      ownership = claimOverlayOwnership()
+      ownership.value = claimOverlayOwnership(() => surface.value, props.layer)
       measureViewport()
       restoreDrawerWidth()
-      await focusSurface()
     } else {
       release()
     }
   },
   { immediate: true, flush: 'post' },
 )
+
+watch(active, focusSurface, { flush: 'post', immediate: true })
 
 onUnmounted(release)
 </script>
@@ -249,15 +251,15 @@ onUnmounted(release)
         v-if="open"
         class="overlay-host"
         :class="[`overlay-${variant}`, `overlay-layer-${layer}`, { 'is-passive': !interactive }]"
-        @keydown.esc.prevent="closeOnEscape"
+        @keydown.esc="closeOverlay"
       >
         <!-- The scrim is a pointer affordance by definition: clicking outside a dialog -->
         <!-- dismisses it. The keyboard equivalent is Escape, handled one level up. -->
         <!-- eslint-disable-next-line vuejs-accessibility/click-events-have-key-events, vuejs-accessibility/no-static-element-interactions -->
         <div
-          v-if="interactive"
+          v-if="active"
           class="overlay-scrim"
-          @click="emit('close')"
+          @click="closeOverlay"
         />
         <!-- The role is inside `modality`, which the a11y rule cannot look into: it
              reads the attributes written on the element and this one carries a
@@ -292,7 +294,7 @@ onUnmounted(release)
             @pointerdown="beginResize"
             @keydown="resizeFromKeyboard"
           >
-            <span aria-hidden="true" />
+            <span class="overlay-resizer-grip" />
           </div>
           <span
             v-if="title"

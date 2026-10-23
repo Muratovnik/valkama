@@ -108,7 +108,7 @@ function edited(event: Event) {
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-rule-strong);
   color: var(--color-text);
-  font: var(--font-note);
+  font: var(--font-control);
   background: var(--color-control-surface);
   border-radius: var(--radius-control);
 
@@ -123,7 +123,8 @@ textarea.control {
      to reach `:deep(textarea)` for it, which is this component's element rather
      than its root, so no class could carry it. The host declares the property on
      whatever it already puts a class on and inheritance does the rest. */
-  min-height: var(--size-text-area-min-height, auto);
+  min-height: var(--size-text-area-min-height);
+  font: var(--font-editor);
   resize: vertical;
 }
 

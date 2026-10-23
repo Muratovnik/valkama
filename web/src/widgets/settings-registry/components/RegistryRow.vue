@@ -20,6 +20,7 @@ const props = defineProps<{
   title: string
   /** The owner is operational context, not a health or lifecycle state. */
   configurationOwner?: string
+  description?: string
   /** Label/value pairs shown under the identity; empty means no list at all. */
   details?: { label: string; value: string }[]
   subtitle?: string
@@ -97,6 +98,12 @@ const { t } = useI18n()
         </span>
       </span>
     </span>
+    <p
+      v-if="props.description"
+      class="registry-description"
+    >
+      {{ props.description }}
+    </p>
     <details
       v-if="props.details?.length"
       class="registry-details"
@@ -196,6 +203,16 @@ const { t } = useI18n()
 .registry-sub {
   color: var(--color-text-muted);
   font: var(--font-note);
+}
+
+.registry-description {
+  grid-column: 2 / -1;
+  max-width: 80ch;
+  padding-inline-end: var(--space-4);
+  margin: var(--space-2) 0;
+  color: var(--color-text-muted);
+  font: var(--font-note);
+  overflow-wrap: anywhere;
 }
 
 .registry-details {

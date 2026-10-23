@@ -76,6 +76,8 @@ export const en = {
       mutationFailed: 'The change was not saved. Retry when the local service reconnects.',
       permissionDenied: 'The local service denied this request.',
       requestFailed: 'The local service did not complete the request.',
+      requestTimeout:
+        'The local service did not respond in time. Check that Valkama is running, then retry.',
       sessionFeedFailed: 'Session activity could not be loaded.',
       sessionsRequestFailed: 'Sessions could not be loaded.',
       streamDisconnected: 'Live session updates were interrupted.',
@@ -144,7 +146,7 @@ export const en = {
     },
     relations: {
       kicker: 'External resources',
-      title: 'Relations',
+      title: 'External resources',
       attach: 'Attach',
       open: 'Open',
       remove: 'Remove',
@@ -166,7 +168,8 @@ export const en = {
       resourceTarget: 'Target',
       targetPending: 'Enter a stable external ID',
       empty: 'No external relations are attached.',
-      unavailable: 'No eligible attach action is available in this project scope.',
+      unavailable:
+        'To attach a resource, enable an adapter with an attach action in this project’s Settings → Integrations.',
       action: 'Action',
       openBlocked: 'The browser blocked opening the external resource.',
       states: {
@@ -211,6 +214,10 @@ export const en = {
     cancel: 'Cancel',
   },
   graph: {
+    claimedBy: 'Assigned to',
+    layoutLoading: 'Arranging graph…',
+    layoutFailed: 'The graph could not be arranged.',
+    retry: 'Retry',
     title: 'Work graph',
     openOnly: 'Open · {count}',
     all: 'All · {count}',
@@ -478,6 +485,26 @@ export const en = {
     },
   },
   memory: {
+    searchProvider: 'Project document search',
+    documentSource: 'Markdown documents · {project}/docs',
+    sourcePending: 'Checking the registered project source…',
+    sourceFailed: 'The project source could not be checked. Try checking it again.',
+    sourceRetry: 'Retry source check',
+    sourceSetup:
+      'Search reads docs/ under the project root registered with Valkama. Register or correct that root with the Valkama projects CLI, and create docs/ in the project if missing.',
+    referenceProvider: 'Saved memory references',
+    referenceSelection: '{provider} · {source}',
+    referenceUnavailable:
+      'Opening saved references is unavailable. Existing labels remain attached.',
+    workspaceSettings: 'Open Workspace Settings',
+    markdownProvider: 'Markdown project documents',
+    noProvider: 'No provider selected',
+    referenceScope: {
+      installation: 'installation default',
+      project: 'project override',
+      unavailable: 'no effective connection',
+    },
+
     heading: 'Memory',
     intro: 'What this item points at. Valkama keeps the pointer, never a copy.',
     none: 'Nothing has been attached to this item.',
@@ -737,6 +764,9 @@ export const en = {
     kindLabel: 'Kind',
     state: 'State',
     priority: 'Priority',
+    holder: 'Responsible: {holder}',
+    owner: 'Responsible',
+    previousHolder: 'Previously responsible: {holder}',
     claim: 'Claim',
     release: 'Release',
     noClaim: 'No active claim',

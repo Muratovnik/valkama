@@ -1,17 +1,10 @@
 <script setup lang="ts">
-/**
- * The dependency field: one node per work item, one wire per link.
- *
- * The items and links are handed down rather than fetched here, so the graph
- * always draws the same answer the Kanban and the list are drawing. Loading and
- * failure belong to whoever owns that fetch; this component draws a field or
- * says the field is empty.
- */
+/** Shared planning data supplies the field; Vue Flow owns camera and interaction. */
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { Background } from '@vue-flow/background'
-import { Handle, MarkerType, PanOnScrollMode, Position, useVueFlow, VueFlow } from '@vue-flow/core'
+import { MarkerType, PanOnScrollMode, Position, useVueFlow, VueFlow } from '@vue-flow/core'
 import type { Edge as FlowEdge, Node as FlowNode } from '@vue-flow/core'
 
 import '@vue-flow/core/dist/style.css'
@@ -19,6 +12,8 @@ import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 import GraphBar from '@/widgets/work-item-graph/components/GraphBar.vue'
 import GraphControls from '@/widgets/work-item-graph/components/GraphControls.vue'
+import GraphEdge from '@/widgets/work-item-graph/components/GraphEdge.vue'
+import GraphLayoutStatus from '@/widgets/work-item-graph/components/GraphLayoutStatus.vue'
 import GraphNodeCard from '@/widgets/work-item-graph/components/GraphNodeCard.vue'
 import { useGraphProjection } from '@/widgets/work-item-graph/composables/useGraphProjection.ts'
 import { graphCameraView } from '@/widgets/work-item-graph/utils/graphCamera.ts'
@@ -60,27 +55,31 @@ const {
   hiddenDone,
   openTotal,
   placed,
+  pending,
+  failed,
+  retry,
   ready,
   showDone,
-} = useGraphProjection(() => ({
-  edges: props.edges,
-  epicId: props.epicId,
-  nodes: props.items,
-  open: props.open,
-  scopeKind: props.scopeKind,
-  space: props.space,
-  version: props.version,
-}))
+} = useGraphProjection(
+  () => ({
+    edges: props.edges,
+    epicId: props.epicId,
+    nodes: props.items,
+    open: props.open,
+    scopeKind: props.scopeKind,
+    space: props.space,
+    version: props.version,
+  }),
+  () => props.selectedId ?? null,
+)
 
 const flowReady = ref(false)
 const fitted = ref(false)
 
 const readyIdSet = computed(() => new Set(ready.value.map((node) => node.work_item_id)))
 
-/**
- * An epic is not drawn as a node, so a child's parent is named by the chip on
- * the child. The reference is what a reader can use; the parent id is a UUID.
- */
+// Containers are named by reference on their children.
+
 const referenceById = computed(
   () => new Map(props.items.map((item) => [item.work_item_id, item.reference])),
 )
@@ -122,14 +121,12 @@ const flowNodes = computed<FlowNode<PlacedNode>[]>(() => {
     selectable: false,
     focusable: false,
     ariaLabel: `${node.reference} ${node.title} · ${node.state.name}`,
-    // The wrapper carries one class, which is the hook for resetting Vue Flow's
-    // own box. What state a node is in is the card's business.
     class: 'graph-node',
     data: node,
   }))
 })
 
-const flowEdges = computed<FlowEdge<{ kind: PlanningEdge['kind'] }>[]>(() => {
+const flowEdges = computed<FlowEdge[]>(() => {
   if (!placed.value) return []
   const focusedEdges = focusSet.value?.edges
   return placed.value.edges.map((edge) => {
@@ -143,7 +140,7 @@ const flowEdges = computed<FlowEdge<{ kind: PlanningEdge['kind'] }>[]>(() => {
       markerEnd: { ...descriptor.markerEnd, type: MarkerType.ArrowClosed },
       sourcePosition: Position.Right,
       targetPosition: Position.Left,
-    } as FlowEdge<{ kind: PlanningEdge['kind'] }>
+    } as FlowEdge
   })
 })
 
@@ -166,8 +163,7 @@ function onFlowNodeMouseLeave(event: { node: { id: string } }) {
 }
 
 function onFlowNodeClick(event: { node: { id: string } }) {
-  // Vue Flow emits one nodeClick for the card button. The button itself does
-  // not emit open, which keeps mouse and keyboard activation exactly-once.
+  // Mouse and keyboard activation both arrive once through Vue Flow.
   const reference = referenceById.value.get(event.node.id)
   if (reference) emit('open', reference)
 }
@@ -184,12 +180,8 @@ function onFieldPointerLeave() {
   applyFocus({ type: 'field-leave' })
 }
 
-/**
- * Vue Flow mounts its canvas with the default camera and fits it afterwards,
- * so the frames in between drew every node at 1:1 — measured as a flash of 28
- * cards at full size before the graph appeared. The pane stays hidden until
- * the camera has actually been placed.
- */
+// Keep nodes hidden until the initial readable camera has settled.
+
 function scheduleFitView(focusOnly = false) {
   if (!flowReady.value || (fitted.value && !focusOnly)) return
   const request = ++cameraRequest
@@ -210,19 +202,21 @@ function onFlowInit() {
   scheduleFitView()
 }
 
-// A projection with nothing placed unmounts the canvas, so the next one starts
-// from an unplaced camera again and must re-earn its first frame.
+// Filter projections replace nodes while the initialized Vue Flow canvas stays mounted.
 watch(
   () => placed.value,
   (projection) => {
     if (projection) return
     cameraRequest += 1
-    flowReady.value = false
     fitted.value = false
   },
 )
 
-watch([placed, dimensions], () => scheduleFitView())
+watch(placed, () => scheduleFitView())
+watch([() => dimensions.value.width, () => dimensions.value.height], () => {
+  fitted.value = false
+  scheduleFitView()
+})
 watch([() => props.space, () => props.scopeKind, () => props.epicId, showDone], () => {
   fitted.value = false
   scheduleFitView()
@@ -231,9 +225,10 @@ watch([() => props.space, () => props.scopeKind, () => props.epicId, showDone], 
 
 <template>
   <section
-    v-if="open"
+    v-show="open"
     class="graph"
     :aria-label="t('graph.title')"
+    :aria-busy="pending"
   >
     <GraphBar
       v-model:show-done="showDone"
@@ -243,6 +238,11 @@ watch([() => props.space, () => props.scopeKind, () => props.epicId, showDone], 
       :has-edges="Boolean(placed?.edges.length)"
     />
 
+    <GraphLayoutStatus
+      :failed="failed"
+      :pending="pending"
+      @retry="retry"
+    />
     <p
       v-if="emptySpace"
       class="graph-empty"
@@ -267,7 +267,7 @@ watch([() => props.space, () => props.scopeKind, () => props.epicId, showDone], 
     <!-- highlight. Nothing here is reachable or actionable by pointer alone. -->
     <!-- eslint-disable-next-line vuejs-accessibility/mouse-events-have-key-events, vuejs-accessibility/no-static-element-interactions -->
     <div
-      v-else-if="placed"
+      v-show="!emptySpace && !emptyOpen"
       class="graph-canvas"
       :class="[{ settled: fitted }]"
       @mouseleave="onFieldPointerLeave"
@@ -302,19 +302,14 @@ watch([() => props.space, () => props.scopeKind, () => props.epicId, showDone], 
         @node-click="onFlowNodeClick"
         @pane-mouse-leave="onFieldPointerLeave"
       >
+        <template #edge-routed="edgeProps">
+          <GraphEdge
+            :id="edgeProps.id"
+            :data="edgeProps.data"
+            :marker-end="edgeProps.markerEnd"
+          />
+        </template>
         <template #node-card="{ data }">
-          <Handle
-            id="target"
-            type="target"
-            :position="Position.Left"
-            :connectable="false"
-          />
-          <Handle
-            id="source"
-            type="source"
-            :position="Position.Right"
-            :connectable="false"
-          />
           <GraphNodeCard
             :node="data"
             :ready="isReady(data)"
@@ -352,7 +347,7 @@ watch([() => props.space, () => props.scopeKind, () => props.epicId, showDone], 
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
-  padding: 0 var(--space-5) var(--space-5);
+  padding: 0;
   overflow: hidden;
 
   /* The field, the dots and the frame are drawn immediately; only the nodes wait
@@ -379,7 +374,7 @@ watch([() => props.space, () => props.scopeKind, () => props.epicId, showDone], 
 }
 
 .graph-empty {
-  padding: var(--space-7) var(--space-5);
+  padding: var(--space-7) 0;
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-note);
@@ -449,10 +444,6 @@ watch([() => props.space, () => props.scopeKind, () => props.epicId, showDone], 
 }
 
 @container workspace (width <= 586px) {
-  .graph-canvas {
-    padding: 0 var(--space-3) var(--space-3);
-  }
-
   .graph-flow {
     min-height: 300px;
   }

@@ -382,7 +382,7 @@ test('the narrow primitive owners remain explicit exceptions', () => {
       '<script setup>import OverlayHost from "./OverlayHost.vue"</script><template><OverlayHost /></template>',
     ],
     [
-      'shared/ui/InspectorDrawer.vue',
+      'shared/ui/ResizableInspector.vue',
       '<script setup>import OverlayHost from "./OverlayHost.vue"</script><template><OverlayHost /></template>',
     ],
     ['shared/ui/OverlayHost.vue', '<template><section role="dialog" /></template>'],

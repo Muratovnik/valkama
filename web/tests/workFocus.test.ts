@@ -153,6 +153,6 @@ test('the global Work portfolio requests the bounded project directory without f
   expect(await fetchPlatformPlanning({ kind: 'global' })).toEqual(payload)
   expect(fetch).toHaveBeenCalledWith(
     '/api/platform/planning?scope_kind=global&directory_only=true',
-    undefined,
+    { signal: expect.any(AbortSignal) },
   )
 })

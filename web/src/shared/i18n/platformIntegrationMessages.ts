@@ -6,11 +6,47 @@ export const platformIntegrationMessages = {
       claudeJournal: 'Claude local journal',
       codexRollout: 'Codex rollout telemetry',
       agentMemory: 'AgentMemory',
+      demoNotes: 'Demo note links',
       codexSkills: 'Codex skills',
       claudeSkills: 'Claude skills',
       git: 'Git artifacts',
     },
     registry: {
+      capabilityNames: {
+        artifact_inspect: 'Inspect Git artifacts',
+        execution_launch: 'Launch work',
+        execution_resume: 'Resume work',
+        execution_stop: 'Stop execution',
+        session_observe: 'Observe sessions',
+        telemetry_query: 'Read usage and activity',
+        memory_open: 'Open memory references',
+        memory_health: 'Check memory provider',
+      },
+      selectionSource: {
+        installation: 'Inherited from installation',
+        project: 'Selected for this project',
+        unavailable: 'No effective connection',
+      },
+      selectedConnection: 'Selected connection',
+      technicalId: 'Technical ID',
+      dataProvider: 'Data provider',
+      origin: 'Integration origin',
+      builtIn: 'Included with Valkama',
+      demo: 'Demonstration adapter',
+      demoSetup:
+        'This adapter demonstrates note links. It has no real memory store and opens example addresses. Choose AgentMemory for saved memory references or use project document search.',
+      external: 'Configured external adapter',
+      providerOwned: 'Provider-owned service',
+      configuration: 'Setup and configuration',
+      externalSetup:
+        'Managed through Valkama CLI: adapter list, adapter check and adapter install. The provider owner manages the service itself.',
+      providerSetup:
+        'Configuration belongs to the provider named above. Use its supported service tools; Valkama selects the connection below.',
+      builtinSetup:
+        'This adapter is included with Valkama. Configure the client or data source with its owner; project connection choices are below.',
+      agentMemorySetup:
+        'Valkama includes the reference adapter. AgentMemory owns the data and service at 127.0.0.1:3111. Start or repair AgentMemory with its own service tools; this page selects connections, not its runtime configuration.',
+
       intro: 'Runtime registry, applicability, trust, and grants for the current operating scope.',
       // `RegistrySection` builds a section's intro key as its title key plus
       // `Intro`, so no scan of this repository's text can see these two being
@@ -83,11 +119,47 @@ export const platformIntegrationMessages = {
       claudeJournal: 'Локальный журнал Claude',
       codexRollout: 'Телеметрия Codex rollout',
       agentMemory: 'AgentMemory',
+      demoNotes: 'Демонстрационные ссылки на заметки',
       codexSkills: 'Навыки Codex',
       claudeSkills: 'Навыки Claude',
       git: 'Артефакты Git',
     },
     registry: {
+      capabilityNames: {
+        artifact_inspect: 'Проверка артефактов Git',
+        execution_launch: 'Запуск работы',
+        execution_resume: 'Продолжение работы',
+        execution_stop: 'Остановка исполнения',
+        session_observe: 'Наблюдение за сессиями',
+        telemetry_query: 'Чтение использования и активности',
+        memory_open: 'Открытие ссылок памяти',
+        memory_health: 'Проверка провайдера памяти',
+      },
+      selectionSource: {
+        installation: 'Унаследовано от установки',
+        project: 'Выбрано для этого проекта',
+        unavailable: 'Нет действующего подключения',
+      },
+      selectedConnection: 'Выбранное подключение',
+      technicalId: 'Технический ID',
+      dataProvider: 'Поставщик данных',
+      origin: 'Происхождение интеграции',
+      builtIn: 'Входит в Valkama',
+      demo: 'Демонстрационный адаптер',
+      demoSetup:
+        'Этот адаптер демонстрирует ссылки на заметки. У него нет реального хранилища памяти, и он открывает примерные адреса. Для сохранённых записей выберите AgentMemory, для документов — поиск по проекту.',
+      external: 'Настроенный внешний адаптер',
+      providerOwned: 'Сервис принадлежит провайдеру',
+      configuration: 'Подключение и настройка',
+      externalSetup:
+        'Управление через CLI Valkama: adapter list, adapter check и adapter install. Самим сервисом управляет его владелец.',
+      providerSetup:
+        'Настройка принадлежит указанному провайдеру. Используйте его средства управления сервисом; Valkama выбирает подключение ниже.',
+      builtinSetup:
+        'Адаптер входит в Valkama. Клиент или источник данных настраивается у его владельца; выбор подключения для проекта — ниже.',
+      agentMemorySetup:
+        'Адаптер ссылок входит в Valkama. Данные и сервис на 127.0.0.1:3111 принадлежат AgentMemory. Запустите или восстановите AgentMemory его средствами; эта страница выбирает подключения, а не настройки сервиса.',
+
       intro: 'Реестр среды, применимость, доверие и разрешения для текущей рабочей области.',
       // Как и в английском каталоге: ключ вступления собирается из ключа
       // заголовка плюс `Intro`, поэтому текстовый поиск его не находит.

@@ -92,11 +92,13 @@ export const LINE_BUDGET = new Map([
   ['widgets/work-item-inspector/components/InspectorOverview.vue', 1],
   ['widgets/work-item-inspector/components/InspectorReserved.vue', 1],
   ['widgets/work-item-inspector/components/InspectorExecution.vue', 1],
-  ['widgets/work-item-inspector/components/KernelRelationsPanel.vue', 2],
+  ['widgets/work-item-inspector/components/KernelRelationsPanel.vue', 1],
   ['widgets/work-item-inspector/components/RelationList.vue', 1],
   ['widgets/work-item-inspector/components/RelationConfirm.vue', 1],
   ['widgets/work-item-views/components/WorkItemList.vue', 1],
   ['widgets/work-item-graph/components/GraphView.vue', 1],
+  // Graph cards need a neutral boundary where dependency wires meet their edges.
+  ['widgets/work-item-graph/components/GraphNodeCard.vue', 1],
   ['widgets/work-item-graph/components/GraphControls.vue', 2],
   ['widgets/work-item-graph/components/GraphBar.vue', 1],
   ['widgets/improvement-case/components/ImprovementCaseDetail.vue', 3],
@@ -263,7 +265,6 @@ export const CONTROL_SIZE_BUDGET = new Map([
   // Overlay and inspector headers, both 56px: a surface header is a band rather
   // than a control, and it is the one size the two tokens do not describe.
   ['shared/ui/OverlayHost.vue', 1],
-  ['shared/ui/ResizableInspector.vue', 1],
 
   // The debt. Every entry is a control that named its own number before the
   // tokens existed; card #333 empties this list. Nothing here is a new

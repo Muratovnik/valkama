@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 
 import type { ViewportTransform } from '@vue-flow/core'
+import ELK from 'elkjs/lib/elk.bundled.js'
 import { test } from 'vitest'
 
 import { graphCameraView } from '@/widgets/work-item-graph/utils/graphCamera.ts'
@@ -13,6 +14,7 @@ import type { PlanningEdge } from '@/shared/api/planningModel.ts'
 import { workItem } from './browser/planningFixtures.ts'
 
 const base = validateWorkItemRecord(workItem)
+const engine = new ELK()
 const SIZE = { width: 1200, height: 680 }
 const nodeId = (number: number) => `work-${number}`
 function graph(count: number, fanout = false) {
@@ -31,9 +33,13 @@ function graph(count: number, fanout = false) {
     to: nodeId(index + 2),
     kind: 'blocks',
   }))
-  return layout({ nodes, edges })
+  return layout({ nodes, edges }, engine)
 }
-function inCamera(placed: ReturnType<typeof graph>, number: number, camera: ViewportTransform) {
+function inCamera(
+  placed: Awaited<ReturnType<typeof graph>>,
+  number: number,
+  camera: ViewportTransform,
+) {
   const item = placed.nodes.find((node) => node.work_item_id === nodeId(number))
   assert.ok(item)
   assert.ok(item.x * camera.zoom + camera.x >= 0)
@@ -42,8 +48,8 @@ function inCamera(placed: ReturnType<typeof graph>, number: number, camera: View
   assert.ok((item.y + NODE_HEIGHT) * camera.zoom + camera.y <= SIZE.height)
 }
 
-test('a large graph starts with readable ready work and its direct dependency', () => {
-  const placed = graph(214)
+test('a large graph starts with readable ready work and its direct dependency', async () => {
+  const placed = await graph(214)
   const camera = graphCameraView(placed, SIZE, new Set([nodeId(1)]))
   assert.ok(camera)
   assert.ok(camera.zoom >= 0.75)
@@ -51,26 +57,26 @@ test('a large graph starts with readable ready work and its direct dependency', 
   inCamera(placed, 2, camera)
   assert.equal(placed.nodes.length, 214)
 })
-test('selected work and direct neighbours take precedence over the start of a long chain', () => {
-  const placed = graph(214)
+test('selected work and direct neighbours take precedence over the start of a long chain', async () => {
+  const placed = await graph(214)
   const camera = graphCameraView(placed, SIZE, new Set([nodeId(1)]), { selectedId: nodeId(110) })
   assert.ok(camera)
   assert.ok(camera.zoom >= 0.75)
   for (const number of [109, 110, 111]) inCamera(placed, number, camera)
 })
-test('a crowded fanout keeps its selected anchor readable', () => {
-  const placed = graph(214, true)
+test('a crowded fanout keeps its selected anchor readable', async () => {
+  const placed = await graph(214, true)
   const camera = graphCameraView(placed, SIZE, new Set(), { selectedId: nodeId(1) })
   assert.ok(camera)
   assert.equal(camera.zoom, 1)
   inCamera(placed, 1, camera)
 })
-test('small graphs fit naturally and missing selections use an existing root', () => {
-  const small = graph(3)
+test('small graphs fit naturally and missing selections use an existing root', async () => {
+  const small = await graph(3)
   const camera = graphCameraView(small, SIZE, new Set())
   assert.ok(camera)
   for (const number of [1, 2, 3]) inCamera(small, number, camera)
-  const large = graph(214)
+  const large = await graph(214)
   const fallback = graphCameraView(large, SIZE, new Set(), { selectedId: 'missing' })
   assert.ok(fallback)
   inCamera(large, 1, fallback)

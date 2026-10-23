@@ -58,10 +58,6 @@ const overlayHeader = readFileSync(
   'utf8',
 )
 const overlay = readFileSync(new URL('../src/shared/ui/OverlayHost.vue', import.meta.url), 'utf8')
-const shellLayout = readFileSync(
-  new URL('../src/shared/lib/shellLayout.ts', import.meta.url),
-  'utf8',
-)
 const app = readFileSync(new URL('../src/app/App.vue', import.meta.url), 'utf8')
 const planningSurface = readFileSync(
   new URL('../src/pages/planning/PlanningModuleSurface.vue', import.meta.url),
@@ -137,29 +133,26 @@ test('the inspector exposes its emits, related navigation, and shared focus owne
   )
 })
 
-test('the work-item inspector is persisted and bounded by its actual workspace', () => {
+test('the work-item inspector uses the persisted overlay drawer without consuming workspace width', () => {
   assert.match(drawer, /INSPECTOR_DRAWER_STORAGE_KEY/)
-  assert.match(inspector, /inspectorLayoutForWorkspace/)
-  assert.match(inspector, /surface\.value\?\.parentElement/)
-  assert.match(inspector, /role="separator"/)
-  assert.match(inspector, /aria-orientation="vertical"/)
-  assert.match(inspector, /@pointerdown="beginResize"/)
-  assert.match(inspector, /@keydown="resizeFromKeyboard"/)
-  assert.match(planningSurface, /class="planning-workspace-shell"/)
+  assert.match(inspector, /<OverlayHost/)
+  assert.match(inspector, /variant="drawer"/)
+  assert.match(inspector, /layer="drawer"/)
+  assert.match(inspector, /resizable/)
+  assert.match(inspector, /:width-storage-key="storageKey"/)
+  assert.doesNotMatch(inspector, /position: relative|flex: none|parentElement/)
+  assert.match(overlay, /<Teleport to="body">/)
+  assert.match(overlay, /position: fixed/)
+  assert.match(overlay, /role="separator"/)
+  assert.match(overlay, /@keydown="resizeFromKeyboard"/)
 })
 
-test('command dialogs are the sole modal focus owner over the inline inspector', () => {
-  // The inspector is a workspace split, not a second dialog. The composer and
-  // launch form therefore remain the only surfaces claiming modal focus.
+test('command dialogs layer over the inspector using shared modal focus ownership', () => {
   assert.match(planningSurface, /v-if="open && boundSpaceResourceRef"/)
   assert.doesNotMatch(planningSurface, /open && !composerOpen/)
   assert.match(drawer, /<ResizableInspector/)
-  assert.doesNotMatch(drawer, /<InspectorDrawer|OverlayHost/)
+  assert.match(inspector, /<OverlayHost/)
   assert.match(overlay, /interactive\?: boolean/)
-  // The five attributes that say whether the surface takes input are one object,
-  // because they describe one fact and cannot disagree. A passive surface is inert
-  // and hidden; each attribute is absent rather than false in the case it does not
-  // apply, which is the whole reason this is derived and not written inline.
   assert.match(overlay, /'aria-hidden': true, 'inert': true/)
   assert.match(overlay, /'role': 'dialog'/)
   assert.doesNotMatch(overlay, /:inert=|:aria-hidden=|:aria-modal=/)
@@ -179,13 +172,12 @@ test('the inspector keeps item facts and generic relation actions in one surface
 })
 
 test('one place draws who holds an item, and the shell owns scope presentation', () => {
-  // The tile names the holder and the graph node names the holder plus whether
-  // the work is active. Nothing else may invent its own mark, which is the half
+  // The tile and graph node name who currently holds the claim. Nothing else may invent its own mark, which is the half
   // of this assertion the column carries.
   assert.match(card, /class="tile-holder"/)
   assert.match(card, /claim_ref/)
   assert.doesNotMatch(lane, /bundle-active|t\('work\.active'\)/)
-  assert.match(graphNode, /class="flow-node-owner-state">\{\{ t\('work\.active'\) \}\}/)
+  assert.match(graphNode, /class="flow-node-owner-state">\{\{ t\('graph\.claimedBy'\) \}\}/)
   assert.match(
     readFileSync(new URL('../src/app/components/AppModuleStage.vue', import.meta.url), 'utf8'),
     /<PlanningModuleSurface/,
@@ -246,18 +238,6 @@ test('settings registry is read-only and has no legacy integration activation pa
   assert.doesNotMatch(settings, /toggleIntegration|updateIntegration|settings\.integrations/)
 })
 
-test('session details use a persistent resizable inspector rather than a modal overlay', () => {
-  assert.match(inspector, /role="separator"/)
-  assert.match(inspector, /aria-orientation="vertical"/)
-  assert.match(inspector, /SESSION_INSPECTOR_STORAGE_KEY/)
-  assert.match(shellLayout, /valkama-session-inspector-width/)
-  assert.match(inspector, /@pointerdown="beginResize"/)
-  assert.match(inspector, /@keydown="resizeFromKeyboard"/)
-  assert.match(inspector, /ResizeObserver/)
-  assert.match(inspector, /surface\.value\?\.parentElement/)
-  assert.doesNotMatch(inspector, /@media\s*\(max-width:\s*860px\)/)
-})
-
 test('the session inspector separates identity from controls and detail content through the shared frame', () => {
   // The head is one component both overlays wear, so its rule and padding are
   // asserted where they live rather than once per surface that shows them.
@@ -290,7 +270,7 @@ test('a work-item tile is one control, not a card with an arrow footer', () => {
 })
 
 test('Planning components carry presentation tones instead of remapping operational state', () => {
-  assert.match(card, /statePresentation\('work-item-priority', props\.item\.priority\)\.tone/)
+  assert.doesNotMatch(card, /box-shadow: inset|data-tone/)
   assert.doesNotMatch(card, /data-priority/)
 
   assert.match(graphNode, /if \(ready\) return 'ready'/)
@@ -298,12 +278,9 @@ test('Planning components carry presentation tones instead of remapping operatio
   assert.match(graphNode, /statePresentation\('work-item-node-marker', markerState\)\.tone/)
   assert.doesNotMatch(graphNode, /class="claimed"|'claimed':/)
 
+  assert.match(drawerDetails, /dimension="work-item-state"[\s\S]*:state="item\.state\.category"/)
   assert.match(
     drawerDetails,
-    /statePresentation\('work-item-state', props\.item\.state\.category\)\.tone/,
-  )
-  assert.match(
-    drawerDetails,
-    /\.step\.done & \{\s*background: var\(--color-accent\);\s*border-color: var\(--color-accent\);/,
+    /\.step\[data-tone='success'\] & \{\s*background: var\(--color-success\);\s*border-color: var\(--color-success\);/,
   )
 })

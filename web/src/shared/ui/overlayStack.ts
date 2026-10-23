@@ -1,25 +1,20 @@
-/**
- * The Vue hosts are deliberately small renderers.  This coordinator is the
- * one DOM owner for the cross-overlay concerns that cannot safely live in
- * each renderer independently: body scroll locking and focus restoration.
- *
- * A command can replace a drawer in one Vue update.  The old host may unmount
- * before the new one mounts (or vice versa), so ownership is lease based and
- * stale releases are ignored.  A microtask handoff lets a replacement claim
- * the original trigger without briefly restoring focus to a disappearing
- * control.
- */
+import { shallowRef } from 'vue'
+
+/** A live host lease; its focus target belongs to the surface it covered. */
 export interface OverlayOwnership {
   readonly id: number
+  readonly layer: 'drawer' | 'command'
   readonly previousFocus: HTMLElement | null
-  readonly previousOverflow: string
+  readonly surface: () => HTMLElement | null
 }
 
+type OverlaySession = { focus: HTMLElement | null; overflow: string }
+
 let nextOverlayOwnershipId = 0
-let overlayOwner: OverlayOwnership | null = null
-let pendingFocus: HTMLElement | null = null
-let pendingOverflow: string | null = null
+const owners = shallowRef<readonly OverlayOwnership[]>([])
+let session: OverlaySession | null = null
 let restoreScheduled = false
+let pendingFocus: HTMLElement | null = null
 
 function activeElement(): HTMLElement | null {
   if (typeof document === 'undefined') return null
@@ -30,56 +25,64 @@ function activeElement(): HTMLElement | null {
 function scheduleRestore() {
   if (restoreScheduled) return
   restoreScheduled = true
-  const finish = () => {
+  queueMicrotask(() => {
     restoreScheduled = false
-    if (overlayOwner) return
+    const top = owners.value.at(-1)
     const target = pendingFocus
-    const overflow = pendingOverflow
     pendingFocus = null
-    pendingOverflow = null
-    if (typeof document !== 'undefined' && overflow !== null) {
-      document.body.style.overflow = overflow
+    if (top) {
+      if (target?.isConnected && top.surface()?.contains(target)) target.focus()
+      return
     }
-    if (target?.isConnected) target.focus()
-  }
-  if (typeof queueMicrotask === 'function') queueMicrotask(finish)
-  else void Promise.resolve().then(finish)
+    const finished = session
+    session = null
+    if (typeof document !== 'undefined' && finished)
+      document.body.style.overflow = finished.overflow
+    if (finished?.focus?.isConnected) finished.focus.focus()
+  })
 }
 
-/** Claim the single focus/scroll owner used by every active OverlayHost. */
-export function claimOverlayOwnership(): OverlayOwnership {
-  const doc = typeof document === 'undefined' ? null : document
-  // Preserve an intentional null trigger during a replacement.  Falling back
-  // to the currently focused control would capture the old drawer button,
-  // which is about to be unmounted by the command surface.
-  const previousFocus = overlayOwner
-    ? overlayOwner.previousFocus
-    : (pendingFocus ?? activeElement())
-  const previousOverflow =
-    overlayOwner?.previousOverflow ?? pendingOverflow ?? doc?.body.style.overflow ?? ''
-  // A replacement keeps the original trigger as the eventual restore target.
+/** Keep the page's original focus and scroll state until every live host closes. */
+export function claimOverlayOwnership(
+  surface: () => HTMLElement | null,
+  layer: OverlayOwnership['layer'],
+): OverlayOwnership {
+  if (!session) {
+    session = {
+      focus: activeElement(),
+      overflow: typeof document === 'undefined' ? '' : document.body.style.overflow,
+    }
+  }
   const lease: OverlayOwnership = {
     id: ++nextOverlayOwnershipId,
-    previousFocus,
-    previousOverflow,
+    layer,
+    previousFocus: owners.value.length ? activeElement() : session.focus,
+    surface,
   }
-  overlayOwner = lease
+  const next = [...owners.value]
+  const commandIndex = next.findIndex((owner) => owner.layer === 'command')
+  if (layer === 'drawer' && commandIndex !== -1) next.splice(commandIndex, 0, lease)
+  else next.push(lease)
+  owners.value = next
   pendingFocus = null
-  pendingOverflow = null
-  if (doc) doc.body.style.overflow = 'hidden'
+  if (typeof document !== 'undefined') document.body.style.overflow = 'hidden'
   return lease
 }
 
-/** Return whether a host still owns the shared DOM responsibilities. */
+/** Reactive ownership lets covered hosts suspend their modal semantics and input. */
 export function ownsOverlay(lease: OverlayOwnership | null): boolean {
-  return lease !== null && overlayOwner?.id === lease.id
+  return lease !== null && owners.value.at(-1)?.id === lease.id
 }
 
-/** Release a host.  Releasing an already superseded host is a no-op. */
+/** Remove only this lease; stale releases cannot dismiss or unlock another host. */
 export function releaseOverlayOwnership(lease: OverlayOwnership | null): void {
-  if (!lease || !ownsOverlay(lease)) return
-  overlayOwner = null
+  if (!lease) return
+  const index = owners.value.findIndex((owner) => owner.id === lease.id)
+  if (index === -1) return
+  const wasTop = index === owners.value.length - 1
+  owners.value = owners.value.filter((owner) => owner.id !== lease.id)
+  if (!wasTop) return
   pendingFocus = lease.previousFocus
-  pendingOverflow = lease.previousOverflow
+  // Keep the session through this microtask so same-tick replacements inherit it.
   scheduleRestore()
 }

@@ -262,22 +262,15 @@ async function removeRelation() {
     aria-labelledby="platform-relations-title"
   >
     <header class="relations-head">
-      <div>
-        <SectionHeading
-          as="h3"
-          level="panel"
-          class="panel-kicker"
-          >{{ t('platform.relations.kicker') }}</SectionHeading
-        >
-        <h2
-          id="platform-relations-title"
-          class="relations-title"
-        >
-          {{ t('platform.relations.title') }}
-        </h2>
-      </div>
+      <SectionHeading
+        id="platform-relations-title"
+        as="h3"
+        level="panel"
+        >{{ t('platform.relations.title') }}</SectionHeading
+      >
       <VButton
-        :disabled="!candidates.length || busy"
+        v-if="candidates.length"
+        :disabled="busy"
         @click="beginAttach"
       >
         <VIcon
@@ -394,19 +387,14 @@ async function removeRelation() {
 .platform-relations {
   display: grid;
   gap: var(--space-3);
-  padding: var(--space-4) 0;
-  border-top: 1px solid var(--color-rule);
+  margin-top: var(--space-5);
 
   .relations-head {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--space-3);
     justify-content: space-between;
-    align-items: flex-start;
-  }
-
-  .relations-title {
-    margin: var(--space-half) 0 0;
-    font-size: var(--font-size-section);
+    align-items: center;
   }
 }
 

@@ -36,7 +36,8 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ retry: [] }>()
 const { t } = useI18n()
-const { connectionDetails, named, reasonLabel } = useRegistryLabels()
+const { connectionDetails, connectionName, connectionOrigin, connectionSetup, named, reasonLabel } =
+  useRegistryLabels()
 const lifecycleNotice = ref('')
 const moduleBusy = ref('')
 
@@ -130,7 +131,11 @@ function moduleIsBusy(registration: ModuleRegistration): boolean {
 }
 
 function connectionFacts(connection: RegistryConnection) {
-  const details = connectionDetails(connection)
+  const details = [
+    { label: t('platform.registry.dataProvider'), value: connection.service.owner_id },
+    { label: t('platform.registry.connections'), value: connectionIdentity(connection) },
+    ...connectionDetails(connection),
+  ]
   return connection.diagnostics
     ? [
         ...details,
@@ -235,7 +240,9 @@ function noteLifecycle(message: string) {
                 v-for="connection in group.connections"
                 :key="connectionIdentity(connection)"
                 :icon="group.icon"
-                :title="named(connection.name, connection.service.service_id)"
+                :title="connectionName(connection)"
+                :subtitle="connectionOrigin(connection, payload)"
+                :description="connectionSetup(connection, payload)"
                 :configuration-owner="connection.configuration_owner"
                 :details="connectionFacts(connection)"
               >

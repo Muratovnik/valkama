@@ -35,15 +35,33 @@ const done = ref('')
 const next = ref('')
 const why = ref('')
 
-// The form follows the record. Editing it while a refetch lands would otherwise
-// overwrite what the operator is typing, so it re-seeds per work item and per
-// stored summary rather than on every response.
+let seededItem = ''
+let seededDraft = ''
+
+function draftValue() {
+  return JSON.stringify({ done: done.value, next: next.value, why: why.value })
+}
+
 watch(
   [() => props.item.work_item_id, () => JSON.stringify(props.item.summary)],
   () => {
-    done.value = props.item.summary?.done ?? ''
-    next.value = props.item.summary?.next ?? ''
-    why.value = props.item.summary?.why ?? ''
+    const incoming = {
+      done: props.item.summary?.done ?? '',
+      next: props.item.summary?.next ?? '',
+      why: props.item.summary?.why ?? '',
+    }
+    const incomingDraft = JSON.stringify(incoming)
+    if (
+      seededItem === props.item.work_item_id &&
+      draftValue() !== seededDraft &&
+      draftValue() !== incomingDraft
+    )
+      return
+    done.value = incoming.done
+    next.value = incoming.next
+    why.value = incoming.why
+    seededItem = props.item.work_item_id
+    seededDraft = incomingDraft
   },
   { immediate: true },
 )

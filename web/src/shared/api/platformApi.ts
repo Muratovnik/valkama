@@ -48,7 +48,7 @@ import {
 } from '@/shared/api/platformRegistryPayload.ts'
 import type { OperatingScope } from '@/shared/api/platformRoute.ts'
 import { validatePlatformUiState } from '@/shared/api/platformUiState.ts'
-import { secureFetch } from '@/shared/api/secureFetch.ts'
+import { readJsonResponse } from '@/shared/api/readJsonResponse.ts'
 
 export function scopeQuery(scope: OperatingScope): URLSearchParams {
   const query = new URLSearchParams({ scope_kind: scope.kind })
@@ -57,8 +57,7 @@ export function scopeQuery(scope: OperatingScope): URLSearchParams {
 }
 
 export async function requestUnknown(input: string, init?: RequestInit): Promise<unknown> {
-  const response = await secureFetch(input, init)
-  const payload = await response.json().catch(() => null)
+  const { response, payload } = await readJsonResponse(input, init)
   if (!response.ok) {
     let state: ReturnType<typeof validatePlatformUiState> | undefined
     if (payload !== null) {

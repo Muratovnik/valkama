@@ -2,24 +2,19 @@
  * What the graph view needs to draw a space: the geometry, the edge shape, the
  * zoom bounds, and which items are in scope.
  *
- * The layered layout itself lives in `graphSugiyama.ts`; this file calls it once
- * and arranges what comes back.
+ * ELK computes the geometry; this adapter preserves the planning model and
+ * passes its orthogonal routes to Vue Flow.
  */
 
+import type { ELK, ElkNode, ElkPoint } from 'elkjs/lib/elk-api'
+
 import {
-  COLUMN_WIDTH,
-  COMPONENT_GAP,
-  ISOLATED_ROWS,
   MARGIN,
   NODE_HEIGHT,
-  SECTION_GAP,
+  NODE_WIDTH,
+  rowOrder,
 } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
-import {
-  connectedComponents,
-  gridRows,
-  layoutComponent,
-} from '@/widgets/work-item-graph/utils/graphSugiyama.ts'
 
 import { readyIds } from '@/shared/api/planningModel.ts'
 import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
@@ -30,32 +25,32 @@ export interface GraphSource {
   nodes: WorkItemBrief[]
 }
 
+export interface RoutedEdge extends PlanningEdge {
+  points: ElkPoint[]
+}
+
 export interface GraphLayout {
-  /** Dependency edges retain the persisted source/target direction. */
-  edges: PlanningEdge[]
+  edges: RoutedEdge[]
   height: number
   isolatedCount: number
-  /** Top (px) of the "unlinked" grid, or -1 when every visible item is wired. */
-  isolatedTop: number
   nodes: PlacedNode[]
-  /** Rank columns of the widest wired component; 0 when nothing is connected. */
   ranks: number
   width: number
-  /** Bottom edge (px) of the wired section; 0 when nothing is connected. */
-  wiredBottom: number
 }
+
+export type GraphLayoutEngine = Pick<ELK, 'layout'>
 
 /** Keep the interaction floor low enough for wide spaces to fit without clipping. */
 export const GRAPH_ZOOM_MIN = 0.01
 export const GRAPH_ZOOM_MAX = 1.45
 
 /** Vue Flow's built-in edge and marker contract for every dependency wire. */
-export const GRAPH_EDGE_TYPE = 'straight' as const
+export const GRAPH_EDGE_TYPE = 'routed' as const
 export const GRAPH_EDGE_MARKER_SIZE = 14
 
 export interface GraphFlowEdge {
   class: string[]
-  data: { kind: PlanningEdge['kind'] }
+  data: { kind: PlanningEdge['kind']; points: ElkPoint[] }
   focusable: false
   id: string
   markerEnd: {
@@ -86,12 +81,12 @@ export function graphFitViewOptions(): GraphFitViewOptions {
 }
 
 /**
- * Convert one persisted dependency into a Vue Flow straight edge descriptor.
+ * Convert one routed dependency into a Vue Flow edge descriptor.
  * The source and target are never swapped for layout convenience: Vue Flow
- * connects the right border of the source node to the left border of target.
+ * keeps native handles while the edge renders the layout engine's bend points.
  */
 export function flowEdge(
-  edge: PlanningEdge,
+  edge: RoutedEdge,
   options: { markerColor: string; lit?: boolean; recessed?: boolean },
 ): GraphFlowEdge {
   const lit = options.lit ?? false
@@ -114,7 +109,7 @@ export function flowEdge(
     selectable: false,
     focusable: false,
     class: ['graph-edge', edge.kind, ...(lit ? ['lit'] : []), ...(recessed ? ['recessed'] : [])],
-    data: { kind: edge.kind },
+    data: { kind: edge.kind, points: edge.points },
   }
 }
 
@@ -159,57 +154,94 @@ export function doneCount(source: GraphSource, scope: GraphScope = WHOLE_SPACE):
   ).length
 }
 
-export function layout(
+/** ELK owns ranking, cycle handling, component packing and obstacle routing. */
+export async function layout(
   source: GraphSource,
+  engine: GraphLayoutEngine,
   showDone = false,
   scope: GraphScope = WHOLE_SPACE,
-): GraphLayout {
-  const nodes = workNodes(source, showDone, scope)
+): Promise<GraphLayout> {
+  const nodes = workNodes(source, showDone, scope).sort(rowOrder)
   const present = new Set(nodes.map((node) => node.work_item_id))
-  const visible = source.edges.filter(
-    (edge) => edge.from !== edge.to && present.has(edge.from) && present.has(edge.to),
-  )
-
-  const { components, isolated } = connectedComponents(nodes, visible)
-
-  const placed: PlacedNode[] = []
-  const edges: PlanningEdge[] = []
-  let ranks = 0
-  let cursor = MARGIN
-  let width = 0
-  for (const component of components) {
-    const block = layoutComponent(component.nodes, component.edges)
-    for (const node of block.nodes) placed.push({ ...node, y: node.y + cursor })
-    for (const edge of block.edges) edges.push({ ...edge })
-    ranks = Math.max(ranks, block.ranks)
-    cursor += block.height + COMPONENT_GAP
-    width = Math.max(width, MARGIN + block.ranks * COLUMN_WIDTH)
+  const visible = source.edges
+    .filter((edge) => edge.kind !== 'parent' && present.has(edge.from) && present.has(edge.to))
+    .sort((left, right) => edgeKey(left).localeCompare(edgeKey(right)))
+  const connected = new Set(visible.flatMap((edge) => [edge.from, edge.to]))
+  if (!nodes.length) {
+    return {
+      nodes: [],
+      edges: [],
+      width: MARGIN * 2,
+      height: MARGIN * 2,
+      ranks: 0,
+      isolatedCount: 0,
+    }
   }
-  const wiredBottom = components.length ? cursor - COMPONENT_GAP : 0
-
-  // -1 means there is no grid at all, which is what the renderer reads to skip
-  // the section heading entirely.
-  let isolatedTop = -1
-  if (isolated.length) {
-    isolatedTop = components.length ? wiredBottom + SECTION_GAP : MARGIN
-    placed.push(...gridRows(isolated, isolatedTop))
-    const columns = Math.ceil(isolated.length / ISOLATED_ROWS)
-    width = Math.max(width, MARGIN + columns * COLUMN_WIDTH)
+  const graph: ElkNode = {
+    id: 'work-graph',
+    layoutOptions: {
+      'elk.algorithm': 'layered',
+      'elk.direction': 'RIGHT',
+      'elk.edgeRouting': 'ORTHOGONAL',
+      'elk.padding': `[top=${MARGIN},left=${MARGIN},bottom=${MARGIN},right=${MARGIN}]`,
+      'elk.spacing.nodeNode': '36',
+      'elk.spacing.componentComponent': '48',
+      'elk.layered.spacing.nodeNodeBetweenLayers': '64',
+      'elk.layered.spacing.edgeNodeBetweenLayers': '20',
+      'elk.spacing.edgeNode': '20',
+      'elk.spacing.edgeEdge': '12',
+      'elk.aspectRatio': '1.7',
+      'elk.separateConnectedComponents': 'true',
+      'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
+    },
+    children: nodes.map((node) => ({
+      id: node.work_item_id,
+      width: NODE_WIDTH,
+      height: NODE_HEIGHT,
+      layoutOptions: { 'elk.portConstraints': 'FIXED_SIDE' },
+      ports: visible.flatMap((edge) => [
+        ...(edge.from === node.work_item_id
+          ? [{ id: `${edgeKey(edge)}:out`, layoutOptions: { 'elk.port.side': 'EAST' } }]
+          : []),
+        ...(edge.to === node.work_item_id
+          ? [{ id: `${edgeKey(edge)}:in`, layoutOptions: { 'elk.port.side': 'WEST' } }]
+          : []),
+      ]),
+    })),
+    edges: visible.map((edge) => ({
+      id: edgeKey(edge),
+      sources: [`${edgeKey(edge)}:out`],
+      targets: [`${edgeKey(edge)}:in`],
+    })),
   }
-
-  let bottom = MARGIN
-  for (const node of placed) {
-    bottom = Math.max(bottom, node.y + NODE_HEIGHT)
-  }
+  const result = await engine.layout(graph)
+  const positions = new Map(result.children?.map((node) => [node.id, node]))
+  const routes = new Map(result.edges?.map((edge) => [edge.id, edge]))
+  const placed = nodes.map((node) => {
+    const position = positions.get(node.work_item_id)
+    if (position?.x === undefined || position.y === undefined)
+      throw new Error('Incomplete graph layout')
+    return { ...node, x: position.x, y: position.y, isolated: !connected.has(node.work_item_id) }
+  })
+  const edges = visible.map((edge) => {
+    const sections = routes.get(edgeKey(edge))?.sections
+    if (!sections?.length) throw new Error('Incomplete graph route')
+    return {
+      ...edge,
+      points: sections.flatMap((section) => [
+        section.startPoint,
+        ...(section.bendPoints ?? []),
+        section.endPoint,
+      ]),
+    }
+  })
   return {
     nodes: placed,
     edges,
-    width: Math.max(width, MARGIN) + MARGIN,
-    height: bottom + MARGIN,
-    ranks,
-    wiredBottom,
-    isolatedCount: isolated.length,
-    isolatedTop,
+    width: result.width ?? MARGIN * 2,
+    height: result.height ?? MARGIN * 2,
+    ranks: new Set(placed.filter((node) => !node.isolated).map((node) => node.x)).size,
+    isolatedCount: placed.filter((node) => node.isolated).length,
   }
 }
 

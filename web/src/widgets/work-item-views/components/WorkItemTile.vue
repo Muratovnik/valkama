@@ -17,7 +17,6 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
-import { statePresentation } from '@/shared/lib/uiSystem.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 
 const props = defineProps<{
@@ -32,6 +31,11 @@ const { t } = useI18n()
 
 /** Three labels at most: a tile is a glance, and the rest are in the inspector. */
 const labels = computed(() => props.item.labels.slice(0, 3))
+const holderLabel = computed(() =>
+  t(props.item.state.is_terminal ? 'workItem.previousHolder' : 'workItem.holder', {
+    holder: props.item.claim_ref,
+  }),
+)
 
 const steps = computed(() => ({
   done: props.item.checklist.filter((step) => step.done).length,
@@ -43,11 +47,11 @@ const steps = computed(() => ({
   <button
     class="work-item-tile"
     type="button"
-    :data-tone="statePresentation('work-item-priority', props.item.priority).tone"
     @click="emit('open', props.item.reference)"
   >
     <span class="tile-line">
       <span class="tile-reference">{{ props.item.reference }}</span>
+      <span class="tile-priority">{{ t(`priority.${props.item.priority}`) }}</span>
       <span
         v-if="props.item.kind !== 'task'"
         class="tile-kind"
@@ -76,7 +80,7 @@ const steps = computed(() => ({
       <span
         v-if="props.item.claim_ref"
         class="tile-holder"
-        >{{ props.item.claim_ref }}</span
+        >{{ holderLabel }}</span
       >
       <span
         v-if="steps.total"
@@ -119,18 +123,9 @@ const steps = computed(() => ({
   }
 }
 
-/* Urgency is a bar at the leading edge, never a tinted sheet. A whole card
-   coloured red reads as a broken item; a mark reads as a priority. */
-.work-item-tile[data-tone='danger'] {
-  box-shadow: inset 2px 0 0 0 var(--color-danger);
-}
-
-.work-item-tile[data-tone='warning'] {
-  box-shadow: inset 2px 0 0 0 var(--color-warning);
-}
-
 .tile-line {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
   align-items: center;
   color: var(--color-text-muted);
@@ -139,8 +134,10 @@ const steps = computed(() => ({
 
 .tile-reference {
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
+.tile-priority,
 .tile-kind {
   color: var(--color-text-tertiary);
 }

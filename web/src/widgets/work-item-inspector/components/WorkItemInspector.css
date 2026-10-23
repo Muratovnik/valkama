@@ -12,6 +12,7 @@
 
 .inspector-meta {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-3);
   align-items: center;
   min-height: var(--size-control-height-compact);
@@ -37,8 +38,7 @@
 }
 
 .head-claim {
-  margin-inline-start: auto;
-  color: var(--color-success);
+  color: var(--color-text-muted);
   font: var(--font-detail);
   overflow-wrap: anywhere;
 }

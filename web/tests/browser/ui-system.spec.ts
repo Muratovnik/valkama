@@ -193,17 +193,12 @@ test('the note field spans its form and its action keeps a full pointer target',
   await page.setViewportSize({ width: 1180, height: 820 })
   await page.goto('/tests/browser/harness.html?lang=ru&surface=work-item')
   const drawer = page.locator('.drawer')
-  const workspaceBox = await page.locator('.harness-main').boundingBox()
+  await expect(drawer).toHaveCSS('transform', 'none')
   const workSurfaceBox = await page.locator('.harness-main').boundingBox()
   const drawerBox = await drawer.boundingBox()
-  expect(
-    workspaceBox &&
-      drawerBox &&
-      drawerBox.x >= workspaceBox.x &&
-      drawerBox.x + drawerBox.width <= workspaceBox.x + workspaceBox.width + 1,
-  ).toBeTruthy()
+  expect(drawerBox && drawerBox.x >= 0 && drawerBox.x + drawerBox.width <= 1181).toBeTruthy()
   expect(workSurfaceBox && workSurfaceBox.width >= 320).toBeTruthy()
-  await expect(drawer).not.toHaveAttribute('role', 'dialog')
+  await expect(drawer).toHaveAttribute('role', 'dialog')
   await expect(drawer.locator('.drawer-frame-body')).toHaveCount(1)
   await expect(drawer.locator('.drawer-frame-body')).toHaveCSS('overflow-y', 'auto')
   // The sections are the shared segmented control, so a section is a button.
@@ -218,7 +213,7 @@ test('the note field spans its form and its action keeps a full pointer target',
   // every other button in the product occupies. It used to be one line beside a
   // button, and the shared baseline is what that geometry asserted.
   expect(formBox && fieldBox && Math.abs(fieldBox.width - formBox.width) < 1).toBeTruthy()
-  expect(fieldBox && fieldBox.height > 44).toBeTruthy()
+  expect(fieldBox && fieldBox.height >= 140).toBeTruthy()
   expect(submitBox && submitBox.height === 40).toBeTruthy()
   expect(formBox && submitBox && submitBox.width < formBox.width).toBeTruthy()
 })

@@ -12,7 +12,7 @@
  * unrelated node.
  */
 
-import { computed, ref, watch } from 'vue'
+import { computed, onScopeDispose, ref, shallowRef, watch } from 'vue'
 import type { ComputedRef, Ref } from 'vue'
 
 import {
@@ -31,7 +31,12 @@ import {
   neighborhood,
   workNodes,
 } from '@/widgets/work-item-graph/utils/graphLayout.ts'
-import type { GraphScope, GraphSource } from '@/widgets/work-item-graph/utils/graphLayout.ts'
+import type {
+  GraphLayout,
+  GraphScope,
+  GraphSource,
+} from '@/widgets/work-item-graph/utils/graphLayout.ts'
+import { createGraphLayoutEngine } from '@/widgets/work-item-graph/utils/graphLayoutEngine.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 
@@ -49,16 +54,22 @@ type ProjectionInput = () => {
 export type GraphProjection = {
   emptyOpen: ComputedRef<boolean>
   emptySpace: ComputedRef<boolean>
+  failed: Ref<boolean>
   focusSet: ComputedRef<ReturnType<typeof neighborhood> | null>
   hiddenDone: ComputedRef<number>
   openTotal: ComputedRef<number>
-  placed: ComputedRef<ReturnType<typeof layout> | null>
+  pending: Ref<boolean>
+  placed: Ref<GraphLayout | null>
   ready: ComputedRef<WorkItemBrief[]>
   showDone: Ref<boolean>
   applyFocus: (event: GraphFocusEvent) => void
+  retry: () => void
 }
 
-export function useGraphProjection(input: ProjectionInput): GraphProjection {
+export function useGraphProjection(
+  input: ProjectionInput,
+  selected: () => string | null = () => null,
+): GraphProjection {
   const showDone = ref(false)
   const focus = ref<ReturnType<typeof createGraphFocus>>(
     createGraphFocus({ ...input(), showDone: false }),
@@ -97,9 +108,60 @@ export function useGraphProjection(input: ProjectionInput): GraphProjection {
     },
   )
 
-  const placed = computed(() =>
-    source.value ? layout(source.value, showDone.value, scope.value) : null,
+  const placed = shallowRef<GraphLayout | null>(null)
+  const pending = ref(false)
+  const failed = ref(false)
+  const attempt = ref(0)
+  let request = 0
+  let context = ''
+  let stopLayout: (() => void) | undefined
+  onScopeDispose(() => {
+    request += 1
+    stopLayout?.()
+  })
+
+  watch(
+    [source, scope, showDone, attempt],
+    async () => {
+      const current = ++request
+      stopLayout?.()
+      const data = source.value
+      const nextContext = JSON.stringify([input().space, scope.value, showDone.value])
+      if (!data || context !== nextContext) placed.value = null
+      context = nextContext
+      pending.value = Boolean(data)
+      failed.value = false
+      if (!data) return
+      let engine: ReturnType<typeof createGraphLayoutEngine> | undefined
+      let timeout: ReturnType<typeof setTimeout> | undefined
+      const dispose = () => {
+        clearTimeout(timeout)
+        engine?.terminateWorker()
+      }
+      stopLayout = dispose
+      try {
+        engine = createGraphLayoutEngine()
+        const expired = new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => reject(new Error('Graph layout timed out')), 30_000)
+        })
+        const result = await Promise.race([
+          layout(data, engine, showDone.value, scope.value),
+          expired,
+        ])
+        if (request === current) placed.value = result
+      } catch {
+        if (request === current) failed.value = true
+      } finally {
+        dispose()
+        if (request === current) pending.value = false
+      }
+    },
+    { immediate: true },
   )
+
+  function retry() {
+    attempt.value += 1
+  }
   const scopedOpen = computed(() =>
     source.value ? workNodes(source.value, false, scope.value) : [],
   )
@@ -116,8 +178,11 @@ export function useGraphProjection(input: ProjectionInput): GraphProjection {
    * cycle reachable through dependency/discovery edges. Unrelated work dims.
    */
   const focusSet = computed(() => {
-    const active = activeGraphFocus(focus.value)
-    if (!placed.value || active === null) return null
+    if (!placed.value) return null
+    const selection = selected()
+    const selectedVisible = placed.value.nodes.some((node) => node.work_item_id === selection)
+    const active = activeGraphFocus(focus.value) ?? (selectedVisible ? selection : null)
+    if (active === null) return null
     return neighborhood(placed.value.edges, active)
   })
 
@@ -140,6 +205,9 @@ export function useGraphProjection(input: ProjectionInput): GraphProjection {
     hiddenDone,
     openTotal,
     placed,
+    pending,
+    failed,
+    retry,
     ready,
     showDone,
   }

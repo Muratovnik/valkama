@@ -16,7 +16,7 @@ import {
 import type { PlanningReadModel, WorkItem } from '@/shared/api/planningModel.ts'
 import { fetchPlanningWorkItem } from '@/shared/api/platformPlanningApi.ts'
 import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
-import { secureFetch } from '@/shared/api/secureFetch.ts'
+import { readJsonResponse } from '@/shared/api/readJsonResponse.ts'
 
 /** The cutover has not run, so the Board domain is still the live one. */
 export class CutoverPendingError extends Error {
@@ -49,8 +49,7 @@ class PlanningRefusedError extends Error {
 }
 
 async function request(input: string, init?: RequestInit): Promise<unknown> {
-  const response = await secureFetch(input, init)
-  const payload: unknown = await response.json().catch(() => null)
+  const { response, payload } = await readJsonResponse(input, init)
   if (response.ok) return payload
   const pending = readPending(payload)
   if (pending !== null) throw new CutoverPendingError(pending.state.reason)
@@ -108,9 +107,13 @@ export function subscribePlanning(
   callbacks.connection('connecting')
   const source = new EventSource(`/api/events${query({ view: 'planning', ...target })}`)
   let closed = false
+  const firstSnapshotDeadline = setTimeout(() => {
+    if (!closed) callbacks.connection('reconnecting')
+  }, 15_000)
   function close() {
     if (closed) return
     closed = true
+    clearTimeout(firstSnapshotDeadline)
     source.removeEventListener('message', onMessage)
     source.removeEventListener('error', onError)
     source.close()
@@ -121,6 +124,7 @@ export function subscribePlanning(
       const model = validateReadModel(JSON.parse(event.data) as unknown)
       if (model.planning_space?.key !== target.space_key)
         throw new Error('Planning stream returned a different space')
+      clearTimeout(firstSnapshotDeadline)
       callbacks.snapshot(model)
       callbacks.connection('live')
     } catch (error) {
@@ -130,6 +134,7 @@ export function subscribePlanning(
     }
   }
   function onError() {
+    clearTimeout(firstSnapshotDeadline)
     if (!closed) callbacks.connection('reconnecting')
   }
   source.addEventListener('message', onMessage)

@@ -81,6 +81,7 @@ const KNOWN_FAILURE_KEYS: Readonly<Record<string, string>> = {
   mutation_failed: 'platform.failures.mutationFailed',
   permission_denied: 'platform.failures.permissionDenied',
   request_failed: 'platform.failures.requestFailed',
+  request_timeout: 'platform.failures.requestTimeout',
   session_feed_failed: 'platform.failures.sessionFeedFailed',
   sessions_request_failed: 'platform.failures.sessionsRequestFailed',
   stream_disconnected: 'platform.failures.streamDisconnected',

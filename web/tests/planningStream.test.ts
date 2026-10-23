@@ -13,7 +13,10 @@ class Source extends EventTarget {
   }
 }
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+})
 
 function subscription() {
   vi.stubGlobal('EventSource', Source)
@@ -67,4 +70,25 @@ it('disposes the source and ignores callbacks already queued for the previous sc
   expect(callbacks.snapshot).not.toHaveBeenCalled()
   expect(callbacks.connection.mock.calls).toEqual([['connecting']])
   expect(source.close).toHaveBeenCalledOnce()
+})
+
+it('reports a silent initial stream without replacing native reconnection and accepts recovery', () => {
+  vi.useFakeTimers()
+  const { source, callbacks, close } = subscription()
+  vi.advanceTimersByTime(15_000)
+  expect(callbacks.connection).toHaveBeenLastCalledWith('reconnecting')
+  expect(source.close).not.toHaveBeenCalled()
+  source.dispatchEvent(new MessageEvent('message', { data: JSON.stringify(planningReadModel) }))
+  expect(callbacks.connection).toHaveBeenLastCalledWith('live')
+  close()
+  expect(vi.getTimerCount()).toBe(0)
+})
+
+it('cleans up the initial stream deadline on scope disposal', () => {
+  vi.useFakeTimers()
+  const { callbacks, close } = subscription()
+  close()
+  vi.advanceTimersByTime(15_000)
+  expect(callbacks.connection.mock.calls).toEqual([['connecting']])
+  expect(vi.getTimerCount()).toBe(0)
 })

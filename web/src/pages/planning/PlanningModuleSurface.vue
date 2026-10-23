@@ -53,6 +53,7 @@ import {
   rejectResource,
   resolveResource,
 } from '@/shared/api/resourceState.ts'
+import { failureMessageKey, typedFailure } from '@/shared/api/typedFailure.ts'
 import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 
@@ -207,7 +208,6 @@ async function loadPlanning() {
   try {
     const next = await fetchPlanning({ project, ...space })
     if (generation !== resource.value.generation) return
-    if (generation !== resource.value.generation) return
     version.value += 1
     if (next.planning_space === null) {
       resource.value = { ...cancelResource(resource.value), data: null }
@@ -222,7 +222,7 @@ async function loadPlanning() {
       planning.value = uiUnavailable(t('workItem.cutoverPending'))
       return
     }
-    const reason = error instanceof Error ? error.message : String(error)
+    const reason = t(failureMessageKey(typedFailure(error)))
     resource.value = rejectResource(resource.value, generation, key, reason)
     if (model.value === null) planning.value = uiError(reason)
     else emit('notice', reason)
@@ -263,8 +263,6 @@ const writable = computed(
     boundSpace.value !== undefined &&
     props.primaryWriteScopeId === boundSpace.value.data_scope_id,
 )
-
-const workflow = computed(() => model.value?.workflow ?? null)
 
 /**
  * The Kernel half of the open item: what it points at outside Valkama.
@@ -455,7 +453,7 @@ defineExpose({ refresh })
       :project-id="inspectorProjectId"
       :can-go-back="canGoBack"
       :refresh-token="version"
-      :workflow="workflow"
+      :workflow="model.workflow"
       :writable="writable"
       :kernel="kernel"
       @back="goBack"
@@ -508,10 +506,6 @@ defineExpose({ refresh })
   margin: 0 auto;
 }
 
-/* Planning and its inspector share the workspace they were actually given.
-   `ResizableInspector` measures this row, so the navigation rail no longer
-   disappears from its width calculation and the work surface always retains
-   a useful minimum beside the panel. */
 .planning-workspace-shell {
   position: relative;
   display: flex;

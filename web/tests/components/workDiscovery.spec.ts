@@ -10,14 +10,17 @@ import WorkItemList from '@/widgets/work-item-views/components/WorkItemList.vue'
 
 import WorkItemComposer from '@/features/work-item-compose/WorkItemComposer.vue'
 
-import { searchMemory } from '@/shared/api/memoryApi.ts'
+import { fetchMemoryProviders, searchMemory } from '@/shared/api/memoryApi.ts'
 import { createWorkItem } from '@/shared/api/planningApi.ts'
 import { validateReadModel, validateWorkItemRecord } from '@/shared/api/planningModel.ts'
 import { i18n as appI18n, messages } from '@/shared/i18n/index.ts'
 
 import { planningReadModel, workItem } from '../browser/planningFixtures.ts'
 
-vi.mock('@/shared/api/memoryApi.ts', () => ({ searchMemory: vi.fn() }))
+vi.mock('@/shared/api/memoryApi.ts', () => ({
+  fetchMemoryProviders: vi.fn(),
+  searchMemory: vi.fn(),
+}))
 vi.mock('@/shared/api/planningApi.ts', () => ({ createWorkItem: vi.fn() }))
 const i18n = (locale = 'en') =>
   createI18n({
@@ -145,6 +148,20 @@ describe('work discovery', () => {
 })
 describe('supporting copy', () => {
   it('keeps memory diagnostics available in a closed disclosure and attaches results', async () => {
+    vi.mocked(fetchMemoryProviders).mockResolvedValue({
+      interface_version: 'valkama-memory-api',
+      providers: [
+        {
+          project_id: 'example-project',
+          title: 'Example project',
+          provider_id: 'markdown-knowledge',
+          capabilities: ['memory.search', 'memory.open'],
+          root: '/project/docs',
+          health: 'ready',
+          reason: null,
+        },
+      ],
+    })
     vi.mocked(searchMemory).mockResolvedValue({
       interface_version: 'valkama-memory-api',
       project_id: 'example-project',
@@ -177,7 +194,7 @@ describe('supporting copy', () => {
     await wrapper.get('input').setValue('release')
     await wrapper.get('form').trigger('submit')
     await flushPromises()
-    expect(wrapper.text()).toContain('Source: Project knowledge')
+    expect(wrapper.text()).toContain('Source: /project/docs')
     const details = wrapper.get('details')
     expect(details.attributes('open')).toBeUndefined()
     expect(details.get('summary').text()).toBe('Technical details')

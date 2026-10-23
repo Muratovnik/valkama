@@ -14,7 +14,7 @@
  */
 
 import { parseContract, strictObject, z } from '@/shared/api/contract.ts'
-import { secureFetch } from '@/shared/api/secureFetch.ts'
+import { readJsonResponse } from '@/shared/api/readJsonResponse.ts'
 
 /** Why a provider cannot answer: a code to decide on, a sentence to show. */
 interface MemoryReason {
@@ -173,9 +173,9 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown, path: string):
 }
 
 async function read(input: string): Promise<unknown> {
-  const response = await secureFetch(input)
-  if (!response.ok) throw new Error(`${response.status} ${await response.text()}`)
-  return response.json() as Promise<unknown>
+  const { response, payload } = await readJsonResponse(input)
+  if (!response.ok) throw new Error(`${response.status} ${JSON.stringify(payload)}`)
+  return payload
 }
 
 /** What this project's knowledge provider has for a query, and what it can do. */

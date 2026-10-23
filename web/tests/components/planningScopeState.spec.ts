@@ -286,7 +286,9 @@ describe('Planning exact resource lifecycle', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('Retained item')
     expect(wrapper.get('.workspace-probe').attributes('data-stale')).toBe('false')
-    expect(wrapper.emitted('notice')).toContainEqual(['Refresh unavailable'])
+    expect(wrapper.emitted('notice')).toContainEqual([
+      'The local service did not complete the request.',
+    ])
     wrapper.unmount()
   })
 })

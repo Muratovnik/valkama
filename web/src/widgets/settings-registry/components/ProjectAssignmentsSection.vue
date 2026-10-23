@@ -23,7 +23,7 @@ type CapabilityId = RegistryAssignment['capability_id']
 const props = defineProps<{ payload: PlatformRegistryReady; projectId: string }>()
 const emit = defineEmits<{ notice: [message: string]; retry: [] }>()
 const { t } = useI18n()
-const { named, reasonLabel } = useRegistryLabels()
+const { capabilityTitle, connectionName: displayConnectionName, reasonLabel } = useRegistryLabels()
 const busy = ref('')
 
 function connectionIdentity(connection: RegistryConnection): string {
@@ -49,13 +49,20 @@ function connectionName(connectionId?: string): string {
   const connection = props.payload.connections.find(
     (item) => connectionIdentity(item) === connectionId,
   )
-  return connection ? named(connection.name, connection.service.service_id) : connectionId
+  return connection ? displayConnectionName(connection) : connectionId
 }
 
 function details(resolution: CapabilityResolution) {
   const capabilityId = resolution.capability.capability_id
   const projectOverride = assignmentFor(capabilityId, 'project')
   const facts = [
+    { label: t('platform.registry.technicalId'), value: capabilityId },
+    {
+      label: t('platform.registry.selectedConnection'),
+      value:
+        (resolution.assignment?.connection_ids ?? []).map((id) => connectionName(id)).join(', ') ||
+        t('platform.registry.none'),
+    },
     {
       label: t('platform.registry.installationDefault'),
       value: connectionName(assignmentFor(capabilityId, 'installation')?.connection_ids[0]),
@@ -76,7 +83,7 @@ function details(resolution: CapabilityResolution) {
 }
 
 function subtitle(resolution: CapabilityResolution): string {
-  return `${t('platform.registry.effectiveSource')}: ${resolution.source ?? t('platform.registry.unavailable')}`
+  return t(`platform.registry.selectionSource.${resolution.source ?? 'unavailable'}`)
 }
 
 function selectedId(resolution: CapabilityResolution): string {
@@ -88,7 +95,7 @@ function compatibleOptions(resolution: CapabilityResolution): ChoiceOption[] {
     .filter((connection) => connection.capabilities.includes(resolution.capability.capability_id))
     .map((connection) => ({
       description: connection.transport,
-      label: named(connection.name, connection.service.service_id),
+      label: displayConnectionName(connection),
       value: connectionIdentity(connection),
     }))
 }
@@ -172,7 +179,7 @@ async function resetOverride(resolution: CapabilityResolution) {
       v-for="resolution in payload.capabilities"
       :key="resolution.capability.capability_id"
       icon="check"
-      :title="resolution.capability.capability_id"
+      :title="capabilityTitle(resolution.capability.capability_id)"
       :subtitle="subtitle(resolution)"
       :details="details(resolution)"
     >
@@ -189,7 +196,7 @@ async function resetOverride(resolution: CapabilityResolution) {
             <ChoiceSelect
               :model-value="selectedId(resolution)"
               :options="compatibleOptions(resolution)"
-              :label="resolution.capability.capability_id"
+              :label="capabilityTitle(resolution.capability.capability_id)"
               :placeholder="t('platform.registry.useInstallationDefault')"
               :empty-label="t('settings.noAvailableIntegrations')"
               :disabled="configurationDisabled(resolution)"

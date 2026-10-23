@@ -55,6 +55,6 @@ withDefaults(
    surface, so it stays with the surface, reached through the class the host puts
    on this component's root. */
 .level-panel {
-  font: var(--font-label);
+  font: var(--font-panel-title);
 }
 </style>

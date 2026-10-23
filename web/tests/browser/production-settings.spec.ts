@@ -201,12 +201,14 @@ test('Settings presents every built-in Connection fact and accessible bounded di
   await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
   await openSettingsSection(page, 'Workspace')
   for (const name of ['Claude Code execution', 'Codex execution', 'AgentMemory', 'Git artifacts'])
-    await expect(page.locator('.registry-name').filter({ hasText: name })).toBeVisible()
+    await expect(
+      page.getByRole('region', { name: 'Integrations' }).getByText(name, { exact: true }),
+    ).toBeVisible()
 
   const git = page
     .getByRole('region', { name: 'Integrations' })
     .locator('.registry-row')
-    .filter({ hasText: 'Git artifacts' })
+    .filter({ has: page.locator('.registry-name').filter({ hasText: /^Git artifacts$/ }) })
   for (const fact of [
     'Transport',
     'built-in',
@@ -251,10 +253,10 @@ test('project assignment override survives reload, resets to installation, and r
     .filter({ hasText: 'telemetry.query' })
   await expect(telemetry).toContainText('Codex rollout telemetry')
   await expect(telemetry).toContainText('Claude local journal')
-  await expect(telemetry).toContainText('Effective source: project')
+  await expect(telemetry).toContainText('Selected for this project')
 
   await page.reload()
-  await expect(telemetry).toContainText('Effective source: project')
+  await expect(telemetry).toContainText('Selected for this project')
   await telemetry.getByRole('button', { name: 'Reset to default' }).click()
   await expect.poll(() => assignmentSelectionCommands.length).toBe(1)
   expect(assignmentSelectionCommands[0]).toMatchObject({
@@ -262,7 +264,7 @@ test('project assignment override survives reload, resets to installation, and r
     capability_id: 'telemetry.query',
     expected_revision: 1,
   })
-  await expect(telemetry).toContainText('Effective source: installation')
+  await expect(telemetry).toContainText('Inherited from installation')
   await expect(telemetry).toContainText('Codex rollout telemetry')
   await expect(telemetry).toContainText('Project override')
   await expect(telemetry).toContainText('None')
@@ -274,9 +276,38 @@ test('project assignment override survives reload, resets to installation, and r
   const unavailable = unavailablePage
     .locator('.project-assignments .registry-row')
     .filter({ hasText: 'telemetry.query' })
-  await expect(unavailable).toContainText('Effective source: Unavailable')
+  await expect(unavailable).toContainText('No effective connection')
   // The reason reads as a sentence; the identifier stays off the screen.
   await expect(unavailable).toContainText('No tool assigned')
   await expect(unavailable).not.toContainText('assignment-missing')
   await unavailablePage.close()
+})
+
+test('Settings capabilities and diagnostic actions stay readable at working widths', async ({
+  page,
+}) => {
+  await installBackend(page)
+  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
+  for (const width of [1440, 900, 390]) {
+    await page.setViewportSize({ width, height: 960 })
+    await openSettingsSection(page, 'Workspace')
+    const capability = page
+      .locator('.project-assignments .registry-name')
+      .filter({ hasText: 'Launch work' })
+    await expect(capability).toBeVisible()
+    await expectNoSilentClipping(page, `Readable Settings capability at ${width}px`)
+    await openSettingsSection(page, 'Diagnostics')
+    const finding = page.locator('.health-finding').first()
+    await expect(finding.locator('.health-action')).toBeVisible()
+    const spacing = await finding.evaluate((element) => {
+      const title = element.querySelector('.health-finding-state')?.getBoundingClientRect()
+      const detail = element.querySelector('.health-detail')?.getBoundingClientRect()
+      const action = element.querySelector('.health-action')?.getBoundingClientRect()
+      if (!title || !detail || !action) throw new Error('Expected a complete diagnostic finding')
+      return { titleGap: detail.top - title.bottom, actionGap: action.top - detail.bottom }
+    })
+    expect(spacing.titleGap).toBeGreaterThanOrEqual(10)
+    expect(spacing.actionGap).toBeGreaterThanOrEqual(10)
+    await expectNoSilentClipping(page, `Readable diagnostics at ${width}px`)
+  }
 })

@@ -212,6 +212,11 @@ const nextStates = computed<ChoiceOption[]>(() => {
 
 const title = computed(() => item.value?.title || props.reference)
 const holder = computed(() => (item.value?.claim_ref ? actorName(item.value.claim_ref) : ''))
+const holderLabel = computed(() =>
+  t(item.value?.state.is_terminal ? 'workItem.previousHolder' : 'workItem.holder', {
+    holder: holder.value,
+  }),
+)
 
 const stateChoice = computed({
   get: () => '',
@@ -279,9 +284,10 @@ function unlink(value: { kind: string; other: string }) {
 
 <template>
   <ResizableInspector
-    class="drawer"
+    surface-class="drawer"
     :open="true"
-    :label="t('workItem.resize')"
+    :label="title"
+    :resize-label="t('workItem.resize')"
     :storage-key="INSPECTOR_DRAWER_STORAGE_KEY"
     @close="emit('close')"
   >
@@ -310,7 +316,7 @@ function unlink(value: { kind: string; other: string }) {
           <span
             v-if="holder"
             class="head-claim"
-            >{{ holder }}</span
+            >{{ holderLabel }}</span
           >
         </div>
       </template>
@@ -428,6 +434,7 @@ function unlink(value: { kind: string; other: string }) {
               v-else-if="section === 'memory'"
               :item="payload"
               :project-id="projectId"
+              :registry="kernel?.registry"
               :writable="writable && !busy"
               @attach="attachMemory"
             />
