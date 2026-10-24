@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import AppContextBar from '@/app/components/AppContextBar.vue'
 import AppModuleStage from '@/app/components/AppModuleStage.vue'
 import AppRouteRecovery from '@/app/components/AppRouteRecovery.vue'
+import { useGlobalWorkActions } from '@/app/composables/useGlobalWorkActions.ts'
 import {
   resolveResourceSelection,
   selectableProjectResources,
@@ -17,6 +18,8 @@ import { usePlatformReadModels } from '@/app/composables/usePlatformReadModels.t
 
 import AppNav from '@/widgets/app-nav/components/AppNav.vue'
 
+import GlobalWorkFinder from '@/features/global-find/GlobalWorkFinder.vue'
+import InputRequestsHub from '@/features/input-requests/components/InputRequestsHub.vue'
 import SessionContext from '@/features/session-open/SessionContext.vue'
 import { resolveSessionWorkItemRoute } from '@/features/session-open/sessionWorkItemRoute.ts'
 
@@ -51,6 +54,13 @@ const {
   updateModuleState,
   writeRoute,
 } = usePlatformNavigation(() => t('platform.route.invalid'))
+
+const { finderOpen, requestsOpen, pendingRequestCount, openTarget } =
+  useGlobalWorkActions(writeRoute)
+const mainContent = ref<HTMLElement | null>(null)
+function focusMainContent() {
+  mainContent.value?.focus()
+}
 
 const contextReady = computed(() =>
   contextState.value.status === 'ready' || contextState.value.status === 'degraded'
@@ -250,6 +260,7 @@ usePlatformEntryRestore({
   <a
     class="skip-link"
     href="#main-content"
+    @click.prevent="focusMainContent"
     >{{ t('accessibility.skipToContent') }}</a
   >
   <div class="app-shell">
@@ -258,6 +269,9 @@ usePlatformEntryRestore({
       :active="activeModule"
       :connection="displayedConnection"
       :refreshing="refreshing"
+      :pending-request-count="pendingRequestCount"
+      @find="finderOpen = true"
+      @requests="requestsOpen = true"
       @navigate="switchModule"
       @home="goHome"
       @refresh="refreshAll"
@@ -277,6 +291,7 @@ usePlatformEntryRestore({
 
       <div
         id="main-content"
+        ref="mainContent"
         class="module-stage"
         tabindex="-1"
       >
@@ -327,6 +342,17 @@ usePlatformEntryRestore({
       </div>
     </div>
   </div>
+  <GlobalWorkFinder
+    :open="finderOpen"
+    @close="finderOpen = false"
+    @select="openTarget"
+  />
+  <InputRequestsHub
+    :open="requestsOpen"
+    @close="requestsOpen = false"
+    @select="openTarget"
+    @count="(count) => (pendingRequestCount = count)"
+  />
 </template>
 
 <style scoped>

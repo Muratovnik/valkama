@@ -14,6 +14,7 @@ import type { Page } from '@playwright/test'
 
 import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 
+import { requestList } from '../support/inputRequests.ts'
 import { moduleRegistrations } from '../support/moduleRegistrations.ts'
 import type { AssignmentSelectionInput } from './assignmentFixture.ts'
 import { applyAssignmentSelection } from './assignmentFixture.ts'
@@ -189,6 +190,7 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
       }
 
       const routes: Record<string, () => Promise<void> | void> = {
+        '/api/modules/planning/requests': () => fulfill({ ...requestList([]), coverage: [] }),
         '/api/modules': () =>
           fulfill({
             interface_version: 'valkama-modules',

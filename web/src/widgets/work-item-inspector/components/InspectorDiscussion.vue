@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import InspectorReport from '@/widgets/work-item-inspector/components/InspectorReport.vue'
@@ -23,6 +23,36 @@ const note = ref('')
 const reporting = ref(false)
 const makeCurrent = ref(false)
 const report = reactive({ done: '', next: '', why: '' })
+const anchor = ref<{ id: string; text: string } | null>(null)
+const composer = ref<HTMLFormElement | null>(null)
+async function discussStep(stepId: string) {
+  if (!props.writable || pending.value) return
+  const step = props.item.checklist.find((entry) => entry.id === stepId)
+  if (!step) return
+  const identity = props.item.work_item_id
+  anchor.value = { id: step.id, text: step.text }
+  reporting.value = false
+  await nextTick()
+  if (props.item.work_item_id !== identity || !props.writable) return
+  composer.value?.focus({ preventScroll: true })
+  composer.value?.scrollIntoView?.({ block: 'nearest' })
+}
+function removeAnchor() {
+  anchor.value = null
+}
+function anchorState(id: string, text: string | null | undefined) {
+  const step = props.item.checklist.find((entry) => entry.id === id)
+  if (!step) return 'removed'
+  return step.text === text ? 'current' : 'changed'
+}
+function quoteLabel(id: string, text: string | null | undefined) {
+  return t(`checklistComment.${anchorState(id, text)}`)
+}
+const anchorHint = computed(() => {
+  if (!anchor.value) return ''
+  const state = anchorState(anchor.value.id, anchor.value.text)
+  return state === 'current' ? '' : t(`checklistComment.${state}Hint`)
+})
 function commentTime(at: string | null) {
   const time = at === null ? Number.NaN : Date.parse(at)
   return Number.isNaN(time) ? Number.NEGATIVE_INFINITY : time
@@ -38,6 +68,7 @@ watch(
     note.value = ''
     reporting.value = false
     makeCurrent.value = false
+    anchor.value = null
     Object.assign(report, { done: '', next: '', why: '' })
   },
 )
@@ -79,10 +110,17 @@ function publish() {
       },
     )
   } else {
+    const target = anchor.value?.id
     void submit(
-      () => commentWorkItem({ id, body: note.value.trim() }),
+      () =>
+        commentWorkItem({
+          id,
+          body: note.value.trim(),
+          ...(target ? { checklist_item_id: target } : {}),
+        }),
       () => {
         note.value = ''
+        anchor.value = null
       },
     )
   }
@@ -97,6 +135,7 @@ function select(commentId: number) {
     }),
   )
 }
+defineExpose({ discussStep })
 </script>
 
 <template>
@@ -135,8 +174,15 @@ function select(commentId: number) {
             >{{ t('workItem.makeOutcome') }}</VButton
           >
         </template>
+        <blockquote
+          v-if="entry.kind === 'comment' && entry.checklist_item_id"
+          class="step-quote"
+        >
+          <strong>{{ quoteLabel(entry.checklist_item_id, entry.checklist_item_text) }}</strong>
+          <p class="discussion-body">{{ entry.checklist_item_text }}</p>
+        </blockquote>
         <p
-          v-else
+          v-if="entry.kind === 'comment'"
           class="discussion-body"
         >
           {{ entry.body }}
@@ -165,14 +211,40 @@ function select(commentId: number) {
     >
     <form
       v-if="writable"
+      ref="composer"
       class="discussion-form"
+      tabindex="-1"
+      :aria-label="t('checklistComment.composer')"
       @submit.prevent="publish"
     >
+      <div
+        v-if="anchor"
+        class="step-context"
+      >
+        <strong>{{ t('checklistComment.linked') }}</strong>
+        <blockquote class="step-quote">
+          <span>{{ quoteLabel(anchor.id, anchor.text) }}</span>
+          <p class="discussion-body">{{ anchor.text }}</p>
+        </blockquote>
+        <p
+          v-if="anchorHint"
+          class="discussion-empty"
+        >
+          {{ anchorHint }}
+        </p>
+        <VButton
+          class="discussion-action"
+          :disabled="pending"
+          @click="removeAnchor"
+          >{{ t('checklistComment.remove') }}</VButton
+        >
+        <p class="discussion-empty">{{ t('checklistComment.reportHint') }}</p>
+      </div>
       <label class="discussion-option"
         ><input
           v-model="reporting"
           type="checkbox"
-          :disabled="pending"
+          :disabled="pending || Boolean(anchor)"
         />{{ t('workItem.workReport') }}</label
       >
       <template v-if="reporting">
@@ -296,5 +368,19 @@ function select(commentId: number) {
 
 .discussion-action {
   justify-self: start;
+}
+
+.step-context,
+.step-quote {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.step-quote {
+  padding-inline-start: var(--space-3);
+  margin: 0;
+  border-inline-start: 1px solid var(--color-rule-strong);
+  color: var(--color-text-muted);
+  font: var(--font-line);
 }
 </style>

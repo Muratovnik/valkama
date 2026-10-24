@@ -16,7 +16,7 @@ from unittest import mock
 from urllib.parse import urlencode
 
 from server import http_surface, store
-from server.planning import service
+from server.planning import requests, service
 from server.platform import core
 from server.platform.contracts import planning_space_entity
 from server.platform.scope import read_store_metadata
@@ -89,6 +89,296 @@ class PlanningScopeHttpTests(unittest.TestCase):
             return response.status, json.loads(response.read())
         finally:
             client.close()
+
+    def test_mapped_global_search_uses_verified_attached_target(self) -> None:
+        self.bind("attached")
+        status, answer = self.request("/api/modules/planning/search?q=only&limit=1")
+        self.assertEqual(200, status, answer)
+        self.assertEqual("valkama-planning-search", answer["interface_version"])
+        self.assertEqual("searched", answer["coverage"][0]["status"])
+        self.assertEqual("attached-only", answer["items"][0]["item"]["title"])
+        self.assertEqual(self.refs["attached"], answer["items"][0]["target"]["space_ref"])
+        self.assertFalse(answer["items"][0]["target"]["writable"])
+        self.assertFalse(answer["has_more"])
+
+    def test_request_platform_create_answer_and_detail_share_exact_envelope(self) -> None:
+        body = {
+            "project_id": "example-project",
+            **self.refs["primary"],
+            "id": "SAME-1",
+            "kind": "decision",
+            "prompt": "May this proceed?",
+            "fields": [
+                {
+                    "id": "proceed",
+                    "label": "Proceed",
+                    "type": "boolean",
+                    "required": True,
+                    "options": [],
+                }
+            ],
+        }
+        status, created = self.request("/api/modules/planning/request", body)
+        self.assertEqual(200, status, created)
+        self.assertEqual("valkama-planning-requests", created["interface_version"])
+        identity = created["request"]["request_id"]
+        status, listed = self.request(
+            "/api/modules/planning/requests?scope_kind=global&status=pending&limit=100"
+        )
+        self.assertEqual(200, status, listed)
+        self.assertEqual(identity, listed["items"][0]["request"]["request_id"])
+        self.assertTrue(listed["items"][0]["target"]["writable"])
+        status, answered = self.request(
+            "/api/modules/planning/request/answer",
+            {
+                "project_id": "example-project",
+                **self.refs["primary"],
+                "id": identity,
+                "answers": {"proceed": False},
+                "expected_revision": 0,
+                "author": "owner",
+            },
+        )
+        self.assertEqual(200, status, answered)
+        self.assertEqual(
+            ("answered", {"proceed": False}, 1),
+            (
+                answered["request"]["status"],
+                answered["request"]["answers"],
+                answered["request"]["revision"],
+            ),
+        )
+        query = urlencode(
+            {
+                "scope_kind": "project",
+                "project_id": "example-project",
+                **self.refs["primary"],
+                "id": identity,
+            }
+        )
+        status, detail = self.request("/api/modules/planning/request?" + query)
+        self.assertEqual(200, status, detail)
+        self.assertEqual(answered, detail)
+        status, refusal = self.request(
+            "/api/modules/planning/request/decline",
+            {
+                "project_id": "example-project",
+                **self.refs["primary"],
+                "id": identity,
+                "expected_revision": 0,
+            },
+        )
+        self.assertEqual(409, status, refusal)
+        self.assertEqual("revision_conflict", refusal["error"]["code"])
+
+    def test_request_exact_attached_reads_are_readonly_and_mutations_never_hit_primary(
+        self,
+    ) -> None:
+        with mock.patch.dict(os.environ, {"VALKAMA_DB": str(self.attached)}):
+            conn = store.connect()
+            created = requests.create(
+                conn,
+                "SAME-1",
+                kind="question",
+                prompt="Attached question",
+                fields=[
+                    {
+                        "id": "reply",
+                        "label": "Reply",
+                        "type": "text",
+                        "required": True,
+                        "options": [],
+                    }
+                ],
+            )
+            conn.commit()
+            conn.execute("UPDATE work_item_requests SET expires_at='2020-01-01T00:00:00.000000Z'")
+            conn.commit()
+            conn.close()
+        self.bind("attached")
+        before = hashlib.sha256(self.attached.read_bytes()).hexdigest()
+        identity = created["request_id"]
+        query = urlencode(
+            {
+                "scope_kind": "project",
+                "project_id": "example-project",
+                **self.refs["attached"],
+                "id": identity,
+            }
+        )
+        status, detail = self.request("/api/modules/planning/request?" + query)
+        self.assertEqual(200, status, detail)
+        self.assertEqual("deadline", detail["request"]["expired_reason"])
+        self.assertFalse(detail["target"]["writable"])
+        status, refused = self.request(
+            "/api/modules/planning/request/answer",
+            {
+                "project_id": "example-project",
+                **self.refs["attached"],
+                "id": identity,
+                "expected_revision": 0,
+                "answers": {"reply": "No write"},
+            },
+        )
+        self.assertEqual(409, status, refused)
+        self.assertEqual("attached_store_readonly", refused["error"]["message"])
+        self.assertEqual(before, hashlib.sha256(self.attached.read_bytes()).hexdigest())
+        conn = store.connect()
+        self.addCleanup(conn.close)
+        self.assertEqual(0, conn.execute("SELECT COUNT(*) FROM work_item_requests").fetchone()[0])
+
+    def test_global_search_reports_unavailable_and_extra_matches_honestly(self) -> None:
+        conn = store.connect()
+        service.create_work_item(conn, space="SAME", title="second only")
+        service.report_work_item(conn, "SAME-1", {"done": "historical needle", "next": "retain"})
+        conn.commit()
+        conn.close()
+        status, bounded = self.request("/api/modules/planning/search?q=only&limit=1")
+        self.assertEqual(200, status, bounded)
+        self.assertTrue(bounded["has_more"])
+        status, history = self.request("/api/modules/planning/search?q=needle")
+        self.assertEqual(200, status, history)
+        self.assertEqual("SAME-1", history["items"][0]["item"]["reference"])
+        self.bind("attached")
+        self.attached.rename(self.root / "unavailable.sqlite3")
+        status, missing = self.request("/api/modules/planning/search?q=only")
+        self.assertEqual(200, status, missing)
+        self.assertEqual([], missing["items"])
+        self.assertEqual("unavailable", missing["coverage"][0]["status"])
+        self.assertNotIn(str(self.root), json.dumps(missing))
+
+    def test_global_new_reads_refuse_malformed_queries_and_report_disabled_sources(self) -> None:
+        for path in (
+            "/api/modules/planning/search?q=only&q=other",
+            "/api/modules/planning/search?q=only&limit=101",
+            "/api/modules/planning/search?q=only&project=guessed",
+            "/api/modules/planning/requests?scope_kind=global&extra=bad",
+            "/api/modules/planning/requests?scope_kind=global&limit=0",
+        ):
+            with self.subTest(path=path):
+                status, answer = self.request(path)
+                self.assertEqual(400, status, answer)
+        conn = store.connect()
+        conn.execute("UPDATE platform_modules SET state='disabled' WHERE module_id='planning'")
+        conn.commit()
+        conn.close()
+        for path in (
+            "/api/modules/planning/search?q=only",
+            "/api/modules/planning/requests?scope_kind=global&status=pending",
+        ):
+            with self.subTest(path=path):
+                status, answer = self.request(path)
+                self.assertEqual(200, status, answer)
+                self.assertEqual([], answer["items"])
+                self.assertEqual("unavailable", answer["coverage"][0]["status"])
+
+    def test_old_attached_request_capability_is_explicitly_unavailable(self) -> None:
+        conn = sqlite3.connect(self.attached)
+        conn.execute("DROP TABLE work_item_requests")
+        conn.commit()
+        conn.close()
+        self.bind("attached")
+        before = hashlib.sha256(self.attached.read_bytes()).hexdigest()
+        status, answer = self.request(
+            "/api/modules/planning/requests?scope_kind=global&status=pending"
+        )
+        self.assertEqual(200, status, answer)
+        self.assertEqual([], answer["items"])
+        self.assertEqual("requests_unavailable", answer["coverage"][0]["reason"])
+        self.assertEqual(before, hashlib.sha256(self.attached.read_bytes()).hexdigest())
+
+    def test_request_uuid_collision_and_other_space_never_escape_exact_target(self) -> None:
+        conn = store.connect()
+        first = requests.create(
+            conn,
+            "SAME-1",
+            kind="question",
+            prompt="Primary question",
+            fields=[
+                {"id": "reply", "label": "Reply", "type": "text", "required": True, "options": []}
+            ],
+        )
+        service.create_planning_space(conn, project_id="other", name="Other space", key="ELSE")
+        service.create_work_item(conn, space="ELSE", title="Other item")
+        other = requests.create(
+            conn,
+            "ELSE-1",
+            kind="question",
+            prompt="Outside bound space",
+            fields=[
+                {"id": "reply", "label": "Reply", "type": "text", "required": True, "options": []}
+            ],
+        )
+        conn.commit()
+        conn.close()
+        query = urlencode(
+            {
+                "scope_kind": "project",
+                "project_id": "example-project",
+                **self.refs["primary"],
+                "id": other["request_id"],
+            }
+        )
+        self.assertEqual(409, self.request("/api/modules/planning/request?" + query)[0])
+        status, refusal = self.request(
+            "/api/modules/planning/request/decline",
+            {
+                "project_id": "example-project",
+                **self.refs["primary"],
+                "id": other["request_id"],
+                "expected_revision": 0,
+            },
+        )
+        self.assertEqual(409, status, refusal)
+        with mock.patch.dict(os.environ, {"VALKAMA_DB": str(self.attached)}):
+            conn = store.connect()
+            attached = requests.create(
+                conn,
+                "SAME-1",
+                kind="question",
+                prompt="Attached UUID collision",
+                fields=[
+                    {
+                        "id": "reply",
+                        "label": "Reply",
+                        "type": "text",
+                        "required": True,
+                        "options": [],
+                    }
+                ],
+            )
+            conn.execute(
+                "UPDATE work_item_requests SET request_id=? WHERE request_id=?",
+                (first["request_id"], attached["request_id"]),
+            )
+            conn.commit()
+            conn.close()
+        self.bind("attached")
+        query = urlencode(
+            {
+                "scope_kind": "project",
+                "project_id": "example-project",
+                **self.refs["attached"],
+                "id": first["request_id"],
+            }
+        )
+        status, detail = self.request("/api/modules/planning/request?" + query)
+        self.assertEqual(200, status, detail)
+        self.assertEqual("Attached UUID collision", detail["request"]["prompt"])
+        status, refusal = self.request(
+            "/api/modules/planning/request/decline",
+            {
+                "project_id": "example-project",
+                **self.refs["attached"],
+                "id": first["request_id"],
+                "expected_revision": 0,
+            },
+        )
+        self.assertEqual(409, status, refusal)
+        conn = store.connect()
+        self.addCleanup(conn.close)
+        self.assertEqual("pending", requests.get(conn, first["request_id"])["status"])
+        self.assertEqual("pending", requests.get(conn, other["request_id"])["status"])
 
     def model_path(self, source: str) -> str:
         return "/api/planning?" + urlencode({"project": "example-project", **self.refs[source]})

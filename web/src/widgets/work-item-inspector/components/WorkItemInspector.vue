@@ -32,8 +32,10 @@ import {
   transitionWorkItem,
 } from '@/shared/api/planningApi.ts'
 import type { PlanningWorkflow } from '@/shared/api/planningModel.ts'
+import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import type { PlatformRegistryReady } from '@/shared/api/platformApiTypes.ts'
 import type { WorkItemRef } from '@/shared/api/platformPlanningRefs.ts'
+import { planningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import type { PlatformRelation } from '@/shared/api/platformRelations.ts'
 import type { OperatingScope } from '@/shared/api/platformRoute.ts'
 import { failureMessage, typedFailure } from '@/shared/api/typedFailure.ts'
@@ -208,6 +210,17 @@ const nextStates = computed<ChoiceOption[]>(() => {
 })
 
 const title = computed(() => item.value?.title || props.reference)
+const target = computed<PlanningTarget | undefined>(() => {
+  const space = planningSpaceRef(props.resourceRef)
+  return props.projectId && space
+    ? {
+        project_id: props.projectId,
+        space_ref: space,
+        reference: props.reference,
+        writable: props.writable,
+      }
+    : undefined
+})
 const holder = computed(() => (item.value?.claim_ref ? actorName(item.value.claim_ref) : ''))
 const holderLabel = computed(() =>
   t(item.value?.state.is_terminal ? 'workItem.previousHolder' : 'workItem.holder', {
@@ -381,6 +394,7 @@ async function discussionChanged() {
               v-show="section === 'overview'"
               :item="payload"
               :resource-ref="resourceRef"
+              :target="target"
               :writable="writable && !busy"
               @changed="discussionChanged"
               @refresh="load"
@@ -410,6 +424,7 @@ async function discussionChanged() {
               :busy="busy"
               :error="executionError"
               :executions="executions"
+              :identity="`${projectId}:${resourceRef.resource_id}:${reference}`"
               :loading="executionsLoading"
               :writable="writable"
               @launch="openLaunch"

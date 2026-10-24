@@ -39,6 +39,7 @@ export const LINE_BUDGET = new Map([
   // edges (failure panel, degraded banner).
   ['shared/ui/VTextInput.vue', 1],
   ['shared/ui/ChoiceSelect.vue', 2],
+  ['shared/ui/CommandList.vue', 1], // Search field edge; results use tone and a focus outline.
   ['shared/ui/CountBadge.vue', 1],
   ['shared/ui/DialogFrame.vue', 2],
   ['shared/ui/DrawerFrame.vue', 1],
@@ -53,6 +54,7 @@ export const LINE_BUDGET = new Map([
   // GraphView keeps the pan viewport frame, the floating flow controls and a
   // legend glyph whose border is the drawing itself.
   ['features/improvement-profile/components/ImprovementProfileDialog.vue', 2],
+  ['features/input-requests/components/RequestCard.vue', 1], // Divider between separate requests.
   // The portfolio's project card keeps its header divider; the view around it
   // draws nothing now that the portfolio is its own component.
   ['pages/analytics/components/AnalyticsPortfolio.vue', 1],
@@ -88,9 +90,9 @@ export const LINE_BUDGET = new Map([
   // Kernel relations panel is a section of its own with a status edge; and the
   // list's sticky header stands on the rule that stops it melting into row one.
   ['widgets/work-item-inspector/components/InspectorHead.vue', 1],
-  ['widgets/work-item-inspector/components/InspectorDiscussion.vue', 1],
+  ['widgets/work-item-inspector/components/InspectorDiscussion.vue', 2], // Composer divider and frozen step quote.
   ['widgets/work-item-inspector/components/InspectorSummary.vue', 1],
-  ['widgets/work-item-inspector/components/InspectorOverview.vue', 1],
+  ['widgets/work-item-inspector/components/InspectorOverview.css', 1],
   ['widgets/work-item-inspector/components/InspectorReserved.vue', 1],
   ['widgets/work-item-inspector/components/InspectorExecution.vue', 1],
   ['widgets/work-item-inspector/components/KernelRelationsPanel.vue', 1],

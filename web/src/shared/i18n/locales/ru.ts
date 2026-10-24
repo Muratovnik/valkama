@@ -1,10 +1,18 @@
 /* The locale is intentionally a parity-checked catalogue, not executable logic. */
 
+import { activityMessages } from '@/shared/i18n/activityMessages.ts'
+import { checklistCommentMessages } from '@/shared/i18n/checklistCommentMessages.ts'
+import { globalFinderMessages } from '@/shared/i18n/globalFinderMessages.ts'
+import { inputRequestMessages } from '@/shared/i18n/inputRequestMessages.ts'
 import { memoryProviderMessages } from '@/shared/i18n/memoryProviderMessages.ts'
 /* Русский каталог; tests/i18n.test.ts проверяет совпадение ключей. */
 import { platformIntegrationMessages } from '@/shared/i18n/platformIntegrationMessages.ts'
 
 export const ru = {
+  history: activityMessages.ru.history,
+  checklistComment: checklistCommentMessages.ru.checklistComment,
+  finder: globalFinderMessages.ru.finder,
+  requests: inputRequestMessages.ru.requests,
   app: {
     title: 'Valkama',
   },
@@ -920,6 +928,10 @@ export const ru = {
     url: 'URL',
   },
   activity: {
+    request_created: 'Запрошен ответ или решение',
+    request_answered: 'Ответ записан',
+    request_declined: 'Запрос отклонён',
+    request_expired: 'Запрос закрыт',
     created: 'Работа создана',
     transitioned: 'Состояние изменено',
     claimed: 'Работа взята',

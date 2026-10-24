@@ -5,6 +5,11 @@ import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { installBackend } from './backend.ts'
 import { now, projectScope, workItem, workItemRef } from './planningFixtures.ts'
 
+function checklistQuote(item: WorkItem, id: unknown) {
+  const step = typeof id === 'string' ? item.checklist.find((entry) => entry.id === id) : undefined
+  return { checklist_item_id: step?.id ?? null, checklist_item_text: step?.text ?? null }
+}
+
 export async function installDiscussionBackend(page: Page) {
   await installBackend(page)
   const item: WorkItem = structuredClone(workItem)
@@ -55,6 +60,7 @@ export async function installDiscussionBackend(page: Page) {
         body: report ? '' : String(body.body),
         author: 'user',
         at: now,
+        ...checklistQuote(item, report ? undefined : body.checklist_item_id),
       }
       item.comments.push(entry)
       if (body.make_current === true) {

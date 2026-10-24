@@ -350,6 +350,86 @@ class DispatchTests(McpSurfaceTestCase):
         self.assertIn("create_work_item", names)
         self.assertEqual(len(mcp_surface.catalogue()), len(names))
 
+    def test_human_request_tools_work_in_both_protocol_eras(self) -> None:
+        item = planning_service.create_work_item(self.conn, space=SPACE_KEY, title="Need an answer")
+        self.conn.commit()
+        for legacy in (False, True):
+            with self.subTest(legacy=legacy):
+
+                def wire(method: str, body: dict, legacy: bool = legacy) -> dict:
+                    message = {
+                        "jsonrpc": "2.0",
+                        "id": 2,
+                        "method": method,
+                        "params": body if legacy else params(**body),
+                    }
+                    messages = (
+                        [
+                            {
+                                "jsonrpc": "2.0",
+                                "id": 1,
+                                "method": "initialize",
+                                "params": {"protocolVersion": "2025-11-25"},
+                            }
+                        ]
+                        if legacy
+                        else []
+                    )
+                    return self.converse(*messages, message)[-1]["result"]
+
+                catalogue = wire("tools/list", {})
+                names = {tool["name"] for tool in catalogue["tools"]}
+                self.assertTrue(
+                    {
+                        "create_work_item_request",
+                        "get_work_item_request",
+                        "list_work_item_requests",
+                        "answer_work_item_request",
+                        "decline_work_item_request",
+                        "expire_work_item_request",
+                    }
+                    <= names
+                )
+                created = wire(
+                    "tools/call",
+                    {
+                        "name": "create_work_item_request",
+                        "arguments": {
+                            "id": item["reference"],
+                            "kind": "question",
+                            "prompt": "Proceed?",
+                            "fields": [
+                                {
+                                    "id": "proceed",
+                                    "label": "Proceed",
+                                    "type": "boolean",
+                                    "required": True,
+                                    "options": [],
+                                }
+                            ],
+                        },
+                    },
+                )
+                self.assertFalse(created["isError"], created)
+                identity = self.payload(created)["request_id"]
+                answered = wire(
+                    "tools/call",
+                    {
+                        "name": "answer_work_item_request",
+                        "arguments": {
+                            "id": identity,
+                            "expected_revision": 0,
+                            "answers": {"proceed": False},
+                        },
+                    },
+                )
+                self.assertFalse(answered["isError"], answered)
+                answer = self.payload(answered)
+                self.assertEqual(
+                    ("answered", 1, {"proceed": False}),
+                    (answer["status"], answer["revision"], answer["answers"]),
+                )
+
     def test_a_tool_runs_and_returns_its_result_as_text(self) -> None:
         result = self.call("create_work_item", {"title": "through the wire", "space": SPACE_KEY})
         self.assertFalse(result["isError"])

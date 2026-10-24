@@ -48,6 +48,8 @@ class PlanningApiTests(unittest.TestCase):
                 "/api/planning",
                 "/api/planning/activity",
                 "/api/planning/graph",
+                "/api/planning/request",
+                "/api/planning/requests",
                 "/api/planning/search",
                 "/api/planning/spaces",
                 "/api/planning/work-item",

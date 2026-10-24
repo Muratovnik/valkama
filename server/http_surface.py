@@ -34,6 +34,7 @@ from .planning import model as planning_model
 from .planning import service as planning_service
 from .planning import views as planning_views
 from .platform import core as platform_core
+from .platform import planning_interactions
 from .platform.contracts import ContractError
 from .projects import scopes
 from .refs import resolve_ref
@@ -105,6 +106,7 @@ PLANNING_WORK_ITEM_PATH = "/api/modules/planning/work-item"
 #: dispatch row that answers them.
 _PLATFORM_WRITE_PATHS = frozenset(
     {
+        *planning_interactions.WRITE_PATHS,
         "/api/modules/state",
         "/api/platform/relations",
         "/api/platform/actions/invoke",
@@ -144,6 +146,8 @@ _HTTP_ROUTE_MODULES = {
     # the relation read, so the route is the Kernel's and the module is
     # Planning's.
     ("GET", PLANNING_WORK_ITEM_PATH): "planning",
+    **{("GET", path): "planning" for path in planning_interactions.READ_PATHS},
+    **{("POST", path): "planning" for path in planning_interactions.WRITE_PATHS},
 }
 _SSE_VIEW_MODULES = {
     "planning": "planning",
@@ -403,6 +407,8 @@ def _execution_lifecycle_write(call: _Call) -> _Answer | None:
 
 
 def _platform_write_error(error: Exception) -> _Answer:
+    if isinstance(error, (planning_model.PlanningError, planning_api.PlanningHttpError)):
+        return planning_api.error_response(error)
     response = platform_core.error_response(error)
     # A Kernel 500 says only that; whatever produced it stays in the process.
     return _generic_failure(500) if response[0] == 500 else response
@@ -461,10 +467,12 @@ _GET_BOUNDARIES: tuple[_Boundary, ...] = (
         commit=_Commit.READ_ONLY,
     ),
     _Boundary(
-        exact=frozenset({"/api/modules", PLANNING_WORK_ITEM_PATH}),
+        exact=frozenset(
+            {"/api/modules", PLANNING_WORK_ITEM_PATH, *planning_interactions.READ_PATHS}
+        ),
         prefix="/api/platform/",
         handler=_platform_read,
-        errors=platform_core.error_response,
+        errors=_platform_write_error,
         commit=_Commit.READ_ONLY,
         missing=_PLAIN_NOT_FOUND,
     ),
@@ -489,7 +497,7 @@ _POST_BOUNDARIES: tuple[_Boundary, ...] = (
         handler=_platform_write,
         errors=_platform_write_error,
         commit=_Commit.DOMAIN,
-        notify=_Notify(frozenset({"/api/platform/relations"})),
+        notify=_Notify(frozenset({"/api/platform/relations", *planning_interactions.WRITE_PATHS})),
     ),
     _Boundary(
         exact=frozenset({"/api/ingest"}),
@@ -633,6 +641,17 @@ class Handler(BaseHTTPRequestHandler):
         try:
             module_id = _http_module_owner(method, path, parameters)
             if module_id is None:
+                return True
+            # Aggregate reads report disabled sources in their coverage, and
+            # check the module before reading each mapped resource.
+            if method == "GET" and (
+                path == "/api/modules/planning/search"
+                or (
+                    path == "/api/modules/planning/requests"
+                    and parameters is not None
+                    and parameters.get("scope_kind") == ["global"]
+                )
+            ):
                 return True
             conn = connect()
             try:

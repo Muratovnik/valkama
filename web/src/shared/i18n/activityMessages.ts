@@ -1,0 +1,49 @@
+export const activityMessages = {
+  en: {
+    history: {
+      scope: 'Searches only the system events and attached evidence loaded for this task.',
+      executionScope:
+        'Searches only the execution records loaded for this task, including results, evidence and session context.',
+      search: 'Search loaded history',
+      category: 'Record category',
+      all: 'All records',
+      events: 'System events',
+      evidence: 'Attached evidence',
+      actor: 'Author',
+      allActors: 'All authors',
+      status: 'Execution status',
+      allStatuses: 'All statuses',
+      client: 'Client',
+      allClients: 'All clients',
+      noMatches: 'No matching records',
+      reset: 'Clear filters',
+      unknownDate: 'Unknown date',
+      unknownEvent: 'System event: {action}',
+      detail: 'Recorded details',
+    },
+  },
+  ru: {
+    history: {
+      scope:
+        'Поиск только по загруженным системным событиям и прикреплённым свидетельствам этой задачи.',
+      executionScope:
+        'Поиск только по загруженным записям исполнений этой задачи, включая результаты, свидетельства и контекст сессий.',
+      search: 'Поиск в загруженной истории',
+      category: 'Категория записи',
+      all: 'Все записи',
+      events: 'Системные события',
+      evidence: 'Прикреплённые свидетельства',
+      actor: 'Автор',
+      allActors: 'Все авторы',
+      status: 'Статус исполнения',
+      allStatuses: 'Все статусы',
+      client: 'Клиент',
+      allClients: 'Все клиенты',
+      noMatches: 'Нет подходящих записей',
+      reset: 'Сбросить фильтры',
+      unknownDate: 'Дата неизвестна',
+      unknownEvent: 'Системное событие: {action}',
+      detail: 'Записанные подробности',
+    },
+  },
+}

@@ -12,14 +12,22 @@
  * here derives a rate or a trend, because Analytics owns that and a second
  * answer computed in a drawer is the kind that disagrees.
  */
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+
+import {
+  groupHistory,
+  matchesRecorded,
+} from '@/widgets/work-item-inspector/utils/historyRecords.ts'
 
 import type { Execution } from '@/shared/api/executionModel.ts'
 import { actorName } from '@/shared/lib/actor.ts'
+import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
+import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import VButton from '@/shared/ui/VButton.vue'
+import VTextInput from '@/shared/ui/VTextInput.vue'
 
 const props = defineProps<{
   busy: boolean
@@ -27,6 +35,7 @@ const props = defineProps<{
   executions: readonly Execution[]
   loading: boolean
   writable: boolean
+  identity?: string
 }>()
 
 const emit = defineEmits<{
@@ -35,7 +44,48 @@ const emit = defineEmits<{
   stop: [reference: string]
 }>()
 
-const { t, d } = useI18n()
+const { t, d, locale } = useI18n()
+const query = ref('')
+const status = ref('')
+const client = ref('')
+function reset() {
+  query.value = ''
+  status.value = ''
+  client.value = ''
+}
+watch(() => props.identity ?? props.executions[0]?.work_item_id, reset)
+const statuses = computed(() => [
+  { value: '', label: t('history.allStatuses') },
+  ...[...new Set(props.executions.map((attempt) => attempt.status))].map((value) => ({
+    value,
+    label: t(`execution.status.${value}`),
+  })),
+])
+const clients = computed(() => [
+  { value: '', label: t('history.allClients') },
+  ...[...new Set(props.executions.map((attempt) => attempt.client_family).filter(Boolean))].map(
+    (value) => ({ value, label: value }),
+  ),
+])
+const groups = computed(() =>
+  groupHistory(
+    props.executions.filter(
+      (attempt) =>
+        (!status.value || attempt.status === status.value) &&
+        (!client.value || attempt.client_family === client.value) &&
+        matchesRecorded(attempt, query.value),
+    ),
+    (attempt) => attempt.started_at,
+  ),
+)
+function groupLabel(date: Date | null) {
+  return date
+    ? new Intl.DateTimeFormat(locale.value, { dateStyle: 'long' }).format(date)
+    : t('history.unknownDate')
+}
+function commits(attempt: Execution) {
+  return attempt.final_artifact?.commits.join(' · ') ?? ''
+}
 
 /** A live attempt is the one a stop applies to; there is at most one. */
 const live = computed(() => props.executions.find((attempt) => attempt.presence !== 'terminal'))
@@ -81,6 +131,7 @@ function evidence(attempt: Execution): string {
       >{{ t('execution.heading') }}</SectionHeading
     >
     <p class="quiet">{{ t('execution.intro') }}</p>
+    <p class="quiet">{{ t('history.executionScope') }}</p>
 
     <div
       v-if="writable"
@@ -123,87 +174,169 @@ function evidence(attempt: Execution): string {
       {{ t('execution.none') }}
     </p>
 
-    <ol
-      v-else
-      class="attempt-list"
-    >
-      <li
-        v-for="attempt in executions"
-        :key="attempt.execution_id"
-        class="attempt"
+    <template v-else>
+      <div class="history-filters">
+        <VTextInput
+          v-model="query"
+          :label="t('history.search')"
+        />
+        <ChoiceSelect
+          v-model="status"
+          :label="t('history.status')"
+          :options="statuses"
+        />
+        <ChoiceSelect
+          v-model="client"
+          :label="t('history.client')"
+          :options="clients"
+        />
+      </div>
+      <DataEmptyState
+        v-if="!groups.length"
+        :title="t('history.noMatches')"
+        compact
       >
-        <div class="attempt-head">
-          <SemanticState
-            dimension="execution"
-            :state="attempt.status"
-            :label="t(`execution.status.${attempt.status}`)"
-            compact
-          />
-          <span class="attempt-shape">{{ shape(attempt) }}</span>
-          <span class="attempt-when">{{ when(attempt.started_at) }}</span>
-        </div>
-
-        <p
-          v-if="attempt.result?.delivery"
-          class="attempt-delivery"
+        <template #action
+          ><VButton @click="reset">{{ t('history.reset') }}</VButton></template
         >
-          {{ attempt.result.delivery }}
-        </p>
-        <p
-          v-if="attempt.result?.unresolved"
-          class="attempt-unresolved"
+      </DataEmptyState>
+      <section
+        v-for="group in groups"
+        :key="group.key"
+        class="history-group"
+      >
+        <SectionHeading
+          as="h4"
+          level="panel"
+          >{{ groupLabel(group.date) }}</SectionHeading
         >
-          {{ t('execution.unresolved', { detail: attempt.result.unresolved }) }}
-        </p>
-
-        <dl class="attempt-facts">
-          <div class="attempt-fact">
-            <dt class="fact-name">{{ t('execution.changed') }}</dt>
-            <dd class="fact-value">{{ evidence(attempt) }}</dd>
-          </div>
-          <div
-            v-if="attempt.exit_code !== null"
-            class="attempt-fact"
-          >
-            <dt class="fact-name">{{ t('execution.exitCode') }}</dt>
-            <dd class="fact-value">{{ attempt.exit_code }}</dd>
-          </div>
-          <div
-            v-if="attempt.result && !attempt.result.structured"
-            class="attempt-fact"
-          >
-            <dt class="fact-name">{{ t('execution.structured') }}</dt>
-            <dd class="fact-value">{{ t('execution.unstructured') }}</dd>
-          </div>
-        </dl>
-
-        <ul
-          v-if="attempt.sessions.length"
-          class="attempt-sessions"
-        >
+        <ol class="attempt-list">
           <li
-            v-for="entry in attempt.sessions"
-            :key="entry.session_id"
+            v-for="attempt in group.records"
+            :key="attempt.execution_id"
+            class="attempt"
           >
-            <button
-              class="attempt-session"
-              type="button"
-              :title="entry.session_id"
-              @click="emit('session', entry.session_id, entry.client)"
+            <div class="attempt-head">
+              <SemanticState
+                dimension="execution"
+                :state="attempt.status"
+                :label="t(`execution.status.${attempt.status}`)"
+                compact
+              />
+              <span class="attempt-shape">{{ shape(attempt) }}</span>
+              <span class="attempt-when">{{ when(attempt.started_at) }}</span>
+            </div>
+
+            <p
+              v-if="attempt.result?.delivery"
+              class="attempt-delivery"
             >
-              {{ t(`execution.relation.${entry.relation}`) }} · {{ actorName(entry.client) }}
-            </button>
+              {{ attempt.result.delivery }}
+            </p>
+            <p
+              v-if="attempt.result?.unresolved"
+              class="attempt-unresolved"
+            >
+              {{ t('execution.unresolved', { detail: attempt.result.unresolved }) }}
+            </p>
+
+            <dl class="attempt-facts">
+              <div class="attempt-fact">
+                <dt class="fact-name">{{ t('execution.changed') }}</dt>
+                <dd class="fact-value">{{ evidence(attempt) }}</dd>
+              </div>
+              <div
+                v-if="attempt.exit_code !== null"
+                class="attempt-fact"
+              >
+                <dt class="fact-name">{{ t('execution.exitCode') }}</dt>
+                <dd class="fact-value">{{ attempt.exit_code }}</dd>
+              </div>
+              <div
+                v-if="attempt.result && !attempt.result.structured"
+                class="attempt-fact"
+              >
+                <dt class="fact-name">{{ t('execution.structured') }}</dt>
+                <dd class="fact-value">{{ t('execution.unstructured') }}</dd>
+              </div>
+            </dl>
+            <details class="attempt-context">
+              <summary>{{ t('history.detail') }}</summary>
+              <p
+                v-if="attempt.result?.oracle"
+                class="attempt-delivery"
+              >
+                {{ attempt.result.oracle }}
+              </p>
+              <p class="attempt-shape">{{ attempt.execution_id }} · {{ attempt.cwd }}</p>
+              <p
+                v-if="attempt.ended_at"
+                class="attempt-when"
+              >
+                {{ when(attempt.ended_at) }}
+              </p>
+              <p
+                v-if="attempt.base_artifact?.head"
+                class="attempt-shape"
+              >
+                {{ attempt.base_artifact.head }}
+              </p>
+              <p
+                v-if="attempt.final_artifact?.commits.length"
+                class="attempt-shape"
+              >
+                {{ commits(attempt) }}
+              </p>
+              <p
+                v-for="entry in attempt.sessions"
+                :key="entry.session_id"
+                class="attempt-shape"
+              >
+                {{ entry.session_id }} · {{ entry.status }} · {{ entry.attention }}
+              </p>
+            </details>
+
+            <ul
+              v-if="attempt.sessions.length"
+              class="attempt-sessions"
+            >
+              <li
+                v-for="entry in attempt.sessions"
+                :key="entry.session_id"
+              >
+                <button
+                  class="attempt-session"
+                  type="button"
+                  :title="entry.session_id"
+                  @click="emit('session', entry.session_id, entry.client)"
+                >
+                  {{ t(`execution.relation.${entry.relation}`) }} · {{ actorName(entry.client) }}
+                </button>
+              </li>
+            </ul>
           </li>
-        </ul>
-      </li>
-    </ol>
+        </ol>
+      </section>
+    </template>
   </section>
 </template>
 
 <style scoped>
-.executions {
+.executions,
+.history-group {
   display: grid;
   gap: var(--space-heading-content);
+}
+
+.history-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: var(--space-3);
+}
+
+.attempt-context {
+  color: var(--color-text-muted);
+  font: var(--font-detail);
 }
 
 .quiet {

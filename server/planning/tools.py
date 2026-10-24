@@ -372,7 +372,7 @@ TOOLS = [
         "Comment on a work item",
         "A note on the record, for anything the fields have no place for.",
         WRITES,
-        {"id": _REFERENCE, "body": _STR, "author": _AUTHOR},
+        {"id": _REFERENCE, "body": _STR, "author": _AUTHOR, "checklist_item_id": _STR},
         ["id", "body"],
     ),
     _tool(
@@ -384,6 +384,98 @@ TOOLS = [
         ["id"],
     ),
 ]
+
+_REQUEST_FIELD = {
+    "type": "object",
+    "properties": {
+        "id": _STR,
+        "label": _STR,
+        "type": {"type": "string", "enum": ["text", "choice", "multi_choice", "boolean"]},
+        "required": _BOOL,
+        "options": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+                "type": "object",
+                "properties": {"id": _STR, "label": _STR},
+                "required": ["id", "label"],
+            },
+        },
+    },
+    "required": ["id", "label", "type", "required", "options"],
+}
+TOOLS.extend(
+    [
+        _tool(
+            "create_work_item_request",
+            "Ask for a human answer",
+            "Create a typed question or decision on an item. Does not change workflow or execution lifecycle.",
+            WRITES,
+            {
+                "id": _REFERENCE,
+                "kind": {"type": "string", "enum": ["question", "decision"]},
+                "prompt": _STR,
+                "fields": {"type": "array", "minItems": 1, "maxItems": 12, "items": _REQUEST_FIELD},
+                "author": _AUTHOR,
+                "execution_id": _STR,
+                "session_id": _STR,
+                "expires_at": _STR,
+            },
+            ["id", "kind", "prompt", "fields"],
+        ),
+        _tool(
+            "get_work_item_request",
+            "Read a human request",
+            "Read an exact request including effective expiry.",
+            READ_ONLY,
+            {"id": _STR},
+            ["id"],
+        ),
+        _tool(
+            "list_work_item_requests",
+            "List human requests",
+            "List requests in the primary store, optionally narrowed to a space and effective status.",
+            READ_ONLY,
+            {
+                "space": _SPACE,
+                "status": {
+                    "type": "string",
+                    "enum": ["pending", "answered", "declined", "expired"],
+                },
+                "limit": _INT,
+            },
+        ),
+        _tool(
+            "answer_work_item_request",
+            "Answer a human request",
+            "Answer once using the request revision. Does not resume an execution.",
+            WRITES,
+            {
+                "id": _STR,
+                "answers": {"type": "object"},
+                "expected_revision": _EXPECTED_REVISION,
+                "author": _AUTHOR,
+            },
+            ["id", "answers", "expected_revision"],
+        ),
+        _tool(
+            "decline_work_item_request",
+            "Decline a human request",
+            "Decline a pending request using its revision.",
+            WRITES,
+            {"id": _STR, "expected_revision": _EXPECTED_REVISION, "author": _AUTHOR},
+            ["id", "expected_revision"],
+        ),
+        _tool(
+            "expire_work_item_request",
+            "Withdraw a human request",
+            "Explicitly withdraw a pending request, retaining its record.",
+            WRITES,
+            {"id": _STR, "expected_revision": _EXPECTED_REVISION, "author": _AUTHOR},
+            ["id", "expected_revision"],
+        ),
+    ]
+)
 
 TOOL_NAMES = frozenset(tool["name"] for tool in TOOLS)
 
@@ -501,4 +593,10 @@ OPS: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], object]] = {
         "/api/planning/work-item/summary/select", acknowledgements.summarized
     ),
     "delete_work_item": _post("/api/planning/work-item/delete"),
+    "create_work_item_request": _post("/api/planning/work-item/request"),
+    "get_work_item_request": _get("/api/planning/request", "id", unwrap="request"),
+    "list_work_item_requests": _get("/api/planning/requests", "space", "status", "limit"),
+    "answer_work_item_request": _post("/api/planning/request/answer"),
+    "decline_work_item_request": _post("/api/planning/request/decline"),
+    "expire_work_item_request": _post("/api/planning/request/expire"),
 }

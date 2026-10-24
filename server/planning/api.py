@@ -18,7 +18,7 @@ import sqlite3
 from collections.abc import Callable, Mapping
 
 from .. import query_params
-from . import migration, model, service, views
+from . import migration, model, requests, service, views
 
 PLANNING_API_INTERFACE = f"{model.PLANNING_INTERFACE}-api"
 
@@ -214,6 +214,25 @@ def _search(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> di
     }
 
 
+def _requests(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
+    return {
+        "interface_version": "valkama-planning-requests",
+        "requests": requests.list_requests(
+            conn,
+            space=_first(parameters, "space"),
+            status=_first(parameters, "status"),
+            limit=_int(_first(parameters, "limit"), "limit", 100),
+        ),
+    }
+
+
+def _request(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
+    return {
+        "interface_version": "valkama-planning-requests",
+        "request": requests.get(conn, _required(parameters, "id")),
+    }
+
+
 _READS: dict[str, Callable[[sqlite3.Connection, Mapping[str, list[str]]], dict]] = {
     "/api/planning": _read_model,
     "/api/planning/spaces": _spaces,
@@ -225,6 +244,8 @@ _READS: dict[str, Callable[[sqlite3.Connection, Mapping[str, list[str]]], dict]]
     # on exact paths and a segment would need a second matching rule.
     "/api/planning/work-item": _work_item,
     "/api/planning/search": _search,
+    "/api/planning/requests": _requests,
+    "/api/planning/request": _request,
 }
 
 
@@ -371,7 +392,68 @@ def _summary(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
 
 def _comment(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     return service.comment_work_item(
-        conn, _text(payload, "id"), _text(payload, "body"), author=_author(payload)
+        conn,
+        _text(payload, "id"),
+        _text(payload, "body"),
+        author=_author(payload),
+        checklist_item_id=_optional_text(payload, "checklist_item_id"),
+    )
+
+
+def _request_fields(payload: Mapping[str, object], allowed: set[str]) -> None:
+    if set(payload) - allowed:
+        raise PlanningHttpError(400, "invalid_request", "request has unknown fields")
+
+
+def _create_request(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
+    _request_fields(
+        payload,
+        {"id", "kind", "prompt", "fields", "author", "execution_id", "session_id", "expires_at"},
+    )
+    return requests.create(
+        conn,
+        _text(payload, "id"),
+        kind=_field(payload, "kind"),
+        prompt=_field(payload, "prompt"),
+        fields=_field(payload, "fields"),
+        author=_author(payload),
+        execution_id=_optional_text(payload, "execution_id"),
+        session_id=_optional_text(payload, "session_id"),
+        expires_at=_optional_text(payload, "expires_at"),
+    )
+
+
+def _answer_request(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
+    _request_fields(payload, {"id", "answers", "expected_revision", "author"})
+    return requests.resolve(
+        conn,
+        _text(payload, "id"),
+        status="answered",
+        expected_revision=_field(payload, "expected_revision"),
+        answers=_field(payload, "answers"),
+        author=_author(payload),
+    )
+
+
+def _decline_request(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
+    _request_fields(payload, {"id", "expected_revision", "author"})
+    return requests.resolve(
+        conn,
+        _text(payload, "id"),
+        status="declined",
+        expected_revision=_field(payload, "expected_revision"),
+        author=_author(payload),
+    )
+
+
+def _expire_request(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
+    _request_fields(payload, {"id", "expected_revision", "author"})
+    return requests.resolve(
+        conn,
+        _text(payload, "id"),
+        status="expired",
+        expected_revision=_field(payload, "expected_revision"),
+        author=_author(payload),
     )
 
 
@@ -445,6 +527,10 @@ _WRITES: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], dict]] =
     "/api/planning/work-item/report": _report,
     "/api/planning/work-item/summary/select": _select_summary,
     "/api/planning/work-item/ref": _ref,
+    "/api/planning/work-item/request": _create_request,
+    "/api/planning/request/answer": _answer_request,
+    "/api/planning/request/decline": _decline_request,
+    "/api/planning/request/expire": _expire_request,
 }
 
 READ_PATHS = tuple(sorted(_READS))

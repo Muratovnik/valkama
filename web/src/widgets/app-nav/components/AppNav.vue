@@ -21,6 +21,7 @@ import { useI18n } from 'vue-i18n'
 
 import NavConnectionButton from '@/widgets/app-nav/components/NavConnectionButton.vue'
 import NavModuleList from '@/widgets/app-nav/components/NavModuleList.vue'
+import NavWorkActions from '@/widgets/app-nav/components/NavWorkActions.vue'
 
 import type {
   ModuleId,
@@ -35,16 +36,19 @@ const props = withDefaults(
     modules: readonly ModuleManifest[]
     badges?: Partial<Record<ModuleId, number>>
     connection?: 'connecting' | 'live' | 'reconnecting'
+    pendingRequestCount?: number | null
     refreshing?: boolean
   }>(),
-  { badges: () => ({}), connection: 'connecting', refreshing: false },
+  { badges: () => ({}), connection: 'connecting', refreshing: false, pendingRequestCount: null },
 )
 
 const emit = defineEmits<{
+  find: []
   home: []
   navigate: [module: ModuleId]
   prefetch: [module: ModuleId, trigger: 'hover' | 'focus']
   refresh: []
+  requests: []
 }>()
 
 const { t } = useI18n()
@@ -93,6 +97,11 @@ function forwardPrefetch(module: ModuleId, trigger: 'hover' | 'focus') {
       class="app-nav"
       :aria-label="t('modules.label')"
     >
+      <NavWorkActions
+        :pending-count="pendingRequestCount"
+        @find="emit('find')"
+        @requests="emit('requests')"
+      />
       <NavModuleList
         v-for="entry in groupedModules"
         :key="entry.group"

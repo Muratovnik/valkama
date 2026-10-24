@@ -236,6 +236,7 @@ export async function commentWorkItem(input: {
   body: string
   id: string
   author?: string
+  checklist_item_id?: string
 }): Promise<void> {
   await write('/api/planning/work-item/comment', { author: 'user', ...input })
 }

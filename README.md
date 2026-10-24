@@ -19,6 +19,11 @@ directory, and the MCP server only exists while a client is talking to it.
   competing claim on the current Planning wire.
 - **Execution tracking on work items.** Launches carry an explicit delivery
   contract, and outcomes are typed results rather than exit codes.
+- **Task finder** with Ctrl/Cmd+K across mapped projects. Results retain their
+  exact store and space; unavailable sources and truncated results stay visible.
+- **Questions and decisions** in a shared inbox. Agents create typed requests;
+  the owner answers or declines the exact request. Expired requests stop accepting
+  answers, and sending an answer does not automatically resume an execution.
 - **A visible integration registry.** Settings distinguishes Modules, Adapters,
   Services, Connections, and Assignments, including health and ownership.
 - **Memory that points rather than copies.** Each project's knowledge is
@@ -26,7 +31,8 @@ directory, and the MCP server only exists while a client is talking to it.
   a work item is a pointer with a stored label — so it still reads when the
   source behind it cannot be reached.
 - **A live local UI** at `http://127.0.0.1:8642/`, in English or Russian, updated
-  over Server-Sent Events rather than polling.
+  over Server-Sent Events. The question inbox also refreshes every 30 seconds
+  while visible and when the window regains focus.
 - **A desktop window and tray icon** on Windows, so Valkama is an application
   rather than a browser tab and active agent work remains visible.
 
@@ -410,6 +416,8 @@ Three things make a card honest about its own progress:
   `claim_work_item_checklist_item` and complete it by id with
   `tick_work_item_checklist_item`. No invented percentages, and two agents
   splitting a work item each hold their own step.
+  `comment_work_item` accepts an optional `checklist_item_id`: the saved comment
+  keeps a quote of that step even after it is renamed or removed.
 - **Typed refs** — commit hashes, session ids, memory entry ids — attached with
   `attach_work_item_ref`, so the next agent reads pointers instead of doing
   archaeology.
@@ -417,6 +425,21 @@ Three things make a card honest about its own progress:
   completions and link changes are all recorded with an author. `get_work_item`
   returns it, so nobody has to guess who did what. Reordering within a lane is
   deliberately *not* history.
+
+The inspector keeps editable descriptions and a shared discussion. An ordinary
+comment can target a checklist step; a work report uses “What was done / Why /
+What comes next” and can be selected as the task outcome. System and execution
+history have filters, date groups and expandable details. Their search covers
+the records loaded for that task.
+
+Use `create_work_item_request` for a question or decision that needs an explicit
+answer. Each request has 1–12 named fields: text, one choice, multiple choices or
+a boolean. Optional execution and session bindings must belong to the task.
+`get_work_item_request` and `list_work_item_requests` expose the current status;
+`answer_work_item_request`, `decline_work_item_request` and
+`expire_work_item_request` require that request's `expected_revision`. A terminal
+task, ended execution or elapsed deadline closes the pending request. Answers
+are stored separately from comments and do not change the task's workflow.
 
 Work items relate to each other the way
 [beads](https://github.com/steveyegge/beads) proved useful for agents. A

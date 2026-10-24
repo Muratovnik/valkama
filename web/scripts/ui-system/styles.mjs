@@ -7,7 +7,8 @@
 const svgOwners = new Set(['shared/ui/VIcon.vue', 'shared/ui/BrandMark.vue'])
 const overlayOwners = new Set(['shared/ui/DialogFrame.vue', 'shared/ui/ResizableInspector.vue'])
 const dialogOwners = new Set(['shared/ui/OverlayHost.vue'])
-const selectionOwners = new Set(['shared/ui/ChoiceSelect.vue'])
+// CommandList owns keyboard navigation of search results; ChoiceSelect owns form values.
+const selectionOwners = new Set(['shared/ui/ChoiceSelect.vue', 'shared/ui/CommandList.vue'])
 const segmentedOwners = new Set(['shared/ui/SegmentedControl.vue'])
 /**
  * Files allowed to author a text control.
@@ -20,7 +21,11 @@ const segmentedOwners = new Set(['shared/ui/SegmentedControl.vue'])
  * 8px. `ChoiceSelect` keeps its own because a combobox's text box is part of
  * the selection widget rather than a field in a form.
  */
-const textFieldOwners = new Set(['shared/ui/VTextInput.vue', 'shared/ui/ChoiceSelect.vue'])
+const textFieldOwners = new Set([
+  'shared/ui/VTextInput.vue',
+  'shared/ui/ChoiceSelect.vue',
+  'shared/ui/CommandList.vue',
+])
 /**
  * Files allowed to author a literal color.
  *
@@ -89,16 +94,16 @@ const SOURCE_RULES = [
     component: true,
     owners: selectionOwners,
     when: ({ source }) =>
-      /\b(?:Select|Combobox)(?:Root|Trigger|Content|Item|Portal|Viewport|Value|Input)\b/.test(
+      /\b(?:Select|Combobox|Listbox)(?:Root|Trigger|Content|Item|Portal|Viewport|Value|Input|Filter)\b/.test(
         source,
       ) && /\bfrom\s*['"]reka-ui['"]/.test(source),
-    message: 'Reka selection primitives belong to ChoiceSelect',
+    message: 'Reka selection primitives belong to ChoiceSelect or CommandList',
   },
   {
     component: true,
     owners: selectionOwners,
     when: ({ markup }) => /\brole\s*=\s*["'](?:combobox|listbox|option)["']/i.test(markup),
-    message: 'selection semantics belong to ChoiceSelect',
+    message: 'selection semantics belong to shared choice or command controls',
   },
   {
     // A row of mutually exclusive buttons is a segmented control. Four screens

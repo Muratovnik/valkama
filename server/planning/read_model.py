@@ -184,6 +184,8 @@ def present(conn: sqlite3.Connection, row: sqlite3.Row, *, full: bool = False) -
             "id": item["id"],
             "kind": "report" if item["report"] else "comment",
             "report": model.summary(item["report"], required=False),
+            "checklist_item_id": item["checklist_item_id"],
+            "checklist_item_text": item["checklist_item_text"],
             "author": item["author"],
             "body": item["body"],
             "at": item["created_at"] or None,

@@ -104,6 +104,25 @@ answers with the full item.
 Prompts and resources are deliberately not offered. Planning tools manage work;
 project context belongs elsewhere.
 
+### Questions and decisions
+
+`create_work_item_request` creates a persistent question or decision for one work
+item. `get_work_item_request` and `list_work_item_requests` are read-only tools.
+The answer, decline and expire tools take the request's own `expected_revision`;
+it is independent of the work item revision. Only one concurrent resolution can
+succeed. A closed task, ended bound execution or elapsed deadline prevents a
+late answer. Reading effective expiry does not write to an attached store.
+
+Fields have stable IDs and one of four types: `text`, `choice`, `multi_choice`
+or `boolean`. A required boolean can be answered `false`; omission is different.
+There is no implicit permission grant or automatic execution resume.
+
+The browser's mapped search and request endpoints return exact project and
+Planning-space identities. Their list envelopes include source coverage and a
+truncation flag. A request detail or mutation returns the confirmed request with
+its target; attached stores remain read-only. Existing Planning searches and
+the complete space read model keep their existing scope and limits.
+
 ### Server identity
 
 The `serverInfo` in the discovery result reports version `1.0.0+<build>`, where

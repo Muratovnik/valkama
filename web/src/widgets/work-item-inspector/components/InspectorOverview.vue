@@ -7,19 +7,24 @@ import InspectorDiscussion from '@/widgets/work-item-inspector/components/Inspec
 import InspectorSummary from '@/widgets/work-item-inspector/components/InspectorSummary.vue'
 import { checklistProgress } from '@/widgets/work-item-inspector/utils/inspectorActivity.ts'
 
+import ItemInputRequests from '@/features/input-requests/components/ItemInputRequests.vue'
+
 import type { WorkItem } from '@/shared/api/planningModel.ts'
+import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { actorName } from '@/shared/lib/actor.ts'
 import { openSourceReference, sourceFeedback } from '@/shared/lib/sourceReference.ts'
 import { statePresentation } from '@/shared/lib/uiSystem.ts'
 import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
+import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
   item: WorkItem
   resourceRef: PlanningSpaceEntityRef
   writable: boolean
+  target?: PlanningTarget
 }>()
 
 const emit = defineEmits<{
@@ -29,6 +34,10 @@ const emit = defineEmits<{
 }>()
 
 const { t, d } = useI18n()
+const discussion = ref<InstanceType<typeof InspectorDiscussion> | null>(null)
+function discussStep(stepId: string) {
+  void discussion.value?.discussStep(stepId)
+}
 
 const blockers = computed(() =>
   props.item.links.filter((link) => link.kind === 'blocks' && link.direction === 'incoming'),
@@ -224,6 +233,13 @@ function when(value: string): string {
             </span>
             <span class="step-text">{{ step.text }}</span>
           </button>
+          <VButton
+            v-if="writable"
+            class="step-discuss"
+            variant="ghost"
+            @click="discussStep(step.id)"
+            >{{ t('checklistComment.discuss') }}</VButton
+          >
           <span
             v-if="step.claimed_by && !step.done"
             class="step-holder"
@@ -245,7 +261,13 @@ function when(value: string): string {
     </section>
 
     <InspectorSummary :item="item" />
+    <ItemInputRequests
+      v-if="target"
+      :target="target"
+      @changed="emit('changed')"
+    />
     <InspectorDiscussion
+      ref="discussion"
       :item="item"
       :writable="writable"
       @changed="emit('changed')"
@@ -254,178 +276,4 @@ function when(value: string): string {
   </div>
 </template>
 
-<style scoped>
-.overview {
-  display: grid;
-  gap: var(--space-section);
-}
-
-/* Several columns of short facts, each a term over its value. A single column
-   made the drawer scroll past five one-word answers before the description. */
-.overview-section {
-  display: grid;
-  gap: var(--space-heading-content);
-}
-
-.facts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
-  gap: var(--space-3) var(--space-4);
-  margin: 0;
-}
-
-.fact {
-  display: grid;
-  gap: var(--space-label-value);
-  align-content: start;
-  min-width: 0;
-}
-
-.fact-wide {
-  grid-column: 1 / -1;
-}
-
-.fact-term {
-  color: var(--color-text-tertiary);
-  font: var(--font-detail);
-}
-
-.fact-value {
-  margin: 0;
-  color: var(--color-text);
-  font: var(--font-line);
-}
-
-.source-anchor {
-  display: flex;
-  align-items: start;
-  padding: 0;
-  border: 0;
-  color: var(--color-action-primary);
-  font: inherit;
-  text-align: start;
-  overflow-wrap: anywhere;
-  background: none;
-  cursor: pointer;
-
-  &:hover,
-  &:focus-visible {
-    text-decoration: underline;
-  }
-}
-
-.source-notice {
-  display: block;
-  margin-top: var(--space-1);
-  color: var(--color-text-muted);
-  font: var(--font-note);
-}
-
-.fact-source {
-  font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
-}
-
-.labels {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-2);
-  padding: 0;
-  margin: 0;
-  list-style: none;
-}
-
-.label {
-  padding: 0 var(--space-1);
-  color: var(--color-text-muted);
-  font: var(--font-detail);
-  background: var(--color-surface-recess);
-  border-radius: var(--radius-status);
-}
-
-.section-line {
-  display: flex;
-  gap: var(--space-2);
-  justify-content: space-between;
-  align-items: baseline;
-}
-
-.section-count {
-  color: var(--color-text-muted);
-  font: var(--font-count);
-  font-variant-numeric: tabular-nums;
-}
-
-.quiet {
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-detail);
-}
-
-.checklist {
-  display: grid;
-  gap: var(--space-2);
-  padding: 0;
-  margin: 0;
-  list-style: none;
-}
-
-/* The step is one control: the box and its text toggle together, because a
-   7px hit target beside a sentence is a target nobody can use. */
-.step {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--space-2);
-  align-items: start;
-  width: 100%;
-  padding: 0;
-  border: 0;
-  text-align: start;
-  background: none;
-  cursor: pointer;
-
-  &:disabled {
-    cursor: default;
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--color-focus-ring);
-    outline-offset: 2px;
-  }
-}
-
-.step-mark {
-  display: grid;
-  place-items: center;
-  width: 16px;
-  height: 16px;
-  border: 1px solid var(--color-rule-strong);
-  color: var(--color-surface);
-  border-radius: var(--radius-status);
-
-  .step[data-tone='success'] & {
-    background: var(--color-success);
-    border-color: var(--color-success);
-  }
-}
-
-.step-text {
-  color: var(--color-text);
-  font: var(--font-line);
-  overflow-wrap: anywhere;
-
-  .step.done & {
-    color: var(--color-text-muted);
-    text-decoration: line-through;
-  }
-}
-
-/* The holder sits under the step, indented to the step's text column, so a name
-   never competes with the step it belongs to. */
-.step-holder {
-  display: block;
-  padding-inline-start: var(--space-6);
-  color: var(--color-text-tertiary);
-  font: var(--font-detail);
-}
-</style>
+<style scoped src="./InspectorOverview.css"></style>

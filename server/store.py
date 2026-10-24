@@ -541,6 +541,11 @@ def connect() -> sqlite3.Connection:
             ):
                 pretable_backup = store_backups.snapshot(conn, _backups(), "preupgrade")
 
+            if planning_store.interactions_migration_needed(conn) and source_identity is None:
+                _, source_identity = store_backups.verified_snapshot(
+                    conn, "preinteractions", locate=_backups
+                )
+
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA foreign_keys=ON")
             conn.execute("BEGIN IMMEDIATE")
@@ -569,6 +574,7 @@ def connect() -> sqlite3.Connection:
                 migrate_planning_cutover(conn)
             _execute_script(conn, SCHEMA)
             planning_store.migrate_discussion(conn)
+            planning_store.migrate_interactions(conn)
             audit_migration = platform_migrations.schema_migration_needed(conn)
             audit_order_migration = platform_migrations.registry_audit_order_migration_needed(conn)
             authorization_migration = platform_migrations.authorization_owner_migration_needed(conn)

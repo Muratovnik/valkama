@@ -62,7 +62,15 @@ test('the recurrence gate rejects ad-hoc combobox and listbox semantics', () => 
     '<template><button role="combobox">Choose</button><div role="listbox"><button role="option">One</button></div></template>',
   )
   assert.equal(violations.length, 1)
-  assert.match(violations[0], /selection semantics belong to ChoiceSelect/)
+  assert.match(violations[0], /selection semantics belong to shared choice or command controls/)
+})
+
+test('the recurrence gate keeps command list ownership in its shared primitive', () => {
+  const source = `<script setup>import { ListboxRoot, ListboxFilter } from 'reka-ui'</script><template><ListboxRoot><ListboxFilter role="combobox" /></ListboxRoot></template>`
+  const violations = scanFixture('features/finder/NewCommand.vue', source)
+  assert.equal(violations.length, 2)
+  assert.ok(violations.some((message) => /selection primitives/.test(message)))
+  assert.deepEqual(scanFixture('shared/ui/CommandList.vue', source), [])
 })
 
 test('the recurrence gate discovers a raw svg in a new nested component', () => {

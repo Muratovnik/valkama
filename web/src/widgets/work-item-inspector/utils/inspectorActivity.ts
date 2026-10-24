@@ -1,5 +1,7 @@
 /** System events and attached evidence; human discussion has its own feed. */
 
+import { groupHistory } from '@/widgets/work-item-inspector/utils/historyRecords.ts'
+
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 
 type Ref = WorkItem['refs'][number]
@@ -12,6 +14,7 @@ export interface ActivityEntry {
   kind: 'event' | 'ref'
   /** Message key naming what happened; the entry never spells its own label. */
   titleKey: string
+  action?: string
   reference?: Ref
 }
 
@@ -29,6 +32,7 @@ export function buildActivity(item: WorkItem): ActivityEntry[] {
     at: event.at,
     author: event.author,
     titleKey: `activity.${event.action}`,
+    action: event.action,
     detail: event.detail,
   }))
   const refs = item.refs.map((reference, index): ActivityEntry => ({
@@ -40,7 +44,7 @@ export function buildActivity(item: WorkItem): ActivityEntry[] {
     detail: reference.label,
     reference,
   }))
-  return [...events, ...refs].sort((left, right) => Date.parse(right.at) - Date.parse(left.at))
+  return groupHistory([...events, ...refs], (entry) => entry.at).flatMap((group) => group.records)
 }
 
 /** Progress over the checklist, which two sections and one tile all ask for. */

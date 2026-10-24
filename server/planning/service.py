@@ -144,7 +144,7 @@ def search_work_items(
         " JOIN planning_spaces p ON p.planning_space_id = i.planning_space_id",
         clauses,
     )
-    query += " ORDER BY i.updated_at DESC LIMIT ?"
+    query += " ORDER BY i.updated_at DESC, i.work_item_id LIMIT ?"
     rows = conn.execute(query, (*parameters, max(1, min(int(limit), 200)))).fetchall()
     found = []
     for row in rows:
@@ -621,15 +621,29 @@ def attach_ref(
 
 
 def comment_work_item(
-    conn: sqlite3.Connection, reference: str, body: str, *, author: str | None = None
+    conn: sqlite3.Connection,
+    reference: str,
+    body: str,
+    *,
+    author: str | None = None,
+    checklist_item_id: str | None = None,
 ) -> dict:
+    if not conn.in_transaction:
+        conn.execute("BEGIN IMMEDIATE")
     row = read_model.item_row(conn, reference)
+    step = (
+        _step(model.checklist(row["checklist"]), checklist_item_id, conn, row)
+        if checklist_item_id is not None
+        else None
+    )
     inserted = conn.execute(
-        "INSERT INTO work_item_comments(work_item_id,author,body) VALUES(?,?,?)",
+        "INSERT INTO work_item_comments(work_item_id,author,body,checklist_item_id,checklist_item_text) VALUES(?,?,?,?,?)",
         (
             str(row["work_item_id"]),
             model.actor(author),
             model.multiline_field(body, "comment.body", limit=8000),
+            step["id"] if step else None,
+            step["text"] if step else None,
         ),
     )
     return {

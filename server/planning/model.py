@@ -62,6 +62,10 @@ EVENT_ACTIONS = (
     "summarized",
     "execution_attached",
     "overridden",
+    "request_created",
+    "request_answered",
+    "request_declined",
+    "request_expired",
 )
 _EVENT_ACTION_SET = frozenset(EVENT_ACTIONS)
 

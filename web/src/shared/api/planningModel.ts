@@ -51,6 +51,10 @@ const EVENT_ACTIONS = [
   'checklist_reopened',
   'summarized',
   'execution_attached',
+  'request_created',
+  'request_answered',
+  'request_declined',
+  'request_expired',
   'overridden',
 ] as const
 
@@ -148,6 +152,8 @@ const commentSchema = z.union([
   strictObject({
     ...commentIdentity,
     kind: z.literal('comment'),
+    checklist_item_id: boundedText(UUID, 36).nullable().optional(),
+    checklist_item_text: blankable(1000).nullable().optional(),
     report: z.null(),
     body: boundedText(/^[^\u{0}]{1,8000}$/u, 8000),
     at: boundedText(ISO, 96),
@@ -155,6 +161,8 @@ const commentSchema = z.union([
   strictObject({
     ...commentIdentity,
     kind: z.literal('report'),
+    checklist_item_id: z.null().optional(),
+    checklist_item_text: z.null().optional(),
     report: summarySchema,
     body: blankable(8000),
     at: boundedText(ISO, 96).nullable(),

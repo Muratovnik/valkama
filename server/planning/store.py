@@ -11,6 +11,7 @@ opens a connection or decides policy; the service above it does both.
 
 from __future__ import annotations
 
+import re
 import sqlite3
 
 from . import model
@@ -118,6 +119,8 @@ CREATE TABLE IF NOT EXISTS work_item_comments(
     author TEXT NOT NULL DEFAULT 'agent',
     body TEXT NOT NULL,
     report TEXT NOT NULL DEFAULT '',
+    checklist_item_id TEXT,
+    checklist_item_text TEXT,
     created_at TEXT NOT NULL DEFAULT {_NOW}
 );
 CREATE INDEX IF NOT EXISTS work_item_comments_item ON work_item_comments(work_item_id, id);
@@ -140,7 +143,87 @@ CREATE TABLE IF NOT EXISTS work_item_events(
     created_at TEXT NOT NULL DEFAULT {_NOW}
 );
 CREATE INDEX IF NOT EXISTS work_item_events_item ON work_item_events(work_item_id, id);
+CREATE TABLE IF NOT EXISTS work_item_requests(
+    request_id TEXT PRIMARY KEY,
+    work_item_id TEXT NOT NULL REFERENCES work_items(work_item_id) ON DELETE CASCADE,
+    kind TEXT NOT NULL CHECK(kind IN ('question','decision')),
+    prompt TEXT NOT NULL,
+    fields_json TEXT NOT NULL,
+    answers_json TEXT,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','answered','declined','expired')),
+    author TEXT NOT NULL,
+    answered_by TEXT NOT NULL DEFAULT '',
+    execution_id TEXT REFERENCES executions(execution_id),
+    session_id TEXT REFERENCES sessions(id),
+    expires_at TEXT,
+    created_at TEXT NOT NULL,
+    resolved_at TEXT,
+    revision INTEGER NOT NULL DEFAULT 0,
+    expired_reason TEXT CHECK(expired_reason IN ('deadline','withdrawn','execution_closed','task_closed'))
+);
+CREATE INDEX IF NOT EXISTS work_item_requests_item ON work_item_requests(work_item_id,created_at);
+
 """
+
+
+def interactions_migration_needed(conn: sqlite3.Connection) -> bool:
+    tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "work_items" not in tables:
+        return False
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(work_item_comments)")}
+    event = conn.execute("SELECT sql FROM sqlite_master WHERE name='work_item_events'").fetchone()
+    return (
+        "work_item_requests" not in tables
+        or not {"checklist_item_id", "checklist_item_text"} <= columns
+        or (event is not None and "request_created" not in event[0])
+    )
+
+
+def migrate_interactions(conn: sqlite3.Connection) -> None:
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(work_item_comments)")}
+    for column in ("checklist_item_id", "checklist_item_text"):
+        if column not in columns:
+            conn.execute(f"ALTER TABLE work_item_comments ADD COLUMN {column} TEXT")
+    event = conn.execute("SELECT sql FROM sqlite_master WHERE name='work_item_events'").fetchone()
+    if event is not None and "request_created" not in event[0]:
+        definitions = [
+            row[0]
+            for row in conn.execute(
+                "SELECT sql FROM sqlite_master WHERE tbl_name='work_item_events' AND type IN ('index','trigger') AND sql IS NOT NULL"
+            )
+        ]
+        sequence = None
+        if "AUTOINCREMENT" in event[0].upper():
+            sequence = conn.execute(
+                "SELECT seq FROM sqlite_sequence WHERE name='work_item_events'"
+            ).fetchone()
+        definition = re.sub(
+            r'CREATE TABLE(?: IF NOT EXISTS)?\s+"?work_item_events"?',
+            "CREATE TABLE work_item_events_replacement",
+            event[0],
+            count=1,
+            flags=re.IGNORECASE,
+        )
+        definition, replaced = re.subn(
+            r"CHECK\s*\(\s*action\s+IN\s*\([^)]*\)\s*\)",
+            f"CHECK(action IN ({_EVENT_ACTION_SQL}))",
+            definition,
+            count=1,
+            flags=re.IGNORECASE,
+        )
+        if replaced != 1:
+            raise RuntimeError("request event migration requires the known action constraint")
+        conn.execute(definition)
+        conn.execute("INSERT INTO work_item_events_replacement SELECT * FROM work_item_events")
+        conn.execute("DROP TABLE work_item_events")
+        conn.execute("ALTER TABLE work_item_events_replacement RENAME TO work_item_events")
+        for statement in definitions:
+            conn.execute(statement)
+        if sequence is not None:
+            conn.execute(
+                "UPDATE sqlite_sequence SET seq=max(seq,?) WHERE name='work_item_events'",
+                (sequence[0],),
+            )
 
 
 def migrate_discussion(conn: sqlite3.Connection) -> None:
@@ -209,6 +292,7 @@ SCHEMA_TABLES = (
     "work_item_comments",
     "work_item_refs",
     "work_item_events",
+    "work_item_requests",
 )
 
 

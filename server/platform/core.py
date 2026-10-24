@@ -25,7 +25,7 @@ from copy import deepcopy
 from datetime import UTC, datetime
 
 from ..projects import project_registry, scopes
-from . import health
+from . import health, planning_interactions
 from . import modules as platform_modules
 from . import relations as platform_relations
 from .capabilities import CAPABILITY_DEFINITIONS, resolve_capability
@@ -2758,6 +2758,7 @@ def handle_get(
     if (
         path != "/api/modules"
         and path != "/api/modules/planning/work-item"
+        and path not in planning_interactions.READ_PATHS
         and not path.startswith("/api/platform/")
     ):
         return None
@@ -2767,6 +2768,12 @@ def handle_get(
         registry_reader=registry_reader,
         providers=providers,
     )
+    if path == "/api/modules/planning/search":
+        return 200, planning_interactions.search(platform, parameters)
+    if path == "/api/modules/planning/requests":
+        return 200, planning_interactions.request_list(platform, parameters)
+    if path == "/api/modules/planning/request":
+        return 200, planning_interactions.request_detail(platform, parameters)
     if path == "/api/modules":
         if parameters:
             raise PlatformHttpError(400, "error", "Module registry accepts no query fields")
@@ -2795,7 +2802,7 @@ def handle_post(
     registry_reader: project_registry.RegistryReader | None = None,
     providers: ProviderCatalog | None = None,
 ) -> tuple[int, dict] | None:
-    if path not in {
+    if path not in planning_interactions.WRITE_PATHS and path not in {
         "/api/platform/relations",
         "/api/platform/actions/invoke",
         "/api/platform/ui-prefs",
@@ -2811,6 +2818,8 @@ def handle_post(
         registry_reader=registry_reader,
         providers=providers,
     )
+    if path in planning_interactions.WRITE_PATHS:
+        return 200, planning_interactions.request_command(platform, path, payload)
     if path == "/api/modules/state":
         return 200, platform.module_state_command(payload)
     if path == "/api/platform/relations":
