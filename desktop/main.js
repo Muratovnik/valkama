@@ -369,7 +369,7 @@ function createWindow(reachable) {
     // The window is the chrome the workspace panel lies on, so this is
     // `--color-navigation` rather than `--color-canvas`: the frame paints before the shell
     // does, and the first thing drawn should be the ground it keeps.
-    backgroundColor: '#0d1117', // --color-navigation
+    backgroundColor: '#0e0f10', // --color-navigation
     autoHideMenuBar: true,
     title: 'Valkama',
     icon: path.join(__dirname, '..', 'windows', 'valkama.ico'),
@@ -390,7 +390,7 @@ function createWindow(reachable) {
     const message = `The Valkama server is not reusable.\n\n${serverFailureReason}\n\nManaged launcher:\n${attemptedLauncher}`
     void mainWindow.loadURL(
       `data:text/html;charset=utf-8,${encodeURIComponent(
-        `<body style="font:14px system-ui;background:#0d1117;color:#ececec;padding:24px">
+        `<body style="font:14px system-ui;background:#0e0f10;color:#ececec;padding:24px">
          <h1 style="font-size:16px">Valkama</h1><pre>${message}</pre></body>`,
       )}`,
     )

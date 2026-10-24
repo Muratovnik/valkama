@@ -42,7 +42,9 @@
   --size-text-area-min-height: calc(2lh + var(--space-4) + 2px);
   --space-label-value: var(--space-2);
   --space-heading-content: var(--space-3);
-  --space-section: var(--space-6);
+
+  /* Section rhythm is wider; label/value and heading/content stay at 8px/12px. */
+  --space-section: var(--space-9);
 
   /* ─────────────────────────────────────────────────────────────────────
      Primitive: raw values. Nothing outside this file names one.
@@ -79,21 +81,15 @@
   /* The categorical ramp for slices that mean a name rather than a state. */
   --color-cyan-400: #7fb4d3;
 
-  /* The cold near-black the chrome is painted from, on the same rungs as the
-     gray ramp above it (16.6 / 26.4 / 37.4 against 13 / 24 / 33). A neutral
-     #0d0d0d read as absence rather than as a surface — the owner asked twice
-     for a color under the rail — so the chrome carries a blue-grey cast while
-     the workspace stays neutral, which is what makes the panel read as lying
-     on something rather than as a hole cut in it.
-     The cast is small on purpose: ten points between the coldest and warmest
-     channel is a temperature, and forty would be a color the product does not
-     mean. It has made that mistake once, in violet, on every panel at once.
-     To go back to a neutral chrome, point the three `--color-navigation*` tokens
-     below at `--color-gray-1000`/`-900`/`-800`; nothing else needs to move, which is
-     what the tier split is for. */
-  --color-slate-1000: #0d1117;
-  --color-slate-900: #161b22;
-  --color-slate-800: #21262d;
+  /* Near-neutral graphite for the left and top chrome. Each navigation step
+     has a two-point channel spread, retaining a subtle cold undertone without
+     the stronger blue cast of the previous ramp. The workspace remains on its
+     neutral gray ramp. A fully neutral chrome can point the three
+     `--color-navigation*` tokens below at `--color-gray-1000`/`-900`/`-800`;
+     nothing else needs to move because the semantic tier owns that choice. */
+  --color-slate-1000: #0e0f10;
+  --color-slate-900: #191a1b;
+  --color-slate-800: #242526;
   --color-slate-450: #64737c;
 
   /* Rules are a percentage of white rather than a fixed grey, so one hairline
@@ -144,11 +140,10 @@
      names a step, and stylelint refuses a new literal.
      Ties broke upward when they snapped, because the interface read as crowded
      against its own reference and the remedy for that is air.
-     The gaps — 10, 11, 13, 14, 16, 20 — are steps nothing spends. A declared
-     token that nothing uses fails `check:ui-system`, which is what keeps this
-     ladder a record of the interface rather than a wish list: 16 was here
-     until the settings page stopped padding itself on top of the frame that
-     had already padded it. */
+     Every declared rung is consumed; `check:ui-system` keeps the ladder a
+     record of interface use rather than a wish list. The 36px section gap now
+     uses its own rung, while the 8px label/value and 12px heading/content gaps
+     keep their existing roles. */
   --space-hair: 1px;
   --space-half: 2px;
   --space-1: 4px;
@@ -159,6 +154,7 @@
   --space-6: 24px;
   --space-7: 28px;
   --space-8: 32px;
+  --space-9: 36px;
   --space-12: 48px;
   --space-24: 96px;
 
@@ -265,7 +261,8 @@
 
   /* Zones are steps on the one ramp. The chrome — the navigation rail and the
      context bar — is one dark backing, and the workspace is a lighter panel
-     lying on it. Neither zone carries a hue.
+     lying on it. The graphite chrome is almost neutral; the workspace stays
+     neutral.
 
      The direction used to run the other way, chrome above workspace, and the
      two zones came within 1.33 of each other: the shell read as one dark mass
@@ -277,12 +274,12 @@
      under-color and lays the content on it as a lighter rounded panel.
      tests/designTokens.test.ts asserts the relationship and the direction.
 
-     The chrome is the tinted one and the workspace stays neutral. Both are
-     zones on the same ladder; the cast is what says which of the two is the
-     backing, at a lightness distance the eye reads as a step rather than as a
-     second black. The oracle accepts either a tinted chrome above a neutral
-     workspace or two neutrals further apart, and rejects everything the
-     palette has actually shipped wrong. */
+     The chosen graphite is in the neutral branch of the oracle: its two-point
+     channel spread accompanies a lightness distance the eye reads as a step
+     rather than a second black. The oracle also accepts a distinctly tinted
+     chrome above a neutral workspace; that alternative needs the bounded cast
+     described by the test. Both branches reject the pairings this palette has
+     actually shipped wrong. */
   --color-navigation: var(--color-slate-1000);
   --color-count-badge-ring: var(--color-navigation);
   --color-navigation-raised: var(--color-slate-900);

@@ -2,9 +2,9 @@
 name: Valkama
 description: A near-black, Codex-look operations console for planning, executing, and reviewing agent work.
 colors:
-  navigation: "#0d1117"
-  navigation-raised: "#161b22"
-  navigation-active: "#21262d"
+  navigation: "#0e0f10"
+  navigation-raised: "#191a1b"
+  navigation-active: "#242526"
   canvas: "#181818"
   surface: "#212121"
   surface-muted: "#282828"
@@ -62,7 +62,7 @@ spacing:
   compact: "8px"
   component: "12px"
   panel: "16px"
-  section: "24px"
+  section: "36px"
   page-gutter: "clamp(20px, 2.5vw, 32px)"
   column-gutter: "24px"
   control-height: "40px"
@@ -96,10 +96,12 @@ glass, gradients, glow, oversized marketing headings, or game-like chrome.
 
 - Navigation stays on the left, expands to 260px, collapses to 64px, and can
   accept more destinations without becoming a horizontal game menu.
-- Spacing follows the 4/8/12/16/24 grid, and a module keeps `--size-page-gutter`
-  from the panel edge. Density comes from alignment and disclosure; taking it
-  from the gaps instead is what made the shell read as crowded against its own
-  reference, which spends 275px on a rail and 16px inside a row.
+- Spacing stays on the four-pixel grid: label/value gaps are 8px, heading/content
+  gaps are 12px, panel spacing is 16px, and section rhythm is 36px. A module
+  keeps `--size-page-gutter` from the panel edge. Density comes from alignment
+  and disclosure; taking it from the gaps instead is what made the shell read as
+  crowded against its own reference, which spends 275px on a rail and 16px
+  inside a row.
 - The context bar names the current module once. A module must not repeat the
   same title or introductory copy merely to fill space.
 - The shell has two zones and they must read as two. The chrome — the
@@ -109,25 +111,26 @@ glass, gradients, glow, oversized marketing headings, or game-like chrome.
   this palette has now managed twice: `#0d0d0d`/`#121212` and, after the
   direction was inverted the first time, `#181818` chrome against a `#121212`
   canvas.
-- The chrome carries a cold cast and the workspace stays neutral. A neutral
-  `#0d0d0d` under the rail read as absence rather than as a surface — the owner
-  asked twice for a color there — and the contrast between a tinted backing and
-  a neutral panel is what says which of the two is the backing. The cast is a
-  temperature, not a color: ten points between the coldest and warmest channel.
-  A violet chrome once tried to solve the same problem and tinted every panel
-  in the shell instead, which is a color the product does not mean, so the
-  panel's neutrality is the half that is not negotiable.
+- The left and top chrome use near-neutral graphite with a subtle cold
+  undertone; the workspace stays neutral. A neutral `#0d0d0d` under the rail
+  read as absence rather than as a surface — the owner asked twice for a color
+  there — which led to a cool backing. The current graphite has a two-point
+  channel spread, much less blue than the earlier ramp. A violet chrome once
+  tried to solve the same problem and tinted every panel in the shell instead,
+  which is a color the product does not mean, so the panel's neutrality remains
+  essential.
 - `designTokens.test.ts` owns both statements as one oracle with two ways to
-  pass, because there are two ways to be right. A neutral chrome has only
-  lightness to separate with, so it owes a ratio of 1.6; a tinted one carries a
-  second signal and may sit at 1.35, but its cast must fall between 6 and 14 —
-  below that there is nothing to see, above it the shell is painted rather than
-  lit. The workspace must be neutral in either case. The floor is the part that
-  has been wrong before: at 1.2 the test passed both merged pairings above, and
-  so certified the very defect it was written for, which is why the oracle now
+  pass, because there are two ways to be right. The current graphite uses the
+  neutral branch: its channel spread is at most 2, and it owes a ratio of 1.6.
+  The oracle also permits a distinctly tinted chrome, which carries a second
+  signal and may sit at 1.35 when its cast falls between 6 and 14 — below that
+  there is nothing to see, above it the shell is painted rather than lit. The
+  workspace must be neutral in either case. The floor is the part that has
+  been wrong before: at 1.2 the test passed both merged pairings above, and so
+  certified the very defect it was written for, which is why the oracle now
   carries the failing pairings as cases rather than as prose. The three chrome
-  tokens must also be tinted together, since a neutral hover on a cold ground
-  is the seam rule one state deeper.
+  tokens must stay on the same chosen branch, since a mismatched hover would
+  make a seam one state deeper.
 - The chrome is one ground with a corner in it, painted from one token. The
   rail and the context bar drew from two, so the corner where they meet had a
   seam and the header read as a third zone; the same test pins both to
@@ -167,9 +170,10 @@ glass, gradients, glow, oversized marketing headings, or game-like chrome.
   is Codex's own (`#0d0d0d`/`#181818`/`#212121`/`#282828`/`#303030`/`#393939`),
   read out of the installed desktop application rather than approximated by eye,
   and so is the direction: it paints the window with an under-color and lays the
-  content on it as a lighter rounded panel. The chrome runs a cold ramp parallel
-  to it, on the same rungs (`#0d1117`/`#161b22`/`#21262d`), so a step means the
-  same distance whichever zone it is in.
+  content on it as a lighter rounded panel. The chrome uses a near-neutral
+  graphite ramp (`#0e0f10`/`#191a1b`/`#242526`) with a two-point channel spread
+  at each navigation step, keeping the shell subtly cool while the workspace
+  remains neutral.
 - The canvas, lists, panels, fields, and inspectors use a near-black neutral
   ladder (the Codex-look ground). Light tones are reserved for text and the
   primary action button, never for large page surfaces.
@@ -239,8 +243,9 @@ glass, gradients, glow, oversized marketing headings, or game-like chrome.
   meant editing seven files by hand. Each site names an anchor that must match
   exactly once, so a moved anchor fails loudly instead of silently doing
   nothing. The document's `spacing:` block is not generated yet.
-- Spacing follows 4/8/12/16/24px. Density is achieved with alignment and
-  disclosure, not tiny type or cramped targets.
+- Spacing follows the four-pixel grid. Label/value gaps remain 8px and
+  heading/content gaps 12px; section rhythm is 36px. Density is achieved with
+  alignment and disclosure, not tiny type or cramped targets.
 - How tall a control stands and how large a pointer target it offers are two
   measurements with two tokens. `--size-control-height` is the row a control
   occupies and belongs on its outermost box; `--size-control-height-compact` is the
