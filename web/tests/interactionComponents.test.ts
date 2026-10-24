@@ -172,12 +172,12 @@ test('the inspector keeps item facts and generic relation actions in one surface
 })
 
 test('one place draws who holds an item, and the shell owns scope presentation', () => {
-  // The tile and graph node name who currently holds the claim. Nothing else may invent its own mark, which is the half
-  // of this assertion the column carries.
+  // Claim presentation belongs to the tile and graph node, not their column.
+  // Rendered owner labels are covered in planningPresentation.spec.ts.
   assert.match(card, /class="tile-holder"/)
   assert.match(card, /claim_ref/)
   assert.doesNotMatch(lane, /bundle-active|t\('work\.active'\)/)
-  assert.match(graphNode, /class="flow-node-owner-state">\{\{ t\('graph\.claimedBy'\) \}\}/)
+  assert.match(graphNode, /class="flow-node-owner-state"/)
   assert.match(
     readFileSync(new URL('../src/app/components/AppModuleStage.vue', import.meta.url), 'utf8'),
     /<PlanningModuleSurface/,

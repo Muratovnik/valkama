@@ -20,6 +20,7 @@ test('description, comments and selected reports survive a fresh item read', asy
     .fill('Please check the result')
   await drawer.locator('.discussion-form button[type="submit"]').click()
   await expect(drawer.locator('.discussion-body')).toHaveText('Please check the result')
+  await expect(drawer.locator('.discussion-body')).toHaveCSS('font-size', '15px')
   await drawer.getByRole('checkbox', { name: 'Work report', exact: true }).check()
   for (const title of ['First result', 'Second result']) {
     await drawer.getByRole('textbox', { name: 'What was done', exact: true }).fill(title)
@@ -40,7 +41,27 @@ test('description, comments and selected reports survive a fresh item read', asy
   await page.reload()
   await expect(drawer.locator('.description-copy')).toHaveText('An editable goal')
   await expect(drawer.locator('.discussion-entry')).toHaveCount(3)
-  await expect(drawer.locator('.outcome')).toContainText('First result')
+  const outcome = drawer.locator('.outcome')
+  await expect(outcome.locator('.outcome-body')).toBeHidden()
+  await expect(outcome.locator('.outcome-preview')).toBeVisible()
+  await expect(outcome.locator('.outcome-preview')).toContainText('First result')
+  await expect(outcome.locator('.outcome-preview-text')).toHaveCSS('font-size', '15px')
+  await outcome.locator('summary').press('Enter')
+  await expect(outcome.locator('.outcome-body')).toBeVisible()
+  await expect(outcome.locator('.outcome-preview')).toBeHidden()
+  await outcome.locator('summary').press('Space')
+  await expect(outcome.locator('.outcome-body')).toBeHidden()
+  const beforeReport = page.url()
+  await outcome.getByRole('button', { name: 'View report in discussion' }).click()
+  await expect(page).toHaveURL(beforeReport)
+  const selected = drawer.locator('#work-report-2')
+  await expect(selected).toBeInViewport({ ratio: 0.5 })
+  await expect(selected).toBeFocused()
+  const reportBounds = await selected.boundingBox()
+  const headerBounds = await drawer.locator('.drawer-frame-head').boundingBox()
+  expect(
+    reportBounds && headerBounds && reportBounds.y >= headerBounds.y + headerBounds.height,
+  ).toBe(true)
 })
 
 for (const width of [900, 390]) {

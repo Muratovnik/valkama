@@ -21,8 +21,8 @@ vi.mock('@/shared/api/platformApi.ts', () => ({
   setPlatformAssignment: vi.fn(),
 }))
 
-const codexId = 'openai:codex:codex-rollout-telemetry:local'
-const claudeId = 'anthropic:claude:claude-journal-telemetry:local'
+const codexId = 'openai:codex-rollout:codex-rollout-telemetry:local'
+const claudeId = 'anthropic:claude-journal:claude-journal-telemetry:local'
 
 function connection(
   owner: string,
@@ -31,6 +31,11 @@ function connection(
   diagnostics?: string,
 ): RegistryConnection {
   const scope = { kind: 'global' as const }
+  const titleKeys: Record<string, string> = {
+    'codex-rollout': 'platform.integrations.codexRollout',
+    'claude-journal': 'platform.integrations.claudeJournal',
+  }
+  const titleKey = titleKeys[serviceId] ?? `integrations.${serviceId}`
   return {
     applicability: scope,
     capabilities: ['telemetry.query'],
@@ -42,14 +47,14 @@ function connection(
     },
     health: 'ready',
     last_checked_at: '2026-08-21T08:00:00Z',
-    name: `integrations.${serviceId}`,
+    name: titleKey,
     observed_at: '2026-08-21T08:00:00Z',
     scope,
     service: {
       owner_id: owner,
       service_id: serviceId,
       service_type: 'local-journal',
-      title_key: `integrations.${serviceId}`,
+      title_key: titleKey,
     },
     state: 'registered',
     transport: 'local-file',
@@ -60,8 +65,8 @@ function connection(
 }
 
 function payload(diagnostics?: string): PlatformRegistryReady {
-  const codex = connection('openai', 'codex', 'codex-rollout-telemetry', diagnostics)
-  const claude = connection('anthropic', 'claude', 'claude-journal-telemetry')
+  const codex = connection('openai', 'codex-rollout', 'codex-rollout-telemetry', diagnostics)
+  const claude = connection('anthropic', 'claude-journal', 'claude-journal-telemetry')
   return {
     action_inputs: [],
     actions: [],
@@ -123,15 +128,10 @@ function payload(diagnostics?: string): PlatformRegistryReady {
   }
 }
 
-function plugins() {
-  return [createI18n({ legacy: false, locale: 'en', messages })]
+function plugins(locale = 'en') {
+  return [createI18n({ legacy: false, locale, messages })]
 }
 
-function registryPayload(diagnostics?: string) {
-  const result = payload(diagnostics)
-  for (const connection of result.connections) connection.capabilities = ['execution.launch']
-  return result
-}
 describe('ProjectAssignmentsSection', () => {
   beforeEach(() => {
     vi.mocked(resetProjectAssignment)
@@ -147,17 +147,19 @@ describe('ProjectAssignmentsSection', () => {
 
   it('uses the shared labelled keyboard control and writes the selected override', async () => {
     const wrapper = mount(ProjectAssignmentsSection, {
-      props: { payload: registryPayload(), projectId: 'alpha' },
+      props: { payload: payload(), projectId: 'alpha' },
       global: { plugins: plugins() },
     })
     expect(wrapper.get('.registry-name').text()).toBe('Read usage and activity')
-    expect(wrapper.get('.registry-sub').text()).toBe('Selected for this project')
+    expect(wrapper.get('.registry-sub').text()).toBe(
+      'Selected for this project · Claude local journal',
+    )
     expect(
       wrapper
         .findAll('.registry-fact')
         .find((fact) => fact.text().startsWith('Selected connection'))
         ?.text(),
-    ).toBe('Selected connectionclaude')
+    ).toBe('Selected connectionClaude local journal')
     const select = wrapper.getComponent(ChoiceSelect)
     expect(select.get('[role="combobox"]').attributes('aria-label')).toBe('Read usage and activity')
 
@@ -188,13 +190,15 @@ describe('ProjectAssignmentsSection', () => {
       global: { plugins: plugins() },
     })
 
-    expect(wrapper.get('.registry-sub').text()).toBe('Inherited from installation')
+    expect(wrapper.get('.registry-sub').text()).toBe(
+      'Inherited from installation · Codex rollout telemetry',
+    )
     expect(
       wrapper
         .findAll('.registry-fact')
         .find((fact) => fact.text().startsWith('Selected connection'))
         ?.text(),
-    ).toBe('Selected connectioncodex')
+    ).toBe('Selected connectionCodex rollout telemetry')
     wrapper.getComponent(ChoiceSelect).vm.$emit('update:modelValue', claudeId)
     await flushPromises()
 
@@ -239,11 +243,10 @@ describe('ProjectAssignmentsSection', () => {
       props: { payload: unavailable, projectId: 'alpha' },
       global: { plugins: plugins() },
     })
-    // The reason reads as a sentence. Asserting the identifier is what let
-    // `connection-unhealthy` reach the screen in the shipped build.
     expect(wrapper.text()).toContain('Tool not healthy')
     expect(wrapper.text()).not.toContain('connection-unhealthy')
     expect(wrapper.text()).toContain('No effective connection')
+    expect(wrapper.get('.registry-sub').text()).toContain('Claude local journal')
 
     const reset = wrapper.findAll('button').find((button) => button.text() === 'Reset to default')
     expect(reset).toBeDefined()
@@ -261,7 +264,7 @@ describe('ProjectAssignmentsSection', () => {
         scope: { kind: 'global' },
         state: {
           interface_version: 'valkama-ui-state',
-          payload: registryPayload(diagnostic),
+          payload: payload(diagnostic),
           status: 'ready',
         },
       },
@@ -281,20 +284,30 @@ describe('ProjectAssignmentsSection', () => {
         scope: { kind: 'global' },
         state: {
           interface_version: 'valkama-ui-state',
-          payload: registryPayload(),
+          payload: payload(),
           status: 'ready',
         },
       },
       global: { plugins: plugins() },
     })
-    expect(telemetryOnly.find('.integrations-execution').exists()).toBe(true)
+    expect(telemetryOnly.find('.integrations-execution').exists()).toBe(false)
+    const telemetry = telemetryOnly.get('.integrations-telemetry')
+    expect(telemetry.findAll('.registry-row')).toHaveLength(2)
+    expect(telemetry.findAll('.registry-name').map((name) => name.text())).toEqual([
+      'Codex rollout telemetry',
+      'Claude local journal',
+    ])
+    expect(telemetry.text()).toContain('Read-only local usage and session sources.')
+    expect(telemetry.findAll('.registry-owner-value').map((owner) => owner.text())).toEqual([
+      'openai',
+      'anthropic',
+    ])
+    expect(telemetry.findAll('.registry-description')).toHaveLength(2)
     expect(telemetryOnly.find('.integrations-skills').exists()).toBe(false)
     expect(telemetryOnly.find('.registry-section.modules').exists()).toBe(false)
 
     const empty = payload()
-    empty.assignments = []
-    empty.capabilities = []
-    empty.connections = []
+    Object.assign(empty, { assignments: [], capabilities: [], connections: [] })
     const emptyRegistry = mount(PlatformSettingsRegistry, {
       props: {
         reloadModules: vi.fn(),
@@ -309,5 +322,100 @@ describe('ProjectAssignmentsSection', () => {
     })
     expect(emptyRegistry.find('.data-empty').exists()).toBe(true)
     expect(emptyRegistry.find('.registry-section').exists()).toBe(false)
+  })
+  it.each(
+    (
+      [
+        ['en', 'global', 'local-file', 'Select a project', 'provider named above'],
+        ['en', 'global', 'built-in', 'Select a project', 'with its owner'],
+        ['en', 'project', 'local-file', 'Project assignments below', 'provider named above'],
+        ['en', 'project', 'built-in', 'Project assignments below', 'with its owner'],
+        ['ru', 'global', 'local-file', 'Выберите проект', 'указанному провайдеру'],
+        ['ru', 'global', 'built-in', 'Выберите проект', 'у его владельца'],
+        ['ru', 'project', 'local-file', '«Назначения проекта»', 'указанному провайдеру'],
+        ['ru', 'project', 'built-in', '«Назначения проекта»', 'у его владельца'],
+      ] as const
+    ).map((scenario) => ({ scenario })),
+  )(
+    'gives $scenario setup guidance',
+    ({ scenario: [locale, kind, transport, instruction, owner] }) => {
+      const data = payload()
+      for (const item of data.connections) item.transport = transport
+      const scope =
+        kind === 'global'
+          ? { kind: 'global' as const }
+          : { kind: 'project' as const, project_ref: { project_id: 'alpha' } }
+      const wrapper = mount(PlatformSettingsRegistry, {
+        props: {
+          reloadModules: vi.fn(),
+          scope,
+          state: { interface_version: 'valkama-ui-state', payload: data, status: 'ready' },
+        },
+        global: { plugins: plugins(locale) },
+      })
+      const guidance = wrapper.get('.registry-description').text()
+      expect(guidance).toContain(instruction)
+      expect(guidance).toContain(owner)
+      expect(wrapper.find('.project-assignments').exists()).toBe(kind === 'project')
+      if (kind === 'global') expect(guidance).not.toContain(locale === 'en' ? 'below' : 'ниже')
+    },
+  )
+  it('names inherited memory before disclosure and after overriding and resetting', async () => {
+    const data = payload()
+    data.connections = [
+      connection('agentmemory', 'local-reference-service', 'agentmemory-reference-v1'),
+      connection('demo', 'notes', 'notes-reference-v1'),
+    ]
+    for (const item of data.connections) item.capabilities = ['memory.open']
+    const memoryId = 'agentmemory:local-reference-service:agentmemory-reference-v1:local'
+    const demoId = 'demo:notes:notes-reference-v1:local'
+    data.assignments = [
+      { ...data.assignments[0], capability_id: 'memory.open', connection_ids: [memoryId] },
+    ]
+    const resolution = data.capabilities[0]
+    if (resolution.state !== 'ready') throw new Error('expected ready fixture')
+    resolution.capability.capability_id = 'memory.open'
+    resolution.assignment = data.assignments[0]
+    resolution.source = 'installation'
+    resolution.connections = [data.connections[0]]
+    const wrapper = mount(ProjectAssignmentsSection, {
+      props: { payload: data, projectId: 'alpha' },
+      global: { plugins: plugins() },
+    })
+    expect(wrapper.get('.registry-sub').text()).toBe('Inherited from installation · AgentMemory')
+    expect(wrapper.get('details').attributes('open')).toBeUndefined()
+    wrapper.getComponent(ChoiceSelect).vm.$emit('update:modelValue', demoId)
+    await flushPromises()
+    expect(setPlatformAssignment).toHaveBeenCalledWith(
+      'memory.open',
+      { kind: 'project', project_id: 'alpha' },
+      [demoId],
+      0,
+    )
+    const overridden = structuredClone(data)
+    const override = {
+      ...data.assignments[0],
+      assignment_id: 'project-memory',
+      scope: { kind: 'project' as const, project_id: 'alpha' },
+      connection_ids: [demoId],
+      revision: 2,
+    }
+    overridden.assignments.push(override)
+    const effective = overridden.capabilities[0]
+    if (effective.state !== 'ready') throw new Error('expected ready fixture')
+    effective.source = 'project'
+    effective.assignment = override
+    effective.connections = [overridden.connections[1]]
+    await wrapper.setProps({ payload: overridden })
+    expect(wrapper.get('.registry-sub').text()).toBe('Selected for this project · Demo note links')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Reset to default')
+      ?.trigger('click')
+    await flushPromises()
+    expect(resetProjectAssignment).toHaveBeenCalledWith('memory.open', 'alpha', 2)
+    await wrapper.setProps({ payload: data })
+    expect(wrapper.get('.registry-sub').text()).toBe('Inherited from installation · AgentMemory')
+    expect(wrapper.getComponent(ChoiceSelect).props('modelValue')).toBe('')
   })
 })

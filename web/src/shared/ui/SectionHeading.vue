@@ -15,8 +15,9 @@
  * owner.
  *
  * The root is the heading element itself and nothing more, so a host that pairs a
- * heading with a count keeps its own row: where the heading sits is layout, and
- * layout belongs to whoever is arranging it.
+ * heading with a count keeps its own row. Panel headings reserve the same height
+ * as an adjacent action, so adding an edit button does not change the distance
+ * from the title to its content.
  */
 withDefaults(
   defineProps<{
@@ -50,11 +51,12 @@ withDefaults(
   font: var(--font-section-title);
 }
 
-/* Type only, and no colour. A section heading is full text on one surface and
-   muted on another — which of the three text tones it takes is a fact about the
-   surface, so it stays with the surface, reached through the class the host puts
-   on this component's root. */
+/* A panel title shares its row with controls. Colour still belongs to the
+   surface, reached through the class the host puts on this component's root. */
 .level-panel {
+  display: flex;
+  align-items: center;
+  min-height: var(--size-control-height);
   font: var(--font-panel-title);
 }
 </style>

@@ -25,7 +25,7 @@ import ToggleSwitch from '@/shared/ui/ToggleSwitch.vue'
 type CapabilityId = RegistryAssignment['capability_id']
 type IntegrationGroup = {
   icon: string
-  key: 'execution' | 'memory' | 'artifacts'
+  key: 'execution' | 'telemetry' | 'memory' | 'artifacts'
   owns: (capability: CapabilityId) => boolean
 }
 
@@ -47,6 +47,7 @@ const integrationGroups: IntegrationGroup[] = [
     icon: 'play',
     owns: (id) => id.startsWith('execution.') || id === 'session.observe',
   },
+  { key: 'telemetry', icon: 'activity', owns: (id) => id === 'telemetry.query' },
   { key: 'memory', icon: 'database', owns: (id) => id.startsWith('memory.') },
   { key: 'artifacts', icon: 'git-branch', owns: (id) => id === 'artifact.inspect' },
 ]
@@ -242,7 +243,7 @@ function noteLifecycle(message: string) {
                 :icon="group.icon"
                 :title="connectionName(connection)"
                 :subtitle="connectionOrigin(connection, payload)"
-                :description="connectionSetup(connection, payload)"
+                :description="connectionSetup(connection, payload, scope)"
                 :configuration-owner="connection.configuration_owner"
                 :details="connectionFacts(connection)"
               >

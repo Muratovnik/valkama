@@ -51,7 +51,10 @@ const numericMark = (column: { numeric?: boolean }) => (column.numeric ? 'true' 
 
 /** Who holds the item, or whether it is there to be taken. */
 function claimLabel(item: WorkItemBrief): string {
-  if (item.claim_ref) return item.claim_ref
+  if (item.claim_ref)
+    return item.state.is_terminal
+      ? t('workItem.previousHolder', { holder: item.claim_ref })
+      : item.claim_ref
   return ready.value.has(item.work_item_id) ? t('workItem.ready') : '—'
 }
 
@@ -185,7 +188,10 @@ const COLUMNS: { key: SortKey; label: string; numeric?: boolean }[] = [
             />
           </td>
           <td class="list-cell">{{ t(`priority.${item.priority}`) }}</td>
-          <td class="list-cell list-claim">
+          <td
+            class="list-cell list-claim"
+            :title="claimLabel(item)"
+          >
             {{ claimLabel(item) }}
           </td>
           <td

@@ -148,7 +148,7 @@ const steps = computed(() => ({
 
 .tile-title {
   color: var(--color-text);
-  font: var(--font-strong);
+  font: var(--font-row-title);
   overflow-wrap: break-word;
 }
 

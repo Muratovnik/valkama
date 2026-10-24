@@ -83,7 +83,9 @@ function details(resolution: CapabilityResolution) {
 }
 
 function subtitle(resolution: CapabilityResolution): string {
-  return t(`platform.registry.selectionSource.${resolution.source ?? 'unavailable'}`)
+  const source = t(`platform.registry.selectionSource.${resolution.source ?? 'unavailable'}`)
+  const names = (resolution.assignment?.connection_ids ?? []).map((id) => connectionName(id))
+  return names.length ? `${source} · ${names.join(', ')}` : source
 }
 
 function selectedId(resolution: CapabilityResolution): string {

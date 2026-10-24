@@ -171,6 +171,63 @@ describe('WorkItemInspector resource state', () => {
     expect(value(wrapper, 'Comment')).toBe('Comment draft')
     wrapper.unmount()
   })
+
+  it.each([
+    { terminal: true, writable: true, claimed: true },
+    { terminal: true, writable: true, claimed: false },
+    { terminal: true, writable: false, claimed: true },
+    { terminal: false, writable: true, claimed: true },
+    { terminal: false, writable: true, claimed: false },
+    { terminal: false, writable: false, claimed: true },
+  ])(
+    'keeps ownership actions truthful for $terminal/$writable/$claimed',
+    async ({ terminal, writable, claimed }) => {
+      const item = record('Ownership task', 1)
+      item.state.is_terminal = terminal
+      item.claim_ref = claimed ? 'claude' : ''
+      vi.mocked(fetchWorkItem).mockResolvedValue(item)
+      const wrapper = mountInspector(true)
+      const nextState = { ...item.state, state_id: 'next-state', key: 'queued', name: 'Queued' }
+      await wrapper.setProps({
+        writable,
+        workflow: {
+          workflow_id: 'workflow',
+          name: 'Task workflow',
+          initial_state_id: item.state.state_id,
+          states: [
+            { ...item.state, position: 0 },
+            { ...nextState, position: 1 },
+          ],
+          transitions: [{ from: item.state.state_id, to: nextState.state_id }],
+        },
+      })
+      await flushPromises()
+
+      const ownerFact = wrapper
+        .findAll('.fact')
+        .find(
+          (fact) =>
+            fact.find('dt').text() === (terminal ? 'Previously responsible' : 'Responsible'),
+        )
+      expect(ownerFact?.find('dd').text()).toBe(claimed ? 'claude' : 'No active claim')
+      if (claimed) {
+        expect(wrapper.get('.head-claim').text()).toBe(
+          terminal ? 'Previously responsible: claude' : 'Responsible: claude',
+        )
+      }
+      const actions = wrapper.findAll('.head-actions button').map((button) => button.text())
+      expect(actions).toEqual(writable && !terminal ? [claimed ? 'Release' : 'Claim'] : [])
+      expect(wrapper.findComponent({ name: 'ChoiceSelect' }).exists()).toBe(writable)
+      if (writable) {
+        expect(wrapper.getComponent({ name: 'ChoiceSelect' }).props()).toMatchObject({
+          disabled: false,
+          options: [{ value: 'queued', label: 'Queued' }],
+        })
+      }
+      expect(item.claim_ref).toBe(claimed ? 'claude' : '')
+      wrapper.unmount()
+    },
+  )
 })
 
 describe('inspector relations hierarchy', () => {

@@ -42,6 +42,9 @@ function stepState(done: boolean) {
 const claimLabel = computed(() =>
   props.item.claim_ref ? actorName(props.item.claim_ref) : t('workItem.noClaim'),
 )
+const ownerLabel = computed(() =>
+  t(props.item.state.is_terminal ? 'workItem.previousOwner' : 'workItem.owner'),
+)
 
 /**
  * Opening the anchor, and what to say when the shell could not.
@@ -120,7 +123,9 @@ function when(value: string): string {
         <dd class="fact-value">{{ t(`workItem.kind.${item.kind}`) }}</dd>
       </div>
       <div class="fact">
-        <dt class="fact-term">{{ t('workItem.owner') }}</dt>
+        <dt class="fact-term">
+          {{ ownerLabel }}
+        </dt>
         <dd class="fact-value">
           {{ claimLabel }}
         </dd>

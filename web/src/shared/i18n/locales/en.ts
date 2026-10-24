@@ -426,8 +426,9 @@ export const en = {
       },
       'adapter-unconfigured': {
         title: '{adapter} source is not configured',
-        detail: 'The local data source does not know where to find its journals.',
-        fix: 'Set the journal directories in the Valkama configuration. Until then, data is not observed rather than zero.',
+        detail:
+          'This optional source observes local usage and activity. Its journal directory has not been configured.',
+        fix: 'Configure the journal directory only if you want these observations. Until then, usage is not observed rather than zero; other Valkama functions remain available.',
       },
       'adapter-unavailable': {
         title: '{adapter} source is unavailable',
@@ -726,6 +727,7 @@ export const en = {
       'The task changed. Refresh the task, review the latest version, then retry. Your draft is kept.',
     refreshDraft: 'Refresh task',
     outcome: 'Task outcome',
+    outcomePreview: 'Abbreviated preview',
     viewReport: 'View report in discussion',
     discussion: 'Discussion',
     workReport: 'Work report',
@@ -807,6 +809,7 @@ export const en = {
     priority: 'Priority',
     holder: 'Responsible: {holder}',
     owner: 'Responsible',
+    previousOwner: 'Previously responsible',
     previousHolder: 'Previously responsible: {holder}',
     claim: 'Claim',
     release: 'Release',
@@ -896,7 +899,7 @@ export const en = {
       title: 'Title',
       state: 'State',
       priority: 'Priority',
-      claim: 'Claim',
+      claim: 'Assignee',
       checklist: 'Steps',
       updated: 'Updated',
     },

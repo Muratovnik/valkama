@@ -92,7 +92,20 @@ function levelLabel(level: DoctorLevel): string {
 
 function finding(check: DoctorCheck, part: 'title' | 'detail' | 'fix'): string {
   const key = `health.finding.${check.presentation.code}.${part}`
-  if (te(key)) return t(key, check.presentation.parameters)
+  const parameters = { ...check.presentation.parameters }
+  const adapterLabels: Record<string, string> = {
+    'claude-code-execution': 'claudeCode',
+    'codex-execution': 'codex',
+    'claude-journal-telemetry': 'claudeJournal',
+    'codex-rollout-telemetry': 'codexRollout',
+    'agentmemory-reference': 'agentMemory',
+    'notes-reference': 'demoNotes',
+    'git-artifacts': 'git',
+  }
+  const adapter = String(parameters.adapter ?? '')
+  const label = adapterLabels[adapter]
+  if (label) parameters.adapter = t(`platform.integrations.${label}`)
+  if (te(key)) return t(key, parameters)
   if (part === 'fix' && check.status === 'ok') return ''
   return t(`health.findingFallback.${part}`)
 }

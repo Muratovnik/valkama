@@ -172,7 +172,11 @@ export function useRegistryLabels() {
     return t('platform.registry.providerOwned')
   }
 
-  function connectionSetup(connection: RegistryConnection, payload: PlatformRegistryReady): string {
+  function connectionSetup(
+    connection: RegistryConnection,
+    payload: PlatformRegistryReady,
+    scope: OperatingScope,
+  ): string {
     if (connection.connection_ref.adapter_lineage_id === 'notes-reference-v1')
       return t('platform.registry.demoSetup')
     if (
@@ -194,7 +198,7 @@ export function useRegistryLabels() {
           entry.adapter_lineage_id === connection.connection_ref.adapter_lineage_id &&
           entry.publisher_id === 'valkama',
       )
-    return t(builtin ? 'platform.registry.builtinSetup' : 'platform.registry.providerSetup')
+    return t(`platform.registry.${builtin ? 'builtinSetup' : 'providerSetup'}.${scope.kind}`)
   }
 
   function connectionDetails(connection: RegistryConnection) {

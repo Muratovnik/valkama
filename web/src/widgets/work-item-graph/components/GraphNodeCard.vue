@@ -43,6 +43,9 @@ const markerState = computed<WorkItemNodeMarkerState>(() => {
  * the sentence once the field has told you it can be picked up.
  */
 const stateLabel = computed(() => (ready ? t('graph.readyMark') : node.state.name))
+const ownerLabel = computed(() =>
+  t(node.state.is_terminal ? 'workItem.previousOwner' : 'graph.claimedBy'),
+)
 </script>
 
 <template>
@@ -94,7 +97,7 @@ const stateLabel = computed(() => (ready ? t('graph.readyMark') : node.state.nam
       v-if="node.claim_ref"
       class="flow-node-owner"
     >
-      <span class="flow-node-owner-state">{{ t('graph.claimedBy') }}</span>
+      <span class="flow-node-owner-state">{{ ownerLabel }}</span>
       <span class="flow-node-owner-name">{{ actorName(node.claim_ref) }}</span>
     </span>
   </button>
@@ -120,17 +123,15 @@ const stateLabel = computed(() => (ready ? t('graph.readyMark') : node.state.nam
   text-align: left;
   background: color-mix(in srgb, var(--color-surface-sheet) 92%, var(--color-surface-recess));
   border-radius: var(--radius-status);
-  transition:
-    opacity var(--duration-quick) var(--ease-out),
-    background-color var(--duration-quick) var(--ease-out);
+  transition: background-color var(--duration-quick) var(--ease-out);
   cursor: pointer;
 
   &.is-terminal {
-    opacity: 0.55;
+    background: var(--color-surface-recess);
   }
 
   &.recessed {
-    opacity: 0.3;
+    background: var(--color-surface-recess);
   }
 
   &:hover {
@@ -187,7 +188,7 @@ const stateLabel = computed(() => (ready ? t('graph.readyMark') : node.state.nam
   color: var(--color-danger);
 }
 
-.flow-node-card.is-terminal .flow-node-title {
+.flow-node-card.recessed .flow-node-title {
   color: var(--color-text-muted);
 }
 
@@ -233,7 +234,7 @@ const stateLabel = computed(() => (ready ? t('graph.readyMark') : node.state.nam
 .flow-node-title {
   display: -webkit-box;
   align-self: center;
-  font: var(--font-detail);
+  font: var(--font-row-title);
   overflow-wrap: anywhere;
   overflow: hidden;
   -webkit-box-orient: vertical;

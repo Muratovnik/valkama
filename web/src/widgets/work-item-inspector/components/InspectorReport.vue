@@ -44,7 +44,7 @@ const { t } = useI18n()
 
 .report-value {
   margin: 0;
-  font: var(--font-line);
+  font: var(--font-editor);
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }

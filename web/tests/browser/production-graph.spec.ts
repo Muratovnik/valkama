@@ -123,6 +123,9 @@ for (const width of [1440, 390]) {
     for (let cycle = 0; cycle < 2; cycle += 1) {
       await page.getByRole('button', { name: 'All · 3', exact: true }).click()
       await assertSettledGraph(page, 3)
+      const terminal = page.locator('.flow-node-card.is-terminal')
+      await expect(terminal).toHaveCSS('opacity', '1')
+      await expect(terminal.locator('.flow-node-title')).toHaveCSS('font-size', '14px')
       await page.getByRole('button', { name: 'Open · 2', exact: true }).click()
       await assertSettledGraph(page, 2)
     }
@@ -153,7 +156,8 @@ for (const width of [1440, 390]) {
     for (let cycle = 0; cycle < 2; cycle += 1) {
       await page.getByRole('button', { name: 'All · 1', exact: true }).click()
       await assertSettledGraph(page, 1)
-      await expect(page.locator('.flow-node-owner')).toContainText('Assigned to')
+      await expect(page.locator('.flow-node-owner')).toContainText('Previously responsible')
+      await expect(page.locator('.flow-node-owner')).not.toContainText('Assigned to')
       await page.getByRole('button', { name: 'Open · 0', exact: true }).click()
       await expect(page.getByText('No open work to draw.', { exact: true })).toBeVisible()
       await expect(page.locator('.graph-canvas')).toBeHidden()

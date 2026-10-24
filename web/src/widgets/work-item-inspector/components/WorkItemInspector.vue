@@ -313,14 +313,14 @@ async function discussionChanged() {
       >
         <div class="head-actions">
           <VButton
-            v-if="item.claim_ref"
+            v-if="!item.state.is_terminal && item.claim_ref"
             :disabled="busy"
             @click="release"
           >
             {{ t('workItem.release') }}
           </VButton>
           <VButton
-            v-else
+            v-else-if="!item.state.is_terminal"
             variant="primary"
             :disabled="busy"
             @click="claim"

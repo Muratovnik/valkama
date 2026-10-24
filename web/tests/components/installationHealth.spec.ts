@@ -41,8 +41,8 @@ const report: DoctorReport = {
   summary: { fail: 0, ok: 1, unknown: 0, warn: 0 },
 }
 
-function mountHealth() {
-  const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages })
+function mountHealth(locale = 'en') {
+  const i18n = createI18n({ legacy: false, locale, fallbackLocale: 'en', messages })
   return mount(InstallationHealth, { global: { plugins: [i18n] } })
 }
 
@@ -85,4 +85,59 @@ describe('InstallationHealth resource state', () => {
     expect(wrapper.text()).toContain('The health report could not be loaded')
     expect(wrapper.text()).not.toContain('C:\\private\\failure.log')
   })
+  it.each(['en', 'ru'])(
+    'names optional journal warnings and preserves required failure severity in %s',
+    async (locale) => {
+      const data = structuredClone(report)
+      data.status = 'fail'
+      data.summary = { fail: 1, ok: 0, unknown: 0, warn: 2 }
+      data.levels[0].status = 'fail'
+      data.levels[0].checks = [
+        ...['claude-journal-telemetry', 'codex-rollout-telemetry'].map((adapter) => ({
+          id: `adapter-${adapter}`,
+          title: adapter,
+          status: 'warn' as const,
+          detail: `Raw ${adapter} source_not_configured`,
+          fix: 'VALKAMA_CODEX_ROLLOUT_ROOT',
+          presentation: { code: 'adapter-unconfigured', parameters: { adapter } },
+        })),
+        {
+          id: 'schema',
+          title: 'Schema incompatible',
+          status: 'fail',
+          detail: 'Stored schema too new',
+          fix: 'Use newer build',
+          presentation: { code: 'store-schema-newer', parameters: { stored: 99, supported: 5 } },
+        },
+      ]
+      vi.mocked(fetchDoctorReport).mockResolvedValueOnce(data)
+      const wrapper = mountHealth(locale)
+      await flushPromises()
+      const findings = wrapper.findAll('.health-finding')
+      const warnings = findings.slice(1)
+      expect(warnings).toHaveLength(2)
+      expect(warnings[0].get('.health-finding-state').text()).toContain(
+        locale === 'en' ? 'Claude local journal' : 'Локальный журнал Claude',
+      )
+      expect(warnings[1].get('.health-finding-state').text()).toContain(
+        locale === 'en' ? 'Codex rollout telemetry' : 'Телеметрия Codex rollout',
+      )
+      for (const warning of warnings) {
+        expect(warning.get('.health-detail').text()).toContain(
+          locale === 'en' ? 'optional' : 'необязательный',
+        )
+        expect(warning.get('.health-action').text()).toContain(
+          locale === 'en' ? 'only if you want' : 'только если нужны',
+        )
+        expect(warning.get('.health-finding-state').attributes('data-state')).toBe('degraded')
+        expect(warning.get('details').attributes('open')).toBeUndefined()
+        expect(warning.get('details').text()).toContain('VALKAMA_CODEX_ROLLOUT_ROOT')
+        expect(warning.get('.health-finding-state').text()).not.toContain('-telemetry')
+      }
+      expect(findings[0].get('.health-finding-state').attributes('data-state')).toBe('unavailable')
+      expect(findings[0].get('.health-detail').text()).not.toContain(
+        locale === 'en' ? 'optional' : 'необязательный',
+      )
+    },
+  )
 })

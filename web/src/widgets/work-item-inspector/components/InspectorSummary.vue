@@ -5,9 +5,18 @@ import InspectorReport from '@/widgets/work-item-inspector/components/InspectorR
 
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
+import VButton from '@/shared/ui/VButton.vue'
 
-defineProps<{ item: WorkItem }>()
+const props = defineProps<{ item: WorkItem }>()
 const { t } = useI18n()
+
+function viewReport() {
+  const report = document.querySelector<HTMLElement>(
+    `#work-report-${props.item.summary_comment_id}`,
+  )
+  report?.scrollIntoView({ block: 'start' })
+  report?.focus({ preventScroll: true })
+}
 </script>
 
 <template>
@@ -15,17 +24,29 @@ const { t } = useI18n()
     v-if="item.summary"
     class="outcome"
   >
-    <SectionHeading
-      as="h3"
-      level="panel"
-      >{{ t('workItem.outcome') }}</SectionHeading
-    >
-    <InspectorReport :report="item.summary" />
-    <a
+    <details class="outcome-details">
+      <summary class="outcome-toggle">
+        <SectionHeading
+          as="h3"
+          level="panel"
+          class="outcome-heading"
+          >{{ t('workItem.outcome') }}</SectionHeading
+        >
+      </summary>
+      <div class="outcome-body">
+        <InspectorReport :report="item.summary" />
+      </div>
+    </details>
+    <div class="outcome-preview">
+      <span class="outcome-preview-label">{{ t('workItem.outcomePreview') }}</span>
+      <p class="outcome-preview-text">{{ item.summary.done }}</p>
+    </div>
+    <VButton
       v-if="item.summary_comment_id !== null"
       class="outcome-link"
-      :href="`#work-report-${item.summary_comment_id}`"
-      >{{ t('workItem.viewReport') }}</a
+      variant="ghost"
+      @click="viewReport"
+      >{{ t('workItem.viewReport') }}</VButton
     >
   </section>
 </template>
@@ -40,7 +61,48 @@ const { t } = useI18n()
 }
 
 .outcome-link {
-  color: var(--color-action-primary);
+  justify-self: start;
+}
+
+.outcome-toggle {
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+  }
+}
+
+.outcome-heading {
+  display: inline-flex;
+  vertical-align: middle;
+}
+
+.outcome-body {
+  margin-top: var(--space-heading-content);
+}
+
+.outcome-preview {
+  display: grid;
+  gap: var(--space-label-value);
+
+  .outcome-details[open] ~ & {
+    display: none;
+  }
+}
+
+.outcome-preview-label {
+  color: var(--color-text-muted);
   font: var(--font-detail);
+}
+
+.outcome-preview-text {
+  display: -webkit-box;
+  margin: 0;
+  font: var(--font-editor);
+  overflow-wrap: anywhere;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 </style>

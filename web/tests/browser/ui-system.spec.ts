@@ -371,19 +371,32 @@ test('inspector facts and section headings keep a shared spacing rhythm', async 
   await page.goto('/tests/browser/harness.html?lang=en&surface=work-item')
   const drawer = page.locator('.drawer')
   await expect(drawer.locator('.fact').first()).toBeVisible()
-  const gaps = await Promise.all(
-    ['.fact dt', '.outcome h3', '.overview-section .section-line'].map((selector) =>
-      drawer
-        .locator(selector)
-        .first()
-        .evaluate((element) => {
-          const next = element.nextElementSibling
-          if (!next) throw new Error('Expected content after the label or heading')
-          return next.getBoundingClientRect().top - element.getBoundingClientRect().bottom
-        }),
-    ),
+  const labelGap = await drawer
+    .locator('.fact dt')
+    .first()
+    .evaluate((element) => {
+      const next = element.nextElementSibling
+      if (!next) throw new Error('Expected a value after the label')
+      return next.getBoundingClientRect().top - element.getBoundingClientRect().bottom
+    })
+  expect(labelGap).toBe(8)
+  const gaps = await drawer.evaluate((element) =>
+    [
+      ['.description-heading h3', '.description-copy'],
+      ['.overview-section .section-line h3', '.section-line + .quiet'],
+      ['.discussion > h3', '.discussion-feed'],
+    ].map(([heading, content]) => {
+      const title = element.querySelector(heading)
+      const next = element.querySelector(content)
+      if (!title || !next) throw new Error('Expected a heading and its visible content')
+      return next.getBoundingClientRect().top - title.getBoundingClientRect().bottom
+    }),
   )
-  expect(gaps).toEqual([8, 12, 12])
+  expect(gaps).toEqual([12, 12, 12])
+  for (const selector of ['.description-copy', '.discussion .report-value']) {
+    const content = drawer.locator(selector).filter({ visible: true }).first()
+    await expect(content).toHaveCSS('font-size', '15px')
+  }
   const labelHeights = await drawer
     .locator('.fact dt')
     .evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().height))

@@ -115,6 +115,7 @@ function select(commentId: number) {
         :id="`work-report-${entry.id}`"
         :key="entry.id"
         class="discussion-entry"
+        tabindex="-1"
       >
         <div class="discussion-meta">
           <span
@@ -262,7 +263,7 @@ function select(commentId: number) {
 
 .discussion-body {
   margin: 0;
-  font: var(--font-line);
+  font: var(--font-editor);
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }

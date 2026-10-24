@@ -40,10 +40,18 @@ export const platformIntegrationMessages = {
       configuration: 'Setup and configuration',
       externalSetup:
         'Managed through Valkama CLI: adapter list, adapter check and adapter install. The provider owner manages the service itself.',
-      providerSetup:
-        'Configuration belongs to the provider named above. Use its supported service tools; Valkama selects the connection below.',
-      builtinSetup:
-        'This adapter is included with Valkama. Configure the client or data source with its owner; project connection choices are below.',
+      providerSetup: {
+        global:
+          'Configuration belongs to the provider named above. Use its supported service tools. Select a project to choose its connections.',
+        project:
+          'Configuration belongs to the provider named above. Use its supported service tools; choose this project’s connection in Project assignments below.',
+      },
+      builtinSetup: {
+        global:
+          'This adapter is included with Valkama. Configure the client or data source with its owner. Select a project to choose its connections.',
+        project:
+          'This adapter is included with Valkama. Configure the client or data source with its owner; choose this project’s connection in Project assignments below.',
+      },
       agentMemorySetup:
         'Valkama includes the reference adapter. AgentMemory owns the data and service at 127.0.0.1:3111. Start or repair AgentMemory with its own service tools; this page selects connections, not its runtime configuration.',
 
@@ -153,10 +161,18 @@ export const platformIntegrationMessages = {
       configuration: 'Подключение и настройка',
       externalSetup:
         'Управление через CLI Valkama: adapter list, adapter check и adapter install. Самим сервисом управляет его владелец.',
-      providerSetup:
-        'Настройка принадлежит указанному провайдеру. Используйте его средства управления сервисом; Valkama выбирает подключение ниже.',
-      builtinSetup:
-        'Адаптер входит в Valkama. Клиент или источник данных настраивается у его владельца; выбор подключения для проекта — ниже.',
+      providerSetup: {
+        global:
+          'Настройка принадлежит указанному провайдеру. Используйте его средства управления сервисом. Выберите проект, чтобы выбрать его подключения.',
+        project:
+          'Настройка принадлежит указанному провайдеру. Используйте его средства управления сервисом; подключение проекта выбирается ниже, в разделе «Назначения проекта».',
+      },
+      builtinSetup: {
+        global:
+          'Адаптер входит в Valkama. Клиент или источник данных настраивается у его владельца. Выберите проект, чтобы выбрать его подключения.',
+        project:
+          'Адаптер входит в Valkama. Клиент или источник данных настраивается у его владельца; подключение проекта выбирается ниже, в разделе «Назначения проекта».',
+      },
       agentMemorySetup:
         'Адаптер ссылок входит в Valkama. Данные и сервис на 127.0.0.1:3111 принадлежат AgentMemory. Запустите или восстановите AgentMemory его средствами; эта страница выбирает подключения, а не настройки сервиса.',
 

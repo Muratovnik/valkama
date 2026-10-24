@@ -213,7 +213,7 @@ describe('task description and discussion', () => {
       },
       global: editingPlugins(),
     })
-    expect(outcome.get('a').attributes('href')).toBe('#work-report-11')
+    expect(outcome.get('.outcome-link').element.tagName).toBe('BUTTON')
   })
 
   it('places backfilled reports by recorded time and labels missing historical metadata', () => {
@@ -259,6 +259,41 @@ describe('task description and discussion', () => {
     expect(entries[0].text()).toContain('Author not recorded')
     expect(entries[0].text()).toContain('Unknown time')
     expect(item.comments.map((entry) => entry.id)).toEqual([1, 100, 99])
+  })
+
+  it('starts the outcome collapsed with an abridged preview and a link to the complete selected report', () => {
+    const report = {
+      done: 'Completed the first phase. '.repeat(40),
+      next: 'Review every acceptance result.',
+      why: 'Keep the full decision available.',
+    }
+    const item: WorkItem = {
+      ...record('Task', 5),
+      summary: report,
+      summary_comment_id: 11,
+      comments: [{ id: 11, kind: 'report', author: 'user', body: '', at: now, report }],
+    }
+    const wrapper = mount(InspectorOverview, {
+      props: { item, resourceRef, writable: true },
+      global: editingPlugins(),
+    })
+    const details = wrapper.get('.outcome details')
+    expect(details.element.tagName).toBe('DETAILS')
+    expect(details.attributes('open')).toBeUndefined()
+    expect(details.get('summary').text()).toBe('Task outcome')
+    expect(details.get('.report').text()).toContain(report.next)
+    expect(details.get('.report').text()).toContain(report.why)
+    expect(wrapper.get('.outcome-preview-label').text()).toBe('Abbreviated preview')
+    expect(wrapper.get('.outcome-preview-text').text()).toBe(report.done.trim())
+    const link = wrapper.get('.outcome-link')
+    expect(link.element.tagName).toBe('BUTTON')
+    expect(link.element.closest('details')).toBeNull()
+    const selectedReport = wrapper.get('#work-report-11 .report')
+    expect(selectedReport.text()).toContain(report.done.trim())
+    expect(selectedReport.text()).toContain(report.next)
+    expect(selectedReport.text()).toContain(report.why)
+    expect(wrapper.get('textarea[aria-label="Comment"]').exists()).toBe(true)
+    wrapper.unmount()
   })
 
   it('shows read-only descriptions and reports without edit actions', () => {

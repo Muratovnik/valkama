@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import GraphNodeCard from '@/widgets/work-item-graph/components/GraphNodeCard.vue'
 import type { PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import InspectorOverview from '@/widgets/work-item-inspector/components/InspectorOverview.vue'
+import WorkItemList from '@/widgets/work-item-views/components/WorkItemList.vue'
 import WorkItemTile from '@/widgets/work-item-views/components/WorkItemTile.vue'
 
 import type { WorkItem, WorkItemBrief } from '@/shared/api/planningModel.ts'
@@ -65,6 +66,18 @@ function i18n() {
 }
 
 describe('Planning semantic presentation', () => {
+  it('distinguishes previous ownership in the list while retaining active assignees', async () => {
+    const item = workItem({ claim_ref: 'claude' })
+    const wrapper = mount(WorkItemList, {
+      props: { items: [item], links: [] },
+      global: { plugins: [i18n()] },
+    })
+    expect(wrapper.get('.list-claim').text()).toBe('claude')
+    await wrapper.setProps({ items: [{ ...item, state: { ...item.state, is_terminal: true } }] })
+    expect(wrapper.get('.list-claim').text()).toBe('Previously responsible: claude')
+    expect(wrapper.get('.list-claim').attributes('title')).toBe('Previously responsible: claude')
+  })
+
   it('keeps priority readable without colouring the whole card', async () => {
     const wrapper = mount(WorkItemTile, {
       props: { item: workItem({ priority: 'urgent' }) },
@@ -91,6 +104,7 @@ describe('Planning semantic presentation', () => {
 
     await wrapper.setProps({ node: placedNode({ claim_ref: 'codex' }) })
     expect(wrapper.get('.flow-node-card').attributes('data-tone')).toBe('success')
+    expect(wrapper.get('.flow-node-owner').text()).toContain('Assigned to')
 
     await wrapper.setProps({ ready: true })
     expect(wrapper.get('.flow-node-card').attributes('data-tone')).toBe('neutral')
@@ -104,6 +118,8 @@ describe('Planning semantic presentation', () => {
       }),
     })
     expect(wrapper.get('.flow-node-card').attributes('data-tone')).toBe('danger')
+    expect(wrapper.get('.flow-node-owner').text()).toContain('Previously responsible')
+    expect(wrapper.get('.flow-node-owner').text()).not.toContain('Assigned to')
   })
 
   it('renders the inspector state from its shared workflow-state presentation', () => {
