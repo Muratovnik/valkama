@@ -28,6 +28,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from server import mcp_surface, store
 from server.ops import tray
+from server.planning import api as planning_api
 from server.planning import service as planning_service
 from server.platform import core as platform_core
 
@@ -498,6 +499,23 @@ class DispatchTests(McpSurfaceTestCase):
         full = self.call("claim_work_item", {**arguments, "verbose": True})["content"][0]["text"]
         self.assertLess(len(short) * 2, len(full))
 
+    def test_the_wire_answers_a_wrong_name_with_the_correction_not_a_key_error(self) -> None:
+        reference = planning_service.create_work_item(self.conn, space=SPACE_KEY, title="Wire")[
+            "reference"
+        ]
+        self.conn.commit()
+        wrong = self.call("get_work_item", {"item": reference})
+        self.assertTrue(wrong["isError"])
+        self.assertIn("unknown argument 'item'", wrong["content"][0]["text"])
+        self.assertIn("expected 'id'", wrong["content"][0]["text"])
+        missing = self.call("get_planning_space", {})
+        self.assertTrue(missing["isError"])
+        self.assertNotIn("KeyError", missing["content"][0]["text"])
+        self.assertIn("missing argument 'space'", missing["content"][0]["text"])
+        synonym = self.call("get_work_item", {"reference": reference})
+        self.assertFalse(synonym["isError"])
+        self.assertEqual(reference, self.payload(synonym)["reference"])
+
 
 class FramingTests(McpSurfaceTestCase):
     def test_a_blank_line_and_unparseable_bytes_are_skipped_not_answered(self) -> None:
@@ -662,6 +680,177 @@ class TrayAssetTests(unittest.TestCase):
     def test_the_tray_script_and_icon_resolve_to_files_that_exist(self) -> None:
         for path in tray.assets():
             self.assertTrue(os.path.isfile(path), f"tray asset is missing: {path}")
+
+
+class ToolArgumentTests(McpSurfaceTestCase):
+    """What a caller whose tool schemas are out of view can still get right."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.first = self.call_tool("create_work_item", space=SPACE_KEY, title="First")["reference"]
+        self.second = self.call_tool("create_work_item", space=SPACE_KEY, title="Second")[
+            "reference"
+        ]
+
+    def call_tool(self, name: str, /, **arguments: object) -> dict:
+        answer = mcp_surface.call_tool(self.conn, name, arguments)
+        assert isinstance(answer, dict)
+        return answer
+
+    def refusal(self, name: str, /, **arguments: object) -> str:
+        with self.assertRaises(planning_api.PlanningHttpError) as caught:
+            mcp_surface.call_tool(self.conn, name, arguments)
+        self.assertEqual(400, caught.exception.status)
+        return caught.exception.message
+
+    def test_an_item_is_read_by_reference_or_ref_as_well_as_by_id(self) -> None:
+        expected = self.call_tool("get_work_item", id=self.first)
+        self.assertEqual(expected, self.call_tool("get_work_item", reference=self.first))
+        self.assertEqual(expected, self.call_tool("get_work_item", ref=self.first))
+
+    def test_the_item_synonyms_reach_every_tool_that_takes_an_id(self) -> None:
+        claimed = self.call_tool("claim_work_item", reference=self.first, author="one")
+        self.assertEqual("one", claimed["claim_ref"])
+        commented = self.call_tool("comment_work_item", ref=self.first, body="a note")
+        self.assertEqual(1, commented["comment_count"])
+
+    def test_a_link_reads_from_to_target_and_type(self) -> None:
+        linked = self.call_tool(
+            "link_work_items", **{"from": self.first, "to": self.second, "type": "relates-to"}
+        )
+        self.assertEqual("relates-to", linked["kind"])
+        self.assertFalse(linked["removed"])
+        removed = self.call_tool(
+            "link_work_items", id=self.first, target=self.second, kind="relates-to", remove=True
+        )
+        self.assertTrue(removed["removed"])
+
+    def test_a_transition_reads_to_and_to_state(self) -> None:
+        for synonym in ("to", "to_state"):
+            with self.subTest(synonym):
+                moved = self.call_tool("transition_work_item", id=self.first, **{synonym: "todo"})
+                self.assertEqual("todo", moved["state"]["key"])
+                self.call_tool("transition_work_item", id=self.first, state="backlog")
+
+    def test_a_ref_is_the_value_to_attach_not_the_item(self) -> None:
+        self.call_tool("attach_work_item_ref", id=self.first, kind="commit", ref="abc1234")
+        refs = self.call_tool("get_work_item", id=self.first)["refs"]
+        self.assertEqual(["abc1234"], [ref["value"] for ref in refs])
+        # `reference` is still the item here, because `ref` is spoken for.
+        self.call_tool("attach_work_item_ref", reference=self.second, kind="commit", value="d5678")
+        self.assertEqual(1, len(self.call_tool("get_work_item", id=self.second)["refs"]))
+
+    def test_a_space_is_read_from_planning_space_id(self) -> None:
+        created = self.call_tool("create_work_item", planning_space_id=SPACE_KEY, title="Third")
+        self.assertTrue(created["reference"].startswith(f"{SPACE_KEY}-"))
+        listed = self.call_tool("list_work_items", planning_space_id=SPACE_KEY)["work_items"]
+        self.assertEqual(3, len(listed))
+        found = self.call_tool("search_work_items", query="Third", planning_space_id=SPACE_KEY)
+        self.assertEqual([created["reference"]], [row["reference"] for row in found["work_items"]])
+        space = self.call_tool("get_planning_space", planning_space_id=SPACE_KEY)
+        self.assertEqual(SPACE_KEY, space["key"])
+
+    def test_a_planning_space_is_also_read_by_id(self) -> None:
+        self.assertEqual(SPACE_KEY, self.call_tool("get_planning_space", id=SPACE_KEY)["key"])
+
+    def test_no_published_schema_advertises_a_synonym(self) -> None:
+        for tool in mcp_surface.catalogue():
+            for synonym in mcp_surface._SYNONYMS.get(tool["name"], {}):
+                self.assertNotIn(synonym, tool["inputSchema"]["properties"], tool["name"])
+
+    def test_a_synonym_and_its_canonical_name_with_different_values_are_refused(self) -> None:
+        cases = (
+            ("get_work_item", {"id": self.first, "reference": self.second}),
+            ("get_work_item", {"ref": self.second, "id": self.first}),
+            ("transition_work_item", {"id": self.first, "state": "todo", "to": "done"}),
+            (
+                "link_work_items",
+                {"id": self.first, "from": self.second, "other": "x", "kind": "blocks"},
+            ),
+            (
+                "link_work_items",
+                {"id": self.first, "other": self.second, "to": "x", "kind": "blocks"},
+            ),
+            (
+                "attach_work_item_ref",
+                {"id": self.first, "kind": "commit", "value": "a", "ref": "b"},
+            ),
+            ("get_planning_space", {"space": SPACE_KEY, "id": "OTHER"}),
+            ("create_work_item", {"space": SPACE_KEY, "planning_space_id": "OTHER", "title": "x"}),
+        )
+        for name, arguments in cases:
+            with self.subTest(name, arguments=arguments):
+                message = self.refusal(name, **arguments)
+                self.assertTrue(message.startswith(f"{name}: "), message)
+                self.assertIn("different values", message)
+        self.assertEqual(2, len(self.call_tool("list_work_items", space=SPACE_KEY)["work_items"]))
+
+    def test_two_synonyms_for_one_name_that_disagree_are_refused(self) -> None:
+        message = self.refusal(
+            "link_work_items", id=self.first, to=self.first, target=self.second, kind="blocks"
+        )
+        self.assertIn("different values", message)
+
+    def test_a_synonym_given_beside_its_canonical_name_with_the_same_value_is_one_answer(
+        self,
+    ) -> None:
+        expected = self.call_tool("get_work_item", id=self.first)
+        self.assertEqual(
+            expected, self.call_tool("get_work_item", id=self.first, reference=self.first)
+        )
+
+    def test_an_unknown_argument_is_named_with_what_the_tool_takes(self) -> None:
+        self.assertEqual(
+            "get_work_item: unknown argument 'item'; expected 'id' (required: A work item,"
+            " by its reference (VAL-142) or its work_item_id)",
+            self.refusal("get_work_item", item=self.first),
+        )
+        message = self.refusal(
+            "transition_work_item", id=self.first, state="todo", status="x", nope=1
+        )
+        self.assertTrue(
+            message.startswith("transition_work_item: unknown arguments 'status', 'nope'; ")
+        )
+        self.assertIn("'id' (required), 'state' (required), 'reason'", message)
+
+    def test_a_synonym_does_not_excuse_an_argument_the_tool_does_not_have(self) -> None:
+        message = self.refusal("get_work_item", reference=self.first, bogus=1)
+        self.assertIn("unknown argument 'bogus'", message)
+
+    def test_a_tool_without_arguments_says_so(self) -> None:
+        self.assertEqual(
+            "list_planning_spaces: unknown argument 'space'; expected no arguments",
+            self.refusal("list_planning_spaces", space=SPACE_KEY),
+        )
+
+    def test_a_missing_argument_is_named_and_is_not_a_key_error(self) -> None:
+        message = self.refusal("get_planning_space")
+        self.assertTrue(
+            message.startswith("get_planning_space: missing argument 'space'; expected")
+        )
+        message = self.refusal("transition_work_item", id=self.first)
+        self.assertTrue(message.startswith("transition_work_item: missing argument 'state'; "))
+        self.assertIn(
+            "link_work_items: missing arguments 'other', 'kind'",
+            self.refusal("link_work_items", id=self.first),
+        )
+
+    def test_arguments_that_are_not_an_object_are_refused(self) -> None:
+        with self.assertRaisesRegex(planning_api.PlanningHttpError, "arguments must be an object"):
+            mcp_surface.call_tool(self.conn, "get_work_item", ["QA-1"])  # type: ignore[arg-type]
+
+    def test_every_required_argument_is_checked_before_a_handler_reads_it(self) -> None:
+        for tool in mcp_surface.catalogue():
+            if tool["name"] not in mcp_surface._SCHEMAS:
+                continue
+            for required in tool["inputSchema"].get("required", []):
+                with self.subTest(tool["name"], required=required):
+                    arguments = {
+                        name: "x" for name in tool["inputSchema"]["required"] if name != required
+                    }
+                    self.assertIn(
+                        f"missing argument '{required}'", self.refusal(tool["name"], **arguments)
+                    )
 
 
 if __name__ == "__main__":

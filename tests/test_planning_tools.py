@@ -7,7 +7,7 @@ from unittest import mock
 
 from server import mcp_surface, store
 from server.planning import api as planning_api
-from server.planning import migration, model
+from server.planning import migration, model, service
 from server.planning import tools as planning_tools
 from tests import board_era
 
@@ -201,6 +201,10 @@ ACKNOWLEDGED = (
 )
 
 
+#: The two reads that answer in rows and so publish `verbose` too.
+ROW_READS = ("list_work_items", "search_work_items")
+
+
 class PlanningAcknowledgementTests(unittest.TestCase):
     """A write answers briefly by default and in full on request."""
 
@@ -276,7 +280,7 @@ class PlanningAcknowledgementTests(unittest.TestCase):
     def test_exactly_the_acknowledged_tools_publish_verbose_as_a_boolean(self) -> None:
         for tool in planning_tools.TOOLS:
             schema = tool["inputSchema"]
-            if tool["name"] in ACKNOWLEDGED:
+            if tool["name"] in ACKNOWLEDGED or tool["name"] in ROW_READS:
                 self.assertEqual("boolean", schema["properties"]["verbose"]["type"], tool["name"])
                 self.assertIn("full", schema["properties"]["verbose"]["description"])
                 self.assertNotIn("verbose", schema.get("required", []), tool["name"])
@@ -408,7 +412,7 @@ class PlanningAcknowledgementTests(unittest.TestCase):
         full = self.call("get_work_item", id=self.ref)
         for key in FULL_ONLY:
             self.assertIn(key, full)
-        listed = self.call("list_work_items", space="QA")["work_items"]
+        listed = self.call("list_work_items", space="QA", verbose=True)["work_items"]
         self.assertTrue(all("comment_count" in item and "events" not in item for item in listed))
         taken = self.call("claim_ready_work_item", space="QA", author="one")["work_item"]
         for key in ("events", "checklist", "description", "comments"):
@@ -430,6 +434,127 @@ class PlanningAcknowledgementTests(unittest.TestCase):
                 self.assertEqual(200, status)
                 stored = self.call("get_work_item", id=self.ref)
                 self.assertEqual(stored, {k: v for k, v in body.items() if k != "warnings"})
+
+
+class PlanningCompactReadTests(unittest.TestCase):
+    """A list or a search answers in rows unless the caller asks for the items."""
+
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(directory.cleanup)
+        patch = mock.patch.dict(
+            os.environ, {"VALKAMA_DB": os.path.join(directory.name, "valkama.sqlite3")}
+        )
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.conn = store.connect()
+        self.addCleanup(self.conn.close)
+        service.create_planning_space(self.conn, project_id="tools", name="Quality", key="QA")
+        self.epic = self.call("create_work_item", space="QA", title="Umbrella", kind="epic")
+        self.child = self.call(
+            "create_work_item",
+            space="QA",
+            title="Child of the umbrella",
+            parent=self.epic["reference"],
+            priority="high",
+            description="a long description",
+            labels=["one"],
+        )
+        self.call("claim_work_item", id=self.child["reference"], author="one")
+        self.call("set_work_item_checklist", id=self.child["reference"], items=["a", "b"])
+
+    def call(self, name: str, **arguments: object) -> dict:
+        answer = mcp_surface.call_tool(self.conn, name, arguments)
+        assert isinstance(answer, dict)
+        return answer
+
+    def fill(self, count: int) -> None:
+        for number in range(count):
+            self.call("create_work_item", space="QA", title=f"Filler {number}")
+
+    def test_a_list_answers_one_compact_row_per_item(self) -> None:
+        answer = self.call("list_work_items", space="QA")
+        rows = {row["reference"]: row for row in answer["work_items"]}
+        self.assertFalse(answer["truncated"])
+        self.assertEqual(
+            {
+                "reference": self.child["reference"],
+                "title": "Child of the umbrella",
+                "kind": "task",
+                "state": "backlog",
+                "priority": "high",
+                "parent": self.epic["reference"],
+                "claim_ref": "one",
+            },
+            rows[self.child["reference"]],
+        )
+        self.assertIsNone(rows[self.epic["reference"]]["parent"])
+        self.assertEqual("", rows[self.epic["reference"]]["claim_ref"])
+
+    def test_verbose_answers_exactly_what_the_boundary_answers(self) -> None:
+        answer = self.call("list_work_items", space="QA", verbose=True)
+        direct = planning_api.handle_get(self.conn, "/api/planning/work-items", {"space": ["QA"]})
+        assert direct is not None
+        self.assertEqual(direct[1], answer)
+        self.assertNotIn("truncated", answer)
+        found = self.call("search_work_items", query="Umbrella", verbose=True)
+        searched = planning_api.handle_get(self.conn, "/api/planning/search", {"q": ["Umbrella"]})
+        assert searched is not None
+        self.assertEqual(searched[1], found)
+
+    def test_a_list_is_capped_by_default_and_says_so(self) -> None:
+        self.fill(planning_tools.COMPACT_LIMIT + 5)
+        answer = self.call("list_work_items", space="QA")
+        self.assertEqual(planning_tools.COMPACT_LIMIT, len(answer["work_items"]))
+        self.assertTrue(answer["truncated"])
+        verbose = self.call("list_work_items", space="QA", verbose=True)
+        self.assertEqual(planning_tools.COMPACT_LIMIT + 7, len(verbose["work_items"]))
+
+    def test_an_explicit_limit_wins_and_the_cut_is_exact(self) -> None:
+        self.fill(planning_tools.COMPACT_LIMIT + 5)
+        total = planning_tools.COMPACT_LIMIT + 7
+        for limit, shown, cut in (
+            (3, 3, True),
+            (total - 1, total - 1, True),
+            (total, total, False),
+        ):
+            with self.subTest(limit=limit):
+                answer = self.call("list_work_items", space="QA", limit=limit)
+                self.assertEqual((shown, cut), (len(answer["work_items"]), answer["truncated"]))
+
+    def test_a_limit_that_is_not_a_number_is_refused(self) -> None:
+        with self.assertRaisesRegex(planning_api.PlanningHttpError, "limit must be an integer"):
+            self.call("list_work_items", space="QA", limit="many")
+
+    def test_verbose_must_be_a_boolean_on_a_read_too(self) -> None:
+        for tool, arguments in (
+            ("list_work_items", {"space": "QA"}),
+            ("search_work_items", {"query": "Umbrella"}),
+        ):
+            with (
+                self.subTest(tool),
+                self.assertRaisesRegex(planning_api.PlanningHttpError, "verbose must be a boolean"),
+            ):
+                self.call(tool, verbose="yes", **arguments)
+
+    def test_a_search_answers_rows_and_keeps_why_each_matched(self) -> None:
+        self.call("comment_work_item", id=self.child["reference"], body="the needle is here")
+        answer = self.call("search_work_items", query="needle")
+        [row] = answer["work_items"]
+        self.assertEqual(self.child["reference"], row["reference"])
+        self.assertEqual("the needle is here", row["comment_hit"])
+        self.assertNotIn("checklist", row)
+        self.assertFalse(answer["truncated"])
+
+    def test_a_search_is_capped_by_default_and_says_so(self) -> None:
+        self.fill(planning_tools.COMPACT_LIMIT + 5)
+        answer = self.call("search_work_items", query="Filler")
+        self.assertEqual(planning_tools.COMPACT_LIMIT, len(answer["work_items"]))
+        self.assertTrue(answer["truncated"])
+        two = self.call("search_work_items", query="Filler", limit=2)
+        self.assertEqual((2, True), (len(two["work_items"]), two["truncated"]))
+        verbose = self.call("search_work_items", query="Filler", verbose=True)
+        self.assertEqual(planning_tools.COMPACT_LIMIT, len(verbose["work_items"]))
 
 
 if __name__ == "__main__":  # pragma: no cover - unittest discovery owns this

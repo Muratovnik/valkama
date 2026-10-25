@@ -7,8 +7,9 @@ decisions twice and they drifted.
 
 Declarative on purpose: the definitions are data and the handlers are one call
 each. A write to a work item narrows its answer to an acknowledgement unless the
-caller passes `verbose`; the boundary underneath still answers in full. The MCP surface decides *which* catalogue to publish; nothing here knows
-that a catalogue can change.
+caller passes `verbose`, and a list or a search narrows each item to one row; the
+boundary underneath still answers in full. The MCP surface decides *which*
+catalogue to publish; nothing here knows that a catalogue can change.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Callable, Mapping
 
-from . import acknowledgements, api, model
+from . import acknowledgements, api, model, read_model
 
 READ_ONLY = {"readOnlyHint": True, "idempotentHint": True, "openWorldHint": False}
 WRITES = {"readOnlyHint": False, "destructiveHint": False, "openWorldHint": False}
@@ -52,6 +53,14 @@ _FORCE = {
 _VERBOSE = {
     "type": "boolean",
     "description": "Answer with the full work item instead of the short acknowledgement.",
+}
+#: Rows a list or a search answers with when the caller names no limit.
+COMPACT_LIMIT = 50
+_VERBOSE_ROWS = {
+    "type": "boolean",
+    "description": "Answer with the full items instead of one compact row per item."
+    " Without it the answer is capped at limit rows (default"
+    f" {COMPACT_LIMIT}) and says whether it was cut.",
 }
 
 
@@ -139,7 +148,8 @@ TOOLS = [
     _tool(
         "list_work_items",
         "List work items",
-        "Items in state order, filtered by state, category, kind or holder.",
+        "Items in state order, filtered by state, category, kind or holder. One compact"
+        " row per item: reference, title, kind, state, priority, parent and holder.",
         READ_ONLY,
         {
             "space": _SPACE,
@@ -148,14 +158,16 @@ TOOLS = [
             "kind": {"type": "string", "enum": sorted(model.WORK_ITEM_KINDS)},
             "owner": _STR,
             "limit": _INT,
+            "verbose": _VERBOSE_ROWS,
         },
     ),
     _tool(
         "search_work_items",
         "Search work items",
-        "Match a phrase against titles, descriptions and closing summaries.",
+        "Match a phrase against titles, descriptions and closing summaries. One compact"
+        " row per item, with the matching comment line when that is what matched.",
         READ_ONLY,
-        {"query": _STR, "space": _SPACE, "limit": _INT},
+        {"query": _STR, "space": _SPACE, "limit": _INT, "verbose": _VERBOSE_ROWS},
         ["query"],
     ),
     _tool(
@@ -490,6 +502,13 @@ def _post(path: str) -> Callable[[sqlite3.Connection, Mapping[str, object]], obj
     return run
 
 
+def _is_verbose(arguments: Mapping[str, object]) -> bool:
+    verbose = arguments.get("verbose", False)
+    if not isinstance(verbose, bool):
+        raise api.PlanningHttpError(400, "invalid_request", "verbose must be a boolean")
+    return verbose
+
+
 def _acknowledged(
     path: str, acknowledge: acknowledgements.Acknowledge
 ) -> Callable[[sqlite3.Connection, Mapping[str, object]], object]:
@@ -503,9 +522,7 @@ def _acknowledged(
     write = _post(path)
 
     def run(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
-        verbose = arguments.get("verbose", False)
-        if not isinstance(verbose, bool):
-            raise api.PlanningHttpError(400, "invalid_request", "verbose must be a boolean")
+        verbose = _is_verbose(arguments)
         item = write(conn, {name: value for name, value in arguments.items() if name != "verbose"})
         if verbose or not isinstance(item, dict):
             return item
@@ -551,6 +568,62 @@ def _search(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object
     return answer[1]
 
 
+def _compact_row(conn: sqlite3.Connection, item: dict) -> dict:
+    """One item as a row: what a caller scans a list for, and nothing it must open."""
+
+    parent = item["parent_id"]
+    row = {
+        "reference": item["reference"],
+        "title": item["title"],
+        "kind": item["kind"],
+        "state": item["state"]["key"],
+        "priority": item["priority"],
+        "parent": read_model.reference(conn, read_model.item_by_id(conn, parent))
+        if parent
+        else None,
+        "claim_ref": item["claim_ref"],
+    }
+    # Why a search returned the item; a row without it cannot be told from noise.
+    return row | {name: item[name] for name in ("comment_hit", "summary_hit") if name in item}
+
+
+def _listing(
+    read: Callable[[sqlite3.Connection, Mapping[str, object]], object],
+) -> Callable[[sqlite3.Connection, Mapping[str, object]], object]:
+    """A read of many items, answered as rows unless the caller wants the items.
+
+    The boundary answers every item with its checklist and labels, which is what
+    a screen draws from and what floods a model that only wanted to find one
+    reference. `verbose` returns that answer untouched. Otherwise the call is
+    bounded: one row more than the limit is read, so the answer can say it was
+    cut instead of passing for the whole.
+    """
+
+    def run(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
+        verbose = _is_verbose(arguments)
+        rest = {name: value for name, value in arguments.items() if name != "verbose"}
+        if verbose:
+            return read(conn, rest)
+        raw = rest.get("limit")
+        try:
+            limit = COMPACT_LIMIT if raw is None else max(1, int(str(raw), 10))
+        except ValueError as error:
+            raise api.PlanningHttpError(
+                400, "invalid_request", "limit must be an integer"
+            ) from error
+        answer = read(conn, {**rest, "limit": limit + 1})
+        if not isinstance(answer, dict):  # pragma: no cover - both reads answer a mapping
+            return answer
+        items = answer["work_items"]
+        return {
+            **answer,
+            "work_items": [_compact_row(conn, item) for item in items[:limit]],
+            "truncated": len(items) > limit,
+        }
+
+    return run
+
+
 def _space(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
     from . import service
 
@@ -563,10 +636,10 @@ OPS: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], object]] = {
     "create_planning_space": _post("/api/planning/spaces"),
     "create_work_item": _acknowledged("/api/planning/work-items", acknowledgements.created),
     "get_work_item": _get("/api/planning/work-item", "id", unwrap="work_item"),
-    "list_work_items": _get(
-        "/api/planning/work-items", "space", "state", "category", "kind", "owner", "limit"
+    "list_work_items": _listing(
+        _get("/api/planning/work-items", "space", "state", "category", "kind", "owner", "limit")
     ),
-    "search_work_items": _search,
+    "search_work_items": _listing(_search),
     "update_work_item": _acknowledged("/api/planning/work-item/update", acknowledgements.updated),
     "transition_work_item": _acknowledged(
         "/api/planning/work-item/transition", acknowledgements.transitioned

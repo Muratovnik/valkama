@@ -113,11 +113,120 @@ def catalogue() -> list[dict]:
     return [*platform_tools.TOOLS, *planning_tools.TOOLS]
 
 
+# The published input schemas are the contract and they name one spelling per
+# argument. After a client compacts its context the schemas are out of view, and
+# agents then write the argument the way the sentence reads: `reference` for the
+# item, `to` for the state. Each of those cost a refused call and a second model
+# request. These names are read here, at dispatch, and nowhere below: the schemas
+# do not advertise them and the domain never sees one.
+_ARGUMENT_SYNONYMS: dict[str, dict[str, str]] = {
+    "link_work_items": {"from": "id", "to": "other", "target": "other", "type": "kind"},
+    "transition_work_item": {"to": "state", "to_state": "state"},
+    "attach_work_item_ref": {"ref": "value"},
+    "create_work_item": {"planning_space_id": "space"},
+    "list_work_items": {"planning_space_id": "space"},
+    "search_work_items": {"planning_space_id": "space"},
+    "get_planning_space": {"planning_space_id": "space", "id": "space"},
+}
+# A tool that takes an `id` but has no argument called `ref` or `reference` of
+# its own is read with those two as the item's reference; a table entry above
+# wins where the same name means something else (`ref` is the value to attach).
+_ITEM_SYNONYMS = {"reference": "id", "ref": "id"}
+
+_SCHEMAS: dict[str, dict] = {tool["name"]: tool["inputSchema"] for tool in planning_tools.TOOLS}
+
+
+def _synonyms(name: str) -> dict[str, str]:
+    properties = _SCHEMAS[name]["properties"]
+    found = (
+        dict(_ITEM_SYNONYMS)
+        if "id" in properties and not set(_ITEM_SYNONYMS) & set(properties)
+        else {}
+    )
+    return {**found, **_ARGUMENT_SYNONYMS.get(name, {})}
+
+
+_SYNONYMS = {name: _synonyms(name) for name in _SCHEMAS}
+
+
+def _expected(name: str) -> str:
+    """The names the tool takes. A tool with one argument also says what it is."""
+
+    schema = _SCHEMAS[name]
+    properties = schema["properties"]
+    if not properties:
+        return "expected no arguments"
+    required = schema.get("required", [])
+    listed = []
+    for argument, definition in properties.items():
+        notes = ["required"] if argument in required else []
+        if len(properties) == 1 and definition.get("description"):
+            notes.append(definition["description"].rstrip("."))
+        listed.append(f"'{argument}'" + (f" ({': '.join(notes)})" if notes else ""))
+    return "expected " + ", ".join(listed)
+
+
+def _plural(names: list[str], noun: str) -> str:
+    quoted = ", ".join(f"'{argument}'" for argument in names)
+    return f"{noun} {quoted}" if len(names) == 1 else f"{noun}s {quoted}"
+
+
+def _canonical_arguments(name: str, arguments: object) -> dict:
+    """The arguments of a Planning tool under the names its schema publishes.
+
+    A synonym is read as the canonical name when that one is absent, and a call
+    that gives both with different values is refused rather than resolved by
+    guessing which the caller meant. An argument the schema does not have, and
+    a required one that is missing, are refused naming the tool and the names it
+    does take, so a caller whose schema is out of view can correct itself in one
+    call.
+    """
+
+    if not isinstance(arguments, dict):
+        raise planning_api.PlanningHttpError(
+            400, "invalid_request", f"{name}: arguments must be an object"
+        )
+    schema = _SCHEMAS[name]
+    synonyms = _SYNONYMS[name]
+    resolved: dict = {}
+    given: dict[str, str] = {}
+    unknown: list[str] = []
+    for argument, value in arguments.items():
+        target = argument if argument in schema["properties"] else synonyms.get(argument)
+        if target is None:
+            unknown.append(argument)
+        elif target in resolved and resolved[target] != value:
+            raise planning_api.PlanningHttpError(
+                400,
+                "invalid_request",
+                f"{name}: '{given[target]}' and '{argument}' both set '{target}' to"
+                f" different values; pass only '{target}'",
+            )
+        else:
+            resolved.setdefault(target, value)
+            given.setdefault(target, argument)
+    if unknown:
+        raise planning_api.PlanningHttpError(
+            400,
+            "invalid_request",
+            f"{name}: {_plural(unknown, 'unknown argument')}; {_expected(name)}",
+        )
+    missing = [argument for argument in schema.get("required", []) if argument not in resolved]
+    if missing:
+        raise planning_api.PlanningHttpError(
+            400,
+            "invalid_request",
+            f"{name}: {_plural(missing, 'missing argument')}; {_expected(name)}",
+        )
+    return resolved
+
+
 def call_tool(conn: sqlite3.Connection, name: str, arguments: dict) -> object:
     if name not in _OPS:
         raise ValueError(f"unknown tool {name!r}")
     if name in _PLANNING_TOOLS:
         platform_core.require_module_enabled(conn, "planning")
+        arguments = _canonical_arguments(name, arguments or {})
     return _OPS[name](conn, arguments or {})
 
 

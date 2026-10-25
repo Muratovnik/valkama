@@ -20,6 +20,15 @@ checkouts are therefore distinguishable even at the same version.
   instead of the whole item. Pass `verbose: true` for the full item. Every MCP
   tool result is now serialized on one line without indentation. The HTTP API
   and the read tools are unchanged.
+- **Breaking for MCP clients:** `list_work_items` and `search_work_items` answer
+  one compact row per item and, without a `limit`, at most 50 rows, with a
+  `truncated` flag. Pass `verbose: true` for the full items as before. Planning
+  tools now refuse an argument their schema does not have, and a missing required
+  one, naming the tool and the arguments it takes. They also read the spellings
+  agents tend to reach for when a schema is out of view (`reference` for `id`,
+  `to` for `state`, `planning_space_id` for `space`, and the few others listed in
+  the connection contract); the published schemas are unchanged apart from the
+  optional `verbose`.
 - Focus the workspace on projects, work items, claims, blockers, execution,
   results, and review. Navigation contains Work and Settings; board, list, and
   graph share the Planning read model. Memory refs and exact session context

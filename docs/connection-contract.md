@@ -101,6 +101,32 @@ briefly (`link_work_items`, `attach_work_item_ref`, `comment_work_item`) are
 unchanged, and so is every refusal. The HTTP API is unchanged: it always
 answers with the full item.
 
+`list_work_items` and `search_work_items` answer one compact row per item:
+`reference`, `title`, `kind`, `state` (the key), `priority`, `parent` (a
+reference, or `null`) and `claim_ref`, plus `comment_hit` and `summary_hit` on a
+search that matched there. Without a `limit` they return at most 50 rows, and
+the answer carries `truncated`, which is true when more matched than it holds.
+With `verbose: true` they answer with the full items, at the limits they had
+before, and without `truncated`.
+
+### Argument names
+
+The published schemas name one spelling for each argument. A Planning tool also
+reads a few other spellings, because a caller that no longer has the schema in
+view writes the argument the way it would say it: `reference` or `ref` for an
+`id`; for `link_work_items`, `from`, `to`, `target` and `type` for `id`,
+`other`, `other` and `kind`; `to` or `to_state` for the `state` of
+`transition_work_item`; `ref` for the `value` of `attach_work_item_ref`; and
+`planning_space_id` for the `space` of `create_work_item`, `list_work_items`,
+`search_work_items` and `get_planning_space` (which also reads `id`). The
+canonical name is used when both are given with the same value. Both given with
+different values is refused. The schemas do not list these spellings, and
+nothing below the MCP surface reads them.
+
+A Planning tool refuses an argument its schema does not have, and a required
+argument that is missing, naming the tool, the argument and the arguments the
+tool takes, for example `get_work_item: unknown argument 'item'; expected 'id'`.
+
 Prompts and resources are deliberately not offered. Planning tools manage work;
 project context belongs elsewhere.
 
