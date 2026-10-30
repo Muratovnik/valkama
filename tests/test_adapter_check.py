@@ -203,5 +203,30 @@ class ConformanceTests(unittest.TestCase):
         self.assertIn("fix:", rendered)
 
 
+class _McpAdapter:
+    """An MCP server as the channel sees it: one tool per declared capability."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, dict]] = []
+
+    def call_tool(self, name: str, arguments: dict) -> dict:
+        self.calls.append((name, arguments))
+        if name != "memory.open":
+            raise transports.TransportError("adapter_refused", f"no tool {name}")
+        return {"opened": True}
+
+
+class McpRefusalTests(unittest.TestCase):
+    def test_over_mcp_only_what_the_protocol_can_carry_is_probed(self) -> None:
+        # MCP tool arguments are always an object, so the non-object probe
+        # would reach this adapter as a valid empty call to a tool it declared.
+        server = _McpAdapter()
+        finding = adapter_check._refusal_finding(
+            external.McpChannel(server), manifest_for("example-adapter")
+        )
+        self.assertEqual("ok", finding["status"])
+        self.assertEqual([("execution.launch", {})], server.calls)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -203,7 +203,10 @@ def _refusal_finding(channel, manifest: dict) -> dict:
         probes.append(
             (f"{undeclared}, which it never declared", {"capability_id": undeclared, "payload": {}})
         )
-    if manifest["capabilities"]:
+    # Over MCP this question cannot be asked: tool arguments are an object by
+    # the protocol's own schema, so the channel sends `{}` in place of a list,
+    # and a conforming adapter that accepts an empty call failed here.
+    if manifest["capabilities"] and not isinstance(channel, external.McpChannel):
         # A list is not a payload. An adapter that reads one is guessing, and a
         # guess that returns a result is the worst of the outcomes.
         probes.append(
