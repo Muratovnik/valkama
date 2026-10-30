@@ -7,21 +7,19 @@ import InspectorMemory from '@/widgets/work-item-inspector/components/InspectorM
 
 import { fetchMemoryProviders, searchMemory } from '@/shared/api/memoryApi.ts'
 import type { MemoryProviders, MemorySearch } from '@/shared/api/memoryApi.ts'
-import { parsePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
 import { memoryProviders, memorySearch } from '../browser/memoryFixtures.ts'
 import { projectId, workItem } from '../browser/planningFixtures.ts'
-import { projectRegistry } from '../browser/platformFixtures.ts'
 
 vi.mock('@/shared/api/memoryApi.ts', () => ({
   fetchMemoryProviders: vi.fn(),
   searchMemory: vi.fn(),
 }))
 
-function mountMemory() {
+function mountMemory(item = workItem) {
   return mount(InspectorMemory, {
-    props: { item: workItem, projectId, writable: true, registry: projectRegistry },
+    props: { item, projectId, writable: true },
     global: { plugins: [createI18n({ legacy: false, locale: 'en', messages })] },
   })
 }
@@ -36,7 +34,7 @@ describe('InspectorMemory source identity', () => {
       .mockResolvedValue(memorySearch as MemorySearch)
   })
 
-  it('identifies project search separately from the selected reference service before searching', async () => {
+  it('identifies the project document search before searching', async () => {
     const wrapper = mountMemory()
     await flushPromises()
     const source = wrapper.get('.memory-source')
@@ -44,16 +42,10 @@ describe('InspectorMemory source identity', () => {
     expect(source.text()).toContain(`${projectId}/docs`)
     expect(source.text()).toContain('C:/projects/sample/docs')
     expect(source.text()).toContain('Markdown project documents')
-    expect(source.text()).toContain('Saved memory references')
-    expect(source.text()).toContain('AgentMemory')
     expect(searchMemory).not.toHaveBeenCalled()
-    expect(
-      parsePlatformRoute(wrapper.get('.memory-settings-link').attributes('href')),
-    ).toMatchObject({
-      module_id: 'settings',
-      scope: { kind: 'project', project_ref: { project_id: projectId } },
-      state: { section: 'workspace' },
-    })
+    // The source is set up through the projects CLI, as the text says; no
+    // Settings screen configures it, so the panel offers no link to one.
+    expect(source.find('a').exists()).toBe(false)
   })
 
   it('keeps the actual unavailable source and repair visible without reporting zero matches', async () => {
@@ -99,5 +91,27 @@ describe('InspectorMemory source identity', () => {
     expect(wrapper.get('.memory-source').text()).not.toContain('could not be checked')
     expect(wrapper.find('.memory-source button').exists()).toBe(false)
     expect((wrapper.get('input').element as HTMLInputElement).value).toBe('release decision')
+  })
+
+  it('lists an attached memory pointer by label and id without offering to open it', async () => {
+    const wrapper = mountMemory({
+      ...workItem,
+      refs: [
+        {
+          kind: 'memory',
+          value: 'mem_0123456789',
+          label: 'Release decision',
+          author: 'agent',
+          at: '2026-08-15T00:00:00Z',
+        },
+      ],
+    })
+    await flushPromises()
+    const row = wrapper.get('.memory-row')
+    expect(row.text()).toContain('Release decision')
+    expect(row.text()).toContain('mem_0123456789')
+    expect(row.find('a').exists()).toBe(false)
+    expect(row.find('button').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Saved memory references')
   })
 })

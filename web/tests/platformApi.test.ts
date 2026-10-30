@@ -4,21 +4,13 @@ import { test } from 'vitest'
 
 import * as platformApi from '@/shared/api/platformApi.ts'
 import {
-  validatePlatformActionCommand,
-  validatePlatformActionResult,
-  validatePlatformRelationCommand,
-} from '@/shared/api/platformCommands.ts'
-import {
   validatePlatformContextPayload,
   validatePlatformUiPrefsResult,
 } from '@/shared/api/platformContextPayload.ts'
 import * as planningApi from '@/shared/api/platformPlanningApi.ts'
 import { validatePlatformPlanningPayload } from '@/shared/api/platformPlanningPayload.ts'
-import { planningSpaceEntity, planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
-import { validatePlatformRegistryPayload } from '@/shared/api/platformRegistryPayload.ts'
+import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 
-import { moduleRegistrations } from './support/moduleRegistrations.ts'
-import { unavailableCapabilityResolutions } from './support/platformCapabilities.ts'
 import { requestBody, requestUrl, withSecurityBootstrap } from './support/request.ts'
 
 const scope = { kind: 'project' as const, project_ref: { project_id: 'example-project' } }
@@ -26,23 +18,6 @@ const spaceRef = {
   data_scope_id: '123e4567-e89b-42d3-a456-426614174000',
   space_key: 'MAIN',
 }
-const workItemRef = { space_ref: spaceRef, reference: 'MAIN-264' }
-const entityRef = planningWorkItemEntity(workItemRef)
-const connectionRef = {
-  service_ref: { owner_id: 'workspace', service_id: 'notes' },
-  adapter_lineage_id: 'lineage-notes',
-  connection_id: 'primary',
-}
-const action = {
-  interface_version: 'valkama-actions' as const,
-  action_id: 'adapter.lineage-notes.attach',
-  owner_kind: 'adapter' as const,
-  owner_id: 'lineage-notes',
-  input_schema_id: 'adapter.resource.attach',
-  target_kind: 'adapter-resource' as const,
-  invocation_scope_schema: 'project' as const,
-}
-
 test('context validates exact primary and project bindings without path-shaped legacy data', () => {
   const payload = {
     interface_version: 'valkama-context',
@@ -143,115 +118,6 @@ test('savePlatformUiPrefs posts one validated preference body to the owned endpo
   }
 })
 
-test('registry requires distinct bounded entity arrays and explicit action input operations', () => {
-  const payload = {
-    interface_version: 'valkama-registry',
-    scope,
-    state: {
-      interface_version: 'valkama-ui-state',
-      status: 'ready',
-      payload: {
-        modules: moduleRegistrations(),
-        services: [],
-        adapters: [],
-        connections: [],
-        assignments: [],
-        capabilities: unavailableCapabilityResolutions(),
-        grants: [],
-        packages: [],
-        actions: [action],
-        action_inputs: [
-          {
-            action_id: action.action_id,
-            operation: 'attach',
-            resource_types: ['note'],
-            fields: [{ key: 'external_id', kind: 'stable-id', required: true, max_length: 128 }],
-            confirmation: 'required',
-            title_key: 'resources.note.attach',
-          },
-        ],
-        core_ref_bindings: [],
-        audit: [
-          {
-            sequence: 1,
-            event_kind: 'package.registered',
-            entity_kind: 'package',
-            entity_id: 'workspace:notes',
-            detail: {},
-            at: '2026-08-13T09:00:00Z',
-          },
-        ],
-      },
-    },
-  }
-  const result = validatePlatformRegistryPayload(payload)
-  assert.equal(
-    result.state.status === 'ready' && result.state.payload.action_inputs[0].operation,
-    'attach',
-  )
-  const memoryResolution =
-    result.state.status === 'ready'
-      ? result.state.payload.capabilities.find(
-          (entry) => entry.capability.capability_id === 'memory.open',
-        )
-      : undefined
-  assert.deepEqual(
-    memoryResolution
-      ? {
-          operation: memoryResolution.capability.operation_character,
-          result: memoryResolution.capability.result_type,
-        }
-      : null,
-    { operation: 'read', result: 'memory-resource' },
-  )
-  for (const field of ['operation_character', 'result_type'] as const) {
-    const missingCapabilityField = structuredClone(payload)
-    delete missingCapabilityField.state.payload.capabilities[0].capability[field]
-    assert.throws(() => validatePlatformRegistryPayload(missingCapabilityField), /unknown value/)
-  }
-  const missingOperation = structuredClone(payload)
-  delete (missingOperation.state.payload.action_inputs[0] as { operation?: string }).operation
-  assert.throws(() => validatePlatformRegistryPayload(missingOperation), /operation.*missing field/)
-
-  const actionAudit = structuredClone(payload)
-  actionAudit.state.payload.audit[0].event_kind = 'action.invoked'
-  actionAudit.state.payload.audit[0].entity_kind = 'action'
-  actionAudit.state.payload.audit[0].entity_id = action.action_id
-  actionAudit.state.payload.audit[0].detail = {
-    view_scope: { kind: 'global' },
-    invocation_scope: scope,
-    target: { connection_ref: connectionRef, resource_type: 'note', external_id: 'N-264' },
-    binding: {
-      project_id: 'example-project',
-      resource_ref: planningSpaceEntity(spaceRef),
-      registry_revision: 2,
-    },
-    decision: {
-      permission_id: 'notes.resource',
-      adapter_lineage_id: 'lineage-notes',
-      connection_ref: connectionRef,
-      connection_state: 'registered',
-      connection_trust: 'trusted',
-      connection_health: 'ready',
-      assignment_id: 'assignment-notes',
-      assignment_revision: 3,
-      grant_id: 'grant-notes',
-      grant_revision: 4,
-    },
-  }
-  assert.deepEqual(
-    validatePlatformRegistryPayload(actionAudit).state.status === 'ready'
-      ? validatePlatformRegistryPayload(actionAudit).state.payload.audit[0].detail
-      : null,
-    actionAudit.state.payload.audit[0].detail,
-  )
-  const unsafeAudit = structuredClone(actionAudit)
-  ;(unsafeAudit.state.payload.audit[0].detail as Record<string, unknown>).provider_body = {
-    token: 'secret',
-  }
-  assert.throws(() => validatePlatformRegistryPayload(unsafeAudit), /provider_body/)
-})
-
 test('planning accepts only sparse exact work-item summaries', () => {
   // A summary is what a directory needs and nothing more. The description is the
   // field that made the Board-era payload grow into a second read model, so the
@@ -308,94 +174,9 @@ test('planning accepts only sparse exact work-item summaries', () => {
   )
 })
 
-test('relation mutations require exact Project invocation scope and target identity', () => {
-  const resource = { connection_ref: connectionRef, resource_type: 'note', external_id: 'N-264' }
-  const command = {
-    interface_version: 'valkama-relation-command',
-    operation: 'attach',
-    entity_ref: entityRef,
-    resource_ref: resource,
-    invocation_context: {
-      view_scope: { kind: 'global' },
-      invocation_scope: scope,
-      target: resource,
-    },
-    action_ref: action,
-    expected_revision: 4,
-    confirmation: true,
-    fallback_label: 'N-264',
-  }
-  assert.equal(validatePlatformRelationCommand(command).operation, 'attach')
-  for (const confirmation of [undefined, false, 'true', 1]) {
-    const candidate = { ...command } as Record<string, unknown>
-    if (confirmation === undefined) delete candidate.confirmation
-    else candidate.confirmation = confirmation
-    assert.throws(() => validatePlatformRelationCommand(candidate), /confirmation/)
-  }
-  assert.throws(
-    () =>
-      validatePlatformRelationCommand({
-        ...command,
-        invocation_context: { ...command.invocation_context, invocation_scope: { kind: 'global' } },
-      }),
-    /Project scope/,
-  )
-})
-
-test('external actions require explicit confirmation bound to the exact Project target', () => {
-  const resource = { connection_ref: connectionRef, resource_type: 'note', external_id: 'N-264' }
-  const command = {
-    interface_version: 'valkama-action-command',
-    action_ref: {
-      ...action,
-      action_id: 'adapter.lineage-notes.open',
-      input_schema_id: 'adapter.resource.open',
-    },
-    invocation_context: {
-      view_scope: { kind: 'global' as const },
-      invocation_scope: scope,
-      target: resource,
-    },
-    input: { entity_ref: entityRef, resource_ref: resource },
-    confirmation: true,
-  }
-  assert.equal(validatePlatformActionCommand(command).confirmation, true)
-  for (const confirmation of [undefined, false, 'true', 1]) {
-    const candidate = { ...command } as Record<string, unknown>
-    if (confirmation === undefined) delete candidate.confirmation
-    else candidate.confirmation = confirmation
-    assert.throws(() => validatePlatformActionCommand(candidate), /confirmation/)
-  }
-})
-
-test('open targets are provider-neutral but reject unsafe browser schemes', () => {
-  const result = {
-    interface_version: 'valkama-action-result',
-    action_ref: action,
-    entity_ref: entityRef,
-    target: { target_kind: 'external-resource', uri: 'resource-link://entry/N-264' },
-    presentation: { label: 'Open resource' },
-  }
-  assert.equal(validatePlatformActionResult(result).target.uri, 'resource-link://entry/N-264')
-  for (const uri of [
-    'javascript://alert',
-    'data://payload',
-    'file://local/path',
-
-    // eslint-disable-next-line sonarjs/no-clear-text-protocols -- see above
-    'http://insecure.invalid',
-  ]) {
-    assert.throws(
-      () => validatePlatformActionResult({ ...result, target: { ...result.target, uri } }),
-      /unsafe/,
-    )
-  }
-})
-
 /** Which read model a request path is answered with, matched in order. */
 const INTERFACE_VERSION_BY_PATH = [
   { fragment: '/context', version: 'valkama-context' },
-  { fragment: '/registry', version: 'valkama-registry' },
   { fragment: '/work-item', version: 'valkama-planning-work-item' },
 ]
 
@@ -426,7 +207,6 @@ test('GET helpers serialize only canonical scope and exact binding parameters', 
   }) as typeof fetch
   try {
     await platformApi.fetchPlatformContext(scope)
-    await platformApi.fetchPlatformRegistry(scope)
     await planningApi.fetchPlatformPlanning(scope, spaceRef)
     await planningApi.fetchPlatformPlanning(scope, attachedSpaceRef)
     await planningApi.fetchPlanningWorkItem(scope, { space_ref: spaceRef, reference: 'MAIN-264' })
@@ -435,7 +215,6 @@ test('GET helpers serialize only canonical scope and exact binding parameters', 
     // into a key and a number the server would have to put back together.
     assert.deepEqual(requested, [
       '/api/platform/context?scope_kind=project&project_id=example-project',
-      '/api/platform/registry?scope_kind=project&project_id=example-project',
       `/api/platform/planning?scope_kind=project&project_id=example-project&data_scope_id=${spaceRef.data_scope_id}&space_key=MAIN`,
       `/api/platform/planning?scope_kind=project&project_id=example-project&data_scope_id=${attachedSpaceRef.data_scope_id}&space_key=MAIN`,
       `/api/modules/planning/work-item?scope_kind=project&project_id=example-project&data_scope_id=${spaceRef.data_scope_id}&space_key=MAIN&reference=MAIN-264`,

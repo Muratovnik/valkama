@@ -6,24 +6,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import PlanningModuleSurface from '@/pages/planning/PlanningModuleSurface.vue'
 
 import { fetchPlanning, subscribePlanning, transitionWorkItem } from '@/shared/api/planningApi.ts'
-import { validateReadModel, validateWorkItemRecord } from '@/shared/api/planningModel.ts'
+import { validateReadModel } from '@/shared/api/planningModel.ts'
 import type { PlatformContextReady } from '@/shared/api/platformApiTypes.ts'
-import { fetchPlanningWorkItem, fetchPlatformPlanning } from '@/shared/api/platformPlanningApi.ts'
+import { fetchPlatformPlanning } from '@/shared/api/platformPlanningApi.ts'
 import { planningSpaceEntity, planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
-import type { PlanningWorkItemPayload } from '@/shared/api/platformPlanningTypes.ts'
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
 import {
   attachedSpaceRef,
   dataScopeId,
-  existingRelation,
   planningReadModel,
   projectId,
   projectScope,
   spaceRef,
-  workItem,
   workItemRef,
 } from '../browser/planningFixtures.ts'
 
@@ -34,7 +31,6 @@ vi.mock('@/shared/api/planningApi.ts', async (load) => ({
   transitionWorkItem: vi.fn(),
 }))
 vi.mock('@/shared/api/platformPlanningApi.ts', () => ({
-  fetchPlanningWorkItem: vi.fn(),
   fetchPlatformPlanning: vi.fn(),
 }))
 
@@ -82,40 +78,14 @@ function route(space: PlanningSpaceRef, open = false): PlatformRoute {
   }
 }
 
-function relations(space: PlanningSpaceRef, label: string): PlanningWorkItemPayload {
-  const ref = { space_ref: space, reference: workItemRef.reference }
-  return {
-    interface_version: 'valkama-planning-work-item',
-    scope: projectScope,
-    work_item_ref: ref,
-    state: {
-      interface_version: 'valkama-ui-state',
-      status: 'ready',
-      payload: {
-        work_item: validateWorkItemRecord(structuredClone(workItem)),
-        relations: {
-          interface_version: 'valkama-relations',
-          relations: [
-            {
-              ...existingRelation,
-              source: planningWorkItemEntity(ref),
-              presentation: { ...existingRelation.presentation, label },
-            },
-          ],
-        },
-      },
-    },
-  } as PlanningWorkItemPayload
-}
-
 const workspace = {
   props: ['model', 'stale', 'writable'],
   template:
     '<div class="workspace-probe" :data-stale="stale"><span v-for="item in model.work_items" :key="item.reference">{{ item.title }}</span><button v-if="writable" class="write-probe">Write</button></div>',
 }
 const inspector = {
-  props: ['kernel'],
-  template: '<div class="inspector-probe">{{ kernel?.relations[0]?.presentation.label }}</div>',
+  props: ['resourceRef'],
+  template: '<div class="inspector-probe">{{ resourceRef.resource_id }}</div>',
 }
 
 function surface(open = false) {
@@ -123,7 +93,6 @@ function surface(open = false) {
     props: {
       context: context(),
       primaryWriteScopeId: dataScopeId,
-      registry: null,
       route: route(spaceRef, open),
       scope: projectScope,
     },
@@ -142,9 +111,6 @@ function surface(open = false) {
 beforeEach(() => {
   vi.mocked(subscribePlanning).mockClear()
   vi.mocked(fetchPlanning).mockReset()
-  vi.mocked(fetchPlanningWorkItem)
-    .mockReset()
-    .mockResolvedValue(relations(spaceRef, 'Primary relation'))
   vi.mocked(fetchPlatformPlanning)
     .mockReset()
     .mockResolvedValue({
@@ -223,23 +189,17 @@ describe('Planning exact resource lifecycle', () => {
     wrapper.unmount()
   })
 
-  it('rejects a delayed old model and old relations with the same item reference', async () => {
+  it('rejects a delayed old model with the same item reference', async () => {
     const oldModel = deferred<ReturnType<typeof model>>()
-    const oldRelations = deferred<PlanningWorkItemPayload>()
     vi.mocked(fetchPlanning)
       .mockReturnValueOnce(oldModel.promise)
       .mockResolvedValueOnce(model('Attached item'))
-    vi.mocked(fetchPlanningWorkItem)
-      .mockReturnValueOnce(oldRelations.promise)
-      .mockResolvedValue(relations(attachedSpaceRef, 'Attached relation'))
     const wrapper = surface(true)
     await wrapper.setProps({ route: route(attachedSpaceRef, true) })
     await flushPromises()
     expect(wrapper.text()).toContain('Attached item')
-    expect(wrapper.text()).toContain('Attached relation')
     expect(wrapper.find('.write-probe').exists()).toBe(false)
     oldModel.resolve(model('Primary item'))
-    oldRelations.resolve(relations(spaceRef, 'Primary relation'))
     await flushPromises()
     expect(wrapper.text()).not.toContain('Primary')
     wrapper.unmount()

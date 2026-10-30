@@ -76,15 +76,9 @@ const mappedProjectResources = computed(() => {
     )?.resources ?? []
   )
 })
-const moduleAuthorityReady = ref(false)
 const moduleStage = ref<InstanceType<typeof AppModuleStage> | null>(null)
 const planningConnection = ref<PlanningConnectionState>('connecting')
-const { contextState, registryState, loadContext, loadRegistry, syncRouteResources } =
-  usePlatformReadModels({
-    route,
-    module: activeModule,
-    blocked: computed(() => routeBlocked.value || !moduleAuthorityReady.value),
-  })
+const { contextState, loadContext } = usePlatformReadModels()
 
 const {
   modules,
@@ -98,18 +92,11 @@ const {
   refreshAll,
 } = usePlatformLiveFeed({
   notice,
-  moduleAuthorityReady,
-  syncRouteResources,
   loadContext,
   refreshSurface: async () => {
     await nextTick()
     if (!['empty', 'ready'].includes(contextState.value.status))
       throw new Error('Context refresh failed')
-    if (
-      activeModule.value === 'settings' &&
-      !['empty', 'ready'].includes(registryState.value.status)
-    )
-      throw new Error('Registry refresh failed')
     await moduleStage.value?.refresh()
   },
   text: {
@@ -132,7 +119,6 @@ const {
   routeUnavailable,
 } = useModuleRouteAuthority({
   loadModules,
-  loadRegistry,
   modules,
   modulesAuthoritative,
   modulesSettled,
@@ -231,18 +217,6 @@ function selectLocale(requested: string) {
   document.documentElement.lang = value
 }
 
-watch(
-  [
-    () => route.value.module_id,
-    () => JSON.stringify(route.value.scope),
-    () => JSON.stringify(route.value.entity),
-  ],
-  () => {
-    void syncRouteResources()
-  },
-  { immediate: true },
-)
-
 usePlatformEntryRestore({
   route,
   contextState,
@@ -311,13 +285,12 @@ usePlatformEntryRestore({
           :module-title="moduleTitle"
           :scope="operatingScope"
           :primary-write-scope-id="primaryWriteScopeId"
-          :registry-state="registryState"
+          :module-registrations="moduleRegistrations"
           :context="contextReady"
           :route="route"
           :locale="locale"
           :reload-modules="reloadModuleState"
           @connection="(state) => (planningConnection = state)"
-          @retry-registry="loadRegistry"
           @entity="openEntity"
           @open-session="openSession"
           @notice="(message) => (notice = message)"

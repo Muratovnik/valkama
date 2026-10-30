@@ -66,7 +66,9 @@ export const LINE_BUDGET = new Map([
   // groups and one row family. Diagnostics uses section and row dividers,
   // plus status edges for initial-load and refresh failures.
   ['pages/settings/components/SettingsGeneral.vue', 2],
-  ['widgets/settings-registry/components/installation-health.css', 5],
+  ['pages/settings/components/installation-health.css', 5],
+  // The module list divides its rows and draws nothing else.
+  ['pages/settings/components/SettingsModules.vue', 1],
   // Six across the module, where there were thirteen: one divider between table
   // rows that share the panel's ground, three status edges, and two lines that
   // belong to rendered markdown rather than to this interface — a blockquote's
@@ -86,8 +88,7 @@ export const LINE_BUDGET = new Map([
   ['widgets/analytics-dashboard/components/DataTableTrigger.vue', 1],
   // Planning's own surfaces. The inspector's head band keeps the one rule that
   // separates it from the section below; Overview divides the facts from the
-  // record and reserves an edge for the sections it does not own yet; the
-  // Kernel relations panel is a section of its own with a status edge; and the
+  // record and reserves an edge for the sections it does not own yet; and the
   // list's sticky header stands on the rule that stops it melting into row one.
   ['widgets/work-item-inspector/components/InspectorHead.vue', 1],
   ['widgets/work-item-inspector/components/InspectorDiscussion.vue', 2], // Composer divider and frozen step quote.
@@ -95,9 +96,6 @@ export const LINE_BUDGET = new Map([
   ['widgets/work-item-inspector/components/InspectorOverview.css', 1],
   ['widgets/work-item-inspector/components/InspectorReserved.vue', 1],
   ['widgets/work-item-inspector/components/InspectorExecution.vue', 1],
-  ['widgets/work-item-inspector/components/KernelRelationsPanel.vue', 1],
-  ['widgets/work-item-inspector/components/RelationList.vue', 1],
-  ['widgets/work-item-inspector/components/RelationConfirm.vue', 1],
   ['widgets/work-item-views/components/WorkItemList.vue', 1],
   ['widgets/work-item-graph/components/GraphView.vue', 1],
   // Graph cards need a neutral boundary where dependency wires meet their edges.
@@ -107,9 +105,6 @@ export const LINE_BUDGET = new Map([
   ['widgets/improvement-case/components/ImprovementCaseDetail.vue', 3],
   ['widgets/improvement-case/components/ImprovementCaseList.vue', 2],
   ['widgets/session-detail/SessionFeed.vue', 2],
-  // The row divider moved into the row component with the row.
-  ['widgets/settings-registry/components/PlatformSettingsRegistry.vue', 1],
-  ['widgets/settings-registry/components/RegistryRow.vue', 1],
 ])
 
 /**

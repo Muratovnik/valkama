@@ -14,12 +14,10 @@ import { typedFailure } from '@/shared/api/typedFailure.ts'
 import type { TypedFailure } from '@/shared/api/typedFailure.ts'
 export type ConnectionState = 'connecting' | 'live' | 'reconnecting'
 interface LiveFeedInputs {
-  moduleAuthorityReady: Ref<boolean>
   notice: Ref<string>
   text: { failure: (failure: TypedFailure) => string; refreshed: () => string }
   loadContext: () => Promise<void>
   refreshSurface: () => Promise<void>
-  syncRouteResources: () => Promise<void>
 }
 export function usePlatformLiveFeed(inputs: LiveFeedInputs) {
   const moduleResource = ref(createResource<readonly ModuleRegistration[]>()) as Ref<
@@ -53,8 +51,6 @@ export function usePlatformLiveFeed(inputs: LiveFeedInputs) {
       const failure = typedFailure(error, 'request_failed')
       moduleResource.value = rejectResource(moduleResource.value, generation, 'modules', failure)
       throw failure
-    } finally {
-      inputs.moduleAuthorityReady.value = modulesAuthoritative.value
     }
   }
   async function refreshAll() {
@@ -62,7 +58,6 @@ export function usePlatformLiveFeed(inputs: LiveFeedInputs) {
     refreshing.value = true
     try {
       await Promise.all([loadModules(), inputs.loadContext()])
-      await inputs.syncRouteResources()
       await inputs.refreshSurface()
       connectionState.value = 'live'
       inputs.notice.value = inputs.text.refreshed()
@@ -74,8 +69,7 @@ export function usePlatformLiveFeed(inputs: LiveFeedInputs) {
     }
   }
   void Promise.all([loadModules(), inputs.loadContext()])
-    .then(async () => {
-      await inputs.syncRouteResources()
+    .then(() => {
       connectionState.value = 'live'
     })
     .catch(() => {

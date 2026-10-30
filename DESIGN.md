@@ -516,14 +516,10 @@ inside work-item context; Memory is a typed reference there.
 ### Settings
 
 Settings uses one section anatomy and one type scale, and its groups read as
-label left, control right. Registry rows state what a thing is and what state
-it is in; interface versions and lineage version numbers are wire facts and do
-not appear as interface copy. A registry state is the shared semantic primitive
-under the `registry-lifecycle` dimension, never a word coloured by the screen's
-own stylesheet, and registry metadata such as an operating level or a
-provenance is plain text rather than a bordered capsule. Integrations separate
-observed health from Kernel-owned intake state. A switch is shown only when the
-Kernel actually owns that setting. Session opener choices show application identity,
+label left, control right. Module rows state what a module is and whether it is
+on; interface versions are wire facts and do not appear as interface copy.
+Installation health reports observed checks with their fixes. A switch is shown
+only when the Kernel actually owns that setting. Session opener choices show application identity,
 availability, and a single collision-aware selector. Impossible destinations
 are omitted for that client family rather than displayed as unusable choices.
 

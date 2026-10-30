@@ -18,7 +18,6 @@ interface AuthorityInputs {
   registrations: Ref<readonly ModuleRegistration[]>
   route: Ref<PlatformRoute>
   loadModules: () => Promise<void>
-  loadRegistry: () => Promise<void>
   te: (key: string) => boolean
   translate: (key: string) => string
 }
@@ -121,7 +120,7 @@ export function useModuleRouteAuthority(inputs: AuthorityInputs) {
     }
   })
   async function reloadModuleState() {
-    await Promise.all([inputs.loadModules(), inputs.loadRegistry()])
+    await inputs.loadModules()
   }
   return { activeManifest, moduleTitle, reloadModuleState, routeFailure, routeUnavailable }
 }

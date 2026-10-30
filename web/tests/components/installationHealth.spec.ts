@@ -3,7 +3,7 @@ import { createI18n } from 'vue-i18n'
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import InstallationHealth from '@/widgets/settings-registry/components/InstallationHealth.vue'
+import InstallationHealth from '@/pages/settings/components/InstallationHealth.vue'
 
 import { fetchDoctorReport } from '@/shared/api/doctorApi.ts'
 import type { DoctorReport } from '@/shared/api/doctorApi.ts'

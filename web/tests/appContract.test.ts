@@ -21,32 +21,15 @@ const planningApi = source('../src/shared/api/platformPlanningApi.ts')
 const coreApi = source('../src/shared/api/api.ts')
 const nav = source('../src/widgets/app-nav/components/AppNav.vue')
 const inspector = source('../src/widgets/work-item-inspector/components/WorkItemInspector.vue')
-const relations = source('../src/widgets/work-item-inspector/components/KernelRelationsPanel.vue')
 const overview = source('../src/widgets/work-item-inspector/components/InspectorOverview.vue')
 const sourceReference = source('../src/shared/lib/sourceReference.ts')
-const relationList = source('../src/widgets/work-item-inspector/components/RelationList.vue')
-const relationConfirm = source('../src/widgets/work-item-inspector/components/RelationConfirm.vue')
-const attachRoutes = source('../src/widgets/work-item-inspector/utils/attachRoutes.ts')
+const inspectorMemory = source('../src/widgets/work-item-inspector/components/InspectorMemory.vue')
 const workspace = source('../src/pages/planning/PlanningWorkspace.vue')
 const portfolio = source('../src/pages/planning/PlanningPortfolio.vue')
 const itemList = source('../src/widgets/work-item-views/components/WorkItemList.vue')
 const segmented = source('../src/shared/ui/SegmentedControl.vue')
 const settings = source('../src/pages/settings/SettingsView.vue')
-// Five assertions below are about what the registry does rather than which of
-// its files does it, and the slice is read as one text for the same reason the
-// skills slice is: a row that writes owns its own model now, so the switch and
-// the call it drives sit one file down from the section that arranges them.
-const registry = [
-  'PlatformSettingsRegistry',
-  'ProjectAssignmentsSection',
-  'RegistryAssignmentToggle',
-  'RegistryRow',
-]
-  .map((name) => source(`../src/widgets/settings-registry/components/${name}.vue`))
-  .join('\n')
-// How a connection reads is derived in the slice's composable and spent in its
-// component, so the naming half of the registry contract is asserted there.
-const registryLabels = source('../src/widgets/settings-registry/composables/useRegistryLabels.ts')
+const settingsModules = source('../src/pages/settings/components/SettingsModules.vue')
 
 test('platformRoute is the sole route owner for the six-module shell', () => {
   assert.match(navigation, /resolvePlatformRoute/)
@@ -81,16 +64,17 @@ test('the frontend consumes only the frozen Platform API endpoints', () => {
   for (const endpoint of [
     '/api/modules',
     '/api/platform/context',
-    '/api/platform/registry',
     '/api/platform/planning',
     '/api/modules/planning/work-item',
-    '/api/platform/relations',
-    '/api/platform/actions/invoke',
     '/api/platform/ui-prefs',
-    '/api/platform/assignments/activation',
-    '/api/platform/assignments/selection',
   ])
     assert.match(endpoints, new RegExp(endpoint.replaceAll('/', '\\/')))
+  // The extension registry and the commands that wrote through it are not the
+  // web client's to call: no Settings screen or inspector panel reads them.
+  assert.doesNotMatch(
+    endpoints,
+    /\/api\/platform\/(?:registry|relations|actions|assignments|grants)/,
+  )
   assert.doesNotMatch(endpoints, /\/api\/integrations|platform-modules['"]|compat|fallback route/i)
   assert.doesNotMatch(endpoints, /\/api\/platform\/card|valkama-card/)
   assert.doesNotMatch(coreApi, /\/api\/dashboard|fetchDashboard|subscribeDashboard/)
@@ -101,42 +85,13 @@ test('the frontend consumes only the frozen Platform API endpoints', () => {
   assert.doesNotMatch(app, /fetchDashboard|exactProjectBoardName|primaryProjectBoard/)
 })
 
-test('work-item relations are generic, descriptor-driven, and explicitly confirmed', () => {
-  // The Kernel half of the section is the inspector's, not Overview's: what an
-  // item points at outside Valkama sits beside what it points at inside.
-  assert.match(inspector, /KernelRelationsPanel/)
-  assert.doesNotMatch(overview, /KernelRelationsPanel|attachCandidates/)
-  assert.match(attachRoutes, /descriptor\.operation !== 'attach'/)
-  assert.match(relations, /stableId/)
-  assert.match(relations, /confirmed/)
-  assert.match(relations, /confirmation:\s*true/)
-  assert.match(relations, /workItemRef\.space_ref\.data_scope_id/)
-  assert.match(relations, /projectId/)
-  assert.match(relations, /expected_revision/)
-  assert.match(relations, /window\.open\(result\.target\.uri/)
+test('the inspector reads no extension registry', () => {
+  // Relations between work items are Planning's own; nothing outside Valkama is
+  // attached or opened from the inspector, and attached memory is a pointer
+  // shown by label and id rather than a provider the inspector resolves.
+  assert.doesNotMatch(inspector, /KernelRelationsPanel|registry|kernel/i)
   assert.doesNotMatch(inspector, /groupReferences|relatedMemories|AgentMemory|agentmemory/i)
-  assert.doesNotMatch(relations, /agentmemory|notes\.invalid|provider\.adapter_id/)
-})
-
-test('attach eligibility mirrors exact connection and permission-grant authorization', () => {
-  assert.match(attachRoutes, /registry\.connections\.find/)
-  assert.match(attachRoutes, /connectionApplies\(candidate\.applicability, scope\)/)
-  assert.match(
-    attachRoutes,
-    /applicability\.kind === 'global' \|\| scopeEquals\(applicability, invocationScope\)/,
-  )
-  assert.match(attachRoutes, /candidate\.state === 'registered'/)
-  assert.match(attachRoutes, /candidate\.trust === 'trusted'/)
-  assert.match(attachRoutes, /candidate\.health === 'ready'/)
-  assert.match(attachRoutes, /connectionApplies\(candidate\.applicability, scope\)/)
-  assert.match(attachRoutes, /grant\.permission_id === 'relation\.attach'/)
-  assert.match(attachRoutes, /grant\.active/)
-  assert.match(attachRoutes, /grant\.state === 'active'/)
-  assert.match(attachRoutes, /grant\.entity_kinds\.includes\('adapter-resource'\)/)
-  assert.match(attachRoutes, /grant\.data_scope_ids\.includes\(dataScopeId\)/)
-  assert.match(relations, /props\.workItemRef\.space_ref\.data_scope_id/)
-  assert.match(attachRoutes, /connectionEquals\(grant\.connection_ref, connectionRef\)/)
-  assert.match(attachRoutes, /scopeEquals\(grant\.applicability, scope\)/)
+  assert.doesNotMatch(inspectorMemory, /registry|referenceProvider|agentmemory/i)
 })
 
 test('source opening carries only canonical Planning-space authority', () => {
@@ -163,24 +118,14 @@ test('session navigation refuses ambiguous project ownership', () => {
   assert.doesNotMatch(liveFeed, /kind: 'work-item'/)
 })
 
-test('Settings renders modules, grouped integrations, and project assignments', () => {
-  assert.match(settings, /PlatformSettingsRegistry/)
-  assert.match(registry, /platform\.registry\.modules/)
-  assert.match(registry, /integrationGroups/)
-  assert.match(registry, /platform\.registry\.projectAssignments/)
-  assert.match(registry, /scope\.kind === 'project'/)
+test('Settings switches modules from the module registrations alone', () => {
+  assert.match(settings, /<SettingsModules/)
+  assert.match(moduleStage, /:module-registrations="moduleRegistrations"/)
+  assert.match(settingsModules, /setModuleState\(/)
+  assert.match(settingsModules, /<ToggleSwitch/)
+  assert.match(settingsModules, /registration\.mutable/)
+  assert.doesNotMatch(`${settings}\n${settingsModules}`, /registry|assignment|grant/i)
   assert.doesNotMatch(settings, /listIntegrations|updateIntegration|\/api\/integrations/)
-})
-
-test('registry presents neutral connections and owns lifecycle and selection', () => {
-  assert.match(registryLabels, /connectionDetails/)
-  assert.match(registry, /connection\.transport/)
-  assert.match(registry, /connection\.capabilities/)
-  assert.match(registry, /ToggleSwitch/)
-  assert.match(registry, /setAssignmentState/)
-  assert.match(registry, /setPlatformAssignment/)
-  assert.match(registry, /resetProjectAssignment/)
-  assert.doesNotMatch(registry, /strong>\{\{ connection\.connection_ref\.connection_id \}\}/)
 })
 
 test('planning projects three views from one read of the space', () => {
@@ -277,14 +222,6 @@ test('common responsive controls keep keyboard focus and 44px targets', () => {
   // 764px or 960px and only one of those was ever the tested one.
   assert.match(compactCss(contextBar), /@containermain\(width<=764px\)/)
   assert.match(compactCss(contextBar), /@containermain\(width<=586px\)/)
-  // The dialog footers are `VButton` now, so the row a control occupies is
-  // asserted in the primitive that owns it; what this says is that the panel uses
-  // it rather than drawing its own. A relation action is the compact row.
-  assert.match(relationConfirm, /<VButton/)
-  assert.match(
-    compactCss(relationList),
-    /\.relation-action\{[^}]*min-height:var\(--size-control-height-compact\)/,
-  )
   // The inspector's section switch is the shared segmented control rather than a
   // tablist of its own, so the row it stands in is the primitive's answer. It
   // lives in the shared frame now, with the two writes it sits beside.

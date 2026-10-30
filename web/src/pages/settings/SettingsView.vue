@@ -2,28 +2,23 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import InstallationHealth from '@/pages/settings/components/InstallationHealth.vue'
 import SettingsGeneral from '@/pages/settings/components/SettingsGeneral.vue'
+import SettingsModules from '@/pages/settings/components/SettingsModules.vue'
 
-import InstallationHealth from '@/widgets/settings-registry/components/InstallationHealth.vue'
-import PlatformSettingsRegistry from '@/widgets/settings-registry/components/PlatformSettingsRegistry.vue'
-
-import type { PlatformRegistryReady } from '@/shared/api/platformApiTypes.ts'
-import type { OperatingScope } from '@/shared/api/platformRoute.ts'
-import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
+import type { ModuleRegistration } from '@/shared/api/platformModuleContract.ts'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 
 type SettingsSection = 'general' | 'workspace' | 'diagnostics'
 
 const props = defineProps<{
   locale: string
-  registryState: PlatformUiState<PlatformRegistryReady>
-  scope: OperatingScope
+  moduleRegistrations: readonly ModuleRegistration[]
   section: string
   reloadModules: () => Promise<void>
 }>()
 const emit = defineEmits<{
   locale: [locale: 'en' | 'ru']
-  retry: []
   state: [state: Record<string, string | number | boolean>]
 }>()
 const { t } = useI18n()
@@ -64,17 +59,11 @@ function selectSection(section: SettingsSection) {
       @locale="(value) => emit('locale', value)"
     />
 
-    <section
+    <SettingsModules
       v-else-if="activeSection === 'workspace'"
-      class="settings-system"
-    >
-      <PlatformSettingsRegistry
-        :state="registryState"
-        :scope="scope"
-        :reload-modules="reloadModules"
-        @retry="emit('retry')"
-      />
-    </section>
+      :registrations="moduleRegistrations"
+      :reload-modules="reloadModules"
+    />
 
     <InstallationHealth v-else />
   </section>
@@ -110,11 +99,5 @@ function selectSection(section: SettingsSection) {
   flex-wrap: wrap;
   min-width: 0;
   max-width: 100%;
-}
-
-.settings-system {
-  display: grid;
-  gap: var(--space-section);
-  min-width: 0;
 }
 </style>

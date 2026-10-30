@@ -49,11 +49,12 @@ its own slot with `:slotted()`, and a custom property the host declares and the
 child reads with a fallback, which is what `--color-count-badge-ring` and
 `--size-text-area-min-height` are.
 
-The failure this prevents is silent. `.registry-row > .semantic-state` named two
-other components' classes to move one element: rename either and the rule matches
-nothing, reports nothing, and the layout quietly loses a rule, because scoped CSS
-has no idea which file a class came from. `.button` and a bare `svg` were the same
-bet on `VButton`'s root tag and Lucide's element. `:slotted()` needs no permission
-and is not an escape — it is a component placing content handed to its own slot,
-and `tests/components/registryRow.spec.ts` asserts the stamp arrives, because a
-`:slotted` rule whose attribute never lands also fails without saying so.
+The failure this prevents is silent. `.registry-row > .semantic-state` once named
+two other components' classes to move one element: rename either and the rule
+matches nothing, reports nothing, and the layout quietly loses a rule, because
+scoped CSS has no idea which file a class came from. `.button` and a bare `svg`
+were the same bet on `VButton`'s root tag and Lucide's element. `:slotted()` needs
+no permission and is not an escape — it is a component placing content handed to
+its own slot — but a component that uses it carries a test that the stamp
+arrives, because a `:slotted` rule whose attribute never lands also fails without
+saying so.

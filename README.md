@@ -4,7 +4,8 @@
 
 Valkama connects projects, work items, agent executions, and results in one web
 and desktop workspace. Work brings board, list, and graph views over one
-Planning read model; Settings manages the local installation and integrations.
+Planning read model; Settings holds preferences, module switches and the
+installation's health checks.
 Memory and session references stay with the work item they support.
 
 It is built for one person: whoever runs a local development loop and is tired
@@ -24,8 +25,6 @@ directory, and the MCP server only exists while a client is talking to it.
 - **Questions and decisions** in a shared inbox. Agents create typed requests;
   the owner answers or declines the exact request. Expired requests stop accepting
   answers, and sending an answer does not automatically resume an execution.
-- **A visible integration registry.** Settings distinguishes Modules, Adapters,
-  Services, Connections, and Assignments, including health and ownership.
 - **Memory that points rather than copies.** Each project's knowledge is
   searched through whichever provider answers for it, and what is attached to
   a work item is a pointer with a stored label — so it still reads when the

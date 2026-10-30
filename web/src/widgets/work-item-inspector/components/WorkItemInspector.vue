@@ -19,7 +19,6 @@ import InspectorExecution from '@/widgets/work-item-inspector/components/Inspect
 import InspectorMemory from '@/widgets/work-item-inspector/components/InspectorMemory.vue'
 import InspectorOverview from '@/widgets/work-item-inspector/components/InspectorOverview.vue'
 import InspectorRelations from '@/widgets/work-item-inspector/components/InspectorRelations.vue'
-import KernelRelationsPanel from '@/widgets/work-item-inspector/components/KernelRelationsPanel.vue'
 import { useWorkItemExecutions } from '@/widgets/work-item-inspector/utils/useWorkItemExecutions.ts'
 import { useWorkItemResource } from '@/widgets/work-item-inspector/utils/useWorkItemResource.ts'
 
@@ -33,11 +32,7 @@ import {
 } from '@/shared/api/planningApi.ts'
 import type { PlanningWorkflow } from '@/shared/api/planningModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
-import type { PlatformRegistryReady } from '@/shared/api/platformApiTypes.ts'
-import type { WorkItemRef } from '@/shared/api/platformPlanningRefs.ts'
 import { planningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
-import type { PlatformRelation } from '@/shared/api/platformRelations.ts'
-import type { OperatingScope } from '@/shared/api/platformRoute.ts'
 import { failureMessage, typedFailure } from '@/shared/api/typedFailure.ts'
 import type { TypedFailure } from '@/shared/api/typedFailure.ts'
 import { actorName } from '@/shared/lib/actor.ts'
@@ -56,19 +51,6 @@ import VIcon from '@/shared/ui/VIcon.vue'
 const props = defineProps<{
   /** True while a related item was opened from inside this drawer. */
   canGoBack: boolean
-  /**
-   * The Kernel half of the relations section: what this item points at outside
-   * Valkama, and the authority to attach or open one. Absent in a global scope,
-   * where no project answers for the item, and the section then shows only the
-   * links between work items.
-   */
-  kernel: {
-    invocationScope: OperatingScope
-    registry: PlatformRegistryReady | null
-    relations: readonly PlatformRelation[]
-    viewScope: OperatingScope
-    workItemRef: WorkItemRef
-  } | null
   /** The project this item belongs to; empty in a global scope. */
   projectId: string
   reference: string
@@ -400,25 +382,14 @@ async function discussionChanged() {
               @refresh="load"
               @tick="tick"
             />
-            <template v-if="section === 'relations'">
-              <InspectorRelations
-                :item="payload"
-                :writable="writable && !busy"
-                @changed="discussionChanged"
-                @session="(id, family) => emit('session', id, family)"
-                @open="(target) => emit('open', target)"
-              />
-              <KernelRelationsPanel
-                v-if="props.kernel"
-                :work-item-ref="props.kernel.workItemRef"
-                :invocation-scope="props.kernel.invocationScope"
-                :view-scope="props.kernel.viewScope"
-                :registry="props.kernel.registry"
-                :relations="props.kernel.relations"
-                :revision="payload.revision"
-                @changed="() => emit('changed')"
-              />
-            </template>
+            <InspectorRelations
+              v-if="section === 'relations'"
+              :item="payload"
+              :writable="writable && !busy"
+              @changed="discussionChanged"
+              @session="(id, family) => emit('session', id, family)"
+              @open="(target) => emit('open', target)"
+            />
             <InspectorExecution
               v-else-if="section === 'execution'"
               :busy="busy"
@@ -435,7 +406,6 @@ async function discussionChanged() {
               v-else-if="section === 'memory'"
               :item="payload"
               :project-id="projectId"
-              :registry="kernel?.registry"
               :writable="writable && !busy"
               @attach="attachMemory"
             />

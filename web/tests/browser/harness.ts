@@ -192,7 +192,6 @@ const Harness = defineComponent({
                 refreshToken: 0,
                 workflow: testWorkflow,
                 writable: true,
-                kernel: null,
               })
             : null,
         ]),

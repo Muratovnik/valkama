@@ -1,20 +1,16 @@
 import assert from 'node:assert/strict'
 
-import { nextTick, ref } from 'vue'
+import { nextTick } from 'vue'
 
 import { beforeEach, test, vi } from 'vitest'
 
-import type { ModuleId } from '@/shared/api/platformModuleContract.ts'
-import type { OperatingScope } from '@/shared/api/platformRoute.ts'
 import { uiReady } from '@/shared/api/platformUiState.ts'
 import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
 
 const fetchPlatformContext = vi.fn()
-const fetchPlatformRegistry = vi.fn()
 
 vi.mock('@/shared/api/platformApi.ts', () => ({
   fetchPlatformContext: (...args: unknown[]) => fetchPlatformContext(...args),
-  fetchPlatformRegistry: (...args: unknown[]) => fetchPlatformRegistry(...args),
 }))
 
 const { usePlatformReadModels } = await import('@/app/composables/usePlatformReadModels.ts')
@@ -31,27 +27,16 @@ function deferred<T>() {
   return { promise, settle }
 }
 
-function routeView(scope: OperatingScope) {
-  return {
-    route: ref({ module_id: 'planning' as ModuleId, scope }),
-    module: ref('planning' as ModuleId),
-    blocked: ref(false),
-  }
-}
-
-const GLOBAL: OperatingScope = { kind: 'global' }
-function readModels(scope: OperatingScope = GLOBAL) {
+function readModels() {
   let tick = 0
-  const models = usePlatformReadModels(routeView(scope), () => {
+  return usePlatformReadModels(() => {
     tick += 1
     return `2026-08-15T00:00:0${tick}Z`
   })
-  return models
 }
 
 beforeEach(() => {
   fetchPlatformContext.mockReset()
-  fetchPlatformRegistry.mockReset()
 })
 
 test('the first load shows loading, because there is nothing to keep', async () => {
@@ -85,17 +70,17 @@ test('a refresh keeps the previous payload on screen instead of blanking it', as
   assert.equal(models.contextState.value.status, 'ready')
 })
 
-test('a failed refresh keeps the working registry rather than replacing it with an error', async () => {
-  fetchPlatformRegistry.mockResolvedValueOnce({ state: uiReady({ connections: 3 }) })
+test('a failed refresh keeps the working context rather than replacing it with an error', async () => {
+  fetchPlatformContext.mockResolvedValueOnce({ state: uiReady({ projects: 3 }) })
   const models = readModels()
-  await models.loadRegistry()
+  await models.loadContext()
 
-  fetchPlatformRegistry.mockRejectedValueOnce(new Error('the local service is not answering'))
-  await models.loadRegistry()
+  fetchPlatformContext.mockRejectedValueOnce(new Error('the local service is not answering'))
+  await models.loadContext()
 
-  const after = models.registryState.value
+  const after = models.contextState.value
   assert.equal(after.status, 'degraded')
-  assert.deepEqual(after.status === 'degraded' ? after.payload : null, { connections: 3 })
+  assert.deepEqual(after.status === 'degraded' ? after.payload : null, { projects: 3 })
   assert.equal(
     after.status === 'degraded' ? (after.reason ?? '') : '',
     'platform.failures.requestFailed',
@@ -103,23 +88,23 @@ test('a failed refresh keeps the working registry rather than replacing it with 
 })
 
 test('an error with nothing to fall back on is an error', async () => {
-  fetchPlatformRegistry.mockRejectedValueOnce(new Error('registry unavailable'))
+  fetchPlatformContext.mockRejectedValueOnce(new Error('context unavailable'))
   const models = readModels()
-  await models.loadRegistry()
-  assert.equal(models.registryState.value.status, 'error')
+  await models.loadContext()
+  assert.equal(models.contextState.value.status, 'error')
 })
 
 test('a contract refusal does not expose its raw object path to the screen', async () => {
   const failure = Object.assign(
-    new Error('registry.state.payload.audit[0].detail: expected object'),
+    new Error('context.state.payload.projects[0].resources: expected array'),
     {
       code: 'platform_api_contract_invalid',
     },
   )
-  fetchPlatformRegistry.mockRejectedValueOnce(failure)
+  fetchPlatformContext.mockRejectedValueOnce(failure)
   const models = readModels()
-  await models.loadRegistry()
-  const state = models.registryState.value
+  await models.loadContext()
+  const state = models.contextState.value
   assert.equal(state.status, 'error')
   assert.equal(state.status === 'error' ? state.reason : '', 'platform.failures.contractInvalid')
 })
@@ -127,17 +112,12 @@ test('a contract refusal does not expose its raw object path to the screen', asy
 test('a slow answer for an abandoned request never overwrites the newer one', async () => {
   const slow = deferred<{ state: PlatformUiState<unknown> }>()
   const quick = deferred<{ state: PlatformUiState<unknown> }>()
-  fetchPlatformRegistry.mockReturnValueOnce(slow.promise).mockReturnValueOnce(quick.promise)
+  fetchPlatformContext.mockReturnValueOnce(slow.promise).mockReturnValueOnce(quick.promise)
 
-  const view = routeView(GLOBAL)
-  const models = usePlatformReadModels(view, () => '2026-08-15T00:00:00Z')
+  const models = usePlatformReadModels(() => '2026-08-15T00:00:00Z')
 
-  const first = models.loadRegistry()
-  view.route.value = {
-    module_id: 'settings',
-    scope: { kind: 'project', project_ref: { project_id: 'new' } },
-  }
-  const second = models.loadRegistry()
+  const first = models.loadContext()
+  const second = models.loadContext()
 
   quick.settle({ state: uiReady({ from: 'new' }) })
   await second
@@ -145,7 +125,7 @@ test('a slow answer for an abandoned request never overwrites the newer one', as
   await first
   await nextTick()
 
-  const state = models.registryState.value
+  const state = models.contextState.value
   assert.equal(state.status, 'ready')
   assert.deepEqual(state.status === 'ready' ? state.payload : null, { from: 'new' })
 })

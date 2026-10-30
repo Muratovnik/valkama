@@ -33,16 +33,14 @@ import WorkItemComposer from '@/features/work-item-compose/WorkItemComposer.vue'
 import { CutoverPendingError, fetchPlanning, transitionWorkItem } from '@/shared/api/planningApi.ts'
 import type { PlanningConnectionState } from '@/shared/api/planningApi.ts'
 import type { PlanningReadModel } from '@/shared/api/planningModel.ts'
-import type { PlatformContextReady, PlatformRegistryReady } from '@/shared/api/platformApiTypes.ts'
+import type { PlatformContextReady } from '@/shared/api/platformApiTypes.ts'
 import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
-import { fetchPlanningWorkItem } from '@/shared/api/platformPlanningApi.ts'
 import {
   planningSpaceEntity,
   planningWorkItemEntity,
   resolvePlanningRouteSelection,
 } from '@/shared/api/platformPlanningRefs.ts'
 import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
-import type { PlatformRelation } from '@/shared/api/platformRelations.ts'
 import type { OperatingScope, PlatformRoute } from '@/shared/api/platformRoute.ts'
 import { uiError, uiLoading, uiUnavailable } from '@/shared/api/platformUiState.ts'
 import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
@@ -60,7 +58,6 @@ import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 const props = defineProps<{
   context: PlatformContextReady | null
   primaryWriteScopeId: string | null
-  registry: PlatformRegistryReady | null
   route: PlatformRoute
   scope: OperatingScope
 }>()
@@ -264,65 +261,8 @@ const writable = computed(
     props.primaryWriteScopeId === boundSpace.value.data_scope_id,
 )
 
-/**
- * The Kernel half of the open item: what it points at outside Valkama.
- *
- * Planning's own read says what the item is; only the Kernel can say what is
- * attached to it, because attaching is authorized against the project binding
- * and the registry rather than against the space. The two halves stay two
- * reads for that reason, and the inspector is handed the second one.
- *
- * A failed read leaves the section showing the links between work items alone.
- * An empty relation list would read as "nothing attached", which is a different
- * claim from "could not ask".
- */
-const relations = ref<readonly PlatformRelation[] | null>(null)
-let relationsSerial = 0
-
-async function loadRelations() {
-  const mine = ++relationsSerial
-  relations.value = null
-  const space = boundSpace.value
-  const reference = open.value
-  const scope = props.scope
-  if (space === undefined || reference === null || scope.kind !== 'project') return
-  try {
-    const payload = await fetchPlanningWorkItem(scope, { space_ref: space, reference })
-    if (mine !== relationsSerial) return
-    relations.value =
-      payload.state.status === 'ready' ? payload.state.payload.relations.relations : null
-  } catch (error) {
-    if (mine !== relationsSerial) return
-    relations.value = null
-    emit('notice', error instanceof Error ? error.message : String(error))
-  }
-}
-
-const relationsKey = computed(() => JSON.stringify([readKey.value, openIdentity.value]))
-watch([relationsKey, version], loadRelations, { immediate: true })
-
 onBeforeUnmount(() => {
-  relationsSerial += 1
   resource.value = cancelResource(resource.value)
-})
-
-/**
- * The Kernel prop, present exactly while every part of it is known: the project
- * that answers for the item, the space it is bound to, and a relation read that
- * came back.
- */
-const kernel = computed(() => {
-  const space = boundSpace.value
-  const reference = open.value
-  const attached = relations.value
-  if (space === undefined || reference === null || attached === null) return null
-  return {
-    invocationScope: props.scope,
-    registry: props.registry,
-    relations: attached,
-    viewScope: props.scope,
-    workItemRef: { space_ref: space, reference },
-  }
 })
 
 /** True once the operator reached this item from another one. */
@@ -455,7 +395,6 @@ defineExpose({ refresh })
       :refresh-token="version"
       :workflow="model.workflow"
       :writable="writable"
-      :kernel="kernel"
       @back="goBack"
       @changed="loadPlanning"
       @close="closeItem"

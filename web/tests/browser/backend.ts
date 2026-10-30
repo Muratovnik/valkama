@@ -16,8 +16,6 @@ import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 
 import { requestList } from '../support/inputRequests.ts'
 import { moduleRegistrations } from '../support/moduleRegistrations.ts'
-import type { AssignmentSelectionInput } from './assignmentFixture.ts'
-import { applyAssignmentSelection } from './assignmentFixture.ts'
 import { installBrowserDoubles } from './browserDoubles.ts'
 import { doctorReport } from './doctorFixtures.ts'
 import {
@@ -34,7 +32,6 @@ import {
   blockedFullWorkItem,
   blockedWorkItem,
   dataScopeId,
-  existingRelation,
   globalScope,
   now,
   planningReadyFor,
@@ -46,13 +43,7 @@ import {
   workItemRef,
 } from './planningFixtures.ts'
 import { planningReadFor, planningRelationsFor } from './planningReadFixture.ts'
-import {
-  globalRegistry,
-  improvementProfile,
-  projectRegistry,
-  rebuildRegistryCapabilities,
-  signalSummary,
-} from './platformFixtures.ts'
+import { improvementProfile, signalSummary } from './platformFixtures.ts'
 import { skillMatrixPayload, skillsPayload } from './skillsFixtures.ts'
 
 type BackendOptions = {
@@ -60,33 +51,16 @@ type BackendOptions = {
   includeAttachedDuplicate?: boolean
   includeUnboundPlanningProject?: boolean
   moduleConflictOnce?: string
-  relationStates?: Array<'missing' | 'ambiguous' | 'malformed'>
-  telemetryUnavailable?: boolean
   uiPrefs?: unknown
 }
 
 const SESSION_TOKEN = 'playwright-session-token'.padEnd(64, 'x')
 
 export async function installBackend(page: Page, options: BackendOptions = {}) {
-  const relationCommands: unknown[] = []
-  const actionCommands: unknown[] = []
   const legacyRequests: string[] = []
   const platformReads: string[] = []
   const prefsWrites: unknown[] = []
-  const assignmentSelectionCommands: unknown[] = []
   const registrations = moduleRegistrations()
-  const projectRegistryState = structuredClone(projectRegistry)
-  const globalRegistryState = structuredClone(globalRegistry)
-  if (options.telemetryUnavailable) {
-    projectRegistryState.assignments = projectRegistryState.assignments.filter(
-      (assignment) => assignment.capability_id !== 'telemetry.query',
-    )
-    globalRegistryState.assignments = globalRegistryState.assignments.filter(
-      (assignment) => assignment.capability_id !== 'telemetry.query',
-    )
-    rebuildRegistryCapabilities(projectRegistryState, true)
-    rebuildRegistryCapabilities(globalRegistryState, false)
-  }
   /**
    * The activity feed, as a reference and a presentation.
    *
@@ -112,7 +86,9 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
       : []
   let moduleConflict = options.moduleConflictOnce
   await installBrowserDoubles(page)
-  let relations = relationsWithStates(options.relationStates)
+  // The server still answers a work item with its relations, and the client
+  // still validates them, so the fixture keeps sending one.
+  const relations = relationsWithStates()
   const attachCommands: { session_id: string; work_item: string }[] = []
   await page.route(
     (url) => url.pathname.startsWith('/api/'),
@@ -172,13 +148,6 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
           session_id: body.session_id,
           execution_id: 'exec-aaaabbbbccccddddeeeeffff00001111',
         })
-      }
-
-      if (path === '/api/platform/assignments/selection' && request.method() === 'POST') {
-        const body = request.postDataJSON() as AssignmentSelectionInput
-        assignmentSelectionCommands.push(body)
-        const result = applyAssignmentSelection(body, projectRegistryState)
-        return fulfill(result.body, result.status)
       }
 
       // The removed surface is matched by pattern, not by name: what the test needs
@@ -270,20 +239,6 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
           })
         },
 
-        '/api/platform/registry': () =>
-          fulfill({
-            interface_version: 'valkama-registry',
-            scope,
-            state: {
-              interface_version: 'valkama-ui-state',
-              status: 'ready',
-              payload: {
-                ...(scope.kind === 'project' ? projectRegistryState : globalRegistryState),
-                modules: structuredClone(registrations),
-              },
-            },
-          }),
-
         '/api/platform/planning': () => {
           let exactSpaceRef = spaceRef
           if (scope.kind === 'project') {
@@ -348,7 +303,7 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
           const answered =
             requestedReference === blockedWorkItem.reference
               ? blockedFullWorkItem
-              : { ...workItem, revision: 3 + relationCommands.length }
+              : { ...workItem, revision: 3 }
           platformReads.push(`${path}?${url.searchParams.toString()}`)
           return fulfill({
             interface_version: 'valkama-planning-work-item',
@@ -368,44 +323,6 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
                 },
               },
             },
-          })
-        },
-
-        '/api/platform/relations': () => {
-          const body = request.postDataJSON()
-          relationCommands.push(body)
-          const attached = {
-            ...structuredClone(existingRelation),
-            relation_id: `relation-${relations.length + 1}`,
-            target: body.resource_ref,
-            presentation: {
-              label: body.fallback_label ?? body.resource_ref.external_id,
-              secondary_text: body.resource_ref.external_id,
-              icon_key: 'external-link',
-            },
-          }
-          relations =
-            body.operation === 'attach'
-              ? [...relations, attached]
-              : relations.filter((entry) => entry.relation_id !== body.resource_ref.external_id)
-          return fulfill({
-            interface_version: 'valkama-relation-result',
-            operation: body.operation,
-            entity_ref: body.entity_ref,
-            card_revision: 3 + relationCommands.length,
-            ...(body.operation === 'attach' ? { relation: attached } : { removed: true }),
-          })
-        },
-
-        '/api/platform/actions/invoke': () => {
-          const body = request.postDataJSON()
-          actionCommands.push(body)
-          return fulfill({
-            interface_version: 'valkama-action-result',
-            action_ref: body.action_ref,
-            entity_ref: body.input.entity_ref,
-            target: { target_kind: 'external-resource', uri: 'resource-link://entry/N-264' },
-            presentation: { label: 'Open resource' },
           })
         },
 
@@ -436,9 +353,6 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
   )
   return {
     attachCommands,
-    relationCommands,
-    actionCommands,
-    assignmentSelectionCommands,
     legacyRequests,
     platformReads,
     prefsWrites,

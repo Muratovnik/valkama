@@ -132,7 +132,6 @@ async function render(primaryWriteScopeId: string | null, space: PlanningSpaceRe
     props: {
       context,
       primaryWriteScopeId,
-      registry: null,
       route: {
         module_id: 'planning' as const,
         scope,

@@ -109,7 +109,6 @@ function envelopeSchema(version: string) {
 }
 
 const contextEnvelopeSchema = envelopeSchema(CONTEXT_INTERFACE)
-export const registryEnvelopeSchema = envelopeSchema(REGISTRY_INTERFACE)
 
 export function validatePlatformContextPayload(
   value: unknown,
@@ -124,11 +123,7 @@ export function validatePlatformContextPayload(
 }
 import { invalid } from '@/shared/api/platformActionRef.ts'
 import { BINDING_STATES, PROJECT_ID, UUID } from '@/shared/api/platformApiGuards.ts'
-import {
-  CONTEXT_INTERFACE,
-  REGISTRY_INTERFACE,
-  UI_PREFS_INTERFACE,
-} from '@/shared/api/platformApiTypes.ts'
+import { CONTEXT_INTERFACE, UI_PREFS_INTERFACE } from '@/shared/api/platformApiTypes.ts'
 import type {
   BindingState,
   PlatformContextPayload,

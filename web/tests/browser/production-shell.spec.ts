@@ -2,17 +2,12 @@ import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 import { PLATFORM_MODULE_IDS } from '@/shared/api/platformModuleContract.ts'
-import {
-  planningSpaceEntity,
-  planningWorkItemEntity,
-  planningWorkItemRef,
-} from '@/shared/api/platformPlanningRefs.ts'
+import { planningSpaceEntity, planningWorkItemRef } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import {
-  actions,
   attachedDataScopeId,
   attachedSpaceRef,
   blockedWorkItem,
@@ -20,13 +15,10 @@ import {
   globalScope,
   projectId,
   projectScope,
-  resourceRef,
   spaceRef,
   workItem,
   workItemRef,
 } from './planningFixtures.ts'
-
-const entityRef = planningWorkItemEntity(workItemRef)
 
 test('cold start at "/" restores a canonical route with no error states', async ({ page }) => {
   const errors: string[] = []
@@ -147,10 +139,8 @@ test('global planning is a portfolio that opens the exact project space', async 
   await expect(page.locator('.work-item-board')).toBeVisible()
 })
 
-test('exact work item journey survives Back/reload and performs generic attach/open actions', async ({
-  page,
-}) => {
-  const { relationCommands, actionCommands } = await installBackend(page)
+test('exact work item journey survives Back and reload', async ({ page }) => {
+  await installBackend(page)
   await page.goto(
     serializePlatformRoute({
       module_id: 'planning',
@@ -161,87 +151,6 @@ test('exact work item journey survives Back/reload and performs generic attach/o
   )
   await page.locator('.work-item-list .list-open').first().click()
   await expect(page.locator('.drawer')).toBeVisible()
-  // External resources are the Kernel half of the relations section, which sits
-  // beside the links between work items rather than in a surface of its own.
-  await page
-    .locator('.drawer')
-    .getByRole('button', { name: /Relations/i })
-    .click()
-  await expect(page.getByText('Release notes', { exact: true })).toBeVisible()
-
-  const attach = page.getByRole('button', { name: /Attach/i }).first()
-  await attach.click()
-  const dialog = page.getByRole('dialog', { name: /Attach external resource/i })
-  await dialog.getByLabel(/Stable external ID/i).fill('N-265')
-  const submit = dialog.getByRole('button', { name: /^Attach$/i })
-  await expect(submit).toBeDisabled()
-  await dialog.getByRole('checkbox').check()
-  await expect(submit).toBeEnabled()
-  await submit.click()
-  await expect.poll(() => relationCommands.length).toBe(1)
-  expect(relationCommands[0]).toMatchObject({
-    interface_version: 'valkama-relation-command',
-    operation: 'attach',
-    entity_ref: entityRef,
-    resource_ref: { resource_type: 'note', external_id: 'N-265' },
-    expected_revision: 3,
-    invocation_context: { invocation_scope: projectScope },
-    confirmation: true,
-  })
-
-  // The attach re-read the item, so the list is rebuilt: wait for the second
-  // relation to land and then name the row rather than taking the first button,
-  // which is ambiguous once there are two and detaches mid-click.
-  const relationRows = page.locator('.platform-relations li')
-  await expect(relationRows).toHaveCount(2)
-  const releaseRelation = relationRows.filter({ hasText: 'Release notes' })
-  await releaseRelation.getByRole('button', { name: /^Open$/i }).click()
-  const openDialog = page.getByRole('dialog', { name: /Open external resource/i })
-  await expect(openDialog).toBeVisible()
-  await expect(openDialog).toContainText(projectId)
-  await expect(openDialog).toContainText(dataScopeId)
-  await expect(openDialog).toContainText('note:N-264')
-  expect(actionCommands).toEqual([])
-  expect(
-    await page.evaluate(() => (window as unknown as { __opened?: string[] }).__opened ?? []),
-  ).toEqual([])
-  const openSubmit = openDialog.getByRole('button', { name: /^Open$/i })
-  await expect(openSubmit).toBeDisabled()
-  await openDialog.getByRole('checkbox').check()
-  await expect(openSubmit).toBeEnabled()
-  expect(actionCommands).toEqual([])
-  await openSubmit.click()
-  await expect.poll(() => actionCommands.length).toBe(1)
-  expect(actionCommands[0]).toEqual({
-    interface_version: 'valkama-action-command',
-    action_ref: actions[1],
-    confirmation: true,
-    invocation_context: {
-      view_scope: projectScope,
-      invocation_scope: projectScope,
-      target: resourceRef,
-    },
-    input: { entity_ref: entityRef, resource_ref: resourceRef },
-  })
-  await expect
-    .poll(() => page.evaluate(() => (window as unknown as { __opened?: string[] }).__opened ?? []))
-    .toContain('resource-link://entry/N-264')
-
-  await releaseRelation.getByRole('button', { name: /^Remove$/i }).click()
-  const removeDialog = page.getByRole('dialog', { name: /Remove external relation/i })
-  await expect(removeDialog).toContainText(projectId)
-  await expect(removeDialog).toContainText(dataScopeId)
-  await expect(removeDialog).toContainText('note:N-264')
-  const removeSubmit = removeDialog.getByRole('button', { name: /^Remove$/i })
-  await expect(removeSubmit).toBeDisabled()
-  await removeDialog.getByRole('checkbox').check()
-  await removeSubmit.click()
-  await expect.poll(() => relationCommands.length).toBe(2)
-  expect(relationCommands[1]).toMatchObject({
-    operation: 'remove',
-    entity_ref: entityRef,
-    confirmation: true,
-  })
 
   // The open item is in the route, so Back closes it and a reload comes back to
   // it. Held in module state, the second of those was impossible.
@@ -344,12 +253,6 @@ test('an attached same-key space stays readable but never reaches primary-only p
   ).toHaveCount(0)
   await page.locator('.drawer').getByRole('button', { name: 'System events', exact: true }).click()
   await expect(page.locator('.drawer .discussion-form')).toHaveCount(0)
-  await page
-    .locator('.drawer')
-    .getByRole('button', { name: /Relations/i })
-    .click()
-  await expect(page.locator('.drawer')).toContainText('Attached: Release notes')
-
   expect(legacyRequests).toEqual([])
 })
 

@@ -20,8 +20,6 @@ import { useI18n } from 'vue-i18n'
 import { fetchMemoryProviders, searchMemory } from '@/shared/api/memoryApi.ts'
 import type { MemoryResult } from '@/shared/api/memoryApi.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
-import type { PlatformRegistryReady } from '@/shared/api/platformApiTypes.ts'
-import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { actorName } from '@/shared/lib/actor.ts'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
 import VButton from '@/shared/ui/VButton.vue'
@@ -32,12 +30,11 @@ const props = defineProps<{
   /** Absent in a global scope, where no project answers for this item. */
   projectId: string
   writable: boolean
-  registry?: PlatformRegistryReady | null
 }>()
 
 const emit = defineEmits<{ attach: [value: { label: string; value: string }] }>()
 
-const { t, d, te } = useI18n()
+const { t, d } = useI18n()
 
 const query = ref('')
 const busy = ref(false)
@@ -52,35 +49,6 @@ const searched = ref(false)
 const sourceLoading = ref(false)
 const sourceFailed = ref(false)
 const located = ref<Awaited<ReturnType<typeof fetchMemoryProviders>>['providers'][number]>()
-const reference = computed(() =>
-  props.registry?.capabilities.find((entry) => entry.capability.capability_id === 'memory.open'),
-)
-const referenceName = computed(() => {
-  const identity = reference.value?.assignment?.connection_ids[0]
-  const connection = props.registry?.connections.find((entry) => {
-    const ref = entry.connection_ref
-    return (
-      `${ref.service_ref.owner_id}:${ref.service_ref.service_id}:${ref.adapter_lineage_id}:${ref.connection_id}` ===
-      identity
-    )
-  })
-  if (!connection) return t('memory.noProvider')
-  if (
-    connection.service.owner_id === 'agentmemory' &&
-    connection.service.service_id === 'local-reference-service'
-  )
-    return 'AgentMemory'
-  return te(connection.name) ? t(connection.name) : connection.service.service_id
-})
-const workspaceSettings = computed(() =>
-  serializePlatformRoute({
-    module_id: 'settings',
-    scope: props.projectId
-      ? { kind: 'project', project_ref: { project_id: props.projectId } }
-      : { kind: 'global' },
-    state: { section: 'workspace' },
-  }),
-)
 const activeProvider = computed(() => provider.value || located.value?.provider_id || '')
 const providerName = computed(() =>
   activeProvider.value === 'markdown-knowledge'
@@ -223,28 +191,6 @@ function when(value: string): string {
         >{{ t('memory.sourceRetry') }}</VButton
       >
       <p class="quiet">{{ t('memory.sourceSetup') }}</p>
-      <template v-if="registry">
-        <strong class="memory-label">{{ t('memory.referenceProvider') }}</strong>
-        <p class="quiet">
-          {{
-            t('memory.referenceSelection', {
-              provider: referenceName,
-              source: t(`memory.referenceScope.${reference?.source ?? 'unavailable'}`),
-            })
-          }}
-        </p>
-        <p
-          v-if="reference?.state !== 'ready'"
-          class="quiet"
-        >
-          {{ t('memory.referenceUnavailable') }}
-        </p>
-      </template>
-      <a
-        class="memory-settings-link"
-        :href="workspaceSettings"
-        >{{ t('memory.workspaceSettings') }}</a
-      >
     </div>
 
     <ul
@@ -359,12 +305,6 @@ function when(value: string): string {
   padding: var(--space-3);
   background: var(--color-surface-muted);
   border-radius: var(--radius-control);
-}
-
-.memory-settings-link {
-  width: fit-content;
-  color: var(--color-accent);
-  font: var(--font-note);
 }
 
 .quiet {

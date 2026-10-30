@@ -41,13 +41,6 @@ const graphProjection = readFileSync(
   new URL('../src/widgets/work-item-graph/composables/useGraphProjection.ts', import.meta.url),
   'utf8',
 )
-const kernelRelations = readFileSync(
-  new URL(
-    '../src/widgets/work-item-inspector/components/KernelRelationsPanel.vue',
-    import.meta.url,
-  ),
-  'utf8',
-)
 const infoTip = readFileSync(new URL('../src/shared/ui/InfoTip.vue', import.meta.url), 'utf8')
 const inspector = readFileSync(
   new URL('../src/shared/ui/ResizableInspector.vue', import.meta.url),
@@ -125,7 +118,6 @@ test('the inspector exposes its emits, related navigation, and shared focus owne
   // Writability is a prop the shell decides, and every write is gated on it
   // together with the in-flight guard rather than each button deciding again.
   assert.match(drawer, /:writable="writable && !busy"/)
-  assert.match(drawer, /<KernelRelationsPanel/)
   assert.match(drawer, /<InspectorOverview/)
   // A route-owned entity gets a fresh inspector subtree. A refresh of that same
   // keyed entity keeps the current panel and only reloads its data.
@@ -164,14 +156,15 @@ test('command dialogs layer over the inspector using shared modal focus ownershi
   assert.match(overlay, /overlay-layer-drawer/)
 })
 
-test('the inspector keeps item facts and generic relation actions in one surface', () => {
+test('the inspector keeps item facts and work-item relations in one surface', () => {
   // The overview panel is its own component; what the inspector owns is which
   // panel shows and the item all of them read.
   assert.match(drawerDetails, /props\.item\.checklist|item\.checklist/)
   assert.match(drawerDetails, /summary/)
-  // Kernel relations sit beside the work-item links rather than in a second
-  // surface, and neither of them knows about AgentMemory by name.
-  assert.match(drawer, /<KernelRelationsPanel/)
+  // The relations section is the links between work items and nothing that an
+  // extension registry would have to authorize.
+  assert.match(drawer, /<InspectorRelations/)
+  assert.doesNotMatch(drawer, /<KernelRelationsPanel/)
   assert.doesNotMatch(drawerDetails, /relatedMemories|groupReferences|agentmemory/i)
 })
 
@@ -201,20 +194,6 @@ test('the planning workspace is the one scroll owner and wears shared controls',
   assert.match(compactCss(workspace), /\.workspace-stage\{[^}]*min-height:0/)
 })
 
-test('every Kernel relation action is confirmed through one dialog component', () => {
-  // Attach, open and remove are three decisions with one confirmation grammar.
-  // Three dialogs written separately is how one of them ended up without the
-  // target line, which is the only part that says what is about to happen.
-  assert.equal(
-    (kernelRelations.match(/<RelationConfirm/g) ?? []).length,
-    3,
-    'attach, open and remove share one confirmation component',
-  )
-  assert.match(kernelRelations, /:target="pendingTarget\(pendingOpen\)"/)
-  assert.match(kernelRelations, /:target="pendingTarget\(pendingRemoval\)"/)
-  assert.doesNotMatch(kernelRelations, /window\.confirm/)
-})
-
 test('operational statuses reserve invariant geometry instead of stretching their rows', () => {
   assert.match(semanticState, /variant\?: 'inline' \| 'badge' \| 'dot'/)
   assert.match(graphNode, /class="flow-node-meta"/)
@@ -237,8 +216,8 @@ test('session filters, module icons, inspector facts, and analytics inspector us
   assert.match(drawer, /<InspectorRelations/)
 })
 
-test('settings registry is read-only and has no legacy integration activation path', () => {
-  assert.match(settings, /PlatformSettingsRegistry/)
+test('settings has no registry screen and no legacy integration activation path', () => {
+  assert.doesNotMatch(settings, /PlatformSettingsRegistry|settings-registry/)
   assert.doesNotMatch(settings, /toggleIntegration|updateIntegration|settings\.integrations/)
 })
 

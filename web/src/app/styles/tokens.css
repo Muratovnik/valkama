@@ -252,9 +252,6 @@
   --font-chip: 600 var(--font-size-dense)/var(--line-height-flat) var(--font-family-interface);
   --font-count: 400 var(--font-size-dense)/var(--line-height-flat) var(--font-family-interface);
 
-  /* What a person compares character by character. */
-  --font-code: 400 var(--font-size-dense)/var(--line-height-normal) var(--font-family-mono);
-
   /* ─────────────────────────────────────────────────────────────────────
      Semantic: what a value is for. This is the tier the application names.
      ───────────────────────────────────────────────────────────────────── */

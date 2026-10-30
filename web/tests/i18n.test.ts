@@ -64,23 +64,6 @@ test('every translation key written out in the source resolves in the catalog', 
   }
 })
 
-test('every section that derives its intro key has one to derive', () => {
-  // `RegistrySection` spells a section's intro as its title key plus `Intro`, so
-  // the key exists nowhere in the source as text. Two of them were deleted as
-  // unreachable and came back as raw keys on the Settings screen; nothing in the
-  // scan above can see them, which is why this case names the derivation.
-  const derived: string[] = []
-  for (const relative of sourceFiles()) {
-    const source = fs.readFileSync(path.join(SRC, relative), 'utf8')
-    for (const match of source.matchAll(/title-key="([A-Za-z0-9_.]+)"/g)) derived.push(match[1])
-  }
-  assert.ok(derived.length > 0, 'no section declares a title key')
-  const missing = derived.flatMap((key) =>
-    [key, `${key}Intro`].filter((candidate) => !resolves(messages.en, candidate)),
-  )
-  assert.deepEqual(missing, [])
-})
-
 test('locale resolution prefers an explicit saved language, then Russian browser preference', () => {
   assert.equal(resolveLocale('en', ['ru-RU']), 'en')
   assert.equal(resolveLocale('ru', ['en-US']), 'ru')
@@ -121,8 +104,6 @@ test('English and Russian catalogs translate checklist actors, activity, source 
   assert.equal(i18n.global.t('platform.actions.relation.remove'), 'Remove')
   assert.equal(i18n.global.t('platform.actions.resource.open'), 'Open')
   assert.match(i18n.global.t('platform.coreWrites.primaryOwnerRequired'), /writable primary store/)
-  assert.match(i18n.global.t('platform.relations.confirmOpen'), /opening this exact target/)
-  assert.match(i18n.global.t('platform.relations.confirmRemove'), /exact target/)
 
   i18n.global.locale.value = 'ru'
   assert.equal(i18n.global.t('activity.claimed'), 'Работа взята')
@@ -130,7 +111,6 @@ test('English and Russian catalogs translate checklist actors, activity, source 
   assert.equal(i18n.global.t('activity.checklistClaimed'), 'Пункт чек-листа взят в работу')
   assert.equal(i18n.global.t('workItem.noClaim'), 'Никто не взял')
   assert.equal(i18n.global.t('refresh.title'), 'Обновить доски, активность и текущий вид сейчас')
-  assert.equal(i18n.global.t('platform.relations.title'), 'Внешние ресурсы')
   assert.equal(i18n.global.t('workItem.view.kanban'), 'Канбан')
   assert.equal(i18n.global.t('graph.frontier', { count: 2 }), 'Можно брать сейчас · 2')
   assert.equal(i18n.global.t('graph.openOnly', { count: 14 }), 'Открытые · 14')
@@ -155,8 +135,6 @@ test('English and Russian catalogs translate checklist actors, activity, source 
   assert.equal(i18n.global.t('platform.actions.relation.remove'), 'Удалить')
   assert.equal(i18n.global.t('platform.actions.resource.open'), 'Открыть')
   assert.match(i18n.global.t('platform.coreWrites.primaryOwnerRequired'), /основное хранилище/)
-  assert.match(i18n.global.t('platform.relations.confirmOpen'), /открытие этой точной цели/)
-  assert.match(i18n.global.t('platform.relations.confirmRemove'), /точной цели/)
 
   i18n.global.locale.value = 'en'
 })

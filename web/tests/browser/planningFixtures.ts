@@ -27,7 +27,7 @@ export const globalScope = { kind: 'global' as const }
 export const workItemRef = { space_ref: spaceRef, reference: 'MAIN-264' }
 export const attachedWorkItemRef = { space_ref: attachedSpaceRef, reference: workItemRef.reference }
 export const now = '2026-08-13T09:00:00Z'
-export const connectionRef = {
+const connectionRef = {
   service_ref: { owner_id: 'workspace', service_id: 'notes' },
   adapter_lineage_id: 'lineage-notes',
   connection_id: 'primary',
@@ -43,8 +43,8 @@ const action = (operation: 'attach' | 'open' | 'remove') => ({
   invocation_scope_schema: 'project',
 })
 
-export const actions = [action('attach'), action('open'), action('remove')]
-export const resourceRef = {
+const actions = [action('attach'), action('open'), action('remove')]
+const resourceRef = {
   connection_ref: connectionRef,
   resource_type: 'note',
   external_id: 'N-264',

@@ -38,7 +38,7 @@ export type ServiceRef = {
   service_id: string
 }
 
-export type ConnectionRef = {
+type ConnectionRef = {
   adapter_lineage_id: string
   connection_id: string
   service_ref: ServiceRef
@@ -78,7 +78,7 @@ export function validateServiceRef(value: unknown, path = 'service_ref'): Servic
   }
 }
 
-export function validateConnectionRef(value: unknown, path = 'connection_ref'): ConnectionRef {
+function validateConnectionRef(value: unknown, path = 'connection_ref'): ConnectionRef {
   const object = plainObject(value, path)
   exactKeys(object, ['service_ref', 'adapter_lineage_id', 'connection_id'], path)
   return {
@@ -234,15 +234,6 @@ export function validateEntityRef(value: unknown, path = 'entity'): EntityRef {
 export function isEntityRef(value: unknown): value is EntityRef {
   try {
     validateEntityRef(value)
-    return true
-  } catch {
-    return false
-  }
-}
-
-export function isAdapterResourceRef(value: unknown): value is AdapterResourceRef {
-  try {
-    validateAdapterResourceRef(value)
     return true
   } catch {
     return false

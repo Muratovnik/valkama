@@ -4,7 +4,6 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import InspectorRelations from '@/widgets/work-item-inspector/components/InspectorRelations.vue'
-import KernelRelationsPanel from '@/widgets/work-item-inspector/components/KernelRelationsPanel.vue'
 import WorkItemInspector from '@/widgets/work-item-inspector/components/WorkItemInspector.vue'
 
 import { fetchExecutionHistory } from '@/shared/api/executionApi.ts'
@@ -47,7 +46,6 @@ function mountInspector(realOverview = false) {
   return mount(WorkItemInspector, {
     props: {
       canGoBack: false,
-      kernel: null,
       projectId: 'sample',
       reference: 'QA-320',
       refreshToken: 0,
@@ -66,7 +64,6 @@ function mountInspector(realOverview = false) {
         InspectorOverview: realOverview ? false : overview,
         InspectorRelations: true,
         InspectorUsage: true,
-        KernelRelationsPanel: true,
         LaunchDialog: true,
         ResizableInspector: passThrough,
         SegmentedControl: realOverview ? false : true,
@@ -250,32 +247,6 @@ describe('inspector relations hierarchy', () => {
       initialKind: 'relates-to',
       initialDirection: 'outgoing',
     })
-    wrapper.unmount()
-  })
-
-  it('explains recovery when no external attach provider is available', () => {
-    const wrapper = mount(KernelRelationsPanel, {
-      props: {
-        invocationScope: { kind: 'global' },
-        viewScope: { kind: 'global' },
-        registry: null,
-        relations: [],
-        revision: 1,
-        workItemRef: {
-          reference: 'QA-320',
-          space_ref: {
-            data_scope_id: '22222222-2222-4222-8222-222222222222',
-            space_key: 'QA',
-          },
-        },
-      },
-      global: { plugins: [createI18n({ legacy: false, locale: 'ru', messages })] },
-    })
-    expect(wrapper.findAll('h3').map((heading) => heading.text())).toEqual(['Внешние ресурсы'])
-    expect(wrapper.text()).toContain('настройках проекта → Интеграции')
-    expect(
-      wrapper.findAll('button').filter((button) => button.text() === 'Прикрепить'),
-    ).toHaveLength(0)
     wrapper.unmount()
   })
 })

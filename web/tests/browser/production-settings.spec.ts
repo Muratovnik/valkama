@@ -43,58 +43,16 @@ test('Settings sections share one measure and one compact control lane', async (
   expect(controlLefts[0] - (pageBox?.x ?? 0)).toBeLessThan((pageBox?.width ?? 0) * 0.53)
 
   await openSettingsSection(page, 'Workspace')
-  const modules = page.locator('.registry-section.modules')
-  await modules
-    .locator('.registry-availability .state-label')
-    .first()
-    .evaluate((node) => {
-      node.textContent = 'Available with a longer heterogeneous label'
-    })
+  const modules = page.locator('.settings-modules')
   const modulesBox = await modules.boundingBox()
   expect(Math.abs((modulesBox?.width ?? 0) - (pageBox?.width ?? 0))).toBeLessThan(2)
-  const laneGeometry = await modules.locator('.registry-row').evaluateAll((rows) =>
-    rows.map((row) => {
-      const lane = row.querySelector('.registry-control-lane')?.getBoundingClientRect()
-      const availability = row.querySelector('.registry-availability')?.getBoundingClientRect()
-      const enablement = row.querySelector('.registry-enablement')?.getBoundingClientRect()
-      const track = row.querySelector('.toggle-track')?.getBoundingClientRect()
-      return {
-        laneLeft: lane?.left ?? 0,
-        laneWidth: lane?.width ?? 0,
-        availabilityLeft: availability?.left ?? 0,
-        availabilityRight: availability?.right ?? 0,
-        enablementLeft: enablement?.left ?? 0,
-        trackLeft: track?.left ?? 0,
-      }
-    }),
-  )
-  expect(
-    Math.max(...laneGeometry.map(({ laneLeft }) => laneLeft)) -
-      Math.min(...laneGeometry.map(({ laneLeft }) => laneLeft)),
-  ).toBeLessThan(2)
-  expect(
-    Math.max(
-      ...laneGeometry.map(
-        ({ availabilityRight, enablementLeft }) => enablementLeft - availabilityRight,
-      ),
-    ),
-  ).toBeLessThanOrEqual(24)
-  expect(
-    Math.max(...laneGeometry.map(({ laneWidth }) => laneWidth)) -
-      Math.min(...laneGeometry.map(({ laneWidth }) => laneWidth)),
-  ).toBeLessThan(2)
-  expect(
-    Math.max(...laneGeometry.map(({ availabilityLeft }) => availabilityLeft)) -
-      Math.min(...laneGeometry.map(({ availabilityLeft }) => availabilityLeft)),
-  ).toBeLessThan(2)
-  expect(
-    Math.max(...laneGeometry.map(({ enablementLeft }) => enablementLeft)) -
-      Math.min(...laneGeometry.map(({ enablementLeft }) => enablementLeft)),
-  ).toBeLessThan(2)
-  const mutableTracks = laneGeometry.map(({ trackLeft }) => trackLeft).filter((left) => left > 0)
-  expect(Math.max(...mutableTracks) - Math.min(...mutableTracks)).toBeLessThan(2)
+  const trackLefts = await modules
+    .locator('.settings-module .toggle-track')
+    .evaluateAll((tracks) => tracks.map((track) => track.getBoundingClientRect().left))
+  expect(trackLefts.length).toBeGreaterThan(1)
+  expect(Math.max(...trackLefts) - Math.min(...trackLefts)).toBeLessThan(2)
   await expect(
-    modules.locator('.registry-row').filter({ hasText: 'Settings' }).getByRole('switch'),
+    modules.locator('.settings-module').filter({ hasText: 'Settings' }).getByRole('switch'),
   ).toHaveCount(0)
 
   await openSettingsSection(page, 'Diagnostics')
@@ -114,7 +72,7 @@ test('Settings sections share one measure and one compact control lane', async (
   }
 })
 
-test('Settings groups Connections by capability and keeps project assignments distinct', async ({
+test('Workspace lists the modules and nothing the extension registry used to show', async ({
   page,
 }) => {
   await installBackend(page)
@@ -125,26 +83,9 @@ test('Settings groups Connections by capability and keeps project assignments di
   await expect(page.getByRole('heading', { name: 'Modules', exact: true })).toBeHidden()
 
   await openSettingsSection(page, 'Workspace')
-  for (const heading of [
-    'Modules',
-    'Integrations',
-    'Execution',
-    'Memory',
-    'Artifacts',
-    'Project assignments',
-  ])
-    await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible()
-
-  await expect
-    .poll(() =>
-      page.locator('.registry-stack').evaluate((stack) => {
-        const width = stack.getBoundingClientRect().width
-        return [...stack.children].every(
-          (child) => Math.abs(child.getBoundingClientRect().width - width) < 2,
-        )
-      }),
-    )
-    .toBe(true)
+  await expect(page.getByRole('heading', { name: 'Modules', exact: true })).toBeVisible()
+  for (const heading of ['Integrations', 'Project assignments'])
+    await expect(page.getByRole('heading', { name: heading, exact: true })).toHaveCount(0)
 
   await page.reload()
   await expect(page.getByRole('button', { name: 'Workspace' })).toHaveAttribute(
@@ -193,97 +134,7 @@ test('Settings reads the installation in levels, each problem with its fix', asy
   await expect(health).toContainText('Schema 5 is supported by this build')
 })
 
-test('Settings presents every built-in Connection fact and accessible bounded diagnostics', async ({
-  page,
-}) => {
-  await installBackend(page)
-  await page.setViewportSize({ width: 1280, height: 900 })
-  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
-  await openSettingsSection(page, 'Workspace')
-  for (const name of ['Claude Code execution', 'Codex execution', 'AgentMemory', 'Git artifacts'])
-    await expect(
-      page.getByRole('region', { name: 'Integrations' }).getByText(name, { exact: true }),
-    ).toBeVisible()
-
-  const git = page
-    .getByRole('region', { name: 'Integrations' })
-    .locator('.registry-row')
-    .filter({ has: page.locator('.registry-name').filter({ hasText: /^Git artifacts$/ }) })
-  for (const fact of [
-    'Transport',
-    'built-in',
-    'Capabilities',
-    'artifact.inspect',
-    'State',
-    'Registered',
-    'Scope',
-    'Global',
-    'Configuration owner',
-    'git-artifacts',
-    'Last checked',
-  ])
-    await expect(git).toContainText(fact)
-
-  const details = git.getByText('Details', { exact: true })
-  await details.click()
-  await expect(git).toContainText('Bounded diagnostic detail')
-  await details.click()
-  await details.focus()
-  await page.keyboard.press('Enter')
-  await expect(git).toContainText('Bounded diagnostic detail')
-  await expectNoSilentClipping(page, 'Settings Connections at 1280x900')
-
-  await page.setViewportSize({ width: 816, height: 900 })
-  await expect
-    .poll(() =>
-      page.locator('.module-stage').evaluate((node) => node.getBoundingClientRect().width),
-    )
-    .toBe(556)
-  await expectNoSilentClipping(page, 'Settings Connections in a 556px module container')
-})
-
-test('project assignment override survives reload, resets to installation, and reports unavailable', async ({
-  page,
-}) => {
-  const { assignmentSelectionCommands } = await installBackend(page)
-  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
-  await openSettingsSection(page, 'Workspace')
-  const telemetry = page
-    .locator('.project-assignments .registry-row')
-    .filter({ hasText: 'telemetry.query' })
-  await expect(telemetry).toContainText('Codex rollout telemetry')
-  await expect(telemetry).toContainText('Claude local journal')
-  await expect(telemetry).toContainText('Selected for this project')
-
-  await page.reload()
-  await expect(telemetry).toContainText('Selected for this project')
-  await telemetry.getByRole('button', { name: 'Reset to default' }).click()
-  await expect.poll(() => assignmentSelectionCommands.length).toBe(1)
-  expect(assignmentSelectionCommands[0]).toMatchObject({
-    operation: 'reset',
-    capability_id: 'telemetry.query',
-    expected_revision: 1,
-  })
-  await expect(telemetry).toContainText('Inherited from installation')
-  await expect(telemetry).toContainText('Codex rollout telemetry')
-  await expect(telemetry).toContainText('Project override')
-  await expect(telemetry).toContainText('None')
-
-  const unavailablePage = await page.context().newPage()
-  await installBackend(unavailablePage, { telemetryUnavailable: true })
-  await unavailablePage.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
-  await openSettingsSection(unavailablePage, 'Workspace')
-  const unavailable = unavailablePage
-    .locator('.project-assignments .registry-row')
-    .filter({ hasText: 'telemetry.query' })
-  await expect(unavailable).toContainText('No effective connection')
-  // The reason reads as a sentence; the identifier stays off the screen.
-  await expect(unavailable).toContainText('No tool assigned')
-  await expect(unavailable).not.toContainText('assignment-missing')
-  await unavailablePage.close()
-})
-
-test('Settings capabilities and diagnostic actions stay readable at working widths', async ({
+test('Settings modules and diagnostic actions stay readable at working widths', async ({
   page,
 }) => {
   await installBackend(page)
@@ -291,11 +142,8 @@ test('Settings capabilities and diagnostic actions stay readable at working widt
   for (const width of [1440, 900, 390]) {
     await page.setViewportSize({ width, height: 960 })
     await openSettingsSection(page, 'Workspace')
-    const capability = page
-      .locator('.project-assignments .registry-name')
-      .filter({ hasText: 'Launch work' })
-    await expect(capability).toBeVisible()
-    await expectNoSilentClipping(page, `Readable Settings capability at ${width}px`)
+    await expect(page.locator('.settings-module').first()).toBeVisible()
+    await expectNoSilentClipping(page, `Readable Settings modules at ${width}px`)
     await openSettingsSection(page, 'Diagnostics')
     const finding = page.locator('.health-finding').first()
     await expect(finding.locator('.health-action')).toBeVisible()

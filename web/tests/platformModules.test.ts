@@ -167,7 +167,6 @@ test('validated future registration remains authoritative with typed unsupported
 
   const authority = useModuleRouteAuthority({
     loadModules: async () => {},
-    loadRegistry: async () => {},
     modules: ref(validated.map((registration) => registration.manifest)),
     modulesAuthoritative: ref(true),
     modulesSettled: ref(true),
@@ -297,7 +296,6 @@ test('direct and history route changes are rechecked against manifest authority'
   })
   const authority = useModuleRouteAuthority({
     loadModules: async () => {},
-    loadRegistry: async () => {},
     modules: ref(registrations.map((registration) => registration.manifest)),
     modulesAuthoritative: ref(true),
     modulesSettled: ref(true),

@@ -13,20 +13,16 @@ const refreshedText = () => 'refreshed'
 const renderFeed = () => h('div')
 function mountFeed() {
   const notice = ref('')
-  const moduleAuthorityReady = ref(false)
   let feed!: ReturnType<typeof usePlatformLiveFeed>
   const loadContext = vi.fn(async () => {})
-  const syncRouteResources = vi.fn(async () => {})
   const refreshSurface = vi.fn(async () => {})
   const wrapper = mount(
     defineComponent({
       setup() {
         feed = usePlatformLiveFeed({
           notice,
-          moduleAuthorityReady,
           text: { failure: (failure) => `failure:${failure.code}`, refreshed: refreshedText },
           loadContext,
-          syncRouteResources,
           refreshSurface,
         })
         return renderFeed
@@ -36,9 +32,7 @@ function mountFeed() {
   return {
     feed,
     notice,
-    moduleAuthorityReady,
     loadContext,
-    syncRouteResources,
     refreshSurface,
     wrapper,
   }
@@ -49,23 +43,22 @@ it('loads only module authority and context, and never opens global feeds', asyn
   const EventSource = vi.fn()
   vi.stubGlobal('fetch', fetch)
   vi.stubGlobal('EventSource', EventSource)
-  const { feed, loadContext, syncRouteResources, wrapper } = mountFeed()
+  const { feed, loadContext, wrapper } = mountFeed()
   await flushPromises()
   expect(feed.modules.value.map((module) => module.module_id)).toEqual(['planning', 'settings'])
   expect(loadContext).toHaveBeenCalledOnce()
-  expect(syncRouteResources).toHaveBeenCalledOnce()
   expect(fetch).not.toHaveBeenCalled()
   expect(EventSource).not.toHaveBeenCalled()
   wrapper.unmount()
 })
 it('retains committed authority after refresh fails with safe typed copy', async () => {
   fetchModules.mockResolvedValue(modulesPayload())
-  const { feed, notice, moduleAuthorityReady, wrapper } = mountFeed()
+  const { feed, notice, wrapper } = mountFeed()
   await flushPromises()
   fetchModules.mockRejectedValueOnce(new Error('DISTINCT private /srv/secret'))
   await feed.refreshAll()
   expect(feed.modules.value.map((module) => module.module_id)).toEqual(['planning', 'settings'])
-  expect(moduleAuthorityReady.value).toBe(true)
+  expect(feed.modulesAuthoritative.value).toBe(true)
   expect(feed.modulesFailure.value).toEqual({
     code: 'request_failed',
     retryable: true,
