@@ -166,7 +166,8 @@ class StoreTooNewError(RuntimeError):
             f"this store is at schema {stored} and this build understands {supported}."
             " It was written by a newer Valkama, so opening it here could misread"
             " rows a later version defined. Restart the client so it spawns the"
-            " server that matches this checkout."
+            " release the launcher now pins; if that release is the one refusing,"
+            " pin a newer one with `launcher install`."
         )
         self.stored = stored
         self.supported = supported
