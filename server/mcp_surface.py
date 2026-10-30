@@ -13,7 +13,7 @@ import sys
 from collections.abc import Callable
 
 from . import static_assets
-from .ops import tray
+from .ops import configuration, tray
 from .planning import api as planning_api
 from .planning import model as planning_model
 from .planning import tools as planning_tools
@@ -221,12 +221,26 @@ def _canonical_arguments(name: str, arguments: object) -> dict:
     return resolved
 
 
+def _signed(name: str, arguments: dict) -> dict:
+    """A planning write that names no author is signed with the configured one.
+
+    The client that spawned this process names itself through `VALKAMA_AUTHOR`,
+    so the surface resolves that here and hands the boundary a value. Planning
+    keeps its own `agent` fallback for when nothing is configured either.
+    """
+
+    if "author" not in _SCHEMAS[name]["properties"] or arguments.get("author") not in (None, ""):
+        return arguments
+    author = configuration.configured("author")
+    return arguments if author is None else {**arguments, "author": author}
+
+
 def call_tool(conn: sqlite3.Connection, name: str, arguments: dict) -> object:
     if name not in _OPS:
         raise ValueError(f"unknown tool {name!r}")
     if name in _PLANNING_TOOLS:
         platform_core.require_module_enabled(conn, "planning")
-        arguments = _canonical_arguments(name, arguments or {})
+        arguments = _signed(name, _canonical_arguments(name, arguments or {}))
     return _OPS[name](conn, arguments or {})
 
 

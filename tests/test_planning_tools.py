@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from server import mcp_surface, store
+from server.ops import configuration
 from server.planning import api as planning_api
 from server.planning import migration, model, service
 from server.planning import tools as planning_tools
@@ -203,6 +206,83 @@ ACKNOWLEDGED = (
 
 #: The two reads that answer in rows and so publish `verbose` too.
 ROW_READS = ("list_work_items", "search_work_items")
+
+
+class PlanningAuthorDefaultTests(unittest.TestCase):
+    """A tool write that names no author is signed with the configured one.
+
+    The MCP surface resolves the setting and hands the boundary a value; Planning
+    keeps its own `agent` default, so the domain never reads the environment.
+    """
+
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.config = os.path.join(directory.name, "config.json")
+        patch = mock.patch.dict(
+            os.environ, {"VALKAMA_DB": os.path.join(directory.name, "valkama.sqlite3")}
+        )
+        patch.start()
+        self.addCleanup(patch.stop)
+        # The owner's own environment and ~/.valkama must not decide these answers.
+        os.environ.pop("VALKAMA_AUTHOR", None)
+        patch_config = mock.patch.object(configuration, "config_path", return_value=self.config)
+        patch_config.start()
+        self.addCleanup(patch_config.stop)
+        self.conn = store.connect()
+        self.addCleanup(self.conn.close)
+        board_id = board_era.seed(self.conn, "Quality Assurance")
+        board_era.add_card(self.conn, board_id, "Carried over")
+        migration.migrate_board_domain(self.conn, project_for_space={"QA": "example-workspace"})
+        store.drop_board_domain(self.conn)
+        self.conn.commit()
+
+    def call(self, name: str, **arguments: object) -> dict:
+        answer = mcp_surface.call_tool(self.conn, name, arguments)
+        assert isinstance(answer, dict)
+        return answer
+
+    def write_file(self, value: dict) -> None:
+        Path(self.config).write_text(json.dumps(value), encoding="utf-8", newline="\n")
+
+    def authors(self, reference: str) -> set[str]:
+        events = service.get_work_item(self.conn, reference)["events"]
+        return {event["author"] for event in events}
+
+    def test_the_environment_signs_a_write_that_names_no_author(self) -> None:
+        with mock.patch.dict(os.environ, {"VALKAMA_AUTHOR": "codex"}):
+            created = self.call("create_work_item", space="QA", title="Signed by the client")
+            claimed = self.call("claim_work_item", id=created["reference"])
+        self.assertEqual("codex", claimed["claim_ref"])
+        self.assertEqual({"codex"}, self.authors(created["reference"]))
+
+    def test_the_file_signs_a_write_when_the_environment_does_not(self) -> None:
+        self.write_file({"author": "from-file"})
+        created = self.call("create_work_item", space="QA", title="Signed by the file")
+        claimed = self.call("claim_work_item", id=created["reference"])
+        self.assertEqual("from-file", claimed["claim_ref"])
+        self.assertEqual({"from-file"}, self.authors(created["reference"]))
+
+    def test_the_environment_beats_the_file_for_an_unsigned_write(self) -> None:
+        self.write_file({"author": "from-file"})
+        with mock.patch.dict(os.environ, {"VALKAMA_AUTHOR": "codex"}):
+            claimed = self.call("claim_work_item", id="QA-1")
+        self.assertEqual("codex", claimed["claim_ref"])
+
+    def test_an_explicit_author_beats_the_configured_one(self) -> None:
+        with mock.patch.dict(os.environ, {"VALKAMA_AUTHOR": "codex"}):
+            created = self.call("create_work_item", space="QA", title="Named by the caller")
+            claimed = self.call("claim_work_item", id=created["reference"], author="one")
+        self.assertEqual("one", claimed["claim_ref"])
+        # The create named no author, so it is the configured one; only the claim
+        # the caller signed carries theirs.
+        self.assertEqual({"codex", "one"}, self.authors(created["reference"]))
+
+    def test_without_any_configuration_an_unsigned_write_is_signed_agent(self) -> None:
+        created = self.call("create_work_item", space="QA", title="Signed by nobody")
+        claimed = self.call("claim_work_item", id=created["reference"])
+        self.assertEqual("agent", claimed["claim_ref"])
+        self.assertEqual({"agent"}, self.authors(created["reference"]))
 
 
 class PlanningAcknowledgementTests(unittest.TestCase):

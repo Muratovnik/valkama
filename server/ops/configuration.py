@@ -92,6 +92,11 @@ SETTINGS: tuple[dict[str, str], ...] = (
         "environment": "VALKAMA_CODEX_ROLLOUT_ROOT",
         "description": "where Codex keeps its rollout journals",
     },
+    {
+        "key": "author",
+        "environment": "VALKAMA_AUTHOR",
+        "description": "the name written into Planning claims and comments when a tool call names none",
+    },
 )
 
 SETTING_KEYS = tuple(item["key"] for item in SETTINGS)

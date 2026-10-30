@@ -167,6 +167,36 @@ def create_planning_space(
     return get_planning_space(conn, space["planning_space_id"])
 
 
+def _parent_row(
+    conn: sqlite3.Connection, space_id: str, parent: str | None, item_id: str | None = None
+) -> sqlite3.Row | None:
+    """The row a work item may take as its parent, or None when it takes none.
+
+    Creating and reparenting answer to the same rules, so both call this. An
+    `item_id` is given only when an existing item is reparented: a new item
+    cannot yet name itself or have children.
+    """
+
+    if not parent:
+        return None
+    parent_row = read_model.item_row(conn, parent)
+    if item_id is not None and str(parent_row["work_item_id"]) == item_id:
+        raise model.PlanningError("a work item cannot be its own parent")
+    if str(parent_row["planning_space_id"]) != space_id:
+        raise model.PlanningError("a parent work item lives in another planning space")
+    if parent_row["parent_id"]:
+        raise model.PlanningError("a work item hierarchy is one level deep")
+    if item_id is not None:
+        children = conn.execute(
+            "SELECT COUNT(*) FROM work_items WHERE parent_id = ?", (item_id,)
+        ).fetchone()[0]
+        if children:
+            raise model.PlanningError(
+                "a work item with children cannot become a child; the hierarchy is one level deep"
+            )
+    return parent_row
+
+
 def create_work_item(
     conn: sqlite3.Connection,
     *,
@@ -189,12 +219,7 @@ def create_work_item(
         if state
         else read_model.state_by_id(conn, str(workflow["initial_state_id"]))
     )
-    parent_row = read_model.item_row(conn, parent) if parent else None
-    if parent_row is not None:
-        if str(parent_row["planning_space_id"]) != space_id:
-            raise model.PlanningError("a parent work item lives in another planning space")
-        if parent_row["parent_id"]:
-            raise model.PlanningError("a work item hierarchy is one level deep")
+    parent_row = _parent_row(conn, space_id, parent)
     item_id = model.new_id()
     number = store.next_number(conn, space_id)
     position = _tail_position(conn, space_id, str(target["state_id"]))
@@ -259,9 +284,9 @@ def update_work_item(
         updates.append("kind = ?")
         parameters.append(model.work_item_kind(kind))
     if parent is not None:
-        parent_row = read_model.item_row(conn, parent) if parent else None
-        if parent_row is not None and str(parent_row["work_item_id"]) == str(row["work_item_id"]):
-            raise model.PlanningError("a work item cannot be its own parent")
+        parent_row = _parent_row(
+            conn, str(row["planning_space_id"]), parent, item_id=str(row["work_item_id"])
+        )
         updates.append("parent_id = ?")
         parameters.append(str(parent_row["work_item_id"]) if parent_row is not None else None)
     if not updates:

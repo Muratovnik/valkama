@@ -128,6 +128,25 @@ class ScopeTests(CliTestCase):
         self.assertEqual([scopes.PRIMARY_SCOPE], json.loads(self.invoke("detach", "other")))
 
 
+class ConfigurationReportTests(CliTestCase):
+    """The report names the author in use, not only the layer it came from."""
+
+    def author_row(self) -> dict:
+        reading = json.loads(self.invoke("config", "--json"))
+        return next(item for item in reading["settings"] if item["key"] == "author")
+
+    def test_with_nothing_set_the_author_in_use_is_the_planning_default(self) -> None:
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("VALKAMA_AUTHOR", None)
+            row = self.author_row()
+        self.assertEqual(("agent", "default"), (row["effective"], row["source"]))
+
+    def test_the_environment_author_is_the_one_in_use(self) -> None:
+        with mock.patch.dict(os.environ, {"VALKAMA_AUTHOR": "codex"}):
+            row = self.author_row()
+        self.assertEqual(("codex", "environment"), (row["effective"], row["source"]))
+
+
 class ConsoleEncodingTests(CliTestCase):
     def test_output_stays_utf8_when_the_console_says_otherwise(self) -> None:
         # Card #292: `summary` printed an arrow out of a title and raised

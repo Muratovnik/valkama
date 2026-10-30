@@ -119,8 +119,10 @@ env = { VALKAMA_AUTHOR = "codex", PYTHONUTF8 = "1", PYTHONIOENCODING = "utf-8" }
 This absolute path belongs to the installed service launcher, not to the source
 checkout.
 
-`VALKAMA_AUTHOR` is what Planning claims and comments are signed with. Give each
-client a different one, or every Planning card will say `agent`.
+`VALKAMA_AUTHOR` is the name Planning claims and comments are signed with when an
+MCP tool call names no `author` of its own. Give each client a different one in
+its registration. Without the variable, the `author` in `config.json` applies; with
+neither, the name is `agent`.
 
 ### 4. Check that it worked
 
@@ -312,7 +314,7 @@ deciding anything.
 
 ## Configuration
 
-Four settings have a file. Everything else is an environment variable, and the
+Five settings have a file. Everything else is an environment variable, and the
 environment overrides the file for every setting, so automation and a
 development shell never have to edit anything to change one run.
 
@@ -344,6 +346,7 @@ rather than falling back to a default, and `python valkama.py doctor` says why.
 | `document_roots` | `VALKAMA_DOC_ROOTS` | none | document roots to search, separated by the path separator |
 | `claude_session_root` | `VALKAMA_CLAUDE_SESSION_ROOT` | none | where Claude Code keeps its session journals |
 | `codex_rollout_root` | `VALKAMA_CODEX_ROLLOUT_ROOT` | none | where Codex keeps its rollout journals |
+| `author` | `VALKAMA_AUTHOR` | `agent` | the name written into Planning claims and comments when an MCP tool call names no `author` |
 
 ### Project registry
 
@@ -372,7 +375,6 @@ belongs to a process rather than to an installation:
 
 | Variable | Default | What it changes |
 | --- | --- | --- |
-| `VALKAMA_AUTHOR` | `agent` | the name written into claims and comments |
 | `VALKAMA_NO_TRAY` | unset | set to anything to suppress the tray icon |
 | `VALKAMA_PORT` | `8642` | the port the desktop app expects the server on |
 | `VALKAMA_TRAY_MUTEX` | `Local\ValkamaTrayIcon` | the mutex tray sessions coordinate through |

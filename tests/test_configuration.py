@@ -179,6 +179,45 @@ class ResolutionTests(unittest.TestCase):
         self.assertNotIn("VALKAMA_PROTECTED_STORE", overrides)
 
 
+class AuthorSettingTests(unittest.TestCase):
+    """The default author is one setting, resolved like every other."""
+
+    def setUp(self) -> None:
+        self._dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._dir.cleanup)
+        self.path = os.path.join(self._dir.name, "config.json")
+
+    def test_the_environment_names_the_author(self) -> None:
+        self.assertEqual(
+            "codex",
+            configuration.configured("author", environ={"VALKAMA_AUTHOR": "codex"}, path=self.path),
+        )
+
+    def test_the_file_names_the_author_when_the_environment_does_not(self) -> None:
+        Path(self.path).write_text(
+            json.dumps({"author": "from-file"}), encoding="utf-8", newline="\n"
+        )
+        self.assertEqual(
+            "from-file", configuration.configured("author", environ={}, path=self.path)
+        )
+        self.assertEqual(
+            "codex",
+            configuration.configured("author", environ={"VALKAMA_AUTHOR": "codex"}, path=self.path),
+        )
+
+    def test_nothing_set_leaves_the_caller_its_own_default(self) -> None:
+        self.assertIsNone(configuration.configured("author", environ={}, path=self.path))
+
+    def test_the_report_names_the_author_and_the_layer_it_came_from(self) -> None:
+        Path(self.path).write_text(
+            json.dumps({"author": "from-file"}), encoding="utf-8", newline="\n"
+        )
+        reading = configuration.report({}, environ={}, path=self.path)
+        row = next(item for item in reading["settings"] if item["key"] == "author")
+        self.assertEqual("file", row["source"])
+        self.assertEqual("VALKAMA_AUTHOR", row["environment"])
+
+
 class ConsumerTests(unittest.TestCase):
     """Every caller reads the one resolution, including the one that did not."""
 

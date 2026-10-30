@@ -33,6 +33,7 @@ from .federation import federated_spaces
 from .http_surface import serve_main
 from .mcp_surface import LEGACY_PROTOCOLS, MODERN_PROTOCOL, catalogue, mcp_main
 from .ops import adapter_check, configuration, doctor, export, setup
+from .planning import model as planning_model
 from .planning import service as planning_service
 from .planning import views as planning_views
 from .platform import core as platform_core
@@ -646,6 +647,8 @@ def main(argv: list[str] | None = None) -> None:
                 "document_roots": os.pathsep.join(documents.doc_roots()),
                 "claude_session_root": os.pathsep.join(journals.claude_roots),
                 "codex_rollout_root": os.pathsep.join(journals.codex_roots),
+                # Planning owns the `agent` fallback, so the name in use comes from it.
+                "author": planning_model.actor(configuration.configured("author")),
             }
         )
         print(

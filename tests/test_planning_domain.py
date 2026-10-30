@@ -355,6 +355,56 @@ class PlanningDomainTests(unittest.TestCase):
         with self.assertRaisesRegex(model.PlanningError, "one level deep"):
             self.item("The grandchild", parent=child["reference"])
 
+    def test_an_item_cannot_be_its_own_parent(self) -> None:
+        item = self.item("Self")
+        with self.assertRaisesRegex(model.PlanningError, "its own parent"):
+            service.update_work_item(self.conn, item["reference"], parent=item["reference"])
+        self.assertIsNone(service.get_work_item(self.conn, item["reference"])["parent_id"])
+
+    def test_reparenting_refuses_a_parent_in_another_planning_space(self) -> None:
+        other = service.create_planning_space(self.conn, project_id="other", name="Other Work")
+        foreign = service.create_work_item(
+            self.conn, space=other["key"], title="Elsewhere", kind="epic", author="tester"
+        )
+        item = self.item("Local")
+        with self.assertRaisesRegex(model.PlanningError, "another planning space"):
+            service.update_work_item(self.conn, item["reference"], parent=foreign["reference"])
+        self.assertIsNone(service.get_work_item(self.conn, item["reference"])["parent_id"])
+
+    def test_reparenting_refuses_a_parent_that_is_itself_a_child(self) -> None:
+        epic = self.item("The epic", kind="epic")
+        child = self.item("The child", parent=epic["reference"])
+        item = self.item("Loose")
+        with self.assertRaisesRegex(model.PlanningError, "one level deep"):
+            service.update_work_item(self.conn, item["reference"], parent=child["reference"])
+
+    def test_reparenting_refuses_an_item_that_already_has_children(self) -> None:
+        epic = self.item("The epic", kind="epic")
+        middle = self.item("The middle", kind="epic")
+        self.item("The grandchild", parent=middle["reference"])
+        with self.assertRaisesRegex(model.PlanningError, "with children"):
+            service.update_work_item(self.conn, middle["reference"], parent=epic["reference"])
+        self.assertIsNone(service.get_work_item(self.conn, middle["reference"])["parent_id"])
+
+    def test_a_parent_cycle_is_refused_in_either_direction(self) -> None:
+        first = self.item("First")
+        second = self.item("Second")
+        service.update_work_item(self.conn, first["reference"], parent=second["reference"])
+        with self.assertRaisesRegex(model.PlanningError, "one level deep"):
+            service.update_work_item(self.conn, second["reference"], parent=first["reference"])
+        self.assertIsNone(service.get_work_item(self.conn, second["reference"])["parent_id"])
+
+    def test_a_reparent_and_a_detach_are_allowed(self) -> None:
+        first_epic = self.item("First epic", kind="epic")
+        second_epic = self.item("Second epic", kind="epic")
+        child = self.item("The child", parent=first_epic["reference"])
+        moved = service.update_work_item(
+            self.conn, child["reference"], parent=second_epic["reference"]
+        )
+        self.assertEqual(second_epic["work_item_id"], moved["parent_id"])
+        detached = service.update_work_item(self.conn, child["reference"], parent="")
+        self.assertIsNone(detached["parent_id"])
+
     def test_an_epic_with_children_is_not_deleted_by_accident(self) -> None:
         epic = self.item("The epic", kind="epic")
         self.item("The child", parent=epic["reference"])
