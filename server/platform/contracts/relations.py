@@ -42,7 +42,10 @@ def validate_provenance(value):
         "observed_at": _utc_timestamp(obj["observed_at"], "provenance.observed_at"),
     }
     if "author" in obj:
-        result["author"] = _identifier(obj["author"], "provenance.author")
+        # The author is the name a writer recorded, bounded text in Planning
+        # (`planning.model.actor`), not an identifier: refs authored
+        # `claude-code session …` made the whole work-item read fail.
+        result["author"] = _nonempty_text(obj["author"], "provenance.author", max_length=128)
     return result
 
 

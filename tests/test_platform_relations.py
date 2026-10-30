@@ -332,6 +332,26 @@ class RelationTests(unittest.TestCase):
         self.assertEqual([], memory["actions"])
         self.assertEqual(1, self.conn.execute("SELECT COUNT(*) FROM work_item_refs").fetchone()[0])
 
+    def test_memory_ref_with_a_free_text_author_still_reads(self):
+        self.conn.execute(
+            "CREATE TABLE work_item_refs(id INTEGER PRIMARY KEY, work_item_id TEXT,"
+            " kind TEXT, value TEXT, label TEXT, author TEXT, created_at TEXT)"
+        )
+        self.conn.execute(
+            "INSERT INTO work_item_refs(work_item_id,kind,value,label,author,created_at)"
+            " VALUES ('item-1','memory','memory-record-1','Memory pointer',"
+            " 'claude-code session 1bffcf44 (primary)', '2026-08-13T00:00:00Z')"
+        )
+        self.conn.commit()
+        adapter_registry = registry()
+        adapter_registry.bind_core_ref_resolver(
+            "memory", service_ref(), "provider-lineage", "connection-1"
+        )
+        relations = read_relations(self.conn, self.item, registry=adapter_registry)
+        self.assertEqual(
+            "claude-code session 1bffcf44 (primary)", relations[0]["provenance"]["author"]
+        )
+
     def test_core_memory_resolution_requires_live_safe_registry_binding(self):
         self.conn.execute(
             "CREATE TABLE work_item_refs(id INTEGER PRIMARY KEY, work_item_id TEXT,"
