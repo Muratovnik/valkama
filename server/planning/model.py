@@ -353,10 +353,11 @@ def dumps(value: object) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
-# The workflow a new PlanningSpace gets. Six states because that is what this
-# installation's history holds, and the code below reads the table rather than
-# this tuple: a space may be given a different set without anything else
-# changing.
+# The workflow a new PlanningSpace gets. The first six are what this
+# installation's history holds; Cancelled came later, so that work closed as not
+# needed, duplicated or superseded stops being counted as done. The code below
+# reads the table rather than this tuple: a space may be given a different set
+# without anything else changing.
 DEFAULT_WORKFLOW_NAME = "Delivery"
 DEFAULT_STATES = (
     ("backlog", "Backlog", "backlog"),
@@ -365,4 +366,7 @@ DEFAULT_STATES = (
     ("review", "Review", "review"),
     ("done", "Done", "completed"),
     ("blocked", "Blocked", "blocked"),
+    ("cancelled", "Cancelled", "cancelled"),
 )
+# The default workflow before Cancelled, which is what its migration recognises.
+PRE_CANCELLED_STATE_KEYS = frozenset(key for key, _name, _category in DEFAULT_STATES[:6])

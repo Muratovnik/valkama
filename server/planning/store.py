@@ -336,8 +336,51 @@ def create_space(
     }
 
 
+def migrate_cancelled_state(conn: sqlite3.Connection) -> int:
+    """Give every workflow still shaped like the old default a Cancelled state.
+
+    Only a workflow whose states are exactly the six the default had before is
+    touched, so a workflow someone shaped differently -- or one already carrying
+    Cancelled -- is left alone, and running this again changes nothing. The new
+    state takes the next position and every move to and from it, the same
+    generosity `create_default_workflow` gives the others. No existing row
+    changes meaning, so the schema ratchet stays where it is.
+    """
+
+    upgraded = 0
+    for workflow in conn.execute("SELECT workflow_id FROM workflows").fetchall():
+        workflow_id = workflow["workflow_id"]
+        states = states_for_workflow(conn, workflow_id)
+        if {state["key"] for state in states} != model.PRE_CANCELLED_STATE_KEYS:
+            continue
+        cancelled = model.new_id()
+        conn.execute(
+            "INSERT INTO workflow_states(state_id,workflow_id,key,name,category,position,is_terminal)"
+            " VALUES(?,?,?,?,?,?,1)",
+            (
+                cancelled,
+                workflow_id,
+                "cancelled",
+                "Cancelled",
+                "cancelled",
+                max(state["position"] for state in states) + 1,
+            ),
+        )
+        for state in states:
+            conn.executemany(
+                "INSERT INTO workflow_transitions(workflow_id,from_state_id,to_state_id)"
+                " VALUES(?,?,?)",
+                (
+                    (workflow_id, state["state_id"], cancelled),
+                    (workflow_id, cancelled, state["state_id"]),
+                ),
+            )
+        upgraded += 1
+    return upgraded
+
+
 def create_default_workflow(conn: sqlite3.Connection, planning_space_id: str) -> dict:
-    """Six states, every forward and backward move between them, blocked either way.
+    """Seven states, every forward and backward move between them, blocked either way.
 
     The transitions are explicit rows rather than "anything to anything": a
     workflow that permitted everything would make the guards below decoration.

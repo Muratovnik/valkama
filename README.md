@@ -420,10 +420,13 @@ registration is removed before its launcher-backed replacement is added.
 
 ## Planning: Kanban view
 
-Six fixed columns: Backlog, Todo, Dev, Review, Done, Blocked.
+One column per state of the space's workflow. A new space gets seven: Backlog,
+Todo, Dev, Review, Done, Blocked and Cancelled. Done is for finished work;
+Cancelled is for work closed as not needed, duplicated or superseded, and needs
+a closing summary that says why but no ticked checklist.
 
 A card becomes an **epic** when other cards point `parent_id` at it. The board
-keeps a persistent index of epics and renders one selected six-column view;
+keeps a persistent index of epics and renders one selected view;
 inside each lane, children are grouped under their epic instead of repeating the
 epic id on every card.
 

@@ -82,8 +82,11 @@ def findings(
         if evidence is None:
             warnings.append(f"{reference} enters {target['name']} with no session or commit ref")
     if target["is_terminal"] and entering:
+        # Cancelled work closes with the steps it never did still open: ticking
+        # them would claim work that did not happen. The summary still has to
+        # say why it stopped.
         open_steps = [step for step in checklist if not step["done"]]
-        if open_steps:
+        if open_steps and target["category"] != "cancelled":
             refusals.append(
                 (
                     "checklist",

@@ -108,7 +108,7 @@ class PlanningToolCallTests(unittest.TestCase):
         spaces = self.call("list_planning_spaces")
         self.assertEqual(1, len(spaces["planning_spaces"]))
         space = self.call("get_planning_space", space="QA")
-        self.assertEqual(6, len(space["workflow"]["states"]))
+        self.assertEqual(7, len(space["workflow"]["states"]))
 
         created = self.call("create_work_item", space="QA", title="Through the tools", author="one")
         self.assertEqual("QA-2", created["reference"])

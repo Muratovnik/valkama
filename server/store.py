@@ -575,6 +575,7 @@ def connect() -> sqlite3.Connection:
             _execute_script(conn, SCHEMA)
             planning_store.migrate_discussion(conn)
             planning_store.migrate_interactions(conn)
+            planning_store.migrate_cancelled_state(conn)
             audit_migration = platform_migrations.schema_migration_needed(conn)
             audit_order_migration = platform_migrations.registry_audit_order_migration_needed(conn)
             authorization_migration = platform_migrations.authorization_owner_migration_needed(conn)

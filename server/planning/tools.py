@@ -202,7 +202,9 @@ TOOLS = [
         "The one path a state changes by. The workflow's guards apply: an active"
         " state needs an executor, a terminal state needs every checklist step"
         " ticked and a closing summary, a blocked state needs a blocker or a"
-        " stated reason. force carries a refusal through and records it.",
+        " stated reason. A cancelled state needs only the summary, saying why the"
+        " work stopped; its undone steps stay open. force carries a refusal"
+        " through and records it.",
         WRITES,
         {
             "id": _REFERENCE,

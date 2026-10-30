@@ -150,7 +150,7 @@ class PlanningMigrationTests(unittest.TestCase):
         self.migrate()
         space = service.get_planning_space(self.conn, "Quality Assurance")
         self.assertEqual(
-            ["backlog", "todo", "dev", "review", "done", "blocked"],
+            ["backlog", "todo", "dev", "review", "done", "blocked", "cancelled"],
             [state["key"] for state in space["workflow"]["states"]],
         )
         moved = service.get_work_item(self.conn, "QA-2")

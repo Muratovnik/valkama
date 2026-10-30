@@ -76,13 +76,14 @@ class PlanningDomainTests(unittest.TestCase):
                 ("review", "review"),
                 ("done", "completed"),
                 ("blocked", "blocked"),
+                ("cancelled", "cancelled"),
             ],
             [(state["key"], state["category"]) for state in workflow["states"]],
         )
         terminal = [state["key"] for state in workflow["states"] if state["is_terminal"]]
-        self.assertEqual(["done"], terminal)
+        self.assertEqual(["done", "cancelled"], terminal)
         # Every ordered pair except a state to itself, as explicit rows.
-        self.assertEqual(6 * 5, len(workflow["transitions"]))
+        self.assertEqual(7 * 6, len(workflow["transitions"]))
 
     def test_a_state_the_workflow_does_not_have_is_refused(self) -> None:
         created = self.item("Land the planning domain")
@@ -139,6 +140,70 @@ class PlanningDomainTests(unittest.TestCase):
         )
         closed = service.transition_work_item(self.conn, created["reference"], "done")
         self.assertTrue(closed["state"]["is_terminal"])
+
+    def test_cancelling_needs_a_summary_and_leaves_undone_steps_open(self) -> None:
+        created = self.item("Land the planning domain")
+        service.set_checklist(self.conn, created["reference"], ["write it", "test it"])
+        with self.assertRaises(model.WorkflowGuardError) as refusal:
+            service.transition_work_item(self.conn, created["reference"], "cancelled")
+        self.assertIn("[summary]", str(refusal.exception))
+        self.assertNotIn("[checklist]", str(refusal.exception))
+        service.set_summary(
+            self.conn,
+            created["reference"],
+            {"done": "Not needed: the surfaces already cover it", "next": "nothing"},
+        )
+        cancelled = service.transition_work_item(self.conn, created["reference"], "cancelled")
+        self.assertEqual("cancelled", cancelled["state"]["category"])
+        self.assertTrue(cancelled["state"]["is_terminal"])
+        self.assertEqual([False, False], [step["done"] for step in cancelled["checklist"]])
+        self.assertEqual([], cancelled.get("overridden", []))
+        # Done still refuses the same open steps: only cancelling may leave them.
+        reopened = service.transition_work_item(self.conn, created["reference"], "backlog")
+        with self.assertRaisesRegex(model.WorkflowGuardError, r"\[checklist\]"):
+            service.transition_work_item(self.conn, reopened["reference"], "done")
+
+    def test_a_workflow_shaped_like_the_old_default_gains_cancelled_once(self) -> None:
+        workflow_id = self.space["workflow"]["workflow_id"]
+        cancelled = self.conn.execute(
+            "SELECT state_id FROM workflow_states WHERE workflow_id = ? AND key = 'cancelled'",
+            (workflow_id,),
+        ).fetchone()["state_id"]
+        self.conn.execute(
+            "DELETE FROM workflow_transitions WHERE from_state_id = ? OR to_state_id = ?",
+            (cancelled, cancelled),
+        )
+        self.conn.execute("DELETE FROM workflow_states WHERE state_id = ?", (cancelled,))
+        held = self.item("Already here")
+        custom = service.create_planning_space(self.conn, project_id="custom", name="Custom")
+        self.conn.execute(
+            "UPDATE workflow_states SET key = 'shipped' WHERE workflow_id = ? AND key = 'done'",
+            (custom["workflow"]["workflow_id"],),
+        )
+        custom_cancelled = self.conn.execute(
+            "SELECT state_id FROM workflow_states WHERE workflow_id = ? AND key = 'cancelled'",
+            (custom["workflow"]["workflow_id"],),
+        ).fetchone()["state_id"]
+        self.conn.execute(
+            "DELETE FROM workflow_transitions WHERE from_state_id = ? OR to_state_id = ?",
+            (custom_cancelled, custom_cancelled),
+        )
+        self.conn.execute("DELETE FROM workflow_states WHERE state_id = ?", (custom_cancelled,))
+        self.conn.commit()
+        self.conn.close()
+
+        for _ in range(2):
+            reopened = store.connect()
+            space = service.get_planning_space(reopened, self.space["key"])
+            states = space["workflow"]["states"]
+            self.assertEqual("cancelled", states[-1]["key"])
+            self.assertEqual(6, states[-1]["position"])
+            self.assertEqual(7 * 6, len(space["workflow"]["transitions"]))
+            other = service.get_planning_space(reopened, custom["key"])
+            self.assertNotIn("cancelled", [state["key"] for state in other["workflow"]["states"]])
+            item = service.get_work_item(reopened, held["reference"])
+            self.assertEqual("backlog", item["state"]["key"])
+            reopened.close()
 
     def test_blocking_needs_a_blocker_or_a_reason(self) -> None:
         created = self.item("Land the planning domain")
@@ -288,7 +353,7 @@ class PlanningDomainTests(unittest.TestCase):
         payload = views.planning_payload(self.conn)
         self.assertEqual(views.READ_MODEL_INTERFACE, payload["interface_version"])
         self.assertEqual("QA", payload["planning_space"]["key"])
-        self.assertEqual(6, len(payload["workflow"]["states"]))
+        self.assertEqual(7, len(payload["workflow"]["states"]))
         self.assertEqual(2, len(payload["work_items"]))
         self.assertEqual(
             [{"from": first["work_item_id"], "to": second["work_item_id"], "kind": "relates-to"}],

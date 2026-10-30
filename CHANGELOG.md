@@ -58,6 +58,13 @@ checkouts are therefore distinguishable even at the same version.
   launcher has been pinned to another release, and `doctor` reports how far the
   checkout has moved past the pinned commit. Run `launcher install` once after
   updating so the stable command stops running the checkout directly.
+- The default workflow has a terminal **Cancelled** state for work closed as not
+  needed, duplicated or superseded, so it is no longer counted as done. Moving
+  an item there needs a closing summary but leaves its undone checklist steps
+  open; Done still needs every step ticked. A workflow still shaped like the
+  earlier six-state default gains Cancelled, with every move to and from it,
+  the first time a store is opened; a workflow shaped differently is left
+  alone. No existing row changes meaning, so the store schema is unchanged.
 
 ### Fixed
 
