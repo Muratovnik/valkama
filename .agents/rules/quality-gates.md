@@ -17,6 +17,15 @@ because it does not parse `.vue`; the web side is covered by
 eslint-plugin-security through vue-eslint-parser. Registry rules are fetched
 once and cached, so the first run on a fresh machine needs the network.
 
+Run the Python gates from the ignored `.venv`, built from
+`requirements-dev.txt` (`uv venv .venv --python 3.11`, then
+`uv pip install --python .venv/Scripts/python.exe -r requirements-dev.txt`),
+with `.venv/Scripts` first on `PATH`. A shared interpreter drifts: an
+unpinned semgrep and mcp 2.x there broke the gate, because semgrep imports
+`mcp.server.fastmcp` at start and mcp 2 removed it. `PATH` matters even with
+the venv present, since the `semgrep` launcher finds `pysemgrep` through it
+and otherwise runs the shared copy.
+
 `lint-imports` is the one-way import rule `AGENTS.md` states in prose, stated
 as configuration so a tool refuses a breach instead of a reviewer noticing one.
 mypy checks the modules that are already clean and names the rest in
@@ -48,7 +57,7 @@ what every `platform_contracts` validator does with any accepted payload;
 against a throwaway store and asserts what every sequence leaves true. They are
 the reason the suite now needs a third-party package at all: the server still
 imports nothing outside the standard library, but the tests no longer run on a
-machine where `install-tools` has never been run.
+machine where `requirements-dev.txt` was never installed.
 
 Discovery starts at the repository root because that is the import root: it is
 not itself a package, so unittest puts it on `sys.path`, which is what makes
