@@ -204,12 +204,6 @@ class ModuleRegistryTests(unittest.TestCase):
             },
         )
         self.assertEqual("memory", saved["prefs"]["module_id"])
-        # A module row in the store is not a module: the list is the build's.
-        self.conn.execute(
-            "INSERT INTO platform_modules VALUES"
-            "('future-module','{}','enabled',1,1,'2026-01-01T00:00:00Z')"
-        )
-        self.conn.commit()
         for module_id in ("future-module", "skills"):
             with self.subTest(module_id=module_id), self.assertRaises(PlatformHttpError):
                 app_shell.save_ui_prefs(
@@ -381,43 +375,17 @@ class ProductModelMigrationTests(unittest.TestCase):
             "Preserve me",
             migrated.execute("SELECT title FROM work_items").fetchone()[0],
         )
+        # The module rows the rewrite carried and the registry's rows went with
+        # their tables at schema 9; the recovery point below still holds them.
         self.assertEqual(
-            ["mutable", "revision"],
-            sorted(
-                {row[1] for row in migrated.execute("PRAGMA table_info(platform_modules)")}
-                & {"mutable", "revision"}
-            ),
-        )
-        current_planning = json.loads(
-            migrated.execute(
-                "SELECT record_json FROM platform_modules WHERE module_id='planning'"
-            ).fetchone()[0]
-        )
-        self.assertIn("planning-space", current_planning["supported_entity_kinds"])
-        self.assertNotIn("board", current_planning["supported_entity_kinds"])
-        self.assertEqual(
-            {item["module_id"]: item for item in platform_modules.module_manifests()},
-            {
-                row["module_id"]: json.loads(row["record_json"])
-                for row in migrated.execute("SELECT module_id,record_json FROM platform_modules")
-            },
-        )
-        self.assertTrue(
-            {
-                "claude-code-execution",
-                "codex-execution",
-                "claude-journal-telemetry",
-                "codex-rollout-telemetry",
-                "agentmemory-reference-v1",
-                "git-artifacts",
-            }
-            <= {
+            ["platform_store_metadata", "platform_ui_prefs"],
+            [
                 row[0]
                 for row in migrated.execute(
-                    "SELECT json_extract(record_json,'$.connection_ref.adapter_lineage_id')"
-                    " FROM platform_connections"
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                    " AND name LIKE 'platform%' ORDER BY name"
                 )
-            }
+            ],
         )
         migrated.close()
         self.assertEqual(1, len(self.backups()))

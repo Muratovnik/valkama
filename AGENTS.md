@@ -183,15 +183,17 @@ and settings.
 The extension registry (services, connections, assignments, grants, actions,
 packages, relations) is gone from the code. An external adapter is a record
 under `~/.valkama/adapters/` held to `platform/adapter_contract.py`: a manifest
-of exactly four fields and a transport the owner supplies. The registry's
-tables, and the module rows (`platform_modules`) with their audit
-(`platform_registry_audit`), stay in the schema only so an existing store opens
-unchanged until a schema migration drops them. Their only remaining users are
-the store's own bring-up (the historical migrations, whose validators live in
-`platform/legacy_records.py`, which still write them for a store older than
-schema 8, and the postconditions, which check the shape of these tables and the
-known-store resources), the rename carry-over and the `relations`
-export section. Do not add a reader, and do not seed rows.
+of exactly four fields and a transport the owner supplies. Schema 9 dropped the
+registry's tables, the module rows (`platform_modules`) with their audit
+(`platform_registry_audit`), and `integration_settings`; a fresh store never
+has them, and the postconditions refuse a store at 9 that does. Their DDL lives
+on, frozen as schema 8 declared it, in `platform/migrations.py`, for one reason:
+a store older than 9 is given that catalog before the historical migrations
+(validators in `platform/legacy_records.py`, the rename carry-over) run, and
+the last step of the same bring-up drops it again. The Board-era cutover in
+`platform/relations.py` keeps the adapter-link table text it rebuilds that
+table from, until the old migrations are folded. Do not declare those tables
+anywhere else, and do not add a reader.
 
 The product has now been renamed twice — Kanban, then Agent Hub, then this —
 and the lesson of the second one is written into the gates here: it renamed the

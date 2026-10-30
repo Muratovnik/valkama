@@ -21,18 +21,24 @@ backup names in `tests/test_store_migration.py`'s `build_legacy_root` fixture.
 A concrete namespace owned by an external provider belongs only in local
 configuration and is neither enumerated nor inferred here.
 
-The extension registry's tables (`platform_services`, `platform_adapters`,
-`platform_connections`, `platform_assignments`, `platform_grants`,
-`platform_actions`, `platform_action_inputs`, `platform_packages`,
-`platform_core_ref_bindings`, `platform_known_stores`,
-`platform_registry_meta`, `platform_adapter_links`), and the module rows
-(`platform_modules`) with their audit (`platform_registry_audit`), keep their
-names and DDL in `platform/core.py` although no product feature uses them: the
-module list is declared in `platform/modules.py`, and an existing store
-must open without a schema change until one migration drops them. Their rows
-are dead data, read only by the store's own bring-up and the export's
-`relations` section, as `AGENTS.md` lists. `store_rename` still rewrites the registry's former interface
-ids inside them, because a store from before the rename must arrive whole.
+Schema 9 dropped the extension registry's tables (`platform_services`,
+`platform_adapters`, `platform_connections`, `platform_assignments`,
+`platform_grants`, `platform_actions`, `platform_action_inputs`,
+`platform_packages`, `platform_core_ref_bindings`, `platform_known_stores`,
+`platform_registry_meta`, `platform_adapter_links`), the module rows
+(`platform_modules`) with their audit (`platform_registry_audit`), and
+`integration_settings`. What a store at 9 holds of the Kernel is
+`platform_store_metadata` and `platform_ui_prefs`, declared in
+`platform/core.py`. The dropped tables keep their names and DDL in
+`platform/migrations.py`, frozen as schema 8 declared them (the Board-era
+cutover in `platform/relations.py` also keeps the adapter-link table text it
+rebuilds from): `store.connect()`
+gives a store older than 9 that catalog before the historical migrations run,
+and drops it in the step that ends the chain, after a verified snapshot
+labelled `preschema9` (or `preproductmodel` for a store older than 8).
+`store_rename` still renames those tables and rewrites the registry's former
+interface ids inside them, because the historical migrations between the
+rename and the drop read and validate them under the current names.
 
 Runtime state lives at `%USERPROFILE%\.valkama`. `store.adopt_legacy_store()`
 walks `LEGACY_LAYOUTS` newest-first, moves the whole directory once, and refuses

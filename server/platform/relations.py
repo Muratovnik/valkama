@@ -2,13 +2,14 @@
 
 `platform_adapter_links` held the extension registry's generic relations: a
 work item pointing at a resource an adapter owned. The registry that wrote and
-read those rows is gone; the table stays until the migration that drops the
-registry's tables, because a store at this schema still declares it.
+read those rows is gone, and schema 9 dropped the table.
 
-What is left here is its `CREATE TABLE` text and the Board-era cutover that
-repoints each link from the card it named to the work item that card became.
-That cutover runs inside `store.migrate_planning_cutover`, the only place the
-card-to-item mapping exists.
+What is left here serves only a store older than 9 on its way forward: the
+Board-era cutover that repoints each link from the card it named to the work
+item that card became, and the table text it rebuilds the table from. That
+cutover runs inside `store.migrate_planning_cutover`, the only place the
+card-to-item mapping exists. `migrations` keeps its own frozen copy of the same
+text for the schema-8 catalog.
 """
 
 from __future__ import annotations
@@ -48,8 +49,6 @@ _INDEX_SQL = """
 CREATE INDEX IF NOT EXISTS platform_adapter_links_item
   ON platform_adapter_links(data_scope_id, space_key, work_item_id)
 """
-
-SCHEMA = _TABLE_SQL + ";" + _INDEX_SQL + ";"
 
 
 def _require_connection(conn):

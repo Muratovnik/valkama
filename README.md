@@ -227,7 +227,7 @@ python valkama.py <command> [options]
 | `adapter remove ADAPTER_ID` | stop declaring an installed adapter |
 | `adapter list` | the adapters this installation declares |
 | `doctor [--json] [--no-probe]` | check this installation in four levels — Installation, Projects, Capabilities, Connections — and say what to do about each problem |
-| `export [--section planning\|relations\|settings]` | write the selected sections as one export; repeat `--section`, or omit it for all sections |
+| `export [--section planning]` | write the Planning spaces and their work items as one export; `planning` is the only section |
 | `migrate planning-model [--dry-run]` | explicitly convert a Board-era store to Planning once; dry run converts a copy |
 | `attach NAME PATH [--label TEXT]` | attach another database file as a scope |
 | `detach NAME` | drop a scope from every view; the file is untouched |
@@ -480,6 +480,24 @@ agent's work.
 
 ### Migrating an older store
 
+A store written by an older schema is upgraded the first time a newer build
+opens it, after a verified snapshot (see below). From then on a build of the
+older schema refuses the store rather than read it, so restart every agent
+client after pinning the newer release with `launcher install`: each one
+starts its own server, and the first to open the store upgrades it. Schema 9
+dropped the extension registry's tables, the module rows and the integration
+switches; its snapshot is labelled `preschema9`.
+
+To go back to a build at schema 8, first stop every process that holds the
+store: the listener and every agent client, since each one runs its own server.
+Pin the earlier release with `launcher install --revision <commit>`. Then
+either stamp the store back with `PRAGMA user_version=8`, which keeps
+every row including those written since the upgrade (a schema-8 build creates
+the dropped tables again, empty), or put the `preschema9` snapshot in its place,
+which loses everything written since. Before replacing the file, delete the
+`-wal` and `-shm` files beside it: a write-ahead log left behind would be
+applied to the snapshot on the next open.
+
 A store that still contains the Board-era model refuses to open until you
 authorize its one-way conversion. Inspect the conversion first, then apply it:
 
@@ -491,11 +509,12 @@ python valkama.py migrate planning-model
 The dry run converts a temporary copy. Before changing the actual store, the
 migration takes a clean SQLite snapshot in the `backups/` directory beside the
 configured database. The generated filename begins `valkama-` and includes a
-migration label such as `preproductmodel` or `preupgrade`. To check recovery
-without replacing your working store, copy the snapshot to a separate path,
-set `VALKAMA_DB` to the copy, and run the same dry run and migration there. The
-database path may differ from the default when `store` or `VALKAMA_DB` is
-configured. Generated snapshots retain the last five files per migration label.
+migration label such as `preschema9`, `preproductmodel` or `preupgrade`. To
+check recovery without replacing your working store, copy the snapshot to a
+separate path, set `VALKAMA_DB` to the copy, and run the same dry run and
+migration there. The database path may differ from the default when `store` or
+`VALKAMA_DB` is configured. Generated snapshots retain the last five files per
+migration label.
 
 ## Planning: launching agents from a card
 

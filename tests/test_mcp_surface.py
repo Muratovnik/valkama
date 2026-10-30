@@ -30,7 +30,6 @@ from server import mcp_surface, store
 from server.ops import tray
 from server.planning import api as planning_api
 from server.planning import service as planning_service
-from tests import registry_rows
 
 SPACE_NAME = "Wire Surface"
 SPACE_KEY = "WIR"
@@ -98,11 +97,7 @@ class McpSurfaceTestCase(unittest.TestCase):
         written = stdout.buffer.getvalue().decode("utf-8")
         return [json.loads(line) for line in written.splitlines() if line.strip()]
 
-    def test_planning_tools_answer_whatever_a_dead_module_row_says(self) -> None:
-        # The module rows are dead data: no row turns Planning off any more.
-        registry_rows.seed_modules(self.conn)
-        self.conn.execute("UPDATE platform_modules SET state='disabled'")
-        self.conn.commit()
+    def test_planning_tools_answer_and_retired_tools_stay_unknown(self) -> None:
         self.assertIn(
             "planning_spaces", mcp_surface.call_tool(self.conn, "list_planning_spaces", {})
         )

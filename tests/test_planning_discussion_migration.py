@@ -83,7 +83,9 @@ class PlanningDiscussionMigrationTests(unittest.TestCase):
         source = self.legacy_source()
         self.conn.close()
         self.conn = store.connect()
-        self.assertEqual(8, self.conn.execute("PRAGMA user_version").fetchone()[0])
+        self.assertEqual(
+            store.STORE_SCHEMA_VERSION, self.conn.execute("PRAGMA user_version").fetchone()[0]
+        )
         for row, original in zip(
             self.conn.execute("SELECT * FROM work_items ORDER BY number"),
             source["items"],

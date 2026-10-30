@@ -11,44 +11,19 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from server import http_surface, mcp_surface, store, watchers
+from server import http_surface, store, watchers
 from server.planning import service as planning_service
 from server.platform import core as platform_core
+from server.platform import migrations as platform_migrations
 from server.platform import modules as platform_modules
-from tests import SUITE_STORE, registry_rows
-
-# The registry's tables, which a store still declares and nothing writes.
-REGISTRY_TABLES = (
-    "platform_services",
-    "platform_adapters",
-    "platform_connections",
-    "platform_packages",
-    "platform_actions",
-    "platform_action_inputs",
-    "platform_assignments",
-    "platform_grants",
-    "platform_core_ref_bindings",
-    "platform_known_stores",
-    "platform_registry_meta",
-)
+from tests import SUITE_STORE, schema8
 
 
-# The module rows and their audit: declared, dead since the list moved to code.
-MODULE_TABLES = ("platform_modules", "platform_registry_audit")
-DEAD_TABLES = (*REGISTRY_TABLES, *MODULE_TABLES)
-
-
-def _row_counts(conn: sqlite3.Connection) -> dict[str, int]:
-    return {
-        table: conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] for table in DEAD_TABLES
-    }
-
-
-def _held(conn: sqlite3.Connection) -> dict[str, list[tuple]]:
-    return {
-        table: [tuple(row) for row in conn.execute(f"SELECT * FROM {table} ORDER BY 1")]
-        for table in DEAD_TABLES
-    }
+def _tables(conn: sqlite3.Connection) -> list[str]:
+    return [
+        row[0]
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+    ]
 
 
 class InitializeTests(unittest.TestCase):
@@ -62,22 +37,18 @@ class InitializeTests(unittest.TestCase):
         patch.start()
         self.addCleanup(patch.stop)
 
-    def test_a_fresh_store_gets_its_identity_and_no_registry_or_module_rows(self) -> None:
+    def test_a_fresh_store_gets_its_identity_and_none_of_the_retired_tables(self) -> None:
         conn = store.connect()
         self.addCleanup(conn.close)
-        self.assertEqual(dict.fromkeys(DEAD_TABLES, 0), _row_counts(conn))
+        tables = _tables(conn)
+        self.assertEqual(
+            ["platform_store_metadata", "platform_ui_prefs"],
+            [name for name in tables if name.startswith("platform_")],
+        )
+        self.assertNotIn("integration_settings", tables)
         self.assertEqual(
             1, conn.execute("SELECT COUNT(*) FROM platform_store_metadata").fetchone()[0]
         )
-        # The tables themselves are still there, exactly as declared: an
-        # existing store must open unchanged until a migration drops them.
-        for table in MODULE_TABLES:
-            with self.subTest(table=table):
-                self.assertIsNotNone(
-                    conn.execute(
-                        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
-                    ).fetchone()
-                )
 
     def test_reopening_a_store_writes_nothing(self) -> None:
         store.connect().close()
@@ -87,87 +58,37 @@ class InitializeTests(unittest.TestCase):
         store.connect().close()
         self.assertEqual(before, observer.execute("PRAGMA data_version").fetchone()[0])
 
-    def test_a_store_holding_registry_and_module_rows_opens_and_keeps_them_untouched(
-        self,
-    ) -> None:
-        # A store as the last registry build left it: its rows are dead data
-        # now, and opening the store neither rewrites, removes nor adds to them.
-        conn = store.connect()
-        try:
-            registry_rows.seed(conn)
-            conn.commit()
-            held = _held(conn)
-        finally:
-            conn.close()
-        self.assertTrue(all(held[table] for table in MODULE_TABLES))
-        # Equal rows could still have been written back with the same values;
-        # the data version says whether anything was written at all.
-        observer = sqlite3.connect(self.db)
-        self.addCleanup(observer.close)
-        before = observer.execute("PRAGMA data_version").fetchone()[0]
-        reopened = store.connect()
-        self.addCleanup(reopened.close)
-        self.assertEqual(before, observer.execute("PRAGMA data_version").fetchone()[0])
-        self.assertEqual(held, _held(reopened))
+    def test_a_current_store_holding_a_retired_table_is_refused_and_left_alone(self) -> None:
+        # Schema 9 never holds these tables. One that does was not migrated by
+        # this product, and repairing it silently would hide that.
+        store.connect().close()
+        raw = sqlite3.connect(self.db)
+        schema8.restore_catalog(raw)
+        raw.commit()
+        held = _tables(raw)
+        raw.close()
+        with self.assertRaisesRegex(
+            platform_migrations.CatalogMigrationError, "undeclared platform tables"
+        ):
+            store.connect()
+        raw = sqlite3.connect(self.db)
+        self.addCleanup(raw.close)
+        self.assertEqual(held, _tables(raw))
         self.assertEqual(
-            store.STORE_SCHEMA_VERSION, reopened.execute("PRAGMA user_version").fetchone()[0]
+            store.STORE_SCHEMA_VERSION, raw.execute("PRAGMA user_version").fetchone()[0]
         )
 
-    def test_module_rows_that_disagree_with_the_build_are_neither_read_nor_refused(
-        self,
-    ) -> None:
-        """What a schema-8 store says about its modules no longer decides anything.
-
-        Every row here would have stopped the store opening or changed what a
-        surface answered while the rows were the module list: Memory disabled
-        with a malformed descriptor, Settings missing, a module no build
-        declares, and the audit of a state change. Now the store opens without a
-        write, the rows stay as they are, and the list is the build's.
-        """
-
-        conn = store.connect()
-        try:
-            registry_rows.seed_modules(conn)
-            conn.execute(
-                "UPDATE platform_modules SET state='disabled',revision=3,record_json='{}'"
-                " WHERE module_id='memory'"
-            )
-            conn.execute("DELETE FROM platform_modules WHERE module_id='settings'")
-            conn.execute(
-                "INSERT INTO platform_modules VALUES"
-                "('future-module','{}','enabled',1,1,'2026-01-01T00:00:00Z')"
-            )
-            conn.execute(
-                "INSERT INTO platform_registry_audit"
-                "(event_kind,entity_kind,entity_id,detail_json,at) VALUES(?,?,?,?,?)",
-                (
-                    "module.state-changed",
-                    "module",
-                    "memory",
-                    '{"state":"disabled"}',
-                    "2026-01-01T00:00:00Z",
-                ),
-            )
-            conn.commit()
-            held = _held(conn)
-        finally:
-            conn.close()
-        observer = sqlite3.connect(self.db)
-        self.addCleanup(observer.close)
-        before = observer.execute("PRAGMA data_version").fetchone()[0]
-        for _ in range(2):
-            reopened = store.connect()
-            try:
-                self.assertEqual(held, _held(reopened))
-                listed = mcp_surface.call_tool(reopened, "list_platform_modules", {})
-            finally:
-                reopened.close()
-            self.assertEqual(before, observer.execute("PRAGMA data_version").fetchone()[0])
-            self.assertEqual(platform_modules.modules_payload(), listed)
-            self.assertEqual(
-                [("memory", "enabled"), ("planning", "enabled"), ("settings", "enabled")],
-                [(item["manifest"]["module_id"], item["state"]) for item in listed["modules"]],
-            )
+    def test_a_current_store_holding_the_integration_switches_is_refused(self) -> None:
+        # The one retired table without the `platform_` prefix.
+        store.connect().close()
+        raw = sqlite3.connect(self.db)
+        raw.execute("CREATE TABLE integration_settings(key TEXT PRIMARY KEY, value TEXT)")
+        raw.commit()
+        raw.close()
+        with self.assertRaisesRegex(
+            platform_migrations.CatalogMigrationError, "integration_settings"
+        ):
+            store.connect()
 
     def test_initialize_needs_an_explicit_connection(self) -> None:
         with self.assertRaises(TypeError):
@@ -277,18 +198,6 @@ class PlatformHttpBoundaryTests(unittest.TestCase):
                 self.assertEqual("not_found", json.loads(body)["error"]["code"])
 
     def test_the_module_list_is_the_builds_and_nothing_changes_it(self) -> None:
-        conn = store.connect()
-        try:
-            # A fresh store holds no module rows; seed the ones an older build
-            # wrote, or the disabling below would change nothing.
-            registry_rows.seed_modules(conn)
-            self.assertEqual(
-                3,
-                conn.execute("UPDATE platform_modules SET state='disabled'").rowcount,
-            )
-            conn.commit()
-        finally:
-            conn.close()
         status, _, body = self._get("/api/modules")
         self.assertEqual(200, status)
         self.assertEqual(platform_modules.modules_payload(), json.loads(body))
@@ -299,23 +208,9 @@ class PlatformHttpBoundaryTests(unittest.TestCase):
         self.assertEqual(404, status)
         self.assertEqual("application/json", content_type)
         self.assertEqual("not_found", json.loads(body)["error"]["code"])
-
-    def test_planning_answers_whatever_a_dead_module_row_says(self) -> None:
-        conn = store.connect()
-        try:
-            registry_rows.seed_modules(conn)
-            conn.execute("UPDATE platform_modules SET state='disabled'")
-            conn.commit()
-        finally:
-            conn.close()
-        for path in (
-            "/api/planning",
-            "/api/planning/spaces",
-            "/api/scopes",
-            "/api/platform/planning?scope_kind=global",
-        ):
-            with self.subTest(path=path):
-                self.assertEqual(200, self._get(path)[0])
+        self.assertEqual(
+            platform_modules.modules_payload(), json.loads(self._get("/api/modules")[2])
+        )
 
     def test_retired_routes_and_event_views_stay_retired(self) -> None:
         for path in (

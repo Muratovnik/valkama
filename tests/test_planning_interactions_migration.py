@@ -62,10 +62,12 @@ class PlanningInteractionsMigrationTests(unittest.TestCase):
     def snapshots(self) -> list[Path]:
         return list((Path(self.path).parent / "backups").glob("*-preinteractions-*.sqlite3"))
 
-    def test_schema_eight_upgrade_snapshots_before_mutation_and_preserves_history(self) -> None:
+    def test_current_schema_upgrade_snapshots_before_mutation_and_preserves_history(self) -> None:
         self.conn.close()
         self.conn = store.connect()
-        self.assertEqual(8, self.conn.execute("PRAGMA user_version").fetchone()[0])
+        self.assertEqual(
+            store.STORE_SCHEMA_VERSION, self.conn.execute("PRAGMA user_version").fetchone()[0]
+        )
         self.assertEqual(1, len(self.snapshots()))
         self.assertEqual(self.identity, store_backups.snapshot_identity(str(self.snapshots()[0])))
         self.assertEqual(

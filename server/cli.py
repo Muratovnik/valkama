@@ -579,7 +579,7 @@ def main(argv: list[str] | None = None) -> None:
     config_cmd.add_argument("--json", action="store_true")
     export_cmd = commands.add_parser(
         "export",
-        help="write the planning trail, relations, settings and decisions as one file",
+        help="write the planning trail as one file",
     )
     export_cmd.add_argument(
         "--section",

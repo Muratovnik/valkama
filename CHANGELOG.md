@@ -12,6 +12,25 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Changed
 
+- **Breaking for every running client: store schema 9.** The first open by this
+  build takes a verified snapshot labelled `preschema9` beside the store, then
+  drops the extension registry's tables, `platform_modules` with
+  `platform_registry_audit`, and `integration_settings`; every other row is kept
+  as it was. A store older than schema 8 goes through the same historical
+  migrations as before, under its `preproductmodel` snapshot, and ends at 9. A
+  build at schema 8 refuses the upgraded store with `StoreTooNewError` and
+  leaves the store file unchanged, so restart every agent client after pinning
+  this release with `launcher install`. Going back to a schema-8 build is described in the README under
+  "Migrating an older store".
+  A fresh store is created at 9 without those tables, and a store stamped 9 that
+  still holds one of them is refused.
+- **Breaking for `export`:** an export carries only the `planning` section. The
+  `relations` section (the registry's adapter links) and the `settings` section
+  (the integration switches) went with their tables; `--section relations` and
+  `--section settings` are refused as unknown.
+- A store that is already current opens without the full `PRAGMA
+  integrity_check`. The check still runs whenever an open migrates the store,
+  and on every snapshot and restore.
 - **Breaking for MCP clients:** the work-item write tools (`create_work_item`,
   `update_work_item`, `transition_work_item`, `claim_work_item`,
   `set_work_item_checklist`, `claim_work_item_checklist_item`,
@@ -47,7 +66,7 @@ checkouts are therefore distinguishable even at the same version.
   is `mutable`, every `revision` is 1 and `updated_at` is when the list last
   changed. Settings no longer declares the registry's read models, and the
   entity kinds `service`, `connection` and `registry` left the reference
-  vocabulary. The export's `settings` section no longer carries module rows.
+  vocabulary.
 - `launcher install` pins a release: it copies one commit of the checkout
   (`--revision`, default `HEAD`) with `git archive` into the releases directory,
   and the stable command runs that copy instead of the working tree. Uncommitted
@@ -64,7 +83,7 @@ checkouts are therefore distinguishable even at the same version.
   open; Done still needs every step ticked. A workflow still shaped like the
   earlier six-state default gains Cancelled, with every move to and from it,
   the first time a store is opened; a workflow shaped differently is left
-  alone. No existing row changes meaning, so the store schema is unchanged.
+  alone. No existing row changes meaning, so this needs no store schema change.
 
 ### Fixed
 
@@ -91,15 +110,13 @@ checkouts are therefore distinguishable even at the same version.
   packages, relations and capability resolution, with `/api/platform/registry`,
   `/api/platform/relations`, `/api/platform/actions`,
   `/api/platform/assignments` and `/api/platform/grants`, which now answer 404.
-  A store keeps its registry tables and rows unchanged and nothing seeds them;
-  only the export's `relations` section still reads the adapter links. The
-  work-item read no longer carries a `relations` key.
+  Nothing seeds or reads the registry's rows, and store schema 9 drops their
+  tables. The work-item read no longer carries a `relations` key.
 - **Breaking for HTTP clients:** turning a module on or off. `POST
   /api/modules/state` answers 404, the Settings Workspace section that held the
   switches is gone, and a disabled module row in an existing store no longer
-  hides or refuses anything. The store keeps its `platform_modules` and
-  `platform_registry_audit` rows unchanged; no feature reads or writes them,
-  and only the historical migrations of a store older than schema 8 still do.
+  hides or refuses anything. Store schema 9 drops the `platform_modules` and
+  `platform_registry_audit` tables.
 
 ## [1.0.2] - 2026-09-27
 

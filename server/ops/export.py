@@ -1,11 +1,15 @@
 """The installation as one file somebody can keep, minus everything secret.
 
 OPS-006. What leaves is the record a person would be sorry to lose and could
-not reconstruct: the planning trail, what the Kernel links to what, which
-integrations the owner switched off. What does not leave is anything a store
+not reconstruct: the planning trail. What does not leave is anything a store
 should not have held in the first place, nor what the build itself declares:
 the module list is code, so an export of it would describe the build that
 wrote the file rather than the installation.
+
+There used to be two more sections. `relations` carried the extension
+registry's adapter links and `settings` the integration switches; schema 9
+dropped both tables, and a section that always answered empty would claim an
+installation had nothing there rather than that the product no longer keeps it.
 
 The secret rule is absolute and cheap to state: no connection configuration
 crosses this boundary. Not redacted, not starred out — absent. A redacted secret
@@ -28,7 +32,7 @@ from ..planning import service as planning_service
 
 #: What one export may carry, so a caller asks for what it wants rather than
 #: getting everything and filtering afterwards.
-SECTIONS = ("planning", "relations", "settings")
+SECTIONS = ("planning",)
 
 #: How many rows one section will carry. An export is a record, not a database
 #: dump, and a file nobody can open is a file nobody keeps.
@@ -61,10 +65,6 @@ def export_installation(
     }
     if "planning" in sections:
         payload["planning"] = _planning(conn)
-    if "relations" in sections:
-        payload["relations"] = _rows(conn, "platform_adapter_links")
-    if "settings" in sections:
-        payload["settings"] = _settings(conn)
     return payload
 
 
@@ -85,35 +85,6 @@ def _planning(conn: sqlite3.Connection) -> dict:
         ):
             items.append(planning_service.get_work_item(conn, str(brief["reference"])))
     return {"planning_spaces": spaces, "work_items": items}
-
-
-def _settings(conn: sqlite3.Connection) -> dict:
-    """Which integrations the owner switched off.
-
-    `platform_connections` is deliberately not read. It is where a
-    configuration — and therefore a secret reference — would live, and the way
-    to guarantee an export cannot leak one is to never open the table.
-    """
-
-    return {"integrations": _rows(conn, "integration_settings")}
-
-
-def _rows(conn: sqlite3.Connection, table: str) -> list[dict]:
-    """One table as records, or nothing when this store does not have it.
-
-    The table name is a literal from `SECTIONS`' own code path and never from a
-    caller; an absent table is an empty list because an older store is a thing
-    an export should survive rather than refuse.
-    """
-
-    if table not in ("platform_adapter_links", "integration_settings"):
-        raise ValueError(f"refusing to export an unnamed table: {table}")
-    try:
-        cursor = conn.execute(f"SELECT * FROM {table} LIMIT {MAX_ROWS}")  # noqa: S608
-    except sqlite3.Error:
-        return []
-    columns = [description[0] for description in cursor.description]
-    return [dict(zip(columns, row, strict=True)) for row in cursor.fetchall()]
 
 
 def render(payload: dict) -> str:

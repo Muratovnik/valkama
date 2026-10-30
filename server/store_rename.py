@@ -11,6 +11,10 @@ indexes), the keys rows are addressed by, and the strings the store wrote down
 inside its JSON records. A record still naming the old interface would be
 refused by its own validator on the next read, so the values travel with the
 tables rather than after them.
+
+Schema 9 dropped most of these tables, at the end of the same bring-up. The
+maps still name them: the historical migrations that run first read them under
+the current names, and validate the records in them, before the drop.
 """
 
 from __future__ import annotations

@@ -10,7 +10,7 @@ from unittest import mock
 
 from server import store
 from server.ops import export
-from tests import registry_rows
+from server.planning import service as planning_service
 
 
 class ExportSectionTests(unittest.TestCase):
@@ -25,30 +25,31 @@ class ExportSectionTests(unittest.TestCase):
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
 
-    def test_settings_carry_the_owner_s_switches_and_not_the_module_list(self) -> None:
-        # A store as the last build that seeded module rows left it: those rows
-        # describe that build, not this installation, and do not leave.
-        registry_rows.seed_modules(self.conn)
-        self.conn.execute(
-            "INSERT INTO integration_settings VALUES('agentmemory',0,'2026-01-01T00:00:00Z')"
+    def test_the_planning_trail_is_the_whole_export(self) -> None:
+        planning_service.create_planning_space(
+            self.conn, project_id="export", name="Export", key="EXP"
         )
+        planning_service.create_work_item(self.conn, space="EXP", title="Kept in the export")
         self.conn.commit()
-        payload = export.export_installation(self.conn, sections=("settings",))
-        self.assertEqual(["settings"], payload["sections"])
-        self.assertEqual({"integrations"}, set(payload["settings"]))
-        self.assertEqual(
-            ["agentmemory"], [row["integration_id"] for row in payload["settings"]["integrations"]]
-        )
-        self.assertNotIn("platform_modules", export.render(payload))
-
-    def test_every_section_renders_and_an_unknown_one_is_refused(self) -> None:
         payload = json.loads(export.render(export.export_installation(self.conn)))
-        self.assertEqual(list(export.SECTIONS), payload["sections"])
-        self.assertEqual({"planning_spaces": [], "work_items": []}, payload["planning"])
-        self.assertEqual([], payload["relations"])
+        self.assertEqual(["planning"], payload["sections"])
+        self.assertEqual(
+            ["Kept in the export"],
+            [item["title"] for item in payload["planning"]["work_items"]],
+        )
+        # The registry's links and the integration switches left with their
+        # tables at schema 9; the export does not answer for them at all.
+        self.assertNotIn("relations", payload)
+        self.assertNotIn("settings", payload)
         self.assertFalse(payload["restorable"])
-        with self.assertRaisesRegex(ValueError, "unknown export section"):
-            export.export_installation(self.conn, sections=("modules",))
+
+    def test_a_retired_or_unknown_section_is_refused(self) -> None:
+        for section in ("relations", "settings", "modules"):
+            with (
+                self.subTest(section=section),
+                self.assertRaisesRegex(ValueError, "unknown export section"),
+            ):
+                export.export_installation(self.conn, sections=(section,))
 
 
 if __name__ == "__main__":

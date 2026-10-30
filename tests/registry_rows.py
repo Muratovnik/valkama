@@ -15,6 +15,10 @@ from the last build that wrote them (with the retired `codex-skills` built-in
 the work-focus retirement removes). A test that needs a store as that build left
 it opens a fresh store and calls `seed`, or `seed_modules` for the module rows
 alone, instead of asking current code to produce data it no longer produces.
+
+Schema 9 dropped the tables these rows live in, so both first give the store
+the schema-8 catalog it lacks, and the store stays a fresh one only until its
+stamp is set below 9: a store stamped 9 that holds these tables is refused.
 """
 
 from __future__ import annotations
@@ -24,6 +28,7 @@ import sqlite3
 from pathlib import Path
 
 from server.store_identity.metadata import read_store_metadata
+from tests import schema8
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "platform-registry-rows.fixture.json"
 CAPTURED_AT = "2026-10-30T00:00:00Z"
@@ -69,6 +74,7 @@ def seed_modules(conn: sqlite3.Connection) -> None:
     the captured events keep the sequence numbers they were written with.
     """
 
+    schema8.restore_catalog(conn)
     _insert(conn, MODULE_TABLES)
 
 
@@ -80,6 +86,7 @@ def seed(conn: sqlite3.Connection) -> None:
     as they were for a store with no planning space when it was seeded.
     """
 
+    schema8.restore_catalog(conn)
     _insert(conn, TABLE_ORDER + MODULE_TABLES)
     conn.execute(
         "INSERT INTO platform_known_stores"

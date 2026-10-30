@@ -17,6 +17,12 @@ owns the current schema; this owns its history, and the dependency runs that
 way only. The registry's row shapes these migrations still check live in
 `legacy_records`, which nothing else reads.
 
+Schema 9 dropped the extension registry's tables, the module rows and their
+audit. Every migration below that reads or rewrites them was written against
+the catalog schema 8 declared, so that catalog is kept here, frozen: a store
+older than 9 is given it before the historical steps run, and loses those
+tables again in the step that ends the chain.
+
 The catalogue of source shapes is deliberately literal. A signature comparison
 that described a table instead of replaying it would drift from the store it
 claims to recognise, which is how two column orders of the same six columns
@@ -45,7 +51,6 @@ from . import modules as platform_modules
 # the runtime by one separator is exactly the failure the postconditions exist
 # to catch.
 from .core import (
-    REGISTRY_SCHEMA,
     SCHEMA,
     SCHEMA_TABLES,
     _execute_schema,
@@ -187,6 +192,32 @@ def retire_work_support_modules(conn: sqlite3.Connection) -> bool:
         if row["module_id"] in RETIRED_MODULE_IDS:
             discard("platform_modules", "module_id", row["module_id"], "module")
     return changed
+
+
+def ensure_schema8_catalog(conn: sqlite3.Connection) -> None:
+    """Give a store older than schema 9 the catalog the steps below were written for.
+
+    Each historical step reads or rewrites the registry's tables, and a store
+    old enough not to have them yet used to get them, empty, from the schema a
+    build declared. The caller runs this where that schema ran, and only for a
+    store it is about to carry forward; `drop_retired_tables` ends the chain.
+    """
+
+    _execute_schema(conn, _SCHEMA8_SCHEMA)
+
+
+def drop_retired_tables(conn: sqlite3.Connection) -> None:
+    """Drop every `platform_*` table schema 9 does not declare, with its indexes.
+
+    The extension registry, the module rows and their audit: nothing has read
+    them since the registry and the module table left the code, so their rows
+    go with them rather than being carried anywhere. The caller owns the
+    verified snapshot taken before the first write, which still holds them.
+    """
+
+    for table in RETIRED_PLATFORM_TABLES:
+        # Every name comes from the literal tuple above and none from a caller.
+        conn.execute(f"DROP TABLE IF EXISTS {table}")
 
 
 def _legacy_board_names(values) -> None:
@@ -428,14 +459,14 @@ def migrate_registry_audit_order(conn: sqlite3.Connection) -> bool:
 
     if not registry_audit_order_migration_needed(conn):
         return False
-    columns = ",".join(_CURRENT_PLATFORM_COLUMNS["platform_registry_audit"])
+    columns = ",".join(_SCHEMA8_PLATFORM_COLUMNS["platform_registry_audit"])
     for row in conn.execute(
         "SELECT name FROM sqlite_master WHERE type='index'"
         " AND tbl_name='platform_registry_audit' AND sql IS NOT NULL"
     ).fetchall():
         conn.execute('DROP INDEX "' + str(row[0]) + '"')
     conn.execute("ALTER TABLE platform_registry_audit RENAME TO platform_registry_audit_legacy")
-    _execute_schema(conn, REGISTRY_SCHEMA)
+    _execute_schema(conn, _SCHEMA8_REGISTRY_SCHEMA)
     conn.execute(
         f"INSERT INTO platform_registry_audit({columns})"
         f" SELECT {columns} FROM platform_registry_audit_legacy"
@@ -509,7 +540,151 @@ def _table_columns(conn: sqlite3.Connection, table: str) -> tuple[str, ...]:
     return tuple(str(row[1]) for row in conn.execute(f"PRAGMA table_info({table})"))
 
 
-_CURRENT_PLATFORM_COLUMNS = {
+# The registry's tables, the module rows and their audit, and the UI preference,
+# byte for byte as `core` declared them while the store was at schema 8. Frozen:
+# the historical steps read and rewrite these tables, `migrate_registry_audit_order`
+# rebuilds the audit table from this text, and classification proves a source
+# store against it. Nothing creates them on a fresh store.
+_SCHEMA8_REGISTRY_SCHEMA = """
+CREATE TABLE IF NOT EXISTS platform_modules(
+    module_id TEXT PRIMARY KEY,
+    record_json TEXT NOT NULL,
+    state TEXT NOT NULL CHECK(state IN ('enabled','disabled')),
+    mutable INTEGER NOT NULL CHECK(mutable IN (0,1)),
+    revision INTEGER NOT NULL CHECK(revision > 0),
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS platform_services(
+    service_key TEXT PRIMARY KEY,
+    record_json TEXT NOT NULL,
+    state TEXT NOT NULL CHECK(state IN ('registered','invalid','tombstoned')),
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS platform_adapters(
+    adapter_lineage_id TEXT PRIMARY KEY,
+    adapter_id TEXT NOT NULL UNIQUE,
+    record_json TEXT NOT NULL,
+    state TEXT NOT NULL CHECK(state IN ('registered','tombstoned')),
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS platform_connections(
+    connection_key TEXT PRIMARY KEY,
+    record_json TEXT NOT NULL,
+    state TEXT NOT NULL CHECK(state IN ('registered','invalid','tombstoned')),
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS platform_assignments(
+    assignment_id TEXT PRIMARY KEY,
+    record_json TEXT NOT NULL,
+    state TEXT NOT NULL CHECK(state IN ('enabled','disabled')),
+    revision INTEGER NOT NULL CHECK(revision > 0),
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS platform_grants(
+    grant_id TEXT PRIMARY KEY,
+    record_json TEXT NOT NULL,
+    state TEXT NOT NULL CHECK(state IN ('active','revoked')),
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS platform_actions(
+    action_id TEXT PRIMARY KEY,
+    record_json TEXT NOT NULL,
+    state TEXT NOT NULL CHECK(state IN ('registered','tombstoned')),
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS platform_action_inputs(
+    action_id TEXT PRIMARY KEY REFERENCES platform_actions(action_id),
+    record_json TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS platform_core_ref_bindings(
+    core_ref_kind TEXT PRIMARY KEY,
+    record_json TEXT NOT NULL,
+    state TEXT NOT NULL CHECK(state IN ('registered','tombstoned')),
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS platform_packages(
+    package_key TEXT PRIMARY KEY,
+    record_json TEXT NOT NULL,
+    state TEXT NOT NULL CHECK(state IN ('registered','tombstoned')),
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS platform_known_stores(
+    data_scope_id TEXT PRIMARY KEY,
+    alias TEXT NOT NULL,
+    resources_json TEXT NOT NULL,
+    registry_revision INTEGER NOT NULL,
+    is_primary INTEGER NOT NULL CHECK(is_primary IN (0,1)),
+    is_attached INTEGER NOT NULL CHECK(is_attached IN (0,1)),
+    is_writable INTEGER NOT NULL CHECK(is_writable IN (0,1)),
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS platform_registry_meta(
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS platform_ui_prefs(
+    key TEXT PRIMARY KEY CHECK(key='last-route'),
+    record_json TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS platform_registry_audit(
+    sequence INTEGER PRIMARY KEY,
+    event_kind TEXT NOT NULL,
+    entity_kind TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    detail_json TEXT NOT NULL DEFAULT '{}',
+    at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS platform_registry_audit_entity
+  ON platform_registry_audit(entity_kind, entity_id, sequence);
+"""
+
+# The store identity and adapter-link DDL exactly as schema 8 declared them.
+# Copies rather than imports: `store_identity.metadata` is current and may
+# change with a later schema, and `relations` leaves with the folding of the
+# old migrations, while every store below 9 still carries this text.
+_SCHEMA8_STORE_METADATA = """
+CREATE TABLE IF NOT EXISTS platform_store_metadata(
+    singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
+    data_scope_id TEXT NOT NULL UNIQUE,
+    owner_id TEXT NOT NULL,
+    is_primary INTEGER NOT NULL CHECK(is_primary IN (0, 1)),
+    is_writable INTEGER NOT NULL CHECK(is_writable IN (0, 1)),
+    created_at TEXT NOT NULL
+);
+"""
+
+_SCHEMA8_ADAPTER_LINKS = """
+CREATE TABLE IF NOT EXISTS platform_adapter_links(
+    id INTEGER PRIMARY KEY,
+    data_scope_id TEXT NOT NULL,
+    space_key TEXT NOT NULL,
+    work_item_id TEXT NOT NULL,
+    service_owner_id TEXT NOT NULL,
+    service_id TEXT NOT NULL,
+    adapter_lineage_id TEXT NOT NULL,
+    connection_id TEXT NOT NULL,
+    resource_type TEXT NOT NULL,
+    external_id TEXT NOT NULL,
+    fallback_label TEXT NOT NULL DEFAULT '',
+    provenance_json TEXT NOT NULL,
+    state TEXT NOT NULL DEFAULT 'resolved' CHECK(state IN ('resolved','unavailable','missing','ambiguous','malformed')),
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(work_item_id) REFERENCES work_items(work_item_id) ON DELETE CASCADE,
+    UNIQUE(data_scope_id, space_key, work_item_id, service_owner_id, service_id,
+           adapter_lineage_id, connection_id, resource_type, external_id)
+)
+;
+CREATE INDEX IF NOT EXISTS platform_adapter_links_item
+  ON platform_adapter_links(data_scope_id, space_key, work_item_id)
+;"""
+
+# The whole `platform_*` catalog of schema 8, composed exactly as `core` composed
+# it then.
+_SCHEMA8_SCHEMA = _SCHEMA8_STORE_METADATA + _SCHEMA8_ADAPTER_LINKS + _SCHEMA8_REGISTRY_SCHEMA
+
+_SCHEMA8_PLATFORM_COLUMNS = {
     "platform_store_metadata": (
         "singleton",
         "data_scope_id",
@@ -565,6 +740,40 @@ _CURRENT_PLATFORM_COLUMNS = {
     ),
     "platform_ui_prefs": ("key", "record_json", "updated_at"),
 }
+_SCHEMA8_TABLES = tuple(_SCHEMA8_PLATFORM_COLUMNS)
+
+# What a store at the current schema holds, which is all the postconditions
+# accept: the two tables `core` declares.
+_CURRENT_PLATFORM_COLUMNS = {
+    "platform_store_metadata": (
+        "singleton",
+        "data_scope_id",
+        "owner_id",
+        "is_primary",
+        "is_writable",
+        "created_at",
+    ),
+    "platform_ui_prefs": ("key", "record_json", "updated_at"),
+}
+
+#: The schema-8 tables schema 9 dropped, in an order foreign keys allow: an
+#: action input names its action, so it goes before it.
+RETIRED_PLATFORM_TABLES = (
+    "platform_adapter_links",
+    "platform_modules",
+    "platform_services",
+    "platform_adapters",
+    "platform_connections",
+    "platform_assignments",
+    "platform_grants",
+    "platform_action_inputs",
+    "platform_actions",
+    "platform_core_ref_bindings",
+    "platform_packages",
+    "platform_known_stores",
+    "platform_registry_meta",
+    "platform_registry_audit",
+)
 _SCHEMA3_ASSIGNMENT_COLUMNS = ("assignment_id", "record_json", "state", "updated_at")
 # `detail_json` reached existing stores through ALTER TABLE ADD COLUMN, which
 # appends. A store created after it went into the schema declares it before
@@ -632,7 +841,7 @@ _SCHEMA3_KNOWN_STORE_COLUMNS = (
     "updated_at",
 )
 _FORMER_PLATFORM_TABLES = {
-    name.replace("platform_", "hub_", 1) for name in _CURRENT_PLATFORM_COLUMNS
+    name.replace("platform_", "hub_", 1) for name in _SCHEMA8_PLATFORM_COLUMNS
 }
 _LEGACY_ADAPTER_CAPABILITIES = {
     "agentmemory-reference-v1": ["memory.open", "memory.health"],
@@ -682,11 +891,9 @@ def _normalize_catalog_sql(sql: str, *, prefix: str) -> str:
     return re.sub(r'[\s"`\[\]]+', "", canonical).lower()
 
 
-def _catalog_signature(conn: sqlite3.Connection, *, prefix: str) -> tuple:
-    actual_tables = {
-        canonical.replace("platform_", prefix, 1): canonical for canonical in SCHEMA_TABLES
-    }
-    tables = []
+def _catalog_signature(conn: sqlite3.Connection, *, prefix: str, tables: tuple[str, ...]) -> tuple:
+    actual_tables = {canonical.replace("platform_", prefix, 1): canonical for canonical in tables}
+    definitions = []
     indexes: list[tuple[str, str, int, int, tuple[tuple[str, int, str], ...], str | None]] = []
     for actual, canonical in sorted(actual_tables.items(), key=lambda item: item[1]):
         row = conn.execute(
@@ -694,7 +901,7 @@ def _catalog_signature(conn: sqlite3.Connection, *, prefix: str) -> tuple:
         ).fetchone()
         if row is None or row[0] is None:
             raise CatalogMigrationError(f"{actual} source table definition is missing")
-        tables.append((canonical, _normalize_catalog_sql(str(row[0]), prefix=prefix)))
+        definitions.append((canonical, _normalize_catalog_sql(str(row[0]), prefix=prefix)))
         for index in conn.execute(f'PRAGMA index_list("{actual}")'):
             index_name = str(index[1])
             columns = tuple(
@@ -727,7 +934,7 @@ def _catalog_signature(conn: sqlite3.Connection, *, prefix: str) -> tuple:
         name, table = str(row[0]), str(row[1])
         if name.startswith(("platform_", "hub_")) and table not in owned_names:
             indexes.append((name.replace(prefix, "platform_", 1), table, -1, -1, (), "<extra>"))
-    return tuple(tables), tuple(sorted(indexes))
+    return tuple(definitions), tuple(sorted(indexes))
 
 
 def _reference_catalog_signature(
@@ -735,7 +942,12 @@ def _reference_catalog_signature(
 ) -> tuple:
     reference = sqlite3.connect(":memory:")
     try:
-        _execute_schema(reference, SCHEMA)
+        if generation == "current":
+            # The catalog a store at this schema holds, from `core` itself.
+            _execute_schema(reference, SCHEMA)
+            return _catalog_signature(reference, prefix="platform_", tables=SCHEMA_TABLES)
+        # Every source shape below is schema 8's catalog or an older variant of it.
+        _execute_schema(reference, _SCHEMA8_SCHEMA)
         if board_era_links:
             # Replay the shape rather than describing it, for the same reason as
             # the audit column below: the table's index travels with it.
@@ -748,7 +960,7 @@ def _reference_catalog_signature(
             # on the store being classified.
             reference.execute("DROP TABLE platform_registry_audit")
             reference.execute(_PRE_DETAIL_AUDIT_SQL)
-            _execute_schema(reference, REGISTRY_SCHEMA)
+            _execute_schema(reference, _SCHEMA8_REGISTRY_SCHEMA)
             reference.execute(_AUDIT_DETAIL_COLUMN_SQL)
         if generation in {"schema-2", "schema-3"}:
             reference.execute("DROP TABLE platform_assignments")
@@ -758,7 +970,7 @@ def _reference_catalog_signature(
         if generation == "schema-2":
             reference.execute("DROP TABLE platform_modules")
             reference.execute(_SCHEMA2_MODULE_SQL)
-        return _catalog_signature(reference, prefix="platform_")
+        return _catalog_signature(reference, prefix="platform_", tables=_SCHEMA8_TABLES)
     finally:
         reference.close()
 
@@ -776,7 +988,8 @@ def _assert_exact_catalog(
         appended_audit_detail=appended_audit_detail,
         board_era_links=board_era_links,
     )
-    if _catalog_signature(conn, prefix=prefix) != reference:
+    tables = SCHEMA_TABLES if generation == "current" else _SCHEMA8_TABLES
+    if _catalog_signature(conn, prefix=prefix, tables=tables) != reference:
         raise CatalogMigrationError(f"{prefix} source catalog signature is not exact")
 
 
@@ -1133,7 +1346,15 @@ def _validate_product_model_source_rows(
 
 
 def classify_product_model_source(conn: sqlite3.Connection, stored_version: int = 3) -> str:
-    """Classify one exact supported pre-4 generation before any snapshot/write."""
+    """Classify the generation that wrote a store older than schema 8, before any write.
+
+    Every answer names a catalog schema 8 or an earlier schema declared; a store
+    at 4 to 7 already carries schema 8's `platform_*` catalog and answers
+    `neutral-catalog`. `store.connect()` does not ask about a store at schema 8:
+    its registry and module rows are dropped, never carried, and the build that
+    stamped 8 last stopped writing module rows, so a check of them would refuse
+    a store over data nothing reads.
+    """
 
     tables = {
         str(row[0])
@@ -1145,16 +1366,16 @@ def classify_product_model_source(conn: sqlite3.Connection, stored_version: int 
         raise CatalogMigrationError(
             "pre-4 store contains migration scratch tables: " + ", ".join(scratch)
         )
-    for current in _CURRENT_PLATFORM_COLUMNS:
+    for current in _SCHEMA8_PLATFORM_COLUMNS:
         former_name = current.replace("platform_", "hub_", 1)
         if current in tables and former_name in tables:
             raise CatalogMigrationError(f"pre-4 store mixes former and current table {current}")
-    owned = (set(_CURRENT_PLATFORM_COLUMNS) | _FORMER_PLATFORM_TABLES) & tables
+    owned = (set(_SCHEMA8_PLATFORM_COLUMNS) | _FORMER_PLATFORM_TABLES) & tables
     unknown_owned = sorted(
         name
         for name in tables
         if name.startswith(("platform_", "hub_"))
-        and name not in set(_CURRENT_PLATFORM_COLUMNS)
+        and name not in set(_SCHEMA8_PLATFORM_COLUMNS)
         and name not in _FORMER_PLATFORM_TABLES
     )
     if unknown_owned:
@@ -1167,11 +1388,11 @@ def classify_product_model_source(conn: sqlite3.Connection, stored_version: int 
         return "planning-only"
 
     former = bool(owned & _FORMER_PLATFORM_TABLES)
-    expected_names = _FORMER_PLATFORM_TABLES if former else set(_CURRENT_PLATFORM_COLUMNS)
+    expected_names = _FORMER_PLATFORM_TABLES if former else set(_SCHEMA8_PLATFORM_COLUMNS)
     if owned != expected_names:
         raise CatalogMigrationError("pre-4 platform catalog is incomplete or mixed")
     prefix = "hub_" if former else "platform_"
-    for canonical, current_columns in _CURRENT_PLATFORM_COLUMNS.items():
+    for canonical, current_columns in _SCHEMA8_PLATFORM_COLUMNS.items():
         table = canonical.replace("platform_", prefix, 1)
         actual = _table_columns(conn, table)
         allowed = {current_columns}
@@ -1197,10 +1418,10 @@ def classify_product_model_source(conn: sqlite3.Connection, stored_version: int 
     modules = _table_columns(conn, prefix + "modules")
     signature_generation = "schema-2" if modules == _SCHEMA2_MODULE_COLUMNS else "schema-3"
     if (
-        assignments == _CURRENT_PLATFORM_COLUMNS["platform_assignments"]
-        and known_stores == _CURRENT_PLATFORM_COLUMNS["platform_known_stores"]
+        assignments == _SCHEMA8_PLATFORM_COLUMNS["platform_assignments"]
+        and known_stores == _SCHEMA8_PLATFORM_COLUMNS["platform_known_stores"]
     ):
-        signature_generation = "current"
+        signature_generation = "schema-8"
     appended_audit_detail = (
         _table_columns(conn, "platform_registry_audit".replace("platform_", prefix, 1))
         == _APPENDED_DETAIL_AUDIT_COLUMNS
@@ -1229,14 +1450,14 @@ def classify_product_model_source(conn: sqlite3.Connection, stored_version: int 
             )
         return "schema-2"
     if (
-        assignments == _CURRENT_PLATFORM_COLUMNS["platform_assignments"]
-        and known_stores == _CURRENT_PLATFORM_COLUMNS["platform_known_stores"]
+        assignments == _SCHEMA8_PLATFORM_COLUMNS["platform_assignments"]
+        and known_stores == _SCHEMA8_PLATFORM_COLUMNS["platform_known_stores"]
     ):
         if former:
             raise CatalogMigrationError(
                 "former-name store cannot carry the current neutral catalog"
             )
-        return "current-unstamped"
+        return "neutral-catalog"
     if stored_version != 3:
         raise CatalogMigrationError("only schema 3 may carry the former product model")
     return "schema-3-former" if former else "schema-3"
@@ -1309,7 +1530,7 @@ def migrate_product_model(
                 ),
             )
         conn.execute("DROP TABLE platform_known_stores_legacy")
-    elif known_store_columns != _CURRENT_PLATFORM_COLUMNS["platform_known_stores"]:
+    elif known_store_columns != _SCHEMA8_PLATFORM_COLUMNS["platform_known_stores"]:
         raise CatalogMigrationError("platform_known_stores has an unrecognized source shape")
 
     manifests = {item["module_id"]: item for item in platform_modules.module_manifests()}
@@ -1409,26 +1630,26 @@ def assert_product_model_postconditions(conn: sqlite3.Connection) -> None:
         raise CatalogMigrationError(
             "post-migration catalog retains former/scratch tables: " + ", ".join(forbidden)
         )
+    # A `platform_*` table this schema does not declare is one the migration to
+    # schema 9 should have dropped, or one no build ever wrote. Either way the
+    # store is not the one this build understands.
+    # `integration_settings` left with them and carries no prefix to catch it by.
+    undeclared = sorted(
+        name
+        for name in tables
+        if (name.startswith("platform_") and name not in _CURRENT_PLATFORM_COLUMNS)
+        or name == "integration_settings"
+    )
+    if undeclared:
+        raise CatalogMigrationError(
+            "post-migration catalog retains undeclared platform tables: " + ", ".join(undeclared)
+        )
     for table, expected in _CURRENT_PLATFORM_COLUMNS.items():
         if table not in tables or _table_columns(conn, table) != expected:
             raise CatalogMigrationError(f"post-migration {table} shape is not exact")
     _assert_exact_catalog(conn, generation="current", prefix="platform_")
     for row in conn.execute("SELECT key,record_json,updated_at FROM platform_ui_prefs"):
         _neutral_ui_prefs_record(row, legacy=False)
-    # The registry's own rows -- assignments, action inputs, adapters -- and the
-    # module rows with their audit are no longer proven here. Nothing reads
-    # them, their tables leave with the next schema, and a row-content check on
-    # dead data could only refuse to open a store over something no code will
-    # look at. Their shape is still proven above, by the catalog signature,
-    # until the tables are dropped.
-    for row in conn.execute("SELECT resources_json FROM platform_known_stores"):
-        resources = json.loads(row[0])
-        if not isinstance(resources, list):
-            raise CatalogMigrationError("post-migration known-store resources are malformed")
-        for resource in resources:
-            entity = validate_legacy_entity_ref(resource)
-            if set(entity) != {"kind", "resource_id"}:
-                raise CatalogMigrationError("post-migration known-store resource is not neutral")
     foreign_keys = conn.execute("PRAGMA foreign_key_check").fetchall()
     if foreign_keys:
         raise CatalogMigrationError("post-migration foreign-key check failed")

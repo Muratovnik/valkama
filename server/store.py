@@ -118,11 +118,6 @@ CREATE TABLE IF NOT EXISTS session_events(
 );
 CREATE INDEX IF NOT EXISTS session_events_session ON session_events(session_id, id);
 CREATE INDEX IF NOT EXISTS session_events_klass ON session_events(klass, id);
-CREATE TABLE IF NOT EXISTS integration_settings(
-    integration_id TEXT PRIMARY KEY,
-    enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0,1)),
-    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
-);
 """
     # After both of the tables it points at: an execution names a work item and
     # the sessions that carried it, and a foreign key wants its target to exist.
@@ -155,7 +150,11 @@ MIGRATIONS = {
 # copy left behind. A server that was current when it started and went stale
 # while it ran already holds its connection; `static_assets.SourceWatch` is what
 # notices that one.
-STORE_SCHEMA_VERSION = 8
+#
+# 9 dropped the extension registry's tables, the module rows with their audit,
+# and `integration_settings`. A build at 8 would create them again, empty, and
+# stamp the store back to 8; the ratchet makes it refuse a store at 9 instead.
+STORE_SCHEMA_VERSION = 9
 
 
 class StoreTooNewError(RuntimeError):
@@ -271,7 +270,6 @@ SCHEMA_TABLES = (
     *planning_store.SCHEMA_TABLES,
     "sessions",
     "session_events",
-    "integration_settings",
     *execution_store.SCHEMA_TABLES,
     *platform_core.SCHEMA_TABLES,
 )
@@ -507,7 +505,9 @@ def connect() -> sqlite3.Connection:
         first_store = not os.path.exists(path)
         if not first_store:
             # A read-only probe is deliberately first. A stale binary therefore
-            # refuses without creating or changing the database, WAL, or SHM.
+            # refuses without creating or changing the database file. Beside a
+            # store in WAL mode SQLite may still leave empty `-wal` and `-shm`
+            # files, which hold nothing and are rebuilt on the next open.
             stored_version = _read_stored_version_without_write(path)
             if stored_version > STORE_SCHEMA_VERSION:
                 raise StoreTooNewError(stored_version, STORE_SCHEMA_VERSION)
@@ -519,17 +519,26 @@ def connect() -> sqlite3.Connection:
                 raise StoreTooNewError(stored_version, STORE_SCHEMA_VERSION)
 
             # Classify and snapshot before the first persistent pragma or schema
-            # write. Schema 3 -> 4 has one named, reusable recovery point.
-            product_model_migration = not first_store and stored_version < STORE_SCHEMA_VERSION
+            # write. Every upgrade of an existing store takes one named, reusable
+            # recovery point. A store older than 8 still goes through the
+            # classification and the historical row migrations, under the label
+            # those have always used; a store at 8 needs only the step that
+            # drops the retired tables, and its recovery point says so.
+            upgrade = not first_store and stored_version < STORE_SCHEMA_VERSION
+            historical = upgrade and stored_version < 8
             source_identity = None
             source_generation = None
             pretable_backup = None
-            if product_model_migration:
+            if historical:
                 source_generation = platform_migrations.classify_product_model_source(
                     conn, stored_version
                 )
                 _, source_identity = store_backups.verified_snapshot(
                     conn, "preproductmodel", locate=_backups
+                )
+            elif upgrade:
+                _, source_identity = store_backups.verified_snapshot(
+                    conn, "preschema9", locate=_backups
                 )
             else:
                 pretable_backup = _snapshot_before_new_tables(conn)
@@ -574,6 +583,10 @@ def connect() -> sqlite3.Connection:
                 _migrate(conn)
                 migrate_planning_cutover(conn)
             _execute_script(conn, SCHEMA)
+            if upgrade:
+                # The steps below were written against schema 8's catalog, which
+                # this build no longer declares; the last step drops it again.
+                platform_migrations.ensure_schema8_catalog(conn)
             planning_store.migrate_discussion(conn)
             planning_store.migrate_interactions(conn)
             planning_store.migrate_cancelled_state(conn)
@@ -605,19 +618,33 @@ def connect() -> sqlite3.Connection:
                 store_metadata.migrate_store_owner(conn)
             if authorization_migration:
                 platform_migrations.migrate_authorization_owner_model(conn)
-            if product_model_migration and source_generation not in {
+            if historical and source_generation not in {
                 "planning-only",
-                "current-unstamped",
+                "neutral-catalog",
             }:
                 platform_migrations.migrate_product_model(conn)
-            if product_model_migration:
+            if historical:
                 platform_migrations.retire_work_support_modules(conn)
+            if upgrade:
+                # Schema 9: the registry's tables, the module rows with their
+                # audit, and the integration switches nothing has written since
+                # the registry replaced them. The recovery point holds them.
+                platform_migrations.drop_retired_tables(conn)
+                conn.execute("DROP TABLE IF EXISTS integration_settings")
             # No "is this a new store" flag: bring-up writes the store's
             # identity only when it is missing, which is the same answer for a
             # store being created and one being upgraded.
             platform_core.initialize(conn, path, caller_owns_transaction=True)
             platform_migrations.assert_product_model_postconditions(conn)
-            store_backups.integrity_check(conn, source="post-migration store")
+            # The full check reads every page, so it runs where something was
+            # migrated -- a recovery point was taken or the stamp moves -- and
+            # not on every open of a store that is already current.
+            if (
+                stored_version != STORE_SCHEMA_VERSION
+                or source_identity is not None
+                or pretable_backup is not None
+            ):
+                store_backups.integrity_check(conn, source="post-migration store")
             # The schema ratchet is the final statement in the same transaction.
             if stored_version != STORE_SCHEMA_VERSION:
                 conn.execute(f"PRAGMA user_version={STORE_SCHEMA_VERSION}")

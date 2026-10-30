@@ -92,7 +92,7 @@ class WorkFocusMigrationTests(unittest.TestCase):
         self.conn.commit()
         return item
 
-    def test_populated_store_retirement_is_backed_up_idempotent_and_preserves_work(self) -> None:
+    def test_populated_store_retirement_is_backed_up_and_preserves_work(self) -> None:
         item = self.populated_source()
         preserved = (
             "work_items",
@@ -102,29 +102,15 @@ class WorkFocusMigrationTests(unittest.TestCase):
             "session_events",
             "executions",
             "execution_sessions",
-            "platform_adapter_links",
         )
         before = {
             table: [tuple(row) for row in self.conn.execute(f"SELECT * FROM {table}")]
             for table in preserved
         }
-        memory = tuple(
-            self.conn.execute("SELECT * FROM platform_modules WHERE module_id='memory'").fetchone()
-        )
-        retained_grants = [
-            tuple(row)
-            for row in self.conn.execute(
-                "SELECT * FROM platform_grants WHERE json_extract(record_json,'$.adapter_lineage_id')!='codex-skills'"
-            )
-        ]
         self.conn.close()
         self.conn = store.connect()
         self.assertEqual(
             store.STORE_SCHEMA_VERSION, self.conn.execute("PRAGMA user_version").fetchone()[0]
-        )
-        self.assertEqual(
-            {"planning", "memory", "settings"},
-            {row[0] for row in self.conn.execute("SELECT module_id FROM platform_modules")},
         )
         for table in preserved:
             self.assertEqual(
@@ -132,51 +118,29 @@ class WorkFocusMigrationTests(unittest.TestCase):
                 [tuple(row) for row in self.conn.execute(f"SELECT * FROM {table}")],
                 table,
             )
-        self.assertEqual(
-            memory,
-            tuple(
-                self.conn.execute(
-                    "SELECT * FROM platform_modules WHERE module_id='memory'"
-                ).fetchone()
-            ),
-        )
-        self.assertEqual(
-            retained_grants,
-            [tuple(row) for row in self.conn.execute("SELECT * FROM platform_grants")],
-        )
+        # The retirement's own effect that outlives schema 9: the last route
+        # named a retired module and is gone. The module rows, the retired
+        # built-in and the audit of both went with their tables.
         self.assertEqual(
             0, self.conn.execute("SELECT COUNT(*) FROM platform_ui_prefs").fetchone()[0]
         )
-        self.assertIsNone(
-            self.conn.execute(
-                "SELECT 1 FROM platform_adapters WHERE adapter_id='codex-skills'"
-            ).fetchone()
-        )
+        for table in ("platform_modules", "platform_adapters", "platform_registry_audit"):
+            with self.subTest(table=table):
+                self.assertIsNone(
+                    self.conn.execute(
+                        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
+                    ).fetchone()
+                )
         self.assertEqual(
             item["reference"], sessions.session_context(self.conn, "exact-sess")["work_item"]
         )
-        audit = [
-            tuple(row)
-            for row in self.conn.execute(
-                "SELECT * FROM platform_registry_audit WHERE event_kind='feature.retired'"
-            )
-        ]
-        self.assertEqual(
-            migrations.RETIRED_MODULE_IDS, {row[3] for row in audit if row[2] == "module"}
-        )
-        self.assertFalse(migrations.retire_work_support_modules(self.conn))
         self.conn.commit()
         self.conn.close()
+        observer = sqlite3.connect(self.path)
+        self.addCleanup(observer.close)
+        written = observer.execute("PRAGMA data_version").fetchone()[0]
         self.conn = store.connect()
-        self.assertEqual(
-            audit,
-            [
-                tuple(row)
-                for row in self.conn.execute(
-                    "SELECT * FROM platform_registry_audit WHERE event_kind='feature.retired'"
-                )
-            ],
-        )
+        self.assertEqual(written, observer.execute("PRAGMA data_version").fetchone()[0])
         snapshots = list((Path(self.path).parent / "backups").glob("*-preproductmodel-*.sqlite3"))
         self.assertEqual(1, len(snapshots))
         backup = sqlite3.connect(snapshots[0])
@@ -205,7 +169,12 @@ class WorkFocusMigrationTests(unittest.TestCase):
         raw.close()
         self.conn = store.connect()
         self.assertEqual(
-            3, self.conn.execute("SELECT COUNT(*) FROM platform_modules").fetchone()[0]
+            store.STORE_SCHEMA_VERSION, self.conn.execute("PRAGMA user_version").fetchone()[0]
+        )
+        self.assertIsNone(
+            self.conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='platform_modules'"
+            ).fetchone()
         )
         self.assertEqual(
             1, len(list((Path(self.path).parent / "backups").glob("*-preproductmodel-*.sqlite3")))

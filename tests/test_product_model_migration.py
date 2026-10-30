@@ -261,33 +261,6 @@ class ProductModelMigrationTests(unittest.TestCase):
                 ).fetchone()
             ),
         )
-        assignment = json.loads(
-            conn.execute(
-                "SELECT record_json FROM platform_assignments WHERE assignment_id='memory-default'"
-            ).fetchone()[0]
-        )
-        self.assertEqual(
-            {
-                "assignment_id": "memory-default",
-                "capability_id": "memory.open",
-                "scope": {"kind": "installation"},
-                "connection_ids": [self.connection_id],
-                "state": "enabled",
-                "changed_by": "owner",
-            },
-            assignment,
-        )
-        capabilities_by_lineage = {
-            row["adapter_lineage_id"]: json.loads(row["record_json"])["capabilities"]
-            for row in conn.execute("SELECT adapter_lineage_id,record_json FROM platform_adapters")
-        }
-        self.assertEqual(
-            ["memory.open", "memory.health"],
-            capabilities_by_lineage["agentmemory-reference-v1"],
-        )
-        # The migration carries what the source held and nothing re-seeds the
-        # built-ins it did not: the registry that seeded them is gone.
-        self.assertEqual({"agentmemory-reference-v1"}, set(capabilities_by_lineage))
         prefs = json.loads(
             conn.execute(
                 "SELECT record_json FROM platform_ui_prefs WHERE key='last-route'"
@@ -300,45 +273,18 @@ class ProductModelMigrationTests(unittest.TestCase):
             {"data_scope_id": self.known_store_scope, "space_key": "MIG"},
             planning_space_ref(prefs["resource_ref"]),
         )
-        fields = [
-            field
-            for row in conn.execute("SELECT record_json FROM platform_action_inputs")
-            for field in json.loads(row[0])["fields"]
-        ]
-        self.assertNotIn("work_item_ref", {field["key"] for field in fields})
-        self.assertIn("entity_ref", {field["key"] for field in fields})
+        # The assignments, adapters and action inputs the rewrite carried went
+        # with the registry's tables at schema 9; the recovery point holds them.
         names = {
             row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
         }
+        self.assertEqual(set(), names & set(platform_migrations.RETIRED_PLATFORM_TABLES))
         self.assertNotIn("platform_assignments_legacy", names)
         self.assertFalse(any(name.endswith("_v2") for name in names))
         conn.close()
         self.assertEqual(1, len(self.backups()))
         store.connect().close()
         self.assertEqual(1, len(self.backups()))
-
-    def test_migrated_assignments_are_unique_per_capability_and_scope(self) -> None:
-        """The migration writes exactly one assignment per capability and scope.
-
-        The registry that read these rows refused a store carrying two, and the
-        migration still writes rows of the shape it defined.
-        """
-
-        conn = store.connect()
-        self.addCleanup(conn.close)
-        keys = []
-        for row in conn.execute("SELECT record_json FROM platform_assignments"):
-            record = validate_assignment(json.loads(row[0]))
-            scope = record["scope"]
-            keys.append(
-                (
-                    record["capability_id"],
-                    "installation"
-                    if scope["kind"] == "installation"
-                    else f"project:{scope['project_id']}",
-                )
-            )
-        self.assertEqual(sorted(set(keys)), sorted(keys))
 
     def test_snapshot_is_integral_and_executable_restore_replays_once(self) -> None:
         store.connect().close()
@@ -519,7 +465,7 @@ class ProductModelMigrationTests(unittest.TestCase):
             store.connect()
         self.assertEqual([], self.backups())
 
-    def test_exact_current_adapter_capability_is_preserved(self) -> None:
+    def test_exact_current_adapter_capability_is_accepted(self) -> None:
         conn = sqlite3.connect(self.path)
         row = conn.execute(
             "SELECT adapter_lineage_id,record_json FROM platform_adapters LIMIT 1"
@@ -532,14 +478,13 @@ class ProductModelMigrationTests(unittest.TestCase):
         )
         conn.commit()
         conn.close()
+        # A current capability id needs no mapping, so the source is not refused;
+        # the adapter row itself leaves with its table.
         migrated = store.connect()
-        persisted = json.loads(
-            migrated.execute(
-                "SELECT record_json FROM platform_adapters WHERE adapter_lineage_id=?", (row[0],)
-            ).fetchone()[0]
+        self.addCleanup(migrated.close)
+        self.assertEqual(
+            store.STORE_SCHEMA_VERSION, migrated.execute("PRAGMA user_version").fetchone()[0]
         )
-        migrated.close()
-        self.assertEqual(["telemetry.query"], persisted["capabilities"])
 
     def test_planning_only_schema_zero_opens_with_the_builds_module_list(self) -> None:
         path = os.path.join(self.directory.name, "planning-only.sqlite3")
@@ -554,33 +499,40 @@ class ProductModelMigrationTests(unittest.TestCase):
             self.assertEqual(
                 store.STORE_SCHEMA_VERSION, migrated.execute("PRAGMA user_version").fetchone()[0]
             )
-            # Nothing seeds module rows any more: the list is the build's.
-            self.assertEqual(
-                0, migrated.execute("SELECT COUNT(*) FROM platform_modules").fetchone()[0]
+            # Nothing keeps module rows any more: the list is the build's.
+            self.assertIsNone(
+                migrated.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='platform_modules'"
+                ).fetchone()
             )
             self.assertIn("settings", {item["manifest"]["module_id"] for item in modules})
             self.assertTrue(all(item["state"] == "enabled" for item in modules))
             migrated.close()
             store.connect().close()
 
-    def test_current_shaped_unstamped_store_reopens_without_rewrite(self) -> None:
-        path = os.path.join(self.directory.name, "current-unstamped.sqlite3")
+    def test_unstamped_store_with_the_neutral_catalog_skips_the_rewrite(self) -> None:
+        path = os.path.join(self.directory.name, "neutral-catalog.sqlite3")
         with mock.patch.dict(os.environ, {"VALKAMA_DB": path}):
             current = store.connect()
-            # An unstamped store with a current catalog was written by a build
+            # An unstamped store with the neutral catalog was written by a build
             # that still seeded its module rows.
             registry_rows.seed_modules(current)
-            before = current.execute(
-                "SELECT module_id,record_json,revision FROM platform_modules ORDER BY module_id"
-            ).fetchall()
             current.execute("PRAGMA user_version=0")
             current.commit()
+            self.assertEqual(
+                "neutral-catalog", platform_migrations.classify_product_model_source(current, 0)
+            )
             current.close()
-            reopened = store.connect()
-            after = reopened.execute(
-                "SELECT module_id,record_json,revision FROM platform_modules ORDER BY module_id"
-            ).fetchall()
-            self.assertEqual([tuple(row) for row in before], [tuple(row) for row in after])
+            with mock.patch.object(
+                platform_migrations,
+                "migrate_product_model",
+                wraps=platform_migrations.migrate_product_model,
+            ) as rewrite:
+                reopened = store.connect()
+            rewrite.assert_not_called()
+            self.assertEqual(
+                store.STORE_SCHEMA_VERSION, reopened.execute("PRAGMA user_version").fetchone()[0]
+            )
             reopened.close()
             store.connect().close()
 
@@ -599,6 +551,51 @@ class ProductModelMigrationTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "source store drifted"):
                 store.connect()
         self._assert_schema3_rolled_back()
+        self.assertEqual(1, len(self.backups()))
+
+    def test_a_store_from_before_the_rename_reaches_the_current_schema(self) -> None:
+        # The same schema-3 Board-era source under the former table names: the
+        # rename, the cutover, the product model and the drop of the registry's
+        # tables all run in one bring-up.
+        conn = sqlite3.connect(self.path)
+        try:
+            for (table,) in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'platform%'"
+            ).fetchall():
+                conn.execute(f"ALTER TABLE {table} RENAME TO {table.replace('platform_', 'hub_')}")
+            conn.commit()
+            data_scope_id = conn.execute("SELECT data_scope_id FROM hub_store_metadata").fetchone()[
+                0
+            ]
+        finally:
+            conn.close()
+        with mock.patch.object(
+            store.store_rename,
+            "migrate_off_former_name",
+            wraps=store.store_rename.migrate_off_former_name,
+        ) as rename:
+            migrated = store.connect()
+        self.addCleanup(migrated.close)
+        rename.assert_called_once()
+        self.assertEqual(
+            store.STORE_SCHEMA_VERSION, migrated.execute("PRAGMA user_version").fetchone()[0]
+        )
+        tables = {
+            row[0] for row in migrated.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        self.assertEqual(
+            {"platform_store_metadata", "platform_ui_prefs"},
+            {name for name in tables if name.startswith(("platform_", "hub_"))},
+        )
+        self.assertNotIn("cards", tables)
+        self.assertEqual(
+            data_scope_id,
+            migrated.execute("SELECT data_scope_id FROM platform_store_metadata").fetchone()[0],
+        )
+        self.assertEqual(
+            "Preserved",
+            migrated.execute("SELECT title FROM work_items WHERE title='Preserved'").fetchone()[0],
+        )
         self.assertEqual(1, len(self.backups()))
 
     def test_migration_lock_serializes_writers(self) -> None:
@@ -653,7 +650,9 @@ class ProductModelMigrationTests(unittest.TestCase):
         finally:
             conn.close()
 
-    def test_audit_columns_appended_by_alter_migrate_into_one_order(self) -> None:
+    def test_audit_columns_appended_by_alter_are_a_known_source_shape(self) -> None:
+        # The order is normalized on the way and the table then leaves with the
+        # registry's at schema 9; what this source must not be is refused.
         self._append_detail_json_to_audit()
         conn = store.connect()
         self.addCleanup(conn.close)
@@ -661,30 +660,10 @@ class ProductModelMigrationTests(unittest.TestCase):
             store.STORE_SCHEMA_VERSION, conn.execute("PRAGMA user_version").fetchone()[0]
         )
         self.assertEqual(
-            list(platform_migrations._CURRENT_PLATFORM_COLUMNS["platform_registry_audit"]),
-            [row[1] for row in conn.execute("PRAGMA table_info(platform_registry_audit)")],
-        )
-        self.assertEqual(
-            ("registered", "module", "planning", "2026-08-01T00:00:00Z", "{}"),
+            [],
             conn.execute(
-                "SELECT event_kind,entity_kind,entity_id,at,detail_json"
-                " FROM platform_registry_audit WHERE sequence=1"
-            ).fetchone()[:5],
-        )
-        self.assertEqual(
-            ["platform_registry_audit_entity"],
-            [
-                row[0]
-                for row in conn.execute(
-                    "SELECT name FROM sqlite_master WHERE type='index'"
-                    " AND tbl_name='platform_registry_audit'"
-                )
-            ],
-        )
-        self.assertIsNone(
-            conn.execute(
-                "SELECT 1 FROM sqlite_master WHERE name='platform_registry_audit_legacy'"
-            ).fetchone()
+                "SELECT name FROM sqlite_master WHERE name LIKE 'platform_registry_audit%'"
+            ).fetchall(),
         )
 
     def test_recovery_point_of_a_refused_attempt_is_not_reused_after_the_store_moves(self) -> None:

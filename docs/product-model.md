@@ -80,11 +80,10 @@ contributes references inside work-item context rather than a standalone
 navigation destination. Analytics, Improvements, Skills, and standalone Sessions
 registrations, pages, and APIs are retired.
 
-A store written before the list moved into code still holds its
-`platform_modules` rows and their audit in `platform_registry_audit`. No
-feature reads or writes them; only the historical migrations of a store older
-than schema 8 still do. They leave with the schema migration that drops the
-registry's tables.
+A store does not record the list. Store schema 9 dropped the
+`platform_modules` rows an earlier build wrote, their audit in
+`platform_registry_audit`, and the extension registry's tables; the snapshot
+taken before that migration still holds them.
 
 The semantic interface identifier remains `valkama-modules`. The payload is cut
 over atomically across server, validators, UI, tests, and built artifacts; no
