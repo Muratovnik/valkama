@@ -33,11 +33,7 @@ from ..store_identity.primitives import (
     _semver,
     _text,
 )
-from ..store_identity.refs import (
-    validate_connection_ref,
-    validate_entity_ref,
-    validate_operating_scope,
-)
+from ..store_identity.refs import validate_entity_ref, validate_operating_scope
 from .adapter_contract import ADAPTER_INTERFACE, HEALTH_STATES
 
 ACTIONS_INTERFACE = "valkama-actions"
@@ -47,7 +43,11 @@ CONTRIBUTIONS_INTERFACE = "valkama-contributions"
 _MODULE_ID_SET = frozenset(
     {"planning", "sessions", "analytics", "improvements", "skills", "memory", "settings"}
 )
-AUTHORIZATION_TARGET_KINDS = ENTITY_KINDS | {"adapter-resource"}
+#: The entity kinds only the registry could name. The identity vocabulary
+#: dropped them with the registry; a row it persisted may still carry one.
+REGISTRY_ENTITY_KINDS = frozenset({"service", "connection", "registry"})
+LEGACY_ENTITY_KINDS = ENTITY_KINDS | REGISTRY_ENTITY_KINDS
+AUTHORIZATION_TARGET_KINDS = LEGACY_ENTITY_KINDS | {"adapter-resource"}
 ASSIGNMENT_STATES = frozenset({"enabled", "disabled"})
 ASSIGNMENT_SCOPE_KINDS = frozenset({"installation", "project"})
 #: Every capability an assignment or a manifest could name.
@@ -87,6 +87,61 @@ def _schema_id(value, where):
     if not isinstance(value, str) or not _SCHEMA_ID_RE.fullmatch(value):
         raise ContractError(f"{where} must match the frontend schema ID grammar")
     return value
+
+
+def validate_service_ref(value):
+    obj = _object(value, ("owner_id", "service_id"), where="service_ref")
+    return {
+        "owner_id": _identifier(obj["owner_id"], "service_ref.owner_id"),
+        "service_id": _identifier(obj["service_id"], "service_ref.service_id"),
+    }
+
+
+def validate_connection_ref(value):
+    obj = _object(
+        value, ("service_ref", "adapter_lineage_id", "connection_id"), where="connection_ref"
+    )
+    return {
+        "service_ref": validate_service_ref(obj["service_ref"]),
+        "adapter_lineage_id": _identifier(
+            obj["adapter_lineage_id"], "connection_ref.adapter_lineage_id"
+        ),
+        "connection_id": _identifier(obj["connection_id"], "connection_ref.connection_id"),
+    }
+
+
+def validate_legacy_entity_ref(value):
+    """An entity reference as a store written while the registry existed holds it.
+
+    The three registry kinds are read here, exactly as the registry defined
+    them; every other kind is the current identity vocabulary's.
+    """
+
+    if not isinstance(value, dict) or value.get("kind") not in REGISTRY_ENTITY_KINDS:
+        return validate_entity_ref(value)
+    kind = value["kind"]
+    if kind == "service":
+        obj = _object(value, ("kind", "owner_id", "service_id"), where="entity_ref")
+        service = validate_service_ref(
+            {"owner_id": obj["owner_id"], "service_id": obj["service_id"]}
+        )
+        return {"kind": kind, **service}
+    if kind == "connection":
+        obj = _object(
+            value,
+            ("kind", "service_ref", "adapter_lineage_id", "connection_id"),
+            where="entity_ref",
+        )
+        connection = validate_connection_ref(
+            {
+                "service_ref": obj["service_ref"],
+                "adapter_lineage_id": obj["adapter_lineage_id"],
+                "connection_id": obj["connection_id"],
+            }
+        )
+        return {"kind": kind, **connection}
+    obj = _object(value, ("kind", "registry_id"), where="entity_ref")
+    return {"kind": kind, "registry_id": _identifier(obj["registry_id"], "entity_ref.registry_id")}
 
 
 def validate_assignment_scope(value):
@@ -227,9 +282,7 @@ def validate_action_ref(value):
     owner_kind = _enum(obj["owner_kind"], {"kernel", "module", "adapter"}, "action_ref.owner_kind")
     owner_id = _identifier(obj["owner_id"], "action_ref.owner_id")
     action_id = _action_namespace(obj["action_id"], owner_kind, owner_id)
-    target_kind = _enum(
-        obj["target_kind"], ENTITY_KINDS | {"adapter-resource"}, "action_ref.target_kind"
-    )
+    target_kind = _enum(obj["target_kind"], AUTHORIZATION_TARGET_KINDS, "action_ref.target_kind")
     scope_schema = _enum(
         obj["invocation_scope_schema"],
         {"global", "project", "either"},
@@ -389,7 +442,7 @@ def _validate_contribution(value):
         "entity_kinds": _list(
             obj["entity_kinds"],
             "contribution.entity_kinds",
-            item=lambda item, where: _enum(item, ENTITY_KINDS, where),
+            item=lambda item, where: _enum(item, LEGACY_ENTITY_KINDS, where),
         ),
     }
     if module_id is not None:
@@ -478,7 +531,7 @@ def _validate_contribution_content(value):
         result = {
             "kind": kind,
             "label": _text(obj["label"], "contribution.content.label", max_length=240),
-            "target": validate_entity_ref(obj["target"]),
+            "target": validate_legacy_entity_ref(obj["target"]),
         }
         if "action" in obj:
             result["action"] = validate_action_ref(obj["action"])
@@ -584,7 +637,7 @@ def validate_adapter_record(value):
         "consumes": _list(
             obj["consumes"],
             "adapter_manifest.consumes",
-            item=lambda item, where: _enum(item, ENTITY_KINDS, where),
+            item=lambda item, where: _enum(item, LEGACY_ENTITY_KINDS, where),
         ),
         "contributions": _list(
             obj["contributions"],

@@ -12,7 +12,6 @@ from unittest import mock
 from server import app_shell, store, ui_state
 from server.planning import service as planning_service
 from server.planning.routing import PlanningRouting
-from server.platform import core as platform_core
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.primitives import ContractError
 from server.store_identity.refs import planning_space_entity
@@ -170,7 +169,7 @@ class AppShellTests(unittest.TestCase):
         )
         self.assertEqual((200, "planning"), (status, payload["prefs"]["module_id"]))
         self.assertIsNone(app_shell.handle_post(self.conn, "/api/platform/relations", {}))
-        self.assertIsNone(app_shell.handle_post(self.conn, platform_core.MODULE_STATE_PATH, {}))
+        self.assertIsNone(app_shell.handle_post(self.conn, "/api/modules/state", {}))
         status, modules = app_shell.handle_get(self.conn, self.db, app_shell.MODULES_PATH, {})
         self.assertEqual(200, status)
         self.assertEqual(

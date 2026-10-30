@@ -299,11 +299,10 @@ class MemoryLinkTests(unittest.TestCase):
 
 
 class MemoryRouteTests(unittest.TestCase):
-    def test_every_memory_path_is_owned_and_dispatched(self) -> None:
+    def test_every_memory_path_is_dispatched(self) -> None:
         """A handler nobody routes to answers a bare 404, as layer 1 shipped."""
 
         for path in memory_api.READ_PATHS:
-            self.assertEqual("memory", http_surface._HTTP_ROUTE_MODULES[("GET", path)], path)
             # Asked of the dispatch table rather than of the file's text: what
             # answers a request is the row that claims the path, so that is what
             # a test about routing has to resolve.

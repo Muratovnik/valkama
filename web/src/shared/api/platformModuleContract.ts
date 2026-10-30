@@ -73,11 +73,13 @@ export type ModuleManifest = {
   version: string
 }
 
+/** One module as the server lists it. The list is the build's: every module
+ *  is enabled and none can be changed, and the wire still says so per module. */
 export type ModuleRegistration = {
   manifest: ModuleManifest
-  mutable: boolean
+  mutable: false
   revision: number
-  state: 'enabled' | 'disabled'
+  state: 'enabled'
   updated_at: string
 }
 
@@ -110,9 +112,6 @@ const ENTITY_KINDS = new Set<EntityKind>([
   'memory-resource',
   'artifact',
   'improvement-case',
-  'service',
-  'connection',
-  'registry',
 ])
 const UI_STATES: Set<ModuleUiStateName> = new Set([
   'loading',
@@ -356,16 +355,15 @@ export function validateModulesPayload(value: unknown, path = 'payload'): Module
   return { interface_version: MODULES_INTERFACE, modules }
 }
 
-export function validateModuleRegistration(
+function validateModuleRegistration(
   value: unknown,
   path = 'module_registration',
 ): ModuleRegistration {
   const registration = plainObject(value, path)
   exactKeys(registration, ['manifest', 'state', 'mutable', 'revision', 'updated_at'], path)
   const manifest = validateModuleManifest(registration.manifest, `${path}.manifest`)
-  if (registration.state !== 'enabled' && registration.state !== 'disabled')
-    invalid(`${path}.state`, 'expected enabled or disabled')
-  if (typeof registration.mutable !== 'boolean') invalid(`${path}.mutable`, 'expected boolean')
+  if (registration.state !== 'enabled') invalid(`${path}.state`, 'expected enabled')
+  if (registration.mutable !== false) invalid(`${path}.mutable`, 'expected false')
   if (
     typeof registration.revision !== 'number' ||
     !Number.isSafeInteger(registration.revision) ||
@@ -378,18 +376,13 @@ export function validateModuleRegistration(
     Number.isNaN(Date.parse(registration.updated_at))
   )
     invalid(`${path}.updated_at`, 'expected timestamp')
-  if (
-    manifest.module_id === 'settings' &&
-    (registration.mutable || registration.state !== 'enabled')
-  )
-    invalid(path, 'Settings must be immutable and enabled')
   return {
     manifest,
-    state: registration.state,
-    mutable: registration.mutable,
+    state: 'enabled',
+    mutable: false,
     revision: registration.revision,
     updated_at: registration.updated_at,
-  } as ModuleRegistration
+  }
 }
 
 import { contractGuards, isCanonicalSemver } from '@/shared/api/contractGuards.ts'

@@ -27,11 +27,8 @@ test('Russian production shell localizes Settings without runtime failures', asy
     await expect(page.getByRole('heading', { name: 'Открытие сессий', exact: true })).toBeVisible()
     await expectNoSilentClipping(page, `Russian Settings General at ${width}px`)
 
-    await sections.getByRole('button', { name: 'Рабочая область' }).click()
-    await expect(page.getByRole('heading', { name: 'Разделы', exact: true })).toBeVisible()
+    await expect(sections.getByRole('button')).toHaveText(['Общие', 'Диагностика'])
     await expect(page.getByRole('heading', { name: 'Интеграции', exact: true })).toHaveCount(0)
-    await expect(page.getByRole('switch', { name: 'Работа' })).toBeVisible()
-    await expectNoSilentClipping(page, `Russian Settings Workspace at ${width}px`)
 
     await sections.getByRole('button', { name: 'Диагностика' }).click()
     await expect(page.getByRole('heading', { name: 'Диагностика установки' })).toBeVisible()

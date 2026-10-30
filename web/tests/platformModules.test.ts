@@ -32,7 +32,7 @@ const EXPECTED_SECONDARY_CONTEXTS = {
   improvements: { global: ['work-item', 'improvement-case'], project: [] },
   skills: { global: ['skill'], project: ['skill'] },
   memory: { global: ['memory-resource'], project: ['memory-resource', 'work-item'] },
-  settings: { global: ['connection', 'registry'], project: ['connection', 'registry'] },
+  settings: { global: [], project: [] },
 } as const
 
 test('valkama-modules has exactly three registrations with both operating levels', () => {
@@ -83,6 +83,10 @@ test('valkama-modules payload validates and rejects additive fields', () => {
   const wrongVersion = structuredClone(payload) as { interface_version: string }
   wrongVersion.interface_version = 'platform-modules'
   assert.throws(() => validateModulesPayload(wrongVersion), /expected valkama-modules/)
+  // The shell has nothing to route without a module, so an empty list is a
+  // broken answer rather than a quiet installation.
+  const empty = { ...payload, modules: [] }
+  assert.throws(() => validateModulesPayload(empty), /non-empty module registry/)
 })
 
 test('module manifest rejects route injection and malformed levels', () => {
@@ -133,20 +137,33 @@ test('module action declarations share the ActionRef 192-character envelope', ()
   assert.throws(() => validateModuleManifest(module), /primary_actions|bounded/)
 })
 
-test('registration state is runtime validated and Settings is fail-closed', () => {
-  const registrations = moduleRegistrations()
-  registrations[0].state = 'disabled'
+test('every registration is enabled and fixed, and anything else is refused', () => {
+  // The module list is the build's. A registration that claims to be off or
+  // changeable is not something this build's server can say.
   assert.equal(
-    validateModulesPayload({ interface_version: MODULES_INTERFACE, modules: registrations })
-      .modules[0].state,
-    'disabled',
+    validateModulesPayload({ interface_version: MODULES_INTERFACE, modules: moduleRegistrations() })
+      .modules.length,
+    3,
   )
-  const settings = registrations.at(-1)
-  assert.ok(settings)
-  settings.state = 'disabled'
+  for (const [field, value, message] of [
+    ['state', 'disabled', /state: expected enabled/],
+    ['mutable', true, /mutable: expected false/],
+  ] as const) {
+    const registrations: unknown[] = moduleRegistrations()
+    registrations[0] = { ...(registrations[0] as object), [field]: value }
+    assert.throws(
+      () =>
+        validateModulesPayload({ interface_version: MODULES_INTERFACE, modules: registrations }),
+      message,
+    )
+  }
+  const withoutSettings = moduleRegistrations().filter(
+    (registration) => registration.manifest.module_id !== 'settings',
+  )
   assert.throws(
-    () => validateModulesPayload({ interface_version: MODULES_INTERFACE, modules: registrations }),
-    /Settings must be immutable and enabled/,
+    () =>
+      validateModulesPayload({ interface_version: MODULES_INTERFACE, modules: withoutSettings }),
+    /Settings registration is required/,
   )
 })
 
@@ -166,7 +183,6 @@ test('validated future registration remains authoritative with typed unsupported
   assert.equal(validated.at(-1)?.manifest.module_id, 'future-module')
 
   const authority = useModuleRouteAuthority({
-    loadModules: async () => {},
     modules: ref(validated.map((registration) => registration.manifest)),
     modulesAuthoritative: ref(true),
     modulesSettled: ref(true),
@@ -224,13 +240,6 @@ test('each module accepts only the entity routes its scoped UI owns', () => {
       source_scope: 'project' as const,
       project_id: 'project-alpha',
     },
-    registry: { kind: 'registry' as const, registry_id: 'registry-1' },
-    connection: {
-      kind: 'connection' as const,
-      adapter_lineage_id: 'adapter-1',
-      connection_id: 'connection-1',
-      service_ref: { owner_id: 'owner-1', service_id: 'service-1' },
-    },
   }
   const accepts = (
     module_id: ModuleId,
@@ -240,8 +249,9 @@ test('each module accepts only the entity routes its scoped UI owns', () => {
     resolveManifestRouteAuthority(manifests[module_id], { module_id, scope, entity }).status ===
     'ready'
 
-  assert.equal(accepts('settings', global, entities.registry), true)
-  assert.equal(accepts('settings', project, entities.connection), true)
+  // Settings names no secondary resource since the registry screens left it.
+  assert.equal(accepts('settings', global, undefined), true)
+  assert.equal(accepts('settings', project, entities.planningSpace), false)
   assert.equal(accepts('planning', project, entities.planningSpace), true)
   assert.equal(accepts('planning', project, entities.workItem), true)
 
@@ -295,7 +305,6 @@ test('direct and history route changes are rechecked against manifest authority'
     scope: { kind: 'project' as const, project_ref: { project_id: 'project-alpha' } },
   })
   const authority = useModuleRouteAuthority({
-    loadModules: async () => {},
     modules: ref(registrations.map((registration) => registration.manifest)),
     modulesAuthoritative: ref(true),
     modulesSettled: ref(true),

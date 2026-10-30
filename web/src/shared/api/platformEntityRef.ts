@@ -26,22 +26,8 @@ export type EntityKind =
   | 'memory-resource'
   | 'artifact'
   | 'improvement-case'
-  | 'service'
-  | 'connection'
-  | 'registry'
 
 const RESOURCE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,511}$/u
-
-type ServiceRef = {
-  owner_id: string
-  service_id: string
-}
-
-type ConnectionRef = {
-  adapter_lineage_id: string
-  connection_id: string
-  service_ref: ServiceRef
-}
 
 export type EntityRef =
   | { kind: 'project'; project_id: string }
@@ -58,28 +44,6 @@ export type EntityRef =
     }
   | { client_family: string; kind: 'session'; session_id: string }
   | { kind: 'skill'; skill_key: string; source_scope: 'global' | 'project'; project_id?: string }
-  | ({ kind: 'service' } & ServiceRef)
-  | ({ kind: 'connection' } & ConnectionRef)
-  | { kind: 'registry'; registry_id: string }
-
-function validateServiceRef(value: unknown, path = 'service_ref'): ServiceRef {
-  const object = plainObject(value, path)
-  exactKeys(object, ['owner_id', 'service_id'], path)
-  return {
-    owner_id: requiredString(object.owner_id, `${path}.owner_id`),
-    service_id: requiredString(object.service_id, `${path}.service_id`),
-  }
-}
-
-function validateConnectionRef(value: unknown, path = 'connection_ref'): ConnectionRef {
-  const object = plainObject(value, path)
-  exactKeys(object, ['service_ref', 'adapter_lineage_id', 'connection_id'], path)
-  return {
-    service_ref: validateServiceRef(object.service_ref, `${path}.service_ref`),
-    adapter_lineage_id: requiredString(object.adapter_lineage_id, `${path}.adapter_lineage_id`),
-    connection_id: requiredString(object.connection_id, `${path}.connection_id`),
-  }
-}
 
 function validateEntity(value: unknown, path: string): EntityRef {
   const object = plainObject(value, path)
@@ -87,14 +51,11 @@ function validateEntity(value: unknown, path: string): EntityRef {
   if (
     ![
       'artifact',
-      'connection',
       'execution',
       'improvement-case',
       'memory-resource',
       'planning-space',
       'project',
-      'registry',
-      'service',
       'session',
       'skill',
       'work-item',
@@ -167,34 +128,6 @@ function validateEntity(value: unknown, path: string): EntityRef {
       }
       if (projectId !== undefined) (result as { project_id?: string }).project_id = projectId
       return result
-    }
-    case 'service': {
-      exactKeys(object, ['kind', 'owner_id', 'service_id'], path)
-      return {
-        kind: 'service',
-        ...validateServiceRef({ owner_id: object.owner_id, service_id: object.service_id }, path),
-      }
-    }
-    case 'connection': {
-      exactKeys(object, ['kind', 'service_ref', 'adapter_lineage_id', 'connection_id'], path)
-      return {
-        kind: 'connection',
-        ...validateConnectionRef(
-          {
-            service_ref: object.service_ref,
-            adapter_lineage_id: object.adapter_lineage_id,
-            connection_id: object.connection_id,
-          },
-          path,
-        ),
-      }
-    }
-    case 'registry': {
-      exactKeys(object, ['kind', 'registry_id'], path)
-      return {
-        kind: 'registry',
-        registry_id: requiredString(object.registry_id, `${path}.registry_id`),
-      }
     }
     default: {
       return invalid(`${path}.kind`, 'unknown entity kind')

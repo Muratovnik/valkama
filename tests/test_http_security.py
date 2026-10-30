@@ -308,7 +308,7 @@ class HttpSecurityBoundaryTests(unittest.TestCase):
         for method, path in self.MUTATIONS:
             with (
                 self.subTest(method=method, path=path),
-                mock.patch.object(http_surface.Handler, "_module_gate") as dispatch,
+                mock.patch.object(http_surface, "_boundary") as dispatch,
             ):
                 request_headers = {
                     "Origin": "https://hostile.example",
@@ -328,7 +328,7 @@ class HttpSecurityBoundaryTests(unittest.TestCase):
     def test_framing_refusal_precedes_module_dispatch(self) -> None:
         request_headers = self.browser_headers(self.server.security_context.browser_session_token)
         request_headers["Content-Type"] = "text/plain"
-        with mock.patch.object(http_surface.Handler, "_module_gate") as dispatch:
+        with mock.patch.object(http_surface, "_boundary") as dispatch:
             status, response_headers, _ = self.request(
                 "POST",
                 "/api/modules/skills/activation",
@@ -355,14 +355,13 @@ class HttpSecurityBoundaryTests(unittest.TestCase):
         self.assertEqual("application/json", response_headers["content-type"])
         self.assertEqual(expected, json.loads(body))
 
-        with mock.patch.object(http_surface.Handler, "_module_gate", return_value=True):
-            status, response_headers, body = self.request(
-                "PUT",
-                "/api/unknown",
-                host=self.authority,
-                request_headers=request_headers,
-                body=b"{}",
-            )
+        status, response_headers, body = self.request(
+            "PUT",
+            "/api/unknown",
+            host=self.authority,
+            request_headers=request_headers,
+            body=b"{}",
+        )
         self.assertEqual(404, status)
         self.assertEqual("application/json", response_headers["content-type"])
         self.assertEqual(expected, json.loads(body))
@@ -373,7 +372,6 @@ class HttpSecurityBoundaryTests(unittest.TestCase):
         request_headers["Content-Length"] = str(len(payload))
         connection = mock.Mock()
         with (
-            mock.patch.object(http_surface.Handler, "_module_gate", return_value=True),
             mock.patch.object(http_surface, "connect", return_value=connection),
             mock.patch.object(
                 http_surface.execution_lifecycle,
@@ -401,7 +399,7 @@ class HttpSecurityBoundaryTests(unittest.TestCase):
         )
         self.assertNotIn(b"database password", body)
 
-    def test_generic_module_gate_failure_uses_the_same_stable_envelope(self) -> None:
+    def test_a_store_that_cannot_open_gets_the_same_stable_envelope(self) -> None:
         payload = json.dumps({"id": "session-1"}).encode()
         request_headers = self.browser_headers(self.server.security_context.browser_session_token)
         request_headers["Content-Length"] = str(len(payload))
@@ -427,6 +425,38 @@ class HttpSecurityBoundaryTests(unittest.TestCase):
             json.loads(body),
         )
         self.assertNotIn(b"registry secret", body)
+        # A read says the same in the read envelope, without the reason either.
+        with mock.patch.object(
+            http_surface, "connect", side_effect=RuntimeError("registry secret leaked")
+        ):
+            status, response_headers, body = self.request(
+                "GET", "/api/planning/spaces", host=self.authority
+            )
+        self.assertEqual(500, status)
+        self.assertEqual("application/json", response_headers["content-type"])
+        self.assertEqual("error", json.loads(body)["status"])
+        self.assertNotIn(b"registry secret", body)
+
+    def test_routes_outside_the_boundary_table_answer_a_store_that_cannot_open(self) -> None:
+        # These four open the store themselves. Before the module gate went
+        # they were answered by it; after, the error escaped and the connection
+        # dropped with no answer, which an event stream retries forever.
+        for path in (
+            "/api/session?id=session-1",
+            "/api/events?view=planning",
+            "/api/scopes",
+            "/api/search?scope=all&q=x",
+        ):
+            for failure in (RuntimeError("store secret"), ValueError("store secret")):
+                with (
+                    self.subTest(path=path, failure=type(failure).__name__),
+                    mock.patch.object(http_surface, "connect", side_effect=failure),
+                ):
+                    status, response_headers, body = self.request("GET", path, host=self.authority)
+                    self.assertEqual(500 if isinstance(failure, RuntimeError) else 400, status)
+                    self.assertEqual("application/json", response_headers["content-type"])
+                    self.assertEqual("error", json.loads(body)["status"])
+                    self.assertNotIn(b"store secret", body)
 
     def test_ingest_rejection_names_its_reason_while_other_posts_stay_generic(self) -> None:
         # `docs/session-event-contract.md` promises a rejected event answers
@@ -445,7 +475,6 @@ class HttpSecurityBoundaryTests(unittest.TestCase):
         }
         connection = mock.Mock()
         with (
-            mock.patch.object(http_surface.Handler, "_module_gate", return_value=True),
             mock.patch.object(http_surface, "connect", return_value=connection),
         ):
             status, response_headers, body = self.request(
@@ -465,7 +494,6 @@ class HttpSecurityBoundaryTests(unittest.TestCase):
         request_headers = self.browser_headers(self.server.security_context.browser_session_token)
         request_headers["Content-Length"] = str(len(payload))
         with (
-            mock.patch.object(http_surface.Handler, "_module_gate", return_value=True),
             mock.patch.object(http_surface, "connect", return_value=connection),
             mock.patch.object(
                 http_surface.execution_lifecycle,
@@ -520,7 +548,6 @@ class HttpSecurityBoundaryTests(unittest.TestCase):
         }
         connection = mock.Mock()
         with (
-            mock.patch.object(http_surface.Handler, "_module_gate", return_value=True),
             mock.patch.object(http_surface, "connect", return_value=connection),
             mock.patch.object(
                 http_surface, "op_ingest_session_event", return_value={"accepted": True}

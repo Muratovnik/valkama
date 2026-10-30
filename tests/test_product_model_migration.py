@@ -13,9 +13,14 @@ from unittest import mock
 from server import store, store_backups, store_lock
 from server.platform import core as platform_core
 from server.platform import migrations as platform_migrations
-from server.platform import module_gate
-from server.platform.legacy_records import CAPABILITY_IDS, validate_assignment
-from server.platform.module_gate import RegistryError
+from server.platform import modules as platform_modules
+from server.platform.legacy_records import (
+    CAPABILITY_IDS,
+    LEGACY_ENTITY_KINDS,
+    validate_assignment,
+    validate_legacy_entity_ref,
+)
+from server.platform.migrations import CatalogMigrationError
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.primitives import ENTITY_KINDS, ContractError
 from server.store_identity.refs import (
@@ -382,7 +387,7 @@ class ProductModelMigrationTests(unittest.TestCase):
         conn.execute("ALTER TABLE platform_assignments ADD COLUMN surprise TEXT")
         conn.commit()
         conn.close()
-        with self.assertRaisesRegex(RegistryError, "source shape is not exact"):
+        with self.assertRaisesRegex(CatalogMigrationError, "source shape is not exact"):
             store.connect()
         self.assertEqual([], self.backups())
         check = sqlite3.connect(self.path)
@@ -400,7 +405,7 @@ class ProductModelMigrationTests(unittest.TestCase):
         conn.execute("ALTER TABLE platform_adapters ADD COLUMN surprise TEXT")
         conn.commit()
         conn.close()
-        with self.assertRaisesRegex(RegistryError, "source shape is not exact"):
+        with self.assertRaisesRegex(CatalogMigrationError, "source shape is not exact"):
             store.connect()
         self.assertEqual([], self.backups())
 
@@ -417,7 +422,7 @@ class ProductModelMigrationTests(unittest.TestCase):
         )
         conn.commit()
         conn.close()
-        with self.assertRaisesRegex(RegistryError, "catalog signature"):
+        with self.assertRaisesRegex(CatalogMigrationError, "catalog signature"):
             store.connect()
         self.assertEqual([], self.backups())
 
@@ -435,7 +440,7 @@ class ProductModelMigrationTests(unittest.TestCase):
         )
         conn.commit()
         conn.close()
-        with self.assertRaisesRegex(RegistryError, "catalog signature"):
+        with self.assertRaisesRegex(CatalogMigrationError, "catalog signature"):
             store.connect()
         self.assertEqual([], self.backups())
 
@@ -444,7 +449,7 @@ class ProductModelMigrationTests(unittest.TestCase):
         conn.execute("DROP INDEX platform_adapter_links_item")
         conn.commit()
         conn.close()
-        with self.assertRaisesRegex(RegistryError, "catalog signature"):
+        with self.assertRaisesRegex(CatalogMigrationError, "catalog signature"):
             store.connect()
         self.assertEqual([], self.backups())
 
@@ -457,7 +462,7 @@ class ProductModelMigrationTests(unittest.TestCase):
         )
         conn.commit()
         conn.close()
-        with self.assertRaisesRegex(RegistryError, "catalog signature"):
+        with self.assertRaisesRegex(CatalogMigrationError, "catalog signature"):
             store.connect()
         self.assertEqual([], self.backups())
 
@@ -466,7 +471,7 @@ class ProductModelMigrationTests(unittest.TestCase):
         conn.execute("CREATE INDEX platform_surprise ON platform_assignments(state)")
         conn.commit()
         conn.close()
-        with self.assertRaisesRegex(RegistryError, "catalog signature"):
+        with self.assertRaisesRegex(CatalogMigrationError, "catalog signature"):
             store.connect()
         self.assertEqual([], self.backups())
 
@@ -475,7 +480,7 @@ class ProductModelMigrationTests(unittest.TestCase):
         conn.execute("CREATE TABLE hub_adapters AS SELECT * FROM platform_adapters")
         conn.commit()
         conn.close()
-        with self.assertRaisesRegex(RegistryError, "mixes former and current"):
+        with self.assertRaisesRegex(CatalogMigrationError, "mixes former and current"):
             store.connect()
         self.assertEqual([], self.backups())
 
@@ -492,7 +497,7 @@ class ProductModelMigrationTests(unittest.TestCase):
         )
         conn.commit()
         conn.close()
-        with self.assertRaisesRegex(RegistryError, "capability values are unmapped"):
+        with self.assertRaisesRegex(CatalogMigrationError, "capability values are unmapped"):
             store.connect()
         self.assertEqual([], self.backups())
 
@@ -510,7 +515,7 @@ class ProductModelMigrationTests(unittest.TestCase):
         )
         conn.commit()
         conn.close()
-        with self.assertRaisesRegex(RegistryError, "UI preference"):
+        with self.assertRaisesRegex(CatalogMigrationError, "UI preference"):
             store.connect()
         self.assertEqual([], self.backups())
 
@@ -536,7 +541,7 @@ class ProductModelMigrationTests(unittest.TestCase):
         migrated.close()
         self.assertEqual(["telemetry.query"], persisted["capabilities"])
 
-    def test_planning_only_schema_zero_seeds_usable_module_registry(self) -> None:
+    def test_planning_only_schema_zero_opens_with_the_builds_module_list(self) -> None:
         path = os.path.join(self.directory.name, "planning-only.sqlite3")
         conn = sqlite3.connect(path)
         conn.execute("CREATE TABLE boards(id INTEGER PRIMARY KEY,name TEXT NOT NULL UNIQUE)")
@@ -545,9 +550,13 @@ class ProductModelMigrationTests(unittest.TestCase):
         conn.close()
         with mock.patch.dict(os.environ, {"VALKAMA_DB": path}):
             migrated = store.connect()
-            modules = module_gate.modules_payload(migrated)["modules"]
+            modules = platform_modules.modules_payload()["modules"]
             self.assertEqual(
                 store.STORE_SCHEMA_VERSION, migrated.execute("PRAGMA user_version").fetchone()[0]
+            )
+            # Nothing seeds module rows any more: the list is the build's.
+            self.assertEqual(
+                0, migrated.execute("SELECT COUNT(*) FROM platform_modules").fetchone()[0]
             )
             self.assertIn("settings", {item["manifest"]["module_id"] for item in modules})
             self.assertTrue(all(item["state"] == "enabled" for item in modules))
@@ -558,6 +567,9 @@ class ProductModelMigrationTests(unittest.TestCase):
         path = os.path.join(self.directory.name, "current-unstamped.sqlite3")
         with mock.patch.dict(os.environ, {"VALKAMA_DB": path}):
             current = store.connect()
+            # An unstamped store with a current catalog was written by a build
+            # that still seeded its module rows.
+            registry_rows.seed_modules(current)
             before = current.execute(
                 "SELECT module_id,record_json,revision FROM platform_modules ORDER BY module_id"
             ).fetchall()
@@ -749,12 +761,20 @@ class NeutralKernelContractTests(unittest.TestCase):
                 "memory-resource",
                 "artifact",
                 "improvement-case",
-                "service",
-                "connection",
-                "registry",
             },
             set(ENTITY_KINDS),
         )
+        # The registry's three kinds left the vocabulary with the registry; the
+        # migrations still read them in the rows it persisted.
+        self.assertEqual(
+            set(ENTITY_KINDS) | {"service", "connection", "registry"}, set(LEGACY_ENTITY_KINDS)
+        )
+        service = {"kind": "service", "owner_id": "owner", "service_id": "memory"}
+        with self.assertRaises(ContractError):
+            validate_entity_ref(service)
+        self.assertEqual(service, validate_legacy_entity_ref(service))
+        with self.assertRaises(ContractError):
+            validate_legacy_entity_ref({**service, "registry_id": "extra"})
         self.assertEqual(
             {
                 "execution.launch",

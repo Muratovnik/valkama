@@ -553,12 +553,10 @@ export const en = {
     sectionLabel: 'Settings section',
     section: {
       general: 'General',
-      workspace: 'Workspace',
       diagnostics: 'Diagnostics',
     },
     sectionIntro: {
       general: 'Local preferences for this device.',
-      workspace: 'Product modules this installation runs.',
       diagnostics: 'Checks the whole installation, regardless of the selected project.',
     },
     interface: 'Interface',
@@ -570,8 +568,6 @@ export const en = {
     notificationsIntro:
       'Choose the events that deserve your attention. System permission is requested only from this page.',
     notifications: 'Notifications',
-    enabled: 'On',
-    disabled: 'Off',
     notifyEnabled: 'Notify about agent and card events',
     notifyEnabledHint: 'The master switch keeps the event choices below.',
     permissionIntro: 'Valkama requests system permission only after this action.',
@@ -606,16 +602,8 @@ export const en = {
       'required': 'Enter a command before selecting it.',
       'too-long': 'Keep the command to 400 characters or fewer.',
     },
-    modules: {
-      title: 'Modules',
-      intro: 'Turn a module off to remove it from navigation for everyone using this installation.',
-    },
     stateLanes: {
       availability: 'Availability',
-    },
-    mutation: {
-      moduleConflict: 'The module changed elsewhere. The current state has been reloaded.',
-      moduleFailed: 'The module state could not be changed. Refresh and try again.',
     },
     diagnostics: {
       needsAttention: 'Needs attention',

@@ -68,14 +68,23 @@ typed error naming the cause. Asked for its health, an adapter that cannot be
 reached reads as a typed unavailable result with a diagnostic, never as an
 exception or a silent absence.
 
-## Module registry and enablement
+## Module list
 
-The persisted server registry declares `planning`, `memory`, and `settings`.
-`GET /api/modules` returns their manifests, enablement state, mutability,
-revision, and update time. Settings is always enabled and cannot be disabled.
-Memory contributes references inside work-item context rather than a standalone
+The server declares `planning`, `memory`, and `settings` in its code, and that
+list is the whole answer: no store row records it and nothing changes it at
+runtime. `GET /api/modules` and the MCP tool `list_platform_modules` return
+each module's manifest inside a registration that keeps the wire's `state`,
+`mutable`, `revision`, and `updated_at` fields; every module is `enabled`, none
+is `mutable`, and `updated_at` is when the list last changed. Memory
+contributes references inside work-item context rather than a standalone
 navigation destination. Analytics, Improvements, Skills, and standalone Sessions
 registrations, pages, and APIs are retired.
+
+A store written before the list moved into code still holds its
+`platform_modules` rows and their audit in `platform_registry_audit`. No
+feature reads or writes them; only the historical migrations of a store older
+than schema 8 still do. They leave with the schema migration that drops the
+registry's tables.
 
 The semantic interface identifier remains `valkama-modules`. The payload is cut
 over atomically across server, validators, UI, tests, and built artifacts; no

@@ -15,10 +15,6 @@ test('state presentation is dimension-aware instead of guessing from labels', ()
     tone: 'success',
     emphasis: 'quiet',
   })
-  assert.deepEqual(statePresentation('integration-intake', 'disabled'), {
-    tone: 'neutral',
-    emphasis: 'quiet',
-  })
   assert.deepEqual(statePresentation('session', 'failed'), {
     tone: 'danger',
     emphasis: 'strong',
@@ -55,7 +51,7 @@ test('state presentation is dimension-aware instead of guessing from labels', ()
     tone: 'neutral',
     emphasis: 'quiet',
   })
-  assert.deepEqual(statePresentation('case', 'unknown-future-state'), {
+  assert.deepEqual(statePresentation('execution', 'unknown-future-state'), {
     tone: 'neutral',
     emphasis: 'quiet',
   })

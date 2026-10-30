@@ -12,15 +12,7 @@ export type ClosedStateDimension =
   | 'work-item-readiness'
 
 export type OpenStateDimension =
-  | 'work-item-state'
-  | 'session'
-  | 'execution'
-  | 'job'
-  | 'case'
-  | 'activity-action'
-  | 'improvement-readiness'
-  | 'integration-health'
-  | 'integration-intake'
+  'work-item-state' | 'session' | 'execution' | 'activity-action' | 'integration-health'
 
 export type StateDimension = ClosedStateDimension | OpenStateDimension
 
@@ -129,25 +121,6 @@ const STATE_PRESENTATION = {
     cancelled: { tone: 'neutral', emphasis: 'quiet' },
     attached: { tone: 'neutral', emphasis: 'quiet' },
   },
-  'job': {
-    queued: { tone: 'warning', emphasis: 'quiet' },
-    running: { tone: 'info', emphasis: 'quiet' },
-    succeeded: { tone: 'success', emphasis: 'quiet' },
-    failed: { tone: 'danger', emphasis: 'strong' },
-    cancelled: { tone: 'neutral', emphasis: 'quiet' },
-  },
-  'case': {
-    open: { tone: 'info', emphasis: 'quiet' },
-    collecting: { tone: 'info', emphasis: 'quiet' },
-    watching: { tone: 'warning', emphasis: 'quiet' },
-    implementing: { tone: 'info', emphasis: 'quiet' },
-    validating: { tone: 'warning', emphasis: 'quiet' },
-    approved: { tone: 'success', emphasis: 'quiet' },
-    effective: { tone: 'success', emphasis: 'quiet' },
-    resolved: { tone: 'success', emphasis: 'quiet' },
-    regressed: { tone: 'danger', emphasis: 'strong' },
-    false_positive: { tone: 'neutral', emphasis: 'quiet' },
-  },
   // Activity providers may add action names without turning an unfamiliar
   // event into an alarm. The three completion-shaped actions are the only
   // shared positive vocabulary; every other action deliberately falls back.
@@ -156,21 +129,11 @@ const STATE_PRESENTATION = {
     checklist_released: { tone: 'success', emphasis: 'quiet' },
     checklist_completed: { tone: 'success', emphasis: 'quiet' },
   },
-  'improvement-readiness': {
-    disabled: { tone: 'neutral', emphasis: 'quiet' },
-    needs_evidence: { tone: 'warning', emphasis: 'quiet' },
-    analyzed_empty: { tone: 'info', emphasis: 'quiet' },
-    ready: { tone: 'success', emphasis: 'quiet' },
-  },
   'integration-health': {
     'ready': { tone: 'success', emphasis: 'quiet' },
     'not-observed': { tone: 'neutral', emphasis: 'quiet' },
     'degraded': { tone: 'warning', emphasis: 'strong' },
     'unavailable': { tone: 'danger', emphasis: 'strong' },
-  },
-  'integration-intake': {
-    enabled: { tone: 'success', emphasis: 'quiet' },
-    disabled: { tone: 'neutral', emphasis: 'quiet' },
   },
   'connection-lifecycle': {
     connecting: { tone: 'neutral', emphasis: 'quiet' },

@@ -1,16 +1,23 @@
-"""Canonical built-in ``valkama-modules`` registry.
+"""The modules this build ships, declared in code: the ``valkama-modules`` wire.
 
-This is the server wire owner. The browser validates this registry at runtime;
-it does not carry a second canonical manifest table.
+Planning, Memory and Settings are the product. Which of them exist is decided
+here, by the build, and nowhere else: no store row records it and nothing turns
+one off. The list used to be rows in `platform_modules` that the Kernel seeded
+and Settings toggled; that table is still declared in `core` only so an
+existing store opens unchanged, and no code reads or writes it.
+
+`modules_payload` keeps the wire it replaced. Each module is a registration --
+its manifest plus `state`, `mutable`, `revision` and `updated_at` -- because
+the MCP tool `list_platform_modules` and the shell's `/api/modules` publish that
+shape. The values are fixed now: every module is enabled, none can be changed,
+and the registration was last changed when the list was.
+
+The browser validates this answer at runtime; it does not carry a second
+canonical manifest table.
 """
 
 from __future__ import annotations
 
-import contextlib
-import logging
-import os
-import threading
-from collections.abc import Callable
 from copy import deepcopy
 
 from .module_manifest import MODULES_INTERFACE, validate_module_manifest
@@ -136,78 +143,54 @@ _MODULES = (
         "platform.modules.settings",
         "settings-2",
         ["section", "query"],
-        [
-            "registry.modules",
-            "registry.adapters",
-            "registry.services",
-            "registry.connections",
-            "registry.grants",
-        ],
-        [
-            "project.assignments",
-            "project.connections",
-            "project.grants",
-            "project.bindings",
-        ],
+        [],
+        ["project.bindings"],
         ["module.settings.open-adapter"],
         ["module.settings.configure-project"],
-        ["registry", "settings"],
-        ["registry.changed"],
-        ["project", "service", "connection", "registry"],
-        ["connection", "registry"],
-        ["connection", "registry"],
+        ["settings"],
+        [],
+        ["project"],
+        [],
+        [],
         ["settings.configure"],
     ),
 )
 
-_STATE_OBSERVERS: list[Callable[[str, str, str], None]] = []
-_STATE_FENCES: dict[tuple[str, str], threading.RLock] = {}
-_STATE_FENCES_LOCK = threading.Lock()
-_LOGGER = logging.getLogger(__name__)
+#: When the module list above last changed. A registration is never changed at
+#: runtime any more, so this is the one `updated_at` every registration reports;
+#: move it with a change to the list or to a manifest.
+DECLARED_AT = "2026-10-30T00:00:00Z"
 
 
-@contextlib.contextmanager
-def module_state_fence(primary_db: str, module_id: str):
-    """Serialize one module's state transition with its final work admission."""
-
-    key = (os.path.abspath(primary_db), module_id)
-    with _STATE_FENCES_LOCK:
-        fence = _STATE_FENCES.setdefault(key, threading.RLock())
-    with fence:
-        yield
-
-
-def register_state_observer(observer: Callable[[str, str, str], None]) -> None:
-    if observer not in _STATE_OBSERVERS:
-        _STATE_OBSERVERS.append(observer)
-
-
-def notify_state_changed(primary_db: str, module_id: str, state: str) -> tuple[str, ...]:
-    diagnostics = []
-    for observer in tuple(_STATE_OBSERVERS):
-        try:
-            observer(primary_db, module_id, state)
-        except Exception as error:
-            diagnostic = f"{type(error).__name__}: {error}"
-            diagnostics.append(diagnostic)
-            _LOGGER.exception(
-                "module state observer failed after commit",
-                extra={"module_id": module_id, "state": state},
-            )
-    return tuple(diagnostics)
+def _registration(manifest: dict) -> dict:
+    return {
+        "manifest": deepcopy(manifest),
+        "state": "enabled",
+        "mutable": False,
+        "revision": 1,
+        "updated_at": DECLARED_AT,
+    }
 
 
 def modules_payload() -> dict:
-    """Return a defensive copy of the sole built-in module registry."""
+    """Every module this build ships, as the registrations the wire carries.
+
+    Ordered by module id, the order the rows this list replaced were read in.
+    """
 
     return {
         "interface_version": MODULES_INTERFACE,
-        "modules": deepcopy(list(_MODULES)),
+        "modules": [
+            _registration(manifest)
+            for manifest in sorted(_MODULES, key=lambda item: item["module_id"])
+        ],
     }
 
 
 def module_manifests() -> list[dict]:
-    return modules_payload()["modules"]
+    """A defensive copy of every manifest this build declares."""
+
+    return deepcopy(list(_MODULES))
 
 
 def module_ids() -> frozenset[str]:
@@ -215,10 +198,8 @@ def module_ids() -> frozenset[str]:
 
 
 __all__ = [
+    "DECLARED_AT",
     "module_ids",
     "module_manifests",
-    "module_state_fence",
     "modules_payload",
-    "notify_state_changed",
-    "register_state_observer",
 ]

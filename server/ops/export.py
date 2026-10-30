@@ -2,8 +2,10 @@
 
 OPS-006. What leaves is the record a person would be sorry to lose and could
 not reconstruct: the planning trail, what the Kernel links to what, which
-modules are on. What does not leave is
-anything a store should not have held in the first place.
+integrations the owner switched off. What does not leave is anything a store
+should not have held in the first place, nor what the build itself declares:
+the module list is code, so an export of it would describe the build that
+wrote the file rather than the installation.
 
 The secret rule is absolute and cheap to state: no connection configuration
 crosses this boundary. Not redacted, not starred out — absent. A redacted secret
@@ -86,17 +88,14 @@ def _planning(conn: sqlite3.Connection) -> dict:
 
 
 def _settings(conn: sqlite3.Connection) -> dict:
-    """Which modules are on, and which integrations the owner switched off.
+    """Which integrations the owner switched off.
 
     `platform_connections` is deliberately not read. It is where a
     configuration — and therefore a secret reference — would live, and the way
     to guarantee an export cannot leak one is to never open the table.
     """
 
-    return {
-        "modules": _rows(conn, "platform_modules"),
-        "integrations": _rows(conn, "integration_settings"),
-    }
+    return {"integrations": _rows(conn, "integration_settings")}
 
 
 def _rows(conn: sqlite3.Connection, table: str) -> list[dict]:
@@ -107,7 +106,7 @@ def _rows(conn: sqlite3.Connection, table: str) -> list[dict]:
     an export should survive rather than refuse.
     """
 
-    if table not in ("platform_adapter_links", "platform_modules", "integration_settings"):
+    if table not in ("platform_adapter_links", "integration_settings"):
         raise ValueError(f"refusing to export an unnamed table: {table}")
     try:
         cursor = conn.execute(f"SELECT * FROM {table} LIMIT {MAX_ROWS}")  # noqa: S608

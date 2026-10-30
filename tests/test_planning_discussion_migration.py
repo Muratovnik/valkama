@@ -12,6 +12,7 @@ from unittest import mock
 from server import store, store_backups
 from server.planning import service
 from server.planning import store as planning_store
+from tests import registry_rows
 
 
 class PlanningDiscussionMigrationTests(unittest.TestCase):
@@ -55,6 +56,8 @@ class PlanningDiscussionMigrationTests(unittest.TestCase):
         self.conn.execute("ALTER TABLE work_item_comments DROP COLUMN report")
         self.conn.execute("ALTER TABLE work_item_comments DROP COLUMN checklist_item_id")
         self.conn.execute("ALTER TABLE work_item_comments DROP COLUMN checklist_item_text")
+        # The module rows the build that wrote schema 7 seeded on every start.
+        registry_rows.seed_modules(self.conn)
         self.conn.execute("PRAGMA user_version=7")
         self.conn.commit()
         return {

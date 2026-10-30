@@ -1,7 +1,7 @@
 """What the web app shell reads before any module renders, and what it remembers.
 
-Three answers, all the shell's own: the modules this store has enabled
-(`/api/modules`), the context -- the primary store's identity and the project
+Three answers, all the shell's own: the modules this build ships
+(`/api/modules`, read from `platform.modules` rather than the store), the context -- the primary store's identity and the project
 directory with each project's binding state (`/api/platform/context`) -- and
 the last route the shell restores on its next start (`/api/platform/ui-prefs`).
 
@@ -17,7 +17,7 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 
 from .planning.routing import PlanningRouting, scope_parameters
-from .platform import module_gate
+from .platform import modules as platform_modules
 from .projects import project_registry
 from .store_identity.primitives import ContractError
 from .store_identity.refs import validate_entity_ref, validate_operating_scope
@@ -38,13 +38,10 @@ def _exact_object(value, allowed, *, required) -> None:
         raise ContractError("request body has missing or unknown fields")
 
 
-def _validated_ui_prefs(conn: sqlite3.Connection, value) -> dict:
+def _validated_ui_prefs(value) -> dict:
     _exact_object(value, ("module_id", "scope", "resource_ref"), required=("module_id", "scope"))
     module_id = value["module_id"]
-    known = {
-        record["manifest"]["module_id"] for record in module_gate.modules_payload(conn)["modules"]
-    }
-    if not isinstance(module_id, str) or module_id not in known:
+    if not isinstance(module_id, str) or module_id not in platform_modules.module_ids():
         raise PlatformHttpError(400, "error", "UI preference names an unknown module")
     prefs = {"module_id": module_id, "scope": validate_operating_scope(value["scope"])}
     if "resource_ref" in value:
@@ -61,7 +58,7 @@ def ui_prefs_record(conn: sqlite3.Connection) -> dict | None:
     if row is None:
         return None
     try:
-        return _validated_ui_prefs(conn, json.loads(str(row[0])))
+        return _validated_ui_prefs(json.loads(str(row[0])))
     except Exception:  # noqa: BLE001 -- a corrupt row must never break the shell context
         return None
 
@@ -75,7 +72,7 @@ def save_ui_prefs(conn: sqlite3.Connection, payload) -> dict:
     if payload["interface_version"] != UI_PREFS_INTERFACE:
         raise PlatformHttpError(400, "error", "UI preference payload version is not supported")
     prefs = _validated_ui_prefs(
-        conn, {key: value for key, value in payload.items() if key != "interface_version"}
+        {key: value for key, value in payload.items() if key != "interface_version"}
     )
     conn.execute(
         "INSERT INTO platform_ui_prefs(key,record_json,updated_at)"
@@ -123,7 +120,7 @@ def handle_get(
     if path == MODULES_PATH:
         if parameters:
             raise PlatformHttpError(400, "error", "Module registry accepts no query fields")
-        return 200, module_gate.modules_payload(conn)
+        return 200, platform_modules.modules_payload()
     if path == CONTEXT_PATH:
         routing = PlanningRouting(conn, primary_db, registry_reader=registry_reader)
         return 200, context_payload(routing, parameters)

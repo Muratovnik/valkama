@@ -5,7 +5,7 @@ export function moduleRegistrations(): ModuleRegistration[] {
   return OFFLINE_MODULE_FALLBACK.map((manifest) => ({
     manifest: structuredClone(manifest),
     state: 'enabled',
-    mutable: manifest.module_id !== 'settings',
+    mutable: false,
     revision: 1,
     updated_at: '2026-08-20T00:00:00Z',
   }))

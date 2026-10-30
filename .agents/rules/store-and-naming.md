@@ -25,8 +25,10 @@ The extension registry's tables (`platform_services`, `platform_adapters`,
 `platform_connections`, `platform_assignments`, `platform_grants`,
 `platform_actions`, `platform_action_inputs`, `platform_packages`,
 `platform_core_ref_bindings`, `platform_known_stores`,
-`platform_registry_meta`, `platform_adapter_links`) keep their names and DDL
-in `platform/core.py` although no product feature uses them: an existing store
+`platform_registry_meta`, `platform_adapter_links`), and the module rows
+(`platform_modules`) with their audit (`platform_registry_audit`), keep their
+names and DDL in `platform/core.py` although no product feature uses them: the
+module list is declared in `platform/modules.py`, and an existing store
 must open without a schema change until one migration drops them. Their rows
 are dead data, read only by the store's own bring-up and the export's
 `relations` section, as `AGENTS.md` lists. `store_rename` still rewrites the registry's former interface

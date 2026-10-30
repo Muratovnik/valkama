@@ -88,7 +88,6 @@ const {
   modulesFailure,
   connectionState,
   refreshing,
-  loadModules,
   refreshAll,
 } = usePlatformLiveFeed({
   notice,
@@ -114,11 +113,9 @@ const displayedConnection = computed(() =>
 const {
   activeManifest,
   moduleTitle,
-  reloadModuleState,
   routeFailure: liveRouteFailure,
   routeUnavailable,
 } = useModuleRouteAuthority({
-  loadModules,
   modules,
   modulesAuthoritative,
   modulesSettled,
@@ -285,11 +282,9 @@ usePlatformEntryRestore({
           :module-title="moduleTitle"
           :scope="operatingScope"
           :primary-write-scope-id="primaryWriteScopeId"
-          :module-registrations="moduleRegistrations"
           :context="contextReady"
           :route="route"
           :locale="locale"
-          :reload-modules="reloadModuleState"
           @connection="(state) => (planningConnection = state)"
           @entity="openEntity"
           @open-session="openSession"

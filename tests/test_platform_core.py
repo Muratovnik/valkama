@@ -6,14 +6,15 @@ import os
 import sqlite3
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
 
-from server import http_surface, store
+from server import http_surface, mcp_surface, store, watchers
+from server.planning import service as planning_service
 from server.platform import core as platform_core
-from server.store_identity.primitives import ContractError
-from server.ui_state import PlatformHttpError
+from server.platform import modules as platform_modules
 from tests import SUITE_STORE, registry_rows
 
 # The registry's tables, which a store still declares and nothing writes.
@@ -32,10 +33,21 @@ REGISTRY_TABLES = (
 )
 
 
+# The module rows and their audit: declared, dead since the list moved to code.
+MODULE_TABLES = ("platform_modules", "platform_registry_audit")
+DEAD_TABLES = (*REGISTRY_TABLES, *MODULE_TABLES)
+
+
 def _row_counts(conn: sqlite3.Connection) -> dict[str, int]:
     return {
-        table: conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-        for table in (*REGISTRY_TABLES, "platform_modules", "platform_registry_audit")
+        table: conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] for table in DEAD_TABLES
+    }
+
+
+def _held(conn: sqlite3.Connection) -> dict[str, list[tuple]]:
+    return {
+        table: [tuple(row) for row in conn.execute(f"SELECT * FROM {table} ORDER BY 1")]
+        for table in DEAD_TABLES
     }
 
 
@@ -50,32 +62,22 @@ class InitializeTests(unittest.TestCase):
         patch.start()
         self.addCleanup(patch.stop)
 
-    def test_a_fresh_store_gets_its_identity_and_modules_and_no_registry_rows(self) -> None:
+    def test_a_fresh_store_gets_its_identity_and_no_registry_or_module_rows(self) -> None:
         conn = store.connect()
         self.addCleanup(conn.close)
-        counts = _row_counts(conn)
-        self.assertEqual(dict.fromkeys(REGISTRY_TABLES, 0), {t: counts[t] for t in REGISTRY_TABLES})
-        self.assertEqual(
-            ["memory", "planning", "settings"],
-            [row[0] for row in conn.execute("SELECT module_id FROM platform_modules ORDER BY 1")],
-        )
-        # Each registration is remembered, which is what keeps a removed module removed.
-        self.assertEqual(
-            [
-                ("memory", "module.registered"),
-                ("planning", "module.registered"),
-                ("settings", "module.registered"),
-            ],
-            [
-                tuple(row)
-                for row in conn.execute(
-                    "SELECT entity_id,event_kind FROM platform_registry_audit ORDER BY entity_id"
-                )
-            ],
-        )
+        self.assertEqual(dict.fromkeys(DEAD_TABLES, 0), _row_counts(conn))
         self.assertEqual(
             1, conn.execute("SELECT COUNT(*) FROM platform_store_metadata").fetchone()[0]
         )
+        # The tables themselves are still there, exactly as declared: an
+        # existing store must open unchanged until a migration drops them.
+        for table in MODULE_TABLES:
+            with self.subTest(table=table):
+                self.assertIsNotNone(
+                    conn.execute(
+                        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
+                    ).fetchone()
+                )
 
     def test_reopening_a_store_writes_nothing(self) -> None:
         store.connect().close()
@@ -85,19 +87,19 @@ class InitializeTests(unittest.TestCase):
         store.connect().close()
         self.assertEqual(before, observer.execute("PRAGMA data_version").fetchone()[0])
 
-    def test_a_store_holding_registry_rows_opens_and_keeps_them_untouched(self) -> None:
+    def test_a_store_holding_registry_and_module_rows_opens_and_keeps_them_untouched(
+        self,
+    ) -> None:
         # A store as the last registry build left it: its rows are dead data
         # now, and opening the store neither rewrites, removes nor adds to them.
         conn = store.connect()
         try:
             registry_rows.seed(conn)
             conn.commit()
-            held = {
-                table: conn.execute(f"SELECT * FROM {table} ORDER BY 1").fetchall()
-                for table in REGISTRY_TABLES
-            }
+            held = _held(conn)
         finally:
             conn.close()
+        self.assertTrue(all(held[table] for table in MODULE_TABLES))
         # Equal rows could still have been written back with the same values;
         # the data version says whether anything was written at all.
         observer = sqlite3.connect(self.db)
@@ -106,74 +108,70 @@ class InitializeTests(unittest.TestCase):
         reopened = store.connect()
         self.addCleanup(reopened.close)
         self.assertEqual(before, observer.execute("PRAGMA data_version").fetchone()[0])
-        self.assertEqual(
-            held,
-            {
-                table: reopened.execute(f"SELECT * FROM {table} ORDER BY 1").fetchall()
-                for table in REGISTRY_TABLES
-            },
-        )
+        self.assertEqual(held, _held(reopened))
         self.assertEqual(
             store.STORE_SCHEMA_VERSION, reopened.execute("PRAGMA user_version").fetchone()[0]
         )
 
+    def test_module_rows_that_disagree_with_the_build_are_neither_read_nor_refused(
+        self,
+    ) -> None:
+        """What a schema-8 store says about its modules no longer decides anything.
+
+        Every row here would have stopped the store opening or changed what a
+        surface answered while the rows were the module list: Memory disabled
+        with a malformed descriptor, Settings missing, a module no build
+        declares, and the audit of a state change. Now the store opens without a
+        write, the rows stay as they are, and the list is the build's.
+        """
+
+        conn = store.connect()
+        try:
+            registry_rows.seed_modules(conn)
+            conn.execute(
+                "UPDATE platform_modules SET state='disabled',revision=3,record_json='{}'"
+                " WHERE module_id='memory'"
+            )
+            conn.execute("DELETE FROM platform_modules WHERE module_id='settings'")
+            conn.execute(
+                "INSERT INTO platform_modules VALUES"
+                "('future-module','{}','enabled',1,1,'2026-01-01T00:00:00Z')"
+            )
+            conn.execute(
+                "INSERT INTO platform_registry_audit"
+                "(event_kind,entity_kind,entity_id,detail_json,at) VALUES(?,?,?,?,?)",
+                (
+                    "module.state-changed",
+                    "module",
+                    "memory",
+                    '{"state":"disabled"}',
+                    "2026-01-01T00:00:00Z",
+                ),
+            )
+            conn.commit()
+            held = _held(conn)
+        finally:
+            conn.close()
+        observer = sqlite3.connect(self.db)
+        self.addCleanup(observer.close)
+        before = observer.execute("PRAGMA data_version").fetchone()[0]
+        for _ in range(2):
+            reopened = store.connect()
+            try:
+                self.assertEqual(held, _held(reopened))
+                listed = mcp_surface.call_tool(reopened, "list_platform_modules", {})
+            finally:
+                reopened.close()
+            self.assertEqual(before, observer.execute("PRAGMA data_version").fetchone()[0])
+            self.assertEqual(platform_modules.modules_payload(), listed)
+            self.assertEqual(
+                [("memory", "enabled"), ("planning", "enabled"), ("settings", "enabled")],
+                [(item["manifest"]["module_id"], item["state"]) for item in listed["modules"]],
+            )
+
     def test_initialize_needs_an_explicit_connection(self) -> None:
         with self.assertRaises(TypeError):
             platform_core.initialize(None, self.db)
-
-
-class ModuleStateCommandTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.directory = tempfile.TemporaryDirectory()
-        self.addCleanup(self.directory.cleanup)
-        self.db = os.path.join(self.directory.name, "valkama.sqlite3")
-        patch = mock.patch.dict(os.environ, {"VALKAMA_DB": self.db})
-        patch.start()
-        self.addCleanup(patch.stop)
-        self.conn = store.connect()
-        self.addCleanup(self.conn.close)
-
-    def command(self, **payload):
-        return platform_core.module_state_command(self.conn, self.db, payload)
-
-    def test_a_state_change_names_the_revision_it_read_and_is_audited(self) -> None:
-        answer = self.command(module_id="memory", state="disabled", expected_revision=1)
-        self.assertEqual("valkama-modules", answer["interface_version"])
-        self.assertEqual(("disabled", 2), (answer["module"]["state"], answer["module"]["revision"]))
-        self.assertEqual(
-            ("module.state-changed", '{"state":"disabled"}'),
-            tuple(
-                self.conn.execute(
-                    "SELECT event_kind,detail_json FROM platform_registry_audit"
-                    " WHERE entity_id='memory' ORDER BY sequence DESC LIMIT 1"
-                ).fetchone()
-            ),
-        )
-        with self.assertRaises(PlatformHttpError) as stale:
-            self.command(module_id="memory", state="enabled", expected_revision=1)
-        self.assertEqual(409, stale.exception.status)
-
-    def test_settings_and_unknown_modules_are_refused_without_a_write(self) -> None:
-        before = self.conn.execute("SELECT COUNT(*) FROM platform_registry_audit").fetchone()[0]
-        for module_id, status in (("settings", 409), ("skills", 404)):
-            with self.subTest(module_id=module_id):
-                with self.assertRaises(PlatformHttpError) as refusal:
-                    self.command(module_id=module_id, state="disabled", expected_revision=1)
-                self.assertEqual(status, refusal.exception.status)
-        self.assertEqual(
-            before, self.conn.execute("SELECT COUNT(*) FROM platform_registry_audit").fetchone()[0]
-        )
-
-    def test_a_malformed_command_is_a_contract_error(self) -> None:
-        for payload in (
-            {"module_id": "memory", "state": "disabled"},
-            {"module_id": "memory", "state": "off", "expected_revision": 1},
-            {"module_id": "memory", "state": "disabled", "expected_revision": True},
-            {"module_id": "", "state": "disabled", "expected_revision": 1},
-            {"module_id": "memory", "state": "disabled", "expected_revision": 1, "extra": 1},
-        ):
-            with self.subTest(payload=payload), self.assertRaises(ContractError):
-                self.command(**payload)
 
 
 class PlatformHttpBoundaryTests(unittest.TestCase):
@@ -245,15 +243,6 @@ class PlatformHttpBoundaryTests(unittest.TestCase):
     def _put(self, path, payload):
         return self._send("PUT", path, payload)
 
-    def _disable(self, module_id: str) -> None:
-        conn = store.connect()
-        try:
-            platform_core.module_state_command(
-                conn, self.db, {"module_id": module_id, "state": "disabled", "expected_revision": 1}
-            )
-        finally:
-            conn.close()
-
     def test_replacement_module_endpoint_and_legacy_integration_404(self) -> None:
         status, content_type, body = self._get("/api/modules")
         self.assertEqual(200, status)
@@ -287,45 +276,61 @@ class PlatformHttpBoundaryTests(unittest.TestCase):
                 self.assertEqual(404, status)
                 self.assertEqual("not_found", json.loads(body)["error"]["code"])
 
-    def test_the_module_state_route_still_changes_a_module_until_the_list_moves_to_code(
-        self,
-    ) -> None:
-        status, _, body = self._post(
+    def test_the_module_list_is_the_builds_and_nothing_changes_it(self) -> None:
+        conn = store.connect()
+        try:
+            # A fresh store holds no module rows; seed the ones an older build
+            # wrote, or the disabling below would change nothing.
+            registry_rows.seed_modules(conn)
+            self.assertEqual(
+                3,
+                conn.execute("UPDATE platform_modules SET state='disabled'").rowcount,
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        status, _, body = self._get("/api/modules")
+        self.assertEqual(200, status)
+        self.assertEqual(platform_modules.modules_payload(), json.loads(body))
+        status, content_type, body = self._post(
             "/api/modules/state",
             {"module_id": "memory", "state": "disabled", "expected_revision": 1},
         )
-        self.assertEqual(200, status)
-        self.assertEqual("disabled", json.loads(body)["module"]["state"])
-        status, _, body = self._post(
-            "/api/modules/state",
-            {"module_id": "settings", "state": "disabled", "expected_revision": 1},
-        )
-        self.assertEqual(409, status)
-        self.assertEqual("unavailable", json.loads(body)["status"])
-        status, _, body = self._post("/api/modules/state", {"module_id": "memory"})
-        self.assertEqual(400, status)
-        self.assertEqual("error", json.loads(body)["status"])
+        self.assertEqual(404, status)
+        self.assertEqual("application/json", content_type)
+        self.assertEqual("not_found", json.loads(body)["error"]["code"])
 
-    def test_owned_http_reads_put_and_sse_refuse_when_modules_are_disabled(self) -> None:
-        self._disable("planning")
+    def test_planning_answers_whatever_a_dead_module_row_says(self) -> None:
+        conn = store.connect()
+        try:
+            registry_rows.seed_modules(conn)
+            conn.execute("UPDATE platform_modules SET state='disabled'")
+            conn.commit()
+        finally:
+            conn.close()
         for path in (
             "/api/planning",
             "/api/planning/spaces",
-            "/api/session?id=missing",
             "/api/scopes",
-            "/api/events?view=planning",
+            "/api/platform/planning?scope_kind=global",
         ):
             with self.subTest(path=path):
-                self.assertEqual(409, self._get(path)[0])
+                self.assertEqual(200, self._get(path)[0])
+
+    def test_retired_routes_and_event_views_stay_retired(self) -> None:
         for path in (
             "/api/dashboard",
             "/api/sessions",
             "/api/modules/skills",
             "/api/modules/improvements",
         ):
-            self.assertEqual(404, self._get(path)[0])
-        for view in ("sessions", "analytics", "dashboard", "improvements"):
-            self.assertEqual(400, self._get(f"/api/events?view={view}")[0])
+            with self.subTest(path=path):
+                self.assertEqual(404, self._get(path)[0])
+        for view in ("sessions", "analytics", "dashboard", "improvements", ""):
+            with self.subTest(view=view):
+                status, _, body = self._get(f"/api/events?view={view}")
+                self.assertEqual(400, status)
+                self.assertEqual("error", json.loads(body)["status"])
         self.assertEqual(
             404, self._put("/api/modules/improvements/profile", {"scope": "personal"})[0]
         )
@@ -333,18 +338,41 @@ class PlatformHttpBoundaryTests(unittest.TestCase):
     def test_unknown_sse_view_is_rejected(self) -> None:
         self.assertEqual(400, self._get("/api/events?view=not-registered")[0])
 
-    def test_open_sse_stream_terminates_after_module_is_disabled(self) -> None:
+    def test_an_open_stream_pushes_a_write_another_connection_commits(self) -> None:
         client = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=3)
+        response = None
         try:
-            client.request("GET", "/api/events?view=planning")
+            client.request("GET", "/api/events?view=spaces")
             response = client.getresponse()
             self.assertEqual(200, response.status)
-            self.assertTrue(response.readline().startswith(b"data: "))
+            first = response.readline()
+            self.assertTrue(first.startswith(b"data: "))
+            self.assertNotIn(b"Streamed", first)
             self.assertEqual(b"\n", response.readline())
-            self._disable("planning")
-            self.assertEqual(b"", response.readline())
+            writer = store.connect()
+            try:
+                planning_service.create_planning_space(
+                    writer, project_id="streamed", name="Streamed", key="STR"
+                )
+                writer.commit()
+            finally:
+                writer.close()
+            line = response.readline()
+            while line.startswith(b":") or line == b"\n":
+                line = response.readline()
+            self.assertTrue(line.startswith(b"data: "))
+            self.assertIn(b"Streamed", line)
         finally:
+            # The response holds the socket open as long as the connection does.
+            if response is not None:
+                response.close()
             client.close()
+        # The handler notices the closed socket on its next keep-alive and lets
+        # go of the store; the directory cannot be removed while it holds it.
+        deadline = time.monotonic() + 3
+        while watchers.WATCHERS._queues and time.monotonic() < deadline:
+            time.sleep(0.05)
+        self.assertEqual([], watchers.WATCHERS._queues)
 
     def test_only_canonical_extensionless_platform_routes_receive_spa_fallback(self) -> None:
         status, content_type, _ = self._get("/modules/planning/global")

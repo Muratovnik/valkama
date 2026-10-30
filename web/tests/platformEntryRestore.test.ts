@@ -138,23 +138,3 @@ test('entry restore removes an entity the authoritative module cannot consume', 
     { module_id: 'settings', scope: { kind: 'global' } },
   )
 })
-
-test('entry restore retains a valid scoped registry entity', () => {
-  const context = {
-    primary: { data_scope_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', is_writable: true },
-    projects: [],
-    ui_prefs: null,
-  } as ContextReady
-  const resource_ref = {
-    kind: 'registry' as const,
-    registry_id: 'registry-1',
-  }
-  assert.deepEqual(
-    resolvedPreferredRoute(
-      context,
-      { module_id: 'settings', scope: { kind: 'global' }, resource_ref },
-      moduleRegistrations().map((item) => item.manifest),
-    ),
-    { module_id: 'settings', scope: { kind: 'global' }, entity: resource_ref },
-  )
-})

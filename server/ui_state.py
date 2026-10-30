@@ -6,9 +6,8 @@ refusal raised below the surface carries the status code and the state it
 renders as, and `error_response` turns it -- or any other failure -- into that
 envelope.
 
-It is a leaf on purpose. The app shell, Planning's routing, the module gate and
-the extension registry all raise and render it, and none of them may need
-another of them to do so.
+It is a leaf on purpose. The app shell, Planning's routing and the HTTP surface
+all raise and render it, and none of them may need another of them to do so.
 """
 
 from __future__ import annotations

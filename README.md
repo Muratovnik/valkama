@@ -4,8 +4,8 @@
 
 Valkama connects projects, work items, agent executions, and results in one web
 and desktop workspace. Work brings board, list, and graph views over one
-Planning read model; Settings holds preferences, module switches and the
-installation's health checks.
+Planning read model; Settings holds preferences and the installation's health
+checks.
 Memory and session references stay with the work item they support.
 
 It is built for one person: whoever runs a local development loop and is tired
@@ -590,7 +590,7 @@ the built UI with no build step — **rebuild and commit it whenever `web/src`
 changes.**
 
 The Python side serves `web/dist` plus the module and Planning APIs.
-`GET /api/modules` is the canonical persisted module registry, and
+`GET /api/modules` is the module list this build declares in code, and
 `GET /api/platform/context` the store's identity and the project directory with
 each project's binding state, which the shell reads before any module renders.
 No endpoint serves integration definitions or loads third-party browser code.

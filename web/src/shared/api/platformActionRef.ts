@@ -48,9 +48,6 @@ const ENTITY_KINDS = new Set<string>([
   'memory-resource',
   'artifact',
   'improvement-case',
-  'service',
-  'connection',
-  'registry',
   'adapter-resource',
 ])
 

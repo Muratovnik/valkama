@@ -7,34 +7,31 @@ of them without making the other two import it.
 
 from __future__ import annotations
 
-import os
 import queue
 import sys
 import threading
 import time
 
 from .executions.lifecycle import reap_launches
-from .platform import module_gate
-from .platform import modules as platform_modules
 from .store import connect
 
 
-def reap_sessions_if_enabled(conn) -> bool:
-    database_row = next(row for row in conn.execute("PRAGMA database_list") if row[1] == "main")
-    primary_db = os.path.abspath(database_row[2]) if database_row[2] else ":memory:"
-    with platform_modules.module_state_fence(primary_db, "planning"):
-        try:
-            conn.execute("BEGIN IMMEDIATE")
-            if not module_gate.is_module_enabled(conn, "planning"):
-                conn.rollback()
-                return False
-            changed = bool(reap_launches(conn))
-            if conn.in_transaction:
-                conn.commit()
-            return changed
-        except Exception:
-            conn.rollback()
-            raise
+def reap_finished_launches(conn) -> bool:
+    """Reap the launches that have finished, in one immediate transaction.
+
+    Whether anything changed is the answer, so the loop below knows to tell
+    the event streams.
+    """
+
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        changed = bool(reap_launches(conn))
+        if conn.in_transaction:
+            conn.commit()
+        return changed
+    except Exception:
+        conn.rollback()
+        raise
 
 
 class Watchers:
@@ -110,7 +107,7 @@ class Watchers:
             # contract; the isolation belongs to the thing that must not die.
             if ticks % 5 == 0:
                 try:
-                    reaped = reap_sessions_if_enabled(conn)
+                    reaped = reap_finished_launches(conn)
                 except Exception as failure:  # noqa: BLE001 -- this loop is the boundary
                     self._report_reap_failure(failure)
                 else:

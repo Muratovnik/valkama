@@ -347,14 +347,14 @@ class PlanningApiTests(unittest.TestCase):
         raise AssertionError(f"{path} did not refuse")
 
 
-class PlanningRouteGateTests(unittest.TestCase):
-    """The module gate must know every neutral path, or it refuses one silently."""
+class PlanningRouteDispatchTests(unittest.TestCase):
+    """Every neutral path the domain declares is one a boundary answers."""
 
-    def test_every_declared_path_is_owned_by_the_planning_module(self) -> None:
+    def test_every_declared_path_is_dispatched(self) -> None:
         for path in planning_api.READ_PATHS:
-            self.assertEqual("planning", http_surface._HTTP_ROUTE_MODULES[("GET", path)], path)
+            self.assertIsNotNone(http_surface._boundary(http_surface._GET_BOUNDARIES, path), path)
         for path in planning_api.WRITE_PATHS:
-            self.assertEqual("planning", http_surface._HTTP_ROUTE_MODULES[("POST", path)], path)
+            self.assertIsNotNone(http_surface._boundary(http_surface._POST_BOUNDARIES, path), path)
 
     def test_the_exact_work_item_route_is_dispatched_with_plannings_loader(self) -> None:
         """The inspector reads one work item on a path the surface has to recognise.
@@ -366,12 +366,8 @@ class PlanningRouteGateTests(unittest.TestCase):
         which is why only a live server showed the gap.
         """
 
-        self.assertEqual(
-            "planning",
-            http_surface._HTTP_ROUTE_MODULES[("GET", http_surface.PLANNING_WORK_ITEM_PATH)],
-        )
         boundary = http_surface._boundary(
-            http_surface._GET_BOUNDARIES, http_surface.PLANNING_WORK_ITEM_PATH
+            http_surface._GET_BOUNDARIES, planning_exact_api.WORK_ITEM_PATH
         )
         self.assertIsNotNone(boundary)
         assert boundary is not None

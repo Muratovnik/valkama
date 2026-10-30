@@ -98,11 +98,19 @@ class RefContractTests(unittest.TestCase):
             validate_entity_ref({"kind": "work-item", "resource_id": "planning-card-1"})["kind"],
         )
         self.assertEqual(
-            "service",
-            validate_entity_ref({"kind": "service", "owner_id": "owner", "service_id": "memory"})[
-                "kind"
-            ],
+            "session",
+            validate_entity_ref(
+                {"kind": "session", "client_family": "codex", "session_id": "session-1"}
+            )["kind"],
         )
+        # The registry's kinds left with the registry: a current reference
+        # cannot name a service, a connection or a registry any more.
+        for retired in (
+            {"kind": "service", "owner_id": "owner", "service_id": "memory"},
+            {"kind": "registry", "registry_id": "installation"},
+        ):
+            with self.subTest(kind=retired["kind"]), self.assertRaises(ContractError):
+                validate_entity_ref(retired)
         with self.assertRaises(UnknownFieldError):
             validate_entity_ref(
                 {"kind": "work-item", "resource_id": "planning-card-1", "project_id": "project-a"}

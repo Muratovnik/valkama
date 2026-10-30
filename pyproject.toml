@@ -188,7 +188,7 @@ layers = [
 ]
 containers = ["server"]
 
-# Planning's exact-scope routing and the app shell answer from the module gate
+# Planning's exact-scope routing and the app shell answer from the module list
 # and the module manifest alone: nothing that brings a store up, migrates it,
 # or reaches an external adapter. `test_layering.py` checks the loaded modules
 # at run time as well, because an import graph does not show the edge a

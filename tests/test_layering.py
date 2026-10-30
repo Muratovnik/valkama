@@ -17,7 +17,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# What answers a request from the module gate alone: exact-scope Planning
+# What answers a request from the module list alone: exact-scope Planning
 # routing, the app shell, store identity and the read envelope.
 ROUTING_MODULES = (
     "server.app_shell",
@@ -28,18 +28,17 @@ ROUTING_MODULES = (
     "server.ui_state",
 )
 
-# The module gate and its manifest are allowed; everything else under
+# The module list and its manifest are allowed; everything else under
 # `server.platform` brings a store up, migrates it or reaches an adapter.
 ALLOWED_PLATFORM_MODULES = {
     "server.platform",
-    "server.platform.module_gate",
     "server.platform.module_manifest",
     "server.platform.modules",
 }
 
 
-class RoutingLoadsOnlyTheModuleGateTests(unittest.TestCase):
-    def test_routing_modules_load_only_the_module_gate(self) -> None:
+class RoutingLoadsOnlyTheModuleListTests(unittest.TestCase):
+    def test_routing_modules_load_only_the_module_list(self) -> None:
         script = (
             "import importlib, json, sys\n"
             f"for name in {ROUTING_MODULES!r}:\n"

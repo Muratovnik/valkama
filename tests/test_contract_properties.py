@@ -68,14 +68,6 @@ SKILL_REFS = st.one_of(
         }
     ),
 )
-SERVICE_REFS = st.fixed_dictionaries({"owner_id": IDENTIFIERS, "service_id": IDENTIFIERS})
-CONNECTION_REFS = st.fixed_dictionaries(
-    {
-        "service_ref": SERVICE_REFS,
-        "adapter_lineage_id": IDENTIFIERS,
-        "connection_id": IDENTIFIERS,
-    }
-)
 # Mirrors _CAPABILITY_RE, shortened: two or three dotted lowercase parts.
 CAPABILITY_IDS = st.from_regex(r"[a-z][a-z0-9-]{0,12}(\.[a-z][a-z0-9-]{0,12}){1,2}", fullmatch=True)
 VERSIONS = st.tuples(
@@ -102,8 +94,6 @@ CONTRACTS = {
     "work_item_ref": (identity_refs.validate_work_item_ref, WORK_ITEM_REFS),
     "session_ref": (identity_refs.validate_session_ref, SESSION_REFS),
     "skill_ref": (identity_refs.validate_skill_ref, SKILL_REFS),
-    "service_ref": (identity_refs.validate_service_ref, SERVICE_REFS),
-    "connection_ref": (identity_refs.validate_connection_ref, CONNECTION_REFS),
     "adapter_manifest": (adapter_contract.validate_adapter_manifest, ADAPTER_MANIFESTS),
 }
 PAYLOADS = st.one_of(

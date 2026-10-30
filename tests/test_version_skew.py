@@ -32,6 +32,7 @@ from unittest import mock
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from server import static_assets, store
+from tests import registry_rows
 
 
 class Clock:
@@ -164,6 +165,8 @@ class StoreSchemaVersionTests(unittest.TestCase):
         conn = store.connect()
         conn.close()
         legacy = sqlite3.connect(self.path)
+        # The module rows every build before versioning seeded on start.
+        registry_rows.seed_modules(legacy)
         legacy.execute("PRAGMA user_version=0")
         legacy.commit()
         legacy.close()

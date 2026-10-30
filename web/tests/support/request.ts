@@ -19,7 +19,6 @@ export function requestBody(body: BodyInit | null | undefined): string {
   if (typeof body === 'string') return body
   throw new Error(`expected a string request body, got ${typeof body}`)
 }
-export type FetchInput = string | URL | Request
 
 /** Add the real browser security bootstrap in front of a focused API mock. */
 export function withSecurityBootstrap(delegate: typeof fetch): typeof fetch {

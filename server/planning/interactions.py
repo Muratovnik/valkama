@@ -9,7 +9,6 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Mapping
 
-from ..platform import module_gate
 from ..store_identity.primitives import ContractError
 from ..store_identity.refs import planning_space_ref, validate_planning_space_ref
 from . import api, model, read_model, requests, service
@@ -82,7 +81,6 @@ def search(routing: PlanningRouting, parameters: Mapping[str, list[str]]) -> dic
             "reason": "source_unavailable",
         }
         try:
-            module_gate.require_module_enabled(routing.conn, "planning")
             with routing.planning_store(_store_parameters(project_id, space_ref)) as (conn, _key):
                 found = service.search_work_items(
                     conn, query, space=space_ref["space_key"], limit=limit + 1
@@ -156,7 +154,6 @@ def _capability(conn: sqlite3.Connection) -> None:
 
 
 def request_detail(routing: PlanningRouting, parameters: Mapping[str, list[str]]) -> dict:
-    module_gate.require_module_enabled(routing.conn, "planning")
     project_id, space_ref = _exact_parameters(parameters, {"id"})
     with routing.planning_store(_store_parameters(project_id, space_ref)) as (conn, _key):
         _capability(conn)
@@ -201,7 +198,6 @@ def request_list(routing: PlanningRouting, parameters: Mapping[str, list[str]]) 
             "reason": "requests_unavailable",
         }
         try:
-            module_gate.require_module_enabled(routing.conn, "planning")
             with routing.planning_store(_store_parameters(project_id, space_ref)) as (conn, _key):
                 _capability(conn)
                 found = requests.list_requests(
@@ -243,7 +239,6 @@ def request_list(routing: PlanningRouting, parameters: Mapping[str, list[str]]) 
 
 
 def request_command(routing: PlanningRouting, path: str, payload: dict) -> dict:
-    module_gate.require_module_enabled(routing.conn, "planning")
     scope_fields = {"project_id", "data_scope_id", "space_key"}
     base = path == "/api/modules/planning/request"
     operation_fields = (

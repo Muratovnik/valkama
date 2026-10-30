@@ -33,21 +33,17 @@ import sqlite3
 from collections.abc import Callable, Mapping
 
 from ..store_identity.primitives import ContractError
-from ..store_identity.refs import (
-    planning_space_entity,
-    validate_entity_ref,
-    validate_operating_scope,
-)
+from ..store_identity.refs import planning_space_entity, validate_operating_scope
 from . import modules as platform_modules
 
 # The current shape, borrowed rather than restated. A migration's last act is to
 # produce exactly what a fresh store declares, so the schema text and the table
-# list are `core`'s answers, the reader that proves a module row is the module
-# gate's, and this module is their second reader. The underscored primitives
-# below travel with them for the same reason: a second copy of the canonical
-# JSON encoding or the timestamp format would be a second answer to what a row
-# looks like, and a migration whose output disagreed with the runtime by one
-# separator is exactly the failure the postconditions exist to catch.
+# list are `core`'s answers, and this module is their second reader. The
+# underscored primitives below travel with them for the same reason: a second
+# copy of the canonical JSON encoding or the timestamp format would be a second
+# answer to what a row looks like, and a migration whose output disagreed with
+# the runtime by one separator is exactly the failure the postconditions exist
+# to catch.
 from .core import (
     REGISTRY_SCHEMA,
     SCHEMA,
@@ -61,13 +57,23 @@ from .core import (
 # The registry's row shapes, which only the migrations below still read.
 from .legacy_records import (
     CAPABILITY_IDS,
+    LEGACY_ENTITY_KINDS,
     validate_action_input_descriptor,
     validate_adapter_record,
     validate_assignment,
     validate_connection,
+    validate_legacy_entity_ref,
 )
-from .module_gate import RegistryError, modules_payload
 from .module_manifest import validate_module_manifest
+
+
+class CatalogMigrationError(ContractError):
+    """The `platform_*` catalog a store persisted cannot be carried forward.
+
+    Raised before the schema stamp, so the store keeps the version it had and
+    the transaction that tried rolls back.
+    """
+
 
 #: The authorization model a store initialized by the registry recorded. Read
 #: and written only by the one-time cutover below.
@@ -216,13 +222,13 @@ def _normalize_schema2_module_manifest(module_id: str, value: object) -> dict:
         ):
             return value
         try:
-            return validate_module_manifest(value)
+            return validate_module_manifest(value, entity_kinds=LEGACY_ENTITY_KINDS)
         except ContractError as error:
-            raise RegistryError("persisted module descriptor is malformed") from error
+            raise CatalogMigrationError("persisted module descriptor is malformed") from error
     if module_id not in current_manifests:
-        raise RegistryError("persisted module has no current manifest")
+        raise CatalogMigrationError("persisted module has no current manifest")
     try:
-        normalized = validate_module_manifest(value)
+        normalized = validate_module_manifest(value, entity_kinds=LEGACY_ENTITY_KINDS)
     except ContractError as error:
         validation_error: ContractError | None = error
     else:
@@ -231,7 +237,9 @@ def _normalize_schema2_module_manifest(module_id: str, value: object) -> dict:
         validation_error = None
     digest = hashlib.sha256(_json(value).encode("utf-8")).hexdigest()
     if _RELEASED_SCHEMA2_MODULE_MANIFEST_HASHES.get(module_id) != digest:
-        raise RegistryError("persisted module descriptor is malformed") from validation_error
+        raise CatalogMigrationError(
+            "persisted module descriptor is malformed"
+        ) from validation_error
     return current_manifests[module_id]
 
 
@@ -306,12 +314,14 @@ def _rebound_resource(encoded: str, space_keys: dict) -> str | None:
     try:
         decoded = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
     except (ValueError, UnicodeDecodeError) as error:
-        raise RegistryError("a planning-space binding is not readable") from error
+        raise CatalogMigrationError("a planning-space binding is not readable") from error
     if not isinstance(decoded, dict) or "board_name" not in decoded:
         return None
     name = str(decoded["board_name"])
     if name not in space_keys:
-        raise RegistryError(f"a project binds board {name!r}, which no planning space replaces")
+        raise CatalogMigrationError(
+            f"a project binds board {name!r}, which no planning space replaces"
+        )
     return _json(
         planning_space_entity(
             {"data_scope_id": str(decoded["data_scope_id"]), "space_key": space_keys[name]}
@@ -332,14 +342,14 @@ def migrate_module_registry(
     normalized = []
     for row in rows:
         if row["state"] != "registered":
-            raise RegistryError("persisted module lifecycle cannot be mapped to enablement")
+            raise CatalogMigrationError("persisted module lifecycle cannot be mapped to enablement")
         try:
             stored_manifest = json.loads(row["record_json"])
             manifest = _normalize_schema2_module_manifest(row["module_id"], stored_manifest)
-        except (TypeError, json.JSONDecodeError, RegistryError) as error:
-            raise RegistryError("persisted module descriptor is malformed") from error
+        except (TypeError, json.JSONDecodeError, CatalogMigrationError) as error:
+            raise CatalogMigrationError("persisted module descriptor is malformed") from error
         if manifest["module_id"] != row["module_id"]:
-            raise RegistryError("persisted module identity disagrees with its descriptor")
+            raise CatalogMigrationError("persisted module identity disagrees with its descriptor")
         normalized.append((row, manifest))
     conn.execute(
         """CREATE TABLE platform_modules_product_model(
@@ -449,7 +459,7 @@ def authorization_owner_migration_needed(conn: sqlite3.Connection) -> bool:
     ).fetchone()
     if marker is not None:
         if str(marker[0]) != AUTHORIZATION_OWNER_MODEL:
-            raise RegistryError("unknown persisted authorization owner model")
+            raise CatalogMigrationError("unknown persisted authorization owner model")
         return False
     return any(
         conn.execute(f"SELECT 1 FROM {table} LIMIT 1").fetchone() is not None
@@ -465,7 +475,7 @@ def migrate_authorization_owner_model(conn: sqlite3.Connection) -> bool:
     ).fetchone()
     if marker is not None:
         if str(marker[0]) != AUTHORIZATION_OWNER_MODEL:
-            raise RegistryError("unknown persisted authorization owner model")
+            raise CatalogMigrationError("unknown persisted authorization owner model")
         return False
     changed = False
     for table, id_column, owner_field, implicit_owner in (
@@ -683,7 +693,7 @@ def _catalog_signature(conn: sqlite3.Connection, *, prefix: str) -> tuple:
             "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (actual,)
         ).fetchone()
         if row is None or row[0] is None:
-            raise RegistryError(f"{actual} source table definition is missing")
+            raise CatalogMigrationError(f"{actual} source table definition is missing")
         tables.append((canonical, _normalize_catalog_sql(str(row[0]), prefix=prefix)))
         for index in conn.execute(f'PRAGMA index_list("{actual}")'):
             index_name = str(index[1])
@@ -767,14 +777,14 @@ def _assert_exact_catalog(
         board_era_links=board_era_links,
     )
     if _catalog_signature(conn, prefix=prefix) != reference:
-        raise RegistryError(f"{prefix} source catalog signature is not exact")
+        raise CatalogMigrationError(f"{prefix} source catalog signature is not exact")
 
 
 def _neutral_adapter_record(row: Mapping[str, object]) -> dict:
     try:
         adapter = json.loads(str(row["record_json"]))
     except (TypeError, json.JSONDecodeError) as error:
-        raise RegistryError("persisted adapter descriptor is malformed") from error
+        raise CatalogMigrationError("persisted adapter descriptor is malformed") from error
     adapter["consumes"] = [
         "work-item" if item == "card" else item for item in adapter.get("consumes", ())
     ]
@@ -791,14 +801,14 @@ def _neutral_adapter_record(row: Mapping[str, object]) -> dict:
         try:
             capabilities = _LEGACY_ADAPTER_CAPABILITIES[str(row["adapter_lineage_id"])]
         except KeyError as error:
-            raise RegistryError("legacy adapter capability lineage is unmapped") from error
+            raise CatalogMigrationError("legacy adapter capability lineage is unmapped") from error
     elif (
         not isinstance(capabilities, list)
         or not capabilities
         or any(item not in CAPABILITY_IDS for item in capabilities)
         or len(capabilities) != len(set(capabilities))
     ):
-        raise RegistryError("legacy adapter capability values are unmapped")
+        raise CatalogMigrationError("legacy adapter capability values are unmapped")
     adapter["capabilities"] = capabilities
     for contribution in adapter.get("contributions", ()):
         contribution["entity_kinds"] = [
@@ -809,7 +819,9 @@ def _neutral_adapter_record(row: Mapping[str, object]) -> dict:
     try:
         adapter = validate_adapter_record(adapter)
     except ContractError as error:
-        raise RegistryError("persisted adapter cannot be cut over to the neutral model") from error
+        raise CatalogMigrationError(
+            "persisted adapter cannot be cut over to the neutral model"
+        ) from error
     if (
         stored_lineage != row["adapter_lineage_id"]
         or stored_state != row["state"]
@@ -818,7 +830,7 @@ def _neutral_adapter_record(row: Mapping[str, object]) -> dict:
         or not isinstance(row["updated_at"], str)
         or not row["updated_at"]
     ):
-        raise RegistryError("persisted adapter identity or lifecycle is malformed")
+        raise CatalogMigrationError("persisted adapter identity or lifecycle is malformed")
     return {
         **adapter,
         "adapter_lineage_id": row["adapter_lineage_id"],
@@ -938,7 +950,9 @@ def _neutral_assignment_record(row: Mapping[str, object]) -> tuple[dict, int]:
             }
         )
     except (KeyError, TypeError, json.JSONDecodeError, ContractError) as error:
-        raise RegistryError("legacy assignment cannot be mapped without guessing") from error
+        raise CatalogMigrationError(
+            "legacy assignment cannot be mapped without guessing"
+        ) from error
     return converted, revision
 
 
@@ -965,12 +979,14 @@ def _neutral_ui_prefs_record(row: Mapping[str, object], *, legacy: bool) -> dict
         if legacy and "board_ref" in record:
             result["resource_ref"] = _space_entity_from_board_ref(record["board_ref"])
         elif not legacy and "resource_ref" in record:
-            result["resource_ref"] = validate_entity_ref(record["resource_ref"])
+            result["resource_ref"] = validate_legacy_entity_ref(record["resource_ref"])
         if not isinstance(row["updated_at"], str) or not row["updated_at"]:
             raise TypeError("UI preference timestamp is invalid")
         return result
     except (KeyError, TypeError, json.JSONDecodeError, ContractError) as error:
-        raise RegistryError("persisted UI preference cannot be mapped without guessing") from error
+        raise CatalogMigrationError(
+            "persisted UI preference cannot be mapped without guessing"
+        ) from error
 
 
 def _space_entity_from_board_ref(value: object) -> dict:
@@ -1031,7 +1047,7 @@ def _neutral_action_input_record(row: Mapping[str, object], *, legacy: bool) -> 
             raise TypeError("action input descriptor timestamp is invalid")
         return normalized
     except (KeyError, TypeError, json.JSONDecodeError, ContractError) as error:
-        raise RegistryError("persisted action input descriptor cannot be mapped") from error
+        raise CatalogMigrationError("persisted action input descriptor cannot be mapped") from error
 
 
 def _validate_product_model_source_rows(
@@ -1049,27 +1065,27 @@ def _validate_product_model_source_rows(
         try:
             manifest = json.loads(row["record_json"])
         except (TypeError, json.JSONDecodeError) as error:
-            raise RegistryError("persisted module descriptor is malformed") from error
+            raise CatalogMigrationError("persisted module descriptor is malformed") from error
         if (
             not isinstance(manifest, dict)
             or manifest.get("module_id") != row["module_id"]
             or (modules == _SCHEMA2_MODULE_COLUMNS and row["module_id"] not in known_modules)
             or row["module_id"] in identities
         ):
-            raise RegistryError("persisted module identity is malformed")
+            raise CatalogMigrationError("persisted module identity is malformed")
         identities.add(row["module_id"])
         if modules == _SCHEMA2_MODULE_COLUMNS:
             try:
                 _normalize_schema2_module_manifest(row["module_id"], manifest)
-            except RegistryError as error:
-                raise RegistryError("persisted module descriptor is malformed") from error
+            except CatalogMigrationError as error:
+                raise CatalogMigrationError("persisted module descriptor is malformed") from error
         allowed_states = (
             {"registered"} if modules == _SCHEMA2_MODULE_COLUMNS else {"enabled", "disabled"}
         )
         if row["state"] not in allowed_states:
-            raise RegistryError("persisted module lifecycle cannot be mapped")
+            raise CatalogMigrationError("persisted module lifecycle cannot be mapped")
     if "settings" not in identities:
-        raise RegistryError("persisted Settings registration is missing")
+        raise CatalogMigrationError("persisted Settings registration is missing")
 
     for row in conn.execute(f"SELECT * FROM {prefix}adapters"):
         _neutral_adapter_record(row)
@@ -1080,14 +1096,16 @@ def _validate_product_model_source_rows(
             try:
                 assignment = validate_assignment(json.loads(row["record_json"]))
             except (TypeError, json.JSONDecodeError, ContractError) as error:
-                raise RegistryError("persisted assignment is malformed") from error
+                raise CatalogMigrationError("persisted assignment is malformed") from error
             if (
                 assignment["assignment_id"] != row["assignment_id"]
                 or assignment["state"] != row["state"]
                 or not isinstance(row["revision"], int)
                 or row["revision"] < 1
             ):
-                raise RegistryError("persisted assignment identity or lifecycle is malformed")
+                raise CatalogMigrationError(
+                    "persisted assignment identity or lifecycle is malformed"
+                )
     legacy_payloads = known_stores == _SCHEMA3_KNOWN_STORE_COLUMNS
     for row in conn.execute(f"SELECT * FROM {prefix}ui_prefs"):
         _neutral_ui_prefs_record(row, legacy=legacy_payloads)
@@ -1109,9 +1127,9 @@ def _validate_product_model_source_rows(
                 _legacy_board_names(values)
             else:
                 for value in values:
-                    validate_entity_ref(value)
+                    validate_legacy_entity_ref(value)
         except (TypeError, json.JSONDecodeError, ContractError) as error:
-            raise RegistryError("persisted known-store inventory is malformed") from error
+            raise CatalogMigrationError("persisted known-store inventory is malformed") from error
 
 
 def classify_product_model_source(conn: sqlite3.Connection, stored_version: int = 3) -> str:
@@ -1124,11 +1142,13 @@ def classify_product_model_source(conn: sqlite3.Connection, stored_version: int 
     }
     scratch = sorted(name for name in tables if name.endswith(("_legacy", "_product_model")))
     if scratch:
-        raise RegistryError("pre-4 store contains migration scratch tables: " + ", ".join(scratch))
+        raise CatalogMigrationError(
+            "pre-4 store contains migration scratch tables: " + ", ".join(scratch)
+        )
     for current in _CURRENT_PLATFORM_COLUMNS:
         former_name = current.replace("platform_", "hub_", 1)
         if current in tables and former_name in tables:
-            raise RegistryError(f"pre-4 store mixes former and current table {current}")
+            raise CatalogMigrationError(f"pre-4 store mixes former and current table {current}")
     owned = (set(_CURRENT_PLATFORM_COLUMNS) | _FORMER_PLATFORM_TABLES) & tables
     unknown_owned = sorted(
         name
@@ -1138,18 +1158,18 @@ def classify_product_model_source(conn: sqlite3.Connection, stored_version: int 
         and name not in _FORMER_PLATFORM_TABLES
     )
     if unknown_owned:
-        raise RegistryError(
+        raise CatalogMigrationError(
             "pre-4 store contains unknown migration-owned tables: " + ", ".join(unknown_owned)
         )
     if not owned:
         if stored_version not in {0, 1, 2}:
-            raise RegistryError("schema-3 store is missing its platform catalog")
+            raise CatalogMigrationError("schema-3 store is missing its platform catalog")
         return "planning-only"
 
     former = bool(owned & _FORMER_PLATFORM_TABLES)
     expected_names = _FORMER_PLATFORM_TABLES if former else set(_CURRENT_PLATFORM_COLUMNS)
     if owned != expected_names:
-        raise RegistryError("pre-4 platform catalog is incomplete or mixed")
+        raise CatalogMigrationError("pre-4 platform catalog is incomplete or mixed")
     prefix = "hub_" if former else "platform_"
     for canonical, current_columns in _CURRENT_PLATFORM_COLUMNS.items():
         table = canonical.replace("platform_", prefix, 1)
@@ -1166,12 +1186,12 @@ def classify_product_model_source(conn: sqlite3.Connection, stored_version: int 
         if canonical == "platform_adapter_links":
             allowed.add(_BOARD_ERA_LINK_COLUMNS)
         if actual not in allowed:
-            raise RegistryError(f"{table} source shape is not exact")
+            raise CatalogMigrationError(f"{table} source shape is not exact")
         triggers = conn.execute(
             "SELECT name FROM sqlite_master WHERE type='trigger' AND tbl_name=?", (table,)
         ).fetchall()
         if triggers:
-            raise RegistryError(f"{table} has unsupported migration-owned triggers")
+            raise CatalogMigrationError(f"{table} has unsupported migration-owned triggers")
     assignments = _table_columns(conn, prefix + "assignments")
     known_stores = _table_columns(conn, prefix + "known_stores")
     modules = _table_columns(conn, prefix + "modules")
@@ -1204,17 +1224,21 @@ def classify_product_model_source(conn: sqlite3.Connection, stored_version: int 
     )
     if modules == _SCHEMA2_MODULE_COLUMNS:
         if former or stored_version != 2:
-            raise RegistryError("legacy module registry is only supported as exact schema 2")
+            raise CatalogMigrationError(
+                "legacy module registry is only supported as exact schema 2"
+            )
         return "schema-2"
     if (
         assignments == _CURRENT_PLATFORM_COLUMNS["platform_assignments"]
         and known_stores == _CURRENT_PLATFORM_COLUMNS["platform_known_stores"]
     ):
         if former:
-            raise RegistryError("former-name store cannot carry the current neutral catalog")
+            raise CatalogMigrationError(
+                "former-name store cannot carry the current neutral catalog"
+            )
         return "current-unstamped"
     if stored_version != 3:
-        raise RegistryError("only schema 3 may carry the former product model")
+        raise CatalogMigrationError("only schema 3 may carry the former product model")
     return "schema-3-former" if former else "schema-3"
 
 
@@ -1235,12 +1259,12 @@ def migrate_product_model(
         "updated_at",
     )
     if module_columns != expected_modules:
-        raise RegistryError("platform_modules has an unrecognized source shape")
+        raise CatalogMigrationError("platform_modules has an unrecognized source shape")
     assignment_columns = _table_columns(conn, "platform_assignments")
     legacy_assignments = ("assignment_id", "record_json", "state", "updated_at")
     current_assignments = (*legacy_assignments[:3], "revision", legacy_assignments[3])
     if assignment_columns not in {legacy_assignments, current_assignments}:
-        raise RegistryError("platform_assignments has an unrecognized source shape")
+        raise CatalogMigrationError("platform_assignments has an unrecognized source shape")
 
     known_store_columns = _table_columns(conn, "platform_known_stores")
     legacy_payloads = known_store_columns == _SCHEMA3_KNOWN_STORE_COLUMNS
@@ -1257,7 +1281,9 @@ def migrate_product_model(
                     raise TypeError("boards_json must be a list")
                 resources = _planning_resources(row["data_scope_id"], names)
             except (TypeError, json.JSONDecodeError, ContractError) as error:
-                raise RegistryError("legacy known-store resources cannot be mapped") from error
+                raise CatalogMigrationError(
+                    "legacy known-store resources cannot be mapped"
+                ) from error
             converted_stores.append((row, resources))
         conn.execute("ALTER TABLE platform_known_stores RENAME TO platform_known_stores_legacy")
         conn.execute(
@@ -1284,14 +1310,14 @@ def migrate_product_model(
             )
         conn.execute("DROP TABLE platform_known_stores_legacy")
     elif known_store_columns != _CURRENT_PLATFORM_COLUMNS["platform_known_stores"]:
-        raise RegistryError("platform_known_stores has an unrecognized source shape")
+        raise CatalogMigrationError("platform_known_stores has an unrecognized source shape")
 
     manifests = {item["module_id"]: item for item in platform_modules.module_manifests()}
     module_rows = conn.execute(
         "SELECT module_id,record_json,state,mutable,revision,updated_at FROM platform_modules"
     ).fetchall()
     if {row["module_id"] for row in module_rows} - set(manifests) - RETIRED_MODULE_IDS:
-        raise RegistryError("persisted module has no neutral manifest")
+        raise CatalogMigrationError("persisted module has no neutral manifest")
     for row in module_rows:
         if (
             row["state"] not in {"enabled", "disabled"}
@@ -1301,7 +1327,7 @@ def migrate_product_model(
             or not isinstance(row["updated_at"], str)
             or not row["updated_at"]
         ):
-            raise RegistryError("persisted module row is malformed")
+            raise CatalogMigrationError("persisted module row is malformed")
         conn.execute(
             "UPDATE platform_modules SET record_json=? WHERE module_id=?",
             (
@@ -1380,29 +1406,29 @@ def assert_product_model_postconditions(conn: sqlite3.Connection) -> None:
         if name.startswith("hub_") or name.endswith(("_legacy", "_product_model"))
     )
     if forbidden:
-        raise RegistryError(
+        raise CatalogMigrationError(
             "post-migration catalog retains former/scratch tables: " + ", ".join(forbidden)
         )
     for table, expected in _CURRENT_PLATFORM_COLUMNS.items():
         if table not in tables or _table_columns(conn, table) != expected:
-            raise RegistryError(f"post-migration {table} shape is not exact")
+            raise CatalogMigrationError(f"post-migration {table} shape is not exact")
     _assert_exact_catalog(conn, generation="current", prefix="platform_")
-    modules_payload(conn)
     for row in conn.execute("SELECT key,record_json,updated_at FROM platform_ui_prefs"):
         _neutral_ui_prefs_record(row, legacy=False)
-    # The registry's own rows -- assignments, action inputs, adapters -- are no
-    # longer proven here. Nothing reads them, their tables leave with the next
-    # schema, and a row-content check on dead data could only refuse to open a
-    # store over something no code will look at. Their shape is still proven
-    # above, by the catalog signature, until the tables are dropped.
+    # The registry's own rows -- assignments, action inputs, adapters -- and the
+    # module rows with their audit are no longer proven here. Nothing reads
+    # them, their tables leave with the next schema, and a row-content check on
+    # dead data could only refuse to open a store over something no code will
+    # look at. Their shape is still proven above, by the catalog signature,
+    # until the tables are dropped.
     for row in conn.execute("SELECT resources_json FROM platform_known_stores"):
         resources = json.loads(row[0])
         if not isinstance(resources, list):
-            raise RegistryError("post-migration known-store resources are malformed")
+            raise CatalogMigrationError("post-migration known-store resources are malformed")
         for resource in resources:
-            entity = validate_entity_ref(resource)
+            entity = validate_legacy_entity_ref(resource)
             if set(entity) != {"kind", "resource_id"}:
-                raise RegistryError("post-migration known-store resource is not neutral")
+                raise CatalogMigrationError("post-migration known-store resource is not neutral")
     foreign_keys = conn.execute("PRAGMA foreign_key_check").fetchall()
     if foreign_keys:
-        raise RegistryError("post-migration foreign-key check failed")
+        raise CatalogMigrationError("post-migration foreign-key check failed")

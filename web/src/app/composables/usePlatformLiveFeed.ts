@@ -26,9 +26,7 @@ export function usePlatformLiveFeed(inputs: LiveFeedInputs) {
   const moduleRegistrations = computed(() => moduleResource.value.data ?? [])
   const modules = computed<readonly ModuleManifest[]>(() =>
     moduleRegistrations.value
-      .filter(
-        (r) => r.state === 'enabled' && ['planning', 'settings'].includes(r.manifest.module_id),
-      )
+      .filter((r) => ['planning', 'settings'].includes(r.manifest.module_id))
       .map((r) => r.manifest),
   )
   const modulesAuthoritative = computed(() => moduleResource.value.data !== null)

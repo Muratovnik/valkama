@@ -7,7 +7,7 @@ import { installBackend } from './backend.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { projectScope } from './planningFixtures.ts'
 
-async function openSettingsSection(page: Page, name: 'Diagnostics' | 'General' | 'Workspace') {
+async function openSettingsSection(page: Page, name: 'Diagnostics' | 'General') {
   await page.getByRole('group', { name: 'Settings section' }).getByRole('button', { name }).click()
 }
 
@@ -42,26 +42,13 @@ test('Settings sections share one measure and one compact control lane', async (
   expect(controlLefts[0] - (pageBox?.x ?? 0)).toBeGreaterThan((pageBox?.width ?? 0) * 0.48)
   expect(controlLefts[0] - (pageBox?.x ?? 0)).toBeLessThan((pageBox?.width ?? 0) * 0.53)
 
-  await openSettingsSection(page, 'Workspace')
-  const modules = page.locator('.settings-modules')
-  const modulesBox = await modules.boundingBox()
-  expect(Math.abs((modulesBox?.width ?? 0) - (pageBox?.width ?? 0))).toBeLessThan(2)
-  const trackLefts = await modules
-    .locator('.settings-module .toggle-track')
-    .evaluateAll((tracks) => tracks.map((track) => track.getBoundingClientRect().left))
-  expect(trackLefts.length).toBeGreaterThan(1)
-  expect(Math.max(...trackLefts) - Math.min(...trackLefts)).toBeLessThan(2)
-  await expect(
-    modules.locator('.settings-module').filter({ hasText: 'Settings' }).getByRole('switch'),
-  ).toHaveCount(0)
-
   await openSettingsSection(page, 'Diagnostics')
   const diagnosticsBox = await page.locator('.installation-health').boundingBox()
   expect(Math.abs((diagnosticsBox?.width ?? 0) - (pageBox?.width ?? 0))).toBeLessThan(2)
 
   for (const width of [1024, 816, 360]) {
     await page.setViewportSize({ width, height: 900 })
-    for (const section of ['General', 'Workspace', 'Diagnostics'] as const) {
+    for (const section of ['General', 'Diagnostics'] as const) {
       await openSettingsSection(page, section)
       await expectNoSilentClipping(page, `English Settings ${section} at ${width}px`)
       const stage = await page.locator('.module-stage').boundingBox()
@@ -72,7 +59,7 @@ test('Settings sections share one measure and one compact control lane', async (
   }
 })
 
-test('Workspace lists the modules and nothing the extension registry used to show', async ({
+test('Settings has nothing to switch modules with and nothing the registry used to show', async ({
   page,
 }) => {
   await installBackend(page)
@@ -80,18 +67,40 @@ test('Workspace lists the modules and nothing the extension registry used to sho
   await expect(page.getByRole('heading', { name: 'Interface', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Opening sessions', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Notifications', exact: true })).toHaveCount(0)
-  await expect(page.getByRole('heading', { name: 'Modules', exact: true })).toBeHidden()
 
-  await openSettingsSection(page, 'Workspace')
-  await expect(page.getByRole('heading', { name: 'Modules', exact: true })).toBeVisible()
-  for (const heading of ['Integrations', 'Project assignments'])
-    await expect(page.getByRole('heading', { name: heading, exact: true })).toHaveCount(0)
+  // The module list is the build's, so there is no section that changes it.
+  const sections = page.getByRole('group', { name: 'Settings section' }).getByRole('button')
+  await expect(sections).toHaveText(['General', 'Diagnostics'])
+  for (const section of ['General', 'Diagnostics'] as const) {
+    await openSettingsSection(page, section)
+    for (const heading of ['Modules', 'Integrations', 'Project assignments'])
+      await expect(page.getByRole('heading', { name: heading, exact: true })).toHaveCount(0)
+    await expect(page.locator('.settings-page').getByRole('switch', { name: 'Work' })).toHaveCount(
+      0,
+    )
+  }
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Product areas' })
+      .getByRole('button', { name: 'Work', exact: true }),
+  ).toBeVisible()
+})
 
-  await page.reload()
-  await expect(page.getByRole('button', { name: 'Workspace' })).toHaveAttribute(
+test('a link to the retired Workspace section opens General', async ({ page }) => {
+  await installBackend(page)
+  await page.goto(
+    serializePlatformRoute({
+      module_id: 'settings',
+      scope: projectScope,
+      state: { section: 'workspace' },
+    }),
+  )
+  await expect(page.getByRole('button', { name: 'General' })).toHaveAttribute(
     'aria-pressed',
     'true',
   )
+  await expect(page.getByRole('heading', { name: 'Interface', exact: true })).toBeVisible()
+  await expect(page.locator('.route-recovery')).toHaveCount(0)
 })
 
 test('Settings reads the installation in levels, each problem with its fix', async ({ page }) => {
@@ -134,16 +143,13 @@ test('Settings reads the installation in levels, each problem with its fix', asy
   await expect(health).toContainText('Schema 5 is supported by this build')
 })
 
-test('Settings modules and diagnostic actions stay readable at working widths', async ({
-  page,
-}) => {
+test('Settings diagnostic actions stay readable at working widths', async ({ page }) => {
   await installBackend(page)
   await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
   for (const width of [1440, 900, 390]) {
     await page.setViewportSize({ width, height: 960 })
-    await openSettingsSection(page, 'Workspace')
-    await expect(page.locator('.settings-module').first()).toBeVisible()
-    await expectNoSilentClipping(page, `Readable Settings modules at ${width}px`)
+    await openSettingsSection(page, 'General')
+    await expectNoSilentClipping(page, `Readable Settings General at ${width}px`)
     await openSettingsSection(page, 'Diagnostics')
     const finding = page.locator('.health-finding').first()
     await expect(finding.locator('.health-action')).toBeVisible()

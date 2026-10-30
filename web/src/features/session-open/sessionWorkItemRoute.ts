@@ -51,7 +51,7 @@ export function resolveSessionWorkItemRoute(
     entity,
   }
   const registration = registrations.find(
-    (candidate) => candidate.manifest.module_id === 'planning' && candidate.state === 'enabled',
+    (candidate) => candidate.manifest.module_id === 'planning',
   )
   if (
     !registration ||

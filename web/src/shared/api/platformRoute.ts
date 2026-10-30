@@ -22,12 +22,7 @@ const PROJECT_ID = /^[a-z][a-z0-9-]{0,159}$/u
 export type PlatformRouteUnavailable = {
   input_module_id: string
   input_scope: OperatingScope
-  reason:
-    | 'unknown-module'
-    | 'disabled-module'
-    | 'unsupported-view'
-    | 'unsupported-scope'
-    | 'incompatible-entity'
+  reason: 'unknown-module' | 'unsupported-view' | 'unsupported-scope' | 'incompatible-entity'
   recovery: {
     available_modules: readonly ModuleId[]
     kind: 'choose-module'
@@ -389,7 +384,6 @@ export function isPlatformRouteUnavailable(value: unknown): value is PlatformRou
   return (
     object.status === 'unavailable' &&
     (object.reason === 'unknown-module' ||
-      object.reason === 'disabled-module' ||
       object.reason === 'unsupported-view' ||
       object.reason === 'unsupported-scope' ||
       object.reason === 'incompatible-entity') &&

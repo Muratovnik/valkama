@@ -14,7 +14,7 @@ from unittest import mock
 from server import http_surface, mcp_surface, sessions, store, store_backups
 from server.executions import service as executions
 from server.planning import service as planning
-from server.platform import core, migrations, modules
+from server.platform import migrations, modules
 from server.ui_state import PlatformHttpError
 from tests import registry_rows
 from tests.retired_modules import FORMER_MODULES
@@ -250,17 +250,10 @@ class WorkFocusMigrationTests(unittest.TestCase):
         )
         self.assertEqual("active", sessions.session_context(self.conn, "exact-session")["status"])
 
-    def test_retained_context_and_execution_admission_belong_to_planning(self) -> None:
-        for method, path in (
-            ("GET", "/api/session"),
-            ("POST", "/api/ingest"),
-            ("POST", "/api/execution/launch"),
-            ("POST", "/api/execution/stop"),
-        ):
-            self.assertEqual("planning", http_surface._http_module_owner(method, path))
+    def test_retired_surfaces_stay_retired(self) -> None:
         for view in ("sessions", "analytics", "dashboard", "improvements"):
             with self.subTest(view=view), self.assertRaises(PlatformHttpError):
-                http_surface._sse_view_owner(view)
+                http_surface._require_sse_view(view)
         for path in (
             "/api/sessions",
             "/api/dashboard",
@@ -268,29 +261,9 @@ class WorkFocusMigrationTests(unittest.TestCase):
             "/api/modules/skills",
             "/api/modules/improvements",
         ):
-            self.assertIsNone(http_surface._http_module_owner("GET", path))
             self.assertIsNone(http_surface._boundary(http_surface._GET_BOUNDARIES, path))
         self.assertEqual({"planning", "memory", "settings"}, modules.module_ids())
         self.assertFalse(any("improvement" in tool["name"] for tool in mcp_surface.catalogue()))
-        self.conn.commit()
-        core.module_state_command(
-            self.conn,
-            self.path,
-            {
-                "module_id": "planning",
-                "state": "disabled",
-                "expected_revision": 1,
-            },
-        )
-        handler = object.__new__(http_surface.Handler)
-        handler._send_json = mock.Mock()
-        for method, path in (
-            ("GET", "/api/session"),
-            ("POST", "/api/ingest"),
-            ("POST", "/api/execution/launch"),
-        ):
-            self.assertFalse(handler._module_gate(method, path))
-            self.assertEqual(409, handler._send_json.call_args.args[0])
 
     def test_session_http_returns_compact_exact_context_without_event_feed(self) -> None:
         self.populated_source()
@@ -299,7 +272,6 @@ class WorkFocusMigrationTests(unittest.TestCase):
         handler.headers = {}
         handler.server = SimpleNamespace()
         handler._require_validated_host = lambda: True
-        handler._module_gate = lambda *_args: True
         handler._send = mock.Mock()
         handler.do_GET()
         payload = json.loads(handler._send.call_args.args[1])

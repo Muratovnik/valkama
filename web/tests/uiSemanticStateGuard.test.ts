@@ -165,7 +165,7 @@ test('aliased canonical presentation APIs may drive exact data-tone carriers', (
       } from '@/shared/lib/uiSystem.ts'
     </script>
     <template>
-      <span :data-tone="presentState('case', state).tone">State</span>
+      <span :data-tone="presentState('execution', state).tone">State</span>
       <span :data-tone="presentSemanticState(pair).tone">Semantic state</span>
     </template>
     <style scoped>
@@ -234,8 +234,8 @@ test('object and statically resolved dynamic data-tone retain canonical provenan
       const toneAttribute = 'data-tone'
     </script>
     <template>
-      <span v-bind="{ 'data-tone': presentState('case', state).tone }">Object</span>
-      <span v-bind:[toneAttribute]="presentState('case', state).tone">Argument</span>
+      <span v-bind="{ 'data-tone': presentState('execution', state).tone }">Object</span>
+      <span v-bind:[toneAttribute]="presentState('execution', state).tone">Argument</span>
     </template>
     <style scoped>[data-tone='danger'] { color: var(--color-danger); }</style>
   `
@@ -274,7 +274,7 @@ test('script callback parameters cannot spoof canonical helper provenance', () =
     <script setup lang="ts">
       import { computed } from 'vue'
       import { statePresentation as presentState } from '@/shared/lib/uiSystem.ts'
-      const presentation = computed((presentState) => presentState('case', state))
+      const presentation = computed((presentState) => presentState('execution', state))
     </script>
     <template><span :data-tone="presentation.tone">State</span></template>
     <style scoped>[data-tone='danger'] { color: var(--color-danger); }</style>
@@ -290,7 +290,7 @@ test('a sibling template scope does not shadow the canonical import globally', (
     </script>
     <template>
       <i v-for="presentState in rows">{{ presentState }}</i>
-      <span :data-tone="presentState('case', state).tone">State</span>
+      <span :data-tone="presentState('execution', state).tone">State</span>
     </template>
     <style scoped>[data-tone='success'] { color: var(--color-success); }</style>
   `
@@ -303,7 +303,7 @@ test('classic script imports are not treated as template presentation bindings',
     <script lang="ts">
       import { statePresentation as presentState } from '@/shared/lib/uiSystem.ts'
     </script>
-    <template><span :data-tone="presentState('case', state).tone">State</span></template>
+    <template><span :data-tone="presentState('execution', state).tone">State</span></template>
     <style scoped>[data-tone='danger'] { color: var(--color-danger); }</style>
   `
 

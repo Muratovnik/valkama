@@ -24,9 +24,6 @@ ENTITY_KINDS = frozenset(
         "memory-resource",
         "artifact",
         "improvement-case",
-        "service",
-        "connection",
-        "registry",
     }
 )
 SCOPE_KINDS = frozenset({"global", "project"})

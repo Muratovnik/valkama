@@ -4,25 +4,21 @@ import { useI18n } from 'vue-i18n'
 
 import InstallationHealth from '@/pages/settings/components/InstallationHealth.vue'
 import SettingsGeneral from '@/pages/settings/components/SettingsGeneral.vue'
-import SettingsModules from '@/pages/settings/components/SettingsModules.vue'
 
-import type { ModuleRegistration } from '@/shared/api/platformModuleContract.ts'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 
-type SettingsSection = 'general' | 'workspace' | 'diagnostics'
+type SettingsSection = 'general' | 'diagnostics'
 
 const props = defineProps<{
   locale: string
-  moduleRegistrations: readonly ModuleRegistration[]
   section: string
-  reloadModules: () => Promise<void>
 }>()
 const emit = defineEmits<{
   locale: [locale: 'en' | 'ru']
   state: [state: Record<string, string | number | boolean>]
 }>()
 const { t } = useI18n()
-const sectionIds: readonly SettingsSection[] = ['general', 'workspace', 'diagnostics']
+const sectionIds: readonly SettingsSection[] = ['general', 'diagnostics']
 const activeSection = computed<SettingsSection>(() =>
   sectionIds.includes(props.section as SettingsSection)
     ? (props.section as SettingsSection)
@@ -57,12 +53,6 @@ function selectSection(section: SettingsSection) {
       v-if="activeSection === 'general'"
       :locale="locale"
       @locale="(value) => emit('locale', value)"
-    />
-
-    <SettingsModules
-      v-else-if="activeSection === 'workspace'"
-      :registrations="moduleRegistrations"
-      :reload-modules="reloadModules"
     />
 
     <InstallationHealth v-else />

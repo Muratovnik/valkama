@@ -31,21 +31,20 @@ changes the level.
 | --- | --- | --- |
 | Planning | Portfolio of Planning spaces and their work; its current Kanban storage uses Planning-specific boards/cards | Views and actions for the exact ProjectRef; current Kanban writes require an exact Planning BoardRef |
 | Memory | The knowledge provider that answers for each registered project, and its health | Search and exact references linked to work items in the project |
-| Settings | Language, module enablement, and installation health | The same installation settings; Settings holds nothing project-owned |
-
-The Settings manifest persisted in the store still names the registry's read
-models (`registry.*`, `project.assignments` and their kin). No endpoint serves
-them; they leave when the module list moves into code.
+| Settings | Language and installation health | The same installation settings; Settings holds nothing project-owned |
 
 All modules use the same state grammar: `loading`, `ready`, `empty`,
 `degraded`, `unavailable`, `permission-denied`, and `error`. A state is not
 inferred from another state (for example, no events do not mean disabled), and
 recovery explains the owning boundary and next action.
 
-## Definitions are not enablement
+## Declarations enable nothing
 
-- A `ModuleDefinition` declares a module. Whether it is enabled is a separate
-  persisted state; Settings is always enabled.
+- The module list is declared in the server's code. Every module it declares
+  is enabled and none can be turned off: there is no enablement state to
+  persist, and no route or tool that changes one. `GET /api/modules` and the
+  MCP tool `list_platform_modules` answer from that list without reading the
+  store.
 - An adapter manifest declares an external adapter: the contract it speaks,
   its identity, its version and the capabilities it answers — four fields and
   nothing else. The transport record, written by the owner, says where the

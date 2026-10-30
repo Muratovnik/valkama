@@ -31,13 +31,10 @@ from .memory import api as memory_api
 from .ops import doctor
 from .planning import api as planning_api
 from .planning import exact_api as planning_exact_api
-from .planning import interactions as planning_interactions
 from .planning import model as planning_model
 from .planning import service as planning_service
 from .planning import views as planning_views
 from .planning.routing import PlanningRouting
-from .platform import core as platform_core
-from .platform import module_gate
 from .projects import scopes
 from .refs import resolve_ref
 from .sessions import op_ingest_session_event, session_context
@@ -99,62 +96,15 @@ CONTENT_TYPES = {
     ".woff2": "font/woff2",
 }
 
-#: The exact-scope route that reads one work item for the inspector. Named
-#: because three places have to agree on it: the module gate, the GET dispatch,
-#: and `planning.exact_api`, which answers it.
-PLANNING_WORK_ITEM_PATH = planning_exact_api.WORK_ITEM_PATH
-
-_HTTP_ROUTE_MODULES = {
-    # The neutral boundary. Its paths are declared here rather than derived, so
-    # the module gate refuses one nobody wrote down.
-    **{("GET", path): "planning" for path in planning_api.READ_PATHS},
-    **{("POST", path): "planning" for path in planning_api.WRITE_PATHS},
-    ("GET", "/api/search"): "planning",
-    ("GET", "/api/scopes"): "planning",
-    # The installation's own health belongs to Settings: it is where an
-    # operator already goes to see what is connected and why something is not.
-    ("GET", "/api/doctor"): "settings",
-    ("GET", "/api/session"): "planning",
-    ("POST", "/api/ingest"): "planning",
-    # Planning owns attempts and their essential session lifecycle.
-    ("POST", "/api/execution/launch"): "planning",
-    ("POST", "/api/execution/stop"): "planning",
-    **{("GET", path): "planning" for path in execution_api.READ_PATHS},
-    # Knowledge belongs to Memory wherever it is read from. The work item
-    # inspector shows some of it, but the module that owns a capability is the
-    # module that gates it: disabling Memory has to take the knowledge out of
-    # the inspector too, or "disabled" means one thing on its own page and
-    # another everywhere else.
-    **{("GET", path): "memory" for path in memory_api.READ_PATHS},
-    **{("POST", path): "planning" for path in execution_api.WRITE_PATHS},
-    # One work item, read through the exact project binding. Planning's own
-    # loader supplies the record and routing owns the scope and the binding.
-    ("GET", PLANNING_WORK_ITEM_PATH): "planning",
-    **{("GET", path): "planning" for path in planning_interactions.READ_PATHS},
-    **{("POST", path): "planning" for path in planning_interactions.WRITE_PATHS},
-}
-_SSE_VIEW_MODULES = {
-    "planning": "planning",
-    "spaces": "planning",
-    "activity": "planning",
-}
+#: The views an event stream can carry, each Planning's own.
+_SSE_VIEWS = frozenset({"planning", "spaces", "activity"})
 
 
-def _sse_view_owner(view: str) -> str:
-    """The one module that owns an event-stream view, or a refusal."""
+def _require_sse_view(view: str) -> None:
+    """Refuse an event-stream view nobody answers, before the stream opens."""
 
-    owner = _SSE_VIEW_MODULES.get(view)
-    if owner is None:
+    if view not in _SSE_VIEWS:
         raise ui_state.PlatformHttpError(400, "error", f"Unknown event stream view: {view}")
-    return owner
-
-
-def _http_module_owner(
-    method: str, path: str, parameters: Mapping[str, list[str]] | None = None
-) -> str | None:
-    if method == "GET" and path == "/api/events":
-        return _sse_view_owner(_first_value(parameters or {}, "view") or "planning")
-    return _HTTP_ROUTE_MODULES.get((method, path))
 
 
 def _first_value(parameters: Mapping[str, list[str]], key: str) -> str | None:
@@ -177,16 +127,6 @@ def _first_value(parameters: Mapping[str, list[str]], key: str) -> str | None:
 # copied per boundary — ten connect / try / handle / error_response / close
 # blocks whose commit policy had already drifted apart — and is now one
 # `_dispatch`. Adding a boundary is declaring a row below.
-#
-# The module gate is deliberately *not* a row. `_module_gate` runs exactly once
-# per request in `do_GET`, `do_POST` and `do_PUT`, before any row is looked up,
-# and `_HTTP_ROUTE_MODULES` / `_http_module_owner` is the single place a path
-# names its owning module. Skills and Improvements used to re-run
-# `require_module_enabled` inside their own handlers on a second connection;
-# because the gate had already refused a disabled module, that second check
-# could only ever disagree with the first — a gate one future path would get on
-# one side only. A boundary that needs gating declares its path in
-# `_HTTP_ROUTE_MODULES` and nowhere else.
 
 
 class _Raw(NamedTuple):
@@ -377,10 +317,6 @@ def _shell_write(call: _Call) -> _Answer | None:
     return app_shell.handle_post(call.store(), call.path, call.payload)
 
 
-def _module_state_write(call: _Call) -> _Answer | None:
-    return 200, platform_core.module_state_command(call.store(), db_path(), call.payload)
-
-
 def _ingest_write(call: _Call) -> _Answer | None:
     result = op_ingest_session_event(call.store(), call.payload)
     return _Raw(200, json.dumps(result).encode("utf-8"), "application/json")
@@ -509,12 +445,6 @@ _POST_BOUNDARIES: tuple[_Boundary, ...] = (
         commit=_Commit.DOMAIN,
     ),
     _Boundary(
-        exact=frozenset({platform_core.MODULE_STATE_PATH}),
-        handler=_module_state_write,
-        errors=_exact_error,
-        commit=_Commit.DOMAIN,
-    ),
-    _Boundary(
         exact=frozenset({"/api/ingest"}),
         handler=_ingest_write,
         errors=_ingest_error,
@@ -636,6 +566,26 @@ class Handler(BaseHTTPRequestHandler):
         # the same security seam while real HTTP requests validate only once.
         return bool(getattr(self, "_host_validated", False)) or self._require_host()
 
+    def _open_store(self) -> sqlite3.Connection | None:
+        """The store, or None once its failure has been answered.
+
+        Every route that reads the store opens it here, so a store that cannot
+        open -- too new, mid-cutover, unreadable -- gets the same envelope
+        everywhere. Without it the error escaped the handler: a `ValueError`
+        subclass was swallowed as a client disconnect and the connection
+        dropped with no answer, which an event stream retries forever.
+        """
+
+        try:
+            return connect()
+        except Exception as error:  # rendered as the stable envelope below
+            status, body = ui_state.error_response(error)
+            if self.command in {"POST", "PUT"} and status == 500:
+                self._send_generic_failure(500)
+            else:
+                self._send_json(status, body)
+            return None
+
     def _answer(self, answer: _Answer) -> None:
         """Write whichever of the two answer shapes a boundary produced."""
 
@@ -650,38 +600,6 @@ class Handler(BaseHTTPRequestHandler):
     def _send_generic_failure(self, status: int = 400) -> None:
         self._answer(_generic_failure(status))
 
-    def _module_gate(
-        self, method: str, path: str, parameters: Mapping[str, list[str]] | None = None
-    ) -> bool:
-        try:
-            module_id = _http_module_owner(method, path, parameters)
-            if module_id is None:
-                return True
-            # Aggregate reads report disabled sources in their coverage, and
-            # check the module before reading each mapped resource.
-            if method == "GET" and (
-                path == "/api/modules/planning/search"
-                or (
-                    path == "/api/modules/planning/requests"
-                    and parameters is not None
-                    and parameters.get("scope_kind") == ["global"]
-                )
-            ):
-                return True
-            conn = connect()
-            try:
-                module_gate.require_module_enabled(conn, module_id)
-                return True
-            finally:
-                conn.close()
-        except Exception as error:
-            response = ui_state.error_response(error)
-            if method in {"POST", "PUT"} and response[0] == 500:
-                self._send_generic_failure(500)
-            else:
-                self._send_json(*response)
-            return False
-
     def _dispatch(
         self,
         boundary: _Boundary,
@@ -693,11 +611,16 @@ class Handler(BaseHTTPRequestHandler):
     ) -> None:
         """Run one boundary under its own commit, notify and error policy.
 
-        The module gate has already run for this request; a row never gates
-        again.
+        A store that cannot be opened is refused here, before the boundary
+        runs, in the same envelope any other failure gets: a write's 500 says
+        nothing about why, because the reason can name a path or a secret.
         """
 
-        conn = None if boundary.commit is _Commit.NO_STORE else connect()
+        conn = None
+        if boundary.commit is not _Commit.NO_STORE:
+            conn = self._open_store()
+            if conn is None:
+                return
         try:
             call = _Call(
                 conn, path, query, parameters or {}, payload if payload is not None else {}
@@ -824,8 +747,6 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
         parameters = parse_qs(url.query, keep_blank_values=True)
-        if not self._module_gate("GET", url.path, parameters):
-            return
         boundary = _boundary(_GET_BOUNDARIES, url.path)
         if boundary is not None:
             self._dispatch(boundary, url.path, query=url.query, parameters=parameters)
@@ -852,6 +773,13 @@ class Handler(BaseHTTPRequestHandler):
             body = json.dumps(doctor.diagnose(probe=False), ensure_ascii=False)
             self._send(200, body.encode("utf-8"), "application/json")
         elif url.path == "/api/scopes":
+            # The federated readers open the primary store themselves and catch
+            # only what an attached store can do wrong; the primary is opened
+            # here first so its failure is answered like any other route's.
+            probe = self._open_store()
+            if probe is None:
+                return
+            probe.close()
             try:
                 body = json.dumps(federated_spaces(), ensure_ascii=False)
                 self._send(200, body.encode("utf-8"), "application/json")
@@ -861,6 +789,10 @@ class Handler(BaseHTTPRequestHandler):
             parameters = parse_qs(url.query)
             text = _first_value(parameters, "q") or ""
             if (_first_value(parameters, "scope") or "") == "all":
+                probe = self._open_store()
+                if probe is None:
+                    return
+                probe.close()
                 try:
                     body = json.dumps(federated_search(text), ensure_ascii=False)
                     self._send(200, body.encode("utf-8"), "application/json")
@@ -889,17 +821,24 @@ class Handler(BaseHTTPRequestHandler):
         elif url.path == "/api/session":
             parameters = parse_qs(url.query)
             session_id = _first_value(parameters, "id") or ""
-            conn = connect()
+            session_store = self._open_store()
+            if session_store is None:
+                return
             try:
-                body = json.dumps(session_context(conn, session_id), ensure_ascii=False)
+                body = json.dumps(session_context(session_store, session_id), ensure_ascii=False)
                 self._send(200, body.encode("utf-8"), "application/json")
             except (ValueError, TypeError) as error:
                 self._send(404, str(error).encode("utf-8"), "text/plain")
             finally:
-                conn.close()
+                session_store.close()
         elif url.path == "/api/events":
             parameters = parse_qs(url.query, keep_blank_values=True)
             view = (parameters.get("view") or ["planning"])[0]
+            try:
+                _require_sse_view(view)
+            except ui_state.PlatformHttpError as error:
+                self._answer(ui_state.error_response(error))
+                return
             exact = bool({"project", "data_scope_id", "space_key"} & parameters.keys())
             if exact and (view != "planning" or len(parameters.get("view", [view])) != 1):
                 self._send_json(400, {"error": "Exact scope requires one Planning view"})
@@ -921,7 +860,9 @@ class Handler(BaseHTTPRequestHandler):
     ) -> None:
         """Push one live read model on every database change; clients never poll."""
         with contextlib.ExitStack() as cleanup:
-            conn = connect()
+            conn = self._open_store()
+            if conn is None:
+                return
             cleanup.callback(conn.close)
             source = conn
             try:
@@ -942,11 +883,9 @@ class Handler(BaseHTTPRequestHandler):
             stream = watchers.WATCHERS.subscribe()
             cleanup.callback(watchers.WATCHERS.unsubscribe, stream)
             frames = EventFrames()
-            owner = _sse_view_owner(view)
             observed_version = source.execute("PRAGMA data_version").fetchone()[0]
 
             def push() -> None:
-                module_gate.require_module_enabled(conn, owner)
                 current: object
                 if exact_parameters is not None:
                     # A fresh routing on every push: a binding moved while the
@@ -980,7 +919,6 @@ class Handler(BaseHTTPRequestHandler):
                         observed_version = current_version
                         push()
                     else:
-                        module_gate.require_module_enabled(conn, owner)
                         self.wfile.write(b": keep-alive\n\n")
                         self.wfile.flush()
             except ui_state.PlatformHttpError:
@@ -1003,8 +941,6 @@ class Handler(BaseHTTPRequestHandler):
         except http_security.RequestRefusedError as error:
             self._refuse(error)
             return
-        if not self._module_gate("POST", path):
-            return
         boundary = _boundary(_POST_BOUNDARIES, path)
         if boundary is not None:
             self._dispatch(boundary, path, payload=payload)
@@ -1025,8 +961,6 @@ class Handler(BaseHTTPRequestHandler):
             payload = self._read_json()
         except http_security.RequestRefusedError as error:
             self._refuse(error)
-            return
-        if not self._module_gate("PUT", path):
             return
         boundary = _boundary(_PUT_BOUNDARIES, path)
         if boundary is None:

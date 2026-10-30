@@ -17,7 +17,6 @@ from .ops import configuration, tray
 from .planning import api as planning_api
 from .planning import model as planning_model
 from .planning import tools as planning_tools
-from .platform import module_gate
 from .platform import tools as platform_tools
 from .store import connect
 
@@ -239,7 +238,6 @@ def call_tool(conn: sqlite3.Connection, name: str, arguments: dict) -> object:
     if name not in _OPS:
         raise ValueError(f"unknown tool {name!r}")
     if name in _PLANNING_TOOLS:
-        module_gate.require_module_enabled(conn, "planning")
         arguments = _signed(name, _canonical_arguments(name, arguments or {}))
     return _OPS[name](conn, arguments or {})
 

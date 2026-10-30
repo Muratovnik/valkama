@@ -240,8 +240,8 @@ _READS: dict[str, Callable[[sqlite3.Connection, Mapping[str, list[str]]], dict]]
     "/api/planning/activity": _activity,
     "/api/planning/work-items": _work_items,
     # The id travels as a parameter rather than a path segment, which is what
-    # every other exact read on this surface already does; the module gate keys
-    # on exact paths and a segment would need a second matching rule.
+    # every other exact read on this surface already does; the HTTP dispatch
+    # keys on exact paths and a segment would need a second matching rule.
     "/api/planning/work-item": _work_item,
     "/api/planning/search": _search,
     "/api/planning/requests": _requests,

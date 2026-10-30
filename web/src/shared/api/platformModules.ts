@@ -1,8 +1,8 @@
 /**
  * Explicitly non-authoritative manifests for transport/offline recovery only.
  *
- * Normal routing, navigation, and module state validate the persisted server
- * registrations instead. Importing this table is an explicit offline choice.
+ * Normal routing and navigation validate the module list the server answers
+ * with instead. Importing this table is an explicit offline choice.
  */
 
 import type { EntityKind } from '@/shared/api/platformEntityRef.ts'
@@ -143,26 +143,15 @@ export const OFFLINE_MODULE_FALLBACK: readonly ModuleManifest[] = Object.freeze(
     title_key: 'platform.modules.settings',
     icon_key: 'settings-2',
     allowed_keys: ['section', 'query'],
-    readGlobal: [
-      'registry.modules',
-      'registry.adapters',
-      'registry.services',
-      'registry.connections',
-      'registry.grants',
-    ],
-    readProject: [
-      'project.assignments',
-      'project.connections',
-      'project.grants',
-      'project.bindings',
-    ],
+    readGlobal: [],
+    readProject: ['project.bindings'],
     actionGlobal: ['module.settings.open-adapter'],
     actionProject: ['module.settings.configure-project'],
-    required_read_models: ['registry', 'settings'],
-    secondaryGlobal: ['connection', 'registry'],
-    secondaryProject: ['connection', 'registry'],
-    sse_subscriptions: ['registry.changed'],
-    supported_entity_kinds: ['project', 'service', 'connection', 'registry'],
+    required_read_models: ['settings'],
+    secondaryGlobal: [],
+    secondaryProject: [],
+    sse_subscriptions: [],
+    supported_entity_kinds: ['project'],
     feature_capabilities: ['settings.configure'],
   }),
 ])

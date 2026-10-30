@@ -17,7 +17,6 @@ interface AuthorityInputs {
   parsedUnavailable: Ref<PlatformRouteUnavailable | null>
   registrations: Ref<readonly ModuleRegistration[]>
   route: Ref<PlatformRoute>
-  loadModules: () => Promise<void>
   te: (key: string) => boolean
   translate: (key: string) => string
 }
@@ -68,7 +67,7 @@ export function useModuleRouteAuthority(inputs: AuthorityInputs) {
     ),
   )
   const activeManifest = computed(() =>
-    activeRegistration.value?.state === 'enabled' &&
+    activeRegistration.value !== undefined &&
     hasModuleRenderer(activeRegistration.value.manifest.module_id)
       ? activeRegistration.value.manifest
       : undefined,
@@ -87,7 +86,7 @@ export function useModuleRouteAuthority(inputs: AuthorityInputs) {
         recovery: { kind: 'choose-module', available_modules: available },
       }
     const registration = activeRegistration.value
-    if (registration?.state === 'enabled' && hasModuleRenderer(registration.manifest.module_id)) {
+    if (registration !== undefined && hasModuleRenderer(registration.manifest.module_id)) {
       const authority = resolveManifestRouteAuthority(registration.manifest, inputs.route.value)
       if (authority.status === 'ready') return null
       return {
@@ -98,12 +97,9 @@ export function useModuleRouteAuthority(inputs: AuthorityInputs) {
         recovery: { kind: 'choose-module', available_modules: available },
       }
     }
-    let reason: PlatformRouteUnavailable['reason'] = 'unsupported-view'
-    if (registration === undefined) reason = 'unknown-module'
-    else if (registration.state === 'disabled') reason = 'disabled-module'
     return {
       status: 'unavailable',
-      reason,
+      reason: registration === undefined ? 'unknown-module' : 'unsupported-view',
       input_module_id: inputs.route.value.module_id,
       input_scope: inputs.route.value.scope,
       recovery: { kind: 'choose-module', available_modules: available },
@@ -119,8 +115,5 @@ export function useModuleRouteAuthority(inputs: AuthorityInputs) {
       return error instanceof Error ? error.message : String(error)
     }
   })
-  async function reloadModuleState() {
-    await inputs.loadModules()
-  }
-  return { activeManifest, moduleTitle, reloadModuleState, routeFailure, routeUnavailable }
+  return { activeManifest, moduleTitle, routeFailure, routeUnavailable }
 }

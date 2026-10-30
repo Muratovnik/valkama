@@ -180,12 +180,15 @@ describe('shared UI contracts', () => {
         `Unknown ${dimension} state: future`,
       )
     }
-    expect(statePresentation('case', 'future')).toEqual({ emphasis: 'quiet', tone: 'neutral' })
+    expect(statePresentation('execution', 'future')).toEqual({
+      emphasis: 'quiet',
+      tone: 'neutral',
+    })
   })
 
   it('renders status and counter geometry from shared component variants', () => {
     const state = mount(SemanticState, {
-      props: { dimension: 'case', state: 'collecting', label: 'Collecting', variant: 'badge' },
+      props: { dimension: 'execution', state: 'running', label: 'Running', variant: 'badge' },
     })
     expect(state.classes()).toContain('variant-badge')
     const badge = mount(CountBadge, {

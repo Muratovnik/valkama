@@ -610,9 +610,9 @@ def connect() -> sqlite3.Connection:
                 platform_migrations.migrate_product_model(conn)
             if product_model_migration:
                 platform_migrations.retire_work_support_modules(conn)
-            # No "is this a new store" flag: the Kernel writes whichever
-            # module rows are missing, which is the same answer for a store
-            # being created and one that predates a module.
+            # No "is this a new store" flag: bring-up writes the store's
+            # identity only when it is missing, which is the same answer for a
+            # store being created and one being upgraded.
             platform_core.initialize(conn, path, caller_owns_transaction=True)
             platform_migrations.assert_product_model_postconditions(conn)
             store_backups.integrity_check(conn, source="post-migration store")

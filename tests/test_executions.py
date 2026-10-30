@@ -556,7 +556,7 @@ class ReapLoopTests(unittest.TestCase):
             return True
 
         with (
-            mock.patch.object(watchers, "reap_sessions_if_enabled", side_effect=reap),
+            mock.patch.object(watchers, "reap_finished_launches", side_effect=reap),
             contextlib.redirect_stderr(io.StringIO()) as reported,
         ):
             registry.run(interval=0, cycles=10)
@@ -923,13 +923,13 @@ class ExecutionApiTests(LaunchHarness):
             )
         self.assertEqual(404, raised.exception.status)
 
-    def test_every_execution_path_is_owned_by_planning(self) -> None:
-        # A module gate that does not know a path refuses it silently, so the
-        # declaration and the dispatch have to be checked against each other.
+    def test_every_execution_path_is_dispatched(self) -> None:
+        # A path the domain declares and no boundary claims answers a bare 404,
+        # so the declaration and the dispatch have to be checked against each other.
         for path in execution_api.READ_PATHS:
-            self.assertEqual("planning", http_surface._HTTP_ROUTE_MODULES[("GET", path)], path)
+            self.assertIsNotNone(http_surface._boundary(http_surface._GET_BOUNDARIES, path), path)
         for path in execution_api.WRITE_PATHS:
-            self.assertEqual("planning", http_surface._HTTP_ROUTE_MODULES[("POST", path)], path)
+            self.assertIsNotNone(http_surface._boundary(http_surface._POST_BOUNDARIES, path), path)
 
 
 class EndToEndLaunchTests(LaunchHarness):

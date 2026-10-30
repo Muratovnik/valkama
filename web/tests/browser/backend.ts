@@ -49,7 +49,6 @@ type BackendOptions = {
   activity?: 'bound' | 'unbound'
   includeAttachedDuplicate?: boolean
   includeUnboundPlanningProject?: boolean
-  moduleConflictOnce?: string
   uiPrefs?: unknown
 }
 
@@ -83,7 +82,6 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
           },
         ]
       : []
-  let moduleConflict = options.moduleConflictOnce
   await installBrowserDoubles(page)
   const attachCommands: { session_id: string; work_item: string }[] = []
   await page.route(
@@ -111,29 +109,6 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
           SESSION_TOKEN,
           `${request.method()} ${path} must carry the browser session token`,
         )
-
-      if (path === '/api/modules/state' && request.method() === 'POST') {
-        const body = request.postDataJSON() as {
-          expected_revision: number
-          module_id: string
-          state: 'enabled' | 'disabled'
-        }
-        const registration = registrations.find(
-          (item) => item.manifest.module_id === body.module_id,
-        )
-        if (registration && moduleConflict === body.module_id) {
-          moduleConflict = undefined
-          registration.revision += 1
-          registration.updated_at = new Date().toISOString()
-          return fulfill({ status: 'unavailable', reason: 'Module revision changed' }, 409)
-        }
-        if (!registration || registration.revision !== body.expected_revision)
-          return fulfill({ status: 'unavailable', reason: 'Module revision changed' }, 409)
-        registration.state = body.state
-        registration.revision += 1
-        registration.updated_at = new Date().toISOString()
-        return fulfill({ interface_version: 'valkama-modules', module: registration })
-      }
 
       if (path === '/api/execution/attach' && request.method() === 'POST') {
         const body = request.postDataJSON() as { session_id: string; work_item: string }

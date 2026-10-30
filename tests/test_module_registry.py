@@ -8,16 +8,11 @@ import re
 import shutil
 import sqlite3
 import tempfile
-import threading
 import unittest
 from unittest import mock
 
 from server import app_shell, mcp_surface, store, watchers
-from server.planning import exact_api as planning_exact_api
-from server.planning import service as planning_service
-from server.platform import core as platform_core
 from server.platform import migrations as platform_migrations
-from server.platform import module_gate
 from server.platform import modules as platform_modules
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
@@ -26,28 +21,13 @@ from tests import board_era, registry_rows
 from tests.registry_fixtures import project_binding, project_entry, registry_bytes
 from tests.retired_modules import FORMER_MODULES
 
-
-class _ModuleRows:
-    """The module rows of one store, read and changed the way the surfaces do."""
-
-    def __init__(self, conn: sqlite3.Connection, path: str) -> None:
-        self.conn = conn
-        self.path = path
-
-    def modules_payload(self) -> dict:
-        return module_gate.modules_payload(self.conn)
-
-    def module_state_command(self, payload: dict) -> dict:
-        return platform_core.module_state_command(self.conn, self.path, payload)
-
-
 _EXPECTED_SECONDARY_CONTEXTS = {
     "planning": {
         "global": ["project", "planning-space"],
         "project": ["planning-space", "work-item"],
     },
     "memory": {"global": ["memory-resource"], "project": ["memory-resource", "work-item"]},
-    "settings": {"global": ["connection", "registry"], "project": ["connection", "registry"]},
+    "settings": {"global": [], "project": []},
 }
 
 
@@ -108,20 +88,6 @@ class ModuleRegistryTests(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.conn = store.connect()
         self.addCleanup(lambda: self.conn.close())
-
-    def platform(self) -> _ModuleRows:
-        return _ModuleRows(self.conn, self.path)
-
-    def module_row(self, module_id: str) -> sqlite3.Row | None:
-        return self.conn.execute(
-            "SELECT state,mutable,revision FROM platform_modules WHERE module_id=?", (module_id,)
-        ).fetchone()
-
-    def registrations(self) -> dict[str, dict]:
-        return {
-            item["manifest"]["module_id"]: item
-            for item in self.platform().modules_payload()["modules"]
-        }
 
     def test_secondary_contexts_are_coherent_and_match_offline_fallback(self) -> None:
         manifests = {item["module_id"]: item for item in platform_modules.module_manifests()}
@@ -198,313 +164,85 @@ class ModuleRegistryTests(unittest.TestCase):
             self.assertEqual(values["supported_entity_kinds"], manifest["supported_entity_kinds"])
             self.assertEqual(values["feature_capabilities"], manifest["feature_capabilities"])
 
-    def test_first_install_defaults_and_response_are_persisted_rows(self) -> None:
-        registrations = self.registrations()
+    def test_every_surface_answers_the_one_list_this_build_declares(self) -> None:
+        """Planning, Memory and Settings, enabled and fixed, the same from every door."""
+
+        payload = platform_modules.modules_payload()
+        self.assertEqual("valkama-modules", payload["interface_version"])
         self.assertEqual(
-            {
-                "planning",
-                "memory",
-                "settings",
-            },
-            set(registrations),
+            ["memory", "planning", "settings"],
+            [item["manifest"]["module_id"] for item in payload["modules"]],
         )
-        self.assertTrue(all(item["state"] == "enabled" for item in registrations.values()))
-        self.assertFalse(registrations["settings"]["mutable"])
-        self.assertTrue(registrations["planning"]["mutable"])
-
-        row = self.conn.execute(
-            "SELECT record_json FROM platform_modules WHERE module_id='memory'"
-        ).fetchone()
-        manifest = json.loads(row[0])
-        manifest["title_key"] = "platform.modules.memory-persisted"
-        self.conn.execute(
-            "UPDATE platform_modules SET record_json=? WHERE module_id='memory'",
-            (json.dumps(manifest, sort_keys=True),),
-        )
-        self.conn.commit()
+        for item in payload["modules"]:
+            with self.subTest(module=item["manifest"]["module_id"]):
+                self.assertEqual(
+                    {"manifest", "state", "mutable", "revision", "updated_at"}, set(item)
+                )
+                self.assertEqual(
+                    ("enabled", False, 1, platform_modules.DECLARED_AT),
+                    (item["state"], item["mutable"], item["revision"], item["updated_at"]),
+                )
+        self.assertEqual(payload, mcp_surface.call_tool(self.conn, "list_platform_modules", {}))
         self.assertEqual(
-            "platform.modules.memory-persisted",
-            self.registrations()["memory"]["manifest"]["title_key"],
+            (200, payload), app_shell.handle_get(self.conn, self.path, "/api/modules", {})
+        )
+        # A caller holding the answer cannot change the list behind it.
+        payload["modules"][0]["manifest"]["title_key"] = "changed"
+        payload["modules"].clear()
+        self.assertEqual(3, len(platform_modules.modules_payload()["modules"]))
+        self.assertNotEqual(
+            "changed", platform_modules.modules_payload()["modules"][0]["manifest"]["title_key"]
         )
 
-    def test_settings_immutability_optimistic_revision_and_restart_persistence(self) -> None:
-        platform = self.platform()
-        before = self.registrations()["settings"]
-        audit_before = self.conn.execute(
-            "SELECT COUNT(*) FROM platform_registry_audit WHERE entity_kind='module'"
-        ).fetchone()[0]
-        with self.assertRaises(PlatformHttpError):
-            platform.module_state_command(
-                {"module_id": "settings", "state": "disabled", "expected_revision": 1}
-            )
-        with self.assertRaises(PlatformHttpError):
-            platform.module_state_command(
-                {"module_id": "settings", "state": "enabled", "expected_revision": 1}
-            )
-        self.assertEqual(before, self.registrations()["settings"])
-        self.assertEqual(
-            audit_before,
-            self.conn.execute(
-                "SELECT COUNT(*) FROM platform_registry_audit WHERE entity_kind='module'"
-            ).fetchone()[0],
-        )
-        changed = platform.module_state_command(
-            {"module_id": "planning", "state": "disabled", "expected_revision": 1}
-        )["module"]
-        self.assertEqual("disabled", changed["state"])
-        self.assertEqual(2, changed["revision"])
-        mcp = mcp_surface.call_tool(self.conn, "list_platform_modules", {})
-        planning = next(
-            item for item in mcp["modules"] if item["manifest"]["module_id"] == "planning"
-        )
-        self.assertEqual("disabled", planning["state"])
-        with self.assertRaises(PlatformHttpError):
-            platform.module_state_command(
-                {"module_id": "planning", "state": "enabled", "expected_revision": 1}
-            )
-        self.conn.close()
-        self.conn = store.connect()
-        self.assertEqual("disabled", self.registrations()["planning"]["state"])
-
-    def test_disabled_module_refuses_server_actions_without_deleting_data(self) -> None:
-        planning_service.create_planning_space(self.conn, project_id="preserved", name="Preserved")
-        item = planning_service.create_work_item(self.conn, space="PRE", title="Still here")
-        self.conn.commit()
-        self.platform().module_state_command(
-            {"module_id": "planning", "state": "disabled", "expected_revision": 1}
-        )
-        with self.assertRaises(PlatformHttpError):
-            planning_exact_api.handle_get(
-                self.conn,
-                self.path,
-                "/api/platform/planning",
-                {"scope_kind": ["global"]},
-            )
-        self.assertEqual(
-            item["reference"],
-            planning_service.get_work_item(self.conn, item["reference"])["reference"],
-        )
-
-    def test_deleted_runtime_rows_remain_absent_and_are_not_reseeded(self) -> None:
-        self.conn.execute("DELETE FROM platform_modules WHERE module_id='memory'")
-        self.conn.commit()
-        self.assertNotIn("memory", self.registrations())
-        self.conn.close()
-        self.conn = store.connect()
-        self.assertIsNone(
-            self.conn.execute("SELECT 1 FROM platform_modules WHERE module_id='memory'").fetchone()
-        )
-        with self.assertRaises(PlatformHttpError):
-            self.platform().module_state_command(
-                {"module_id": "memory", "state": "enabled", "expected_revision": 1}
-            )
-
-    def test_a_module_added_after_an_installation_exists_appears_on_the_next_open(self) -> None:
-        """The gap that made a seventh module a schema change instead of a build.
-
-        Seeding ran for a store being created, so an installation that already
-        existed never gained a row for a module added later: it was in the
-        registry source and invisible in the product. The store here is stripped
-        of every trace of Memory — the row and the audit history both — because
-        an absent row alone is a removal, and a removal is honoured.
-        """
-
-        self.conn.execute("DELETE FROM platform_modules WHERE module_id='memory'")
-        self.conn.execute(
-            "DELETE FROM platform_registry_audit WHERE entity_kind='module' AND entity_id='memory'"
-        )
-        self.conn.commit()
-        # Read the row, not the payload: building a Platform is what reconciles,
-        # so asking it whether Memory is absent is what makes it present.
-        self.assertIsNone(self.module_row("memory"))
-        before = self.registrations()["planning"]
-
-        self.conn.close()
-        self.conn = store.connect()
-
-        memory = self.registrations()["memory"]
-        self.assertEqual("enabled", memory["state"])
-        self.assertTrue(memory["mutable"])
-        self.assertEqual(1, memory["revision"])
-        # Reconciling adds; it never restates what the store already holds.
-        self.assertEqual(before["revision"], self.registrations()["planning"]["revision"])
-        self.assertEqual(before["updated_at"], self.registrations()["planning"]["updated_at"])
-
-    def test_a_module_the_operator_removed_is_not_restored_by_reconciling(self) -> None:
-        """The audit is what tells a removal apart from a module that is new."""
-
-        self.conn.execute("DELETE FROM platform_modules WHERE module_id='memory'")
-        self.conn.commit()
-        self.conn.close()
-        self.conn = store.connect()
-        self.assertIsNone(self.module_row("memory"))
-
-    def test_valid_future_registration_is_persisted_runtime_authority(self) -> None:
-        row = self.conn.execute(
-            "SELECT record_json,updated_at FROM platform_modules WHERE module_id='planning'"
-        ).fetchone()
-        manifest = json.loads(row["record_json"])
-        manifest.update(
-            {
-                "module_id": "future-module",
-                "route_namespace": "future-module",
-                "title_key": "platform.modules.future-module",
-                "state_schema": {
-                    **manifest["state_schema"],
-                    "schema_id": "module.future-module.state",
-                },
-                "inspector_owner": "module.future-module",
-            }
-        )
-        self.conn.execute(
-            "INSERT INTO platform_modules"
-            "(module_id,record_json,state,mutable,revision,updated_at) VALUES(?,?,?,?,?,?)",
-            (
-                "future-module",
-                json.dumps(manifest, sort_keys=True),
-                "enabled",
-                1,
-                1,
-                row["updated_at"],
-            ),
-        )
-        self.conn.commit()
-        registration = self.registrations()["future-module"]
-        self.assertEqual("enabled", registration["state"])
-        self.assertEqual("future-module", registration["manifest"]["module_id"])
+    def test_the_last_route_names_only_a_module_this_build_declares(self) -> None:
         saved = app_shell.save_ui_prefs(
             self.conn,
             {
                 "interface_version": "valkama-ui-prefs",
-                "module_id": "future-module",
+                "module_id": "memory",
                 "scope": {"kind": "global"},
             },
         )
-        self.assertEqual("future-module", saved["prefs"]["module_id"])
-
-    def test_inconsistent_registry_refuses_state_change_without_mutation(self) -> None:
-        before = self.registrations()["planning"]
-        audit_before = self.conn.execute(
-            "SELECT COUNT(*) FROM platform_registry_audit WHERE entity_kind='module'"
-        ).fetchone()[0]
-        self.conn.execute("UPDATE platform_modules SET record_json='{}' WHERE module_id='memory'")
+        self.assertEqual("memory", saved["prefs"]["module_id"])
+        # A module row in the store is not a module: the list is the build's.
+        self.conn.execute(
+            "INSERT INTO platform_modules VALUES"
+            "('future-module','{}','enabled',1,1,'2026-01-01T00:00:00Z')"
+        )
         self.conn.commit()
-        with self.assertRaises(module_gate.RegistryError):
-            module_gate.require_module_enabled(self.conn, "planning")
-        with self.assertRaises(module_gate.RegistryError):
-            self.platform().module_state_command(
-                {"module_id": "planning", "state": "disabled", "expected_revision": 1}
-            )
-        planning = self.conn.execute(
-            "SELECT state,revision,updated_at FROM platform_modules WHERE module_id='planning'"
-        ).fetchone()
-        self.assertEqual(
-            (before["state"], before["revision"], before["updated_at"]), tuple(planning)
-        )
-        self.assertEqual(
-            audit_before,
-            self.conn.execute(
-                "SELECT COUNT(*) FROM platform_registry_audit WHERE entity_kind='module'"
-            ).fetchone()[0],
-        )
+        for module_id in ("future-module", "skills"):
+            with self.subTest(module_id=module_id), self.assertRaises(PlatformHttpError):
+                app_shell.save_ui_prefs(
+                    self.conn,
+                    {
+                        "interface_version": "valkama-ui-prefs",
+                        "module_id": module_id,
+                        "scope": {"kind": "global"},
+                    },
+                )
+        self.assertEqual("memory", app_shell.ui_prefs_record(self.conn)["module_id"])
 
-    def test_missing_settings_refuses_state_change_without_mutation(self) -> None:
-        before = self.registrations()["planning"]
-        self.conn.execute("DELETE FROM platform_modules WHERE module_id='settings'")
-        self.conn.commit()
-        with self.assertRaisesRegex(module_gate.RegistryError, "Settings"):
-            self.platform().module_state_command(
-                {"module_id": "planning", "state": "disabled", "expected_revision": 1}
-            )
-        row = self.conn.execute(
-            "SELECT state,revision,updated_at FROM platform_modules WHERE module_id='planning'"
-        ).fetchone()
-        self.assertEqual((before["state"], before["revision"], before["updated_at"]), tuple(row))
-
-    def test_sessions_disable_suppresses_and_reenable_resumes_reaper(self) -> None:
-        platform = self.platform()
-        platform.module_state_command(
-            {"module_id": "planning", "state": "disabled", "expected_revision": 1}
-        )
-        with mock.patch.object(watchers, "reap_launches", return_value=True) as reaper:
-            self.assertFalse(watchers.reap_sessions_if_enabled(self.conn))
-            reaper.assert_not_called()
-            platform.module_state_command(
-                {"module_id": "planning", "state": "enabled", "expected_revision": 2}
-            )
-            self.assertTrue(watchers.reap_sessions_if_enabled(self.conn))
-            reaper.assert_called_once_with(self.conn)
-
-    def test_empty_sessions_reap_closes_admission_transaction_and_repeats(self) -> None:
+    def test_empty_reap_closes_its_transaction_and_repeats(self) -> None:
         with mock.patch.object(watchers, "reap_launches", return_value=[]) as reaper:
-            self.assertFalse(watchers.reap_sessions_if_enabled(self.conn))
+            self.assertFalse(watchers.reap_finished_launches(self.conn))
             self.assertFalse(self.conn.in_transaction)
-            self.assertFalse(watchers.reap_sessions_if_enabled(self.conn))
+            self.assertFalse(watchers.reap_finished_launches(self.conn))
             self.assertFalse(self.conn.in_transaction)
         self.assertEqual(2, reaper.call_count)
 
-    def test_observer_failure_cannot_report_a_committed_transition_as_rolled_back(self) -> None:
-        def fail_observer(_path: str, _module_id: str, _state: str) -> None:
-            raise RuntimeError("observer failed")
+    def test_a_reap_that_changed_something_says_so_and_commits(self) -> None:
+        with mock.patch.object(watchers, "reap_launches", return_value=["exec-1"]) as reaper:
+            self.assertTrue(watchers.reap_finished_launches(self.conn))
+        self.assertFalse(self.conn.in_transaction)
+        reaper.assert_called_once_with(self.conn)
 
+    def test_a_failed_reap_rolls_back_and_raises(self) -> None:
         with (
-            mock.patch.object(platform_modules, "_STATE_OBSERVERS", [fail_observer]),
-            self.assertLogs("server.platform.modules", level="ERROR"),
+            mock.patch.object(watchers, "reap_launches", side_effect=RuntimeError("boom")),
+            self.assertRaisesRegex(RuntimeError, "boom"),
         ):
-            result = self.platform().module_state_command(
-                {"module_id": "planning", "state": "disabled", "expected_revision": 1}
-            )
-        self.assertEqual("disabled", result["module"]["state"])
-        self.assertEqual(
-            ("disabled", 2),
-            tuple(
-                self.conn.execute(
-                    "SELECT state,revision FROM platform_modules WHERE module_id='planning'"
-                ).fetchone()
-            ),
-        )
-
-    def test_sessions_reaper_and_disable_share_one_check_use_fence(self) -> None:
-        entered = threading.Event()
-        release = threading.Event()
-        disabled = threading.Event()
-        reaper_conn = sqlite3.connect(self.path, timeout=2, check_same_thread=False)
-        reaper_conn.row_factory = sqlite3.Row
-        state_conn = sqlite3.connect(self.path, timeout=2, check_same_thread=False)
-        state_conn.row_factory = sqlite3.Row
-        self.addCleanup(reaper_conn.close)
-        self.addCleanup(state_conn.close)
-        platform = _ModuleRows(state_conn, self.path)
-
-        def reap_under_lock(conn: sqlite3.Connection) -> bool:
-            entered.set()
-            release.wait(2)
-            conn.commit()
-            return True
-
-        def disable() -> None:
-            platform.module_state_command(
-                {"module_id": "planning", "state": "disabled", "expected_revision": 1}
-            )
-            disabled.set()
-
-        with mock.patch.object(watchers, "reap_launches", side_effect=reap_under_lock) as reaper:
-            reaper_thread = threading.Thread(
-                target=watchers.reap_sessions_if_enabled, args=(reaper_conn,)
-            )
-            disable_thread = threading.Thread(target=disable)
-            reaper_thread.start()
-            self.assertTrue(entered.wait(2))
-            disable_thread.start()
-            self.assertFalse(disabled.wait(0.1), "disable crossed an active reaper fence")
-            release.set()
-            reaper_thread.join(2)
-            disable_thread.join(2)
-            self.assertFalse(reaper_thread.is_alive())
-            self.assertFalse(disable_thread.is_alive())
-            self.assertTrue(disabled.is_set())
-            self.assertFalse(watchers.reap_sessions_if_enabled(reaper_conn))
-            self.assertEqual(1, reaper.call_count)
+            watchers.reap_finished_launches(self.conn)
+        self.assertFalse(self.conn.in_transaction)
 
 
 class ProductModelMigrationTests(unittest.TestCase):
@@ -550,8 +288,11 @@ class ProductModelMigrationTests(unittest.TestCase):
         board_id = board_era.seed(conn, "Legacy")
         self.card = {"id": board_era.add_card(conn, board_id, "Preserve me")}
         rows = conn.execute(
-            "SELECT module_id,record_json,updated_at FROM platform_modules ORDER BY module_id"
+            "SELECT module_id,updated_at FROM platform_modules ORDER BY module_id"
         ).fetchall()
+        # Every module but the two given as released below carries the manifest
+        # this build declares, which a schema-2 row may hold as it is.
+        current = {item["module_id"]: item for item in platform_modules.module_manifests()}
         conn.execute("ALTER TABLE platform_modules RENAME TO platform_modules_current")
         conn.execute(
             """CREATE TABLE platform_modules(
@@ -572,7 +313,7 @@ class ProductModelMigrationTests(unittest.TestCase):
                         else (
                             json.dumps(_released_schema2_skills_manifest(), sort_keys=True)
                             if row["module_id"] == "skills"
-                            else row["record_json"]
+                            else json.dumps(current[row["module_id"]], sort_keys=True)
                         )
                     ),
                     row["updated_at"],
@@ -727,7 +468,7 @@ class ProductModelMigrationTests(unittest.TestCase):
         conn.commit()
         conn.close()
 
-        with self.assertRaises(module_gate.RegistryError):
+        with self.assertRaises(platform_migrations.CatalogMigrationError):
             store.connect()
         self.assertEqual([], self.backups())
         check = sqlite3.connect(self.path)
@@ -759,7 +500,7 @@ class ProductModelMigrationTests(unittest.TestCase):
         ).fetchall()
         conn.close()
 
-        with self.assertRaises(module_gate.RegistryError):
+        with self.assertRaises(platform_migrations.CatalogMigrationError):
             store.connect()
 
         self.assertEqual([], self.backups())

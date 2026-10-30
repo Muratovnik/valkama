@@ -34,8 +34,6 @@ const failureReason = computed(() => {
   return t(message.key, message.params ?? {})
 })
 const unavailableMessage = computed(() => {
-  if (props.unavailable?.reason === 'disabled-module')
-    return `${t('settings.disabled')}: ${props.unavailable.input_module_id}`
   if (props.unavailable?.reason === 'unsupported-view')
     return `${t('platform.actions.unavailable')} ${props.unavailable.input_module_id}`
   if (

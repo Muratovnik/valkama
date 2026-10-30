@@ -198,6 +198,32 @@
   }
  ],
  "platform_grants": [],
+ "platform_modules": [
+  {
+   "module_id": "memory",
+   "mutable": 1,
+   "record_json": "{\"feature_capabilities\":[\"memory.open\",\"memory.health\"],\"icon_key\":\"book-open\",\"inspector_owner\":\"module.memory\",\"interface_version\":\"valkama-modules\",\"module_id\":\"memory\",\"navigation_group\":\"capabilities\",\"operating_levels\":[\"global\",\"project\"],\"primary_actions\":[\"module.memory.open\"],\"required_read_models\":[\"memory\"],\"route_namespace\":\"memory\",\"secondary_actions\":[\"module.memory.attach\"],\"secondary_context\":{\"global\":{\"behavior\":\"all\",\"kinds\":[\"memory-resource\"]},\"project\":{\"behavior\":\"all\",\"kinds\":[\"memory-resource\",\"work-item\"]}},\"semantics\":{\"global\":{\"action_semantics\":[\"module.memory.attach\"],\"read_models\":[\"memory.providers\",\"memory.recent\"]},\"project\":{\"action_semantics\":[\"module.memory.open\"],\"read_models\":[\"memory.search\",\"memory.linked\"]}},\"sse_subscriptions\":[],\"state_schema\":{\"allowed_keys\":[\"query\",\"provider\"],\"max_bytes\":2048,\"schema_id\":\"module.memory.state\"},\"states\":{\"global\":{\"supported\":[\"loading\",\"ready\",\"empty\",\"error\",\"unavailable\",\"permission-denied\",\"degraded\"]},\"project\":{\"supported\":[\"loading\",\"ready\",\"empty\",\"error\",\"unavailable\",\"permission-denied\",\"degraded\"]}},\"supported_entity_kinds\":[\"project\",\"memory-resource\",\"work-item\"],\"title_key\":\"platform.modules.memory\",\"version\":\"2.0.0\"}",
+   "revision": 1,
+   "state": "enabled",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "module_id": "planning",
+   "mutable": 1,
+   "record_json": "{\"feature_capabilities\":[],\"icon_key\":\"layout-dashboard\",\"inspector_owner\":\"module.planning\",\"interface_version\":\"valkama-modules\",\"module_id\":\"planning\",\"navigation_group\":\"work\",\"operating_levels\":[\"global\",\"project\"],\"primary_actions\":[\"module.planning.create-work-item\",\"module.planning.open-work-item\"],\"required_read_models\":[\"planning-spaces\",\"work-items\"],\"route_namespace\":\"planning\",\"secondary_actions\":[\"module.planning.create-work-item\",\"module.planning.open-work-item\"],\"secondary_context\":{\"global\":{\"behavior\":\"all\",\"kinds\":[\"project\",\"planning-space\"]},\"project\":{\"behavior\":\"all\",\"kinds\":[\"planning-space\",\"work-item\"]}},\"semantics\":{\"global\":{\"action_semantics\":[\"module.planning.create-work-item\",\"module.planning.open-work-item\"],\"read_models\":[\"planning.spaces\",\"planning.work-items\"]},\"project\":{\"action_semantics\":[\"module.planning.create-work-item\",\"module.planning.open-work-item\"],\"read_models\":[\"planning.project-spaces\",\"planning.work-items\"]}},\"sse_subscriptions\":[\"planning.changed\"],\"state_schema\":{\"allowed_keys\":[\"query\",\"view\",\"status\"],\"max_bytes\":2048,\"schema_id\":\"module.planning.state\"},\"states\":{\"global\":{\"supported\":[\"loading\",\"ready\",\"empty\",\"error\",\"unavailable\",\"permission-denied\",\"degraded\"]},\"project\":{\"supported\":[\"loading\",\"ready\",\"empty\",\"error\",\"unavailable\",\"permission-denied\",\"degraded\"]}},\"supported_entity_kinds\":[\"project\",\"planning-space\",\"workflow\",\"work-item\"],\"title_key\":\"platform.modules.planning\",\"version\":\"2.0.0\"}",
+   "revision": 1,
+   "state": "enabled",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "module_id": "settings",
+   "mutable": 0,
+   "record_json": "{\"feature_capabilities\":[\"settings.configure\"],\"icon_key\":\"settings-2\",\"inspector_owner\":\"module.settings\",\"interface_version\":\"valkama-modules\",\"module_id\":\"settings\",\"navigation_group\":\"system\",\"operating_levels\":[\"global\",\"project\"],\"primary_actions\":[\"module.settings.configure-project\"],\"required_read_models\":[\"registry\",\"settings\"],\"route_namespace\":\"settings\",\"secondary_actions\":[\"module.settings.open-adapter\"],\"secondary_context\":{\"global\":{\"behavior\":\"all\",\"kinds\":[\"connection\",\"registry\"]},\"project\":{\"behavior\":\"all\",\"kinds\":[\"connection\",\"registry\"]}},\"semantics\":{\"global\":{\"action_semantics\":[\"module.settings.open-adapter\"],\"read_models\":[\"registry.modules\",\"registry.adapters\",\"registry.services\",\"registry.connections\",\"registry.grants\"]},\"project\":{\"action_semantics\":[\"module.settings.configure-project\"],\"read_models\":[\"project.assignments\",\"project.connections\",\"project.grants\",\"project.bindings\"]}},\"sse_subscriptions\":[\"registry.changed\"],\"state_schema\":{\"allowed_keys\":[\"section\",\"query\"],\"max_bytes\":2048,\"schema_id\":\"module.settings.state\"},\"states\":{\"global\":{\"supported\":[\"loading\",\"ready\",\"empty\",\"error\",\"unavailable\",\"permission-denied\",\"degraded\"]},\"project\":{\"supported\":[\"loading\",\"ready\",\"empty\",\"error\",\"unavailable\",\"permission-denied\",\"degraded\"]}},\"supported_entity_kinds\":[\"project\",\"service\",\"connection\",\"registry\"],\"title_key\":\"platform.modules.settings\",\"version\":\"2.0.0\"}",
+   "revision": 1,
+   "state": "enabled",
+   "updated_at": "2026-10-30T00:00:00Z"
+  }
+ ],
  "platform_packages": [
   {
    "package_key": "valkama:valkama.claude-code",
@@ -240,6 +266,32 @@
    "record_json": "{\"execution\":\"local_process\",\"package_id\":\"valkama.codex-skills\",\"provenance\":\"platform-built-in\",\"publisher_id\":\"valkama\",\"version\":\"1.0.0\"}",
    "state": "registered",
    "updated_at": "2026-10-30T00:00:00Z"
+  }
+ ],
+ "platform_registry_audit": [
+  {
+   "at": "2026-10-30T00:00:00Z",
+   "detail_json": "{}",
+   "entity_id": "planning",
+   "entity_kind": "module",
+   "event_kind": "module.registered",
+   "sequence": 1
+  },
+  {
+   "at": "2026-10-30T00:00:00Z",
+   "detail_json": "{}",
+   "entity_id": "memory",
+   "entity_kind": "module",
+   "event_kind": "module.registered",
+   "sequence": 2
+  },
+  {
+   "at": "2026-10-30T00:00:00Z",
+   "detail_json": "{}",
+   "entity_id": "settings",
+   "entity_kind": "module",
+   "event_kind": "module.registered",
+   "sequence": 3
   }
  ],
  "platform_registry_meta": [

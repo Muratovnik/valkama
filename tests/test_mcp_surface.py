@@ -26,11 +26,11 @@ from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from server import mcp_surface, store, ui_state
+from server import mcp_surface, store
 from server.ops import tray
 from server.planning import api as planning_api
 from server.planning import service as planning_service
-from server.platform import core as platform_core
+from tests import registry_rows
 
 SPACE_NAME = "Wire Surface"
 SPACE_KEY = "WIR"
@@ -98,15 +98,14 @@ class McpSurfaceTestCase(unittest.TestCase):
         written = stdout.buffer.getvalue().decode("utf-8")
         return [json.loads(line) for line in written.splitlines() if line.strip()]
 
-    def test_disabled_planning_and_improvements_tools_refuse_at_dispatch(self) -> None:
+    def test_planning_tools_answer_whatever_a_dead_module_row_says(self) -> None:
+        # The module rows are dead data: no row turns Planning off any more.
+        registry_rows.seed_modules(self.conn)
+        self.conn.execute("UPDATE platform_modules SET state='disabled'")
         self.conn.commit()
-        platform_core.module_state_command(
-            self.conn,
-            os.environ["VALKAMA_DB"],
-            {"module_id": "planning", "state": "disabled", "expected_revision": 1},
+        self.assertIn(
+            "planning_spaces", mcp_surface.call_tool(self.conn, "list_planning_spaces", {})
         )
-        with self.assertRaises(ui_state.PlatformHttpError):
-            mcp_surface.call_tool(self.conn, "list_planning_spaces", {})
         with self.assertRaisesRegex(ValueError, "unknown tool"):
             mcp_surface.call_tool(self.conn, "get_improvements_profile", {})
 

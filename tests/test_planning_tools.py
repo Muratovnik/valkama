@@ -163,13 +163,6 @@ class PlanningToolCallTests(unittest.TestCase):
         self.assertTrue(self.call("delete_work_item", id=created["reference"])["deleted"])
         self.assertEqual(1, len(self.call("list_work_items", space="QA")["work_items"]))
 
-    def test_a_disabled_planning_module_refuses_a_neutral_tool_too(self) -> None:
-        self.conn.execute(
-            "UPDATE platform_modules SET state = 'disabled' WHERE module_id = 'planning'"
-        )
-        with self.assertRaisesRegex(Exception, "disabled"):
-            self.call("list_work_items", space="QA")
-
     def test_a_tool_nobody_declared_is_refused(self) -> None:
         with self.assertRaisesRegex(ValueError, "unknown tool"):
             self.call("invent_work_item")

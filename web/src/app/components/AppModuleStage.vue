@@ -8,18 +8,16 @@ import ModuleFrame from '@/widgets/module-frame/components/ModuleFrame.vue'
 
 import type { PlatformContextReady } from '@/shared/api/platformApiTypes.ts'
 import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
-import type { ModuleId, ModuleRegistration } from '@/shared/api/platformModuleContract.ts'
+import type { ModuleId } from '@/shared/api/platformModuleContract.ts'
 import type { OperatingScope, PlatformRoute } from '@/shared/api/platformRoute.ts'
 const props = defineProps<{
   activeModule: ModuleId
   context: PlatformContextReady | null
   locale: string
-  moduleRegistrations: readonly ModuleRegistration[]
   moduleTitle: string
   primaryWriteScopeId: string | null
   route: PlatformRoute
   scope: OperatingScope
-  reloadModules: () => Promise<void>
 }>()
 const emit = defineEmits<{
   'connection': [state: 'connecting' | 'live' | 'reconnecting']
@@ -63,8 +61,6 @@ defineExpose({ refresh })
     <SettingsView
       :locale="locale"
       :section="stateValue('section', 'general')"
-      :module-registrations="moduleRegistrations"
-      :reload-modules="reloadModules"
       @locale="(value) => emit('locale', value)"
       @state="(state) => emit('state', state)"
     />

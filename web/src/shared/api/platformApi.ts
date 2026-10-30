@@ -3,7 +3,7 @@
  *
  * The contracts live beside this file, one module per read model. What is left
  * here is the request: the query a scope becomes, the endpoint each read model
- * is fetched from, and the two commands that write.
+ * is fetched from, and the one command that writes.
  */
 
 import { assertScope, invalid } from '@/shared/api/platformApiGuards.ts'
@@ -18,15 +18,8 @@ import {
   validatePlatformContextPayload,
   validatePlatformUiPrefsResult,
 } from '@/shared/api/platformContextPayload.ts'
-import {
-  validateModuleRegistration,
-  validateModulesPayload,
-} from '@/shared/api/platformModuleContract.ts'
-import type {
-  ModuleId,
-  ModuleRegistration,
-  ModulesPayload,
-} from '@/shared/api/platformModuleContract.ts'
+import { validateModulesPayload } from '@/shared/api/platformModuleContract.ts'
+import type { ModulesPayload } from '@/shared/api/platformModuleContract.ts'
 import type { OperatingScope } from '@/shared/api/platformRoute.ts'
 import { validatePlatformUiState } from '@/shared/api/platformUiState.ts'
 import { readJsonResponse } from '@/shared/api/readJsonResponse.ts'
@@ -58,28 +51,6 @@ export async function requestUnknown(input: string, init?: RequestInit): Promise
 
 export async function fetchModules(): Promise<ModulesPayload> {
   return validateModulesPayload(await requestUnknown('/api/modules'))
-}
-
-export async function setModuleState(
-  moduleId: ModuleId,
-  state: 'enabled' | 'disabled',
-  expectedRevision: number,
-): Promise<ModuleRegistration> {
-  const payload = await requestUnknown('/api/modules/state', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ module_id: moduleId, state, expected_revision: expectedRevision }),
-  })
-  const object = payload as { interface_version?: unknown; module?: unknown }
-  if (object.interface_version !== 'valkama-modules') invalid('module_result', 'wrong interface')
-  const registration = validateModuleRegistration(object.module, 'module_result.module')
-  if (
-    registration.manifest.module_id !== moduleId ||
-    registration.state !== state ||
-    registration.revision !== expectedRevision + 1
-  )
-    invalid('module_result.module', 'response does not match optimistic mutation')
-  return registration
 }
 
 export async function fetchPlatformContext(scope: OperatingScope): Promise<PlatformContextPayload> {

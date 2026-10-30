@@ -2,8 +2,8 @@
 
 One tool, deliberately. The Kernel answers most questions through a module's own
 surface, and what an agent needs from it directly is the list of modules this
-build declares — which is a read, and the only one that is not somebody else's
-subject.
+build declares — which is a read of `modules`, answered without touching the
+store, and the only one that is not somebody else's subject.
 
 Here rather than in the MCP surface for the same reason Planning and
 Improvements own theirs: a schema and the handler behind it are read and changed
@@ -16,7 +16,7 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Callable
 
-from . import module_gate
+from . import modules as platform_modules
 
 READ_ONLY = {"readOnlyHint": True, "idempotentHint": True, "openWorldHint": False}
 
@@ -31,9 +31,5 @@ TOOLS = [
 ]
 
 OPS: dict[str, Callable[[sqlite3.Connection, dict], object]] = {
-    "list_platform_modules": lambda conn, _a: module_gate.modules_payload(conn),
+    "list_platform_modules": lambda _conn, _a: platform_modules.modules_payload(),
 }
-
-#: Derived, never restated: a hand-written second list is how a tool ends up
-#: published without the gate its module is supposed to carry.
-TOOL_NAMES = frozenset(OPS)

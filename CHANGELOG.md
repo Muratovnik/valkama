@@ -41,6 +41,13 @@ checkouts are therefore distinguishable even at the same version.
   any other field is refused by name, including a record installed with the
   earlier, longer manifest. Capabilities are an open set of dotted lowercase
   ids. Check and install such an adapter again.
+- The module list (Planning, Memory, Settings) is declared in code.
+  `GET /api/modules` and the MCP tool `list_platform_modules` keep their shape
+  and answer from it without reading the store: every module is `enabled`, none
+  is `mutable`, every `revision` is 1 and `updated_at` is when the list last
+  changed. Settings no longer declares the registry's read models, and the
+  entity kinds `service`, `connection` and `registry` left the reference
+  vocabulary. The export's `settings` section no longer carries module rows.
 
 ### Fixed
 
@@ -70,6 +77,12 @@ checkouts are therefore distinguishable even at the same version.
   A store keeps its registry tables and rows unchanged and nothing seeds them;
   only the export's `relations` section still reads the adapter links. The
   work-item read no longer carries a `relations` key.
+- **Breaking for HTTP clients:** turning a module on or off. `POST
+  /api/modules/state` answers 404, the Settings Workspace section that held the
+  switches is gone, and a disabled module row in an existing store no longer
+  hides or refuses anything. The store keeps its `platform_modules` and
+  `platform_registry_audit` rows unchanged; no feature reads or writes them,
+  and only the historical migrations of a store older than schema 8 still do.
 
 ## [1.0.2] - 2026-09-27
 

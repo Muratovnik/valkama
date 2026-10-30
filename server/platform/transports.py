@@ -100,9 +100,6 @@ class TransportError(Exception):
         self.code = code
         self.message = message[:512]
 
-    def diagnostic(self) -> dict:
-        return {"code": self.code, "message": self.message}
-
 
 class _NoRedirect(request.HTTPRedirectHandler):
     """Refuse every redirect rather than follow one.

@@ -25,6 +25,7 @@ from server.planning.routing import PlanningRouting
 from server.projects import project_registry, scopes
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
+from tests import registry_rows
 from tests.registry_fixtures import project_entry, registry_bytes
 
 
@@ -251,7 +252,7 @@ class PlanningScopeHttpTests(unittest.TestCase):
         self.assertEqual("unavailable", missing["coverage"][0]["status"])
         self.assertNotIn(str(self.root), json.dumps(missing))
 
-    def test_global_new_reads_refuse_malformed_queries_and_report_disabled_sources(self) -> None:
+    def test_global_new_reads_refuse_malformed_queries_and_ignore_dead_module_rows(self) -> None:
         for path in (
             "/api/modules/planning/search?q=only&q=other",
             "/api/modules/planning/search?q=only&limit=101",
@@ -262,7 +263,10 @@ class PlanningScopeHttpTests(unittest.TestCase):
             with self.subTest(path=path):
                 status, answer = self.request(path)
                 self.assertEqual(400, status, answer)
+        # A module row that says Planning is off is dead data: every source is
+        # still read. A source that cannot be read is the next test's subject.
         conn = store.connect()
+        registry_rows.seed_modules(conn)
         conn.execute("UPDATE platform_modules SET state='disabled' WHERE module_id='planning'")
         conn.commit()
         conn.close()
@@ -273,8 +277,10 @@ class PlanningScopeHttpTests(unittest.TestCase):
             with self.subTest(path=path):
                 status, answer = self.request(path)
                 self.assertEqual(200, status, answer)
-                self.assertEqual([], answer["items"])
-                self.assertEqual("unavailable", answer["coverage"][0]["status"])
+                self.assertTrue(answer["coverage"], answer)
+                self.assertEqual(
+                    ["searched"], sorted({entry["status"] for entry in answer["coverage"]})
+                )
 
     def test_old_attached_request_capability_is_explicitly_unavailable(self) -> None:
         conn = sqlite3.connect(self.attached)

@@ -15,7 +15,6 @@ import json
 import sqlite3
 from collections.abc import Callable, Mapping
 
-from ..platform import module_gate
 from ..projects import project_registry
 from ..store_identity.refs import planning_space_ref, validate_work_item_ref
 from ..ui_state import PlatformHttpError, envelope
@@ -223,7 +222,6 @@ def handle_get(
         return 200, interactions.request_list(routing, parameters)
     if path == "/api/modules/planning/request":
         return 200, interactions.request_detail(routing, parameters)
-    module_gate.require_module_enabled(conn, "planning")
     if path == PORTFOLIO_PATH:
         return 200, planning_payload(routing, parameters)
     if item_loader is None:

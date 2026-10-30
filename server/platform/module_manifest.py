@@ -1,7 +1,8 @@
 """The ``valkama-modules`` manifest: what one module declares about itself.
 
-Kept apart from the adapter contract because the module gate reads it on every
-request and must stay small: a module manifest names its actions by ID only.
+The modules this build ships are declared in `modules`, and each declaration is
+held to this shape when the server imports it. Kept apart from the adapter
+contract because a module manifest names its actions by ID only.
 """
 
 from __future__ import annotations
@@ -24,8 +25,15 @@ from ..store_identity.primitives import (
 MODULES_INTERFACE = "valkama-modules"
 
 
-def validate_module_manifest(value):
-    """Validate the backend half of the frozen ``valkama-modules`` wire."""
+def validate_module_manifest(value, *, entity_kinds=ENTITY_KINDS):
+    """Validate the backend half of the frozen ``valkama-modules`` wire.
+
+    `entity_kinds` is the vocabulary the manifest's kinds are read in: the
+    current one by default, and a wider one only for a migration reading a
+    manifest an earlier build persisted.
+    """
+
+    kinds = frozenset(entity_kinds) | {"adapter-resource"}
     obj = _object(
         value,
         (
@@ -110,7 +118,7 @@ def validate_module_manifest(value):
         },
         "secondary_context": {
             level: _validate_secondary_context(
-                secondary_obj[level], f"module_manifest.secondary_context.{level}"
+                secondary_obj[level], f"module_manifest.secondary_context.{level}", kinds
             )
             for level in ("global", "project")
         },
@@ -127,7 +135,7 @@ def validate_module_manifest(value):
         "supported_entity_kinds": _list(
             obj["supported_entity_kinds"],
             "module_manifest.supported_entity_kinds",
-            item=lambda item, where: _enum(item, ENTITY_KINDS | {"adapter-resource"}, where),
+            item=lambda item, where: _enum(item, kinds, where),
         ),
         "primary_actions": _list(
             obj["primary_actions"],
@@ -189,13 +197,13 @@ def _validate_module_level(value, where):
     }
 
 
-def _validate_secondary_context(value, where):
+def _validate_secondary_context(value, where, kinds):
     obj = _object(value, ("kinds", "behavior"), where=where)
     return {
         "kinds": _list(
             obj["kinds"],
             f"{where}.kinds",
-            item=lambda item, path: _enum(item, ENTITY_KINDS | {"adapter-resource"}, path),
+            item=lambda item, path: _enum(item, kinds, path),
         ),
         "behavior": _enum(obj["behavior"], {"all", "none", "unavailable"}, f"{where}.behavior"),
     }

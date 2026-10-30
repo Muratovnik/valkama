@@ -29,7 +29,6 @@ const portfolio = source('../src/pages/planning/PlanningPortfolio.vue')
 const itemList = source('../src/widgets/work-item-views/components/WorkItemList.vue')
 const segmented = source('../src/shared/ui/SegmentedControl.vue')
 const settings = source('../src/pages/settings/SettingsView.vue')
-const settingsModules = source('../src/pages/settings/components/SettingsModules.vue')
 
 test('platformRoute is the sole route owner for the six-module shell', () => {
   assert.match(navigation, /resolvePlatformRoute/)
@@ -118,13 +117,11 @@ test('session navigation refuses ambiguous project ownership', () => {
   assert.doesNotMatch(liveFeed, /kind: 'work-item'/)
 })
 
-test('Settings switches modules from the module registrations alone', () => {
-  assert.match(settings, /<SettingsModules/)
-  assert.match(moduleStage, /:module-registrations="moduleRegistrations"/)
-  assert.match(settingsModules, /setModuleState\(/)
-  assert.match(settingsModules, /<ToggleSwitch/)
-  assert.match(settingsModules, /registration\.mutable/)
-  assert.doesNotMatch(`${settings}\n${settingsModules}`, /registry|assignment|grant/i)
+test('Settings changes nothing about which modules exist', () => {
+  // The module list is the build's: no section, prop or request can switch one.
+  assert.doesNotMatch(settings, /SettingsModules|workspace|ToggleSwitch|setModuleState/)
+  assert.doesNotMatch(moduleStage, /module-registrations|reload-modules/)
+  assert.doesNotMatch(settings, /registry|assignment|grant/i)
   assert.doesNotMatch(settings, /listIntegrations|updateIntegration|\/api\/integrations/)
 })
 

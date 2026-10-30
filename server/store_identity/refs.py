@@ -145,27 +145,6 @@ def validate_skill_ref(value):
     return result
 
 
-def validate_service_ref(value):
-    obj = _object(value, ("owner_id", "service_id"), where="service_ref")
-    return {
-        "owner_id": _identifier(obj["owner_id"], "service_ref.owner_id"),
-        "service_id": _identifier(obj["service_id"], "service_ref.service_id"),
-    }
-
-
-def validate_connection_ref(value):
-    obj = _object(
-        value, ("service_ref", "adapter_lineage_id", "connection_id"), where="connection_ref"
-    )
-    return {
-        "service_ref": validate_service_ref(obj["service_ref"]),
-        "adapter_lineage_id": _identifier(
-            obj["adapter_lineage_id"], "connection_ref.adapter_lineage_id"
-        ),
-        "connection_id": _identifier(obj["connection_id"], "connection_ref.connection_id"),
-    }
-
-
 def validate_entity_ref(value):
     obj = _object(
         value,
@@ -181,13 +160,6 @@ def validate_entity_ref(value):
             "session_id",
             "skill_key",
             "source_scope",
-            "service_ref",
-            "owner_id",
-            "service_id",
-            "connection_ref",
-            "adapter_lineage_id",
-            "connection_id",
-            "registry_id",
         ),
         where="entity_ref",
     )
@@ -203,9 +175,6 @@ def validate_entity_ref(value):
         "memory-resource": {"kind", "resource_id"},
         "artifact": {"kind", "resource_id"},
         "improvement-case": {"kind", "resource_id"},
-        "service": {"kind", "owner_id", "service_id"},
-        "connection": {"kind", "service_ref", "adapter_lineage_id", "connection_id"},
-        "registry": {"kind", "registry_id"},
     }[kind]
     actual = set(obj)
     # ``project_id`` is an optional key for project-scoped skills.  It is
@@ -237,23 +206,7 @@ def validate_entity_ref(value):
                 {"client_family": obj["client_family"], "session_id": obj["session_id"]}
             ),
         }
-    if kind == "skill":
-        skill = validate_skill_ref(
-            {key: obj[key] for key in ("skill_key", "source_scope", "project_id") if key in obj}
-        )
-        return {"kind": kind, **skill}
-    if kind == "service":
-        service = validate_service_ref(
-            {"owner_id": obj["owner_id"], "service_id": obj["service_id"]}
-        )
-        return {"kind": kind, **service}
-    if kind == "connection":
-        connection = validate_connection_ref(
-            {
-                "service_ref": obj["service_ref"],
-                "adapter_lineage_id": obj["adapter_lineage_id"],
-                "connection_id": obj["connection_id"],
-            }
-        )
-        return {"kind": kind, **connection}
-    return {"kind": kind, "registry_id": _identifier(obj["registry_id"], "entity_ref.registry_id")}
+    skill = validate_skill_ref(
+        {key: obj[key] for key in ("skill_key", "source_scope", "project_id") if key in obj}
+    )
+    return {"kind": kind, **skill}
