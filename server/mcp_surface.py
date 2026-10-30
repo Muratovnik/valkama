@@ -12,7 +12,7 @@ import sqlite3
 import sys
 from collections.abc import Callable
 
-from . import static_assets
+from . import launcher, static_assets
 from .ops import configuration, tray
 from .planning import api as planning_api
 from .planning import model as planning_model
@@ -259,15 +259,16 @@ def _write_message(payload: dict) -> None:
     sys.stdout.buffer.flush()
 
 
-# Appended to a tool result once this process is provably running code the
-# checkout no longer has. Written for the agent that receives it: it says what
+# Appended to a tool result once this process is provably running code its
+# launcher no longer starts. Written for the agent that receives it: it says what
 # is wrong with the answer it just got, and the one action that fixes it.
 STALE_BUILD_WARNING = (
-    "WARNING: this Valkama MCP server is running code that the checkout no longer"
-    " has — the working tree changed after this process started, and a client"
-    " session opened now would get a different build. The result above came from"
-    " the old one. Restart this client session so it spawns the current server,"
-    " and treat anything surprising above as possibly stale."
+    "WARNING: this Valkama MCP server is running code its launcher no longer"
+    " starts — the source changed, or the launcher was pinned to another release,"
+    " after this process started, and a client session opened now would get a"
+    " different build. The result above came from the old one. Restart this"
+    " client session so it spawns the current server, and treat anything"
+    " surprising above as possibly stale."
 )
 
 
@@ -336,7 +337,9 @@ def mcp_main() -> None:
     """Own the stdio session and its database handle."""
     conn = connect()
     try:
-        source_watch = static_assets.SourceWatch(static_assets.SOURCE_ROOT)
+        source_watch = static_assets.SourceWatch(
+            static_assets.SOURCE_ROOT, launched_from=launcher.pinned_source_reader()
+        )
         _mcp_loop(conn, source_watch, catalogue())
     finally:
         conn.close()

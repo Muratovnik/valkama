@@ -157,8 +157,13 @@ Y` gives each importer a private copy that the swap cannot see.
 `valkama.py` is the source entry-point shim and stays at the repository root.
 Agent clients must register the service-owned command installed by
 `python valkama.py launcher install`; the user-facing command path is stable and
-contains no checkout path. Only the managed launcher shim records the current
-source entry point and interpreter. The desktop installer and tray may keep their
+contains no checkout path. That command runs a pinned release — one commit
+copied out of the checkout — so edits here reach client sessions and the live
+store only at the next `launcher install`. Installing a commit that raises the
+store schema migrates the live store when the next session opens it: treat that
+install as the migration and give it the same backup and rollback. Only the
+managed launcher shim records the current release entry point and interpreter.
+The desktop installer and tray may keep their
 own service-owned install records. Moving the repository therefore requires one
 launcher reinstall and, for the desktop app, one rebuild/reinstall — not edits in
 every client and project configuration. Tests mirror the package under `tests/`,

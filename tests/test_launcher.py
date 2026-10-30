@@ -13,31 +13,59 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from server import cli, launcher
+from server import cli, launcher, static_assets
+
+ENTRY = "import json, sys\nprint(json.dumps(sys.argv[1:]))\n"
+
+
+def git(checkout: Path, *arguments: str) -> str:
+    completed = subprocess.run(
+        ["git", *arguments], cwd=checkout, check=True, capture_output=True, text=True
+    )
+    return completed.stdout.strip()
+
+
+def make_checkout(path: Path, body: str = ENTRY) -> Path:
+    """A Git checkout with one commit holding a Valkama entry point."""
+
+    path.mkdir(parents=True)
+    for arguments in (
+        ("init", "-q"),
+        ("config", "user.email", "launcher@test"),
+        ("config", "user.name", "launcher"),
+    ):
+        git(path, *arguments)
+    commit(path, body, "seed")
+    return path
+
+
+def commit(checkout: Path, body: str, message: str) -> str:
+    (checkout / "valkama.py").write_text(body, encoding="utf-8", newline="\n")
+    git(checkout, "add", "-A")
+    git(checkout, "commit", "-qm", message)
+    return git(checkout, "rev-parse", "HEAD")
 
 
 class LauncherTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name).resolve()
-        self.source = self.root / "checkout" / "valkama.py"
-        self.source.parent.mkdir()
-        self.source.write_text(
-            "import json, sys\nprint(json.dumps(sys.argv[1:]))\n",
-            encoding="utf-8",
-            newline="\n",
-        )
+        self.checkout = make_checkout(self.root / "checkout")
+        self.source = self.checkout / "valkama.py"
         self.directory = self.root / "bin"
+        self.releases = self.root / "releases"
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
-    def install(self, *, platform_name: str | None = None):
+    def install(self, *, platform_name: str | None = None, **options):
         return launcher.install(
             self.directory,
             platform_name=platform_name or os.name,
             python=sys.executable,
-            script=self.source,
+            checkout=options.pop("checkout", self.checkout),
+            releases=self.releases,
+            **options,
         )
 
     def listener_owner(
@@ -84,19 +112,130 @@ class LauncherTests(unittest.TestCase):
         for platform_name in ("nt", "posix"):
             with self.subTest(platform_name=platform_name):
                 directory = self.root / platform_name
-                launcher.install(
+                installed = launcher.install(
                     directory,
                     platform_name=platform_name,
                     python=sys.executable,
-                    script=self.source,
+                    checkout=self.checkout,
+                    releases=self.releases,
                 )
                 command = directory / launcher.command_name(platform_name)
                 shim = directory / launcher.SHIM_NAME
-                self.assertNotIn(str(self.source), command.read_text(encoding="utf-8"))
-                encoded_source = json.dumps(str(self.source), ensure_ascii=False)
+                self.assertNotIn(str(self.checkout), command.read_text(encoding="utf-8"))
+                self.assertNotIn(str(self.checkout), shim.read_text(encoding="utf-8"))
+                encoded_source = json.dumps(str(installed["source_script"]), ensure_ascii=False)
                 self.assertIn(encoded_source, shim.read_text(encoding="utf-8"))
                 if platform_name == "posix" and os.name != "nt":
                     self.assertTrue(command.stat().st_mode & stat.S_IXUSR)
+
+    def test_clients_run_the_committed_tree_not_the_working_tree(self) -> None:
+        head = git(self.checkout, "rev-parse", "HEAD")
+        self.source.write_text("raise SystemExit('unfinished edit')\n", encoding="utf-8")
+        installed = self.install()
+        pinned = Path(str(installed["source_script"]))
+        self.assertEqual(self.releases / head / "valkama.py", pinned)
+        self.assertEqual(ENTRY, pinned.read_text(encoding="utf-8"))
+        self.assertEqual(head, installed["revision"])
+        self.assertEqual(str(self.checkout), installed["checkout"])
+
+    def test_a_named_revision_is_pinned_and_the_previous_release_is_kept(self) -> None:
+        first = git(self.checkout, "rev-parse", "HEAD")
+        second = commit(self.checkout, "print('second')\n", "second")
+        self.assertEqual(second, self.install()["revision"])
+        rolled_back = self.install(revision=first)
+        self.assertEqual(first, rolled_back["revision"])
+        self.assertEqual(str(self.releases / first / "valkama.py"), rolled_back["source_script"])
+        self.assertTrue((self.releases / second / "valkama.py").is_file())
+
+    def test_an_existing_release_is_reused_only_after_it_verifies(self) -> None:
+        installed = self.install()
+        pinned = Path(str(installed["source_script"]))
+        # Running a release writes bytecode into it; that is not an edit.
+        (pinned.parent / "__pycache__").mkdir()
+        (pinned.parent / "__pycache__" / "valkama.cpython-311.pyc").write_bytes(b"\0")
+        self.assertEqual(installed["source_script"], self.install()["source_script"])
+        pinned.write_text("print('edited in place')\n", encoding="utf-8", newline="\n")
+        with self.assertRaisesRegex(launcher.LauncherError, "refusing to reuse"):
+            self.install()
+        self.assertEqual("print('edited in place')\n", pinned.read_text(encoding="utf-8"))
+
+    def test_a_commit_without_an_entry_point_leaves_no_release_behind(self) -> None:
+        (self.checkout / "README.md").write_text("kept\n", encoding="utf-8", newline="\n")
+        git(self.checkout, "add", "README.md")
+        git(self.checkout, "rm", "-q", "valkama.py")
+        git(self.checkout, "commit", "-qm", "drop the entry point")
+        self.source.write_text(ENTRY, encoding="utf-8", newline="\n")
+        with self.assertRaisesRegex(launcher.LauncherError, "no valkama.py"):
+            self.install()
+        self.assertEqual([], list(self.releases.iterdir()))
+        self.assertEqual("missing", launcher.status(self.directory)["state"])
+
+    def test_an_empty_commit_is_refused_with_a_reason(self) -> None:
+        git(self.checkout, "rm", "-q", "valkama.py")
+        git(self.checkout, "commit", "-qm", "empty the tree")
+        self.source.write_text(ENTRY, encoding="utf-8", newline="\n")
+        with self.assertRaisesRegex(launcher.LauncherError, "could not be unpacked"):
+            self.install()
+        self.assertEqual([], list(self.releases.iterdir()))
+
+    def test_only_the_root_of_a_git_checkout_can_be_pinned(self) -> None:
+        nested = self.checkout / "nested"
+        nested.mkdir()
+        (nested / "valkama.py").write_text(ENTRY, encoding="utf-8", newline="\n")
+        plain = self.root / "plain"
+        plain.mkdir()
+        (plain / "valkama.py").write_text(ENTRY, encoding="utf-8", newline="\n")
+        for checkout, reason in ((nested, "not its root"), (self.root, "not a Valkama")):
+            with self.subTest(checkout=checkout):
+                with self.assertRaisesRegex(launcher.LauncherError, reason):
+                    self.install(checkout=checkout)
+        with self.assertRaises(launcher.LauncherError):
+            self.install(checkout=plain)
+        with self.assertRaisesRegex(launcher.LauncherError, "git could not read"):
+            self.install(revision="no-such-revision")
+        self.assertEqual("missing", launcher.status(self.directory)["state"])
+
+    def test_a_release_installs_from_the_checkout_it_was_copied_from(self) -> None:
+        installed = self.install()
+        with mock.patch.object(
+            launcher, "source_script", return_value=Path(str(installed["source_script"]))
+        ):
+            self.assertEqual(self.checkout, launcher.default_checkout())
+        self.assertEqual(Path(launcher.__file__).resolve().parents[1], launcher.default_checkout())
+
+    def test_a_pinned_process_learns_that_the_launcher_moved_on(self) -> None:
+        first = git(self.checkout, "rev-parse", "HEAD")
+        installed = self.install()
+        pinned = Path(str(installed["source_script"]))
+        environment = {launcher.LAUNCHER_ENV: str(self.directory)}
+        with (
+            mock.patch.dict(os.environ, environment),
+            mock.patch.object(launcher, "source_script", return_value=pinned),
+        ):
+            reader = launcher.pinned_source_reader()
+            self.assertIsNotNone(reader)
+            assert reader is not None
+            clock = [1000.0]
+            watch = static_assets.SourceWatch(
+                pinned.parent, interval=5.0, clock=lambda: clock[0], launched_from=reader
+            )
+            clock[0] += 60
+            self.assertFalse(watch.drifted())
+            commit(self.checkout, "print('next')\n", "next")
+            self.install()
+            self.assertNotEqual(str(pinned), reader())
+            clock[0] += 60
+            self.assertTrue(watch.drifted())
+            self.install(revision=first)
+            clock[0] += 60
+            self.assertTrue(watch.drifted(), "drift is one-way even when the pin returns")
+        with (
+            mock.patch.dict(os.environ, environment),
+            mock.patch.object(launcher, "source_script", return_value=self.source),
+        ):
+            self.assertIsNone(launcher.pinned_source_reader(), "a checkout run is not the pin")
+        with mock.patch.dict(os.environ, {launcher.LAUNCHER_ENV: ""}):
+            self.assertIsNone(launcher.pinned_source_reader())
 
     def test_unmanaged_launcher_is_not_overwritten(self) -> None:
         self.directory.mkdir()
@@ -115,19 +254,11 @@ class LauncherTests(unittest.TestCase):
             self.install()
         with self.assertRaisesRegex(launcher.LauncherError, "drifted"):
             launcher.uninstall(self.directory)
-        self.assertEqual(
-            launcher.install(
-                self.directory,
-                force=True,
-                python=sys.executable,
-                script=self.source,
-            )["state"],
-            "installed",
-        )
+        self.assertEqual(self.install(force=True)["state"], "installed")
 
     def test_missing_source_keeps_managed_ownership_but_reports_unavailable(self) -> None:
-        self.install()
-        self.source.unlink()
+        installed = self.install()
+        Path(str(installed["source_script"])).unlink()
         state = launcher.status(self.directory)
         self.assertEqual(state["state"], "installed")
         self.assertFalse(state["source_available"])
@@ -143,7 +274,7 @@ class LauncherTests(unittest.TestCase):
         def reader(_port):
             return [owner]
 
-        self.source.unlink()
+        Path(str(installed["source_script"])).unlink()
         ownership_while_moved = launcher.listener_status(
             self.directory,
             platform_name="nt",
@@ -153,19 +284,16 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(owner["identity_token"], ownership_while_moved["process_identity"])
         self.assertEqual(owner["executable_path"], ownership_while_moved["executable_path"])
 
-        moved = self.root / "moved-checkout" / "valkama.py"
-        moved.parent.mkdir()
-        moved.write_text("print('moved')\n", encoding="utf-8", newline="\n")
+        moved = make_checkout(self.root / "moved-checkout", "print('moved')\n")
 
-        reinstalled = launcher.install(
-            self.directory,
-            platform_name="nt",
-            python=sys.executable,
-            script=moved,
-        )
+        reinstalled = self.install(platform_name="nt", checkout=moved)
         self.assertEqual(command, reinstalled["command"])
         self.assertEqual(shim, reinstalled["shim"])
-        self.assertEqual(str(moved), reinstalled["source_script"])
+        self.assertEqual(str(moved), reinstalled["checkout"])
+        self.assertEqual(
+            "print('moved')\n",
+            Path(str(reinstalled["source_script"])).read_text(encoding="utf-8"),
+        )
 
         ownership = launcher.listener_status(
             self.directory,
@@ -485,9 +613,23 @@ class LauncherTests(unittest.TestCase):
     def test_cli_launcher_round_trip(self) -> None:
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
-            cli.main(["launcher", "install", "--directory", str(self.directory)])
+            cli.main(
+                [
+                    "launcher",
+                    "install",
+                    "--directory",
+                    str(self.directory),
+                    "--checkout",
+                    str(self.checkout),
+                    "--releases",
+                    str(self.releases),
+                    "--revision",
+                    "HEAD",
+                ]
+            )
         installed = json.loads(output.getvalue())
         self.assertEqual(installed["state"], "installed")
+        self.assertEqual(git(self.checkout, "rev-parse", "HEAD"), installed["revision"])
 
         output = io.StringIO()
         with contextlib.redirect_stdout(output):

@@ -606,6 +606,34 @@ class SetupTests(unittest.TestCase):
             [sys.executable, setup.entry_point_path(), "launcher", "install"], finding["command"]
         )
 
+    def test_a_release_pinned_from_this_checkout_is_verified_with_its_lag(self) -> None:
+        checkout = os.path.dirname(setup.entry_point_path())
+        listings = {
+            "codex": self.result(self.codex_listing(self.launcher_command)),
+            "claude": self.result(self.claude_listing(self.launcher_command)),
+        }
+        pinned = self.launcher_state(
+            source_script="D:/releases/" + "a" * 40 + "/valkama.py",
+            source_available=True,
+            checkout=checkout,
+            revision="a" * 40,
+        )
+        for head, lag in (("a" * 40, False), ("b" * 40, True)):
+            with (
+                self.subTest(head=head),
+                mock.patch.object(setup.launcher, "checkout_revision", return_value=head),
+            ):
+                finding = self.finding(self.inspect(listings, launcher_state=pinned), "launcher")
+                self.assertEqual("ok", finding["status"])
+                self.assertIn("aaaaaaaaaaaa pinned from", finding["detail"])
+                self.assertEqual(lag, "bbbbbbbbbbbb" in finding["detail"])
+        elsewhere = {**pinned, "checkout": "D:/another/checkout"}
+        finding = self.finding(self.inspect(listings, launcher_state=elsewhere), "launcher")
+        self.assertEqual("fail", finding["status"])
+        missing = {**pinned, "source_available": False}
+        finding = self.finding(self.inspect(listings, launcher_state=missing), "launcher")
+        self.assertEqual("fail", finding["status"])
+
     def test_missing_utf8_environment_replaces_an_otherwise_stable_registration(self) -> None:
         reading = self.inspect(
             {

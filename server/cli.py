@@ -319,6 +319,10 @@ def _launcher_parser(commands: argparse._SubParsersAction) -> None:
         action.add_argument("--directory", default=None)
         if name in {"install", "uninstall"}:
             action.add_argument("--force", action="store_true")
+        if name == "install":
+            action.add_argument("--revision", default="HEAD")
+            action.add_argument("--checkout", default=None)
+            action.add_argument("--releases", default=None)
     listener = actions.add_parser(
         "listener",
         help="inspect or stop the HTTP listener owned by the managed launcher",
@@ -333,7 +337,13 @@ def _launcher_parser(commands: argparse._SubParsersAction) -> None:
 def _launcher_main(parser: argparse.ArgumentParser, options: argparse.Namespace) -> None:
     try:
         if options.launcher_action == "install":
-            result = launcher.install(options.directory, force=options.force)
+            result = launcher.install(
+                options.directory,
+                force=options.force,
+                checkout=options.checkout,
+                revision=options.revision,
+                releases=options.releases,
+            )
         elif options.launcher_action == "uninstall":
             result = launcher.uninstall(options.directory, force=options.force)
         elif options.launcher_action == "listener" and options.listener_action == "stop":

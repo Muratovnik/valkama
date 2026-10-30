@@ -88,13 +88,18 @@ register:
 - Windows: `%LOCALAPPDATA%\Valkama\bin\valkama.cmd`
 - macOS/Linux: `$XDG_BIN_HOME/valkama` or `~/.local/bin/valkama`
 
-The user-facing command contains no source-checkout path. A managed Python shim
-beside it is the durable process identity; its manifest records the current
-`valkama.py`, interpreter and managed hashes. Agent clients, the tray and the
-desktop all use that verified pair. After moving the checkout, run `launcher
-install` once from the new location; client configuration and listener
-ownership remain unchanged. See [`SERVICE.md`](SERVICE.md) for ownership, safe
-listener reconciliation, drift handling, uninstall and relocation details.
+The user-facing command contains no source-checkout path. It runs a pinned
+release: the checkout's current commit, copied out with `git archive` and never
+edited, so uncommitted work in the checkout never reaches a client session or
+the store it opens. Run `launcher install` again to publish newer commits, or
+with `--revision <commit>` to go back to an earlier release. A managed Python
+shim beside the command is the durable process identity; its manifest records
+the release's `valkama.py`, the pinned commit, the interpreter and managed
+hashes. Agent clients, the tray and the desktop all use that verified pair.
+After moving the checkout, run `launcher install` once from the new location;
+client configuration and listener ownership remain unchanged. See
+[`SERVICE.md`](SERVICE.md) for releases, ownership, safe listener
+reconciliation, drift handling, uninstall and relocation details.
 
 ### 3. Register it with your agent
 
@@ -208,7 +213,7 @@ python valkama.py <command> [options]
 | `serve [--port 8642]` | serve the JSON API and Valkama UI |
 | `capabilities` | report public interfaces, MCP revisions and tool count as JSON without reading user data |
 | `status [--launcher-directory DIR]` | report source, database, runtime and launcher state without opening the database |
-| `launcher install [--directory DIR] [--force]` | atomically install or repair the stable client command |
+| `launcher install [--revision REV] [--checkout DIR] [--releases DIR] [--directory DIR] [--force]` | pin a commit as a release and atomically install or repair the stable client command that runs it |
 | `launcher status [--directory DIR]` | verify launcher ownership and hashes |
 | `launcher listener status\|stop [--port 8642]` | inspect or stop only the Windows listener proven to run through the managed shim |
 | `launcher uninstall [--directory DIR] [--force]` | remove only the managed launcher files |
@@ -538,7 +543,8 @@ change installed skill files or agent-client settings.
 `desktop/` is a thin Electron shell. It verifies the managed launcher, checks
 that its Python server is listening, then shows Valkama in a real window with
 its own process, taskbar entry and icon. It runs `runtime` and `serve` through
-the stable shim, whose manifest selects this repository; there is no second
+the stable shim, whose manifest selects the release pinned from this
+repository; there is no second
 desktop source record or checkout-path fallback.
 
 ```bash

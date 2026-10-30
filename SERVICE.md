@@ -1,7 +1,8 @@
 # Valkama service contract
 
 Valkama owns the command that clients, the tray and the desktop use to start it.
-None of them points directly into the source checkout.
+None of them points directly into the source checkout: the command runs a pinned
+release, one commit of the checkout copied out and never edited.
 
 ## Install the launcher
 
@@ -19,10 +20,48 @@ The result is JSON containing `command` and `args`. The default command is:
 
 The launcher directory contains three managed files: the user-facing command, a
 Python shim and a hash manifest. The command itself contains no checkout path.
-The manifest records the current `valkama.py`, the exact Python interpreter and
-the hashes that let every local surface verify the command and shim before use.
+The manifest records the release's `valkama.py`, the commit it was pinned from
+(`revision`), the checkout it came from (`checkout`), the exact Python
+interpreter and the hashes that let every local surface verify the command and
+shim before use.
 
-Moving the repository requires one reinstall from the new checkout:
+## Pinned releases
+
+`launcher install` writes the commit it is given (`--revision`, default `HEAD`)
+with `git archive` into the releases directory (`--releases` overrides it):
+
+- Windows: `%LOCALAPPDATA%\Valkama\releases\<commit>`
+- macOS/Linux: `$XDG_DATA_HOME/valkama/releases/<commit>` or
+  `~/.local/share/valkama/releases/<commit>`
+
+Only committed files reach a release, so an unfinished edit in the checkout
+cannot break or migrate anything a client session opens. Each new client session
+spawns its own server, and that server opens the live store; with a pinned
+release, code reaches the store only when someone runs `launcher install`. That
+is the one step that publishes the checkout's newer commits to clients, and the
+step at which a raised store schema migrates the store.
+
+A release is staged and renamed into place whole, with a record of every file's
+hash. Installing a commit that already has a release reuses it after checking
+those hashes; a release that has been edited is refused, not repaired, because a
+running server may be using it. Releases are kept after a newer install, so the
+previous one is the rollback:
+
+```text
+python valkama.py launcher install --revision <previous commit>
+```
+
+A running server notices when the launcher has been pinned to another release
+and appends a warning to its tool results until its client restarts it. The
+store schema still governs the opposite case: a release older than the store
+refuses to open it.
+
+The stable command can install too. Run from a release, `launcher install` pins
+from the checkout that release was copied from; `--checkout` names another one.
+
+## Move the checkout
+
+Moving the repository requires one install from the new checkout:
 
 ```text
 python /new/path/valkama.py launcher install
@@ -30,10 +69,10 @@ python /new/path/valkama.py launcher install
 
 The stable command and shim paths do not change, so client configuration and
 listener ownership remain valid. A listener started before the move still names
-that same shim in its process command line; after reinstall, the tray or desktop
-can safely replace it if its runtime is stale. A missing former source is
-reported as unavailable but does not erase managed ownership, so reinstalling
-from the new checkout needs no relocation exception or old-path scan.
+that same shim in its process command line; after the install, the tray or
+desktop can safely replace it if its runtime is stale. A missing release is
+reported as unavailable but does not erase managed ownership, so installing
+again needs no relocation exception or old-path scan.
 
 An edited or partially missing managed file is reported as `drifted` and is not
 overwritten or removed without `--force`.
@@ -43,6 +82,9 @@ Remove only the managed launcher files with:
 ```text
 python valkama.py launcher uninstall
 ```
+
+Uninstalling leaves the releases directory alone. Delete a release yourself once
+no Valkama process runs from it.
 
 ## Managed listener lifecycle
 

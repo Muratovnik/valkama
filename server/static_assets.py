@@ -11,7 +11,7 @@ import hashlib
 import json
 import os
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -222,6 +222,11 @@ class SourceWatch:
 
     Drift is one-way. A process cannot become current again -- only a restart
     does that -- so once this is true it stays true and stops reading the tree.
+
+    A process started from a pinned release has a third signal. Its own files
+    never change, so the tree alone would never drift; `launched_from` answers
+    which entry point the launcher starts now, and a different answer than at
+    start is drift too.
     """
 
     def __init__(
@@ -230,12 +235,15 @@ class SourceWatch:
         *,
         interval: float = 5.0,
         clock: object = None,
+        launched_from: Callable[[], str | None] | None = None,
     ) -> None:
         self._root = source_root
         self._interval = interval
         self._clock = clock if callable(clock) else time.monotonic
         self._stamp = source_stamp(source_root)
         self._digest = backend_digest(source_root)
+        self._launched_from = launched_from
+        self._launched = launched_from() if launched_from is not None else None
         self._checked = self._clock()
         self._drifted = False
 
@@ -256,6 +264,9 @@ class SourceWatch:
         if now - self._checked < self._interval:
             return False
         self._checked = now
+        if self._launched_from is not None and self._launched_from() != self._launched:
+            self._drifted = True
+            return True
         stamp = source_stamp(self._root)
         if stamp == self._stamp:
             return False

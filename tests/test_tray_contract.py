@@ -270,7 +270,8 @@ $message = try {{
                 directory,
                 platform_name="nt",
                 python=sys.executable,
-                script=os.path.join(ROOT, "valkama.py"),
+                checkout=ROOT,
+                releases=Path(temporary) / "releases",
             )
             done = subprocess.run(
                 [

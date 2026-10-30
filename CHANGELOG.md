@@ -48,6 +48,16 @@ checkouts are therefore distinguishable even at the same version.
   changed. Settings no longer declares the registry's read models, and the
   entity kinds `service`, `connection` and `registry` left the reference
   vocabulary. The export's `settings` section no longer carries module rows.
+- `launcher install` pins a release: it copies one commit of the checkout
+  (`--revision`, default `HEAD`) with `git archive` into the releases directory,
+  and the stable command runs that copy instead of the working tree. Uncommitted
+  edits no longer reach new client sessions or the store they open; newer
+  commits reach clients at the next `launcher install`, and an earlier
+  `--revision` is the rollback. The launcher manifest gains `revision` and
+  `checkout`, keeping its schema version. A running MCP server warns once the
+  launcher has been pinned to another release, and `doctor` reports how far the
+  checkout has moved past the pinned commit. Run `launcher install` once after
+  updating so the stable command stops running the checkout directly.
 
 ### Fixed
 

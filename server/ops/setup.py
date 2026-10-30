@@ -124,6 +124,23 @@ def _prerequisites() -> list[dict]:
     return findings
 
 
+def _pinned_detail(command: str, checkout: str, revision: str) -> str:
+    """Which commit clients run, and whether this checkout has moved past it.
+
+    A checkout ahead of its pinned release is the normal state while work is in
+    progress, not a fault: commits reach clients only through the next install.
+    """
+
+    detail = f"verified at {command}; clients run {revision[:12]} pinned from {checkout}"
+    try:
+        head = launcher.checkout_revision(checkout)
+    except launcher.LauncherError:
+        return detail
+    if head != revision:
+        detail += f"; this checkout is at {head[:12]} — `launcher install` pins it"
+    return detail
+
+
 def _launcher_finding() -> tuple[dict, dict[str, object]]:
     """Verify the managed launcher and its binding to this checkout."""
 
@@ -150,6 +167,7 @@ def _launcher_finding() -> tuple[dict, dict[str, object]]:
             ),
             state,
         )
+    pinned_from = str(state.get("checkout") or "")
     if state.get("state") == "installed" and current and _same_path(current, entry):
         return (
             _finding(
@@ -157,6 +175,21 @@ def _launcher_finding() -> tuple[dict, dict[str, object]]:
                 "Stable launcher",
                 "ok",
                 f"verified at {command}; source is {entry}",
+            ),
+            state,
+        )
+    if (
+        state.get("state") == "installed"
+        and state.get("source_available")
+        and pinned_from
+        and _same_path(os.path.join(pinned_from, ENTRY_POINT), entry)
+    ):
+        return (
+            _finding(
+                "launcher",
+                "Stable launcher",
+                "ok",
+                _pinned_detail(command, pinned_from, str(state.get("revision") or "")),
             ),
             state,
         )
