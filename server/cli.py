@@ -250,9 +250,7 @@ def _adapter_command(options) -> None:
             print("no external adapters are declared")
         return
     if options.adapter_command == "remove":
-        # The declaration only. Registry rows an earlier start wrote for this
-        # adapter stay where they are, as README says, until the migration that
-        # drops the registry tables takes them with everything else.
+        # The declaration is all there is: no table holds an installed adapter.
         declared = installed.remove(options.adapter_id)
         print(
             f"removed the declaration of {options.adapter_id}"
@@ -283,7 +281,6 @@ def _adapter_command(options) -> None:
         raise SystemExit("nothing to install: the adapter served no usable manifest")
     path = installed.install(installation["manifest"], installation["transport"])
     print(f"declared at {path}")
-    print("It becomes a Connection on the next start of the server or the tray.")
 
 
 def _adapter_report(options) -> tuple[dict, dict | None]:

@@ -13,7 +13,7 @@ import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
 export const CONTEXT_INTERFACE = 'valkama-context' as const
 export const UI_PREFS_INTERFACE = 'valkama-ui-prefs' as const
 
-export type BindingState = 'mapped' | 'unbound' | 'stale' | 'detached' | 'ambiguous' | 'unavailable'
+export type BindingState = 'mapped' | 'unbound' | 'unavailable'
 
 export type ProjectDirectoryResource = {
   resource_ref: EntityRef

@@ -3,7 +3,6 @@
 import type { WorkflowState, WorkItem } from '@/shared/api/planningModel.ts'
 import type { BindingState } from '@/shared/api/platformApiTypes.ts'
 import type { PlanningSpaceRef, WorkItemRef } from '@/shared/api/platformPlanningRefs.ts'
-import type { PlatformRelationsPayload } from '@/shared/api/platformRelations.ts'
 import type { OperatingScope } from '@/shared/api/platformRoute.ts'
 import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
 
@@ -58,7 +57,6 @@ export type PlatformPlanningPayload = {
 }
 
 export type PlanningWorkItemReady = {
-  relations: PlatformRelationsPayload
   work_item: WorkItem
 }
 

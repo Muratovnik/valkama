@@ -99,9 +99,11 @@ class McpSurfaceTestCase(unittest.TestCase):
         return [json.loads(line) for line in written.splitlines() if line.strip()]
 
     def test_disabled_planning_and_improvements_tools_refuse_at_dispatch(self) -> None:
-        platform = platform_core.Platform(self.conn, os.environ["VALKAMA_DB"])
-        platform.module_state_command(
-            {"module_id": "planning", "state": "disabled", "expected_revision": 1}
+        self.conn.commit()
+        platform_core.module_state_command(
+            self.conn,
+            os.environ["VALKAMA_DB"],
+            {"module_id": "planning", "state": "disabled", "expected_revision": 1},
         )
         with self.assertRaises(ui_state.PlatformHttpError):
             mcp_surface.call_tool(self.conn, "list_planning_spaces", {})

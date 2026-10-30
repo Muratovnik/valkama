@@ -158,7 +158,7 @@ class AppShellTests(unittest.TestCase):
         self.assertIsNone(app_shell.ui_prefs_record(self.conn))
         self.assertIsNone(self.context(scope_kind="global")["state"]["payload"]["ui_prefs"])
 
-    def test_the_shell_owns_its_paths_and_the_registry_does_not(self) -> None:
+    def test_the_shell_answers_its_own_paths_and_no_others(self) -> None:
         status, payload = app_shell.handle_post(
             self.conn,
             app_shell.UI_PREFS_PATH,
@@ -170,12 +170,7 @@ class AppShellTests(unittest.TestCase):
         )
         self.assertEqual((200, "planning"), (status, payload["prefs"]["module_id"]))
         self.assertIsNone(app_shell.handle_post(self.conn, "/api/platform/relations", {}))
-        self.assertIsNone(
-            platform_core.handle_post(self.conn, self.db, app_shell.UI_PREFS_PATH, payload)
-        )
-        for path in app_shell.READ_PATHS:
-            with self.subTest(path=path):
-                self.assertIsNone(platform_core.handle_get(self.conn, self.db, path, {}))
+        self.assertIsNone(app_shell.handle_post(self.conn, platform_core.MODULE_STATE_PATH, {}))
         status, modules = app_shell.handle_get(self.conn, self.db, app_shell.MODULES_PATH, {})
         self.assertEqual(200, status)
         self.assertEqual(

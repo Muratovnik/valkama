@@ -13,8 +13,13 @@ import {
 } from '@/shared/api/contract.ts'
 import { validateWorkItemRecord } from '@/shared/api/planningModel.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
-import { invalid } from '@/shared/api/platformActionRef.ts'
-import { BINDING_STATES, enumField, ISO, PROJECT_ID } from '@/shared/api/platformApiGuards.ts'
+import {
+  BINDING_STATES,
+  enumField,
+  invalid,
+  ISO,
+  PROJECT_ID,
+} from '@/shared/api/platformApiGuards.ts'
 import type { BindingState } from '@/shared/api/platformApiTypes.ts'
 import { validateTypedState } from '@/shared/api/platformContextPayload.ts'
 import { validatePlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
@@ -28,7 +33,6 @@ import type {
   PlatformPlanningPayload,
   PlatformPlanningReady,
 } from '@/shared/api/platformPlanningTypes.ts'
-import { validatePlatformRelationsPayload } from '@/shared/api/platformRelations.ts'
 import { validateOperatingScope } from '@/shared/api/platformRoute.ts'
 
 const planningEnvelopeSchema = strictObject({
@@ -111,11 +115,9 @@ export function validatePlatformPlanningPayload(
 }
 
 // The populated work item is Planning's own shape and is validated by Planning's
-// own contract; this boundary owns the envelope around it and the Kernel
-// relations beside it.
+// own contract; this boundary owns the envelope around it.
 const workItemReadySchema = strictObject({
   work_item: z.unknown(),
-  relations: fromValidator(validatePlatformRelationsPayload),
 })
 
 function workItem(value: unknown, path: string): WorkItem {
@@ -125,7 +127,7 @@ function workItem(value: unknown, path: string): WorkItem {
 function planningWorkItemReady(value: unknown, path: string): PlanningWorkItemReady {
   const record = parseContract(workItemReadySchema, value, path, invalid)
   // The item is deep-cloned away from the caller's payload, so it stays a call.
-  return { relations: record.relations, work_item: workItem(record.work_item, `${path}.work_item`) }
+  return { work_item: workItem(record.work_item, `${path}.work_item`) }
 }
 
 const planningWorkItemPayloadSchema = strictObject({

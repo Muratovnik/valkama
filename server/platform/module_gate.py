@@ -5,11 +5,10 @@ persisted about it -- one row per module in `platform_modules` -- and answers
 the question every surface asks before a module's work runs: is exactly one
 registration for it present, valid and enabled.
 
-It imports nothing from the extension registry, so Planning and the app shell
-can be gated without loading the registry. The registry builds on it instead:
-`RegistryError` is defined here because an inconsistent module row is the first
-inconsistency a persisted registry can have, and the registry's own refusals
-are refinements of it.
+Planning, the app shell and every surface are gated through it, so it imports
+nothing but the module declaration and the identity vocabulary. `RegistryError`
+is defined here because an inconsistent module row is the inconsistency this
+module reports; the migrations raise it for the persisted catalog as well.
 """
 
 from __future__ import annotations

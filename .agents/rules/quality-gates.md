@@ -55,7 +55,8 @@ shift that `ruff format` had introduced after the run.
 
 Two test files state properties rather than examples, and `property_settings.py`
 owns how Hypothesis is configured for both. `test_contract_properties.py` says
-what every `platform_contracts` validator does with any accepted payload;
+what every identity-ref validator and the adapter manifest validator do with
+any accepted payload;
 `test_board_properties.py` drives arbitrary sequences of board operations
 against a throwaway store and asserts what every sequence leaves true. They are
 the reason the suite now needs a third-party package at all: the server still

@@ -111,9 +111,8 @@ _HTTP_ROUTE_MODULES = {
     **{("POST", path): "planning" for path in planning_api.WRITE_PATHS},
     ("GET", "/api/search"): "planning",
     ("GET", "/api/scopes"): "planning",
-    # The installation's own health belongs to the module that shows the
-    # registry: Settings is where an operator already goes to see what is
-    # connected and why something is not.
+    # The installation's own health belongs to Settings: it is where an
+    # operator already goes to see what is connected and why something is not.
     ("GET", "/api/doctor"): "settings",
     ("GET", "/api/session"): "planning",
     ("POST", "/api/ingest"): "planning",
@@ -205,7 +204,6 @@ _NOT_FOUND: _Answer = (
     404,
     {"error": {"code": "not_found", "message": "API endpoint was not found"}},
 )
-_PLAIN_NOT_FOUND: _Answer = _Raw(404, b"not found", "text/plain")
 
 
 def _generic_failure(status: int = 400) -> _Answer:
@@ -290,8 +288,6 @@ class _Boundary(NamedTuple):
     commit: _Commit
     exact: frozenset[str] = frozenset()
     prefix: str | None = None
-    #: The answer when the handler says the path is not its own.
-    missing: _Answer = _NOT_FOUND
     notify: _Notify | None = None
 
 
@@ -365,10 +361,6 @@ def _shell_read(call: _Call) -> _Answer | None:
     return app_shell.handle_get(call.store(), db_path(), call.path, call.parameters)
 
 
-def _registry_read(call: _Call) -> _Answer | None:
-    return platform_core.handle_get(call.store(), db_path(), call.path, call.parameters)
-
-
 def _execution_write(call: _Call) -> _Answer | None:
     return execution_api.handle_post(call.store(), call.path, call.payload)
 
@@ -385,8 +377,8 @@ def _shell_write(call: _Call) -> _Answer | None:
     return app_shell.handle_post(call.store(), call.path, call.payload)
 
 
-def _registry_write(call: _Call) -> _Answer | None:
-    return platform_core.handle_post(call.store(), db_path(), call.path, call.payload)
+def _module_state_write(call: _Call) -> _Answer | None:
+    return 200, platform_core.module_state_command(call.store(), db_path(), call.payload)
 
 
 def _ingest_write(call: _Call) -> _Answer | None:
@@ -419,12 +411,6 @@ def _exact_error(error: Exception) -> _Answer:
     """Planning's exact-scope routes and the app shell: the `ui_state` envelope."""
 
     return _kernel_answer(error, ui_state.error_response)
-
-
-def _registry_error(error: Exception) -> _Answer:
-    """The extension registry's routes, whose own refusals map before the envelope's."""
-
-    return _kernel_answer(error, platform_core.error_response)
 
 
 def _ingest_error(error: Exception) -> _Answer:
@@ -479,9 +465,8 @@ _GET_BOUNDARIES: tuple[_Boundary, ...] = (
         errors=execution_api.error_response,
         commit=_Commit.READ_ONLY,
     ),
-    # The three rows below answer under `/api/platform/` and `/api/modules`;
-    # the exact rows come first, so only what neither claims reaches the
-    # registry's prefix row.
+    # The two rows below answer under `/api/platform/` and `/api/modules`.
+    # Nothing else does: any other path there falls through to a plain 404.
     _Boundary(
         exact=planning_exact_api.READ_PATHS,
         handler=_planning_exact_read,
@@ -493,13 +478,6 @@ _GET_BOUNDARIES: tuple[_Boundary, ...] = (
         handler=_shell_read,
         errors=_exact_error,
         commit=_Commit.READ_ONLY,
-    ),
-    _Boundary(
-        prefix="/api/platform/",
-        handler=_registry_read,
-        errors=_registry_error,
-        commit=_Commit.READ_ONLY,
-        missing=_PLAIN_NOT_FOUND,
     ),
 )
 
@@ -531,11 +509,10 @@ _POST_BOUNDARIES: tuple[_Boundary, ...] = (
         commit=_Commit.DOMAIN,
     ),
     _Boundary(
-        exact=platform_core.WRITE_PATHS,
-        handler=_registry_write,
-        errors=_registry_error,
+        exact=frozenset({platform_core.MODULE_STATE_PATH}),
+        handler=_module_state_write,
+        errors=_exact_error,
         commit=_Commit.DOMAIN,
-        notify=_Notify(frozenset({"/api/platform/relations"})),
     ),
     _Boundary(
         exact=frozenset({"/api/ingest"}),
@@ -698,9 +675,7 @@ class Handler(BaseHTTPRequestHandler):
             finally:
                 conn.close()
         except Exception as error:
-            # The registry's mapper, because `connect()` still brings the
-            # registry up and can fail with one of its refusals.
-            response = platform_core.error_response(error)
+            response = ui_state.error_response(error)
             if method in {"POST", "PUT"} and response[0] == 500:
                 self._send_generic_failure(500)
             else:
@@ -730,7 +705,7 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 answer = boundary.handler(call)
                 if answer is None:
-                    self._answer(boundary.missing)
+                    self._answer(_NOT_FOUND)
                     return
                 if boundary.commit is _Commit.SURFACE and conn is not None:
                     conn.commit()

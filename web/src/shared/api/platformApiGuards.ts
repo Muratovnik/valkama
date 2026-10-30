@@ -21,16 +21,10 @@ export const ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/u
 export const PROJECT_ID = /^[a-z][a-z0-9-]{0,159}$/u
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
 export const ISO = /^\d{4}-\d{2}-\d{2}T[^\s]{1,80}Z$/u
-export const BINDING_STATES = [
-  'mapped',
-  'unbound',
-  'stale',
-  'detached',
-  'ambiguous',
-  'unavailable',
-] as const
+/** The binding states the server's routing answers with. */
+export const BINDING_STATES = ['mapped', 'unbound', 'unavailable'] as const
 
-function invalid(path: string, detail: string): never {
+export function invalid(path: string, detail: string): never {
   throw new PlatformApiContractError(path, detail)
 }
 

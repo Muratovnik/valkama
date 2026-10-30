@@ -9,8 +9,8 @@ answer is in a projection and nobody knows which call made it.
 So the checks fall in two groups. The manifest group is offline and answers
 whether the document is a valid adapter declaration. The behaviour group needs
 the adapter running, and every case in it is a refusal the adapter is supposed
-to produce: a capability it never declared, a payload that is not an object, a
-body larger than its own stated ceiling. Passing those is the conformance;
+to produce: a capability it never declared, and a payload that is not an
+object. Passing those is the conformance;
 answering them cheerfully is the failure the tool exists to name.
 
 It reports in the vocabulary `doctor` already uses — a finding per check with a
@@ -25,7 +25,7 @@ import json
 import os
 
 from ..platform import external, installed, transports
-from ..platform.contracts import validate_adapter_manifest
+from ..platform.adapter_contract import validate_adapter_manifest
 from . import doctor
 
 #: What a record may weigh before this refuses to read it. A conformance tool
@@ -112,35 +112,6 @@ def _manifest_findings(raw: object) -> tuple[list[dict], dict | None]:
             "An adapter that declares no capability can be installed and then asked for nothing."
             if not capabilities
             else "",
-        )
-    )
-
-    # Every capability needs a permission, or the installer cannot show the
-    # owner what enabling it allows — which §18.5 requires before enabling.
-    declared = {str(item["permission_id"]) for item in manifest["permissions"]}
-    unpermitted = [item for item in capabilities if item not in declared]
-    findings.append(
-        _finding(
-            "permissions",
-            "Permission declarations",
-            "warn" if unpermitted else "ok",
-            f"{len(declared)} declared; {', '.join(unpermitted)} without one"
-            if unpermitted
-            else f"{len(declared)} declared, one per capability",
-            "§18.5 requires the owner to see what a Connection allows before"
-            " enabling it. A capability with no permission shows nothing."
-            if unpermitted
-            else "",
-        )
-    )
-
-    contract = manifest["health_contract"]
-    findings.append(
-        _finding(
-            "bounds",
-            "Declared bounds",
-            "ok",
-            f"{contract['timeout_ms']} ms, {contract['max_payload_bytes']} bytes",
         )
     )
     return findings, manifest

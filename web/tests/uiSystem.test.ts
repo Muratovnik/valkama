@@ -27,14 +27,6 @@ test('state presentation is dimension-aware instead of guessing from labels', ()
     tone: 'success',
     emphasis: 'quiet',
   })
-  assert.deepEqual(statePresentation('skill-readiness', 'partial'), {
-    tone: 'info',
-    emphasis: 'quiet',
-  })
-  assert.deepEqual(statePresentation('skill-readiness', 'invalid'), {
-    tone: 'danger',
-    emphasis: 'strong',
-  })
   assert.deepEqual(statePresentation('platform-ui-state', 'degraded'), {
     tone: 'warning',
     emphasis: 'strong',

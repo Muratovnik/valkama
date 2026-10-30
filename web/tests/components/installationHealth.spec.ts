@@ -140,4 +140,31 @@ describe('InstallationHealth resource state', () => {
       )
     },
   )
+  it.each(['en', 'ru'])('names an adapter record the contract refused in %s', async (locale) => {
+    const data = structuredClone(report)
+    data.status = 'warn'
+    data.summary = { fail: 0, ok: 0, unknown: 0, warn: 1 }
+    data.levels[0].status = 'warn'
+    data.levels[0].checks = [
+      {
+        id: 'adapter-record-old-adapter',
+        title: 'Adapter record old-adapter',
+        status: 'warn',
+        detail: 'old-adapter.json: unknown field(s): permissions',
+        fix: 'valkama adapter install',
+        presentation: { code: 'adapter-record-refused', parameters: { adapter: 'old-adapter' } },
+      },
+    ]
+    vi.mocked(fetchDoctorReport).mockResolvedValueOnce(data)
+    const wrapper = mountHealth(locale)
+    await flushPromises()
+    const finding = wrapper.get('.health-finding')
+    expect(finding.get('.health-finding-state').text()).toContain('old-adapter')
+    expect(finding.get('.health-detail').text()).toContain(
+      locale === 'en' ? 'adapter contract' : 'контракту адаптера',
+    )
+    expect(finding.get('.health-action').text()).toContain(
+      locale === 'en' ? 'reinstall' : 'переустановите',
+    )
+  })
 })

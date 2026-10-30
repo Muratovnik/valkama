@@ -7,7 +7,7 @@ import {
   plainObject,
   requiredString,
   UUID_LOWERCASE,
-} from '@/shared/api/platformRelationGuards.ts'
+} from '@/shared/api/platformRefGuards.ts'
 
 /** The shape of a planning space key: short, uppercase, and stable. */
 const SPACE_KEY = /^[A-Z][A-Z0-9]{1,7}$/u

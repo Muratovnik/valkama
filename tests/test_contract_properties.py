@@ -1,6 +1,6 @@
-"""Laws the wire contracts obey for every payload, not for the chosen examples.
+"""Laws the identity contracts and the adapter manifest obey for every payload.
 
-`test_platform_contracts.py` states what each validator does with particular values.
+`test_store_identity.py` states what each validator does with particular values.
 This file states what all of them do with any value: a validator normalizes
 once and for all, invents no field, shares no substructure with its input, and
 refuses both an unknown key and a missing one. Those are the properties a
@@ -25,7 +25,9 @@ from hypothesis import strategies as st
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from server.platform import contracts as platform_contracts
+from server.platform import adapter_contract
+from server.store_identity import primitives as identity_primitives
+from server.store_identity import refs as identity_refs
 from tests.property_settings import use_gate_profile
 
 use_gate_profile()
@@ -74,12 +76,19 @@ CONNECTION_REFS = st.fixed_dictionaries(
         "connection_id": IDENTIFIERS,
     }
 )
-REGISTRY_REFS = st.fixed_dictionaries({"registry_id": IDENTIFIERS})
-ADAPTER_RESOURCE_REFS = st.fixed_dictionaries(
+# Mirrors _CAPABILITY_RE, shortened: two or three dotted lowercase parts.
+CAPABILITY_IDS = st.from_regex(r"[a-z][a-z0-9-]{0,12}(\.[a-z][a-z0-9-]{0,12}){1,2}", fullmatch=True)
+VERSIONS = st.tuples(
+    st.integers(min_value=0, max_value=999),
+    st.integers(min_value=0, max_value=999),
+    st.integers(min_value=0, max_value=999),
+).map(lambda parts: "{}.{}.{}".format(*parts))
+ADAPTER_MANIFESTS = st.fixed_dictionaries(
     {
-        "connection_ref": CONNECTION_REFS,
-        "resource_type": IDENTIFIERS,
-        "external_id": IDENTIFIERS,
+        "contract_version": st.just(adapter_contract.ADAPTER_INTERFACE),
+        "adapter_id": IDENTIFIERS,
+        "version": VERSIONS,
+        "capabilities": st.lists(CAPABILITY_IDS, unique=True, max_size=4),
     }
 )
 
@@ -87,19 +96,15 @@ ADAPTER_RESOURCE_REFS = st.fixed_dictionaries(
 # strategy produces exactly the keys that contract requires, which is what lets
 # the deletion law below treat any present key as load-bearing.
 CONTRACTS = {
-    "project_ref": (platform_contracts.validate_project_ref, PROJECT_REFS),
-    "operating_scope": (platform_contracts.validate_operating_scope, OPERATING_SCOPES),
-    "planning_space_ref": (platform_contracts.validate_planning_space_ref, SPACE_REFS),
-    "work_item_ref": (platform_contracts.validate_work_item_ref, WORK_ITEM_REFS),
-    "session_ref": (platform_contracts.validate_session_ref, SESSION_REFS),
-    "skill_ref": (platform_contracts.validate_skill_ref, SKILL_REFS),
-    "service_ref": (platform_contracts.validate_service_ref, SERVICE_REFS),
-    "connection_ref": (platform_contracts.validate_connection_ref, CONNECTION_REFS),
-    "registry_ref": (platform_contracts.validate_registry_ref, REGISTRY_REFS),
-    "adapter_resource_ref": (
-        platform_contracts.validate_adapter_resource_ref,
-        ADAPTER_RESOURCE_REFS,
-    ),
+    "project_ref": (identity_refs.validate_project_ref, PROJECT_REFS),
+    "operating_scope": (identity_refs.validate_operating_scope, OPERATING_SCOPES),
+    "planning_space_ref": (identity_refs.validate_planning_space_ref, SPACE_REFS),
+    "work_item_ref": (identity_refs.validate_work_item_ref, WORK_ITEM_REFS),
+    "session_ref": (identity_refs.validate_session_ref, SESSION_REFS),
+    "skill_ref": (identity_refs.validate_skill_ref, SKILL_REFS),
+    "service_ref": (identity_refs.validate_service_ref, SERVICE_REFS),
+    "connection_ref": (identity_refs.validate_connection_ref, CONNECTION_REFS),
+    "adapter_manifest": (adapter_contract.validate_adapter_manifest, ADAPTER_MANIFESTS),
 }
 PAYLOADS = st.one_of(
     *(st.tuples(st.just(name), strategy) for name, (_validator, strategy) in CONTRACTS.items())
@@ -107,8 +112,6 @@ PAYLOADS = st.one_of(
 # Cannot collide with a real field: every optional key in these contracts
 # contains an underscore, and this alphabet has none.
 FOREIGN_KEYS = st.from_regex(r"[a-z]{1,12}", fullmatch=True)
-
-DANGEROUS_SCHEMES = ("file", "javascript", "data", "vbscript", "smb")
 
 
 def poison(value: object) -> None:
@@ -156,7 +159,7 @@ class ContractLawTests(unittest.TestCase):
         validate, _strategy = CONTRACTS[name]
         if key in payload:
             return
-        with self.assertRaises(platform_contracts.UnknownFieldError):
+        with self.assertRaises(identity_primitives.UnknownFieldError):
             validate({**payload, key: "value"})
 
     @given(PAYLOADS, st.integers(min_value=0))
@@ -167,7 +170,7 @@ class ContractLawTests(unittest.TestCase):
         validate, _strategy = CONTRACTS[name]
         keys = sorted(payload)
         removed = keys[choice % len(keys)]
-        with self.assertRaises(platform_contracts.MissingFieldError):
+        with self.assertRaises(identity_primitives.MissingFieldError):
             validate({key: value for key, value in payload.items() if key != removed})
 
 
@@ -176,8 +179,8 @@ class SpaceKeyLawTests(unittest.TestCase):
     def test_a_space_key_is_never_accepted_with_padding(self, ref, padding) -> None:
         # A space is addressed by key, so " QA" and "QA" must not both resolve;
         # one of them is a typo.
-        with self.assertRaises(platform_contracts.ContractError):
-            platform_contracts.validate_planning_space_ref(
+        with self.assertRaises(identity_primitives.ContractError):
+            identity_refs.validate_planning_space_ref(
                 {**ref, "space_key": padding + ref["space_key"]}
             )
 
@@ -187,57 +190,29 @@ class SpaceKeyLawTests(unittest.TestCase):
         scope = ref["data_scope_id"]
         if scope == scope.upper():
             return
-        with self.assertRaises(platform_contracts.ContractError):
-            platform_contracts.validate_planning_space_ref({**ref, "data_scope_id": scope.upper()})
+        with self.assertRaises(identity_primitives.ContractError):
+            identity_refs.validate_planning_space_ref({**ref, "data_scope_id": scope.upper()})
 
     @given(WORK_ITEM_REFS)
     def test_a_reference_must_belong_to_the_space_it_is_paired_with(self, ref) -> None:
         # The pair is the identity. A reference from another space would route a
         # read to a store that does not hold the item.
         other = "OTH" if ref["space_ref"]["space_key"] != "OTH" else "OTX"
-        with self.assertRaises(platform_contracts.ContractError):
-            platform_contracts.validate_work_item_ref({**ref, "reference": f"{other}-1"})
+        with self.assertRaises(identity_primitives.ContractError):
+            identity_refs.validate_work_item_ref({**ref, "reference": f"{other}-1"})
 
 
-class OpenTargetLawTests(unittest.TestCase):
-    @given(st.sampled_from(DANGEROUS_SCHEMES), IDENTIFIERS, IDENTIFIERS)
-    def test_a_dangerous_scheme_is_refused_even_when_the_caller_allows_it(
-        self, scheme, host, kind
-    ) -> None:
-        # The allowlist is a caller's opinion; these five schemes are the
-        # module's own floor, and an adapter must not be able to lower it.
-        with self.assertRaises(platform_contracts.UnsafePayloadError):
-            platform_contracts.validate_open_target(
-                {"target_kind": kind, "uri": f"{scheme}://{host}"},
-                allowed_kinds={kind},
-                allowed_schemes={scheme},
-            )
+def _version(version: str) -> str:
+    """A version as the adapter manifest reads it, the one contract that takes one."""
 
-    @given(
-        st.from_regex(r"[a-z][a-z0-9+.-]{1,10}", fullmatch=True),
-        st.from_regex(r"[a-z][a-z0-9+.-]{1,10}", fullmatch=True),
-        IDENTIFIERS,
-        IDENTIFIERS,
-    )
-    def test_a_scheme_outside_the_allowlist_is_refused(self, scheme, allowed, host, kind) -> None:
-        if scheme == allowed or scheme in DANGEROUS_SCHEMES:
-            return
-        with self.assertRaises(platform_contracts.UnsafePayloadError):
-            platform_contracts.validate_open_target(
-                {"target_kind": kind, "uri": f"{scheme}://{host}"},
-                allowed_kinds={kind},
-                allowed_schemes={allowed},
-            )
-
-    @given(IDENTIFIERS, IDENTIFIERS)
-    def test_an_empty_allowlist_is_refused_rather_than_read_as_permissive(self, kind, host) -> None:
-        # An adapter that forgot to declare its schemes must fail closed.
-        with self.assertRaises(platform_contracts.ContractError):
-            platform_contracts.validate_open_target(
-                {"target_kind": kind, "uri": f"https://{host}"},
-                allowed_kinds={kind},
-                allowed_schemes=set(),
-            )
+    return adapter_contract.validate_adapter_manifest(
+        {
+            "contract_version": adapter_contract.ADAPTER_INTERFACE,
+            "adapter_id": "example",
+            "version": version,
+            "capabilities": [],
+        }
+    )["version"]
 
 
 class SemverLawTests(unittest.TestCase):
@@ -248,7 +223,7 @@ class SemverLawTests(unittest.TestCase):
     )
     def test_a_release_version_is_returned_unchanged(self, major, minor, patch) -> None:
         version = f"{major}.{minor}.{patch}"
-        self.assertEqual(version, platform_contracts.validate_semver(version))
+        self.assertEqual(version, _version(version))
 
     @given(
         st.integers(min_value=1, max_value=999),
@@ -258,8 +233,8 @@ class SemverLawTests(unittest.TestCase):
     def test_a_padded_component_is_refused(self, major, minor, patch) -> None:
         # 01.2.3 and 1.2.3 are the same release written twice, and a version
         # that sorts by string would order them apart.
-        with self.assertRaises(platform_contracts.ContractError):
-            platform_contracts.validate_semver(f"0{major}.{minor}.{patch}")
+        with self.assertRaises(identity_primitives.ContractError):
+            _version(f"0{major}.{minor}.{patch}")
 
 
 if __name__ == "__main__":

@@ -33,7 +33,7 @@ nothing and produces a 401 that looks like a wrong password.
 it rather than trusting `Content-Length`, which the other side controls.
 
 Nothing here knows what an adapter *is*. It moves bounded JSON to a checked
-address and names its failures; `providers.py` decides what that means.
+address and names its failures; `external.py` decides what that means.
 
 `CliTransport` is the same contract over a child process, and the differences
 are all about what a process can do that a socket cannot.

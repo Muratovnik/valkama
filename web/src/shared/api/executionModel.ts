@@ -23,8 +23,7 @@ import {
   z,
 } from '@/shared/api/contract.ts'
 import { WORK_ITEM_REFERENCE } from '@/shared/api/planningModel.ts'
-import { invalid } from '@/shared/api/platformActionRef.ts'
-import { enumField, ISO } from '@/shared/api/platformApiGuards.ts'
+import { enumField, invalid, ISO } from '@/shared/api/platformApiGuards.ts'
 
 const EXECUTION_API = 'valkama-execution-api' as const
 

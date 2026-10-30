@@ -17,14 +17,11 @@ session context are part of a work item.
 
 | Term | Meaning |
 | --- | --- |
-| Kernel | The small product core that owns module discovery, routing, scopes, capabilities, Connections, Assignments, normalized projections, security, and diagnostics. |
+| Kernel | The small product core that owns module discovery, routing, operating scopes, the external adapter contract, normalized projections, security, and diagnostics. |
 | Module | A user-facing domain with its own route namespace, entities, actions, and lifecycle. |
 | View | A presentation of one module's entities. It owns neither domain data nor integrations. |
-| Adapter | Code that implements one or more Capabilities through a concrete built-in or external tool. It owns no product route. |
-| Service | A tool or system for which Valkama can create Connections through an Adapter. |
-| Connection | A configured, health-checked instance of a Service or built-in tool. |
-| Capability | A typed operation requested by a Module and implemented by one or more Adapters. Its definition owns cardinality, permissions, and unavailable behavior. |
-| Assignment | The explicit selection of Connections for one Capability at installation or project scope. |
+| Adapter | Code that answers one or more Capabilities for a concrete built-in or external tool. An external Adapter declares itself in a four-field manifest and is reached through a transport its owner supplies. It owns no product route. |
+| Capability | A named operation, a dotted lowercase id such as `memory.open`, that an Adapter declares it answers. |
 | Projection | A normalized Valkama read model. Provider-native payloads do not cross directly into product UI. |
 | Project | A stable user project identity and its root, independent of a Planning representation. |
 | PlanningSpace | A planning namespace within a Project. |
@@ -32,6 +29,11 @@ session context are part of a work item.
 | WorkItem | A unit of planned work. |
 | Execution | One attempt to perform a WorkItem. |
 | Session | One exact provider-client session that may participate in an Execution. |
+
+Service, Connection, Assignment and permission grant named the records of the
+extension registry, which has been removed;
+[ADR 0010](decisions/0010-coordination-from-session-identity.md), still a draft,
+records why. None of them is a current product record.
 
 ## Load-bearing distinctions
 
@@ -42,24 +44,29 @@ session context are part of a work item.
 | Owns domain data | Yes | No | No |
 | Implements external or built-in capabilities | Requests them | No | Yes |
 
-A Capability definition describes what a Module needs. A Connection describes
-one usable tool instance. An Assignment chooses Connection references for a
-Capability. These records are not interchangeable.
+An adapter manifest names the adapter and the Capabilities it answers; the
+owner supplies where it is reached. Declaring an adapter enables nothing and
+authorizes nothing.
 
 A WorkItem expresses intent, an Execution records one attempt, and a Session is
 the provider's exact conversational/runtime container. One WorkItem can have
 many Executions, and one Execution can correlate with more than one Session.
 
-## Kernel scope and resolution
+## Adapters and capabilities
 
-Kernel contracts expose exactly two assignment scopes:
+An external Adapter's manifest has exactly four fields: the contract it speaks,
+its identity, its version, and the Capabilities it answers. A field the
+contract does not name is refused rather than ignored. Where the adapter runs
+is the owner's transport record, never part of the manifest; the
+[README](../README.md#external-adapters) describes the calls and the checks.
 
-- `installation`: the local default;
-- `project`: an explicit override keyed by stable `project_id`.
-
-Resolution is deterministic: project override, then installation default, then
-a typed unavailable result. Cardinality is enforced by the Capability; a
-multi-source capability never silently selects a first Connection.
+A Module uses the provider it is built with: Memory answers through its
+built-in Markdown provider for each registered project. No module selects among
+installed adapters. A call for a Capability the adapter did not declare is
+refused before it leaves, and a call that cannot reach the adapter fails with a
+typed error naming the cause. Asked for its health, an adapter that cannot be
+reached reads as a typed unavailable result with a diagnostic, never as an
+exception or a silent absence.
 
 ## Module registry and enablement
 
@@ -118,6 +125,6 @@ ambiguous bindings cannot supply an effective project root. Session refs, native
 opening, and execution launch, stop, resume, history, and typed results remain
 supported.
 
-Memory uses the existing provider and relation APIs. A work item keeps a typed
-pointer and stored label, including when the provider is unavailable. Retiring
+Memory reads through its own provider API. A work item keeps a typed `memory`
+pointer and its stored label, including when the provider is unavailable. Retiring
 the Skills catalogue does not alter installed skill files or client enablement.

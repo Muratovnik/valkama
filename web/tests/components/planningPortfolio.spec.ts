@@ -7,14 +7,7 @@ import PlanningPortfolio from '@/pages/planning/PlanningPortfolio.vue'
 
 import { messages } from '@/shared/i18n/index.ts'
 
-const bindingStates = [
-  'mapped',
-  'unbound',
-  'stale',
-  'detached',
-  'ambiguous',
-  'unavailable',
-] as const
+const bindingStates = ['mapped', 'unbound', 'unavailable'] as const
 
 const projects = bindingStates.map((bindingState) => ({
   binding_state: bindingState,
@@ -57,8 +50,8 @@ describe('PlanningPortfolio', () => {
   })
 
   it.each([
-    ['en', ['Mapped', 'Unbound', 'Stale', 'Detached', 'Ambiguous', 'Unavailable']],
-    ['ru', ['Связан', 'Не связан', 'Устарел', 'Отсоединён', 'Неоднозначен', 'Недоступен']],
+    ['en', ['Mapped', 'Unbound', 'Unavailable']],
+    ['ru', ['Связан', 'Не связан', 'Недоступен']],
   ] as const)(
     'renders every binding state through the shared semantic owner in %s',
     (locale, labels) => {

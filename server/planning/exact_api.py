@@ -24,9 +24,6 @@ from .routing import PlanningRouting, one, scope_parameters, space_ref_parameter
 
 PLANNING_INTERFACE = "valkama-planning"
 PLANNING_WORK_ITEM_INTERFACE = "valkama-planning-work-item"
-#: The registry's relation read model, which this route still carries empty so
-#: the browser's contract for it holds until both sides drop the key.
-RELATIONS_INTERFACE = "valkama-relations"
 
 PORTFOLIO_PATH = "/api/platform/planning"
 WORK_ITEM_PATH = "/api/modules/planning/work-item"
@@ -176,9 +173,8 @@ def work_item_payload(
     """One work item, read through the exact binding and store.
 
     The record comes from Planning's own service through the loader; this
-    function owns the scope and the binding. `relations` is the registry's
-    read model and is answered empty: the inspector reads links and refs from
-    the work item itself.
+    function owns the scope and the binding. The inspector reads links and
+    refs from the work item itself.
     """
 
     scope = scope_parameters(parameters, project_extras=("data_scope_id", "space_key", "reference"))
@@ -202,10 +198,7 @@ def work_item_payload(
         "work_item_ref": work_item_ref,
         "state": envelope(
             "ready",
-            payload={
-                "work_item": work_item,
-                "relations": {"interface_version": RELATIONS_INTERFACE, "relations": []},
-            },
+            payload={"work_item": work_item},
         ),
     }
 

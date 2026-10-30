@@ -1,4 +1,7 @@
-/** Runtime validated action references for Platform core/module/adapter actions. */
+/**
+ * The action reference a failure state may offer as its retry: one kernel, module or
+ * adapter action, bound to its owner's namespace.
+ */
 
 import { contractGuards } from '@/shared/api/contractGuards.ts'
 import type { EntityKind } from '@/shared/api/platformEntityRef.ts'
@@ -51,7 +54,7 @@ const ENTITY_KINDS = new Set<string>([
   'adapter-resource',
 ])
 
-export function invalid(path: string, detail: string): never {
+function invalid(path: string, detail: string): never {
   throw new PlatformActionValidationError(`${path}: ${detail}`)
 }
 
@@ -150,83 +153,3 @@ export function validateActionRef(value: unknown, path = 'action'): ActionRef {
     invocation_scope_schema: invocationScopeSchema,
   }
 }
-
-export function validateActionRefs(value: unknown, path = 'actions'): ActionRef[] {
-  if (!Array.isArray(value) || value.length > 128) invalid(path, 'expected bounded array')
-  const actions = value.map((action, index) => validateActionRef(action, `${path}[${index}]`))
-  const seen = new Set<string>()
-  for (const action of actions) {
-    if (seen.has(action.action_id)) invalid(path, `duplicate action_id ${action.action_id}`)
-    seen.add(action.action_id)
-  }
-  return actions
-}
-
-/**
- * Registry semantics are intentionally immutable: once an ID has been
- * observed, a later registration cannot silently replace its owner.
- */
-export class ActionRegistry {
-  private readonly entries = new Map<string, ActionRef>()
-
-  register(value: unknown): ActionRef {
-    const action = validateActionRef(value)
-    if (this.entries.has(action.action_id))
-      throw new PlatformActionValidationError(`action_id ${action.action_id} is already registered`)
-    this.entries.set(action.action_id, action)
-    return action
-  }
-
-  registerMany(value: unknown): readonly ActionRef[] {
-    const actions = validateActionRefs(value)
-    const local = new Set<string>()
-    for (const action of actions) {
-      if (local.has(action.action_id) || this.entries.has(action.action_id))
-        throw new PlatformActionValidationError(
-          `action_id ${action.action_id} is already registered`,
-        )
-      local.add(action.action_id)
-    }
-    for (const action of actions) this.entries.set(action.action_id, action)
-    return actions
-  }
-
-  get(actionId: string): ActionRef | undefined {
-    const action = this.entries.get(actionId)
-    return action === undefined ? undefined : { ...action }
-  }
-
-  list(): readonly ActionRef[] {
-    return [...this.entries.values()].map((action) => ({ ...action }))
-  }
-}
-
-export const CORE_ACTIONS: readonly ActionRef[] = [
-  {
-    interface_version: ACTIONS_INTERFACE,
-    action_id: 'core.work-item.create',
-    owner_kind: 'kernel',
-    owner_id: 'kernel',
-    input_schema_id: 'core.work-item.create',
-    target_kind: 'work-item',
-    invocation_scope_schema: 'either',
-  },
-  {
-    interface_version: ACTIONS_INTERFACE,
-    action_id: 'core.work-item.open',
-    owner_kind: 'kernel',
-    owner_id: 'kernel',
-    input_schema_id: 'core.work-item.open',
-    target_kind: 'work-item',
-    invocation_scope_schema: 'either',
-  },
-  {
-    interface_version: ACTIONS_INTERFACE,
-    action_id: 'core.work-item.attach-resource',
-    owner_kind: 'kernel',
-    owner_id: 'kernel',
-    input_schema_id: 'core.work-item.attach-resource',
-    target_kind: 'adapter-resource',
-    invocation_scope_schema: 'project',
-  },
-]

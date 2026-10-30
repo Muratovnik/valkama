@@ -23,8 +23,8 @@ questions about the store and knows nothing about who asked:
     static_assets.py  the built web UI, the checkout paths and runtime identity
     launcher.py     the managed stable command agent clients register
     watchers.py     change fan-out, shared by every surface
-    platform/       the kernel: the module manifest and its gate, contracts,
-                    registry, relations, scope and providers
+    platform/       the kernel: the module manifest and its gate, the store
+                    bring-up, and the external adapter contract and transports
     projects/       project and scope registries
 
 And below it the three surfaces, which own no domain rule of their own:

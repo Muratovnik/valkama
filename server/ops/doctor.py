@@ -518,13 +518,11 @@ _ADAPTER_FIXES = {
 }
 
 
-def _adapter_check(
-    adapter_id: str, state: str, diagnostics: dict | None, *, lineage_id: str = ""
-) -> dict:
+def _adapter_check(adapter_id: str, state: str, diagnostics: dict | None) -> dict:
     """One source's health as a check, in the shape the Diagnostics view reads.
 
-    The check id follows the lineage, which outlives a renamed adapter id; a
-    built-in's lineage is its id.
+    A built-in source is named by its lineage, which outlives a renamed adapter
+    id; an installed adapter by the id its manifest declares.
     """
 
     status = {"ready": "ok", "degraded": "warn", "unavailable": "warn"}.get(state, "unknown")
@@ -537,7 +535,7 @@ def _adapter_check(
         else "adapter-unavailable"
     )
     return _check(
-        f"adapter-{lineage_id or adapter_id}",
+        f"adapter-{adapter_id}",
         f"Adapter {adapter_id}",
         status,
         (diagnostics or {}).get("message", state),
@@ -576,7 +574,8 @@ def _adapter_checks() -> list[dict]:
     Built from the sources themselves rather than from a registry of them: the
     execution clients, the two journal readers, Git, and the declarations under
     the installed-adapters directory. A declaration whose destination the
-    policy refuses builds no provider and is not listed, as before.
+    policy refuses builds no provider and is not listed, as before; a record
+    the contract refuses is listed as a warning of its own.
     """
 
     checks = [
@@ -600,12 +599,33 @@ def _adapter_checks() -> list[dict]:
         )
     )
     checks.extend(
-        _adapter_check(
-            provider.adapter_id, *provider.health(), lineage_id=provider.adapter_lineage_id
-        )
+        _adapter_check(provider.adapter_id, *provider.health())
         for provider in installed.installed_providers()
     )
+    _, refused = installed.read_records()
+    checks.extend(_refused_record_check(refusal) for refusal in refused)
     return checks
+
+
+def _refused_record_check(refusal: dict) -> dict:
+    """A declaration the installed-adapters directory holds but cannot use.
+
+    Without this the adapter simply vanished from Diagnostics: a record written
+    in the manifest's earlier, longer form is refused by name of its extra
+    fields, builds no provider, and only `adapter list` said why.
+    """
+
+    name = Path(str(refusal["path"])).stem
+    return _check(
+        f"adapter-record-{name}",
+        f"Adapter record {name}",
+        "warn",
+        f"{refusal['path']}: {refusal['reason']}",
+        "Check the adapter again and reinstall it with `valkama adapter install`,"
+        " or delete the file if it is no longer used. Nothing else is affected.",
+        presentation_code="adapter-record-refused",
+        parameters={"adapter": name},
+    )
 
 
 def _project_checks() -> list[dict]:

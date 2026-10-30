@@ -27,7 +27,6 @@ test.beforeEach(async ({ page }) => {
           interface_version: 'valkama-ui-state',
           status: 'ready',
           payload: {
-            relations: { interface_version: 'valkama-relations', relations: [] },
             work_item: {
               work_item_id: '00000000-0000-4000-8000-000000000241',
               planning_space_id: '00000000-0000-4000-8000-000000000800',

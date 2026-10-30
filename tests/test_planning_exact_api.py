@@ -96,12 +96,10 @@ class PlanningExactApiTests(unittest.TestCase):
         self.assertEqual(self.item_ref, detail["work_item_ref"])
         payload = detail["state"]["payload"]
         self.assertEqual(self.item["reference"], payload["work_item"]["reference"])
-        # The item carries a memory ref, which the registry used to project as a
-        # relation. The route still answers the key, and answers it empty.
+        # The item carries a memory ref, which the inspector reads from the
+        # work item itself; the payload holds nothing else.
         self.assertEqual(["lsn_example"], [ref["value"] for ref in payload["work_item"]["refs"]])
-        self.assertEqual(
-            {"interface_version": "valkama-relations", "relations": []}, payload["relations"]
-        )
+        self.assertEqual(["work_item"], list(payload))
         self.assertNotIn("memory_body", json.dumps(detail))
 
     def test_a_missing_work_item_or_loader_is_refused(self) -> None:

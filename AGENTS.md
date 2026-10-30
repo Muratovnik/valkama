@@ -175,6 +175,16 @@ Analytics, Improvements, Skills management and Sessions monitoring must not be
 reseeded on upgrade. Removing their screens does not remove session identity,
 work-item history, execution links or installed client skills and settings.
 
+The extension registry (services, connections, assignments, grants, actions,
+packages, relations) is gone from the code. An external adapter is a record
+under `~/.valkama/adapters/` held to `platform/adapter_contract.py`: a manifest
+of exactly four fields and a transport the owner supplies. The registry's
+tables stay in the schema only so an existing store opens unchanged until a
+schema migration drops them. Their only remaining users are the store's own
+bring-up (the historical migrations, whose validators live in
+`platform/legacy_records.py`, and the postconditions), the rename carry-over
+and the `relations` export section. Do not add a reader, and do not seed rows.
+
 The product has now been renamed twice — Kanban, then Agent Hub, then this —
 and the lesson of the second one is written into the gates here: it renamed the
 sources and stopped, leaving the tray looking for its script beside the wrong
@@ -200,7 +210,7 @@ binding from a project name or directory.
 
 The kernel names the module platform, not a former product: `server/platform/`
 is the package, `platform_*` the tables, `platform.*` the i18n key space, and
-`valkama-*` the interface ids, none with a version suffix. Four literals are
+`valkama-*` the interface ids, none with a version suffix. Three literals are
 deliberately still spelled the old way because they name what earlier
 generations wrote on real disks; that list, the migration that renamed
 everything else, and the store-adoption and ownership rules live in

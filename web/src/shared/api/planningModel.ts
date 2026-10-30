@@ -16,8 +16,7 @@ import {
   uniqueList,
   z,
 } from '@/shared/api/contract.ts'
-import { invalid } from '@/shared/api/platformActionRef.ts'
-import { enumField, ID, ISO, PROJECT_ID, UUID } from '@/shared/api/platformApiGuards.ts'
+import { enumField, ID, invalid, ISO, PROJECT_ID, UUID } from '@/shared/api/platformApiGuards.ts'
 
 const PLANNING_READ_MODEL = 'valkama-planning-read-model' as const
 const PLANNING_API = 'valkama-planning-api' as const

@@ -1,0 +1,299 @@
+{
+ "platform_action_inputs": [
+  {
+   "action_id": "adapter.agentmemory-reference-v1.relation.attach",
+   "record_json": "{\"action_id\":\"adapter.agentmemory-reference-v1.relation.attach\",\"confirmation\":\"required\",\"fields\":[{\"key\":\"external_id\",\"kind\":\"stable-id\",\"max_length\":128,\"required\":true}],\"operation\":\"attach\",\"resource_types\":[\"memory\"],\"title_key\":\"platform.actions.relation.attach\"}",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "action_id": "adapter.agentmemory-reference-v1.relation.remove",
+   "record_json": "{\"action_id\":\"adapter.agentmemory-reference-v1.relation.remove\",\"confirmation\":\"required\",\"fields\":[{\"key\":\"external_id\",\"kind\":\"stable-id\",\"max_length\":128,\"required\":true}],\"operation\":\"remove\",\"resource_types\":[\"memory\"],\"title_key\":\"platform.actions.relation.remove\"}",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "action_id": "adapter.agentmemory-reference-v1.resource.open",
+   "record_json": "{\"action_id\":\"adapter.agentmemory-reference-v1.resource.open\",\"confirmation\":\"required\",\"fields\":[{\"key\":\"external_id\",\"kind\":\"stable-id\",\"max_length\":128,\"required\":true}],\"operation\":\"open\",\"resource_types\":[\"memory\"],\"title_key\":\"platform.actions.resource.open\"}",
+   "updated_at": "2026-10-30T00:00:00Z"
+  }
+ ],
+ "platform_actions": [
+  {
+   "action_id": "adapter.agentmemory-reference-v1.relation.attach",
+   "record_json": "{\"action_id\":\"adapter.agentmemory-reference-v1.relation.attach\",\"input_schema_id\":\"reference.relation.attach.v1\",\"interface_version\":\"valkama-actions\",\"invocation_scope_schema\":\"project\",\"owner_id\":\"agentmemory-reference-v1\",\"owner_kind\":\"adapter\",\"target_kind\":\"adapter-resource\"}",
+   "state": "registered",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "action_id": "adapter.agentmemory-reference-v1.relation.remove",
+   "record_json": "{\"action_id\":\"adapter.agentmemory-reference-v1.relation.remove\",\"input_schema_id\":\"reference.relation.remove.v1\",\"interface_version\":\"valkama-actions\",\"invocation_scope_schema\":\"project\",\"owner_id\":\"agentmemory-reference-v1\",\"owner_kind\":\"adapter\",\"target_kind\":\"adapter-resource\"}",
+   "state": "registered",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "action_id": "adapter.agentmemory-reference-v1.resource.open",
+   "record_json": "{\"action_id\":\"adapter.agentmemory-reference-v1.resource.open\",\"input_schema_id\":\"reference.resource.open.v1\",\"interface_version\":\"valkama-actions\",\"invocation_scope_schema\":\"project\",\"owner_id\":\"agentmemory-reference-v1\",\"owner_kind\":\"adapter\",\"target_kind\":\"adapter-resource\"}",
+   "state": "registered",
+   "updated_at": "2026-10-30T00:00:00Z"
+  }
+ ],
+ "platform_adapters": [
+  {
+   "adapter_id": "claude-code-execution",
+   "adapter_lineage_id": "claude-code-execution",
+   "record_json": "{\"adapter_id\":\"claude-code-execution\",\"adapter_lineage_id\":\"claude-code-execution\",\"capabilities\":[\"execution.launch\",\"execution.resume\",\"execution.stop\",\"session.observe\"],\"configuration_owner\":\"anthropic\",\"consumes\":[],\"contract_version\":\"valkama-adapter\",\"contributions\":[],\"direct_read\":false,\"execution\":\"local_process\",\"health_contract\":{\"max_payload_bytes\":8192,\"states\":[\"ready\",\"degraded\",\"unavailable\",\"not-observed\"],\"timeout_ms\":500},\"owner_id\":\"valkama\",\"package_id\":\"valkama.claude-code\",\"permissions\":[{\"connection_mode\":\"required\",\"entity_kinds\":[\"registry\"],\"permission_id\":\"execution.launch\"},{\"connection_mode\":\"required\",\"entity_kinds\":[\"registry\"],\"permission_id\":\"execution.resume\"},{\"connection_mode\":\"required\",\"entity_kinds\":[\"registry\"],\"permission_id\":\"execution.stop\"},{\"connection_mode\":\"required\",\"entity_kinds\":[\"registry\"],\"permission_id\":\"session.observe\"}],\"publisher_id\":\"valkama\",\"state\":\"registered\",\"supported_service_types\":[\"agent-execution\"],\"title_key\":\"platform.integrations.claudeCode\",\"trust_owner\":\"anthropic\",\"version\":\"1.0.0\"}",
+   "state": "registered",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "adapter_id": "codex-execution",
+   "adapter_lineage_id": "codex-execution",
+   "record_json": "{\"adapter_id\":\"codex-execution\",\"adapter_lineage_id\":\"codex-execution\",\"capabilities\":[\"execution.launch\",\"execution.resume\",\"execution.stop\",\"session.observe\"],\"configuration_owner\":\"openai\",\"consumes\":[],\"contract_version\":\"valkama-adapter\",\"contributions\":[],\"direct_read\":false,\"execution\":\"local_process\",\"health_contract\":{\"max_payload_bytes\":8192,\"states\":[\"ready\",\"degraded\",\"unavailable\",\"not-observed\"],\"timeout_ms\":500},\"owner_id\":\"valkama\",\"package_id\":\"valkama.codex\",\"permissions\":[{\"connection_mode\":\"required\",\"entity_kinds\":[\"registry\"],\"permission_id\":\"execution.launch\"},{\"connection_mode\":\"required\",\"entity_kinds\":[\"registry\"],\"permission_id\":\"execution.resume\"},{\"connection_mode\":\"required\",\"entity_kinds\":[\"registry\"],\"permission_id\":\"execution.stop\"},{\"connection_mode\":\"required\",\"entity_kinds\":[\"registry\"],\"permission_id\":\"session.observe\"}],\"publisher_id\":\"valkama\",\"state\":\"registered\",\"supported_service_types\":[\"agent-execution\"],\"title_key\":\"platform.integrations.codex\",\"trust_owner\":\"openai\",\"version\":\"1.0.0\"}",
+   "state": "registered",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "adapter_id": "claude-journal-telemetry",
+   "adapter_lineage_id": "claude-journal-telemetry",
+   "record_json": "{\"adapter_id\":\"claude-journal-telemetry\",\"adapter_lineage_id\":\"claude-journal-telemetry\",\"capabilities\":[\"telemetry.query\"],\"configuration_owner\":\"anthropic\",\"consumes\":[],\"contract_version\":\"valkama-adapter\",\"contributions\":[],\"direct_read\":false,\"execution\":\"built_in\",\"health_contract\":{\"max_payload_bytes\":8192,\"states\":[\"ready\",\"degraded\",\"unavailable\",\"not-observed\"],\"timeout_ms\":500},\"owner_id\":\"valkama\",\"package_id\":\"valkama.claude-journal\",\"permissions\":[{\"connection_mode\":\"required\",\"entity_kinds\":[\"registry\"],\"permission_id\":\"telemetry.query\"}],\"publisher_id\":\"valkama\",\"state\":\"registered\",\"supported_service_types\":[\"local-telemetry\"],\"title_key\":\"platform.integrations.claudeJournal\",\"trust_owner\":\"anthropic\",\"version\":\"1.0.0\"}",
+   "state": "registered",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "adapter_id": "codex-rollout-telemetry",
+   "adapter_lineage_id": "codex-rollout-telemetry",
+   "record_json": "{\"adapter_id\":\"codex-rollout-telemetry\",\"adapter_lineage_id\":\"codex-rollout-telemetry\",\"capabilities\":[\"telemetry.query\"],\"configuration_owner\":\"openai\",\"consumes\":[],\"contract_version\":\"valkama-adapter\",\"contributions\":[],\"direct_read\":false,\"execution\":\"built_in\",\"health_contract\":{\"max_payload_bytes\":8192,\"states\":[\"ready\",\"degraded\",\"unavailable\",\"not-observed\"],\"timeout_ms\":500},\"owner_id\":\"valkama\",\"package_id\":\"valkama.codex-rollout\",\"permissions\":[{\"connection_mode\":\"required\",\"entity_kinds\":[\"registry\"],\"permission_id\":\"telemetry.query\"}],\"publisher_id\":\"valkama\",\"state\":\"registered\",\"supported_service_types\":[\"local-telemetry\"],\"title_key\":\"platform.integrations.codexRollout\",\"trust_owner\":\"openai\",\"version\":\"1.0.0\"}",
+   "state": "registered",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "adapter_id": "git-artifacts",
+   "adapter_lineage_id": "git-artifacts",
+   "record_json": "{\"adapter_id\":\"git-artifacts\",\"adapter_lineage_id\":\"git-artifacts\",\"capabilities\":[\"artifact.inspect\"],\"configuration_owner\":\"git\",\"consumes\":[],\"contract_version\":\"valkama-adapter\",\"contributions\":[],\"direct_read\":false,\"execution\":\"local_process\",\"health_contract\":{\"max_payload_bytes\":8192,\"states\":[\"ready\",\"degraded\",\"unavailable\",\"not-observed\"],\"timeout_ms\":500},\"owner_id\":\"valkama\",\"package_id\":\"valkama.git-artifacts\",\"permissions\":[{\"connection_mode\":\"required\",\"entity_kinds\":[\"registry\"],\"permission_id\":\"artifact.inspect\"}],\"publisher_id\":\"valkama\",\"state\":\"registered\",\"supported_service_types\":[\"artifact-provider\"],\"title_key\":\"platform.integrations.git\",\"trust_owner\":\"git\",\"version\":\"1.0.0\"}",
+   "state": "registered",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "adapter_id": "agentmemory-reference",
+   "adapter_lineage_id": "agentmemory-reference-v1",
+   "record_json": "{\"adapter_id\":\"agentmemory-reference\",\"adapter_lineage_id\":\"agentmemory-reference-v1\",\"capabilities\":[\"memory.open\",\"memory.health\"],\"configuration_owner\":\"agentmemory\",\"consumes\":[\"work-item\"],\"contract_version\":\"valkama-adapter\",\"contributions\":[{\"actions\":[{\"action_id\":\"adapter.agentmemory-reference.relation.attach\",\"input_schema_id\":\"reference.relation.attach.v1\",\"interface_version\":\"valkama-actions\",\"invocation_scope_schema\":\"project\",\"owner_id\":\"agentmemory-reference\",\"owner_kind\":\"adapter\",\"target_kind\":\"adapter-resource\"},{\"action_id\":\"adapter.agentmemory-reference.relation.remove\",\"input_schema_id\":\"reference.relation.remove.v1\",\"interface_version\":\"valkama-actions\",\"invocation_scope_schema\":\"project\",\"owner_id\":\"agentmemory-reference\",\"owner_kind\":\"adapter\",\"target_kind\":\"adapter-resource\"},{\"action_id\":\"adapter.agentmemory-reference.resource.open\",\"input_schema_id\":\"reference.resource.open.v1\",\"interface_version\":\"valkama-actions\",\"invocation_scope_schema\":\"project\",\"owner_id\":\"agentmemory-reference\",\"owner_kind\":\"adapter\",\"target_kind\":\"adapter-resource\"}],\"content\":{\"kind\":\"status\",\"label\":\"Reference actions available\",\"status\":\"ready\"},\"contribution_id\":\"agentmemory-reference.card-relations\",\"entity_kinds\":[\"work-item\"],\"interface_version\":\"valkama-contributions\",\"owner_id\":\"agentmemory-reference\",\"owner_kind\":\"adapter\",\"slot\":\"entity-action\"}],\"direct_read\":false,\"execution\":\"local_service\",\"health_contract\":{\"max_payload_bytes\":131072,\"states\":[\"ready\",\"degraded\",\"unavailable\",\"not-observed\"],\"timeout_ms\":500},\"owner_id\":\"agentmemory\",\"package_id\":\"agentmemory.reference-adapter\",\"permissions\":[{\"connection_mode\":\"required\",\"entity_kinds\":[\"adapter-resource\"],\"permission_id\":\"relation.attach\",\"target_kinds\":[\"memory\"]},{\"connection_mode\":\"required\",\"entity_kinds\":[\"adapter-resource\"],\"permission_id\":\"relation.remove\",\"target_kinds\":[\"memory\"]},{\"connection_mode\":\"required\",\"entity_kinds\":[\"adapter-resource\"],\"permission_id\":\"resource.open\",\"target_kinds\":[\"memory\"]}],\"publisher_id\":\"agentmemory\",\"state\":\"registered\",\"supported_service_types\":[\"knowledge-reference\"],\"title_key\":\"platform.adapters.agentmemory-reference\",\"trust_owner\":\"agentmemory\",\"version\":\"1.0.0\"}",
+   "state": "registered",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "adapter_id": "codex-skills",
+   "adapter_lineage_id": "codex-skills",
+   "record_json": "{\"adapter_id\":\"codex-skills\",\"adapter_lineage_id\":\"codex-skills\",\"capabilities\":[\"skills.catalog\",\"skills.activate\"],\"configuration_owner\":\"openai\",\"consumes\":[],\"contract_version\":\"valkama-adapter\",\"contributions\":[],\"direct_read\":false,\"execution\":\"local_process\",\"health_contract\":{\"max_payload_bytes\":8192,\"states\":[\"ready\",\"degraded\",\"unavailable\",\"not-observed\"],\"timeout_ms\":500},\"owner_id\":\"valkama\",\"package_id\":\"valkama.codex-skills\",\"permissions\":[{\"connection_mode\":\"required\",\"entity_kinds\":[\"registry\"],\"permission_id\":\"skills.catalog\"},{\"connection_mode\":\"required\",\"entity_kinds\":[\"registry\"],\"permission_id\":\"skills.activate\"}],\"publisher_id\":\"valkama\",\"state\":\"registered\",\"supported_service_types\":[\"skills-provider\"],\"title_key\":\"platform.integrations.codexSkills\",\"trust_owner\":\"openai\",\"version\":\"1.0.0\"}",
+   "state": "registered",
+   "updated_at": "2026-10-30T00:00:00Z"
+  }
+ ],
+ "platform_assignments": [
+  {
+   "assignment_id": "builtin:execution.launch:installation",
+   "record_json": "{\"assignment_id\":\"builtin:execution.launch:installation\",\"capability_id\":\"execution.launch\",\"changed_by\":\"valkama\",\"connection_ids\":[\"openai:codex:codex-execution:local\"],\"scope\":{\"kind\":\"installation\"},\"state\":\"enabled\"}",
+   "revision": 1,
+   "state": "enabled",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "assignment_id": "builtin:execution.resume:installation",
+   "record_json": "{\"assignment_id\":\"builtin:execution.resume:installation\",\"capability_id\":\"execution.resume\",\"changed_by\":\"valkama\",\"connection_ids\":[\"openai:codex:codex-execution:local\"],\"scope\":{\"kind\":\"installation\"},\"state\":\"enabled\"}",
+   "revision": 1,
+   "state": "enabled",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "assignment_id": "builtin:execution.stop:installation",
+   "record_json": "{\"assignment_id\":\"builtin:execution.stop:installation\",\"capability_id\":\"execution.stop\",\"changed_by\":\"valkama\",\"connection_ids\":[\"openai:codex:codex-execution:local\"],\"scope\":{\"kind\":\"installation\"},\"state\":\"enabled\"}",
+   "revision": 1,
+   "state": "enabled",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "assignment_id": "builtin:session.observe:installation",
+   "record_json": "{\"assignment_id\":\"builtin:session.observe:installation\",\"capability_id\":\"session.observe\",\"changed_by\":\"valkama\",\"connection_ids\":[\"openai:codex:codex-execution:local\"],\"scope\":{\"kind\":\"installation\"},\"state\":\"enabled\"}",
+   "revision": 1,
+   "state": "enabled",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "assignment_id": "builtin:telemetry.query:installation",
+   "record_json": "{\"assignment_id\":\"builtin:telemetry.query:installation\",\"capability_id\":\"telemetry.query\",\"changed_by\":\"valkama\",\"connection_ids\":[\"openai:codex-rollout:codex-rollout-telemetry:local\"],\"scope\":{\"kind\":\"installation\"},\"state\":\"enabled\"}",
+   "revision": 1,
+   "state": "enabled",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "assignment_id": "builtin:memory.open:installation",
+   "record_json": "{\"assignment_id\":\"builtin:memory.open:installation\",\"capability_id\":\"memory.open\",\"changed_by\":\"valkama\",\"connection_ids\":[\"agentmemory:local-reference-service:agentmemory-reference-v1:singleton\"],\"scope\":{\"kind\":\"installation\"},\"state\":\"enabled\"}",
+   "revision": 1,
+   "state": "enabled",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "assignment_id": "builtin:memory.health:installation",
+   "record_json": "{\"assignment_id\":\"builtin:memory.health:installation\",\"capability_id\":\"memory.health\",\"changed_by\":\"valkama\",\"connection_ids\":[\"agentmemory:local-reference-service:agentmemory-reference-v1:singleton\"],\"scope\":{\"kind\":\"installation\"},\"state\":\"enabled\"}",
+   "revision": 1,
+   "state": "enabled",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "assignment_id": "builtin:artifact.inspect:installation",
+   "record_json": "{\"assignment_id\":\"builtin:artifact.inspect:installation\",\"capability_id\":\"artifact.inspect\",\"changed_by\":\"valkama\",\"connection_ids\":[\"git:local-git:git-artifacts:local\"],\"scope\":{\"kind\":\"installation\"},\"state\":\"enabled\"}",
+   "revision": 1,
+   "state": "enabled",
+   "updated_at": "2026-10-30T00:00:00Z"
+  }
+ ],
+ "platform_connections": [
+  {
+   "connection_key": "anthropic:claude-code:claude-code-execution:local",
+   "record_json": "{\"applicability\":{\"kind\":\"global\"},\"configuration_owner\":\"anthropic\",\"connection_ref\":{\"adapter_lineage_id\":\"claude-code-execution\",\"connection_id\":\"local\",\"service_ref\":{\"owner_id\":\"anthropic\",\"service_id\":\"claude-code\"}},\"health\":\"not-observed\",\"state\":\"registered\",\"trust\":\"unknown\",\"trust_owner\":\"anthropic\"}",
+   "state": "registered",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "connection_key": "openai:codex:codex-execution:local",
+   "record_json": "{\"applicability\":{\"kind\":\"global\"},\"configuration_owner\":\"openai\",\"connection_ref\":{\"adapter_lineage_id\":\"codex-execution\",\"connection_id\":\"local\",\"service_ref\":{\"owner_id\":\"openai\",\"service_id\":\"codex\"}},\"health\":\"not-observed\",\"state\":\"registered\",\"trust\":\"unknown\",\"trust_owner\":\"openai\"}",
+   "state": "registered",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "connection_key": "anthropic:claude-journal:claude-journal-telemetry:local",
+   "record_json": "{\"applicability\":{\"kind\":\"global\"},\"configuration_owner\":\"anthropic\",\"connection_ref\":{\"adapter_lineage_id\":\"claude-journal-telemetry\",\"connection_id\":\"local\",\"service_ref\":{\"owner_id\":\"anthropic\",\"service_id\":\"claude-journal\"}},\"health\":\"not-observed\",\"state\":\"registered\",\"trust\":\"unknown\",\"trust_owner\":\"anthropic\"}",
+   "state": "registered",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "connection_key": "openai:codex-rollout:codex-rollout-telemetry:local",
+   "record_json": "{\"applicability\":{\"kind\":\"global\"},\"configuration_owner\":\"openai\",\"connection_ref\":{\"adapter_lineage_id\":\"codex-rollout-telemetry\",\"connection_id\":\"local\",\"service_ref\":{\"owner_id\":\"openai\",\"service_id\":\"codex-rollout\"}},\"health\":\"not-observed\",\"state\":\"registered\",\"trust\":\"unknown\",\"trust_owner\":\"openai\"}",
+   "state": "registered",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "connection_key": "git:local-git:git-artifacts:local",
+   "record_json": "{\"applicability\":{\"kind\":\"global\"},\"configuration_owner\":\"git\",\"connection_ref\":{\"adapter_lineage_id\":\"git-artifacts\",\"connection_id\":\"local\",\"service_ref\":{\"owner_id\":\"git\",\"service_id\":\"local-git\"}},\"health\":\"not-observed\",\"state\":\"registered\",\"trust\":\"unknown\",\"trust_owner\":\"git\"}",
+   "state": "registered",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "connection_key": "agentmemory:local-reference-service:agentmemory-reference-v1:singleton",
+   "record_json": "{\"applicability\":{\"kind\":\"global\"},\"configuration_owner\":\"agentmemory\",\"connection_ref\":{\"adapter_lineage_id\":\"agentmemory-reference-v1\",\"connection_id\":\"singleton\",\"service_ref\":{\"owner_id\":\"agentmemory\",\"service_id\":\"local-reference-service\"}},\"health\":\"not-observed\",\"state\":\"registered\",\"trust\":\"unknown\",\"trust_owner\":\"agentmemory\"}",
+   "state": "registered",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "connection_key": "openai:codex-skills:codex-skills:local",
+   "record_json": "{\"applicability\":{\"kind\":\"global\"},\"configuration_owner\":\"openai\",\"connection_ref\":{\"adapter_lineage_id\":\"codex-skills\",\"connection_id\":\"local\",\"service_ref\":{\"owner_id\":\"openai\",\"service_id\":\"codex-skills\"}},\"health\":\"not-observed\",\"state\":\"registered\",\"trust\":\"unknown\",\"trust_owner\":\"openai\"}",
+   "state": "registered",
+   "updated_at": "2026-10-30T00:00:00Z"
+  }
+ ],
+ "platform_core_ref_bindings": [
+  {
+   "core_ref_kind": "memory",
+   "record_json": "{\"adapter_lineage_id\":\"agentmemory-reference-v1\",\"binding_version\":\"1\",\"connection_id\":\"singleton\",\"core_ref_kind\":\"memory\",\"direct_read\":false,\"service_ref\":{\"owner_id\":\"agentmemory\",\"service_id\":\"local-reference-service\"}}",
+   "state": "registered",
+   "updated_at": "2026-10-30T00:00:00Z"
+  }
+ ],
+ "platform_grants": [],
+ "platform_packages": [
+  {
+   "package_key": "valkama:valkama.claude-code",
+   "record_json": "{\"execution\":\"local_process\",\"package_id\":\"valkama.claude-code\",\"provenance\":\"platform-built-in\",\"publisher_id\":\"valkama\",\"version\":\"1.0.0\"}",
+   "state": "registered",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "package_key": "valkama:valkama.codex",
+   "record_json": "{\"execution\":\"local_process\",\"package_id\":\"valkama.codex\",\"provenance\":\"platform-built-in\",\"publisher_id\":\"valkama\",\"version\":\"1.0.0\"}",
+   "state": "registered",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "package_key": "valkama:valkama.claude-journal",
+   "record_json": "{\"execution\":\"built_in\",\"package_id\":\"valkama.claude-journal\",\"provenance\":\"platform-built-in\",\"publisher_id\":\"valkama\",\"version\":\"1.0.0\"}",
+   "state": "registered",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "package_key": "valkama:valkama.codex-rollout",
+   "record_json": "{\"execution\":\"built_in\",\"package_id\":\"valkama.codex-rollout\",\"provenance\":\"platform-built-in\",\"publisher_id\":\"valkama\",\"version\":\"1.0.0\"}",
+   "state": "registered",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "package_key": "valkama:valkama.git-artifacts",
+   "record_json": "{\"execution\":\"local_process\",\"package_id\":\"valkama.git-artifacts\",\"provenance\":\"platform-built-in\",\"publisher_id\":\"valkama\",\"version\":\"1.0.0\"}",
+   "state": "registered",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "package_key": "agentmemory:agentmemory.reference-adapter",
+   "record_json": "{\"execution\":\"local_service\",\"package_id\":\"agentmemory.reference-adapter\",\"provenance\":\"provider-owned\",\"publisher_id\":\"agentmemory\",\"version\":\"1.0.0\"}",
+   "state": "registered",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "package_key": "valkama:valkama.codex-skills",
+   "record_json": "{\"execution\":\"local_process\",\"package_id\":\"valkama.codex-skills\",\"provenance\":\"platform-built-in\",\"publisher_id\":\"valkama\",\"version\":\"1.0.0\"}",
+   "state": "registered",
+   "updated_at": "2026-10-30T00:00:00Z"
+  }
+ ],
+ "platform_registry_meta": [
+  {
+   "key": "primary_registry_revision",
+   "value": "1"
+  },
+  {
+   "key": "authorization_owner_model",
+   "value": "explicit-owner-v1"
+  }
+ ],
+ "platform_services": [
+  {
+   "record_json": "{\"configuration_owner\":\"anthropic\",\"direct_read\":false,\"discovery_provenance\":\"platform-built-in\",\"service_ref\":{\"owner_id\":\"anthropic\",\"service_id\":\"claude-code\"},\"service_type\":\"agent-execution\",\"state\":\"registered\",\"title_key\":\"platform.integrations.claudeCode\",\"trust_owner\":\"anthropic\"}",
+   "service_key": "anthropic:claude-code",
+   "state": "registered",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "record_json": "{\"configuration_owner\":\"openai\",\"direct_read\":false,\"discovery_provenance\":\"platform-built-in\",\"service_ref\":{\"owner_id\":\"openai\",\"service_id\":\"codex\"},\"service_type\":\"agent-execution\",\"state\":\"registered\",\"title_key\":\"platform.integrations.codex\",\"trust_owner\":\"openai\"}",
+   "service_key": "openai:codex",
+   "state": "registered",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "record_json": "{\"configuration_owner\":\"anthropic\",\"direct_read\":false,\"discovery_provenance\":\"platform-built-in\",\"service_ref\":{\"owner_id\":\"anthropic\",\"service_id\":\"claude-journal\"},\"service_type\":\"local-telemetry\",\"state\":\"registered\",\"title_key\":\"platform.integrations.claudeJournal\",\"trust_owner\":\"anthropic\"}",
+   "service_key": "anthropic:claude-journal",
+   "state": "registered",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "record_json": "{\"configuration_owner\":\"openai\",\"direct_read\":false,\"discovery_provenance\":\"platform-built-in\",\"service_ref\":{\"owner_id\":\"openai\",\"service_id\":\"codex-rollout\"},\"service_type\":\"local-telemetry\",\"state\":\"registered\",\"title_key\":\"platform.integrations.codexRollout\",\"trust_owner\":\"openai\"}",
+   "service_key": "openai:codex-rollout",
+   "state": "registered",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "record_json": "{\"configuration_owner\":\"git\",\"direct_read\":false,\"discovery_provenance\":\"platform-built-in\",\"service_ref\":{\"owner_id\":\"git\",\"service_id\":\"local-git\"},\"service_type\":\"artifact-provider\",\"state\":\"registered\",\"title_key\":\"platform.integrations.git\",\"trust_owner\":\"git\"}",
+   "service_key": "git:local-git",
+   "state": "registered",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "record_json": "{\"configuration_owner\":\"agentmemory\",\"direct_read\":false,\"discovery_provenance\":\"provider-owned\",\"service_ref\":{\"owner_id\":\"agentmemory\",\"service_id\":\"local-reference-service\"},\"service_type\":\"knowledge-reference\",\"state\":\"registered\",\"title_key\":\"platform.adapters.agentmemory-reference\",\"trust_owner\":\"agentmemory\"}",
+   "service_key": "agentmemory:local-reference-service",
+   "state": "registered",
+   "updated_at": "2026-10-30T00:00:00Z"
+  },
+  {
+   "record_json": "{\"configuration_owner\":\"openai\",\"direct_read\":false,\"discovery_provenance\":\"platform-built-in\",\"service_ref\":{\"owner_id\":\"openai\",\"service_id\":\"codex-skills\"},\"service_type\":\"skills-provider\",\"state\":\"registered\",\"title_key\":\"platform.integrations.codexSkills\",\"trust_owner\":\"openai\"}",
+   "service_key": "openai:codex-skills",
+   "state": "registered",
+   "updated_at": "2026-10-30T00:00:00Z"
+  }
+ ]
+}

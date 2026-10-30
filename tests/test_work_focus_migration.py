@@ -14,7 +14,9 @@ from unittest import mock
 from server import http_surface, mcp_surface, sessions, store, store_backups
 from server.executions import service as executions
 from server.planning import service as planning
-from server.platform import core, migrations, modules, providers
+from server.platform import core, migrations, modules
+from server.ui_state import PlatformHttpError
+from tests import registry_rows
 from tests.retired_modules import FORMER_MODULES
 
 
@@ -71,30 +73,9 @@ class WorkFocusMigrationTests(unittest.TestCase):
             },
         )
         executions.link_session(self.conn, attempt, "exact-session", "launched")
-        # Seed the former built-in through its native registry, without a client process.
-        retired = providers.BuiltinCapabilityProvider(
-            "codex-skills",
-            "codex-skills",
-            "openai",
-            "codex-skills",
-            "skills-provider",
-            "platform.integrations.codexSkills",
-            "valkama.codex-skills",
-            ("skills.catalog", "skills.activate"),
-            "local-process",
-            "skills",
-            "codex",
-        )
-        core.Platform(
-            self.conn,
-            self.path,
-            providers=providers.ProviderCatalog(
-                [
-                    *providers.ProviderCatalog().seed_providers(),
-                    retired,
-                ]
-            ),
-        )
+        # The registry rows a build with the former built-in left behind,
+        # including the retired `codex-skills` adapter this migration removes.
+        registry_rows.seed(self.conn)
         for module_id, manifest in FORMER_MODULES.items():
             self.conn.execute(
                 "INSERT INTO platform_modules VALUES(?,?,'disabled',1,9,'2026-01-01T00:00:00Z')",
@@ -278,7 +259,7 @@ class WorkFocusMigrationTests(unittest.TestCase):
         ):
             self.assertEqual("planning", http_surface._http_module_owner(method, path))
         for view in ("sessions", "analytics", "dashboard", "improvements"):
-            with self.subTest(view=view), self.assertRaises(core.PlatformHttpError):
+            with self.subTest(view=view), self.assertRaises(PlatformHttpError):
                 http_surface._sse_view_owner(view)
         for path in (
             "/api/sessions",
@@ -292,12 +273,14 @@ class WorkFocusMigrationTests(unittest.TestCase):
         self.assertEqual({"planning", "memory", "settings"}, modules.module_ids())
         self.assertFalse(any("improvement" in tool["name"] for tool in mcp_surface.catalogue()))
         self.conn.commit()
-        core.Platform(self.conn, self.path).module_state_command(
+        core.module_state_command(
+            self.conn,
+            self.path,
             {
                 "module_id": "planning",
                 "state": "disabled",
                 "expected_revision": 1,
-            }
+            },
         )
         handler = object.__new__(http_surface.Handler)
         handler._send_json = mock.Mock()

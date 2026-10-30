@@ -10,6 +10,10 @@ card: 232
 > This document preserves the earlier contract, not current support. See the
 > [product model](../product-model.md) and [README](../../README.md)
 > for the supported work-item, session-context, and lifecycle boundaries.
+> The registry of services, connections, assignments and grants decided here
+> has been removed; only the external adapter contract remains.
+> [ADR 0010](0010-coordination-from-session-identity.md), still a draft,
+> records why.
 
 ## Context
 

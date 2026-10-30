@@ -11,20 +11,19 @@ import unittest
 from unittest import mock
 
 from server import store, store_backups, store_lock
-from server.platform import capabilities, module_gate
 from server.platform import core as platform_core
 from server.platform import migrations as platform_migrations
-from server.platform.contracts import (
-    CAPABILITY_IDS,
-    ENTITY_KINDS,
-    ContractError,
+from server.platform import module_gate
+from server.platform.legacy_records import CAPABILITY_IDS, validate_assignment
+from server.platform.module_gate import RegistryError
+from server.store_identity.metadata import read_store_metadata
+from server.store_identity.primitives import ENTITY_KINDS, ContractError
+from server.store_identity.refs import (
     planning_space_entity,
     planning_space_ref,
-    validate_assignment,
     validate_entity_ref,
 )
-from server.store_identity.metadata import read_store_metadata
-from tests import board_era
+from tests import board_era, registry_rows
 from tests.registry_fixtures import project_binding, project_entry, registry_bytes
 
 
@@ -39,22 +38,6 @@ def _connection_id(ref: dict) -> str:
     )
 
 
-def _reference_connection(owner_id: str, adapter_lineage_id: str) -> dict:
-    return {
-        "connection_ref": {
-            "service_ref": {"owner_id": owner_id, "service_id": "svc"},
-            "adapter_lineage_id": adapter_lineage_id,
-            "connection_id": "singleton",
-        },
-        "applicability": {"kind": "global"},
-        "state": "registered",
-        "trust": "trusted",
-        "health": "ready",
-        "trust_owner": owner_id,
-        "configuration_owner": owner_id,
-    }
-
-
 class ProductModelMigrationTests(unittest.TestCase):
     def setUp(self) -> None:
         self.directory = tempfile.TemporaryDirectory()
@@ -66,6 +49,8 @@ class ProductModelMigrationTests(unittest.TestCase):
         patch.start()
         self.addCleanup(patch.stop)
         conn = store.connect()
+        # The registry rows the last build that had a registry seeded on start.
+        registry_rows.seed(conn)
         resource_ref = planning_space_entity(
             {
                 "data_scope_id": read_store_metadata(conn)["data_scope_id"],
@@ -295,16 +280,9 @@ class ProductModelMigrationTests(unittest.TestCase):
             ["memory.open", "memory.health"],
             capabilities_by_lineage["agentmemory-reference-v1"],
         )
-        self.assertTrue(
-            {
-                "claude-code-execution",
-                "codex-execution",
-                "claude-journal-telemetry",
-                "codex-rollout-telemetry",
-                "git-artifacts",
-            }
-            <= capabilities_by_lineage.keys()
-        )
+        # The migration carries what the source held and nothing re-seeds the
+        # built-ins it did not: the registry that seeded them is gone.
+        self.assertEqual({"agentmemory-reference-v1"}, set(capabilities_by_lineage))
         prefs = json.loads(
             conn.execute(
                 "SELECT record_json FROM platform_ui_prefs WHERE key='last-route'"
@@ -335,11 +313,10 @@ class ProductModelMigrationTests(unittest.TestCase):
         self.assertEqual(1, len(self.backups()))
 
     def test_migrated_assignments_are_unique_per_capability_and_scope(self) -> None:
-        """The registry loads exactly one assignment per capability and scope.
+        """The migration writes exactly one assignment per capability and scope.
 
-        A store that carries two refuses to load at all, so this is not a
-        cosmetic uniqueness claim: it is the difference between a Settings
-        registry the owner can read and one that fails whole.
+        The registry that read these rows refused a store carrying two, and the
+        migration still writes rows of the shape it defined.
         """
 
         conn = store.connect()
@@ -357,11 +334,6 @@ class ProductModelMigrationTests(unittest.TestCase):
                 )
             )
         self.assertEqual(sorted(set(keys)), sorted(keys))
-        payload = platform_core.Platform(conn, self.path).registry_payload(
-            {"scope_kind": ["global"]}
-        )
-        self.assertEqual("ready", payload["state"]["status"])
-        self.assertIn("assignments", payload["state"]["payload"])
 
     def test_snapshot_is_integral_and_executable_restore_replays_once(self) -> None:
         store.connect().close()
@@ -410,7 +382,7 @@ class ProductModelMigrationTests(unittest.TestCase):
         conn.execute("ALTER TABLE platform_assignments ADD COLUMN surprise TEXT")
         conn.commit()
         conn.close()
-        with self.assertRaisesRegex(platform_core.RegistryError, "source shape is not exact"):
+        with self.assertRaisesRegex(RegistryError, "source shape is not exact"):
             store.connect()
         self.assertEqual([], self.backups())
         check = sqlite3.connect(self.path)
@@ -428,7 +400,7 @@ class ProductModelMigrationTests(unittest.TestCase):
         conn.execute("ALTER TABLE platform_adapters ADD COLUMN surprise TEXT")
         conn.commit()
         conn.close()
-        with self.assertRaisesRegex(platform_core.RegistryError, "source shape is not exact"):
+        with self.assertRaisesRegex(RegistryError, "source shape is not exact"):
             store.connect()
         self.assertEqual([], self.backups())
 
@@ -445,7 +417,7 @@ class ProductModelMigrationTests(unittest.TestCase):
         )
         conn.commit()
         conn.close()
-        with self.assertRaisesRegex(platform_core.RegistryError, "catalog signature"):
+        with self.assertRaisesRegex(RegistryError, "catalog signature"):
             store.connect()
         self.assertEqual([], self.backups())
 
@@ -463,7 +435,7 @@ class ProductModelMigrationTests(unittest.TestCase):
         )
         conn.commit()
         conn.close()
-        with self.assertRaisesRegex(platform_core.RegistryError, "catalog signature"):
+        with self.assertRaisesRegex(RegistryError, "catalog signature"):
             store.connect()
         self.assertEqual([], self.backups())
 
@@ -472,7 +444,7 @@ class ProductModelMigrationTests(unittest.TestCase):
         conn.execute("DROP INDEX platform_adapter_links_item")
         conn.commit()
         conn.close()
-        with self.assertRaisesRegex(platform_core.RegistryError, "catalog signature"):
+        with self.assertRaisesRegex(RegistryError, "catalog signature"):
             store.connect()
         self.assertEqual([], self.backups())
 
@@ -485,7 +457,7 @@ class ProductModelMigrationTests(unittest.TestCase):
         )
         conn.commit()
         conn.close()
-        with self.assertRaisesRegex(platform_core.RegistryError, "catalog signature"):
+        with self.assertRaisesRegex(RegistryError, "catalog signature"):
             store.connect()
         self.assertEqual([], self.backups())
 
@@ -494,7 +466,7 @@ class ProductModelMigrationTests(unittest.TestCase):
         conn.execute("CREATE INDEX platform_surprise ON platform_assignments(state)")
         conn.commit()
         conn.close()
-        with self.assertRaisesRegex(platform_core.RegistryError, "catalog signature"):
+        with self.assertRaisesRegex(RegistryError, "catalog signature"):
             store.connect()
         self.assertEqual([], self.backups())
 
@@ -503,7 +475,7 @@ class ProductModelMigrationTests(unittest.TestCase):
         conn.execute("CREATE TABLE hub_adapters AS SELECT * FROM platform_adapters")
         conn.commit()
         conn.close()
-        with self.assertRaisesRegex(platform_core.RegistryError, "mixes former and current"):
+        with self.assertRaisesRegex(RegistryError, "mixes former and current"):
             store.connect()
         self.assertEqual([], self.backups())
 
@@ -520,7 +492,7 @@ class ProductModelMigrationTests(unittest.TestCase):
         )
         conn.commit()
         conn.close()
-        with self.assertRaisesRegex(platform_core.RegistryError, "capability values are unmapped"):
+        with self.assertRaisesRegex(RegistryError, "capability values are unmapped"):
             store.connect()
         self.assertEqual([], self.backups())
 
@@ -538,7 +510,7 @@ class ProductModelMigrationTests(unittest.TestCase):
         )
         conn.commit()
         conn.close()
-        with self.assertRaisesRegex(platform_core.RegistryError, "UI preference"):
+        with self.assertRaisesRegex(RegistryError, "UI preference"):
             store.connect()
         self.assertEqual([], self.backups())
 
@@ -793,11 +765,9 @@ class NeutralKernelContractTests(unittest.TestCase):
                 "memory.open",
                 "memory.health",
                 "artifact.inspect",
+                "skills.catalog",
+                "skills.activate",
             },
-            set(capabilities.CAPABILITY_DEFINITIONS),
-        )
-        self.assertEqual(
-            set(capabilities.CAPABILITY_DEFINITIONS) | {"skills.catalog", "skills.activate"},
             set(CAPABILITY_IDS),
         )
         assignment = {
@@ -818,10 +788,8 @@ class NeutralKernelContractTests(unittest.TestCase):
         """History assigned per adapter; the neutral record assigns per capability.
 
         A store could therefore hold two legacy assignments that both mean
-        `memory.open` at one scope. Registered as a pair they are refused and
-        the whole registry fails to load, so the migration reduces them to one
-        record holding both Connections — and chooses neither, because
-        `memory.open` takes one and the owner is the one who picks.
+        `memory.open` at one scope. The migration reduces them to one record
+        holding both Connections and chooses neither.
         """
 
         scope = {"kind": "project", "project_id": "example-workspace"}
@@ -859,74 +827,6 @@ class NeutralKernelContractTests(unittest.TestCase):
         self.assertEqual("enabled", record["state"])
         self.assertEqual(7, revision)
         self.assertEqual("2026-08-20T00:00:01Z", updated_at)
-
-        # What the owner then sees: a named conflict, not a Connection picked
-        # for them.
-        resolved = capabilities.resolve_capability(
-            "memory.open",
-            project_id="example-workspace",
-            assignments=[record],
-            connections=[
-                _reference_connection("agentmemory", "agentmemory-reference-v1"),
-                _reference_connection("valkama-notes", "notes-reference-v1"),
-            ],
-        )
-        self.assertEqual("unavailable", resolved["state"])
-        self.assertEqual("cardinality-one-required", resolved["reason"])
-
-    def test_project_override_and_cardinality_never_select_first(self) -> None:
-        def connection(identifier: str) -> dict:
-            return {
-                "connection_ref": {
-                    "service_ref": {"owner_id": "owner", "service_id": identifier},
-                    "adapter_lineage_id": f"adapter-{identifier}",
-                    "connection_id": "main",
-                },
-                "applicability": {"kind": "global"},
-                "configuration_owner": "owner",
-                "trust_owner": "owner",
-                "trust": "trusted",
-                "health": "ready",
-                "state": "registered",
-            }
-
-        first, second = connection("first"), connection("second")
-        first_id = _connection_id(first["connection_ref"])
-        second_id = _connection_id(second["connection_ref"])
-        assignments = [
-            {
-                "assignment_id": "installation",
-                "capability_id": "telemetry.query",
-                "scope": {"kind": "installation"},
-                "connection_ids": [first_id],
-                "state": "enabled",
-                "changed_by": "owner",
-            },
-            {
-                "assignment_id": "project",
-                "capability_id": "telemetry.query",
-                "scope": {"kind": "project", "project_id": "valkama"},
-                "connection_ids": [first_id, second_id],
-                "state": "enabled",
-                "changed_by": "owner",
-            },
-        ]
-        resolved = capabilities.resolve_capability(
-            "telemetry.query",
-            project_id="valkama",
-            assignments=assignments,
-            connections=[first, second],
-        )
-        self.assertEqual("project", resolved["source"])
-        self.assertEqual([first, second], resolved["connections"])
-        one = [
-            dict(assignments[0], capability_id="memory.open", connection_ids=[first_id, second_id])
-        ]
-        unavailable = capabilities.resolve_capability(
-            "memory.open", assignments=one, connections=[first, second]
-        )
-        self.assertEqual("unavailable", unavailable["state"])
-        self.assertEqual("cardinality-one-required", unavailable["reason"])
 
 
 if __name__ == "__main__":

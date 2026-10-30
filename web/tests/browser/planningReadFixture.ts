@@ -1,23 +1,10 @@
-import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
-import type { WorkItemRef } from '@/shared/api/platformPlanningRefs.ts'
-
 import {
   attachedDataScopeId,
   dataScopeId,
-  existingRelation,
   planningReadModel,
   projectId,
   spaceRef,
 } from './planningFixtures.ts'
-
-export function planningRelationsFor(relations: (typeof existingRelation)[], ref: WorkItemRef) {
-  if (ref.space_ref.data_scope_id !== attachedDataScopeId) return relations
-  return relations.map((relation) => ({
-    ...relation,
-    source: planningWorkItemEntity(ref),
-    presentation: { ...relation.presentation, label: `Attached: ${relation.presentation.label}` },
-  }))
-}
 
 /** A wrong or omitted store identity must fail the browser oracle. */
 export function planningReadFor(query: URLSearchParams, includeAttached = false) {

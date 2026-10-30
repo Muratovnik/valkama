@@ -28,7 +28,6 @@ export async function installDiscussionBackend(page: Page) {
           status: 'ready',
           payload: {
             work_item: item,
-            relations: { interface_version: 'valkama-relations', relations: [] },
           },
         },
       },

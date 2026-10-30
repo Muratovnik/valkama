@@ -12,7 +12,6 @@
  * of the exact-binding endpoints is that neither the key nor the reference is
  * enough to answer.
  */
-import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 
 export const projectId = 'example-project'
 export const dataScopeId = '123e4567-e89b-42d3-a456-426614174000'
@@ -27,59 +26,6 @@ export const globalScope = { kind: 'global' as const }
 export const workItemRef = { space_ref: spaceRef, reference: 'MAIN-264' }
 export const attachedWorkItemRef = { space_ref: attachedSpaceRef, reference: workItemRef.reference }
 export const now = '2026-08-13T09:00:00Z'
-const connectionRef = {
-  service_ref: { owner_id: 'workspace', service_id: 'notes' },
-  adapter_lineage_id: 'lineage-notes',
-  connection_id: 'primary',
-}
-
-const action = (operation: 'attach' | 'open' | 'remove') => ({
-  interface_version: 'valkama-actions',
-  action_id: `adapter.lineage-notes.${operation}`,
-  owner_kind: 'adapter',
-  owner_id: 'lineage-notes',
-  input_schema_id: `adapter.resource.${operation}`,
-  target_kind: 'adapter-resource',
-  invocation_scope_schema: 'project',
-})
-
-const actions = [action('attach'), action('open'), action('remove')]
-const resourceRef = {
-  connection_ref: connectionRef,
-  resource_type: 'note',
-  external_id: 'N-264',
-}
-export const existingRelation = {
-  interface_version: 'valkama-relations',
-  relation_id: 'relation-264-note',
-  source: planningWorkItemEntity(workItemRef),
-  kind: 'adapter-resource',
-  target: resourceRef,
-  provider: {
-    service_ref: connectionRef.service_ref,
-    adapter_id: 'notes-adapter',
-    adapter_lineage_id: connectionRef.adapter_lineage_id,
-    adapter_version: '1.0.0',
-    connection_id: connectionRef.connection_id,
-  },
-  state: 'resolved',
-  provenance: { source_kind: 'adapter', observed_at: now, author: 'codex' },
-  presentation: { label: 'Release notes', secondary_text: 'N-264', icon_key: 'external-link' },
-  actions: [actions[1], actions[2]],
-}
-
-export function relationsWithStates(states?: Array<'missing' | 'ambiguous' | 'malformed'>) {
-  return states
-    ? states.map((state) => ({
-        ...structuredClone(existingRelation),
-        relation_id: `relation-${state}`,
-        state,
-        presentation: { ...existingRelation.presentation, label: `${state} relation` },
-        actions: [],
-      }))
-    : [structuredClone(existingRelation)]
-}
-
 const identity = (id: number) => `00000000-0000-4000-8000-${String(id).padStart(12, '0')}`
 
 const STATES = [

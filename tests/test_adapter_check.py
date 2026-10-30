@@ -17,15 +17,8 @@ import threading
 import unittest
 from pathlib import Path
 
-# `server.store` first, and it has to be an import isort will keep first:
-# `providers` reaches analytics, which reaches back into `platform.core`, so
-# entering the package through `platform` alone meets that cycle half-built.
-# `store` initialises the Kernel and sorts before `server.platform`, so the
-# ordering survives a formatter that reorders imports — an earlier attempt used
-# a comment and a `core` import, and the formatter moved it.
-from server import store  # noqa: F401  (primes the platform import cycle)
 from server.ops import adapter_check
-from server.platform import external
+from server.platform import external, transports
 
 CONFORMING = "conforming"
 LAX = "lax"
@@ -36,26 +29,7 @@ def manifest_for(adapter_id: str) -> dict:
         "contract_version": "valkama-adapter",
         "adapter_id": adapter_id,
         "version": "1.0.0",
-        "title_key": "platform.adapters.notes-reference",
-        "package_id": "example.adapter",
-        "publisher_id": "example",
-        "owner_id": "example",
-        "configuration_owner": "example",
-        "trust_owner": "example",
-        "execution": "local_service",
-        "supported_service_types": ["notes-reference"],
         "capabilities": ["memory.open"],
-        "consumes": [],
-        "contributions": [],
-        "permissions": [
-            {
-                "permission_id": "memory.open",
-                "connection_mode": "required",
-                "entity_kinds": ["adapter-resource"],
-                "target_kinds": ["note"],
-            }
-        ],
-        "health_contract": {"timeout_ms": 500, "max_payload_bytes": 131072},
     }
 
 
@@ -163,12 +137,31 @@ class ConformanceTests(unittest.TestCase):
         report = adapter_check.check_file(self.write(record_for("example-adapter", base)))
         self.assertEqual("fail", self.statuses(report)["identity"])
 
-    def test_a_capability_without_a_permission_is_a_warning_with_its_reason(self) -> None:
+    def test_an_adapter_declaring_no_capability_is_a_warning_with_its_reason(self) -> None:
         base = self.serve(CONFORMING)
         record = record_for("example-adapter", base)
-        record["manifest"]["permissions"] = []
+        record["manifest"]["capabilities"] = []
         report = adapter_check.check_file(self.write(record))
-        self.assertEqual("warn", self.statuses(report)["permissions"])
+        self.assertEqual("warn", self.statuses(report)["capabilities"])
+
+    def test_a_manifest_in_the_former_long_shape_fails_by_the_field_it_names(self) -> None:
+        base = self.serve(CONFORMING)
+        record = record_for("example-adapter", base)
+        record["manifest"]["health_contract"] = {"timeout_ms": 500, "max_payload_bytes": 1024}
+        report = adapter_check.check_file(self.write(record))
+        self.assertEqual("fail", report["status"])
+        self.assertEqual(["manifest"], [item["id"] for item in report["findings"]])
+        self.assertIn("health_contract", report["findings"][0]["detail"])
+
+    def test_a_declared_capability_is_answered_and_attributed_to_the_adapter(self) -> None:
+        base = self.serve(CONFORMING)
+        provider = external.ExternalProvider(
+            manifest_record=manifest_for("example-adapter"),
+            channel=external.HttpChannel(transports.HttpTransport(base_url=base)),
+        )
+        answer = provider.dispatch("memory.open", {"external_id": "note-1"})
+        self.assertEqual("memory-resource", answer["result_type"])
+        self.assertEqual("example-adapter", answer["provider"])
 
     def test_an_adapter_that_is_not_running_stops_at_health(self) -> None:
         record = record_for("example-adapter", "http://127.0.0.1:1")

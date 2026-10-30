@@ -36,6 +36,11 @@ checkouts are therefore distinguishable even at the same version.
 - Keep session lifecycle ingestion in Planning, accepting `session_start`,
   `session_end`, `attention`, and `turn_end`. `/api/session` resolves compact
   stored context rather than an event feed.
+- **Breaking for adapter authors:** the external adapter manifest has exactly
+  four fields (`contract_version`, `adapter_id`, `version`, `capabilities`), and
+  any other field is refused by name, including a record installed with the
+  earlier, longer manifest. Capabilities are an open set of dotted lowercase
+  ids. Check and install such an adapter again.
 
 ### Fixed
 
@@ -58,6 +63,13 @@ checkouts are therefore distinguishable even at the same version.
   skill files and existing client enablement settings are unchanged.
 - Unused desktop inbox notification wiring, frontend remnants of the retired
   Analytics and Skills screens, and the unused usage client with its test fixtures.
+- The extension registry: services, connections, assignments, grants, actions,
+  packages, relations and capability resolution, with `/api/platform/registry`,
+  `/api/platform/relations`, `/api/platform/actions`,
+  `/api/platform/assignments` and `/api/platform/grants`, which now answer 404.
+  A store keeps its registry tables and rows unchanged and nothing seeds them;
+  only the export's `relations` section still reads the adapter links. The
+  work-item read no longer carries a `relations` key.
 
 ## [1.0.2] - 2026-09-27
 

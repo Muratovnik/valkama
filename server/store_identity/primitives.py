@@ -2,9 +2,9 @@
 
 The five refusals, the field readers and the closed value sets that a store,
 a planning space, a work item, a project or an operating scope is checked
-against. Nothing here knows what a manifest, a grant or a relation is: the
-Kernel's own contracts are written on top of this vocabulary, which is what
-keeps one rejection reason from being spelled two ways.
+against. Nothing here knows what a manifest is: the module manifest and the
+adapter contract are written on top of this vocabulary, which is what keeps one
+rejection reason from being spelled two ways.
 """
 
 from __future__ import annotations
@@ -30,7 +30,6 @@ ENTITY_KINDS = frozenset(
     }
 )
 SCOPE_KINDS = frozenset({"global", "project"})
-ASSIGNMENT_SCOPE_KINDS = frozenset({"installation", "project"})
 _IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 _SAFE_TEXT = re.compile(r"^[^\x00\r\n]{0,512}$")
 _UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
@@ -140,9 +139,8 @@ def _work_item_reference(value, where):
     return value
 
 
-# Generic bounded-value validators. They live here, beneath everything that
-# routes, so the module manifest can use them without importing the
-# registry's contract package.
+# Generic bounded-value validators, beneath everything that routes, so the
+# module manifest and the adapter contract share one spelling of each.
 _SEMVER_RE = re.compile(
     r"^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
     r"(?:-(?:(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)"

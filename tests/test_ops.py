@@ -232,10 +232,9 @@ class DoctorStoreTests(unittest.TestCase):
 
 
 class _InstalledAdapter:
-    """An installed adapter as the doctor sees one: ids and a health answer."""
+    """An installed adapter as the doctor sees one: its id and a health answer."""
 
     adapter_id = "example-external"
-    adapter_lineage_id = "example-external-v1"
 
     def health(self) -> tuple[str, dict | None]:
         return "degraded", {"code": "adapter_health_unreadable", "message": "said 'odd'"}
@@ -261,7 +260,7 @@ class DoctorAdapterTests(unittest.TestCase):
         environment.start()
         self.addCleanup(environment.stop)
 
-    def checks(self, *, git: str | None) -> dict[str, dict]:
+    def checks(self, *, git: str | None, refused: list[dict] | None = None) -> dict[str, dict]:
         def client_binary(client: str) -> str:
             if client == "codex":
                 raise runner.LaunchError("codex is not on PATH")
@@ -273,6 +272,10 @@ class DoctorAdapterTests(unittest.TestCase):
             mock.patch(
                 "server.platform.installed.installed_providers",
                 return_value=[_InstalledAdapter()],
+            ),
+            mock.patch(
+                "server.platform.installed.read_records",
+                return_value=([], refused or []),
             ),
         ):
             listed = doctor._adapter_checks()
@@ -295,8 +298,8 @@ class DoctorAdapterTests(unittest.TestCase):
                     "codex-rollout-telemetry",
                 ),
                 "adapter-git-artifacts": ("warn", "adapter-unavailable", "git-artifacts"),
-                # The id follows the lineage; the label follows the adapter id.
-                "adapter-example-external-v1": ("warn", "adapter-unavailable", "example-external"),
+                # An installed adapter is named by the id its manifest declares.
+                "adapter-example-external": ("warn", "adapter-unavailable", "example-external"),
             },
             {
                 identifier: (
@@ -318,6 +321,19 @@ class DoctorAdapterTests(unittest.TestCase):
         self.assertEqual("ok", checks["adapter-git-artifacts"]["status"])
         self.assertEqual("", checks["adapter-git-artifacts"]["fix"])
         self.assertEqual("", checks["adapter-claude-journal-telemetry"]["fix"])
+
+    def test_a_refused_record_is_a_warning_rather_than_a_silent_absence(self) -> None:
+        path = os.path.join(self._dir.name, "old-adapter.json")
+        reason = "manifest: unknown field(s): permissions"
+        checks = self.checks(git="/usr/bin/git", refused=[{"path": path, "reason": reason}])
+        check = checks["adapter-record-old-adapter"]
+        self.assertEqual(
+            ("warn", "adapter-record-refused", {"adapter": "old-adapter"}),
+            (check["status"], check["presentation"]["code"], check["presentation"]["parameters"]),
+        )
+        self.assertIn(path, check["detail"])
+        self.assertIn(reason, check["detail"])
+        self.assertIn("valkama adapter install", check["fix"])
 
 
 class DoctorCommandTests(unittest.TestCase):

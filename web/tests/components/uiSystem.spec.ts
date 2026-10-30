@@ -17,7 +17,6 @@ function closedStateTypeOracle() {
   statePresentation('connection-lifecycle', 'live')
   statePresentation('platform-ui-state', 'ready')
   statePresentation('project-binding', 'mapped')
-  statePresentation('relation-state', 'resolved')
   statePresentation('session-feed-result', 'normal')
   statePresentation('work-item-node-marker', 'claimed')
   statePresentation('work-item-priority', 'high')
@@ -28,8 +27,6 @@ function closedStateTypeOracle() {
   statePresentation('platform-ui-state', 'future')
   // @ts-expect-error Project binding names are a closed platform vocabulary.
   statePresentation('project-binding', 'future')
-  // @ts-expect-error Relation state names are a closed platform vocabulary.
-  statePresentation('relation-state', 'future')
   // @ts-expect-error Session feed results are a closed platform vocabulary.
   statePresentation('session-feed-result', 'future')
   // @ts-expect-error Work-item node markers are a closed platform vocabulary.
@@ -110,9 +107,9 @@ describe('shared UI contracts', () => {
       emphasis: 'quiet',
       tone: 'success',
     })
-    expect(statePresentation('project-binding', 'ambiguous')).toEqual({
-      emphasis: 'strong',
-      tone: 'warning',
+    expect(statePresentation('project-binding', 'unbound')).toEqual({
+      emphasis: 'quiet',
+      tone: 'neutral',
     })
     expect(statePresentation('project-binding', 'unavailable')).toEqual({
       emphasis: 'strong',
@@ -120,15 +117,7 @@ describe('shared UI contracts', () => {
     })
   })
 
-  it('owns relation and work-item readiness severity in the shared state table', () => {
-    expect(statePresentation('relation-state', 'resolved')).toEqual({
-      emphasis: 'quiet',
-      tone: 'success',
-    })
-    expect(statePresentation('relation-state', 'malformed')).toEqual({
-      emphasis: 'strong',
-      tone: 'danger',
-    })
+  it('owns work-item readiness severity in the shared state table', () => {
     expect(statePresentation('work-item-readiness', 'ready')).toEqual({
       emphasis: 'quiet',
       tone: 'success',
@@ -182,7 +171,6 @@ describe('shared UI contracts', () => {
       'connection-lifecycle',
       'platform-ui-state',
       'project-binding',
-      'relation-state',
       'session-feed-result',
       'work-item-node-marker',
       'work-item-priority',

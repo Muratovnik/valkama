@@ -6,7 +6,6 @@ export type ClosedStateDimension =
   | 'control-selection'
   | 'platform-ui-state'
   | 'project-binding'
-  | 'relation-state'
   | 'session-feed-result'
   | 'work-item-node-marker'
   | 'work-item-priority'
@@ -22,9 +21,6 @@ export type OpenStateDimension =
   | 'improvement-readiness'
   | 'integration-health'
   | 'integration-intake'
-  | 'registry-lifecycle'
-  | 'skill-validation'
-  | 'skill-readiness'
 
 export type StateDimension = ClosedStateDimension | OpenStateDimension
 
@@ -190,49 +186,13 @@ const STATE_PRESENTATION = {
     'permission-denied': { tone: 'danger', emphasis: 'strong' },
     'degraded': { tone: 'warning', emphasis: 'strong' },
   },
-  // Whether one project resource has a single usable owner binding. An absent
-  // binding is an ordinary not-yet-configured state; drift and ambiguity need
-  // attention, and an unavailable owner is the only hard failure.
+  // Whether one project resource has a usable owner binding. An absent
+  // binding is an ordinary not-yet-configured state; an unavailable bound
+  // store is the only hard failure.
   'project-binding': {
     mapped: { tone: 'success', emphasis: 'quiet' },
     unbound: { tone: 'neutral', emphasis: 'quiet' },
-    stale: { tone: 'warning', emphasis: 'strong' },
-    detached: { tone: 'warning', emphasis: 'strong' },
-    ambiguous: { tone: 'warning', emphasis: 'strong' },
     unavailable: { tone: 'danger', emphasis: 'strong' },
-  },
-  'relation-state': {
-    resolved: { tone: 'success', emphasis: 'quiet' },
-    missing: { tone: 'warning', emphasis: 'quiet' },
-    ambiguous: { tone: 'warning', emphasis: 'strong' },
-    unavailable: { tone: 'danger', emphasis: 'strong' },
-    malformed: { tone: 'danger', emphasis: 'strong' },
-  },
-  // What the registry reports about an adapter, a service or a grant. The
-  // settings screen used to colour these words from its own stylesheet, which
-  // is the second status mapping this dimension exists to remove.
-  'registry-lifecycle': {
-    active: { tone: 'success', emphasis: 'quiet' },
-    enabled: { tone: 'success', emphasis: 'quiet' },
-    ready: { tone: 'success', emphasis: 'quiet' },
-    registered: { tone: 'info', emphasis: 'quiet' },
-    restricted: { tone: 'warning', emphasis: 'quiet' },
-    degraded: { tone: 'warning', emphasis: 'strong' },
-    blocked: { tone: 'danger', emphasis: 'strong' },
-    revoked: { tone: 'danger', emphasis: 'strong' },
-    unavailable: { tone: 'danger', emphasis: 'strong' },
-  },
-  'skill-validation': {
-    valid: { tone: 'success', emphasis: 'quiet' },
-    partial: { tone: 'warning', emphasis: 'quiet' },
-    invalid: { tone: 'danger', emphasis: 'strong' },
-  },
-  'skill-readiness': {
-    enabled: { tone: 'success', emphasis: 'quiet' },
-    partial: { tone: 'info', emphasis: 'quiet' },
-    disabled: { tone: 'neutral', emphasis: 'quiet' },
-    unavailable: { tone: 'warning', emphasis: 'strong' },
-    invalid: { tone: 'danger', emphasis: 'strong' },
   },
   'work-item-readiness': {
     ready: { tone: 'success', emphasis: 'quiet' },
@@ -243,7 +203,6 @@ const STATE_PRESENTATION = {
 type ConnectionLifecycleState = keyof (typeof STATE_PRESENTATION)['connection-lifecycle']
 type PlatformUiState = keyof (typeof STATE_PRESENTATION)['platform-ui-state']
 type ProjectBindingState = keyof (typeof STATE_PRESENTATION)['project-binding']
-type RelationState = keyof (typeof STATE_PRESENTATION)['relation-state']
 type SessionFeedResultState = keyof (typeof STATE_PRESENTATION)['session-feed-result']
 type WorkItemNodeMarkerState = keyof (typeof STATE_PRESENTATION)['work-item-node-marker']
 type WorkItemPriorityState = keyof (typeof STATE_PRESENTATION)['work-item-priority']
@@ -259,7 +218,6 @@ export type SemanticStatePair =
   | { dimension: 'control-selection'; state: 'selected' | 'unselected' }
   | { dimension: 'platform-ui-state'; state: PlatformUiState }
   | { dimension: 'project-binding'; state: ProjectBindingState }
-  | { dimension: 'relation-state'; state: RelationState }
   | { dimension: 'session-feed-result'; state: SessionFeedResultState }
   | { dimension: 'work-item-node-marker'; state: WorkItemNodeMarkerState }
   | { dimension: 'work-item-priority'; state: WorkItemPriorityState }
@@ -271,7 +229,6 @@ const CLOSED_STATE_DIMENSIONS = {
   'control-selection': true,
   'platform-ui-state': true,
   'project-binding': true,
-  'relation-state': true,
   'session-feed-result': true,
   'work-item-node-marker': true,
   'work-item-priority': true,

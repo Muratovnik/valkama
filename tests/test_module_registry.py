@@ -21,9 +21,25 @@ from server.platform import module_gate
 from server.platform import modules as platform_modules
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
-from tests import board_era
+from server.ui_state import PlatformHttpError
+from tests import board_era, registry_rows
 from tests.registry_fixtures import project_binding, project_entry, registry_bytes
 from tests.retired_modules import FORMER_MODULES
+
+
+class _ModuleRows:
+    """The module rows of one store, read and changed the way the surfaces do."""
+
+    def __init__(self, conn: sqlite3.Connection, path: str) -> None:
+        self.conn = conn
+        self.path = path
+
+    def modules_payload(self) -> dict:
+        return module_gate.modules_payload(self.conn)
+
+    def module_state_command(self, payload: dict) -> dict:
+        return platform_core.module_state_command(self.conn, self.path, payload)
+
 
 _EXPECTED_SECONDARY_CONTEXTS = {
     "planning": {
@@ -93,8 +109,8 @@ class ModuleRegistryTests(unittest.TestCase):
         self.conn = store.connect()
         self.addCleanup(lambda: self.conn.close())
 
-    def platform(self) -> platform_core.Platform:
-        return platform_core.Platform(self.conn, self.path)
+    def platform(self) -> _ModuleRows:
+        return _ModuleRows(self.conn, self.path)
 
     def module_row(self, module_id: str) -> sqlite3.Row | None:
         return self.conn.execute(
@@ -217,11 +233,11 @@ class ModuleRegistryTests(unittest.TestCase):
         audit_before = self.conn.execute(
             "SELECT COUNT(*) FROM platform_registry_audit WHERE entity_kind='module'"
         ).fetchone()[0]
-        with self.assertRaises(platform_core.PlatformHttpError):
+        with self.assertRaises(PlatformHttpError):
             platform.module_state_command(
                 {"module_id": "settings", "state": "disabled", "expected_revision": 1}
             )
-        with self.assertRaises(platform_core.PlatformHttpError):
+        with self.assertRaises(PlatformHttpError):
             platform.module_state_command(
                 {"module_id": "settings", "state": "enabled", "expected_revision": 1}
             )
@@ -242,7 +258,7 @@ class ModuleRegistryTests(unittest.TestCase):
             item for item in mcp["modules"] if item["manifest"]["module_id"] == "planning"
         )
         self.assertEqual("disabled", planning["state"])
-        with self.assertRaises(platform_core.PlatformHttpError):
+        with self.assertRaises(PlatformHttpError):
             platform.module_state_command(
                 {"module_id": "planning", "state": "enabled", "expected_revision": 1}
             )
@@ -257,7 +273,7 @@ class ModuleRegistryTests(unittest.TestCase):
         self.platform().module_state_command(
             {"module_id": "planning", "state": "disabled", "expected_revision": 1}
         )
-        with self.assertRaises(platform_core.PlatformHttpError):
+        with self.assertRaises(PlatformHttpError):
             planning_exact_api.handle_get(
                 self.conn,
                 self.path,
@@ -278,7 +294,7 @@ class ModuleRegistryTests(unittest.TestCase):
         self.assertIsNone(
             self.conn.execute("SELECT 1 FROM platform_modules WHERE module_id='memory'").fetchone()
         )
-        with self.assertRaises(platform_core.PlatformHttpError):
+        with self.assertRaises(PlatformHttpError):
             self.platform().module_state_command(
                 {"module_id": "memory", "state": "enabled", "expected_revision": 1}
             )
@@ -375,7 +391,7 @@ class ModuleRegistryTests(unittest.TestCase):
         self.conn.commit()
         with self.assertRaises(module_gate.RegistryError):
             module_gate.require_module_enabled(self.conn, "planning")
-        with self.assertRaises(platform_core.RegistryError):
+        with self.assertRaises(module_gate.RegistryError):
             self.platform().module_state_command(
                 {"module_id": "planning", "state": "disabled", "expected_revision": 1}
             )
@@ -396,7 +412,7 @@ class ModuleRegistryTests(unittest.TestCase):
         before = self.registrations()["planning"]
         self.conn.execute("DELETE FROM platform_modules WHERE module_id='settings'")
         self.conn.commit()
-        with self.assertRaisesRegex(platform_core.RegistryError, "Settings"):
+        with self.assertRaisesRegex(module_gate.RegistryError, "Settings"):
             self.platform().module_state_command(
                 {"module_id": "planning", "state": "disabled", "expected_revision": 1}
             )
@@ -458,7 +474,7 @@ class ModuleRegistryTests(unittest.TestCase):
         state_conn.row_factory = sqlite3.Row
         self.addCleanup(reaper_conn.close)
         self.addCleanup(state_conn.close)
-        platform = platform_core.Platform(state_conn, self.path)
+        platform = _ModuleRows(state_conn, self.path)
 
         def reap_under_lock(conn: sqlite3.Connection) -> bool:
             entered.set()
@@ -505,6 +521,8 @@ class ProductModelMigrationTests(unittest.TestCase):
         cutover.start()
         self.addCleanup(cutover.stop)
         conn = store.connect()
+        # The registry rows the last build that had a registry seeded on start.
+        registry_rows.seed(conn)
         resource_ref = planning_space_entity(
             {
                 "data_scope_id": read_store_metadata(conn)["data_scope_id"],
@@ -709,7 +727,7 @@ class ProductModelMigrationTests(unittest.TestCase):
         conn.commit()
         conn.close()
 
-        with self.assertRaises(platform_core.RegistryError):
+        with self.assertRaises(module_gate.RegistryError):
             store.connect()
         self.assertEqual([], self.backups())
         check = sqlite3.connect(self.path)
@@ -741,7 +759,7 @@ class ProductModelMigrationTests(unittest.TestCase):
         ).fetchall()
         conn.close()
 
-        with self.assertRaises(platform_core.RegistryError):
+        with self.assertRaises(module_gate.RegistryError):
             store.connect()
 
         self.assertEqual([], self.backups())

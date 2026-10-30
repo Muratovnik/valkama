@@ -61,7 +61,6 @@ function planningWorkItemPayload() {
             { action: 'created', detail: 'backlog', author: 'codex', at: '2026-08-13T08:00:00Z' },
           ],
         },
-        relations: { interface_version: 'valkama-relations', relations: [] },
       },
     },
   }

@@ -2,8 +2,7 @@
 
 `store.connect()` is the only caller. It reads a store, classifies which
 generation wrote it, and runs the migrations below in the order that module
-states; nothing here touches the `Platform` runtime class, and nothing here
-decides when it runs. What lives here is the knowledge that outlives a release:
+states; nothing here decides when it runs. What lives here is the knowledge that outlives a release:
 the exact column tuples and `CREATE TABLE` text of shapes no build writes any
 more, the catalog signature that proves a store is exactly one of them, the
 normalizers that carry a legacy row into the current record, the seven forward
@@ -14,8 +13,9 @@ It is kept apart from `core` because it grows differently. A migration is
 written once, is never edited again, and is deleted only when the shape it
 carries can no longer exist on a real disk -- so this file accumulates while
 the runtime beside it stays the size of what the product does today. `core`
-owns the current schema, the current records and the Kernel; this owns their
-history, and the dependency runs that way only.
+owns the current schema; this owns its history, and the dependency runs that
+way only. The registry's row shapes these migrations still check live in
+`legacy_records`, which nothing else reads.
 
 The catalogue of source shapes is deliberately literal. A signature comparison
 that described a table instead of replaying it would drift from the store it
@@ -32,19 +32,13 @@ import re
 import sqlite3
 from collections.abc import Callable, Mapping
 
-from . import modules as platform_modules
-from .capabilities import CAPABILITY_DEFINITIONS
-from .contracts import (
-    ContractError,
+from ..store_identity.primitives import ContractError
+from ..store_identity.refs import (
     planning_space_entity,
-    validate_action_input_descriptor,
-    validate_adapter_manifest,
-    validate_assignment,
-    validate_connection,
     validate_entity_ref,
-    validate_module_manifest,
     validate_operating_scope,
 )
+from . import modules as platform_modules
 
 # The current shape, borrowed rather than restated. A migration's last act is to
 # produce exactly what a fresh store declares, so the schema text and the table
@@ -55,18 +49,47 @@ from .contracts import (
 # looks like, and a migration whose output disagreed with the runtime by one
 # separator is exactly the failure the postconditions exist to catch.
 from .core import (
-    AUTHORIZATION_OWNER_MODEL,
     REGISTRY_SCHEMA,
     SCHEMA,
     SCHEMA_TABLES,
-    _connection_key,
     _execute_schema,
     _json,
     _now,
-    _planning_resources,
     _table_present,
 )
+
+# The registry's row shapes, which only the migrations below still read.
+from .legacy_records import (
+    CAPABILITY_IDS,
+    validate_action_input_descriptor,
+    validate_adapter_record,
+    validate_assignment,
+    validate_connection,
+)
 from .module_gate import RegistryError, modules_payload
+from .module_manifest import validate_module_manifest
+
+#: The authorization model a store initialized by the registry recorded. Read
+#: and written only by the one-time cutover below.
+AUTHORIZATION_OWNER_MODEL = "explicit-owner-v1"
+
+
+def _connection_key(ref: dict) -> str:
+    """How the registry keyed a Connection row, which a legacy assignment names."""
+
+    service = ref["service_ref"]
+    return (
+        f"{service['owner_id']}:{service['service_id']}"
+        f":{ref['adapter_lineage_id']}:{ref['connection_id']}"
+    )
+
+
+def _planning_resources(data_scope_id: str, space_keys) -> list[dict]:
+    return [
+        planning_space_entity({"data_scope_id": data_scope_id, "space_key": str(key)})
+        for key in space_keys
+    ]
+
 
 _RELEASED_SCHEMA2_MODULE_MANIFEST_HASHES = {
     "planning": "b008651d89d43c08d6986fa52b7b1bf486f93908d30cfdd78ff4d24cafe96a1a",
@@ -772,10 +795,7 @@ def _neutral_adapter_record(row: Mapping[str, object]) -> dict:
     elif (
         not isinstance(capabilities, list)
         or not capabilities
-        or any(
-            item not in set(CAPABILITY_DEFINITIONS) | {"skills.catalog", "skills.activate"}
-            for item in capabilities
-        )
+        or any(item not in CAPABILITY_IDS for item in capabilities)
         or len(capabilities) != len(set(capabilities))
     ):
         raise RegistryError("legacy adapter capability values are unmapped")
@@ -787,7 +807,7 @@ def _neutral_adapter_record(row: Mapping[str, object]) -> dict:
     stored_lineage = adapter.pop("adapter_lineage_id", row["adapter_lineage_id"])
     stored_state = adapter.pop("state", row["state"])
     try:
-        adapter = validate_adapter_manifest(adapter)
+        adapter = validate_adapter_record(adapter)
     except ContractError as error:
         raise RegistryError("persisted adapter cannot be cut over to the neutral model") from error
     if (
@@ -1368,27 +1388,13 @@ def assert_product_model_postconditions(conn: sqlite3.Connection) -> None:
             raise RegistryError(f"post-migration {table} shape is not exact")
     _assert_exact_catalog(conn, generation="current", prefix="platform_")
     modules_payload(conn)
-    for row in conn.execute("SELECT record_json FROM platform_assignments"):
-        validate_assignment(json.loads(row[0]))
     for row in conn.execute("SELECT key,record_json,updated_at FROM platform_ui_prefs"):
         _neutral_ui_prefs_record(row, legacy=False)
-    for row in conn.execute("SELECT action_id,record_json,updated_at FROM platform_action_inputs"):
-        _neutral_action_input_record(row, legacy=False)
-    for row in conn.execute(
-        "SELECT adapter_lineage_id,adapter_id,record_json,state FROM platform_adapters"
-    ):
-        stored = json.loads(row["record_json"])
-        if stored.get("adapter_lineage_id") != row["adapter_lineage_id"]:
-            raise RegistryError("post-migration adapter lineage is inconsistent")
-        if stored.get("state") != row["state"]:
-            raise RegistryError("post-migration adapter state is inconsistent")
-        manifest = {
-            key: value
-            for key, value in stored.items()
-            if key not in {"adapter_lineage_id", "state"}
-        }
-        if validate_adapter_manifest(manifest)["adapter_id"] != row["adapter_id"]:
-            raise RegistryError("post-migration adapter identity is inconsistent")
+    # The registry's own rows -- assignments, action inputs, adapters -- are no
+    # longer proven here. Nothing reads them, their tables leave with the next
+    # schema, and a row-content check on dead data could only refuse to open a
+    # store over something no code will look at. Their shape is still proven
+    # above, by the catalog signature, until the tables are dropped.
     for row in conn.execute("SELECT resources_json FROM platform_known_stores"):
         resources = json.loads(row[0])
         if not isinstance(resources, list):

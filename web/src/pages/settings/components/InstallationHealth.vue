@@ -98,8 +98,6 @@ function finding(check: DoctorCheck, part: 'title' | 'detail' | 'fix'): string {
     'codex-execution': 'codex',
     'claude-journal-telemetry': 'claudeJournal',
     'codex-rollout-telemetry': 'codexRollout',
-    'agentmemory-reference': 'agentMemory',
-    'notes-reference': 'demoNotes',
     'git-artifacts': 'git',
   }
   const adapter = String(parameters.adapter ?? '')

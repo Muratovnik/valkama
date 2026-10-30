@@ -1,8 +1,7 @@
 /** HTTP ownership for Planning's space and work-item projections. */
 
-import { invalid } from '@/shared/api/platformActionRef.ts'
 import { requestUnknown, scopeQuery } from '@/shared/api/platformApi.ts'
-import { assertScope, canonicalJson } from '@/shared/api/platformApiGuards.ts'
+import { assertScope, canonicalJson, invalid } from '@/shared/api/platformApiGuards.ts'
 import {
   validatePlanningWorkItemPayload,
   validatePlatformPlanningPayload,

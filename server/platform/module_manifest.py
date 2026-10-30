@@ -1,9 +1,7 @@
 """The ``valkama-modules`` manifest: what one module declares about itself.
 
-Kept apart from the adapter and contribution contracts because the module gate
-reads it on every request and must not drag the registry's vocabulary in with
-it: a module manifest names actions by their ID, never by a registered
-ActionRef.
+Kept apart from the adapter contract because the module gate reads it on every
+request and must stay small: a module manifest names its actions by ID only.
 """
 
 from __future__ import annotations

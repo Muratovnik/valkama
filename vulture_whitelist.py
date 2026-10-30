@@ -18,8 +18,6 @@ _.do_OPTIONS  # unused method (server\http_surface.py)
 _.close_connection  # unused attribute (server\http_surface.py)
 _.row_factory  # unused attribute (server\projects\scopes.py)
 _.row_factory  # unused attribute (server\store.py)
-_.row_factory  # unused attribute (tests\test_platform_black_box.py)
-_.row_factory  # unused attribute (tests\test_platform_relations.py)
 
 # Hypothesis calls these by decorator, not by name: @rule and @invariant
 # register a method on the state machine, and teardown is the framework's own

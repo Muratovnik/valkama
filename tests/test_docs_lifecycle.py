@@ -34,9 +34,6 @@ REQUIRED_PRODUCT_TERMS = (
     "Module",
     "View",
     "Adapter",
-    "Service",
-    "Connection",
-    "Assignment",
     "Capability",
     "Projection",
     "Project",
@@ -168,11 +165,9 @@ class ProductModelDocsTests(unittest.TestCase):
         normalized = " ".join(text.split())
         required_statements = (
             "| Owns a user domain and route | Yes | No | No |",
-            "A Capability definition describes what a Module needs.",
-            "A Connection describes one usable tool instance.",
-            "An Assignment chooses Connection references for a Capability.",
+            "An adapter manifest names the adapter and the Capabilities it answers;",
+            "Declaring an adapter enables nothing and authorizes nothing.",
             "A WorkItem expresses intent, an Execution records one attempt",
-            "project override, then installation default, then",
             "a typed unavailable result",
         )
         for statement in required_statements:

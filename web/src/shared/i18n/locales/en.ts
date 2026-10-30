@@ -60,9 +60,6 @@ export const en = {
     bindings: {
       mapped: 'Mapped',
       unbound: 'Unbound',
-      stale: 'Stale',
-      detached: 'Detached',
-      ambiguous: 'Ambiguous',
       unavailable: 'Unavailable',
     },
     states: {
@@ -389,6 +386,12 @@ export const en = {
         title: '{adapter} source is unavailable',
         detail: 'The capability it provides is temporarily not answering.',
         fix: 'Check the source itself. The rest of Valkama remains available.',
+      },
+      'adapter-record-refused': {
+        title: 'Adapter record {adapter} is not usable',
+        detail:
+          'The installed declaration does not match the adapter contract, so the adapter is not connected.',
+        fix: 'Check the adapter again and reinstall it, or delete the record if it is no longer used. The rest of Valkama remains available.',
       },
       'registry-available': {
         title: 'Project registry',

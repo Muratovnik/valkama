@@ -260,11 +260,25 @@ the machine. An answer carrying `{"error": "..."}` is a refusal on either
 transport: stdin and stdout have no status line, and a refusal only one
 transport could make is one the conformance tool would miss.
 
-**A manifest carries no destination.** It is published to the browser and the
-contract refuses a path or an argv anywhere in one, so where an adapter lives
-is something you supply — which is also the only order that works, since the
-destination is how the manifest gets fetched. Installing pairs the two in a
-record under `~/.valkama/adapters/`.
+**A manifest names the adapter and nothing else.** It has exactly four fields,
+all required:
+
+```json
+{
+  "contract_version": "valkama-adapter",
+  "adapter_id": "example-notes",
+  "version": "1.0.0",
+  "capabilities": ["notes.search", "notes.open"]
+}
+```
+
+`version` is a semantic version, and each capability is a dotted lowercase id
+the adapter chooses for an operation it answers. A manifest carrying any other
+field is refused with that field's name rather than read in part, and so is a
+path or an argv anywhere in it. Where an adapter lives is therefore something
+you supply — which is also the only order that works, since the destination is
+how the manifest gets fetched. Installing pairs the two in a record under
+`~/.valkama/adapters/`.
 
 This is not what a *backend* does. Phoenix, Langfuse and Jaeger are other
 people's products with their own APIs; Valkama reaches one through a provider
@@ -295,21 +309,18 @@ python valkama.py adapter check --mcp MCP_COMMAND ARG...
 python valkama.py adapter install --mcp MCP_COMMAND ARG...
 ```
 
-Installing writes a record to `~/.valkama/adapters/`, one file per adapter. That
-is the whole mechanism: a built-in adapter is declared in code, an installed one
-is declared by a file, and both then travel the identical path that turns a
-declaration into registry rows and a Connection. Installing an adapter whose
-check failed is refused; `--force` overrides and says so.
+Installing writes a record to `~/.valkama/adapters/`, one file per adapter,
+holding the manifest and the transport and nothing else. That file is the whole
+declaration: no table holds an installed adapter, so `adapter remove` deletes
+the file and nothing else. Installing an adapter whose check failed is refused;
+`--force` overrides and says so.
 
-`adapter remove` deletes the file. The registry rows written on an earlier start
-stay, so a ref pointing at that adapter still resolves and its Connection reads
-`unavailable` — a ref whose target evaporated reads as data loss, and an
-unavailable Connection reads as what it is.
-
-An installed adapter claims no core ref kind. Claiming one binds every ref of
-that kind to it and only one provider may, so a manifest able to claim `memory`
-would displace the provider you already have, at install time, without you
-deciding anything.
+`adapter list` reads the records back and names every file it refuses, with the
+reason, and `doctor` asks each installed adapter for its health under
+Connections. A record written for the earlier, longer manifest is refused with
+the names of the fields this contract does not have; check and install that
+adapter again. No module calls an installed adapter yet: today the contract is
+what an adapter is checked, declared and health-reported against.
 
 ## Configuration
 
@@ -579,10 +590,10 @@ the built UI with no build step — **rebuild and commit it whenever `web/src`
 changes.**
 
 The Python side serves `web/dist` plus the module and Planning APIs.
-`GET /api/modules` is the canonical persisted module registry;
-`GET /api/platform/registry` returns normalized integration definitions,
-Connections, Assignments, health, and ownership without loading third-party
-browser code.
+`GET /api/modules` is the canonical persisted module registry, and
+`GET /api/platform/context` the store's identity and the project directory with
+each project's binding state, which the shell reads before any module renders.
+No endpoint serves integration definitions or loads third-party browser code.
 
 ### Local HTTP security
 
@@ -628,7 +639,7 @@ The maintained product contracts are:
 - [`docs/product-model.md`](docs/product-model.md) — the product vocabulary and
   the distinctions between modules, views, adapters, and runtime records.
 - [`docs/platform-contract.md`](docs/platform-contract.md) — the two operating
-  levels and the object kinds a module may not confuse.
+  levels, what each module means on them, and what an adapter may do.
 - [`docs/connection-contract.md`](docs/connection-contract.md) — what a client
   learns on connect, and how the server refuses to answer from a stale build.
 

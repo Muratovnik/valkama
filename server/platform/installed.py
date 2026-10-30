@@ -1,35 +1,29 @@
-"""EXT-006: which external adapters this installation has, as files it can read.
+"""Which external adapters this installation declares, as files it can read.
 
-A built-in adapter is declared in code — the provider classes are the
-declaration, and `_seed_registry` turns each into registry rows on every start.
-An external adapter needs the same kind of declaration from somewhere the owner
-controls, and this is it: one file per adapter under `~/.valkama/adapters/`.
-
-That choice is deliberately boring. It needs no new table, the owner can read
-and delete what is installed without a tool, and the adapters flow through the
-identical seeding path the built-ins use — which is the only way to be sure an
-external adapter is not a second class of thing with a second set of bugs.
+An external adapter is declared by the owner, one file per adapter under
+`~/.valkama/adapters/`. That choice is deliberately boring: it needs no table,
+and the owner can read and delete what is installed without a tool.
 
 **The file is not a manifest.** It is a manifest *and* a transport, and they are
-separate for a reason the CLI transport made unavoidable: a manifest is
-published to the browser, and the contract refuses a `command` key or a
-path-shaped string anywhere in one. An argv naming an absolute interpreter is
-local configuration, not a declaration about what an adapter is. §18.4 says the
-same from the other side — a manifest may be *discovered* from an endpoint, so
-the destination is known before the manifest is, and cannot live inside the
-document it is used to fetch.
+separate for a reason the CLI transport made unavoidable: a manifest may be
+fetched from the adapter itself and is held to the browser rule, which refuses a
+`command` key or a path-shaped string anywhere in it. An argv naming an absolute
+interpreter is local configuration, not a declaration about what an adapter is.
+A manifest may also be *discovered* from an endpoint, so the destination is
+known before the manifest is, and cannot live inside the document it is used to
+fetch.
 
 ```json
 {
   "record_version": "valkama-adapter-installation",
-  "manifest": { ... },
+  "manifest": {"contract_version": "valkama-adapter", "adapter_id": "...",
+               "version": "1.0.0", "capabilities": ["memory.open"]},
   "transport": {"kind": "http", "base_url": "http://127.0.0.1:8770"}
 }
 ```
 
-Removal is a file deletion, and the registry rows come out separately through
-`Platform.unregister_external_adapter`. What a deletion alone would leave is the
-reason: rows from an earlier start staying as a Connection nobody can act on.
+Removal is a file deletion and nothing else: no table holds an installed
+adapter, so there is nothing left behind to unregister.
 
 Nothing here dials anything. Reading a record is not reaching an adapter, and a
 directory of files is not a set of running services.
@@ -41,7 +35,7 @@ import json
 import os
 
 from ..ops.configuration import CONFIG_DIRECTORY
-from .contracts import validate_adapter_manifest, validate_adapter_transport
+from .adapter_contract import validate_adapter_manifest, validate_adapter_transport
 from .external import CliChannel, ExternalProvider, HttpChannel, McpChannel
 from .transports import CliTransport, HttpTransport, McpTransport, TransportError
 
@@ -73,14 +67,19 @@ def record_path(adapter_id: str, home: str | None = None) -> str:
 
 
 def validate_record(value: object) -> dict:
-    """An installation record: a valid manifest, and a transport that suits it."""
+    """An installation record: exactly a valid manifest and a valid transport."""
 
     if not isinstance(value, dict):
         raise ValueError("an installation record is an object")
+    unknown = set(value) - {"record_version", "manifest", "transport"}
+    if unknown:
+        raise ValueError(
+            f"an installation record has unknown field(s): {', '.join(sorted(unknown))}"
+        )
     if value.get("record_version") != RECORD_VERSION:
         raise ValueError(f"record_version must be {RECORD_VERSION}")
     manifest = validate_adapter_manifest(value.get("manifest"))
-    transport = validate_adapter_transport(value.get("transport"), manifest["execution"])
+    transport = validate_adapter_transport(value.get("transport"))
     return {"record_version": RECORD_VERSION, "manifest": manifest, "transport": transport}
 
 
@@ -118,8 +117,8 @@ def channel_for(record: dict) -> CliChannel | HttpChannel | McpChannel | None:
 
     A destination the policy refuses is not a destination. The record stays
     readable and the adapter simply does not become a provider — better than
-    half-building one, which is a Connection reporting `unavailable` for a
-    reason nobody can act on.
+    half-building one, which would report `unavailable` for a reason nobody
+    can act on.
     """
 
     transport = record.get("transport")
@@ -161,7 +160,7 @@ def channel_for(record: dict) -> CliChannel | HttpChannel | McpChannel | None:
 
 
 def installed_providers(home: str | None = None) -> list[ExternalProvider]:
-    """The installed adapters, as providers the catalogue can hold."""
+    """The installed adapters, each as a provider that can be asked for its health."""
 
     records, _ = read_records(home)
     providers = []

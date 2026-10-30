@@ -7,7 +7,6 @@ import binascii
 import json
 
 from .primitives import (
-    ASSIGNMENT_SCOPE_KINDS,
     ENTITY_KINDS,
     SCOPE_KINDS,
     ContractError,
@@ -40,21 +39,6 @@ def validate_operating_scope(value):
     if set(obj) != {"kind", "project_ref"}:
         raise MissingFieldError("project operating_scope requires exactly project_ref")
     return {"kind": "project", "project_ref": validate_project_ref(obj["project_ref"])}
-
-
-def validate_assignment_scope(value):
-    obj = _object(value, ("kind",), optional=("project_id",), where="assignment_scope")
-    kind = _enum(obj["kind"], ASSIGNMENT_SCOPE_KINDS, "assignment_scope.kind")
-    if kind == "installation":
-        if set(obj) != {"kind"}:
-            raise UnknownFieldError("installation assignment_scope cannot carry project_id")
-        return {"kind": "installation"}
-    if set(obj) != {"kind", "project_id"}:
-        raise MissingFieldError("project assignment_scope requires exactly project_id")
-    return {
-        "kind": "project",
-        "project_id": _project_id(obj["project_id"], "assignment_scope.project_id"),
-    }
 
 
 def validate_data_scope_id(value):
@@ -137,15 +121,6 @@ def planning_work_item_entity(work_item_ref):
     return {"kind": "work-item", "resource_id": _planning_resource_id(item)}
 
 
-def planning_work_item_ref(entity_ref):
-    entity = validate_entity_ref(entity_ref)
-    if entity["kind"] != "work-item":
-        raise InvalidDiscriminantError("entity_ref.kind must be work-item")
-    return validate_work_item_ref(
-        _planning_resource(entity["resource_id"], "entity_ref.resource_id")
-    )
-
-
 def validate_session_ref(value):
     obj = _object(value, ("client_family", "session_id"), where="session_ref")
     return {
@@ -188,22 +163,6 @@ def validate_connection_ref(value):
             obj["adapter_lineage_id"], "connection_ref.adapter_lineage_id"
         ),
         "connection_id": _identifier(obj["connection_id"], "connection_ref.connection_id"),
-    }
-
-
-def validate_registry_ref(value):
-    obj = _object(value, ("registry_id",), where="registry_ref")
-    return {"registry_id": _identifier(obj["registry_id"], "registry_ref.registry_id")}
-
-
-def validate_adapter_resource_ref(value):
-    obj = _object(
-        value, ("connection_ref", "resource_type", "external_id"), where="adapter_resource_ref"
-    )
-    return {
-        "connection_ref": validate_connection_ref(obj["connection_ref"]),
-        "resource_type": _identifier(obj["resource_type"], "adapter_resource_ref.resource_type"),
-        "external_id": _identifier(obj["external_id"], "adapter_resource_ref.external_id"),
     }
 
 

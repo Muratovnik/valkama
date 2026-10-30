@@ -1,11 +1,9 @@
-"""EXT-001 and EXT-002: the adapter contract, and the transport that proves it.
+"""The external adapter contract, and the transports that carry it.
 
-The contract's whole claim is that the Kernel needs to know nothing about a
-provider beyond its ConnectionRef. A test that only exercised the two built-in
-families could not tell whether that is true or whether the catalogue simply
-happens to recognise both, so the case that matters here is a provider written
-inside this file: if the catalogue can route to something it has never seen,
-the contract is real.
+An adapter declares four things about itself -- the contract it speaks, its id,
+its version and the capabilities it answers -- and the owner states where it is.
+The cases here are mostly refusals: a contract that accepted a field nobody
+checks, or a destination nobody vetted, would be a contract only on paper.
 """
 
 from __future__ import annotations
@@ -17,221 +15,148 @@ import sys
 import tempfile
 import threading
 import unittest
-from dataclasses import dataclass
 from pathlib import Path
 
-# `server.store` first, and it has to be an import isort will keep first:
-# `providers` reaches analytics, which reaches back into `platform.core`, so
-# entering the package through `platform` alone meets that cycle half-built.
-# `store` initialises the Kernel and sorts before `server.platform`, so the
-# ordering survives a formatter that reorders imports — an earlier attempt used
-# a comment and a `core` import, and the formatter moved it.
-from server import store  # noqa: F401  (primes the platform import cycle)
-from server.platform import contracts, external, providers, transports
-from server.platform.adapters import Provider
-from server.platform.core import error_response
-
-
-def _status_of(failure: Exception) -> tuple[int, str]:
-    """How the HTTP surface would answer this refusal."""
-
-    status, body = error_response(failure)
-    return status, str(body["status"])
-
-
-class ContractTests(unittest.TestCase):
-    """What every adapter answers, whoever wrote it."""
-
-    def test_every_built_in_provider_satisfies_the_written_contract(self) -> None:
-        for provider in providers.ProviderCatalog().all():
-            with self.subTest(adapter=provider.adapter_id):
-                self.assertIsInstance(provider, Provider)
-                self.assertTrue(provider.capabilities, "a provider with nothing to answer")
-                manifest = provider.manifest()
-                self.assertEqual("valkama-adapter", manifest["contract_version"])
-                # The manifest and the provider must agree about what it does.
-                # They were two lists before this, and one of them lived in the
-                # catalogue where no external adapter could reach it.
-                self.assertEqual(sorted(provider.capabilities), sorted(manifest["capabilities"]))
-
-    def test_health_never_raises_however_broken_the_provider_is(self) -> None:
-        # A sweep exists to survive one provider being down. An exception here
-        # takes the sweep with it, which is the failure the doctor already met
-        # one layer up.
-        for provider in providers.ProviderCatalog().all():
-            with self.subTest(adapter=provider.adapter_id):
-                state, diagnostics = provider.health()
-                self.assertIn(state, ("ready", "degraded", "unavailable", "not-observed"))
-                if state != "ready":
-                    self.assertIn("code", diagnostics or {})
-
-    def test_a_capability_the_provider_does_not_have_is_refused_not_ignored(self) -> None:
-        provider = providers.AgentMemoryReferenceProvider()
-        with self.assertRaises(providers.ProviderError):
-            provider.dispatch("execution.launch", {})
-
-    def test_every_provider_says_what_one_probe_of_it_can_cost(self) -> None:
-        # The number the read path budgets against. It has to come from the
-        # provider because only the provider knows, and it has to be a ceiling
-        # something enforces — a read that trusted a figure nothing holds to
-        # would have a bound only on paper.
-        for provider in providers.ProviderCatalog().all():
-            with self.subTest(adapter=provider.adapter_id):
-                self.assertIsInstance(provider.probe_ceiling_ms, int)
-                self.assertGreaterEqual(provider.probe_ceiling_ms, 0)
-                self.assertLessEqual(provider.probe_ceiling_ms, transports.MAX_PROCESS_TIMEOUT_MS)
-
-
-@dataclass(frozen=True)
-class _Stranger:
-    """A provider the Kernel has never met, written to the contract and nothing else.
-
-    This is the case EXT-001 exists for. Before the extraction the catalogue
-    dispatched by `isinstance` and read capabilities from a table keyed by
-    lineage id, so this object could be registered and still answer nothing.
-    """
-
-    adapter_id: str = "stranger"
-    adapter_lineage_id: str = "stranger-v1"
-    capabilities: tuple[str, ...] = ("telemetry.query",)
-    core_ref_kinds: tuple[str, ...] = ()
-
-    @property
-    def connection_ref(self) -> dict:
-        return {
-            "service_ref": {"owner_id": "stranger", "service_id": "elsewhere"},
-            "adapter_lineage_id": self.adapter_lineage_id,
-            "connection_id": "one",
-        }
-
-    @property
-    def probe_ceiling_ms(self) -> int:
-        return 0
-
-    def manifest(self) -> dict:
-        return {"contract_version": "valkama-adapter", "capabilities": list(self.capabilities)}
-
-    def package_descriptor(self) -> dict:
-        return {"package_id": "stranger.pkg"}
-
-    def service_descriptor(self) -> dict:
-        return {"service_ref": self.connection_ref["service_ref"]}
-
-    def health(self) -> tuple[str, dict | None]:
-        return "ready", None
-
-    def connection(self, scope: dict | None = None, *, observe: bool = True) -> dict:  # noqa: ARG002
-        return {"connection_ref": self.connection_ref, "health": "ready"}
-
-    def dispatch(self, capability_id: str, payload: dict) -> dict:
-        if capability_id not in self.capabilities:
-            raise providers.ProviderError("not mine")
-        return {"result_type": "telemetry", "provider": self.adapter_id, "echo": payload}
-
-
-class StrangerTests(unittest.TestCase):
-    def test_the_catalogue_routes_to_a_provider_it_has_never_seen(self) -> None:
-        stranger = _Stranger()
-        catalog = providers.ProviderCatalog([stranger])
-        self.assertEqual(["telemetry.query"], catalog.capabilities_for(stranger))
-        answer = catalog.dispatch(stranger.connection_ref, "telemetry.query", {"n": 1})
-        self.assertEqual({"n": 1}, answer["echo"])
-
-    def test_it_refuses_a_capability_that_provider_does_not_declare(self) -> None:
-        stranger = _Stranger()
-        catalog = providers.ProviderCatalog([stranger])
-        with self.assertRaises(providers.ProviderError):
-            catalog.dispatch(stranger.connection_ref, "memory.open", {})
-
+from server.platform import adapter_contract, external, transports
+from server.store_identity.primitives import (
+    ContractError,
+    InvalidDiscriminantError,
+    MissingFieldError,
+    UnknownFieldError,
+    UnsafePayloadError,
+)
 
 _MANIFEST = {
     "contract_version": "valkama-adapter",
     "adapter_id": "example-adapter",
     "version": "1.0.0",
-    "title_key": "platform.adapters.notes-reference",
-    "package_id": "example.adapter",
-    "publisher_id": "example",
-    "owner_id": "example",
-    "configuration_owner": "example",
-    "trust_owner": "example",
-    "execution": "local_process",
-    "supported_service_types": ["notes-reference"],
     "capabilities": ["memory.open"],
-    "consumes": [],
-    "contributions": [],
-    "permissions": [],
-    "health_contract": {"timeout_ms": 500, "max_payload_bytes": 131072},
 }
 
 
-class ManifestTransportTests(unittest.TestCase):
-    """A destination beside the manifest, and the mode it has to agree with."""
+class AdapterManifestTests(unittest.TestCase):
+    """Four fields, every one required, nothing else accepted."""
 
-    def transport(self, value: dict, execution: str) -> dict:
-        return contracts.validate_adapter_transport(value, execution)
+    def test_a_manifest_is_exactly_its_four_fields(self) -> None:
+        self.assertEqual(_MANIFEST, adapter_contract.validate_adapter_manifest(dict(_MANIFEST)))
+        for field in _MANIFEST:
+            with self.subTest(missing=field), self.assertRaises(MissingFieldError):
+                adapter_contract.validate_adapter_manifest(
+                    {key: value for key, value in _MANIFEST.items() if key != field}
+                )
 
-    def test_a_built_in_adapter_may_not_declare_an_address(self) -> None:
-        # It runs inside this process. An address would be a second claim about
-        # where it lives, and the believed one would be whichever got read.
-        with self.assertRaises(contracts.ContractError):
-            self.transport({"kind": "http", "base_url": "http://127.0.0.1:1"}, "built_in")
+    def test_a_field_the_contract_does_not_name_is_refused(self) -> None:
+        # What the registry-era manifest carried is now exactly such a field:
+        # an adapter still sending it is told so rather than half-read.
+        for field, value in (
+            ("title_key", "platform.adapters.example"),
+            ("execution", "local_service"),
+            ("permissions", []),
+            ("health_contract", {"timeout_ms": 500, "max_payload_bytes": 1024}),
+        ):
+            with self.subTest(field=field), self.assertRaises(UnknownFieldError):
+                adapter_contract.validate_adapter_manifest({**_MANIFEST, field: value})
 
-    def test_the_kind_has_to_match_how_the_adapter_runs(self) -> None:
-        with self.assertRaises(contracts.ContractError):
-            self.transport({"kind": "cli", "command": ["x"]}, "local_service")
-        with self.assertRaises(contracts.ContractError):
-            self.transport({"kind": "http", "base_url": "http://127.0.0.1:1"}, "local_process")
+    def test_an_argv_in_a_manifest_is_refused(self) -> None:
+        # A manifest may come from the adapter itself; the transport half,
+        # which the owner writes, is the only place an argv belongs.
+        with self.assertRaises(ContractError):
+            adapter_contract.validate_adapter_manifest(
+                {**_MANIFEST, "transport": {"kind": "cli", "command": ["/usr/bin/python"]}}
+            )
+        with self.assertRaises(UnsafePayloadError):
+            adapter_contract.validate_adapter_manifest({**_MANIFEST, "adapter_id": "<script>"})
+
+    def test_each_field_is_held_to_its_own_grammar(self) -> None:
+        for field, value, refusal in (
+            ("contract_version", "valkama-adapter-v2", InvalidDiscriminantError),
+            ("version", "1.0", ContractError),
+            ("capabilities", ["memory"], ContractError),
+            ("capabilities", ["Memory.Open"], ContractError),
+            ("capabilities", ["memory.open", "memory.open"], ContractError),
+            ("capabilities", "memory.open", ContractError),
+            ("adapter_id", "", ContractError),
+        ):
+            with self.subTest(field=field, value=value), self.assertRaises(refusal):
+                adapter_contract.validate_adapter_manifest({**_MANIFEST, field: value})
+
+    def test_the_capability_set_is_the_adapter_s_own(self) -> None:
+        # No list here decides which capability ids exist: the caller checks a
+        # call against what the adapter declared.
+        manifest = {**_MANIFEST, "capabilities": ["notes.search", "trace.export-run"]}
+        self.assertEqual(
+            ["notes.search", "trace.export-run"],
+            adapter_contract.validate_adapter_manifest(manifest)["capabilities"],
+        )
+        self.assertEqual(
+            [],
+            adapter_contract.validate_adapter_manifest({**_MANIFEST, "capabilities": []})[
+                "capabilities"
+            ],
+        )
+
+
+class AdapterTransportTests(unittest.TestCase):
+    """Where an adapter is: an address or an argv, never both."""
+
+    transport = staticmethod(adapter_contract.validate_adapter_transport)
+
+    def test_the_kind_names_the_protocol(self) -> None:
+        self.assertEqual(
+            {"kind": "http", "base_url": "http://127.0.0.1:1"},
+            self.transport({"kind": "http", "base_url": "http://127.0.0.1:1"}),
+        )
+        for kind in ("cli", "mcp"):
+            with self.subTest(kind=kind):
+                self.assertEqual(
+                    {"kind": kind, "command": ["/usr/bin/python", "adapter.py"]},
+                    self.transport({"kind": kind, "command": ["/usr/bin/python", "adapter.py"]}),
+                )
+        with self.assertRaises(InvalidDiscriminantError):
+            self.transport({"kind": "grpc", "base_url": "http://127.0.0.1:1"})
+
+    def test_an_address_and_an_argv_do_not_mix(self) -> None:
+        with self.assertRaises(ContractError):
+            self.transport({"kind": "cli", "command": ["x"], "base_url": "http://127.0.0.1:1"})
+        with self.assertRaises(ContractError):
+            self.transport({"kind": "http", "base_url": "http://127.0.0.1:1", "command": ["x"]})
 
     def test_an_empty_argv_is_not_a_command(self) -> None:
-        with self.assertRaises(contracts.ContractError):
-            self.transport({"kind": "cli", "command": []}, "local_process")
+        with self.assertRaises(MissingFieldError):
+            self.transport({"kind": "cli", "command": []})
 
-    def test_a_credential_stays_a_reference_in_the_manifest(self) -> None:
+    def test_an_unknown_field_and_an_unbounded_limit_are_refused(self) -> None:
+        with self.assertRaises(UnknownFieldError):
+            self.transport({"kind": "http", "base_url": "http://127.0.0.1:1", "proxy": "x"})
+        with self.assertRaises(ContractError):
+            self.transport({"kind": "http", "base_url": "http://127.0.0.1:1", "timeout_ms": 0})
+
+    def test_a_credential_stays_a_reference_in_the_record(self) -> None:
         # Resolved at call time by the transport, never stored resolved: a
-        # manifest gets logged, dumped and exported, and a token in one is a
+        # record gets logged, dumped and exported, and a token in one is a
         # token in all three.
         answer = self.transport(
             {
                 "kind": "http",
                 "base_url": "https://cloud.langfuse.com",
                 "headers": {"Authorization": "Basic ${LANGFUSE_KEYS}"},
-            },
-            "local_service",
+            }
         )
         self.assertEqual("Basic ${LANGFUSE_KEYS}", answer["headers"]["Authorization"])
 
-    def test_no_manifest_carries_a_destination(self) -> None:
-        # Not even the built-in that speaks HTTP. A manifest is published to
-        # the browser, and the contract refuses a path or an argv anywhere in
-        # one — which is the whole reason the transport is a separate half.
-        for provider in providers.ProviderCatalog().all():
-            with self.subTest(adapter=provider.adapter_id):
-                self.assertNotIn("transport", provider.manifest())
 
-    def test_an_argv_is_refused_in_a_manifest_and_accepted_in_a_transport(self) -> None:
-        # The refusal that moved the field. `_reject_unsafe_tree` guards what
-        # reaches a browser; the transport half never does.
-        with self.assertRaises(contracts.ContractError):
-            contracts.validate_adapter_manifest(
-                {**_MANIFEST, "transport": {"kind": "cli", "command": ["/usr/bin/python"]}}
-            )
-        answer = self.transport({"kind": "cli", "command": ["/usr/bin/python"]}, "local_process")
-        self.assertEqual(["/usr/bin/python"], answer["command"])
-
+class ExternalProviderTests(unittest.TestCase):
     def test_an_unreachable_endpoint_is_unavailable_rather_than_an_exception(self) -> None:
-        provider = providers.AgentMemoryReferenceProvider()
-        # The class is a frozen dataclass with a no-argument constructor, so
-        # `replace` cannot reach the field. Pointing it at a closed port is the
-        # whole test, and this is the smallest way to do it.
-        object.__setattr__(
-            provider,
-            "endpoint",
-            transports.HttpTransport(base_url="http://127.0.0.1:1", timeout_ms=50),
+        provider = external.ExternalProvider(
+            manifest_record=_MANIFEST,
+            channel=external.HttpChannel(
+                transports.HttpTransport(base_url="http://127.0.0.1:1", timeout_ms=50)
+            ),
         )
         state, diagnostics = provider.health()
         self.assertEqual("unavailable", state)
-        # The transport's own code says how the call failed; a Connection
-        # reader wants what that means for the capability.
+        # The transport's own code says how the call failed; a health reader
+        # wants what that means for the adapter.
         self.assertEqual("provider_unavailable", (diagnostics or {})["code"])
 
 
@@ -624,23 +549,22 @@ class McpTransportTests(unittest.TestCase):
         self.assertEqual("unavailable", state)
         self.assertEqual("provider_unavailable", (diagnostics or {})["code"])
 
-    def test_a_refused_dispatch_is_a_provider_refusal_and_a_typed_response(self) -> None:
-        # `ExternalAdapterError` derived from `Exception`, so a dispatched
-        # external no was outside every handler written for a provider refusal
-        # and reached the surface as a generic 500. A built-in refusing the
-        # identical call has always answered 400.
+    def test_a_refused_dispatch_is_a_typed_refusal(self) -> None:
+        # One refusal family for every way a call can fail, with a code a
+        # caller can tell apart, and a `ValueError` so a surface answers it as
+        # a refused request rather than a failure of its own.
         provider = external.ExternalProvider(
             manifest_record=_MANIFEST, channel=external.McpChannel(self.server("refusing"))
         )
-        with self.assertRaises(providers.ProviderError) as refused:
+        with self.assertRaises(external.ExternalAdapterError) as refused:
             provider.dispatch("memory.open", {"resource_ref": {}})
-        self.assertEqual((400, "error"), _status_of(refused.exception))
+        self.assertEqual("adapter_refused", refused.exception.code)
+        self.assertIsInstance(refused.exception, ValueError)
         # And the case the protocol names outright: a capability the adapter
         # never declared is refused rather than forwarded.
-        with self.assertRaises(providers.ProviderError) as undeclared:
+        with self.assertRaises(external.ExternalAdapterError) as undeclared:
             provider.dispatch("execution.launch", {})
         self.assertEqual("capability_not_declared", undeclared.exception.code)
-        self.assertEqual((400, "error"), _status_of(undeclared.exception))
 
     def test_the_channel_maps_a_capability_to_the_tool_of_the_same_name(self) -> None:
         # That is the whole mapping, and it lets a general-purpose MCP server

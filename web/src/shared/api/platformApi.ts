@@ -6,8 +6,7 @@
  * is fetched from, and the two commands that write.
  */
 
-import { invalid } from '@/shared/api/platformActionRef.ts'
-import { assertScope } from '@/shared/api/platformApiGuards.ts'
+import { assertScope, invalid } from '@/shared/api/platformApiGuards.ts'
 import { UI_PREFS_INTERFACE } from '@/shared/api/platformApiTypes.ts'
 import type {
   PlatformContextPayload,

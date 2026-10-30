@@ -10,11 +10,10 @@ import {
   exactKeys,
   ID,
   invalid,
-  KEY,
   plainObject,
   PROJECT_ID,
   requiredString,
-} from '@/shared/api/platformRelationGuards.ts'
+} from '@/shared/api/platformRefGuards.ts'
 
 export type EntityKind =
   | 'project'
@@ -33,7 +32,7 @@ export type EntityKind =
 
 const RESOURCE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,511}$/u
 
-export type ServiceRef = {
+type ServiceRef = {
   owner_id: string
   service_id: string
 }
@@ -42,12 +41,6 @@ type ConnectionRef = {
   adapter_lineage_id: string
   connection_id: string
   service_ref: ServiceRef
-}
-
-export type AdapterResourceRef = {
-  connection_ref: ConnectionRef
-  external_id: string
-  resource_type: string
 }
 
 export type EntityRef =
@@ -69,7 +62,7 @@ export type EntityRef =
   | ({ kind: 'connection' } & ConnectionRef)
   | { kind: 'registry'; registry_id: string }
 
-export function validateServiceRef(value: unknown, path = 'service_ref'): ServiceRef {
+function validateServiceRef(value: unknown, path = 'service_ref'): ServiceRef {
   const object = plainObject(value, path)
   exactKeys(object, ['owner_id', 'service_id'], path)
   return {
@@ -85,24 +78,6 @@ function validateConnectionRef(value: unknown, path = 'connection_ref'): Connect
     service_ref: validateServiceRef(object.service_ref, `${path}.service_ref`),
     adapter_lineage_id: requiredString(object.adapter_lineage_id, `${path}.adapter_lineage_id`),
     connection_id: requiredString(object.connection_id, `${path}.connection_id`),
-  }
-}
-
-export function validateAdapterResourceRef(
-  value: unknown,
-  path = 'adapter_resource_ref',
-): AdapterResourceRef {
-  const object = plainObject(value, path)
-  exactKeys(object, ['connection_ref', 'resource_type', 'external_id'], path)
-  return {
-    connection_ref: validateConnectionRef(object.connection_ref, `${path}.connection_ref`),
-    resource_type: requiredString(object.resource_type, `${path}.resource_type`, KEY, 64),
-    external_id: requiredString(
-      object.external_id,
-      `${path}.external_id`,
-      /^[^\u{0}-\u{1F}]{1,160}$/u,
-      160,
-    ),
   }
 }
 
@@ -229,13 +204,4 @@ function validateEntity(value: unknown, path: string): EntityRef {
 
 export function validateEntityRef(value: unknown, path = 'entity'): EntityRef {
   return validateEntity(value, path)
-}
-
-export function isEntityRef(value: unknown): value is EntityRef {
-  try {
-    validateEntityRef(value)
-    return true
-  } catch {
-    return false
-  }
 }

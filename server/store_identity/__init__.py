@@ -6,7 +6,7 @@ store: a planning space by its key, a work item by its reference, a project,
 an operating scope. `primitives` is the vocabulary both are checked in.
 
 This package sits beneath everything that routes by identity — Planning, the
-app shell and the Kernel's registry alike — and imports none of them. The
+app shell and the platform modules alike — and imports none of them. The
 table keeps its `platform_` name and the refs keep their encoding, because
 every binding and relation on disk already points at them.
 """

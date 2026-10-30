@@ -121,8 +121,7 @@ export function validatePlatformContextPayload(
     state: validateTypedState(record.state, `${path}.state`, contextReady),
   }
 }
-import { invalid } from '@/shared/api/platformActionRef.ts'
-import { BINDING_STATES, PROJECT_ID, UUID } from '@/shared/api/platformApiGuards.ts'
+import { BINDING_STATES, invalid, PROJECT_ID, UUID } from '@/shared/api/platformApiGuards.ts'
 import { CONTEXT_INTERFACE, UI_PREFS_INTERFACE } from '@/shared/api/platformApiTypes.ts'
 import type {
   BindingState,

@@ -49,10 +49,8 @@ is the fictional universality §15.4 forbids, arriving over a socket.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from urllib.parse import urlparse
 
-from .adapters import ProviderError
-from .contracts import HEALTH_STATES, validate_adapter_manifest
+from .adapter_contract import HEALTH_STATES, validate_adapter_manifest
 from .transports import (
     MCP_HEALTH_TOOL,
     MCP_MANIFEST_TOOL,
@@ -60,16 +58,11 @@ from .transports import (
     HttpTransport,
     McpTransport,
     TransportError,
-    is_loopback,
 )
 
 MANIFEST_PATH = "/valkama/v1/manifest"
 HEALTH_PATH = "/valkama/v1/health"
 INVOKE_PATH = "/valkama/v1/invoke"
-
-
-def _host_of(url: str) -> str:
-    return urlparse(url).hostname or ""
 
 
 def _refusal(answer: dict) -> dict:
@@ -90,24 +83,18 @@ def _refusal(answer: dict) -> dict:
     return answer
 
 
-class ExternalAdapterError(ProviderError):
-    """An adapter answered, and the answer was not usable.
+class ExternalAdapterError(ValueError):
+    """An adapter answered, and the answer was not usable -- or it refused.
 
-    A `ProviderError` because that is the refusal family the Provider protocol
-    names, and an external adapter is a provider. Derived from `Exception` it
-    was outside every handler written for a provider refusal, so a dispatched
-    external no — including the undeclared-capability case the protocol calls
-    out by name — reached the surface as a generic failure rather than as the
-    typed refusal a built-in produces for the identical situation.
+    One refusal family for every way an adapter call can fail, carrying a code
+    as well as a sentence, because the conformance tool and the CLI have to
+    tell one failure from another.
     """
 
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
         self.code = code
         self.message = message[:512]
-
-    def diagnostic(self) -> dict:
-        return {"code": self.code, "message": self.message}
 
 
 def fetch_manifest(channel: CliChannel | HttpChannel | McpChannel) -> dict:
@@ -139,18 +126,6 @@ class HttpChannel:
 
     transport: HttpTransport
 
-    @property
-    def label(self) -> str:
-        return "loopback-http" if is_loopback(_host_of(self.transport.base_url)) else "remote-https"
-
-    @property
-    def where(self) -> str:
-        return self.transport.base_url
-
-    @property
-    def probe_ceiling_ms(self) -> int:
-        return self.transport.timeout_ms
-
     def call(self, name: str, body: dict | None = None) -> dict:
         if name == "invoke":
             return _refusal(self.transport.post_json(INVOKE_PATH, body or {}))
@@ -162,18 +137,6 @@ class CliChannel:
     """The three calls as a field on stdin."""
 
     transport: CliTransport
-
-    @property
-    def label(self) -> str:
-        return "local-process"
-
-    @property
-    def where(self) -> str:
-        return " ".join(self.transport.command)
-
-    @property
-    def probe_ceiling_ms(self) -> int:
-        return self.transport.timeout_ms
 
     def call(self, name: str, body: dict | None = None) -> dict:
         return _refusal(self.transport.run_json({"call": name, **(body or {})}))
@@ -197,18 +160,6 @@ class McpChannel:
 
     transport: McpTransport
 
-    @property
-    def label(self) -> str:
-        return "local-process"
-
-    @property
-    def where(self) -> str:
-        return " ".join(self.transport.command)
-
-    @property
-    def probe_ceiling_ms(self) -> int:
-        return self.transport.timeout_ms
-
     def call(self, name: str, body: dict | None = None) -> dict:
         if name == "invoke":
             payload = body or {}
@@ -223,115 +174,28 @@ class McpChannel:
 
 @dataclass(frozen=True)
 class ExternalProvider:
-    """An adapter reached over a channel, satisfying the same contract as a built-in.
+    """An adapter reached over a channel: its manifest, its health, one call.
 
-    One provider for both transports rather than one each. The difference
-    between a path and a stdin field is three lines in a channel; duplicating
-    identity, health and dispatch around it would be two implementations of the
-    same contract, which is how they drift.
+    One provider for every transport rather than one each. The difference
+    between a path, a stdin field and a tool name is three lines in a channel;
+    duplicating identity, health and dispatch around it would be several
+    implementations of the same contract, which is how they drift.
 
-    It holds a validated manifest rather than re-deriving identity from the
-    wire on every call: an adapter that could change its own `adapter_id`
-    between calls would break every ref pointing at it, and the ref outliving
-    the implementation is the reason `adapter_lineage_id` exists.
+    It holds a validated manifest rather than re-reading identity from the wire
+    on every call: an adapter that could change its own `adapter_id` between
+    calls would attribute its answers to somebody else.
     """
 
     manifest_record: dict
     channel: CliChannel | HttpChannel | McpChannel
-    connection_id: str = "default"
 
     @property
     def adapter_id(self) -> str:
         return str(self.manifest_record["adapter_id"])
 
     @property
-    def adapter_lineage_id(self) -> str:
-        return str(self.manifest_record.get("adapter_lineage_id") or self.adapter_id)
-
-    @property
     def capabilities(self) -> tuple[str, ...]:
         return tuple(self.manifest_record["capabilities"])
-
-    @property
-    def transport(self) -> str:
-        """The display label the Connections list reads, not the destination.
-
-        The second thing the Kernel asked of this provider that the extracted
-        contract had not named — found the same way as the first, by being the
-        first provider written from outside the two built-in families.
-
-        `remote-https` is a new value in that vocabulary and it is the honest
-        one: the four that existed were all local, and calling an adapter on
-        another host `loopback-http` because the enum had no other slot is the
-        kind of label that reads as fact.
-        """
-
-        return self.channel.label
-
-    @property
-    def probe_ceiling_ms(self) -> int:
-        """What one health call can cost, taken from the channel that enforces it.
-
-        The channel's transport holds the timeout it actually applies — a socket
-        deadline, or a process one that stops the whole tree — so this is the
-        Kernel's honest ceiling for this adapter rather than a number the
-        adapter's own manifest offered about itself.
-        """
-
-        return self.channel.probe_ceiling_ms
-
-    @property
-    def core_ref_kinds(self) -> tuple[str, ...]:
-        """None, and not by omission.
-
-        Claiming a core ref kind binds every ref of that kind to this provider,
-        and the Kernel refuses two claimants — so a manifest that could claim
-        one would displace whatever the owner already had, at install time,
-        without the owner deciding. That is an owner action, not a declaration.
-        """
-
-        return ()
-
-    @property
-    def service_ref(self) -> dict:
-        return {
-            "owner_id": str(self.manifest_record["configuration_owner"]),
-            "service_id": self.adapter_id,
-        }
-
-    @property
-    def connection_ref(self) -> dict:
-        return {
-            "service_ref": self.service_ref,
-            "adapter_lineage_id": self.adapter_lineage_id,
-            "connection_id": self.connection_id,
-        }
-
-    def manifest(self) -> dict:
-        return dict(self.manifest_record)
-
-    def package_descriptor(self) -> dict:
-        return {
-            "package_id": str(self.manifest_record["package_id"]),
-            "publisher_id": str(self.manifest_record["publisher_id"]),
-            "version": str(self.manifest_record["version"]),
-            "execution": str(self.manifest_record["execution"]),
-            # Never `platform-built-in`: this arrived from somewhere, and the
-            # provenance is the only field that says so after installation.
-            "provenance": "external-endpoint",
-        }
-
-    def service_descriptor(self) -> dict:
-        return {
-            "service_ref": self.service_ref,
-            "service_type": str(self.manifest_record["supported_service_types"][0]),
-            "title_key": str(self.manifest_record["title_key"]),
-            "configuration_owner": str(self.manifest_record["configuration_owner"]),
-            "trust_owner": str(self.manifest_record["trust_owner"]),
-            "discovery_provenance": "external-endpoint",
-            "state": "registered",
-            "direct_read": False,
-        }
 
     def health(self) -> tuple[str, dict | None]:
         """Never raises, and never takes the adapter's word for the state name."""
@@ -354,23 +218,6 @@ class ExternalProvider:
             return "ready", None
         return state, diagnostics if isinstance(diagnostics, dict) else None
 
-    def connection(self, scope: dict | None = None, *, observe: bool = True) -> dict:
-        state, diagnostics = self.health() if observe else ("not-observed", None)
-        record = {
-            "connection_ref": self.connection_ref,
-            "applicability": scope or {"kind": "global"},
-            "configuration_owner": str(self.manifest_record["configuration_owner"]),
-            "trust_owner": str(self.manifest_record["trust_owner"]),
-            # Reaching an adapter is not trusting it. Only the owner lifecycle
-            # promotes this, which is the same rule the built-ins follow.
-            "trust": "unknown",
-            "health": state,
-            "state": "registered",
-        }
-        if diagnostics is not None:
-            record["diagnostics"] = diagnostics
-        return record
-
     def dispatch(self, capability_id: str, payload: dict) -> dict:
         """Ask for one capability the adapter declared, and check what comes back."""
 
@@ -389,14 +236,9 @@ class ExternalProvider:
             raise ExternalAdapterError(
                 "adapter_result_untyped", "the answer carried no result_type"
             )
-        # The provider and connection are stamped here rather than trusted from
-        # the answer: an adapter naming a different connection would attribute
-        # its result to somebody else's.
-        return {
-            **answer,
-            "provider": self.adapter_id,
-            "connection_ref": self.connection_ref,
-        }
+        # The provider is stamped here rather than trusted from the answer: an
+        # adapter naming another would attribute its result to somebody else.
+        return {**answer, "provider": self.adapter_id}
 
 
 __all__ = [

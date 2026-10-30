@@ -37,12 +37,11 @@ import {
   planningReadyFor,
   projectId,
   projectScope,
-  relationsWithStates,
   spaceRef,
   workItem,
   workItemRef,
 } from './planningFixtures.ts'
-import { planningReadFor, planningRelationsFor } from './planningReadFixture.ts'
+import { planningReadFor } from './planningReadFixture.ts'
 import { improvementProfile, signalSummary } from './platformFixtures.ts'
 import { skillMatrixPayload, skillsPayload } from './skillsFixtures.ts'
 
@@ -86,9 +85,6 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
       : []
   let moduleConflict = options.moduleConflictOnce
   await installBrowserDoubles(page)
-  // The server still answers a work item with its relations, and the client
-  // still validates them, so the fixture keeps sending one.
-  const relations = relationsWithStates()
   const attachCommands: { session_id: string; work_item: string }[] = []
   await page.route(
     (url) => url.pathname.startsWith('/api/'),
@@ -317,10 +313,6 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
                   requestedScopeId === attachedDataScopeId
                     ? { ...answered, title: `Attached: ${answered.title}` }
                     : answered,
-                relations: {
-                  interface_version: 'valkama-relations',
-                  relations: planningRelationsFor(relations, exactRef),
-                },
               },
             },
           })

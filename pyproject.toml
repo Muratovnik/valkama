@@ -188,17 +188,13 @@ layers = [
 ]
 containers = ["server"]
 
-# Planning's exact-scope routing and the app shell answer without the extension
-# registry: they may use the module gate and the module manifest, but nothing
-# that registers, grants, relates, probes or transports. The whole `contracts`
-# package is forbidden, not only its registry modules: importing any submodule
-# runs the package's `__init__`, which loads `authorization` and `relations`,
-# and an import graph does not show that edge. `test_layering.py` checks the
-# loaded modules at run time for the same reason. This is what lets the
-# registry be removed without touching what the web shell and the Planning
-# routes read.
+# Planning's exact-scope routing and the app shell answer from the module gate
+# and the module manifest alone: nothing that brings a store up, migrates it,
+# or reaches an external adapter. `test_layering.py` checks the loaded modules
+# at run time as well, because an import graph does not show the edge a
+# package's `__init__` adds.
 [[tool.importlinter.contracts]]
-name = "Planning routing and the app shell never reach the extension registry"
+name = "Planning routing and the app shell never reach the store bring-up or an adapter"
 type = "forbidden"
 source_modules = [
   "server.app_shell",
@@ -207,18 +203,13 @@ source_modules = [
   "server.ui_state",
 ]
 forbidden_modules = [
-  "server.platform.adapters",
-  "server.platform.capabilities",
-  "server.platform.contracts",
+  "server.platform.adapter_contract",
   "server.platform.core",
   "server.platform.external",
-  "server.platform.health",
   "server.platform.installed",
+  "server.platform.legacy_records",
   "server.platform.migrations",
-  "server.platform.providers",
-  "server.platform.registry",
   "server.platform.relations",
-  "server.platform.scope",
   "server.platform.tools",
   "server.platform.transports",
 ]
@@ -282,8 +273,9 @@ data_file = ".cache/coverage/data"
 # figure rises. 76.13% when this was adopted, 77.68% once card #307 gave the
 # two surfaces that had no tests some: cli went from 0% to 97% and mcp_surface
 # from 27% to 60%. Layer 1 took it to 79.56% and layer 2 to 79.64%.
-# Execution, scoped-read and registry regressions now hold the floor at 83%.
-fail_under = 83
+# Execution, scoped-read and registry regressions held the floor at 83%;
+# removing the extension registry with its code and tests left 84.14%.
+fail_under = 84
 precision = 2
 skip_covered = true
 exclude_also = [
