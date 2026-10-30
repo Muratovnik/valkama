@@ -14,7 +14,7 @@ import threading
 import time
 
 from .executions.lifecycle import reap_launches
-from .platform import core as platform_core
+from .platform import module_gate
 from .platform import modules as platform_modules
 from .store import connect
 
@@ -25,7 +25,7 @@ def reap_sessions_if_enabled(conn) -> bool:
     with platform_modules.module_state_fence(primary_db, "planning"):
         try:
             conn.execute("BEGIN IMMEDIATE")
-            if not platform_core.is_module_enabled(conn, "planning"):
+            if not module_gate.is_module_enabled(conn, "planning"):
                 conn.rollback()
                 return False
             changed = bool(reap_launches(conn))

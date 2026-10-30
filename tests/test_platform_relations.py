@@ -15,7 +15,7 @@ from server.platform.relations import (
     read_relations,
     remove_adapter_link,
 )
-from server.platform.scope import ensure_store_metadata
+from server.store_identity.metadata import ensure_store_metadata
 
 
 def service_ref():

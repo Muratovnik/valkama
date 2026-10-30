@@ -12,13 +12,15 @@ import threading
 import unittest
 from unittest import mock
 
-from server import mcp_surface, store, watchers
+from server import app_shell, mcp_surface, store, watchers
+from server.planning import exact_api as planning_exact_api
 from server.planning import service as planning_service
 from server.platform import core as platform_core
 from server.platform import migrations as platform_migrations
+from server.platform import module_gate
 from server.platform import modules as platform_modules
-from server.platform.contracts import planning_space_entity
-from server.platform.scope import read_store_metadata
+from server.store_identity.metadata import read_store_metadata
+from server.store_identity.refs import planning_space_entity
 from tests import board_era
 from tests.registry_fixtures import project_binding, project_entry, registry_bytes
 from tests.retired_modules import FORMER_MODULES
@@ -256,7 +258,7 @@ class ModuleRegistryTests(unittest.TestCase):
             {"module_id": "planning", "state": "disabled", "expected_revision": 1}
         )
         with self.assertRaises(platform_core.PlatformHttpError):
-            platform_core.handle_get(
+            planning_exact_api.handle_get(
                 self.conn,
                 self.path,
                 "/api/platform/planning",
@@ -354,12 +356,13 @@ class ModuleRegistryTests(unittest.TestCase):
         registration = self.registrations()["future-module"]
         self.assertEqual("enabled", registration["state"])
         self.assertEqual("future-module", registration["manifest"]["module_id"])
-        saved = self.platform().save_ui_prefs(
+        saved = app_shell.save_ui_prefs(
+            self.conn,
             {
                 "interface_version": "valkama-ui-prefs",
                 "module_id": "future-module",
                 "scope": {"kind": "global"},
-            }
+            },
         )
         self.assertEqual("future-module", saved["prefs"]["module_id"])
 
@@ -370,8 +373,8 @@ class ModuleRegistryTests(unittest.TestCase):
         ).fetchone()[0]
         self.conn.execute("UPDATE platform_modules SET record_json='{}' WHERE module_id='memory'")
         self.conn.commit()
-        with self.assertRaises(platform_core.RegistryError):
-            platform_core.require_module_enabled(self.conn, "planning")
+        with self.assertRaises(module_gate.RegistryError):
+            module_gate.require_module_enabled(self.conn, "planning")
         with self.assertRaises(platform_core.RegistryError):
             self.platform().module_state_command(
                 {"module_id": "planning", "state": "disabled", "expected_revision": 1}

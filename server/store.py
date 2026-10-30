@@ -32,9 +32,9 @@ from .planning import store as planning_store
 from .platform import core as platform_core
 from .platform import migrations as platform_migrations
 from .platform import relations as platform_relations
-from .platform import scope as platform_scope
-from .platform.contracts import planning_space_ref
 from .projects import project_registry
+from .store_identity import metadata as store_metadata
+from .store_identity.refs import planning_space_ref
 
 # -- the legacy Board schema, kept only so a store can be migrated off it ----
 #
@@ -421,7 +421,7 @@ def migrate_planning_cutover(conn: sqlite3.Connection) -> dict | None:
 
     if not board_domain_present(conn):
         return None
-    metadata = platform_scope.read_store_metadata(conn)
+    metadata = store_metadata.read_store_metadata(conn)
     result = planning_migration.migrate_board_domain(
         conn,
         project_for_space=_project_for_space(str(metadata["data_scope_id"])),
@@ -578,7 +578,7 @@ def connect() -> sqlite3.Connection:
             audit_migration = platform_migrations.schema_migration_needed(conn)
             audit_order_migration = platform_migrations.registry_audit_order_migration_needed(conn)
             authorization_migration = platform_migrations.authorization_owner_migration_needed(conn)
-            owner_migration = platform_scope.store_owner_migration_needed(conn)
+            owner_migration = store_metadata.store_owner_migration_needed(conn)
             if (
                 (
                     audit_migration
@@ -600,7 +600,7 @@ def connect() -> sqlite3.Connection:
                 # long ago.
                 platform_migrations.migrate_registry_audit_order(conn)
             if owner_migration:
-                platform_scope.migrate_store_owner(conn)
+                store_metadata.migrate_store_owner(conn)
             if authorization_migration:
                 platform_migrations.migrate_authorization_owner_model(conn)
             if product_model_migration and source_generation not in {

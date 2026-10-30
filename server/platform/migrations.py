@@ -47,13 +47,13 @@ from .contracts import (
 )
 
 # The current shape, borrowed rather than restated. A migration's last act is to
-# produce exactly what a fresh store declares, so the schema text, the table
-# list and the reader that proves a module row are `core`'s answers and this
-# module is their second reader. The underscored primitives below travel with
-# them for the same reason: a second copy of the canonical JSON encoding or
-# the timestamp format would be a second answer to what a row looks like, and a
-# migration whose output disagreed with the runtime by one separator is exactly
-# the failure the postconditions exist to catch.
+# produce exactly what a fresh store declares, so the schema text and the table
+# list are `core`'s answers, the reader that proves a module row is the module
+# gate's, and this module is their second reader. The underscored primitives
+# below travel with them for the same reason: a second copy of the canonical
+# JSON encoding or the timestamp format would be a second answer to what a row
+# looks like, and a migration whose output disagreed with the runtime by one
+# separator is exactly the failure the postconditions exist to catch.
 from .core import (
     AUTHORIZATION_OWNER_MODEL,
     REGISTRY_SCHEMA,
@@ -65,9 +65,8 @@ from .core import (
     _now,
     _planning_resources,
     _table_present,
-    modules_payload,
 )
-from .registry import RegistryError
+from .module_gate import RegistryError, modules_payload
 
 _RELEASED_SCHEMA2_MODULE_MANIFEST_HASHES = {
     "planning": "b008651d89d43c08d6986fa52b7b1bf486f93908d30cfdd78ff4d24cafe96a1a",

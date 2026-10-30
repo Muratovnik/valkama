@@ -12,6 +12,7 @@ import json
 import sqlite3
 from datetime import UTC, datetime
 
+from ..store_identity.metadata import read_store_metadata
 from .contracts import (
     ContractError,
     planning_work_item_entity,
@@ -19,7 +20,6 @@ from .contracts import (
     validate_relation,
     validate_work_item_ref,
 )
-from .scope import read_store_metadata
 
 
 class RelationError(ContractError):

@@ -3,16 +3,10 @@ import sqlite3
 import tempfile
 import unittest
 
-from server.platform.contracts import (
-    ContractError,
-    planning_space_entity,
-    planning_work_item_entity,
-)
-from server.platform.scope import (
+from server.platform.scope import BindingConflictError, ProjectResourceBindingReader
+from server.store_identity.metadata import (
     FORMER_OWNER_IDS,
     PLATFORM_OWNER_ID,
-    BindingConflictError,
-    ProjectResourceBindingReader,
     ScopeConflictError,
     ScopeError,
     ensure_store_metadata,
@@ -21,6 +15,8 @@ from server.platform.scope import (
     read_store_metadata,
     store_owner_migration_needed,
 )
+from server.store_identity.primitives import ContractError
+from server.store_identity.refs import planning_space_entity, planning_work_item_entity
 
 UUID = "abcdefab-cdef-4abc-8def-abcdefabcdef"
 UUID_2 = "fedcbafe-dcba-4fed-8cba-fedcbafedcba"

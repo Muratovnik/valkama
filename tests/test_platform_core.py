@@ -10,10 +10,10 @@ from pathlib import Path
 from unittest import mock
 
 from server import http_surface, store
-from server.memory import service as memory_service
+from server.planning import exact_api as planning_exact_api
 from server.planning import service as planning_service
 from server.platform import core as platform_core
-from server.platform.contracts import planning_space_entity, planning_work_item_entity
+from server.platform import relations as platform_relations
 from server.platform.providers import (
     AgentMemoryReferenceProvider,
     NotesReferenceProvider,
@@ -26,10 +26,11 @@ from server.platform.registry import (
     RevokedPermissionError,
     ScopeMismatchError,
 )
-from server.platform.scope import read_store_metadata
 from server.projects import scopes
+from server.store_identity.metadata import read_store_metadata
+from server.store_identity.refs import planning_space_entity, planning_work_item_entity
 from tests import SUITE_STORE
-from tests.registry_fixtures import project_binding, project_entry, registry_bytes
+from tests.registry_fixtures import project_entry, registry_bytes
 
 SOURCE_HASH = "a" * 64
 
@@ -216,6 +217,14 @@ class PlatformTests(unittest.TestCase):
                 )
         return {"assignment_id": assignment_id, "grant_ids": grant_ids}
 
+    def _relations(self, platform):
+        return platform_relations.read_relations(
+            self.conn,
+            self.item_ref,
+            registry=platform.registry(),
+            invocation_scope=self.project_scope,
+        )
+
     def _authorize_all(self, platform=None):
         platform = platform or self.platform
         return {
@@ -223,20 +232,13 @@ class PlatformTests(unittest.TestCase):
             "notes": self._authorize(platform, self.notes),
         }
 
-    def test_exact_modules_context_registry_planning_and_card_contracts(self) -> None:
+    def test_exact_modules_registry_and_relation_contracts(self) -> None:
         modules = self.platform.modules_payload()
         self.assertEqual("valkama-modules", modules["interface_version"])
         self.assertEqual(
             ["memory", "planning", "settings"],
             [item["manifest"]["module_id"] for item in modules["modules"]],
         )
-        context = self.platform.context_payload(self._query())
-        self.assertEqual("valkama-context", context["interface_version"])
-        project = context["state"]["payload"]["projects"][0]
-        self.assertEqual("mapped", project["binding_state"])
-        self.assertNotIn("binding_reason", project)
-        self.assertNotIn("canonical_root", json.dumps(context))
-
         registry = self.platform.registry_payload(self._query())
         ready = registry["state"]["payload"]
         self.assertEqual(8, len(ready["assignments"]))
@@ -251,24 +253,12 @@ class PlatformTests(unittest.TestCase):
         )
         self.assertTrue(all("detail" in item for item in ready["audit"]))
 
-        planning = self.platform.planning_payload(
-            self._query(data_scope_id=self.data_scope_id, space_key="EXA")
-        )
-        summary = planning["state"]["payload"]["planning_spaces"][0]["work_items"][0]
-        self.assertEqual(self.item_ref, summary["work_item_ref"])
-        detail = self.platform.planning_work_item_payload(
-            self._query(
-                data_scope_id=self.data_scope_id,
-                space_key="EXA",
-                reference=self.item["reference"],
-            ),
-            planning_service.get_work_item,
-        )
-        memory_relation = detail["state"]["payload"]["relations"]["relations"][0]
+        relations = self._relations(self.platform)
+        memory_relation = relations[0]
         self.assertEqual("lsn_example", memory_relation["target"]["external_id"])
         self.assertEqual("unavailable", memory_relation["state"])
         self.assertEqual([], memory_relation["actions"])
-        self.assertNotIn("memory_body", json.dumps(detail))
+        self.assertNotIn("memory_body", json.dumps(relations))
 
         self._authorize_all()
         configured = self.platform.registry_payload(self._query())["state"]["payload"]
@@ -288,117 +278,6 @@ class PlatformTests(unittest.TestCase):
         self.assertEqual(8, len(global_ready["assignments"]))
         self.assertEqual(len(configured["grants"]), len(global_ready["grants"]))
         self.assertTrue(all("applicability" in item for item in global_ready["connections"]))
-
-    def test_global_planning_and_memory_share_every_registered_project(self) -> None:
-        unbound_root = Path(self.directory.name) / "unbound"
-        unbound_root.mkdir()
-        Path(self.registry_path).write_bytes(
-            registry_bytes(
-                [
-                    project_entry(
-                        "example-project",
-                        self.directory.name,
-                        board="Example Board",
-                        bindings=[self.binding],
-                        source_hash=SOURCE_HASH,
-                    ),
-                    project_entry(
-                        "unbound-project",
-                        unbound_root,
-                        board="Unbound Project",
-                        bindings=[
-                            project_binding(
-                                "unbound-project",
-                                planning_work_item_entity(self.item_ref),
-                                source_hash="b" * 64,
-                            )
-                        ],
-                        source_hash="b" * 64,
-                    ),
-                ]
-            )
-        )
-        reader = Path(self.registry_path).read_bytes
-        platform = platform_core.Platform(
-            self.conn,
-            self.db,
-            registry_reader=reader,
-            providers=self.providers,
-        )
-
-        planning = platform.planning_payload({"scope_kind": ["global"]})["state"]
-        self.assertEqual("ready", planning["status"])
-        planning_projects = planning["payload"]["projects"]
-        memory_projects = memory_service.providers(registry_reader=reader)["providers"]
-        self.assertEqual(
-            {"example-project", "unbound-project"},
-            {item["project_id"] for item in planning_projects},
-        )
-        self.assertEqual(
-            {item["project_id"] for item in planning_projects},
-            {item["project_id"] for item in memory_projects},
-        )
-        unbound = next(
-            item for item in planning_projects if item["project_id"] == "unbound-project"
-        )
-        self.assertEqual("unbound", unbound["binding_state"])
-        self.assertNotIn("binding_reason", unbound)
-        self.assertEqual([], unbound["planning_spaces"])
-
-    def test_global_planning_directory_stays_bounded_without_reading_work_items(self) -> None:
-        for number in range(1200):
-            planning_service.create_work_item(
-                self.conn, space="EXA", title=f"Portfolio work {number}"
-            )
-        self.conn.commit()
-        with mock.patch.object(
-            self.platform, "_space_view", side_effect=AssertionError("full item read")
-        ) as read_items:
-            directory = self.platform.planning_payload(
-                {"scope_kind": ["global"], "directory_only": ["true"]}
-            )
-        read_items.assert_not_called()
-        self.assertEqual("ready", directory["state"]["status"])
-        payload = directory["state"]["payload"]
-        self.assertEqual([], payload["planning_spaces"])
-        self.assertEqual(1201, payload["projects"][0]["planning_spaces"][0]["work_item_count"])
-        self.assertEqual("Example Board", payload["projects"][0]["title"])
-        self.assertEqual("Example Space", payload["projects"][0]["planning_spaces"][0]["title"])
-        self.assertLess(len(json.dumps(payload).encode("utf-8")), 256 * 1024)
-
-        def value_count(value):
-            if isinstance(value, dict):
-                return 1 + sum(value_count(child) for child in value.values())
-            if isinstance(value, list):
-                return 1 + sum(value_count(child) for child in value)
-            return 1
-
-        self.assertLess(value_count(payload), 16_384)
-        default = self.platform.planning_payload({"scope_kind": ["global"]})
-        self.assertEqual(payload["projects"], default["state"]["payload"]["projects"])
-        items = default["state"]["payload"]["planning_spaces"][0]["work_items"]
-        self.assertEqual(1201, len(items))
-        self.assertIn(self.item_ref, [item["work_item_ref"] for item in items])
-        self.assertGreater(value_count(default["state"]["payload"]), 16_384)
-
-    def test_planning_directory_query_is_exact_and_only_global(self) -> None:
-        for parameters in (
-            {"scope_kind": ["global"], "directory_only": ["false"]},
-            {"scope_kind": ["global"], "directory_only": ["true", "true"]},
-            {"scope_kind": ["global"], "directory_only": []},
-            {"scope_kind": ["global", "global"], "directory_only": ["true"]},
-            {"directory_only": ["true"]},
-            {"scope_kind": ["global"], "directory_only": ["true"], "unknown": ["x"]},
-            self._query(data_scope_id=self.data_scope_id, space_key="EXA", directory_only="true"),
-        ):
-            with (
-                self.subTest(parameters=parameters),
-                self.assertRaises(platform_core.PlatformHttpError) as refusal,
-            ):
-                self.platform.planning_payload(parameters)
-            self.assertEqual(400, refusal.exception.status)
-        with self.assertRaises(platform_core.PlatformHttpError):
-            self.platform.context_payload({"scope_kind": ["global"], "directory_only": ["true"]})
 
     def test_generic_relation_attach_open_remove_is_atomic(self) -> None:
         self._authorize(self.platform, self.notes)
@@ -606,17 +485,19 @@ class PlatformTests(unittest.TestCase):
                 "SELECT COUNT(*) FROM platform_registry_audit WHERE event_kind='action.invoked'"
             ).fetchone()[0],
         )
-        self.assertEqual(
-            "ready",
-            self.platform.planning_work_item_payload(
-                self._query(
-                    data_scope_id=self.data_scope_id,
-                    space_key="EXA",
-                    reference=self.item["reference"],
-                ),
-                planning_service.get_work_item,
-            )["state"]["status"],
+        status, detail = planning_exact_api.handle_get(
+            self.conn,
+            self.db,
+            planning_exact_api.WORK_ITEM_PATH,
+            self._query(
+                data_scope_id=self.data_scope_id,
+                space_key="EXA",
+                reference=self.item["reference"],
+            ),
+            item_loader=planning_service.get_work_item,
+            registry_reader=Path(self.registry_path).read_bytes,
         )
+        self.assertEqual((200, "ready"), (status, detail["state"]["status"]))
 
     def test_action_audit_is_scoped_persisted_and_atomic_with_relation(self) -> None:
         configured = self._authorize(self.platform, self.notes)
@@ -809,14 +690,7 @@ class PlatformTests(unittest.TestCase):
             registry_reader=Path(self.registry_path).read_bytes,
             providers=self.providers,
         )
-        relation = after_connection.planning_work_item_payload(
-            self._query(
-                data_scope_id=self.data_scope_id,
-                space_key="EXA",
-                reference=self.item["reference"],
-            ),
-            planning_service.get_work_item,
-        )["state"]["payload"]["relations"]["relations"][0]
+        relation = self._relations(after_connection)[0]
         self.assertEqual("durable-note", relation["target"]["external_id"])
         self.assertEqual("unavailable", relation["state"])
         self.assertEqual([], relation["actions"])
@@ -869,14 +743,7 @@ class PlatformTests(unittest.TestCase):
             configured["assignment_id"], "disabled"
         )
         self.assertEqual(2, disabled_result["revision"])
-        disabled = self.platform.planning_work_item_payload(
-            self._query(
-                data_scope_id=self.data_scope_id,
-                space_key="EXA",
-                reference=self.item["reference"],
-            ),
-            planning_service.get_work_item,
-        )["state"]["payload"]["relations"]["relations"][0]
+        disabled = self._relations(self.platform)[0]
         self.assertEqual("unavailable", disabled["state"])
         self.assertEqual([], disabled["actions"])
 
@@ -886,14 +753,7 @@ class PlatformTests(unittest.TestCase):
         self.assertEqual(3, enabled_result["revision"])
         self.platform.revoke_grant(configured["grant_ids"]["resource.open"])
         self.platform.revoke_grant(configured["grant_ids"]["relation.remove"])
-        revoked = self.platform.planning_work_item_payload(
-            self._query(
-                data_scope_id=self.data_scope_id,
-                space_key="EXA",
-                reference=self.item["reference"],
-            ),
-            planning_service.get_work_item,
-        )["state"]["payload"]["relations"]["relations"][0]
+        revoked = self._relations(self.platform)[0]
         self.assertEqual("unavailable", revoked["state"])
         self.assertEqual([], revoked["actions"])
 
@@ -951,97 +811,6 @@ class PlatformTests(unittest.TestCase):
     def test_legacy_platform_api_has_no_second_owner(self) -> None:
         self.assertIsNone(platform_core.handle_get(self.conn, self.db, "/api/integrations", {}))
 
-    def test_context_reports_absent_ui_prefs_as_null(self) -> None:
-        payload = self.platform.context_payload({"scope_kind": ["global"]})
-        self.assertIsNone(payload["state"]["payload"]["ui_prefs"])
-
-    def test_ui_prefs_round_trip_through_context(self) -> None:
-        result = self.platform.save_ui_prefs(
-            {
-                "interface_version": "valkama-ui-prefs",
-                "module_id": "planning",
-                "scope": self.project_scope,
-                "resource_ref": planning_space_entity(self.item_ref["space_ref"]),
-            }
-        )
-        self.assertEqual(result["interface_version"], "valkama-ui-prefs")
-        self.assertEqual(result["prefs"]["module_id"], "planning")
-        payload = self.platform.context_payload({"scope_kind": ["global"]})
-        prefs = payload["state"]["payload"]["ui_prefs"]
-        self.assertEqual(prefs["scope"], self.project_scope)
-        self.assertEqual(prefs["resource_ref"], planning_space_entity(self.item_ref["space_ref"]))
-
-    def test_ui_prefs_persist_across_platform_restart(self) -> None:
-        self.platform.save_ui_prefs(
-            {
-                "interface_version": "valkama-ui-prefs",
-                "module_id": "planning",
-                "scope": {"kind": "global"},
-            }
-        )
-        restarted = platform_core.Platform(
-            self.conn,
-            self.db,
-            registry_reader=Path(self.registry_path).read_bytes,
-            providers=self.providers,
-        )
-        prefs = restarted.ui_prefs_record()
-        self.assertEqual(prefs, {"module_id": "planning", "scope": {"kind": "global"}})
-
-    def test_ui_prefs_reject_unknown_module_version_and_fields(self) -> None:
-        with self.assertRaises(platform_core.PlatformHttpError):
-            self.platform.save_ui_prefs(
-                {
-                    "interface_version": "valkama-ui-prefs",
-                    "module_id": "not-a-module",
-                    "scope": {"kind": "global"},
-                }
-            )
-        with self.assertRaises(platform_core.PlatformHttpError):
-            self.platform.save_ui_prefs(
-                {
-                    "interface_version": "valkama-ui-prefs-unknown",
-                    "module_id": "planning",
-                    "scope": {"kind": "global"},
-                }
-            )
-        with self.assertRaises(platform_core.ContractError):
-            self.platform.save_ui_prefs(
-                {
-                    "interface_version": "valkama-ui-prefs",
-                    "module_id": "planning",
-                    "scope": {"kind": "global"},
-                    "surprise": True,
-                }
-            )
-        with self.assertRaises(platform_core.ContractError):
-            self.platform.save_ui_prefs(
-                {
-                    "interface_version": "valkama-ui-prefs",
-                    "module_id": "planning",
-                    "scope": self.project_scope,
-                    "space_ref": self.item_ref["space_ref"],
-                }
-            )
-        self.assertIsNone(self.platform.ui_prefs_record())
-
-    def test_corrupt_or_stale_ui_prefs_row_reads_as_null(self) -> None:
-        self.conn.execute(
-            "INSERT INTO platform_ui_prefs(key,record_json,updated_at)"
-            " VALUES('last-route','{not json',?)",
-            (platform_core._now(),),
-        )
-        self.conn.commit()
-        self.assertIsNone(self.platform.ui_prefs_record())
-        self.conn.execute(
-            "UPDATE platform_ui_prefs SET record_json=?",
-            (json.dumps({"module_id": "gone-module", "scope": {"kind": "global"}}),),
-        )
-        self.conn.commit()
-        self.assertIsNone(self.platform.ui_prefs_record())
-        payload = self.platform.context_payload({"scope_kind": ["global"]})
-        self.assertIsNone(payload["state"]["payload"]["ui_prefs"])
-
     def test_http_assignment_activation_and_grant_revoke_commands(self) -> None:
         authorized = self._authorize(self.platform, self.notes)
         grant_ids = authorized["grant_ids"]
@@ -1093,21 +862,6 @@ class PlatformTests(unittest.TestCase):
         ready = self.platform.registry_payload(self._query())["state"]["payload"]
         target = next(item for item in ready["grants"] if item["grant_id"] == grant_id)
         self.assertFalse(target["active"])
-
-    def test_handle_post_owns_the_ui_prefs_path(self) -> None:
-        status, payload = platform_core.handle_post(
-            self.conn,
-            self.db,
-            "/api/platform/ui-prefs",
-            {
-                "interface_version": "valkama-ui-prefs",
-                "module_id": "planning",
-                "scope": {"kind": "global"},
-            },
-            providers=self.providers,
-        )
-        self.assertEqual(status, 200)
-        self.assertEqual(payload["prefs"]["module_id"], "planning")
 
 
 class PlatformHttpBoundaryTests(unittest.TestCase):

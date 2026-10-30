@@ -16,7 +16,7 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Callable
 
-from . import core as platform_core
+from . import module_gate
 
 READ_ONLY = {"readOnlyHint": True, "idempotentHint": True, "openWorldHint": False}
 
@@ -31,7 +31,7 @@ TOOLS = [
 ]
 
 OPS: dict[str, Callable[[sqlite3.Connection, dict], object]] = {
-    "list_platform_modules": lambda conn, _a: platform_core.modules_payload(conn),
+    "list_platform_modules": lambda conn, _a: module_gate.modules_payload(conn),
 }
 
 #: Derived, never restated: a hand-written second list is how a tool ends up

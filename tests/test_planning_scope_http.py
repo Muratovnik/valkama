@@ -1,4 +1,8 @@
-"""Real HTTP reads must distinguish stores with identical Planning references."""
+"""Real HTTP reads must distinguish stores with identical Planning references.
+
+They must also leave the store exactly as they found it: a read that commits
+wakes every live stream as though the data had changed.
+"""
 
 from __future__ import annotations
 
@@ -17,10 +21,10 @@ from urllib.parse import urlencode
 
 from server import http_surface, store
 from server.planning import requests, service
-from server.platform import core
-from server.platform.contracts import planning_space_entity
-from server.platform.scope import read_store_metadata
-from server.projects import scopes
+from server.planning.routing import PlanningRouting
+from server.projects import project_registry, scopes
+from server.store_identity.metadata import read_store_metadata
+from server.store_identity.refs import planning_space_entity
 from tests.registry_fixtures import project_entry, registry_bytes
 
 
@@ -54,7 +58,7 @@ class PlanningScopeHttpTests(unittest.TestCase):
         scopes.attach(str(self.primary), "attached", str(self.attached))
         self.bind("primary")
         registry_patch = mock.patch.object(
-            core.project_registry, "_read_registry_bytes", self.registry.read_bytes
+            project_registry, "_read_registry_bytes", self.registry.read_bytes
         )
         registry_patch.start()
         self.addCleanup(registry_patch.stop)
@@ -514,14 +518,14 @@ class PlanningScopeHttpTests(unittest.TestCase):
         self.bind("attached")
         conn = store.connect()
         self.addCleanup(conn.close)
-        platform = core.Platform(conn, str(self.primary))
+        routing = PlanningRouting(conn, str(self.primary))
 
         def attempted_write(selected: sqlite3.Connection, _key: str) -> dict:
             selected.execute("UPDATE work_items SET title='forbidden'")
             return {}
 
         with self.assertRaisesRegex(sqlite3.OperationalError, "readonly"):
-            platform.planning_read_model(
+            routing.planning_read_model(
                 {
                     key: [value]
                     for key, value in {
@@ -538,3 +542,112 @@ class PlanningScopeHttpTests(unittest.TestCase):
         self.assertEqual("primary-updated", service.get_work_item(conn, "SAME-1")["title"])
         _, attached = self.request(self.model_path("attached"))
         self.assertEqual("attached-only", attached["work_items"][0]["title"])
+
+    # -- reads write nothing ---------------------------------------------------
+    #
+    # `PRAGMA data_version` on a second connection moves exactly when another
+    # connection commits a change, which is what an SSE consumer and every other
+    # reader of this store see. A read that commits, even a row it only touched,
+    # makes every viewer believe the store changed.
+
+    def observe_primary(self) -> sqlite3.Connection:
+        observer = sqlite3.connect(self.primary)
+        self.addCleanup(observer.close)
+        return observer
+
+    @staticmethod
+    def data_version(observer: sqlite3.Connection) -> int:
+        return int(observer.execute("PRAGMA data_version").fetchone()[0])
+
+    def pending_request(self, source: str) -> str:
+        path = self.primary if source == "primary" else self.attached
+        with mock.patch.dict(os.environ, {"VALKAMA_DB": str(path)}):
+            conn = store.connect()
+            try:
+                created = requests.create(
+                    conn,
+                    "SAME-1",
+                    kind="question",
+                    prompt="Still open?",
+                    fields=[
+                        {
+                            "id": "reply",
+                            "label": "Reply",
+                            "type": "text",
+                            "required": True,
+                            "options": [],
+                        }
+                    ],
+                )
+                conn.commit()
+            finally:
+                conn.close()
+        return str(created["request_id"])
+
+    def exact_read_paths(self, source: str) -> dict[str, str]:
+        exact = {"scope_kind": "project", "project_id": "example-project", **self.refs[source]}
+        request_id = self.pending_request(source)
+        return {
+            "request detail": "/api/modules/planning/request?"
+            + urlencode({**exact, "id": request_id}),
+            "modules": "/api/modules",
+            "context global": "/api/platform/context?scope_kind=global",
+            "context project": "/api/platform/context?"
+            + urlencode({"scope_kind": "project", "project_id": "example-project"}),
+            "portfolio global": "/api/platform/planning?scope_kind=global",
+            "portfolio directory": "/api/platform/planning?scope_kind=global&directory_only=true",
+            "portfolio exact": "/api/platform/planning?" + urlencode(exact),
+            "work item": "/api/modules/planning/work-item?"
+            + urlencode({**exact, "reference": "SAME-1"}),
+            "search": "/api/modules/planning/search?q=only",
+            "requests global": "/api/modules/planning/requests?scope_kind=global",
+            "requests exact": "/api/modules/planning/requests?" + urlencode(exact),
+            "planning model": self.model_path(source),
+        }
+
+    def assert_reads_leave_store_unchanged(self, source: str, paths: dict[str, str]) -> None:
+        self.bind(source)
+        observer = self.observe_primary()
+        # The first request after a binding or an attach may record the store
+        # inventory once; what is measured is every read after that.
+        self.assertEqual(200, self.request("/api/modules")[0])
+        for name, path in paths.items():
+            with self.subTest(source=source, read=name):
+                before = self.data_version(observer)
+                status, answer = self.request(path)
+                self.assertEqual(200, status, answer)
+                self.assertEqual(before, self.data_version(observer), path)
+
+    def test_exact_reads_of_the_primary_store_write_nothing(self) -> None:
+        self.assert_reads_leave_store_unchanged("primary", self.exact_read_paths("primary"))
+
+    def test_exact_reads_of_an_attached_store_write_nothing(self) -> None:
+        paths = self.exact_read_paths("attached")
+        before = hashlib.sha256(self.attached.read_bytes()).digest()
+        self.assert_reads_leave_store_unchanged("attached", paths)
+        self.assertEqual(before, hashlib.sha256(self.attached.read_bytes()).digest())
+
+    def test_exact_stream_snapshot_writes_nothing(self) -> None:
+        self.bind("attached")
+        observer = self.observe_primary()
+        self.assertEqual(200, self.request("/api/modules")[0])
+        before = self.data_version(observer)
+        client = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=3)
+        self.addCleanup(client.close)
+        client.request("GET", self.stream_path("attached"))
+        response = client.getresponse()
+        self.addCleanup(response.close)
+        self.addCleanup(self.end_stream, response)
+        self.assertEqual(200, response.status)
+        first = self.read_frame(response)
+        self.assertEqual(["attached-only"], [item["title"] for item in first["work_items"]])
+        self.assertEqual(before, self.data_version(observer))
+
+    def end_stream(self, response: http.client.HTTPResponse) -> None:
+        """Revoke the binding so the server ends the stream and lets go of the store."""
+
+        self.bind("primary")
+        http_surface.watchers.WATCHERS.publish("changed")
+        for _ in range(20):
+            if response.readline() == b"":
+                return

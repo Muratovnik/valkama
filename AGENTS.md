@@ -107,9 +107,9 @@ script, the icon, the generator that renders it, and the installer.
 The server lives in `server/`, split into domain and surfaces. Domain modules
 answer questions about the store and know nothing about who asked: `store`,
 `sessions`, `federation`, `refs`, `documents`, `runner`, `processes`,
-`git_worktrees`, `static_assets`, `watchers`, plus the `planning/`,
-`executions/`, `platform/`, `memory/`, `projects/`, `ops/` and `telemetry/`
-subpackages. The three
+`git_worktrees`, `static_assets`, `watchers`, `app_shell`, `ui_state`, plus the
+`planning/`, `executions/`, `platform/`, `store_identity/`, `memory/`,
+`projects/`, `ops/` and `telemetry/` subpackages. The three
 surfaces own no domain rule: `mcp_surface`, `http_surface` and `cli`.
 
 `store` keeps what only it can own — the schema, the ratchet, the store's own

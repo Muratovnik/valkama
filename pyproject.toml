@@ -184,9 +184,60 @@ type = "layers"
 layers = [
   "cli",
   "http_surface | mcp_surface",
-  "documents : executions : federation : memory : ops : planning : platform : processes : projects : refs : runner : sessions : static_assets : store : telemetry : watchers",
+  "app_shell : documents : executions : federation : memory : ops : planning : platform : processes : projects : refs : runner : sessions : static_assets : store : store_identity : telemetry : ui_state : watchers",
 ]
 containers = ["server"]
+
+# Planning's exact-scope routing and the app shell answer without the extension
+# registry: they may use the module gate and the module manifest, but nothing
+# that registers, grants, relates, probes or transports. The whole `contracts`
+# package is forbidden, not only its registry modules: importing any submodule
+# runs the package's `__init__`, which loads `authorization` and `relations`,
+# and an import graph does not show that edge. `test_layering.py` checks the
+# loaded modules at run time for the same reason. This is what lets the
+# registry be removed without touching what the web shell and the Planning
+# routes read.
+[[tool.importlinter.contracts]]
+name = "Planning routing and the app shell never reach the extension registry"
+type = "forbidden"
+source_modules = [
+  "server.app_shell",
+  "server.planning",
+  "server.store_identity",
+  "server.ui_state",
+]
+forbidden_modules = [
+  "server.platform.adapters",
+  "server.platform.capabilities",
+  "server.platform.contracts",
+  "server.platform.core",
+  "server.platform.external",
+  "server.platform.health",
+  "server.platform.installed",
+  "server.platform.migrations",
+  "server.platform.providers",
+  "server.platform.registry",
+  "server.platform.relations",
+  "server.platform.scope",
+  "server.platform.tools",
+  "server.platform.transports",
+]
+
+# Store identity and the read envelope are the floor everything above routes on,
+# so they import none of it.
+[[tool.importlinter.contracts]]
+name = "Store identity and the read envelope sit beneath everything that routes"
+type = "forbidden"
+source_modules = [
+  "server.store_identity",
+  "server.ui_state",
+]
+forbidden_modules = [
+  "server.app_shell",
+  "server.planning",
+  "server.platform",
+  "server.projects",
+]
 
 [tool.mypy]
 python_version = "3.11"

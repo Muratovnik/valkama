@@ -1,16 +1,19 @@
-"""Mapped Planning search and human-request transport contracts."""
+"""Mapped Planning search and human-request transport contracts.
+
+Each operation reaches a store only through `PlanningRouting`, so a search or a
+request names an exact project binding and never a key-only space.
+"""
 
 from __future__ import annotations
 
 import sqlite3
 from collections.abc import Mapping
-from typing import TYPE_CHECKING
 
-from ..planning import api, model, read_model, requests, service
-from .contracts import ContractError, planning_space_ref, validate_planning_space_ref
-
-if TYPE_CHECKING:
-    from .core import Platform
+from ..platform import module_gate
+from ..store_identity.primitives import ContractError
+from ..store_identity.refs import planning_space_ref, validate_planning_space_ref
+from . import api, model, read_model, requests, service
+from .routing import PlanningRouting
 
 READ_PATHS = frozenset(
     {
@@ -36,20 +39,20 @@ def _limit(parameters: Mapping[str, list[str]], default: int) -> int:
     return int(raw[0])
 
 
-def _target(platform: Platform, project_id: str, space_ref: dict, reference: str) -> dict:
+def _target(routing: PlanningRouting, project_id: str, space_ref: dict, reference: str) -> dict:
     return {
         "project_id": project_id,
         "space_ref": space_ref,
         "reference": reference,
-        "writable": space_ref["data_scope_id"] == platform.metadata["data_scope_id"],
+        "writable": space_ref["data_scope_id"] == routing.metadata["data_scope_id"],
     }
 
 
-def _resources(platform: Platform) -> list[tuple[str, dict]]:
-    if platform.projects_result["status"] != "available":
+def _resources(routing: PlanningRouting) -> list[tuple[str, dict]]:
+    if routing.projects_result["status"] != "available":
         raise api.PlanningHttpError(409, "unavailable", "project_registry_unavailable")
     result = []
-    for project in platform.projects:
+    for project in routing.projects:
         binding = project.get("planning_binding")
         if binding is None:
             continue
@@ -62,7 +65,7 @@ def _resources(platform: Platform) -> list[tuple[str, dict]]:
     )
 
 
-def search(platform: Platform, parameters: Mapping[str, list[str]]) -> dict:
+def search(routing: PlanningRouting, parameters: Mapping[str, list[str]]) -> dict:
     if set(parameters) - {"q", "limit"} or "q" not in parameters:
         raise api.PlanningHttpError(400, "invalid_request", "search requires q and optional limit")
     query = model.text_field(_one(parameters, "q"), "query", limit=200)
@@ -71,7 +74,7 @@ def search(platform: Platform, parameters: Mapping[str, list[str]]) -> dict:
     coverage: list[dict] = []
     seen: set[tuple[str, str, str]] = set()
     more = False
-    for project_id, space_ref in _resources(platform):
+    for project_id, space_ref in _resources(routing):
         entry: dict = {
             "project_id": project_id,
             "space_ref": space_ref,
@@ -79,8 +82,8 @@ def search(platform: Platform, parameters: Mapping[str, list[str]]) -> dict:
             "reason": "source_unavailable",
         }
         try:
-            platform.require_module_enabled("planning")
-            with platform.planning_store(_store_parameters(project_id, space_ref)) as (conn, _key):
+            module_gate.require_module_enabled(routing.conn, "planning")
+            with routing.planning_store(_store_parameters(project_id, space_ref)) as (conn, _key):
                 found = service.search_work_items(
                     conn, query, space=space_ref["space_key"], limit=limit + 1
                 )
@@ -96,7 +99,7 @@ def search(platform: Platform, parameters: Mapping[str, list[str]]) -> dict:
                     seen.add(identity)
                     items.append(
                         {
-                            "target": _target(platform, project_id, space_ref, item["reference"]),
+                            "target": _target(routing, project_id, space_ref, item["reference"]),
                             "item": {
                                 "work_item_id": item["work_item_id"],
                                 "planning_space_id": item["planning_space_id"],
@@ -152,21 +155,21 @@ def _capability(conn: sqlite3.Connection) -> None:
         raise api.PlanningHttpError(409, "unavailable", "requests_unavailable")
 
 
-def request_detail(platform: Platform, parameters: Mapping[str, list[str]]) -> dict:
-    platform.require_module_enabled("planning")
+def request_detail(routing: PlanningRouting, parameters: Mapping[str, list[str]]) -> dict:
+    module_gate.require_module_enabled(routing.conn, "planning")
     project_id, space_ref = _exact_parameters(parameters, {"id"})
-    with platform.planning_store(_store_parameters(project_id, space_ref)) as (conn, _key):
+    with routing.planning_store(_store_parameters(project_id, space_ref)) as (conn, _key):
         _capability(conn)
         record = requests.get(conn, _one(parameters, "id"))
         _request_item(conn, record, space_ref["space_key"])
     return {
         "interface_version": "valkama-planning-requests",
-        "target": _target(platform, project_id, space_ref, record["reference"]),
+        "target": _target(routing, project_id, space_ref, record["reference"]),
         "request": record,
     }
 
 
-def request_list(platform: Platform, parameters: Mapping[str, list[str]]) -> dict:
+def request_list(routing: PlanningRouting, parameters: Mapping[str, list[str]]) -> dict:
     limit = _limit(parameters, 100)
     status = _one(parameters, "status") if "status" in parameters else None
     if status is not None:
@@ -179,7 +182,7 @@ def request_list(platform: Platform, parameters: Mapping[str, list[str]]) -> dic
     if scope_kind == "global":
         if set(scoped) != {"scope_kind"}:
             raise api.PlanningHttpError(400, "invalid_request", "global_scope_fields_invalid")
-        resources = _resources(platform)
+        resources = _resources(routing)
     else:
         reference = _one(scoped, "reference") if "reference" in scoped else None
         project_id, space_ref = _exact_parameters(
@@ -198,8 +201,8 @@ def request_list(platform: Platform, parameters: Mapping[str, list[str]]) -> dic
             "reason": "requests_unavailable",
         }
         try:
-            platform.require_module_enabled("planning")
-            with platform.planning_store(_store_parameters(project_id, space_ref)) as (conn, _key):
+            module_gate.require_module_enabled(routing.conn, "planning")
+            with routing.planning_store(_store_parameters(project_id, space_ref)) as (conn, _key):
                 _capability(conn)
                 found = requests.list_requests(
                     conn,
@@ -216,7 +219,7 @@ def request_list(platform: Platform, parameters: Mapping[str, list[str]]) -> dic
                         items.append(
                             {
                                 "target": _target(
-                                    platform, project_id, space_ref, record["reference"]
+                                    routing, project_id, space_ref, record["reference"]
                                 ),
                                 "request": record,
                             }
@@ -239,8 +242,8 @@ def request_list(platform: Platform, parameters: Mapping[str, list[str]]) -> dic
     }
 
 
-def request_command(platform: Platform, path: str, payload: dict) -> dict:
-    platform.require_module_enabled("planning")
+def request_command(routing: PlanningRouting, path: str, payload: dict) -> dict:
+    module_gate.require_module_enabled(routing.conn, "planning")
     scope_fields = {"project_id", "data_scope_id", "space_key"}
     base = path == "/api/modules/planning/request"
     operation_fields = (
@@ -261,13 +264,13 @@ def request_command(platform: Platform, path: str, payload: dict) -> dict:
         )
     parameters = {key: [payload[key]] for key in scope_fields}
     parameters["scope_kind"] = ["project"]
-    with platform.conn:
-        if not platform.conn.in_transaction:
-            platform.conn.execute("BEGIN IMMEDIATE")
+    with routing.conn:
+        if not routing.conn.in_transaction:
+            routing.conn.execute("BEGIN IMMEDIATE")
         project_id, space_ref = _exact_parameters(parameters, set())
-        if space_ref["data_scope_id"] != platform.metadata["data_scope_id"]:
+        if space_ref["data_scope_id"] != routing.metadata["data_scope_id"]:
             raise api.PlanningHttpError(409, "unavailable", "attached_store_readonly")
-        with platform.planning_store(_store_parameters(project_id, space_ref)) as (conn, _key):
+        with routing.planning_store(_store_parameters(project_id, space_ref)) as (conn, _key):
             _capability(conn)
             operation = {key: value for key, value in payload.items() if key not in scope_fields}
             if base:
@@ -290,7 +293,7 @@ def request_command(platform: Platform, path: str, payload: dict) -> dict:
             record = answer[1]
     return {
         "interface_version": "valkama-planning-requests",
-        "target": _target(platform, project_id, space_ref, record["reference"]),
+        "target": _target(routing, project_id, space_ref, record["reference"]),
         "request": record,
     }
 

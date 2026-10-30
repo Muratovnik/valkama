@@ -30,11 +30,8 @@ from .contracts import (
     validate_service_descriptor,
     validate_service_ref,
 )
+from .module_gate import RegistryError
 from .scope import ProjectResourceBindingReader, ScopeError
-
-
-class RegistryError(ContractError):
-    pass
 
 
 class DuplicateRegistrationError(RegistryError):

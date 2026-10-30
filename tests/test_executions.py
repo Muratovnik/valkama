@@ -33,9 +33,9 @@ from server.executions import service as execution_service
 from server.planning import model as planning_model
 from server.planning import service as planning
 from server.planning import views as planning_views
-from server.platform.contracts import planning_space_entity
-from server.platform.scope import read_store_metadata
 from server.projects import project_registry
+from server.store_identity.metadata import read_store_metadata
+from server.store_identity.refs import planning_space_entity
 from tests import SUITE_STORE
 from tests.registry_fixtures import project_entry, registry_bytes
 

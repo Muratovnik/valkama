@@ -26,7 +26,7 @@ from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from server import mcp_surface, store
+from server import mcp_surface, store, ui_state
 from server.ops import tray
 from server.planning import api as planning_api
 from server.planning import service as planning_service
@@ -103,7 +103,7 @@ class McpSurfaceTestCase(unittest.TestCase):
         platform.module_state_command(
             {"module_id": "planning", "state": "disabled", "expected_revision": 1}
         )
-        with self.assertRaises(platform_core.PlatformHttpError):
+        with self.assertRaises(ui_state.PlatformHttpError):
             mcp_surface.call_tool(self.conn, "list_planning_spaces", {})
         with self.assertRaisesRegex(ValueError, "unknown tool"):
             mcp_surface.call_tool(self.conn, "get_improvements_profile", {})

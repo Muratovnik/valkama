@@ -11,9 +11,9 @@ from unittest import mock
 
 from server import cli, store
 from server.planning import service as planning_service
-from server.platform import scope as platform_scope
-from server.platform.contracts import planning_space_entity
 from server.projects import project_registry, registry_owner
+from server.store_identity import metadata as store_metadata
+from server.store_identity.refs import planning_space_entity
 
 
 class RegistryOwnerTests(unittest.TestCase):
@@ -186,7 +186,7 @@ class RegistryOwnerTests(unittest.TestCase):
                     connection, project_id="example", name="Example", key="EX"
                 )
                 connection.commit()
-                scope_id = platform_scope.read_store_metadata(connection)["data_scope_id"]
+                scope_id = store_metadata.read_store_metadata(connection)["data_scope_id"]
             finally:
                 connection.close()
             with mock.patch.object(

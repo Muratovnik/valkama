@@ -9,7 +9,7 @@ from server.platform.contracts import (
 )
 from server.platform.registry import PermissionDeniedError, PlatformRegistry
 from server.platform.relations import add_adapter_link, read_relations
-from server.platform.scope import ensure_store_metadata
+from server.store_identity.metadata import ensure_store_metadata
 
 
 class CoreConsumer:

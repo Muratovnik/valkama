@@ -21,9 +21,9 @@ from collections.abc import Callable, Mapping
 from .. import query_params, runner
 from ..planning import api as planning_api
 from ..planning import service as planning_service
-from ..platform.contracts import planning_space_entity
-from ..platform.scope import read_store_metadata
 from ..projects import project_registry
+from ..store_identity.metadata import read_store_metadata
+from ..store_identity.refs import planning_space_entity
 from ..telemetry import projections as telemetry
 from . import drivers, results
 from . import service as execution_service

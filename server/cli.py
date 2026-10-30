@@ -37,11 +37,11 @@ from .planning import model as planning_model
 from .planning import service as planning_service
 from .planning import views as planning_views
 from .platform import installed
-from .platform import scope as platform_scope
-from .platform.contracts import planning_space_entity
 from .projects import registry_owner, scopes
 from .static_assets import DIST_DIR, SOURCE_ROOT
 from .store import connect, data_root, db_path
+from .store_identity import metadata as store_metadata
+from .store_identity.refs import planning_space_entity
 from .telemetry import journal
 
 # --- session-probe summary and routa import ---------------------------------
@@ -415,7 +415,7 @@ def _projects_main(options: argparse.Namespace) -> None:
                     raise registry_owner.RegistryOwnerError(
                         "planning space belongs to a different project id"
                     )
-                metadata = platform_scope.read_store_metadata(conn)
+                metadata = store_metadata.read_store_metadata(conn)
             binding = planning_space_entity(
                 {"data_scope_id": metadata["data_scope_id"], "space_key": space["key"]}
             )

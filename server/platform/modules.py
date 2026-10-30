@@ -13,7 +13,7 @@ import threading
 from collections.abc import Callable
 from copy import deepcopy
 
-from .contracts import MODULES_INTERFACE, validate_module_manifest
+from .module_manifest import MODULES_INTERFACE, validate_module_manifest
 
 _ALL_STATES = [
     "loading",

@@ -10,6 +10,24 @@ from __future__ import annotations
 
 from urllib.parse import urlsplit
 
+from ...store_identity.primitives import (
+    ENTITY_KINDS,
+    ContractError,
+    InvalidDiscriminantError,
+    UnsafePayloadError,
+    _enum,
+    _identifier,
+    _object,
+    _text,
+    _uuid,
+)
+from ...store_identity.refs import (
+    validate_adapter_resource_ref,
+    validate_assignment_scope,
+    validate_connection_ref,
+    validate_entity_ref,
+    validate_operating_scope,
+)
 from .primitives import (
     _ACTION_NAME_RE,
     _MODULE_ID_SET,
@@ -18,29 +36,13 @@ from .primitives import (
     ASSIGNMENT_STATES,
     AUTHORIZATION_TARGET_KINDS,
     CAPABILITY_IDS,
-    ENTITY_KINDS,
     HEALTH_STATES,
     TRUST_STATES,
-    ContractError,
-    InvalidDiscriminantError,
-    UnsafePayloadError,
-    _enum,
-    _identifier,
     _list,
-    _object,
     _reject_unsafe_tree,
     _revision,
     _schema_id,
-    _text,
     _timestamp,
-    _uuid,
-)
-from .refs import (
-    validate_adapter_resource_ref,
-    validate_assignment_scope,
-    validate_connection_ref,
-    validate_entity_ref,
-    validate_operating_scope,
 )
 
 

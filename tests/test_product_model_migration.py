@@ -11,7 +11,7 @@ import unittest
 from unittest import mock
 
 from server import store, store_backups, store_lock
-from server.platform import capabilities
+from server.platform import capabilities, module_gate
 from server.platform import core as platform_core
 from server.platform import migrations as platform_migrations
 from server.platform.contracts import (
@@ -23,7 +23,7 @@ from server.platform.contracts import (
     validate_assignment,
     validate_entity_ref,
 )
-from server.platform.scope import read_store_metadata
+from server.store_identity.metadata import read_store_metadata
 from tests import board_era
 from tests.registry_fixtures import project_binding, project_entry, registry_bytes
 
@@ -573,7 +573,7 @@ class ProductModelMigrationTests(unittest.TestCase):
         conn.close()
         with mock.patch.dict(os.environ, {"VALKAMA_DB": path}):
             migrated = store.connect()
-            modules = platform_core.modules_payload(migrated)["modules"]
+            modules = module_gate.modules_payload(migrated)["modules"]
             self.assertEqual(
                 store.STORE_SCHEMA_VERSION, migrated.execute("PRAGMA user_version").fetchone()[0]
             )

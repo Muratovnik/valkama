@@ -8,8 +8,8 @@ from unittest import mock
 
 from server import http_surface, store
 from server.planning import api as planning_api
+from server.planning import exact_api as planning_exact_api
 from server.planning import model, service
-from server.platform import core as platform_core
 
 
 class PlanningApiTests(unittest.TestCase):
@@ -356,15 +356,14 @@ class PlanningRouteGateTests(unittest.TestCase):
         for path in planning_api.WRITE_PATHS:
             self.assertEqual("planning", http_surface._HTTP_ROUTE_MODULES[("POST", path)], path)
 
-    def test_the_kernel_work_item_route_is_dispatched_with_plannings_loader(self) -> None:
-        """The Kernel reads one work item on a path the surface has to recognise.
+    def test_the_exact_work_item_route_is_dispatched_with_plannings_loader(self) -> None:
+        """The inspector reads one work item on a path the surface has to recognise.
 
-        `platform.core.handle_get` has accepted this path and demanded an
-        ``item_loader`` all along, while the surface dispatched to that handler
-        only for ``/api/modules`` exactly or ``/api/platform/``. The path is
-        neither, so it answered a bare 404 and the relations panel never loaded
-        its half. A mock backend answered it, which is why only a live server
-        showed the gap.
+        The handler behind this path has demanded an ``item_loader`` all along,
+        while the surface once dispatched to it only for ``/api/modules``
+        exactly or ``/api/platform/``. The path is neither, so it answered a
+        bare 404 and the inspector never loaded. A mock backend answered it,
+        which is why only a live server showed the gap.
         """
 
         self.assertEqual(
@@ -376,16 +375,16 @@ class PlanningRouteGateTests(unittest.TestCase):
         )
         self.assertIsNotNone(boundary)
         assert boundary is not None
-        self.assertIs(http_surface._platform_read, boundary.handler)
+        self.assertIs(http_surface._planning_exact_read, boundary.handler)
         self.assertIn(
             "item_loader=planning_service.get_work_item",
-            inspect.getsource(http_surface._platform_read),
+            inspect.getsource(http_surface._planning_exact_read),
         )
         # And the handler really does demand one, which is what makes passing it
         # the fix rather than a decoration.
         self.assertIn(
             "the work item endpoint requires Planning's own loader",
-            inspect.getsource(platform_core.handle_get),
+            inspect.getsource(planning_exact_api.handle_get),
         )
 
 

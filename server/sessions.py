@@ -8,9 +8,9 @@ from __future__ import annotations
 import json
 import sqlite3
 
-from .platform.contracts import planning_space_entity
-from .platform.scope import read_store_metadata
 from .projects import project_registry
+from .store_identity.metadata import read_store_metadata
+from .store_identity.refs import planning_space_entity
 
 # The current contract is docs/product-model.md#work-item-context. The historic
 # class value is retained for lifecycle rows so existing durable records keep

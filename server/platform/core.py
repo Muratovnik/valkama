@@ -15,17 +15,26 @@ a legacy row forward, and the migrations `store.connect()` runs -- lives in
 
 from __future__ import annotations
 
-import contextlib
 import hashlib
 import json
 import os
 import sqlite3
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Mapping
 from copy import deepcopy
 from datetime import UTC, datetime
 
+from ..planning.routing import scope_parameters
 from ..projects import project_registry, scopes
-from . import health, planning_interactions
+from ..store_identity.metadata import (
+    PLATFORM_OWNER_ID,
+    STORE_METADATA_SCHEMA,
+    ScopeError,
+    ensure_store_metadata,
+    read_store_metadata,
+)
+from ..ui_state import PlatformHttpError, envelope
+from ..ui_state import error_response as ui_error_response
+from . import health
 from . import modules as platform_modules
 from . import relations as platform_relations
 from .capabilities import CAPABILITY_DEFINITIONS, resolve_capability
@@ -45,16 +54,12 @@ from .contracts import (
     validate_connection_ref,
     validate_entity_ref,
     validate_invocation_context,
-    validate_module_manifest,
-    validate_operating_scope,
     validate_permission_grant,
-    validate_planning_space_ref,
     validate_relation,
-    validate_work_item_ref,
 )
+from .module_gate import modules_payload, require_module_enabled, unseen_module_ids
 from .providers import (
     ProviderCatalog,
-    ProviderError,
     ProviderUnavailableError,
     ReferenceProvider,
 )
@@ -68,33 +73,19 @@ from .registry import (
 )
 from .relations import (
     RelationConflictError,
-    RelationError,
     RelationRevisionConflictError,
     add_adapter_link,
     read_relations,
     remove_adapter_link,
 )
-from .scope import (
-    PLATFORM_OWNER_ID,
-    STORE_METADATA_SCHEMA,
-    BindingResolution,
-    ProjectResourceBindingReader,
-    ScopeError,
-    ensure_store_metadata,
-    read_store_metadata,
-)
+from .scope import BindingResolution, ProjectResourceBindingReader
 from .transports import TransportError
 
-CONTEXT_INTERFACE = "valkama-context"
 REGISTRY_INTERFACE = "valkama-registry"
-PLANNING_INTERFACE = "valkama-planning"
-PLANNING_WORK_ITEM_INTERFACE = "valkama-planning-work-item"
 RELATION_COMMAND_INTERFACE = "valkama-relation-command"
 RELATION_RESULT_INTERFACE = "valkama-relation-result"
 ACTION_COMMAND_INTERFACE = "valkama-action-command"
 ACTION_RESULT_INTERFACE = "valkama-action-result"
-UI_STATE_INTERFACE = "valkama-ui-state"
-UI_PREFS_INTERFACE = "valkama-ui-prefs"
 ASSIGNMENT_ACTIVATION_INTERFACE = "valkama-assignment-activation"
 ASSIGNMENT_SELECTION_INTERFACE = "valkama-assignment-selection"
 GRANT_REVOKE_INTERFACE = "valkama-grant-revoke"
@@ -218,14 +209,6 @@ SCHEMA_TABLES = (
 )
 
 
-class PlatformHttpError(ValueError):
-    def __init__(self, status: int, state: str, reason: str):
-        self.status = status
-        self.state = state
-        self.reason = reason
-        super().__init__(reason)
-
-
 def _now() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
@@ -268,10 +251,6 @@ def _scope_key(scope: dict) -> tuple[str, str]:
         if scope["kind"] == "global"
         else ("project", scope["project_ref"]["project_id"])
     )
-
-
-def _ui(status: str, **fields) -> dict:
-    return {"interface_version": UI_STATE_INTERFACE, "status": status, **fields}
 
 
 def _last_checked_at(store: str, connection_ref: dict, state: str) -> str | None:
@@ -327,109 +306,6 @@ def initialize(
         observe_health=False,
         caller_owns_transaction=caller_owns_transaction,
     )
-
-
-def modules_payload(conn: sqlite3.Connection) -> dict:
-    """Read and validate every registration from the canonical persisted rows."""
-
-    registrations = []
-    rows = conn.execute(
-        "SELECT module_id,record_json,state,mutable,revision,updated_at"
-        " FROM platform_modules ORDER BY module_id"
-    ).fetchall()
-    identities = [row["module_id"] for row in rows]
-    if len(identities) != len(set(identities)):
-        raise RegistryError("persisted module identity is duplicated")
-    if "settings" not in identities:
-        raise RegistryError("persisted Settings registration is missing")
-    for row in rows:
-        try:
-            manifest = validate_module_manifest(json.loads(row["record_json"]))
-        except (TypeError, json.JSONDecodeError, ContractError) as error:
-            raise RegistryError("persisted module descriptor is malformed") from error
-        if manifest["module_id"] != row["module_id"]:
-            raise RegistryError("persisted module identity disagrees with its descriptor")
-        if row["state"] not in {"enabled", "disabled"}:
-            raise RegistryError("persisted module state is invalid")
-        if row["mutable"] not in {0, 1}:
-            raise RegistryError("persisted module mutability is invalid")
-        mutable = bool(row["mutable"])
-        if not isinstance(row["revision"], int) or row["revision"] <= 0:
-            raise RegistryError("persisted module revision is invalid")
-        if not isinstance(row["updated_at"], str) or not row["updated_at"]:
-            raise RegistryError("persisted module update time is invalid")
-        if manifest["module_id"] == "settings" and (mutable or row["state"] != "enabled"):
-            raise RegistryError("persisted Settings module state is invalid")
-        registrations.append(
-            {
-                "manifest": manifest,
-                "state": row["state"],
-                "mutable": mutable,
-                "revision": int(row["revision"]),
-                "updated_at": row["updated_at"],
-            }
-        )
-    return {"interface_version": MODULES_INTERFACE, "modules": registrations}
-
-
-def require_module_enabled(conn: sqlite3.Connection, module_id: str) -> None:
-    """Refuse work unless one exact persisted registration is enabled."""
-
-    registration = next(
-        (
-            item
-            for item in modules_payload(conn)["modules"]
-            if item["manifest"]["module_id"] == module_id
-        ),
-        None,
-    )
-    if registration is None or registration["state"] != "enabled":
-        raise PlatformHttpError(409, "unavailable", f"Module {module_id} is disabled")
-
-
-def is_module_enabled(conn: sqlite3.Connection, module_id: str) -> bool:
-    try:
-        require_module_enabled(conn, module_id)
-    except PlatformHttpError:
-        return False
-    return True
-
-
-def unseen_module_ids(conn: sqlite3.Connection) -> list[str]:
-    """Modules this build declares that this store has never known.
-
-    Two rules meet here and only one of them is obvious. A module added in a
-    later build must appear in installations that already exist, or it stays in
-    the registry source and invisible in the product. But a row that was removed
-    stays removed: the persisted registry is the runtime authority, and a build
-    that reseeded whatever it happened to declare would overwrite the operator
-    rather than extend the product.
-
-    Both hold because the audit answers a question the module table cannot: a
-    registration writes an audit event and nothing erases it, so a module with
-    history was known once and its absence is a removal, while a module with no
-    history anywhere is new. Absence alone cannot tell those apart.
-    """
-
-    if (
-        conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='platform_modules'"
-        ).fetchone()
-        is None
-    ):
-        return []
-    present = {str(row[0]) for row in conn.execute("SELECT module_id FROM platform_modules")}
-    remembered = {
-        str(row[0])
-        for row in conn.execute(
-            "SELECT entity_id FROM platform_registry_audit WHERE entity_kind='module'"
-        )
-    }
-    return [
-        str(manifest["module_id"])
-        for manifest in platform_modules.module_manifests()
-        if str(manifest["module_id"]) not in present | remembered
-    ]
 
 
 def _table_present(conn: sqlite3.Connection, name: str) -> bool:
@@ -501,6 +377,13 @@ class Platform:
         return default
 
     def _sync_store_inventory(self) -> None:
+        """Record which stores are present, writing only what actually changed.
+
+        Every connection to the store runs this, so a row rewritten on each
+        call would make every read a write: other connections would see the
+        database change on every request that merely looked at it.
+        """
+
         primary_revision = int(self._meta("primary_registry_revision", "1"))
         space_keys = [
             str(row[0]) for row in self.conn.execute("SELECT key FROM planning_spaces ORDER BY key")
@@ -514,15 +397,11 @@ class Platform:
             True,
             True,
         )
-        self.conn.execute(
-            "UPDATE platform_known_stores SET is_attached=0, is_writable=0, updated_at=?"
-            " WHERE is_primary=0 AND is_attached != 0",
-            (_now(),),
-        )
         try:
             attached = scopes.load(self.primary_db)
         except scopes.ScopeError:
             attached = []
+        present = []
         for item in attached:
             if item.get("primary"):
                 continue
@@ -544,10 +423,27 @@ class Platform:
                     attached_conn.close()
             except (sqlite3.Error, scopes.ScopeError, ScopeError):
                 continue
+            present.append((metadata["data_scope_id"], item["name"], space_keys, revision))
+        attached_ids = {data_scope_id for data_scope_id, *_ in present}
+        detached = [
+            str(row[0])
+            for row in self.conn.execute(
+                "SELECT data_scope_id FROM platform_known_stores"
+                " WHERE is_primary=0 AND is_attached != 0"
+            ).fetchall()
+            if str(row[0]) not in attached_ids
+        ]
+        for data_scope_id in detached:
+            self.conn.execute(
+                "UPDATE platform_known_stores SET is_attached=0, is_writable=0, updated_at=?"
+                " WHERE data_scope_id=?",
+                (_now(), data_scope_id),
+            )
+        for data_scope_id, alias, space_keys, revision in present:
             self._upsert_known_store(
-                metadata["data_scope_id"],
-                item["name"],
-                _planning_resources(metadata["data_scope_id"], space_keys),
+                data_scope_id,
+                alias,
+                _planning_resources(data_scope_id, space_keys),
                 revision,
                 False,
                 True,
@@ -578,7 +474,13 @@ class Platform:
                  alias=excluded.alias, resources_json=excluded.resources_json,
                  registry_revision=excluded.registry_revision,
                  is_primary=excluded.is_primary, is_attached=excluded.is_attached,
-                 is_writable=excluded.is_writable, updated_at=excluded.updated_at""",
+                 is_writable=excluded.is_writable, updated_at=excluded.updated_at
+               WHERE alias IS NOT excluded.alias
+                 OR resources_json IS NOT excluded.resources_json
+                 OR registry_revision IS NOT excluded.registry_revision
+                 OR is_primary IS NOT excluded.is_primary
+                 OR is_attached IS NOT excluded.is_attached
+                 OR is_writable IS NOT excluded.is_writable""",
             (
                 data_scope_id,
                 alias,
@@ -1736,104 +1638,8 @@ class Platform:
             raise PlatformHttpError(404, "unavailable", "Project is not registered")
         return matches[0]
 
-    def _project_directory_item(self, project: dict) -> dict:
-        resources = []
-        resource_ref = project["planning_binding"]
-        if resource_ref is not None:
-            resolution = self.scope_reader.resolve(project["project_id"], resource_ref)
-            entry = {"resource_ref": resource_ref, "state": resolution.state}
-            if resolution.state != "mapped":
-                entry["reason"] = _reason_code(resolution)
-            resources.append(entry)
-        return {
-            "project_id": project["project_id"],
-            "title": project["display_name"],
-            "binding_state": self._binding_state(resources),
-            "resources": resources,
-        }
-
-    @staticmethod
-    def _binding_state(resources: list[dict]) -> str:
-        states = [str(resource["state"]) for resource in resources]
-        if not states:
-            return "unbound"
-        priority = ("ambiguous", "stale", "detached", "unavailable", "unbound", "mapped")
-        return next(state for state in priority if state in states)
-
-    def _validated_ui_prefs(self, value) -> dict:
-        self._exact_object(
-            value,
-            ("module_id", "scope", "resource_ref"),
-            required=("module_id", "scope"),
-        )
-        module_id = value["module_id"]
-        registrations = self.modules_payload()["modules"]
-        known = {record["manifest"]["module_id"] for record in registrations}
-        if not isinstance(module_id, str) or module_id not in known:
-            raise PlatformHttpError(400, "error", "UI preference names an unknown module")
-        prefs = {
-            "module_id": module_id,
-            "scope": validate_operating_scope(value["scope"]),
-        }
-        if "resource_ref" in value:
-            prefs["resource_ref"] = validate_entity_ref(value["resource_ref"])
-        return prefs
-
-    def ui_prefs_record(self) -> dict | None:
-        """Last-route preference, or None when unset or unreadable."""
-
-        row = self.conn.execute(
-            "SELECT record_json FROM platform_ui_prefs WHERE key='last-route'"
-        ).fetchone()
-        if row is None:
-            return None
-        try:
-            return self._validated_ui_prefs(json.loads(str(row[0])))
-        except Exception:  # noqa: BLE001 -- a corrupt row must never break the shell context
-            return None
-
-    def save_ui_prefs(self, payload) -> dict:
-        self._exact_object(
-            payload,
-            ("interface_version", "module_id", "scope", "resource_ref"),
-            required=("interface_version", "module_id", "scope"),
-        )
-        if payload["interface_version"] != UI_PREFS_INTERFACE:
-            raise PlatformHttpError(400, "error", "UI preference payload version is not supported")
-        prefs = self._validated_ui_prefs(
-            {key: value for key, value in payload.items() if key != "interface_version"}
-        )
-        self.conn.execute(
-            "INSERT INTO platform_ui_prefs(key,record_json,updated_at)"
-            " VALUES('last-route',?,?)"
-            " ON CONFLICT(key) DO UPDATE SET"
-            " record_json=excluded.record_json, updated_at=excluded.updated_at",
-            (_json(prefs), _now()),
-        )
-        self.conn.commit()
-        return {"interface_version": UI_PREFS_INTERFACE, "prefs": prefs}
-
-    def context_payload(self, parameters: Mapping[str, list[str]]) -> dict:
-        scope = self._scope_parameters(parameters)
-        payload = {
-            "primary": {
-                "data_scope_id": self.metadata["data_scope_id"],
-                "is_writable": True,
-            },
-            "projects": [self._project_directory_item(item) for item in self.projects],
-            "ui_prefs": self.ui_prefs_record(),
-        }
-        if self.projects_result["status"] != "available":
-            state = _ui("unavailable", reason="Project registry is unavailable")
-        elif scope["kind"] == "project":
-            self._project(scope["project_ref"]["project_id"])
-            state = _ui("ready", payload=payload)
-        else:
-            state = _ui("ready", payload=payload)
-        return {"interface_version": CONTEXT_INTERFACE, "scope": scope, "state": state}
-
     def registry_payload(self, parameters: Mapping[str, list[str]]) -> dict:
-        scope = self._scope_parameters(parameters)
+        scope = scope_parameters(parameters)
         if scope["kind"] == "project":
             self._project(scope["project_ref"]["project_id"])
         registry = self.registry()
@@ -2025,226 +1831,7 @@ class Platform:
         return {
             "interface_version": REGISTRY_INTERFACE,
             "scope": scope,
-            "state": _ui("ready", payload=ready),
-        }
-
-    # -- exact planning reads ------------------------------------------
-
-    def planning_payload(self, parameters: Mapping[str, list[str]]) -> dict:
-        """The Kernel's directory: which project binds which space, and how full.
-
-        What is *in* a space is Planning's own boundary to answer. This one
-        exists so global scope can list projects and spaces without every module
-        learning the Planning read model.
-        """
-
-        directory_only = "directory_only" in parameters
-        if directory_only:
-            if self._one(parameters, "directory_only") != "true":
-                raise PlatformHttpError(400, "error", "directory_only must be true")
-            if self._one(parameters, "scope_kind") != "global":
-                raise PlatformHttpError(400, "error", "directory_only requires global scope")
-            parameters = {
-                key: values for key, values in parameters.items() if key != "directory_only"
-            }
-        scope = self._scope_parameters(parameters, project_extras=("data_scope_id", "space_key"))
-        if self.projects_result["status"] != "available":
-            return {
-                "interface_version": PLANNING_INTERFACE,
-                "scope": scope,
-                "state": _ui("unavailable", reason="Project registry is unavailable"),
-            }
-        if scope["kind"] == "global":
-            projects = [self._planning_project(item) for item in self.projects]
-            spaces = []
-            for project in () if directory_only else self.projects:
-                binding = project["planning_binding"]
-                if binding is not None:
-                    space_ref = planning_space_ref(binding)
-                    resolution = self.scope_reader.resolve(project["project_id"], binding)
-                    if resolution.mapped:
-                        spaces.append(self._space_view(space_ref))
-            state = (
-                _ui("ready", payload={"projects": projects, "planning_spaces": spaces})
-                if projects
-                else _ui("empty", reason="platform.planning.noSpaces")
-            )
-            return {"interface_version": PLANNING_INTERFACE, "scope": scope, "state": state}
-        project_id = scope["project_ref"]["project_id"]
-        project = self._project(project_id)
-        space_ref = self._space_ref_parameters(parameters)
-        self._require_mapping(project_id, space_ref)
-        space = self._space_view(space_ref)
-        state = (
-            _ui(
-                "ready",
-                payload={
-                    "projects": [self._planning_project(project)],
-                    "planning_spaces": [space],
-                },
-            )
-            if space["work_items"]
-            else _ui("empty", reason="platform.planning.empty")
-        )
-        return {"interface_version": PLANNING_INTERFACE, "scope": scope, "state": state}
-
-    def _planning_project(self, project: dict) -> dict:
-        directory = self._project_directory_item(project)
-        planning_resources = [
-            item
-            for item in directory["resources"]
-            if item["resource_ref"]["kind"] == "planning-space"
-        ]
-        binding_state = self._binding_state(planning_resources)
-        spaces = []
-        for item in planning_resources:
-            if item["state"] != "mapped":
-                continue
-            space_ref = planning_space_ref(item["resource_ref"])
-            with self._store_connection(space_ref) as store:
-                row = store.execute(
-                    "SELECT p.name, COUNT(w.work_item_id) AS held FROM planning_spaces p"
-                    " LEFT JOIN work_items w ON w.planning_space_id = p.planning_space_id"
-                    " WHERE p.key = ? GROUP BY p.planning_space_id",
-                    (space_ref["space_key"],),
-                ).fetchone()
-            spaces.append(
-                {
-                    "space_ref": space_ref,
-                    # The display name is the space's own, kept apart from its
-                    # identity: renaming it must not move a single binding.
-                    "title": str(row["name"]) if row else space_ref["space_key"],
-                    "work_item_count": int(row["held"]) if row else 0,
-                }
-            )
-        return {
-            "project_id": project["project_id"],
-            "title": project["display_name"],
-            "binding_state": binding_state,
-            "planning_spaces": spaces,
-        }
-
-    def _space_view(self, space_ref: dict) -> dict:
-        """One space, summarised. The Kernel names items; it does not group them.
-
-        The Board era answered here with cards already sorted into six lanes,
-        which is why Kanban was the model rather than one view of it.
-        """
-
-        with self._store_connection(space_ref) as store:
-            space = store.execute(
-                "SELECT planning_space_id, name FROM planning_spaces WHERE key = ?",
-                (space_ref["space_key"],),
-            ).fetchone()
-            if space is None:
-                raise PlatformHttpError(
-                    409, "unavailable", "Exact Project planning space is unavailable"
-                )
-            work_items = [
-                {
-                    "work_item_ref": {
-                        "space_ref": space_ref,
-                        "reference": f"{space_ref['space_key']}-{int(row['number'])}",
-                    },
-                    "title": row["title"],
-                    "state_key": row["state_key"],
-                    "state_category": row["category"],
-                    "priority": row["priority"],
-                    "labels": json.loads(row["labels"]),
-                    "claim_ref": row["claim_ref"],
-                    "revision": int(row["revision"]),
-                    "updated_at": row["updated_at"],
-                }
-                for row in store.execute(
-                    "SELECT w.number, w.title, w.priority, w.labels, w.claim_ref, w.revision,"
-                    " w.updated_at, s.key AS state_key, s.category"
-                    " FROM work_items w JOIN workflow_states s ON s.state_id = w.state_id"
-                    " WHERE w.planning_space_id = ? ORDER BY s.position, w.position, w.number",
-                    (str(space["planning_space_id"]),),
-                )
-            ]
-        return {
-            "space_ref": space_ref,
-            "title": str(space["name"]),
-            "work_items": work_items,
-        }
-
-    def planning_read_model(
-        self,
-        parameters: Mapping[str, list[str]],
-        loader: Callable[[sqlite3.Connection, str], dict],
-    ) -> dict:
-        """Read Planning's model through the exact owner binding and store.
-
-        Planning owns the model; the Kernel owns which connection may answer.
-        Attached connections are opened read-only by the shared store resolver.
-        """
-
-        with self.planning_store(parameters) as (store, key):
-            return loader(store, key)
-
-    @contextlib.contextmanager
-    def planning_store(
-        self, parameters: Mapping[str, list[str]]
-    ) -> Iterator[tuple[sqlite3.Connection, str]]:
-        """Hold the authorized exact store for a read or a live subscription."""
-        if set(parameters) != {"project", "data_scope_id", "space_key"}:
-            raise PlatformHttpError(400, "error", "Exact Planning query fields are required")
-        project_id = self._one(parameters, "project")
-        self._project(project_id)
-        space_ref = self._space_ref_parameters(parameters)
-        self._require_mapping(project_id, space_ref)
-        with self._store_connection(space_ref) as store:
-            yield store, space_ref["space_key"]
-
-    def planning_work_item_payload(
-        self,
-        parameters: Mapping[str, list[str]],
-        item_loader: Callable[[sqlite3.Connection, str], dict],
-    ) -> dict:
-        """One work item, plus the Kernel relations attached to it.
-
-        The record itself comes from Planning's own service through the loader;
-        this method owns scope, binding and the relation read model, which are
-        the three things Planning must not have to know about.
-        """
-
-        scope = self._scope_parameters(
-            parameters, project_extras=("data_scope_id", "space_key", "reference")
-        )
-        if scope["kind"] != "project":
-            raise PlatformHttpError(400, "error", "Work item reads require exact Project scope")
-        project_id = scope["project_ref"]["project_id"]
-        self._project(project_id)
-        space_ref = self._space_ref_parameters(parameters)
-        self._require_mapping(project_id, space_ref)
-        work_item_ref = validate_work_item_ref(
-            {"space_ref": space_ref, "reference": self._one(parameters, "reference")}
-        )
-        with self._store_connection(space_ref) as store:
-            try:
-                work_item = item_loader(store, work_item_ref["reference"])
-            except (ValueError, KeyError) as error:
-                raise PlatformHttpError(
-                    404, "unavailable", "Exact work item is unavailable"
-                ) from error
-            relations = read_relations(
-                store, work_item_ref, registry=self.registry(), invocation_scope=scope
-            )
-        return {
-            "interface_version": PLANNING_WORK_ITEM_INTERFACE,
-            "scope": scope,
-            "work_item_ref": work_item_ref,
-            "state": _ui(
-                "ready",
-                payload={
-                    "work_item": work_item,
-                    "relations": {
-                        "interface_version": "valkama-relations",
-                        "relations": relations,
-                    },
-                },
-            ),
+            "state": envelope("ready", payload=ready),
         }
 
     # -- authorized provider actions -----------------------------------
@@ -2638,75 +2225,6 @@ class Platform:
             raise PlatformHttpError(409, "unavailable", _reason_code(resolution))
         return resolution
 
-    @contextlib.contextmanager
-    def _store_connection(self, space_ref: dict):
-        if space_ref["data_scope_id"] == self.metadata["data_scope_id"]:
-            yield self.conn
-            return
-        try:
-            candidates = scopes.load(self.primary_db)
-        except scopes.ScopeError as error:
-            raise PlatformHttpError(
-                409, "unavailable", "Attached store registry is unavailable"
-            ) from error
-        for item in candidates:
-            if item.get("primary"):
-                continue
-            try:
-                attached = scopes.open_readonly(item)
-            except scopes.ScopeError:
-                continue
-            try:
-                metadata = read_store_metadata(attached)
-                if metadata["data_scope_id"] == space_ref["data_scope_id"]:
-                    yield attached
-                    return
-            finally:
-                attached.close()
-        raise PlatformHttpError(409, "unavailable", "Exact attached store is unavailable")
-
-    def _scope_parameters(
-        self, parameters: Mapping[str, list[str]], *, project_extras: tuple[str, ...] = ()
-    ) -> dict:
-        scope_kind = self._one(parameters, "scope_kind")
-        if scope_kind == "global":
-            if set(parameters) != {"scope_kind"}:
-                raise PlatformHttpError(400, "error", "Global scope has unknown query fields")
-            return {"kind": "global"}
-        if scope_kind != "project":
-            raise PlatformHttpError(400, "error", "scope_kind must be global or project")
-        expected = {"scope_kind", "project_id", *project_extras}
-        if set(parameters) != expected:
-            raise PlatformHttpError(
-                400, "error", "Project scope query fields are incomplete or unknown"
-            )
-        return validate_operating_scope(
-            {
-                "kind": "project",
-                "project_ref": {"project_id": self._one(parameters, "project_id")},
-            }
-        )
-
-    def _space_ref_parameters(self, parameters: Mapping[str, list[str]]) -> dict:
-        return validate_planning_space_ref(
-            {
-                "data_scope_id": self._one(parameters, "data_scope_id"),
-                "space_key": self._one(parameters, "space_key"),
-            }
-        )
-
-    @staticmethod
-    def _one(parameters: Mapping[str, list[str]], key: str) -> str:
-        values = parameters.get(key)
-        if (
-            not isinstance(values, list)
-            or len(values) != 1
-            or not isinstance(values[0], str)
-            or not values[0]
-        ):
-            raise PlatformHttpError(400, "error", f"{key} must occur exactly once")
-        return values[0]
-
     @staticmethod
     def _exact_object(value, allowed, *, required) -> None:
         if (
@@ -2718,10 +2236,10 @@ class Platform:
 
 
 def error_response(error: Exception) -> tuple[int, dict]:
-    if isinstance(error, PlatformHttpError):
-        return error.status, _ui(error.state, reason=error.reason)
+    """The registry's own refusals first; everything else as `ui_state` maps it."""
+
     if isinstance(error, (PermissionDeniedError, RevokedPermissionError)):
-        return 403, _ui("permission-denied", reason="Action is not authorized")
+        return 403, envelope("permission-denied", reason="Action is not authorized")
     if isinstance(
         error,
         (
@@ -2737,12 +2255,23 @@ def error_response(error: Exception) -> tuple[int, dict]:
             RelationConflictError,
         ),
     ):
-        return 409, _ui("unavailable", reason="Requested Platform resource is unavailable")
-    if isinstance(
-        error, (ContractError, ProviderError, RelationError, RegistryError, TypeError, ValueError)
-    ):
-        return 400, _ui("error", reason="Platform request is invalid")
-    return 500, _ui("error", reason="Platform operation failed")
+        return 409, envelope("unavailable", reason="Requested Platform resource is unavailable")
+    return ui_error_response(error)
+
+
+#: The registry's own routes. Planning's exact-scope routes and the app shell's
+#: answer in `planning.exact_api` and `app_shell` without constructing Platform.
+READ_PATHS = frozenset({"/api/platform/registry"})
+WRITE_PATHS = frozenset(
+    {
+        "/api/platform/relations",
+        "/api/platform/actions/invoke",
+        "/api/platform/assignments/activation",
+        "/api/platform/assignments/selection",
+        "/api/platform/grants/revoke",
+        "/api/modules/state",
+    }
+)
 
 
 def handle_get(
@@ -2751,16 +2280,10 @@ def handle_get(
     path: str,
     parameters: Mapping[str, list[str]],
     *,
-    item_loader: Callable[[sqlite3.Connection, str], dict] | None = None,
     registry_reader: project_registry.RegistryReader | None = None,
     providers: ProviderCatalog | None = None,
 ) -> tuple[int, dict] | None:
-    if (
-        path != "/api/modules"
-        and path != "/api/modules/planning/work-item"
-        and path not in planning_interactions.READ_PATHS
-        and not path.startswith("/api/platform/")
-    ):
+    if path not in READ_PATHS:
         return None
     platform = Platform(
         conn,
@@ -2768,29 +2291,7 @@ def handle_get(
         registry_reader=registry_reader,
         providers=providers,
     )
-    if path == "/api/modules/planning/search":
-        return 200, planning_interactions.search(platform, parameters)
-    if path == "/api/modules/planning/requests":
-        return 200, planning_interactions.request_list(platform, parameters)
-    if path == "/api/modules/planning/request":
-        return 200, planning_interactions.request_detail(platform, parameters)
-    if path == "/api/modules":
-        if parameters:
-            raise PlatformHttpError(400, "error", "Module registry accepts no query fields")
-        return 200, platform.modules_payload()
-    if path == "/api/platform/context":
-        return 200, platform.context_payload(parameters)
-    if path == "/api/platform/registry":
-        return 200, platform.registry_payload(parameters)
-    if path == "/api/platform/planning":
-        platform.require_module_enabled("planning")
-        return 200, platform.planning_payload(parameters)
-    if path == "/api/modules/planning/work-item":
-        platform.require_module_enabled("planning")
-        if item_loader is None:
-            raise TypeError("the work item endpoint requires Planning's own loader")
-        return 200, platform.planning_work_item_payload(parameters, item_loader)
-    return None
+    return 200, platform.registry_payload(parameters)
 
 
 def handle_post(
@@ -2802,15 +2303,7 @@ def handle_post(
     registry_reader: project_registry.RegistryReader | None = None,
     providers: ProviderCatalog | None = None,
 ) -> tuple[int, dict] | None:
-    if path not in planning_interactions.WRITE_PATHS and path not in {
-        "/api/platform/relations",
-        "/api/platform/actions/invoke",
-        "/api/platform/ui-prefs",
-        "/api/platform/assignments/activation",
-        "/api/platform/assignments/selection",
-        "/api/platform/grants/revoke",
-        "/api/modules/state",
-    }:
+    if path not in WRITE_PATHS:
         return None
     platform = Platform(
         conn,
@@ -2818,15 +2311,11 @@ def handle_post(
         registry_reader=registry_reader,
         providers=providers,
     )
-    if path in planning_interactions.WRITE_PATHS:
-        return 200, planning_interactions.request_command(platform, path, payload)
     if path == "/api/modules/state":
         return 200, platform.module_state_command(payload)
     if path == "/api/platform/relations":
         platform.require_module_enabled("planning")
         return 200, platform.relation_command(payload)
-    if path == "/api/platform/ui-prefs":
-        return 200, platform.save_ui_prefs(payload)
     if path == "/api/platform/assignments/activation":
         return 200, platform.assignment_activation_command(payload)
     if path == "/api/platform/assignments/selection":
@@ -2837,14 +2326,14 @@ def handle_post(
 
 
 __all__ = [
+    "READ_PATHS",
     "SCHEMA",
     "SCHEMA_TABLES",
+    "WRITE_PATHS",
     "Platform",
     "PlatformHttpError",
     "error_response",
     "handle_get",
     "handle_post",
     "initialize",
-    "modules_payload",
-    "require_module_enabled",
 ]

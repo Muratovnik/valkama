@@ -4,7 +4,11 @@ Layout, grouped by owner. Everything above the line is domain — it answers
 questions about the store and knows nothing about who asked:
 
     store.py        the schema, its migrations, backups and the connection
-    planning/       spaces, workflows, work items, links and their events
+    store_identity/ which store this is, and the exact refs of what it holds
+    planning/       spaces, workflows, work items, links and their events, and
+                    the routing that answers a read for one exact project scope
+    app_shell.py    what the web shell reads first: modules, context, last route
+    ui_state.py     the envelope those reads answer in, and its refusal
     executions/     one attempt at a work item: its lifecycle and the drivers
                     that know how each agent client is invoked
     runner.py       process shape for a launched client, and stopping it
@@ -19,8 +23,8 @@ questions about the store and knows nothing about who asked:
     static_assets.py  the built web UI, the checkout paths and runtime identity
     launcher.py     the managed stable command agent clients register
     watchers.py     change fan-out, shared by every surface
-    platform/       the kernel: contracts, registry, relations, scope,
-                    providers and the module manifest
+    platform/       the kernel: the module manifest and its gate, contracts,
+                    registry, relations, scope and providers
     projects/       project and scope registries
 
 And below it the three surfaces, which own no domain rule of their own:

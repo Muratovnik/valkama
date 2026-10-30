@@ -16,7 +16,8 @@ import re
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any, Literal, TypedDict
 
-from ..platform.contracts import ContractError, planning_space_entity, planning_space_ref
+from ..store_identity.primitives import ContractError
+from ..store_identity.refs import planning_space_entity, planning_space_ref
 
 RegistryReader = Callable[[], bytes | None]
 RegistryStatus = Literal["available", "absent", "malformed", "unavailable"]

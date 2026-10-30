@@ -8,30 +8,32 @@ client may not invent one for an adapter it does not know.
 
 from __future__ import annotations
 
+from ...store_identity.primitives import (
+    ContractError,
+    InvalidDiscriminantError,
+    _enum,
+    _identifier,
+    _object,
+    _project_id,
+)
+from ...store_identity.refs import (
+    validate_adapter_resource_ref,
+    validate_entity_ref,
+    validate_service_ref,
+)
 from .authorization import validate_action_ref
 from .primitives import (
     OPERATING_SCOPE_INTERFACE,
     RELATION_STATES,
     RELATIONS_INTERFACE,
-    ContractError,
-    InvalidDiscriminantError,
-    _enum,
-    _identifier,
     _list,
     _nonempty_text,
-    _object,
     _positive_revision,
-    _project_id,
     _provider_version,
     _reject_unsafe_tree,
     _relation_kind,
     _sha256,
     _utc_timestamp,
-)
-from .refs import (
-    validate_adapter_resource_ref,
-    validate_entity_ref,
-    validate_service_ref,
 )
 
 

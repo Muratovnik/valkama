@@ -16,8 +16,8 @@ renames the tables and rewrites the interface ids inside the records once,
 stamped by `STORE_SCHEMA_VERSION`, and `tests/test_store_rename_migration.py`
 proves the carry-over against a throwaway store. The public literals deliberately
 still spelled the old way name what earlier generations wrote on real disks:
-`LEGACY_LAYOUTS`, `platform_scope.FORMER_OWNER_IDS`, the stale backup names in
-`tests/test_store_migration.py`'s `build_legacy_root` fixture, and
+`LEGACY_LAYOUTS`, `store_identity.metadata.FORMER_OWNER_IDS`, the stale backup
+names in `tests/test_store_migration.py`'s `build_legacy_root` fixture, and
 `OPERATING_SCOPE_INTERFACE = "project-resource-binding"`. A concrete namespace
 owned by an external provider belongs only in local configuration and is neither
 enumerated nor inferred here. The operating-scope interface id discriminates
@@ -29,5 +29,5 @@ Runtime state lives at `%USERPROFILE%\.valkama`. `store.adopt_legacy_store()`
 walks `LEGACY_LAYOUTS` newest-first, moves the whole directory once, and refuses
 loudly rather than opening an empty board. The store's `owner_id` is immutable
 by design so a second product cannot claim someone else's board;
-`platform_scope.migrate_store_owner()` is the one sanctioned way past it and spends
-only this product's own former names, never an arbitrary value.
+`store_identity.metadata.migrate_store_owner()` is the one sanctioned way past it
+and spends only this product's own former names, never an arbitrary value.

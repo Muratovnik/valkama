@@ -15,7 +15,10 @@ semgrep is the only dataflow analysis here: ruff matches patterns, semgrep
 follows a tainted value through a function. It reads the Python server alone,
 because it does not parse `.vue`; the web side is covered by
 eslint-plugin-security through vue-eslint-parser. Registry rules are fetched
-once and cached, so the first run on a fresh machine needs the network.
+once and cached, so the first run on a fresh machine needs the network. It
+scans only files Git knows about: a new module that is not yet staged is
+skipped without a word, so stage new files (`git add -N` is enough) before
+reading its result as covering them.
 
 Run the Python gates from the ignored `.venv`, built from
 `requirements-dev.txt` (`uv venv .venv --python 3.11`, then

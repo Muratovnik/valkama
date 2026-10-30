@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import NamedTuple
 from urllib.parse import parse_qs, urlparse
 
-from . import http_security, runner, static_assets, watchers
+from . import app_shell, http_security, runner, static_assets, ui_state, watchers
 from .executions import api as execution_api
 from .executions import lifecycle as execution_lifecycle
 from .executions import service as execution_service
@@ -30,17 +30,20 @@ from .federation import federated_search, federated_spaces
 from .memory import api as memory_api
 from .ops import doctor
 from .planning import api as planning_api
+from .planning import exact_api as planning_exact_api
+from .planning import interactions as planning_interactions
 from .planning import model as planning_model
 from .planning import service as planning_service
 from .planning import views as planning_views
+from .planning.routing import PlanningRouting
 from .platform import core as platform_core
-from .platform import planning_interactions
-from .platform.contracts import ContractError
+from .platform import module_gate
 from .projects import scopes
 from .refs import resolve_ref
 from .sessions import op_ingest_session_event, session_context
 from .static_assets import DIST_DIR, SOURCE_ROOT
 from .store import connect, db_path
+from .store_identity.primitives import ContractError
 
 CLIENT_DISCONNECT_ERRORS = (
     BrokenPipeError,
@@ -96,26 +99,10 @@ CONTENT_TYPES = {
     ".woff2": "font/woff2",
 }
 
-#: The Kernel route that reads one work item plus the relations attached to it.
-#: Named because three places have to agree on it: the module gate, the GET
-#: dispatch, and `platform.core`, which has always accepted it.
-PLANNING_WORK_ITEM_PATH = "/api/modules/planning/work-item"
-
-#: The Kernel's own write routes, named once because two places need the same
-#: list: the framing limit `do_POST` picks before reading a body, and the
-#: dispatch row that answers them.
-_PLATFORM_WRITE_PATHS = frozenset(
-    {
-        *planning_interactions.WRITE_PATHS,
-        "/api/modules/state",
-        "/api/platform/relations",
-        "/api/platform/actions/invoke",
-        "/api/platform/ui-prefs",
-        "/api/platform/assignments/activation",
-        "/api/platform/assignments/selection",
-        "/api/platform/grants/revoke",
-    }
-)
+#: The exact-scope route that reads one work item for the inspector. Named
+#: because three places have to agree on it: the module gate, the GET dispatch,
+#: and `planning.exact_api`, which answers it.
+PLANNING_WORK_ITEM_PATH = planning_exact_api.WORK_ITEM_PATH
 
 _HTTP_ROUTE_MODULES = {
     # The neutral boundary. Its paths are declared here rather than derived, so
@@ -141,10 +128,8 @@ _HTTP_ROUTE_MODULES = {
     # another everywhere else.
     **{("GET", path): "memory" for path in memory_api.READ_PATHS},
     **{("POST", path): "planning" for path in execution_api.WRITE_PATHS},
-    # One work item and the Kernel relations attached to it. Planning's own
-    # loader supplies the record and the Kernel owns the scope, the binding and
-    # the relation read, so the route is the Kernel's and the module is
-    # Planning's.
+    # One work item, read through the exact project binding. Planning's own
+    # loader supplies the record and routing owns the scope and the binding.
     ("GET", PLANNING_WORK_ITEM_PATH): "planning",
     **{("GET", path): "planning" for path in planning_interactions.READ_PATHS},
     **{("POST", path): "planning" for path in planning_interactions.WRITE_PATHS},
@@ -161,7 +146,7 @@ def _sse_view_owner(view: str) -> str:
 
     owner = _SSE_VIEW_MODULES.get(view)
     if owner is None:
-        raise platform_core.PlatformHttpError(400, "error", f"Unknown event stream view: {view}")
+        raise ui_state.PlatformHttpError(400, "error", f"Unknown event stream view: {view}")
     return owner
 
 
@@ -344,8 +329,8 @@ def _planning_read(call: _Call) -> _Answer | None:
             raise planning_api.PlanningHttpError(
                 400, "invalid_request", "Exact scope is supported by the Planning model read"
             )
-        platform = platform_core.Platform(call.store(), db_path())
-        return 200, platform.planning_read_model(
+        routing = PlanningRouting(call.store(), db_path())
+        return 200, routing.planning_read_model(
             call.parameters,
             lambda conn, key: planning_views.planning_payload(conn, space=key),
         )
@@ -353,8 +338,8 @@ def _planning_read(call: _Call) -> _Answer | None:
 
 
 def _planning_read_error(error: Exception) -> _Answer:
-    if isinstance(error, (platform_core.PlatformHttpError, ContractError)):
-        return platform_core.error_response(error)
+    if isinstance(error, (ui_state.PlatformHttpError, ContractError)):
+        return ui_state.error_response(error)
     return planning_api.error_response(error)
 
 
@@ -366,14 +351,22 @@ def _execution_read(call: _Call) -> _Answer | None:
     return execution_api.handle_get(call.store(), call.path, call.parameters)
 
 
-def _platform_read(call: _Call) -> _Answer | None:
-    return platform_core.handle_get(
+def _planning_exact_read(call: _Call) -> _Answer | None:
+    return planning_exact_api.handle_get(
         call.store(),
         db_path(),
         call.path,
         call.parameters,
         item_loader=planning_service.get_work_item,
     )
+
+
+def _shell_read(call: _Call) -> _Answer | None:
+    return app_shell.handle_get(call.store(), db_path(), call.path, call.parameters)
+
+
+def _registry_read(call: _Call) -> _Answer | None:
+    return platform_core.handle_get(call.store(), db_path(), call.path, call.parameters)
 
 
 def _execution_write(call: _Call) -> _Answer | None:
@@ -384,7 +377,15 @@ def _planning_write(call: _Call) -> _Answer | None:
     return planning_api.handle_post(call.store(), call.path, call.payload)
 
 
-def _platform_write(call: _Call) -> _Answer | None:
+def _planning_exact_write(call: _Call) -> _Answer | None:
+    return planning_exact_api.handle_post(call.store(), db_path(), call.path, call.payload)
+
+
+def _shell_write(call: _Call) -> _Answer | None:
+    return app_shell.handle_post(call.store(), call.path, call.payload)
+
+
+def _registry_write(call: _Call) -> _Answer | None:
     return platform_core.handle_post(call.store(), db_path(), call.path, call.payload)
 
 
@@ -406,12 +407,24 @@ def _execution_lifecycle_write(call: _Call) -> _Answer | None:
 # these are the ones this surface owns.
 
 
-def _platform_write_error(error: Exception) -> _Answer:
+def _kernel_answer(error: Exception, render: Callable[[Exception], tuple[int, dict]]) -> _Answer:
     if isinstance(error, (planning_model.PlanningError, planning_api.PlanningHttpError)):
         return planning_api.error_response(error)
-    response = platform_core.error_response(error)
+    response = render(error)
     # A Kernel 500 says only that; whatever produced it stays in the process.
     return _generic_failure(500) if response[0] == 500 else response
+
+
+def _exact_error(error: Exception) -> _Answer:
+    """Planning's exact-scope routes and the app shell: the `ui_state` envelope."""
+
+    return _kernel_answer(error, ui_state.error_response)
+
+
+def _registry_error(error: Exception) -> _Answer:
+    """The extension registry's routes, whose own refusals map before the envelope's."""
+
+    return _kernel_answer(error, platform_core.error_response)
 
 
 def _ingest_error(error: Exception) -> _Answer:
@@ -466,13 +479,25 @@ _GET_BOUNDARIES: tuple[_Boundary, ...] = (
         errors=execution_api.error_response,
         commit=_Commit.READ_ONLY,
     ),
+    # The three rows below answer under `/api/platform/` and `/api/modules`;
+    # the exact rows come first, so only what neither claims reaches the
+    # registry's prefix row.
     _Boundary(
-        exact=frozenset(
-            {"/api/modules", PLANNING_WORK_ITEM_PATH, *planning_interactions.READ_PATHS}
-        ),
+        exact=planning_exact_api.READ_PATHS,
+        handler=_planning_exact_read,
+        errors=_exact_error,
+        commit=_Commit.READ_ONLY,
+    ),
+    _Boundary(
+        exact=app_shell.READ_PATHS,
+        handler=_shell_read,
+        errors=_exact_error,
+        commit=_Commit.READ_ONLY,
+    ),
+    _Boundary(
         prefix="/api/platform/",
-        handler=_platform_read,
-        errors=_platform_write_error,
+        handler=_registry_read,
+        errors=_registry_error,
         commit=_Commit.READ_ONLY,
         missing=_PLAIN_NOT_FOUND,
     ),
@@ -493,11 +518,24 @@ _POST_BOUNDARIES: tuple[_Boundary, ...] = (
         commit=_Commit.SURFACE,
     ),
     _Boundary(
-        exact=_PLATFORM_WRITE_PATHS,
-        handler=_platform_write,
-        errors=_platform_write_error,
+        exact=planning_exact_api.WRITE_PATHS,
+        handler=_planning_exact_write,
+        errors=_exact_error,
         commit=_Commit.DOMAIN,
-        notify=_Notify(frozenset({"/api/platform/relations", *planning_interactions.WRITE_PATHS})),
+        notify=_Notify(),
+    ),
+    _Boundary(
+        exact=app_shell.WRITE_PATHS,
+        handler=_shell_write,
+        errors=_exact_error,
+        commit=_Commit.DOMAIN,
+    ),
+    _Boundary(
+        exact=platform_core.WRITE_PATHS,
+        handler=_registry_write,
+        errors=_registry_error,
+        commit=_Commit.DOMAIN,
+        notify=_Notify(frozenset({"/api/platform/relations"})),
     ),
     _Boundary(
         exact=frozenset({"/api/ingest"}),
@@ -655,11 +693,13 @@ class Handler(BaseHTTPRequestHandler):
                 return True
             conn = connect()
             try:
-                platform_core.require_module_enabled(conn, module_id)
+                module_gate.require_module_enabled(conn, module_id)
                 return True
             finally:
                 conn.close()
         except Exception as error:
+            # The registry's mapper, because `connect()` still brings the
+            # registry up and can fail with one of its refusals.
             response = platform_core.error_response(error)
             if method in {"POST", "PUT"} and response[0] == 500:
                 self._send_generic_failure(500)
@@ -912,10 +952,10 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 if exact_parameters is not None:
                     source, _key = cleanup.enter_context(
-                        platform_core.Platform(conn, db_path()).planning_store(exact_parameters)
+                        PlanningRouting(conn, db_path()).planning_store(exact_parameters)
                     )
-            except (platform_core.PlatformHttpError, ContractError) as error:
-                self._answer(platform_core.error_response(error))
+            except (ui_state.PlatformHttpError, ContractError) as error:
+                self._answer(ui_state.error_response(error))
                 return
 
             self.send_response(200)
@@ -931,10 +971,12 @@ class Handler(BaseHTTPRequestHandler):
             observed_version = source.execute("PRAGMA data_version").fetchone()[0]
 
             def push() -> None:
-                platform_core.require_module_enabled(conn, owner)
+                module_gate.require_module_enabled(conn, owner)
                 current: object
                 if exact_parameters is not None:
-                    current = platform_core.Platform(conn, db_path()).planning_read_model(
+                    # A fresh routing on every push: a binding moved while the
+                    # stream is open refuses here and closes the stream.
+                    current = PlanningRouting(conn, db_path()).planning_read_model(
                         exact_parameters,
                         lambda selected, key: planning_views.planning_payload(selected, space=key),
                     )
@@ -963,10 +1005,10 @@ class Handler(BaseHTTPRequestHandler):
                         observed_version = current_version
                         push()
                     else:
-                        platform_core.require_module_enabled(conn, owner)
+                        module_gate.require_module_enabled(conn, owner)
                         self.wfile.write(b": keep-alive\n\n")
                         self.wfile.flush()
-            except platform_core.PlatformHttpError:
+            except ui_state.PlatformHttpError:
                 self.close_connection = True
             except CLIENT_DISCONNECT_ERRORS:
                 pass
