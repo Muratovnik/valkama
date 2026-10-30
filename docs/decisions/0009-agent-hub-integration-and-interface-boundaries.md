@@ -12,8 +12,7 @@ card: 232
 > for the supported work-item, session-context, and lifecycle boundaries.
 > The registry of services, connections, assignments and grants decided here
 > has been removed; only the external adapter contract remains.
-> [ADR 0010](0010-coordination-from-session-identity.md), still a draft,
-> records why.
+> [ADR 0010](0010-coordination-from-session-identity.md) records why.
 
 ## Context
 

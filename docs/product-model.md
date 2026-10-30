@@ -32,8 +32,8 @@ session context are part of a work item.
 
 Service, Connection, Assignment and permission grant named the records of the
 extension registry, which has been removed;
-[ADR 0010](decisions/0010-coordination-from-session-identity.md), still a draft,
-records why. None of them is a current product record.
+[ADR 0010](decisions/0010-coordination-from-session-identity.md) records
+why. None of them is a current product record.
 
 ## Load-bearing distinctions
 

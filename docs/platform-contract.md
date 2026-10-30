@@ -15,8 +15,8 @@ and Settings; Memory contributes work-item references. Session lifecycle and
 compact context are Planning-owned. Standalone Sessions, Analytics,
 Improvements, and Skills destinations and their APIs are retired, and so is the
 extension registry of services, connections, assignments, grants, actions and
-relations. [ADR 0010](decisions/0010-coordination-from-session-identity.md),
-still a draft, records why.
+relations. [ADR 0010](decisions/0010-coordination-from-session-identity.md)
+records why.
 
 ## Operating levels
 
