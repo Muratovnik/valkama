@@ -36,7 +36,6 @@ from .ops import adapter_check, configuration, doctor, export, setup
 from .planning import model as planning_model
 from .planning import service as planning_service
 from .planning import views as planning_views
-from .platform import core as platform_core
 from .platform import installed
 from .platform import scope as platform_scope
 from .platform.contracts import planning_space_entity
@@ -251,24 +250,9 @@ def _adapter_command(options) -> None:
             print("no external adapters are declared")
         return
     if options.adapter_command == "remove":
-        # The registry first, because it is the half that can refuse. It does so
-        # while an assignment still selects the lineage, and deleting the
-        # declaration before asking left the exact debris the paired flow exists
-        # to prevent: declaration gone, rows present, and no file left to
-        # install again to reach them.
-        with contextlib.closing(store.connect()) as conn:
-            platform = platform_core.Platform(conn, store.db_path())
-            outcome = platform.unregister_external_adapter(options.adapter_id)
-        print(
-            f"unregistered {options.adapter_id}"
-            if outcome["removed"]
-            else f"not unregistered: {outcome['reason']}"
-        )
-        if not outcome["removed"] and outcome["code"] == "assignments-select-it":
-            # A refusal leaves both halves in place. Nothing registered under
-            # that id is not a refusal: a declaration written since the last
-            # start has no rows yet and is still the owner's to remove.
-            raise SystemExit(1)
+        # The declaration only. Registry rows an earlier start wrote for this
+        # adapter stay where they are, as README says, until the migration that
+        # drops the registry tables takes them with everything else.
         declared = installed.remove(options.adapter_id)
         print(
             f"removed the declaration of {options.adapter_id}"

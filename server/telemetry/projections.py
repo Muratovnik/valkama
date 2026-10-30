@@ -9,9 +9,9 @@ projection is honest about how much it does not know.
 Two sources, two different kinds of evidence, and they are deliberately not
 merged into one number:
 
-* Tokens, cost and model come from the client's own journal, through the
-  adapter registered for that client. A journal format is client-specific, so
-  the adapter is chosen by the session's client and never defaulted — reading a
+* Tokens, cost and model come from the client's own journal, read by the
+  journal adapter for that client. A journal format is client-specific, so the
+  adapter is chosen by the session's client and never defaulted — reading a
   Codex rollout as a Claude transcript produces numbers, and they are wrong.
 * Tool calls come from `session_events`, which Valkama wrote itself when the
   hooks reported them. That is the only tool evidence a local setup has, and it
@@ -30,19 +30,23 @@ import datetime as dt
 import sqlite3
 
 from .. import sessions
-from ..platform import providers as platform_providers
 from . import contracts
+from .journal import LocalJournalUsageProvider
 
-#: The one capability this reads. Named once so the adapter lookup and the
-#: unavailable reason cannot describe different things.
-CAPABILITY = "telemetry.query"
+#: Which journal adapter answers for each client, by the id a projection's
+#: provenance names it with. The ids are the ones these readers have always
+#: published, so a stored or rendered provenance keeps meaning the same reader.
+JOURNAL_ADAPTERS = {"claude": "claude-journal-telemetry", "codex": "codex-rollout-telemetry"}
+
+#: The journals are read in this process, so there is one connection to name.
+_CONNECTION_ID = "local"
 
 
 def execution_usage(
     conn: sqlite3.Connection,
     execution_id: str,
     *,
-    catalog: platform_providers.ProviderCatalog | None = None,
+    journal: LocalJournalUsageProvider | None = None,
 ) -> dict:
     """The normalized projection for one attempt, or a stated absence.
 
@@ -51,6 +55,9 @@ def execution_usage(
     the same request costs a dictionary lookup. TEL-002 asks whether a
     persistent cache is needed; on these sources the answer is no, and this is
     where that would change.
+
+    `journal` is the reader to ask, for a caller that already knows where the
+    journals are; by default the roots come from the configuration.
     """
 
     row = conn.execute(
@@ -70,8 +77,8 @@ def execution_usage(
         (execution_id,),
     ).fetchall()
 
-    registry = catalog or platform_providers.ProviderCatalog()
-    observations = [_observe(registry, entry) for entry in sessions]
+    reader = journal or LocalJournalUsageProvider()
+    observations = [_observe(reader, entry) for entry in sessions]
     answered = [item for item in observations if item["observed"]]
 
     return {
@@ -111,8 +118,8 @@ def execution_usage(
     }
 
 
-def _observe(registry: platform_providers.ProviderCatalog, entry: sqlite3.Row) -> dict:
-    """Ask the adapter registered for this session's client, or say why not.
+def _observe(journal: LocalJournalUsageProvider, entry: sqlite3.Row) -> dict:
+    """Ask the journal adapter for this session's client, or say why not.
 
     The adapter is chosen by the client the session reported, never defaulted.
     A session whose client is unknown is left unobserved: reading one journal
@@ -130,34 +137,21 @@ def _observe(registry: platform_providers.ProviderCatalog, entry: sqlite3.Row) -
         "adapter_id": "",
         "connection_id": "",
     }
-    provider = _provider_for(registry, client)
-    if provider is None:
+    adapter_id = JOURNAL_ADAPTERS.get(client)
+    if adapter_id is None:
         return {**blank, "reason": f"no telemetry adapter is registered for {client!r}"}
-    try:
-        answer = provider.dispatch(CAPABILITY, {"session_id": session_id})
-    except platform_providers.ProviderError as error:
-        return {**blank, "reason": str(error)}
-    usage = dict(answer.get("observation") or {})
+    if not session_id:
+        return {**blank, "reason": "telemetry query requires session_id"}
+    usage = journal.usage_for_session(session_id, client=client)
     return {
         "session_id": session_id,
         "client": client,
         "observed": bool(usage.get("observed")),
         "usage": usage,
-        "adapter_id": str(answer.get("provider") or ""),
-        "connection_id": str((answer.get("connection_ref") or {}).get("connection_id") or ""),
+        "adapter_id": adapter_id,
+        "connection_id": _CONNECTION_ID,
         "reason": "" if usage.get("observed") else str(usage.get("reason") or "not observed"),
     }
-
-
-def _provider_for(registry: platform_providers.ProviderCatalog, client: str):
-    for provider in registry.all():
-        if (
-            isinstance(provider, platform_providers.BuiltinCapabilityProvider)
-            and CAPABILITY in provider.capabilities
-            and provider.client == client
-        ):
-            return provider
-    return None
 
 
 def _duration(row: sqlite3.Row) -> dict:
@@ -310,4 +304,4 @@ def _provenance(observations: list[dict], observed_at: str) -> dict:
     )
 
 
-__all__ = ["CAPABILITY", "execution_usage"]
+__all__ = ["JOURNAL_ADAPTERS", "execution_usage"]

@@ -19,7 +19,7 @@ from unittest import mock
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from server import cli, processes, store
+from server import cli, processes, runner, store
 from server.executions import service as execution_service
 from server.ops import configuration, doctor, setup
 from server.planning import service as planning
@@ -229,6 +229,95 @@ class DoctorStoreTests(unittest.TestCase):
 
     def test_a_store_with_no_open_attempt_passes(self) -> None:
         self.assertEqual("ok", doctor._open_execution_check()["status"])
+
+
+class _InstalledAdapter:
+    """An installed adapter as the doctor sees one: ids and a health answer."""
+
+    adapter_id = "example-external"
+    adapter_lineage_id = "example-external-v1"
+
+    def health(self) -> tuple[str, dict | None]:
+        return "degraded", {"code": "adapter_health_unreadable", "message": "said 'odd'"}
+
+
+class DoctorAdapterTests(unittest.TestCase):
+    """The Connections level: each local source, then each installed adapter.
+
+    The id, presentation code and `adapter` parameter are what the Diagnostics
+    view keys its labels and translations on, so they are asserted exactly.
+    """
+
+    def setUp(self) -> None:
+        self._dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._dir.cleanup)
+        environment = mock.patch.dict(
+            os.environ,
+            {
+                "VALKAMA_CLAUDE_SESSION_ROOT": self._dir.name,
+                "VALKAMA_CODEX_ROLLOUT_ROOT": os.path.join(self._dir.name, "absent"),
+            },
+        )
+        environment.start()
+        self.addCleanup(environment.stop)
+
+    def checks(self, *, git: str | None) -> dict[str, dict]:
+        def client_binary(client: str) -> str:
+            if client == "codex":
+                raise runner.LaunchError("codex is not on PATH")
+            return f"/bin/{client}"
+
+        with (
+            mock.patch("server.runner.client_binary", side_effect=client_binary),
+            mock.patch("server.ops.doctor.shutil.which", return_value=git),
+            mock.patch(
+                "server.platform.installed.installed_providers",
+                return_value=[_InstalledAdapter()],
+            ),
+        ):
+            listed = doctor._adapter_checks()
+        return {check["id"]: check for check in listed}
+
+    def test_every_source_is_a_check_the_diagnostics_view_can_label(self) -> None:
+        checks = self.checks(git=None)
+        self.assertEqual(
+            {
+                "adapter-claude-code-execution": ("ok", "adapter-ready", "claude-code-execution"),
+                "adapter-codex-execution": ("warn", "adapter-unavailable", "codex-execution"),
+                "adapter-claude-journal-telemetry": (
+                    "ok",
+                    "adapter-ready",
+                    "claude-journal-telemetry",
+                ),
+                "adapter-codex-rollout-telemetry": (
+                    "warn",
+                    "adapter-unconfigured",
+                    "codex-rollout-telemetry",
+                ),
+                "adapter-git-artifacts": ("warn", "adapter-unavailable", "git-artifacts"),
+                # The id follows the lineage; the label follows the adapter id.
+                "adapter-example-external-v1": ("warn", "adapter-unavailable", "example-external"),
+            },
+            {
+                identifier: (
+                    check["status"],
+                    check["presentation"]["code"],
+                    check["presentation"]["parameters"]["adapter"],
+                )
+                for identifier, check in checks.items()
+            },
+        )
+
+    def test_an_unconfigured_journal_says_where_to_point_it(self) -> None:
+        check = self.checks(git="/usr/bin/git")["adapter-codex-rollout-telemetry"]
+        self.assertEqual("No configured local telemetry source was found", check["detail"])
+        self.assertIn("codex_rollout_root", check["fix"])
+
+    def test_a_ready_source_carries_no_fix(self) -> None:
+        checks = self.checks(git="/usr/bin/git")
+        self.assertEqual("ok", checks["adapter-git-artifacts"]["status"])
+        self.assertEqual("", checks["adapter-git-artifacts"]["fix"])
+        self.assertEqual("", checks["adapter-claude-journal-telemetry"]["fix"])
 
 
 class DoctorCommandTests(unittest.TestCase):

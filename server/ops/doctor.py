@@ -25,16 +25,20 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sqlite3
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
+from pathlib import Path
 from urllib import error, request
 
 from .. import runner, static_assets, store
 from ..executions import drivers as execution_drivers
 from ..memory import service as memory_service
-from ..platform import providers as platform_providers
+from ..platform import installed
 from ..projects import project_registry
+from ..telemetry import journal as telemetry_journal
+from ..telemetry.projections import JOURNAL_ADAPTERS
 from . import configuration
 
 #: What a check can conclude. `warn` is a real answer, not a soft failure: a
@@ -514,32 +518,93 @@ _ADAPTER_FIXES = {
 }
 
 
-def _adapter_checks() -> list[dict]:
-    checks = []
-    for provider in platform_providers.ProviderCatalog().seed_providers():
-        state, diagnostics = provider.health()
-        status = {"ready": "ok", "degraded": "warn", "unavailable": "warn"}.get(state, "unknown")
-        code = str((diagnostics or {}).get("code", ""))
-        presentation_code = (
-            "adapter-ready"
-            if status == "ok"
-            else "adapter-unconfigured"
-            if code == "source_not_configured"
-            else "adapter-unavailable"
-        )
-        checks.append(
-            _check(
-                f"adapter-{provider.adapter_lineage_id}",
-                f"Adapter {provider.adapter_id}",
-                status,
-                (diagnostics or {}).get("message", state),
-                ""
-                if status == "ok"
-                else _ADAPTER_FIXES.get(code, _ADAPTER_FIXES["provider_unavailable"]),
-                presentation_code=presentation_code,
-                parameters={"adapter": provider.adapter_id},
+def _adapter_check(
+    adapter_id: str, state: str, diagnostics: dict | None, *, lineage_id: str = ""
+) -> dict:
+    """One source's health as a check, in the shape the Diagnostics view reads.
+
+    The check id follows the lineage, which outlives a renamed adapter id; a
+    built-in's lineage is its id.
+    """
+
+    status = {"ready": "ok", "degraded": "warn", "unavailable": "warn"}.get(state, "unknown")
+    code = str((diagnostics or {}).get("code", ""))
+    presentation_code = (
+        "adapter-ready"
+        if status == "ok"
+        else "adapter-unconfigured"
+        if code == "source_not_configured"
+        else "adapter-unavailable"
+    )
+    return _check(
+        f"adapter-{lineage_id or adapter_id}",
+        f"Adapter {adapter_id}",
+        status,
+        (diagnostics or {}).get("message", state),
+        "" if status == "ok" else _ADAPTER_FIXES.get(code, _ADAPTER_FIXES["provider_unavailable"]),
+        presentation_code=presentation_code,
+        parameters={"adapter": adapter_id},
+    )
+
+
+def _unavailable(code: str, message: str) -> tuple[str, dict]:
+    return "unavailable", {"code": code, "message": message}
+
+
+def _execution_health(client: str) -> tuple[str, dict | None]:
+    try:
+        runner.client_binary(client)
+    except (OSError, runner.LaunchError):
+        return _unavailable("provider_unavailable", "The configured local provider is unavailable")
+    return "ready", None
+
+
+def _journal_health(roots: list[str]) -> tuple[str, dict | None]:
+    try:
+        if not roots or not any(Path(root).exists() for root in roots[:32]):
+            return _unavailable(
+                "source_not_configured", "No configured local telemetry source was found"
             )
+    except OSError:
+        return _unavailable("provider_unavailable", "The configured local provider is unavailable")
+    return "ready", None
+
+
+def _adapter_checks() -> list[dict]:
+    """Each local source Valkama reads, then each adapter an owner installed.
+
+    Built from the sources themselves rather than from a registry of them: the
+    execution clients, the two journal readers, Git, and the declarations under
+    the installed-adapters directory. A declaration whose destination the
+    policy refuses builds no provider and is not listed, as before.
+    """
+
+    checks = [
+        _adapter_check(capability.adapter_lineage_id, *_execution_health(capability.client))
+        for capability in execution_drivers.all_capabilities()
+    ]
+    journal = telemetry_journal.LocalJournalUsageProvider()
+    roots = {"claude": journal.claude_roots, "codex": journal.codex_roots}
+    checks.extend(
+        _adapter_check(adapter_id, *_journal_health(roots[client]))
+        for client, adapter_id in JOURNAL_ADAPTERS.items()
+    )
+    checks.append(
+        _adapter_check(
+            "git-artifacts",
+            *(
+                ("ready", None)
+                if shutil.which("git")
+                else _unavailable("provider_unavailable", "Git is not available on PATH")
+            ),
         )
+    )
+    checks.extend(
+        _adapter_check(
+            provider.adapter_id, *provider.health(), lineage_id=provider.adapter_lineage_id
+        )
+        for provider in installed.installed_providers()
+    )
     return checks
 
 

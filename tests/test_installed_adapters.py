@@ -437,12 +437,11 @@ class UnregisterTests(StoreCase):
 
 
 class RemoveCommandTests(StoreCase):
-    """`adapter remove` is two halves, and the refusable one goes first.
+    """`adapter remove` deletes the declaration and nothing else.
 
-    The declaration used to be deleted before the registry was asked, and the
-    registry refuses while an assignment still selects the lineage — leaving
-    exactly the debris the paired flow exists to prevent: rows present, and no
-    declaration left to reinstall in order to reach them.
+    The registry rows an earlier start wrote stay, as README says: a ref to the
+    adapter still resolves and its Connection reads `unavailable`. They leave
+    with the registry tables rather than through this command.
     """
 
     def setUp(self) -> None:
@@ -458,53 +457,24 @@ class RemoveCommandTests(StoreCase):
             {"kind": "http", "base_url": "http://127.0.0.1:8770"},
             self.directory.name,
         )
-        self.platform = self.build(self.notes, self.external)
+        self.build(self.notes, self.external)
 
-    def invoke(self) -> str:
+    def invoke(self, adapter_id: str) -> str:
         stream = io.StringIO()
         with contextlib.redirect_stdout(stream):
-            cli.main(["adapter", "remove", "example-external"])
+            cli.main(["adapter", "remove", adapter_id])
         return stream.getvalue()
 
-    def select_it(self, revision: int) -> None:
-        self.platform.assignment_selection_command(
-            {
-                "interface_version": "valkama-assignment-selection",
-                "operation": "set",
-                "capability_id": "memory.open",
-                "scope": {"kind": "installation"},
-                "connection_ids": [platform_core._connection_key(self.external.connection_ref)],
-                "expected_revision": revision,
-            }
-        )
-
-    def test_a_refused_removal_leaves_both_halves_in_place(self) -> None:
-        self.select_it(1)
-        stream = io.StringIO()
-        with contextlib.redirect_stdout(stream), self.assertRaises(SystemExit) as refused:
-            cli.main(["adapter", "remove", "example-external"])
-        self.assertEqual(1, refused.exception.code)
-        self.assertIn("not unregistered", stream.getvalue())
-        self.assertTrue(os.path.isfile(self.record_path), "the declaration survived")
+    def test_removal_deletes_the_declaration_and_leaves_the_registry_alone(self) -> None:
+        printed = self.invoke("example-external")
+        self.assertIn("removed the declaration of example-external", printed)
+        self.assertFalse(os.path.isfile(self.record_path))
         self.assertEqual(["example-external"], self.rows("platform_adapters", "adapter_id"))
 
-    def test_a_successful_removal_takes_both(self) -> None:
-        printed = self.invoke()
-        self.assertIn("unregistered example-external", printed)
-        self.assertIn("removed the declaration", printed)
-        self.assertFalse(os.path.isfile(self.record_path))
-        self.assertEqual([], self.rows("platform_adapters", "adapter_id"))
-
-    def test_nothing_registered_under_that_id_is_not_a_refusal(self) -> None:
-        # Only an assignment still selecting the lineage stops the command. An
-        # id nothing knows is answered and the exit stays clean, because there
-        # is nothing to leave in place.
-        stream = io.StringIO()
-        with contextlib.redirect_stdout(stream):
-            cli.main(["adapter", "remove", "never-installed"])
-        printed = stream.getvalue()
-        self.assertIn("no adapter", printed)
-        self.assertIn("was not declared here", printed)
+    def test_an_id_that_was_never_declared_is_answered_without_a_refusal(self) -> None:
+        # Nothing to delete is an answer, not an error: the exit stays clean.
+        printed = self.invoke("never-installed")
+        self.assertIn("never-installed was not declared here", printed)
         self.assertTrue(os.path.isfile(self.record_path), "another adapter's file is untouched")
 
 

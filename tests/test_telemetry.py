@@ -21,7 +21,6 @@ sys.path.insert(0, ROOT)
 from server import sessions, store
 from server.executions import service as execution_service
 from server.planning import service as planning
-from server.platform import providers as platform_providers
 from server.telemetry import contracts, projections
 from server.telemetry.journal import LocalJournalUsageProvider
 from tests import SUITE_STORE
@@ -129,19 +128,15 @@ class ExecutionUsageTests(unittest.TestCase):
             )
         return path
 
-    def catalog(self, path: str) -> platform_providers.ProviderCatalog:
-        """A registry whose telemetry adapters read this test's journal only.
+    def journal(self, path: str) -> LocalJournalUsageProvider:
+        """A journal reader that reads this test's journal only.
 
-        The provider's roots are constructor arguments for exactly this reason:
-        nothing here crawls a home directory, so a test never reads the owner's
-        real transcripts.
+        The roots are constructor arguments for exactly this reason: nothing
+        here crawls a home directory, so a test never reads the owner's real
+        transcripts.
         """
 
-        provider = LocalJournalUsageProvider(codex_roots=[path], claude_roots=[path])
-        original = platform_providers.LocalJournalUsageProvider
-        platform_providers.LocalJournalUsageProvider = lambda: provider  # type: ignore[assignment]
-        self.addCleanup(lambda: setattr(platform_providers, "LocalJournalUsageProvider", original))
-        return platform_providers.ProviderCatalog()
+        return LocalJournalUsageProvider(codex_roots=[path], claude_roots=[path])
 
     def test_an_attempt_nobody_observed_reports_unknown_and_never_zero(self) -> None:
         record = self.item("unobserved")
@@ -175,7 +170,7 @@ class ExecutionUsageTests(unittest.TestCase):
         self.conn.commit()
 
         usage = projections.execution_usage(
-            self.conn, execution_id, catalog=self.catalog(os.path.dirname(path))
+            self.conn, execution_id, journal=self.journal(os.path.dirname(path))
         )
         self.assertEqual("confirmed", usage["coverage"]["tokens"])
         # The client's own field names are normalised: `cached_input_tokens`
@@ -203,7 +198,7 @@ class ExecutionUsageTests(unittest.TestCase):
         self.conn.commit()
 
         usage = projections.execution_usage(
-            self.conn, execution_id, catalog=self.catalog(os.path.dirname(path))
+            self.conn, execution_id, journal=self.journal(os.path.dirname(path))
         )
         # The sum is real and it is not the whole, and the payload says which.
         self.assertEqual(4, usage["tokens"]["input"]["value"])
@@ -212,6 +207,31 @@ class ExecutionUsageTests(unittest.TestCase):
         unobserved = [item for item in usage["sessions"] if not item["observed"]]
         self.assertEqual(["codex-3"], [item["session_id"] for item in unobserved])
         self.assertTrue(unobserved[0]["reason"])
+
+    def test_each_client_is_attributed_to_its_own_journal_reader(self) -> None:
+        # The provenance names the reader that was asked even when it found
+        # nothing, and two readers on one attempt are `mixed` rather than
+        # whichever came first.
+        record = self.item("claude reader")
+        execution_id = self.attempt(record["work_item_id"])
+        self.session("claude-1", "claude")
+        execution_service.link_session(self.conn, execution_id, "claude-1", "launched")
+        self.conn.commit()
+        empty = os.path.join(self._dir.name, "no-journals")
+        os.mkdir(empty)
+
+        usage = projections.execution_usage(self.conn, execution_id, journal=self.journal(empty))
+        self.assertEqual("claude-journal-telemetry", usage["provenance"]["adapter_id"])
+        self.assertEqual("local", usage["provenance"]["connection_id"])
+        self.assertEqual("partial", usage["provenance"]["source_quality"])
+        self.assertFalse(usage["sessions"][0]["observed"])
+
+        self.session("codex-6", "codex")
+        execution_service.link_session(self.conn, execution_id, "codex-6", "resumed")
+        self.conn.commit()
+        usage = projections.execution_usage(self.conn, execution_id, journal=self.journal(empty))
+        self.assertEqual("mixed", usage["provenance"]["adapter_id"])
+        self.assertEqual("local", usage["provenance"]["connection_id"])
 
     def test_an_unknown_client_is_not_read_with_the_wrong_parser(self) -> None:
         record = self.item("unknown client")
