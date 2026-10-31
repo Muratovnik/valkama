@@ -533,9 +533,11 @@ def _mcp_loop(
         if method == "initialize":
             # An `initialize` puts this process in the legacy era for the rest
             # of its life, which is the scope the specification gives a stdio
-            # server. Claude Code is such a client today: it opens with this and
-            # has no way to fall forward, so answering it is the difference
-            # between a working board and a red entry in its server list.
+            # server. A client that opens with it has no way to fall forward,
+            # so answering it is the difference between a working board and a
+            # red entry in its server list. Codex 0.166.0 opens with it unless
+            # its `mcp_2026_07_28` feature is on, as its source reads; Claude
+            # Code does when told to negotiate the legacy revision.
             wanted = params.get("protocolVersion")
             legacy_era = wanted if wanted in LEGACY_PROTOCOLS else LEGACY_PROTOCOLS[0]
             client = _client(params)
