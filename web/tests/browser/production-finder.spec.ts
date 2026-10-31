@@ -172,6 +172,13 @@ test('the task finder opens an exact hit on Enter and keeps every state legible'
     expect(retryBox?.width).toBeLessThan(width / 2)
     await expectNoSilentClipping(page, `Finder failure at ${width}px`)
     await shot(`failed-${width}`)
+    // Keyboard only: Tab from the field reaches Retry, and Enter runs it.
+    mode = 'results'
+    await search.focus()
+    await page.keyboard.press('Tab')
+    await expect(retry).toBeFocused()
+    await page.keyboard.press('Enter')
+    await expect(dialog.getByRole('option').first()).toBeVisible()
 
     mode = 'loading'
     // The request leaves after the debounce; hold it until it is in the route.

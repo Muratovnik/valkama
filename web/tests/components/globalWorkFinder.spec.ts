@@ -271,7 +271,11 @@ describe('global task finder', () => {
     const wrapper = finder()
     await search(wrapper)
     expect(wrapper.text()).toContain('The project list could not be read, so nothing was searched.')
-    expect(wrapper.get('button.finder-retry').text()).toBe('Retry search')
+    const retry = wrapper.get('button.finder-retry')
+    expect(retry.text()).toBe('Retry search')
+    // Enter on the button is the button's: the list's submit must not cancel it.
+    const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+    expect(retry.element.dispatchEvent(enter)).toBe(true)
   })
 
   it('shows a safe error and retries the same query', async () => {

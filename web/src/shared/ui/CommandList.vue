@@ -34,9 +34,11 @@ watch(
 /**
  * Enter that no row took: Reka stops the event when a row is highlighted, so
  * one that reaches the root found none — the rows are still loading, or the
- * pointer left the list and took the highlight with it.
+ * pointer left the list and took the highlight with it. Only the search field
+ * submits: a button in the feedback slot keeps its own Enter.
  */
 function submit(event: KeyboardEvent) {
+  if (!(event.target instanceof HTMLInputElement)) return
   if (event.isComposing || event.ctrlKey || event.metaKey || event.altKey) return
   event.preventDefault()
   emit('submit')
