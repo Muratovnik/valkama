@@ -40,7 +40,7 @@ from ..platform import installed
 from ..projects import project_registry
 from ..telemetry import journal as telemetry_journal
 from ..telemetry.projections import JOURNAL_ADAPTERS
-from . import configuration
+from . import configuration, skills
 
 #: What a check can conclude. `warn` is a real answer, not a soft failure: a
 #: store with no recent snapshot works perfectly until the day it matters.
@@ -89,7 +89,7 @@ def _check(
 #: a level and wrong across them, because across them it invites somebody to
 #: start at the end.
 LEVELS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
-    ("installation", "Installation", ("configuration", "store", "runtime")),
+    ("installation", "Installation", ("configuration", "store", "runtime", "skills")),
     ("projects", "Projects", ("projects",)),
     ("capabilities", "Capabilities", ("drivers",)),
     ("connections", "Connections", ("adapters",)),
@@ -107,6 +107,7 @@ def diagnose(*, port: int = 8642, probe: bool = True) -> dict:
         "configuration": _guarded("configuration", "Configuration file", _configuration_checks),
         "store": _guarded("store", "Store", _store_checks),
         "runtime": _guarded("runtime", "Runtime", lambda: _runtime_checks(port, probe=probe)),
+        "skills": _guarded("skills", "Valkama skill", _skill_checks),
         "drivers": _guarded("drivers", "Execution drivers", _driver_checks),
         "adapters": _guarded("adapters", "Adapters", _adapter_checks),
         "projects": _guarded("projects", "Projects", _project_checks),
@@ -586,6 +587,81 @@ def _open_execution_check() -> dict:
         presentation_code="attempts-open",
         parameters={"count": open_count},
     )
+
+
+#: What each state of a client's copy of the skill says, and what to do about it.
+_SKILL_FINDINGS = {
+    "installed": ("ok", "skill-installed", "", ""),
+    "missing": (
+        "warn",
+        "skill-missing",
+        "{title} has no Valkama skill, so its agents work the planning tools without"
+        " the procedure around them",
+        "Run `valkama skill install --client {client}`.",
+    ),
+    "outdated": (
+        "warn",
+        "skill-outdated",
+        "{title}'s Valkama skill is from another release than the one the launcher"
+        " pins, so it can describe tools that changed",
+        "Run `valkama skill install --client {client}`; `valkama launcher install`"
+        " also refreshes it.",
+    ),
+    "drifted": (
+        "warn",
+        "skill-drifted",
+        "{title}'s Valkama skill differs from what Valkama wrote: {detail}",
+        "Run `valkama skill install --client {client} --force` to put Valkama's back;"
+        " that discards the edits.",
+    ),
+    "unmanaged": (
+        "warn",
+        "skill-unmanaged",
+        "{path} holds a skill named valkama that Valkama did not write: {detail}",
+        "Remove it, or replace it with `valkama skill install --client {client} --force`.",
+    ),
+}
+
+
+def _skill_checks() -> list[dict]:
+    """Each client's copy of the skill, for the clients this user has."""
+
+    present = [
+        entry for entry in skills.copies() if entry["detected"] or entry["state"] != "missing"
+    ]
+    if not present:
+        return [
+            _check(
+                "skill",
+                "Valkama skill",
+                "ok",
+                "neither Claude Code nor Codex is set up for this user, so no skill is needed",
+                presentation_code="skill-no-client",
+            )
+        ]
+    checks = []
+    for entry in present:
+        client = str(entry["client"])
+        title = skills.CLIENT_TITLES[client]
+        status, code, detail, fix = _SKILL_FINDINGS[str(entry["state"])]
+        facts = {
+            "client": client,
+            "title": title,
+            "path": str(entry["path"]),
+            "detail": str(entry["detail"] or ""),
+        }
+        checks.append(
+            _check(
+                f"skill-{client}",
+                f"Valkama skill for {title}",
+                status,
+                detail.format(**facts) if detail else f"installed at {entry['path']}",
+                fix.format(**facts),
+                presentation_code=code,
+                parameters={"client": client, "title": title, "path": str(entry["path"])},
+            )
+        )
+    return checks
 
 
 def _runtime_checks(port: int, *, probe: bool) -> list[dict]:

@@ -882,6 +882,12 @@ The front itself is the one part a switch does not replace: a session keeps
 the front it started with. A front that is killed from outside leaves its
 backend to see stdin close and exit on its own.
 
+The Valkama skill does not travel through the front. Its copies change only
+when `launcher install` refreshes them or `skill install` writes them (see
+[Install the skill](../SERVICE.md#install-the-skill)), and each client rereads
+them on its own: a session can run the new release's tools with the skill text
+it loaded before the switch until its client picks up the changed copy.
+
 ### A process that went stale while it ran
 
 `static_assets.SourceWatch` covers a process with no front: a checkout run

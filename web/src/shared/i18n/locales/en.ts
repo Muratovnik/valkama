@@ -399,6 +399,34 @@ export const en = {
         detail: 'The built web interface is missing.',
         fix: 'Run npm ci and then npm run build in the web directory.',
       },
+      'skill-installed': {
+        title: 'Valkama skill for {title}',
+        detail: 'The skill matches the release the launcher pins.',
+      },
+      'skill-missing': {
+        title: 'No Valkama skill for {title}',
+        detail: 'Agents in {title} use the planning tools without the procedure around them.',
+        fix: 'Run valkama skill install --client {client}.',
+      },
+      'skill-outdated': {
+        title: 'Valkama skill for {title} is out of date',
+        detail: 'The skill comes from another release than the one the launcher pins.',
+        fix: 'Run valkama skill install --client {client}; valkama launcher install also refreshes it.',
+      },
+      'skill-drifted': {
+        title: 'Valkama skill for {title} was edited',
+        detail: 'Its files differ from the ones Valkama wrote.',
+        fix: 'Run valkama skill install --client {client} --force to restore it; that discards the edits.',
+      },
+      'skill-unmanaged': {
+        title: 'Another skill named valkama for {title}',
+        detail: 'A skill Valkama did not write is at {path}.',
+        fix: 'Remove it, or replace it with valkama skill install --client {client} --force.',
+      },
+      'skill-no-client': {
+        title: 'Valkama skill',
+        detail: 'Neither Claude Code nor Codex is set up for this user.',
+      },
       'listener-offline': {
         title: 'Local server is not running',
         detail: 'Nothing is answering on port {port}.',

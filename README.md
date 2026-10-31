@@ -131,6 +131,19 @@ MCP tool call names no `author` of its own. Give each client a different one in
 its registration. Without the variable, the `author` in `config.json` applies; with
 neither, the name is `agent`.
 
+Then give the agents the procedure that goes with the tools — finding and
+claiming an item, keeping its checklist, merging duplicates, closing it:
+
+```bash
+python valkama.py skill install
+```
+
+It writes the Valkama skill for each client this user has, where that client
+finds its user's skills (`~/.claude/skills/valkama`, `~/.agents/skills/valkama`),
+from the release the launcher pins, and `launcher install` keeps it in step. It
+edits no client configuration; see
+[`SERVICE.md`](SERVICE.md#install-the-skill).
+
 ### 4. Check that it worked
 
 Restart the client, then ask it to list Planning spaces. In Claude Code:

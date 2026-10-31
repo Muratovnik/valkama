@@ -39,7 +39,37 @@ def checks_of(report: dict) -> list[dict]:
     return [check for level in report["levels"] for check in level["checks"]]
 
 
+def isolate_home(test: unittest.TestCase) -> pathlib.Path:
+    """A throwaway home, so the doctor's skill check reads no real client or launcher.
+
+    The doctor compares each client's copy of the skill with the release the
+    launcher pins; without this it would read the user's own skill directories
+    and launcher manifest.
+    """
+
+    directory = tempfile.TemporaryDirectory()
+    test.addCleanup(directory.cleanup)
+    root = pathlib.Path(directory.name)
+    patch = mock.patch.dict(
+        os.environ,
+        {
+            "HOME": str(root),
+            "USERPROFILE": str(root),
+            "LOCALAPPDATA": str(root / "local"),
+            "XDG_BIN_HOME": str(root / "bin"),
+            "CLAUDE_CONFIG_DIR": str(root / ".claude"),
+            "CODEX_HOME": str(root / ".codex"),
+        },
+    )
+    patch.start()
+    test.addCleanup(patch.stop)
+    return root
+
+
 class DoctorShapeTests(unittest.TestCase):
+    def setUp(self) -> None:
+        isolate_home(self)
+
     def test_every_check_has_a_stable_ui_presentation(self) -> None:
         report = doctor.diagnose(probe=False)
         self.assertTrue(report["checked_at"].endswith("Z"))
@@ -541,6 +571,7 @@ class DoctorConfigurationTests(unittest.TestCase):
     """
 
     def setUp(self) -> None:
+        isolate_home(self)
         self._dir = tempfile.TemporaryDirectory()
         self.addCleanup(self._dir.cleanup)
         self.path = os.path.join(self._dir.name, "config.json")

@@ -5,6 +5,7 @@
   capabilities             machine-readable public interfaces and protocol versions
   status                   read-only source, data and launcher status
   launcher ...             install, inspect and supervise the stable service command
+  skill ...                install, inspect or remove the Valkama skill for each client
   runtime                  canonical backend/static identity for this checkout
   summary [--space KEY]    short planning-space report for session hooks
   scopes | attach | detach attachable database files, federated at read time
@@ -32,7 +33,7 @@ from . import documents, launcher, static_assets, store, transcripts
 from .federation import federated_spaces
 from .http_surface import serve_main
 from .mcp_surface import LEGACY_PROTOCOLS, MODERN_PROTOCOL, catalogue, mcp_main
-from .ops import adapter_check, configuration, doctor, export, setup
+from .ops import adapter_check, configuration, doctor, export, setup, skills
 from .planning import model as planning_model
 from .planning import service as planning_service
 from .planning import views as planning_views
@@ -173,6 +174,7 @@ def capabilities_main() -> None:
             "capabilities",
             "status",
             "launcher",
+            "skill",
             "mcp",
             "serve",
             "runtime",
@@ -354,7 +356,57 @@ def _launcher_main(parser: argparse.ArgumentParser, options: argparse.Namespace)
             result = launcher.status(options.directory)
     except launcher.LauncherError as error:
         parser.error(str(error))
+    if options.launcher_action == "install":
+        # The skill follows the pin: every copy Valkama manages moves to the
+        # release just pinned. A failure here leaves the launcher installed and
+        # says so, rather than reporting the install itself as failed.
+        try:
+            result = {**result, "skills": skills.refresh(options.directory)}
+        except (OSError, skills.SkillError) as error:
+            result = {**result, "skills": [], "skills_error": str(error)}
     print(json.dumps(result, ensure_ascii=False, indent=1, sort_keys=True))
+
+
+def _skill_parser(commands: argparse._SubParsersAction) -> None:
+    command = commands.add_parser(
+        "skill",
+        help="install, inspect or remove the Valkama skill where each client finds it",
+    )
+    actions = command.add_subparsers(dest="skill_action", required=True)
+    for name in ("install", "status", "uninstall"):
+        action = actions.add_parser(name)
+        action.add_argument(
+            "--client",
+            action="append",
+            choices=skills.CLIENTS,
+            default=None,
+            help="a client to act on; repeat for both. Default: every client this user has",
+        )
+        action.add_argument("--launcher-directory", default=None)
+        if name != "status":
+            action.add_argument("--force", action="store_true")
+
+
+def _skill_main(parser: argparse.ArgumentParser, options: argparse.Namespace) -> None:
+    try:
+        if options.skill_action == "install":
+            result = skills.install(
+                options.client,
+                force=options.force,
+                launcher_directory=options.launcher_directory,
+            )
+        elif options.skill_action == "uninstall":
+            result = skills.uninstall(options.client, force=options.force)
+        else:
+            result = skills.report(options.launcher_directory)
+    except (OSError, skills.SkillError) as error:
+        parser.error(str(error))
+    print(json.dumps(result, ensure_ascii=False, indent=1, sort_keys=True))
+    clients = result.get("clients")
+    if isinstance(clients, list) and any(
+        isinstance(entry, dict) and entry.get("action") == "refused" for entry in clients
+    ):
+        raise SystemExit(1)
 
 
 def _export_main(options: argparse.Namespace) -> None:
@@ -490,6 +542,7 @@ def main(argv: list[str] | None = None) -> None:
     status = commands.add_parser("status")
     status.add_argument("--launcher-directory", default=None)
     _launcher_parser(commands)
+    _skill_parser(commands)
     commands.add_parser(
         "runtime",
         help="print the canonical backend/static identity for the local checkout",
@@ -650,6 +703,8 @@ def main(argv: list[str] | None = None) -> None:
         status_main(options.launcher_directory)
     elif options.command == "launcher":
         _launcher_main(parser, options)
+    elif options.command == "skill":
+        _skill_main(parser, options)
     elif options.command == "runtime":
         runtime_main()
     elif options.command == "projects":

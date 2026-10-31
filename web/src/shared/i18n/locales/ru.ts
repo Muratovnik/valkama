@@ -400,6 +400,34 @@ export const ru = {
         detail: 'Готовая сборка интерфейса отсутствует.',
         fix: 'В каталоге web выполните npm ci, затем npm run build.',
       },
+      'skill-installed': {
+        title: 'Навык Valkama для {title}',
+        detail: 'Навык совпадает с релизом, закреплённым лаунчером.',
+      },
+      'skill-missing': {
+        title: 'Нет навыка Valkama для {title}',
+        detail: 'Агенты в {title} работают с инструментами планирования без описанной процедуры.',
+        fix: 'Выполните valkama skill install --client {client}.',
+      },
+      'skill-outdated': {
+        title: 'Навык Valkama для {title} устарел',
+        detail: 'Навык взят из другого релиза, чем закреплённый лаунчером.',
+        fix: 'Выполните valkama skill install --client {client}; valkama launcher install тоже его обновляет.',
+      },
+      'skill-drifted': {
+        title: 'Навык Valkama для {title} изменён',
+        detail: 'Его файлы отличаются от записанных Valkama.',
+        fix: 'Выполните valkama skill install --client {client} --force, чтобы вернуть его; правки будут потеряны.',
+      },
+      'skill-unmanaged': {
+        title: 'Другой навык с именем valkama для {title}',
+        detail: 'По пути {path} лежит навык, который Valkama не записывала.',
+        fix: 'Удалите его или замените: valkama skill install --client {client} --force.',
+      },
+      'skill-no-client': {
+        title: 'Навык Valkama',
+        detail: 'Ни Claude Code, ни Codex не настроены для этого пользователя.',
+      },
       'listener-offline': {
         title: 'Локальный сервер не запущен',
         detail: 'На порту {port} нет ответа.',

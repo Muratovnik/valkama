@@ -12,6 +12,18 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Added
 
+- A Valkama skill, `server/skill/valkama`, with the procedure around the
+  planning tools: finding or filing the item for a change, claiming it, its
+  checklist and step claims, batched writes, refs and links, blocking,
+  requests to the owner, merging duplicates, closing, and what a subagent
+  without the tools reports. `valkama skill install | status | uninstall`
+  writes it where Claude Code and Codex find a user's skills
+  (`~/.claude/skills/valkama` or `$CLAUDE_CONFIG_DIR/skills/valkama`, and
+  `~/.agents/skills/valkama`), from the release the launcher pins, without
+  touching either client's configuration. A manifest of digests keeps it
+  idempotent and leaves edited or foreign copies alone without `--force`.
+  `launcher install` refreshes every copy Valkama manages, and
+  `valkama doctor` reports each one.
 - `merge_work_items` (`POST /api/planning/work-item/merge`) folds items that are
   one change into the item that survives, all or nothing. Their checklist steps
   (with their ids, ticks and step claims), discussion comments, refs and links

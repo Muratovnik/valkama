@@ -167,6 +167,49 @@ The absolute value is an installed service path, not a source-checkout path.
 `python valkama.py setup` verifies the managed launcher and both registrations;
 with `--apply`, it removes a stale registration before adding the replacement.
 
+## Install the skill
+
+Valkama ships a skill, `server/skill/valkama`, that tells an agent how to work
+the planning tools: finding and claiming an item, keeping its checklist,
+batching writes, merging duplicates and closing it. Install it for the clients
+this user has:
+
+```text
+valkama skill install
+valkama skill status
+```
+
+`valkama` is the stable command `launcher status` names; from a checkout,
+`python valkama.py skill install` does the same. Each client gets a copy where it finds its user's skills by itself, so neither
+client's configuration is touched:
+
+| Client | Copy |
+| --- | --- |
+| Claude Code | `~/.claude/skills/valkama`, or `$CLAUDE_CONFIG_DIR/skills/valkama` when that is set |
+| Codex | `~/.agents/skills/valkama` |
+
+Without `--client`, `install` writes for each client whose own directory
+exists (`~/.claude` or `$CLAUDE_CONFIG_DIR`, `~/.codex` or `$CODEX_HOME`);
+`--client claude` or `--client codex`, repeatable, names them. The files come
+from the release the launcher pins, so the skill describes the tools clients
+run; with no launcher installed they come from the code that runs the command.
+Both clients notice a new or changed skill in a running session. A Claude Code
+session started before `~/.claude/skills` existed needs `/reload-skills` or a
+restart, and Codex needs a restart when a change does not appear.
+
+A copy is Valkama's while a manifest beside its files, `.valkama-skill.json`,
+records their digests. `status` reads each copy as `missing`, `installed`,
+`outdated` (from another release), `drifted` (a file edited, removed or added)
+or `unmanaged` (a `valkama` skill Valkama did not write). `install` leaves an
+installed copy as it is, refuses a drifted or unmanaged one without `--force`,
+and with it writes the skill's files and names any other file it left.
+`launcher install` refreshes every installed or outdated copy to the release it
+pins and reports them under `skills`; it installs none for a client that has
+none. `valkama skill uninstall` removes the files a manifest names and the
+directory once it is empty, refuses a drifted copy without `--force`, and never
+removes an unmanaged one. `valkama doctor` reports each copy under the
+installation level. A refused `install` or `uninstall` exits with status 1.
+
 ## Machine-readable discovery
 
 ```text
