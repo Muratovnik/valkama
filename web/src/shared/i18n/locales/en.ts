@@ -930,7 +930,7 @@ export const en = {
       unconfirmed: 'Unconfirmed',
       liveDetail: 'until {date}, unless the session shows a sign of life',
       staleDetail: 'the session behind it is gone',
-      unconfirmedDetail: 'no session confirmed it',
+      unconfirmedDetail: 'held until someone releases it',
       mark: 'Stale claim',
       takeOver: 'Take over',
     },

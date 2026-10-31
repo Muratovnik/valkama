@@ -931,7 +931,7 @@ export const ru = {
       unconfirmed: 'Не подтверждён',
       liveDetail: 'до {date}, если сессия не подаст признаков жизни',
       staleDetail: 'сессии, которая его взяла, больше нет',
-      unconfirmedDetail: 'ни одна сессия его не подтвердила',
+      unconfirmedDetail: 'держится, пока его не освободят вручную',
       mark: 'Захват устарел',
       takeOver: 'Забрать себе',
     },

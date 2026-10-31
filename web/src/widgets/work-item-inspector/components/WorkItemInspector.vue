@@ -7,11 +7,16 @@
  * empty inside Overview, which is what keeps the shell honest while later layers
  * are still being built.
  *
- * The head carries the two writes that change what the item *is* — who holds it
- * and what state it is in — because both are answered by looking at the title
- * bar. Both refuse rather than force: a refusal shows the server's reason in the
- * head, beside the action that would satisfy it, and overriding is a second,
- * explicit answer rather than a default.
+ * The head that stays in view is the item's name, its reference and the
+ * sections, and the reference steps out once the body is read past the head:
+ * with the two writes and the holder pinned too it took a quarter of a desktop
+ * drawer and a third of a phone's. The two writes
+ * that change what the item *is* — who holds it and what state it is in — open
+ * the body instead, above every section. Both refuse rather than force: a
+ * refusal shows the server's reason in the head, where it is seen however far
+ * down the write was made, and overriding is a second, explicit answer rather
+ * than a default. Who holds the item is said once, beside its claim in the
+ * overview, not again in the head.
  */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -21,8 +26,10 @@ import InspectorChain from '@/widgets/work-item-inspector/components/InspectorCh
 import InspectorExecution from '@/widgets/work-item-inspector/components/InspectorExecution.vue'
 import InspectorMemory from '@/widgets/work-item-inspector/components/InspectorMemory.vue'
 import InspectorOverview from '@/widgets/work-item-inspector/components/InspectorOverview.vue'
+import InspectorRefusal from '@/widgets/work-item-inspector/components/InspectorRefusal.vue'
 import InspectorRelations from '@/widgets/work-item-inspector/components/InspectorRelations.vue'
 import InspectorWriteActions from '@/widgets/work-item-inspector/components/InspectorWriteActions.vue'
+import { titleRuns } from '@/widgets/work-item-inspector/utils/titleRuns.ts'
 import { provideDraftGuard } from '@/widgets/work-item-inspector/utils/useDraftGuard.ts'
 import { useInspectorWrites } from '@/widgets/work-item-inspector/utils/useInspectorWrites.ts'
 import { useWorkItemChain } from '@/widgets/work-item-inspector/utils/useWorkItemChain.ts'
@@ -37,7 +44,6 @@ import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { planningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import { failureMessage, typedFailure } from '@/shared/api/typedFailure.ts'
 import type { TypedFailure } from '@/shared/api/typedFailure.ts'
-import { holderName } from '@/shared/lib/actor.ts'
 import { INSPECTOR_DRAWER_STORAGE_KEY } from '@/shared/lib/shellLayout.ts'
 import type { LaunchPacket } from '@/shared/types/launch.ts'
 import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
@@ -199,6 +205,7 @@ const sections = computed<ChoiceOption[]>(() => [
 ])
 
 const title = computed(() => item.value?.title || props.reference)
+const titleText = computed(() => titleRuns(title.value))
 const target = computed<PlanningTarget | undefined>(() => {
   const space = planningSpaceRef(props.resourceRef)
   return props.projectId && space
@@ -210,14 +217,8 @@ const target = computed<PlanningTarget | undefined>(() => {
       }
     : undefined
 })
-const holder = computed(() => (item.value?.claim_ref ? holderName(item.value.claim_ref) : ''))
-const holderLabel = computed(() =>
-  t(item.value?.state.is_terminal ? 'workItem.previousHolder' : 'workItem.holder', {
-    holder: holder.value,
-  }),
-)
-
-const headSlot = computed(() => Boolean(item.value && props.writable) || asking.value)
+/** The head holds what has to be answered or read before going on, and only while it does. */
+const headSlot = computed(() => Boolean(notice.value || writeError.value) || asking.value)
 
 const shownSection = computed({
   get: () => section.value,
@@ -273,6 +274,19 @@ const close = () => void leave(() => emit('close'))
       :close-label="t('drawer.close')"
       @close="close"
     >
+      <template #title>
+        <template
+          v-for="(run, index) in titleText"
+          :key="index"
+        >
+          <span
+            v-if="run.whole"
+            class="head-title-reference"
+            >{{ run.text }}</span
+          ><template v-else>{{ run.text }}</template>
+        </template>
+      </template>
+
       <template #meta>
         <div class="inspector-meta">
           <button
@@ -289,11 +303,6 @@ const close = () => void leave(() => emit('close'))
             <span>{{ t('workItem.back') }}</span>
           </button>
           <span class="head-reference">{{ reference }}</span>
-          <span
-            v-if="holder"
-            class="head-claim"
-            >{{ holderLabel }}</span
-          >
         </div>
       </template>
 
@@ -302,21 +311,21 @@ const close = () => void leave(() => emit('close'))
         #actions
       >
         <div class="head-stack">
-          <InspectorWriteActions
-            v-if="item && writable"
-            :item="item"
-            :workflow="workflow"
-            :busy="busy"
+          <InspectorRefusal
+            v-if="notice"
             :notice="notice"
-            :error="writeError"
-            @claim="claim"
-            @release="release"
-            @take-over="takeOver"
-            @move="moveTo"
+            :busy="busy"
             @dismiss="dismissNotice"
             @force="force"
             @guard="followGuard"
           />
+          <p
+            v-if="writeError"
+            class="head-error"
+            role="alert"
+          >
+            {{ writeError }}
+          </p>
           <ConfirmStrip
             v-if="asking"
             tone="danger"
@@ -336,10 +345,25 @@ const close = () => void leave(() => emit('close'))
             size="compact"
             :label="t('workItem.sections')"
             :options="sections"
+            wrap
           />
         </div>
       </template>
 
+      <div
+        v-if="item && writable"
+        class="inspector-writes"
+      >
+        <InspectorWriteActions
+          :item="item"
+          :workflow="workflow"
+          :busy="busy"
+          @claim="claim"
+          @release="release"
+          @take-over="takeOver"
+          @move="moveTo"
+        />
+      </div>
       <article
         :key="reference"
         class="inspector"

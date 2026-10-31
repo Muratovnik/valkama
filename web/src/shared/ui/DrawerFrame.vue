@@ -1,11 +1,43 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
 
 import VIcon from '@/shared/ui/VIcon.vue'
 
 defineProps<{ closeLabel: string; title: string; subtitle?: string }>()
 const emit = defineEmits<{ close: [] }>()
 const body = ref<HTMLElement | null>(null)
+const head = ref<HTMLElement | null>(null)
+
+/**
+ * The head gives its room back to the body once the body is read past it: the
+ * title keeps one line and what stands under it steps out, while the actions
+ * slot — a refusal, a question — and the tabs stay. Whole, the head of a long
+ * title took a quarter of a desktop drawer and more of a phone's, for as long as
+ * the drawer was read.
+ *
+ * It condenses only past its own height and comes back only at the very top,
+ * and the body is scrolled back by exactly the height the head gave up, so the
+ * text under the reader's eye does not move and a scroll near either threshold
+ * cannot flip it back and forth.
+ */
+const condensed = ref(false)
+/** How far past the head's own height the body is read before the head condenses. */
+const CONDENSE_AFTER = 24
+
+async function follow() {
+  const scroller = body.value
+  const whole = head.value
+  if (!scroller || !whole) return
+  if (condensed.value) {
+    if (scroller.scrollTop <= 0) condensed.value = false
+    return
+  }
+  const before = whole.offsetHeight
+  if (scroller.scrollTop <= before + CONDENSE_AFTER) return
+  condensed.value = true
+  await nextTick()
+  scroller.scrollTop -= before - whole.offsetHeight
+}
 
 /**
  * Back to the top of the body, for a host that swaps what the body shows. One
@@ -22,16 +54,27 @@ defineExpose({ scrollToTop })
 
 <template>
   <div class="drawer-frame">
-    <header class="drawer-frame-head">
+    <header
+      ref="head"
+      class="drawer-frame-head"
+      :class="{ condensed }"
+    >
       <div class="drawer-frame-title">
-        <h2 class="drawer-frame-name">{{ title }}</h2>
+        <h2 class="drawer-frame-name">
+          <slot name="title">{{ title }}</slot>
+        </h2>
         <p
           v-if="subtitle"
           class="drawer-frame-subtitle"
         >
           {{ subtitle }}
         </p>
-        <slot name="meta" />
+        <div
+          v-if="$slots.meta"
+          class="drawer-frame-meta"
+        >
+          <slot name="meta" />
+        </div>
       </div>
       <button
         class="drawer-frame-close"
@@ -57,6 +100,7 @@ defineExpose({ scrollToTop })
     <div
       ref="body"
       class="drawer-frame-body"
+      @scroll.passive="follow"
     >
       <slot />
     </div>
@@ -95,6 +139,20 @@ defineExpose({ scrollToTop })
   font: var(--font-drawer-title);
   letter-spacing: -0.02em;
   overflow-wrap: anywhere;
+}
+
+/* Condensed, the title is one line and the lines under it step out. */
+.drawer-frame-head.condensed {
+  .drawer-frame-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .drawer-frame-subtitle,
+  .drawer-frame-meta {
+    display: none;
+  }
 }
 
 .drawer-frame-subtitle {

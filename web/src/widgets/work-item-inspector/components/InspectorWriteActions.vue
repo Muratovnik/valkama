@@ -1,7 +1,9 @@
 <script setup lang="ts">
 /**
  * The two writes that change what an item is — who holds it and what state it
- * is in — and the questions and refusals that come with them.
+ * is in — and the takeover question that comes with them. A refusal of either
+ * is the host's to show, in the head that stays in view while the body scrolls,
+ * because a refused tick far down the card has to be seen where it was made.
  *
  * Release is this client's act on its own claim; the server refuses it on
  * anyone else's, and used to answer every press of the button with that same
@@ -15,9 +17,6 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import InspectorRefusal from '@/widgets/work-item-inspector/components/InspectorRefusal.vue'
-import type { RefusalNotice } from '@/widgets/work-item-inspector/utils/useInspectorWrites.ts'
-
 import type { PlanningWorkflow, WorkItem } from '@/shared/api/planningModel.ts'
 import { isWebAuthor } from '@/shared/api/webAuthor.ts'
 import { holderName } from '@/shared/lib/actor.ts'
@@ -28,17 +27,12 @@ import VButton from '@/shared/ui/VButton.vue'
 
 const props = defineProps<{
   busy: boolean
-  error: string
   item: WorkItem
-  notice: RefusalNotice | null
   workflow: PlanningWorkflow | null
 }>()
 
 const emit = defineEmits<{
   'claim': []
-  'dismiss': []
-  'force': []
-  'guard': [name: string]
   'move': [stateKey: string]
   'release': []
   'take-over': []
@@ -137,21 +131,6 @@ function takeOver() {
     @confirm="takeOver"
     @cancel="askingTakeover = false"
   />
-  <InspectorRefusal
-    v-if="notice"
-    :notice="notice"
-    :busy="busy"
-    @dismiss="emit('dismiss')"
-    @force="emit('force')"
-    @guard="(name) => emit('guard', name)"
-  />
-  <p
-    v-if="error"
-    class="head-error"
-    role="alert"
-  >
-    {{ error }}
-  </p>
 </template>
 
 <style scoped>
@@ -167,11 +146,5 @@ function takeOver() {
 .state-choice {
   flex: 1 1 auto;
   min-width: 0;
-}
-
-.head-error {
-  margin: 0;
-  color: var(--color-danger);
-  font: var(--font-detail);
 }
 </style>

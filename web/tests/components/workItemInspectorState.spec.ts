@@ -41,7 +41,9 @@ import {
 
 const passThrough = { template: '<div><slot /></div>' }
 const drawerFrame = {
-  template: '<div><slot name="meta" /><slot name="actions" /><slot name="tabs" /><slot /></div>',
+  // The frame's head and body, as the real one lays them out.
+  template:
+    '<div><header class="drawer-frame-head"><slot name="title" /><slot name="meta" /><slot name="actions" /><slot name="tabs" /></header><slot /></div>',
   methods: { scrollToTop() {} },
 }
 const overview = {
@@ -119,6 +121,19 @@ describe('WorkItemInspector resource state', () => {
     expect(wrapper.get('.overview-probe').text()).toBe(
       `Recovered work item:${resourceRef.resource_id}`,
     )
+  })
+
+  it('keeps a reference in the title whole, and the title as it was written', async () => {
+    vi.mocked(fetchWorkItem).mockResolvedValueOnce(
+      record('Findings after the review (follow-up to MAIN-384)', 1),
+    )
+    const wrapper = mountInspector()
+    await flushPromises()
+    const head = wrapper.get('.drawer-frame-head')
+    // The reference is one run the head keeps from breaking at its hyphen.
+    expect(head.findAll('.head-title-reference').map((run) => run.text())).toEqual(['MAIN-384'])
+    expect(head.text()).toContain('Findings after the review (follow-up to MAIN-384)')
+    wrapper.unmount()
   })
 
   it('keeps the exact inspector subtree through refresh and degraded retry', async () => {
@@ -219,12 +234,14 @@ describe('WorkItemInspector resource state', () => {
             fact.find('dt').text() === (terminal ? 'Previously responsible' : 'Responsible'),
         )
       expect(ownerFact?.find('dd').text()).toBe(claimed ? holder : 'No active claim')
-      if (claimed) {
-        expect(wrapper.get('.head-claim').text()).toBe(
-          terminal ? `Previously responsible: ${holder}` : `Responsible: ${holder}`,
-        )
-      }
-      const actions = wrapper.findAll('.head-actions button').map((button) => button.text())
+      // The holder is named once, in the facts; the head that stays in view
+      // holds the title, the reference and the sections, not the holder again.
+      const head = wrapper.get('.drawer-frame-head')
+      if (claimed) expect(head.text()).not.toContain(holder)
+      expect(head.find('.head-actions').exists()).toBe(false)
+      const actions = wrapper
+        .findAll('.inspector-writes .head-actions button')
+        .map((button) => button.text())
       expect(actions).toEqual(action)
       expect(wrapper.findComponent({ name: 'ChoiceSelect' }).exists()).toBe(writable)
       if (writable) {

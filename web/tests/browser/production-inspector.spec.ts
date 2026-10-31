@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import type { Locator } from '@playwright/test'
 
 import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { parsePlatformRoute, serializePlatformRoute } from '@/shared/api/platformRoute.ts'
@@ -52,7 +53,9 @@ test('Russian relations keep one hierarchy, aligned controls, and narrow content
   await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
   const drawer = page.locator('.drawer')
-  await expect(drawer.locator('.head-claim')).toContainText('Ответственный: codex')
+  // The holder is named once, in the facts, and not again in the head.
+  await expect(drawer.locator('.fact').filter({ hasText: 'Ответственный' })).toContainText('codex')
+  await expect(drawer.locator('.drawer-frame-head')).not.toContainText('codex')
   await drawer.getByRole('checkbox', { name: 'Отчёт о работе', exact: true }).check()
   const result = drawer.getByRole('textbox', { name: 'Что сделано', exact: true })
   const longDraft =
@@ -182,3 +185,66 @@ test('an unsent comment survives browser Back, global search and a reload until 
   await expect(drawer.locator('.head-reference')).toHaveText(workItemRef.reference)
   await expect(strip).toHaveCount(0)
 })
+
+async function topOf(locator: Locator): Promise<number> {
+  const box = await locator.boundingBox()
+  return box?.y ?? 0
+}
+
+async function heightOf(locator: Locator): Promise<number> {
+  const box = await locator.boundingBox()
+  return box?.height ?? 0
+}
+
+async function rightOf(locator: Locator): Promise<number> {
+  const box = await locator.boundingBox()
+  return (box?.x ?? 0) + (box?.width ?? 0)
+}
+
+for (const width of [1440, 390]) {
+  test(`the card's head names every section and gives its room back while the body is read at ${width}px`, async ({
+    page,
+  }) => {
+    await page.addInitScript(() => localStorage.setItem('valkama-locale', 'ru'))
+    await page.setViewportSize({ width, height: 700 })
+    await installBackend(page)
+    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+    await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
+    const drawer = page.locator('.drawer')
+    const head = drawer.locator('.drawer-frame-head')
+    await expect(drawer.locator('.head-reference')).toHaveText(workItemRef.reference)
+
+    // Every section is named whole on the strip: no scrollbar, nothing cut off.
+    const tabs = drawer.locator('.inspector-tabs')
+    const strip = await tabs.evaluate((node) => ({
+      overflow: node.scrollWidth - node.clientWidth,
+      bar: getComputedStyle(node).overflowX,
+    }))
+    expect(strip).toEqual({ overflow: 0, bar: 'visible' })
+    const edge = await rightOf(tabs)
+    for (const tab of await tabs.getByRole('button').all())
+      expect(await rightOf(tab)).toBeLessThanOrEqual(edge + 0.5)
+    await expect(tabs.getByRole('button', { name: 'Системные события', exact: true })).toBeVisible()
+
+    // Read down the body: the head condenses, and the text under the reader's
+    // eye moves by the distance scrolled and not by the height the head gave up.
+    const whole = await heightOf(head)
+    const body = drawer.locator('.drawer-frame-body')
+    await body.hover()
+    const probe = drawer.locator('.inspector-writes')
+    let before = await topOf(probe)
+    for (let step = 0; step < 6; step += 1) {
+      await page.mouse.wheel(0, 80)
+      await expect.poll(() => topOf(probe)).toBeCloseTo(before - 80, 0)
+      before -= 80
+    }
+    await expect(head).toHaveClass(/condensed/u)
+    expect(await heightOf(head)).toBeLessThan(whole - 20)
+    await expect(drawer.locator('.head-reference')).toBeHidden()
+
+    // Back at the top the head is whole again.
+    await body.evaluate((node) => node.scrollTo({ top: 0 }))
+    await expect(head).not.toHaveClass(/condensed/u)
+    await expect.poll(() => heightOf(head)).toBeCloseTo(whole, 0)
+  })
+}

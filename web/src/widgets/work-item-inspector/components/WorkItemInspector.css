@@ -37,10 +37,9 @@
   }
 }
 
-.head-claim {
-  color: var(--color-text-muted);
-  font: var(--font-detail);
-  overflow-wrap: anywhere;
+/* A reference in the title is one word: a line breaks around it, never at its hyphen. */
+.head-title-reference {
+  white-space: nowrap;
 }
 
 .head-reference {
@@ -50,8 +49,8 @@
 }
 
 /* What the head asks or reports — a refusal, a question before a draft is lost
-   — stands under the two writes it is about, at full width, and stays in view
-   while the body scrolls. */
+   — stands under the title at full width, and stays in view while the body
+   scrolls. */
 .head-stack {
   display: grid;
   flex: 1 1 100%;
@@ -59,11 +58,25 @@
   min-width: 0;
 }
 
+.head-error {
+  margin: 0;
+  color: var(--color-danger);
+  font: var(--font-detail);
+}
+
+/* The writes open the body, above whichever section is shown. */
+.inspector-writes {
+  display: grid;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+}
+
+/* Every section is named on the strip at every width: where one row cannot
+   hold them the strip takes a second row, rather than a scrollbar that hid the
+   last section behind its own arrows on a phone. */
 .inspector-tabs {
   width: 100%;
   padding-bottom: var(--space-3);
-  overflow-x: auto;
-  scrollbar-width: thin;
 }
 
 .inspector-read-recovery {
