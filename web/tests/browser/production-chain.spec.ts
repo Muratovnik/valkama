@@ -193,7 +193,10 @@ test('the readout of the first lane stays inside a panel scrolled to the map', a
   })
   const box = (await lane.boundingBox()) ?? { x: 0, y: 0, width: 0, height: 0 }
   expect(box.y - panelTop).toBeLessThan(40)
-  await page.mouse.move(box.x + 200, box.y + box.height / 2)
+  // The point is resolved against the lane when the pointer moves, and only
+  // once the lane holds still: a box measured beforehand can be stale by then.
+  await lane.hover({ position: { x: 200, y: box.height / 2 } })
+  await expect(section.locator('.branch-tip')).toBeVisible()
   const tip = await section.locator('.branch-tip').boundingBox()
   expect(tip).not.toBeNull()
   // Above the lane it would rise past the panel's top edge and be cut off.
