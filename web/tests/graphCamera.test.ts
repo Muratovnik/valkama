@@ -81,3 +81,23 @@ test('small graphs fit naturally and missing selections use an existing root', a
   assert.ok(fallback)
   inCamera(large, 1, fallback)
 })
+test('a chain starts on its root rather than on the first workable item', async () => {
+  const placed = await graph(214)
+  const camera = graphCameraView(placed, SIZE, new Set([nodeId(1)]), { rootId: nodeId(150) })
+  assert.ok(camera)
+  assert.ok(camera.zoom >= 0.75)
+  inCamera(placed, 150, camera)
+  // The open card still outranks the root, and «Focus work» still asks for work.
+  const selected = graphCameraView(placed, SIZE, new Set([nodeId(1)]), {
+    rootId: nodeId(150),
+    selectedId: nodeId(60),
+  })
+  assert.ok(selected)
+  inCamera(placed, 60, selected)
+  const work = graphCameraView(placed, SIZE, new Set([nodeId(1)]), {
+    rootId: nodeId(150),
+    focusOnly: true,
+  })
+  assert.ok(work)
+  inCamera(placed, 1, work)
+})

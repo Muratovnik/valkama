@@ -24,20 +24,31 @@ function fitNodes(nodes: PlacedNode[], dimensions: Dimensions): ViewportTransfor
   )
 }
 
+/**
+ * Where the camera starts: the whole field when it reads at that size,
+ * otherwise one anchor and its direct links. The anchor is the open card's item,
+ * then — for a chain — the root the chain grew from, so a reload or a link lands
+ * on the same place the card's «Show on graph» does; then the first workable
+ * item. «Focus work» asks for workable work, so it skips the root.
+ */
 export function graphCameraView(
   graph: GraphLayout,
   dimensions: Dimensions,
   readyIds: Set<string>,
-  options: { focusOnly?: boolean; selectedId?: string | null } = {},
+  options: { focusOnly?: boolean; rootId?: string | null; selectedId?: string | null } = {},
 ): ViewportTransform | null {
   if (!graph.nodes.length || !dimensions.width || !dimensions.height) return null
   const whole = fitNodes(graph.nodes, dimensions)
   const selected = graph.nodes.find((node) => node.work_item_id === options.selectedId)
   if (!options.focusOnly && !selected && whole.zoom >= READABLE_ZOOM) return whole
 
+  const root = options.focusOnly
+    ? undefined
+    : graph.nodes.find((node) => node.work_item_id === options.rootId)
   const incoming = new Set(graph.edges.map((edge) => edge.to))
   const anchor =
     selected ??
+    root ??
     graph.nodes.find((node) => readyIds.has(node.work_item_id)) ??
     graph.nodes.find((node) => !incoming.has(node.work_item_id)) ??
     graph.nodes[0]

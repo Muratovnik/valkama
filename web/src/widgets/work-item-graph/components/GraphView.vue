@@ -241,6 +241,7 @@ function scheduleFitView(focusOnly = false) {
     if (!flowReady.value || request !== cameraRequest || !placed.value) return
     const camera = graphCameraView(placed.value, dimensions.value, readyIdSet.value, {
       selectedId: props.selectedId,
+      rootId: inChain.value ? props.epicId : null,
       focusOnly,
     })
     if (!camera) return
