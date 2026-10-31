@@ -13,7 +13,7 @@ the call and the session row, every time it is asked for, and never written:
 | Checked in order | State |
 |---|---|
 | no claim | none |
-| no call, a call that is not `confirmed`, or a call without a session | `unconfirmed` |
+| no call (or no such column, in a scope an earlier build wrote), a call that is not `confirmed`, or a call without a session | `unconfirmed` |
 | no session row, a session `ended` or `failed`, or `last_seen` older than `LEASE_PERIOD` | `stale` |
 | otherwise | `live` |
 
@@ -105,7 +105,10 @@ def lease(conn: sqlite3.Connection, row: sqlite3.Row) -> Lease | None:
     if not holder:
         return None
     call = None
-    if row["claim_call_id"] is not None:
+    # An attached scope is read as it is and never migrated, so a store an
+    # earlier build wrote has no `claim_call_id`: its claims name no call.
+    columns = row.keys()  # `in row` would search a Row's values, not its names
+    if "claim_call_id" in columns and row["claim_call_id"] is not None:
         call = conn.execute(
             "SELECT c.identity_state, c.identity_source, c.session_id, c.agent_id, c.received_at,"
             " s.id AS session_row, s.status, s.last_seen"

@@ -256,6 +256,12 @@ checkouts are therefore distinguishable even at the same version.
   limit and `next_offset` says where the rest starts. The list order now ends
   on the work item id, so paging cannot repeat or skip an item that ties with
   one from another space.
+- Search across attached scopes (`/api/search?scope=all`) failed as a whole when
+  one attached store was written by an earlier build: reading a claim there
+  needed a column that store does not have. Such a claim now reads
+  `unconfirmed`, and a scope that cannot be opened or searched for any reason
+  costs only its own hits and is named, with the reason, in the new `skipped`
+  list of the answer.
 - A claim, checklist claim or checklist tick made in the browser was signed
   `agent`, while a comment made there was signed `user`. A browser write that
   names no author, or an empty one, is now signed `user`.

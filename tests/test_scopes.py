@@ -8,16 +8,19 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from server import store
+from server import federation, store
 from server.planning import service as planning_service
 from server.projects import scopes
-from tests import SUITE_STORE
+from tests import SUITE_STORE, schema9
 
 
-class RegistryTests(unittest.TestCase):
+class ScopeCase(unittest.TestCase):
+    """A primary store and a second one beside it, each with a space."""
+
     def setUp(self) -> None:
         self._dir = tempfile.TemporaryDirectory()
         self.primary = os.path.join(self._dir.name, "valkama.sqlite3")
@@ -41,6 +44,8 @@ class RegistryTests(unittest.TestCase):
         os.environ["VALKAMA_DB"] = SUITE_STORE
         self._dir.cleanup()
 
+
+class RegistryTests(ScopeCase):
     def test_the_primary_scope_exists_without_a_registry(self) -> None:
         listed = scopes.load(self.primary)
         self.assertEqual([scopes.PRIMARY_SCOPE], [item["name"] for item in listed])
@@ -136,6 +141,55 @@ class RegistryTests(unittest.TestCase):
         for bad in ("WOR-12", "work#", ""):
             with self.subTest(value=bad), self.assertRaises(scopes.ScopeError):
                 scopes.split_qualified(bad)
+
+
+class FederatedSearchTests(ScopeCase):
+    """One scope that cannot be read the way this build reads costs that scope's hits only."""
+
+    def older(self) -> str:
+        """A store an earlier build wrote: schema 9 before session identity, never migrated."""
+
+        path = os.path.join(self._dir.name, "older.sqlite3")
+        schema9.build(path)
+        connection = sqlite3.connect(path)
+        try:
+            schema9.populate(connection)
+            connection.commit()
+        finally:
+            connection.close()
+        return path
+
+    def test_a_claimed_item_in_a_scope_without_claim_calls_reads_unconfirmed(self) -> None:
+        scopes.attach(self.primary, "older", self.older())
+        found = federation.federated_search("Held")
+        [hit] = [item for item in found["work_items"] if item["scope"] == "older"]
+        self.assertEqual(("KEEP-1", "unconfirmed"), (hit["reference"], hit["claim_state"]))
+        self.assertEqual([], found["skipped"])
+
+    def test_a_scope_that_fails_is_skipped_and_named(self) -> None:
+        scopes.attach(self.primary, "work", self.work)
+        real = planning_service.search_work_items
+
+        def failing(connection: sqlite3.Connection, text: str, **options: object) -> list[dict]:
+            path = connection.execute("PRAGMA database_list").fetchone()[2]
+            if os.path.samefile(path, self.work):
+                raise IndexError("No item with that key")
+            return real(connection, text, **options)  # type: ignore[arg-type]
+
+        with mock.patch.object(planning_service, "search_work_items", side_effect=failing):
+            found = federation.federated_search("item")
+        self.assertEqual([], [item for item in found["work_items"] if item["scope"] == "work"])
+        self.assertEqual(
+            [{"scope": "work", "detail": "IndexError: No item with that key"}], found["skipped"]
+        )
+
+    def test_an_unavailable_scope_is_named_too(self) -> None:
+        scopes.attach(self.primary, "work", self.work)
+        os.remove(self.work)
+        found = federation.federated_search("item")
+        [skipped] = found["skipped"]
+        self.assertEqual("work", skipped["scope"])
+        self.assertIn("not present", skipped["detail"])
 
 
 if __name__ == "__main__":

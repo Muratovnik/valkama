@@ -48,34 +48,55 @@ def federated_spaces() -> dict:
 
 
 def federated_search(query: str) -> dict:
-    """One query across every attached scope, each hit labelled with its source."""
+    """One query across every attached scope, each hit labelled with its source.
+
+    A scope that cannot be opened or searched costs its own hits and nothing
+    else: an attached store is read as it is, never migrated, so one an earlier
+    or later build wrote may not answer the way this build asks. It is named in
+    `skipped` with the reason, so a missing hit is never silent.
+    """
 
     text = query.strip()
     if not text:
-        return {"query": "", "work_items": [], "documents": []}
+        return {"query": "", "work_items": [], "documents": [], "skipped": []}
     work_items: list[dict] = []
+    skipped: list[dict] = []
     for scope in scopes.load(db_path()):
         try:
             connection = connect() if scope.get("primary") else scopes.open_readonly(scope)
-        except (scopes.ScopeError, sqlite3.Error):
-            continue  # an unavailable scope is reported by /api/scopes
+        except (scopes.ScopeError, sqlite3.Error) as error:
+            skipped.append({"scope": scope["name"], "detail": str(error)})
+            continue
+        found: list[dict] = []
         try:
             # One search per store rather than one per space: the reference
             # already carries the space, so asking space by space would only
             # repeat the same scan.
             for item in planning_service.search_work_items(connection, text):
-                work_items.append(
+                found.append(
                     {
                         **item,
                         "scope": scope["name"],
                         "qualified_reference": scopes.qualified(scope["name"], item["reference"]),
                     }
                 )
-        except (sqlite3.Error, ValueError):
+        except Exception as error:  # noqa: BLE001 -- one scope's failure is that scope's alone
+            detail = (
+                str(error)
+                if isinstance(error, sqlite3.Error)
+                else (f"{type(error).__name__}: {error}")
+            )
+            skipped.append({"scope": scope["name"], "detail": detail})
             continue
         finally:
             connection.close()
-    return {"query": text, "work_items": work_items, "documents": search_documents(text)}
+        work_items.extend(found)
+    return {
+        "query": text,
+        "work_items": work_items,
+        "documents": search_documents(text),
+        "skipped": skipped,
+    }
 
 
 __all__ = ["federated_search", "federated_spaces"]
