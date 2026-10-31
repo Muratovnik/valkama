@@ -122,6 +122,19 @@ class ReleaseToolchainTests(unittest.TestCase):
         self.assertIn("semgrep", message)
         self.assertIn(str(self.environment.scripts), message)
 
+    def test_a_script_in_the_current_directory_does_not_stand_in_either(self) -> None:
+        # shutil.which searches the current directory first on Windows, even
+        # when it is handed a path of its own.
+        next(self.environment.scripts.glob("semgrep*")).unlink()
+        here = self.root / "checkout"
+        here.mkdir()
+        _script(here, "semgrep")
+        previous = Path.cwd()
+        os.chdir(here)
+        self.addCleanup(os.chdir, previous)
+        message = self.refusal(self.environment.interpreter())
+        self.assertIn(f"no semgrep console script in {self.environment.scripts}", message)
+
     def test_the_tool_environment_puts_the_interpreters_scripts_first(self) -> None:
         # semgrep's launcher finds pysemgrep through PATH and only appends its
         # own directory, so a shared copy earlier on PATH would win.
@@ -149,7 +162,9 @@ class ReleaseToolchainTests(unittest.TestCase):
         self.assertIn("ruff: not installed; requirements-dev.txt pins 0.17.3", message)
         self.assertIn("semgrep: 1.150.0 installed; requirements-dev.txt pins 1.183.0", message)
         self.assertNotIn("mypy", message)
-        self.assertIn("pip install -r requirements-dev.txt", message)
+        # uv's venv holds no pip, so each way of creating one names its own installer.
+        self.assertIn("uv venv .venv --python 3.11, then uv pip install --python", message)
+        self.assertIn("python -m venv .venv, then .venv/Scripts/python -m pip install", message)
         self.assertIn(".github/relkit.pyz release prepare", message)
 
     def test_a_pin_the_suite_imports_counts_although_no_stage_runs_it(self) -> None:

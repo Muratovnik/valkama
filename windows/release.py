@@ -35,6 +35,8 @@ SKIP_DIRS = frozenset(
 )
 REQUIREMENTS = ROOT / "requirements-dev.txt"
 _PIN = re.compile(r"([A-Za-z0-9][A-Za-z0-9._-]*)==([A-Za-z0-9.+!_-]+)")
+#: What pip names a console script: an `.exe` launcher on Windows, the bare name elsewhere.
+_SCRIPT_SUFFIXES = (".exe",) if sys.platform == "win32" else ("",)
 
 
 class ToolchainError(RuntimeError):
@@ -138,9 +140,9 @@ def require_toolchain(
         if tool.module is not None:
             commands[name] = (str(interpreter.executable), "-m", tool.module)
         elif tool.script is not None:
-            found = shutil.which(tool.script, path=str(interpreter.scripts))
+            found = _console_script(interpreter.scripts, tool.script)
             if found is not None:
-                commands[name] = (found,)
+                commands[name] = (str(found),)
             elif interpreter.version_of(tool.distribution) is not None:
                 # A missing distribution is already reported; a missing script
                 # beside an installed one is a broken install.
@@ -150,13 +152,27 @@ def require_toolchain(
         raise ToolchainError(
             f"release check: {interpreter.executable} does not hold the pinned gate"
             f" toolchain:\n{listed}\n"
-            "Run the release with the project's virtual environment: create it"
-            " (uv venv .venv --python 3.11, or python -m venv .venv), install the"
-            " pins with .venv/Scripts/python -m pip install -r requirements-dev.txt,"
-            " then run .venv/Scripts/python .github/relkit.pyz release prepare"
-            " <version> (.venv/bin/python outside Windows)."
+            "Run the release with the project's virtual environment: create it and"
+            " install the pins (uv venv .venv --python 3.11, then uv pip install"
+            " --python .venv/Scripts/python.exe -r requirements-dev.txt; or"
+            " python -m venv .venv, then .venv/Scripts/python -m pip install -r"
+            " requirements-dev.txt), then run .venv/Scripts/python .github/relkit.pyz"
+            " release prepare <version> (.venv/bin/python outside Windows)."
         )
     return commands
+
+
+def _console_script(directory: Path, name: str) -> Path | None:
+    """The console script `name` in `directory`, and nowhere else.
+
+    `shutil.which` with a `path` still searches the current directory first on
+    Windows, so a same-named executable where the release runs would win.
+    """
+
+    for candidate in (directory / f"{name}{suffix}" for suffix in _SCRIPT_SUFFIXES):
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return candidate
+    return None
 
 
 def tool_environment(interpreter: Interpreter, base: Mapping[str, str]) -> dict[str, str]:
