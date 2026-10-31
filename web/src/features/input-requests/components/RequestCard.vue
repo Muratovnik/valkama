@@ -19,6 +19,7 @@ import type {
 } from '@/shared/api/inputRequestModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { isWebAuthor } from '@/shared/api/webAuthor.ts'
+import { projectTitle, useProjectTitles } from '@/shared/lib/projectTitles.ts'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
 import VButton from '@/shared/ui/VButton.vue'
 
@@ -107,8 +108,10 @@ const deadlineLabel = computed(() =>
   }),
 )
 /** Project and task; the space key is left out where the reference already begins with it. */
+const projects = useProjectTitles()
 const context = computed(() => {
-  const { project_id: project, space_ref: space } = props.entry.target
+  const { project_id: id, space_ref: space } = props.entry.target
+  const project = projectTitle(projects.value, id)
   const reference = request.value.reference
   return reference.startsWith(`${space.space_key}-`)
     ? `${project} · ${reference}`

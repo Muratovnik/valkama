@@ -7,6 +7,7 @@ import type { GlobalPlanningSearch } from '@/shared/api/planningGlobalSearchApi.
 import { skippedSourceReason } from '@/shared/api/planningTarget.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { typedFailure } from '@/shared/api/typedFailure.ts'
+import { projectTitle } from '@/shared/lib/projectTitles.ts'
 import CommandList from '@/shared/ui/CommandList.vue'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
@@ -40,11 +41,6 @@ const FAILURES = new Set([
   'request_timeout',
 ])
 
-/** A project by its title, or by its id when the app's list does not hold it. */
-function projectName(projectId: string) {
-  return props.projects.find((project) => project.project_id === projectId)?.title ?? projectId
-}
-
 /**
  * The sources that were not searched, one line per reason. A raw reason never
  * reaches the screen: the shared mapping reads an unknown one as "other".
@@ -55,7 +51,7 @@ const skipped = computed(() => {
     if (entry.status !== 'unavailable') continue
     const reason = skippedSourceReason(entry.reason)
     const sources = groups.get(reason) ?? []
-    sources.push(`${projectName(entry.project_id)} · ${entry.space_ref.space_key}`)
+    sources.push(`${projectTitle(props.projects, entry.project_id)} · ${entry.space_ref.space_key}`)
     groups.set(reason, sources)
   }
   return [...groups].map(([reason, sources]) => ({
@@ -94,7 +90,7 @@ const choices = computed(() =>
     title: entry.item.title,
     reference: entry.item.reference,
     detail: [
-      projectName(entry.target.project_id),
+      projectTitle(props.projects, entry.target.project_id),
       entry.item.state.name,
       ...(entry.target.writable ? [] : [t('finder.readonly')]),
     ].join(' · '),

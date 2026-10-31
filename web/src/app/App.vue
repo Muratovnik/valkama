@@ -29,6 +29,7 @@ import type { PlanningConnectionState } from '@/shared/api/planningApi.ts'
 import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
 import { failureMessage } from '@/shared/api/typedFailure.ts'
 import type { TypedFailure } from '@/shared/api/typedFailure.ts'
+import { provideProjectTitles } from '@/shared/lib/projectTitles.ts'
 import type { ResolvedRef } from '@/shared/types/reference.ts'
 
 const { t, te, locale } = useI18n()
@@ -71,6 +72,8 @@ const contextReady = computed(() =>
     ? contextState.value.payload
     : null,
 )
+// Every surface that names a project reads the same list the finder does.
+provideProjectTitles(computed(() => contextReady.value?.projects ?? []))
 const mappedProjectResources = computed(() => {
   const scope = operatingScope.value
   return scope.kind === 'project'

@@ -27,6 +27,7 @@ import type {
 } from '@/shared/api/inputRequestModel.ts'
 import { skippedSourceReason } from '@/shared/api/planningTarget.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
+import { projectTitle, useProjectTitles } from '@/shared/lib/projectTitles.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import VButton from '@/shared/ui/VButton.vue'
 
@@ -84,6 +85,7 @@ const statusText = computed(() => {
 const showToolbar = computed(
   () => Boolean(statusText.value) && (props.showRefresh || !props.result || props.failed),
 )
+const projects = useProjectTitles()
 /** The sources not read, each with the reason the finder names it by. */
 const skipped = computed(() =>
   (props.result?.coverage ?? [])
@@ -93,7 +95,7 @@ const skipped = computed(() =>
       return {
         key: JSON.stringify([source.project_id, source.space_ref]),
         text: t('requests.sourceUnavailable', {
-          project: source.project_id,
+          project: projectTitle(projects.value, source.project_id),
           space: source.space_ref.space_key,
           reason: t(
             reason === 'requests_unavailable' ? 'requests.unreadable' : `finder.reasons.${reason}`,
