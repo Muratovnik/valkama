@@ -62,15 +62,17 @@ function isDone(group: ChainGroup): boolean {
   return group === 'done'
 }
 
+/** Who holds an open item, if anyone does. */
+function holder(group: ChainGroup, member: ChainMember): string | null {
+  return !isDone(group) && member.claim_ref ? holderName(member.claim_ref) : null
+}
+
 /**
- * Who holds an open item; otherwise its state, unless the heading above already
- * names the one state the whole group is in. A closed one says how it ended on
- * the same terms.
+ * An unheld item's state, unless the heading above already names the one state
+ * the whole group is in. A closed one says how it ended on the same terms.
  */
-function detail(group: ChainGroup, member: ChainMember): string | null {
-  return !isDone(group) && member.claim_ref
-    ? holderName(member.claim_ref)
-    : rowStateName(props.groups[group], member)
+function stateWord(group: ChainGroup, member: ChainMember): string | null {
+  return holder(group, member) ? null : rowStateName(props.groups[group], member)
 }
 </script>
 
@@ -132,9 +134,14 @@ function detail(group: ChainGroup, member: ChainMember): string | null {
                 >{{ t('workItem.chain.workableMark') }}</span
               >
               <span
-                v-if="detail(group, member)"
+                v-if="holder(group, member)"
+                class="chain-row-detail chain-row-holder"
+                >{{ holder(group, member) }}</span
+              >
+              <span
+                v-else-if="stateWord(group, member)"
                 class="chain-row-detail"
-                >{{ detail(group, member) }}</span
+                >{{ stateWord(group, member) }}</span
               >
             </button>
           </li>
@@ -158,6 +165,7 @@ function detail(group: ChainGroup, member: ChainMember): string | null {
   display: grid;
   gap: var(--space-4);
   min-width: 0;
+  container: chain-members / inline-size;
 }
 
 .chain-group {
@@ -242,6 +250,16 @@ function detail(group: ChainGroup, member: ChainMember): string | null {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* On a narrow list the name gives way before the state word does, and who
+   holds a task gives way before its name: at a phone's width the holder took a
+   third of the row and left the title a dozen characters. The card of the task
+   names its holder. */
+@container chain-members (width < 480px) {
+  .chain-row-holder {
+    display: none;
+  }
 }
 
 .chain-more {
