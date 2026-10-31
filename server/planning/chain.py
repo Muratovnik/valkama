@@ -18,7 +18,8 @@ members stay in R's planning space.
 Everything is read in one query per table and computed here, so a space of a
 thousand items answers in one pass rather than one read per member; only a held
 member costs one more, to read its lease. Readiness is the read model's own
-rule, asked through `read_model.workable` with facts loaded in bulk.
+rule, asked through `read_model.workable` with facts loaded in bulk, and so is a
+member's `rank`: its place in the space's order of work, `ranking.ranks`.
 """
 
 from __future__ import annotations
@@ -29,7 +30,7 @@ from collections import Counter
 from datetime import UTC, date, datetime, timedelta
 from functools import partial
 
-from . import leases, model, read_model
+from . import leases, model, ranking, read_model
 
 #: The scopes a chain is read in.
 SCOPES = ("chain", "epic")
@@ -63,7 +64,8 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
         str(row["work_item_id"]): row
         for row in conn.execute(
             "SELECT i.*, s.key AS state_key, s.name AS state_name,"
-            " s.category AS state_category, s.is_terminal AS state_terminal"
+            " s.category AS state_category, s.is_terminal AS state_terminal,"
+            " s.position AS state_position"
             " FROM work_items i JOIN workflow_states s ON s.state_id = i.state_id"
             " WHERE i.planning_space_id = ? ORDER BY i.number",
             (space_id,),
@@ -93,6 +95,7 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
         if row["parent_id"] is not None:
             children.setdefault(str(row["parent_id"]), []).append(identity)
     members = _members(root_id, scope, rows, children, links)
+    rank = ranking.ranks(rows.values())
 
     # What an unfinished item blocks, wherever the blocker lives.
     blocked = {
@@ -129,6 +132,7 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
                     category=str(row["state_category"]),
                     blocked=partial(operator.contains, blocked, identity),
                 ),
+                "rank": rank[identity],
                 "_parent_id": parent,
             }
         )

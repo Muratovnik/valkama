@@ -337,15 +337,17 @@ class PlanningDomainTests(unittest.TestCase):
 
     # -- ready work ----------------------------------------------------------
 
-    def test_claim_ready_skips_a_blocked_item_and_prefers_urgency(self) -> None:
+    def test_claim_ready_skips_a_blocked_item_and_follows_the_planned_order(self) -> None:
+        # Priority no longer jumps the order: the urgent item was created last,
+        # so it is last in its state and waits until somebody places it first.
         blocked = self.item("Blocked work")
         blocker = self.item("The blocker")
         service.link_work_items(self.conn, blocker["reference"], blocked["reference"], "blocks")
         urgent = self.item("Urgent work", priority="urgent")
         picked = service.claim_ready_work_item(self.conn, space=self.space["key"], author="tester")
-        self.assertEqual(urgent["reference"], picked["reference"])
+        self.assertEqual(blocker["reference"], picked["reference"])
         second = service.claim_ready_work_item(self.conn, space=self.space["key"], author="tester")
-        self.assertEqual(blocker["reference"], second["reference"])
+        self.assertEqual(urgent["reference"], second["reference"])
         third = service.claim_ready_work_item(self.conn, space=self.space["key"], author="tester")
         self.assertIsNone(third)
 

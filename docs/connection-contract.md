@@ -140,6 +140,49 @@ before (200 for a list, 50 for a search), and with the same `truncated` and
 `GET /api/planning/search` take the same `offset` parameter and carry the same
 two fields.
 
+### The order of work
+
+Every work item has a place among the items in its state, and that place is the
+order work is taken in. `list_work_items`, `GET /api/planning/work-items` and
+`GET /api/planning` list the items of each state in that order, the states in
+the workflow's order. The place is the item's `position`, which every store
+already holds, so placing an item changes no store format and a build that
+predates placements reads the same order.
+
+`update_work_item` and `POST /api/planning/work-item/update` take `rank`, which
+places the item among the items of its own state:
+
+| `rank` | Places the item |
+| --- | --- |
+| `first` | before every other item in its state |
+| `last` | after every other item in its state |
+| `before:<item>` | directly before that item |
+| `after:<item>` | directly after that item |
+
+`<item>` is a reference or a work item id, and it must be another item in the
+same state of the same planning space. Any other spelling, and an anchor that is
+the item itself, lives in another space or stands in another state, is refused
+with `invalid_request` before anything is written. A placement that names where
+the item already stands writes nothing. Otherwise it is an edit like the other
+fields `update_work_item` takes: guarded by `expected_revision`, one revision,
+no history event, and the acknowledgement's `updated` names `rank`. The call is
+recorded with its identity, as every write is. Placing an item moves no other
+item, except when two neighbours leave no room between them: then the items of
+that state are renumbered in the order they already have, with no revision bump.
+
+`transition_work_item`, `POST /api/planning/work-item/transition` and the
+`transition` group of `apply_work_item_changes` take the same `rank`, which
+places the item in the state it moves to; the anchor must then be in that state.
+Without `rank` a moved item goes last in its new state, as it did before
+placements existed, and a new item goes last in its first state.
+
+`claim_ready_work_item` takes the first ready item in that order: an item in a
+`queued` state before one in a `backlog` state, then the states in the
+workflow's order, then the place inside the state. Priority only breaks a tie
+between two items at the same place, which a store written before placements
+can hold, and the item number breaks what is left. Placing an item first is what
+makes it next; an urgent item nobody placed waits its turn.
+
 ### Reading one work item
 
 `get_work_item` answers with every current field of the item -- state,
@@ -203,7 +246,7 @@ answers with `interface_version` and `chain`:
 | `origins` | members grouped by their parent: `parent_reference` and `parent_title` (`null` for members without a parent), `count` and `open`. The root's own children come first, then the larger groups |
 | `series` | one entry per UTC day on which a member was created or closed, oldest first: `day` (`YYYY-MM-DD`), `created`, `closed`, and the running totals `total` and `closed_total` |
 | `recent` | the last 7 UTC days, today included: `days` (7), `created`, `closed`, and `trend`, which is `growing` when more were created than closed, `converging` when fewer, and `steady` otherwise |
-| `members` | every member, by number: `work_item_id`, `reference`, `title`, `state` (`key`, `name`, `category`, `is_terminal`), `claim_ref`, `claim_state`, `parent_reference`, `created_at`, `closed_at` and `ready` |
+| `members` | every member, by number: `work_item_id`, `reference`, `title`, `state` (`key`, `name`, `category`, `is_terminal`), `claim_ref`, `claim_state`, `parent_reference`, `created_at`, `closed_at`, `ready` and `rank` |
 | `edges` | the `blocks` and `discovered-from` links whose two ends are the root or members: `from`, `to` (work item ids) and `kind` |
 
 A member's `closed_at` is when it last changed state, if its state is terminal:
@@ -212,6 +255,14 @@ It is `null` for an open member. `ready` is the rule every work item record
 uses: unheld, not a parent, in a state work can start from, and not blocked by
 anything unfinished.
 
+A member's `rank` is its 1-based place in the order of work across its whole
+planning space: the states by category (`active`, `review`, `queued`,
+`backlog`, `blocked`, `completed`, `cancelled`), then the workflow's order of
+states, then the place inside a state, as described in
+[The order of work](#the-order-of-work). It is counted over the space, not over
+the chain, so two members' ranks are compared and never counted between: a gap
+means work outside the chain stands between them.
+
 A `scope` other than `chain` or `epic` is refused with `invalid_request`, and so
 is an unknown item, as on `GET /api/planning/work-item`.
 
@@ -219,9 +270,9 @@ The MCP tool `get_work_item_chain` takes `id`, `scope`, `offset` and `limit`, an
 answers with the same fields except `members` and `edges`, with only the newest
 30 entries of `series`. In their place it carries `open_members`, one compact
 row per open member: `reference`, `title`, `state` (the key), `claim_ref`,
-`ready` and `parent_reference`. They come in the order a reader acts on them:
-active members, then members in review, then ready ones, then the rest, each
-group by number. The rows are paged like a list: at most `limit` per answer, 50
+`ready`, `parent_reference` and `rank`. They come in the order a reader acts on
+them: active members, then members in review, then ready ones, then the rest,
+each group in the order of work. The rows are paged like a list: at most `limit` per answer, 50
 by default and at most 200, with `truncated` and `next_offset`.
 
 ### Several changes in one call
@@ -238,7 +289,7 @@ these groups, and applies them in this order:
 | `links` | list of `{other, kind, remove?}`, linking from this item | `link_work_items` |
 | `comment` | `{body, checklist_item_id?}` | `comment_work_item` |
 | `summary` | `{done, next, why?}` | `set_work_item_summary` |
-| `transition` | `{state, reason?, force?}` | `transition_work_item` |
+| `transition` | `{state, reason?, force?, rank?}` | `transition_work_item` |
 
 Each step is the write its single tool makes, with the same guards, events,
 revision bumps and refusals, so a closing transition is judged after the ticks

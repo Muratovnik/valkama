@@ -373,6 +373,7 @@ class ChainBoundaryTests(ChainFixture):
                 "created_at",
                 "closed_at",
                 "ready",
+                "rank",
             },
             set(found["members"][0]),
         )

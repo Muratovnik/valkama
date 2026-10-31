@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from . import calls, leases, model, read_model, store, transitions
+from . import calls, leases, model, ranking, read_model, store, transitions
 
 _NOW = "strftime('%Y-%m-%dT%H:%M:%SZ','now')"
 
@@ -375,11 +375,19 @@ def update_work_item(
     labels: object = None,
     kind: str | None = None,
     parent: str | None = None,
+    rank: str | None = None,
     expected_revision: int | None = None,
     author: str | None = None,
 ) -> dict:
+    """Edit the fields a transition does not own, and where the item stands in its state.
+
+    `rank` is a placement in the item's own state (`ranking.placement`). It is an
+    edit like the others: one guarded write, one revision, no history event.
+    """
+
     row = read_model.item_row(conn, reference)
     _require_revision(row, expected_revision)
+    placement = ranking.placement(rank) if rank is not None else None
     updates: list[str] = []
     parameters: list[object] = []
     if title is not None:
@@ -406,6 +414,15 @@ def update_work_item(
         )
         updates.append("parent_id = ?")
         parameters.append(str(parent_row["work_item_id"]) if parent_row is not None else None)
+    if placement is not None:
+        # Last, because it is the one step that may write before `_write` does:
+        # every refusal above has had its chance to leave the store untouched.
+        placed = ranking.position(
+            conn, row, read_model.state_by_id(conn, str(row["state_id"])), placement
+        )
+        if placed is not None:
+            updates.append("position = ?")
+            parameters.append(placed)
     if not updates:
         return read_model.present(conn, row, full=True)
     _write(conn, row, updates, parameters)
@@ -439,18 +456,32 @@ def transition_work_item(
     *,
     reason: str = "",
     force: bool = False,
+    rank: str | None = None,
     expected_revision: int | None = None,
     author: str | None = None,
 ) -> dict:
+    """Move an item to a state, last in that state unless `rank` places it.
+
+    Last is where a build without placements puts a moved item too, so an item
+    that enters a state queues behind the work already ordered there.
+    """
+
     row = read_model.item_row(conn, reference)
     _require_revision(row, expected_revision)
     target = _state_row(conn, str(row["workflow_id"]), state)
+    placement = ranking.placement(rank) if rank is not None else None
     refusals, warnings = transitions.findings(conn, row, target, reason=reason)
     if refusals and not force:
         raise model.WorkflowGuardError(
             "; ".join(f"[{guard}] {message}" for guard, message in refusals)
         )
-    position = _tail_position(conn, str(row["planning_space_id"]), str(target["state_id"]))
+    position = (
+        _tail_position(conn, str(row["planning_space_id"]), str(target["state_id"]))
+        if placement is None
+        else ranking.position(conn, row, target, placement)
+    )
+    if position is None:
+        position = float(row["position"])
     _write(
         conn,
         row,
@@ -615,6 +646,11 @@ def claim_ready_work_item(
 ) -> dict | None:
     """Pick the next unheld, unblocked item in a startable state and take it.
 
+    The next one is the first in the order of work: a queued state before the
+    backlog, and inside a state the order the board shows, top first. Priority
+    only breaks a tie in that order, so placing an item first is what puts it
+    next, and an urgent item nobody placed waits its turn.
+
     Choosing and writing are two statements, so the item chosen can be taken by
     somebody else before this claim lands. The guarded write is what catches
     that, and the loser looks for the next candidate instead of being handed an
@@ -639,8 +675,9 @@ def claim_ready_work_item(
     query = with_clauses(
         "SELECT i.* FROM work_items i JOIN workflow_states s ON s.state_id = i.state_id", clauses
     )
-    query += " ORDER BY CASE i.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1"
-    query += " WHEN 'medium' THEN 2 ELSE 3 END, s.position, i.position, i.number LIMIT 1"
+    query += " ORDER BY " + ranking.WORK_ORDER_SQL + ", s.position, i.position,"
+    query += " CASE i.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1"
+    query += " WHEN 'medium' THEN 2 ELSE 3 END, i.number LIMIT 1"
     actor = model.actor(author)
     # An expired lease is not a holder, so the queue sees through it: released
     # first, the item then reads unheld to the filter above.

@@ -50,6 +50,12 @@ _FORCE = {
     "type": "boolean",
     "description": "Carry a refusal through. The override is recorded as an event.",
 }
+_RANK = {
+    "type": "string",
+    "description": "Where the item goes among the items of its state: first, last,"
+    " before:MAIN-12 or after:MAIN-12, naming an item in that same state. The order"
+    " is the one the board shows and claim_ready_work_item takes work in.",
+}
 _VERBOSE = {
     "type": "boolean",
     "description": "Answer with the full work item instead of the short acknowledgement.",
@@ -200,8 +206,9 @@ TOOLS = [
     _tool(
         "list_work_items",
         "List work items",
-        "Items in state order, filtered by state, category, kind, holder or parent. One compact"
-        " row per item: reference, title, kind, state, priority, parent and holder."
+        "Items in state order, and inside a state in the planned order, filtered by state,"
+        " category, kind, holder or parent. One compact row per item: reference, title,"
+        " kind, state, priority, parent and holder."
         f" A page holds at most {service.MAX_LIST_PAGE} items." + _PAGING,
         READ_ONLY,
         {
@@ -232,7 +239,9 @@ TOOLS = [
         " change) and recent: the last 7 UTC"
         " days' created and closed and a trend of growing, converging or steady."
         " open_members lists the open members, active first, then review, then"
-        f" ready, then the rest; at most {CHAIN_PAGE} per page." + _PAGING,
+        " ready, then the rest, each in the order of work; a row's rank is its"
+        " place in that order across the space, to compare, not to count; at most"
+        f" {CHAIN_PAGE} per page." + _PAGING,
         READ_ONLY,
         {
             "id": _REFERENCE,
@@ -284,6 +293,7 @@ TOOLS = [
             "labels": _LABELS,
             "kind": {"type": "string", "enum": sorted(model.WORK_ITEM_KINDS)},
             "parent": _REFERENCE,
+            "rank": _RANK,
             "expected_revision": _EXPECTED_REVISION,
             "author": _AUTHOR,
             "verbose": _VERBOSE,
@@ -298,7 +308,8 @@ TOOLS = [
         " ticked and a closing summary, a blocked state needs a blocker or a"
         " stated reason. A cancelled state needs only the summary, saying why the"
         " work stopped; its undone steps stay open. force carries a refusal"
-        " through and records it.",
+        " through and records it. The item goes last in its new state unless rank"
+        " places it.",
         WRITES,
         {
             "id": _REFERENCE,
@@ -308,6 +319,7 @@ TOOLS = [
                 "description": "Why, when the state is blocked and no item blocks it.",
             },
             "force": _FORCE,
+            "rank": _RANK,
             "expected_revision": _EXPECTED_REVISION,
             "author": _AUTHOR,
             "verbose": _VERBOSE,
@@ -333,9 +345,11 @@ TOOLS = [
     _tool(
         "claim_ready_work_item",
         "Claim the next ready work item",
-        "Choose and claim in one step: the highest-priority unheld item in a"
-        " startable state that nothing unfinished blocks. Answers with nothing"
-        " when no item is ready.",
+        "Choose and claim in one step: the first unheld item in a startable state"
+        " that nothing unfinished blocks, in the order of work — a queued state"
+        " before the backlog, and inside a state the planned order (see rank on"
+        " update_work_item); priority only breaks a tie. Answers with nothing when"
+        " no item is ready.",
         WRITES,
         {"space": _SPACE, "author": _AUTHOR},
     ),
@@ -551,7 +565,12 @@ TOOLS = [
             },
             "transition": {
                 "type": "object",
-                "properties": {"state": _STATE, "reason": _STR, "force": _FORCE},
+                "properties": {
+                    "state": _STATE,
+                    "reason": _STR,
+                    "force": _FORCE,
+                    "rank": _RANK,
+                },
                 "required": ["state"],
             },
             "expected_revision": {
@@ -851,7 +870,7 @@ def _chain(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
     found["series"] = found["series"][-CHAIN_SERIES_ENTRIES:]
     open_members = sorted(
         (member for member in members if not member["state"]["is_terminal"]),
-        key=_open_rank,
+        key=lambda member: (_open_rank(member), member["rank"]),
     )
     found["open_members"] = [
         {
@@ -861,6 +880,7 @@ def _chain(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
             "claim_ref": member["claim_ref"],
             "ready": member["ready"],
             "parent_reference": member["parent_reference"],
+            "rank": member["rank"],
         }
         for member in open_members[offset : offset + size]
     ]

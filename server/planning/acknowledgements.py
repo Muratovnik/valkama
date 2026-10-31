@@ -17,7 +17,16 @@ from collections.abc import Callable, Mapping
 
 #: The arguments of `update_work_item` that edit the record, in the order the
 #: tool declares them. An argument that is absent or null changes nothing.
-UPDATABLE_FIELDS = ("title", "description", "source", "priority", "labels", "kind", "parent")
+UPDATABLE_FIELDS = (
+    "title",
+    "description",
+    "source",
+    "priority",
+    "labels",
+    "kind",
+    "parent",
+    "rank",
+)
 
 Acknowledge = Callable[[dict, Mapping[str, object]], dict]
 

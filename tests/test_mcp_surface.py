@@ -1897,6 +1897,71 @@ class CreateWorkItemWithLinksTests(WireCallTestCase):
         self.assertIn("create_work_item", mcp_surface.PLANNING_INSTRUCTIONS)
 
 
+class RankToolTests(WireCallTestCase):
+    """`rank` on the writes an agent already has: where an item goes in its state."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.items = [
+            planning_service.create_work_item(self.conn, space=SPACE_KEY, title=title)["reference"]
+            for title in ("First", "Second", "Third")
+        ]
+        self.queued = planning_service.create_work_item(
+            self.conn, space=SPACE_KEY, title="Queued", state="todo"
+        )["reference"]
+        self.conn.commit()
+
+    def order(self, state: str = "backlog") -> list[str]:
+        return [
+            item["reference"]
+            for item in planning_service.list_work_items(
+                self.conn, space=SPACE_KEY, state_key=state
+            )
+        ]
+
+    def test_the_writes_that_place_an_item_publish_rank_and_no_new_tool_does(self) -> None:
+        schemas = {tool["name"]: tool["inputSchema"] for tool in planning_tools.TOOLS}
+        self.assertEqual("string", schemas["update_work_item"]["properties"]["rank"]["type"])
+        self.assertEqual("string", schemas["transition_work_item"]["properties"]["rank"]["type"])
+        transition = schemas["apply_work_item_changes"]["properties"]["transition"]
+        self.assertIn("rank", transition["properties"])
+        self.assertFalse({"rank_work_item", "place_work_item", "reorder_work_item"} & set(schemas))
+
+    def test_an_update_places_the_item_and_says_so(self) -> None:
+        answer = self.answer(
+            "update_work_item", {"id": self.items[2], "rank": f"before:{self.items[0]}"}
+        )
+        self.assertEqual(["rank"], answer["updated"])
+        self.assertEqual([self.items[2], *self.items[:2]], self.order())
+        [call] = self.calls()
+        self.assertEqual("update_work_item", call["tool"])
+
+    def test_a_transition_and_a_batch_place_the_item_in_its_new_state(self) -> None:
+        self.answer("transition_work_item", {"id": self.items[0], "state": "todo", "rank": "first"})
+        self.assertEqual([self.items[0], self.queued], self.order("todo"))
+        answer = self.answer(
+            "apply_work_item_changes",
+            {
+                "id": self.items[1],
+                "transition": {"state": "todo", "rank": f"after:{self.items[0]}"},
+            },
+        )
+        self.assertEqual({"transition": {"state": "todo"}}, answer["applied"])
+        self.assertEqual([self.items[0], self.items[1], self.queued], self.order("todo"))
+
+    def test_a_placement_the_store_cannot_follow_is_refused_and_writes_nothing(self) -> None:
+        for rank, message in (
+            ("top", "rank must be first, last, before:<work item> or after:<work item>"),
+            (f"after:{self.queued}", f"{self.queued} is in Todo, not Backlog"),
+        ):
+            with self.subTest(rank=rank):
+                error = self.refusal("update_work_item", {"id": self.items[0], "rank": rank})
+                self.assertEqual("invalid_request", error["code"])
+                self.assertIn(message, error["message"])
+        self.assertEqual(self.items, self.order())
+        self.assertEqual([], self.calls())
+
+
 class CompactWorkItemReadTests(WireCallTestCase):
     """get_work_item: the newest history by default, all of it on request."""
 
@@ -2109,19 +2174,23 @@ class ChainToolTests(WireCallTestCase):
 
     def test_open_members_run_active_review_ready_then_the_rest(self) -> None:
         answer = self.answer("get_work_item_chain", {"id": self.root})
+        # The rest in the order of work: the claimed Todo item before the
+        # blocked one, whatever their numbers.
         self.assertEqual(
             [
                 self.children["active"],
                 self.children["review"],
                 self.children["ready"],
                 self.found,
-                self.children["held"],
                 self.children["claimed"],
+                self.children["held"],
             ],
             [row["reference"] for row in answer["open_members"]],
         )
         self.assertEqual((False, None), (answer["truncated"], answer["next_offset"]))
-        claimed = answer["open_members"][-1]
+        claimed = answer["open_members"][-2]
+        # A row's rank is the one the whole chain gives that member.
+        ranks = {member["reference"]: member["rank"] for member in self.whole()["members"]}
         self.assertEqual(
             {
                 "reference": self.children["claimed"],
@@ -2130,10 +2199,15 @@ class ChainToolTests(WireCallTestCase):
                 "claim_ref": "one",
                 "ready": False,
                 "parent_reference": self.root,
+                "rank": ranks[self.children["claimed"]],
             },
             claimed,
         )
         self.assertIsNone(answer["open_members"][3]["parent_reference"])
+        # Inside a group the rows follow the rank: the two ready ones, the rest.
+        rows = answer["open_members"]
+        for group in (rows[2:4], rows[4:]):
+            self.assertLess(group[0]["rank"], group[1]["rank"])
 
     def test_open_members_page_until_next_offset_is_null(self) -> None:
         seen: list[str] = []

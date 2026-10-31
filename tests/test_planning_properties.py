@@ -137,6 +137,44 @@ class PlanningMachine(RuleBasedStateMachine):
             assert force
             assert "overridden" in self.events(item)
 
+    @rule(item=items, anchor=items, where=st.sampled_from(("first", "last", "before", "after")))
+    def place(self, item, anchor, where):
+        """A placement moves its own item once, or refuses and moves nothing.
+
+        Any two items will do as item and anchor: one in another state, or the
+        item itself, is a refusal, and the invariant below still has to hold
+        whichever way it went.
+        """
+
+        before = self.row(item)
+        neighbours = {
+            str(row["work_item_id"]): int(row["revision"])
+            for row in self.conn.execute(
+                "SELECT work_item_id, revision FROM work_items WHERE work_item_id != ?",
+                (before["work_item_id"],),
+            )
+        }
+        rank = where if where in ("first", "last") else f"{where}:{anchor}"
+        try:
+            service.update_work_item(self.conn, item, rank=rank)
+        except model.PlanningError:
+            after = self.row(item)
+            assert after["position"] == before["position"]
+            assert after["revision"] == before["revision"]
+            return
+        after = self.row(item)
+        assert after["state_key"] == before["state_key"]
+        # Written once, or not at all when it already stood there.
+        assert after["revision"] in (before["revision"], before["revision"] + 1)
+        if after["revision"] == before["revision"]:
+            assert after["position"] == before["position"]
+        # A neighbour may be renumbered, but never written: its revision stays.
+        for row in self.conn.execute(
+            "SELECT work_item_id, revision FROM work_items WHERE work_item_id != ?",
+            (before["work_item_id"],),
+        ):
+            assert int(row["revision"]) == neighbours[str(row["work_item_id"])]
+
     @rule(item=items, drift=st.integers(min_value=1, max_value=3))
     def a_stale_revision_is_refused(self, item, drift):
         before = self.row(item)

@@ -388,6 +388,7 @@ def _update(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
         labels=payload.get("labels"),
         kind=_optional_text(payload, "kind"),
         parent=_optional_text(payload, "parent"),
+        rank=_optional_text(payload, "rank"),
         expected_revision=_optional_int(payload, "expected_revision"),
         author=_author(payload),
     )
@@ -404,6 +405,7 @@ def _transition(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict
         _text(payload, "state"),
         reason=str(payload.get("reason") or ""),
         force=_flag(payload, "force"),
+        rank=_optional_text(payload, "rank"),
         expected_revision=_optional_int(payload, "expected_revision"),
         author=_author(payload),
     )
@@ -624,7 +626,7 @@ APPLY_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
     ("links", frozenset({"other", "kind", "remove"})),
     ("comment", frozenset({"body", "checklist_item_id"})),
     ("summary", frozenset({"done", "next", "why"})),
-    ("transition", frozenset({"state", "reason", "force"})),
+    ("transition", frozenset({"state", "reason", "force", "rank"})),
 )
 #: What a creation may do to the item it just made, after making it and in this
 #: order. A link from a new item has nothing to remove, so `remove` is not taken.
