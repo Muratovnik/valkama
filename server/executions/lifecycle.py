@@ -37,11 +37,9 @@ from .drivers import capabilities_for
 #: checked, and a terminal state needs a summary the runner cannot write.
 _REVIEW_CATEGORY = "review"
 #: A launch runs from a state somebody works inside, so that is the only place a
-#: reaped launch may move an item from, and the place a starting launch moves an
-#: item to when it was merely queued.
+#: reaped launch may move an item from. A starting launch reaches it through its
+#: claim, which starts an item that was merely queued.
 _ACTIVE_CATEGORY = "active"
-#: The categories a launch is allowed to start an item out of.
-_STARTABLE_CATEGORIES = ("backlog", "queued")
 
 
 def launch_work_item(conn: sqlite3.Connection, payload: dict) -> dict:
@@ -85,14 +83,12 @@ def _launch_reserved(
         state_before = str(record["state"]["key"])
         claim_before = str(record["claim_ref"] or "")
         planning_service.claim_work_item(
-            conn, reference, author=actor, force=bool(payload.get("force"))
+            conn,
+            reference,
+            author=actor,
+            force=bool(payload.get("force")),
+            start_reason="launched",
         )
-        if record["state"]["category"] in _STARTABLE_CATEGORIES:
-            started_state = _first_state(conn, record, _ACTIVE_CATEGORY)
-            if started_state is not None:
-                planning_service.transition_work_item(
-                    conn, reference, started_state, author=actor, reason="launched"
-                )
         launched = planning_service.get_work_item(conn, reference)
         execution_service.open_execution(
             conn,
@@ -480,6 +476,8 @@ def _restore(
                 force=True,
                 expected_revision=int(launched["revision"]),
             )
+            # The state was put back above, so neither claim write may move
+            # it: a claim would start it again and a release would requeue it.
             if claim:
                 planning_service.claim_work_item(
                     conn,
@@ -487,6 +485,7 @@ def _restore(
                     author=claim,
                     force=True,
                     expected_revision=int(restored["revision"]),
+                    move_state=False,
                 )
             else:
                 planning_service.claim_work_item(
@@ -495,6 +494,7 @@ def _restore(
                     author=actor,
                     release=True,
                     expected_revision=int(restored["revision"]),
+                    move_state=False,
                 )
         unresolved = (
             "nothing ran; the prior state and claim were restored"

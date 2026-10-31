@@ -439,7 +439,10 @@ class PlanningDomainTests(unittest.TestCase):
         created = self.item("First")
         service.claim_work_item(self.conn, created["reference"], author="tester")
         feed = views.activity_feed(self.conn, limit=10)
-        self.assertEqual(["claimed", "created"], [entry["action"] for entry in feed])
+        # The claim started the item, so its transition is the newest entry.
+        self.assertEqual(
+            ["transitioned", "claimed", "created"], [entry["action"] for entry in feed]
+        )
         self.assertEqual("QA-1", feed[0]["reference"])
 
     def test_a_project_gets_its_space_on_first_use(self) -> None:

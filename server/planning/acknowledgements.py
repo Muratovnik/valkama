@@ -53,6 +53,17 @@ def _base(item: dict) -> dict:
     }
 
 
+def _moved(item: dict) -> dict:
+    """What a claim or a release did to the state, and what the caller must not miss.
+
+    `started` is a claim moving unstarted work into the active state; `requeued`
+    a release putting work under way back in the queue; `warnings` what the
+    move's guards had to say, or why an item that should have moved did not.
+    """
+
+    return {name: item[name] for name in ("started", "requeued", "warnings") if item.get(name)}
+
+
 def created(item: dict, _arguments: Mapping[str, object]) -> dict:
     """A new item: the defaults the caller may not have named are the news.
 
@@ -65,6 +76,7 @@ def created(item: dict, _arguments: Mapping[str, object]) -> dict:
         "title": item["title"],
         "kind": item["kind"],
         "priority": item["priority"],
+        **_moved(item),
     }
     if "applied" in item:
         answer["applied"] = item["applied"]
@@ -81,18 +93,16 @@ def updated(item: dict, arguments: Mapping[str, object]) -> dict:
 def transitioned(item: dict, _arguments: Mapping[str, object]) -> dict:
     """The state is already in the base; add the findings a caller must not miss."""
 
-    answer = _base(item)
-    if item.get("warnings"):
-        answer["warnings"] = item["warnings"]
+    answer = {**_base(item), **_moved(item)}
     if item.get("overridden"):
         answer["overridden"] = item["overridden"]
     return answer
 
 
 def claimed(item: dict, _arguments: Mapping[str, object]) -> dict:
-    """The holder is `claim_ref`, and its lease `claim_state`; the base carries both."""
+    """The holder is `claim_ref` and its lease `claim_state`, and a move of the state."""
 
-    return _base(item)
+    return {**_base(item), **_moved(item)}
 
 
 def checklist_replaced(item: dict, _arguments: Mapping[str, object]) -> dict:

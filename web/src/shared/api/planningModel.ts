@@ -216,6 +216,12 @@ const claimSchema = strictObject({
   expires_at: boundedText(ISO, 96).nullable(),
 })
 
+/** Where a claim or a release moved an item: the state keys before and after. */
+const stateMoveSchema = strictObject({
+  from: boundedText(STATE_KEY, 32),
+  to: boundedText(STATE_KEY, 32),
+})
+
 const workItemSchema = strictObject({
   ...workItemBriefShape,
   claim: claimSchema.nullable(),
@@ -230,6 +236,9 @@ const workItemSchema = strictObject({
   // A transition answers with these; a plain read does not.
   warnings: boundedList(boundedText(/^[^\u{0}]{1,512}$/u, 512), 32).optional(),
   overridden: uniqueList(boundedText(ID, 64), 16).optional(),
+  // A claim that started the item, and a release that put it back in the queue.
+  started: stateMoveSchema.optional(),
+  requeued: stateMoveSchema.optional(),
 })
 
 const spaceIdentityShape = {

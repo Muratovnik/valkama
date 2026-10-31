@@ -100,8 +100,13 @@ class PlanningApiTests(unittest.TestCase):
                 for item in self.get("/api/planning/work-items", owner="one")["work_items"]
             ],
         )
+        # The claim started the epic, so only the plain item is still in the backlog.
         self.assertEqual(
-            2, len(self.get("/api/planning/work-items", category="backlog")["work_items"])
+            ["QA-1"],
+            [
+                item["reference"]
+                for item in self.get("/api/planning/work-items", category="backlog")["work_items"]
+            ],
         )
         self.assertEqual(0, len(self.get("/api/planning/work-items", state="done")["work_items"]))
 
@@ -214,7 +219,8 @@ class PlanningApiTests(unittest.TestCase):
             expected_revision=created["revision"],
         )
         self.assertEqual("urgent", updated["priority"])
-        self.post("/api/planning/work-item/claim", id="QA-1", author="one")
+        claimed = self.post("/api/planning/work-item/claim", id="QA-1", author="one")
+        self.assertEqual({"from": "backlog", "to": "dev"}, claimed["started"])
         with_steps = self.post("/api/planning/work-item/checklist", id="QA-1", items=["write it"])
         step = with_steps["checklist"][0]["id"]
         self.post("/api/planning/work-item/checklist/claim", id="QA-1", item_id=step, author="one")
@@ -240,6 +246,7 @@ class PlanningApiTests(unittest.TestCase):
             [
                 "created",
                 "claimed",
+                "transitioned",
                 "checklist_replaced",
                 "checklist_claimed",
                 "checklist_completed",

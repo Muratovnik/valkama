@@ -166,7 +166,9 @@ TOOLS = [
             "parent": _REFERENCE,
             "claim": {
                 "type": "boolean",
-                "description": "true claims the new item as claim_work_item does.",
+                "description": "true claims the new item as claim_work_item does,"
+                " which starts it: it is created in its first state and then moved"
+                " to the active one.",
             },
             "links": {
                 "type": "array",
@@ -333,7 +335,13 @@ TOOLS = [
         "claim_work_item",
         "Claim a work item",
         "Take ownership before working it. Refuses if somebody else holds it;"
-        " force takes it over and records the takeover, release hands it back.",
+        " force takes it over and records the takeover, release hands it back."
+        " Claiming an item in a backlog or queued state starts it: it moves to the"
+        " workflow's first active state it can reach, and the answer's started"
+        " names both states. Review, blocked, active and finished items keep their"
+        " state. Releasing an active item puts it back in the first queued state"
+        " (or the backlog), named in requeued, unless one of its checklist steps is"
+        " still claimed.",
         WRITES,
         {
             "id": _REFERENCE,
@@ -351,8 +359,9 @@ TOOLS = [
         "Choose and claim in one step: the first unheld item in a startable state"
         " that nothing unfinished blocks, in the order of work — a queued state"
         " before the backlog, and inside a state the planned order (see rank on"
-        " update_work_item); priority only breaks a tie. Answers with nothing when"
-        " no item is ready.",
+        " update_work_item); priority only breaks a tie. The claim starts the item"
+        " as claim_work_item does, so it answers in its active state with started."
+        " Answers with nothing when no item is ready.",
         WRITES,
         {"space": _SPACE, "author": _AUTHOR},
     ),
@@ -507,7 +516,8 @@ TOOLS = [
         "Several writes to one item in one call, all or nothing. Each group works"
         " exactly as its single tool does, and they apply in this order: claim,"
         " checklist_ticks, refs, links, comment, summary, transition — so a closing"
-        " transition sees the ticks and the summary sent with it. A refused step"
+        " transition sees the ticks and the summary sent with it, and a transition"
+        " sent with claim moves an item the claim has already started. A refused step"
         " writes nothing and names the step and the refusal's code. Name at least"
         " one group. Answers with the acknowledgement and applied, what each group"
         " changed.",
@@ -516,7 +526,8 @@ TOOLS = [
             "id": _REFERENCE,
             "claim": {
                 "type": "boolean",
-                "description": "true claims the item as claim_work_item does.",
+                "description": "true claims the item as claim_work_item does,"
+                " starting it when it is in a backlog or queued state.",
             },
             "checklist_ticks": {
                 "type": "array",

@@ -81,6 +81,24 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Changed
 
+- **A claim starts the work it takes, and a release puts it back in the
+  queue.** Claiming an item in a `backlog` or `queued` state — through
+  `claim_work_item`, `claim_ready_work_item`, the `claim` of
+  `create_work_item` and `apply_work_item_changes`, the HTTP writes, the
+  browser or a launch — also moves it to the workflow's first reachable
+  `active` state, as a `transitioned` event (`dev: claimed`). Review, blocked,
+  active and finished items keep their state. Releasing an item in an active
+  state, or a lease expiring on one, moves it to the first reachable `queued`
+  state, or the backlog (`todo: released`, `todo: lease-expired`), unless one
+  of its checklist steps is still claimed. The answers add `started` and
+  `requeued`, and a claim's move carries its warnings, such as a claim no
+  session confirmed. For existing agents: a separate transition to the active
+  state after a claim is no longer needed and is now a move within one state;
+  a claimed item's history gains one event and its revision one more step; a
+  claim that cannot reach an active state answers with a warning instead of a
+  launch failing on the transition guard; and the owner's release of a Dev
+  item in the browser moves it to Todo. See
+  [A claim starts the work](docs/connection-contract.md#a-claim-starts-the-work).
 - A state can be named by its category. `transition_work_item`,
   `create_work_item`, the `transition` group of `apply_work_item_changes` and
   their HTTP writes read `active`, `review`, `blocked`, `completed`,

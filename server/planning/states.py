@@ -1,4 +1,4 @@
-"""How a caller names a workflow state.
+"""How a caller names a workflow state, and which state a claim starts work in.
 
 A workflow's states are rows, so their keys belong to the installation: the
 default workflow says `dev`, another may say `in-flight`. What every workflow
@@ -44,6 +44,47 @@ def resolve(conn: sqlite3.Connection, workflow_id: str, reference: object) -> sq
                 f" {', '.join(str(state['key']) for state in matching)}; name one by its key"
             )
     raise model.PlanningError(f"this workflow has no state named {text}; {_listing(states)}")
+
+
+#: The categories work is started from. Coming back to active from review or
+#: blocked is not starting it.
+STARTABLE = frozenset({"backlog", "queued"})
+
+
+def start_state(conn: sqlite3.Connection, row: sqlite3.Row) -> sqlite3.Row | None:
+    """The state a claim starts this item in, or None when it has nowhere to go.
+
+    The first `active` state in workflow order that the workflow lets the item
+    reach from where it stands. The caller decides whether the item is one that
+    starts at all; this only answers where it would go.
+    """
+
+    found: sqlite3.Row | None = conn.execute(
+        "SELECT s.* FROM workflow_states s JOIN workflow_transitions t"
+        " ON t.workflow_id = s.workflow_id AND t.to_state_id = s.state_id"
+        " WHERE s.workflow_id = ? AND s.category = 'active' AND t.from_state_id = ?"
+        " ORDER BY s.position LIMIT 1",
+        (row["workflow_id"], row["state_id"]),
+    ).fetchone()
+    return found
+
+
+def queue_state(conn: sqlite3.Connection, row: sqlite3.Row) -> sqlite3.Row | None:
+    """The state a released item goes back to, or None when it has nowhere to go.
+
+    The first `queued` state in workflow order that the item can reach from
+    where it stands, or failing that the first reachable `backlog` state: the
+    states the take-next queue takes work from.
+    """
+
+    found: sqlite3.Row | None = conn.execute(
+        "SELECT s.* FROM workflow_states s JOIN workflow_transitions t"
+        " ON t.workflow_id = s.workflow_id AND t.to_state_id = s.state_id"
+        " WHERE s.workflow_id = ? AND s.category IN ('queued','backlog') AND t.from_state_id = ?"
+        " ORDER BY CASE s.category WHEN 'queued' THEN 0 ELSE 1 END, s.position LIMIT 1",
+        (row["workflow_id"], row["state_id"]),
+    ).fetchone()
+    return found
 
 
 def _ordered(conn: sqlite3.Connection, workflow_id: str) -> list[sqlite3.Row]:

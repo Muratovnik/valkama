@@ -207,7 +207,18 @@ class PlanningMachine(RuleBasedStateMachine):
             return
         after = self.row(item)
         assert after["claim_ref"] == ("" if release else author)
-        assert after["revision"] == before["revision"] + 1
+        # A claim starts unstarted work and a release requeues work under way,
+        # each one more guarded write; nothing else moves the state.
+        start = not release and before["state_key"] in ("backlog", "todo")
+        steps_held = any(step["claimed_by"] for step in json.loads(before["checklist"]))
+        requeue = release and before["state_key"] == "dev" and not steps_held
+        if start:
+            assert after["state_key"] == "dev"
+        elif requeue:
+            assert after["state_key"] == "todo"
+        else:
+            assert after["state_key"] == before["state_key"]
+        assert after["revision"] == before["revision"] + 1 + int(start or requeue)
 
     @rule(item=items, texts=ITEM_TEXTS, force=st.booleans())
     def set_checklist(self, item, texts, force):

@@ -1526,6 +1526,8 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
         answer = self.answer("apply_work_item_changes", self.closing())
 
         self.assertEqual("done", answer["state"]["key"])
+        # The claim started the item before the transition closed it.
+        self.assertEqual({"from": "backlog", "to": "dev"}, answer["started"])
         self.assertEqual("one", answer["claim_ref"])
         self.assertNotIn("events", answer)
         item = planning_service.get_work_item(self.conn, self.reference)
@@ -1562,13 +1564,14 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
         self.assertEqual(
             [
                 "claimed",
+                "transitioned",
                 "checklist_completed",
                 "checklist_completed",
                 "linked",
                 "summarized",
                 "transitioned",
             ],
-            [event["action"] for event in item["events"]][-6:],
+            [event["action"] for event in item["events"]][-7:],
         )
 
     def test_one_batch_is_one_call_and_every_row_points_at_it(self) -> None:
@@ -1754,6 +1757,9 @@ class CreateWorkItemWithLinksTests(WireCallTestCase):
         answer = self.answer("create_work_item", self.discovered(), {"sessionId": self.SESSION})
 
         self.assertEqual({"claim": True, "links": 2}, answer["applied"])
+        # The claim started the new item, and the acknowledgement says so.
+        self.assertEqual({"from": "backlog", "to": "dev"}, answer["started"])
+        self.assertEqual("dev", answer["state"]["key"])
         self.assertEqual("one", answer["claim_ref"])
         self.assertEqual("Found en route", answer["title"])
         self.assertNotIn("events", answer)
@@ -1768,7 +1774,7 @@ class CreateWorkItemWithLinksTests(WireCallTestCase):
         )
         # The history is the single tools' history, in the order they apply.
         self.assertEqual(
-            ["created", "claimed", "linked", "linked"],
+            ["created", "claimed", "transitioned", "linked", "linked"],
             [event["action"] for event in item["events"]],
         )
         # One call, recorded once, and every row it wrote points at it: the new
@@ -1972,6 +1978,7 @@ class CompactWorkItemReadTests(WireCallTestCase):
         )["reference"]
         for number in range(7):
             planning_service.comment_work_item(self.conn, self.reference, f"note {number}")
+        # Each claim starts the item and each release requeues it: four events a round.
         for _ in range(6):
             planning_service.claim_work_item(self.conn, self.reference, author="one")
             planning_service.claim_work_item(self.conn, self.reference, author="one", release=True)
@@ -1983,7 +1990,7 @@ class CompactWorkItemReadTests(WireCallTestCase):
         self.assertEqual(self.complete["comments"][-5:], answer["comments"])
         self.assertEqual(self.complete["events"][-10:], answer["events"])
         self.assertEqual(
-            (7, 13, True),
+            (7, 25, True),
             (answer["comments_total"], answer["events_total"], answer["history_truncated"]),
         )
         for key, value in self.complete.items():
@@ -2063,7 +2070,7 @@ class CompactWorkItemReadTests(WireCallTestCase):
         assert handled is not None
         self.assertEqual(complete, handled[1]["work_item"])
         self.assertEqual(8, len(complete["comments"]))
-        self.assertEqual(13, len(complete["events"]))
+        self.assertEqual(25, len(complete["events"]))
         for added in ("sessions", "comments_total", "events_total", "history_truncated"):
             self.assertNotIn(added, complete)
 
@@ -2112,7 +2119,11 @@ class ChainToolTests(WireCallTestCase):
             self.children[name] = planning_service.create_work_item(
                 self.conn, space=SPACE_KEY, title=name, state=state, parent=self.root
             )["reference"]
-        planning_service.claim_work_item(self.conn, self.children["claimed"], author="one")
+        # Held in Todo, as a claim an earlier build took left it: a claim now
+        # starts its item, and this one stands for work held but not started.
+        planning_service.claim_work_item(
+            self.conn, self.children["claimed"], author="one", move_state=False
+        )
         # Enough closed children on distinct days for the series to be cut.
         for day in range(1, 33):
             done = planning_service.create_work_item(

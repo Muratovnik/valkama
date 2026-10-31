@@ -14,11 +14,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from . import calls, leases, model
-
-# Categories an item may be started from. Coming back to active from review or
-# blocked is not "starting" it, so it does not need an executor again.
-_STARTABLE = frozenset({"backlog", "queued"})
+from . import calls, leases, model, states
 
 Finding = tuple[str, str]
 
@@ -63,7 +59,7 @@ def findings(
     entering = (
         current["category"] != target["category"] or current["state_id"] != target["state_id"]
     )
-    if target["category"] == "active" and current["category"] in _STARTABLE:
+    if target["category"] == "active" and current["category"] in states.STARTABLE:
         claimed_step = any(step["claimed_by"] for step in checklist)
         if not item["claim_ref"] and not claimed_step:
             refusals.append(

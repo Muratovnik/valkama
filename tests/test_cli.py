@@ -77,8 +77,8 @@ class SpaceReportingTests(CliTestCase):
         self.conn.commit()
         output = self.invoke("summary", "--space", SPACE_KEY)
         self.assertIn(f"space '{SPACE_NAME}'", output)
-        # Claiming does not move an item, so both are still in the backlog.
-        self.assertIn("Backlog 2", output)
+        # Claiming starts an item, so one is in the backlog and one under way.
+        self.assertIn("Backlog 1, Dev 1", output)
         self.assertIn("a queued item", output)
 
     def test_summary_reports_an_epic(self) -> None:

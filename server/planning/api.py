@@ -356,9 +356,9 @@ def _create(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
         base: dict[str, object] = {"id": str(item["work_item_id"])}
         if "author" in payload:
             base["author"] = payload["author"]
-        _findings, applied = _run_steps(conn, base, steps)
+        findings, applied = _run_steps(conn, base, steps)
         answer = service.get_work_item(conn, str(item["work_item_id"]))
-    return {**answer, "applied": applied}
+    return {**answer, **findings, "applied": applied}
 
 
 def _created(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
@@ -705,8 +705,8 @@ def _apply_step(
     """Run one step through the write the single tool uses, and say what it changed."""
 
     if group == "claim":
-        _claim(conn, base)
-        return {}, True
+        claimed = _claim(conn, base)
+        return {name: claimed[name] for name in ("started", "warnings") if claimed.get(name)}, True
     if group == "checklist_ticks":
         _checklist_tick(conn, {**entry, **base})
         return {}, {"item_id": entry.get("item_id"), "done": entry.get("done", True)}
@@ -802,7 +802,11 @@ def _run_steps(
                 f"{label}: {body['error']['message']}",
                 {**detail, "step": {"group": group, "index": index}},
             ) from error
+        # A claim's start and a transition may both warn; neither hides the other.
+        warnings = [*findings.get("warnings", []), *extra.pop("warnings", [])]
         findings.update(extra)
+        if warnings:
+            findings["warnings"] = warnings
         if group == "checklist_ticks":
             applied.setdefault(group, []).append(change)
         elif group in _APPLY_LISTS:

@@ -87,14 +87,14 @@ item: `reference`, `work_item_id`, `revision`, `state` (`key`, `name`,
 
 | Tool | Also carries |
 | --- | --- |
-| `create_work_item` | `title`, `kind`, `priority`; `applied` when it took `claim` or `links` |
+| `create_work_item` | `title`, `kind`, `priority`; `applied` when it took `claim` or `links`; `started` and `warnings` from its claim when there are any |
 | `update_work_item` | `updated`, the names of the fields it edited |
 | `transition_work_item` | `warnings` and `overridden` when there are any |
-| `claim_work_item` | nothing more; `claim_ref` is the holder and `claim_state` its lease |
+| `claim_work_item` | `claim_ref` is the holder and `claim_state` its lease; `started`, `requeued` and `warnings` when there are any (see [A claim starts the work](#a-claim-starts-the-work)) |
 | `set_work_item_checklist` | `checklist`, the new steps as `item_id` and `text` |
 | `claim_work_item_checklist_item`, `tick_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by` |
 | `set_work_item_summary` | `summary_recorded: true` |
-| `apply_work_item_changes` | `applied`, what each group changed; `warnings` and `overridden` from its transition when there are any |
+| `apply_work_item_changes` | `applied`, what each group changed; `started` from its claim, `overridden` from its transition, and the `warnings` of both, when there are any |
 
 Each of these tools takes an optional boolean `verbose`, false by default. With
 `verbose: true` the answer is the full item with its whole history, as
@@ -363,7 +363,8 @@ arguments that act on the item it creates:
 
 They apply in the same transaction as the creation: the item is created, then
 claimed, then linked, each step being the write its single tool makes, with its
-events. Work found en route is filed in one call this way, linked
+events. The claim starts the new item, so an item created with `claim: true`
+answers in its active state with `started`. Work found en route is filed in one call this way, linked
 `discovered-from` the item it was found from. A malformed `claim` or `links`,
 or an entry with a field other than `other` and `kind`, is refused with
 `invalid_request` before anything is written. When a step is refused — a link
@@ -540,8 +541,11 @@ Who may release or take over a claim follows the lease:
   write does anything else: `claim_work_item` on that item, and
   `claim_ready_work_item`, which first releases every stale lease in its space.
   The release is a `released` event with the detail `lease-expired: <holder>`,
-  written by Valkama under its own call. Taking a stale claim over therefore
-  needs no `force`, and its history reads `released` and then `claimed`.
+  written by Valkama under its own call; an item it leaves unheld in an active
+  state is put back in the queue under the same call, as any release does (see
+  [A claim starts the work](#a-claim-starts-the-work)). Taking a stale claim
+  over therefore needs no `force`, and its history reads `released` and then
+  `claimed`.
   `claim_work_item` with `release` on a stale lease stops after that release.
 - An `unconfirmed` claim is compared by `author`, as every claim was before
   leases, and never expires by itself.
@@ -556,6 +560,56 @@ runner is listed like any other.
 A claim still counts as the executor that starting an item requires. Starting
 an item under an `unconfirmed` or a `stale` claim answers with a warning, not a
 refusal, unless the claim was taken in the browser.
+
+### A claim starts the work
+
+The decision and the alternatives it was chosen over are in
+[ADR 0012](decisions/0012-claims-start-work.md).
+
+Taking an item is the moment its work starts, so a claim moves an item that has
+not started into the workflow's active state, and a release moves work under way
+back to where the take-next queue finds it. Both follow the state's category,
+never its name. The rule holds for every write that claims: `claim_work_item`,
+`claim_ready_work_item`, the `claim` of `create_work_item` and of
+`apply_work_item_changes`, their HTTP writes, the browser, and a launch.
+
+| The item is in | A claim (a take or a takeover) | A release (by its holder, `force`, or lease expiry) |
+| --- | --- | --- |
+| a `backlog` or `queued` state | moves it to the first `active` state, in workflow order, that a transition of the workflow reaches from where it stands | moves nothing |
+| an `active` state | moves nothing | moves it to the first reachable `queued` state, or failing that the first reachable `backlog` state |
+| a `review`, `blocked`, `completed` or `cancelled` state | moves nothing | moves nothing |
+
+A move is the transition its single tool makes: the workflow's guards judge it,
+it writes a `transitioned` event whose detail is the new key and the reason
+(`dev: claimed`, `todo: released`, `todo: lease-expired`, `dev: launched` for a
+launch), it bumps the revision once more, and the item goes last in its new
+state. A claim's move needs no further executor, because the claim is it. Its
+answer, full or acknowledged, adds `started: {"from": "backlog", "to": "dev"}`;
+a release's adds `requeued: {"from": "dev", "to": "todo"}`; and the move's
+warnings, such as a claim no session confirmed, arrive in `warnings`.
+
+Three cases keep the state where it is:
+
+- A startable item whose workflow lets it reach no active state is claimed and
+  stays put, with a warning: `MAIN-12 stays in Backlog: its workflow has no
+  active state it can move to`.
+- An active item whose checklist still has a claimed step is released and stays
+  active, because that step's holder is still its executor.
+- An active item with no reachable queued or backlog state is released and
+  stays.
+
+A review or blocked item says something a claim does not undo, and finished
+work is reopened by a transition of its own, so a claim takes those over
+without moving them. Release requeues because a claim starts its item: without
+it, a released or expired claim would leave work in an active state that is not
+`ready`, so `claim_ready_work_item` never offers it again, and not held, so
+`stale_claims` does not list it either. A requeued item keeps its checklist,
+comments and history, and goes to the queued state rather than the backlog it
+may have come from, so the queue offers it before new backlog work.
+
+`transition` sent beside `claim` in one `apply_work_item_changes` call applies
+after the claim's move: `{"claim": true, "transition": {"state": "review"}}`
+moves a backlog item to `dev` and then to `review`.
 
 ### Questions and decisions
 

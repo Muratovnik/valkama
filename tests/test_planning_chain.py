@@ -93,8 +93,8 @@ class ChainFixture(unittest.TestCase):
         link("C3", "Blk", "blocks")
         link("Z", "C1", "discovered-from")
 
+        # The claim starts C3: it moves it to Dev with its one transition.
         service.claim_work_item(self.conn, self.refs["C3"], author="one")
-        service.transition_work_item(self.conn, self.refs["C3"], "dev", author="one")
         for name in ("C1", "E1"):
             service.set_summary(self.conn, self.refs[name], {"done": "d", "next": "n"})
         service.transition_work_item(self.conn, self.refs["C1"], "dev", force=True)

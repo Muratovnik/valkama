@@ -81,7 +81,7 @@ class LaunchCompensationTests(unittest.TestCase):
         self.assertIn("changed after launch", attempt["result"]["unresolved"])
 
     def test_failed_forced_launch_restores_the_prior_holder(self) -> None:
-        planning.claim_work_item(self.other, self.reference, author="prior-holder")
+        before = planning.claim_work_item(self.other, self.reference, author="prior-holder")
         self.other.commit()
         runner.RUNNER = runner.Runner(
             spawn=lambda *_args: (_ for _ in ()).throw(OSError("no client"))
@@ -91,7 +91,9 @@ class LaunchCompensationTests(unittest.TestCase):
             lifecycle.launch_work_item(self.conn, self.packet(force=True))
 
         item = planning.get_work_item(self.other, self.reference)
-        self.assertEqual("todo", item["state"]["key"])
+        # The prior claim started the item; the compensation puts back that
+        # state, and its own claim writes neither start nor requeue it again.
+        self.assertEqual(before["state"]["key"], item["state"]["key"])
         self.assertEqual("prior-holder", item["claim_ref"])
         self.assertIn("restored", self.attempt()["result"]["unresolved"])
 

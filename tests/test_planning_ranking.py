@@ -245,6 +245,9 @@ class OrderReaderTests(RankingTestCase):
         urgent = self.item("Urgent but last", priority="urgent")
         self.assertEqual(first, self.take())
         service.claim_work_item(self.conn, first, release=True, author="agent")
+        # The release put the started item in the queued state; back beside the
+        # urgent one, so the two share a state.
+        service.transition_work_item(self.conn, first, "backlog")
         # Two rows an earlier build left at one position: the urgent one goes first.
         self.conn.execute("UPDATE work_items SET position = 7.0")
         self.assertEqual(urgent, self.take())

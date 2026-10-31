@@ -401,10 +401,16 @@ class PlanningAcknowledgementTests(unittest.TestCase):
             with self.subTest(tool):
                 answer = self.call(tool, verbose=True, **self.arguments_for(tool))
                 stored = self.full(answer["reference"])
-                # A transition also reports what the guards said about it, and a
-                # batch what each of its groups changed.
+                # A transition also reports what the guards said about it, a
+                # claim the state it started the item in, and a batch what each
+                # of its groups changed.
                 self.assertEqual(
-                    stored, {k: v for k, v in answer.items() if k not in ("warnings", "applied")}
+                    stored,
+                    {
+                        k: v
+                        for k, v in answer.items()
+                        if k not in ("warnings", "applied", "started", "requeued")
+                    },
                 )
 
     def test_verbose_false_is_the_default_and_anything_else_is_refused(self) -> None:
@@ -522,7 +528,10 @@ class PlanningAcknowledgementTests(unittest.TestCase):
                 status, body = handled
                 self.assertEqual(200, status)
                 stored = self.full(self.ref)
-                self.assertEqual(stored, {k: v for k, v in body.items() if k != "warnings"})
+                self.assertEqual(
+                    stored,
+                    {k: v for k, v in body.items() if k not in ("warnings", "started")},
+                )
 
 
 class PlanningCompactReadTests(unittest.TestCase):
@@ -570,7 +579,8 @@ class PlanningCompactReadTests(unittest.TestCase):
                 "reference": self.child["reference"],
                 "title": "Child of the umbrella",
                 "kind": "task",
-                "state": "backlog",
+                # The claim in setUp started it.
+                "state": "dev",
                 "priority": "high",
                 "parent": self.epic["reference"],
                 "claim_ref": "one",

@@ -517,6 +517,8 @@ def claim_work_item(
     force: bool = False,
     release: bool = False,
     expected_revision: int | None = None,
+    start_reason: str = "claimed",
+    move_state: bool = True,
 ) -> dict:
     """Take, release or take over an item, deciding who holds it from its lease.
 
@@ -524,6 +526,11 @@ def claim_work_item(
     `force` and the history shows the expiry and the claim as two events. The
     one exception is the holding session itself: it is still the holder, and
     its own call has just counted as its heartbeat.
+
+    Taking an item that has not started starts it (`_start`), and
+    `start_reason` is what that transition records. Releasing an item under way
+    puts it back in the queue (`_hand_back`). `move_state=False` does neither,
+    for a caller that sets the state itself: a launch putting back what it found.
     """
 
     row = read_model.item_row(conn, reference)
@@ -565,9 +572,91 @@ def claim_work_item(
         except model.RevisionConflictError:
             return _claim_lost(conn, row, actor)
         _log(conn, str(row["work_item_id"]), "claimed", "", author)
-    return read_model.present(
-        conn, read_model.item_by_id(conn, str(row["work_item_id"])), full=True
-    )
+    identity = str(row["work_item_id"])
+    if not move_state:
+        return read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
+    if release:
+        requeued = _hand_back(conn, identity, author, "released")
+        answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
+        if requeued is not None:
+            answer["requeued"] = requeued
+        return answer
+    return _start(conn, identity, author, start_reason)
+
+
+def _start(conn: sqlite3.Connection, identity: str, author: str | None, reason: str) -> dict:
+    """Move an item its claim just took into the active state, and answer with it.
+
+    A claim is the moment work starts, and an item left in the backlog while an
+    agent worked it told everyone reading the board that nobody had begun. So
+    an item in a `backlog` or `queued` state moves to the first active state
+    its workflow lets it reach, through the transition guards like any other
+    move, and the answer's `started` names where it came from and went. An item
+    under way, in review, blocked or finished stays where it is: review and
+    blocked say something a claim does not undo, and reopening finished work is
+    a decision of its own. A startable item with no active state to reach stays
+    too, and `warnings` says so.
+    """
+
+    row = read_model.item_by_id(conn, identity)
+    current = read_model.state_by_id(conn, str(row["state_id"]))
+    if current["category"] not in states.STARTABLE:
+        return read_model.present(conn, row, full=True)
+    reference = read_model.reference(conn, row)
+    target = states.start_state(conn, row)
+    if target is None:
+        answer = read_model.present(conn, row, full=True)
+        answer["warnings"] = [
+            f"{reference} stays in {current['name']}: its workflow has no active state"
+            " it can move to"
+        ]
+        return answer
+    refusals, warnings = transitions.findings(conn, row, target)
+    if refusals:
+        answer = read_model.present(conn, row, full=True)
+        answer["warnings"] = [
+            f"{reference} stays in {current['name']}: {message}" for _guard, message in refusals
+        ]
+        return answer
+    position = _tail_position(conn, str(row["planning_space_id"]), str(target["state_id"]))
+    _write(conn, row, ["state_id = ?", "position = ?"], [str(target["state_id"]), position])
+    _log(conn, identity, "transitioned", f"{target['key']}: {reason}", author)
+    answer = read_model.present(conn, read_model.item_by_id(conn, identity), full=True)
+    answer["started"] = {"from": str(current["key"]), "to": str(target["key"])}
+    if warnings:
+        answer["warnings"] = warnings
+    return answer
+
+
+def _hand_back(
+    conn: sqlite3.Connection, identity: str, author: str | None, reason: str
+) -> dict | None:
+    """Put an item nobody holds any more back where the take-next queue finds it.
+
+    The other half of `_start`. A claim starts its item, so without this every
+    released or expired claim would leave its item in an active state with no
+    holder: not ready, because the queue takes only unstarted work, and not
+    abandoned either, because that list is of held items. So an item in an
+    active state goes back to the first queued state its workflow lets it reach,
+    or the backlog when there is none; the answer is that move, for the
+    caller's `requeued`, or None. Its checklist, comments and history stay. An item whose checklist still has a claimed step
+    stays active, because that step's holder is still its executor; review,
+    blocked and finished items stay where they are.
+    """
+
+    row = read_model.item_by_id(conn, identity)
+    current = read_model.state_by_id(conn, str(row["state_id"]))
+    if current["category"] != "active" or any(
+        step["claimed_by"] for step in model.checklist(row["checklist"])
+    ):
+        return None
+    target = states.queue_state(conn, row)
+    if target is None:
+        return None
+    position = _tail_position(conn, str(row["planning_space_id"]), str(target["state_id"]))
+    _write(conn, row, ["state_id = ?", "position = ?"], [str(target["state_id"]), position])
+    _log(conn, identity, "transitioned", f"{target['key']}: {reason}", author)
+    return {"from": str(current["key"]), "to": str(target["key"])}
 
 
 def _claim_lost(conn: sqlite3.Connection, row: sqlite3.Row, actor: str) -> dict:
@@ -635,6 +724,7 @@ def _expire(conn: sqlite3.Connection, row: sqlite3.Row, lease: leases.Lease) -> 
     with calls.bind(calls.valkama(), leases.EXPIRY_TOOL):
         _hold(conn, row, "")
         _log(conn, identity, "released", leases.expiry_detail(lease), leases.EXPIRY_AUTHOR)
+        _hand_back(conn, identity, leases.EXPIRY_AUTHOR, leases.EXPIRY_REASON)
     return read_model.item_by_id(conn, identity)
 
 
@@ -693,9 +783,7 @@ def claim_ready_work_item(
             lost = conflict
             continue
         _log(conn, str(row["work_item_id"]), "claimed", "", author)
-        return read_model.present(
-            conn, read_model.item_by_id(conn, str(row["work_item_id"])), full=True
-        )
+        return _start(conn, str(row["work_item_id"]), author, "claimed")
     if lost is not None:
         raise lost
     raise model.PlanningError("no work item could be claimed")

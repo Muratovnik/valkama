@@ -622,19 +622,28 @@ class AbandonedClaimTests(LeaseTestCase):
 
 class ExecutorGuardTests(LeaseTestCase):
     def start(self) -> list[str]:
+        """Start the held item by hand, the path a claim an earlier build took still needs.
+
+        A claim starts its item itself, so the item is put back first.
+        """
+
+        service.transition_work_item(self.conn, self.reference, "backlog")
         moved = service.transition_work_item(self.conn, self.reference, "dev")
         self.conn.commit()
         return moved["warnings"]
 
     def test_an_unconfirmed_claim_starts_the_item_with_a_warning(self) -> None:
-        self.claim(None, author="old")
-        self.assertEqual(
-            [f"{self.reference} starts under a claim by old that no session confirmed"],
-            self.start(),
-        )
+        warning = f"{self.reference} starts under a claim by old that no session confirmed"
+        claimed = self.claim(None, author="old")
+        self.assertEqual({"from": "backlog", "to": "dev"}, claimed["started"])
+        self.assertEqual([warning], claimed["warnings"])
+        self.assertEqual([warning], self.start())
 
     def test_a_live_lease_starts_the_item_without_one(self) -> None:
-        self.claim(codex(ONE), author="codex")
+        claimed = self.claim(codex(ONE), author="codex")
+        self.assertEqual(
+            ({"from": "backlog", "to": "dev"}, None), (claimed["started"], claimed.get("warnings"))
+        )
         self.assertEqual([], self.start())
 
     def test_a_stale_lease_still_counts_as_the_executor_but_says_so(self) -> None:
