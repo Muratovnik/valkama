@@ -246,6 +246,22 @@ def _is_spa_route(path: str) -> bool:
     return isinstance(path, str) and _SPA_ROUTE.fullmatch(path) is not None
 
 
+def _is_page_path(path: str) -> bool:
+    """A path a person types or follows, rather than one the built page fetches.
+
+    The build names every file it ships with an extension and serves them from
+    `/assets/` or the root, so an extensionless path outside `/assets/` and
+    `/api/` can only be an address of the app. When it names no page, the app
+    shell answers it -- with 404, because the address names nothing -- and says
+    so with a way back, instead of a bare plain-text "not found" a person
+    cannot leave. A file the page fetches keeps its plain 404: a script or a
+    stylesheet that came back as HTML would fail far from its cause.
+    """
+
+    last = path.rsplit("/", 1)[-1]
+    return not path.startswith(("/api/", "/assets/")) and "." not in last
+
+
 def _boundary(table: tuple[_Boundary, ...], path: str) -> _Boundary | None:
     """The first row that claims this path, in declaration order."""
 
@@ -658,7 +674,14 @@ class Handler(BaseHTTPRequestHandler):
             max_bytes=max_bytes or 64 * 1024,
         )
 
-    def _send_asset(self, relative: str) -> None:
+    def _has_asset(self, relative: str) -> bool:
+        normalized = relative.lstrip("/").replace("\\", "/")
+        snapshot = getattr(getattr(self, "server", None), "runtime_snapshot", None)
+        if snapshot is not None:
+            return normalized in snapshot.assets
+        return os.path.isfile(os.path.join(DIST_DIR, normalized))
+
+    def _send_asset(self, relative: str, status: int = 200) -> None:
         """Serve one startup-captured asset, refusing anything that escapes it."""
         dist = os.path.abspath(DIST_DIR)
         normalized_relative = relative.lstrip("/").replace("\\", "/")
@@ -704,7 +727,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.end_headers()
                 return
         extension = os.path.splitext(target)[1]
-        self.send_response(200)
+        self.send_response(status)
         self.send_header("Content-Type", CONTENT_TYPES.get(extension, "application/octet-stream"))
         self.send_header("Content-Length", str(len(body)))
         if policy is not None:
@@ -713,7 +736,7 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _send_index(self) -> None:
+    def _send_index(self, status: int = 200) -> None:
         snapshot = getattr(getattr(self, "server", None), "runtime_snapshot", None)
         has_index = (
             "index.html" in snapshot.assets
@@ -727,7 +750,7 @@ class Handler(BaseHTTPRequestHandler):
                 "text/plain",
             )
             return
-        self._send_asset("index.html")
+        self._send_asset("index.html", status)
 
     def do_GET(self) -> None:
         url = urlparse(self.path)
@@ -757,6 +780,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         if url.path in ("/", "/index.html") or _is_spa_route(url.path):
             self._send_index()
+        elif _is_page_path(url.path) and not self._has_asset(url.path):
+            self._send_index(404)
         elif not url.path.startswith("/api/"):
             self._send_asset(url.path)
         elif url.path == "/api/runtime":

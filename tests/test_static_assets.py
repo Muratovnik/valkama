@@ -232,6 +232,53 @@ class StaticAssetTests(unittest.TestCase):
                 )["not_modified"]
             )
 
+    def test_an_address_that_names_no_page_gets_the_shell_with_404(self) -> None:
+        # A person who types or follows a dead address gets the app, which says
+        # what is missing and offers a way back; the status still says the
+        # address names nothing. What the page itself fetches keeps a plain
+        # 404, so a missing script never arrives as HTML.
+        with tempfile.TemporaryDirectory() as directory:
+            dist = os.path.join(directory, "dist")
+            os.makedirs(os.path.join(dist, "assets"))
+            with open(os.path.join(dist, "index.html"), "wb") as handle:
+                handle.write(b"<html>shell</html>")
+            with open(os.path.join(dist, "assets", "app.js"), "wb") as handle:
+                handle.write(b"js")
+            snapshot = static_assets.capture_runtime_snapshot(directory, dist)
+
+            def request(path: str) -> tuple[int, str, bytes]:
+                handler = object.__new__(http_surface.Handler)
+                handler._host_validated = True
+                handler.headers = {}
+                handler.wfile = io.BytesIO()
+                captured: dict[str, object] = {"headers": {}}
+                handler.send_response = lambda code: captured.update(code=code)
+                handler.send_header = lambda name, value: captured["headers"].__setitem__(
+                    name, value
+                )
+                handler.end_headers = lambda: None
+                handler.path = path
+                handler.server = SimpleNamespace(runtime_snapshot=snapshot)
+                with mock.patch.object(http_surface, "DIST_DIR", dist):
+                    handler.do_GET()
+                headers = captured["headers"]
+                return int(captured["code"]), str(headers["Content-Type"]), handler.wfile.getvalue()
+
+            for path in ("/modules/whatever", "/foo/bar", "/modules/analytics", "/nowhere/"):
+                with self.subTest(path=path):
+                    self.assertEqual(
+                        (404, "text/html; charset=utf-8", b"<html>shell</html>"), request(path)
+                    )
+            for path in ("/assets/missing.js", "/missing.css", "/assets/chunk"):
+                with self.subTest(path=path):
+                    code, content_type, body = request(path)
+                    self.assertEqual((404, "text/plain"), (code, content_type))
+                    self.assertNotIn(b"<html", body)
+            self.assertEqual(200, request("/modules/planning/global")[0])
+            self.assertEqual(
+                (200, b"js"), (request("/assets/app.js")[0], request("/assets/app.js")[2])
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
