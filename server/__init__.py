@@ -13,6 +13,9 @@ questions about the store and knows nothing about who asked:
                     that know how each agent client is invoked
     runner.py       process shape for a launched client, and stopping it
     sessions.py     essential lifecycle ingestion and exact work association
+    hooks/          `valkama hook`: client hook events into the store or the
+                    spool, and the Claude identity transform
+    housekeeping.py start-up maintenance a long-lived process runs: the spool drain
     federation.py   spaces and search across attached databases
     refs.py         resolving a work item ref into what it points at
     documents.py    repository documents, for search and for evidence

@@ -12,6 +12,33 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Added
 
+- `valkama hook <client> <event>`, the command Claude Code and Codex hooks run.
+  It records a session lifecycle event from stdin straight into the store, with
+  no `serve` or MCP session running. It covers session start and end, subagent
+  start and stop, turn end, prompt submission, compaction and, for Claude Code,
+  notifications. The event becomes one `execution_events` row, confirmed with
+  source `hook`, and updates the session rows that every session reader uses.
+  A subagent gets its own row, `<session>:<agent>`, under its parent.
+  - The write is a light open of a store that already exists at the current
+    schema. A busy, missing or other-version store, or a failed insert, sends
+    the event to `spool/` beside the store instead. Spool files are delivered
+    later by the next successful hook write, or by `housekeeping.drain_spool`.
+    Delivery is idempotent on the event's uid. An event older than what the
+    store already knows is kept as history and changes no session, so a late
+    drain cannot revive an ended session.
+  - The command always exits 0 and prints nothing, whatever its input. It keeps
+    an allowlist of fields and never the prompt, tool arguments, assistant text
+    or Codex turn metadata.
+  - `valkama hook claude pre-tool-use` prints the `PreToolUse` output that adds
+    `_identity` (session, tool use, and agent inside a subagent) to a Valkama
+    tool call. It does not open the store, and it makes no permission decision.
+  - `doctor` reports spool files still waiting, with the oldest event time;
+    rejected spool files; events delivered through the spool in the last 14
+    days; Planning writes in the last 14 days by identity state and source; and
+    the last hook event per client.
+
+  The contract is in `docs/hook-contract.md`, which replaces the superseded
+  session event contract. `POST /api/ingest` is unchanged.
 - The store gains what session identity and claim leases need, still at schema
   9. A new append-only table `execution_events` records the execution tree:
   client lifecycle events and every Planning write call with the identity it

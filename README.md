@@ -218,6 +218,7 @@ python valkama.py <command> [options]
 | `launcher listener status\|stop [--port 8642]` | inspect or stop only the Windows listener proven to run through the managed shim |
 | `launcher uninstall [--directory DIR] [--force]` | remove only the managed launcher files |
 | `summary [--space KEY]` | a short Planning-space report, meant for session hooks |
+| `hook CLIENT EVENT` | record one client hook event from stdin without a running server; see [Client hooks](#client-hooks) |
 | `runtime` | print this checkout's backend and static identity |
 | `projects list\|add\|update\|remove\|bind\|check\|apply\|doctor\|rollback\|import` | manage the local project inventory and its projection; see [Project registry](#project-registry) |
 | `config [--json]` | every setting, the layer it came from, and the value in use |
@@ -560,6 +561,34 @@ Sessions SSE view are retired. Analytics dashboards and exports, Improvements,
 and the Skills catalogue and activation API are also retired. This does not
 change installed skill files or agent-client settings.
 
+## Client hooks
+
+`valkama hook <client> <event>` is the command Claude Code and Codex hooks run.
+It reads the hook input from stdin and records the session event straight into
+the store, so sessions stay visible while neither `serve` nor an MCP session is
+running. When the store is busy, missing or at another schema version, the
+event goes to a spool beside the store and lands later. The command always
+exits 0, and a lifecycle event prints nothing, so it never blocks or alters a
+client session.
+
+```
+valkama hook claude session-start   < hook-input.json
+valkama hook codex stop             < hook-input.json
+valkama hook claude pre-tool-use    < hook-input.json
+```
+
+The events are `session-start`, `session-end`, `subagent-start`,
+`subagent-stop`, `stop`, `user-prompt-submit` and `pre-compact` for both
+clients, plus `notification` for Claude Code. Each one updates the session row
+that `GET /api/session` and work-item context read. `claude pre-tool-use` adds
+the session identity to a Valkama tool call and is the only case that prints
+anything. Only an allowlisted set of fields is kept: never the prompt, tool
+arguments or assistant text.
+
+`doctor` reports spool files still waiting, rejected spool files, and the last
+hook event from each client. The fields, the spool format and the session rules
+are in [the client hook contract](docs/hook-contract.md).
+
 ## The desktop app and the tray
 
 `desktop/` is a thin Electron shell. It verifies the managed launcher, checks
@@ -652,7 +681,7 @@ files and process memory.
 
 | Path | Owns |
 | --- | --- |
-| `valkama.py` | the source entry point — it prepares `sys.path` and hands off to `server/cli.py` |
+| `valkama.py` | the source entry point — it prepares `sys.path` and hands off to `server/cli.py`, or for `hook` to `server/hooks/entry.py` before the command line is imported |
 | `server/` | the Python server, managed launcher, domain modules, and CLI/HTTP/MCP surfaces |
 | `web/` | the Vue application, its build and its tests |
 | `desktop/` | the Electron window — its own npm package, tests and release output |
@@ -677,6 +706,8 @@ The maintained product contracts are:
   levels, what each module means on them, and what an adapter may do.
 - [`docs/connection-contract.md`](docs/connection-contract.md) — what a client
   learns on connect, and how the server refuses to answer from a stale build.
+- [`docs/hook-contract.md`](docs/hook-contract.md) — what `valkama hook` keeps
+  from a client hook, the spool, and what each event does to a session.
 
 The superseded Improvements and session-event contracts remain in `docs/` as
 historical records; they do not describe supported endpoints.

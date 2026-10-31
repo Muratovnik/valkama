@@ -34,6 +34,7 @@ from urllib import error, request
 
 from .. import runner, static_assets, store
 from ..executions import drivers as execution_drivers
+from ..hooks import ingest, spool
 from ..memory import service as memory_service
 from ..platform import installed
 from ..projects import project_registry
@@ -257,7 +258,10 @@ def _store_checks() -> list[dict]:
                 "Start Valkama once; the store is created on first open.",
                 presentation_code="store-missing",
                 parameters={"path": path},
-            )
+            ),
+            # A hook spools while there is no store, so the spool is worth
+            # reading exactly when this check is not green.
+            *_spool_checks(path),
         ]
     try:
         stored = int(
@@ -305,6 +309,143 @@ def _store_checks() -> list[dict]:
         )
     checks.append(_backup_check(path))
     checks.append(_open_execution_check())
+    checks.extend(_spool_checks(path))
+    checks.extend(_execution_event_checks(path))
+    return checks
+
+
+#: How far back the delivery and identity counters look.
+EVENT_WINDOW_DAYS = 14
+
+
+def _spool_checks(path: str) -> list[dict]:
+    """Hook events still waiting beside the store, and files set aside as unreadable."""
+
+    directory = spool.directory(path)
+    waiting = spool.summary(directory)
+    if waiting["pending"]:
+        pending = _check(
+            "hook-spool",
+            "Hook spool",
+            "warn",
+            f"{waiting['pending']} hook event file(s) wait in {directory},"
+            f" the oldest from {waiting['oldest'] or 'an unknown time'}",
+            "Open the store once with the current build (start any MCP session or `serve`):"
+            " hooks then write directly and drain the spool. Files that stay belong to a"
+            " hook build whose schema the store does not match; reinstall the launcher.",
+            presentation_code="hook-spool-pending",
+            parameters={
+                "count": waiting["pending"],
+                "oldest": waiting["oldest"] or "",
+                "path": directory,
+            },
+        )
+    else:
+        pending = _check(
+            "hook-spool",
+            "Hook spool",
+            "ok",
+            "no hook event waits in the spool",
+            presentation_code="hook-spool-empty",
+            parameters={"path": directory},
+        )
+    if not waiting["rejected"]:
+        return [pending]
+    rejected = _check(
+        "hook-spool-rejected",
+        "Rejected hook events",
+        "warn",
+        f"{waiting['rejected']} spool file(s) in {directory} could not be read and were set aside",
+        "Read the `.rejected` files; they are never retried. Delete each once it is understood.",
+        presentation_code="hook-spool-rejected",
+        parameters={"count": waiting["rejected"], "path": directory},
+    )
+    return [pending, rejected]
+
+
+def _execution_event_checks(path: str) -> list[dict]:
+    """What the execution tree says about delivery and identity, read without writing."""
+
+    since = f"-{EVENT_WINDOW_DAYS} days"
+    try:
+        conn = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
+        try:
+            spooled = conn.execute(
+                "SELECT COUNT(*) FROM execution_events WHERE delivery = 'spooled'"
+                " AND received_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)",
+                (since,),
+            ).fetchone()[0]
+            identities = conn.execute(
+                "SELECT identity_state, identity_source, COUNT(*) FROM execution_events"
+                " WHERE kind = 'planning_write'"
+                " AND received_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)"
+                " GROUP BY identity_state, identity_source ORDER BY 1, 2",
+                (since,),
+            ).fetchall()
+            latest = conn.execute(
+                "SELECT client, MAX(COALESCE(occurred_at, received_at)) FROM execution_events"
+                " WHERE identity_source = ? GROUP BY client ORDER BY client",
+                (ingest.IDENTITY_SOURCE,),
+            ).fetchall()
+        finally:
+            conn.close()
+    except sqlite3.Error as failure:
+        return [
+            _check(
+                "execution-events",
+                "Execution events",
+                "unknown",
+                f"the execution tree could not be read: {failure}",
+                "Open the store once with the current build; it adds the table.",
+                presentation_code="execution-events-unreadable",
+            )
+        ]
+    window = f"in the last {EVENT_WINDOW_DAYS} days"
+    writes = ", ".join(f"{state}/{source} {count}" for state, source, count in identities)
+    checks = [
+        _check(
+            "hook-delivery",
+            "Spooled hook events",
+            "ok",
+            f"{spooled} hook event(s) {window} reached the store through the spool",
+            presentation_code="hook-delivery",
+            parameters={"count": int(spooled), "days": EVENT_WINDOW_DAYS},
+        ),
+        _check(
+            "planning-write-identity",
+            "Planning write identity",
+            "ok",
+            f"Planning writes {window} by identity and source: {writes}"
+            if writes
+            else f"no Planning write recorded its identity {window}",
+            presentation_code="planning-write-identity",
+            parameters={"writes": writes, "days": EVENT_WINDOW_DAYS},
+        ),
+    ]
+    if latest:
+        last = ", ".join(f"{client} {at}" for client, at in latest)
+        checks.append(
+            _check(
+                "hook-last-event",
+                "Last hook event",
+                "ok",
+                f"last hook event per client: {last}",
+                presentation_code="hook-last-event",
+                parameters={"clients": last},
+            )
+        )
+    else:
+        checks.append(
+            _check(
+                "hook-last-event",
+                "Last hook event",
+                "warn",
+                "no client hook has written an event into this store",
+                "Register the client hooks that run `valkama hook`; until then sessions are"
+                " seen only through tool calls and launches.",
+                presentation_code="hook-last-event-none",
+            )
+        )
     return checks
 
 

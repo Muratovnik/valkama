@@ -10,6 +10,8 @@ card: 200
 > This document preserves the earlier contract, not current support. See the
 > [product model](product-model.md) and [README](../README.md)
 > for the supported work-item, session-context, and lifecycle boundaries.
+> Client hooks now report through `valkama hook`, described in the
+> [client hook contract](hook-contract.md).
 
 Владелец: этот репозиторий (сервер — авторитет контракта); адаптеры клиентов
 живут в других репозиториях и подключаются без изменения ядра. Происхождение —

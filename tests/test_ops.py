@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import pathlib
+import sqlite3
 import sys
 import tempfile
 import unittest
@@ -21,6 +22,7 @@ sys.path.insert(0, ROOT)
 
 from server import cli, processes, runner, store
 from server.executions import service as execution_service
+from server.hooks import spool
 from server.ops import configuration, doctor, setup
 from server.planning import service as planning
 from tests import SUITE_STORE
@@ -229,6 +231,116 @@ class DoctorStoreTests(unittest.TestCase):
 
     def test_a_store_with_no_open_attempt_passes(self) -> None:
         self.assertEqual("ok", doctor._open_execution_check()["status"])
+
+
+class DoctorHookTests(unittest.TestCase):
+    """What has not landed from the hooks, and what the execution tree says about identity."""
+
+    def setUp(self) -> None:
+        self._dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(self._dir.cleanup)
+        self.path = os.path.join(self._dir.name, "test.sqlite3")
+        os.environ["VALKAMA_DB"] = self.path
+        self.addCleanup(lambda: os.environ.__setitem__("VALKAMA_DB", SUITE_STORE))
+        self.spool = spool.directory(self.path)
+
+    def by_id(self) -> dict[str, dict]:
+        return {check["id"]: check for check in doctor._store_checks()}
+
+    def spool_file(self, name: str, body: bytes = b"") -> None:
+        os.makedirs(self.spool, exist_ok=True)
+        with open(os.path.join(self.spool, name), "wb") as handle:
+            handle.write(body)
+
+    def event(self, conn, uid: str, **columns: object) -> None:
+        values = {
+            "event_uid": uid,
+            "kind": "session_start",
+            "identity_state": "confirmed",
+            "identity_source": "hook",
+            **columns,
+        }
+        conn.execute(
+            f"INSERT INTO execution_events({', '.join(values)}) VALUES ({', '.join('?' * len(values))})",
+            tuple(values.values()),
+        )
+
+    def test_with_no_store_the_spool_is_still_reported(self) -> None:
+        self.spool_file("01793000000000000000-x.jsonl")
+        checks = self.by_id()
+        self.assertEqual("warn", checks["store"]["status"])
+        self.assertEqual("warn", checks["hook-spool"]["status"])
+        self.assertIn("2026-10-26T", checks["hook-spool"]["detail"])
+
+    def test_pending_and_rejected_files_are_counted(self) -> None:
+        conn = store.connect()
+        conn.close()
+        self.spool_file("01793000000000000000-a.jsonl")
+        self.spool_file("01794000000000000000-b.jsonl")
+        self.spool_file("01790000000000000000-c.rejected")
+        self.spool_file(".01795000000000000000-d.jsonl.tmp")
+        checks = self.by_id()
+        self.assertEqual(2, checks["hook-spool"]["presentation"]["parameters"]["count"])
+        self.assertIn("the oldest from 2026-10-26T", checks["hook-spool"]["detail"])
+        self.assertEqual("warn", checks["hook-spool-rejected"]["status"])
+        self.assertEqual(1, checks["hook-spool-rejected"]["presentation"]["parameters"]["count"])
+
+    def test_an_empty_spool_and_a_silent_store_say_so(self) -> None:
+        conn = store.connect()
+        conn.close()
+        checks = self.by_id()
+        self.assertEqual("ok", checks["hook-spool"]["status"])
+        self.assertNotIn("hook-spool-rejected", checks)
+        self.assertEqual("warn", checks["hook-last-event"]["status"])
+        self.assertIn("no Planning write", checks["planning-write-identity"]["detail"])
+
+    def test_the_execution_tree_counters(self) -> None:
+        conn = store.connect()
+        self.addCleanup(conn.close)
+        self.event(conn, "1", client="claude", occurred_at="2026-10-31T10:00:00.000Z")
+        self.event(
+            conn, "2", client="claude", occurred_at="2026-10-31T11:00:00.000Z", delivery="spooled"
+        )
+        self.event(
+            conn, "3", client="codex", occurred_at="2026-10-31T09:00:00.000Z", delivery="spooled"
+        )
+        self.event(
+            conn, "4", client="codex", delivery="spooled", received_at="2020-01-01T00:00:00.000Z"
+        )
+        for uid, state, source in (
+            ("5", "confirmed", "claude-hook"),
+            ("6", "confirmed", "claude-hook"),
+            ("7", "unconfirmed", "cli"),
+        ):
+            self.event(
+                conn, uid, kind="planning_write", identity_state=state, identity_source=source
+            )
+        self.event(
+            conn,
+            "8",
+            kind="planning_write",
+            identity_state="unconfirmed",
+            identity_source="cli",
+            received_at="2020-01-01T00:00:00.000Z",
+        )
+        conn.commit()
+        checks = self.by_id()
+        self.assertEqual(2, checks["hook-delivery"]["presentation"]["parameters"]["count"])
+        self.assertEqual(
+            "confirmed/claude-hook 2, unconfirmed/cli 1",
+            checks["planning-write-identity"]["presentation"]["parameters"]["writes"],
+        )
+        self.assertEqual(
+            "claude 2026-10-31T11:00:00.000Z, codex 2026-10-31T09:00:00.000Z",
+            checks["hook-last-event"]["presentation"]["parameters"]["clients"],
+        )
+
+    def test_a_store_without_the_execution_tree_is_unknown_not_a_crash(self) -> None:
+        made = sqlite3.connect(self.path)
+        made.execute("PRAGMA user_version=9")
+        made.close()
+        checks = doctor._execution_event_checks(self.path)
+        self.assertEqual(["unknown"], [check["status"] for check in checks])
 
 
 class _InstalledAdapter:

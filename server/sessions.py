@@ -191,6 +191,124 @@ def op_ingest_session_event(conn: sqlite3.Connection, payload: dict) -> dict:
     return {"session": session_id, "event": kind, "klass": klass, "id": cursor.lastrowid}
 
 
+#: Second precision, the format `sessions.last_seen` has always had. Kept so
+#: older builds and every reader still compare these columns as text.
+_SECOND = 19
+
+
+def _second(at: str) -> str:
+    """`at` (UTC, `%Y-%m-%dT%H:%M:%S` with any fraction) cut to the stored precision."""
+
+    if len(at) < _SECOND or at[10] != "T":
+        raise ValueError(f"session time {at!r} is not a UTC timestamp")
+    return at[:_SECOND] + "Z"
+
+
+def subagent_session_id(session_id: str, agent_id: str) -> str:
+    """The row id of a subagent: its parent session and its own agent id."""
+
+    return f"{session_id}:{agent_id}"
+
+
+def touch(
+    conn: sqlite3.Connection,
+    session_id: str,
+    *,
+    client: str,
+    at: str,
+    cwd: str = "",
+    transcript_path: str = "",
+    parent_session_id: str = "",
+    agent_id: str = "",
+    client_version: str = "",
+) -> bool:
+    """Make sure one session row exists and advance its heartbeat to `at`.
+
+    The one upsert behind every sign of life a session gives -- a hook event,
+    and a confirmed tool call -- so all of them agree on what moving a session
+    forward means. Runs inside the caller's transaction.
+
+    `last_seen` becomes the later of what it was and `at`, never "now", so
+    replaying old events can never make a dead session look live. The answer is
+    whether `at` is current: a new row, or not older than the row's
+    `last_seen`. Only a current event may change the row's other columns or its
+    state; an older one is history.
+    """
+
+    second = _second(at)
+    row = conn.execute("SELECT last_seen FROM sessions WHERE id = ?", (session_id,)).fetchone()
+    described = {
+        "cwd": cwd,
+        "transcript_path": transcript_path,
+        "parent_session_id": parent_session_id,
+        "agent_id": agent_id,
+        "client_version": client_version,
+    }
+    if row is None:
+        conn.execute(
+            "INSERT INTO sessions(id, client, started_at, last_seen, cwd, transcript_path,"
+            " parent_session_id, agent_id, client_version) VALUES (?,?,?,?,?,?,?,?,?)",
+            (session_id, client, second, second, *described.values()),
+        )
+        return True
+    current = second >= str(row[0])
+    updates = ["last_seen = MAX(last_seen, ?)"]
+    values: list[str] = [second]
+    if current:
+        for column, value in described.items():
+            if value:
+                updates.append(f"{column} = ?")
+                values.append(value)
+    conn.execute(f"UPDATE sessions SET {', '.join(updates)} WHERE id = ?", (*values, session_id))
+    return current
+
+
+#: What a lifecycle transition does to a session row. A terminal status stays
+#: until an explicit start: a late end, turn or notification cannot downgrade a
+#: `failed` session or bring an ended one back, and only a live session can be
+#: waiting or blocked.
+_TRANSITIONS = {
+    "start": "status = 'active', ended_at = NULL, attention = '', attention_seen = 0, client = ?",
+    "end": (
+        "ended_at = CASE WHEN status = 'failed' THEN ended_at ELSE ? END,"
+        " attention = CASE WHEN status = 'failed' THEN 'failed' ELSE 'ended' END,"
+        " attention_seen = 0,"
+        " status = CASE WHEN status = 'failed' THEN 'failed' ELSE 'ended' END"
+    ),
+    "waiting": (
+        f"attention = CASE WHEN status = 'active' THEN '{WAITING_ATTENTION}' ELSE attention END,"
+        " attention_seen = CASE WHEN status = 'active' THEN 0 ELSE attention_seen END"
+    ),
+    "blocked": (
+        "attention = CASE WHEN status = 'active' THEN 'blocked' ELSE attention END,"
+        " attention_seen = CASE WHEN status = 'active' THEN 0 ELSE attention_seen END"
+    ),
+    "working": "attention = CASE WHEN status = 'active' THEN '' ELSE attention END",
+}
+
+
+def transition(
+    conn: sqlite3.Connection, session_id: str, name: str, *, at: str, client: str = ""
+) -> None:
+    """Apply one lifecycle transition to an existing row, inside the caller's transaction.
+
+    The caller decides whether the event is current (see `touch`); this only
+    knows what each transition means.
+    """
+
+    if name not in _TRANSITIONS:
+        raise ValueError(f"unknown session transition {name!r}")
+    if name == "start":
+        parameters: tuple[str, ...] = (client,)
+    elif name == "end":
+        parameters = (_second(at),)
+    else:
+        parameters = ()
+    conn.execute(
+        f"UPDATE sessions SET {_TRANSITIONS[name]} WHERE id = ?", (*parameters, session_id)
+    )
+
+
 def _session_associations(
     conn: sqlite3.Connection,
     session_id: str,
