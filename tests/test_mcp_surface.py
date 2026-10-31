@@ -25,7 +25,7 @@ import tempfile
 import threading
 import time
 import unittest
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import ClassVar
 from unittest import mock
 
@@ -36,6 +36,7 @@ from server.hooks import normalize, spool
 from server.ops import tray
 from server.planning import api as planning_api
 from server.planning import calls as planning_calls
+from server.planning import chain as planning_chain
 from server.planning import service as planning_service
 from server.planning import tools as planning_tools
 from tests.planning_fixtures import bulk_items
@@ -1869,7 +1870,24 @@ class ChainToolTests(WireCallTestCase):
         planning_service.link_work_items(
             self.conn, self.found, self.children["ready"], "discovered-from"
         )
+        # The open members are written on one fixed day too, and the chain's own
+        # clock is held still, so the series and the recent window read the same
+        # on both sides of a UTC midnight.
+        for reference in (*self.children.values(), self.found):
+            self.conn.execute(
+                "UPDATE work_items SET created_at = ?, updated_at = ? WHERE work_item_id = ?",
+                (
+                    "2026-09-10T08:00:00Z",
+                    "2026-09-10T08:00:00Z",
+                    planning_service.get_work_item(self.conn, reference)["work_item_id"],
+                ),
+            )
         self.conn.commit()
+        clock = mock.patch.object(
+            planning_chain, "utc_now", return_value=datetime(2026, 9, 12, 23, 59, tzinfo=UTC)
+        )
+        clock.start()
+        self.addCleanup(clock.stop)
 
     def whole(self, scope: str = "chain") -> dict:
         handled = planning_api.handle_get(
