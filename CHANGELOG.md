@@ -70,6 +70,12 @@ checkouts are therefore distinguishable even at the same version.
     removes a file a crash left behind. A sweep deletes nothing else but an
     abandoned `*.partial`: a copy no row names, as after restoring the store
     from a snapshot, is kept and reported by `doctor`.
+  - `valkama transcripts purge` deletes copies on request, whatever retention
+    says: `--session <id>` (repeatable), `--before <date>` (sessions whose last
+    activity is earlier) and `--dry-run`. Each copy gets a `transcript_purged`
+    row with `reason` `on-request` before its file is deleted, a copy still
+    owed for those sessions is never made, and the command prints counts only,
+    including how many open work items refer to the sessions.
   - The export lists "transcript archive" among what it excludes and never
     reads it. `doctor` reports copies kept and their size, copies owed, files
     no row names and recorded copies missing from disk.

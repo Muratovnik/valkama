@@ -232,6 +232,7 @@ python valkama.py <command> [options]
 | `adapter list` | the adapters this installation declares |
 | `doctor [--json] [--no-probe]` | check this installation in four levels — Installation, Projects, Capabilities, Connections — and say what to do about each problem |
 | `export [--section planning] [--space KEY]... [--output PATH]` | write every Planning space and every one of its work items as one JSON export; `planning` is the only section. `--space` (repeatable) narrows it to those spaces and records them as `space_filter`; an unknown space exits non-zero. `--output` writes the file whole through a temporary file beside it and prints one summary line instead of the JSON. A space whose items do not add up to its count stops the export |
+| `transcripts purge [--session ID]... [--before DATE] [--dry-run]` | delete archived transcripts now, on request, whatever retention says; prints counts only |
 | `migrate planning-model [--dry-run]` | explicitly convert a Board-era store to Planning once; dry run converts a copy |
 | `attach NAME PATH [--label TEXT]` | attach another database file as a scope |
 | `detach NAME` | drop a scope from every view; the file is untouched |
@@ -612,7 +613,22 @@ machine and never appear in an export. They are kept while an open work item
 refers to the session, and for at least 90 days after the later of the
 session's last activity and the closing of the last item that refers to it.
 Transcripts can contain secrets and personal data, so treat the store's
-directory accordingly.
+directory accordingly. To delete copies when someone asks, without waiting for
+retention:
+
+```text
+valkama transcripts purge --session <id> [--session <id> ...] [--dry-run]
+valkama transcripts purge --before 2026-01-01 [--dry-run]
+```
+
+`--session` names sessions by exact id; `--before` takes the sessions whose
+last activity is earlier than that date (UTC) or time. Given both, a session
+must match both. The copies go even while an open work item refers to the
+session, and the command says how many such items there were. A copy still
+owed for those sessions is never made. The store keeps only the fact of each
+deletion and the copy's hash, never its content, and the command prints counts
+of sessions, files and bytes, never a session id or a path. `--dry-run`
+prints the same counts and changes nothing.
 
 `doctor` reports spool files still waiting, rejected spool files, the last
 hook event from each client, and the transcript archive: copies kept, copies

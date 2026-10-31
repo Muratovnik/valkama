@@ -334,6 +334,35 @@ directory, has no rows for files that may be the only copies left: the sweep
 records such a file when an owed end matches its name and content, and
 otherwise leaves it for `doctor` to report.
 
+### Deletion on request
+
+Retention decides when a copy may go; a person may need it gone sooner, for
+example when the subject of personal data in a transcript asks for its
+deletion.
+
+```text
+valkama transcripts purge --session <id> [--session <id> ...] [--dry-run]
+valkama transcripts purge --before <date or time> [--dry-run]
+```
+
+`--session` (repeatable) names sessions by exact id. `--before` takes the
+sessions whose last activity -- `last_seen`, or the newest event of a session
+with no row -- is earlier than the given ISO date or time; a date is its first
+moment in UTC, and a time without an offset is read as UTC. Given both, a
+session must match both; at least one is required.
+
+The purge takes each current copy of those sessions the way retention does: a
+`transcript_purged` row with `reason` `on-request`, then the file. A copy in a
+named session's folder that no row names is deleted too, with its own purge
+row. A copy still owed for such a session is settled with a
+`transcript_archived` row without a file and with `reason` `on-request`, so no
+later sweep makes it. Items that refer to the session do not keep its copies:
+the command counts the distinct open ones and says so.
+
+The output is counts only -- sessions, files, bytes, copies owed, open items --
+because another session's id or a transcript's path is itself personal data.
+`--dry-run` prints the same counts and writes and deletes nothing.
+
 ### What never leaves
 
 The installation export reads neither the archive nor its rows, and lists

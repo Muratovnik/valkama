@@ -12,6 +12,7 @@ newest terminal transition of an item that refers to it.
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import os
 import sqlite3
@@ -614,6 +615,140 @@ class OrphanTests(ArchiveCase):
         self.assertEqual(1, transcripts.sweep(self.conn).archived)
         self.assertEqual(os.path.join(os.path.dirname(self.path), "transcripts"), self.root)
         self.assertEqual(1, len(self.files()))
+
+
+OTHER = "7a2d3b9f-0000-4000-8000-0000000000bb"
+
+
+class PurgeOnRequestTests(ArchiveCase):
+    """`valkama transcripts purge`: deletion when a person asks, whatever retention says."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.mine = synthetic(5, marker="mine")
+        self.theirs = synthetic(9, marker="theirs")
+        self.deliver("session-end", transcript_path=self.transcript("mine.jsonl", self.mine))
+        self.deliver(
+            "session-end",
+            session_id=OTHER,
+            transcript_path=self.transcript("theirs.jsonl", self.theirs),
+        )
+        self.mine_copy = f"{SESSION}/main-{sha(self.mine)[:16]}.jsonl"
+        self.their_copy = f"{OTHER}/main-{sha(self.theirs)[:16]}.jsonl"
+        self.assertEqual(sorted([self.mine_copy, self.their_copy]), self.files())
+
+    def purge(self, **options: object) -> transcripts.PurgeResult:
+        return transcripts.purge_on_request(self.conn, root=self.root, **options)
+
+    def open_item(self) -> None:
+        planning.create_planning_space(self.conn, project_id="test", name="Test", key="TST")
+        reference = planning.create_work_item(self.conn, space="TST", title="open")["reference"]
+        planning.attach_ref(self.conn, reference, "session", SESSION)
+        self.conn.commit()
+
+    def test_a_named_session_goes_now_even_with_an_open_item_and_others_stay(self) -> None:
+        self.open_item()
+        result = self.purge(sessions=[SESSION])
+        self.assertEqual(
+            transcripts.PurgeResult(
+                dry_run=False, sessions=1, files=1, bytes=len(self.mine), open_items=1
+            ),
+            result,
+        )
+        self.assertEqual([self.their_copy], self.files())
+        (purge,) = self.rows(transcripts.PURGED)
+        self.assertEqual(
+            (self.mine_copy, sha(self.mine), transcripts.ON_REQUEST, SESSION),
+            (purge["archive_path"], purge["archive_sha256"], purge["reason"], purge["session_id"]),
+        )
+        # Retention's own sweep does not bring it back or touch the other copy.
+        self.assertEqual(0, self.sweep().archived)
+        self.assertEqual([self.their_copy], self.files())
+
+    def test_the_summary_names_no_session_path_or_content(self) -> None:
+        self.open_item()
+        text = transcripts.render_purge(self.purge(sessions=[SESSION]))
+        for secret in (SESSION, OTHER, self.root, self.client, "mine", "theirs"):
+            self.assertNotIn(secret, text)
+        self.assertIn("1 file(s)", text)
+        self.assertIn("1 open work item(s)", text)
+
+    def test_a_dry_run_counts_and_changes_nothing(self) -> None:
+        before = self.rows(transcripts.PURGED)
+        result = self.purge(sessions=[SESSION, OTHER], dry_run=True)
+        self.assertEqual(
+            (2, 2, len(self.mine) + len(self.theirs)),
+            (
+                result.sessions,
+                result.files,
+                result.bytes,
+            ),
+        )
+        self.assertEqual(before, self.rows(transcripts.PURGED))
+        self.assertEqual(sorted([self.mine_copy, self.their_copy]), self.files())
+        self.assertIn("dry run", transcripts.render_purge(result))
+
+    def test_before_selects_sessions_whose_last_activity_is_earlier(self) -> None:
+        self.conn.execute("UPDATE sessions SET last_seen = ? WHERE id = ?", (LAST_SEEN, SESSION))
+        self.conn.commit()
+        result = self.purge(before=transcripts.before_argument("2026-02-01"))
+        self.assertEqual(1, result.sessions)
+        self.assertEqual([self.their_copy], self.files())
+        # Both filters given: a session must match both.
+        self.assertEqual(0, self.purge(sessions=[OTHER], before="2026-02-01T00:00:00Z").sessions)
+        self.assertEqual([self.their_copy], self.files())
+
+    def test_an_owed_copy_is_settled_and_never_made_later(self) -> None:
+        with mock.patch.object(transcripts, "HOOK_MAX_BYTES", 0):
+            self.deliver(
+                "session-end",
+                session_id="third",
+                transcript_path=self.transcript("third.jsonl", synthetic(2)),
+            )
+        self.assertEqual(1, len(transcripts.pending(self.conn)))
+        self.assertEqual(1, self.purge(sessions=["third"]).owed)
+        self.assertEqual([], transcripts.pending(self.conn))
+        self.assertEqual(0, self.sweep().archived)
+        self.assertFalse(os.path.exists(os.path.join(self.root, "third")))
+
+    def test_a_named_sessions_copy_without_a_row_goes_too(self) -> None:
+        stray = os.path.join(self.root, SESSION, "main-0123456789abcdef.jsonl")
+        with open(stray, "wb") as handle:
+            handle.write(b"{}\n")
+        result = self.purge(sessions=[SESSION])
+        self.assertEqual(2, result.files)
+        self.assertEqual([self.their_copy], self.files())
+        reasons = {row["archive_path"]: row["reason"] for row in self.rows(transcripts.PURGED)}
+        self.assertEqual(transcripts.ON_REQUEST, reasons[f"{SESSION}/main-0123456789abcdef.jsonl"])
+
+    def test_a_request_must_name_something(self) -> None:
+        with self.assertRaises(ValueError):
+            self.purge()
+        for bad in ("yesterday", "2026-13-01"):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                transcripts.before_argument(bad)
+        self.assertEqual("2026-02-01T00:00:00Z", transcripts.before_argument("2026-02-01"))
+        self.assertEqual(
+            "2026-01-31T21:00:00Z", transcripts.before_argument("2026-02-01T00:00:00+03:00")
+        )
+
+    def test_the_command_line(self) -> None:
+        from server import cli
+
+        self.conn.commit()
+        for argv, expected in (
+            (["transcripts", "purge", "--session", SESSION, "--dry-run"], "would remove 1 file(s)"),
+            (["transcripts", "purge", "--session", SESSION], "removed 1 file(s)"),
+        ):
+            with self.subTest(argv=argv):
+                printed = io.StringIO()
+                with mock.patch.object(sys, "stdout", printed):
+                    cli.main(argv)
+                self.assertIn(expected, printed.getvalue())
+                self.assertNotIn(SESSION, printed.getvalue())
+        self.assertEqual([self.their_copy], self.files())
+        with mock.patch.object(sys, "stderr", io.StringIO()), self.assertRaises(SystemExit):
+            cli.main(["transcripts", "purge"])
 
 
 class HookProcessTests(unittest.TestCase):

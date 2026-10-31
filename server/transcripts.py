@@ -32,6 +32,7 @@ import stat
 import time
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from . import store
 from .hooks.normalize import HookEvent, normalize_path, timestamp
@@ -72,8 +73,9 @@ ARCHIVE_SUFFIX = ".jsonl"
 
 #: Why a row ends a pending copy without a file: the source is gone.
 SOURCE_MISSING = "source-missing"
-#: Why an archive was purged.
+#: Why an archive was purged: retention released it, or a person asked.
 RETENTION = "retention"
+ON_REQUEST = "on-request"
 
 _SAFE = re.compile(r"[A-Za-z0-9._-]{1,128}")
 #: Names Windows will not create, whatever the extension.
@@ -407,8 +409,9 @@ def _newest(conn: sqlite3.Connection) -> dict[str, Archive | None]:
     return newest
 
 
-#: What retention needs to know about session `:s`, in one read: how many
-#: non-terminal items refer to it, and the moment its retention counts from.
+#: Every item that refers to session `:s`, whether it is open, and the moment
+#: its newest terminal transition happened (its last update when no transition
+#: was recorded).
 #:
 #: An item refers to the session through a session ref naming it (exactly, by a
 #: prefix of it, or as one of its subagents), through any Planning write call
@@ -416,12 +419,7 @@ def _newest(conn: sqlite3.Connection) -> dict[str, Archive | None]:
 #: execution of the item the session (or one of its subagents) is linked to, or
 #: as the item the session was launched for. A loose match only keeps a copy
 #: longer.
-#:
-#: The moment is the later of the session's `last_seen` and the newest terminal
-#: transition of a referring item (its last update when no transition was
-#: recorded). A session with no row falls back to its newest event, so a copy
-#: is never kept forever for want of a heartbeat.
-_RETENTION_SQL = """
+_REFERRING_SQL = """
 WITH referring(work_item_id) AS (
     SELECT r.work_item_id FROM work_item_refs r
     WHERE r.kind = 'session'
@@ -440,31 +438,51 @@ WITH referring(work_item_id) AS (
     UNION
     SELECT work_item_id FROM sessions WHERE id = :s AND work_item_id IS NOT NULL
 )
-SELECT
-    (SELECT COUNT(*) FROM work_items w JOIN workflow_states st ON st.state_id = w.state_id
-     WHERE st.is_terminal = 0 AND w.work_item_id IN referring),
-    (SELECT MAX(j) FROM (
-        SELECT COALESCE(
-            (SELECT julianday(last_seen) FROM sessions WHERE id = :s),
-            (SELECT MAX(julianday(COALESCE(occurred_at, received_at))) FROM execution_events
-             WHERE session_id = :s
-               AND kind NOT IN ('transcript_archived', 'transcript_purged'))) AS j
-        UNION ALL
-        SELECT julianday(COALESCE(
-            (SELECT MAX(ev.created_at) FROM work_item_events ev
-             WHERE ev.work_item_id = w.work_item_id AND ev.action = 'transitioned'),
-            w.updated_at))
-        FROM work_items w WHERE w.work_item_id IN referring))
+SELECT w.work_item_id, st.is_terminal,
+       julianday(COALESCE(
+           (SELECT MAX(ev.created_at) FROM work_item_events ev
+            WHERE ev.work_item_id = w.work_item_id AND ev.action = 'transitioned'),
+           w.updated_at))
+FROM work_items w JOIN workflow_states st ON st.state_id = w.state_id
+WHERE w.work_item_id IN referring
+"""
+
+#: When session `:s` last did anything: its `last_seen`, or, with no row, its
+#: newest event, so a copy is never kept forever for want of a heartbeat.
+_ACTIVITY_SQL = """
+SELECT COALESCE(
+    (SELECT julianday(last_seen) FROM sessions WHERE id = :s),
+    (SELECT MAX(julianday(COALESCE(occurred_at, received_at))) FROM execution_events
+     WHERE session_id = :s AND kind NOT IN ('transcript_archived', 'transcript_purged')))
 """
 
 
-def purgeable(conn: sqlite3.Connection, session_id: str, *, now: str) -> bool:
-    """Whether retention lets this session's archive go at `now` (UTC timestamp)."""
+def _referring(conn: sqlite3.Connection, session_id: str) -> list[tuple[str, bool, float | None]]:
+    """(item, open, newest terminal moment) for every item that refers to the session."""
 
-    open_items, anchor = conn.execute(_RETENTION_SQL, {"s": session_id}).fetchone()
-    if open_items or anchor is None:
+    return [
+        (str(row[0]), not row[1], row[2]) for row in conn.execute(_REFERRING_SQL, {"s": session_id})
+    ]
+
+
+def purgeable(conn: sqlite3.Connection, session_id: str, *, now: str) -> bool:
+    """Whether retention lets this session's archive go at `now` (UTC timestamp).
+
+    Not while an item that refers to the session is open; otherwise once 90
+    days have passed since the later of the session's last activity and the
+    newest terminal transition of a referring item.
+    """
+
+    items = _referring(conn, session_id)
+    if any(is_open for _item, is_open, _moment in items):
         return False
-    age = conn.execute("SELECT julianday(?) - ?", (now, anchor)).fetchone()[0]
+    moments = [moment for _item, _open, moment in items if moment is not None]
+    activity = conn.execute(_ACTIVITY_SQL, {"s": session_id}).fetchone()[0]
+    if activity is not None:
+        moments.append(activity)
+    if not moments:
+        return False
+    age = conn.execute("SELECT julianday(?) - ?", (now, max(moments))).fetchone()[0]
     return age is not None and float(age) >= RETENTION_DAYS
 
 
@@ -603,7 +621,9 @@ def _copy_pending(conn: sqlite3.Connection, owed: Pending, root: str, result: Sw
     result.archived += 1
 
 
-def _purge(conn: sqlite3.Connection, root: str, archives: list[Archive]) -> None:
+def _purge(
+    conn: sqlite3.Connection, root: str, archives: list[Archive], *, reason: str = RETENTION
+) -> None:
     """Record each purge, then delete its file: the row is committed first.
 
     A crash between the two leaves a file whose newest row is the purge, which
@@ -620,7 +640,7 @@ def _purge(conn: sqlite3.Connection, root: str, archives: list[Archive]) -> None
             transcript_path=archive.transcript_path,
             archive=archive.archive_path,
             sha256=archive.sha256,
-            reason=RETENTION,
+            reason=reason,
         )
         _discard(_absolute(root, archive.archive_path))
     if archives:
@@ -698,6 +718,181 @@ def _remove_orphans(root: str, purged_paths: set[str]) -> int:
             removed += 1
             _remove_if_empty(os.path.dirname(path))
     return removed
+
+
+def before_argument(text: str) -> str:
+    """An ISO date or UTC time as the stored timestamp format; `ValueError` otherwise.
+
+    A date means its first moment, UTC. A time with an offset is converted to
+    UTC; one without is read as UTC, the zone every stored time is in.
+    """
+
+    moment = datetime.fromisoformat(text.strip().replace("Z", "+00:00"))
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=UTC)
+    return moment.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+@dataclass
+class PurgeResult:
+    """What an on-request purge removed, or would remove, in counts only.
+
+    Counts and nothing else, on purpose: what it prints may be pasted anywhere,
+    and another session's id or a transcript's path is itself personal data.
+    """
+
+    dry_run: bool
+    sessions: int = 0
+    files: int = 0
+    bytes: int = 0
+    #: Copies still owed for these sessions that will now never be made.
+    owed: int = 0
+    #: Distinct non-terminal items that refer to these sessions; the purge
+    #: does not wait for them, which is the point of a request.
+    open_items: int = 0
+
+
+def purge_on_request(
+    conn: sqlite3.Connection,
+    *,
+    sessions: list[str] | tuple[str, ...] = (),
+    before: str | None = None,
+    root: str | None = None,
+    dry_run: bool = False,
+) -> PurgeResult:
+    """Delete the archived transcripts of the sessions a person names, now.
+
+    `sessions` names sessions by exact id; `before` (a UTC timestamp, see
+    `before_argument`) selects the sessions whose last activity is earlier.
+    Given both, a session must match both. Open items that refer to a session
+    do not keep its copies: they are counted and reported, never a reason to
+    keep. Each copy goes the way retention takes it -- a `transcript_purged`
+    row with `reason` `on-request` first, then the file -- so the history keeps
+    the fact of the deletion and a hash, never the content.
+
+    A copy still owed for such a session is settled with a
+    `transcript_archived` row without a file, so no later sweep makes it. A
+    file in a named session's folder that no row names is deleted too, with
+    its own purge row. With `dry_run`, nothing is written or deleted and the
+    counts say what would be.
+    """
+
+    if not sessions and before is None:
+        raise ValueError("name at least one session or a date to purge before")
+    root = root if root is not None else directory(store.db_path())
+    named = set(sessions)
+    archives = current(conn)
+    by_session: dict[str, list[Archive]] = {}
+    for archive in archives.values():
+        by_session.setdefault(archive.session_id, []).append(archive)
+    owed_by_session: dict[str, list[Pending]] = {}
+    for entry in pending(conn):
+        owed_by_session.setdefault(entry.session_id, []).append(entry)
+    files = {relative: info for relative, _path, info in _files(root)}
+    purged_paths = purged(conn)
+
+    result = PurgeResult(dry_run=dry_run)
+    open_items: set[str] = set()
+    for session_id in sorted(set(by_session) | set(owed_by_session) | named):
+        if named and session_id not in named:
+            continue
+        if before is not None and not _active_before(conn, session_id, before):
+            continue
+        kept = by_session.get(session_id, [])
+        folder = f"{safe(session_id)}/"
+        unnamed = (
+            sorted(
+                relative
+                for relative in files
+                if relative.startswith(folder)
+                and relative.endswith(ARCHIVE_SUFFIX)
+                and relative not in archives
+            )
+            if session_id in named
+            else []
+        )
+        owed = owed_by_session.get(session_id, [])
+        if not (kept or unnamed or owed):
+            continue
+        result.sessions += 1
+        result.files += sum(1 for a in kept if a.archive_path in files) + len(unnamed)
+        result.bytes += sum(
+            files[a.archive_path].st_size for a in kept if a.archive_path in files
+        ) + sum(files[relative].st_size for relative in unnamed)
+        result.owed += len(owed)
+        open_items.update(
+            item for item, is_open, _moment in _referring(conn, session_id) if is_open
+        )
+        if dry_run:
+            continue
+        _purge(conn, root, kept, reason=ON_REQUEST)
+        for relative in unnamed:
+            path = _absolute(root, relative)
+            if relative not in purged_paths:
+                _append(
+                    conn,
+                    kind=PURGED,
+                    client=None,
+                    session_id=session_id,
+                    agent_id=None,
+                    transcript_path=None,
+                    archive=relative,
+                    sha256=_digest(path),
+                    reason=ON_REQUEST,
+                )
+            _discard(path)
+            _remove_if_empty(os.path.dirname(path))
+        for debt in owed:
+            _append(
+                conn,
+                kind=ARCHIVED,
+                client=debt.client,
+                session_id=debt.session_id,
+                agent_id=debt.agent_id,
+                transcript_path=normalize_path(debt.transcript_path),
+                reason=ON_REQUEST,
+            )
+    result.open_items = len(open_items)
+    return result
+
+
+def _active_before(conn: sqlite3.Connection, session_id: str, before: str) -> bool:
+    activity = conn.execute(_ACTIVITY_SQL, {"s": session_id}).fetchone()[0]
+    if activity is None:
+        return False
+    return bool(conn.execute("SELECT ? < julianday(?)", (activity, before)).fetchone()[0])
+
+
+def _digest(path: str) -> str | None:
+    digest = hashlib.sha256()
+    try:
+        with open(path, "rb") as reader:
+            while chunk := reader.read(CHUNK_BYTES):
+                digest.update(chunk)
+    except OSError:
+        return None
+    return digest.hexdigest()
+
+
+def render_purge(result: PurgeResult) -> str:
+    """One paragraph of counts for a person; no session id, path or content."""
+
+    verb = "would remove" if result.dry_run else "removed"
+    lines = [
+        f"transcripts purge: {verb} {result.files} file(s), {result.bytes} bytes,"
+        f" from {result.sessions} session(s)",
+    ]
+    if result.owed:
+        settled = "would be settled" if result.dry_run else "settled"
+        lines.append(f"{result.owed} copy(ies) still owed for them {settled} without a copy")
+    if result.open_items:
+        lines.append(
+            f"{result.open_items} open work item(s) refer to these sessions;"
+            " their copies are removed all the same"
+        )
+    if result.dry_run:
+        lines.append("dry run: nothing was written or deleted")
+    return "\n".join(lines)
 
 
 def summary(conn: sqlite3.Connection, root: str) -> dict:

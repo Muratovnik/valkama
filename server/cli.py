@@ -28,7 +28,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from . import documents, launcher, static_assets, store
+from . import documents, launcher, static_assets, store, transcripts
 from .federation import federated_spaces
 from .http_surface import serve_main
 from .mcp_surface import LEGACY_PROTOCOLS, MODERN_PROTOCOL, catalogue, mcp_main
@@ -633,6 +633,14 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         help="convert a copy and report what would move; the store is untouched",
     )
+    transcripts_cmd = commands.add_parser("transcripts", help="act on the transcript archive")
+    transcripts_sub = transcripts_cmd.add_subparsers(dest="transcripts_command", required=True)
+    purge_cmd = transcripts_sub.add_parser(
+        "purge", help="delete archived transcripts now, whatever retention says"
+    )
+    purge_cmd.add_argument("--session", action="append", default=[], metavar="ID")
+    purge_cmd.add_argument("--before", type=transcripts.before_argument, metavar="DATE")
+    purge_cmd.add_argument("--dry-run", action="store_true")
     options = parser.parse_args(argv)
     if options.command == "serve":
         serve_main(options.port, development_origin=options.development_origin)
@@ -716,6 +724,15 @@ def main(argv: list[str] | None = None) -> None:
     elif options.command == "detach":
         remaining = scopes.detach(db_path(), options.name)
         print(json.dumps([item["name"] for item in remaining]))
+    elif options.command == "transcripts":
+        with contextlib.closing(connect()) as conn:
+            try:
+                purged = transcripts.purge_on_request(
+                    conn, sessions=options.session, before=options.before, dry_run=options.dry_run
+                )
+            except ValueError as error:
+                raise SystemExit(f"transcripts purge: {error}") from error
+        print(transcripts.render_purge(purged))
     else:
         mcp_main()
 
