@@ -7,12 +7,18 @@
  * the reader's language and, where the inspector can do the next thing itself,
  * the button that does it. Carrying the move through anyway is offered only when
  * the server accepts an override, and only after a second, explicit answer.
+ *
+ * The server's sentence is held to two lines. It names every refused guard at
+ * once, so it grows with each of them, and the head it stands in is pinned:
+ * every line it took came out of the body on a phone. The hints and actions
+ * above it say the same in the reader's language and stay whole.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { RefusalNotice } from '@/widgets/work-item-inspector/utils/useInspectorWrites.ts'
 
+import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
 import ConfirmStrip from '@/shared/ui/ConfirmStrip.vue'
 import VButton from '@/shared/ui/VButton.vue'
 
@@ -71,7 +77,11 @@ function force() {
         >
       </li>
     </ul>
-    <p class="refusal-reason">{{ t('workItem.refusal.reason', { reason: notice.reason }) }}</p>
+    <CollapsibleText
+      class="refusal-reason"
+      :text="t('workItem.refusal.reason', { reason: notice.reason })"
+      :lines="2"
+    />
     <template v-if="notice.force">
       <!-- Hidden rather than removed while asked, so the answer can hand focus
            back to it. -->
@@ -138,10 +148,8 @@ function force() {
 }
 
 .refusal-reason {
-  margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
-  overflow-wrap: anywhere;
 }
 
 /* Filled like the guard actions above it, so its edge is the text column's edge;

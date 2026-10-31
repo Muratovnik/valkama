@@ -143,6 +143,18 @@ test('the drawn-line ledger is exact in both directions and names its tokens', (
   // ceiling: delete the line and the ledger in the same commit.
   assert.match(scanBorderBudget(divider, new Map([['future/Panel.vue', 2]]))[0], /says 2/)
 
+  // So does a vanished file: its entry is lines the tree no longer draws.
+  assert.deepEqual(
+    scanBorderBudget(
+      divider,
+      new Map([
+        ['future/Panel.vue', 1],
+        ['future/Gone.vue', 1],
+      ]),
+    ),
+    ['future/Gone.vue: LINE_BUDGET keeps an entry for a file the tree does not have; remove it'],
+  )
+
   const literal = [styled('Panel', '.a { border: 1px solid #303030; }')]
   assert.ok(
     scanBorderBudget(literal, new Map([['future/Panel.vue', 1]])).some((violation) =>
@@ -231,6 +243,10 @@ test('a literal control height is rejected inside the band and ignored outside i
   assert.match(
     scanControlSizes(control('min-height: 44px'), new Map([['future/Control.vue', 2]]))[0],
     /the ledger says 2/,
+  )
+  assert.match(
+    scanControlSizes(control('height: 18px'), new Map([['future/Gone.vue', 1]]))[0],
+    /CONTROL_SIZE_BUDGET keeps an entry for a file the tree does not have/,
   )
 })
 

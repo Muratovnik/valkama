@@ -75,11 +75,7 @@ const busy = ref(false)
 const section = ref<Section>('overview')
 const frame = ref<InstanceType<typeof DrawerFrame> | null>(null)
 const overview = ref<InstanceType<typeof InspectorOverview> | null>(null)
-const { unsaved } = provideDraftGuard()
-
-/** Whether the head is asking before a draft is lost. */
-const asking = ref<'discard' | null>(null)
-let departure: (() => void) | null = null
+const { asking, discard, keep: keepEditing, leave, unsaved } = provideDraftGuard()
 
 function failureText(failure: TypedFailure, fallbackKey?: string): string {
   const message = failureMessage(failure)
@@ -204,7 +200,7 @@ const holderLabel = computed(() =>
   }),
 )
 
-const headSlot = computed(() => Boolean(item.value && props.writable) || asking.value === 'discard')
+const headSlot = computed(() => Boolean(item.value && props.writable) || asking.value)
 
 const shownSection = computed({
   get: () => section.value,
@@ -229,38 +225,19 @@ function followGuard(guard: string) {
   else if (guard === 'checklist') overview.value?.revealChecklist()
 }
 
-/**
- * Leave this item — close it, step back, or open another — after asking when
- * that would drop a draft. The question stands in the head; the drawer stays
- * usable underneath it, and the draft stays until the answer is to discard it.
- */
-function leave(action: () => void) {
-  if (!unsaved.value.length) {
-    action()
-    return
-  }
-  departure = action
-  asking.value = 'discard'
-}
-
-function keepEditing() {
-  departure = null
-  asking.value = null
-}
-
-function discard() {
-  const action = departure
-  keepEditing()
-  action?.()
-}
-
 const discardQuestion = computed(() =>
   t('workItem.discard.question', {
     drafts: unsaved.value.map((kind) => t(`workItem.discard.${kind}`)).join(', '),
   }),
 )
 
-const close = () => leave(() => emit('close'))
+/**
+ * Leave this item — close it, step back, or open another — after asking when
+ * that would drop a draft. The question stands in the head; the drawer stays
+ * usable underneath it, and the draft stays until the answer is to discard it.
+ * The guard asks the same question for a departure the inspector did not start.
+ */
+const close = () => void leave(() => emit('close'))
 </script>
 
 <template>
@@ -286,7 +263,7 @@ const close = () => leave(() => emit('close'))
             class="head-back"
             type="button"
             :title="t('workItem.back')"
-            @click="leave(() => emit('back'))"
+            @click="void leave(() => emit('back'))"
           >
             <VIcon
               name="chevron-left"
@@ -324,7 +301,7 @@ const close = () => leave(() => emit('close'))
             @guard="followGuard"
           />
           <ConfirmStrip
-            v-if="asking === 'discard'"
+            v-if="asking"
             tone="danger"
             :message="discardQuestion"
             :confirm-label="t('workItem.discard.confirm')"
@@ -384,7 +361,7 @@ const close = () => leave(() => emit('close'))
               :writable="writable && !busy"
               @changed="reloaded"
               @session="(id, family) => emit('session', id, family)"
-              @open="(target) => leave(() => emit('open', target))"
+              @open="(target) => void leave(() => emit('open', target))"
             />
             <InspectorExecution
               v-else-if="section === 'execution'"

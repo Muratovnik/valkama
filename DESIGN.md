@@ -155,9 +155,11 @@ glass, gradients, glow, oversized marketing headings, or game-like chrome.
   | sheet | `--color-surface-sheet` | a card, a row, a panel lying on a ground |
   | recess | `--color-surface-recess` | an epic well, a strip cut into a card |
 
-  `--color-surface-sheet` and `--color-surface-recess` are roles: a container may re-point
-  one — the drawer does, being its own ground — so a rule that must be one
-  exact tone wherever it renders names the palette step instead. A role that
+  `--color-surface-sheet` and `--color-surface-recess` are roles: a container
+  standing on another rung may re-point one to stay a step above itself — the
+  drawer stands on `--color-surface`, the rung the default sheet already sits
+  above, so it re-points nothing — and a rule that must be one exact tone
+  wherever it renders names the palette step instead. A role that
   resolves to the same tone as another role is a duplicate and fails
   `designTokens.test.ts`; the palette shipped `--surface-panel` and
   `--color-surface-sheet` painted identically until it did. A group cut into

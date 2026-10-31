@@ -53,48 +53,17 @@ export const LINE_BUDGET = new Map([
   // edges, timeline spines — plus status edges where a state names itself.
   // GraphView keeps the pan viewport frame, the floating flow controls and a
   // legend glyph whose border is the drawing itself.
-  ['features/improvement-profile/components/ImprovementProfileDialog.vue', 2],
   ['features/input-requests/components/RequestCard.vue', 1], // Divider between separate requests.
-  // The portfolio's project card keeps its header divider; the view around it
-  // draws nothing now that the portfolio is its own component.
-  ['pages/analytics/components/AnalyticsPortfolio.vue', 1],
-  ['pages/improvements/components/ImprovementsView.vue', 3],
-  ['pages/improvements/components/ImprovementJobs.vue', 3],
-  ['pages/sessions/SessionsView.vue', 1],
-  ['pages/sessions/SessionTable.vue', 3],
   // Settings General uses one earned divider between its two preference
   // groups and one row family. Diagnostics uses section and row dividers,
   // plus status edges for initial-load and refresh failures.
   ['pages/settings/components/SettingsGeneral.vue', 2],
   ['pages/settings/components/installation-health.css', 5],
-  // The module list divides its rows and draws nothing else.
-  ['pages/settings/components/SettingsModules.vue', 1],
-  // Six across the module, where there were thirteen: one divider between table
-  // rows that share the panel's ground, three status edges, and two lines that
-  // belong to rendered markdown rather than to this interface — a blockquote's
-  // edge and the grid of an author's own table. The seven that went were a
-  // toolbar and a filter row underlined for nothing, a head band that carried a
-  // hairline above and below its own tone, section rules down a narrow drawer,
-  // and two lists whose rows already stand on a ground of their own.
-  ['pages/skills/components/SkillCatalogue.vue', 1],
-  ['pages/skills/components/SkillDetailDrawer.vue', 1],
-  ['pages/skills/components/SkillPreview.vue', 3],
-  ['pages/skills/components/SkillsView.vue', 1],
-  ['widgets/activity-bell/ActivityBell.vue', 4],
-  ['widgets/analytics-dashboard/components/AnalyticsDashboard.vue', 2],
-  ['widgets/analytics-dashboard/components/AnalyticsCardTable.vue', 1],
-  ['widgets/analytics-dashboard/components/AnalyticsMetricLedger.vue', 1],
-  ['widgets/analytics-dashboard/components/AnalyticsTableInspector.vue', 1],
-  ['widgets/analytics-dashboard/components/DataTableTrigger.vue', 1],
-  // Planning's own surfaces. The inspector's head band keeps the one rule that
-  // separates it from the section below; Overview divides the facts from the
-  // record and reserves an edge for the sections it does not own yet; and the
+  // Planning's own surfaces. Overview divides the facts from the record; the
   // list's sticky header stands on the rule that stops it melting into row one.
-  ['widgets/work-item-inspector/components/InspectorHead.vue', 1],
   ['widgets/work-item-inspector/components/InspectorDiscussion.vue', 2], // Composer divider and frozen step quote.
   ['widgets/work-item-inspector/components/InspectorSummary.vue', 1],
   ['widgets/work-item-inspector/components/InspectorOverview.css', 1],
-  ['widgets/work-item-inspector/components/InspectorReserved.vue', 1],
   ['widgets/work-item-inspector/components/InspectorExecution.vue', 1],
   ['widgets/work-item-views/components/WorkItemList.vue', 1],
   ['widgets/work-item-graph/components/GraphView.vue', 1],
@@ -102,9 +71,6 @@ export const LINE_BUDGET = new Map([
   ['widgets/work-item-graph/components/GraphNodeCard.vue', 1],
   ['widgets/work-item-graph/components/GraphControls.vue', 2],
   ['widgets/work-item-graph/components/GraphBar.vue', 1],
-  ['widgets/improvement-case/components/ImprovementCaseDetail.vue', 3],
-  ['widgets/improvement-case/components/ImprovementCaseList.vue', 2],
-  ['widgets/session-detail/SessionFeed.vue', 2],
 ])
 
 /**
@@ -131,8 +97,24 @@ function drawnLines(file, source) {
   return { drawn, violations }
 }
 
+/**
+ * The entries a ledger keeps for files the scanned tree does not have.
+ *
+ * A ledger is exact in both directions only if a file that disappeared counts as
+ * lines that disappeared. Scanning the files that exist never visits the entry of
+ * one that does not, so twenty-four entries outlived the screens they described
+ * — retired modules and a deleted inspector head among them — and any of those
+ * paths coming back would have inherited a budget nobody had argued for.
+ */
+function staleEntries(sources, budget, ledger) {
+  const present = new Set(sources.map(({ file }) => file))
+  return [...budget.keys()]
+    .filter((file) => !present.has(file))
+    .map((file) => `${file}: ${ledger} keeps an entry for a file the tree does not have; remove it`)
+}
+
 export function scanBorderBudget(sources, budget = LINE_BUDGET) {
-  const violations = []
+  const violations = staleEntries(sources, budget, 'LINE_BUDGET')
   for (const { file, source } of sources) {
     if (!/\.(?:vue|css)$/.test(file)) continue
     const reading = drawnLines(file, source)
@@ -273,14 +255,12 @@ export const CONTROL_SIZE_BUDGET = new Map([
   // the rest of the height. The height is the line and the air around it, so it
   // is the padding, and the ledger is exact in both directions — which is how
   // removing the literal shows up here as a failure until this entry goes too.
-  ['widgets/analytics-dashboard/components/AnalyticsFilterBar.vue', 2],
-  ['widgets/analytics-dashboard/components/DataTableTrigger.vue', 1],
   ['widgets/work-item-graph/components/GraphView.vue', 1],
   ['widgets/work-item-graph/components/GraphControls.vue', 1],
 ])
 
 export function scanControlSizes(sources, budget = CONTROL_SIZE_BUDGET) {
-  const violations = []
+  const violations = staleEntries(sources, budget, 'CONTROL_SIZE_BUDGET')
   for (const { file, source } of sources) {
     if (!/\.(?:vue|css)$/.test(file)) continue
     if (file === 'app/styles/tokens.css') continue

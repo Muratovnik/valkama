@@ -2,7 +2,7 @@
  * The URL is the state, and this is the only thing that writes it.
  *
  * Every navigation goes through `writeRoute`, which clears the two failure flags
- * before it moves — a route that resolved is proof the last one's failure is over.
+ * once it has moved — a route that resolved is proof the last one's failure is over.
  * Back, forward and any navigation the shell did not start land in `applyLocation`.
  *
  * A clean entry — "/" with no query, which is how both the desktop shell and a
@@ -11,6 +11,7 @@
  */
 
 import { computed, ref, watch } from 'vue'
+import { isNavigationFailure, NavigationFailureType } from 'vue-router'
 
 import { router } from '@/app/router.ts'
 
@@ -93,12 +94,26 @@ export function usePlatformNavigation(invalidRouteMessage: () => string) {
   const operatingScope = computed(() => route.value.scope)
   const routeBlocked = computed(() => Boolean(routeFailure.value || routeUnavailable.value))
 
-  function writeRoute(next: PlatformRoute, mode: 'push' | 'replace' = 'push') {
+  /**
+   * The route moves once the router has agreed to move. Writing it first
+   * unmounted an open item before the leave guard could ask about its draft;
+   * a move the guard refused, or a newer one overtook, leaves it as it was.
+   */
+  async function navigate(next: PlatformRoute, mode: 'push' | 'replace') {
+    const href = serializePlatformRoute(next)
+    const failure = await (mode === 'push' ? router.push(href) : router.replace(href))
+    if (
+      isNavigationFailure(failure, NavigationFailureType.aborted) ||
+      isNavigationFailure(failure, NavigationFailureType.cancelled)
+    )
+      return
     routeFailure.value = ''
     routeUnavailable.value = null
     route.value = next
-    const href = serializePlatformRoute(next)
-    void (mode === 'push' ? router.push(href) : router.replace(href))
+  }
+
+  function writeRoute(next: PlatformRoute, mode: 'push' | 'replace' = 'push') {
+    void navigate(next, mode)
   }
 
   function switchModule(moduleId: ModuleId) {
