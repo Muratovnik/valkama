@@ -74,6 +74,11 @@ for (const width of [1440, 390]) {
         .evaluate((node) => getComputedStyle(node).color)
     expect(await tone('.chain-row-ready')).toBe(await tone('.chain-row-detail'))
     expect(await tone('.chain-row-ready')).not.toBe(await tone('.chain-row-title'))
+    // At a phone's width a row gives the holder's room to the title; the
+    // state word and the workable mark stay.
+    const holder = section.locator('.chain-row-holder').first()
+    await expect(holder).toBeVisible({ visible: width >= 480 })
+    await expect(section.locator('.chain-row-ready').first()).toBeVisible()
     await section.screenshot(shot(info, `chain-card-${width}.png`))
     await section.getByRole('button', { name: 'Show all · 107' }).click()
     await section.getByRole('button', { name: 'Done · 483' }).click()
