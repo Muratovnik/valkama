@@ -96,14 +96,25 @@ withDefaults(
     opacity: 0.9;
   }
 
+  /* A ghost with a label rests on the control fill, so an action in a line of text
+     reads as a control; an icon-only ghost has no label to read as one and stays bare.
+     A labelled ghost's hover steps one further than its fill, as every control's does. */
   &.variant-ghost {
     color: var(--color-text-muted);
     background: transparent;
   }
 
+  &.variant-ghost:not(.icon-only) {
+    background: var(--color-control-surface);
+  }
+
   &.variant-ghost:hover:not(:disabled) {
     color: var(--color-text);
     background: var(--color-surface-hover);
+  }
+
+  &.variant-ghost:not(.icon-only):hover:not(:disabled) {
+    background: var(--color-surface-active);
   }
 
   &.variant-danger {

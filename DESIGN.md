@@ -479,8 +479,10 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   one exception this document would otherwise have to write into the rule above
   that forbids them.
 - **Buttons:** `VButton` owns the four weights the product uses — primary
-  (light on dark, one per surface), secondary, ghost, danger. A screen does not
-  restyle a bare `<button>` for an ordinary action.
+  (light on dark, one per surface), secondary, ghost, danger. A ghost with a label
+  rests on the control fill and steps one further on hover, so a text action reads
+  as a control; an icon-only ghost stays bare at rest. A screen does not restyle a
+  bare `<button>` for an ordinary action.
 - **Segmented choice:** `SegmentedControl` owns "pick one of a few visible
   alternatives" — view switches, chart encodings, ledger filters. A row of
   `aria-pressed` buttons styled locally is the same control built again, and

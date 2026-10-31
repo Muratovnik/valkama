@@ -336,7 +336,6 @@ defineExpose({ focus })
       >
       <VButton
         v-if="showTaskLink"
-        class="request-task-link"
         variant="ghost"
         @click="emit('select', entry.target)"
         >{{ t('requests.openTask') }}</VButton
@@ -419,11 +418,5 @@ defineExpose({ focus })
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-}
-
-/* A bare text action sits its padding inside the column, so its label would not
-   start where the question does. It hangs back by that padding. */
-.request-task-link {
-  margin-inline-start: calc(-1 * var(--space-4));
 }
 </style>

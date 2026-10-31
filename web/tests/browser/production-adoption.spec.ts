@@ -183,15 +183,12 @@ test('a required boolean remains unanswered until No is submitted and confirmed'
   await page.getByRole('button', { name: /^Needs my answer/ }).click()
   await expect(dialog.locator('.request-state')).toContainText('You answered')
   await expect(dialog.getByRole('definition')).toHaveText('No')
-  // The lone text action hangs back into the answer's column: its label starts
-  // where the question's term starts, not a button padding inside it.
+  // The filled action keeps its edge on the answer's column, where the question's
+  // term starts, as the other filled actions in the card do.
   const term = present(await dialog.getByRole('term').boundingBox(), 'the answer term')
   const task = dialog.getByRole('button', { name: 'Open task', exact: true })
   const taskBox = present(await task.boundingBox(), 'the open-task action')
-  const inset = Number.parseFloat(
-    await task.evaluate((element) => getComputedStyle(element).paddingLeft),
-  )
-  expect(taskBox.x + inset).toBeCloseTo(term.x, 0)
+  expect(taskBox.x).toBeCloseTo(term.x, 0)
   await task.click()
   const itemRequests = page.getByRole('region', { name: 'Questions and decisions', exact: true })
   await expect(itemRequests.locator('.request-state')).toContainText('You answered')
@@ -242,9 +239,15 @@ test('Discuss step reveals the composer and retains a frozen quote after rename 
   await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
   const drawer = page.locator('.drawer')
-  await drawer
-    .getByRole('button', { name: 'Discuss step “Frontend contract”', exact: true })
-    .click()
+  const discuss = drawer.getByRole('button', {
+    name: 'Discuss step “Frontend contract”',
+    exact: true,
+  })
+  // An icon-only ghost has no label to read as a control, so it stays bare at rest.
+  expect(await discuss.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe(
+    'rgba(0, 0, 0, 0)',
+  )
+  await discuss.click()
   const composer = drawer.getByRole('form', { name: 'Write a comment', exact: true })
   await expect(composer).toBeFocused()
   await expect(composer).toBeInViewport({ ratio: 0.5 })

@@ -112,6 +112,14 @@ const tiles = (where: Locator) =>
     .locator('li[data-reference]')
     .evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).dataset.reference))
 
+/** The sum of an rgb(a) colour's first three channels: a lighter fill has the larger sum. */
+function brightness(color: string): number {
+  return (color.match(/\d+(\.\d+)?/g) ?? [])
+    .slice(0, 3)
+    .map(Number)
+    .reduce((sum, value) => sum + value, 0)
+}
+
 async function openBoard(page: Page, state: Record<string, string> = { group: 'epic' }) {
   await page.goto(boardRoute(state))
   await expect(page.locator('.work-item-board')).toBeVisible()
@@ -171,6 +179,21 @@ for (const [width, oneRow] of [
       }),
     )
     expect(Math.abs(rows[0] - rows[1]) <= 2, `heading on one row at ${width}px`).toBe(oneRow)
+    // A labelled lane action reads as a control: a fill at rest, and a hover that is
+    // one step lighter than the fill, not the same fill.
+    const laneAction = head.locator('.lane-actions button').first()
+    const restFill = await laneAction.evaluate(
+      (element) => getComputedStyle(element).backgroundColor,
+    )
+    await laneAction.hover()
+    const hoverFill = await laneAction.evaluate(
+      (element) => getComputedStyle(element).backgroundColor,
+    )
+    expect(restFill, `lane action has a fill at rest at ${width}px`).not.toBe('rgba(0, 0, 0, 0)')
+    expect(
+      brightness(hoverFill),
+      `lane action hover is lighter than rest at ${width}px`,
+    ).toBeGreaterThan(brightness(restFill))
     await page.screenshot(shot(info, `w-board-lanes-${width}.png`))
   })
 }
