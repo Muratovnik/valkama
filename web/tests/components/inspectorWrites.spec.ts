@@ -367,6 +367,18 @@ describe('inspector writes and their refusals', () => {
     expect(await mayLeave()).toBe(true)
     expect(wrapper.find('.confirm-strip').exists()).toBe(false)
 
+    // That pass is spent on the move it was given for. A discarded departure
+    // that never became a route change does not let a later move through.
+    wrapper.getComponent(drawerFrameStub).vm.$emit('close')
+    await flushPromises()
+    await getButton(wrapper, 'Discard').trigger('click')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    const later = mayLeave()
+    await flushPromises()
+    expect(wrapper.get('.confirm-strip').text()).toContain('Unsaved changes will be lost: comment')
+    await getButton(wrapper, 'Keep editing').trigger('click')
+    expect(await later).toBe(false)
+
     // Sent or cleared, the draft no longer holds a reload, and an unmounted
     // inspector holds nothing.
     await wrapper.get('textarea[aria-label="Comment"]').setValue('')
