@@ -14,7 +14,7 @@ import unittest
 from unittest import mock
 
 from server import store
-from server.planning import api, service
+from server.planning import api, model, service
 
 
 class ChecklistGroupTests(unittest.TestCase):
@@ -165,6 +165,70 @@ class ChecklistGroupTests(unittest.TestCase):
             )
         self.assertIn("unknown field(s) force", refusal.exception.message)
         self.assertEqual(1, len(service.list_work_items(self.conn, space="STP")))
+
+    def test_steps_appended_after_the_old_ones_keep_every_claim_and_tick(self) -> None:
+        old = service.set_checklist(self.conn, self.reference, ["write it", "test it", "ship"])
+        first, second, third = old["checklist"]
+        service.tick_checklist_item(self.conn, self.reference, first["id"], author="one")
+        service.claim_checklist_item(self.conn, self.reference, second["id"], author="two")
+        before = {step["id"]: step for step in self.post_get()["checklist"]}
+        # The old steps by their text, one by its id and renamed, and a finding appended.
+        answer = self.post(
+            "/api/planning/work-item/apply",
+            id=self.reference,
+            author="reviewer",
+            checklist={
+                "items": [
+                    "write it",
+                    {"id": second["id"], "text": "test it on Windows"},
+                    "ship",
+                    "review: handle empty input",
+                ]
+            },
+        )
+        steps = answer["checklist"]
+        self.assertEqual(
+            [first["id"], second["id"], third["id"]], [step["id"] for step in steps[:3]]
+        )
+        self.assertEqual(before[first["id"]], steps[0])
+        self.assertEqual({**before[second["id"]], "text": "test it on Windows"}, steps[1])
+        self.assertEqual(
+            ("review: handle empty input", False), (steps[3]["text"], steps[3]["done"])
+        )
+        self.assertEqual(
+            [{"item_id": step["id"], "text": step["text"], "done": step["done"]} for step in steps],
+            answer["applied"]["checklist"],
+        )
+
+    def test_a_repeated_step_sent_done_is_ticked_and_one_left_out_is_not_reopened(self) -> None:
+        old = service.set_checklist(self.conn, self.reference, ["a", "b"])["checklist"]
+        service.claim_checklist_item(self.conn, self.reference, old[0]["id"], author="one")
+        service.tick_checklist_item(self.conn, self.reference, old[1]["id"], author="one")
+        steps = service.set_checklist(
+            self.conn, self.reference, [{"text": "a", "done": True}, "b"], author="agent"
+        )["checklist"]
+        self.assertEqual(
+            [(old[0]["id"], True, "", "agent"), (old[1]["id"], True, "", "one")],
+            [(s["id"], s["done"], s["claimed_by"], s["done_by"]) for s in steps],
+        )
+        self.assertEqual("checklist_completed", self.actions()[-1])
+
+    def test_a_list_that_drops_an_engaged_step_names_it(self) -> None:
+        old = service.set_checklist(self.conn, self.reference, ["keep", "done already"])
+        service.tick_checklist_item(self.conn, self.reference, old["checklist"][1]["id"])
+        before = service.get_work_item(self.conn, self.reference)
+        with self.assertRaises(model.PlanningError) as refusal:
+            service.set_checklist(self.conn, self.reference, ["keep", "new"])
+        self.assertIn(
+            "would lose 1 claimed or completed step(s): done already", str(refusal.exception)
+        )
+        self.assertEqual(before, service.get_work_item(self.conn, self.reference))
+        # Free steps may go without force, as before.
+        kept = service.set_checklist(self.conn, self.reference, ["done already"])
+        self.assertEqual(["done already"], [step["text"] for step in kept["checklist"]])
+
+    def post_get(self) -> dict:
+        return service.get_work_item(self.conn, self.reference)
 
     def test_a_step_that_names_its_own_id_keeps_the_state_it_carries(self) -> None:
         carried = {

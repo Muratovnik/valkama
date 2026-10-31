@@ -91,7 +91,7 @@ item: `reference`, `work_item_id`, `revision`, `state` (`key`, `name`,
 | `update_work_item` | `updated`, the names of the fields it edited |
 | `transition_work_item` | `warnings` and `overridden` when there are any |
 | `claim_work_item` | `claim_ref` is the holder and `claim_state` its lease; `started`, `requeued` and `warnings` when there are any (see [A claim starts the work](#a-claim-starts-the-work)) |
-| `set_work_item_checklist` | `checklist`, the new steps as `item_id`, `text` and `done` |
+| `set_work_item_checklist` | `checklist`, the steps as `item_id`, `text` and `done` |
 | `claim_work_item_checklist_item`, `tick_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by` |
 | `set_work_item_summary` | `summary_recorded: true` |
 | `apply_work_item_changes` | `applied`, what each group changed; `started` from its claim, `overridden` from its transition, and the `warnings` of both, when there are any |
@@ -336,17 +336,23 @@ Each step is the write its single tool makes, with the same guards, events,
 revision bumps and refusals, so a closing transition is judged after the ticks
 and the summary sent with it.
 
-`checklist` replaces the steps, as `set_work_item_checklist` does: it refuses
-to discard a claimed or completed step without `force`. The new steps get new
-`item_id`s, which `applied.checklist` lists as `{item_id, text, done}`, so
-`checklist_ticks` in the same call can name only steps the item already had,
-and those are gone once `checklist` replaced them. A step that is done when it
-is set is sent as `{"text": "…", "done": true}` instead: it is recorded done by
-the caller, with the `checklist_completed` event a tick writes, so a call that
-sets done steps, a summary and a closing transition closes the item. The same
-step shape is what `set_work_item_checklist` takes; a step that names its own
-`id`, which only the HTTP write accepts, is one carried over and keeps the
-`done_by` it carries. A list holds at most 100 entries. At least one
+`checklist` sets the steps, as `set_work_item_checklist` does. A step sent
+with the text of a step the item has is that step: it keeps its `item_id`, its
+claim, its tick and who made them, and duplicate texts match in order. So steps
+are appended by sending the item's steps and then the new ones, and a step is
+renamed by sending `{"id": "…", "text": "…"}`, which only the HTTP write
+accepts. Leaving out a claimed or completed step is refused, naming it, and
+`force` discards it explicitly; a step with neither may be left out freely.
+A new step gets a new `item_id`, and `applied.checklist` lists every step as
+`{item_id, text, done}`, so `checklist_ticks` in the same call can name only
+steps the item already had. A step that is done when it is set is sent as
+`{"text": "…", "done": true}` instead: it is recorded done by the caller, with
+the `checklist_completed` event a tick writes, so a call that sets done steps,
+a summary and a closing transition closes the item. A repeated step sent done
+is ticked the same way; one sent without `done` keeps its tick, and a step is
+reopened only by a tick with `done: false`. A step that names an `id` the item
+does not have is one carried over and keeps the state it carries. A list holds
+at most 100 entries. At least one
 group must name a change, and an entry with a field its group does not take is
 refused; both are `invalid_request` before anything is written.
 `expected_revision` is checked once, against the item as the call found it.

@@ -82,8 +82,10 @@ _STEP = {
 _STEPS = {
     "type": "array",
     "maxItems": model.MAX_CHECKLIST,
-    "description": "The steps, in order: text, or {text, done}. A step sent done=true"
-    " is recorded as done by you, as a tick would record it.",
+    "description": "The steps, in order: text, or {text, done}. A step whose text"
+    " repeats one the item has is that step, keeping its item_id, claim and tick;"
+    " a step sent done=true that was not done is recorded as done by you, as a"
+    " tick would record it.",
     "items": _STEP,
 }
 #: Rows a list or a search answers with when the caller names no limit.
@@ -404,10 +406,13 @@ TOOLS = [
     _tool(
         "set_work_item_checklist",
         "Set a work item's checklist",
-        "Replace the steps. Existing claimed or completed state is protected;"
-        " force discards it explicitly. The answer lists the new steps with the"
-        " item_id every later tick or step claim names. apply_work_item_changes"
-        " and create_work_item take the same steps as their checklist group.",
+        "Set the steps. A step sent with the text of one the item has keeps"
+        " that step's item_id, claim and tick, so appending is sending the old"
+        " steps and then the new ones. Leaving out a claimed or completed step"
+        " is refused, naming it; force discards it explicitly. The answer lists"
+        " the steps with the item_id every later tick or step claim names."
+        " apply_work_item_changes and create_work_item take the same steps as"
+        " their checklist group.",
         WRITES,
         {
             "id": _REFERENCE,
@@ -611,10 +616,11 @@ TOOLS = [
             },
             "checklist": {
                 "type": "object",
-                "description": "Replace the steps as set_work_item_checklist does, after"
-                " the claim and before the ticks. The new steps get new item_ids, so"
-                " checklist_ticks in the same call cannot name them: send a step"
-                " done=true instead. applied.checklist lists the new item_ids.",
+                "description": "Set the steps as set_work_item_checklist does, after"
+                " the claim and before the ticks: a repeated step keeps its item_id"
+                " and state, and a new one gets a new item_id, which checklist_ticks in"
+                " the same call cannot name: send it done=true instead."
+                " applied.checklist lists every item_id.",
                 "properties": {"items": _STEPS, "force": _FORCE},
                 "required": ["items"],
             },

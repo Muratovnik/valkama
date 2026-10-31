@@ -802,32 +802,66 @@ def set_checklist(
     expected_revision: int | None = None,
     author: str | None = None,
 ) -> dict:
-    """Replace the steps; a new step may arrive already done.
+    """Set the steps, keeping every step the new list repeats.
 
-    A step is text, or `{text, done}`. One sent done is recorded as done by the
-    caller, with the `checklist_completed` event a tick would write, so setting
-    a step done and ticking it after are one history. A step that names its own
-    `id` is one being carried over, and keeps the state it carries.
+    A step is text, or `{text, done}`. One that repeats a step the item has —
+    the same text, or that step's own `id` — is that step: it keeps its id and
+    its claim, tick and author, so appending to a checklist is sending it with
+    the new steps after the old. Only a claimed or completed step the new list
+    leaves out needs `force`, because only dropping one discards its state.
+
+    A step sent done that was not done is recorded as done by the caller, with
+    the `checklist_completed` event a tick would write, so setting a step done
+    and ticking it are one history; a step is reopened by a tick, not by
+    leaving `done` out. A step that names an `id` the item does not have is one
+    being carried over from elsewhere, and keeps the state it carries.
     """
 
     row = read_model.item_row(conn, reference)
     _require_revision(row, expected_revision)
     existing = model.checklist(row["checklist"])
-    engaged = [step for step in existing if step["done"] or step["claimed_by"]]
-    if engaged and not force:
-        raise model.PlanningError(
-            f"{read_model.reference(conn, row)} has {len(engaged)} claimed or completed step(s);"
-            " pass force to discard that state explicitly"
-        )
-    replacement = model.checklist(items)
+    sent_steps = model.checklist(items)
     # The steps as sent, beside the steps as read; anything but a list (a stored
     # checklist's JSON text) carries nothing new.
-    sent = items if isinstance(items, list) else [None] * len(replacement)
-    completed = [
-        step
-        for step, raw in zip(replacement, sent, strict=True)
-        if step["done"] and isinstance(raw, dict) and not raw.get("id") and not step["done_by"]
+    sent = items if isinstance(items, list) else [None] * len(sent_steps)
+    by_id = {step["id"]: step for step in existing}
+    kept: set[str] = set()
+    replacement: list[dict] = []
+    completed: list[dict] = []
+    for step, raw in zip(sent_steps, sent, strict=True):
+        named = raw.get("id") if isinstance(raw, dict) else None
+        if named and named not in by_id:
+            replacement.append(step)  # carried over, with the state it carries
+            continue
+        match = (
+            by_id[named]
+            if named
+            else next(
+                (old for old in existing if old["text"] == step["text"] and old["id"] not in kept),
+                None,
+            )
+        )
+        if match is None or match["id"] in kept:
+            if step["done"] and not step["done_by"]:
+                completed.append(step)
+            replacement.append(step)
+            continue
+        kept.add(match["id"])
+        same = {**match, "text": step["text"]}
+        if step["done"] and not match["done"]:
+            same.update(done=True, claimed_by="")
+            completed.append(same)
+        replacement.append(same)
+    dropped = [
+        step for step in existing if step["id"] not in kept and (step["done"] or step["claimed_by"])
     ]
+    if dropped and not force:
+        raise model.PlanningError(
+            f"{read_model.reference(conn, row)} would lose {len(dropped)} claimed or completed"
+            f" step(s): {'; '.join(step['text'][:80] for step in dropped)}. Send them again,"
+            " by their text or id, to keep them, or pass force to discard that state"
+            " explicitly"
+        )
     if completed:
         label = calls.holder(author)
         for step in completed:

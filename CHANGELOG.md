@@ -98,6 +98,14 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Changed
 
+- **A checklist write keeps the steps it repeats.** `set_work_item_checklist`
+  and the `checklist` group of `apply_work_item_changes` and `create_work_item`
+  read a step sent with the text of one the item has (or, over HTTP, its
+  `id`) as that step: it keeps its `item_id`, claim and tick. Appending steps
+  to an item with claimed or completed steps no longer needs `force`, which
+  used to discard their state. Only leaving such a step out is refused, and
+  the refusal now names the steps it would lose. A step whose text did not
+  change keeps its `item_id` where it used to get a new one.
 - **A claim starts the work it takes, and a release puts it back in the
   queue.** Claiming an item in a `backlog` or `queued` state — through
   `claim_work_item`, `claim_ready_work_item`, the `claim` of
