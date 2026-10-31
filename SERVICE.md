@@ -51,6 +51,16 @@ previous one is the rollback:
 python valkama.py launcher install --revision <previous commit>
 ```
 
+A release from before `valkama hook` does not know that command, and its
+argument parser exits 2, which Claude Code reads from a prompt or tool hook as
+blocking the prompt or the call. The shim therefore answers `valkama hook`
+itself, with exit status 0 and nothing on stdout, whenever the pinned release
+has no `server/hooks/entry.py`; every other command still reaches the release.
+The shim is written by the launcher code that runs `launcher install`, so roll
+back with a build that has this guard -- the stable command of the current
+release, or a checkout at least that new -- not with the older release's own
+`launcher install`.
+
 A running server notices when the launcher has been pinned to another release
 and appends a warning to its tool results until its client restarts it. The
 store schema still governs the opposite case: a release older than the store

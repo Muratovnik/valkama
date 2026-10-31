@@ -93,7 +93,9 @@ The user-facing command contains no source-checkout path. It runs a pinned
 release: the checkout's current commit, copied out with `git archive` and never
 edited, so uncommitted work in the checkout never reaches a client session or
 the store it opens. Run `launcher install` again to publish newer commits, or
-with `--revision <commit>` to go back to an earlier release. A managed Python
+with `--revision <commit>` to go back to an earlier release (a release from
+before `valkama hook` is answered by the shim with silence and exit 0 when a
+client hook calls it; see `SERVICE.md`). A managed Python
 shim beside the command is the durable process identity; its manifest records
 the release's `valkama.py`, the pinned commit, the interpreter and managed
 hashes. Agent clients, the tray and the desktop all use that verified pair.

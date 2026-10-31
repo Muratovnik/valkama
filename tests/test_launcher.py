@@ -128,6 +128,55 @@ class LauncherTests(unittest.TestCase):
                 if platform_name == "posix" and os.name != "nt":
                     self.assertTrue(command.stat().st_mode & stat.S_IXUSR)
 
+    def run_command(self, command: Path, *arguments: str) -> subprocess.CompletedProcess:
+        if os.name == "nt":
+            argv = ["cmd.exe", "/d", "/c", str(command), *arguments]
+        else:
+            argv = [str(command), *arguments]
+        return subprocess.run(
+            argv,
+            input=b'{"session_id": "S", "hook_event_name": "Stop"}',
+            capture_output=True,
+            check=False,
+            env={**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"},
+        )
+
+    def test_a_release_without_hooks_answers_a_hook_with_silence_and_exit_0(self) -> None:
+        """Rolling back to a release from before `valkama hook` must not block a client.
+
+        Such a release hands `hook` to its argument parser, which exits 2, and
+        Claude Code reads exit 2 from a prompt or tool hook as "block".
+        """
+
+        refusing = "import sys\nprint('usage: unknown command', file=sys.stderr)\nsys.exit(2)\n"
+        commit(self.checkout, refusing, "a release from before hooks")
+        installed = self.install()
+        command = Path(str(installed["command"]))
+        for event in ("user-prompt-submit", "pre-tool-use", "stop"):
+            with self.subTest(event=event):
+                result = self.run_command(command, "hook", "claude", event)
+                self.assertEqual((0, b""), (result.returncode, result.stdout), result.stderr)
+        # Every other command still reaches that release.
+        self.assertEqual(2, self.run_command(command, "serve").returncode)
+
+    def test_a_release_with_hooks_still_receives_the_hook(self) -> None:
+        hooks = self.checkout / "server" / "hooks"
+        hooks.mkdir(parents=True)
+        (hooks / "entry.py").write_text("", encoding="utf-8", newline="\n")
+        commit(self.checkout, ENTRY, "a release with hooks")
+        installed = self.install()
+        result = self.run_command(Path(str(installed["command"])), "hook", "claude", "stop")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(["hook", "claude", "stop"], json.loads(result.stdout))
+
+    def test_the_posix_command_hands_every_argument_to_the_shim(self) -> None:
+        """The hook guard lives in the shim both commands run; the wrapper only forwards."""
+
+        text, _mode = launcher._command_bytes("posix", Path(sys.executable))
+        self.assertIn(f'"$SCRIPT_DIR/{launcher.SHIM_NAME}" "$@"', text.decode("utf-8"))
+        shim = launcher._shim_bytes(Path("/releases/abc/valkama.py")).decode("utf-8")
+        self.assertIn('sys.argv[1:2] == ["hook"]', shim)
+
     def test_clients_run_the_committed_tree_not_the_working_tree(self) -> None:
         head = git(self.checkout, "rev-parse", "HEAD")
         self.source.write_text("raise SystemExit('unfinished edit')\n", encoding="utf-8")
