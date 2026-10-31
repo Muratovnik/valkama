@@ -152,6 +152,13 @@ a:focus-visible,
   background: transparent;
 }
 
+/* Where a horizontal and a vertical bar meet. Once any bar is styled the engine
+   paints this square white unless it is named, which on the dark board read as a
+   stray light tile in the corner of every lane scroller. */
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 ::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
   background: var(--color-scrollbar-thumb);
