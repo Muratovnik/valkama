@@ -8,6 +8,7 @@
  * what "current" looks like — so a rail that grows a second list of entries gets
  * the same button without a stylesheet knowing about it.
  */
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { ModuleId, ModuleManifest } from '@/shared/api/platformModuleContract.ts'
@@ -36,6 +37,16 @@ function moduleTitle(module: ModuleManifest): string {
   return te(module.title_key) ? t(module.title_key) : module.module_id
 }
 
+/**
+ * A group whose only entry is already called by the group's name. The heading
+ * still names the group for a reader; it just gives up its line, because the
+ * entry under it says the same words.
+ */
+const headingRepeatsEntry = computed(() => {
+  const [only] = props.modules
+  return props.modules.length === 1 && only !== undefined && moduleTitle(only) === props.heading
+})
+
 /** How many things want attention in a module, or nothing when none do. */
 function moduleBadge(module: ModuleManifest): number {
   return props.badges[module.module_id] ?? 0
@@ -59,6 +70,7 @@ function currentState(module: ModuleManifest) {
     <h2
       v-if="heading"
       class="nav-group-heading"
+      :class="{ 'nav-group-heading-echo': headingRepeatsEntry }"
     >
       {{ heading }}
     </h2>
@@ -104,6 +116,18 @@ function currentState(module: ModuleManifest) {
   margin: 0;
   color: var(--color-navigation-text-muted);
   font: var(--font-group-heading);
+}
+
+/* Kept in the document for readers, out of the layout: the entry beneath it
+   already prints the same word. */
+.nav-group-heading-echo {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  clip-path: inset(50%);
 }
 
 /* Icon, label, count — and the count belongs to the label, not to the far edge
