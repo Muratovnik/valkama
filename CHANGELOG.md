@@ -53,7 +53,13 @@ checkouts are therefore distinguishable even at the same version.
 - The navigation rail names each entry by what it shows. A screen reader now
   hears a module's attention count, which the entry's label used to hide; the
   brand button is called Valkama, with where it goes in its tooltip; and the
-  finder's name includes the shortcut printed beside it.
+  finder's name includes the shortcut printed beside it. The «Needs my answer»
+  button is named the same way, so it says how many questions wait.
+- A route a module cannot open in the current scope says so in one sentence
+  that names the module, instead of a sentence followed by `.: planning`.
+- A chain link whose root is not among the space's work items says just that,
+  instead of always blaming another planning space; a root deleted while its
+  graph was open is one such case.
 
 ## [2.1.0](https://github.com/Muratovnik/valkama/compare/v2.0.0...v2.1.0) - 2026-10-31
 

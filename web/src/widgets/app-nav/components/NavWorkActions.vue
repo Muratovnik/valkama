@@ -29,7 +29,6 @@ const { t } = useI18n()
       class="work-action"
       type="button"
       :title="t('requests.title')"
-      :aria-label="t('requests.title')"
       @click="emit('requests')"
     >
       <VIcon
@@ -93,9 +92,10 @@ const { t } = useI18n()
     padding: 0;
   }
 
-  /* Out of sight, never out of the name: the finder is named by what it
-     shows, so its label stays for a reader once the rail has no line for it,
-     and the shortcut, which `aria-keyshortcuts` already states, goes. */
+  /* Out of sight, never out of the name: each action is named by what it
+     shows, its label and any count, so the label stays for a reader once the
+     rail has no line for it, and the shortcut, which `aria-keyshortcuts`
+     already states, goes. */
   .action-label {
     position: absolute;
     width: 1px;
