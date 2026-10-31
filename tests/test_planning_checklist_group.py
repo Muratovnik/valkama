@@ -205,10 +205,10 @@ class ChecklistGroupTests(unittest.TestCase):
         service.claim_checklist_item(self.conn, self.reference, old[0]["id"], author="one")
         service.tick_checklist_item(self.conn, self.reference, old[1]["id"], author="one")
         steps = service.set_checklist(
-            self.conn, self.reference, [{"text": "a", "done": True}, "b"], author="agent"
+            self.conn, self.reference, [{"text": "a", "done": True}, "b"], author="one"
         )["checklist"]
         self.assertEqual(
-            [(old[0]["id"], True, "", "agent"), (old[1]["id"], True, "", "one")],
+            [(old[0]["id"], True, "", "one"), (old[1]["id"], True, "", "one")],
             [(s["id"], s["done"], s["claimed_by"], s["done_by"]) for s in steps],
         )
         self.assertEqual("checklist_completed", self.actions()[-1])
@@ -226,6 +226,23 @@ class ChecklistGroupTests(unittest.TestCase):
         # Free steps may go without force, as before.
         kept = service.set_checklist(self.conn, self.reference, ["done already"])
         self.assertEqual(["done already"], [step["text"] for step in kept["checklist"]])
+
+    def test_a_step_someone_else_holds_is_completed_only_as_a_tick_would_be(self) -> None:
+        step = service.set_checklist(self.conn, self.reference, ["theirs"])["checklist"][0]
+        service.claim_checklist_item(self.conn, self.reference, step["id"], author="holder")
+        before = service.get_work_item(self.conn, self.reference)
+        with self.assertRaisesRegex(model.PlanningError, "that step is claimed by holder"):
+            service.set_checklist(
+                self.conn, self.reference, [{"text": "theirs", "done": True}], author="other"
+            )
+        self.assertEqual(before, service.get_work_item(self.conn, self.reference))
+        # Repeating it without completing it keeps the claim; its holder may complete it.
+        kept = service.set_checklist(self.conn, self.reference, ["theirs", "more"], author="other")
+        self.assertEqual("holder", kept["checklist"][0]["claimed_by"])
+        done = service.set_checklist(
+            self.conn, self.reference, [{"text": "theirs", "done": True}, "more"], author="holder"
+        )["checklist"][0]
+        self.assertEqual((True, "", "holder"), (done["done"], done["claimed_by"], done["done_by"]))
 
     def post_get(self) -> dict:
         return service.get_work_item(self.conn, self.reference)

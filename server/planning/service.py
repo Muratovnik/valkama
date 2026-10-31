@@ -825,6 +825,7 @@ def set_checklist(
     # checklist's JSON text) carries nothing new.
     sent = items if isinstance(items, list) else [None] * len(sent_steps)
     by_id = {step["id"]: step for step in existing}
+    label = calls.holder(author)
     kept: set[str] = set()
     replacement: list[dict] = []
     completed: list[dict] = []
@@ -849,6 +850,13 @@ def set_checklist(
         kept.add(match["id"])
         same = {**match, "text": step["text"]}
         if step["done"] and not match["done"]:
+            held = match["claimed_by"]
+            # The tick's own guard: completing a step someone else holds is
+            # theirs to do, whichever write sends it.
+            if held and held not in (label, model.actor(author)) and not force:
+                raise model.PlanningError(
+                    f"that step is claimed by {held}; pass force to complete it anyway"
+                )
             same.update(done=True, claimed_by="")
             completed.append(same)
         replacement.append(same)
@@ -862,10 +870,8 @@ def set_checklist(
             " by their text or id, to keep them, or pass force to discard that state"
             " explicitly"
         )
-    if completed:
-        label = calls.holder(author)
-        for step in completed:
-            step["done_by"] = label
+    for step in completed:
+        step["done_by"] = label
     _write(conn, row, ["checklist = ?"], [model.dumps(replacement)])
     identity = str(row["work_item_id"])
     _log(conn, identity, "checklist_replaced", str(len(replacement)), author)

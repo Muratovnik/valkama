@@ -332,7 +332,7 @@ class PlanningAcknowledgementTests(unittest.TestCase):
 
     @property
     def step(self) -> str:
-        """The first step as it stands now; a checklist replacement mints new ids."""
+        """The first step as it stands now; a checklist write with new texts mints new ids."""
 
         return str(self.call("get_work_item", id=self.ref)["checklist"][0]["id"])
 

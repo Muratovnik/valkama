@@ -112,8 +112,8 @@ checkouts are therefore distinguishable even at the same version.
 
 - **A checklist write keeps the steps it repeats.** `set_work_item_checklist`
   and the `checklist` group of `apply_work_item_changes` and `create_work_item`
-  read a step sent with the text of one the item has (or, over HTTP, its
-  `id`) as that step: it keeps its `item_id`, claim and tick. Appending steps
+  read a step sent with the text of one the item has (or its `id`) as that
+  step: it keeps its `item_id`, claim and tick. Appending steps
   to an item with claimed or completed steps no longer needs `force`, which
   used to discard their state. Only leaving such a step out is refused, and
   the refusal now names the steps it would lose. A step whose text did not
