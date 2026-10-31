@@ -11,10 +11,12 @@ import json
 import sqlite3
 import sys
 from collections.abc import Callable
+from typing import NamedTuple
 
 from . import launcher, static_assets
 from .ops import configuration, tray
 from .planning import api as planning_api
+from .planning import calls as planning_calls
 from .planning import model as planning_model
 from .planning import tools as planning_tools
 from .platform import tools as platform_tools
@@ -237,12 +239,56 @@ def _signed(name: str, arguments: dict) -> dict:
     return arguments if author is None else {**arguments, "author": author}
 
 
-def call_tool(conn: sqlite3.Connection, name: str, arguments: dict) -> object:
+class _Client(NamedTuple):
+    """What the handshake said about the client, when there was one."""
+
+    name: str | None = None
+    version: str | None = None
+
+
+def _client(params: dict) -> _Client:
+    info = params.get("clientInfo")
+    if not isinstance(info, dict):
+        return _Client()
+    name, version = info.get("name"), info.get("version")
+    return _Client(
+        name[:200] if isinstance(name, str) and name else None,
+        version[:200] if isinstance(version, str) and version else None,
+    )
+
+
+def call_tool(
+    conn: sqlite3.Connection,
+    name: str,
+    arguments: dict,
+    *,
+    meta: object = None,
+    client: _Client | None = None,
+) -> object:
+    """Run one tool as one call, under the identity its client proved.
+
+    `_identity` is what a client's `PreToolUse` hook adds to every call, so it
+    is taken out here, for every tool and before any schema is consulted: no
+    published schema names it, and a tool refusing it would fail every call of
+    a client with the hook installed. It reaches no domain code as an argument.
+    """
+
+    arguments = dict(arguments) if isinstance(arguments, dict) else arguments
+    claimed = (
+        arguments.pop(planning_calls.IDENTITY_ARGUMENT, None)
+        if isinstance(arguments, dict)
+        else None
+    )
     if name not in _OPS:
         raise ValueError(f"unknown tool {name!r}")
     if name in _PLANNING_TOOLS:
         arguments = _signed(name, _canonical_arguments(name, arguments or {}))
-    return _OPS[name](conn, arguments or {})
+    client = client or _Client()
+    identity = planning_calls.verify_mcp(
+        meta, claimed, client=client.name, client_version=client.version
+    )
+    with planning_calls.bind(identity, name):
+        return _OPS[name](conn, arguments or {})
 
 
 def _compact(payload: object) -> str:
@@ -359,6 +405,8 @@ def _mcp_loop(
     # handshake version afterwards. The specification scopes that choice to the
     # stdio process, and one process only ever has one client.
     legacy_era: str | None = None
+    # Who the handshake said the client is; a modern client sends none.
+    client = _Client()
     release_version = static_assets.release_version()
     # The tray module holds the mutex handles for as long as this session
     # does; releasing them is what lets the next session own the icon.
@@ -430,6 +478,7 @@ def _mcp_loop(
             # between a working board and a red entry in its server list.
             wanted = params.get("protocolVersion")
             legacy_era = wanted if wanted in LEGACY_PROTOCOLS else LEGACY_PROTOCOLS[0]
+            client = _client(params)
             if msg_id is not None:  # a notification cannot be answered
                 _write_message(
                     {
@@ -467,7 +516,13 @@ def _mcp_loop(
             )
         elif method == "tools/call":
             try:
-                data = call_tool(conn, params.get("name", ""), params.get("arguments") or {})
+                data = call_tool(
+                    conn,
+                    params.get("name", ""),
+                    params.get("arguments") or {},
+                    meta=params.get("_meta"),
+                    client=client,
+                )
                 # The write has to be committed here. Board operations committed
                 # inside themselves; the Planning service leaves the transaction
                 # to its caller, so without this every tool write an agent made

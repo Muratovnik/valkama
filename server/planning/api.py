@@ -18,7 +18,7 @@ import sqlite3
 from collections.abc import Callable, Mapping
 
 from .. import query_params
-from . import migration, model, requests, service, views
+from . import calls, migration, model, requests, service, views
 
 PLANNING_API_INTERFACE = f"{model.PLANNING_INTERFACE}-api"
 
@@ -260,7 +260,13 @@ def handle_post(
         return None
     if not isinstance(payload, Mapping):
         raise PlanningHttpError(400, "invalid_request", "request body must be a JSON object")
-    return 200, writer(conn, payload)
+    answer = writer(conn, payload)
+    # Every write call has its row, including one that logged nothing — an edit,
+    # a claim that found itself already held, a take-next with nothing to take.
+    # Inside a bound call this finds the row a write already inserted; outside
+    # one it does nothing.
+    calls.call_id(conn, calls.acted_on(answer))
+    return 200, answer
 
 
 def _create(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
@@ -502,9 +508,15 @@ def _space(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
 
 
 def _author(payload: Mapping[str, object]) -> str | None:
+    """The author the payload names, or the one its call implies.
+
+    A browser write that names nobody is the owner's, and signing it with
+    Planning's `agent` fallback is how a claim made by hand read as an agent's.
+    """
+
     value = payload.get("author")
-    if value is None:
-        return None
+    if value is None or value == "":
+        return calls.default_author()
     if not isinstance(value, str):
         raise PlanningHttpError(400, "invalid_request", "author must be a string")
     return value

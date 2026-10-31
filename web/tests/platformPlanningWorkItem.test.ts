@@ -58,7 +58,18 @@ function planningWorkItemPayload() {
             },
           ],
           events: [
-            { action: 'created', detail: 'backlog', author: 'codex', at: '2026-08-13T08:00:00Z' },
+            {
+              action: 'created',
+              detail: 'backlog',
+              author: 'codex',
+              at: '2026-08-13T08:00:00Z',
+              identity: {
+                state: 'confirmed',
+                source: 'codex-meta',
+                session_id: '019a3c2e-5b7d-7c11-9e0f-2f4b6d8a1c3e',
+                agent_id: null,
+              },
+            } as Record<string, unknown>,
           ],
         },
       },
@@ -71,6 +82,32 @@ test('Planning work-item payload accepts the populated shape without compatibili
   const result = validatePlanningWorkItemPayload(planningWorkItemPayload())
   assert.equal(result.state.status, 'ready')
   assert.equal(result.work_item_ref.reference, 'MAIN-264')
+})
+
+test('an event written before identity reads as unconfirmed and naming nobody', () => {
+  const payload = planningWorkItemPayload()
+  const event = payload.state.payload.work_item.events[0]
+  if (event === undefined) throw new Error('Expected event fixture')
+  event.identity = { state: 'unconfirmed', source: null, session_id: null, agent_id: null }
+  const result = validatePlanningWorkItemPayload(payload)
+  assert.equal(result.state.status, 'ready')
+})
+
+test.each([
+  ['no identity at all', undefined],
+  ['a state outside the two', { state: 'live', source: null, session_id: null, agent_id: null }],
+  [
+    'a field the contract does not name',
+    { state: 'confirmed', source: 'browser', session_id: null, agent_id: null, tool: 'x' },
+  ],
+  ['a missing id field', { state: 'confirmed', source: 'browser', session_id: null }],
+])('rejects an event identity with %s', (_label, identity) => {
+  const payload = planningWorkItemPayload()
+  const event = payload.state.payload.work_item.events[0]
+  if (event === undefined) throw new Error('Expected event fixture')
+  if (identity === undefined) delete event.identity
+  else event.identity = identity
+  expect(() => validatePlanningWorkItemPayload(payload)).toThrow()
 })
 
 test.each([

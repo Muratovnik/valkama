@@ -30,6 +30,7 @@ from .federation import federated_search, federated_spaces
 from .memory import api as memory_api
 from .ops import doctor
 from .planning import api as planning_api
+from .planning import calls as planning_calls
 from .planning import exact_api as planning_exact_api
 from .planning import model as planning_model
 from .planning import service as planning_service
@@ -943,7 +944,15 @@ class Handler(BaseHTTPRequestHandler):
             return
         boundary = _boundary(_POST_BOUNDARIES, path)
         if boundary is not None:
-            self._dispatch(boundary, path, payload=payload)
+            if path == "/api/ingest":
+                self._dispatch(boundary, path, payload=payload)
+                return
+            # Past the browser credential, the write is the owner's own UI: the
+            # one writer this server can verify without a client's help. Every
+            # Planning row it writes, including one an execution launch writes
+            # on its behalf, points at a call that says so.
+            with planning_calls.bind(planning_calls.browser(), path):
+                self._dispatch(boundary, path, payload=payload)
             return
         # Every write this surface still owns has a row above. A transition, a
         # claim, a checklist tick and a summary are Planning's own boundary

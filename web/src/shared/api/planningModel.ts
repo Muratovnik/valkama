@@ -168,11 +168,27 @@ const commentSchema = z.union([
   }),
 ])
 
+/** A client-reported id, never resolved here; the server bounds it at 200. */
+const callField = () => blankable(200).nullable()
+
+/**
+ * Who made the call that wrote an event, as far as the call proved it. `author`
+ * is what the caller wrote about itself; this is what the call carried. An
+ * event older than identity has no source and names nobody.
+ */
+const eventIdentitySchema = strictObject({
+  state: enumField(['confirmed', 'unconfirmed'] as const),
+  source: boundedText(/^[a-z][a-z-]{0,63}$/u, 64).nullable(),
+  session_id: callField(),
+  agent_id: callField(),
+})
+
 const eventSchema = strictObject({
   action: enumField(EVENT_ACTIONS),
   detail: blankable(512),
   author: actor(),
   at: boundedText(ISO, 96),
+  identity: eventIdentitySchema,
 })
 
 const workItemSchema = strictObject({

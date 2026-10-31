@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import sqlite3
 
-from . import model
+from . import calls, model
 
 
 def item_row(conn: sqlite3.Connection, reference: object) -> sqlite3.Row:
@@ -201,13 +201,34 @@ def present(conn: sqlite3.Connection, row: sqlite3.Row, *, full: bool = False) -
             "detail": event["detail"],
             "author": event["author"],
             "at": event["created_at"],
+            "identity": _identity(event),
         }
         for event in conn.execute(
-            "SELECT * FROM work_item_events WHERE work_item_id = ? ORDER BY id",
+            "SELECT e.action, e.detail, e.author, e.created_at,"
+            " c.identity_state, c.identity_source, c.session_id, c.agent_id"
+            " FROM work_item_events e LEFT JOIN execution_events c ON c.id = e.call_id"
+            " WHERE e.work_item_id = ? ORDER BY e.id",
             (str(row["work_item_id"]),),
         )
     ]
     return record
+
+
+def _identity(event: sqlite3.Row) -> dict:
+    """Who made the call that wrote this event, as far as the call proved it.
+
+    `author` beside it is what the caller wrote about itself; this is what the
+    call carried. An event with no call row — written before identity existed,
+    by an older build, or by the runner outside any call — is unconfirmed and
+    names nobody.
+    """
+
+    return {
+        "state": event["identity_state"] or calls.UNCONFIRMED,
+        "source": event["identity_source"],
+        "session_id": event["session_id"],
+        "agent_id": event["agent_id"],
+    }
 
 
 def loads(value: object) -> object:

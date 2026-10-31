@@ -849,5 +849,286 @@ class ToolArgumentTests(McpSurfaceTestCase):
                     )
 
 
+class CallIdentityTests(McpSurfaceTestCase):
+    """Who made a write, as the wire call proved it.
+
+    What clients send was recorded from the clients themselves: Codex puts the
+    session in `_meta.sessionId` (and a subagent's own thread in `threadId`) on
+    every call; Claude Code repeats the hook's `tool_use_id` as
+    `_meta["claudecode/toolUseId"]`, and a `PreToolUse` hook adds `_identity`.
+    """
+
+    SESSION = "019a3c2e-5b7d-7c11-9e0f-2f4b6d8a1c3e"
+    THREAD = "019a3c2e-9999-7c11-9e0f-2f4b6d8a1c3e"
+    TOOL_USE = "toolu_01ABCdefGHIjklMNOpqrSTU"
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.reference = planning_service.create_work_item(
+            self.conn, space=SPACE_KEY, title="Who holds it"
+        )["reference"]
+        self.conn.commit()
+
+    def call(self, name: str, arguments: dict, meta: dict | None = None) -> dict:
+        message = {
+            "jsonrpc": "2.0",
+            "id": 9,
+            "method": "tools/call",
+            "params": {"_meta": {**META, **(meta or {})}, "name": name, "arguments": arguments},
+        }
+        [answer] = self.converse(message)
+        return answer["result"]
+
+    def claim(self, meta: dict | None = None, **extra: object) -> dict:
+        result = self.call("claim_work_item", {"id": self.reference, **extra}, meta)
+        self.assertFalse(result["isError"], result)
+        return result
+
+    def event(self, action: str) -> dict:
+        events = planning_service.get_work_item(self.conn, self.reference)["events"]
+        [found] = [event for event in events if event["action"] == action]
+        return found
+
+    def calls(self) -> list[dict]:
+        return [
+            dict(row)
+            for row in self.conn.execute(
+                "SELECT * FROM execution_events WHERE kind='planning_write' ORDER BY id"
+            )
+        ]
+
+    def hook(self, **fields: str) -> dict:
+        return {"session_id": self.SESSION, "tool_use_id": self.TOOL_USE, **fields}
+
+    def test_a_codex_call_confirms_the_session_its_meta_names(self) -> None:
+        self.claim({"sessionId": self.SESSION, "threadId": self.SESSION, "callId": "call_7"})
+        self.assertEqual(
+            {
+                "state": "confirmed",
+                "source": "codex-meta",
+                "session_id": self.SESSION,
+                "agent_id": None,
+            },
+            self.event("claimed")["identity"],
+        )
+        [row] = self.calls()
+        self.assertEqual(
+            ("claim_work_item", "call_7", "codex"),
+            (row["tool"], row["tool_use_id"], row["client"]),
+        )
+        self.assertEqual(
+            planning_service.get_work_item(self.conn, self.reference)["work_item_id"],
+            row["work_item_id"],
+        )
+
+    def test_a_codex_subagent_is_named_by_its_own_thread(self) -> None:
+        self.claim({"sessionId": self.SESSION, "threadId": self.THREAD})
+        identity = self.event("claimed")["identity"]
+        self.assertEqual(("confirmed", self.THREAD), (identity["state"], identity["agent_id"]))
+
+    def test_a_codex_call_whose_identity_argument_disagrees_is_unconfirmed(self) -> None:
+        self.claim(
+            {"sessionId": self.SESSION},
+            _identity=self.hook(session_id="someone-else"),
+        )
+        identity = self.event("claimed")["identity"]
+        self.assertEqual(
+            ("unconfirmed", "codex-meta-mismatch"), (identity["state"], identity["source"])
+        )
+
+    def test_a_claude_call_is_confirmed_when_the_hook_knew_the_tool_use_id(self) -> None:
+        self.claim(
+            {"claudecode/toolUseId": self.TOOL_USE},
+            _identity=self.hook(agent_id="a1b2c3", agent_type="general-purpose"),
+        )
+        self.assertEqual(
+            {
+                "state": "confirmed",
+                "source": "claude-hook",
+                "session_id": self.SESSION,
+                "agent_id": "a1b2c3",
+            },
+            self.event("claimed")["identity"],
+        )
+        [row] = self.calls()
+        self.assertEqual(
+            ("claude", self.TOOL_USE, "general-purpose"),
+            (row["client"], row["tool_use_id"], row["agent_type"]),
+        )
+
+    def test_an_identity_with_another_tool_use_id_is_not_confirmed(self) -> None:
+        # A model can type an `_identity`; it cannot know the id of the call it
+        # is about to make. That is the whole of what separates the two.
+        self.claim(
+            {"claudecode/toolUseId": "toolu_the_real_one"},
+            _identity=self.hook(),
+        )
+        identity = self.event("claimed")["identity"]
+        self.assertEqual(
+            ("unconfirmed", "claude-hook-mismatch"), (identity["state"], identity["source"])
+        )
+
+    def test_without_the_meta_key_the_hook_session_is_kept_but_not_confirmed(self) -> None:
+        self.claim(_identity=self.hook())
+        self.assertEqual(
+            {
+                "state": "unconfirmed",
+                "source": "claude-hook-unverified",
+                "session_id": self.SESSION,
+                "agent_id": None,
+            },
+            self.event("claimed")["identity"],
+        )
+
+    def test_a_call_that_carries_nothing_is_unconfirmed_and_names_nobody(self) -> None:
+        self.claim()
+        self.assertEqual(
+            {"state": "unconfirmed", "source": "mcp", "session_id": None, "agent_id": None},
+            self.event("claimed")["identity"],
+        )
+
+    def test_the_author_text_and_the_server_environment_are_not_identity(self) -> None:
+        with mock.patch.dict(os.environ, {"CLAUDE_CODE_SESSION_ID": self.SESSION}):
+            self.claim(author=self.SESSION)
+        self.assertEqual("unconfirmed", self.event("claimed")["identity"]["state"])
+
+    def test_a_malformed_identity_is_dropped_and_the_call_still_runs(self) -> None:
+        for malformed in (
+            "session",
+            {"session_id": self.SESSION},
+            {"session_id": self.SESSION, "tool_use_id": 7},
+            {**self.hook(), "agent_id": ["not", "text"]},
+            {**self.hook(), "session_id": "s" * 201},
+        ):
+            with self.subTest(malformed=malformed):
+                result = self.call(
+                    "update_work_item",
+                    {"id": self.reference, "title": "Still runs", "_identity": malformed},
+                    {"claudecode/toolUseId": self.TOOL_USE},
+                )
+                self.assertFalse(result["isError"], result)
+                self.assertEqual(("unconfirmed", "mcp", None), self.last_call())
+
+    def last_call(self) -> tuple:
+        row = self.calls()[-1]
+        return row["identity_state"], row["identity_source"], row["session_id"]
+
+    def test_the_identity_argument_is_taken_out_of_every_tool_before_its_schema(self) -> None:
+        # The hook adds it to every call of this server, reads included; a
+        # schema that refused it would fail them all.
+        for name, arguments in (
+            ("get_work_item", {"id": self.reference}),
+            ("list_work_items", {"space": SPACE_KEY}),
+            ("list_platform_modules", {}),
+            ("comment_work_item", {"id": self.reference, "body": "Seen"}),
+        ):
+            with self.subTest(name):
+                result = self.call(
+                    name,
+                    {**arguments, "_identity": self.hook()},
+                    {"claudecode/toolUseId": self.TOOL_USE},
+                )
+                self.assertFalse(result["isError"], result)
+                self.assertNotIn("_identity", result["content"][0]["text"])
+        # Only the write is a call in the execution tree.
+        self.assertEqual(["comment_work_item"], [row["tool"] for row in self.calls()])
+
+    def test_no_published_schema_names_the_identity_argument(self) -> None:
+        self.assertNotIn("_identity", json.dumps(mcp_surface.catalogue()))
+
+    def test_a_refused_call_leaves_no_row(self) -> None:
+        planning_service.claim_work_item(self.conn, self.reference, author="holder")
+        self.conn.commit()
+        result = self.call(
+            "claim_work_item", {"id": self.reference, "author": "other"}, {"sessionId": "s"}
+        )
+        self.assertTrue(result["isError"])
+        self.assertEqual([], self.calls())
+
+    def test_every_row_a_call_writes_points_at_its_one_call(self) -> None:
+        other = planning_service.create_work_item(self.conn, space=SPACE_KEY, title="Other")
+        self.conn.commit()
+        meta = {"sessionId": self.SESSION}
+        for name, arguments in (
+            ("update_work_item", {"id": self.reference, "title": "Edited"}),
+            ("comment_work_item", {"id": self.reference, "body": "A note"}),
+            ("attach_work_item_ref", {"id": self.reference, "kind": "url", "value": "https://x"}),
+            (
+                "link_work_items",
+                {"id": self.reference, "other": other["reference"], "kind": "blocks"},
+            ),
+        ):
+            self.assertFalse(self.call(name, arguments, meta)["isError"])
+        rows = self.calls()
+        self.assertEqual(
+            ["update_work_item", "comment_work_item", "attach_work_item_ref", "link_work_items"],
+            [row["tool"] for row in rows],
+        )
+        # An edit logs no event and is still a call, on the item it edited.
+        item_id = planning_service.get_work_item(self.conn, self.reference)["work_item_id"]
+        self.assertEqual(item_id, rows[0]["work_item_id"])
+        pointers = {
+            table: [row[0] for row in self.conn.execute(f"SELECT call_id FROM {table}")]
+            for table in ("work_item_comments", "work_item_refs")
+        }
+        self.assertEqual(
+            {"work_item_comments": [rows[1]["id"]], "work_item_refs": [rows[2]["id"]]}, pointers
+        )
+        # One link writes an event on each item, both of the one call.
+        linked = self.conn.execute(
+            "SELECT DISTINCT call_id FROM work_item_events WHERE action='linked'"
+        ).fetchall()
+        self.assertEqual([(rows[3]["id"],)], [tuple(row) for row in linked])
+
+    def test_a_delete_is_a_call_that_outlives_its_item(self) -> None:
+        item_id = planning_service.get_work_item(self.conn, self.reference)["work_item_id"]
+        result = self.call("delete_work_item", {"id": self.reference}, {"sessionId": self.SESSION})
+        self.assertFalse(result["isError"], result)
+        [row] = self.calls()
+        self.assertEqual(
+            ("delete_work_item", item_id, "confirmed"),
+            (row["tool"], row["work_item_id"], row["identity_state"]),
+        )
+
+    def test_an_event_written_before_identity_reads_as_unconfirmed(self) -> None:
+        self.conn.execute(
+            "INSERT INTO work_item_events(work_item_id,action,detail,author)"
+            " SELECT work_item_id,'released','','old-build' FROM work_items"
+        )
+        self.conn.commit()
+        self.assertEqual(
+            {"state": "unconfirmed", "source": None, "session_id": None, "agent_id": None},
+            self.event("released")["identity"],
+        )
+
+    def test_a_handshake_client_names_the_client_of_its_calls(self) -> None:
+        self.converse(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-06-18",
+                    "clientInfo": {"name": "claude-code", "version": "2.1.304"},
+                },
+            },
+            {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/call",
+                "params": {
+                    "_meta": {"claudecode/toolUseId": self.TOOL_USE},
+                    "name": "claim_work_item",
+                    "arguments": {"id": self.reference, "_identity": self.hook()},
+                },
+            },
+        )
+        [row] = self.calls()
+        self.assertEqual(
+            ("claude-code", "2.1.304", "confirmed"),
+            (row["client"], row["client_version"], row["identity_state"]),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

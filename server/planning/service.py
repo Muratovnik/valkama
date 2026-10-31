@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from . import model, read_model, store, transitions
+from . import calls, model, read_model, store, transitions
 
 _NOW = "strftime('%Y-%m-%dT%H:%M:%SZ','now')"
 
@@ -628,14 +628,15 @@ def attach_ref(
 ) -> dict:
     row = read_model.item_row(conn, reference)
     conn.execute(
-        "INSERT OR IGNORE INTO work_item_refs(work_item_id,kind,value,label,author)"
-        " VALUES(?,?,?,?,?)",
+        "INSERT OR IGNORE INTO work_item_refs(work_item_id,kind,value,label,author,call_id)"
+        " VALUES(?,?,?,?,?,?)",
         (
             str(row["work_item_id"]),
             model.ref_kind(kind),
             model.text_field(value, "work_item_ref.value", limit=512),
             model.text_field(label, "work_item_ref.label", limit=200, required=False),
             model.actor(author),
+            calls.call_id(conn, str(row["work_item_id"])),
         ),
     )
     return {
@@ -662,13 +663,15 @@ def comment_work_item(
         else None
     )
     inserted = conn.execute(
-        "INSERT INTO work_item_comments(work_item_id,author,body,checklist_item_id,checklist_item_text) VALUES(?,?,?,?,?)",
+        "INSERT INTO work_item_comments(work_item_id,author,body,checklist_item_id,"
+        "checklist_item_text,call_id) VALUES(?,?,?,?,?,?)",
         (
             str(row["work_item_id"]),
             model.actor(author),
             model.multiline_field(body, "comment.body", limit=8000),
             step["id"] if step else None,
             step["text"] if step else None,
+            calls.call_id(conn, str(row["work_item_id"])),
         ),
     )
     return {
@@ -720,8 +723,9 @@ def report_work_item(
     conn.execute("SAVEPOINT planning_report")
     try:
         inserted = conn.execute(
-            "INSERT INTO work_item_comments(work_item_id,author,body,report) VALUES(?,?,?,?)",
-            (identity, model.actor(author), "", model.dumps(record)),
+            "INSERT INTO work_item_comments(work_item_id,author,body,report,call_id)"
+            " VALUES(?,?,?,?,?)",
+            (identity, model.actor(author), "", model.dumps(record), calls.call_id(conn, identity)),
         )
         updates = ["summary = ?", "summary_comment_id = ?"] if make_current else []
         parameters: list[object] = [model.dumps(record), inserted.lastrowid] if make_current else []
@@ -905,12 +909,13 @@ def _log(
     author: str | None,
 ) -> None:
     conn.execute(
-        "INSERT INTO work_item_events(work_item_id,action,detail,author) VALUES(?,?,?,?)",
+        "INSERT INTO work_item_events(work_item_id,action,detail,author,call_id) VALUES(?,?,?,?,?)",
         (
             work_item_id,
             model.event_action(action),
             model.text_field(detail, "event.detail", limit=512, required=False),
             model.actor(author),
+            calls.call_id(conn, work_item_id),
         ),
     )
 

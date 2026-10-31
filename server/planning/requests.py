@@ -7,7 +7,7 @@ import json
 import sqlite3
 from collections.abc import Iterator
 
-from . import model, read_model, request_model, service
+from . import calls, model, read_model, request_model, service
 
 
 @contextlib.contextmanager
@@ -269,6 +269,12 @@ def _event(
     conn: sqlite3.Connection, work_item_id: str, action: str, request_id: str, author: str | None
 ) -> None:
     conn.execute(
-        "INSERT INTO work_item_events(work_item_id,action,detail,author) VALUES(?,?,?,?)",
-        (work_item_id, model.event_action(action), request_id, model.actor(author)),
+        "INSERT INTO work_item_events(work_item_id,action,detail,author,call_id) VALUES(?,?,?,?,?)",
+        (
+            work_item_id,
+            model.event_action(action),
+            request_id,
+            model.actor(author),
+            calls.call_id(conn, work_item_id),
+        ),
     )
