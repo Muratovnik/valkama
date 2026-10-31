@@ -241,10 +241,9 @@ checkouts are therefore distinguishable even at the same version.
   200 without saying so; at a `limit` of 1000 or more (200 for a search) the
   compact answer reported `truncated: false` while it was cut. A page still
   holds at most 1000 (200) items, but `truncated` is now correct at every
-  limit and `next_offset` says where the rest starts.
-- A list read in state order broke ties between spaces arbitrarily, so two
-  pages could repeat one item and skip another. The work item id now settles
-  the order.
+  limit and `next_offset` says where the rest starts. The list order now ends
+  on the work item id, so paging cannot repeat or skip an item that ties with
+  one from another space.
 - A claim, checklist claim or checklist tick made in the browser was signed
   `agent`, while a comment made there was signed `user`. A browser write that
   names no author, or an empty one, is now signed `user`.
