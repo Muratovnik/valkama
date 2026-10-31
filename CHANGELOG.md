@@ -256,6 +256,10 @@ checkouts are therefore distinguishable even at the same version.
   limit and `next_offset` says where the rest starts. The list order now ends
   on the work item id, so paging cannot repeat or skip an item that ties with
   one from another space.
+- A half-written migration snapshot, left by a process killed while writing it,
+  was found as reusable at every later open and stopped each one. A reusable
+  snapshot that cannot be read is now renamed to `*.unverified`, kept, and a
+  fresh snapshot is taken.
 - Search across attached scopes (`/api/search?scope=all`) failed as a whole when
   one attached store was written by an earlier build: reading a claim there
   needed a column that store does not have. Such a claim now reads

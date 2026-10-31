@@ -136,6 +136,22 @@ def snapshot_identity(path: str) -> str:
         snapshot.close()
 
 
+#: What a snapshot that failed verification is renamed with. No reuse or
+#: retention pattern matches it, so it stays until a person removes it.
+UNVERIFIED_SUFFIX = ".unverified"
+
+
+def set_aside(path: str) -> None:
+    """Rename one snapshot out of reuse and retention, keeping every byte."""
+
+    try:
+        os.rename(path, path + UNVERIFIED_SUFFIX)
+    except OSError:
+        # Left in place it is still older than the fresh copy taken next, so
+        # the next open reuses that one instead.
+        pass
+
+
 def verified_snapshot(
     conn: sqlite3.Connection,
     label: str,
@@ -154,13 +170,24 @@ def verified_snapshot(
     `locate` is called rather than passed as a value, so each of the two paths
     below resolves the backup location for itself -- the same two resolutions
     this made when it read the store's path directly.
+
+    A reusable snapshot that cannot be read at all -- half a file from a
+    process killed during `VACUUM INTO` -- is set aside under `*.unverified`
+    and this attempt takes its own. Renamed rather than deleted, because a
+    recovery point is never removed on a guess; renamed rather than left,
+    because it would otherwise be found as reusable at every later open and
+    stop each of them.
     """
 
     integrity_check(conn, source="source store")
     source_identity = logical_identity(conn)
     reusable = reusable_snapshot(locate(), label)
-    if reusable is not None and snapshot_identity(reusable) == source_identity:
-        return reusable, source_identity
+    if reusable is not None:
+        try:
+            if snapshot_identity(reusable) == source_identity:
+                return reusable, source_identity
+        except (sqlite3.Error, RuntimeError):
+            set_aside(reusable)
     destination = snapshot(conn, locate(), label)
     if snapshot_identity(destination) != source_identity:
         raise RuntimeError("snapshot does not match the exact logical source store")

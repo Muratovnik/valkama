@@ -528,7 +528,10 @@ check recovery without replacing your working store, copy the snapshot to a
 separate path, set `VALKAMA_DB` to the copy, and run the same dry run and
 migration there. The database path may differ from the default when `store` or
 `VALKAMA_DB` is configured. Generated snapshots retain the last five files per
-migration label.
+migration label. A snapshot that a retry would reuse but that cannot be read --
+half a file left by a process killed while writing it -- is renamed with the
+suffix `.unverified`, kept, and replaced by a fresh snapshot; remove it by hand
+once you no longer need it.
 
 ## Planning: launching agents from a card
 

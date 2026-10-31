@@ -439,6 +439,71 @@ class IdentitySchemaMigrationTests(unittest.TestCase):
         self.assertIn("execution_events", _catalog(conn, "table"))
         self.assertEqual(1, len(self.snapshots()))
 
+    def test_a_snapshot_cut_short_is_set_aside_and_a_fresh_one_taken(self) -> None:
+        """A process killed during `VACUUM INTO` leaves half a snapshot under a reusable name."""
+
+        self.populated_source()
+        source = sqlite3.connect(self.path)
+        try:
+            identity = store_backups.logical_identity(source)
+            whole = store_backups.snapshot(source, store._backups(), "preidentity")
+        finally:
+            source.close()
+        data = Path(whole).read_bytes()
+        Path(whole).write_bytes(data[: len(data) // 2])
+        cut = Path(whole).read_bytes()
+
+        conn = store.connect()
+        self.addCleanup(conn.close)
+        self.assertIn("execution_events", _catalog(conn, "table"))
+        [fresh] = self.snapshots()
+        self.assertNotEqual(Path(whole), fresh)
+        self.assertEqual(identity, store_backups.snapshot_identity(str(fresh)))
+        # Set aside under a name no reuse or retention matches, byte for byte.
+        [aside] = list((self.root / "backups").glob("*.unverified"))
+        self.assertEqual(Path(whole).name, aside.name.removesuffix(".unverified"))
+        self.assertEqual(cut, aside.read_bytes())
+
+
+class VerifiedSnapshotTests(unittest.TestCase):
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        self.location = store_backups.BackupLocation(str(self.root / "backups"), "valkama")
+        self.conn = sqlite3.connect(self.root / "source.sqlite3")
+        self.addCleanup(self.conn.close)
+        self.conn.execute("CREATE TABLE kept(value TEXT)")
+        self.conn.execute("INSERT INTO kept VALUES ('one')")
+        self.conn.commit()
+
+    def reusable(self, name: str, data: bytes) -> Path:
+        path = self.root / "backups" / name
+        path.parent.mkdir(exist_ok=True)
+        path.write_bytes(data)
+        return path
+
+    def test_an_unreadable_reusable_snapshot_is_renamed_never_deleted(self) -> None:
+        bad = self.reusable("valkama-label-20261031T000000Z-abcdef.sqlite3", b"not a database")
+        path, identity = store_backups.verified_snapshot(
+            self.conn, "label", locate=lambda: self.location
+        )
+        self.assertNotEqual(str(bad), path)
+        self.assertEqual(store_backups.logical_identity(self.conn), identity)
+        self.assertFalse(bad.exists())
+        self.assertEqual(b"not a database", Path(f"{bad}.unverified").read_bytes())
+
+    def test_a_readable_snapshot_of_another_state_stays_under_its_label(self) -> None:
+        older = self.root / "backups"
+        older.mkdir()
+        earlier = store_backups.snapshot(self.conn, self.location, "label")
+        self.conn.execute("INSERT INTO kept VALUES ('two')")
+        self.conn.commit()
+        path, _ = store_backups.verified_snapshot(self.conn, "label", locate=lambda: self.location)
+        self.assertNotEqual(earlier, path)
+        self.assertTrue(Path(earlier).exists())
+        self.assertEqual([], list(older.glob("*.unverified")))
+
 
 if __name__ == "__main__":
     unittest.main()
