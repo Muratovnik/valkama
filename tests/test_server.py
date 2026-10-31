@@ -416,6 +416,7 @@ class StdioTests(unittest.TestCase):
                     "set_work_item_checklist",
                     "tick_work_item_checklist_item",
                     "attach_work_item_ref",
+                    "apply_work_item_changes",
                     "delete_work_item",
                 },
                 names,
@@ -424,7 +425,7 @@ class StdioTests(unittest.TestCase):
             self.assertNotIn("create_board", names)
             self.assertIn("list_platform_modules", names)
             self.assertFalse(any("improvement" in name for name in names))
-            self.assertEqual(28, len(names))
+            self.assertEqual(29, len(names))
             self.assertLessEqual(
                 {
                     "create_work_item_request",
