@@ -14,6 +14,14 @@ from server import http_surface, static_assets
 
 
 class StaticAssetTests(unittest.TestCase):
+    def test_every_file_type_the_build_ships_is_served_with_its_type(self) -> None:
+        # A type missing here is sent as application/octet-stream: a font the
+        # browser may refuse, a licence notice it offers to download.
+        dist = Path(__file__).resolve().parent.parent / "web" / "dist"
+        shipped = {path.suffix for path in dist.rglob("*") if path.is_file()}
+        self.assertTrue(shipped)
+        self.assertEqual(set(), shipped - set(http_surface.CONTENT_TYPES))
+
     def test_runtime_identity_ignores_files_outside_the_backend(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

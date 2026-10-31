@@ -95,6 +95,9 @@ CONTENT_TYPES = {
     ".ico": "image/x-icon",
     ".json": "application/json",
     ".woff2": "font/woff2",
+    ".ttf": "font/ttf",
+    ".txt": "text/plain; charset=utf-8",
+    ".md": "text/markdown; charset=utf-8",
 }
 
 #: The views an event stream can carry, each Planning's own.
