@@ -229,7 +229,7 @@ python valkama.py <command> [options]
 | `adapter remove ADAPTER_ID` | stop declaring an installed adapter |
 | `adapter list` | the adapters this installation declares |
 | `doctor [--json] [--no-probe]` | check this installation in four levels — Installation, Projects, Capabilities, Connections — and say what to do about each problem |
-| `export [--section planning]` | write the Planning spaces and their work items as one export; `planning` is the only section |
+| `export [--section planning] [--space KEY]... [--output PATH]` | write every Planning space and every one of its work items as one JSON export; `planning` is the only section. `--space` (repeatable) narrows it to those spaces and records them as `space_filter`; an unknown space exits non-zero. `--output` writes the file whole through a temporary file beside it and prints one summary line instead of the JSON. A space whose items do not add up to its count stops the export |
 | `migrate planning-model [--dry-run]` | explicitly convert a Board-era store to Planning once; dry run converts a copy |
 | `attach NAME PATH [--label TEXT]` | attach another database file as a scope |
 | `detach NAME` | drop a scope from every view; the file is untouched |

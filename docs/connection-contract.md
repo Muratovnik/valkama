@@ -106,10 +106,24 @@ answers with the full item.
 `list_work_items` and `search_work_items` answer one compact row per item:
 `reference`, `title`, `kind`, `state` (the key), `priority`, `parent` (a
 reference, or `null`), `claim_ref` and `claim_state`, plus `comment_hit` and
-`summary_hit` on a search that matched there. Without a `limit` they return at most 50 rows, and
-the answer carries `truncated`, which is true when more matched than it holds.
+`summary_hit` on a search that matched there. Without a `limit` they return at most 50 rows.
+
+Each answer is one page. `truncated` is true when more items match than the page
+holds, and `next_offset` is then the offset of the next page; on the last page
+it is `null`. A page holds at most 1000 items for `list_work_items` and 200 for
+`search_work_items`. A larger `limit` is answered with at most one page, and
+`truncated` still says whether more items match. Both tools take an optional
+`offset`, a non-negative integer, 0 by default. Calling again with the same
+filters and each `next_offset` until it is `null` returns every matching item
+exactly once, as long as nothing writes to the store in between; a write between
+two pages can move an item across the boundary. An `offset` that is negative or
+not an integer is refused with `invalid_request`.
+
 With `verbose: true` they answer with the full items, at the limits they had
-before, and without `truncated`.
+before (200 for a list, 50 for a search), and with the same `truncated` and
+`next_offset`. The HTTP reads `GET /api/planning/work-items` and
+`GET /api/planning/search` take the same `offset` parameter and carry the same
+two fields.
 
 ### Argument names
 

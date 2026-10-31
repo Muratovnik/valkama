@@ -128,6 +128,20 @@ checkouts are therefore distinguishable even at the same version.
   - `doctor`'s hook and identity findings have their texts in the web's
     Settings, in English and Russian.
 
+- `valkama export --space KEY` (repeatable) exports only those Planning spaces
+  and names them in the file as `space_filter`; an unknown space exits non-zero.
+  `valkama export --output PATH` writes the export through a temporary file in
+  the same directory and replaces the target in one rename, then prints one
+  line with the path, the spaces and the item count. Without `--output` the
+  export still goes to stdout.
+- `list_work_items` and `search_work_items` take an optional `offset`, and so do
+  `GET /api/planning/work-items` and `GET /api/planning/search`. Their answers
+  carry `next_offset`, the offset of the next page, or `null` on the last one.
+  The `tools/list` change is additive only: one new optional `offset` property
+  on each of the two tools, and longer descriptions that explain paging. The
+  HTTP answers gain `truncated` and `next_offset`, and so does a `verbose`
+  tool answer, which is the HTTP answer; no existing field changes.
+
 ### Changed
 
 - Two sessions that sign with the same `author` no longer release or take
@@ -218,6 +232,19 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- `valkama export` wrote at most 1000 work items per Planning space and said
+  nothing about the rest; the items lost were those in the last workflow
+  states. It now reads every item page by page and checks the count against
+  the space's own. A count that does not add up stops the export, and nothing
+  is printed or written.
+- `list_work_items` cut its answer at 1000 items and `search_work_items` at
+  200 without saying so; at a `limit` of 1000 or more (200 for a search) the
+  compact answer reported `truncated: false` while it was cut. A page still
+  holds at most 1000 (200) items, but `truncated` is now correct at every
+  limit and `next_offset` says where the rest starts.
+- A list read in state order broke ties between spaces arbitrarily, so two
+  pages could repeat one item and skip another. The work item id now settles
+  the order.
 - A claim, checklist claim or checklist tick made in the browser was signed
   `agent`, while a comment made there was signed `user`. A browser write that
   names no author, or an empty one, is now signed `user`.
