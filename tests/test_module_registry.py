@@ -42,6 +42,8 @@ def _released_schema2_planning_manifest() -> dict:
     manifest = next(
         item for item in platform_modules.module_manifests() if item["module_id"] == "planning"
     )
+    # The route keys schema 2 declared; the chain keys came later.
+    manifest["state_schema"]["allowed_keys"] = ["query", "view", "status"]
     manifest["semantics"] = {
         "global": {
             "read_models": ["portfolio.cards", "portfolio.boards"],
