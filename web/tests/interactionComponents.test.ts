@@ -64,6 +64,10 @@ const workspace = readFileSync(
   new URL('../src/pages/planning/PlanningWorkspace.vue', import.meta.url),
   'utf8',
 )
+const workspaceBar = readFileSync(
+  new URL('../src/pages/planning/PlanningWorkspaceBar.vue', import.meta.url),
+  'utf8',
+)
 const lane = readFileSync(
   new URL('../src/widgets/work-item-views/components/WorkItemColumn.vue', import.meta.url),
   'utf8',
@@ -185,8 +189,8 @@ test('one place draws who holds an item, and the shell owns scope presentation',
 test('the planning workspace is the one scroll owner and wears shared controls', () => {
   // The view switch is the shared segmented control rather than three buttons of
   // its own, so the row it sits in matches every other module's header.
-  assert.match(workspace, /<SegmentedControl/)
-  assert.match(workspace, /:aria-busy="countsBusy"/)
+  assert.match(workspaceBar, /<SegmentedControl/)
+  assert.match(workspaceBar, /:aria-busy="countsBusy"/)
   // The header row stays and each view scrolls inside the stage. Two scroll
   // containers is how the board used to take the page sideways with it.
   assert.match(compactCss(workspace), /\.workspace\{[^}]*flex-direction:column/)

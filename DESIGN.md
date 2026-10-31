@@ -506,6 +506,12 @@ the one-off cheaper than the shared thing.
 
 Work presents board, list, and graph views from the same Planning read model.
 It pairs a collapsible epic index with a horizontally scrollable board.
+The bar above the views is two rows and no more: the view, the queue, the
+search and, on the board, the grouping as compact controls on one row, then
+what is drawn and how much of it beside the one primary action. The queue
+folds into a menu where the row cannot hold its segments beside a usable
+search. Every number in the bar counts one population — the space, or a chain
+with its root — and a view that draws fewer items says what it leaves out.
 Epic progress, lane state, and active work share the same semantic palette.
 Aggregate epic activity belongs only to the epic index, including its compact
 state; bundle headers on the board do not repeat a “working” label.

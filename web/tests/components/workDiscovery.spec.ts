@@ -51,7 +51,9 @@ function workspace(locale = 'en', large = false) {
   })
 }
 function button(wrapper: ReturnType<typeof workspace>, text: string) {
-  const found = wrapper.findAll('button').find((entry) => entry.text() === text)
+  const found = wrapper
+    .findAll('button')
+    .find((entry) => (entry.text() || entry.attributes('aria-label')) === text)
   if (!found) throw new Error(`Missing button: ${text}`)
   return found
 }

@@ -85,8 +85,10 @@ function workspace(props: Partial<InstanceType<typeof PlanningWorkspace>['$props
   })
 }
 
-const countsLine = (wrapper: ReturnType<typeof workspace>) =>
-  wrapper.get('.workspace-counts').text()
+/** The figures the bar shows beside the action, one entry each. */
+const figures = (wrapper: ReturnType<typeof workspace>) =>
+  wrapper.findAll('.workspace-figures > span').map((figure) => figure.text())
+const countsLine = (wrapper: ReturnType<typeof workspace>) => figures(wrapper).join(' · ')
 
 beforeEach(() => localStorage.clear())
 afterEach(() => {
@@ -129,8 +131,11 @@ describe('one population above the stage', () => {
     const wrapper = workspace({ grouping: 'epic' })
     await wrapper.get('input').setValue('item 1')
     // MAIN-1 heads a lane; MAIN-10 to MAIN-13 are tiles.
-    expect(countsLine(wrapper)).toContain('lane epics outside the columns: 1')
-    expect(wrapper.get('[role="status"]').text()).toBe('5 shown of 7')
+    expect(figures(wrapper)).toEqual([
+      '5 open of 7 · 0 open claimed',
+      '5 shown of 7',
+      'lane epics outside the columns: 1',
+    ])
   })
 
   it('says how many parents the whole-space graph draws as groups rather than nodes', () => {

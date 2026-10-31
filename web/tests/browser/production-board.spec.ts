@@ -192,7 +192,7 @@ test('a lane stays folded or unfolded the way it was left, across a reload', asy
   await expect(closed).toHaveAttribute('aria-expanded', 'true')
   await expect(page.locator('[data-reference="MAIN-402"]')).toHaveCount(0)
   // Without grouping, every tile is on the board whatever its lane was left as.
-  await page.getByRole('button', { name: 'No grouping' }).click()
+  await page.getByRole('switch', { name: 'Group the board by epic' }).click()
   await expect.poll(() => routeState(page)).toEqual({ view: 'kanban' })
   await expect(page.locator('[data-reference="MAIN-402"]')).toBeVisible()
 })
@@ -209,20 +209,20 @@ test('a lane shows its epic’s chain on the board, in every view, and the chip 
     .poll(() => routeState(page))
     .toEqual({ view: 'kanban', group: 'epic', chain: 'MAIN-401', chain_scope: 'chain' })
   const chip = page.locator('.workspace-chip')
-  await expect(chip).toHaveText('Chain MAIN-401 · 5')
+  await expect(chip).toHaveText('Chain MAIN-401 · 6')
   await expect(page.locator('.board-lane')).toHaveCount(1)
   await expect(tiles(page.locator('.work-item-board'))).resolves.toHaveLength(5)
   await page.screenshot(shot(info, 'w-board-chain-1440.png'))
 
   // Ungrouped, the root is a tile like its members; the chain stays.
-  await page.getByRole('button', { name: 'No grouping' }).click()
+  await page.getByRole('switch', { name: 'Group the board by epic' }).click()
   await expect
     .poll(() => routeState(page))
     .toEqual({ view: 'kanban', chain: 'MAIN-401', chain_scope: 'chain' })
   await expect(tiles(page.locator('.work-item-board'))).resolves.toHaveLength(6)
   await page.getByRole('button', { name: 'List', exact: true }).click()
   await expect(page.locator('tbody tr')).toHaveCount(6)
-  await expect(chip).toHaveText('Chain MAIN-401 · 5')
+  await expect(chip).toHaveText('Chain MAIN-401 · 6')
   await chip.click()
   await expect.poll(() => routeState(page)).toEqual({ view: 'list' })
   await expect(page.locator('tbody tr')).toHaveCount(13)

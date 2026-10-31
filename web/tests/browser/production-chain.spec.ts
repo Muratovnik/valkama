@@ -249,7 +249,7 @@ test('Show on graph draws the open part of the chain, its root marked, and the r
   await section.getByRole('button', { name: 'Show on graph' }).click()
   const chip = page.locator('.graph-chip')
   // The chip counts the whole chain; the field draws the root and the 9 open members.
-  await expect(chip).toHaveText('Chain MAIN-264 · 16')
+  await expect(chip).toHaveText('Chain MAIN-264 · 17')
   await expect(page.locator('.flow-node-card')).toHaveCount(10)
   await expect(page.locator('.graph-canvas')).toHaveClass(/settled/u)
   const closed = page.getByRole('switch', { name: 'Draw the closed members of the chain' })
@@ -271,7 +271,7 @@ test('Show on graph draws the open part of the chain, its root marked, and the r
   await expect(page.locator('.flow-node-card')).toHaveCount(17)
   await expect(page.locator('.graph-canvas')).toHaveClass(/settled/u)
   await expect(page.locator('.flow-node-card.recessed')).toHaveCount(7)
-  await expect(chip).toHaveText('Chain MAIN-264 · 16')
+  await expect(chip).toHaveText('Chain MAIN-264 · 17')
   await page.locator('.graph').screenshot(shot(info, 'chain-graph-closed.png'))
 
   await chip.click()
@@ -294,7 +294,7 @@ test('the chain is held in the address: a reload keeps it, and leaving removes i
   const section = await openCard(page)
   await section.getByRole('button', { name: 'Show on graph' }).click()
   const chip = page.locator('.graph-chip')
-  await expect(chip).toHaveText('Chain MAIN-264 · 16')
+  await expect(chip).toHaveText('Chain MAIN-264 · 17')
   await expect
     .poll(() => routeState(page))
     .toEqual({
@@ -305,7 +305,7 @@ test('the chain is held in the address: a reload keeps it, and leaving removes i
   await expect(page.locator('.drawer')).toHaveCount(0)
 
   await page.reload()
-  await expect(chip).toHaveText('Chain MAIN-264 · 16')
+  await expect(chip).toHaveText('Chain MAIN-264 · 17')
   await expect(page.locator('.flow-node-card')).toHaveCount(10)
   await expect(page.locator('.graph-canvas')).toHaveClass(/settled/u)
   // A reload frames the root again, as entering from the card did.
@@ -340,7 +340,7 @@ test('the chain is held in the address: a reload keeps it, and leaving removes i
   await page.getByRole('button', { name: 'Kanban', exact: true }).click()
   const kept = { view: 'kanban', chain: 'MAIN-264', chain_scope: 'chain' }
   await expect.poll(() => routeState(page)).toEqual(kept)
-  await expect(page.locator('.workspace-chip')).toHaveText('Chain MAIN-264 · 16')
+  await expect(page.locator('.workspace-chip')).toHaveText('Chain MAIN-264 · 17')
   await expect(page.locator('.work-item-board [data-reference]')).toHaveCount(17)
   await page.locator('.workspace-chip').click()
   await expect.poll(() => routeState(page)).toEqual({ view: 'kanban' })
@@ -350,7 +350,7 @@ test('the chain is held in the address: a reload keeps it, and leaving removes i
 
   // Back in the chain from a link, the chip is the other way out.
   await page.goto(graphRoute({ chain: 'MAIN-264', chain_scope: 'chain' }))
-  await expect(chip).toHaveText('Chain MAIN-264 · 16')
+  await expect(chip).toHaveText('Chain MAIN-264 · 17')
   await chip.click()
   await expect(chip).toHaveCount(0)
   await expect.poll(() => routeState(page)).toEqual({ view: 'graph' })
@@ -364,7 +364,7 @@ test('Back and Forward land on the field the address names', async ({ page }) =>
   const section = await openCard(page)
   await section.getByRole('button', { name: 'Show on graph' }).click()
   const chip = page.locator('.graph-chip')
-  await expect(chip).toHaveText('Chain MAIN-264 · 16')
+  await expect(chip).toHaveText('Chain MAIN-264 · 17')
   // The card closed on its own, a step after the chain was named: Back is the
   // card again, over the same chain.
   await expect(page.locator('.drawer')).toHaveCount(0)
@@ -372,10 +372,10 @@ test('Back and Forward land on the field the address names', async ({ page }) =>
 
   await page.goBack()
   await expect(page.locator('.drawer section.chain')).toBeVisible()
-  await expect(chip).toHaveText('Chain MAIN-264 · 16')
+  await expect(chip).toHaveText('Chain MAIN-264 · 17')
   await page.goForward()
   await expect(page.locator('.drawer')).toHaveCount(0)
-  await expect(chip).toHaveText('Chain MAIN-264 · 16')
+  await expect(chip).toHaveText('Chain MAIN-264 · 17')
 
   // Leaving by the chip replaces the place rather than adding one, as a view
   // switch does, so Back is the card that was open before it.
@@ -383,7 +383,7 @@ test('Back and Forward land on the field the address names', async ({ page }) =>
   await expect(chip).toHaveCount(0)
   await page.goBack()
   await expect(page.locator('.drawer section.chain')).toBeVisible()
-  await expect(chip).toHaveText('Chain MAIN-264 · 16')
+  await expect(chip).toHaveText('Chain MAIN-264 · 17')
 })
 
 test('a long chain opened from a link draws its open part, and all of it on request', async ({
@@ -398,7 +398,7 @@ test('a long chain opened from a link draws its open part, and all of it on requ
   const started = Date.now()
   await page.goto(graphRoute({ chain: 'MAIN-264', chain_scope: 'chain' }))
   const chip = page.locator('.graph-chip')
-  await expect(chip).toHaveText('Chain MAIN-264 · 609')
+  await expect(chip).toHaveText('Chain MAIN-264 · 610')
   // The root, the 120 open members, the closed epic three of them are under and
   // the epic that closed with all of its work.
   await expect(page.locator('.flow-node-card')).toHaveCount(123)

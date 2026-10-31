@@ -386,9 +386,10 @@ describe('a chain narrows the board and the list', () => {
 
   it('offers the grouping on the board and hands the choice up', async () => {
     const wrapper = workspace('kanban')
-    const segment = wrapper.findAll('[aria-label="Board grouping"] button')
-    expect(segment.map((entry) => entry.text())).toEqual(['No grouping', 'By epic'])
-    await segment[1].trigger('click')
+    const grouping = wrapper.get('[role="switch"][aria-label="Group the board by epic"]')
+    expect(grouping.attributes('aria-checked')).toBe('false')
+    expect(grouping.text()).toBe('By epic')
+    await grouping.trigger('click')
     expect(wrapper.emitted('group')).toEqual([['epic']])
   })
 })

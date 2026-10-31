@@ -847,6 +847,7 @@ export const en = {
         'Scope from {from} to {to}: {start} at the start, {total} now; {closed} closed and {open} open on {day}.',
     },
     queueLabel: 'Work queue',
+    queueMenuAll: 'All work',
     queue: {
       all: 'All',
       ready: 'Ready',
@@ -885,9 +886,8 @@ export const en = {
     liveUnavailable: 'Live updates are unavailable. Refresh to load the latest work and reconnect.',
     columnEmpty: 'Nothing here',
     lanes: {
-      groupingLabel: 'Board grouping',
+      groupingLabel: 'Group the board by epic',
       grouping: {
-        none: 'No grouping',
         epic: 'By epic',
       },
       noEpic: 'No epic',

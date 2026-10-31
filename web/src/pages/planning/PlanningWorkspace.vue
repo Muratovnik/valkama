@@ -18,6 +18,7 @@ import { useI18n } from 'vue-i18n'
 
 import PlanningChainFailure from '@/pages/planning/PlanningChainFailure.vue'
 import { usePlanningCensus } from '@/pages/planning/composables/usePlanningCensus.ts'
+import PlanningWorkspaceBar from '@/pages/planning/PlanningWorkspaceBar.vue'
 import { graphView } from '@/pages/planning/utils/graphView.ts'
 
 import WorkItemBoard from '@/widgets/work-item-views/components/WorkItemBoard.vue'
@@ -29,11 +30,7 @@ import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import type { PlanningReadModel, WorkQueue } from '@/shared/api/planningModel.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import { LAZY_VIEW_LOADING_DELAY_MS } from '@/shared/ui/lazyView.ts'
-import ScopeChip from '@/shared/ui/ScopeChip.vue'
-import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import VButton from '@/shared/ui/VButton.vue'
-import VIcon from '@/shared/ui/VIcon.vue'
-import VTextInput from '@/shared/ui/VTextInput.vue'
 
 const props = defineProps<{
   model: PlanningReadModel
@@ -137,11 +134,6 @@ function resetFilters() {
   query.value = ''
   queue.value = 'all'
 }
-const queues: WorkQueue[] = ['all', 'ready', 'assigned', 'blocked', 'review']
-const queueOptions = computed(() =>
-  queues.map((value) => ({ value, label: t(`workItem.queue.${value}`) })),
-)
-
 /** What the graph needs of a chain: who is in it, and what to call it. */
 const graphChain = computed(() =>
   props.chain
@@ -157,44 +149,14 @@ const graphChain = computed(() =>
 const graphScopeKind = computed(() => (props.chain ? 'chain' : 'all'))
 const graphEdges = computed(() => props.chain?.edges ?? props.model.links)
 
-const VIEW_MODES: readonly PlanningViewMode[] = ['kanban', 'list', 'graph']
-
-const GROUPINGS: readonly BoardGrouping[] = ['none', 'epic']
-const groupingSegments = computed(() =>
-  GROUPINGS.map((value) => ({ value, label: t(`workItem.lanes.grouping.${value}`) })),
+/** The chain the board or the list is narrowed to, for the bar's chip; the graph names its own. */
+const chipReference = computed(() =>
+  props.chain && stageView.value !== 'graph' ? props.chain.root.reference : null,
 )
-/** The chip naming the chain the board or the list is narrowed to; the graph draws its own. */
-const scopeChip = computed(() => {
-  const chain = props.chain
-  if (!chain || stageView.value === 'graph') return null
-  const reference = chain.root.reference
-  return {
-    label: t('graph.chainChip', { reference, count: countedItems.value.length }),
-    exit: t('graph.chainExit', { reference }),
-  }
-})
-const showScopeBar = computed(() => stageView.value === 'kanban' || scopeChip.value !== null)
-
-const viewSegments = computed(() =>
-  VIEW_MODES.map((mode) => ({ value: mode, label: t(`workItem.view.${mode}`) })),
-)
-
-/**
- * `aria-busy` while a refresh is in flight, and absent otherwise.
- *
- * Absent rather than `false`: the counts are not busy between refreshes, and
- * `aria-busy="false"` is a claim about a state the row is not in.
- */
-const countsBusy = computed(() => (props.stale ? true : undefined))
-
-/** What the view on the stage leaves out of its own counts, said beside them. */
-const exclusion = computed(() => {
-  const left = census.exclusion.value
-  if (left === null) return ''
-  return left.kind === 'lane-heads'
-    ? t('workItem.countsExclude.laneHeads', { count: left.count })
-    : t('workItem.countsExclude.graphParents', { count: left.count, open: left.open })
-})
+/** The board's grouping while the board is on the stage, which is when it can be grouped. */
+const barGrouping = computed(() => (stageView.value === 'kanban' ? boardGrouping.value : null))
+/** How many counted items the queue and the search let through, when either narrows. */
+const matchCount = computed(() => (filtered.value ? matchedItems.value.length : null))
 </script>
 
 <template>
@@ -202,49 +164,22 @@ const exclusion = computed(() => {
     class="workspace"
     :aria-label="t('platform.modules.planning')"
   >
-    <header class="workspace-head">
-      <!-- Reaching for the switch is the intent to use it: the board and the
-           list are already here, so the graph is what it would download. -->
-      <SegmentedControl
-        :model-value="view"
-        :options="viewSegments"
-        :label="t('workItem.viewLabel')"
-        @focusin="graphView.prefetch"
-        @pointerenter="graphView.prefetch"
-        @update:model-value="(mode) => emit('view', mode)"
-      />
-      <SegmentedControl
-        v-model="queue"
-        class="workspace-queue"
-        :options="queueOptions"
-        :label="t('workItem.queueLabel')"
-      />
-      <span
-        class="workspace-counts"
-        :aria-busy="countsBusy"
-        >{{ t('workItem.spaceCounts', counts)
-        }}<template v-if="exclusion"> · {{ exclusion }}</template></span
-      >
-      <VButton
-        v-if="writable"
-        variant="primary"
-        @click="emit('create')"
-      >
-        <span aria-hidden="true">+</span>{{ t('workItem.create') }}
-      </VButton>
-      <p
-        v-else
-        class="workspace-note"
-        role="status"
-        data-state="unavailable"
-      >
-        <VIcon
-          name="info"
-          class="workspace-note-icon"
-          :size="16"
-        />{{ t('platform.coreWrites.primaryOwnerRequired') }}
-      </p>
-    </header>
+    <PlanningWorkspaceBar
+      v-model:queue="queue"
+      v-model:query="query"
+      :busy="stale"
+      :chain="chipReference"
+      :counts="counts"
+      :exclusion="census.exclusion.value"
+      :grouping="barGrouping"
+      :matches="matchCount"
+      :view="view"
+      :writable="writable"
+      @create="emit('create')"
+      @exit-chain="emit('exit-chain')"
+      @group="(value) => emit('group', value)"
+      @view="(mode) => emit('view', mode)"
+    />
 
     <p
       v-if="warning"
@@ -253,46 +188,6 @@ const exclusion = computed(() => {
     >
       {{ warning }}
     </p>
-    <div class="workspace-search">
-      <VTextInput
-        v-model="query"
-        :label="t('workItem.searchLabel')"
-        :placeholder="t('workItem.searchPlaceholder')"
-      />
-      <VButton
-        v-if="query"
-        @click="query = ''"
-        >{{ t('workItem.clearSearch') }}</VButton
-      >
-      <span
-        v-if="filtered"
-        class="workspace-counts"
-        role="status"
-        >{{
-          t('workItem.matchCount', { count: matchedItems.length, total: countedItems.length })
-        }}</span
-      >
-    </div>
-    <div
-      v-if="showScopeBar"
-      class="workspace-scope"
-    >
-      <ScopeChip
-        v-if="scopeChip"
-        class="workspace-chip"
-        :label="scopeChip.label"
-        :exit-label="scopeChip.exit"
-        @exit="emit('exit-chain')"
-      />
-      <SegmentedControl
-        v-if="stageView === 'kanban'"
-        size="compact"
-        :label="t('workItem.lanes.groupingLabel')"
-        :model-value="boardGrouping"
-        :options="groupingSegments"
-        @update:model-value="(value) => emit('group', value)"
-      />
-    </div>
     <PlanningChainFailure
       v-if="chainFailure"
       :failure="chainFailure"
@@ -374,82 +269,23 @@ const exclusion = computed(() => {
   background: var(--color-canvas);
 }
 
-/* One grammar across every module: the view switcher on the left, where the eye
-   starts, and the one primary action on the right. */
-.workspace-head {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  align-items: center;
-  min-width: 0;
-
-  & > :last-child {
-    margin-inline-start: auto;
-  }
-}
-
-.workspace-queue {
-  flex-wrap: wrap;
-  min-width: 0;
-  max-width: 100%;
-}
-
-.workspace-search {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  align-items: end;
-}
-
-/* What the board or the list is narrowed to and how it is grouped: one row
-   above the field, where the graph keeps its own bar. */
-.workspace-scope {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-3);
-  align-items: center;
-  min-width: 0;
-}
-
-.workspace-chip {
-  max-width: 100%;
-}
-
-.workspace-counts {
-  color: var(--color-text-muted);
-  font: var(--font-count);
-  font-variant-numeric: tabular-nums;
-}
-
 .workspace-stage {
   display: grid;
   flex: 1 1 auto;
   min-height: 0;
 }
 
+/* A line of text about the stage: a warning, or the chain still being read. */
 .workspace-note {
-  display: flex;
-  gap: var(--space-2);
-  align-items: flex-start;
   max-width: 54ch;
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
-
-  .workspace-note-icon {
-    flex: 0 0 auto;
-    margin-top: var(--space-hair);
-  }
 }
 
 @container workspace (width <= 556px) {
   .workspace {
     padding-inline: var(--space-3);
-  }
-
-  .workspace-head {
-    flex-direction: column;
-    align-items: stretch;
   }
 }
 </style>
