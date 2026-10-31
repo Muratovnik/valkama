@@ -16,10 +16,9 @@ import type { Page, TestInfo } from '@playwright/test'
 import { planningSpaceEntity, planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
-import { chainResponse } from '../fixtures/chain.ts'
 import { branchedChain, smallBranchedChain } from '../fixtures/chainMap.ts'
 import { installBackend } from './backend.ts'
-import { largeChainHere, longChainHere, smallChain } from './chainFixtures.ts'
+import { largeChainHere, longChainHere, serve, smallChain } from './chainFixtures.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import {
   attachedWorkItemRef,
@@ -28,7 +27,6 @@ import {
   workItem,
   workItemRef,
 } from './planningFixtures.ts'
-import { planningReadFor } from './planningReadFixture.ts'
 
 /** What the address's module state says, decoded. */
 function routeState(page: Page): Record<string, unknown> {
@@ -45,32 +43,6 @@ function graphRoute(state: Record<string, string>) {
     scope: projectScope,
     entity: planningSpaceEntity(spaceRef),
     state: { view: 'graph', ...state },
-  })
-}
-
-async function serve(
-  page: Page,
-  chain: unknown,
-  extraItems: unknown[] = [],
-  extraLinks: unknown[] = [],
-) {
-  await page.route('**/api/planning/work-item/chain?*', (route) =>
-    route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify(chainResponse(chain as never)),
-    }),
-  )
-  await page.route('**/api/planning?*', async (route) => {
-    const response = planningReadFor(new URL(route.request().url()).searchParams)
-    if (response.status === 200 && 'work_items' in response.body) {
-      response.body.work_items = [...response.body.work_items, ...(extraItems as never[])]
-      response.body.links = [...response.body.links, ...(extraLinks as never[])]
-    }
-    await route.fulfill({
-      status: response.status,
-      contentType: 'application/json',
-      body: JSON.stringify(response.body),
-    })
   })
 }
 

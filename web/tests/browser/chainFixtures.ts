@@ -1,11 +1,14 @@
 /**
  * The chains the browser suite serves, built into this suite's space: a small
  * one that draws legibly, the card's large one renamed into the space, and the
- * unit fixture's long one filed in it.
+ * unit fixture's long one filed in it; and `serve`, which answers for them.
  */
-import { largeEpicChain } from '../fixtures/chain.ts'
+import type { Page } from '@playwright/test'
+
+import { chainResponse, largeEpicChain } from '../fixtures/chain.ts'
 import { longChainSpace } from '../fixtures/chainSpace.ts'
 import { planningReadModel, workItem, workItemRef } from './planningFixtures.ts'
+import { planningReadFor } from './planningReadFixture.ts'
 
 const identity = (id: number) => `00000000-0000-4000-8000-${String(id).padStart(12, '0')}`
 
@@ -178,4 +181,34 @@ export function longChainHere() {
     edges,
   }
   return { chain, items, edges }
+}
+
+/**
+ * Answer the chain endpoint with `chain`, and the space's read with this suite's
+ * space plus the items and links a chain needs that the space does not hold.
+ */
+export async function serve(
+  page: Page,
+  chain: unknown,
+  extraItems: unknown[] = [],
+  extraLinks: unknown[] = [],
+) {
+  await page.route('**/api/planning/work-item/chain?*', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify(chainResponse(chain as never)),
+    }),
+  )
+  await page.route('**/api/planning?*', async (route) => {
+    const response = planningReadFor(new URL(route.request().url()).searchParams)
+    if (response.status === 200 && 'work_items' in response.body) {
+      response.body.work_items = [...response.body.work_items, ...(extraItems as never[])]
+      response.body.links = [...response.body.links, ...(extraLinks as never[])]
+    }
+    await route.fulfill({
+      status: response.status,
+      contentType: 'application/json',
+      body: JSON.stringify(response.body),
+    })
+  })
 }
