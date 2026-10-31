@@ -74,9 +74,6 @@ checkouts are therefore distinguishable even at the same version.
 - The branch map replaces the card's line of origins: each lane's label names
   its epic, or says it has none, and its counts stand at the lane's end.
 - The card's scope chart is shorter and stands under the branch map.
-- The chain answer names a root with children once, as `has_children`; the
-  `container` field that always carried the same value is gone from
-  `GET /api/planning/work-item/chain` and `get_work_item_chain`.
 - In the card's chain section, a member row names its state only when its
   group mixes states. A group in one state names it once, in its heading, and
   the finished group is headed the same way.
