@@ -118,19 +118,25 @@ async function chooseLane(key: string) {
 const KEEP = '\u{A0}'
 
 /**
- * The chain in one line: how much is done and how much is open, the open work
+ * The chain in one line: how much grew from this item, how much of it is done
+ * and how much is open, the open work
  * by group — named as the board names its column where the whole group is in
  * one state, and by the group's own word where it spans several — and how much
  * of it the space would let someone take now. That figure is the read model's
  * rule — unheld, unblocked, in any state work can start from, the backlog
  * included — so it may exceed the to-do group, and the wording says why rather
- * than reading as one more category. The total is the section's own count.
+ * than reading as one more category.
+ *
+ * The total is said as what it is — the work under the root, the root itself
+ * not counted — because the board's chain chip counts the root too and reads
+ * one more for the same chain; an unlabelled 306 beside a 307 read as a fault.
  */
 const summary = computed(() => {
   const chain = props.chain
   const current = groups.value
   if (!chain || !current) return ''
-  if (chain.open === 0) return t('workItem.chain.summaryNoneOpen', { closed: chain.closed })
+  const counts = { total: chain.total, closed: chain.closed, open: chain.open }
+  if (chain.open === 0) return t('workItem.chain.summaryNoneOpen', counts)
   const parts = OPEN_CHAIN_GROUPS.filter((group) => current[group].length > 0)
     .map((group) =>
       t('workItem.chain.part', {
@@ -139,7 +145,7 @@ const summary = computed(() => {
       }).replaceAll(' ', KEEP),
     )
     .join(`${KEEP}· `)
-  const line = t('workItem.chain.summary', { closed: chain.closed, open: chain.open, parts })
+  const line = t('workItem.chain.summary', { ...counts, parts })
   return chain.ready ? `${line}; ${t('workItem.chain.workable', { count: chain.ready })}` : line
 })
 

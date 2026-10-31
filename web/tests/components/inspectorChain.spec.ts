@@ -99,9 +99,11 @@ describe('the chain section of a card', () => {
     // never lowercased keys — and the workable count beside it rather than as a
     // group of its own. It counts the backlog too, so it outnumbers the 14 to
     // do, and it says so. A name keeps its count, and a separator the part
-    // before it, when the line wraps. The total is the section header's count.
+    // before it, when the line wraps. The total says what it counts: the work
+    // under the root, the root itself not included, which the board's chain
+    // chip does include.
     expect(chain.get('.chain-summary-line').text()).toBe(
-      'Done 483 · open 133: Development\u{A0}11\u{A0}· Code\u{A0}review\u{A0}1\u{A0}· Todo\u{A0}14\u{A0}· Backlog\u{A0}107; workable 115 (backlog included)',
+      'Under the root: 616 · 483 done · 133 open: Development\u{A0}11\u{A0}· Code\u{A0}review\u{A0}1\u{A0}· Todo\u{A0}14\u{A0}· Backlog\u{A0}107; workable 115 (backlog included)',
     )
     // 53 added against 42 done: the open part grows unless more than
     // 53 ÷ 7 ≈ 7.57 close a day, said to a tenth and rounded up.
@@ -231,7 +233,7 @@ describe('the chain section of a card', () => {
     expect(asked).toHaveLength(2)
     expect(section(wrapper).find('[role="alert"]').exists()).toBe(false)
     expect(section(wrapper).get('.chain-summary-line').text()).toBe(
-      'Done 483 · open 133: Development\u{A0}11\u{A0}· Code\u{A0}review\u{A0}1\u{A0}· Todo\u{A0}14\u{A0}· Backlog\u{A0}107; workable 115 (backlog included)',
+      'Under the root: 616 · 483 done · 133 open: Development\u{A0}11\u{A0}· Code\u{A0}review\u{A0}1\u{A0}· Todo\u{A0}14\u{A0}· Backlog\u{A0}107; workable 115 (backlog included)',
     )
   })
 
@@ -356,7 +358,7 @@ describe('the chain section of a card', () => {
     expect(asked).toHaveLength(2)
     // A refresh keeps the last answer on screen while it runs and after it.
     expect(section(wrapper).get('.chain-summary-line').text()).toBe(
-      'Done 483 · open 133: Development\u{A0}11\u{A0}· Code\u{A0}review\u{A0}1\u{A0}· Todo\u{A0}14\u{A0}· Backlog\u{A0}107; workable 115 (backlog included)',
+      'Under the root: 616 · 483 done · 133 open: Development\u{A0}11\u{A0}· Code\u{A0}review\u{A0}1\u{A0}· Todo\u{A0}14\u{A0}· Backlog\u{A0}107; workable 115 (backlog included)',
     )
 
     vi.mocked(fetchWorkItem).mockResolvedValue(ROOT)
