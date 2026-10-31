@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 
+import { settingsView } from '@/app/moduleViews.ts'
+
 import PlanningModuleSurface from '@/pages/planning/PlanningModuleSurface.vue'
-import SettingsView from '@/pages/settings/SettingsView.vue'
 
 import ModuleFrame from '@/widgets/module-frame/components/ModuleFrame.vue'
 
@@ -10,6 +11,7 @@ import type { PlatformContextReady } from '@/shared/api/platformApiTypes.ts'
 import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
 import type { ModuleId } from '@/shared/api/platformModuleContract.ts'
 import type { OperatingScope, PlatformRoute } from '@/shared/api/platformRoute.ts'
+
 const props = defineProps<{
   activeModule: ModuleId
   context: PlatformContextReady | null
@@ -28,6 +30,7 @@ const emit = defineEmits<{
   'open-session': [sessionId: string, clientFamily: string]
   'state': [state: Record<string, string | number | boolean>]
 }>()
+const SettingsView = settingsView.component
 const planningSurface = ref<InstanceType<typeof PlanningModuleSurface> | null>(null)
 async function refresh() {
   await planningSurface.value?.refresh()

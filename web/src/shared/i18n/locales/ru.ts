@@ -85,6 +85,8 @@ export const ru = {
       sessionFeedFailed: 'Не удалось загрузить активность сессии.',
       sessionsRequestFailed: 'Не удалось загрузить сессии.',
       streamDisconnected: 'Поток обновлений сессий прерван.',
+      viewDownloadFailed:
+        'Эта часть интерфейса не загрузилась. Повторите; после обновления Valkama перезагрузите окно.',
       unknown: 'Запрос завершился ошибкой (технический код: {code}).',
     },
     actions: {

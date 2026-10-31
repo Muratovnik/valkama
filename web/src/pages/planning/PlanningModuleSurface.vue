@@ -31,6 +31,7 @@ import { usePlanningSubscription } from '@/pages/planning/composables/usePlannin
 import PlanningPortfolio from '@/pages/planning/PlanningPortfolio.vue'
 import PlanningWorkspace from '@/pages/planning/PlanningWorkspace.vue'
 import type { PlanningViewMode } from '@/pages/planning/PlanningWorkspace.vue'
+import { graphView } from '@/pages/planning/utils/graphView.ts'
 
 import WorkItemInspector from '@/widgets/work-item-inspector/components/WorkItemInspector.vue'
 
@@ -127,6 +128,8 @@ const view = computed<PlanningViewMode>(() => {
   const value = props.route.state?.view
   return value === 'graph' || value === 'list' ? value : 'kanban'
 })
+// An address that opens on the graph downloads it beside the space read, not after it.
+watch(view, (mode) => mode === 'graph' && graphView.prefetch(), { immediate: true })
 
 const {
   state: portfolio,

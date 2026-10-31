@@ -65,6 +65,12 @@ checkouts are therefore distinguishable even at the same version.
 - A work item of an attached store shows the chain section with a note that
   the chain is read for work items of the primary store only.
 - The desktop app is built on Electron 45 (Chromium 156), up from Electron 43.
+- The board no longer downloads Settings, and the libraries it runs ship as a
+  separate `vendor` chunk that keeps its hash across releases. The graph and
+  Settings download when the pointer or focus reaches the view switch or the
+  Settings entry, or when the address names them. A slow download keeps the
+  board on screen and then shows the loading panel; a failed one shows «Could
+  not load this view» with Retry, where the graph used to leave an empty stage.
 
 ### Fixed
 

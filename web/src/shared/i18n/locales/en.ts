@@ -85,6 +85,8 @@ export const en = {
       sessionFeedFailed: 'Session activity could not be loaded.',
       sessionsRequestFailed: 'Sessions could not be loaded.',
       streamDisconnected: 'Live session updates were interrupted.',
+      viewDownloadFailed:
+        'This part of the interface did not download. Retry; after a Valkama update, reload the window.',
       unknown: 'The request failed (technical code: {code}).',
     },
     actions: {

@@ -8,8 +8,10 @@
  * and the links arrive once and each view projects what it needs. That is why a
  * state renamed in the workflow renames a column, a row and a node together.
  */
-import { computed, defineAsyncComponent, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+
+import { graphView } from '@/pages/planning/utils/graphView.ts'
 
 import WorkItemBoard from '@/widgets/work-item-views/components/WorkItemBoard.vue'
 import WorkItemList from '@/widgets/work-item-views/components/WorkItemList.vue'
@@ -18,6 +20,7 @@ import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import { inWorkQueue } from '@/shared/api/planningModel.ts'
 import type { PlanningReadModel, WorkQueue } from '@/shared/api/planningModel.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
+import { LAZY_VIEW_LOADING_DELAY_MS } from '@/shared/ui/lazyView.ts'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
@@ -47,11 +50,38 @@ const emit = defineEmits<{
 }>()
 
 /** The graph pulls in Vue Flow, which no other view needs on first paint. */
-const WorkItemGraph = defineAsyncComponent(
-  () => import('@/widgets/work-item-graph/components/GraphView.vue'),
-)
+const WorkItemGraph = graphView.component
 
 export type PlanningViewMode = 'graph' | 'kanban' | 'list'
+
+/**
+ * The view the stage draws, which trails the chosen one only while the graph's
+ * code is still downloading.
+ *
+ * A switch to the graph keeps the board or the list on screen until the graph
+ * can replace it, so the stage never blanks between the two. Once the download
+ * has run for the loading delay the graph's own boundary takes the stage and
+ * says it is loading, or that it failed and can be retried.
+ */
+const stageView = ref<PlanningViewMode>(props.view)
+let releaseTimer: ReturnType<typeof setTimeout> | undefined
+function releaseGraph() {
+  clearTimeout(releaseTimer)
+  if (props.view === 'graph') stageView.value = 'graph'
+}
+watch(
+  () => props.view,
+  (mode) => {
+    clearTimeout(releaseTimer)
+    if (mode !== 'graph' || graphView.ready.value) {
+      stageView.value = mode
+      return
+    }
+    releaseTimer = setTimeout(releaseGraph, LAZY_VIEW_LOADING_DELAY_MS)
+    graphView.load().then(releaseGraph, releaseGraph)
+  },
+)
+onBeforeUnmount(() => clearTimeout(releaseTimer))
 
 const { t } = useI18n()
 
@@ -131,10 +161,14 @@ const counts = computed(() => {
     :aria-label="t('platform.modules.planning')"
   >
     <header class="workspace-head">
+      <!-- Reaching for the switch is the intent to use it: the board and the
+           list are already here, so the graph is what it would download. -->
       <SegmentedControl
         :model-value="view"
         :options="viewSegments"
         :label="t('workItem.viewLabel')"
+        @focusin="graphView.prefetch"
+        @pointerenter="graphView.prefetch"
         @update:model-value="(mode) => emit('view', mode)"
       />
       <SegmentedControl
@@ -207,7 +241,7 @@ const counts = computed(() => {
         >
       </DataEmptyState>
       <WorkItemBoard
-        v-if="view === 'kanban' && model.workflow"
+        v-if="stageView === 'kanban' && model.workflow"
         v-show="visibleItems.length || !filtered"
         :workflow="model.workflow"
         :items="visibleItems"
@@ -216,21 +250,21 @@ const counts = computed(() => {
         @transition="(reference, stateKey) => emit('transition', reference, stateKey)"
       />
       <WorkItemList
-        v-else-if="view === 'list'"
+        v-else-if="stageView === 'list'"
         v-show="visibleItems.length || !filtered"
         :items="visibleItems"
         :links="model.links"
         @open="(reference) => emit('open', reference)"
       />
       <p
-        v-else-if="view === 'graph' && chainPending"
+        v-else-if="stageView === 'graph' && chainPending"
         class="workspace-note"
         role="status"
       >
         {{ t('workItem.chain.loading') }}
       </p>
       <WorkItemGraph
-        v-else-if="view === 'graph'"
+        v-else-if="stageView === 'graph'"
         v-show="visibleItems.length || !filtered"
         :scope-kind="graphScopeKind"
         :space="model.planning_space?.planning_space_id ?? ''"

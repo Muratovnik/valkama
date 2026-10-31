@@ -15,6 +15,7 @@ import { usePlatformEntryRestore } from '@/app/composables/usePlatformEntryResto
 import { usePlatformLiveFeed } from '@/app/composables/usePlatformLiveFeed.ts'
 import { DEFAULT_ROUTE, usePlatformNavigation } from '@/app/composables/usePlatformNavigation.ts'
 import { usePlatformReadModels } from '@/app/composables/usePlatformReadModels.ts'
+import { prefetchModule } from '@/app/moduleViews.ts'
 
 import AppNav from '@/widgets/app-nav/components/AppNav.vue'
 
@@ -54,6 +55,9 @@ const {
   updateModuleState,
   writeRoute,
 } = usePlatformNavigation(() => t('platform.route.invalid'))
+
+// The destination an address names starts downloading before the module list settles.
+watch(activeModule, prefetchModule, { immediate: true })
 
 const { finderOpen, requestsOpen, pendingRequestCount, openTarget } =
   useGlobalWorkActions(writeRoute)
@@ -243,6 +247,7 @@ usePlatformEntryRestore({
       @find="finderOpen = true"
       @requests="requestsOpen = true"
       @navigate="switchModule"
+      @prefetch="prefetchModule"
       @home="goHome"
       @refresh="refreshAll"
     />

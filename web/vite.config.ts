@@ -15,7 +15,24 @@ export default defineConfig({
   // and `user-select` gains a `-webkit-` twin. The desktop app runs Chromium 156
   // while a browser reader is on an evergreen one, so lowering it would spend
   // selector clarity to reach nobody.
-  build: { outDir: 'dist', emptyOutDir: true, cssTarget: 'chrome150' },
+  build: {
+    outDir: 'dist',
+    emptyOutDir: true,
+    cssTarget: 'chrome150',
+    rolldownOptions: {
+      output: {
+        // The libraries the first screen runs — Vue, the router, i18n, zod,
+        // Reka — change far less often than the application, so they ship as
+        // their own chunk and keep their hash, and the cache, across releases.
+        // `$initial` keeps the group to what the entry imports statically: a
+        // library only a lazy view uses, such as Vue Flow, stays in that view's
+        // chunk instead of being pulled forward onto the first screen.
+        codeSplitting: {
+          groups: [{ name: 'vendor', test: /[\\/]node_modules[\\/]/, tags: ['$initial'] }],
+        },
+      },
+    },
+  },
   server: {
     host: '127.0.0.1',
     port: 5173,
