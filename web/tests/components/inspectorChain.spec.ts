@@ -55,6 +55,23 @@ function section(wrapper: VueWrapper) {
   return wrapper.find('section.chain')
 }
 
+/** The group of members headed by this label. */
+function group(wrapper: VueWrapper, label: string) {
+  return section(wrapper)
+    .findAll('section.chain-group')
+    .find((found) => found.attributes('aria-label') === label)
+}
+
+/** What each shown row of a group says at its end, or null where it says nothing. */
+function details(wrapper: VueWrapper, label: string) {
+  return group(wrapper, label)
+    ?.findAll('.chain-row')
+    .map((row) => row.find('.chain-row-detail'))
+    .map((detail) => (detail.exists() ? detail.text() : null))
+}
+
+const eight = <T>(value: T) => Array.from({ length: 8 }, () => value)
+
 describe('the chain section of a card', () => {
   useInspectorHarness()
 
@@ -69,9 +86,10 @@ describe('the chain section of a card', () => {
 
     expect(chain.get('.chain-headline').text()).toBe('616 in all · 483 closed')
     // Open work by category, in the space's own state names, and the workable
-    // count beside it rather than as a group of its own.
+    // count beside it rather than as a group of its own. It counts the backlog
+    // too, so it outnumbers the 14 to do, and it says so.
     expect(chain.get('.chain-breakdown').text()).toBe(
-      '133 open: development 11 · code review 1 · todo 14 · backlog 107 · workable: 115',
+      '133 open: development 11 · code review 1 · todo 14 · backlog 107; workable: 115 — unheld and unblocked, backlog included',
     )
     expect(chain.get('.chain-trend').text()).toBe(
       'Last 7 days: +53 discovered, −42 closed — scope is growing',
@@ -92,6 +110,38 @@ describe('the chain section of a card', () => {
     // The holder, not the state, names who has the work in progress.
     expect(chain.findAll('.chain-row')[0].text()).toContain('codex')
     expect(chain.findAll('.chain-row-ready').length).toBeGreaterThan(0)
+  })
+
+  it('names a row state only where its group heading does not', async () => {
+    const mixed = largeEpicChain()
+    // The three open items under VAL-900 wait in a second backlog state, and
+    // the first two closed ones were cancelled rather than done.
+    for (const member of mixed.members.filter(
+      (item) => item.parent_reference === 'VAL-900' && !item.state.is_terminal,
+    ))
+      Object.assign(member.state, { key: 'icebox', name: 'Icebox' })
+    for (const member of mixed.members.slice(0, 2))
+      Object.assign(member.state, { key: 'cancelled', name: 'Cancelled', category: 'cancelled' })
+    Object.assign(mixed.by_category, { completed: 481, cancelled: 2 })
+    serveChain(json(chainResponse(largeEpicChain())), json(chainResponse(mixed)))
+    // One state per group: the heading names it, and the rows do not repeat it.
+    const single = await open()
+    expect(details(single, 'Todo')).toEqual(eight(null))
+    await getButton(single, 'Done · 483').trigger('click')
+    expect(details(single, 'Done')).toEqual(eight(null))
+    single.unmount()
+
+    // A group that mixes states is headed by its category, and each row names its own.
+    const several = await open()
+    expect(group(several, 'Backlog')?.get('.chain-group-title').text()).toBe('Backlog · 107')
+    await getButton(several, 'Show all · 107').trigger('click')
+    const backlog = details(several, 'Backlog') ?? []
+    expect(new Set(backlog)).toEqual(new Set(['Backlog', 'Icebox']))
+    expect(backlog.filter((name) => name === 'Icebox')).toHaveLength(3)
+    await getButton(several, 'Done · 483').trigger('click')
+    expect(new Set(details(several, 'Done'))).toEqual(new Set(['Done', 'Cancelled']))
+    // A holder still stands where the state would.
+    expect(details(several, 'Development')).toEqual(eight('codex'))
   })
 
   it('stops a long group after eight rows and shows the rest on request', async () => {
@@ -199,6 +249,20 @@ describe('the chain section of a card', () => {
     vi.mocked(fetchWorkItem).mockResolvedValue(ROOT)
     const attached = await open(ROOT, { writable: false })
     expect(asked).toHaveLength(2)
-    expect(section(attached).exists()).toBe(false)
+    // The section stays, and says where a chain can be read instead.
+    expect(section(attached).get('.chain-quiet').text()).toBe(
+      'The chain is available only for work items of the primary store.',
+    )
+    expect(section(attached).find('.chain-headline').exists()).toBe(false)
+    expect(section(attached).find('[role="alert"]').exists()).toBe(false)
+  })
+
+  it('says the same for an attached item with no children of its own', async () => {
+    const asked = serveChain(json(chainResponse(emptyChain())))
+    const leaf = workItemFixture('Leaf', 1)
+    vi.mocked(fetchWorkItem).mockResolvedValue(leaf)
+    const wrapper = await open(leaf, { writable: false })
+    expect(asked).toHaveLength(0)
+    expect(section(wrapper).get('.chain-quiet').text()).toContain('primary store')
   })
 })

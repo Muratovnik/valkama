@@ -53,6 +53,16 @@ export function sharedStateName(members: readonly ChainMember[]): string | null 
 }
 
 /**
+ * The state a row in this group has to name itself. A group whose members all
+ * share one state already says it in its heading, so its rows say nothing; a
+ * group that mixes states heads itself with the category, so every row names
+ * its own.
+ */
+export function rowStateName(group: readonly ChainMember[], member: ChainMember): string | null {
+  return sharedStateName(group) === null ? member.state.name : null
+}
+
+/**
  * The root's own children, and every other place the chain's members came to
  * live: another epic they were filed under, or none. The server lists the root's
  * own children first; this only separates them so the card can name them as the

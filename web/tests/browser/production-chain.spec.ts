@@ -17,7 +17,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { chainResponse } from '../fixtures/chain.ts'
 import { installBackend } from './backend.ts'
 import { largeChainHere, longChainHere, smallChain } from './chainFixtures.ts'
-import { projectScope, spaceRef, workItemRef } from './planningFixtures.ts'
+import { attachedWorkItemRef, projectScope, spaceRef, workItemRef } from './planningFixtures.ts'
 import { planningReadFor } from './planningReadFixture.ts'
 
 /** What the address's module state says, decoded. */
@@ -90,7 +90,7 @@ for (const width of [1440, 390]) {
     const section = await openCard(page)
     await expect(section.locator('.chain-headline')).toHaveText('616 in all · 483 closed')
     await expect(section.locator('.chain-breakdown')).toHaveText(
-      '133 open: development 11 · code review 1 · todo 14 · backlog 107 · workable: 115',
+      '133 open: development 11 · code review 1 · todo 14 · backlog 107; workable: 115 — unheld and unblocked, backlog included',
     )
     await expect(section.locator('.chain-trend')).toContainText('scope is growing')
     await expect(section.getByRole('img')).toHaveAttribute('aria-label', /616 now/u)
@@ -103,6 +103,69 @@ for (const width of [1440, 390]) {
     await page.locator('.drawer').screenshot(shot(info, `chain-card-expanded-${width}.png`))
   })
 }
+
+test('a wrapped origins line never ends on a separator', async ({ page }, info) => {
+  await page.setViewportSize({ width: 390, height: 1000 })
+  await installBackend(page)
+  await serve(page, largeChainHere())
+  const section = await openCard(page)
+  const line = section.locator('.chain-origin-later')
+  await expect(line).toBeVisible()
+  // Each entry's box, and what its two pseudo-elements draw, read in the browser.
+  const entries = await line.locator('.chain-origin-entry').evaluateAll((nodes) =>
+    nodes.map((node) => ({
+      top: Math.round(node.getBoundingClientRect().top),
+      before: getComputedStyle(node, '::before').content,
+      after: getComputedStyle(node, '::after').content,
+      text: node.textContent,
+    })),
+  )
+  expect(entries).toHaveLength(3)
+  // At this width the line does wrap, so the case under test is on screen.
+  expect(new Set(entries.map((entry) => entry.top)).size).toBeGreaterThan(1)
+  // The separator opens every entry but the first and closes none.
+  expect(entries.map((entry) => [entry.before, entry.after])).toEqual([
+    ['none', 'none'],
+    ['"·"', 'none'],
+    ['"·"', 'none'],
+  ])
+  // What a reader hears keeps each piece's own space and dash, and one separator
+  // between two entries.
+  await expect(line).toMatchAriaSnapshot(`
+    - listitem:
+      - text: "Discovered later:"
+      - button "MAIN-779"
+      - text: — 242 (open 100) · no epic — 88 (open 30) ·
+      - button "MAIN-900"
+      - text: — 13 (open 3)
+  `)
+  await line.screenshot(shot(info, 'chain-origins-390.png'))
+})
+
+test('an attached store item says where a chain is read, and asks for none', async ({
+  page,
+}, info) => {
+  await page.setViewportSize({ width: 390, height: 1000 })
+  await installBackend(page, { includeAttachedDuplicate: true })
+  const asked: string[] = []
+  page.on('request', (request) => {
+    if (request.url().includes('/api/planning/work-item/chain')) asked.push(request.url())
+  })
+  await page.goto(
+    serializePlatformRoute({
+      module_id: 'planning',
+      scope: projectScope,
+      entity: planningWorkItemEntity(attachedWorkItemRef),
+    }),
+  )
+  const section = page.locator('.drawer section.chain')
+  await expect(section).toBeVisible()
+  await expect(section.locator('.chain-quiet')).toHaveText(
+    'The chain is available only for work items of the primary store.',
+  )
+  await page.locator('.drawer').screenshot(shot(info, 'chain-attached-390.png'))
+  expect(asked).toEqual([])
+})
 
 test('Show on graph draws the open part of the chain, its root marked, and the rest on request', async ({
   page,

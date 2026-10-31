@@ -11,7 +11,7 @@
 import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { sharedStateName } from '@/widgets/work-item-inspector/utils/chainSummary.ts'
+import { rowStateName, sharedStateName } from '@/widgets/work-item-inspector/utils/chainSummary.ts'
 import type { ChainGroups } from '@/widgets/work-item-inspector/utils/chainSummary.ts'
 
 import type { ChainMember } from '@/shared/api/planningChainApi.ts'
@@ -62,10 +62,14 @@ function isDone(group: ChainGroup): boolean {
   return group === 'done'
 }
 
-/** Who holds an open item, or its state when nobody does; a closed one says how it ended. */
-function detail(group: ChainGroup, member: ChainMember): string {
-  if (isDone(group) || !member.claim_ref) return member.state.name
-  return actorName(member.claim_ref)
+/**
+ * Who holds an open item; otherwise its state, unless the heading above already
+ * names the one state the whole group is in. A closed one says how it ended on
+ * the same terms.
+ */
+function detail(group: ChainGroup, member: ChainMember): string | null {
+  if (!isDone(group) && member.claim_ref) return actorName(member.claim_ref)
+  return rowStateName(props.groups[group], member)
 }
 </script>
 
@@ -88,7 +92,7 @@ function detail(group: ChainGroup, member: ChainMember): string {
           :name="doneIcon"
           :size="16"
         />
-        {{ t('workItem.chain.doneGroup', { count: groups.done.length }) }}
+        {{ groupHeading('done') }}
       </button>
       <h4
         v-else
@@ -126,7 +130,11 @@ function detail(group: ChainGroup, member: ChainMember): string {
                 class="chain-row-ready"
                 >{{ t('workItem.chain.workableMark') }}</span
               >
-              <span class="chain-row-detail">{{ detail(group, member) }}</span>
+              <span
+                v-if="detail(group, member)"
+                class="chain-row-detail"
+                >{{ detail(group, member) }}</span
+              >
             </button>
           </li>
         </ul>

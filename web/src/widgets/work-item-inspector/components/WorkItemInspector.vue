@@ -378,6 +378,7 @@ const close = () => void leave(() => emit('close'))
                   :container="payload.container"
                   :failed="chain.failed.value"
                   :loading="chain.loading.value"
+                  :readable="writable"
                   :scope="chain.scope.value"
                   @scope="chain.setScope"
                   @retry="retryChain"

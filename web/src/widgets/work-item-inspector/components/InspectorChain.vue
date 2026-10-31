@@ -8,6 +8,11 @@
  * discovered from it says nothing here, and a leaf whose chain is still loading
  * says nothing either — only an item known to have children holds the place
  * while it loads, so opening an ordinary task does not flash an empty section.
+ *
+ * An item of an attached store is the exception. The chain read answers for
+ * the primary store alone, so the card asks it nothing for one, and the section
+ * says where a chain can be read instead of leaving the reader to wonder why
+ * there is none.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -32,6 +37,8 @@ const props = defineProps<{
   container: boolean
   failed: boolean
   loading: boolean
+  /** The chain read reaches this item: it is in the primary store, not an attached one. */
+  readable: boolean
   scope: ChainScope
 }>()
 
@@ -44,9 +51,10 @@ const emit = defineEmits<{
 
 const { t, locale } = useI18n()
 
-const visible = computed(() =>
-  props.chain ? props.chain.total > 0 : props.container && (props.loading || props.failed),
-)
+const visible = computed(() => {
+  if (!props.readable) return true
+  return props.chain ? props.chain.total > 0 : props.container && (props.loading || props.failed)
+})
 
 /** Busy only while a read runs; absent otherwise rather than a claim of `false`. */
 const busy = computed(() => (props.loading ? true : undefined))
@@ -71,6 +79,9 @@ const groups = computed(() => (props.chain ? groupMembers(props.chain.members) :
 /**
  * The open work broken down by category, in the space's own state names where
  * a group has one, and how much of it the space would let someone take now.
+ * That figure is the read model's rule — unheld, unblocked, in any state work
+ * can start from, the backlog included — so it may exceed the to-do group, and
+ * the wording says why rather than reading as one more category.
  */
 const breakdown = computed(() => {
   const chain = props.chain
@@ -88,7 +99,7 @@ const breakdown = computed(() => {
     )
     .join(' · ')
   const line = t('workItem.chain.openParts', { open: chain.open, parts })
-  return chain.ready ? `${line} · ${t('workItem.chain.workable', { count: chain.ready })}` : line
+  return chain.ready ? `${line}; ${t('workItem.chain.workable', { count: chain.ready })}` : line
 })
 
 const headline = computed(() =>
@@ -156,6 +167,13 @@ function entryCount(origin: ChainOrigin): string {
         </VButton>
       </template>
     </SectionHeader>
+
+    <p
+      v-if="!readable"
+      class="chain-quiet"
+    >
+      {{ t('workItem.chain.primaryOnly') }}
+    </p>
 
     <SegmentedControl
       v-if="chain?.root.has_children"
@@ -311,14 +329,16 @@ function entryCount(origin: ChainOrigin): string {
   color: var(--color-text-tertiary);
 }
 
+/* The separator opens the entry it introduces rather than closing the one
+   before it, so a wrapped line starts with «·» and never ends on one. */
 .chain-origin-entry {
   display: inline-flex;
   gap: var(--space-1);
   align-items: baseline;
 
-  &:not(:last-child)::after {
+  & + &::before {
     content: '·';
-    padding-inline-start: var(--space-1);
+    padding-inline-end: var(--space-1);
     color: var(--color-text-tertiary);
   }
 }
