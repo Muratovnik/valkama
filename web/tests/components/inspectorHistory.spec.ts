@@ -111,7 +111,7 @@ describe('recorded history', () => {
     wrapper.unmount()
   })
 
-  it('renders unknown action and timestamp honestly and keeps details in a disclosure', () => {
+  it('renders unknown action and timestamp honestly and shows the recorded detail on the row', () => {
     const item = activityItem()
     item.events = [
       { action: 'future_action', at: 'unknown timestamp', author: 'A', detail: 'retained' },
@@ -121,7 +121,9 @@ describe('recorded history', () => {
     expect(wrapper.text()).toContain('System event: future_action')
     expect(wrapper.text()).toContain('Unknown date')
     expect(wrapper.text()).toContain('unknown timestamp')
-    expect(wrapper.get('details').text()).toContain('retained')
+    // The substance is the row's second line, not hidden behind a disclosure.
+    expect(wrapper.find('details').exists()).toBe(false)
+    expect(wrapper.get('li .entry-detail').text()).toBe('retained')
     expect(wrapper.get('li > .entry-line').text()).toContain('System event: future_action')
     wrapper.unmount()
   })

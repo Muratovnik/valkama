@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import HistoryFilterBar from '@/widgets/work-item-inspector/components/HistoryFilterBar.vue'
 import {
   groupHistory,
   matchesRecorded,
@@ -11,24 +12,20 @@ import type { ActivityEntry } from '@/widgets/work-item-inspector/utils/inspecto
 
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { actorName, actorSession } from '@/shared/lib/actor.ts'
-import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
 import VButton from '@/shared/ui/VButton.vue'
-import VTextInput from '@/shared/ui/VTextInput.vue'
 
 const props = defineProps<{
   item: WorkItem
 }>()
 
-const { t, te, d, locale } = useI18n()
+const { t, te, locale } = useI18n()
 const query = ref('')
-const category = ref('')
-const author = ref('')
+const selected = ref<Record<string, string>>({ category: '', author: '' })
 function reset() {
   query.value = ''
-  category.value = ''
-  author.value = ''
+  selected.value = { category: '', author: '' }
 }
 watch(() => props.item.work_item_id, reset)
 
@@ -36,62 +33,73 @@ const entries = computed(() => buildActivity(props.item))
 const emptyTitle = computed(() =>
   t(entries.value.length ? 'history.noMatches' : 'workItem.noActivity'),
 )
-const categories = computed(() => [
-  { value: '', label: t('history.all') },
-  { value: 'event', label: t('history.events') },
-  { value: 'ref', label: t('history.evidence') },
-])
-const authors = computed(() => [
-  { value: '', label: t('history.allActors') },
-  ...[...new Set(entries.value.map((entry) => entry.author).filter(Boolean))].map((value) => ({
-    value,
-    label: value,
-  })),
+const choices = computed(() => [
+  {
+    id: 'category',
+    label: t('history.category'),
+    options: [
+      { value: '', label: t('history.all') },
+      { value: 'event', label: t('history.events') },
+      { value: 'ref', label: t('history.evidence') },
+    ],
+  },
+  {
+    id: 'author',
+    label: t('history.actor'),
+    options: [
+      { value: '', label: t('history.allActors') },
+      ...[...new Set(entries.value.map((entry) => entry.author).filter(Boolean))].map((value) => ({
+        value,
+        label: value,
+      })),
+    ],
+  },
 ])
 function title(entry: ActivityEntry) {
   return te(entry.titleKey)
     ? t(entry.titleKey)
     : t('history.unknownEvent', { action: entry.action ?? entry.kind })
 }
-const groups = computed(() =>
-  groupHistory(
+const groups = computed(() => {
+  const { category, author } = selected.value
+  return groupHistory(
     entries.value.filter(
       (entry) =>
-        (!category.value || entry.kind === category.value) &&
-        (!author.value || entry.author === author.value) &&
+        (!category || entry.kind === category) &&
+        (!author || entry.author === author) &&
         matchesRecorded([entry, title(entry)], query.value),
     ),
     (entry) => entry.at,
-  ),
-)
+  )
+})
 function groupLabel(date: Date | null) {
   return date
     ? new Intl.DateTimeFormat(locale.value, { dateStyle: 'long' }).format(date)
     : t('history.unknownDate')
 }
+/** The group heading already says which day, so a row says only when in it. */
 function when(value: string): string {
   const date = new Date(value)
-  return Number.isNaN(date.valueOf()) ? value : d(date, 'activity')
+  return Number.isNaN(date.valueOf())
+    ? value
+    : new Intl.DateTimeFormat(locale.value, { timeStyle: 'short' }).format(date)
+}
+/** The reference value, unless the label already says it. */
+function referenceValue(entry: ActivityEntry) {
+  const value = entry.reference?.value ?? ''
+  return value && value !== entry.detail ? value : ''
 }
 </script>
 
 <template>
   <div class="activity">
-    <p class="entry-detail">{{ t('history.scope') }}</p>
-    <div class="history-filters">
-      <VTextInput
-        v-model="query"
-        :label="t('history.search')"
-      />
-      <ChoiceSelect
-        v-model="category"
-        :label="t('history.category')"
-        :options="categories"
-      />
-      <ChoiceSelect
-        v-model="author"
-        :label="t('history.actor')"
-        :options="authors"
+    <div class="activity-filters">
+      <p class="activity-scope">{{ t('history.scope') }}</p>
+      <HistoryFilterBar
+        v-model:query="query"
+        v-model:selected="selected"
+        :search-label="t('history.search')"
+        :choices="choices"
       />
     </div>
     <section
@@ -105,6 +113,9 @@ function when(value: string): string {
         >{{ groupLabel(group.date) }}</SectionHeading
       >
       <ol class="feed">
+        <!-- What happened, then what it was about, then who: the recorded
+             substance is the row's second line, where it used to hide inside a
+             "Recorded details" disclosure on every single row. -->
         <li
           v-for="entry in group.records"
           :key="entry.key"
@@ -115,24 +126,18 @@ function when(value: string): string {
             <span class="entry-title">{{ title(entry) }}</span>
             <span class="entry-at">{{ when(entry.at) }}</span>
           </div>
-          <details
-            v-if="entry.detail || entry.reference"
-            class="entry-context"
+          <p
+            v-if="entry.detail"
+            class="entry-detail"
           >
-            <summary>{{ t('history.detail') }}</summary>
-            <p
-              v-if="entry.detail"
-              class="entry-detail"
-            >
-              {{ entry.detail }}
-            </p>
-            <p
-              v-if="entry.reference"
-              class="entry-reference"
-            >
-              {{ entry.reference.value }}
-            </p>
-          </details>
+            {{ entry.detail }}
+          </p>
+          <p
+            v-if="referenceValue(entry)"
+            class="entry-reference"
+          >
+            {{ referenceValue(entry) }}
+          </p>
           <p
             v-if="entry.author"
             class="entry-author"
@@ -168,21 +173,20 @@ function when(value: string): string {
   gap: var(--space-section);
 }
 
-.history-filters {
+.activity-filters {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
   gap: var(--space-3);
+}
+
+.activity-scope {
+  margin: 0;
+  color: var(--color-text-muted);
+  font: var(--font-detail);
 }
 
 .history-group {
   display: grid;
   gap: var(--space-heading-content);
-}
-
-.entry-context {
-  color: var(--color-text-muted);
-  font: var(--font-detail);
-  overflow-wrap: anywhere;
 }
 
 .feed {
@@ -195,7 +199,7 @@ function when(value: string): string {
 
 .entry {
   display: grid;
-  gap: var(--space-label-value);
+  gap: var(--space-1);
   min-width: 0;
 }
 
@@ -221,7 +225,7 @@ function when(value: string): string {
 .entry-detail {
   margin: 0;
   color: var(--color-text-muted);
-  font: var(--font-line);
+  font: var(--font-note);
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }

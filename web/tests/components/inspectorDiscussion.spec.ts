@@ -216,7 +216,7 @@ describe('task description and discussion', () => {
     expect(outcome.get('.outcome-link').element.tagName).toBe('BUTTON')
   })
 
-  it('places backfilled reports by recorded time and labels missing historical metadata', () => {
+  it('places backfilled reports newest first and labels missing historical metadata', () => {
     const item: WorkItem = {
       ...record('Task', 1),
       comments: [
@@ -251,13 +251,14 @@ describe('task description and discussion', () => {
       global: editingPlugins(),
     })
     const entries = wrapper.findAll('.discussion-entry')
+    // 13:00Z, then 15:00+03:00 (12:00Z), then the entry with no recorded time.
     expect(entries.map((entry) => entry.attributes('id'))).toEqual([
-      'work-report-99',
-      'work-report-100',
       'work-report-1',
+      'work-report-100',
+      'work-report-99',
     ])
-    expect(entries[0].text()).toContain('Author not recorded')
-    expect(entries[0].text()).toContain('Unknown time')
+    expect(entries[2].text()).toContain('Author not recorded')
+    expect(entries[2].text()).toContain('Unknown time')
     expect(item.comments.map((entry) => entry.id)).toEqual([1, 100, 99])
   })
 

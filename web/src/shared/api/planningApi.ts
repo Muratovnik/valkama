@@ -17,6 +17,7 @@ import type { PlanningReadModel, WorkItem } from '@/shared/api/planningModel.ts'
 import { fetchPlanningWorkItem } from '@/shared/api/platformPlanningApi.ts'
 import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import { readJsonResponse } from '@/shared/api/readJsonResponse.ts'
+import { WEB_AUTHOR } from '@/shared/api/webAuthor.ts'
 
 /** The cutover has not run, so the Board domain is still the live one. */
 export class CutoverPendingError extends Error {
@@ -48,6 +49,36 @@ class PlanningRefusedError extends Error {
   }
 }
 
+/** What a refused write said, in the server's own words, and which guards refused it. */
+export interface PlanningRefusal {
+  code: string
+  /** The guards a workflow refusal names, in order: `[summary] …; [checklist] …`. */
+  guards: string[]
+  /** The server's reason, worded for whoever has to act on it. */
+  message: string
+  status: number
+}
+
+const GUARD_NAME = /\[([a-z][a-z0-9_-]{0,31})\]/gu
+
+/**
+ * The refusal a write ended in, or null for anything else.
+ *
+ * A guard refusal is an answer, not a crash, and its message is the part that
+ * says what to do next. Reading it through the generic failure path kept only
+ * the code, which is how "has no closing summary; record what was done" became
+ * "the request failed (workflow_guard)".
+ */
+export function planningRefusal(error: unknown): PlanningRefusal | null {
+  if (!(error instanceof PlanningRefusedError)) return null
+  return {
+    code: error.code,
+    message: error.message,
+    status: error.status,
+    guards: [...error.message.matchAll(GUARD_NAME)].map((match) => match[1]),
+  }
+}
+
 async function request(input: string, init?: RequestInit): Promise<unknown> {
   const { response, payload } = await readJsonResponse(input, init)
   if (response.ok) return payload
@@ -75,11 +106,12 @@ function query(parameters: Record<string, string | number | undefined>): string 
   return text ? `?${text}` : ''
 }
 
+/** Every write names the client's author unless the caller names another one. */
 async function write(path: string, body: Record<string, unknown>): Promise<unknown> {
   return request(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ author: WEB_AUTHOR, ...body }),
   })
 }
 
@@ -238,7 +270,7 @@ export async function commentWorkItem(input: {
   author?: string
   checklist_item_id?: string
 }): Promise<void> {
-  await write('/api/planning/work-item/comment', { author: 'user', ...input })
+  await write('/api/planning/work-item/comment', { ...input })
 }
 
 export async function updateWorkItemDescription(input: {
@@ -247,9 +279,7 @@ export async function updateWorkItemDescription(input: {
   id: string
   author?: string
 }): Promise<WorkItem> {
-  return validateWorkItemRecord(
-    await write('/api/planning/work-item/update', { author: 'user', ...input }),
-  )
+  return validateWorkItemRecord(await write('/api/planning/work-item/update', { ...input }))
 }
 
 export async function publishWorkItemReport(input: {
@@ -259,9 +289,7 @@ export async function publishWorkItemReport(input: {
   author?: string
   expected_revision?: number
 }): Promise<WorkItem> {
-  return validateWorkItemRecord(
-    await write('/api/planning/work-item/report', { author: 'user', ...input }),
-  )
+  return validateWorkItemRecord(await write('/api/planning/work-item/report', { ...input }))
 }
 
 export async function selectWorkItemSummary(input: {
@@ -270,7 +298,5 @@ export async function selectWorkItemSummary(input: {
   id: string
   author?: string
 }): Promise<WorkItem> {
-  return validateWorkItemRecord(
-    await write('/api/planning/work-item/summary/select', { author: 'user', ...input }),
-  )
+  return validateWorkItemRecord(await write('/api/planning/work-item/summary/select', { ...input }))
 }

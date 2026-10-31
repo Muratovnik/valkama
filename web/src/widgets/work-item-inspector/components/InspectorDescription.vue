@@ -2,11 +2,13 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { useDraftSource } from '@/widgets/work-item-inspector/utils/useDraftGuard.ts'
 import { useInspectorMutation } from '@/widgets/work-item-inspector/utils/useInspectorMutation.ts'
 
 import { updateWorkItemDescription } from '@/shared/api/planningApi.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
-import SectionHeading from '@/shared/ui/SectionHeading.vue'
+import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
+import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VTextInput from '@/shared/ui/VTextInput.vue'
 
@@ -32,10 +34,12 @@ watch(
     seeded = value
   },
 )
-const { pending, errorKey, submit } = useInspectorMutation(
+const { pending, errorKey, errorReason, submit } = useInspectorMutation(
   () => props.item.work_item_id,
   () => emit('changed'),
 )
+// An open editor whose text differs from what is saved is work a close would lose.
+useDraftSource('description', () => editing.value && draft.value !== props.item.description)
 const editLabel = computed(() =>
   t(props.item.description ? 'workItem.editDescription' : 'workItem.addDescription'),
 )
@@ -63,20 +67,22 @@ function cancel() {
 
 <template>
   <section class="description-section">
-    <div class="description-heading">
-      <SectionHeading
-        as="h3"
-        level="panel"
-        >{{ t('workItem.description') }}</SectionHeading
-      >
-      <VButton
+    <SectionHeader
+      class="description-heading"
+      :title="t('workItem.description')"
+    >
+      <template
         v-if="writable && !editing"
-        variant="ghost"
-        @click="editing = true"
+        #actions
       >
-        {{ editLabel }}
-      </VButton>
-    </div>
+        <VButton
+          variant="ghost"
+          @click="editing = true"
+        >
+          {{ editLabel }}
+        </VButton>
+      </template>
+    </SectionHeader>
     <form
       v-if="editing && writable"
       class="description-form"
@@ -95,6 +101,11 @@ function cancel() {
         role="alert"
       >
         {{ t(errorKey) }}
+        <span
+          v-if="errorReason"
+          class="description-reason"
+          >{{ errorReason }}</span
+        >
       </p>
       <div class="description-actions">
         <VButton
@@ -116,12 +127,17 @@ function cancel() {
         >
       </div>
     </form>
+    <CollapsibleText
+      v-else-if="item.description"
+      class="description-copy"
+      :text="item.description"
+      :lines="12"
+    />
     <p
       v-else
-      class="description-copy"
-      :class="{ empty: !item.description }"
+      class="description-copy empty"
     >
-      {{ item.description || t('workItem.noDescription') }}
+      {{ t('workItem.noDescription') }}
     </p>
   </section>
 </template>
@@ -133,16 +149,11 @@ function cancel() {
   gap: var(--space-heading-content);
 }
 
-.description-heading,
 .description-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
   align-items: center;
-}
-
-.description-heading {
-  justify-content: space-between;
 }
 
 .description-copy {
@@ -160,5 +171,11 @@ function cancel() {
   margin: 0;
   color: var(--color-danger);
   font: var(--font-detail);
+}
+
+.description-reason {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--color-text-muted);
 }
 </style>

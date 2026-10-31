@@ -15,6 +15,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import HistoryFilterBar from '@/widgets/work-item-inspector/components/HistoryFilterBar.vue'
 import {
   groupHistory,
   matchesRecorded,
@@ -22,12 +23,10 @@ import {
 
 import type { Execution } from '@/shared/api/executionModel.ts'
 import { actorName } from '@/shared/lib/actor.ts'
-import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import VButton from '@/shared/ui/VButton.vue'
-import VTextInput from '@/shared/ui/VTextInput.vue'
 
 const props = defineProps<{
   busy: boolean
@@ -46,38 +45,47 @@ const emit = defineEmits<{
 
 const { t, d, locale } = useI18n()
 const query = ref('')
-const status = ref('')
-const client = ref('')
+const selected = ref<Record<string, string>>({ status: '', client: '' })
 function reset() {
   query.value = ''
-  status.value = ''
-  client.value = ''
+  selected.value = { status: '', client: '' }
 }
 watch(() => props.identity ?? props.executions[0]?.work_item_id, reset)
-const statuses = computed(() => [
-  { value: '', label: t('history.allStatuses') },
-  ...[...new Set(props.executions.map((attempt) => attempt.status))].map((value) => ({
-    value,
-    label: t(`execution.status.${value}`),
-  })),
+const choices = computed(() => [
+  {
+    id: 'status',
+    label: t('history.status'),
+    options: [
+      { value: '', label: t('history.allStatuses') },
+      ...[...new Set(props.executions.map((attempt) => attempt.status))].map((value) => ({
+        value,
+        label: t(`execution.status.${value}`),
+      })),
+    ],
+  },
+  {
+    id: 'client',
+    label: t('history.client'),
+    options: [
+      { value: '', label: t('history.allClients') },
+      ...[...new Set(props.executions.map((attempt) => attempt.client_family).filter(Boolean))].map(
+        (value) => ({ value, label: value }),
+      ),
+    ],
+  },
 ])
-const clients = computed(() => [
-  { value: '', label: t('history.allClients') },
-  ...[...new Set(props.executions.map((attempt) => attempt.client_family).filter(Boolean))].map(
-    (value) => ({ value, label: value }),
-  ),
-])
-const groups = computed(() =>
-  groupHistory(
+const groups = computed(() => {
+  const { status, client } = selected.value
+  return groupHistory(
     props.executions.filter(
       (attempt) =>
-        (!status.value || attempt.status === status.value) &&
-        (!client.value || attempt.client_family === client.value) &&
+        (!status || attempt.status === status) &&
+        (!client || attempt.client_family === client) &&
         matchesRecorded(attempt, query.value),
     ),
     (attempt) => attempt.started_at,
-  ),
-)
+  )
+})
 function groupLabel(date: Date | null) {
   return date
     ? new Intl.DateTimeFormat(locale.value, { dateStyle: 'long' }).format(date)
@@ -175,22 +183,12 @@ function evidence(attempt: Execution): string {
     </p>
 
     <template v-else>
-      <div class="history-filters">
-        <VTextInput
-          v-model="query"
-          :label="t('history.search')"
-        />
-        <ChoiceSelect
-          v-model="status"
-          :label="t('history.status')"
-          :options="statuses"
-        />
-        <ChoiceSelect
-          v-model="client"
-          :label="t('history.client')"
-          :options="clients"
-        />
-      </div>
+      <HistoryFilterBar
+        v-model:query="query"
+        v-model:selected="selected"
+        :search-label="t('history.search')"
+        :choices="choices"
+      />
       <DataEmptyState
         v-if="!groups.length"
         :title="t('history.noMatches')"
@@ -326,12 +324,6 @@ function evidence(attempt: Execution): string {
 .history-group {
   display: grid;
   gap: var(--space-heading-content);
-}
-
-.history-filters {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
-  gap: var(--space-3);
 }
 
 .attempt-context {

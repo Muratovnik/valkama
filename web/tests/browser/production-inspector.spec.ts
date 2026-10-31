@@ -60,7 +60,7 @@ test('Russian relations keep one hierarchy, aligned controls, and narrow content
   await expect(drawer.getByRole('heading', { name: 'Внешние ресурсы', exact: true })).toHaveCount(0)
   const splitter = drawer.getByRole('separator')
   await splitter.press('End')
-  const add = drawer.getByRole('button', { name: 'Добавить связанную задачу', exact: true })
+  const add = drawer.getByRole('button', { name: 'Добавить связь', exact: true })
   await add.click()
   const picker = page.getByRole('dialog', { name: 'Связанная задача', exact: true })
   await expect(picker).toBeVisible()

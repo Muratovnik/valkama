@@ -15,7 +15,11 @@ import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 
 import { workItem } from '../browser/planningFixtures.ts'
 
-vi.mock('@/shared/api/planningApi.ts', () => ({ createWorkItem: vi.fn(), linkWorkItems: vi.fn() }))
+vi.mock('@/shared/api/planningApi.ts', async (load) => ({
+  ...(await load<typeof import('@/shared/api/planningApi.ts')>()),
+  createWorkItem: vi.fn(),
+  linkWorkItems: vi.fn(),
+}))
 vi.mock('@/shared/api/planningSearchApi.ts', () => ({ searchPlanningWorkItems: vi.fn() }))
 const data = () =>
   validateWorkItemRecord({ ...structuredClone(workItem), summary_comment_id: null })
@@ -186,7 +190,7 @@ describe('related task picker', () => {
 })
 
 describe('grouped related tasks', () => {
-  it('groups direction, inherits group plus, preserves open and removes incoming correctly', async () => {
+  it('groups direction, adds from one section action, preserves open and removes incoming correctly', async () => {
     const item = data()
     item.links.push({ ...item.links[0], direction: 'outgoing' })
     const wrapper = mount(InspectorRelations, {
@@ -194,11 +198,16 @@ describe('grouped related tasks', () => {
       global: { plugins: [i18n()], stubs: { RelatedWorkPicker: true } },
     })
     expect(wrapper.findAll('.relation-group')).toHaveLength(2)
-    await wrapper.findAll('.relation-group')[1].get('header button').trigger('click')
+    // One add action for the section, not a floating plus per group; the
+    // picker's own kind and direction choices cover what the group plus preset.
+    expect(wrapper.findAll('.relation-group button').map((button) => button.text())).not.toContain(
+      '+',
+    )
+    await wrapper.get('.section-header-actions button').trigger('click')
     expect(wrapper.getComponent(RelatedWorkPicker).props()).toMatchObject({
       open: true,
-      initialKind: 'blocks',
-      initialDirection: 'incoming',
+      initialKind: 'relates-to',
+      initialDirection: 'outgoing',
     })
     await wrapper.findAll('.link-open')[0].trigger('click')
     expect(wrapper.emitted('open')).toEqual([[item.links[0].reference]])
@@ -218,6 +227,30 @@ describe('grouped related tasks', () => {
     expect(wrapper.emitted('changed')).toHaveLength(1)
     await wrapper.setProps({ writable: false })
     expect(wrapper.findAll('.link-remove')).toHaveLength(0)
+    wrapper.unmount()
+  })
+
+  it('shows a symmetric kind as one group, whichever item recorded the link', () => {
+    const item = data()
+    const related = { ...item.links[0], kind: 'relates-to' as const }
+    item.links = [
+      { ...related, direction: 'outgoing' as const },
+      {
+        ...related,
+        direction: 'incoming' as const,
+        work_item_id: item.work_item_id.replace(/.$/u, '9'),
+      },
+    ]
+    const wrapper = mount(InspectorRelations, {
+      props: { item, writable: true },
+      global: { plugins: [i18n()], stubs: { RelatedWorkPicker: true } },
+    })
+    const groups = wrapper.findAll('.relation-group')
+    expect(groups).toHaveLength(1)
+    expect(groups[0].get('.group-heading').text()).toBe('Relates to 2')
+    expect(groups[0].findAll('.link-row')).toHaveLength(2)
+    // The count stands apart from the words it counts, in the accessible text too.
+    expect(wrapper.get('h3').text()).toBe('Related work 2')
     wrapper.unmount()
   })
 })

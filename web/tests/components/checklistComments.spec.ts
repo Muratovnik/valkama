@@ -62,10 +62,9 @@ describe('checklist-linked comments', () => {
     const scroll = vi.fn()
     Object.defineProperty(form.element, 'scrollIntoView', { value: scroll, configurable: true })
     await wrapper.get('textarea[aria-label="Comment"]').setValue('Existing plain draft')
-    const action = present(
-      wrapper.findAll('button').find((button) => button.text() === 'Discuss step'),
-      'step action',
-    )
+    // The action names its step, so a row of identical icons stays distinguishable.
+    const action = wrapper.get('button[aria-label="Discuss step “Second step”"]')
+    expect(action.attributes('title')).toBe('Discuss step')
     expect(action.element.closest('[role="checkbox"]')).toBeNull()
     expect(action.attributes('type')).toBe('button')
     await action.trigger('click')

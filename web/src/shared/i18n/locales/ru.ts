@@ -91,6 +91,8 @@ export const ru = {
     actions: {
       retry: 'Повторить',
       cancel: 'Отмена',
+      expand: 'Показать полностью',
+      collapse: 'Свернуть',
       unavailable: 'Действие недоступно в текущей рабочей области.',
       // Named by the server, not by any call site here: the Kernel builds
       // `platform.actions.<permission_id>` from the adapter's declared
@@ -668,7 +670,7 @@ export const ru = {
     unknownTime: 'Время неизвестно',
     unknownAuthor: 'Автор не указан',
     related: {
-      add: 'Добавить связанную задачу',
+      add: 'Добавить связь',
       pickerTitle: 'Связанная задача',
       relation: 'Тип связи',
       existing: 'Существующая задача',
@@ -743,6 +745,50 @@ export const ru = {
     previousHolder: 'Ранее отвечал: {holder}',
     claim: 'Взять',
     release: 'Освободить',
+    takeOver: 'Забрать себе',
+    takeOverQuestion:
+      'Работу держит {holder}. Забрать её себе? Передача будет записана в историю работы.',
+    takeOverConfirm: 'Забрать',
+    discard: {
+      question: 'Несохранённые изменения будут потеряны: {drafts}.',
+      confirm: 'Не сохранять',
+      keep: 'Вернуться к правке',
+      description: 'описание',
+      comment: 'комментарий',
+      report: 'отчёт о работе',
+    },
+    refusal: {
+      transition: 'Перевод в «{state}» не выполнен',
+      claim: 'Работу взять не удалось',
+      release: 'Освободить работу не удалось',
+      takeover: 'Забрать работу не удалось',
+      tick: 'Шаг не отмечен',
+      attach: 'Ссылка не прикреплена',
+      generic: 'Сервис отклонил действие',
+      conflict: 'Работу изменили, пока карточка была открыта. Карточка обновлена — повторите.',
+      reason: 'Ответ сервиса: {reason}',
+      dismiss: 'Скрыть',
+      guard: {
+        summary: 'Нет итога работы: опубликуйте отчёт и сделайте его итогом.',
+        checklist: 'В чек-листе есть незакрытые шаги.',
+        executor: 'У работы нет исполнителя.',
+        blocker: 'Для блокировки нужна блокирующая задача или причина.',
+        transition: 'Процесс не допускает такой переход.',
+      },
+      action: {
+        summary: 'Написать итог',
+        checklist: 'К чек-листу',
+        executor: 'Взять работу',
+        blocker: 'Открыть связи',
+      },
+      force: {
+        transition: 'Перевести принудительно',
+        transitionQuestion:
+          'Перевести в «{state}» вопреки правилам процесса? Переопределение будет записано в историю работы.',
+        tick: 'Отметить всё равно',
+        tickQuestion: 'Шаг держит {holder}. Отметить его выполненным от вашего имени?',
+      },
+    },
     noClaim: 'Никто не взял',
     moveTo: 'Перевести в',
     updated: 'Обновлено',

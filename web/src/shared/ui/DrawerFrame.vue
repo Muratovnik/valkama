@@ -1,8 +1,23 @@
 <script setup lang="ts">
+import { ref } from 'vue'
+
 import VIcon from '@/shared/ui/VIcon.vue'
 
 defineProps<{ closeLabel: string; title: string; subtitle?: string }>()
 const emit = defineEmits<{ close: [] }>()
+const body = ref<HTMLElement | null>(null)
+
+/**
+ * Back to the top of the body, for a host that swaps what the body shows. One
+ * scroll position shared by every tab opened the next tab wherever the last one
+ * had been read to — the Relations heading above the fold, the newest event
+ * below it.
+ */
+function scrollToTop() {
+  body.value?.scrollTo({ top: 0 })
+}
+
+defineExpose({ scrollToTop })
 </script>
 
 <template>
@@ -39,7 +54,12 @@ const emit = defineEmits<{ close: [] }>()
         <slot name="tabs" />
       </div>
     </header>
-    <div class="drawer-frame-body"><slot /></div>
+    <div
+      ref="body"
+      class="drawer-frame-body"
+    >
+      <slot />
+    </div>
   </div>
 </template>
 
@@ -114,9 +134,14 @@ const emit = defineEmits<{ close: [] }>()
   grid-area: tabs;
 }
 
+/* The scrollbar is paid for out of the end inset, so the body's content ends
+   where the head's does. Drawn inside a full inset it pushed every row 10px
+   short of the close button above it, and the column read as shifted. */
 .drawer-frame-body {
   min-height: 0;
   padding: var(--space-6);
+  padding-inline-end: calc(var(--space-6) - var(--size-scrollbar));
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 </style>

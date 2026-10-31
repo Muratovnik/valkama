@@ -7,7 +7,9 @@ import { useInputRequests } from '@/features/input-requests/composables/useInput
 
 import type { InputAnswers, InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
-import SectionHeading from '@/shared/ui/SectionHeading.vue'
+import SectionHeader from '@/shared/ui/SectionHeader.vue'
+import VButton from '@/shared/ui/VButton.vue'
+import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{ target: PlanningTarget }>()
 const emit = defineEmits<{ changed: [entry: InputRequestEntry] }>()
@@ -27,11 +29,26 @@ function updated(entry: InputRequestEntry) {
     class="item-input-requests"
     :aria-label="t('requests.itemTitle')"
   >
-    <SectionHeading
-      as="h3"
-      level="panel"
-      >{{ t('requests.itemTitle') }}</SectionHeading
-    >
+    <!-- The section already has a heading row, so the refresh lives in it
+         instead of standing alone above the message it would refresh. -->
+    <SectionHeader :title="t('requests.itemTitle')">
+      <template #actions>
+        <VButton
+          variant="ghost"
+          size="inline"
+          :disabled="loading"
+          :title="t('requests.refreshItem')"
+          :aria-label="t('requests.refreshItem')"
+          icon
+          @click="refresh"
+        >
+          <VIcon
+            name="refresh"
+            :size="16"
+          />
+        </VButton>
+      </template>
+    </SectionHeader>
     <RequestList
       :entries="entries"
       :result="result"
@@ -39,6 +56,7 @@ function updated(entry: InputRequestEntry) {
       :failed="failed"
       :partial="partial"
       :drafts="drafts"
+      :show-refresh="false"
       item
       @refresh="refresh"
       @updated="updated"

@@ -4,12 +4,13 @@ import { useI18n } from 'vue-i18n'
 
 import RelatedWorkPicker from '@/widgets/work-item-inspector/components/RelatedWorkPicker.vue'
 
-import { linkWorkItems } from '@/shared/api/planningApi.ts'
+import { linkWorkItems, planningRefusal } from '@/shared/api/planningApi.ts'
 import { LINK_KINDS } from '@/shared/api/planningModel.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { actorName } from '@/shared/lib/actor.ts'
-import SectionHeading from '@/shared/ui/SectionHeading.vue'
+import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import VButton from '@/shared/ui/VButton.vue'
+import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{ item: WorkItem; writable: boolean }>()
 const emit = defineEmits<{
@@ -19,28 +20,38 @@ const emit = defineEmits<{
 }>()
 const { t, d } = useI18n()
 type Link = WorkItem['links'][number]
+
+/**
+ * Kinds whose two directions mean the same thing. A link is stored once, from
+ * the item its author was looking at, so "relates to" arrived as two groups
+ * under one heading each — the same words twice, the rows split by an accident
+ * of who wrote them.
+ */
+const SYMMETRIC: ReadonlySet<Link['kind']> = new Set(['relates-to'])
+
 const pickerOpen = ref(false)
-const initialKind = ref<Link['kind']>('relates-to')
-const initialDirection = ref<Link['direction']>('outgoing')
 const busy = ref(false)
 const error = ref('')
-const grouped = computed(() =>
-  LINK_KINDS.flatMap((kind) =>
-    (['outgoing', 'incoming'] as const)
-      .map((direction) => ({
-        kind,
-        direction,
-        links: props.item.links.filter(
-          (link) => link.kind === kind && link.direction === direction,
-        ),
+const groups = computed(() =>
+  LINK_KINDS.flatMap((kind) => {
+    const directions = SYMMETRIC.has(kind)
+      ? [{ key: kind, label: t(`workItem.relation.${kind}.outgoing`), match: () => true }]
+      : (['outgoing', 'incoming'] as const).map((direction) => ({
+          key: `${kind}-${direction}`,
+          label: t(`workItem.relation.${kind}.${direction}`),
+          match: (link: Link) => link.direction === direction,
+        }))
+    return directions
+      .map((group) => ({
+        key: group.key,
+        label: group.label,
+        links: props.item.links.filter((link) => link.kind === kind && group.match(link)),
       }))
-      .filter((group) => group.links.length),
-  ),
+      .filter((group) => group.links.length)
+  }),
 )
-function add(kind: Link['kind'] = 'relates-to', direction: Link['direction'] = 'outgoing') {
+function add() {
   if (!props.writable || busy.value) return
-  initialKind.value = kind
-  initialDirection.value = direction
   pickerOpen.value = true
 }
 async function remove(link: Link) {
@@ -56,7 +67,9 @@ async function remove(link: Link) {
     })
     emit('changed')
   } catch (error_) {
-    error.value = error_ instanceof Error ? error_.message : String(error_)
+    error.value =
+      planningRefusal(error_)?.message ??
+      (error_ instanceof Error ? error_.message : String(error_))
   } finally {
     busy.value = false
   }
@@ -70,23 +83,27 @@ function when(value: string): string {
 <template>
   <div class="relations">
     <section class="relation-section">
-      <header class="relations-heading">
-        <SectionHeading
-          as="h3"
-          level="panel"
-          >{{ t('workItem.links') }}
-          <span class="relation-count">{{ item.links.length }}</span></SectionHeading
-        >
-        <VButton
+      <SectionHeader
+        :title="t('workItem.links')"
+        :count="item.links.length || ''"
+      >
+        <template
           v-if="writable"
-          variant="ghost"
-          :disabled="busy"
-          :title="t('workItem.related.add')"
-          :aria-label="t('workItem.related.add')"
-          @click="add()"
-          >+</VButton
+          #actions
         >
-      </header>
+          <VButton
+            variant="ghost"
+            :disabled="busy"
+            @click="add"
+          >
+            <VIcon
+              name="plus"
+              :size="16"
+            />
+            {{ t('workItem.related.add') }}
+          </VButton>
+        </template>
+      </SectionHeader>
       <p
         v-if="error"
         class="relation-error"
@@ -95,31 +112,18 @@ function when(value: string): string {
         {{ error }}
       </p>
       <section
-        v-for="group in grouped"
-        :key="group.kind + group.direction"
+        v-for="group in groups"
+        :key="group.key"
         class="relation-group"
       >
-        <header class="relations-heading">
-          <h4 class="group-heading">
-            {{ t(`workItem.relation.${group.kind}.${group.direction}`) }}
-            <span class="relation-count">{{ group.links.length }}</span>
-          </h4>
-          <VButton
-            v-if="writable"
-            variant="ghost"
-            :disabled="busy"
-            :title="t('workItem.related.add')"
-            :aria-label="`${t('workItem.related.add')}: ${t(
-              `workItem.relation.${group.kind}.${group.direction}`,
-            )}`"
-            @click="add(group.kind, group.direction)"
-            >+</VButton
-          >
-        </header>
+        <h4 class="group-heading">
+          {{ group.label }}
+          <span class="group-count">{{ group.links.length }}</span>
+        </h4>
         <ul class="link-list">
           <li
             v-for="link in group.links"
-            :key="link.work_item_id"
+            :key="`${link.direction}-${link.work_item_id}`"
             class="link-row"
           >
             <button
@@ -127,35 +131,41 @@ function when(value: string): string {
               type="button"
               @click="emit('open', link.reference)"
             >
-              <span class="link-reference">{{ link.reference }}</span
-              ><span class="link-title">{{ link.title }}</span>
+              <span class="link-reference">{{ link.reference }}</span>
+              <span class="link-title">{{ link.title }}</span>
             </button>
-            <button
+            <VButton
               v-if="writable"
               class="link-remove"
-              type="button"
+              variant="ghost"
+              size="inline"
               :disabled="busy"
+              :title="t('workItem.unlink')"
               :aria-label="t('workItem.related.remove', { reference: link.reference })"
+              icon
               @click="remove(link)"
             >
-              {{ t('workItem.unlink') }}
-            </button>
+              <VIcon
+                name="close"
+                :size="16"
+              />
+            </VButton>
           </li>
         </ul>
       </section>
       <p
-        v-if="!grouped.length"
+        v-if="!groups.length"
         class="quiet"
       >
         {{ t('workItem.noLinks') }}
       </p>
       <RelatedWorkPicker
         :key="item.work_item_id"
+        initial-kind="relates-to"
+        initial-direction="outgoing"
         :item="item"
         :writable="writable"
         :open="pickerOpen"
-        :initial-kind="initialKind"
-        :initial-direction="initialDirection"
         @close="pickerOpen = false"
         @changed="emit('changed')"
         @open="emit('open', $event)"
@@ -163,11 +173,10 @@ function when(value: string): string {
     </section>
 
     <section class="relation-section">
-      <SectionHeading
-        as="h3"
-        level="panel"
-        >{{ t('workItem.refs') }}</SectionHeading
-      >
+      <SectionHeader
+        :title="t('workItem.refs')"
+        :count="item.refs.length || ''"
+      />
       <p class="quiet">{{ t('workItem.refsIntro') }}</p>
       <ul
         v-if="item.refs.length"
@@ -225,27 +234,24 @@ function when(value: string): string {
   font: var(--font-detail);
 }
 
-.relations-heading {
-  display: flex;
-  gap: var(--space-2);
-  justify-content: space-between;
-  align-items: center;
-}
-
-.relation-count {
-  color: var(--color-text-muted);
-  font: var(--font-detail);
-}
-
+/* A group is a caption over its rows, and the rows hang directly under it:
+   the caption and its count are one line of the same quiet type. */
 .relation-group {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-1);
 }
 
 .group-heading {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
   margin: 0;
   color: var(--color-text-tertiary);
-  font: var(--font-control);
+  font: var(--font-group-heading);
+}
+
+.group-count {
+  font-variant-numeric: tabular-nums;
 }
 
 .relation-error {
@@ -256,62 +262,51 @@ function when(value: string): string {
 
 .link-list {
   display: grid;
-  gap: var(--space-2);
   padding: 0;
   margin: 0;
   list-style: none;
 }
 
+/* The row and its one action in two columns, so every remove stands at the
+   same edge instead of wherever the title happened to end. */
 .link-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-2);
-  align-items: baseline;
+  align-items: start;
 }
 
+/* The reference column holds an ordinary reference at full width, so titles
+   start on one line down the list; a longer key widens only its own row. */
 .link-open {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(8ch, max-content) minmax(0, 1fr);
   gap: var(--space-2);
   align-items: baseline;
   min-width: 0;
-  min-height: var(--size-control-target);
-  padding: 0;
+  padding: var(--space-1) 0;
   border: 0;
+  color: inherit;
   text-align: start;
   background: none;
   cursor: pointer;
 }
 
 .link-reference {
-  flex: 0 0 auto;
   color: var(--color-text-muted);
   font: var(--font-line);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .link-title {
   color: var(--color-text);
-  font: var(--font-editor);
+  font: var(--font-note);
   overflow-wrap: anywhere;
-}
 
-.link-remove {
-  min-height: var(--size-control-target);
-  padding: 0 var(--space-1);
-  border: 0;
-  color: var(--color-text-tertiary);
-  font: var(--font-detail);
-  background: none;
-  cursor: pointer;
-
-  &:hover,
-  &:focus-visible {
-    color: var(--color-danger);
+  .link-open:is(:hover, :focus-visible) & {
+    text-decoration: underline;
   }
-}
-
-.link-open:is(:hover, :focus-visible) .link-title {
-  text-decoration: underline;
 }
 
 .ref-list {

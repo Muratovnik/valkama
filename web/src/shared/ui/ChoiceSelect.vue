@@ -43,7 +43,12 @@ const query = ref('')
 const searchInput = ref<HTMLInputElement | null>(null)
 const codec = computed(() => choiceValueCodec(props.options))
 const selected = computed(() => props.options.find((option) => option.value === props.modelValue))
-const internalValue = computed(() => encodeChoiceValue(codec.value, props.modelValue) ?? undefined)
+// Null rather than undefined when no option is chosen. Reka decides once, at
+// mount, whether it follows the model or keeps its own: mounted on undefined it
+// keeps its own for life, so a parent that answered a choice by staying unset
+// (a state move the server refused) left the item selected inside the list, and
+// choosing it again changed nothing and sent nothing.
+const internalValue = computed(() => encodeChoiceValue(codec.value, props.modelValue) ?? null)
 const filtered = computed(() => {
   const needle = query.value.trim().toLocaleLowerCase()
   if (!needle) return [...props.options]

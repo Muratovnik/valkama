@@ -142,10 +142,6 @@ const steps = computed(() => ({
   color: var(--color-text-tertiary);
 }
 
-.tile-mark {
-  margin-inline-start: auto;
-}
-
 .tile-title {
   color: var(--color-text);
   font: var(--font-row-title);

@@ -9,7 +9,9 @@
  *
  * The head carries the two writes that change what the item *is* — who holds it
  * and what state it is in — because both are answered by looking at the title
- * bar, and both refuse rather than force: a guard that says no says which guard.
+ * bar. Both refuse rather than force: a refusal shows the server's reason in the
+ * head, beside the action that would satisfy it, and overriding is a second,
+ * explicit answer rather than a default.
  */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -19,17 +21,14 @@ import InspectorExecution from '@/widgets/work-item-inspector/components/Inspect
 import InspectorMemory from '@/widgets/work-item-inspector/components/InspectorMemory.vue'
 import InspectorOverview from '@/widgets/work-item-inspector/components/InspectorOverview.vue'
 import InspectorRelations from '@/widgets/work-item-inspector/components/InspectorRelations.vue'
+import InspectorWriteActions from '@/widgets/work-item-inspector/components/InspectorWriteActions.vue'
+import { provideDraftGuard } from '@/widgets/work-item-inspector/utils/useDraftGuard.ts'
+import { useInspectorWrites } from '@/widgets/work-item-inspector/utils/useInspectorWrites.ts'
 import { useWorkItemExecutions } from '@/widgets/work-item-inspector/utils/useWorkItemExecutions.ts'
 import { useWorkItemResource } from '@/widgets/work-item-inspector/utils/useWorkItemResource.ts'
 
 import LaunchDialog from '@/features/work-item-launch/LaunchDialog.vue'
 
-import {
-  attachWorkItemRef,
-  claimWorkItem,
-  tickChecklistStep,
-  transitionWorkItem,
-} from '@/shared/api/planningApi.ts'
 import type { PlanningWorkflow } from '@/shared/api/planningModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { planningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
@@ -40,7 +39,7 @@ import { INSPECTOR_DRAWER_STORAGE_KEY } from '@/shared/lib/shellLayout.ts'
 import type { LaunchPacket } from '@/shared/types/launch.ts'
 import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
-import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
+import ConfirmStrip from '@/shared/ui/ConfirmStrip.vue'
 import DrawerFrame from '@/shared/ui/DrawerFrame.vue'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 import ResizableInspector from '@/shared/ui/ResizableInspector.vue'
@@ -72,9 +71,15 @@ const { t } = useI18n()
 
 type Section = 'activity' | 'execution' | 'memory' | 'overview' | 'relations'
 
-const error = ref('')
 const busy = ref(false)
 const section = ref<Section>('overview')
+const frame = ref<InstanceType<typeof DrawerFrame> | null>(null)
+const overview = ref<InstanceType<typeof InspectorOverview> | null>(null)
+const { unsaved } = provideDraftGuard()
+
+/** Whether the head is asking before a draft is lost. */
+const asking = ref<'discard' | null>(null)
+let departure: (() => void) | null = null
 
 function failureText(failure: TypedFailure, fallbackKey?: string): string {
   const message = failureMessage(failure)
@@ -99,9 +104,36 @@ const {
 )
 
 async function load() {
-  error.value = ''
+  writeError.value = ''
   await loadResource()
 }
+
+async function reloaded() {
+  await load()
+  emit('changed')
+}
+
+const {
+  attachMemory,
+  claim,
+  dismiss: dismissNotice,
+  error: writeError,
+  force,
+  moveTo,
+  notice,
+  release,
+  takeOver,
+  tick,
+} = useInspectorWrites({
+  busy,
+  item,
+  changed: reloaded,
+  failureText: (error) => failureText(typedFailure(error, 'mutation_failed')),
+  load,
+  reference: () => props.reference,
+  stateName: (key) => props.workflow?.states.find((entry) => entry.key === key)?.name ?? key,
+  writable: () => props.writable,
+})
 
 const {
   capabilities,
@@ -114,14 +146,7 @@ const {
   openLaunch,
   start: startLaunch,
   stop: stopExecution,
-} = useWorkItemExecutions(
-  () => props.reference,
-  busy,
-  async () => {
-    await load()
-    emit('changed')
-  },
-)
+} = useWorkItemExecutions(() => props.reference, busy, reloaded)
 
 /** The refusal is worded here, where the catalog is, not inside the composable. */
 function submitLaunch(packet: LaunchPacket) {
@@ -146,25 +171,9 @@ watch(
   { immediate: true },
 )
 
-/**
- * One place where every write lands, so a refusal is reported the same way
- * whichever section made it and the record is always re-read afterwards. A
- * guard refusal is an answer, not a crash: it names the guard that refused.
- */
-async function write(operation: () => Promise<unknown>) {
-  if (!props.writable || busy.value) return
-  busy.value = true
-  error.value = ''
-  try {
-    await operation()
-    await load()
-    emit('changed')
-  } catch (error_) {
-    error.value = failureText(typedFailure(error_, 'mutation_failed'))
-  } finally {
-    busy.value = false
-  }
-}
+// Every tab starts at its own top. The body is one scroller, so a tab opened
+// after reading far down another used to open at that same depth.
+watch(section, () => frame.value?.scrollToTop())
 
 const sections = computed<ChoiceOption[]>(() => [
   { value: 'overview' as const, label: t('workItem.overview') },
@@ -175,21 +184,6 @@ const sections = computed<ChoiceOption[]>(() => [
   { value: 'relations' as const, label: t('workItem.relations') },
   { value: 'activity' as const, label: t('workItem.activity') },
 ])
-
-/** The states this item may move to, which is the workflow's answer, not a list. */
-const nextStates = computed<ChoiceOption[]>(() => {
-  const record = item.value
-  const workflow = props.workflow
-  if (!record || !workflow) return []
-  const allowed = new Set(
-    workflow.transitions
-      .filter((transition) => transition.from === record.state.state_id)
-      .map((transition) => transition.to),
-  )
-  return workflow.states
-    .filter((state) => allowed.has(state.state_id))
-    .map((state) => ({ value: state.key, label: state.name }))
-})
 
 const title = computed(() => item.value?.title || props.reference)
 const target = computed<PlanningTarget | undefined>(() => {
@@ -210,12 +204,7 @@ const holderLabel = computed(() =>
   }),
 )
 
-const stateChoice = computed({
-  get: () => '',
-  set: (value: string) => {
-    if (value) moveTo(value)
-  },
-})
+const headSlot = computed(() => Boolean(item.value && props.writable) || asking.value === 'discard')
 
 const shownSection = computed({
   get: () => section.value,
@@ -224,43 +213,54 @@ const shownSection = computed({
   },
 })
 
-function claim() {
-  void write(() => claimWorkItem({ id: props.reference }))
-}
-
-function release() {
-  void write(() => claimWorkItem({ id: props.reference, release: true }))
-}
-
-function moveTo(stateKey: string) {
-  if (!stateKey) return
-  void write(() => transitionWorkItem({ id: props.reference, state: stateKey }))
-}
-
-function tick(itemId: string, done: boolean) {
-  void write(() => tickChecklistStep({ id: props.reference, item_id: itemId, done }))
+/** The next step a guard asks for, taken where the inspector can take it. */
+function followGuard(guard: string) {
+  if (guard === 'executor') {
+    claim()
+    return
+  }
+  dismissNotice()
+  if (guard === 'blocker') {
+    section.value = 'relations'
+    return
+  }
+  section.value = 'overview'
+  if (guard === 'summary') void overview.value?.startOutcomeReport()
+  else if (guard === 'checklist') overview.value?.revealChecklist()
 }
 
 /**
- * A pointer, not a copy. Valkama records that this item names the document; the
- * provider is not asked to store anything, which is why a read-only knowledge
- * source can still be attached to a work item.
+ * Leave this item — close it, step back, or open another — after asking when
+ * that would drop a draft. The question stands in the head; the drawer stays
+ * usable underneath it, and the draft stays until the answer is to discard it.
  */
-function attachMemory(entry: { label: string; value: string }) {
-  void write(() =>
-    attachWorkItemRef({
-      id: props.reference,
-      kind: 'memory',
-      value: entry.value,
-      label: entry.label,
-    }),
-  )
+function leave(action: () => void) {
+  if (!unsaved.value.length) {
+    action()
+    return
+  }
+  departure = action
+  asking.value = 'discard'
 }
 
-async function discussionChanged() {
-  await load()
-  emit('changed')
+function keepEditing() {
+  departure = null
+  asking.value = null
 }
+
+function discard() {
+  const action = departure
+  keepEditing()
+  action?.()
+}
+
+const discardQuestion = computed(() =>
+  t('workItem.discard.question', {
+    drafts: unsaved.value.map((kind) => t(`workItem.discard.${kind}`)).join(', '),
+  }),
+)
+
+const close = () => leave(() => emit('close'))
 </script>
 
 <template>
@@ -270,13 +270,14 @@ async function discussionChanged() {
     :label="title"
     :resize-label="t('workItem.resize')"
     :storage-key="INSPECTOR_DRAWER_STORAGE_KEY"
-    @close="emit('close')"
+    @close="close"
   >
     <DrawerFrame
+      ref="frame"
       class="inspector-frame"
       :title="title"
       :close-label="t('drawer.close')"
-      @close="emit('close')"
+      @close="close"
     >
       <template #meta>
         <div class="inspector-meta">
@@ -285,7 +286,7 @@ async function discussionChanged() {
             class="head-back"
             type="button"
             :title="t('workItem.back')"
-            @click="emit('back')"
+            @click="leave(() => emit('back'))"
           >
             <VIcon
               name="chevron-left"
@@ -303,32 +304,33 @@ async function discussionChanged() {
       </template>
 
       <template
-        v-if="item && writable"
+        v-if="headSlot"
         #actions
       >
-        <div class="head-actions">
-          <VButton
-            v-if="!item.state.is_terminal && item.claim_ref"
-            :disabled="busy"
-            @click="release"
-          >
-            {{ t('workItem.release') }}
-          </VButton>
-          <VButton
-            v-else-if="!item.state.is_terminal"
-            variant="primary"
-            :disabled="busy"
-            @click="claim"
-          >
-            {{ t('workItem.claim') }}
-          </VButton>
-          <ChoiceSelect
-            v-model="stateChoice"
-            class="state-choice"
-            :label="t('workItem.moveTo')"
-            :placeholder="t('workItem.moveTo')"
-            :options="nextStates"
-            :disabled="busy || !nextStates.length"
+        <div class="head-stack">
+          <InspectorWriteActions
+            v-if="item && writable"
+            :item="item"
+            :workflow="workflow"
+            :busy="busy"
+            :notice="notice"
+            :error="writeError"
+            @claim="claim"
+            @release="release"
+            @take-over="takeOver"
+            @move="moveTo"
+            @dismiss="dismissNotice"
+            @force="force"
+            @guard="followGuard"
+          />
+          <ConfirmStrip
+            v-if="asking === 'discard'"
+            tone="danger"
+            :message="discardQuestion"
+            :confirm-label="t('workItem.discard.confirm')"
+            :cancel-label="t('workItem.discard.keep')"
+            @confirm="discard"
+            @cancel="keepEditing"
           />
         </div>
       </template>
@@ -348,13 +350,6 @@ async function discussionChanged() {
         :key="reference"
         class="inspector"
       >
-        <p
-          v-if="error"
-          class="inspector-write-error"
-          role="alert"
-        >
-          {{ error }}
-        </p>
         <PlatformStatePanel
           :state="state"
           :retryable="readRetryable"
@@ -374,11 +369,12 @@ async function discussionChanged() {
             </div>
             <InspectorOverview
               v-show="section === 'overview'"
+              ref="overview"
               :item="payload"
               :resource-ref="resourceRef"
               :target="target"
               :writable="writable && !busy"
-              @changed="discussionChanged"
+              @changed="reloaded"
               @refresh="load"
               @tick="tick"
             />
@@ -386,9 +382,9 @@ async function discussionChanged() {
               v-if="section === 'relations'"
               :item="payload"
               :writable="writable && !busy"
-              @changed="discussionChanged"
+              @changed="reloaded"
               @session="(id, family) => emit('session', id, family)"
-              @open="(target) => emit('open', target)"
+              @open="(target) => leave(() => emit('open', target))"
             />
             <InspectorExecution
               v-else-if="section === 'execution'"

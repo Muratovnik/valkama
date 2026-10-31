@@ -4,7 +4,7 @@ export const activityMessages = {
       scope: 'Searches only the system events and attached evidence loaded for this task.',
       executionScope:
         'Searches only the execution records loaded for this task, including results, evidence and session context.',
-      search: 'Search loaded history',
+      search: 'Search',
       category: 'Record category',
       all: 'All records',
       events: 'System events',
@@ -28,7 +28,7 @@ export const activityMessages = {
         'Поиск только по загруженным системным событиям и прикреплённым свидетельствам этой задачи.',
       executionScope:
         'Поиск только по загруженным записям исполнений этой задачи, включая результаты, свидетельства и контекст сессий.',
-      search: 'Поиск в загруженной истории',
+      search: 'Поиск',
       category: 'Категория записи',
       all: 'Все записи',
       events: 'Системные события',

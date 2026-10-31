@@ -1,8 +1,19 @@
 <script setup lang="ts">
+/**
+ * Comments and work reports on one item, and the composer for the next one.
+ *
+ * The composer comes first and the newest entry right under it. It used to sit
+ * after every entry ever written, oldest first, so writing a comment on a busy
+ * item began with scrolling past all of them, and the latest report — the one a
+ * reader came for — was the last thing on the page. Long entries are held to a
+ * few lines until expanded, so one report a screen long no longer pushes the
+ * rest of the thread out of reach.
+ */
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import InspectorReport from '@/widgets/work-item-inspector/components/InspectorReport.vue'
+import { useDraftSource } from '@/widgets/work-item-inspector/utils/useDraftGuard.ts'
 import { useInspectorMutation } from '@/widgets/work-item-inspector/utils/useInspectorMutation.ts'
 
 import {
@@ -12,7 +23,8 @@ import {
 } from '@/shared/api/planningApi.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { actorName, actorSession } from '@/shared/lib/actor.ts'
-import SectionHeading from '@/shared/ui/SectionHeading.vue'
+import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
+import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VTextInput from '@/shared/ui/VTextInput.vue'
 
@@ -25,17 +37,31 @@ const makeCurrent = ref(false)
 const report = reactive({ done: '', next: '', why: '' })
 const anchor = ref<{ id: string; text: string } | null>(null)
 const composer = ref<HTMLFormElement | null>(null)
-async function discussStep(stepId: string) {
-  if (!props.writable || pending.value) return
-  const step = props.item.checklist.find((entry) => entry.id === stepId)
-  if (!step) return
-  const identity = props.item.work_item_id
-  anchor.value = { id: step.id, text: step.text }
-  reporting.value = false
+
+useDraftSource('comment', () => Boolean(note.value.trim()))
+useDraftSource('report', () => reporting.value && Boolean(report.done || report.next || report.why))
+
+async function revealComposer(identity: string) {
   await nextTick()
   if (props.item.work_item_id !== identity || !props.writable) return
   composer.value?.focus({ preventScroll: true })
   composer.value?.scrollIntoView?.({ block: 'nearest' })
+}
+async function discussStep(stepId: string) {
+  if (!props.writable || pending.value) return
+  const step = props.item.checklist.find((entry) => entry.id === stepId)
+  if (!step) return
+  anchor.value = { id: step.id, text: step.text }
+  reporting.value = false
+  await revealComposer(props.item.work_item_id)
+}
+/** A work report that becomes the item's outcome: what closing the item asks for. */
+async function startReport() {
+  if (!props.writable || pending.value) return
+  anchor.value = null
+  reporting.value = true
+  makeCurrent.value = true
+  await revealComposer(props.item.work_item_id)
 }
 function removeAnchor() {
   anchor.value = null
@@ -57,9 +83,10 @@ function commentTime(at: string | null) {
   const time = at === null ? Number.NaN : Date.parse(at)
   return Number.isNaN(time) ? Number.NEGATIVE_INFINITY : time
 }
+/** Newest first; an entry with no recorded time goes last, where its age puts it. */
 const comments = computed(() =>
   [...props.item.comments].sort(
-    (left, right) => commentTime(left.at) - commentTime(right.at) || left.id - right.id,
+    (left, right) => commentTime(right.at) - commentTime(left.at) || right.id - left.id,
   ),
 )
 watch(
@@ -72,7 +99,7 @@ watch(
     Object.assign(report, { done: '', next: '', why: '' })
   },
 )
-const { pending, errorKey, submit } = useInspectorMutation(
+const { pending, errorKey, errorReason, submit } = useInspectorMutation(
   () => props.item.work_item_id,
   () => emit('changed'),
 )
@@ -135,80 +162,15 @@ function select(commentId: number) {
     }),
   )
 }
-defineExpose({ discussStep })
+defineExpose({ discussStep, startReport })
 </script>
 
 <template>
   <section class="discussion">
-    <SectionHeading
-      as="h3"
-      level="panel"
-      >{{ t('workItem.discussion') }}</SectionHeading
-    >
-    <ol
-      v-if="item.comments.length"
-      class="discussion-feed"
-    >
-      <li
-        v-for="entry in comments"
-        :id="`work-report-${entry.id}`"
-        :key="entry.id"
-        class="discussion-entry"
-        tabindex="-1"
-      >
-        <div class="discussion-meta">
-          <span
-            >{{ actorName(entry.author) || t('workItem.unknownAuthor') }}
-            <span v-if="actorSession(entry.author)">{{ actorSession(entry.author) }}</span></span
-          >
-          <span>{{ when(entry.at) }}</span>
-        </div>
-        <template v-if="entry.kind === 'report' && entry.report">
-          <strong class="discussion-label">{{ reportLabel(entry.id) }}</strong>
-          <InspectorReport :report="entry.report" />
-          <VButton
-            v-if="writable && entry.id !== item.summary_comment_id"
-            class="discussion-action"
-            :disabled="pending"
-            @click="select(entry.id)"
-            >{{ t('workItem.makeOutcome') }}</VButton
-          >
-        </template>
-        <blockquote
-          v-if="entry.kind === 'comment' && entry.checklist_item_id"
-          class="step-quote"
-        >
-          <strong>{{ quoteLabel(entry.checklist_item_id, entry.checklist_item_text) }}</strong>
-          <p class="discussion-body">{{ entry.checklist_item_text }}</p>
-        </blockquote>
-        <p
-          v-if="entry.kind === 'comment'"
-          class="discussion-body"
-        >
-          {{ entry.body }}
-        </p>
-      </li>
-    </ol>
-    <p
-      v-else
-      class="discussion-empty"
-    >
-      {{ t('workItem.noDiscussion') }}
-    </p>
-    <p
-      v-if="errorKey"
-      class="discussion-error"
-      role="alert"
-    >
-      {{ t(errorKey) }}
-    </p>
-    <VButton
-      v-if="errorKey && writable"
-      class="discussion-action"
-      :disabled="pending"
-      @click="emit('refresh')"
-      >{{ t('workItem.refreshDraft') }}</VButton
-    >
+    <SectionHeader
+      :title="t('workItem.discussion')"
+      :count="item.comments.length || ''"
+    />
     <form
       v-if="writable"
       ref="composer"
@@ -286,14 +248,84 @@ defineExpose({ discussStep })
         :maxlength="8000"
         :disabled="pending"
       />
-      <VButton
-        class="discussion-action"
-        type="submit"
-        variant="primary"
-        :disabled="pending || !canSend"
-        >{{ publishLabel }}</VButton
+      <p
+        v-if="errorKey"
+        class="discussion-error"
+        role="alert"
       >
+        {{ t(errorKey) }}
+        <span
+          v-if="errorReason"
+          class="discussion-reason"
+          >{{ errorReason }}</span
+        >
+      </p>
+      <div class="discussion-actions">
+        <VButton
+          class="discussion-action"
+          type="submit"
+          variant="primary"
+          :disabled="pending || !canSend"
+          >{{ publishLabel }}</VButton
+        >
+        <VButton
+          v-if="errorKey"
+          class="discussion-action"
+          :disabled="pending"
+          @click="emit('refresh')"
+          >{{ t('workItem.refreshDraft') }}</VButton
+        >
+      </div>
     </form>
+    <ol
+      v-if="item.comments.length"
+      class="discussion-feed"
+    >
+      <li
+        v-for="entry in comments"
+        :id="`work-report-${entry.id}`"
+        :key="entry.id"
+        class="discussion-entry"
+        tabindex="-1"
+      >
+        <div class="discussion-meta">
+          <span
+            >{{ actorName(entry.author) || t('workItem.unknownAuthor') }}
+            <span v-if="actorSession(entry.author)">{{ actorSession(entry.author) }}</span></span
+          >
+          <span>{{ when(entry.at) }}</span>
+        </div>
+        <template v-if="entry.kind === 'report' && entry.report">
+          <strong class="discussion-label">{{ reportLabel(entry.id) }}</strong>
+          <InspectorReport :report="entry.report" />
+          <VButton
+            v-if="writable && entry.id !== item.summary_comment_id"
+            class="discussion-action"
+            :disabled="pending"
+            @click="select(entry.id)"
+            >{{ t('workItem.makeOutcome') }}</VButton
+          >
+        </template>
+        <blockquote
+          v-if="entry.kind === 'comment' && entry.checklist_item_id"
+          class="step-quote"
+        >
+          <strong>{{ quoteLabel(entry.checklist_item_id, entry.checklist_item_text) }}</strong>
+          <p class="discussion-body">{{ entry.checklist_item_text }}</p>
+        </blockquote>
+        <CollapsibleText
+          v-if="entry.kind === 'comment'"
+          class="discussion-body"
+          :text="entry.body"
+        />
+      </li>
+    </ol>
+    <p
+      v-else
+      class="discussion-empty"
+    >
+      {{ t('workItem.noDiscussion') }}
+    </p>
   </section>
 </template>
 
@@ -311,6 +343,8 @@ defineExpose({ discussStep })
   list-style: none;
 }
 
+/* A sheet on the drawer's ground: the card is visible, so its padding reads
+   as the card's inset rather than as text shifted off the column. */
 .discussion-entry {
   display: grid;
   gap: var(--space-2);
@@ -352,11 +386,18 @@ defineExpose({ discussStep })
   font: var(--font-detail);
 }
 
+.discussion-reason {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--color-text-muted);
+}
+
+/* The composer leads the section and the thread starts under its rule. */
 .discussion-form {
   display: grid;
   gap: var(--space-3);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--color-rule);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-rule);
 }
 
 .discussion-option {
@@ -364,6 +405,12 @@ defineExpose({ discussStep })
   gap: var(--space-2);
   align-items: center;
   font: var(--font-line);
+}
+
+.discussion-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
 .discussion-action {

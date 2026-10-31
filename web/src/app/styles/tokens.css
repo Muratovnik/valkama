@@ -334,9 +334,11 @@
   /* The two ladder *roles*, as distinct from the steps above them.
      A step says which tone; a role says where a thing stands, and a container
      may move a role without moving the palette. That is the whole difference,
-     and it is why both exist: `.overlay-surface-drawer` re-points `sheet`
-     because the drawer is its own ground, while a rule that must be exactly
-     this tone wherever it renders names the step instead.
+     and it is why both exist: a container standing on another rung may
+     re-point `sheet` to stay one step above itself, while a rule that must be
+     exactly this tone wherever it renders names the step instead. The drawer
+     stands on `--color-surface`, the rung the default sheet already sits above,
+     so it re-points nothing.
 
      A sheet is an object lying on a container, so it sits one step above the
      container rather than level with it: workspace → lane ground → card. When a
@@ -418,6 +420,17 @@
   --size-control-height: 40px;
   --size-control-height-compact: 36px;
   --size-control-target: 44px;
+
+  /* An action that rides a line of content rather than standing in a toolbar:
+     discuss this step, remove this link, show the rest of this comment. Drawn at
+     a control's height it made every checklist step two rows tall and pulled the
+     line under the step away from it. 28px still clears the 24px AA target. */
+  --size-control-inline: 28px;
+
+  /* How wide a scrollbar is. A panel that scrolls spends it from its own end
+     inset, so content stays centred between its edges whether or not the bar
+     shows; written once here because `base.css` draws the bar at this width. */
+  --size-scrollbar: 10px;
 
   color-scheme: dark;
 }

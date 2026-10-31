@@ -13,18 +13,32 @@
 withDefaults(
   defineProps<{
     disabled?: boolean
+    /** A square button holding one icon; its name comes from `aria-label`. */
+    icon?: boolean
+    /**
+     * `inline` rides a line of content — a checklist step, a link row — where a
+     * control-height button would make the line two rows tall.
+     */
+    size?: 'default' | 'inline'
     title?: string
     type?: 'button' | 'submit'
     variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
   }>(),
-  { variant: 'secondary', type: 'button', disabled: false, title: undefined },
+  {
+    variant: 'secondary',
+    type: 'button',
+    disabled: false,
+    title: undefined,
+    size: 'default',
+    icon: false,
+  },
 )
 </script>
 
 <template>
   <button
     class="button"
-    :class="`variant-${variant}`"
+    :class="[`variant-${variant}`, `size-${size}`, { 'icon-only': icon }]"
     :type="type"
     :disabled="disabled"
     :title="title"
@@ -94,6 +108,24 @@ withDefaults(
 
   &.variant-danger {
     color: var(--color-action-danger);
+  }
+
+  &.size-inline {
+    gap: var(--space-1);
+    min-height: var(--size-control-inline);
+    padding: 0 var(--space-2);
+    font-size: var(--font-size-dense);
+  }
+
+  /* Square at whichever height the size gives it, so an icon sits centred
+     rather than on a label's padding. */
+  &.icon-only {
+    min-width: var(--size-control-height);
+    padding: 0;
+  }
+
+  &.icon-only.size-inline {
+    min-width: var(--size-control-inline);
   }
 }
 </style>

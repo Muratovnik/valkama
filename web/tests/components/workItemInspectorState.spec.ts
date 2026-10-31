@@ -36,6 +36,7 @@ import {
 const passThrough = { template: '<div><slot /></div>' }
 const drawerFrame = {
   template: '<div><slot name="meta" /><slot name="actions" /><slot name="tabs" /><slot /></div>',
+  methods: { scrollToTop() {} },
 }
 const overview = {
   props: ['item', 'resourceRef'],
@@ -169,19 +170,24 @@ describe('WorkItemInspector resource state', () => {
     wrapper.unmount()
   })
 
+  // `user` is the author this client writes as: its own claim may be released,
+  // and anyone else's is offered as a takeover, because the server refuses a
+  // release of a claim the caller does not hold.
   it.each([
-    { terminal: true, writable: true, claimed: true },
-    { terminal: true, writable: true, claimed: false },
-    { terminal: true, writable: false, claimed: true },
-    { terminal: false, writable: true, claimed: true },
-    { terminal: false, writable: true, claimed: false },
-    { terminal: false, writable: false, claimed: true },
+    { terminal: true, writable: true, holder: 'claude', action: [] },
+    { terminal: true, writable: true, holder: '', action: [] },
+    { terminal: true, writable: false, holder: 'claude', action: [] },
+    { terminal: false, writable: true, holder: 'claude', action: ['Take over'] },
+    { terminal: false, writable: true, holder: 'user', action: ['Release'] },
+    { terminal: false, writable: true, holder: '', action: ['Claim'] },
+    { terminal: false, writable: false, holder: 'claude', action: [] },
   ])(
-    'keeps ownership actions truthful for $terminal/$writable/$claimed',
-    async ({ terminal, writable, claimed }) => {
+    'keeps ownership actions truthful for $terminal/$writable/$holder',
+    async ({ terminal, writable, holder, action }) => {
+      const claimed = Boolean(holder)
       const item = record('Ownership task', 1)
       item.state.is_terminal = terminal
-      item.claim_ref = claimed ? 'claude' : ''
+      item.claim_ref = holder
       vi.mocked(fetchWorkItem).mockResolvedValue(item)
       const wrapper = mountInspector(true)
       const nextState = { ...item.state, state_id: 'next-state', key: 'queued', name: 'Queued' }
@@ -206,14 +212,14 @@ describe('WorkItemInspector resource state', () => {
           (fact) =>
             fact.find('dt').text() === (terminal ? 'Previously responsible' : 'Responsible'),
         )
-      expect(ownerFact?.find('dd').text()).toBe(claimed ? 'claude' : 'No active claim')
+      expect(ownerFact?.find('dd').text()).toBe(claimed ? holder : 'No active claim')
       if (claimed) {
         expect(wrapper.get('.head-claim').text()).toBe(
-          terminal ? 'Previously responsible: claude' : 'Responsible: claude',
+          terminal ? `Previously responsible: ${holder}` : `Responsible: ${holder}`,
         )
       }
       const actions = wrapper.findAll('.head-actions button').map((button) => button.text())
-      expect(actions).toEqual(writable && !terminal ? [claimed ? 'Release' : 'Claim'] : [])
+      expect(actions).toEqual(action)
       expect(wrapper.findComponent({ name: 'ChoiceSelect' }).exists()).toBe(writable)
       if (writable) {
         expect(wrapper.getComponent({ name: 'ChoiceSelect' }).props()).toMatchObject({
@@ -221,7 +227,7 @@ describe('WorkItemInspector resource state', () => {
           options: [{ value: 'queued', label: 'Queued' }],
         })
       }
-      expect(item.claim_ref).toBe(claimed ? 'claude' : '')
+      expect(item.claim_ref).toBe(holder)
       wrapper.unmount()
     },
   )
@@ -237,11 +243,11 @@ describe('inspector relations hierarchy', () => {
       },
     })
     expect(wrapper.findAll('h3').map((heading) => heading.text())).toEqual([
-      'Связанная работа 0',
+      'Связанная работа',
       'Свидетельства',
     ])
     expect(wrapper.find('form').exists()).toBe(false)
-    await wrapper.get('header button').trigger('click')
+    await wrapper.get('.section-header-actions button').trigger('click')
     expect(wrapper.findComponent({ name: 'RelatedWorkPicker' }).props()).toMatchObject({
       open: true,
       initialKind: 'relates-to',

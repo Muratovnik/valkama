@@ -140,8 +140,8 @@ a:focus-visible,
 }
 
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: var(--size-scrollbar);
+  height: var(--size-scrollbar);
 }
 
 /* The bar takes its ground from whatever it scrolls over. Naming a color here

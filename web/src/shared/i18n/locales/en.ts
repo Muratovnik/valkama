@@ -91,6 +91,8 @@ export const en = {
     actions: {
       retry: 'Retry',
       cancel: 'Cancel',
+      expand: 'Show all',
+      collapse: 'Show less',
       unavailable: 'This action is unavailable in the current scope.',
       // Named by the server, not by any call site here: the Kernel builds
       // `platform.actions.<permission_id>` from the adapter's declared
@@ -667,7 +669,7 @@ export const en = {
     unknownTime: 'Unknown time',
     unknownAuthor: 'Author not recorded',
     related: {
-      add: 'Add related task',
+      add: 'Add link',
       pickerTitle: 'Related task',
       relation: 'Relation',
       existing: 'Existing task',
@@ -741,6 +743,50 @@ export const en = {
     previousHolder: 'Previously responsible: {holder}',
     claim: 'Claim',
     release: 'Release',
+    takeOver: 'Take over',
+    takeOverQuestion:
+      '{holder} holds this work. Take it over? The handover is recorded in the work history.',
+    takeOverConfirm: 'Take over',
+    discard: {
+      question: 'Unsaved changes will be lost: {drafts}.',
+      confirm: 'Discard',
+      keep: 'Keep editing',
+      description: 'description',
+      comment: 'comment',
+      report: 'work report',
+    },
+    refusal: {
+      transition: 'Moving to “{state}” was refused',
+      claim: 'The claim was refused',
+      release: 'The release was refused',
+      takeover: 'The takeover was refused',
+      tick: 'The step was not updated',
+      attach: 'The reference was not attached',
+      generic: 'The service refused this action',
+      conflict: 'The work changed while it was open. It has been reloaded; try again.',
+      reason: 'The service said: {reason}',
+      dismiss: 'Dismiss',
+      guard: {
+        summary: 'There is no closing summary: publish a report and make it the outcome.',
+        checklist: 'The checklist has open steps.',
+        executor: 'The work has no executor.',
+        blocker: 'Blocking needs a blocking task or a reason.',
+        transition: 'The workflow has no such transition.',
+      },
+      action: {
+        summary: 'Write the outcome',
+        checklist: 'Go to the checklist',
+        executor: 'Claim the work',
+        blocker: 'Open relations',
+      },
+      force: {
+        transition: 'Move anyway',
+        transitionQuestion:
+          'Move to “{state}” against the workflow rules? The override is recorded in the work history.',
+        tick: 'Complete anyway',
+        tickQuestion: '{holder} holds this step. Mark it done in your name?',
+      },
+    },
     noClaim: 'No active claim',
     moveTo: 'Move to',
     updated: 'Updated',

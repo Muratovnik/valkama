@@ -11,6 +11,7 @@ import { readRefusal } from '@/shared/api/planningModel.ts'
 import { serializePlanningTarget } from '@/shared/api/planningTarget.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { readJsonResponse } from '@/shared/api/readJsonResponse.ts'
+import { WEB_AUTHOR } from '@/shared/api/webAuthor.ts'
 
 export class InputRequestError extends Error {
   readonly code: string
@@ -81,7 +82,7 @@ async function resolve(
       ...serializePlanningTarget(entry.target),
       id: entry.request.request_id,
       expected_revision: entry.request.revision,
-      author: 'user',
+      author: WEB_AUTHOR,
       ...(answers === undefined ? {} : { answers }),
     }),
   })

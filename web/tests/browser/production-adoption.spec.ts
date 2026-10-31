@@ -217,7 +217,9 @@ test('Discuss step reveals the composer and retains a frozen quote after rename 
   await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
   const drawer = page.locator('.drawer')
-  await drawer.getByRole('button', { name: 'Discuss step', exact: true }).click()
+  await drawer
+    .getByRole('button', { name: 'Discuss step “Frontend contract”', exact: true })
+    .click()
   const composer = drawer.getByRole('form', { name: 'Write a comment', exact: true })
   await expect(composer).toBeFocused()
   await expect(composer).toBeInViewport({ ratio: 0.5 })

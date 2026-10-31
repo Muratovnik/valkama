@@ -388,13 +388,12 @@ onUnmounted(release)
   container: overlay / inline-size;
 }
 
+/* The drawer's ground is `--color-surface`, so the default sheet — one step
+   above it — is already the right tone for an object lying on the drawer. It
+   used to be re-pointed to the drawer's own tone, which made every comment
+   card the same colour as the panel it lay on: an invisible box whose padding
+   read as the text sitting off its column. */
 .overlay-surface-drawer {
-  /* The drawer is its own ground, so a sheet inside it starts from the drawer
-     rather than from the muted ground it would inherit. Every other step of
-     the ladder holds here, and restating those was how nine lines said what
-     one does. */
-  --color-surface-sheet: var(--color-surface);
-
   position: absolute;
   inset: 0 0 0 auto;
   display: flex;

@@ -15,6 +15,7 @@ import { actorName } from '@/shared/lib/actor.ts'
 import { openSourceReference, sourceFeedback } from '@/shared/lib/sourceReference.ts'
 import { statePresentation } from '@/shared/lib/uiSystem.ts'
 import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
+import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import VButton from '@/shared/ui/VButton.vue'
@@ -35,15 +36,34 @@ const emit = defineEmits<{
 
 const { t, d } = useI18n()
 const discussion = ref<InstanceType<typeof InspectorDiscussion> | null>(null)
+const checklistSection = ref<HTMLElement | null>(null)
 function discussStep(stepId: string) {
   void discussion.value?.discussStep(stepId)
 }
 
+/** The report composer, opened as the item's outcome: what a closing guard asks for. */
+function startOutcomeReport() {
+  return discussion.value?.startReport()
+}
+
+function revealChecklist() {
+  checklistSection.value?.scrollIntoView({ block: 'start' })
+}
+
+// A closed item is neither blocked nor waiting on a next step: both read as
+// live instructions, and on a Done card they were stale ones.
 const blockers = computed(() =>
-  props.item.links.filter((link) => link.kind === 'blocks' && link.direction === 'incoming'),
+  props.item.state.is_terminal
+    ? []
+    : props.item.links.filter((link) => link.kind === 'blocks' && link.direction === 'incoming'),
 )
-const nextStep = computed(() => props.item.checklist.find((step) => !step.done))
+const nextStep = computed(() =>
+  props.item.state.is_terminal ? undefined : props.item.checklist.find((step) => !step.done),
+)
 const steps = computed(() => checklistProgress(props.item))
+const stepCount = computed(() =>
+  steps.value.total ? t('workItem.checklistProgress', steps.value) : '',
+)
 function stepState(done: boolean) {
   return done ? 'selected' : 'unselected'
 }
@@ -80,6 +100,8 @@ function when(value: string): string {
   const date = new Date(value)
   return Number.isNaN(date.valueOf()) ? value : d(date, 'activity')
 }
+
+defineExpose({ revealChecklist, startOutcomeReport })
 </script>
 
 <template>
@@ -187,23 +209,22 @@ function when(value: string): string {
       @refresh="emit('refresh')"
     />
 
-    <section class="overview-section">
-      <div class="section-line">
-        <SectionHeading
-          as="h3"
-          level="panel"
-          >{{ t('workItem.checklist') }}</SectionHeading
-        >
-        <span
-          v-if="steps.total"
-          class="section-count"
-          >{{ t('workItem.checklistProgress', steps) }}</span
-        >
-      </div>
+    <section
+      ref="checklistSection"
+      class="overview-section"
+    >
+      <SectionHeader
+        :title="t('workItem.checklist')"
+        :count="stepCount"
+      />
       <ul
         v-if="item.checklist.length"
         class="checklist"
       >
+        <!-- The step, its one action at the row's end, and who holds or closed
+             it directly under the step's own text. The action used to be a full
+             button on a row of its own, so each holder line sat closer to the
+             next step than to the one it described. -->
         <li
           v-for="step in item.checklist"
           :key="step.id"
@@ -237,9 +258,17 @@ function when(value: string): string {
             v-if="writable"
             class="step-discuss"
             variant="ghost"
+            size="inline"
+            :title="t('checklistComment.discuss')"
+            :aria-label="t('checklistComment.discussStep', { step: step.text })"
+            icon
             @click="discussStep(step.id)"
-            >{{ t('checklistComment.discuss') }}</VButton
           >
+            <VIcon
+              name="message-square"
+              :size="16"
+            />
+          </VButton>
           <span
             v-if="step.claimed_by && !step.done"
             class="step-holder"

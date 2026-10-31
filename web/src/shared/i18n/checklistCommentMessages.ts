@@ -2,6 +2,7 @@ export const checklistCommentMessages = {
   en: {
     checklistComment: {
       discuss: 'Discuss step',
+      discussStep: 'Discuss step “{step}”',
       composer: 'Write a comment',
       linked: 'Comment on checklist step',
       current: 'Checklist step',
@@ -18,6 +19,7 @@ export const checklistCommentMessages = {
   ru: {
     checklistComment: {
       discuss: 'Обсудить шаг',
+      discussStep: 'Обсудить шаг «{step}»',
       composer: 'Написать комментарий',
       linked: 'Комментарий к шагу чек-листа',
       current: 'Шаг чек-листа',

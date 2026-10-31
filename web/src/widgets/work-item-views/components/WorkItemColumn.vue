@@ -105,14 +105,17 @@ function open(reference: string) {
 
 <style scoped>
 /* A ground the sheets lie on, separated by a tonal step and a radius rather
-   than by an outline. */
+   than by an outline. The end inset is the start inset less the scrollbar the
+   stack keeps a gutter for, so a sheet stands centred in its lane whether the
+   lane scrolls or not. It used to sit 12px from the start and 22px from the
+   end, which read as every card shifted towards the left. */
 .work-item-column {
   display: flex;
   flex-direction: column;
   min-width: 250px;
   height: 100%;
   min-height: 0;
-  padding: var(--space-3) var(--space-2) var(--space-2) var(--space-3);
+  padding: var(--space-3) calc(var(--space-3) - var(--size-scrollbar)) var(--space-2) var(--space-3);
   background: var(--color-surface);
   overflow: hidden;
   border-radius: var(--radius-card);
@@ -143,8 +146,9 @@ function open(reference: string) {
   position: relative;
   flex: 1 1 auto;
   min-height: 72px;
-  padding: var(--space-1) var(--space-1) var(--space-1) 0;
+  padding: var(--space-1) 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 /* The space between two sheets belongs to the stack, so it is a gap and is
