@@ -134,7 +134,11 @@ TOOLS = [
         "create_work_item",
         "Create a work item",
         "One unit of planned work. It starts in the workflow's initial state unless"
-        " you name another. kind=epic is a parent; a hierarchy is one level deep.",
+        " you name another. kind=epic is a parent; a hierarchy is one level deep."
+        " claim and links act on the new item in the same call, all or nothing:"
+        " it is created, then claimed, then linked, each as its single tool does."
+        " A refused claim or link creates nothing and names the step and the"
+        " refusal's code. With either, the answer adds applied, what each changed.",
         WRITES,
         {
             "space": _SPACE,
@@ -151,6 +155,24 @@ TOOLS = [
                 " comment; never copy the plan text into the item.",
             },
             "parent": _REFERENCE,
+            "claim": {
+                "type": "boolean",
+                "description": "true claims the new item as claim_work_item does.",
+            },
+            "links": {
+                "type": "array",
+                "maxItems": api.MAX_APPLY_ENTRIES,
+                "description": "Links from the new item, as link_work_items takes them:"
+                " work found en route links discovered-from the item it was found from.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "other": _REFERENCE,
+                        "kind": {"type": "string", "enum": sorted(model.LINK_KINDS)},
+                    },
+                    "required": ["other", "kind"],
+                },
+            },
             "author": _AUTHOR,
             "verbose": _VERBOSE,
         },

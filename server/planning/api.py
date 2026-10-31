@@ -14,8 +14,9 @@ refusal, in the one place that can act on it.
 
 from __future__ import annotations
 
+import contextlib
 import sqlite3
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from typing import Any
 
 from .. import query_params
@@ -339,6 +340,28 @@ def handle_post(
 
 
 def _create(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
+    """A new item, then its claim, then its links, as one all-or-nothing change.
+
+    Each step after the creation is the write its single tool makes, inside one
+    savepoint with the creation, so a refused link or claim leaves no item, no
+    spent number and no call row behind. Without `claim` or `links` the answer
+    is the one this route always gave; with them it adds `applied`.
+    """
+
+    steps = _steps(payload, CREATE_GROUPS)
+    if not steps:
+        return _created(conn, payload)
+    with _all_or_nothing(conn):
+        item = _created(conn, payload)
+        base: dict[str, object] = {"id": str(item["work_item_id"])}
+        if "author" in payload:
+            base["author"] = payload["author"]
+        _findings, applied = _run_steps(conn, base, steps)
+        answer = service.get_work_item(conn, str(item["work_item_id"]))
+    return {**answer, "applied": applied}
+
+
+def _created(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     return service.create_work_item(
         conn,
         space=_text(payload, "space"),
@@ -603,21 +626,45 @@ APPLY_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
     ("summary", frozenset({"done", "next", "why"})),
     ("transition", frozenset({"state", "reason", "force"})),
 )
+#: What a creation may do to the item it just made, after making it and in this
+#: order. A link from a new item has nothing to remove, so `remove` is not taken.
+CREATE_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
+    ("claim", frozenset()),
+    ("links", frozenset({"other", "kind"})),
+)
 #: The groups that are lists of entries rather than one object.
 _APPLY_LISTS = frozenset({"checklist_ticks", "refs", "links"})
 #: The most entries one list in a batch may hold.
 MAX_APPLY_ENTRIES = 100
 
+_Step = tuple[str, int, Mapping[str, object]]
 
-def _apply_entries(payload: Mapping[str, object]) -> list[tuple[str, int, Mapping[str, object]]]:
-    """Every step a batch names, in application order, refused before anything is written.
+
+def _apply_entries(payload: Mapping[str, object]) -> list[_Step]:
+    """Every step a batch names, in application order; a batch must name one."""
+
+    steps = _steps(payload, APPLY_GROUPS)
+    if not steps:
+        raise PlanningHttpError(
+            400,
+            "invalid_request",
+            "a batch needs at least one change: "
+            + ", ".join(group for group, _fields in APPLY_GROUPS),
+        )
+    return steps
+
+
+def _steps(
+    payload: Mapping[str, object], groups: tuple[tuple[str, frozenset[str]], ...]
+) -> list[_Step]:
+    """Every step the payload names, in application order, refused before anything is written.
 
     A step is its group, its index within the group and its fields. `claim`
     is a boolean, so `false` names no step.
     """
 
-    steps: list[tuple[str, int, Mapping[str, object]]] = []
-    for group, fields in APPLY_GROUPS:
+    steps: list[_Step] = []
+    for group, fields in groups:
         value = payload.get(group)
         if value is None:
             continue
@@ -647,13 +694,6 @@ def _apply_entries(payload: Mapping[str, object]) -> list[tuple[str, int, Mappin
                     f" {', '.join(sorted(fields))}",
                 )
             steps.append((group, index, entry))
-    if not steps:
-        raise PlanningHttpError(
-            400,
-            "invalid_request",
-            "a batch needs at least one change: "
-            + ", ".join(group for group, _fields in APPLY_GROUPS),
-        )
     return steps
 
 
@@ -701,46 +741,73 @@ def _apply(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     base: dict[str, object] = {"id": reference}
     if "author" in payload:
         base["author"] = payload["author"]
-    if not conn.in_transaction:
-        conn.execute("BEGIN IMMEDIATE")
-    conn.execute("SAVEPOINT planning_apply")
-    try:
+    with _all_or_nothing(conn):
         actual = int(read_model.item_row(conn, reference)["revision"])
         if expected is not None and expected != actual:
             raise model.RevisionConflictError(expected, actual)
-        findings: dict = {}
-        applied: dict[str, Any] = {}
-        for group, index, entry in steps:
-            try:
-                extra, change = _apply_step(conn, group, base, entry)
-            except (model.PlanningError, PlanningHttpError) as error:
-                status, body = error_response(error)
-                label = f"{group}[{index}]" if group in _APPLY_LISTS else group
-                detail = {
-                    name: value
-                    for name, value in body["error"].items()
-                    if name not in ("code", "message")
-                }
-                raise PlanningHttpError(
-                    status,
-                    str(body["error"]["code"]),
-                    f"{label}: {body['error']['message']}",
-                    {**detail, "step": {"group": group, "index": index}},
-                ) from error
-            findings.update(extra)
-            if group == "checklist_ticks":
-                applied.setdefault(group, []).append(change)
-            elif group in _APPLY_LISTS:
-                applied[group] = applied.get(group, 0) + 1
-            else:
-                applied[group] = change
+        findings, applied = _run_steps(conn, base, steps)
         answer = service.get_work_item(conn, reference)
-    except BaseException:
-        conn.execute("ROLLBACK TO planning_apply")
-        conn.execute("RELEASE planning_apply")
-        raise
-    conn.execute("RELEASE planning_apply")
     return {**answer, **findings, "applied": applied}
+
+
+@contextlib.contextmanager
+def _all_or_nothing(conn: sqlite3.Connection) -> Iterator[None]:
+    """One savepoint around several writes: a refusal anywhere rolls every one of them back.
+
+    The savepoint, not the caller's rollback, is what keeps a refused step's
+    predecessors out of the store, because the HTTP surface commits whatever a
+    handler leaves. Opened inside a transaction the caller already holds, it
+    commits nothing on the caller's behalf.
+    """
+
+    if not conn.in_transaction:
+        conn.execute("BEGIN IMMEDIATE")
+    conn.execute("SAVEPOINT planning_batch")
+    try:
+        yield
+    except BaseException:
+        conn.execute("ROLLBACK TO planning_batch")
+        conn.execute("RELEASE planning_batch")
+        raise
+    conn.execute("RELEASE planning_batch")
+
+
+def _run_steps(
+    conn: sqlite3.Connection, base: Mapping[str, object], steps: list[_Step]
+) -> tuple[dict, dict[str, Any]]:
+    """Run each step in order; the findings a caller must not miss, and what each group changed.
+
+    A refusal keeps its status and code, prefixes its message with the step and
+    names the step beside it, so the caller can tell which entry to fix.
+    """
+
+    findings: dict = {}
+    applied: dict[str, Any] = {}
+    for group, index, entry in steps:
+        try:
+            extra, change = _apply_step(conn, group, base, entry)
+        except (model.PlanningError, PlanningHttpError) as error:
+            status, body = error_response(error)
+            label = f"{group}[{index}]" if group in _APPLY_LISTS else group
+            detail = {
+                name: value
+                for name, value in body["error"].items()
+                if name not in ("code", "message")
+            }
+            raise PlanningHttpError(
+                status,
+                str(body["error"]["code"]),
+                f"{label}: {body['error']['message']}",
+                {**detail, "step": {"group": group, "index": index}},
+            ) from error
+        findings.update(extra)
+        if group == "checklist_ticks":
+            applied.setdefault(group, []).append(change)
+        elif group in _APPLY_LISTS:
+            applied[group] = applied.get(group, 0) + 1
+        else:
+            applied[group] = change
+    return findings, applied
 
 
 _WRITES: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], dict]] = {

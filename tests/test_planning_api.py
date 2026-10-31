@@ -394,6 +394,61 @@ class PlanningApiTests(unittest.TestCase):
         )
         self.assertFalse(steps["checklist"][0]["done"])
 
+    def test_a_create_with_links_and_claim_answers_in_full_with_what_was_applied(self) -> None:
+        origin = self.post("/api/planning/work-items", space="QA", title="Origin")
+        created = self.post(
+            "/api/planning/work-items",
+            space="QA",
+            title="Found",
+            author="one",
+            claim=True,
+            links=[{"other": origin["reference"], "kind": "discovered-from"}],
+        )
+        self.assertEqual({"claim": True, "links": 1}, created["applied"])
+        self.assertEqual("one", created["claim_ref"])
+        self.assertEqual(
+            [("discovered-from", origin["reference"])],
+            [(link["kind"], link["reference"]) for link in created["links"]],
+        )
+        self.assertIn("events", created)
+        plain = self.post("/api/planning/work-items", space="QA", title="Plain")
+        self.assertNotIn("applied", plain)
+
+    def test_a_refused_create_leaves_nothing_behind_a_commit(self) -> None:
+        origin = self.post("/api/planning/work-items", space="QA", title="Origin")
+        self.conn.commit()
+        with self.assertRaises(planning_api.PlanningHttpError) as refused:
+            planning_api.handle_post(
+                self.conn,
+                "/api/planning/work-items",
+                {
+                    "space": "QA",
+                    "title": "Should vanish",
+                    "claim": True,
+                    "links": [
+                        {"other": origin["reference"], "kind": "discovered-from"},
+                        {"other": "QA-404", "kind": "relates-to"},
+                    ],
+                },
+            )
+        self.assertEqual(
+            ("invalid_request", {"group": "links", "index": 1}),
+            (refused.exception.code, refused.exception.detail["step"]),
+        )
+        # The HTTP surface commits what a handler leaves; the savepoint is what
+        # keeps the item, its claim and its first link out of that commit.
+        self.conn.commit()
+        self.assertEqual(
+            (1, 0),
+            (
+                self.conn.execute("SELECT COUNT(*) FROM work_items").fetchone()[0],
+                self.conn.execute("SELECT COUNT(*) FROM work_item_links").fetchone()[0],
+            ),
+        )
+        origin_after = self.get("/api/planning/work-item", id=origin["reference"])["work_item"]
+        self.assertEqual(origin["revision"], origin_after["revision"])
+        self.assertEqual(["created"], [event["action"] for event in origin_after["events"]])
+
     def test_a_batch_runs_inside_a_transaction_the_caller_already_opened(self) -> None:
         item = self.post("/api/planning/work-items", space="QA", title="Nested")
         self.assertTrue(self.conn.in_transaction)

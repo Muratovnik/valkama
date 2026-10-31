@@ -87,7 +87,7 @@ item: `reference`, `work_item_id`, `revision`, `state` (`key`, `name`,
 
 | Tool | Also carries |
 | --- | --- |
-| `create_work_item` | `title`, `kind`, `priority` |
+| `create_work_item` | `title`, `kind`, `priority`; `applied` when it took `claim` or `links` |
 | `update_work_item` | `updated`, the names of the fields it edited |
 | `transition_work_item` | `warnings` and `overridden` when there are any |
 | `claim_work_item` | nothing more; `claim_ref` is the holder and `claim_state` its lease |
@@ -257,6 +257,36 @@ the step, and names the step:
 `index` is the entry's position in a list group and 0 for the others. A refused
 stale revision keeps `expected` and `actual` beside it. The call is recorded as
 one call with its identity, and every row its steps write points to that call.
+
+### Creating an item with its claim and links
+
+`create_work_item` (`POST /api/planning/work-items`) also takes two optional
+arguments that act on the item it creates:
+
+| Argument | Shape | Works as |
+| --- | --- | --- |
+| `claim` | `true` | `claim_work_item`; `false` is no change |
+| `links` | list of `{other, kind}`, linking from the new item, at most 100 | `link_work_items` |
+
+They apply in the same transaction as the creation: the item is created, then
+claimed, then linked, each step being the write its single tool makes, with its
+events. Work found en route is filed in one call this way, linked
+`discovered-from` the item it was found from. A malformed `claim` or `links`,
+or an entry with a field other than `other` and `kind`, is refused with
+`invalid_request` before anything is written. When a step is refused — a link
+to an unknown item, say — nothing is created, no number is spent, and the error
+names the step the way a refused batch step does:
+
+```json
+{"error": {"code": "invalid_request",
+ "message": "links[1]: no work item WIR-99",
+ "step": {"group": "links", "index": 1}}}
+```
+
+The answer adds `applied`, in the batch's style: `{"claim": true, "links": 2}`.
+The call is recorded once with its identity, and the creation's, the claim's and
+both ends of each link's events point to it. Without `claim` or `links`, the
+call and its answer are what they were before.
 
 The acknowledgement's `applied` names only the groups that changed something:
 

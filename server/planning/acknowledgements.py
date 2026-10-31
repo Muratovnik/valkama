@@ -45,14 +45,21 @@ def _base(item: dict) -> dict:
 
 
 def created(item: dict, _arguments: Mapping[str, object]) -> dict:
-    """A new item: the defaults the caller may not have named are the news."""
+    """A new item: the defaults the caller may not have named are the news.
 
-    return {
+    A creation that also claimed or linked the item says so in `applied`, as a
+    batch does; one that did neither answers without it.
+    """
+
+    answer = {
         **_base(item),
         "title": item["title"],
         "kind": item["kind"],
         "priority": item["priority"],
     }
+    if "applied" in item:
+        answer["applied"] = item["applied"]
+    return answer
 
 
 def updated(item: dict, arguments: Mapping[str, object]) -> dict:

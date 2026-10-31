@@ -491,7 +491,8 @@ Work items relate to each other the way
 [beads](https://github.com/steveyegge/beads) proved useful for agents. A
 `blocks` link keeps unfinished dependencies out of `claim_ready_work_item`,
 which chooses and claims a ready item in one step. `discovered-from` records
-where work found en route came from. Blockers that are not work items stay
+where work found en route came from, and `create_work_item` takes that link and
+the claim in the call that files the item. Blockers that are not work items stay
 comments.
 
 Guards refuse a move the board could not honestly report: `dev` needs an

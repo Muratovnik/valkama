@@ -12,6 +12,12 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Added
 
+- `create_work_item` and `POST /api/planning/work-items` take `claim` and
+  `links` (`{other, kind}`), applied to the new item in the same transaction:
+  created, then claimed, then linked. A refused claim or link creates nothing
+  and names the step, as `apply_work_item_changes` does, and the answer adds
+  `applied`. Filing discovered work linked `discovered-from` and claimed takes
+  one call instead of three.
 - The chain root carries its own mark on the graph: a «root» tag on its node,
   and «chain root» in the node's accessible name. It stands one step above the
   closed work around it even when it is closed itself.

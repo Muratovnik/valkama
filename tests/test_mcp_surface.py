@@ -37,6 +37,7 @@ from server.ops import tray
 from server.planning import api as planning_api
 from server.planning import calls as planning_calls
 from server.planning import chain as planning_chain
+from server.planning import model as planning_model
 from server.planning import service as planning_service
 from server.planning import tools as planning_tools
 from tests.planning_fixtures import bulk_items
@@ -1701,6 +1702,199 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
             "transition_work_item",
         ):
             self.assertIn(single, tools)
+
+
+class CreateWorkItemWithLinksTests(WireCallTestCase):
+    """create_work_item takes its claim and its links: one call, all or nothing."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.found_from = planning_service.create_work_item(
+            self.conn, space=SPACE_KEY, title="Where it was found"
+        )
+        self.related = planning_service.create_work_item(
+            self.conn, space=SPACE_KEY, title="Related"
+        )
+        self.conn.commit()
+        self.before = {
+            reference: planning_service.get_work_item(self.conn, reference)
+            for reference in (self.found_from["reference"], self.related["reference"])
+        }
+
+    def discovered(self, **extra: object) -> dict:
+        return {
+            "space": SPACE_KEY,
+            "title": "Found en route",
+            "author": "one",
+            "claim": True,
+            "links": [
+                {"other": self.found_from["reference"], "kind": "discovered-from"},
+                {"other": self.related["reference"], "kind": "relates-to"},
+            ],
+            **extra,
+        }
+
+    def items(self) -> int:
+        return int(self.conn.execute("SELECT COUNT(*) FROM work_items").fetchone()[0])
+
+    def assert_nothing_created(self) -> None:
+        self.assertEqual(2, self.items())
+        self.assertEqual([], self.calls())
+        for reference, before in self.before.items():
+            item = planning_service.get_work_item(self.conn, reference)
+            self.assertEqual(
+                (before["revision"], before["events"]), (item["revision"], item["events"])
+            )
+        self.assertEqual(0, self.conn.execute("SELECT COUNT(*) FROM work_item_links").fetchone()[0])
+        # The refused item's number was not spent: the next one takes it.
+        number = planning_service.create_work_item(self.conn, space=SPACE_KEY, title="Next")
+        self.assertEqual(f"{SPACE_KEY}-3", number["reference"])
+
+    def test_the_item_is_created_claimed_and_linked_in_one_call(self) -> None:
+        answer = self.answer("create_work_item", self.discovered(), {"sessionId": self.SESSION})
+
+        self.assertEqual({"claim": True, "links": 2}, answer["applied"])
+        self.assertEqual("one", answer["claim_ref"])
+        self.assertEqual("Found en route", answer["title"])
+        self.assertNotIn("events", answer)
+        item = planning_service.get_work_item(self.conn, answer["reference"])
+        self.assertEqual(item["revision"], answer["revision"])
+        self.assertEqual(
+            [
+                ("discovered-from", self.found_from["reference"]),
+                ("relates-to", self.related["reference"]),
+            ],
+            sorted((link["kind"], link["reference"]) for link in item["links"]),
+        )
+        # The history is the single tools' history, in the order they apply.
+        self.assertEqual(
+            ["created", "claimed", "linked", "linked"],
+            [event["action"] for event in item["events"]],
+        )
+        # One call, recorded once, and every row it wrote points at it: the new
+        # item's events and the event each link logs on its other end.
+        [row] = self.calls()
+        self.assertEqual(
+            ("create_work_item", "confirmed", self.SESSION, item["work_item_id"]),
+            (row["tool"], row["identity_state"], row["session_id"], row["work_item_id"]),
+        )
+        pointers = {
+            found[0]
+            for found in self.conn.execute(
+                "SELECT call_id FROM work_item_events WHERE work_item_id = ? OR action = 'linked'",
+                (item["work_item_id"],),
+            )
+        }
+        self.assertEqual({row["id"]}, pointers)
+        claimed = self.conn.execute(
+            "SELECT claim_call_id FROM work_items WHERE work_item_id = ?", (item["work_item_id"],)
+        ).fetchone()[0]
+        self.assertEqual(row["id"], claimed)
+        self.assertEqual("live", answer["claim_state"])
+        for other in (self.found_from["reference"], self.related["reference"]):
+            events = planning_service.get_work_item(self.conn, other)["events"]
+            self.assertEqual("linked", events[-1]["action"])
+            self.assertEqual("confirmed", events[-1]["identity"]["state"])
+
+    def test_verbose_answers_with_the_full_item_and_what_was_applied(self) -> None:
+        answer = self.answer(
+            "create_work_item",
+            {
+                "space": SPACE_KEY,
+                "title": "Verbose",
+                "links": [{"other": self.related["reference"], "kind": "blocks"}],
+                "verbose": True,
+            },
+        )
+        self.assertIn("events", answer)
+        self.assertEqual({"links": 1}, answer["applied"])
+        self.assertEqual("", answer["claim_ref"])
+
+    def test_a_link_to_an_unknown_item_creates_nothing(self) -> None:
+        arguments = self.discovered(
+            links=[
+                {"other": self.related["reference"], "kind": "relates-to"},
+                {"other": f"{SPACE_KEY}-99", "kind": "discovered-from"},
+            ]
+        )
+        error = self.refusal("create_work_item", arguments, {"sessionId": self.SESSION})
+        self.assertEqual("invalid_request", error["code"])
+        self.assertEqual({"group": "links", "index": 1}, error["step"])
+        self.assertTrue(error["message"].startswith("links[1]: "), error["message"])
+        self.assertIn(f"{SPACE_KEY}-99", error["message"])
+        self.assert_nothing_created()
+
+    def test_a_refused_claim_creates_nothing(self) -> None:
+        # A fresh item has no holder, so nothing in the domain refuses its claim
+        # today; the refusal is injected to prove the creation goes with it.
+        refused = planning_model.PlanningError("the claim was refused")
+        with mock.patch.object(planning_service, "claim_work_item", side_effect=refused):
+            error = self.refusal("create_work_item", self.discovered(), {"sessionId": self.SESSION})
+        self.assertEqual(
+            ("invalid_request", {"group": "claim", "index": 0}), (error["code"], error["step"])
+        )
+        self.assertEqual("claim: the claim was refused", error["message"])
+        self.assert_nothing_created()
+
+    def test_malformed_links_or_claim_are_refused_before_anything_is_written(self) -> None:
+        other = self.related["reference"]
+        for extra, wanted in (
+            ({"claim": "yes"}, "claim must be a boolean"),
+            ({"links": {"other": other, "kind": "blocks"}}, "links must be a list"),
+            ({"links": ["QA-1"]}, "links[0] must be an object"),
+            (
+                {"links": [{"other": other, "kind": "blocks", "remove": True}]},
+                "links[0]: unknown field(s) remove",
+            ),
+            ({"links": [{"other": other, "kind": "parent-of"}]}, "links[0]: "),
+        ):
+            with self.subTest(extra=extra):
+                error = self.refusal("create_work_item", self.discovered(**extra))
+                self.assertEqual("invalid_request", error["code"])
+                self.assertIn(wanted, error["message"])
+        self.assert_nothing_created()
+
+    def test_the_call_without_claim_or_links_answers_as_before(self) -> None:
+        for extra in ({}, {"claim": False, "links": []}):
+            with self.subTest(extra=extra):
+                answer = self.answer(
+                    "create_work_item", {"space": SPACE_KEY, "title": "Plain", **extra}
+                )
+                self.assertEqual(
+                    {
+                        "reference",
+                        "work_item_id",
+                        "revision",
+                        "state",
+                        "claim_ref",
+                        "claim_state",
+                        "title",
+                        "kind",
+                        "priority",
+                    },
+                    set(answer),
+                )
+                item = planning_service.get_work_item(self.conn, answer["reference"])
+                self.assertEqual(["created"], [event["action"] for event in item["events"]])
+                self.assertEqual(("", []), (item["claim_ref"], item["links"]))
+
+    def test_the_schema_publishes_claim_and_links(self) -> None:
+        [answer] = self.converse(
+            {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": params()}
+        )
+        tools = {tool["name"]: tool for tool in answer["result"]["tools"]}
+        self.assertEqual(len(mcp_surface.catalogue()), len(tools))
+        schema = tools["create_work_item"]["inputSchema"]
+        self.assertEqual(["space", "title"], schema["required"])
+        self.assertEqual("boolean", schema["properties"]["claim"]["type"])
+        links = schema["properties"]["links"]
+        self.assertEqual(planning_api.MAX_APPLY_ENTRIES, links["maxItems"])
+        self.assertEqual({"other", "kind"}, set(links["items"]["properties"]))
+        self.assertEqual(["other", "kind"], links["items"]["required"])
+        self.assertEqual(
+            sorted(planning_model.LINK_KINDS), links["items"]["properties"]["kind"]["enum"]
+        )
+        self.assertIn("create_work_item", mcp_surface.PLANNING_INSTRUCTIONS)
 
 
 class CompactWorkItemReadTests(WireCallTestCase):
