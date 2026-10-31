@@ -16,6 +16,7 @@ import GraphEdge from '@/widgets/work-item-graph/components/GraphEdge.vue'
 import GraphEmptyState from '@/widgets/work-item-graph/components/GraphEmptyState.vue'
 import GraphLayoutStatus from '@/widgets/work-item-graph/components/GraphLayoutStatus.vue'
 import GraphNodeCard from '@/widgets/work-item-graph/components/GraphNodeCard.vue'
+import { useGraphNodeMarks } from '@/widgets/work-item-graph/composables/useGraphNodeMarks.ts'
 import { useGraphProjection } from '@/widgets/work-item-graph/composables/useGraphProjection.ts'
 import { graphCameraView } from '@/widgets/work-item-graph/utils/graphCamera.ts'
 import { NODE_HEIGHT, NODE_WIDTH } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
@@ -29,7 +30,6 @@ import {
 } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import type { GraphScope } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 
-import { CHAIN_GROUPS, chainGroup } from '@/shared/api/planningChainGroups.ts'
 import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
 
 const props = defineProps<{
@@ -91,12 +91,6 @@ const fitted = ref(false)
 
 const readyIdSet = computed(() => new Set(ready.value.map((node) => node.work_item_id)))
 
-// Containers are named by reference on their children.
-
-const referenceById = computed(
-  () => new Map(props.items.map((item) => [item.work_item_id, item.reference])),
-)
-
 /** A lit edge takes the accent; an unlit discovery stays quieter than a block. */
 function edgeMarkerColor(lit: boolean, kind: PlanningEdge['kind']): string {
   if (lit) return 'var(--color-action-primary)'
@@ -108,51 +102,25 @@ function isReady(node: PlacedNode): boolean {
   return readyIdSet.value.has(node.work_item_id)
 }
 
-const inChain = computed(() => props.scopeKind === 'chain')
-
-/**
- * The parent's reference, or nothing when the node is a root — or when the
- * parent is the chain's root, which the chip already names: on a chain filed
- * under one epic, the same reference on every node says nothing.
- */
-function parentReference(node: PlacedNode): string | undefined {
-  if (node.parent_id === null) return undefined
-  if (inChain.value && node.parent_id === props.epicId) return undefined
-  return referenceById.value.get(node.parent_id)
-}
-
-/** The chain's root, which the field marks; a chain is the only field that has one. */
-function isChainRoot(node: PlacedNode): boolean {
-  return inChain.value && node.work_item_id === props.epicId
-}
-
-/**
- * Outside the focused lineage, which is a fact about the field — or, in a
- * chain, finished: the chain draws its closed work as the ground the open work
- * stands on. Its root is the exception, closed or not: it is what the rest grew
- * from.
- */
-function isRecessed(node: PlacedNode): boolean {
-  if (inChain.value && node.state.is_terminal && !isChainRoot(node)) return true
-  const focused = focusSet.value
-  return focused !== null && !focused.ids.has(node.work_item_id)
-}
-
-/** The node's place in the chain, marked only when the field is one. */
-function nodeChainGroup(node: PlacedNode) {
-  return inChain.value ? chainGroup(node) : undefined
-}
+const {
+  chainLegend,
+  inChain,
+  isChainRoot,
+  isRecessed,
+  nodeChainGroup,
+  parentReference,
+  referenceById,
+} = useGraphNodeMarks({
+  epicId: () => props.epicId,
+  focusSet,
+  items: () => props.items,
+  placed,
+  scopeKind: () => props.scopeKind,
+})
 
 const chainChip = computed(() =>
   props.chain ? { reference: props.chain.reference, total: props.chain.total } : null,
 )
-
-/** The chain groups the field draws, which is what its legend names. */
-const chainLegend = computed(() => {
-  if (!inChain.value || !placed.value) return []
-  const present = new Set(placed.value.nodes.map((node) => chainGroup(node)))
-  return CHAIN_GROUPS.filter((group) => present.has(group))
-})
 
 const flowNodes = computed<FlowNode<PlacedNode>[]>(() => {
   if (!placed.value) return []
