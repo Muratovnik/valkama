@@ -53,6 +53,7 @@ class PlanningApiTests(unittest.TestCase):
                 "/api/planning/search",
                 "/api/planning/spaces",
                 "/api/planning/work-item",
+                "/api/planning/work-item/chain",
                 "/api/planning/work-items",
             ),
             planning_api.READ_PATHS,

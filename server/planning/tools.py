@@ -68,6 +68,10 @@ _OFFSET = {
     "description": "How many items to skip, for the next page: pass the next_offset"
     " of the previous answer with the same filters.",
 }
+#: The most open members one page of get_work_item_chain carries.
+CHAIN_PAGE = 200
+#: How many of a chain's newest series entries get_work_item_chain carries.
+CHAIN_SERIES_DAYS = 30
 #: How much history get_work_item carries unless the caller asks for all of it.
 RECENT_COMMENTS = 5
 RECENT_EVENTS = 10
@@ -174,7 +178,7 @@ TOOLS = [
     _tool(
         "list_work_items",
         "List work items",
-        "Items in state order, filtered by state, category, kind or holder. One compact"
+        "Items in state order, filtered by state, category, kind, holder or parent. One compact"
         " row per item: reference, title, kind, state, priority, parent and holder."
         f" A page holds at most {service.MAX_LIST_PAGE} items." + _PAGING,
         READ_ONLY,
@@ -184,10 +188,40 @@ TOOLS = [
             "category": {"type": "string", "enum": list(model.STATE_CATEGORIES)},
             "kind": {"type": "string", "enum": sorted(model.WORK_ITEM_KINDS)},
             "owner": _STR,
+            "parent": {
+                "type": "string",
+                "description": "Only the children of this item, by its reference (VAL-142)"
+                " or its work_item_id.",
+            },
             "limit": _INT,
             "offset": _OFFSET,
             "verbose": _VERBOSE_ROWS,
         },
+    ),
+    _tool(
+        "get_work_item_chain",
+        "Read a chain of work",
+        "What one item's work grew into and whether it converges. scope=epic counts"
+        " the item's children; scope=chain (the default) adds, transitively, every"
+        " item discovered from it or from a member and every child of a member;"
+        " relates-to, duplicates and blocks never widen it. Answers with total,"
+        " closed, open, ready, by_category, origins (members grouped by parent),"
+        f" the last {CHAIN_SERIES_DAYS} days of series and recent: the last 7 UTC"
+        " days' created and closed and a trend of growing, converging or steady."
+        " open_members lists the open members, active first, then review, then"
+        f" ready, then the rest; at most {CHAIN_PAGE} per page." + _PAGING,
+        READ_ONLY,
+        {
+            "id": _REFERENCE,
+            "scope": {"type": "string", "enum": ["chain", "epic"]},
+            "offset": _OFFSET,
+            "limit": {
+                "type": "integer",
+                "description": f"Open members per page, {COMPACT_LIMIT} by default; a"
+                f" larger limit is answered with at most {CHAIN_PAGE}.",
+            },
+        },
+        ["id"],
     ),
     _tool(
         "search_work_items",
@@ -754,6 +788,67 @@ def _listing(
     return run
 
 
+def _open_rank(member: dict) -> int:
+    """Where an open chain member is listed: work under way first, then work waiting
+    on a reviewer, then work anyone could take now, then everything else."""
+
+    category = member["state"]["category"]
+    if category == "active":
+        return 0
+    if category == "review":
+        return 1
+    return 2 if member["ready"] else 3
+
+
+def _count_argument(arguments: Mapping[str, object], name: str, default: int) -> int:
+    value = arguments.get(name)
+    if value is None:
+        return default
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise model.PlanningError(f"{name} must be a non-negative integer")
+    return value
+
+
+def _chain(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
+    """The chain as the HTTP read answers it, without the parts a model need not scan.
+
+    The members and edges a screen draws are left out; the open members come as
+    compact rows, one page at a time, and the series keeps its newest days.
+    """
+
+    offset = _count_argument(arguments, "offset", 0)
+    size = max(1, min(_count_argument(arguments, "limit", COMPACT_LIMIT), CHAIN_PAGE))
+    parameters = {"id": [str(arguments["id"])]}
+    if arguments.get("scope") is not None:
+        parameters["scope"] = [str(arguments["scope"])]
+    answer = api.handle_get(conn, "/api/planning/work-item/chain", parameters)
+    if answer is None:  # pragma: no cover - the path table above is closed
+        raise ValueError("no planning chain read")
+    found = dict(answer[1]["chain"])
+    members = found.pop("members")
+    found.pop("edges")
+    found["series"] = found["series"][-CHAIN_SERIES_DAYS:]
+    open_members = sorted(
+        (member for member in members if not member["state"]["is_terminal"]),
+        key=_open_rank,
+    )
+    found["open_members"] = [
+        {
+            "reference": member["reference"],
+            "title": member["title"],
+            "state": member["state"]["key"],
+            "claim_ref": member["claim_ref"],
+            "ready": member["ready"],
+            "parent_reference": member["parent_reference"],
+        }
+        for member in open_members[offset : offset + size]
+    ]
+    truncated = len(open_members) > offset + size
+    found["truncated"] = truncated
+    found["next_offset"] = offset + size if truncated else None
+    return found
+
+
 def _space(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
     return service.get_planning_space(conn, str(arguments["space"]))
 
@@ -772,10 +867,12 @@ OPS: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], object]] = {
             "category",
             "kind",
             "owner",
+            "parent",
             "limit",
             "offset",
         )
     ),
+    "get_work_item_chain": _chain,
     "search_work_items": _listing(_search),
     "update_work_item": _acknowledged("/api/planning/work-item/update", acknowledgements.updated),
     "transition_work_item": _acknowledged(

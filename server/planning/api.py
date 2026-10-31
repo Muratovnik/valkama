@@ -19,7 +19,7 @@ from collections.abc import Callable, Mapping
 from typing import Any
 
 from .. import query_params
-from . import calls, migration, model, read_model, requests, service, views
+from . import calls, chain, migration, model, read_model, requests, service, views
 
 PLANNING_API_INTERFACE = f"{model.PLANNING_INTERFACE}-api"
 
@@ -235,6 +235,7 @@ def _work_items(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -
             category=_first(parameters, "category"),
             kind=_first(parameters, "kind"),
             owner=_first(parameters, "owner"),
+            parent=_first(parameters, "parent"),
             limit=_int(_first(parameters, "limit"), "limit", 200),
             offset=_offset(parameters),
         ),
@@ -252,6 +253,18 @@ def _work_item(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) ->
             comments=_count(parameters, "comments"),
             events=_count(parameters, "events"),
             sessions=_switch(parameters, "sessions"),
+        ),
+    }
+
+
+def _chain(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
+    """The chain of work rooted at one item: `scope` is `chain` (the default) or `epic`."""
+
+    scope = _first(parameters, "scope")
+    return {
+        "interface_version": PLANNING_API_INTERFACE,
+        "chain": chain.chain(
+            conn, _required(parameters, "id"), "chain" if scope is None else scope
         ),
     }
 
@@ -298,6 +311,7 @@ _READS: dict[str, Callable[[sqlite3.Connection, Mapping[str, list[str]]], dict]]
     # every other exact read on this surface already does; the HTTP dispatch
     # keys on exact paths and a segment would need a second matching rule.
     "/api/planning/work-item": _work_item,
+    "/api/planning/work-item/chain": _chain,
     "/api/planning/search": _search,
     "/api/planning/requests": _requests,
     "/api/planning/request": _request,

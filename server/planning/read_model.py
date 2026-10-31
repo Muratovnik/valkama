@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Callable
 
 from . import calls, leases, model
 
@@ -119,6 +120,20 @@ def is_container(conn: sqlite3.Connection, work_item_id: str) -> bool:
     )
 
 
+def workable(
+    *, container: bool, claim_ref: object, category: str, blocked: Callable[[], bool]
+) -> bool:
+    """Whether an item is workable now: unheld, uncontained, unblocked and not started.
+
+    The one statement of the rule, so a projection that loaded its facts in bulk
+    answers it the way a single item's record does. `blocked` is asked last and
+    only when the rest already holds, because it is the one fact that may cost
+    a query.
+    """
+
+    return not container and not claim_ref and category in ("backlog", "queued") and not blocked()
+
+
 def present(
     conn: sqlite3.Connection,
     row: sqlite3.Row,
@@ -170,11 +185,11 @@ def present(
     lease = leases.lease(conn, row)
     record["claim_state"] = lease.state if lease is not None else None
     record["container"] = is_container(conn, identity)
-    record["ready"] = (
-        not record["container"]
-        and not row["claim_ref"]
-        and state["category"] in ("backlog", "queued")
-        and not blocked(conn, identity)
+    record["ready"] = workable(
+        container=record["container"],
+        claim_ref=row["claim_ref"],
+        category=state["category"],
+        blocked=lambda: blocked(conn, identity),
     )
     if not full:
         # A count, under its own name. Calling it `comments` in the brief and

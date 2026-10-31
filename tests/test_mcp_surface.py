@@ -25,6 +25,7 @@ import tempfile
 import threading
 import time
 import unittest
+from datetime import date, timedelta
 from typing import ClassVar
 from unittest import mock
 
@@ -1830,6 +1831,142 @@ class CompactWorkItemReadTests(WireCallTestCase):
                         "/api/planning/work-item",
                         {"id": [self.reference], **parameters},
                     )
+
+
+class ChainToolTests(WireCallTestCase):
+    """get_work_item_chain: the shared chain read, cut down for a model, open members paged."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.root = planning_service.create_work_item(
+            self.conn, space=SPACE_KEY, title="Root", kind="epic"
+        )["reference"]
+        self.children: dict[str, str] = {}
+        for name, state in (
+            ("ready", None),
+            ("held", "blocked"),
+            ("active", "dev"),
+            ("review", "review"),
+            ("claimed", "todo"),
+        ):
+            self.children[name] = planning_service.create_work_item(
+                self.conn, space=SPACE_KEY, title=name, state=state, parent=self.root
+            )["reference"]
+        planning_service.claim_work_item(self.conn, self.children["claimed"], author="one")
+        # Enough closed children on distinct days for the series to be cut.
+        for day in range(1, 33):
+            done = planning_service.create_work_item(
+                self.conn, space=SPACE_KEY, title=f"done {day}", state="done", parent=self.root
+            )
+            stamp = f"{date(2026, 7, 31) + timedelta(days=day)}T08:00:00Z"
+            self.conn.execute(
+                "UPDATE work_items SET created_at = ?, updated_at = ? WHERE work_item_id = ?",
+                (stamp, stamp, done["work_item_id"]),
+            )
+        self.found = planning_service.create_work_item(self.conn, space=SPACE_KEY, title="found")[
+            "reference"
+        ]
+        planning_service.link_work_items(
+            self.conn, self.found, self.children["ready"], "discovered-from"
+        )
+        self.conn.commit()
+
+    def whole(self, scope: str = "chain") -> dict:
+        handled = planning_api.handle_get(
+            self.conn, "/api/planning/work-item/chain", {"id": [self.root], "scope": [scope]}
+        )
+        assert handled is not None
+        return handled[1]["chain"]
+
+    def test_the_answer_is_the_shared_chain_without_members_and_edges(self) -> None:
+        answer = self.answer("get_work_item_chain", {"id": self.root})
+        whole = self.whole()
+        self.assertNotIn("members", answer)
+        self.assertNotIn("edges", answer)
+        for key in ("root", "scope", "total", "closed", "open", "ready", "by_category"):
+            self.assertEqual(whole[key], answer[key], key)
+        self.assertEqual((38, 32, 6), (answer["total"], answer["closed"], answer["open"]))
+        self.assertEqual(whole["origins"], answer["origins"])
+        self.assertEqual(whole["recent"], answer["recent"])
+        self.assertEqual(33, len(whole["series"]))
+        self.assertEqual(whole["series"][-30:], answer["series"])
+
+    def test_the_epic_scope_leaves_the_discovered_item_out(self) -> None:
+        answer = self.answer("get_work_item_chain", {"reference": self.root, "scope": "epic"})
+        self.assertEqual(("epic", 37, 5), (answer["scope"], answer["total"], answer["open"]))
+
+    def test_open_members_run_active_review_ready_then_the_rest(self) -> None:
+        answer = self.answer("get_work_item_chain", {"id": self.root})
+        self.assertEqual(
+            [
+                self.children["active"],
+                self.children["review"],
+                self.children["ready"],
+                self.found,
+                self.children["held"],
+                self.children["claimed"],
+            ],
+            [row["reference"] for row in answer["open_members"]],
+        )
+        self.assertEqual((False, None), (answer["truncated"], answer["next_offset"]))
+        claimed = answer["open_members"][-1]
+        self.assertEqual(
+            {
+                "reference": self.children["claimed"],
+                "title": "claimed",
+                "state": "todo",
+                "claim_ref": "one",
+                "ready": False,
+                "parent_reference": self.root,
+            },
+            claimed,
+        )
+        self.assertIsNone(answer["open_members"][3]["parent_reference"])
+
+    def test_open_members_page_until_next_offset_is_null(self) -> None:
+        seen: list[str] = []
+        pages: list[tuple[int, bool, int | None]] = []
+        offset: int | None = 0
+        while offset is not None:
+            answer = self.answer(
+                "get_work_item_chain", {"id": self.root, "limit": 4, "offset": offset}
+            )
+            seen.extend(row["reference"] for row in answer["open_members"])
+            pages.append((len(answer["open_members"]), answer["truncated"], answer["next_offset"]))
+            offset = answer["next_offset"]
+        self.assertEqual([(4, True, 4), (2, False, None)], pages)
+        self.assertEqual(6, len(set(seen)))
+        # A limit above the page is one page of at most the cap.
+        self.assertEqual(
+            6,
+            len(
+                self.answer("get_work_item_chain", {"id": self.root, "limit": 5000})["open_members"]
+            ),
+        )
+
+    def test_refusals_carry_the_boundary_codes(self) -> None:
+        for arguments, wanted in (
+            ({"id": self.root, "offset": -1}, "offset must be a non-negative integer"),
+            ({"id": self.root, "limit": True}, "limit must be a non-negative integer"),
+            ({"id": self.root, "scope": "related"}, "scope must be chain or epic"),
+            ({"id": f"{SPACE_KEY}-999"}, f"no work item {SPACE_KEY}-999"),
+        ):
+            with self.subTest(arguments=arguments):
+                error = self.refusal("get_work_item_chain", arguments)
+                self.assertEqual(("invalid_request", wanted), (error["code"], error["message"]))
+
+    def test_list_work_items_keeps_only_the_named_parents_children(self) -> None:
+        listed = self.answer("list_work_items", {"parent": self.root, "limit": 100})["work_items"]
+        self.assertEqual(37, len(listed))
+        self.assertEqual({self.root}, {row["parent"] for row in listed})
+        self.assertEqual([], self.answer("list_work_items", {"parent": self.found})["work_items"])
+        error = self.refusal("list_work_items", {"parent": f"{SPACE_KEY}-999"})
+        self.assertEqual("invalid_request", error["code"])
+        # Without it the list is unchanged: every item in the space.
+        self.assertEqual(
+            39,
+            len(self.answer("list_work_items", {"space": SPACE_KEY, "limit": 100})["work_items"]),
+        )
 
 
 if __name__ == "__main__":

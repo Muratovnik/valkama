@@ -102,10 +102,13 @@ def list_work_items(
     category: str | None = None,
     kind: str | None = None,
     owner: str | None = None,
+    parent: str | None = None,
     limit: int | None = 200,
     offset: int = 0,
 ) -> list[dict]:
     """Exactly `limit` items from `offset` on, or every one of them when limit is None.
+
+    `parent` keeps only the children of that item, named as any item is named.
 
     Nothing here caps the count: a caller that wants a bounded page with an
     honest account of what it left out asks `list_work_items_page`.
@@ -128,6 +131,9 @@ def list_work_items(
     if owner is not None:
         clauses.append("i.claim_ref = ?")
         parameters.append(model.actor(owner, "owner"))
+    if parent is not None:
+        clauses.append("i.parent_id = ?")
+        parameters.append(str(read_model.item_row(conn, parent)["work_item_id"]))
     query = with_clauses(
         "SELECT i.* FROM work_items i JOIN workflow_states s ON s.state_id = i.state_id", clauses
     )
@@ -148,6 +154,7 @@ def list_work_items_page(
     category: str | None = None,
     kind: str | None = None,
     owner: str | None = None,
+    parent: str | None = None,
     limit: int = 200,
     offset: int = 0,
 ) -> dict:
@@ -161,6 +168,7 @@ def list_work_items_page(
         category=category,
         kind=kind,
         owner=owner,
+        parent=parent,
         limit=size + 1,
         offset=offset,
     )
