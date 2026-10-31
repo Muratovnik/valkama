@@ -81,6 +81,26 @@ class PlanningRequestTests(unittest.TestCase):
                 self.conn, request["request_id"], status="declined", expected_revision=0
             )
 
+    def test_an_expected_revision_must_be_a_count(self) -> None:
+        request = self.create()
+        self.conn.commit()
+        for revision in (-1, True, "0", 0.0, None):
+            with (
+                self.subTest(revision=revision),
+                self.assertRaisesRegex(
+                    model.PlanningError, "expected_revision must be a non-negative integer"
+                ),
+            ):
+                requests.resolve(
+                    self.conn, request["request_id"], status="declined", expected_revision=revision
+                )
+        self.assertEqual(
+            "declined",
+            requests.resolve(
+                self.conn, request["request_id"], status="declined", expected_revision=0
+            )["status"],
+        )
+
     def test_two_connections_answer_exactly_once(self) -> None:
         request = self.create()
         self.conn.commit()

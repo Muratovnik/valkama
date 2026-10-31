@@ -228,12 +228,7 @@ def resolve(
     answers: object = None,
     author: str | None = None,
 ) -> dict:
-    if (
-        not isinstance(expected_revision, int)
-        or isinstance(expected_revision, bool)
-        or expected_revision < 0
-    ):
-        raise model.PlanningError("expected_revision must be a non-negative integer")
+    expected_revision = model.count_field(expected_revision, "expected_revision")
     model.enum_field(status, frozenset({"answered", "declined", "expired"}), "status")
     with _transaction(conn):
         row = _row(conn, identity)
