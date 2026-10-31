@@ -170,6 +170,14 @@ recorded with its identity, as every write is. Placing an item moves no other
 item, except when two neighbours leave no room between them: then the items of
 that state are renumbered in the order they already have, with no revision bump.
 
+A placement writes no history event on purpose. Every build that opens the
+store reads the same history, and a build that predates placements checks each
+event's action against the closed list it knows: its card would refuse an item
+whose history held a placement. The call's row in the execution tree (see
+[Call identity](#call-identity)) and the revision record a placement instead. A
+transition that carries `rank` writes its `transitioned` event as before; the
+placement adds none.
+
 `transition_work_item`, `POST /api/planning/work-item/transition` and the
 `transition` group of `apply_work_item_changes` take the same `rank`, which
 places the item in the state it moves to; the anchor must then be in that state.
