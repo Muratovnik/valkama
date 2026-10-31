@@ -82,8 +82,9 @@ const lane = computed(() => {
 })
 const listed = computed(() => {
   const chain = props.chain
-  if (!chain || lane.value === null) return groups.value
-  return groupMembers(chain.members.filter((member) => laneOf(member) === lane.value))
+  return !chain || lane.value === null
+    ? groups.value
+    : groupMembers(chain.members.filter((member) => laneOf(member) === lane.value))
 })
 const laneName = computed(() => lane.value || t('workItem.chain.noEpic'))
 /**

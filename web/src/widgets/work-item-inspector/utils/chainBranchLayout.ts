@@ -132,9 +132,8 @@ function sourcesOf(context: ForkContext, id: string): string[] {
   return [...(context.sources.get(id) ?? [])].sort((left, right) => {
     const a = age(left)
     const b = age(right)
-    if (a && b) return byAge(a, b)
-    // The root is older than any member it led to.
-    return Number(Boolean(a)) - Number(Boolean(b))
+    // The root is not a member, and it is older than any member it led to.
+    return a && b ? byAge(a, b) : Number(Boolean(a)) - Number(Boolean(b))
   })
 }
 

@@ -102,8 +102,9 @@ export function useBranchCursor({ canvas, describe, drawing, open }: CursorOptio
     const pointed = pointedAt()
     const lane = pointed && laneDrawing(pointed.lane)
     const member = pointed && lane?.lane.members[pointed.index]
-    if (!pointed || !lane || !member) return null
-    return { lane, member, index: pointed.index, group: lane.lane.groups[pointed.index] }
+    return pointed && lane && member
+      ? { lane, member, index: pointed.index, group: lane.lane.groups[pointed.index] }
+      : null
   })
 
   function indexAt(lane: LaneDrawing, event: MouseEvent): number {
