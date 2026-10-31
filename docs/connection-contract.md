@@ -615,8 +615,12 @@ How a switch goes:
    that fails, the old backend goes on serving.
 4. The old backend is stopped: its stdin is closed, and its process tree is
    killed if it has not exited within 5 seconds. Only then does the new one
-   start, so two backends of one session never run at once and an old release
-   never writes a store the new one has migrated.
+   start, so two backends of one session never run at once, and an old release
+   of that session never writes a store its new one has migrated. A backend
+   that still has not exited is never joined by another: the next request is
+   answered with an error and the front exits. Each session switches on its
+   own, so until another session has switched, its old release can still
+   finish the one request it has in flight.
 5. The new backend is asked `server/discover`, and must answer within 120
    seconds. A client that made a handshake has its `initialize`, and its
    `notifications/initialized`, replayed to it, so the backend knows the
@@ -632,7 +636,9 @@ A release that fails after the old backend stopped — a store it refuses, an
 exit before it answers — is stopped, and the previous release is started
 again. Either way the next tool result carries one more content block, appended
 after the payload, that names the release and why it failed, and that release
-is tried again only once the launcher names another one. If the previous release
+is tried again only once the launcher names another one. Pinning the same
+commit again names the same release; restarting the session starts it afresh,
+which is the way to retry a failure that has passed. If the previous release
 cannot start either, which is the case when the failed one migrated the store
 first, the request is answered with a JSON-RPC error that carries the store's
 refusal, and the front exits.

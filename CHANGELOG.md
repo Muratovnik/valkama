@@ -57,8 +57,11 @@ checkouts are therefore distinguishable even at the same version.
   launcher's `mcp` is now a stdio front that keeps the client's pipe and runs
   the pinned release's server behind it. A few seconds after an install it
   switches to the new release between two requests, and tells a client that
-  can hear it that the tool list changed: Claude Code's CLI then lists the
-  tools again, so a tool the new release added appears in the session. The
+  can hear it that the tool list changed. Claude Code's CLI, as observed in
+  2.1.304, then lists the tools again, so a tool the new release added appears
+  in the session; a tool schema the model has already loaded can stay in its
+  context, the Desktop app's host path did not refresh, and a server-side
+  listen denylist can switch the notification off for a connection. The
   front declares `tools.listChanged` and answers `subscriptions/listen` itself;
   requests reach the server byte for byte. A release that does not start
   leaves the session on the one it had, with one warning on the next tool

@@ -126,6 +126,12 @@ predates the front is simply a server.
   Windows a Python child handed the front's stdin pipe does not finish starting
   while the front's main thread has a read pending on it, so a switch begun
   while the client was idle would have waited for its next message.
+- **POSIX.** A backend runs in a session of its own. `stop_process_tree` kills
+  the child's process group there, and a backend left in the front's group
+  would take the front, and the client that started it, down with it; the
+  helper now also refuses to kill its caller's own group. A backend that will
+  not exit even then is never joined by another release: the session's server
+  stops instead.
 
 The front's own code is the one part a switch does not replace: a session
 keeps the front it started with.
