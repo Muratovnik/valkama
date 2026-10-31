@@ -65,7 +65,7 @@ export const LINE_BUDGET = new Map([
   ['widgets/work-item-inspector/components/InspectorSummary.vue', 1],
   ['widgets/work-item-inspector/components/InspectorOverview.css', 1],
   ['widgets/work-item-inspector/components/InspectorExecution.vue', 1],
-  // The branch map's task readout floats over the lanes below it (overlay).
+  // The branch map's task readout floats over the lanes beside it (overlay).
   ['widgets/work-item-inspector/components/ChainBranchTip.vue', 1],
   ['widgets/work-item-views/components/WorkItemList.vue', 1],
   ['widgets/work-item-graph/components/GraphView.vue', 1],

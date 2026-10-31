@@ -60,12 +60,13 @@ const drawing = computed(() =>
   })),
 )
 
-const { announcement, cursorOf, enter, exit, leave, move, openAt, point, shown } = useBranchCursor({
-  canvas,
-  describe,
-  drawing,
-  open: (reference) => emit('open', reference),
-})
+const { announcement, cursorOf, enter, exit, leave, move, openAt, point, roomAbove, shown } =
+  useBranchCursor({
+    canvas,
+    describe,
+    drawing,
+    open: (reference) => emit('open', reference),
+  })
 
 /** The lane the member list is narrowed to says so: it is the current one. */
 function isFiltered(lane: LaneDrawing): boolean {
@@ -108,6 +109,8 @@ function place(box: Box) {
 
 /** The mark over the task being looked at, and its readout over the lane. */
 const TIP_WIDTH = 280
+/** The readout's height, near enough to know whether it fits above a lane. */
+const TIP_HEIGHT = 100
 const mark = computed(() => {
   const current = shown.value
   return (
@@ -116,7 +119,9 @@ const mark = computed(() => {
 })
 const tipStyle = computed(() => {
   const current = shown.value
-  return current ? place(tipAt(current.lane, current.index, drawing.value, TIP_WIDTH)) : {}
+  if (!current) return {}
+  const above = roomAbove(current.lane) >= TIP_HEIGHT
+  return place(tipAt(current.lane, current.index, drawing.value, { above, width: TIP_WIDTH }))
 })
 
 const hintId = useId()

@@ -148,5 +148,20 @@ export function useBranchCursor({ canvas, describe, drawing, open }: CursorOptio
     if (focused.value === lane.lane.key) focused.value = null
   }
 
-  return { announcement, cursorOf, enter, exit, leave, move, openAt, point, shown }
+  /**
+   * How much of the panel is visible above a lane's line: the readout stands
+   * there only when it fits, since a scrolled panel clips whatever rises past
+   * its top edge.
+   */
+  function roomAbove(lane: LaneDrawing): number {
+    const node = canvas.value
+    if (!node) return 0
+    let scroller = node.parentElement
+    while (scroller && !/auto|scroll/u.test(getComputedStyle(scroller).overflowY))
+      scroller = scroller.parentElement
+    const edge = scroller ? scroller.getBoundingClientRect().top : 0
+    return node.getBoundingClientRect().top + (lane.band.top ?? 0) - edge
+  }
+
+  return { announcement, cursorOf, enter, exit, leave, move, openAt, point, roomAbove, shown }
 }

@@ -775,7 +775,6 @@ export const en = {
         summary:
           'Branch map: {lanes} lanes, {total} items; {done} finished, {current} in progress, {ahead} ahead.',
         lane: 'Lane {name}: {total} items; {done} finished, {current} in progress, {ahead} ahead',
-        laneRole: 'lane',
         hint: 'Left and Right move between tasks, Page Up and Page Down jump between stretches of one state, Home and End go to the ends, Enter opens the task.',
         task: '{reference} · {title} · {state}',
         position: '{position} of {total}',

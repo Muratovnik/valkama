@@ -472,16 +472,23 @@ export function markAt(lane: LaneDrawing, index: number, unit: number) {
 }
 
 /**
- * The readout over the task it names, standing just above the lane's line so
- * the lanes below stay readable, centred on the task inside the map's width.
+ * The readout for the task it names, centred on the task inside the map's
+ * width. It stands just above the lane's line, so the lanes below stay
+ * readable, unless there is not room for it there — the first lane at the top
+ * of a scrolled panel — and then just below.
  */
-export function tipAt(lane: LaneDrawing, index: number, drawing: BranchDrawing, tip: number): Box {
-  const width = Math.min(tip, drawing.width)
+export function tipAt(
+  lane: LaneDrawing,
+  index: number,
+  drawing: BranchDrawing,
+  tip: { above: boolean; width: number },
+): Box {
+  const width = Math.min(tip.width, drawing.width)
   const span = taskSpan(lane, index, drawing.unit)
   const centre = (span.left + span.right) / 2
-  return {
-    bottom: drawing.height - ((lane.band.top ?? 0) - TIP_GAP),
-    left: Math.max(0, Math.min(drawing.width - width, centre - width / 2)),
-    width,
-  }
+  const left = Math.max(0, Math.min(drawing.width - width, centre - width / 2))
+  const band = lane.band.top ?? 0
+  return tip.above
+    ? { bottom: drawing.height - (band - TIP_GAP), left, width }
+    : { top: band + LANE_BAND + TIP_GAP, left, width }
 }

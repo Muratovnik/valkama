@@ -199,6 +199,33 @@ for (const width of [1440, 390]) {
   })
 }
 
+test('the readout of the first lane stays inside a panel scrolled to the map', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await installBackend(page)
+  await serve(page, branchedChain(mapRoot, 'MAIN'))
+  const section = await openCard(page)
+  const lane = section.getByRole('slider').first()
+  // Hovering waits for the card to finish sliding in; then the pointer leaves.
+  await lane.hover()
+  await page.mouse.move(0, 0)
+  // Scroll the card's panel until the map's first lane is the first thing shown.
+  const panelTop = await section.locator('.branch-map-canvas').evaluate((canvas) => {
+    let panel = canvas.parentElement
+    while (panel && !/auto|scroll/u.test(getComputedStyle(panel).overflowY))
+      panel = panel.parentElement
+    if (!panel) return 0
+    panel.scrollTop += canvas.getBoundingClientRect().top - panel.getBoundingClientRect().top
+    return panel.getBoundingClientRect().top
+  })
+  const box = (await lane.boundingBox()) ?? { x: 0, y: 0, width: 0, height: 0 }
+  expect(box.y - panelTop).toBeLessThan(40)
+  await page.mouse.move(box.x + 200, box.y + box.height / 2)
+  const tip = await section.locator('.branch-tip').boundingBox()
+  expect(tip).not.toBeNull()
+  // Above the lane it would rise past the panel's top edge and be cut off.
+  expect(tip?.y ?? 0).toBeGreaterThanOrEqual(panelTop)
+})
+
 test('the branch map gives a small chain a segment, a dot and a name per task', async ({
   page,
 }, info) => {

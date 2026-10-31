@@ -777,7 +777,6 @@ export const ru = {
         summary:
           'Карта цепочки: веток — {lanes}, задач — {total}; выполнено {done}, в работе {current}, впереди {ahead}.',
         lane: 'Ветка {name}: задач — {total}; выполнено {done}, в работе {current}, впереди {ahead}',
-        laneRole: 'ветка',
         hint: 'Стрелки влево и вправо — по задачам, Page Up и Page Down — по участкам одного состояния, Home и End — к краям, Enter — открыть задачу.',
         task: '{reference} · {title} · {state}',
         position: '{position} из {total}',
