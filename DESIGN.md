@@ -524,6 +524,11 @@ stretched to that, its tasks sharing the length, and a dot closes it, so it
 reads as a lane and still as the shortest; its counts say its volume. A chain
 view's legend names only the states its drawing holds, on the map as on the
 graph, so no key — least of all the emphatic «Blocked» — stands for nothing.
+The graph's key lies on the field's corner, not in the bar above it, and keeps
+the place of a state a switch can add, so no switch moves the bar or the
+field; every framing keeps the nodes clear of the key and the camera controls.
+Zoomed out past reading, the graph draws each node as a block of its state's
+colour with its reference, so the whole of a long chain reads as an overview.
 Under the chain's totals, one line answers whether and when the open part
 closes, from the last seven days, and says so as a range when those days
 disagree.
