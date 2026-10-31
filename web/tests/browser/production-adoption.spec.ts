@@ -183,7 +183,16 @@ test('a required boolean remains unanswered until No is submitted and confirmed'
   await page.getByRole('button', { name: /^Needs my answer/ }).click()
   await expect(dialog.locator('.request-state')).toContainText('You answered')
   await expect(dialog.getByRole('definition')).toHaveText('No')
-  await dialog.getByRole('button', { name: 'Open task', exact: true }).click()
+  // The lone text action hangs back into the answer's column: its label starts
+  // where the question's term starts, not a button padding inside it.
+  const term = present(await dialog.getByRole('term').boundingBox(), 'the answer term')
+  const task = dialog.getByRole('button', { name: 'Open task', exact: true })
+  const taskBox = present(await task.boundingBox(), 'the open-task action')
+  const inset = Number.parseFloat(
+    await task.evaluate((element) => getComputedStyle(element).paddingLeft),
+  )
+  expect(taskBox.x + inset).toBeCloseTo(term.x, 0)
+  await task.click()
   const itemRequests = page.getByRole('region', { name: 'Questions and decisions', exact: true })
   await expect(itemRequests.locator('.request-state')).toContainText('You answered')
   await page.reload()
