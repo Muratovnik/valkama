@@ -184,6 +184,7 @@ function toggleLabel(lane: BoardLane): string {
         v-for="lane in props.lanes"
         :key="lane.id"
         class="board-lane"
+        :class="{ open: isOpen(lane) }"
         :aria-label="title(lane)"
         :data-lane="lane.id"
       >
@@ -340,15 +341,23 @@ function toggleLabel(lane: BoardLane): string {
 /* A lane repeats the tracks rather than borrowing them as a subgrid: the tracks
    are measured widths, so they line up the same, and a lane that stands on its
    own can skip layout while it is scrolled out of sight. Laying out every lane
-   of a space was most of what regrouping the board cost. */
+   of a space was most of what regrouping the board cost.
+
+   A lane not yet laid out is reserved its likely height, a folded one its
+   heading's: a single guess for both made the scrollbar of a space with a
+   hundred folded lanes half again too long until it had been scrolled through. */
 .board-lane {
   display: grid;
   grid-template-columns: var(--lane-tracks);
   grid-column: 1 / -1;
   gap: var(--space-2);
   padding-top: var(--space-3);
-  contain-intrinsic-size: auto 240px;
+  contain-intrinsic-size: auto calc(var(--size-control-height-compact) + var(--space-3));
   content-visibility: auto;
+
+  &.open {
+    contain-intrinsic-size: auto 480px;
+  }
 }
 
 /* Held at the left edge of what is visible, however far the states scroll.
