@@ -3,35 +3,29 @@ import { fileURLToPath, URL } from 'node:url'
 import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vitest/config'
 
-const shared = {
-  plugins: [vue()],
-  resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
-}
-
 // Two projects rather than one environment: contract tests read source files
 // from disk, and a DOM shim replaces the global URL that node:url needs.
-// Browser specs stay out of both; Playwright owns them.
+// Browser specs stay out of both; Playwright owns them. An inline project
+// inherits this file's plugins, alias and test options, so each one names only
+// what sets it apart; listing the Vue plugin again would compile every SFC twice.
 export default defineConfig({
-  ...shared,
+  plugins: [vue()],
+  resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   test: {
     clearMocks: true,
     projects: [
       {
-        ...shared,
         test: {
           name: 'contracts',
           environment: 'node',
           include: ['tests/*.{test,spec}.{ts,mts,mjs}'],
-          clearMocks: true,
         },
       },
       {
-        ...shared,
         test: {
           name: 'components',
           environment: 'happy-dom',
           include: ['tests/components/**/*.{test,spec}.ts'],
-          clearMocks: true,
         },
       },
     ],

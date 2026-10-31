@@ -8,13 +8,13 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [vue()],
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
-  // Vite 7 defaults `cssTarget` to `build.target`, which is chrome107, and
-  // esbuild flattens any syntax the target predates. Native nesting is the one
-  // this project is about to use, and the desktop app runs Chromium 150 while a
-  // browser reader is on an evergreen one, so lowering it would spend selector
-  // clarity to reach nobody. Verified against every stylesheet here: at both
-  // targets today's output is byte-identical, so this only decides what happens
-  // to the nesting that arrives next.
+  // Vite 8 defaults `cssTarget` to `build.target`, which is chrome111, and
+  // Lightning CSS, its CSS minifier, lowers any syntax the target predates.
+  // Native nesting is the one this project uses, and Chrome 111 predates it:
+  // at the default every nested rule is flattened back into repeated selectors
+  // and `user-select` gains a `-webkit-` twin. The desktop app runs Chromium 150
+  // while a browser reader is on an evergreen one, so lowering it would spend
+  // selector clarity to reach nobody.
   build: { outDir: 'dist', emptyOutDir: true, cssTarget: 'chrome150' },
   server: {
     host: '127.0.0.1',
