@@ -16,7 +16,7 @@ import WorkItemInspector from '@/widgets/work-item-inspector/components/WorkItem
 import { fetchExecutionHistory } from '@/shared/api/executionApi.ts'
 import { fetchWorkItem } from '@/shared/api/planningApi.ts'
 import type { PlanningWorkflow, WorkItem } from '@/shared/api/planningModel.ts'
-import { messages } from '@/shared/i18n/index.ts'
+import { messages, pluralRules } from '@/shared/i18n/index.ts'
 
 import { inspectorResourceRef as resourceRef } from '../fixtures/workItem.ts'
 import { requestBody, requestUrl, withSecurityBootstrap } from './request.ts'
@@ -90,7 +90,9 @@ export function mountInspector(item: WorkItem, overrides: { writable?: boolean }
       ...overrides,
     },
     global: {
-      plugins: [createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages })],
+      plugins: [
+        createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages, pluralRules }),
+      ],
       stubs: {
         ChoiceSelect: choiceStub,
         DrawerFrame: drawerFrameStub,
