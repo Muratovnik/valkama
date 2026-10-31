@@ -26,7 +26,7 @@ from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from server import mcp_surface, store
+from server import housekeeping, mcp_surface, store
 from server.ops import tray
 from server.planning import api as planning_api
 from server.planning import service as planning_service
@@ -109,6 +109,7 @@ class McpSurfaceTestCase(unittest.TestCase):
         with (
             mock.patch.object(sys, "stdin", Stdin(b"")),
             mock.patch.object(mcp_surface, "connect", return_value=connection),
+            mock.patch.object(housekeeping, "start_up", return_value=[]),
             mock.patch.object(tray, "start", return_value=None),
         ):
             mcp_surface.mcp_main()
@@ -118,6 +119,7 @@ class McpSurfaceTestCase(unittest.TestCase):
         connection = mock.Mock()
         with (
             mock.patch.object(mcp_surface, "connect", return_value=connection),
+            mock.patch.object(housekeeping, "start_up", return_value=[]),
             mock.patch.object(mcp_surface, "_mcp_loop", side_effect=RuntimeError("stdin failed")),
             self.assertRaisesRegex(RuntimeError, "stdin failed"),
         ):

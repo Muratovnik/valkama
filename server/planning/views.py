@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from . import model, service, store
+from . import calls, leases, model, service, store
 
 READ_MODEL_INTERFACE = f"{model.PLANNING_INTERFACE}-read-model"
 
@@ -50,9 +50,9 @@ def planning_payload(conn: sqlite3.Connection, *, space: str | None = None) -> d
     }
 
 
-#: A claim quiet for this many days is treated as abandoned. Cheap protection
-#: against a claim that outlived the session holding it: the space says somebody
-#: is on the work, and nobody is.
+#: An unconfirmed claim quiet for this many days is treated as abandoned. Such a
+#: claim names no session whose end could be seen, so its quiet is the only sign
+#: left; a claim a confirmed session holds is judged by its lease instead.
 STALE_CLAIM_DAYS = 3
 
 
@@ -62,7 +62,12 @@ def stale_claims(
     space: str | None = None,
     days: int = STALE_CLAIM_DAYS,
 ) -> list[dict]:
-    """Held items nothing has touched, so their ownership is abandoned.
+    """Held items whose holder is no longer there, so their ownership is abandoned.
+
+    A lease a confirmed session holds is abandoned when it reads `stale`, however
+    recently somebody else touched the item, and never while it is `live`. An
+    unconfirmed claim has only its quiet to go by: no event for `days`. A claim
+    taken in the browser is the owner's own and is not second-guessed here.
 
     A claim only goes stale while somebody is supposed to be working: the
     categories are asked of the workflow rather than named, so a space that
@@ -78,20 +83,40 @@ def stale_claims(
         clauses.append("w.planning_space_id = ?")
         parameters.append(str(service.get_planning_space(conn, space)["planning_space_id"]))
     query = service.with_clauses(
-        "SELECT p.key || '-' || w.number AS reference, w.title, w.claim_ref, s.key AS state,"
+        "SELECT w.*, p.key || '-' || w.number AS reference, s.key AS state,"
+        " c.identity_source AS claim_source,"
         " COALESCE(MAX(e.created_at), w.updated_at) AS last_event,"
         " CAST(julianday('now') - julianday(COALESCE(MAX(e.created_at), w.updated_at))"
         "  AS INTEGER) AS quiet_days"
         " FROM work_items w"
         " JOIN planning_spaces p ON p.planning_space_id = w.planning_space_id"
         " JOIN workflow_states s ON s.state_id = w.state_id"
+        " LEFT JOIN execution_events c ON c.id = w.claim_call_id"
         " LEFT JOIN work_item_events e ON e.work_item_id = w.work_item_id",
         clauses,
     )
-    query += " GROUP BY w.work_item_id HAVING quiet_days >= ?"
-    query += " ORDER BY quiet_days DESC, w.number"
-    rows = conn.execute(query, (*parameters, int(days))).fetchall()
-    return [dict(item) for item in rows]
+    query += " GROUP BY w.work_item_id ORDER BY quiet_days DESC, w.number"
+    abandoned = []
+    for row in conn.execute(query, parameters).fetchall():
+        claim_state = leases.state(conn, row)
+        if claim_state == leases.LIVE:
+            continue
+        if claim_state == leases.UNCONFIRMED and (
+            row["claim_source"] == calls.BROWSER or int(row["quiet_days"]) < int(days)
+        ):
+            continue
+        abandoned.append(
+            {
+                "reference": row["reference"],
+                "title": row["title"],
+                "claim_ref": row["claim_ref"],
+                "claim_state": claim_state,
+                "state": row["state"],
+                "last_event": row["last_event"],
+                "quiet_days": int(row["quiet_days"]),
+            }
+        )
+    return abandoned
 
 
 def activity_feed(conn: sqlite3.Connection, limit: int = 100) -> list[dict]:

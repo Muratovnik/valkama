@@ -3,18 +3,69 @@
 Kept out of `store.connect()` on purpose: bring-up stays bring-up, and every
 doctor, export and test that opens a store would otherwise write as a side
 effect. A surface that owns a lasting connection -- the MCP loop, `serve` --
-calls this once after it has opened the store.
+calls `run` once after it has opened the store.
 
-Today it delivers the hook spool: events a hook process could not write
-because the store was busy, missing or at another schema version.
+`run` is a plain sequence of steps, each its own transaction:
+
+- deliver the hook spool: events a hook process could not write because the
+  store was busy, missing or at another schema version;
+- release the Planning leases that went stale while no write met them.
+
+The spool goes first, because a delivered event can move a session's
+heartbeat forward and keep its lease from lapsing.
 """
 
 from __future__ import annotations
 
 import sqlite3
+from dataclasses import dataclass, field
 
 from . import store
 from .hooks import ingest, spool
+from .planning import service as planning_service
+
+
+@dataclass
+class Report:
+    """What one run did."""
+
+    spool: ingest.DrainResult = field(default_factory=ingest.DrainResult)
+    expired_leases: int = 0
+    #: The step that could not finish and why; the steps after it still ran.
+    failures: list[str] = field(default_factory=list)
+
+
+def run(conn: sqlite3.Connection) -> Report:
+    """Every start-up step, in order, on a connection outside any transaction."""
+
+    report = Report()
+    report.spool = drain_spool(conn)
+    try:
+        report.expired_leases = expire_leases(conn)
+    except sqlite3.Error as error:
+        report.failures.append(f"lease expiry: {error}")
+    return report
+
+
+def start_up(conn: sqlite3.Connection) -> list[str]:
+    """Run every step for a surface that is starting, and say what is worth saying.
+
+    A surface must start even when maintenance cannot finish -- a store locked
+    by another writer is an ordinary state, not a reason to refuse an agent its
+    tools -- so a failure is reported, never raised. The answer is lines for the
+    process's stderr; stdout belongs to a protocol in the MCP case.
+    """
+
+    try:
+        report = run(conn)
+    except (sqlite3.Error, OSError) as error:
+        return [f"start-up maintenance did not finish: {error}"]
+    lines = [f"start-up maintenance: {failure}" for failure in report.failures]
+    if report.spool.stopped:
+        lines.append(f"hook spool drain stopped: {report.spool.stopped}")
+    if report.expired_leases:
+        lines.append(f"released {report.expired_leases} expired Planning lease(s)")
+    return lines
 
 
 def drain_spool(conn: sqlite3.Connection, *, seconds: float | None = None) -> ingest.DrainResult:
@@ -26,3 +77,16 @@ def drain_spool(conn: sqlite3.Connection, *, seconds: float | None = None) -> in
     """
 
     return ingest.drain(conn, spool.directory(store.db_path()), seconds=seconds)
+
+
+def expire_leases(conn: sqlite3.Connection) -> int:
+    """Release every stale lease in the store, in one transaction; how many were released."""
+
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        expired = planning_service.expire_leases(conn)
+    except BaseException:
+        conn.rollback()
+        raise
+    conn.commit()
+    return expired

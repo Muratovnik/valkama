@@ -23,7 +23,11 @@ Acknowledge = Callable[[dict, Mapping[str, object]], dict]
 
 
 def _base(item: dict) -> dict:
-    """Identity, the revision the next write must name, and who holds the item."""
+    """Identity, the revision the next write must name, and who holds the item.
+
+    `claim_state` says whether that holder's session is still there: `live`,
+    `stale` or `unconfirmed`, and null when nobody holds the item.
+    """
 
     state = item["state"]
     return {
@@ -36,6 +40,7 @@ def _base(item: dict) -> dict:
             "is_terminal": state["is_terminal"],
         },
         "claim_ref": item["claim_ref"],
+        "claim_state": item["claim_state"],
     }
 
 
@@ -69,7 +74,7 @@ def transitioned(item: dict, _arguments: Mapping[str, object]) -> dict:
 
 
 def claimed(item: dict, _arguments: Mapping[str, object]) -> dict:
-    """The holder is `claim_ref`, which the base already carries."""
+    """The holder is `claim_ref`, and its lease `claim_state`; the base carries both."""
 
     return _base(item)
 

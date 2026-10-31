@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from . import calls, model, read_model, store, transitions
+from . import calls, leases, model, read_model, store, transitions
 
 _NOW = "strftime('%Y-%m-%dT%H:%M:%SZ','now')"
 
@@ -370,28 +370,50 @@ def claim_work_item(
     release: bool = False,
     expected_revision: int | None = None,
 ) -> dict:
+    """Take, release or take over an item, deciding who holds it from its lease.
+
+    A stale lease is released before anything else, so taking it over needs no
+    `force` and the history shows the expiry and the claim as two events. The
+    one exception is the holding session itself: it is still the holder, and
+    its own call has just counted as its heartbeat.
+    """
+
     row = read_model.item_row(conn, reference)
     _require_revision(row, expected_revision)
     actor = model.actor(author)
-    held = str(row["claim_ref"] or "")
+    caller = calls.current()
+    lease = leases.lease(conn, row)
+    expired = False
+    if (
+        lease is not None
+        and lease.state == leases.STALE
+        and not leases.held_by(lease, caller, actor)
+    ):
+        row = _expire(conn, row, lease)
+        lease, expired = None, True
+    held = lease.holder if lease is not None else ""
+    holder = lease is not None and leases.held_by(lease, caller, actor)
     if release:
-        if held and held != actor and not force:
+        if expired:
+            # The lease this release named is already gone, released above.
+            return read_model.present(conn, row, full=True)
+        if lease is not None and not holder and not force:
             raise model.PlanningError(
                 f"{read_model.reference(conn, row)} is held by {held}, not by you"
             )
-        _write(conn, row, ["claim_ref = ?"], [""])
+        _hold(conn, row, "")
         _log(conn, str(row["work_item_id"]), "released", held, author)
-    elif held and held != actor:
+    elif lease is not None and not holder:
         if not force:
             raise model.PlanningError(
                 f"{read_model.reference(conn, row)} is already held by {held};"
                 " pass force to take the work over"
             )
-        _write(conn, row, ["claim_ref = ?"], [actor])
+        _hold(conn, row, actor)
         _log(conn, str(row["work_item_id"]), "taken_over", held, author)
     else:
         try:
-            _write(conn, row, ["claim_ref = ?"], [actor])
+            _hold(conn, row, actor)
         except model.RevisionConflictError:
             return _claim_lost(conn, row, actor)
         _log(conn, str(row["work_item_id"]), "claimed", "", author)
@@ -405,21 +427,67 @@ def _claim_lost(conn: sqlite3.Connection, row: sqlite3.Row, actor: str) -> dict:
 
     What a caller is promised is that a claim fails naming the holder, not that
     it reports a revision — so the answer to losing comes from re-reading who
-    holds it now. Finding one's own name there is the same outcome that was
-    asked for, and saying so keeps a retry from being punished for the race it
-    already won.
+    holds it now. Finding oneself there is the same outcome that was asked for,
+    and saying so keeps a retry from being punished for the race it already won.
     """
 
     fresh = read_model.item_by_id(conn, str(row["work_item_id"]))
-    holder = str(fresh["claim_ref"] or "")
-    if holder == actor:
+    lease = leases.lease(conn, fresh)
+    if lease is not None and leases.held_by(lease, calls.current(), actor):
         return read_model.present(conn, fresh, full=True)
-    if holder:
+    if lease is not None:
         raise model.PlanningError(
-            f"{read_model.reference(conn, fresh)} is already held by {holder};"
+            f"{read_model.reference(conn, fresh)} is already held by {lease.holder};"
             " pass force to take the work over"
         ) from None
     raise model.RevisionConflictError(int(row["revision"]), int(fresh["revision"])) from None
+
+
+def expire_leases(conn: sqlite3.Connection, *, space_id: str | None = None) -> int:
+    """Release every stale lease, in one space or in all of them; how many were released.
+
+    Only a lease a confirmed session holds can lapse: an unconfirmed claim has
+    no session to go quiet. A lease another writer changed in the meantime is
+    left to it.
+    """
+
+    clauses = [
+        "i.claim_ref != ''",
+        "c.identity_state = 'confirmed'",
+        "COALESCE(c.session_id, '') != ''",
+    ]
+    parameters: list[object] = []
+    if space_id is not None:
+        clauses.append("i.planning_space_id = ?")
+        parameters.append(space_id)
+    query = with_clauses(
+        "SELECT i.* FROM work_items i JOIN execution_events c ON c.id = i.claim_call_id", clauses
+    )
+    expired = 0
+    for row in conn.execute(query + " ORDER BY i.number", parameters).fetchall():
+        lease = leases.lease(conn, row)
+        if lease is None or lease.state != leases.STALE:
+            continue
+        try:
+            _expire(conn, row, lease)
+        except model.RevisionConflictError:
+            continue
+        expired += 1
+    return expired
+
+
+def _expire(conn: sqlite3.Connection, row: sqlite3.Row, lease: leases.Lease) -> sqlite3.Row:
+    """Release a stale lease as a write of Valkama's own, and return the row after it.
+
+    The release is its own call, so the history says who released it and why
+    rather than charging the expiry to whichever caller happened to meet it.
+    """
+
+    identity = str(row["work_item_id"])
+    with calls.bind(calls.valkama(), leases.EXPIRY_TOOL):
+        _hold(conn, row, "")
+        _log(conn, identity, "released", leases.expiry_detail(lease), leases.EXPIRY_AUTHOR)
+    return read_model.item_by_id(conn, identity)
 
 
 def claim_ready_work_item(
@@ -447,22 +515,26 @@ def claim_ready_work_item(
         " WHERE l.to_id = i.work_item_id AND l.kind = 'blocks' AND bs.is_terminal = 0)",
     ]
     parameters: list[object] = []
-    if space is not None:
+    space_id = str(_space_row(conn, space)["planning_space_id"]) if space is not None else None
+    if space_id is not None:
         clauses.append("i.planning_space_id = ?")
-        parameters.append(str(_space_row(conn, space)["planning_space_id"]))
+        parameters.append(space_id)
     query = with_clauses(
         "SELECT i.* FROM work_items i JOIN workflow_states s ON s.state_id = i.state_id", clauses
     )
     query += " ORDER BY CASE i.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1"
     query += " WHEN 'medium' THEN 2 ELSE 3 END, s.position, i.position, i.number LIMIT 1"
     actor = model.actor(author)
+    # An expired lease is not a holder, so the queue sees through it: released
+    # first, the item then reads unheld to the filter above.
+    expire_leases(conn, space_id=space_id)
     lost: model.RevisionConflictError | None = None
     for _ in range(_READY_CLAIM_ATTEMPTS):
         row = conn.execute(query, tuple(parameters)).fetchone()
         if row is None:
             return None
         try:
-            _write(conn, row, ["claim_ref = ?"], [actor])
+            _hold(conn, row, actor)
         except model.RevisionConflictError as conflict:
             lost = conflict
             continue
@@ -899,6 +971,20 @@ def _write(
     if current is None:
         raise model.PlanningError("that work item was deleted while this change was being made")
     raise model.RevisionConflictError(expected, int(current[0]))
+
+
+def _hold(conn: sqlite3.Connection, row: sqlite3.Row, holder: str) -> None:
+    """Set who holds an item, and the call that took it, in one guarded write.
+
+    The only writer of `claim_ref`. The holder and the call travel together, so
+    a lease always names the call that took it; a release clears both. A build
+    that writes `claim_ref` alone leaves the call unchanged, and the store's
+    `work_items_claim_follows_call` trigger clears it, which makes that claim
+    read as unconfirmed rather than as somebody else's lease.
+    """
+
+    taken = calls.call_id(conn, str(row["work_item_id"])) if holder else None
+    _write(conn, row, ["claim_ref = ?", "claim_call_id = ?"], [holder, taken])
 
 
 def _log(

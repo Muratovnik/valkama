@@ -36,6 +36,9 @@ import sqlite3
 import uuid
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
+
+from .. import sessions
 
 KIND = "planning_write"
 
@@ -61,6 +64,8 @@ MCP = "mcp"
 BROWSER = "browser"
 #: A command-line write. Reserved: no command writes Planning today.
 CLI = "cli"
+#: A write Valkama makes itself: releasing a lease that expired.
+VALKAMA = "valkama"
 #: The values `identity_source` takes on a call row.
 SOURCES = (
     CODEX_META,
@@ -71,6 +76,7 @@ SOURCES = (
     MCP,
     BROWSER,
     CLI,
+    VALKAMA,
 )
 
 #: The argument a `PreToolUse` hook adds. Removed before schema validation.
@@ -211,6 +217,12 @@ def browser() -> Identity:
     return Identity(state=CONFIRMED, source=BROWSER, client=BROWSER)
 
 
+def valkama() -> Identity:
+    """A write Valkama makes on its own account, such as releasing an expired lease."""
+
+    return Identity(state=CONFIRMED, source=VALKAMA, client=VALKAMA)
+
+
 @contextlib.contextmanager
 def bind(identity: Identity, tool: str) -> Iterator[None]:
     """Make every Planning write inside this block part of one call."""
@@ -231,6 +243,13 @@ def default_author() -> str | None:
 
     call = _CURRENT.get()
     return OWNER_ACTOR if call is not None and call.identity.source == BROWSER else None
+
+
+def current() -> Identity | None:
+    """The identity of the call in progress, or None outside any call."""
+
+    call = _CURRENT.get()
+    return call.identity if call is not None else None
 
 
 def call_id(conn: sqlite3.Connection, work_item_id: str | None) -> int | None:
@@ -268,7 +287,28 @@ def call_id(conn: sqlite3.Connection, work_item_id: str | None) -> int | None:
             work_item_id,
         ),
     )
+    _heartbeat(conn, identity)
     return int(inserted.lastrowid or 0)
+
+
+def _heartbeat(conn: sqlite3.Connection, identity: Identity) -> None:
+    """Count a confirmed call as a sign of life of the session that made it.
+
+    A client proved the session, so the session is working, whether or not its
+    hooks reported anything: without this, an agent whose hooks are silent
+    would watch its own lease lapse while it writes. The call names the
+    top-level session even inside a subagent, and that row is the one a lease
+    follows. A missing row is created, as a hook event would.
+    """
+
+    if identity.state != CONFIRMED or identity.session_id is None:
+        return
+    sessions.touch(
+        conn,
+        identity.session_id,
+        client=identity.client or "",
+        at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    )
 
 
 def acted_on(result: object) -> str | None:

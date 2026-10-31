@@ -17,7 +17,8 @@ directory, and the MCP server only exists while a client is talking to it.
 
 - **Planning with Kanban, list, and graph views.** Its MCP tools create, move,
   claim, comment, link, and summarise work; `claim_work_item` refuses a
-  competing claim on the current Planning wire.
+  competing claim on the current Planning wire. A claim is a lease held by the
+  agent session that took it, so it lapses when that session is gone.
 - **Execution tracking on work items.** Launches carry an explicit delivery
   contract, and outcomes are typed results rather than exit codes.
 - **Task finder** with Ctrl/Cmd+K across mapped projects. Results retain their
@@ -446,6 +447,18 @@ Three things make a card honest about its own progress:
   completions and link changes are all recorded with an author. `get_work_item`
   returns it, so nobody has to guess who did what. Reordering within a lane is
   deliberately *not* history.
+
+A claim also says whether anyone is still behind it. When the client proves its
+session, the claim is a lease on that session: `live` while the session is
+active and has shown a sign of life — a hook event or a Valkama write — in the
+last 14 days, `stale` once it ended or went quiet, and `unconfirmed` when no
+session was proved, which is also how every older claim and every claim made in
+the browser reads. Another session needs `force` to take a live claim, even when
+it signs with the same author. A stale claim is released by whoever meets it
+next, and taking it over needs no `force`; the history shows the expiry as a
+`released` event by `valkama`. The board marks stale claims, and the inspector
+shows the lease and when it expires. The exact rules are in
+[the connection contract](docs/connection-contract.md#claims-are-leases).
 
 The inspector keeps editable descriptions and a shared discussion. An ordinary
 comment can target a checklist step; a work report uses “What was done / Why /

@@ -99,8 +99,41 @@ checkouts are therefore distinguishable even at the same version.
     refuses every item; serve the one built with it.
   - A write made by the execution runner outside any call records no call row
     and reads as `unconfirmed`.
+- A claim is a lease held by the session that took it. Its state, `live`,
+  `stale` or `unconfirmed`, is computed at every read: `unconfirmed` when no
+  confirmed session took it, `stale` when that session ended, failed, has no
+  row or showed no sign of life for 14 days, otherwise `live`. See
+  `docs/connection-contract.md#claims-are-leases`.
+  - `get_work_item`, a `verbose` write and the HTTP item read carry `claim`:
+    `holder`, `state`, `session_id`, `agent_id`, `source`, `acquired_at`,
+    `last_seen` and `expires_at`, or `null`. Every item record, the compact
+    list and search rows and the short write acknowledgements carry
+    `claim_state`. `claim_ref` and `ready` keep their meaning, and `tools/list`
+    is unchanged. The web reads records strictly, so a `web/dist` built before
+    this change refuses every item; serve the one built with it.
+  - A confirmed write call counts as a sign of life of its top-level session,
+    so a session whose hooks are silent stays live while it writes.
+  - A stale lease is released by the first write that meets it:
+    `claim_work_item` on that item, `claim_ready_work_item` in its space, and
+    the start-up of an MCP server or `serve`, which now also drains the hook
+    spool. The release is a `released` event with the detail
+    `lease-expired: <holder>`, written by `valkama` under its own call row
+    (source `valkama`, tool `lease-expiry`). Taking a stale claim over needs no
+    `force`.
 
 ### Changed
+
+- Two sessions that sign with the same `author` no longer release or take
+  over each other's claim. A confirmed session holds its claim whatever author
+  it signs with, and any other caller needs `force` against a live lease. A
+  claim without a confirmed session is still compared by author.
+- The space's abandoned claims (`stale_claims`) follow the lease: a stale lease
+  is listed at once and a live one never, whatever its quiet. The three-day
+  quiet rule stays for unconfirmed claims, except one taken in the browser.
+  Each entry carries `claim_state`.
+- Starting an item under an unconfirmed or stale claim answers with a warning.
+  The claim still counts as the executor, and a claim taken in the browser
+  gets no warning.
 
 - **Breaking for every running client: store schema 9.** The first open by this
   build takes a verified snapshot labelled `preschema9` beside the store, then

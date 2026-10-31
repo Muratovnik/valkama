@@ -80,15 +80,17 @@ A tool result is one line of JSON text, without indentation.
 
 A write to a work item answers with a short acknowledgement instead of the whole
 item: `reference`, `work_item_id`, `revision`, `state` (`key`, `name`,
-`is_terminal`) and `claim_ref`, plus what that call changed. `revision` is the
-value to pass as `expected_revision` on the next write.
+`is_terminal`), `claim_ref` and `claim_state`, plus what that call changed.
+`revision` is the value to pass as `expected_revision` on the next write.
+`claim_state` is the holder's lease, described in
+[Claims are leases](#claims-are-leases).
 
 | Tool | Also carries |
 | --- | --- |
 | `create_work_item` | `title`, `kind`, `priority` |
 | `update_work_item` | `updated`, the names of the fields it edited |
 | `transition_work_item` | `warnings` and `overridden` when there are any |
-| `claim_work_item` | nothing more; `claim_ref` is the holder |
+| `claim_work_item` | nothing more; `claim_ref` is the holder and `claim_state` its lease |
 | `set_work_item_checklist` | `checklist`, the new steps as `item_id` and `text` |
 | `claim_work_item_checklist_item`, `tick_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by` |
 | `set_work_item_summary` | `summary_recorded: true` |
@@ -103,8 +105,8 @@ answers with the full item.
 
 `list_work_items` and `search_work_items` answer one compact row per item:
 `reference`, `title`, `kind`, `state` (the key), `priority`, `parent` (a
-reference, or `null`) and `claim_ref`, plus `comment_hit` and `summary_hit` on a
-search that matched there. Without a `limit` they return at most 50 rows, and
+reference, or `null`), `claim_ref` and `claim_state`, plus `comment_hit` and
+`summary_hit` on a search that matched there. Without a `limit` they return at most 50 rows, and
 the answer carries `truncated`, which is true when more matched than it holds.
 With `verbose: true` they answer with the full items, at the limits they had
 before, and without `truncated`.
@@ -186,9 +188,69 @@ An event written before calls were recorded, or by the execution runner outside
 any call, has
 `{"state": "unconfirmed", "source": null, "session_id": null, "agent_id": null}`.
 A write from the browser UI is `confirmed` with source `browser` and no session;
-see [Local HTTP security](../README.md#local-http-security).
-The short acknowledgements, the list rows and every other tool result are
-unchanged.
+see [Local HTTP security](../README.md#local-http-security). A write Valkama
+makes on its own account, which today is only releasing an expired lease, is
+`confirmed` with source `valkama`, client `valkama` and tool `lease-expiry`, and
+its events are signed `valkama`.
+
+A confirmed call with a session is also a sign of life of that session. The
+first write of the call moves `last_seen` of the session row forward, creating
+the row when it is missing, exactly as a hook event does. Inside a subagent the
+call names its parent session, and the parent's row is the one that moves.
+
+### Claims are leases
+
+A claim records the call that took it, and through that call the session that
+holds the item. Whether that session is still there is computed at every read
+and never written by one:
+
+| Checked in order | `claim_state` |
+| --- | --- |
+| nobody holds the item | `null` |
+| the claim names no call, the call is not `confirmed`, or it has no session | `unconfirmed` |
+| the session has no row, is `ended` or `failed`, or was last seen more than 14 days ago | `stale` |
+| otherwise | `live` |
+
+A claim made before calls were recorded, by a build that does not record them,
+or in the browser reads `unconfirmed`: none of them names a session.
+
+`get_work_item`, a `verbose` write and the HTTP item read carry the lease as
+`claim`:
+
+```json
+{"holder": "codex", "state": "live", "session_id": "019a…", "agent_id": null,
+ "source": "codex-meta", "acquired_at": "2026-10-31T09:00:00.120Z",
+ "last_seen": "2026-10-31T09:40:12Z", "expires_at": "2026-11-14T09:40:12Z"}
+```
+
+`holder` is `claim_ref`. `acquired_at` is when the claiming call arrived and is
+`null` for a claim that names no call; `last_seen` is the session's, and
+`expires_at` is `last_seen` plus 14 days while the lease is `live`, `null`
+otherwise. `claim` is `null` when nobody holds the item. Every item record, full
+or listed, carries `claim_state`; `claim_ref` and `ready` mean what they meant.
+
+Who may release or take over a claim follows the lease:
+
+- A call from the session that holds a `live` or `stale` lease is the holder,
+  whatever `author` it signs with and whichever of its subagents makes it.
+- Any other call needs `force` against a `live` lease, including a call from
+  another session that signs with the same `author`, and a call with no
+  confirmed session at all.
+- A `stale` lease is released by the first write that meets it, before that
+  write does anything else: `claim_work_item` on that item, and
+  `claim_ready_work_item`, which first releases every stale lease in its space.
+  The release is a `released` event with the detail `lease-expired: <holder>`,
+  written by Valkama under its own call. Taking a stale claim over therefore
+  needs no `force`, and its history reads `released` and then `claimed`.
+  `claim_work_item` with `release` on a stale lease stops after that release.
+- An `unconfirmed` claim is compared by `author`, as every claim was before
+  leases, and never expires by itself.
+
+An MCP server and `serve` also release every stale lease once when they start.
+
+A claim still counts as the executor that starting an item requires. Starting
+an item under an `unconfirmed` or a `stale` claim answers with a warning, not a
+refusal, unless the claim was taken in the browser.
 
 ### Questions and decisions
 

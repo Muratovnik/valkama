@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import sqlite3
 
-from . import calls, model
+from . import calls, leases, model
 
 
 def item_row(conn: sqlite3.Connection, reference: object) -> sqlite3.Row:
@@ -137,6 +137,7 @@ def present(conn: sqlite3.Connection, row: sqlite3.Row, *, full: bool = False) -
             "is_terminal": bool(state["is_terminal"]),
         },
         "claim_ref": row["claim_ref"],
+        "claim_state": None,
         "parent_id": row["parent_id"],
         "labels": model.labels(loads(row["labels"])),
         "source": row["source"],
@@ -149,6 +150,10 @@ def present(conn: sqlite3.Connection, row: sqlite3.Row, *, full: bool = False) -
     # answer the same question the same way. The Board era left it to each view,
     # and they disagreed about a held item and about a container.
     identity = str(row["work_item_id"])
+    # Read, never written: a stale lease stays on the record until a write
+    # meets it, and the state says so rather than hiding it.
+    lease = leases.lease(conn, row)
+    record["claim_state"] = lease.state if lease is not None else None
     record["container"] = is_container(conn, identity)
     record["ready"] = (
         not record["container"]
@@ -162,6 +167,7 @@ def present(conn: sqlite3.Connection, row: sqlite3.Row, *, full: bool = False) -
         # strict reader cannot describe.
         record["comment_count"] = comment_count(conn, row)
         return record
+    record["claim"] = lease.as_dict() if lease is not None else None
     record["description"] = row["description"]
     record["summary"] = model.summary(row["summary"], required=False)
     record["summary_comment_id"] = row["summary_comment_id"]

@@ -13,7 +13,7 @@ import sys
 from collections.abc import Callable
 from typing import NamedTuple
 
-from . import launcher, static_assets
+from . import housekeeping, launcher, static_assets
 from .ops import configuration, tray
 from .planning import api as planning_api
 from .planning import calls as planning_calls
@@ -385,6 +385,10 @@ def mcp_main() -> None:
     """Own the stdio session and its database handle."""
     conn = connect()
     try:
+        # Before the first request: a lease that lapsed while no session ran
+        # is released here rather than reported as held to the first reader.
+        for line in housekeeping.start_up(conn):
+            print(f"valkama: {line}", file=sys.stderr)  # noqa: T201
         source_watch = static_assets.SourceWatch(
             static_assets.SOURCE_ROOT, launched_from=launcher.pinned_source_reader()
         )

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from . import model
+from . import calls, leases, model
 
 # Categories an item may be started from. Coming back to active from review or
 # blocked is not "starting" it, so it does not need an executor again.
@@ -73,6 +73,9 @@ def findings(
                     " checklist steps before starting it",
                 )
             )
+        warning = _lease_warning(conn, item, reference)
+        if warning:
+            warnings.append(warning)
     if target["category"] == "review" and entering:
         evidence = conn.execute(
             "SELECT 1 FROM work_item_refs WHERE work_item_id = ?"
@@ -119,6 +122,24 @@ def findings(
                 )
             )
     return refusals, warnings
+
+
+def _lease_warning(conn: sqlite3.Connection, item: sqlite3.Row, reference: str) -> str:
+    """What to say when the executor the guard accepted may not be there.
+
+    A claim still counts as an executor: refusing an unconfirmed one would
+    refuse every claim made before identity existed and every client without
+    it. A claim the owner took in the browser needs no such remark.
+    """
+
+    lease = leases.lease(conn, item)
+    if lease is None or lease.source == calls.BROWSER:
+        return ""
+    if lease.state == leases.UNCONFIRMED:
+        return f"{reference} starts under a claim by {lease.holder} that no session confirmed"
+    if lease.state == leases.STALE:
+        return f"{reference} starts under a stale claim by {lease.holder}: its session is gone"
+    return ""
 
 
 def _space_key(conn: sqlite3.Connection, planning_space_id: str) -> str:

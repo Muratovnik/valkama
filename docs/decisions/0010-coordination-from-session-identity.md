@@ -73,7 +73,10 @@ Prototypes run before this decision (Claude Code 2.1.304, Codex Desktop
    The lease is `live` while that session's heartbeat (the last hook event)
    is recent, `stale` after the lease period, and `unconfirmed` when the claim
    was made without a confirmed session; claims recorded before this change
-   become `unconfirmed` as they are, without rewriting history. An expired
+   become `unconfirmed` as they are, without rewriting history. A confirmed
+   MCP write call also counts as that heartbeat, so a session that writes to
+   Valkama stays live while its hooks are silent, and liveness follows the
+   top-level session, never a subagent's own row. An expired
    lease is released with the reason `lease-expired`, recorded in the item's
    history like every other release.
 

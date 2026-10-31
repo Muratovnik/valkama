@@ -558,11 +558,14 @@ class PlanningCompactReadTests(unittest.TestCase):
                 "priority": "high",
                 "parent": self.epic["reference"],
                 "claim_ref": "one",
+                # The call carried no identity, so nothing confirms the holder.
+                "claim_state": "unconfirmed",
             },
             rows[self.child["reference"]],
         )
         self.assertIsNone(rows[self.epic["reference"]]["parent"])
         self.assertEqual("", rows[self.epic["reference"]]["claim_ref"])
+        self.assertIsNone(rows[self.epic["reference"]]["claim_state"])
 
     def test_verbose_answers_exactly_what_the_boundary_answers(self) -> None:
         answer = self.call("list_work_items", space="QA", verbose=True)

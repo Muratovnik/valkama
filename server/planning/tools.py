@@ -584,6 +584,7 @@ def _compact_row(conn: sqlite3.Connection, item: dict) -> dict:
         if parent
         else None,
         "claim_ref": item["claim_ref"],
+        "claim_state": item["claim_state"],
     }
     # Why a search returned the item; a row without it cannot be told from noise.
     return row | {name: item[name] for name in ("comment_hit", "summary_hit") if name in item}

@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import NamedTuple
 from urllib.parse import parse_qs, urlparse
 
-from . import app_shell, http_security, runner, static_assets, ui_state, watchers
+from . import app_shell, housekeeping, http_security, runner, static_assets, ui_state, watchers
 from .executions import api as execution_api
 from .executions import lifecycle as execution_lifecycle
 from .executions import service as execution_service
@@ -1002,8 +1002,11 @@ def serve_main(port: int, *, development_origin: str | None = None) -> None:
     try:
         closed = execution_service.close_open_executions(startup, "the platform restarted")
         startup.commit()
+        maintenance = housekeeping.start_up(startup)
     finally:
         startup.close()
+    for line in maintenance:
+        print(line, file=sys.stderr)  # noqa: T201
     if closed:
         print(  # noqa: T201
             f"closed {closed} execution(s) left open by a previous process", file=sys.stderr

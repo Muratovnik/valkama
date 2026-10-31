@@ -130,12 +130,13 @@ happened, one transaction per file, with `delivery = 'spooled'` and
 commits. Two callers drain the spool:
 
 - every hook, after its own direct write, for at most 50 files or 300 ms;
-- `server/housekeeping.py`, which drains everything pending through a
-  connection a long-lived process already holds. The MCP and `serve` start-up
-  do not call it yet, so for now the spool drains with the next successful hook
-  write.
+- the start-up of an MCP server and of `serve`, which drains everything
+  pending once, before the first request, and then releases the Planning
+  leases that went stale. A failure there is reported on stderr and does not
+  stop the process from starting.
 
-Opening the store never drains it.
+Opening the store never drains it: a doctor, an export or a test that opens it
+writes nothing.
 
 Delivery is idempotent. `event_uid` is unique in `execution_events`, and an
 event that is already there inserts nothing and changes no session. A drain
@@ -169,6 +170,12 @@ time.
 An event older than the row's `last_seen` changes no other column and no state,
 so it is recorded as history only. Draining old events therefore cannot make an
 ended session look live.
+
+**Tool calls.** A confirmed Planning write call is a sign of life as well: it
+moves `last_seen` of its top-level session forward the same way, to the time
+the call arrived, and creates the row when it is missing. It changes no state,
+so it cannot reopen an ended session. A claim's lease is read from this
+column; see [Claims are leases](connection-contract.md#claims-are-leases).
 
 **Subagents.** Inside a subagent, a client reports the parent's `session_id`
 plus the subagent's `agent_id`. The parent row is updated first (heartbeat
