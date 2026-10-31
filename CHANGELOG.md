@@ -124,6 +124,9 @@ checkouts are therefore distinguishable even at the same version.
   any state work can start from, the backlog included.
 - A work item of an attached store shows the chain section with a note that
   the chain is read for work items of the primary store only.
+- The «workable» mark on the chain section's member rows takes the quiet tone
+  of the holder beside it. It repeats down most open groups, and in the title's
+  colour it read louder than the titles.
 - The desktop app is built on Electron 45 (Chromium 156), up from Electron 43.
 - The board no longer downloads Settings, and the libraries it runs ship as a
   separate `vendor` chunk that keeps its hash across releases. The graph and

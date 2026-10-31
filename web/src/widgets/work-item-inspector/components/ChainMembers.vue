@@ -225,9 +225,12 @@ function detail(group: ChainGroup, member: ChainMember): string | null {
   text-overflow: ellipsis;
 }
 
+/* Most open rows are workable, so the word repeats down a whole group: in the
+   holder's quiet tone it is there for a reader who looks, and leaves the
+   titles to be read first. */
 .chain-row-ready {
   grid-column: 3;
-  color: var(--color-action-primary);
+  color: var(--color-text-tertiary);
   font: var(--font-detail);
   white-space: nowrap;
 }

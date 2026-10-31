@@ -78,6 +78,15 @@ for (const width of [1440, 390]) {
       'Last 7 days: +53 discovered, −42 closed. New work arrives faster than it closes: to converge, more than 7.6 a day must close',
     )
     await expect(section.getByRole('img')).toHaveAttribute('aria-label', /616 now/u)
+    // The workable mark repeats down whole groups, so it takes the holder's
+    // quiet tone rather than competing with the titles.
+    const tone = (selector: string) =>
+      section
+        .locator(selector)
+        .first()
+        .evaluate((node) => getComputedStyle(node).color)
+    expect(await tone('.chain-row-ready')).toBe(await tone('.chain-row-detail'))
+    expect(await tone('.chain-row-ready')).not.toBe(await tone('.chain-row-title'))
     await section.screenshot(shot(info, `chain-card-${width}.png`))
     await section.getByRole('button', { name: 'Show all · 107' }).click()
     await section.getByRole('button', { name: 'Done · 483' }).click()
