@@ -7,7 +7,7 @@ import { LINK_KINDS } from '@/shared/api/planningModel.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { searchPlanningWorkItems } from '@/shared/api/planningSearchApi.ts'
 import type { PlanningSearchResult } from '@/shared/api/planningSearchApi.ts'
-import { actorName } from '@/shared/lib/actor.ts'
+import { holderName } from '@/shared/lib/actor.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
 import VButton from '@/shared/ui/VButton.vue'
@@ -256,7 +256,7 @@ function close() {
               <span class="result-meta"
                 >{{ candidate.state.name
                 }}<template v-if="candidate.claim_ref">
-                  · {{ actorName(candidate.claim_ref) }}</template
+                  · {{ holderName(candidate.claim_ref) }}</template
                 ></span
               >
             </span>

@@ -17,7 +17,7 @@ import type { ChainGroups } from '@/widgets/work-item-inspector/utils/chainSumma
 import type { ChainMember } from '@/shared/api/planningChainApi.ts'
 import { CHAIN_GROUPS } from '@/shared/api/planningChainGroups.ts'
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
-import { actorName } from '@/shared/lib/actor.ts'
+import { holderName } from '@/shared/lib/actor.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
@@ -69,7 +69,7 @@ function isDone(group: ChainGroup): boolean {
  */
 function detail(group: ChainGroup, member: ChainMember): string | null {
   return !isDone(group) && member.claim_ref
-    ? actorName(member.claim_ref)
+    ? holderName(member.claim_ref)
     : rowStateName(props.groups[group], member)
 }
 </script>

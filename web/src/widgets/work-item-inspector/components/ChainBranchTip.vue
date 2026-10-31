@@ -11,7 +11,7 @@ import { useI18n } from 'vue-i18n'
 
 import type { ChainMember } from '@/shared/api/planningChainApi.ts'
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
-import { actorName } from '@/shared/lib/actor.ts'
+import { holderName } from '@/shared/lib/actor.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 
 const props = defineProps<{
@@ -27,7 +27,7 @@ const { t } = useI18n()
 const meta = computed(() => {
   const place = t('workItem.chain.map.position', { position: props.position, total: props.total })
   const held = !props.member.state.is_terminal && props.member.claim_ref
-  return held ? `${actorName(props.member.claim_ref)} · ${place}` : place
+  return held ? `${holderName(props.member.claim_ref)} · ${place}` : place
 })
 </script>
 

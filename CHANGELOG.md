@@ -99,6 +99,18 @@ checkouts are therefore distinguishable even at the same version.
   launch failing on the transition guard; and the owner's release of a Dev
   item in the browser moves it to Todo. See
   [A claim starts the work](docs/connection-contract.md#a-claim-starts-the-work).
+- **A claim or a checklist step is held by the session that took it.** When
+  the client proved the call's session, `claim_ref`, a step's `claimed_by` and
+  `done_by` read `codex (session <id>)` or `claude (session <id>)`, with
+  `agent <id>` for a subagent, whatever `author` the call signed with; `author`
+  stays what the history records. A call with no confirmed session holds by
+  its `author`, as before. Two sessions signing with one name are two holders
+  of steps as of claims, and a step held under a name is still that name's.
+  The list, the card, the board, the graph, the chain and the MCP answers print
+  a holder the same way: its name and the start of its session
+  (`codex · 019a3c2e`). For existing agents: `list_work_items` with `owner`
+  matches the holder exactly, and a refusal names the holder by its label. See
+  [Who holds a claim or a step](docs/connection-contract.md#who-holds-a-claim-or-a-step).
 - A state can be named by its category. `transition_work_item`,
   `create_work_item`, the `transition` group of `apply_work_item_changes` and
   their HTTP writes read `active`, `review`, `blocked`, `completed`,

@@ -11,6 +11,7 @@ import { useI18n } from 'vue-i18n'
 
 import { PRIORITIES, readyIds } from '@/shared/api/planningModel.ts'
 import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
+import { holderName } from '@/shared/lib/actor.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
@@ -53,8 +54,8 @@ const numericMark = (column: { numeric?: boolean }) => (column.numeric ? 'true' 
 function claimLabel(item: WorkItemBrief): string {
   if (item.claim_ref)
     return item.state.is_terminal
-      ? t('workItem.previousHolder', { holder: item.claim_ref })
-      : item.claim_ref
+      ? t('workItem.previousHolder', { holder: holderName(item.claim_ref) })
+      : holderName(item.claim_ref)
   return ready.value.has(item.work_item_id) ? t('workItem.ready') : '—'
 }
 

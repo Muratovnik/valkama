@@ -1760,7 +1760,8 @@ class CreateWorkItemWithLinksTests(WireCallTestCase):
         # The claim started the new item, and the acknowledgement says so.
         self.assertEqual({"from": "backlog", "to": "dev"}, answer["started"])
         self.assertEqual("dev", answer["state"]["key"])
-        self.assertEqual("one", answer["claim_ref"])
+        # The session the client proved holds it, not the author the call signed.
+        self.assertEqual(f"codex (session {self.SESSION})", answer["claim_ref"])
         self.assertEqual("Found en route", answer["title"])
         self.assertNotIn("events", answer)
         item = planning_service.get_work_item(self.conn, answer["reference"])

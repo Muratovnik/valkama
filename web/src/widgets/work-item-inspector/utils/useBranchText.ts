@@ -3,7 +3,7 @@ import { useI18n } from 'vue-i18n'
 import type { BranchLane } from '@/widgets/work-item-inspector/utils/chainBranchLayout.ts'
 
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
-import { actorName } from '@/shared/lib/actor.ts'
+import { holderName } from '@/shared/lib/actor.ts'
 
 /**
  * The map's five colours and the groups each one draws: queued and backlog work
@@ -57,7 +57,7 @@ export function useBranchText() {
       state: member.state.name,
     })
     return !member.state.is_terminal && member.claim_ref
-      ? `${line} · ${actorName(member.claim_ref)}`
+      ? `${line} · ${holderName(member.claim_ref)}`
       : line
   }
 

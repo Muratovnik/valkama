@@ -20,7 +20,7 @@ import type { RefusalNotice } from '@/widgets/work-item-inspector/utils/useInspe
 
 import type { PlanningWorkflow, WorkItem } from '@/shared/api/planningModel.ts'
 import { isWebAuthor } from '@/shared/api/webAuthor.ts'
-import { actorName } from '@/shared/lib/actor.ts'
+import { holderName } from '@/shared/lib/actor.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import ConfirmStrip from '@/shared/ui/ConfirmStrip.vue'
@@ -70,7 +70,7 @@ const claimAction = computed<'claim' | 'release' | 'takeover' | 'stale' | null>(
 const takeoverDisabled = computed(() => props.busy || askingTakeover.value)
 const choiceDisabled = computed(() => props.busy || !nextStates.value.length)
 const takeoverQuestion = computed(() =>
-  t('workItem.takeOverQuestion', { holder: actorName(props.item.claim_ref) }),
+  t('workItem.takeOverQuestion', { holder: holderName(props.item.claim_ref) }),
 )
 
 // An action select, not a value: the model stays empty, so the same state can

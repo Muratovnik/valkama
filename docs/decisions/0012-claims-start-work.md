@@ -3,7 +3,7 @@ status: draft
 card: 1214
 ---
 
-# ADR 0012: A claim starts the work it takes
+# ADR 0012: A claim starts the work it takes, and its session holds it
 
 ## Context
 
@@ -52,6 +52,19 @@ Executions already did the right thing for a launch: claim, then move a
    not have is refused listing every state and the categories that name one,
    so a caller can correct itself in one call.
 
+4. **The holder is the confirmed session; `author` is a label, and the
+   fallback.** On one day only 10 of 124 open claims carried a session in
+   `claim_ref`; the rest said `claude`, `claude-code`, `agent` or a name of the
+   agent's own, so two sessions read as one holder and one session as several.
+   A claim already pointed at the call that took it, and through it at the
+   session, so who may release it was decided by session; what every reader
+   saw was still the free text. Now a call whose client proved its session
+   writes that session as the holder — `codex (session <id>)`,
+   `claude agent <id> (session <id>)` — into `claim_ref` and a step's
+   `claimed_by` and `done_by`. `author` stays what each event, comment and ref
+   records about the call, and stays the holder of a call nobody confirmed, so
+   a claim made the old way behaves the old way.
+
 ## Consequences
 
 - No store or schema change, and no new event action: a move is a
@@ -65,6 +78,17 @@ Executions already did the right thing for a launch: claim, then move a
   compensation puts back the state it found and asks its claim writes not to
   move it again (`move_state=False`).
 - The owner releasing a Dev item in the browser moves it to Todo.
+- The holder label is written where the name was, as text of the spelling the
+  web already split into a name and a session. An earlier build reads it as a
+  name; nothing changes meaning, so the store schema does not move. The label
+  is written once, by the call its lease points at, so it cannot drift from
+  the lease. Claims taken before keep their text until they are claimed again.
+- Rejected for the holder: a second, derived `holder` field computed from the
+  lease at read time (a second answer to "who holds it" beside `claim_ref`, a
+  new field in every strict reader of every payload that carries one, and no
+  answer for checklist steps, which have no lease to derive from); and
+  ignoring `author` altogether (a call with no confirmed session would hold as
+  nobody, and every claim made before identity would change owner).
 - Rejected: leaving release alone and documenting the stranded item (it would
   be in no list anyone reads); widening the take-next queue to unheld active
   items (`ready` is the one rule every record, view and chain count uses, and a

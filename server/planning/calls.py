@@ -32,6 +32,8 @@ from __future__ import annotations
 
 import contextlib
 import contextvars
+import hashlib
+import re
 import sqlite3
 import uuid
 from collections.abc import Iterator, Mapping
@@ -39,6 +41,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from .. import sessions
+from . import model
 
 KIND = "planning_write"
 
@@ -250,6 +253,56 @@ def current() -> Identity | None:
 
     call = _CURRENT.get()
     return call.identity if call is not None else None
+
+
+#: The name a holder opens with, by the channel that proved the session. Named
+#: after the channel rather than the handshake's `clientInfo`, so one client
+#: reads the same whether or not it opened with `initialize`.
+_CHANNEL_NAMES = {CODEX_META: "codex", CLAUDE_HOOK: "claude"}
+#: An identifier a holder carries as it is: what both clients send today.
+_PLAIN_ID = re.compile(r"^[A-Za-z0-9._:-]{1,40}$")
+
+
+def holder(author: str | None) -> str:
+    """Who this call is, as a claim or a checklist step records its holder.
+
+    A call whose client proved its session holds as that session, whatever
+    `author` it signs with: `codex (session 019a…)`, and inside a subagent
+    `claude agent a7 (session 5937…)`. Agents used to sign claims as `claude`,
+    `claude-code`, `agent` or a name of their own, so two sessions read as one
+    holder and one session as several. Any other call — no identity, an
+    unconfirmed one, the browser, the runner — holds by its `author`, as every
+    claim did before.
+
+    The label is text in `claim_ref` and `claimed_by`, so an earlier build reads
+    it as the name it always held. `name (session id)` is also the spelling the
+    web already parses into a name and a session.
+    """
+
+    identity = current()
+    name = _CHANNEL_NAMES.get(identity.source) if identity is not None else None
+    if (
+        identity is None
+        or name is None
+        or identity.state != CONFIRMED
+        or identity.session_id is None
+    ):
+        return model.actor(author)
+    if identity.agent_id is not None:
+        name += f" agent {_label_id(identity.agent_id)}"
+    return f"{name} (session {_label_id(identity.session_id)})"
+
+
+def _label_id(value: str) -> str:
+    """An id as a holder carries it: itself, or a short digest of one that is not plain.
+
+    The digest keeps a label inside the 128 characters a holder may have and
+    free of anything a name may not hold, without letting two ids collide.
+    """
+
+    if _PLAIN_ID.match(value):
+        return value
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
 
 
 def call_id(conn: sqlite3.Connection, work_item_id: str | None) -> int | None:

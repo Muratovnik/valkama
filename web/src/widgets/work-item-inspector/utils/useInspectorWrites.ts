@@ -21,7 +21,7 @@ import {
 } from '@/shared/api/planningApi.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { isWebAuthor } from '@/shared/api/webAuthor.ts'
-import { actorName } from '@/shared/lib/actor.ts'
+import { holderName } from '@/shared/lib/actor.ts'
 
 /** A refused write as the head shows it: what was refused, why, and any override on offer. */
 export interface RefusalNotice {
@@ -152,7 +152,7 @@ export function useInspectorWrites(options: {
               label: t('workItem.refusal.force.tick'),
               overrides: 'invalid_request',
               question: t('workItem.refusal.force.tickQuestion', {
-                holder: actorName(holder ?? ''),
+                holder: holderName(holder ?? ''),
               }),
               run: () => tickChecklistStep({ id, item_id: itemId, done, force: true }),
             },

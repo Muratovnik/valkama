@@ -44,6 +44,12 @@ def codex(session: str, thread: str | None = None) -> dict:
     return {"sessionId": session, "threadId": thread or session, "callId": f"call_{session[-4:]}"}
 
 
+def held(session: str) -> str:
+    """The holder a claim records for a Codex session that proved itself."""
+
+    return f"codex (session {session})"
+
+
 class _Bytes:
     def __init__(self, payload: bytes = b"") -> None:
         self.buffer = io.BytesIO(payload)
@@ -183,12 +189,12 @@ class TwoSessionsTests(LeaseTestCase):
     def test_a_second_session_under_the_same_author_cannot_release_the_claim(self) -> None:
         self.assertEqual("live", self.claim(codex(ONE), author="codex")["claim_state"])
         refused = self.claim(codex(TWO), author="codex", release=True)
-        self.assertIn("held by codex, not by you", refused["error"])
+        self.assertIn(f"held by {held(ONE)}, not by you", refused["error"])
         taken = self.claim(codex(TWO), author="codex")
-        self.assertIn("already held by codex; pass force", taken["error"])
+        self.assertIn(f"already held by {held(ONE)}; pass force", taken["error"])
         lease = self.item()["claim"]
         self.assertEqual(
-            ("codex", "live", ONE), (lease["holder"], lease["state"], lease["session_id"])
+            (held(ONE), "live", ONE), (lease["holder"], lease["state"], lease["session_id"])
         )
         self.assertEqual([("claimed", "", "codex", "codex-meta")], self.history())
 
@@ -270,7 +276,7 @@ class LeaseStateTests(LeaseTestCase):
             self.read_everywhere(),
         )
         # Reads never write: the claim and the revision are where they were.
-        self.assertEqual(("codex", revision), (self.item()["claim_ref"], self.item()["revision"]))
+        self.assertEqual((held(ONE), revision), (self.item()["claim_ref"], self.item()["revision"]))
         self.assertIsNone(self.item()["claim"]["expires_at"])
 
     def test_a_failed_session_and_a_missing_session_row_read_stale(self) -> None:
@@ -310,7 +316,7 @@ class LeaseStateTests(LeaseTestCase):
         answer = self.mcp(
             "update_work_item", {"id": self.reference, "title": "Renamed"}, codex(ONE)
         )
-        self.assertEqual(("codex", "live"), (answer["claim_ref"], answer["claim_state"]))
+        self.assertEqual((held(ONE), "live"), (answer["claim_ref"], answer["claim_state"]))
 
 
 class HeartbeatTests(LeaseTestCase):
@@ -349,7 +355,7 @@ class ExpiryTests(LeaseTestCase):
     def assert_expired_by_valkama(self) -> None:
         released = [event for event in self.item()["events"] if event["action"] == "released"]
         self.assertEqual(1, len(released))
-        self.assertEqual("lease-expired: codex", released[0]["detail"])
+        self.assertEqual(f"lease-expired: {held(ONE)}", released[0]["detail"])
         self.assertEqual("valkama", released[0]["author"])
         self.assertEqual(
             {"state": "confirmed", "source": "valkama", "session_id": None, "agent_id": None},
@@ -362,11 +368,11 @@ class ExpiryTests(LeaseTestCase):
 
     def test_a_stale_lease_is_taken_over_without_force(self) -> None:
         taken = self.claim(codex(TWO), author="codex", started=True)
-        self.assertEqual(("codex", "live"), (taken["claim_ref"], taken["claim_state"]))
+        self.assertEqual((held(TWO), "live"), (taken["claim_ref"], taken["claim_state"]))
         self.assertEqual(
             [
                 ("claimed", "", "codex", "codex-meta"),
-                ("released", "lease-expired: codex", "valkama", "valkama"),
+                ("released", f"lease-expired: {held(ONE)}", "valkama", "valkama"),
                 ("claimed", "", "codex", "codex-meta"),
             ],
             self.history(),
@@ -446,7 +452,7 @@ class ResumedSessionTests(LeaseTestCase):
         self.assertEqual({"status": "active", "ended_at": None, "attention": ""}, self.session())
         self.assertEqual("live", self.item()["claim_state"])
         self.assertEqual(0, housekeeping.run(self.conn).expired_leases)
-        self.assertEqual("codex", self.item()["claim_ref"])
+        self.assertEqual(held(ONE), self.item()["claim_ref"])
 
     def test_an_unconfirmed_write_revives_nothing(self) -> None:
         self.mcp(
@@ -650,7 +656,7 @@ class ExecutorGuardTests(LeaseTestCase):
         self.claim(codex(ONE), author="codex")
         self.set_session(ONE, status="ended")
         self.assertEqual(
-            [f"{self.reference} starts under a stale claim by codex: its session is gone"],
+            [f"{self.reference} starts under a stale claim by {held(ONE)}: its session is gone"],
             self.start(),
         )
 

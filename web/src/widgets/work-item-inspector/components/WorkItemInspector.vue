@@ -37,7 +37,7 @@ import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { planningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import { failureMessage, typedFailure } from '@/shared/api/typedFailure.ts'
 import type { TypedFailure } from '@/shared/api/typedFailure.ts'
-import { actorName } from '@/shared/lib/actor.ts'
+import { holderName } from '@/shared/lib/actor.ts'
 import { INSPECTOR_DRAWER_STORAGE_KEY } from '@/shared/lib/shellLayout.ts'
 import type { LaunchPacket } from '@/shared/types/launch.ts'
 import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
@@ -210,7 +210,7 @@ const target = computed<PlanningTarget | undefined>(() => {
       }
     : undefined
 })
-const holder = computed(() => (item.value?.claim_ref ? actorName(item.value.claim_ref) : ''))
+const holder = computed(() => (item.value?.claim_ref ? holderName(item.value.claim_ref) : ''))
 const holderLabel = computed(() =>
   t(item.value?.state.is_terminal ? 'workItem.previousHolder' : 'workItem.holder', {
     holder: holder.value,

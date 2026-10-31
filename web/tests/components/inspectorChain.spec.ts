@@ -154,8 +154,8 @@ describe('the chain section of a card', () => {
     expect(backlog.filter((name) => name === 'Icebox')).toHaveLength(3)
     await getButton(several, 'Done · 483').trigger('click')
     expect(new Set(details(several, 'Done'))).toEqual(new Set(['Done', 'Cancelled']))
-    // A holder still stands where the state would.
-    expect(details(several, 'Development')).toEqual(eight('codex'))
+    // A holder still stands where the state would, with the start of its session.
+    expect(details(several, 'Development')).toEqual(eight('codex · 1baa03d7'))
   })
 
   it('stops a long group after eight rows and shows the rest on request', async () => {

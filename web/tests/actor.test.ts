@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 
 import { test } from 'vitest'
 
-import { actorName, actorSession, splitActor } from '@/shared/lib/actor.ts'
+import { actorName, actorSession, holderName, splitActor } from '@/shared/lib/actor.ts'
 
 test('a session baked into an actor name is split into name and session', () => {
   assert.deepEqual(splitActor('claude-fable (session 1baa03d7)'), {
@@ -30,4 +30,22 @@ test('plain names and odd shapes pass through untouched', () => {
   // must never end up empty while somebody holds the work.
   assert.equal(actorName('(session 1baa03d7)'), '(session 1baa03d7)')
   assert.equal(actorSession('(session 1baa03d7)'), '1baa03d7')
+})
+
+test('a holder prints its name and the start of its session, or its name alone', () => {
+  // The label the server writes for a claim whose client proved its session.
+  assert.equal(
+    holderName('codex (session 019a3c2e-5b7d-7c11-9e0f-2f4b6d8a1c3e)'),
+    'codex · 019a3c2e',
+  )
+  assert.equal(
+    holderName('claude agent a7 (session 5937332f-1c2d-4e5f-8a9b-0c1d2e3f4a5b)'),
+    'claude agent a7 · 5937332f',
+  )
+  // A holder signed by hand the old way reads the same way.
+  assert.equal(holderName('claude-fable (session 1baa03d7)'), 'claude-fable · 1baa03d7')
+  assert.equal(holderName('user'), 'user')
+  assert.equal(holderName('codex:executor'), 'codex:executor')
+  // No name before the session: the whole text, never an empty holder.
+  assert.equal(holderName('(session 1baa03d7)'), '(session 1baa03d7)')
 })

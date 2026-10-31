@@ -519,7 +519,7 @@ or in the browser reads `unconfirmed`: none of them names a session.
 `claim`:
 
 ```json
-{"holder": "codex", "state": "live", "session_id": "019a…", "agent_id": null,
+{"holder": "codex (session 019a…)", "state": "live", "session_id": "019a…", "agent_id": null,
  "source": "codex-meta", "acquired_at": "2026-10-31T09:00:00.120Z",
  "last_seen": "2026-10-31T09:40:12Z", "expires_at": "2026-11-14T09:40:12Z"}
 ```
@@ -529,6 +529,50 @@ or in the browser reads `unconfirmed`: none of them names a session.
 `expires_at` is `last_seen` plus 14 days while the lease is `live`, `null`
 otherwise. `claim` is `null` when nobody holds the item. Every item record, full
 or listed, carries `claim_state`; `claim_ref` and `ready` mean what they meant.
+
+### Who holds a claim or a step
+
+A claim and a checklist step record their holder as text: `claim_ref`, and a
+step's `claimed_by` and `done_by`. When the write call is `confirmed` with a
+session -- source `codex-meta` or `claude-hook` -- the holder is that session,
+whatever `author` the call signs with:
+
+| The call comes from | The holder reads |
+| --- | --- |
+| a Codex session | `codex (session <sessionId>)` |
+| a Codex subagent (`threadId` differs) | `codex agent <threadId> (session <sessionId>)` |
+| a Claude Code session, through the hook | `claude (session <session_id>)` |
+| a Claude Code subagent | `claude agent <agent_id> (session <session_id>)` |
+
+The name is the identity channel's, not the handshake's `clientInfo`, so one
+client reads the same either way it opens. An id is carried as it is when it is
+at most 40 letters, digits, `.`, `_`, `:` or `-`, which both clients' ids are;
+any other id is carried as the first 16 hex digits of its SHA-256, which keeps
+the holder within the 128 characters a holder may have.
+
+Every other call holds by its `author`, as every claim did before: an
+`unconfirmed` call, a call with no identity, the browser (`user` unless the
+payload names someone), a launch (`<client>:<role>`). `author` itself is what
+the history records about the call: each event, comment and ref keeps the
+author the call signed, beside the identity its call row proved.
+
+Holding by session changes three comparisons:
+
+- Two sessions that sign with the same author hold two different claims and
+  two different steps, so one cannot tick or release the other's step without
+  `force`, and one subagent's step is not another's.
+- A step held under a signature -- by an unconfirmed call, or before this
+  change -- is still its signer's: a call whose `author` is that signature may
+  tick or release it, whether or not its own session is confirmed.
+- `list_work_items` with `owner` matches `claim_ref` exactly, so a session finds
+  its own items by the holder its claim acknowledgement returned.
+
+The text is the `name (session id)` spelling the web already reads as a name
+and a session, and every surface prints a holder the same way: the name, then
+the first 8 characters of the session (`codex · 019a3c2e`). A store keeps one
+format: an earlier build reads the label as the name it always held, and no
+row changes meaning, so the store schema stays where it is. Claims taken before
+this change keep the text they were taken with until they are claimed again.
 
 Who may release or take over a claim follows the lease:
 

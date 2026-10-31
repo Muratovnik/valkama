@@ -8,7 +8,7 @@ import { Handle, Position } from '@vue-flow/core'
 import type { PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
-import { actorName } from '@/shared/lib/actor.ts'
+import { holderName } from '@/shared/lib/actor.ts'
 import { statePresentation } from '@/shared/lib/uiSystem.ts'
 import type { SemanticStatePair } from '@/shared/lib/uiSystem.ts'
 
@@ -128,7 +128,7 @@ const accessibleName = computed(() =>
       class="flow-node-owner"
     >
       <span class="flow-node-owner-state">{{ ownerLabel }}</span>
-      <span class="flow-node-owner-name">{{ actorName(node.claim_ref) }}</span>
+      <span class="flow-node-owner-name">{{ holderName(node.claim_ref) }}</span>
     </span>
   </button>
 </template>

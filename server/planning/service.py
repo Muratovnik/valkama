@@ -535,7 +535,10 @@ def claim_work_item(
 
     row = read_model.item_row(conn, reference)
     _require_revision(row, expected_revision)
+    # `actor` is what the caller signs; `label` what it holds as. An unconfirmed
+    # lease is still compared by the signature, as every claim was before.
     actor = model.actor(author)
+    label = calls.holder(author)
     caller = calls.current()
     lease = leases.lease(conn, row)
     expired = False
@@ -564,11 +567,11 @@ def claim_work_item(
                 f"{read_model.reference(conn, row)} is already held by {held};"
                 " pass force to take the work over"
             )
-        _hold(conn, row, actor)
+        _hold(conn, row, label)
         _log(conn, str(row["work_item_id"]), "taken_over", held, author)
     else:
         try:
-            _hold(conn, row, actor)
+            _hold(conn, row, label)
         except model.RevisionConflictError:
             return _claim_lost(conn, row, actor)
         _log(conn, str(row["work_item_id"]), "claimed", "", author)
@@ -768,7 +771,7 @@ def claim_ready_work_item(
     query += " ORDER BY " + ranking.WORK_ORDER_SQL + ", s.position, i.position,"
     query += " CASE i.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1"
     query += " WHEN 'medium' THEN 2 ELSE 3 END, i.number LIMIT 1"
-    actor = model.actor(author)
+    label = calls.holder(author)
     # An expired lease is not a holder, so the queue sees through it: released
     # first, the item then reads unheld to the filter above.
     expire_leases(conn, space_id=space_id)
@@ -778,7 +781,7 @@ def claim_ready_work_item(
         if row is None:
             return None
         try:
-            _hold(conn, row, actor)
+            _hold(conn, row, label)
         except model.RevisionConflictError as conflict:
             lost = conflict
             continue
@@ -829,22 +832,25 @@ def claim_checklist_item(
     _require_revision(row, expected_revision)
     steps = model.checklist(row["checklist"])
     step = _step(steps, item_id, conn, row)
-    actor = model.actor(author)
+    label = calls.holder(author)
     held = step["claimed_by"]
+    # A step held under the caller's signature is the caller's too: that is how
+    # every step was held before a session could hold one.
+    mine = held in (label, model.actor(author))
     if release:
-        if held and held != actor and not force:
+        if held and not mine and not force:
             raise model.PlanningError(f"that step is held by {held}, not by you")
         step["claimed_by"] = ""
         action = "checklist_released"
-    elif held and held != actor:
+    elif held and not mine:
         if not force:
             raise model.PlanningError(
                 f"that step is already held by {held}; pass force to take it over"
             )
-        step["claimed_by"] = actor
+        step["claimed_by"] = label
         action = "checklist_taken_over"
     else:
-        step["claimed_by"] = actor
+        step["claimed_by"] = label
         action = "checklist_claimed"
     _write(conn, row, ["checklist = ?"], [model.dumps(steps)])
     _log(conn, str(row["work_item_id"]), action, step["text"][:120], author)
@@ -867,13 +873,13 @@ def tick_checklist_item(
     _require_revision(row, expected_revision)
     steps = model.checklist(row["checklist"])
     step = _step(steps, item_id, conn, row)
-    actor = model.actor(author)
-    if step["claimed_by"] and step["claimed_by"] != actor and not force:
+    label = calls.holder(author)
+    if step["claimed_by"] and step["claimed_by"] not in (label, model.actor(author)) and not force:
         raise model.PlanningError(
             f"that step is claimed by {step['claimed_by']}; pass force to complete it anyway"
         )
     step["done"] = bool(done)
-    step["done_by"] = actor if done else ""
+    step["done_by"] = label if done else ""
     step["claimed_by"] = "" if done else step["claimed_by"]
     _write(conn, row, ["checklist = ?"], [model.dumps(steps)])
     _log(

@@ -12,7 +12,7 @@ import ItemInputRequests from '@/features/input-requests/components/ItemInputReq
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { isWebAuthor } from '@/shared/api/webAuthor.ts'
-import { actorName } from '@/shared/lib/actor.ts'
+import { holderName } from '@/shared/lib/actor.ts'
 import { openSourceReference, sourceFeedback } from '@/shared/lib/sourceReference.ts'
 import { statePresentation } from '@/shared/lib/uiSystem.ts'
 import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
@@ -70,7 +70,7 @@ function stepState(done: boolean) {
 }
 /** Who holds the item, or the phrase for nobody — never a blank cell. */
 const claimLabel = computed(() =>
-  props.item.claim_ref ? actorName(props.item.claim_ref) : t('workItem.noClaim'),
+  props.item.claim_ref ? holderName(props.item.claim_ref) : t('workItem.noClaim'),
 )
 const ownerLabel = computed(() =>
   t(props.item.state.is_terminal ? 'workItem.previousOwner' : 'workItem.owner'),
@@ -310,12 +310,12 @@ defineExpose({ revealChecklist, startOutcomeReport })
           <span
             v-if="step.claimed_by && !step.done"
             class="step-holder"
-            >{{ t('workItem.stepHeldBy', { agent: actorName(step.claimed_by) }) }}</span
+            >{{ t('workItem.stepHeldBy', { agent: holderName(step.claimed_by) }) }}</span
           >
           <span
             v-else-if="step.done && step.done_by"
             class="step-holder"
-            >{{ t('workItem.stepDoneBy', { agent: actorName(step.done_by) }) }}</span
+            >{{ t('workItem.stepDoneBy', { agent: holderName(step.done_by) }) }}</span
           >
         </li>
       </ul>

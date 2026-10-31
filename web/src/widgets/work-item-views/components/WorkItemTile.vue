@@ -20,6 +20,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
+import { holderName } from '@/shared/lib/actor.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 
 const props = defineProps<{
@@ -36,7 +37,7 @@ const { t } = useI18n()
 const labels = computed(() => props.item.labels.slice(0, 3))
 const holderLabel = computed(() =>
   t(props.item.state.is_terminal ? 'workItem.previousHolder' : 'workItem.holder', {
-    holder: props.item.claim_ref,
+    holder: holderName(props.item.claim_ref),
   }),
 )
 

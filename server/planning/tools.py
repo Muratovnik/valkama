@@ -48,7 +48,12 @@ _EXPECTED_REVISION = {
     "minimum": 0,
     "description": "Revision read from a previous read; rejects a stale write.",
 }
-_AUTHOR = {"type": "string", "description": "Who is acting. Recorded, not resolved."}
+_AUTHOR = {
+    "type": "string",
+    "description": "Your name for this call, recorded in the history. A claim or a"
+    " checklist step is held by the session your client proved, whatever this"
+    " says; author is the holder only for a call with no confirmed session.",
+}
 _FORCE = {
     "type": "boolean",
     "description": "Carry a refusal through. The override is recorded as an event.",
@@ -221,7 +226,12 @@ TOOLS = [
             "state": _STATE,
             "category": {"type": "string", "enum": list(model.STATE_CATEGORIES)},
             "kind": {"type": "string", "enum": sorted(model.WORK_ITEM_KINDS)},
-            "owner": _STR,
+            "owner": {
+                "type": "string",
+                "description": "Only items held by this holder, spelled exactly as"
+                " claim_ref is: a confirmed session holds as 'codex (session <id>)',"
+                " which a claim's acknowledgement returns.",
+            },
             "parent": {
                 "type": "string",
                 "description": "Only the children of this item, by its reference (VAL-142)"
