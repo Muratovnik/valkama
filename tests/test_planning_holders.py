@@ -46,7 +46,7 @@ class HolderLabelTests(unittest.TestCase):
 
     def test_a_confirmed_session_holds_as_itself_whatever_it_signs(self) -> None:
         self.assertEqual(f"codex (session {SESSION})", self.holder(codex()))
-        self.assertEqual(f"codex (session {SESSION})", self.holder(codex(), "claude-workbench"))
+        self.assertEqual(f"codex (session {SESSION})", self.holder(codex(), "claude-desk"))
         self.assertEqual(f"claude (session {SESSION})", self.holder(claude()))
 
     def test_a_subagent_holds_as_its_own_agent_inside_the_session(self) -> None:

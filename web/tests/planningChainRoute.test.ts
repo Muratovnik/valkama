@@ -75,7 +75,7 @@ test('a chain is read out of every view, with the endpoint default for its scope
 test('a value the endpoint could never answer is invalid rather than sent', () => {
   for (const state of [
     { view: 'graph', chain: 'not a reference' },
-    { view: 'graph', chain: 'val-384' },
+    { view: 'graph', chain: 'main-384' },
     { view: 'graph', chain: 384 },
     { view: 'graph', chain: 'MAIN-12', chain_scope: 'space' },
     { view: 'graph', chain_scope: 'epic' },
