@@ -874,6 +874,10 @@ export const ru = {
     searchPlaceholder: 'Номер или название',
     clearSearch: 'Очистить поиск',
     matchCount: 'Показано {count} из {total}',
+    countsExclude: {
+      laneHeads: 'эпики рядов не в колонках: {count}',
+      graphParents: 'родительские задачи не на графе: {count}, из них открыто {open}',
+    },
     searchEmpty: 'По вашему запросу ничего не найдено.',
     queueEmpty: 'В этой очереди нет работы.',
     filterContext: 'Выбрана очередь «{queue}». Сбросьте фильтры, чтобы увидеть всю работу.',

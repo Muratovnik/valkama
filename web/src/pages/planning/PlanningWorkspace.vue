@@ -17,6 +17,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import PlanningChainFailure from '@/pages/planning/PlanningChainFailure.vue'
+import { usePlanningCensus } from '@/pages/planning/composables/usePlanningCensus.ts'
 import { graphView } from '@/pages/planning/utils/graphView.ts'
 
 import WorkItemBoard from '@/widgets/work-item-views/components/WorkItemBoard.vue'
@@ -25,7 +26,6 @@ import type { BoardGrouping } from '@/widgets/work-item-views/utils/boardLanes.t
 import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
 
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
-import { inWorkQueue } from '@/shared/api/planningModel.ts'
 import type { PlanningReadModel, WorkQueue } from '@/shared/api/planningModel.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import { LAZY_VIEW_LOADING_DELAY_MS } from '@/shared/ui/lazyView.ts'
@@ -113,7 +113,23 @@ watch(
     query.value = ''
   },
 )
-const filtered = computed(() => Boolean(searchTerm.value) || queue.value !== 'all')
+const boardGrouping = computed(() => props.grouping ?? 'none')
+const census = usePlanningCensus(() => ({
+  chain: props.chain ?? null,
+  grouping: boardGrouping.value,
+  queue: queue.value,
+  search: searchTerm.value,
+  space: props.model.work_items,
+  view: stageView.value,
+}))
+const {
+  counted: countedItems,
+  counts,
+  filtered,
+  matched: matchedItems,
+  scope: scopeItems,
+  visible: visibleItems,
+} = census
 const emptyTitle = computed(() =>
   t(searchTerm.value ? 'workItem.searchEmpty' : 'workItem.queueEmpty'),
 )
@@ -125,27 +141,6 @@ const queues: WorkQueue[] = ['all', 'ready', 'assigned', 'blocked', 'review']
 const queueOptions = computed(() =>
   queues.map((value) => ({ value, label: t(`workItem.queue.${value}`) })),
 )
-/**
- * The items a view of the board or the list works over: the chain's members and
- * its root while the route names a chain, otherwise the whole space. The graph
- * scopes itself and always takes the whole space. It follows the view on the
- * stage, so a board kept on screen while the graph downloads stays narrowed.
- */
-const scopeItems = computed(() => {
-  const chain = props.chain
-  if (!chain || stageView.value === 'graph') return props.model.work_items
-  const members = new Set([chain.root.work_item_id, ...chain.members.map((m) => m.work_item_id)])
-  return props.model.work_items.filter((item) => members.has(item.work_item_id))
-})
-const visibleItems = computed(() =>
-  scopeItems.value.filter(
-    (item) =>
-      inWorkQueue(item, queue.value) &&
-      (!searchTerm.value ||
-        item.reference.toLocaleLowerCase().includes(searchTerm.value) ||
-        item.title.toLocaleLowerCase().includes(searchTerm.value)),
-  ),
-)
 
 /** What the graph needs of a chain: who is in it, and what to call it. */
 const graphChain = computed(() =>
@@ -153,7 +148,7 @@ const graphChain = computed(() =>
     ? {
         members: props.chain.members.map((member) => member.work_item_id),
         reference: props.chain.root.reference,
-        total: props.chain.total,
+        total: countedItems.value.length,
       }
     : null,
 )
@@ -168,15 +163,13 @@ const GROUPINGS: readonly BoardGrouping[] = ['none', 'epic']
 const groupingSegments = computed(() =>
   GROUPINGS.map((value) => ({ value, label: t(`workItem.lanes.grouping.${value}`) })),
 )
-const boardGrouping = computed(() => props.grouping ?? 'none')
-
 /** The chip naming the chain the board or the list is narrowed to; the graph draws its own. */
 const scopeChip = computed(() => {
   const chain = props.chain
   if (!chain || stageView.value === 'graph') return null
   const reference = chain.root.reference
   return {
-    label: t('graph.chainChip', { reference, count: chain.total }),
+    label: t('graph.chainChip', { reference, count: countedItems.value.length }),
     exit: t('graph.chainExit', { reference }),
   }
 })
@@ -194,13 +187,13 @@ const viewSegments = computed(() =>
  */
 const countsBusy = computed(() => (props.stale ? true : undefined))
 
-const counts = computed(() => {
-  const items = scopeItems.value
-  return {
-    total: items.length,
-    open: items.filter((item) => !item.state.is_terminal).length,
-    held: items.filter((item) => item.claim_ref !== '' && !item.state.is_terminal).length,
-  }
+/** What the view on the stage leaves out of its own counts, said beside them. */
+const exclusion = computed(() => {
+  const left = census.exclusion.value
+  if (left === null) return ''
+  return left.kind === 'lane-heads'
+    ? t('workItem.countsExclude.laneHeads', { count: left.count })
+    : t('workItem.countsExclude.graphParents', { count: left.count, open: left.open })
 })
 </script>
 
@@ -229,7 +222,8 @@ const counts = computed(() => {
       <span
         class="workspace-counts"
         :aria-busy="countsBusy"
-        >{{ t('workItem.spaceCounts', counts) }}</span
+        >{{ t('workItem.spaceCounts', counts)
+        }}<template v-if="exclusion"> · {{ exclusion }}</template></span
       >
       <VButton
         v-if="writable"
@@ -275,7 +269,7 @@ const counts = computed(() => {
         class="workspace-counts"
         role="status"
         >{{
-          t('workItem.matchCount', { count: visibleItems.length, total: scopeItems.length })
+          t('workItem.matchCount', { count: matchedItems.length, total: countedItems.length })
         }}</span
       >
     </div>
@@ -314,7 +308,7 @@ const counts = computed(() => {
         {{ t('workItem.chain.loading') }}
       </p>
       <DataEmptyState
-        v-else-if="!visibleItems.length && filtered"
+        v-else-if="!matchedItems.length && filtered"
         :title="emptyTitle"
         :description="t('workItem.filterContext', { queue: t(`workItem.queue.${queue}`) })"
       >
@@ -324,7 +318,7 @@ const counts = computed(() => {
       </DataEmptyState>
       <WorkItemBoard
         v-if="!chainPending && stageView === 'kanban' && model.workflow"
-        v-show="visibleItems.length || !filtered"
+        v-show="matchedItems.length || !filtered"
         :workflow="model.workflow"
         :items="visibleItems"
         :scope-items="scopeItems"
@@ -340,14 +334,14 @@ const counts = computed(() => {
       />
       <WorkItemList
         v-else-if="!chainPending && stageView === 'list'"
-        v-show="visibleItems.length || !filtered"
+        v-show="matchedItems.length || !filtered"
         :items="visibleItems"
         :links="model.links"
         @open="(reference) => emit('open', reference)"
       />
       <WorkItemGraph
         v-else-if="!chainPending && stageView === 'graph'"
-        v-show="visibleItems.length || !filtered"
+        v-show="matchedItems.length || !filtered"
         :scope-kind="graphScopeKind"
         :space="model.planning_space?.planning_space_id ?? ''"
         :items="visibleItems"

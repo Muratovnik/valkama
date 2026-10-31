@@ -874,6 +874,10 @@ export const en = {
     searchPlaceholder: 'Reference or title',
     clearSearch: 'Clear search',
     matchCount: '{count} shown of {total}',
+    countsExclude: {
+      laneHeads: 'lane epics outside the columns: {count}',
+      graphParents: 'parents not drawn on the graph: {count}, {open} of them open',
+    },
     searchEmpty: 'No work matches your search.',
     queueEmpty: 'No work in this queue.',
     filterContext: 'Selected queue: {queue}. Reset filters to see all work.',

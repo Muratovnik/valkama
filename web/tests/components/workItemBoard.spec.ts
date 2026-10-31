@@ -376,7 +376,7 @@ describe('a chain narrows the board and the list', () => {
       shown.delete(undefined)
       expect(shown).toEqual(new Set(['MAIN-1', 'MAIN-10', 'MAIN-13']))
       const chip = wrapper.get('.workspace-chip')
-      expect(chip.text()).toBe('Chain MAIN-1 · 2')
+      expect(chip.text()).toBe('Chain MAIN-1 · 3')
       expect(chip.attributes('aria-label')).toBe('Leave chain MAIN-1 and show the whole space')
       await chip.trigger('click')
       expect(wrapper.emitted('exit-chain')).toHaveLength(1)
