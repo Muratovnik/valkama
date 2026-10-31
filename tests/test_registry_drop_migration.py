@@ -19,6 +19,7 @@ from unittest import mock
 from server import sessions, store, store_backups
 from server.executions import service as executions
 from server.planning import service as planning
+from server.planning import store as planning_store
 from server.platform import migrations
 from tests import registry_rows, schema8
 
@@ -46,6 +47,8 @@ RETIRED_INDEXES = {"platform_adapter_links_item", "platform_registry_audit_entit
 #: What the same upgrade adds: session identity is an additive step every store
 #: older than it takes on the way, schema 8 included.
 ADDED = {"execution_events"}
+#: When the schema-8 build wrote the rows below.
+CREATED_AT = "2026-08-09T16:50:36Z"
 
 
 def _catalog(conn: sqlite3.Connection, kind: str) -> set[str]:
@@ -104,14 +107,7 @@ class SchemaEightMigrationTests(unittest.TestCase):
         conn = sqlite3.connect(self.path)
         conn.row_factory = sqlite3.Row
         try:
-            planning.create_planning_space(conn, project_id="kept", name="Kept", key="KEEP")
-            first = planning.create_work_item(conn, space="KEEP", title="Kept with its history")
-            second = planning.create_work_item(conn, space="KEEP", title="Linked to the first")
-            planning.link_work_items(conn, second["reference"], first["reference"], "blocks")
-            planning.attach_ref(conn, first["reference"], "memory", "memory:kept")
-            planning.attach_ref(conn, first["reference"], "session", "kept-session")
-            planning.comment_work_item(conn, first["reference"], "Kept byte for byte")
-            planning.claim_work_item(conn, first["reference"], author="kept-agent")
+            first = self.planning_rows(conn)
             conn.commit()
             sessions.op_ingest_session_event(
                 conn,
@@ -119,13 +115,13 @@ class SchemaEightMigrationTests(unittest.TestCase):
                     "session_id": "kept-session",
                     "client": "claude",
                     "event": "session_start",
-                    "work_item": first["reference"],
+                    "work_item": "KEEP-1",
                 },
             )
             attempt = executions.open_execution(
                 conn,
                 execution_id="exec-kept",
-                work_item_id=first["work_item_id"],
+                work_item_id=first,
                 project_id="kept",
                 packet={
                     "client": "claude",
@@ -147,6 +143,70 @@ class SchemaEightMigrationTests(unittest.TestCase):
             conn.commit()
         finally:
             conn.close()
+
+    @staticmethod
+    def planning_rows(conn: sqlite3.Connection) -> str:
+        """Work with its history, as the schema-8 build wrote it; the held item's id.
+
+        Plain SQL in the shapes that build wrote, so the fixture keeps working
+        however later code writes these tables. The space and its workflow come
+        from `create_space`, which writes only tables nothing since has changed.
+        """
+
+        space = planning_store.create_space(conn, project_id="kept", name="Kept", key="KEEP")
+        workflow = planning_store.workflow_for_space(conn, space["planning_space_id"])
+        first = "11111111-1111-4111-8111-111111111111"
+        second = "22222222-2222-4222-8222-222222222222"
+        for identity, number, claim, title in (
+            (first, 1, "kept-agent", "Kept with its history"),
+            (second, 2, "", "Linked to the first"),
+        ):
+            conn.execute(
+                "INSERT INTO work_items(work_item_id,planning_space_id,number,workflow_id,"
+                "state_id,claim_ref,title,position,revision,created_at,updated_at)"
+                " VALUES(?,?,?,?,?,?,?,?,1,?,?)",
+                (
+                    identity,
+                    space["planning_space_id"],
+                    number,
+                    workflow["workflow_id"],
+                    workflow["initial_state_id"],
+                    claim,
+                    title,
+                    float(number),
+                    CREATED_AT,
+                    CREATED_AT,
+                ),
+            )
+        conn.execute("UPDATE planning_spaces SET next_number=3")
+        conn.execute(
+            "INSERT INTO work_item_links(from_id,to_id,kind,created_at) VALUES(?,?,'blocks',?)",
+            (second, first, CREATED_AT),
+        )
+        for identity, action, detail in (
+            (first, "created", "backlog"),
+            (second, "created", "backlog"),
+            (second, "linked", "blocks KEEP-1"),
+            (first, "linked", "blocks from KEEP-2"),
+            (first, "claimed", ""),
+        ):
+            conn.execute(
+                "INSERT INTO work_item_events(work_item_id,action,detail,author,created_at)"
+                " VALUES(?,?,?,'kept-agent',?)",
+                (identity, action, detail, CREATED_AT),
+            )
+        for kind, value in (("memory", "memory:kept"), ("session", "kept-session")):
+            conn.execute(
+                "INSERT INTO work_item_refs(work_item_id,kind,value,label,author,created_at)"
+                " VALUES(?,?,?,'','kept-agent',?)",
+                (first, kind, value, CREATED_AT),
+            )
+        conn.execute(
+            "INSERT INTO work_item_comments(work_item_id,author,body,created_at)"
+            " VALUES(?,'kept-agent','Kept byte for byte',?)",
+            (first, CREATED_AT),
+        )
+        return first
 
     def test_the_retired_tables_leave_and_every_other_row_stays(self) -> None:
         self.populated_source()
