@@ -24,7 +24,7 @@ const identity = (id: number) => `00000000-0000-4000-8000-${String(id).padStart(
 /** The large chain, renamed into this suite's space and rooted at its item. */
 export function largeChainHere() {
   const chain = JSON.parse(
-    JSON.stringify(largeEpicChain()).replaceAll('VAL-384', 'MAIN-264').replaceAll('VAL-', 'MAIN-'),
+    JSON.stringify(largeEpicChain()).replaceAll('MAIN-384', 'MAIN-264'),
   ) as ReturnType<typeof largeEpicChain>
   return { ...chain, root: { ...chain.root, work_item_id: workItem.work_item_id } }
 }

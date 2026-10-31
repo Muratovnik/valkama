@@ -50,7 +50,7 @@ function item(n: number, overrides: Partial<WorkItemBrief> = {}): WorkItemBrief 
   return {
     work_item_id: id(n),
     planning_space_id: 'space-1',
-    reference: `VAL-${n}`,
+    reference: `MAIN-${n}`,
     number: n,
     title: `item ${n}`,
     kind: 'task',
@@ -133,28 +133,28 @@ describe('the whole-space graph and its unlinked items', () => {
   it('leaves unlinked items out by default and draws them when the toggle is thrown', async () => {
     const graph = openGraph()
     // 3 is tied to nothing but its epic, and 4 only to closed work hidden here.
-    expect(await drawn(graph)).toEqual(['VAL-5', 'VAL-6'])
+    expect(await drawn(graph)).toEqual(['MAIN-5', 'MAIN-6'])
     const toggle = graph.get('[role="switch"]')
     expect(toggle.text()).toBe('Unlinked · 4')
     expect(toggle.attributes('aria-checked')).toBe('false')
     await toggle.trigger('click')
-    expect(await drawn(graph)).toEqual(['VAL-3', 'VAL-4', 'VAL-5', 'VAL-6', 'VAL-7', 'VAL-8'])
+    expect(await drawn(graph)).toEqual(['MAIN-3', 'MAIN-4', 'MAIN-5', 'MAIN-6', 'MAIN-7', 'MAIN-8'])
     expect(graph.get('[role="switch"]').attributes('aria-checked')).toBe('true')
     // The open/all filter still works beside it.
     await graph.get('button[aria-pressed="false"]').trigger('click')
-    expect(await drawn(graph)).toContain('VAL-2')
+    expect(await drawn(graph)).toContain('MAIN-2')
     // The whole space has no root to mark.
     expect(graph.find('.flow-node-root').exists()).toBe(false)
   })
 })
 
 describe('the graph scoped to one chain', () => {
-  const chain = { members: [id(2), id(3), id(4)], reference: 'VAL-1', total: 3 }
+  const chain = { members: [id(2), id(3), id(4)], reference: 'MAIN-1', total: 3 }
   const chainEdges: PlanningEdge[] = [{ from: id(4), to: id(2), kind: 'discovered-from' }]
 
   it('draws the root and the open members, and the closed ones only when the switch is thrown', async () => {
     const graph = openGraph({ scopeKind: 'chain', epicId: id(1), chain, edges: chainEdges })
-    expect(await drawn(graph)).toEqual(['VAL-1', 'VAL-3', 'VAL-4'])
+    expect(await drawn(graph)).toEqual(['MAIN-1', 'MAIN-3', 'MAIN-4'])
     // One switch, and it is the closed one: a chain has no unlinked toggle and
     // no open/all filter.
     const toggle = graph.get('[role="switch"]')
@@ -164,18 +164,18 @@ describe('the graph scoped to one chain', () => {
     expect(toggle.attributes('aria-checked')).toBe('false')
     expect(graph.find('.graph-filter').exists()).toBe(false)
     // The chip still counts the whole chain.
-    expect(graph.get('.graph-chip').text()).toBe('Chain VAL-1 · 3')
+    expect(graph.get('.graph-chip').text()).toBe('Chain MAIN-1 · 3')
 
     await toggle.trigger('click')
-    expect(await drawn(graph)).toEqual(['VAL-1', 'VAL-2', 'VAL-3', 'VAL-4'])
+    expect(await drawn(graph)).toEqual(['MAIN-1', 'MAIN-2', 'MAIN-3', 'MAIN-4'])
     expect(graph.get('[role="switch"]').attributes('aria-checked')).toBe('true')
     const cards = graph.findAllComponents(GraphNodeCard)
     const card = (reference: string) =>
       cards.find((entry) => entry.props('node').reference === reference)
-    expect(card('VAL-2')?.props('recessed')).toBe(true)
-    expect(card('VAL-3')?.props('recessed')).toBe(false)
-    expect(card('VAL-2')?.props('chainGroup')).toBe('done')
-    expect(card('VAL-3')?.props('chainGroup')).toBe('queued')
+    expect(card('MAIN-2')?.props('recessed')).toBe(true)
+    expect(card('MAIN-3')?.props('recessed')).toBe(false)
+    expect(card('MAIN-2')?.props('chainGroup')).toBe('done')
+    expect(card('MAIN-3')?.props('chainGroup')).toBe('queued')
   })
 
   it('takes the closed switch from its host, and hands a change back rather than keeping it', async () => {
@@ -187,16 +187,16 @@ describe('the graph scoped to one chain', () => {
       showClosed: true,
     })
     // An address that says closed draws the closed members from the start.
-    expect(await drawn(graph)).toEqual(['VAL-1', 'VAL-2', 'VAL-3', 'VAL-4'])
+    expect(await drawn(graph)).toEqual(['MAIN-1', 'MAIN-2', 'MAIN-3', 'MAIN-4'])
     await graph.get('[role="switch"]').trigger('click')
     expect(graph.emitted('update:showClosed')).toEqual([[false]])
     await graph.setProps({ showClosed: false })
-    expect(await drawn(graph)).toEqual(['VAL-1', 'VAL-3', 'VAL-4'])
+    expect(await drawn(graph)).toEqual(['MAIN-1', 'MAIN-3', 'MAIN-4'])
   })
 
   it('marks the root with a word and in its accessible name, closed or not', async () => {
     const closedRoot = items.map((entry) =>
-      entry.reference === 'VAL-1' ? { ...entry, state: DONE } : entry,
+      entry.reference === 'MAIN-1' ? { ...entry, state: DONE } : entry,
     )
     const graph = openGraph({
       scopeKind: 'chain',
@@ -207,20 +207,20 @@ describe('the graph scoped to one chain', () => {
     })
     await drawn(graph)
     const cards = graph.findAllComponents(GraphNodeCard)
-    const root = cards.find((entry) => entry.props('node').reference === 'VAL-1')
+    const root = cards.find((entry) => entry.props('node').reference === 'MAIN-1')
     expect(root?.props('root')).toBe(true)
     // Closed, it still stands above the closed work rather than with it.
     expect(root?.props('recessed')).toBe(false)
     expect(root?.get('.flow-node-root').text()).toBe('root')
-    expect(root?.get('button').attributes('aria-label')).toBe('VAL-1 item 1 · Done · chain root')
-    const others = cards.filter((entry) => entry.props('node').reference !== 'VAL-1')
+    expect(root?.get('button').attributes('aria-label')).toBe('MAIN-1 item 1 · Done · chain root')
+    const others = cards.filter((entry) => entry.props('node').reference !== 'MAIN-1')
     expect(others.every((entry) => !entry.find('.flow-node-root').exists())).toBe(true)
   })
 
   it('leaves out the origin chip that would only repeat the root, and keeps any other', async () => {
     // 3 is filed under the root itself; 4 under an epic outside the chain.
     const filed = items.map((entry) =>
-      entry.reference === 'VAL-4' ? { ...entry, parent_id: id(5) } : entry,
+      entry.reference === 'MAIN-4' ? { ...entry, parent_id: id(5) } : entry,
     )
     const graph = openGraph({
       scopeKind: 'chain',
@@ -233,17 +233,17 @@ describe('the graph scoped to one chain', () => {
     const cards = graph.findAllComponents(GraphNodeCard)
     const card = (reference: string) =>
       cards.find((entry) => entry.props('node').reference === reference)
-    expect(card('VAL-3')?.props('parentReference')).toBeUndefined()
-    expect(card('VAL-3')?.find('.flow-node-epic').exists()).toBe(false)
-    expect(card('VAL-4')?.get('.flow-node-epic').text()).toBe('VAL-5')
+    expect(card('MAIN-3')?.props('parentReference')).toBeUndefined()
+    expect(card('MAIN-3')?.find('.flow-node-epic').exists()).toBe(false)
+    expect(card('MAIN-4')?.get('.flow-node-epic').text()).toBe('MAIN-5')
   })
 
   it('names the chain in a chip that leads back to the whole space', async () => {
     const graph = openGraph({ scopeKind: 'chain', epicId: id(1), chain, edges: chainEdges })
     await drawn(graph)
     const chip = graph.get('.graph-chip')
-    expect(chip.text()).toBe('Chain VAL-1 · 3')
-    expect(chip.attributes('aria-label')).toBe('Leave chain VAL-1 and show the whole space')
+    expect(chip.text()).toBe('Chain MAIN-1 · 3')
+    expect(chip.attributes('aria-label')).toBe('Leave chain MAIN-1 and show the whole space')
     await chip.trigger('click')
     expect(graph.emitted('exit-chain')).toHaveLength(1)
   })
@@ -280,11 +280,11 @@ describe('the graph scoped to one chain', () => {
     await flushPromises()
     const cards = graph.findAllComponents(GraphNodeCard)
     expect(cards.every((card) => card.props('overview'))).toBe(true)
-    const card = cards.find((entry) => entry.props('node').reference === 'VAL-3')
-    expect(card?.get('.flow-node-overview').text()).toBe('VAL-3')
+    const card = cards.find((entry) => entry.props('node').reference === 'MAIN-3')
+    expect(card?.get('.flow-node-overview').text()).toBe('MAIN-3')
     expect(card?.find('.flow-node-title').exists()).toBe(false)
     // Its accessible name still says everything the card does.
-    expect(card?.get('button').attributes('aria-label')).toBe('VAL-3 item 3 · Todo')
+    expect(card?.get('button').attributes('aria-label')).toBe('MAIN-3 item 3 · Todo')
     viewport.value = { x: 0, y: 0, zoom: 1 }
     await flushPromises()
     expect(graph.find('.flow-node-overview').exists()).toBe(false)

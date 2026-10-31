@@ -1,6 +1,6 @@
 """Every Planning operation, and the only place that writes a work item.
 
-A caller names an item by its UUID or by what a person types — `VAL-142` — and
+A caller names an item by its UUID or by what a person types — `MAIN-142` — and
 gets the same record either way. Writes go through one guarded path that names
 the revision it read, bumps it, and records what happened; that is why the event
 trace can be read as the truth rather than as a best effort, and why two agents

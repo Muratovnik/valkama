@@ -1004,7 +1004,7 @@ class ToolArgumentTests(McpSurfaceTestCase):
     def test_an_unknown_argument_is_named_with_what_the_tool_takes(self) -> None:
         self.assertEqual(
             "delete_work_item: unknown argument 'item'; expected 'id' (required: A work item,"
-            " by its reference (VAL-142) or its work_item_id)",
+            " by its reference (MAIN-142) or its work_item_id)",
             self.refusal("delete_work_item", item=self.first),
         )
         message = self.refusal(
@@ -2250,7 +2250,7 @@ class ChainToolTests(WireCallTestCase):
             ({"id": self.root, "scope": "related"}, "scope must be chain or epic"),
             (
                 {"id": "not a reference"},
-                "a work item reference reads as KEY-NUMBER, such as VAL-142",
+                "a work item reference reads as KEY-NUMBER, such as MAIN-142",
             ),
         ):
             with self.subTest(arguments=arguments):

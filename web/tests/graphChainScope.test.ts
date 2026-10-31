@@ -36,7 +36,7 @@ function item(n: number, overrides: Partial<WorkItemBrief> = {}): WorkItemBrief 
   return {
     work_item_id: id(n),
     planning_space_id: id(800),
-    reference: `VAL-${n}`,
+    reference: `MAIN-${n}`,
     number: n,
     title: `item ${n}`,
     kind: 'task',
@@ -82,16 +82,16 @@ const chain: GraphScope = { kind: 'chain', epicId: id(1), members: [id(2), id(3)
 test('chain scope draws its open part by default and every member when closed work is asked for', () => {
   // 2 is closed and the parent of nothing drawn, so the default leaves it out.
   const drawn = workNodes(space, false, chain).map((node) => node.reference)
-  assert.deepEqual(drawn, ['VAL-1', 'VAL-3', 'VAL-4'])
+  assert.deepEqual(drawn, ['MAIN-1', 'MAIN-3', 'MAIN-4'])
   assert.deepEqual(
     workNodes(space, true, chain).map((node) => node.reference),
-    ['VAL-1', 'VAL-2', 'VAL-3', 'VAL-4'],
+    ['MAIN-1', 'MAIN-2', 'MAIN-3', 'MAIN-4'],
   )
   assert.equal(doneCount(space, chain), 1)
   // The whole space never draws the root (it is a container) nor, by default, done work.
   assert.deepEqual(
     workNodes(space, false).map((node) => node.reference),
-    ['VAL-3', 'VAL-4', 'VAL-5', 'VAL-6'],
+    ['MAIN-3', 'MAIN-4', 'MAIN-5', 'MAIN-6'],
   )
 })
 
@@ -104,7 +104,7 @@ test('the chain is laid out with only its own nodes, and a link to outside work 
   )
   assert.deepEqual(
     placed.nodes.map((node) => node.reference).sort((left, right) => left.localeCompare(right)),
-    ['VAL-1', 'VAL-2', 'VAL-3', 'VAL-4'],
+    ['MAIN-1', 'MAIN-2', 'MAIN-3', 'MAIN-4'],
   )
   assert.equal(placed.edges.length, 1)
 })
@@ -180,6 +180,6 @@ test('a closed parent outside the chain does not come back with its open child',
   const scope: GraphScope = { kind: 'chain', epicId: id(1), members: [id(21)] }
   assert.deepEqual(
     workNodes(nodes, false, scope).map((node) => node.reference),
-    ['VAL-1', 'VAL-21'],
+    ['MAIN-1', 'MAIN-21'],
   )
 })

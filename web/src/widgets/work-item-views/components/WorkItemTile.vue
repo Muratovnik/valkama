@@ -3,7 +3,7 @@
  * One work item as a sheet: its reference, what it is, and only the facts that
  * change what a reader would do next.
  *
- * The reference leads, because `VAL-142` is what a person types and what a
+ * The reference leads, because `MAIN-142` is what a person types and what a
  * commit message already holds. Everything else is a mark rather than a
  * sentence: an unfinished checklist, a holder, a blocked edge. A tile that
  * restated the whole record would make the wall of work unreadable, which is

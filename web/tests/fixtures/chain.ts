@@ -1,7 +1,7 @@
 /**
- * A chain shaped like the one that started this view: VAL-384, an epic closed
+ * A chain shaped like the one that started this view: MAIN-384, an epic closed
  * with all 273 children done, and 343 more items discovered from them — 242
- * under VAL-779, 88 under no epic, 13 under VAL-900. 133 of the 616 are open:
+ * under MAIN-779, 88 under no epic, 13 under MAIN-900. 133 of the 616 are open:
  * 11 in progress, 1 in review, 14 queued and 107 in the backlog, of which the
  * space calls 115 workable.
  *
@@ -32,7 +32,7 @@ function member(state: StateName, parent: string | null, ready = false, claim = 
   const terminal = STATES[state].is_terminal
   return {
     work_item_id: chainId(number),
-    reference: `VAL-${number}`,
+    reference: `MAIN-${number}`,
     title: `Chain item ${number}`,
     state: { ...STATES[state] },
     claim_ref: claim,
@@ -54,21 +54,21 @@ function many(count: number, make: (index: number) => ReturnType<typeof member>)
 export function largeEpicChain() {
   next = 1000
   const members = [
-    ...many(273, () => member('done', 'VAL-384')),
-    ...many(11, () => member('active', 'VAL-779', false, 'codex (session 1baa03d7)')),
-    ...many(1, () => member('review', 'VAL-779', false, 'claude')),
-    ...many(14, () => member('queued', 'VAL-779', true)),
-    ...many(74, (index) => member('backlog', 'VAL-779', index < 71)),
-    ...many(142, () => member('done', 'VAL-779')),
+    ...many(273, () => member('done', 'MAIN-384')),
+    ...many(11, () => member('active', 'MAIN-779', false, 'codex (session 1baa03d7)')),
+    ...many(1, () => member('review', 'MAIN-779', false, 'claude')),
+    ...many(14, () => member('queued', 'MAIN-779', true)),
+    ...many(74, (index) => member('backlog', 'MAIN-779', index < 71)),
+    ...many(142, () => member('done', 'MAIN-779')),
     ...many(30, () => member('backlog', null, true)),
     ...many(58, () => member('done', null)),
-    ...many(3, () => member('backlog', 'VAL-900')),
-    ...many(10, () => member('done', 'VAL-900')),
+    ...many(3, () => member('backlog', 'MAIN-900')),
+    ...many(10, () => member('done', 'MAIN-900')),
   ]
   return {
     root: {
       work_item_id: CHAIN_ROOT_ID,
-      reference: 'VAL-384',
+      reference: 'MAIN-384',
       title: 'Planning rethink',
       kind: 'epic' as const,
       has_children: true,
@@ -80,10 +80,10 @@ export function largeEpicChain() {
     ready: 115,
     by_category: { active: 11, backlog: 107, completed: 483, queued: 14, review: 1 },
     origins: [
-      { parent_reference: 'VAL-384', parent_title: 'Planning rethink', count: 273, open: 0 },
-      { parent_reference: 'VAL-779', parent_title: 'Second wave', count: 242, open: 100 },
+      { parent_reference: 'MAIN-384', parent_title: 'Planning rethink', count: 273, open: 0 },
+      { parent_reference: 'MAIN-779', parent_title: 'Second wave', count: 242, open: 100 },
       { parent_reference: null, parent_title: null, count: 88, open: 30 },
-      { parent_reference: 'VAL-900', parent_title: 'Follow-ups', count: 13, open: 3 },
+      { parent_reference: 'MAIN-900', parent_title: 'Follow-ups', count: 13, open: 3 },
     ],
     series: [
       { day: '2026-09-01', created: 273, closed: 0, total: 273, closed_total: 0 },

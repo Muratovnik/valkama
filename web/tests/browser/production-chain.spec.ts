@@ -1,6 +1,6 @@
 /**
  * A chain read end to end in the built application: the card's section for an
- * epic shaped like VAL-384, its branch map for a six-lane chain and a small one,
+ * epic shaped like MAIN-384, its branch map for a six-lane chain and a small one,
  * the graph scoped to a chain and back, and the chain held in the address, so a
  * reload, a link and Back come back to the same field.
  *
@@ -50,7 +50,7 @@ function shot(info: TestInfo, name: string) {
 }
 
 for (const width of [1440, 390]) {
-  test(`the card reads a VAL-384-shaped chain at ${width}px`, async ({ page }, info) => {
+  test(`the card reads a MAIN-384-shaped chain at ${width}px`, async ({ page }, info) => {
     await page.setViewportSize({ width, height: 1000 })
     await installBackend(page)
     await serve(page, largeChainHere())

@@ -132,7 +132,7 @@ def _space_key(value, where):
 
 def _work_item_reference(value, where):
     if not isinstance(value, str) or not _WORK_ITEM_REFERENCE_RE.fullmatch(value):
-        raise ContractError(f"{where} must be a work item reference such as VAL-142")
+        raise ContractError(f"{where} must be a work item reference such as MAIN-142")
     return value
 
 

@@ -20,35 +20,35 @@ afterEach(() => vi.unstubAllGlobals())
 describe('the chain read', () => {
   it('asks for one root in one scope and reads the planning envelope', async () => {
     const fetchMock = answer(chainResponse(largeEpicChain()))
-    const chain = await fetchWorkItemChain('VAL-384', 'epic')
+    const chain = await fetchWorkItemChain('MAIN-384', 'epic')
     const url = new URL(requestUrl(fetchMock.mock.calls.at(-1)?.[0] ?? ''), 'https://example.test')
     expect(url.pathname).toBe('/api/planning/work-item/chain')
-    expect(Object.fromEntries(url.searchParams)).toEqual({ id: 'VAL-384', scope: 'epic' })
+    expect(Object.fromEntries(url.searchParams)).toEqual({ id: 'MAIN-384', scope: 'epic' })
     expect(chain.total).toBe(616)
     expect(chain.members).toHaveLength(616)
   })
 
   it('refuses a payload without the planning interface or with a field it does not know', async () => {
     answer({ chain: largeEpicChain() })
-    await expect(fetchWorkItemChain('VAL-384', 'chain')).rejects.toThrow(/interface_version/u)
+    await expect(fetchWorkItemChain('MAIN-384', 'chain')).rejects.toThrow(/interface_version/u)
     answer(chainResponse({ ...largeEpicChain(), extra: 1 } as ReturnType<typeof largeEpicChain>))
-    await expect(fetchWorkItemChain('VAL-384', 'chain')).rejects.toThrow(/unknown field/u)
+    await expect(fetchWorkItemChain('MAIN-384', 'chain')).rejects.toThrow(/unknown field/u)
   })
 
   it('refuses days out of order and counts that do not add up', async () => {
     const chain = largeEpicChain()
     answer(chainResponse({ ...chain, series: [...chain.series].reverse() }))
-    await expect(fetchWorkItemChain('VAL-384', 'chain')).rejects.toThrow(/ascending days/u)
+    await expect(fetchWorkItemChain('MAIN-384', 'chain')).rejects.toThrow(/ascending days/u)
     answer(chainResponse({ ...chain, closed: 482 }))
-    await expect(fetchWorkItemChain('VAL-384', 'chain')).rejects.toThrow(/add up/u)
+    await expect(fetchWorkItemChain('MAIN-384', 'chain')).rejects.toThrow(/add up/u)
   })
 
   it('carries the server code and status of a refusal', async () => {
-    answer({ error: { code: 'not_found', message: 'no work item VAL-9' } }, 404)
-    await expect(fetchWorkItemChain('VAL-9', 'chain')).rejects.toMatchObject({
+    answer({ error: { code: 'not_found', message: 'no work item MAIN-9' } }, 404)
+    await expect(fetchWorkItemChain('MAIN-9', 'chain')).rejects.toMatchObject({
       code: 'not_found',
       status: 404,
-      message: 'no work item VAL-9',
+      message: 'no work item MAIN-9',
     })
   })
 })

@@ -29,11 +29,11 @@ _BOOL = {"type": "boolean"}
 _LABELS = {"type": "array", "items": {"type": "string"}}
 _REFERENCE = {
     "type": "string",
-    "description": "A work item, by its reference (VAL-142) or its work_item_id.",
+    "description": "A work item, by its reference (MAIN-142) or its work_item_id.",
 }
 _SPACE = {
     "type": "string",
-    "description": "Planning space, by key (VAL), name, or planning_space_id.",
+    "description": "Planning space, by key (MAIN), name, or planning_space_id.",
 }
 _STATE = {
     "type": "string",
@@ -262,7 +262,7 @@ TOOLS = [
             },
             "parent": {
                 "type": "string",
-                "description": "Only the children of this item, by its reference (VAL-142)"
+                "description": "Only the children of this item, by its reference (MAIN-142)"
                 " or its work_item_id.",
             },
             "limit": _INT,
@@ -489,7 +489,7 @@ TOOLS = [
         {
             "id": {
                 "type": "string",
-                "description": "The item that survives, by its reference (VAL-142) or"
+                "description": "The item that survives, by its reference (MAIN-142) or"
                 " its work_item_id.",
             },
             "items": {

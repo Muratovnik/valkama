@@ -168,7 +168,7 @@ def enum_field(value: object, allowed: frozenset[str], field: str) -> str:
 
 
 def space_key(value: object) -> str:
-    """The prefix a human identifier is built from, such as `VAL`."""
+    """The prefix a human identifier is built from, such as `MAIN`."""
 
     text = text_field(value, "planning_space.key", limit=8)
     if not _SPACE_KEY.match(text):
@@ -266,7 +266,7 @@ def labels(value: object) -> list[str]:
 
 
 def human_id(key: str, number: int) -> str:
-    """`VAL-142`: what a person types, built from the space key and the number."""
+    """`MAIN-142`: what a person types, built from the space key and the number."""
 
     if number < 1:
         raise PlanningError("work_item.number starts at 1")
@@ -277,7 +277,7 @@ def parse_human_id(value: object) -> tuple[str, int]:
     text = text_field(value, "work_item reference", limit=20)
     match = _HUMAN_ID.match(text)
     if match is None:
-        raise PlanningError("a work item reference reads as KEY-NUMBER, such as VAL-142")
+        raise PlanningError("a work item reference reads as KEY-NUMBER, such as MAIN-142")
     return match.group(1), int(match.group(2))
 
 

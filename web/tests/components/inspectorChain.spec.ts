@@ -1,6 +1,6 @@
 /**
  * The card's chain section, read through the real client against a stubbed
- * server: what the owner reads off a chain shaped like VAL-384, what it asks the
+ * server: what the owner reads off a chain shaped like MAIN-384, what it asks the
  * server and when, and the ways in and out of it.
  */
 import { flushPromises } from '@vue/test-utils'
@@ -75,7 +75,7 @@ const eight = <T>(value: T) => Array.from({ length: 8 }, () => value)
 describe('the chain section of a card', () => {
   useInspectorHarness()
 
-  it('reads a VAL-384-shaped chain as a map first, then one line, the trend and the groups', async () => {
+  it('reads a MAIN-384-shaped chain as a map first, then one line, the trend and the groups', async () => {
     const asked = serveChain(json(chainResponse(largeEpicChain())))
     const wrapper = await open()
     const chain = section(wrapper)
@@ -117,10 +117,10 @@ describe('the chain section of a card', () => {
     // origins line the map replaced is gone.
     expect(chain.find('.chain-origins').exists()).toBe(false)
     expect(chain.findAll('.branch-map-label').map((label) => label.text())).toEqual([
-      'VAL-384',
-      'VAL-779',
+      'MAIN-384',
+      'MAIN-779',
       'no epic',
-      'VAL-900',
+      'MAIN-900',
     ])
     expect(chain.findAll('.branch-map-count').map((count) => count.text())).toEqual([
       '273 of 273 done',
@@ -141,10 +141,10 @@ describe('the chain section of a card', () => {
 
   it('names a row state only where its group heading does not', async () => {
     const mixed = largeEpicChain()
-    // The three open items under VAL-900 wait in a second backlog state, and
+    // The three open items under MAIN-900 wait in a second backlog state, and
     // the first two closed ones were cancelled rather than done.
     for (const member of mixed.members.filter(
-      (item) => item.parent_reference === 'VAL-900' && !item.state.is_terminal,
+      (item) => item.parent_reference === 'MAIN-900' && !item.state.is_terminal,
     ))
       Object.assign(member.state, { key: 'icebox', name: 'Icebox' })
     for (const member of mixed.members.slice(0, 2))
@@ -251,10 +251,10 @@ describe('the chain section of a card', () => {
     const reference = row.get('.chain-row-reference').text()
     await row.trigger('click')
     await flushPromises()
-    await getButton(wrapper, 'VAL-779').trigger('click')
-    await getButton(wrapper, 'Open VAL-779').trigger('click')
+    await getButton(wrapper, 'MAIN-779').trigger('click')
+    await getButton(wrapper, 'Open MAIN-779').trigger('click')
     await flushPromises()
-    expect(wrapper.emitted('open')).toEqual([[reference], ['VAL-779']])
+    expect(wrapper.emitted('open')).toEqual([[reference], ['MAIN-779']])
   })
 
   it('narrows the member list to the lane chosen on the map, and widens it back', async () => {
@@ -267,9 +267,9 @@ describe('the chain section of a card', () => {
     const chip = () => section(wrapper).find('.chain-lane-chip')
     expect(chip().exists()).toBe(false)
 
-    await getButton(wrapper, 'VAL-779').trigger('click')
-    expect(chip().text()).toBe('Lane VAL-779')
-    expect(chip().attributes('aria-label')).toBe('Lane VAL-779: show every lane')
+    await getButton(wrapper, 'MAIN-779').trigger('click')
+    expect(chip().text()).toBe('Lane MAIN-779')
+    expect(chip().attributes('aria-label')).toBe('Lane MAIN-779: show every lane')
     expect(headings()).toEqual(['Development · 11', 'Code review · 1', 'Todo · 14', 'Backlog · 74'])
     expect(getButton(wrapper, 'Done · 142').exists()).toBe(true)
     // The narrowed list follows the map and its line directly; the whole
@@ -306,18 +306,18 @@ describe('the chain section of a card', () => {
       'Todo · 14',
       'Backlog · 107',
     ])
-    await getButton(wrapper, 'VAL-900').trigger('click')
-    await getButton(wrapper, 'VAL-900').trigger('click')
+    await getButton(wrapper, 'MAIN-900').trigger('click')
+    await getButton(wrapper, 'MAIN-900').trigger('click')
     expect(chip().exists()).toBe(false)
   })
 
   it('forgets a chosen lane the next answer does not have', async () => {
-    // The epic scope is the root's own children: one lane, and no VAL-900 in it.
+    // The epic scope is the root's own children: one lane, and no MAIN-900 in it.
     const whole = largeEpicChain()
     const epic = {
       ...whole,
       scope: 'epic' as const,
-      members: whole.members.filter((member) => member.parent_reference === 'VAL-384'),
+      members: whole.members.filter((member) => member.parent_reference === 'MAIN-384'),
       total: 273,
       closed: 273,
       open: 0,
@@ -328,7 +328,7 @@ describe('the chain section of a card', () => {
     }
     serveChain(json(chainResponse(whole)), json(chainResponse(epic)))
     const wrapper = await open()
-    await getButton(wrapper, 'VAL-900').trigger('click')
+    await getButton(wrapper, 'MAIN-900').trigger('click')
     expect(section(wrapper).find('.chain-lane-chip').exists()).toBe(true)
     await getButton(wrapper, 'Epic').trigger('click')
     await flushPromises()
@@ -336,7 +336,7 @@ describe('the chain section of a card', () => {
       section(wrapper)
         .findAll('.branch-map-label')
         .map((label) => label.text()),
-    ).toEqual(['VAL-384'])
+    ).toEqual(['MAIN-384'])
     expect(section(wrapper).find('.chain-lane-chip').exists()).toBe(false)
   })
 
@@ -345,7 +345,7 @@ describe('the chain section of a card', () => {
     const wrapper = await open()
     await getButton(wrapper, 'Show on graph').trigger('click')
     const [[shown]] = wrapper.emitted('chain') as [[{ root: { reference: string }; total: number }]]
-    expect(shown.root.reference).toBe('VAL-384')
+    expect(shown.root.reference).toBe('MAIN-384')
     expect(shown.total).toBe(616)
   })
 
