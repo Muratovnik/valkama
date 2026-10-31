@@ -165,6 +165,54 @@ class ConsoleEncodingTests(CliTestCase):
         self.assertIn("переход → готово", finished.stdout.decode("utf-8"))
 
 
+class ExportTests(CliTestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        service.create_planning_space(self.conn, project_id="cli", name="Other", key="OTH")
+        service.create_work_item(self.conn, space="OTH", title="not in the narrowed export")
+        self.item("in the narrowed export")
+        self.target = os.path.join(self.home.name, "export.json")
+
+    def test_without_output_the_export_goes_to_stdout_as_before(self) -> None:
+        payload = json.loads(self.invoke("export"))
+        self.assertEqual(
+            {"COM", "OTH"}, {space["key"] for space in payload["planning"]["planning_spaces"]}
+        )
+        self.assertNotIn("space_filter", payload)
+
+    def test_one_space_to_a_file_prints_only_a_summary(self) -> None:
+        output = self.invoke("export", "--space", SPACE_KEY, "--output", self.target)
+        self.assertEqual(
+            f"wrote {os.path.abspath(self.target)}: 1 planning space(s) ({SPACE_KEY}),"
+            " 1 work item(s)\n",
+            output,
+        )
+        with open(self.target, encoding="utf-8") as handle:
+            payload = json.load(handle)
+        self.assertEqual([SPACE_KEY], payload["space_filter"])
+        self.assertEqual(
+            ["in the narrowed export"],
+            [item["title"] for item in payload["planning"]["work_items"]],
+        )
+
+    def test_the_space_option_repeats(self) -> None:
+        payload = json.loads(self.invoke("export", "--space", SPACE_KEY, "--space", "OTH"))
+        self.assertEqual(["COM", "OTH"], sorted(payload["space_filter"]))
+        self.assertEqual(2, len(payload["planning"]["work_items"]))
+
+    def test_an_unknown_space_exits_non_zero_and_writes_nothing(self) -> None:
+        with self.assertRaises(SystemExit) as stopped:
+            self.invoke("export", "--space", "NOPE", "--output", self.target)
+        self.assertIn("no planning space named NOPE", str(stopped.exception.code))
+        self.assertFalse(os.path.exists(self.target))
+
+    def test_an_unwritable_output_exits_non_zero(self) -> None:
+        missing = os.path.join(self.home.name, "absent", "export.json")
+        with self.assertRaises(SystemExit) as stopped:
+            self.invoke("export", "--output", missing)
+        self.assertIn("cannot write", str(stopped.exception.code))
+
+
 class RoutingTests(CliTestCase):
     def test_capabilities_advertises_only_commands_the_parser_implements(self) -> None:
         payload = json.loads(self.invoke("capabilities"))

@@ -357,6 +357,32 @@ def _launcher_main(parser: argparse.ArgumentParser, options: argparse.Namespace)
     print(json.dumps(result, ensure_ascii=False, indent=1, sort_keys=True))
 
 
+def _export_main(options: argparse.Namespace) -> None:
+    """Print the export, or write it to a file and print one line about it.
+
+    A refused space or a count that does not add up exits non-zero with the
+    reason, and nothing is printed or written in its place.
+    """
+
+    conn = connect()
+    try:
+        sections = tuple(options.section or export.SECTIONS)
+        spaces = tuple(options.space) if options.space else None
+        payload = export.export_installation(conn, sections=sections, spaces=spaces)
+    except (planning_model.PlanningError, export.ExportIncompleteError, ValueError) as error:
+        raise SystemExit(f"export: {error}") from error
+    finally:
+        conn.close()
+    if options.output is None:
+        print(export.render(payload))
+        return
+    try:
+        written = export.write(payload, options.output)
+    except OSError as error:
+        raise SystemExit(f"export: cannot write {options.output}: {error}") from error
+    print(export.summary(payload, written))
+
+
 def _projects_main(options: argparse.Namespace) -> None:
     inventory = registry_owner.inventory_path()
     target = registry_owner.projection_path()
@@ -587,6 +613,17 @@ def main(argv: list[str] | None = None) -> None:
         choices=export.SECTIONS,
         help="export only this section; repeatable, default is everything",
     )
+    export_cmd.add_argument(
+        "--space",
+        action="append",
+        metavar="KEY",
+        help="export only this planning space; repeatable, default is every space",
+    )
+    export_cmd.add_argument(
+        "--output",
+        metavar="PATH",
+        help="write the export to this file, replacing it whole, and print a summary",
+    )
     migrate_cmd = commands.add_parser(
         "migrate", help="run one named forward-only data migration, once"
     )
@@ -610,12 +647,7 @@ def main(argv: list[str] | None = None) -> None:
     elif options.command == "projects":
         _projects_main(options)
     elif options.command == "export":
-        conn = connect()
-        try:
-            sections = tuple(options.section or export.SECTIONS)
-            print(export.render(export.export_installation(conn, sections=sections)))
-        finally:
-            conn.close()
+        _export_main(options)
     elif options.command == "setup":
         # The reading is what `--apply` runs, rather than a fresh one: a second
         # inspection could propose a different set from the one just shown.
