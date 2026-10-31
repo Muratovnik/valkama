@@ -119,7 +119,22 @@ def is_container(conn: sqlite3.Connection, work_item_id: str) -> bool:
     )
 
 
-def present(conn: sqlite3.Connection, row: sqlite3.Row, *, full: bool = False) -> dict:
+def present(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    *,
+    full: bool = False,
+    comments: int | None = None,
+    events: int | None = None,
+) -> dict:
+    """One item: a brief record, or the full one with its history.
+
+    `comments` and `events` cut a full record's history to that many of the
+    newest entries, still oldest first, and add the totals and whether anything
+    was left out. Neither given is the whole history, which is what every write
+    answers with and what a screen draws from.
+    """
+
     state = state_by_id(conn, str(row["state_id"]))
     record = {
         "work_item_id": row["work_item_id"],
@@ -196,9 +211,12 @@ def present(conn: sqlite3.Connection, row: sqlite3.Row, *, full: bool = False) -
             "body": item["body"],
             "at": item["created_at"] or None,
         }
-        for item in conn.execute(
-            "SELECT * FROM work_item_comments WHERE work_item_id = ? ORDER BY id",
-            (str(row["work_item_id"]),),
+        for item in _newest(
+            conn,
+            "SELECT * FROM work_item_comments WHERE work_item_id = ?",
+            "id",
+            identity,
+            comments,
         )
     ]
     record["events"] = [
@@ -209,15 +227,77 @@ def present(conn: sqlite3.Connection, row: sqlite3.Row, *, full: bool = False) -
             "at": event["created_at"],
             "identity": _identity(event),
         }
-        for event in conn.execute(
-            "SELECT e.action, e.detail, e.author, e.created_at,"
+        for event in _newest(
+            conn,
+            "SELECT e.id, e.action, e.detail, e.author, e.created_at,"
             " c.identity_state, c.identity_source, c.session_id, c.agent_id"
             " FROM work_item_events e LEFT JOIN execution_events c ON c.id = e.call_id"
-            " WHERE e.work_item_id = ? ORDER BY e.id",
-            (str(row["work_item_id"]),),
+            " WHERE e.work_item_id = ?",
+            "e.id",
+            identity,
+            events,
         )
     ]
+    if comments is not None or events is not None:
+        comments_total = comment_count(conn, row)
+        events_total = int(
+            conn.execute(
+                "SELECT COUNT(*) FROM work_item_events WHERE work_item_id = ?", (identity,)
+            ).fetchone()[0]
+        )
+        record["comments_total"] = comments_total
+        record["events_total"] = events_total
+        record["history_truncated"] = (
+            len(record["comments"]) < comments_total or len(record["events"]) < events_total
+        )
     return record
+
+
+def _newest(
+    conn: sqlite3.Connection, query: str, order: str, work_item_id: str, limit: int | None
+) -> list[sqlite3.Row]:
+    """Every row of one item's history oldest first, or only the newest `limit` of them."""
+
+    if limit is None:
+        return conn.execute(query + " ORDER BY " + order, (work_item_id,)).fetchall()
+    newest = conn.execute(
+        query + " ORDER BY " + order + " DESC LIMIT ?", (work_item_id, limit)
+    ).fetchall()
+    return newest[::-1]
+
+
+def sessions(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
+    """The agent sessions a client proved behind this item's write calls.
+
+    One entry per session, in the order each first wrote here. Only a confirmed
+    call counts: an unconfirmed one names a session nobody verified, and a
+    browser or Valkama call has no session at all. A call is charged to the item
+    it acted on first, so a link counts for its source item, not its target.
+    """
+
+    found: dict[str, dict] = {}
+    for call in conn.execute(
+        "SELECT session_id, client, identity_source, received_at FROM execution_events"
+        " WHERE kind = ? AND work_item_id = ? AND identity_state = ?"
+        " AND COALESCE(session_id, '') != '' ORDER BY id",
+        (calls.KIND, work_item_id, calls.CONFIRMED),
+    ):
+        entry = found.setdefault(
+            str(call["session_id"]),
+            {"session_id": call["session_id"], "first_at": call["received_at"], "writes": 0},
+        )
+        # The latest call names how the session is reached now.
+        entry["client"] = call["client"]
+        entry["identity_source"] = call["identity_source"]
+        entry["last_at"] = call["received_at"]
+        entry["writes"] += 1
+    return [
+        {
+            name: entry[name]
+            for name in ("session_id", "client", "identity_source", "first_at", "last_at", "writes")
+        }
+        for entry in found.values()
+    ]
 
 
 def _identity(event: sqlite3.Row) -> dict:

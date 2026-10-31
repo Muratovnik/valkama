@@ -68,6 +68,9 @@ _OFFSET = {
     "description": "How many items to skip, for the next page: pass the next_offset"
     " of the previous answer with the same filters.",
 }
+#: How much history get_work_item carries unless the caller asks for all of it.
+RECENT_COMMENTS = 5
+RECENT_EVENTS = 10
 #: What every list and search says about paging, so an agent knows to keep going.
 _PAGING = (
     " An answer holds one page: truncated is true when more items match, and"
@@ -152,9 +155,20 @@ TOOLS = [
     _tool(
         "get_work_item",
         "Read a work item",
-        "One item in full: its state, checklist, links, refs, comments and event trail.",
+        "One item: its fields, checklist, links, refs and summary, the newest"
+        f" {RECENT_COMMENTS} comments and {RECENT_EVENTS} history events with"
+        " comments_total, events_total and history_truncated, and sessions: the"
+        " agent sessions whose confirmed calls wrote to it. full=true returns every"
+        " comment and event.",
         READ_ONLY,
-        {"id": _REFERENCE},
+        {
+            "id": _REFERENCE,
+            "full": {
+                "type": "boolean",
+                "description": "Answer with every comment and history event instead of"
+                " the newest ones.",
+            },
+        },
         ["id"],
     ),
     _tool(
@@ -334,10 +348,11 @@ TOOLS = [
     _tool(
         "attach_work_item_ref",
         "Attach a reference",
-        "A structured pointer: a commit, a session id, an AgentMemory record id,"
-        " or a url. Attach every memory record materially used for this work as"
-        " kind=memory with its stable id; this is a one-way pointer and never"
-        " writes back. Raw logs and files do not belong here.",
+        "A structured pointer: a commit, an AgentMemory record id, or a url. Attach"
+        " every memory record materially used for this work as kind=memory with"
+        " its stable id; this is a one-way pointer and never writes back. Your own"
+        " session needs no ref: Valkama records the confirmed session of every"
+        " write itself. Raw logs and files do not belong here.",
         WRITES,
         {
             "id": _REFERENCE,
@@ -409,6 +424,86 @@ TOOLS = [
         WRITES,
         {"id": _REFERENCE, "body": _STR, "author": _AUTHOR, "checklist_item_id": _STR},
         ["id", "body"],
+    ),
+    _tool(
+        "apply_work_item_changes",
+        "Apply several changes to a work item",
+        "Several writes to one item in one call, all or nothing. Each group works"
+        " exactly as its single tool does, and they apply in this order: claim,"
+        " checklist_ticks, refs, links, comment, summary, transition — so a closing"
+        " transition sees the ticks and the summary sent with it. A refused step"
+        " writes nothing and names the step and the refusal's code. Name at least"
+        " one group. Answers with the acknowledgement and applied, what each group"
+        " changed.",
+        WRITES,
+        {
+            "id": _REFERENCE,
+            "claim": {
+                "type": "boolean",
+                "description": "true claims the item as claim_work_item does.",
+            },
+            "checklist_ticks": {
+                "type": "array",
+                "maxItems": api.MAX_APPLY_ENTRIES,
+                "description": "Steps to complete, or to reopen with done=false.",
+                "items": {
+                    "type": "object",
+                    "properties": {"item_id": _STR, "done": _BOOL},
+                    "required": ["item_id"],
+                },
+            },
+            "refs": {
+                "type": "array",
+                "maxItems": api.MAX_APPLY_ENTRIES,
+                "description": "Pointers to attach, as attach_work_item_ref takes them.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "kind": {"type": "string", "enum": sorted(model.REF_KINDS)},
+                        "value": _STR,
+                        "label": _STR,
+                    },
+                    "required": ["kind", "value"],
+                },
+            },
+            "links": {
+                "type": "array",
+                "maxItems": api.MAX_APPLY_ENTRIES,
+                "description": "Links from this item, as link_work_items takes them.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "other": _REFERENCE,
+                        "kind": {"type": "string", "enum": sorted(model.LINK_KINDS)},
+                        "remove": _BOOL,
+                    },
+                    "required": ["other", "kind"],
+                },
+            },
+            "comment": {
+                "type": "object",
+                "properties": {"body": _STR, "checklist_item_id": _STR},
+                "required": ["body"],
+            },
+            "summary": {
+                "type": "object",
+                "properties": {"done": _STR, "next": _STR, "why": _STR},
+                "required": ["done", "next"],
+            },
+            "transition": {
+                "type": "object",
+                "properties": {"state": _STATE, "reason": _STR, "force": _FORCE},
+                "required": ["state"],
+            },
+            "expected_revision": {
+                **_EXPECTED_REVISION,
+                "description": "Revision read from a previous read; checked once, before"
+                " the first step, and rejects a stale batch.",
+            },
+            "author": _AUTHOR,
+            "verbose": _VERBOSE,
+        },
+        ["id"],
     ),
     _tool(
         "delete_work_item",
@@ -525,10 +620,10 @@ def _post(path: str) -> Callable[[sqlite3.Connection, Mapping[str, object]], obj
     return run
 
 
-def _is_verbose(arguments: Mapping[str, object]) -> bool:
-    verbose = arguments.get("verbose", False)
+def _is_verbose(arguments: Mapping[str, object], name: str = "verbose") -> bool:
+    verbose = arguments.get(name, False)
     if not isinstance(verbose, bool):
-        raise api.PlanningHttpError(400, "invalid_request", "verbose must be a boolean")
+        raise api.PlanningHttpError(400, "invalid_request", f"{name} must be a boolean")
     return verbose
 
 
@@ -576,6 +671,24 @@ def _get(
         return answer[1][unwrap] if unwrap else answer[1]
 
     return run
+
+
+def _work_item(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
+    """One item with its newest history unless the caller wants all of it.
+
+    The cut is made by the boundary's opt-in parameters, so the HTTP read a
+    screen makes without them is the complete record it always was. Either way
+    the answer names the sessions that wrote to the item.
+    """
+
+    parameters = {"id": [str(arguments["id"])], "sessions": ["true"]}
+    if not _is_verbose(arguments, "full"):
+        parameters["comments"] = [str(RECENT_COMMENTS)]
+        parameters["events"] = [str(RECENT_EVENTS)]
+    answer = api.handle_get(conn, "/api/planning/work-item", parameters)
+    if answer is None:  # pragma: no cover - the path table above is closed
+        raise ValueError("no planning work item read")
+    return answer[1]["work_item"]
 
 
 def _search(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
@@ -650,7 +763,7 @@ OPS: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], object]] = {
     "get_planning_space": _space,
     "create_planning_space": _post("/api/planning/spaces"),
     "create_work_item": _acknowledged("/api/planning/work-items", acknowledgements.created),
-    "get_work_item": _get("/api/planning/work-item", "id", unwrap="work_item"),
+    "get_work_item": _work_item,
     "list_work_items": _listing(
         _get(
             "/api/planning/work-items",
@@ -685,6 +798,9 @@ OPS: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], object]] = {
         "/api/planning/work-item/summary", acknowledgements.summarized
     ),
     "comment_work_item": _post("/api/planning/work-item/comment"),
+    "apply_work_item_changes": _acknowledged(
+        "/api/planning/work-item/apply", acknowledgements.applied
+    ),
     "report_work_item": _acknowledged("/api/planning/work-item/report", acknowledgements.reported),
     "select_work_item_summary": _acknowledged(
         "/api/planning/work-item/summary/select", acknowledgements.summarized

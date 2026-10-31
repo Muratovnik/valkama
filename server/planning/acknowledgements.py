@@ -112,6 +112,12 @@ def summarized(item: dict, _arguments: Mapping[str, object]) -> dict:
     }
 
 
+def applied(item: dict, arguments: Mapping[str, object]) -> dict:
+    """A batch: what each group changed, and a transition's findings like the single tool's."""
+
+    return {**transitioned(item, arguments), "applied": item["applied"]}
+
+
 def reported(item: dict, _arguments: Mapping[str, object]) -> dict:
     return {
         **_base(item),

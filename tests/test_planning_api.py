@@ -346,6 +346,53 @@ class PlanningApiTests(unittest.TestCase):
             return status, body["error"]["code"]
         raise AssertionError(f"{path} did not refuse")
 
+    # -- the batch write ---------------------------------------------------
+
+    def test_a_refused_batch_leaves_nothing_behind_a_commit(self) -> None:
+        item = self.post("/api/planning/work-items", space="QA", title="Atomic")
+        steps = self.post("/api/planning/work-item/checklist", id=item["reference"], items=["a"])
+        self.conn.commit()
+        before = self.get("/api/planning/work-item", id=item["reference"])["work_item"]
+        with self.assertRaises(planning_api.PlanningHttpError) as refused:
+            planning_api.handle_post(
+                self.conn,
+                "/api/planning/work-item/apply",
+                {
+                    "id": item["reference"],
+                    "claim": True,
+                    "refs": [{"kind": "commit", "value": "abc1234"}],
+                    "comment": {"body": "should vanish"},
+                    "summary": {"done": "d", "next": "n"},
+                    # The step stays open, so the closing transition is refused.
+                    "transition": {"state": "done"},
+                },
+            )
+        self.assertEqual("workflow_guard", refused.exception.code)
+        # The HTTP surface commits what a handler leaves; the savepoint is what
+        # keeps the earlier steps out of that commit.
+        self.conn.commit()
+        after = self.get("/api/planning/work-item", id=item["reference"])["work_item"]
+        self.assertEqual(before, after)
+        self.assertEqual(
+            (0, 0),
+            (
+                self.conn.execute("SELECT COUNT(*) FROM work_item_comments").fetchone()[0],
+                self.conn.execute("SELECT COUNT(*) FROM work_item_refs").fetchone()[0],
+            ),
+        )
+        self.assertFalse(steps["checklist"][0]["done"])
+
+    def test_a_batch_runs_inside_a_transaction_the_caller_already_opened(self) -> None:
+        item = self.post("/api/planning/work-items", space="QA", title="Nested")
+        self.assertTrue(self.conn.in_transaction)
+        answer = self.post(
+            "/api/planning/work-item/apply", id=item["reference"], comment={"body": "kept"}
+        )
+        self.assertEqual({"comment"}, set(answer["applied"]))
+        self.conn.rollback()
+        # Nothing was committed on the caller's behalf: the item is gone too.
+        self.assertEqual(0, self.conn.execute("SELECT COUNT(*) FROM work_items").fetchone()[0])
+
 
 class PlanningRouteDispatchTests(unittest.TestCase):
     """Every neutral path the domain declares is one a boundary answers."""

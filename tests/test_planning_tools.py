@@ -194,6 +194,7 @@ ACKNOWLEDGED = (
     "set_work_item_summary",
     "report_work_item",
     "select_work_item_summary",
+    "apply_work_item_changes",
 )
 
 
@@ -317,6 +318,17 @@ class PlanningAcknowledgementTests(unittest.TestCase):
         assert isinstance(answer, dict)
         return answer
 
+    def full(self, reference: str) -> dict:
+        """The complete item, as every write's full answer carries it.
+
+        `full=true` is the read that keeps every comment and event; `sessions`
+        is what the read adds about the item, not part of the record a write
+        returns.
+        """
+
+        answer = self.call("get_work_item", id=reference, full=True)
+        return {k: v for k, v in answer.items() if k != "sessions"}
+
     @property
     def step(self) -> str:
         """The first step as it stands now; a checklist replacement mints new ids."""
@@ -348,6 +360,7 @@ class PlanningAcknowledgementTests(unittest.TestCase):
             "tick_work_item_checklist_item": {"id": ref, "item_id": step, "author": "one"},
             "set_work_item_summary": {"id": ref, "summary": {"done": "d", "next": "n"}},
             "report_work_item": {"id": ref, "report": {"done": "d", "next": "n"}},
+            "apply_work_item_changes": {"id": ref, "comment": {"body": "batched"}},
         }[tool]
 
     def test_exactly_the_acknowledged_tools_publish_verbose_as_a_boolean(self) -> None:
@@ -387,9 +400,12 @@ class PlanningAcknowledgementTests(unittest.TestCase):
         for tool in ACKNOWLEDGED:
             with self.subTest(tool):
                 answer = self.call(tool, verbose=True, **self.arguments_for(tool))
-                stored = self.call("get_work_item", id=answer["reference"])
-                # A transition also reports what the guards said about it.
-                self.assertEqual(stored, {k: v for k, v in answer.items() if k != "warnings"})
+                stored = self.full(answer["reference"])
+                # A transition also reports what the guards said about it, and a
+                # batch what each of its groups changed.
+                self.assertEqual(
+                    stored, {k: v for k, v in answer.items() if k not in ("warnings", "applied")}
+                )
 
     def test_verbose_false_is_the_default_and_anything_else_is_refused(self) -> None:
         arguments = self.arguments_for("claim_work_item")
@@ -505,7 +521,7 @@ class PlanningAcknowledgementTests(unittest.TestCase):
                 assert handled is not None
                 status, body = handled
                 self.assertEqual(200, status)
-                stored = self.call("get_work_item", id=self.ref)
+                stored = self.full(self.ref)
                 self.assertEqual(stored, {k: v for k, v in body.items() if k != "warnings"})
 
 

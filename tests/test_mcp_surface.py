@@ -34,6 +34,7 @@ from server import housekeeping, mcp_surface, store, transcripts
 from server.hooks import normalize, spool
 from server.ops import tray
 from server.planning import api as planning_api
+from server.planning import calls as planning_calls
 from server.planning import service as planning_service
 from server.planning import tools as planning_tools
 from tests.planning_fixtures import bulk_items
@@ -995,9 +996,9 @@ class ToolArgumentTests(McpSurfaceTestCase):
 
     def test_an_unknown_argument_is_named_with_what_the_tool_takes(self) -> None:
         self.assertEqual(
-            "get_work_item: unknown argument 'item'; expected 'id' (required: A work item,"
+            "delete_work_item: unknown argument 'item'; expected 'id' (required: A work item,"
             " by its reference (VAL-142) or its work_item_id)",
-            self.refusal("get_work_item", item=self.first),
+            self.refusal("delete_work_item", item=self.first),
         )
         message = self.refusal(
             "transition_work_item", id=self.first, state="todo", status="x", nope=1
@@ -1426,6 +1427,405 @@ class ListPagingTests(McpSurfaceTestCase):
         self.assertEqual(planning_tools.COMPACT_LIMIT, len(answer["work_items"]))
         self.assertTrue(answer["truncated"])
         self.assertEqual(planning_tools.COMPACT_LIMIT, answer["next_offset"])
+
+
+class WireCallTestCase(McpSurfaceTestCase):
+    """One tool call on the wire, with the `_meta` a client sends beside it."""
+
+    SESSION = "019a3c2e-5b7d-7c11-9e0f-2f4b6d8a1c3e"
+
+    def call(self, name: str, arguments: dict, meta: dict | None = None) -> dict:
+        message = {
+            "jsonrpc": "2.0",
+            "id": 11,
+            "method": "tools/call",
+            "params": {"_meta": {**META, **(meta or {})}, "name": name, "arguments": arguments},
+        }
+        [answer] = self.converse(message)
+        return answer["result"]
+
+    def answer(self, name: str, arguments: dict, meta: dict | None = None) -> dict:
+        result = self.call(name, arguments, meta)
+        self.assertFalse(result["isError"], result)
+        payload = json.loads(result["content"][0]["text"])
+        assert isinstance(payload, dict)
+        return payload
+
+    def refusal(self, name: str, arguments: dict, meta: dict | None = None) -> dict:
+        result = self.call(name, arguments, meta)
+        self.assertTrue(result["isError"], result)
+        error = result["structuredContent"]["error"]
+        assert isinstance(error, dict)
+        return error
+
+    def calls(self) -> list[dict]:
+        return [
+            dict(row)
+            for row in self.conn.execute(
+                "SELECT * FROM execution_events WHERE kind='planning_write' ORDER BY id"
+            )
+        ]
+
+
+class ApplyWorkItemChangesTests(WireCallTestCase):
+    """Several writes to one item in one call: in a fixed order, and all or nothing."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        item = planning_service.create_work_item(self.conn, space=SPACE_KEY, title="Batched")
+        self.reference = item["reference"]
+        self.other = planning_service.create_work_item(self.conn, space=SPACE_KEY, title="Related")[
+            "reference"
+        ]
+        steps = planning_service.set_checklist(self.conn, self.reference, ["one", "two"])
+        self.steps = [step["id"] for step in steps["checklist"]]
+        self.conn.commit()
+        self.before = planning_service.get_work_item(self.conn, self.reference)
+
+    def closing(self, **extra: object) -> dict:
+        """Every group, ending in a transition the guards allow only after the rest."""
+
+        return {
+            "id": self.reference,
+            "author": "one",
+            "claim": True,
+            "checklist_ticks": [{"item_id": self.steps[0]}, {"item_id": self.steps[1]}],
+            "refs": [{"kind": "commit", "value": "abc1234", "label": "the change"}],
+            "links": [{"other": self.other, "kind": "relates-to"}],
+            "comment": {"body": "closing note", "checklist_item_id": self.steps[1]},
+            "summary": {"done": "both steps", "next": "nothing"},
+            "transition": {"state": "done"},
+            **extra,
+        }
+
+    def assert_untouched(self) -> None:
+        item = planning_service.get_work_item(self.conn, self.reference)
+        self.assertEqual(self.before["revision"], item["revision"])
+        self.assertEqual(self.before["events"], item["events"])
+        self.assertEqual([], item["comments"])
+        self.assertEqual([], item["refs"])
+        self.assertEqual([], item["links"])
+        self.assertEqual("", item["claim_ref"])
+        self.assertEqual([False, False], [step["done"] for step in item["checklist"]])
+        self.assertIsNone(item["summary"])
+        self.assertEqual("backlog", item["state"]["key"])
+        self.assertEqual([], self.calls())
+
+    def test_a_closing_transition_lands_because_its_ticks_and_summary_come_first(self) -> None:
+        # The same transition on its own is refused: the guards are live.
+        alone = self.refusal("transition_work_item", {"id": self.reference, "state": "done"})
+        self.assertEqual("workflow_guard", alone["code"])
+
+        answer = self.answer("apply_work_item_changes", self.closing())
+
+        self.assertEqual("done", answer["state"]["key"])
+        self.assertEqual("one", answer["claim_ref"])
+        self.assertNotIn("events", answer)
+        item = planning_service.get_work_item(self.conn, self.reference)
+        self.assertEqual(item["revision"], answer["revision"])
+        comment = next(entry for entry in item["comments"] if entry["kind"] == "comment")
+        self.assertEqual(
+            {
+                "claim": True,
+                "checklist_ticks": [
+                    {"item_id": self.steps[0], "done": True},
+                    {"item_id": self.steps[1], "done": True},
+                ],
+                "refs": 1,
+                "links": 1,
+                "comment": {"comment_id": comment["id"]},
+                "summary": {"summary_comment_id": item["summary_comment_id"]},
+                "transition": {"state": "done"},
+            },
+            answer["applied"],
+        )
+        self.assertEqual([True, True], [step["done"] for step in item["checklist"]])
+        self.assertEqual(["one", "one"], [step["done_by"] for step in item["checklist"]])
+        self.assertEqual(
+            [("commit", "abc1234", "the change")],
+            [(ref["kind"], ref["value"], ref["label"]) for ref in item["refs"]],
+        )
+        self.assertEqual(
+            [("relates-to", self.other)],
+            [(link["kind"], link["reference"]) for link in item["links"]],
+        )
+        self.assertEqual(("closing note", "two"), (comment["body"], comment["checklist_item_text"]))
+        self.assertEqual({"done": "both steps", "next": "nothing"}, item["summary"])
+        # The history is the single tools' history, in the order the groups apply.
+        self.assertEqual(
+            [
+                "claimed",
+                "checklist_completed",
+                "checklist_completed",
+                "linked",
+                "summarized",
+                "transitioned",
+            ],
+            [event["action"] for event in item["events"]][-6:],
+        )
+
+    def test_one_batch_is_one_call_and_every_row_points_at_it(self) -> None:
+        self.answer("apply_work_item_changes", self.closing(), {"sessionId": self.SESSION})
+        [row] = self.calls()
+        item = planning_service.get_work_item(self.conn, self.reference)
+        self.assertEqual(
+            ("apply_work_item_changes", "confirmed", self.SESSION, item["work_item_id"]),
+            (row["tool"], row["identity_state"], row["session_id"], row["work_item_id"]),
+        )
+        pointers = {
+            found[0]
+            for table in ("work_item_comments", "work_item_refs")
+            for found in self.conn.execute(f"SELECT call_id FROM {table}")
+        }
+        # The setup's own writes ran outside any call.
+        pointers |= {
+            found[0]
+            for found in self.conn.execute(
+                "SELECT call_id FROM work_item_events"
+                " WHERE action NOT IN ('created', 'checklist_replaced')"
+            )
+        }
+        self.assertEqual({row["id"]}, pointers)
+        self.assertEqual(
+            {"confirmed"}, {event["identity"]["state"] for event in item["events"][-6:]}
+        )
+
+    def test_a_refused_step_writes_nothing_and_names_the_step_and_its_code(self) -> None:
+        # The second step is left open, so the transition is the step refused,
+        # after every other group already wrote inside the batch.
+        arguments = self.closing(checklist_ticks=[{"item_id": self.steps[0]}])
+        error = self.refusal("apply_work_item_changes", arguments, {"sessionId": self.SESSION})
+        self.assertEqual("workflow_guard", error["code"])
+        self.assertEqual({"group": "transition", "index": 0}, error["step"])
+        self.assertTrue(error["message"].startswith("transition: [checklist]"), error["message"])
+        self.assert_untouched()
+
+    def test_a_refused_entry_of_a_list_is_named_by_its_index(self) -> None:
+        unknown = self.steps[0][:-4] + ("beef" if not self.steps[0].endswith("beef") else "cafe")
+        arguments = self.closing(checklist_ticks=[{"item_id": self.steps[0]}, {"item_id": unknown}])
+        error = self.refusal("apply_work_item_changes", arguments)
+        self.assertEqual("invalid_request", error["code"])
+        self.assertEqual({"group": "checklist_ticks", "index": 1}, error["step"])
+        self.assertTrue(error["message"].startswith("checklist_ticks[1]: "), error["message"])
+        self.assert_untouched()
+
+    def test_a_claim_somebody_else_holds_refuses_the_whole_batch(self) -> None:
+        planning_service.claim_work_item(self.conn, self.reference, author="holder")
+        self.conn.commit()
+        held = planning_service.get_work_item(self.conn, self.reference)
+        error = self.refusal(
+            "apply_work_item_changes",
+            {"id": self.reference, "author": "other", "claim": True, "comment": {"body": "x"}},
+        )
+        self.assertEqual(
+            ({"group": "claim", "index": 0}, "invalid_request"), (error["step"], error["code"])
+        )
+        self.assertIn("already held by holder", error["message"])
+        item = planning_service.get_work_item(self.conn, self.reference)
+        self.assertEqual((held["revision"], []), (item["revision"], item["comments"]))
+
+    def test_a_stale_expected_revision_refuses_before_any_step(self) -> None:
+        stale = self.before["revision"] - 1
+        error = self.refusal("apply_work_item_changes", self.closing(expected_revision=stale))
+        self.assertEqual(("revision_conflict", stale), (error["code"], error["expected"]))
+        self.assert_untouched()
+        answer = self.answer(
+            "apply_work_item_changes", self.closing(expected_revision=self.before["revision"])
+        )
+        self.assertEqual("done", answer["state"]["key"])
+
+    def test_a_batch_that_changes_nothing_or_is_malformed_is_refused(self) -> None:
+        for arguments, wanted in (
+            ({"id": self.reference}, "at least one change"),
+            ({"id": self.reference, "claim": False}, "at least one change"),
+            ({"id": self.reference, "checklist_ticks": []}, "at least one change"),
+            ({"id": self.reference, "claim": "yes"}, "claim must be a boolean"),
+            ({"id": self.reference, "refs": {"kind": "url"}}, "refs must be a list"),
+            ({"id": self.reference, "comment": "text"}, "comment must be an object"),
+            (
+                {"id": self.reference, "refs": [{"kind": "url", "value": "x", "id": "QA-9"}]},
+                "refs[0]: unknown field(s) id",
+            ),
+        ):
+            with self.subTest(arguments=arguments):
+                error = self.refusal("apply_work_item_changes", arguments)
+                self.assertEqual("invalid_request", error["code"])
+                self.assertIn(wanted, error["message"])
+        self.assert_untouched()
+
+    def test_verbose_answers_with_the_full_item_and_what_was_applied(self) -> None:
+        answer = self.answer(
+            "apply_work_item_changes",
+            {"id": self.reference, "comment": {"body": "only this"}, "verbose": True},
+        )
+        self.assertEqual(["only this"], [entry["body"] for entry in answer["comments"]])
+        self.assertIn("events", answer)
+        self.assertEqual(["comment"], list(answer["applied"]))
+
+    def test_the_batch_is_published_with_every_group_and_the_single_tools_stay(self) -> None:
+        [answer] = self.converse(
+            {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": params()}
+        )
+        tools = {tool["name"]: tool for tool in answer["result"]["tools"]}
+        schema = tools["apply_work_item_changes"]["inputSchema"]
+        self.assertEqual(["id"], schema["required"])
+        self.assertEqual(
+            {
+                "id",
+                "claim",
+                "checklist_ticks",
+                "refs",
+                "links",
+                "comment",
+                "summary",
+                "transition",
+                "expected_revision",
+                "author",
+                "verbose",
+            },
+            set(schema["properties"]),
+        )
+        for single in (
+            "claim_work_item",
+            "tick_work_item_checklist_item",
+            "attach_work_item_ref",
+            "link_work_items",
+            "comment_work_item",
+            "set_work_item_summary",
+            "transition_work_item",
+        ):
+            self.assertIn(single, tools)
+
+
+class CompactWorkItemReadTests(WireCallTestCase):
+    """get_work_item: the newest history by default, all of it on request."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.reference = planning_service.create_work_item(
+            self.conn, space=SPACE_KEY, title="Long history"
+        )["reference"]
+        for number in range(7):
+            planning_service.comment_work_item(self.conn, self.reference, f"note {number}")
+        for _ in range(6):
+            planning_service.claim_work_item(self.conn, self.reference, author="one")
+            planning_service.claim_work_item(self.conn, self.reference, author="one", release=True)
+        self.conn.commit()
+        self.complete = planning_service.get_work_item(self.conn, self.reference)
+
+    def test_the_default_answer_carries_the_newest_history_and_its_totals(self) -> None:
+        answer = self.answer("get_work_item", {"id": self.reference})
+        self.assertEqual(self.complete["comments"][-5:], answer["comments"])
+        self.assertEqual(self.complete["events"][-10:], answer["events"])
+        self.assertEqual(
+            (7, 13, True),
+            (answer["comments_total"], answer["events_total"], answer["history_truncated"]),
+        )
+        for key, value in self.complete.items():
+            if key not in ("comments", "events"):
+                self.assertEqual(value, answer[key], key)
+
+    def test_full_answers_with_the_complete_record(self) -> None:
+        answer = self.answer("get_work_item", {"id": self.reference, "full": True})
+        self.assertEqual(self.complete, {k: v for k, v in answer.items() if k != "sessions"})
+        self.assertNotIn("history_truncated", answer)
+        self.assertEqual([], answer["sessions"])
+
+    def test_a_short_history_is_whole_and_says_so(self) -> None:
+        reference = planning_service.create_work_item(self.conn, space=SPACE_KEY, title="Short")[
+            "reference"
+        ]
+        self.conn.commit()
+        answer = self.answer("get_work_item", {"id": reference})
+        self.assertEqual(
+            (0, 1, False, 1),
+            (
+                answer["comments_total"],
+                answer["events_total"],
+                answer["history_truncated"],
+                len(answer["events"]),
+            ),
+        )
+
+    def test_full_must_be_a_boolean(self) -> None:
+        error = self.refusal("get_work_item", {"id": self.reference, "full": "yes"})
+        self.assertEqual(
+            ("invalid_request", "full must be a boolean"), (error["code"], error["message"])
+        )
+
+    def test_sessions_name_only_the_confirmed_sessions_that_wrote(self) -> None:
+        tool_use = "toolu_01ABCdefGHIjklMNOpqrSTU"
+        hook = {"session_id": "unverified-session", "tool_use_id": tool_use}
+        comment = {"id": self.reference, "body": "x"}
+        self.answer("comment_work_item", comment, {"sessionId": self.SESSION})
+        self.answer("comment_work_item", comment, {"sessionId": self.SESSION})
+        # Unconfirmed: a hook identity the client did not vouch for, and nothing at all.
+        self.answer("comment_work_item", {**comment, "_identity": hook})
+        self.answer("comment_work_item", comment)
+        # Confirmed but sessionless: the owner's browser.
+        with planning_calls.bind(planning_calls.browser(), "/api/planning/work-item/comment"):
+            planning_service.comment_work_item(self.conn, self.reference, "by hand")
+        self.conn.commit()
+        self.assertEqual(5, len(self.calls()))
+
+        for full in (False, True):
+            with self.subTest(full=full):
+                [session] = self.answer("get_work_item", {"id": self.reference, "full": full})[
+                    "sessions"
+                ]
+                self.assertEqual(
+                    (self.SESSION, "codex", "codex-meta", 2),
+                    (
+                        session["session_id"],
+                        session["client"],
+                        session["identity_source"],
+                        session["writes"],
+                    ),
+                )
+                self.assertLessEqual(session["first_at"], session["last_at"])
+
+    def test_the_http_reads_answer_exactly_what_they_did(self) -> None:
+        # The browser inspector reads the item through the module route, whose
+        # loader is service.get_work_item with no options; the neutral read
+        # without parameters is the same record. Neither gains a field.
+        self.answer(
+            "comment_work_item", {"id": self.reference, "body": "x"}, {"sessionId": self.SESSION}
+        )
+        complete = planning_service.get_work_item(self.conn, self.reference)
+        handled = planning_api.handle_get(
+            self.conn, "/api/planning/work-item", {"id": [self.reference]}
+        )
+        assert handled is not None
+        self.assertEqual(complete, handled[1]["work_item"])
+        self.assertEqual(8, len(complete["comments"]))
+        self.assertEqual(13, len(complete["events"]))
+        for added in ("sessions", "comments_total", "events_total", "history_truncated"):
+            self.assertNotIn(added, complete)
+
+    def test_the_http_read_takes_the_same_cut_as_opt_in_parameters(self) -> None:
+        handled = planning_api.handle_get(
+            self.conn,
+            "/api/planning/work-item",
+            {"id": [self.reference], "comments": ["2"], "events": ["0"], "sessions": ["true"]},
+        )
+        assert handled is not None
+        item = handled[1]["work_item"]
+        self.assertEqual(self.complete["comments"][-2:], item["comments"])
+        self.assertEqual(
+            ([], [], True), (item["events"], item["sessions"], item["history_truncated"])
+        )
+        for parameters, wanted in (
+            ({"comments": ["-1"]}, "comments must be a non-negative integer"),
+            ({"events": ["many"]}, "events must be a non-negative integer"),
+            ({"sessions": ["yes"]}, "sessions must be true or false"),
+        ):
+            with self.subTest(parameters=parameters):
+                with self.assertRaisesRegex(Exception, wanted):
+                    planning_api.handle_get(
+                        self.conn,
+                        "/api/planning/work-item",
+                        {"id": [self.reference], **parameters},
+                    )
 
 
 if __name__ == "__main__":

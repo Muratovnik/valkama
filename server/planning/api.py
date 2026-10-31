@@ -16,21 +16,29 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Callable, Mapping
+from typing import Any
 
 from .. import query_params
-from . import calls, migration, model, requests, service, views
+from . import calls, migration, model, read_model, requests, service, views
 
 PLANNING_API_INTERFACE = f"{model.PLANNING_INTERFACE}-api"
 
 
 class PlanningHttpError(Exception):
-    """A refusal with the status the surface should report."""
+    """A refusal with the status the surface should report.
 
-    def __init__(self, status: int, code: str, message: str) -> None:
+    `detail` is carried beside the code and the message in the error body, for
+    a refusal that has more to say than one sentence: which step of a batch.
+    """
+
+    def __init__(
+        self, status: int, code: str, message: str, detail: Mapping[str, object] | None = None
+    ) -> None:
         super().__init__(message)
         self.status = status
         self.code = code
         self.message = message
+        self.detail = dict(detail or {})
 
 
 def _first(parameters: Mapping[str, list[str]], name: str) -> str | None:
@@ -94,7 +102,9 @@ def error_response(error: BaseException) -> tuple[int, dict]:
     """One mapping from a refusal to a status, for both surfaces."""
 
     if isinstance(error, PlanningHttpError):
-        return error.status, {"error": {"code": error.code, "message": error.message}}
+        return error.status, {
+            "error": {"code": error.code, "message": error.message, **error.detail}
+        }
     if isinstance(error, model.RevisionConflictError):
         return 409, {
             "error": {
@@ -180,19 +190,39 @@ def _activity(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> 
     }
 
 
-def _offset(parameters: Mapping[str, list[str]]) -> int:
-    """Where a page starts. Refused as a domain error, so both surfaces carry its code."""
+def _count(parameters: Mapping[str, list[str]], name: str) -> int | None:
+    """A count a read takes, or None when it is absent.
 
-    value = _first(parameters, "offset")
+    Refused as a domain error, so both surfaces carry its code.
+    """
+
+    value = _first(parameters, name)
     if value is None:
-        return 0
+        return None
     try:
-        offset = int(value, 10)
+        count = int(value, 10)
     except ValueError:
-        offset = -1
-    if offset < 0:
-        raise model.PlanningError("offset must be a non-negative integer")
-    return offset
+        count = -1
+    if count < 0:
+        raise model.PlanningError(f"{name} must be a non-negative integer")
+    return count
+
+
+def _offset(parameters: Mapping[str, list[str]]) -> int:
+    """Where a page starts."""
+
+    return _count(parameters, "offset") or 0
+
+
+def _switch(parameters: Mapping[str, list[str]], name: str) -> bool:
+    """A boolean query parameter: `true`, `false`, or absent for false."""
+
+    value = _first(parameters, name)
+    if value is None or value == "false":
+        return False
+    if value == "true":
+        return True
+    raise PlanningHttpError(400, "invalid_request", f"{name} must be true or false")
 
 
 def _work_items(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
@@ -212,9 +242,17 @@ def _work_items(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -
 
 
 def _work_item(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
+    """One item. `comments`, `events` and `sessions` are opt-in; without them, the full record."""
+
     return {
         "interface_version": PLANNING_API_INTERFACE,
-        "work_item": service.get_work_item(conn, _required(parameters, "id")),
+        "work_item": service.get_work_item(
+            conn,
+            _required(parameters, "id"),
+            comments=_count(parameters, "comments"),
+            events=_count(parameters, "events"),
+            sessions=_switch(parameters, "sessions"),
+        ),
     }
 
 
@@ -539,6 +577,158 @@ def _author(payload: Mapping[str, object]) -> str | None:
     return value
 
 
+#: What a batch may change, in the order it applies them, with the fields each
+#: entry may name. The order is the contract: a closing transition is judged
+#: after the ticks and the summary sent beside it.
+APPLY_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
+    ("claim", frozenset()),
+    ("checklist_ticks", frozenset({"item_id", "done"})),
+    ("refs", frozenset({"kind", "value", "label"})),
+    ("links", frozenset({"other", "kind", "remove"})),
+    ("comment", frozenset({"body", "checklist_item_id"})),
+    ("summary", frozenset({"done", "next", "why"})),
+    ("transition", frozenset({"state", "reason", "force"})),
+)
+#: The groups that are lists of entries rather than one object.
+_APPLY_LISTS = frozenset({"checklist_ticks", "refs", "links"})
+#: The most entries one list in a batch may hold.
+MAX_APPLY_ENTRIES = 100
+
+
+def _apply_entries(payload: Mapping[str, object]) -> list[tuple[str, int, Mapping[str, object]]]:
+    """Every step a batch names, in application order, refused before anything is written.
+
+    A step is its group, its index within the group and its fields. `claim`
+    is a boolean, so `false` names no step.
+    """
+
+    steps: list[tuple[str, int, Mapping[str, object]]] = []
+    for group, fields in APPLY_GROUPS:
+        value = payload.get(group)
+        if value is None:
+            continue
+        if group == "claim":
+            if not isinstance(value, bool):
+                raise PlanningHttpError(400, "invalid_request", "claim must be a boolean")
+            if value:
+                steps.append((group, 0, {}))
+            continue
+        entries = value if group in _APPLY_LISTS else [value]
+        if not isinstance(entries, list) or len(entries) > MAX_APPLY_ENTRIES:
+            raise PlanningHttpError(
+                400,
+                "invalid_request",
+                f"{group} must be a list of at most {MAX_APPLY_ENTRIES} objects",
+            )
+        for index, entry in enumerate(entries):
+            label = f"{group}[{index}]" if group in _APPLY_LISTS else group
+            if not isinstance(entry, Mapping):
+                raise PlanningHttpError(400, "invalid_request", f"{label} must be an object")
+            unknown = sorted(set(entry) - fields)
+            if unknown:
+                raise PlanningHttpError(
+                    400,
+                    "invalid_request",
+                    f"{label}: unknown field(s) {', '.join(unknown)}; expected"
+                    f" {', '.join(sorted(fields))}",
+                )
+            steps.append((group, index, entry))
+    if not steps:
+        raise PlanningHttpError(
+            400,
+            "invalid_request",
+            "a batch needs at least one change: "
+            + ", ".join(group for group, _fields in APPLY_GROUPS),
+        )
+    return steps
+
+
+def _apply_step(
+    conn: sqlite3.Connection, group: str, base: Mapping[str, object], entry: Mapping[str, object]
+) -> tuple[dict, object]:
+    """Run one step through the write the single tool uses, and say what it changed."""
+
+    if group == "claim":
+        _claim(conn, base)
+        return {}, True
+    if group == "checklist_ticks":
+        _checklist_tick(conn, {**entry, **base})
+        return {}, {"item_id": entry.get("item_id"), "done": entry.get("done", True)}
+    if group == "refs":
+        _ref(conn, {**entry, **base})
+        return {}, 1
+    if group == "links":
+        _link(conn, {**entry, **base})
+        return {}, 1
+    if group == "comment":
+        return {}, {"comment_id": _comment(conn, {**entry, **base})["comment_id"]}
+    if group == "summary":
+        answer = _summary(conn, {**base, "summary": dict(entry)})
+        return {}, {"summary_comment_id": answer["summary_comment_id"]}
+    answer = _transition(conn, {**entry, **base})
+    found = {name: answer[name] for name in ("warnings", "overridden") if answer.get(name)}
+    return found, {"state": answer["state"]["key"]}
+
+
+def _apply(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
+    """Several writes to one work item as one all-or-nothing change.
+
+    Each step is the very write its single tool makes, with that tool's guards,
+    events and revision bump, inside one savepoint: a refused step rolls back
+    every step before it, even for a caller that commits after catching the
+    refusal. The call row is the batch's, so one call is recorded however many
+    steps it took. `expected_revision` is checked once, against the item as the
+    batch found it.
+    """
+
+    reference = _text(payload, "id")
+    expected = _optional_int(payload, "expected_revision")
+    steps = _apply_entries(payload)
+    base: dict[str, object] = {"id": reference}
+    if "author" in payload:
+        base["author"] = payload["author"]
+    if not conn.in_transaction:
+        conn.execute("BEGIN IMMEDIATE")
+    conn.execute("SAVEPOINT planning_apply")
+    try:
+        actual = int(read_model.item_row(conn, reference)["revision"])
+        if expected is not None and expected != actual:
+            raise model.RevisionConflictError(expected, actual)
+        findings: dict = {}
+        applied: dict[str, Any] = {}
+        for group, index, entry in steps:
+            try:
+                extra, change = _apply_step(conn, group, base, entry)
+            except (model.PlanningError, PlanningHttpError) as error:
+                status, body = error_response(error)
+                label = f"{group}[{index}]" if group in _APPLY_LISTS else group
+                detail = {
+                    name: value
+                    for name, value in body["error"].items()
+                    if name not in ("code", "message")
+                }
+                raise PlanningHttpError(
+                    status,
+                    str(body["error"]["code"]),
+                    f"{label}: {body['error']['message']}",
+                    {**detail, "step": {"group": group, "index": index}},
+                ) from error
+            findings.update(extra)
+            if group == "checklist_ticks":
+                applied.setdefault(group, []).append(change)
+            elif group in _APPLY_LISTS:
+                applied[group] = applied.get(group, 0) + 1
+            else:
+                applied[group] = change
+        answer = service.get_work_item(conn, reference)
+    except BaseException:
+        conn.execute("ROLLBACK TO planning_apply")
+        conn.execute("RELEASE planning_apply")
+        raise
+    conn.execute("RELEASE planning_apply")
+    return {**answer, **findings, "applied": applied}
+
+
 _WRITES: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], dict]] = {
     "/api/planning/spaces": _space,
     "/api/planning/work-items": _create,
@@ -556,6 +746,7 @@ _WRITES: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], dict]] =
     "/api/planning/work-item/report": _report,
     "/api/planning/work-item/summary/select": _select_summary,
     "/api/planning/work-item/ref": _ref,
+    "/api/planning/work-item/apply": _apply,
     "/api/planning/work-item/request": _create_request,
     "/api/planning/request/answer": _answer_request,
     "/api/planning/request/decline": _decline_request,

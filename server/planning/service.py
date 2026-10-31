@@ -72,8 +72,26 @@ def get_planning_space(conn: sqlite3.Connection, reference: str) -> dict:
     }
 
 
-def get_work_item(conn: sqlite3.Connection, reference: str) -> dict:
-    return read_model.present(conn, read_model.item_row(conn, reference), full=True)
+def get_work_item(
+    conn: sqlite3.Connection,
+    reference: str,
+    *,
+    comments: int | None = None,
+    events: int | None = None,
+    sessions: bool = False,
+) -> dict:
+    """One item in full; `comments` and `events` keep only the newest of each.
+
+    `sessions` adds the agent sessions whose confirmed calls wrote to it.
+    Without any of these the answer is the complete record a screen draws from.
+    """
+
+    record = read_model.present(
+        conn, read_model.item_row(conn, reference), full=True, comments=comments, events=events
+    )
+    if sessions:
+        record["sessions"] = read_model.sessions(conn, str(record["work_item_id"]))
+    return record
 
 
 def list_work_items(
