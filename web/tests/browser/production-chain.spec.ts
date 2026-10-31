@@ -27,6 +27,7 @@ import {
   serve,
   smallChain,
 } from './chainFixtures.ts'
+import { renderedContrast } from './contrast.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { attachedWorkItemRef, projectScope, workItem, workItemRef } from './planningFixtures.ts'
 
@@ -159,6 +160,10 @@ for (const width of [1440, 390]) {
       'Backlog · 56',
       'Blocked · 1',
     ])
+    // The lanes that stepped back still read: their labels are not faded, and
+    // their quiet tone keeps AA contrast on the drawer's ground.
+    const receded = section.locator('.branch-map-head.receded .branch-map-label').first()
+    expect(await receded.evaluate(renderedContrast)).toBeGreaterThanOrEqual(4.5)
     await section.locator('.chain-lane-chip').click()
     await expect(section.locator('.chain-lane-chip')).toHaveCount(0)
 

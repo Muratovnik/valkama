@@ -77,9 +77,7 @@ const { announcement, cursorOf, enter, exit, leave, move, openAt, point, roomAbo
   })
 
 /** The lane the member list is narrowed to says so: it is the current one. */
-function isFiltered(lane: LaneDrawing): boolean {
-  return props.filter === lane.lane.key
-}
+const isFiltered = (lane: LaneDrawing) => props.filter === lane.lane.key
 
 /**
  * While the list is narrowed to one lane, every other lane steps back, so the
@@ -87,18 +85,12 @@ function isFiltered(lane: LaneDrawing): boolean {
  */
 const recedes = (lane: LaneDrawing) => props.filter !== null && !isFiltered(lane)
 
-function currentOf(lane: LaneDrawing): 'true' | undefined {
-  return isFiltered(lane) ? 'true' : undefined
-}
+const currentOf = (lane: LaneDrawing) => (isFiltered(lane) ? 'true' : undefined)
 
 /** The parent epic's title, where the lane has one, as the label's tooltip. */
-function titleOf(lane: LaneDrawing): string | undefined {
-  return lane.lane.title ?? undefined
-}
+const titleOf = (lane: LaneDrawing) => lane.lane.title ?? undefined
 
-function positionOf(lane: LaneDrawing): string {
-  return position(cursorOf(lane.lane), lane.lane.members.length)
-}
+const positionOf = (lane: LaneDrawing) => position(cursorOf(lane.lane), lane.lane.members.length)
 
 const caption = computed(() => summary(layout.value.lanes, layout.value.total))
 
@@ -174,6 +166,7 @@ function countId(lane: LaneDrawing): string {
         <g
           v-for="lane in drawing.lanes"
           :key="lane.lane.key"
+          class="branch-map-drawn"
           :class="{ receded: recedes(lane) }"
         >
           <path
@@ -335,9 +328,17 @@ function countId(lane: LaneDrawing): string {
   stroke-width: 2;
 }
 
-/* The lanes the narrowed list does not hold, stepped back behind the one it does. */
-.receded {
+/* The lanes the narrowed list does not hold, stepped back behind the one it
+   does: their drawing fades, and their words take the quiet tone, which a
+   reader can still read and choose. */
+.branch-map-drawn.receded {
   opacity: 0.3;
+}
+
+.branch-map-reference.receded,
+.receded .branch-map-label,
+.receded .branch-map-count {
+  color: var(--color-text-tertiary);
 }
 
 /* Each state's colour, named once for every mark that draws it: the neutral
