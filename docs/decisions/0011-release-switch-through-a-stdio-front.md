@@ -79,9 +79,9 @@ predates the front is simply a server.
 - **Requests pass through as bytes.** A client line reaches the backend
   unchanged, so `_meta`, `_identity` and the request id arrive exactly as the
   client wrote them. The front parses an answer to find its id, and rewrites
-  only three: it adds `tools.listChanged: true` to the capabilities of an
-  `initialize` and a `server/discover` result, and it appends a warning to a
-  tool result when one is due.
+  three kinds of answer and no others: it adds `tools.listChanged: true` to the
+  capabilities of an `initialize` and a `server/discover` result, and it
+  appends a warning to a tool result when one is due.
 - **The front keeps the protocol state.** It records the `initialize` the
   client sent and whether `notifications/initialized` followed, and replays
   both to every later backend, so the new one knows the client's era and
@@ -122,7 +122,10 @@ predates the front is simply a server.
   front holds does not flicker on a switch, and loses `VALKAMA_LAUNCHER_DIR`,
   so it cannot become a front of its own or warn about a pin the front
   follows. It is started without a console window and stopped through
-  `processes.stop_process_tree`.
+  `processes.stop_process_tree`. The `capabilities` run gets no stdin: on
+  Windows a Python child handed the front's stdin pipe does not finish starting
+  while the front's main thread has a read pending on it, so a switch begun
+  while the client was idle would have waited for its next message.
 
 The front's own code is the one part a switch does not replace: a session
 keeps the front it started with.
@@ -130,8 +133,8 @@ keeps the front it started with.
 ## Alternatives rejected
 
 - **Reload the server inside its process.** `importlib.reload` re-executes a
-  module but leaves every object created from the old one in place, and
-  `from X import Y` copies survive it
+  module, but instances keep their old class definitions and names bound by
+  `from X import Y` keep the old objects
   ([Python documentation](https://docs.python.org/3/library/importlib.html#importlib.reload)).
   This server keeps an open store connection, a maintenance thread, the tray
   handles and module singletons, and a release may need another interpreter.
@@ -159,8 +162,11 @@ keeps the front it started with.
   the new release refuses an argument it does not take and names the ones it
   does.
 - A session runs two Python processes, and a switch costs one release start
-  plus a `capabilities` run. Measured on Windows 11 with Python 3.11 against a
-  throwaway store: see [the connection contract](../connection-contract.md).
+  plus a `capabilities` run. On Windows 11 with Python 3.15.2 and a throwaway
+  store, a session's first answer through the launcher took a median of 0.29
+  seconds against 0.21 without the front, and the notification arrived 2.4 to
+  4.6 seconds after `launcher install` returned
+  ([the connection contract](../connection-contract.md#a-release-switch-under-a-running-session)).
 - An old release that a running session still serves cannot be made to
   refuse a store a newer one migrated while its request was in flight; that
   window is one request long per session.

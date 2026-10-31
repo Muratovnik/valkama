@@ -35,8 +35,27 @@ checkouts are therefore distinguishable even at the same version.
   ends, Enter opens the task, and a live region says which task it is. On a
   long chain, narrow segments of one state merge into one stretch, and work
   under way is raised so that it still shows.
+- A running agent session follows `launcher install` without a restart. The
+  launcher's `mcp` is now a stdio front that keeps the client's pipe and runs
+  the pinned release's server behind it. A few seconds after an install it
+  switches to the new release between two requests, and tells a client that
+  can hear it that the tool list changed: Claude Code's CLI then lists the
+  tools again, so a tool the new release added appears in the session. The
+  front declares `tools.listChanged` and answers `subscriptions/listen` itself;
+  requests reach the server byte for byte. A release that does not start
+  leaves the session on the one it had, with one warning on the next tool
+  result. Codex lists the tools again only with its `mcp_tool_list_changed`
+  feature, which is off by default; its calls reach the new release either
+  way. See the
+  [connection contract](docs/connection-contract.md#a-release-switch-under-a-running-session).
 
 ### Changed
+
+- `launcher install` reaches every session whose front is running at once,
+  not only the sessions opened after it. Installing a commit that raises the
+  store schema therefore migrates the store through the first session that
+  switches. A session opened with a release from before the front still warns
+  until its client restarts it.
 
 - A chain on the graph draws its open part by default: the root, the open
   members, and every member that is the parent of one drawn, so the epics the

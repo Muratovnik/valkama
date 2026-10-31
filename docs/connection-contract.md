@@ -506,24 +506,113 @@ different checkouts introduced themselves identically.
 
 ## Running one version against another's data
 
-A stdio MCP server is spawned by its client from a working tree, and lives as
-long as the session does. Nothing makes it exit when that tree changes.
+A stdio MCP server is spawned by its client and lives as long as the session
+does. The client owns that process, and a server that killed itself mid-call
+would lose the call rather than repair anything. What can change is what runs
+behind the pipe.
 
-So pulling a change gives the *next* session a process built from the new code
-while the current one keeps answering from the old — both against the same
-store. No automatic update can fix this: the client owns the process, and a
-server that killed itself mid-call would lose the call rather than repair
-anything.
+### A release switch under a running session
 
-Two guards make the skew impossible to miss instead.
+When the launcher's command starts `valkama.py mcp` and the launcher still
+names that release, the process is a **front**, not the server. It holds the
+client's stdin and stdout for the session and runs the server as a
+**backend**: a child process, `<interpreter> <release>/valkama.py mcp`, of the
+release the launcher names now. Any other start of `valkama.py mcp` serves
+in-process. The design and the alternatives it was chosen over are in
+[ADR 0011](decisions/0011-release-switch-through-a-stdio-front.md).
+
+What the client sees:
+
+- **Its requests arrive unchanged.** Each line reaches the backend as the bytes
+  the client wrote, so `_meta`, `_identity` and request ids are untouched.
+- **`tools.listChanged` is declared.** The front adds `"listChanged": true` to
+  `capabilities.tools` in an `initialize` result and a `server/discover`
+  result. Nothing else in an answer changes, except the warning below.
+- **`subscriptions/listen` is answered by the front.** On a connection with no
+  handshake, the front acknowledges a stream with
+  `notifications/subscriptions/acknowledged` carrying the listen request's id in
+  `_meta["io.modelcontextprotocol/subscriptionId"]`, and agrees to
+  `toolsListChanged` only, the one notification it can send. The stream stays
+  open until the client sends `notifications/cancelled` for that id; when the
+  session ends, the front answers the listen request with
+  `{"resultType": "complete"}` and the same `_meta`. A listen request naming a
+  version the backend does not serve is refused with
+  `UnsupportedProtocolVersionError` (`-32022`). After an `initialize` it is
+  passed to the backend, which does not know the method: the handshake
+  revisions have no streams.
+- **stdout carries only protocol frames.** A backend line that is not a
+  JSON-RPC message is dropped and reported on stderr. A backend's stderr is
+  passed through to the front's.
+
+How a switch goes:
+
+1. The front reads the launcher manifest before every request it forwards, and
+   every 2 seconds while the client is idle. A launcher that is not `installed`
+   names no release, and the session keeps the one it has.
+2. A switch waits for the request in flight to be answered: one lock covers a
+   request's round trip and a switch, so a request finishes on the backend that
+   received it and is never sent twice.
+3. The new release is asked for `capabilities`, which reads no user data. If
+   that fails, the old backend goes on serving.
+4. The old backend is stopped: its stdin is closed, and its process tree is
+   killed if it has not exited within 5 seconds. Only then does the new one
+   start, so two backends of one session never run at once and an old release
+   never writes a store the new one has migrated.
+5. The new backend is asked `server/discover`, and must answer within 120
+   seconds. A client that made a handshake has its `initialize`, and its
+   `notifications/initialized`, replayed to it, so the backend knows the
+   client's era and `clientInfo`.
+6. The front asks the new backend for its tools and compares them with the last
+   list the client received. When they differ, it sends
+   `notifications/tools/list_changed`: bare to a client that made a handshake,
+   and on every stream that agreed to `toolsListChanged`, with that stream's
+   `subscriptionId`, to a client that did not. A client with neither hears
+   nothing.
+
+A release that fails after the old backend stopped — a store it refuses, an
+exit before it answers — is stopped, and the previous release is started
+again. Either way the next tool result carries one more content block, appended
+after the payload, that names the release and why it failed, and that release
+is tried again only once the launcher names another one. If the previous release
+cannot start either, which is the case when the failed one migrated the store
+first, the request is answered with a JSON-RPC error that carries the store's
+refusal, and the front exits.
+
+A backend that exits mid-session ends the session's server the same way: the
+request it held is answered with an error, never resent, and the front exits
+with status 1, which leaves restarting the server to the client.
+
+Measured on Windows 11 with Python 3.15.2 and a throwaway store, switching a
+running session between two releases of this repository:
+`notifications/tools/list_changed` arrived 2.4 to 4.6 seconds after
+`launcher install` returned, and the first `server/discover` through the
+launcher took a median of 0.29 seconds with the front against 0.21 seconds for
+a release without it, over 10 starts each.
+
+What the clients do with the notification, as of 2026-10-31:
+
+| Client | Revision it opens with | On `notifications/tools/list_changed` |
+| --- | --- | --- |
+| Claude Code 2.1.304, CLI | 2026-07-28 on stdio by default | Opens `subscriptions/listen` itself when the discovery result declares `listChanged`, and lists the tools again. A tool schema the model has already loaded can stay in its context. |
+| Codex CLI 0.166.0 | the handshake revisions by default | Logs it. With the `mcp_tool_list_changed` feature, which is off by default, it lists the tools again at its next catalog read. |
+
+So in Codex, by default, every call reaches the new release, but a tool the new
+release added stays invisible until the session restarts.
+
+The front itself is the one part a switch does not replace: a session keeps
+the front it started with. A front that is killed from outside leaves its
+backend to see stdin close and exit on its own.
 
 ### A process that went stale while it ran
 
-`static_assets.SourceWatch` covers this case. The first tool result after the
-drift carries an extra content block saying so and naming the one fix: restart
-the client session. The agent keeps that block in its context, so it is not
-repeated on every answer: a reminder follows only when at least 30 minutes have
-passed since the last one, and a process sends three in all.
+`static_assets.SourceWatch` covers a process with no front: a checkout run
+whose sources changed, a session opened with a release from before the front,
+or a release the launcher started while its own files had drifted. The first
+tool result after the drift carries an extra content block saying so and naming
+the one fix: restart the client session. The agent keeps that block in its
+context, so it is not repeated on every answer: a reminder follows only when at
+least 30 minutes have passed since the last one, and a process sends three in
+all.
 
 It is appended, never prepended — `content[0]` stays the payload.
 
@@ -541,7 +630,8 @@ installed copy left behind.
 
 The generation lives in `PRAGMA user_version` and is read before the first
 write of any kind, including the schema script. A store written by a newer build raises
-`StoreTooNew` and is not touched.
+`StoreTooNew` and is not touched. A front that switches to such a build gets
+that refusal as the build's failure to start, and keeps the release it had.
 
 Raise the number in the same commit that changes what an existing row *means*.
 Migrations here are forward-only and idempotent, so it is the change of meaning,
