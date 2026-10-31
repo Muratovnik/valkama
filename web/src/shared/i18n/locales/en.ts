@@ -895,7 +895,7 @@ export const en = {
       showAll: 'Show all · {count}',
     },
     order: {
-      hint: 'Arrow keys move focus between work items; Alt+Up and Alt+Down move the work item within its column.',
+      hint: 'Arrow keys move focus between work items. Alt+Up and Alt+Down move the work item past its neighbour in the same state. The order is shared by the whole board: one order per state, across all epics.',
       moved: '{reference} moved: {position} of {total} in {state}',
       first: '{reference} is already first',
       last: '{reference} is already last',

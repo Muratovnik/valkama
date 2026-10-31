@@ -132,6 +132,15 @@ describe('the board grouped by epic', () => {
   })
 })
 
+describe('the order hint of the grouped board', () => {
+  it('says the order is shared by the whole board, one order per state, across epics', () => {
+    const wrapper = board({ grouping: 'epic' })
+    expect(wrapper.get('[id$="-reorder"]').text()).toBe(messages.en.workItem.order.hint)
+    expect(messages.en.workItem.order.hint).toContain('one order per state, across all epics')
+    expect(messages.ru.workItem.order.hint).toContain('один порядок на состояние, для всех эпиков')
+  })
+})
+
 describe('moving a tile from the keyboard', () => {
   it('moves it one place with Alt+ArrowDown and says where it went', async () => {
     const wrapper = board()
