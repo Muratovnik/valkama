@@ -25,6 +25,7 @@ import type {
   InputRequestEntry,
   InputRequestList,
 } from '@/shared/api/inputRequestModel.ts'
+import { skippedSourceReason } from '@/shared/api/planningTarget.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import VButton from '@/shared/ui/VButton.vue'
@@ -78,11 +79,23 @@ const statusText = computed(() => {
 const showToolbar = computed(
   () => Boolean(statusText.value) && (props.showRefresh || !props.result || props.failed),
 )
-const sources = computed(() =>
-  props.result?.coverage.map((source) => ({
-    ...source,
-    key: JSON.stringify([source.project_id, source.space_ref]),
-  })),
+/** The sources not read, each with the reason the finder names it by. */
+const skipped = computed(() =>
+  (props.result?.coverage ?? [])
+    .filter((source) => source.status === 'unavailable')
+    .map((source) => {
+      const reason = skippedSourceReason(source.reason)
+      return {
+        key: JSON.stringify([source.project_id, source.space_ref]),
+        text: t('requests.sourceUnavailable', {
+          project: source.project_id,
+          space: source.space_ref.space_key,
+          reason: t(
+            reason === 'requests_unavailable' ? 'requests.unreadable' : `finder.reasons.${reason}`,
+          ),
+        }),
+      }
+    }),
 )
 const cards: Record<string, { focus: () => void } | null> = {}
 const status = ref<HTMLElement | null>(null)
@@ -150,22 +163,13 @@ async function updated(entry: InputRequestEntry) {
     >
       {{ t('requests.truncated') }}
     </p>
-    <template
-      v-for="source in sources"
+    <p
+      v-for="source in skipped"
       :key="source.key"
+      class="request-note"
     >
-      <p
-        v-if="source.status === 'unavailable'"
-        class="request-note"
-      >
-        {{
-          t('requests.sourceUnavailable', {
-            project: source.project_id,
-            space: source.space_ref.space_key,
-          })
-        }}
-      </p>
-    </template>
+      {{ source.text }}
+    </p>
     <template v-if="empty">
       <DataEmptyState
         v-if="showRefresh"

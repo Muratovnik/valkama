@@ -33,6 +33,26 @@ export const planningCoverageSchema = strictObject({
   reason: z.string().min(1).max(240).nullable(),
 })
 
+/**
+ * Why a source was skipped, by the stable code the server names it with
+ * (`PlanningRouting.unavailable_reason`, plus what each listing adds for a store
+ * that opened and then failed). A code outside this list reads as `other`, so a
+ * raw reason never reaches the screen.
+ */
+const SKIPPED_SOURCE_REASONS = new Set([
+  'store_not_attached',
+  'store_unreadable',
+  'attached_list_unreadable',
+  'space_missing',
+  'binding_conflict',
+  'search_failed',
+  'requests_unavailable',
+])
+
+export function skippedSourceReason(reason: string | null): string {
+  return reason !== null && SKIPPED_SOURCE_REASONS.has(reason) ? reason : 'other'
+}
+
 export function serializePlanningTarget(target: PlanningTarget) {
   const validated = planningTargetSchema.parse(target)
   return {

@@ -23,6 +23,7 @@ import {
   requestEntry,
   requestList,
   twoQuestions,
+  unavailableSource,
 } from '../support/inputRequests.ts'
 import { present } from '../support/present.ts'
 import { answer, checkedLabels, radioLabel, radios } from '../support/radioAnswers.ts'
@@ -397,5 +398,28 @@ describe('human input requests', () => {
     wrappers.push(item)
     await flushPromises()
     expect(item.get('.request-state').text()).toBe('Waiting for your answer')
+  })
+
+  it('names why each skipped source was not read, as the task finder does', async () => {
+    vi.mocked(fetchInputRequests).mockResolvedValue({
+      ...requestList([]),
+      coverage: [
+        unavailableSource('detached', 'store_not_attached'),
+        unavailableSource('failing', 'requests_unavailable'),
+        unavailableSource('strange', 'a raw server sentence'),
+      ],
+    })
+    const wrapper = hub()
+    await flushPromises()
+    const notes = wrapper.findAll('.request-note').map((note) => note.text())
+    expect(notes).toEqual(
+      expect.arrayContaining([
+        'detached · TASK: Store not attached',
+        'failing · TASK: Questions could not be read',
+        'strange · TASK: Could not be read',
+      ]),
+    )
+    expect(wrapper.text()).not.toContain('source unavailable')
+    expect(wrapper.text()).not.toContain('a raw server sentence')
   })
 })

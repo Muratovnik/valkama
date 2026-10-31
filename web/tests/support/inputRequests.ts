@@ -73,3 +73,13 @@ export const answered = (entry: InputRequestEntry, by = 'user'): InputRequestEnt
     revision: 2,
   },
 })
+
+/** A source the listing could not read, for the reason the server gave. */
+export function unavailableSource(project: string, reason: string) {
+  return {
+    project_id: project,
+    space_ref: requestEntry().target.space_ref,
+    status: 'unavailable' as const,
+    reason,
+  }
+}
