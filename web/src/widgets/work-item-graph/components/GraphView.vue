@@ -14,6 +14,7 @@ import GraphBar from '@/widgets/work-item-graph/components/GraphBar.vue'
 import GraphControls from '@/widgets/work-item-graph/components/GraphControls.vue'
 import GraphEdge from '@/widgets/work-item-graph/components/GraphEdge.vue'
 import GraphEmptyState from '@/widgets/work-item-graph/components/GraphEmptyState.vue'
+import GraphFieldCorner from '@/widgets/work-item-graph/components/GraphFieldCorner.vue'
 import GraphLayoutStatus from '@/widgets/work-item-graph/components/GraphLayoutStatus.vue'
 import GraphLegend from '@/widgets/work-item-graph/components/GraphLegend.vue'
 import GraphNodeCard from '@/widgets/work-item-graph/components/GraphNodeCard.vue'
@@ -131,6 +132,9 @@ const { fitted, fitOptions, overview, onFlowInit, scheduleFitView } = useGraphCa
 
 /** The chain has closed members, so the key keeps the place «Done» comes and goes from. */
 const keepDone = computed(() => inChain.value && hiddenDone.value > 0)
+const hasEdges = computed(() => Boolean(placed.value?.edges.length))
+/** Whether the field has a key to draw: the bar offers it on a narrow workspace. */
+const keyed = computed(() => chainLegend.value.length > 0 || hasEdges.value)
 
 const chainChip = computed(() =>
   props.chain ? { reference: props.chain.reference, total: props.chain.total } : null,
@@ -220,8 +224,17 @@ function onFieldPointerLeave() {
       :hidden-done="hiddenDone"
       :ready-count="ready.length"
       :unlinked="unlinked"
+      :keyed="keyed"
       @exit-chain="emit('exit-chain')"
-    />
+    >
+      <template #legend>
+        <GraphLegend
+          :groups="chainLegend"
+          :has-edges="hasEdges"
+          :keep-done="keepDone"
+        />
+      </template>
+    </GraphBar>
 
     <GraphLayoutStatus
       :failed="failed"
@@ -248,10 +261,11 @@ function onFieldPointerLeave() {
         ref="legendPlace"
         class="graph-legend-place"
       >
-        <GraphLegend
+        <GraphFieldCorner
           :groups="chainLegend"
-          :has-edges="Boolean(placed?.edges.length)"
+          :has-edges="hasEdges"
           :keep-done="keepDone"
+          :ready-count="ready.length"
         />
       </div>
       <VueFlow
@@ -414,8 +428,10 @@ function onFieldPointerLeave() {
 }
 
 @container workspace (width <= 586px) {
+  /* The field is whatever the column leaves it. A floor taller than that would
+     run the flow out of its box, and the camera controls with it. */
   .graph-flow {
-    min-height: 300px;
+    min-height: 0;
   }
 }
 

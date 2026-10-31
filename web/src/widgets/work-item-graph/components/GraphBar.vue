@@ -12,17 +12,28 @@
  * open part, and a switch beside the chip says how many closed members that
  * leaves out and draws them. The key to the markers lies on the field itself
  * (`GraphLegend`), so this bar stays one row and never changes height with it.
+ *
+ * In a phone-wide workspace the filter and a switch do not share one row, and
+ * three stacked rows left the field half the screen. There the bar keeps only
+ * the filter or the chip; the switch and the key (the `legend` slot) open under
+ * a «Graph options» button, and the host draws the frontier count on the field
+ * where the key was. The narrow layout is the container's, so nothing here
+ * measures the window.
  */
-import { computed } from 'vue'
+import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import ScopeChip from '@/shared/ui/ScopeChip.vue'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import ToggleSwitch from '@/shared/ui/ToggleSwitch.vue'
+import VButton from '@/shared/ui/VButton.vue'
+import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
   chain: { reference: string; total: number } | null
   hiddenDone: number
+  /** The field draws a key, so the narrow bar has one to offer. */
+  keyed: boolean
   openTotal: number
   readyCount: number
   showDone: boolean
@@ -48,6 +59,12 @@ const options = computed(() => [
 function updateFilter(value: 'all' | 'open') {
   emit('update:showDone', value === 'all')
 }
+
+/** Only a narrow bar shows the button; a wide one lays the options out in its row. */
+const optionsOpen = ref(false)
+const optionsId = useId()
+const switchShown = computed(() => (props.chain ? props.hiddenDone > 0 : props.unlinked > 0))
+const hasOptions = computed(() => switchShown.value || props.keyed)
 </script>
 
 <template>
@@ -59,26 +76,43 @@ function updateFilter(value: 'all' | 'open') {
       :exit-label="t('graph.chainExit', { reference: chain.reference })"
       @exit="emit('exit-chain')"
     />
-    <ToggleSwitch
-      v-if="chain && hiddenDone"
-      class="graph-closed"
-      :label="t('graph.closedToggle')"
-      :model-value="showDone"
-      :on-label="t('graph.closed', { count: hiddenDone })"
-      :off-label="t('graph.closed', { count: hiddenDone })"
-      @update:model-value="(value) => emit('update:showDone', value)"
+    <SegmentedControl
+      v-else
+      class="graph-filter"
+      size="compact"
+      :label="t('graph.title')"
+      :model-value="filter"
+      :options="options"
+      @update:model-value="updateFilter"
     />
-    <template v-if="!chain">
-      <SegmentedControl
-        class="graph-filter"
-        size="compact"
-        :label="t('graph.title')"
-        :model-value="filter"
-        :options="options"
-        @update:model-value="updateFilter"
+    <VButton
+      v-if="hasOptions"
+      class="graph-options-toggle"
+      variant="ghost"
+      :aria-label="t('graph.options')"
+      :aria-expanded="optionsOpen"
+      :aria-controls="optionsId"
+      icon
+      @click="optionsOpen = !optionsOpen"
+    >
+      <VIcon name="filters" />
+    </VButton>
+    <div
+      :id="optionsId"
+      class="graph-options"
+      :class="{ open: optionsOpen }"
+    >
+      <ToggleSwitch
+        v-if="switchShown && chain"
+        class="graph-closed"
+        :label="t('graph.closedToggle')"
+        :model-value="showDone"
+        :on-label="t('graph.closed', { count: hiddenDone })"
+        :off-label="t('graph.closed', { count: hiddenDone })"
+        @update:model-value="(value) => emit('update:showDone', value)"
       />
       <ToggleSwitch
-        v-if="unlinked"
+        v-else-if="switchShown"
         class="graph-unlinked"
         :label="t('graph.unlinkedToggle')"
         :model-value="showUnlinked"
@@ -86,7 +120,10 @@ function updateFilter(value: 'all' | 'open') {
         :off-label="t('graph.unlinked', { count: unlinked })"
         @update:model-value="(value) => emit('update:showUnlinked', value)"
       />
-    </template>
+      <div class="graph-options-legend">
+        <slot name="legend" />
+      </div>
+    </div>
     <span class="graph-frontier-count">{{ t('graph.frontier', { count: readyCount }) }}</span>
   </div>
 </template>
@@ -107,9 +144,52 @@ function updateFilter(value: 'all' | 'open') {
   font: var(--font-line);
 }
 
+/* Wide, the options are the row's own: the button is not needed and the key
+   lies on the field. */
+.graph-options {
+  display: contents;
+}
+
+.graph-options-toggle,
+.graph-options-legend {
+  display: none;
+}
+
 @container workspace (width <= 586px) {
   .graph-bar {
+    flex-wrap: nowrap;
     gap: var(--space-2);
+  }
+
+  .graph-options-toggle {
+    display: inline-flex;
+    margin-left: auto;
+  }
+
+  .graph-options {
+    display: none;
+  }
+
+  /* Open, the options take the room under the row; the field gives it back when
+     they close. */
+  .graph-bar:has(.graph-options.open) {
+    flex-wrap: wrap;
+  }
+
+  .graph-options.open {
+    display: flex;
+    flex-basis: 100%;
+    flex-direction: column;
+    gap: var(--space-2);
+    align-items: flex-start;
+  }
+
+  .graph-options-legend {
+    display: block;
+  }
+
+  .graph-frontier-count {
+    display: none;
   }
 }
 </style>

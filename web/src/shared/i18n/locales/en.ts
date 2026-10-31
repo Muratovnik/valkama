@@ -199,6 +199,7 @@ export const en = {
     zoomOut: 'Zoom out',
     zoomReset: 'Fit whole graph',
     focusWork: 'Focus work',
+    options: 'Graph options and key',
     chainChip: 'Chain {reference} · {count}',
     chainExit: 'Leave chain {reference} and show the whole space',
     chainInvalid: 'This link names no chain this space can read; the whole space is shown.',

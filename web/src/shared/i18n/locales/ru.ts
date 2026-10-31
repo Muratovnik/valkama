@@ -198,6 +198,7 @@ export const ru = {
     zoomOut: 'Отдалить',
     zoomReset: 'Весь граф',
     focusWork: 'К рабочей задаче',
+    options: 'Параметры и легенда графа',
     chainChip: 'Цепочка {reference} · {count}',
     chainExit: 'Выйти из цепочки {reference} и показать всё пространство',
     chainInvalid: 'Ссылка не называет цепочку, которую можно прочитать; показано всё пространство.',

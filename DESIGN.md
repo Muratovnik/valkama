@@ -540,7 +540,10 @@ column does and a group of states by the group's own word, never by a
 workflow key. The graph's key lies on the field's corner, not in the bar above
 it, and keeps the place of a state a switch can add, so no switch moves the bar
 or the field; every framing keeps the nodes clear of the key and the camera
-controls. Zoomed out past reading, the graph draws each node as a block of its
+controls. In a phone-wide workspace the bar is one row — the filter or the chip
+and a «Graph options» button that opens the switch and the key under it — and
+the frontier count takes the key's corner of the field, so the field keeps most
+of the screen and no camera control falls outside it. Zoomed out past reading, the graph draws each node as a block of its
 state's colour with its reference, so the whole of a long chain reads as an
 overview. Under the map, one line gives the totals and a second answers
 whether and when the open part closes, from the last seven days, and says so

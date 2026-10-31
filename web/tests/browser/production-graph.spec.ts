@@ -279,9 +279,12 @@ for (const width of [1440, 1024]) {
       bar: await bar.boundingBox(),
       field: await page.locator('.graph-flow').boundingBox(),
     }
-    await expect(page.locator('.graph-canvas .graph-legend')).toBeVisible()
-    await expect(page.locator('.graph-bar .graph-legend')).toHaveCount(0)
-    const key = await page.locator('.graph-legend').boundingBox()
+    const fieldKey = page.locator('.graph-canvas .graph-legend')
+    await expect(fieldKey).toBeVisible()
+    // The bar keeps a key only for a narrow workspace, out of sight at this width.
+    await expect(page.locator('.graph-bar .graph-legend')).toBeHidden()
+    await expect(page.locator('.graph-options-toggle')).toBeHidden()
+    const key = await fieldKey.boundingBox()
 
     const closed = page.getByRole('switch', { name: 'Draw the closed members of the chain' })
     await closed.click()
@@ -290,8 +293,8 @@ for (const width of [1440, 1024]) {
     // Throwing the switch moves nothing: not the bar, not the field, not the key.
     expect(await bar.boundingBox()).toEqual(before.bar)
     expect(await page.locator('.graph-flow').boundingBox()).toEqual(before.field)
-    expect(await page.locator('.graph-legend').boundingBox()).toEqual(key)
-    await expect(page.locator('.graph-legend-state:not(.held)').first()).toHaveText('Done')
+    expect(await fieldKey.boundingBox()).toEqual(key)
+    await expect(fieldKey.locator('.graph-legend-state:not(.held)').first()).toHaveText('Done')
 
     // The whole of it, zoomed out past reading: an overview by state, framed
     // clear of the key and the controls.
@@ -299,8 +302,59 @@ for (const width of [1440, 1024]) {
     await expect(page.locator('.flow-node-card.overview')).toHaveCount(610)
     await expect(page.locator('.flow-node-overview').first()).toBeVisible()
     expect(await cardsUnder(page, '.vue-flow__controls')).toBe(0)
-    expect(await cardsUnder(page, '.graph-legend')).toBe(0)
+    expect(await cardsUnder(page, '.graph-canvas .graph-legend')).toBe(0)
     await page.getByRole('button', { name: 'Zoom in', exact: true }).click()
     await expect(page.locator('.flow-node-card.overview')).toHaveCount(610)
   })
 }
+
+test('at a phone width the bar is one row and its options open under it', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await installBackend(page)
+  const { chain, items, edges } = smallChain()
+  await serve(page, chain, items, edges)
+  await page.goto(graphRoute({ chain: 'MAIN-264', chain_scope: 'chain' }))
+  await expect(page.locator('.graph-canvas')).toHaveClass(/settled/u)
+  const bar = page.locator('.graph-bar')
+  const toggle = page.getByRole('button', { name: 'Graph options and key' })
+  const closed = page.getByRole('switch', { name: 'Draw the closed members of the chain' })
+
+  // One row: the chip and the options button, nothing stacked under them.
+  const chip = await page.locator('.graph-chip').boundingBox()
+  const button = await toggle.boundingBox()
+  expect(
+    chip && button && Math.abs(chip.y + chip.height / 2 - (button.y + button.height / 2)),
+  ).toBeLessThan(4)
+  const row = await bar.boundingBox()
+  expect(row?.height).toBeLessThanOrEqual(60)
+  await expect(closed).toBeHidden()
+  await expect(page.locator('.graph-frontier-count')).toBeHidden()
+  // The count stays in sight, on the field's corner where the key was.
+  await expect(page.locator('.graph-frontier-on-field')).toBeVisible()
+  await expect(page.locator('.graph-canvas .graph-legend')).toBeHidden()
+
+  // Every camera control stands inside the field: none is cut off.
+  const field = await page.locator('.graph-canvas').boundingBox()
+  for (const control of await page.locator('.graph-controls button').all()) {
+    const box = await control.boundingBox()
+    expect(field && box && box.y + box.height).toBeLessThanOrEqual(
+      (field?.y ?? 0) + (field?.height ?? 0),
+    )
+  }
+
+  // By keyboard: the button opens the switch and the key under the row.
+  await toggle.focus()
+  await page.keyboard.press('Enter')
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+  await expect(closed).toBeVisible()
+  await expect(page.locator('.graph-bar .graph-legend')).toBeVisible()
+  await page.keyboard.press('Tab')
+  await expect(closed).toBeFocused()
+  await page.keyboard.press('Space')
+  await expect(closed).toHaveAttribute('aria-checked', 'true')
+  await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(closed).toBeHidden()
+  const closedRow = await bar.boundingBox()
+  expect(closedRow?.height).toBeLessThanOrEqual(60)
+})

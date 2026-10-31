@@ -251,20 +251,25 @@ describe('the graph scoped to one chain', () => {
   it('names in its legend the groups it draws, and keeps the place of the one the switch adds', async () => {
     const graph = openGraph({ scopeKind: 'chain', epicId: id(1), chain, edges: chainEdges })
     await drawn(graph)
-    const named = () => graph.findAll('.graph-legend-state:not(.held)').map((entry) => entry.text())
-    const places = () => graph.findAll('.graph-legend-state').map((entry) => entry.text())
+    const key = '.graph-canvas .graph-legend-state'
+    const named = () => graph.findAll(`${key}:not(.held)`).map((entry) => entry.text())
+    const places = () => graph.findAll(key).map((entry) => entry.text())
     expect(named()).toEqual(['To do'])
     // «Done» is not drawn, so it is not named; its place is kept, unseen, so
     // throwing the switch moves no word of the key.
     expect(places()).toEqual(['Done', 'To do'])
-    expect(graph.get('.graph-legend-state.held').text()).toBe('Done')
+    expect(graph.get(`${key}.held`).text()).toBe('Done')
     await graph.get('[role="switch"]').trigger('click')
     await drawn(graph)
     expect(named()).toEqual(['Done', 'To do'])
     expect(places()).toEqual(['Done', 'To do'])
-    // The key lies on the field, not in the bar above it.
-    expect(graph.find('.graph-bar .graph-legend').exists()).toBe(false)
+    // The key lies on the field. The bar's options hold the same key for a
+    // narrow workspace only, where the field's corner gives way to the count;
+    // which one shows is the container's call (the browser spec at 390).
     expect(graph.find('.graph-canvas .graph-legend').exists()).toBe(true)
+    expect(graph.get('.graph-bar .graph-options .graph-legend').text()).toBe(
+      graph.get('.graph-canvas .graph-legend').text(),
+    )
   })
 
   it('draws each node as its colour and reference once the field is zoomed out past reading', async () => {
