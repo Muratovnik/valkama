@@ -99,10 +99,10 @@ store is unchanged at schema 9, so the upgrade runs no migration.
   browser, a launch), also moves it to the first reachable `active` state: one
   more `transitioned` event (`dev: claimed`) and one more revision. The answer
   adds `started: {from, to}`. Review, blocked, active and finished items stay
-  where they are, and an item that can reach no active state is claimed where
-  it stands, with a warning (a launch of one used to fail). An agent no longer
-  needs its own transition to the active state after a claim (one sent anyway
-  is a move within one state, with one more event), and takes the next
+  where they are, and an item that can reach no active state is claimed in
+  place with a warning; a launch used to fail on such an item. An agent no
+  longer needs its own transition to the active state after a claim (one sent
+  anyway is a move within one state, with one more event), and takes the next
   `expected_revision` from the claim's answer. See
   [A claim starts the work](docs/connection-contract.md#a-claim-starts-the-work).
 - **A release puts work under way back in the queue.** Releasing an `active`
@@ -126,11 +126,14 @@ store is unchanged at schema 9, so the upgrade runs no migration.
   `force` discards only the steps left out.
 - **A work item that does not exist is `not_found` (404)**, where it was
   `invalid_request` (400): the item named, a `parent`, the other end of a link,
-  or a batch step. A malformed reference is still `invalid_request`.
-- **Acknowledgements carry more**: `started`, `requeued` and `warnings` after
-  a claim or release, `applied` from `create_work_item`, and each step's `done`
-  from `set_work_item_checklist`. See
-  [Tool results](docs/connection-contract.md#tool-results).
+  or a step of a batch, which keeps its `step`. A malformed reference is still
+  `invalid_request`.
+- **Acknowledgements carry more.** `claim_work_item` adds `started`,
+  `requeued` and `warnings` when there are any; `create_work_item` and
+  `apply_work_item_changes` add `started` and their claim's `warnings`;
+  `create_work_item` adds `applied` when it took `claim`, `checklist` or
+  `links`; the `checklist` of `set_work_item_checklist` gives each step's
+  `done`. See [Tool results](docs/connection-contract.md#tool-results).
 - **The server lists 31 tools, up from 29**: `get_work_item_chain` and
   `merge_work_items` are new.
 - **`claim_ready_work_item` takes the first ready item in the order of work**,
