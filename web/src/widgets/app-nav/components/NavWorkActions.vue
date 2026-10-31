@@ -23,7 +23,11 @@ const { t } = useI18n()
         :size="20"
       />
       <span class="action-label">{{ t('finder.trigger') }}</span>
-      <kbd class="action-shortcut">Ctrl K</kbd>
+      <kbd
+        class="action-shortcut"
+        aria-hidden="true"
+        >Ctrl K</kbd
+      >
     </button>
     <button
       class="work-action"
@@ -94,8 +98,8 @@ const { t } = useI18n()
 
   /* Out of sight, never out of the name: each action is named by what it
      shows, its label and any count, so the label stays for a reader once the
-     rail has no line for it, and the shortcut, which `aria-keyshortcuts`
-     already states, goes. */
+     rail has no line for it. The shortcut is never part of the name, at any
+     width, because `aria-keyshortcuts` already states it. */
   .action-label {
     position: absolute;
     width: 1px;

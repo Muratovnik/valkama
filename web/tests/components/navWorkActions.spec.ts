@@ -34,6 +34,15 @@ describe('rail work actions', () => {
     expect(finder.attributes('aria-keyshortcuts')).toBe('Control+k Meta+k')
   })
 
+  // The shortcut is printed for the eye in the wide rail and hidden in the
+  // narrow one; were it part of the name, the name would change with the
+  // rail's width and repeat what aria-keyshortcuts already says.
+  it('keeps the printed shortcut out of the finder button name', () => {
+    const finder = mountActions(null).findAll('button')[0]
+    expect(finder.find('kbd').attributes('aria-hidden')).toBe('true')
+    expect(finder.attributes('aria-label')).toBeUndefined()
+  })
+
   it('names it by its label alone while nothing waits', () => {
     const questions = mountActions(0).findAll('button')[1]
     expect(questions.attributes('aria-label')).toBeUndefined()
