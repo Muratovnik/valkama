@@ -137,6 +137,32 @@ A new file at the top level needs an argument for why it belongs to none of
 those. `tests/test_docs_lifecycle.py` refuses a document under `docs/` without
 its frontmatter.
 
+## Releasing
+
+A release is cut with the Release Kit bundled at `.github/relkit.pyz`, whose
+settings are `[release]` in `relkit.toml`. It runs `windows/release.py check`,
+`build` and `smoke`, each with the interpreter that launched it, so launch it
+with the project's virtual environment, not whatever `python` comes first on
+`PATH`:
+
+```powershell
+uv venv .venv --python 3.11              # or: python -m venv .venv
+uv pip install --python .venv/Scripts/python.exe -r requirements-dev.txt
+cd web; npm ci; cd ../desktop; npm ci; cd ..
+.venv/Scripts/python .github/relkit.pyz release prepare <version>
+```
+
+Outside Windows the interpreter is `.venv/bin/python`. `check` runs every
+Python tool from that interpreter's environment — as `python -m <tool>`, or as
+the console script in its own `Scripts` (or `bin`) directory, which it also puts
+first on `PATH` for each stage — and never a same-named tool found elsewhere on
+`PATH`. Before the first stage it verifies that every package
+`requirements-dev.txt` pins is installed there at that version, and refuses at
+once, naming the interpreter, each missing or mismatched package and what to
+run, when one is not. `build` needs npm and no Python tool, and `smoke` runs the
+server, which needs only the standard library. The web build that `check` runs
+rewrites `web/dist`; commit it only when `web/src` changed.
+
 ## Reporting a bug
 
 Include what you ran, what happened, and what you expected. For anything

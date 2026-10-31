@@ -2,19 +2,30 @@
 
 Release Kit runs build and smoke from a committed, Git-free source snapshot.
 The desktop installer is a window for the source service, not a bundled server.
+
+Release Kit runs every command here with its own interpreter as `{python}`, so
+`check` takes its Python tools from that interpreter's environment and nowhere
+else, and refuses before the first stage when that environment lacks one. Build
+and smoke need no development tool: build runs npm, and smoke runs the server,
+which imports only the standard library.
 """
 
 from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.metadata
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
+import sysconfig
 import tempfile
 import zipfile
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,6 +33,144 @@ NPM = "npm.cmd" if sys.platform == "win32" else "npm"
 SKIP_DIRS = frozenset(
     {".git", ".cache", ".private", ".state", "tmp", "node_modules", "release", "__pycache__"}
 )
+REQUIREMENTS = ROOT / "requirements-dev.txt"
+_PIN = re.compile(r"([A-Za-z0-9][A-Za-z0-9._-]*)==([A-Za-z0-9.+!_-]+)")
+
+
+class ToolchainError(RuntimeError):
+    """The interpreter running the check lacks a pinned tool; nothing has run yet."""
+
+
+@dataclass(frozen=True)
+class Tool:
+    """A tool `check` runs: the distribution that pins it, and how it is started.
+
+    `module` runs it as `python -m module`. A tool without one is the console
+    script `script` from the interpreter's own scripts directory: typos and
+    lint-imports have no runnable module, and `python -m semgrep` is refused
+    by semgrep itself.
+    """
+
+    distribution: str
+    module: str | None = None
+    script: str | None = None
+
+
+TOOLS: dict[str, Tool] = {
+    "ruff": Tool("ruff", module="ruff"),
+    "typos": Tool("typos", script="typos"),
+    "vulture": Tool("vulture", module="vulture"),
+    "mypy": Tool("mypy", module="mypy"),
+    "lint-imports": Tool("import-linter", script="lint-imports"),
+    "semgrep": Tool("semgrep", script="semgrep"),
+    "coverage": Tool("coverage", module="coverage"),
+}
+
+
+@dataclass(frozen=True)
+class Interpreter:
+    """One Python environment: its executable, where its console scripts are, what it has."""
+
+    executable: Path
+    scripts: Path
+    version_of: Callable[[str], str | None]
+
+
+def _installed(distribution: str) -> str | None:
+    try:
+        return importlib.metadata.version(distribution)
+    except importlib.metadata.PackageNotFoundError:
+        return None
+
+
+def running_interpreter() -> Interpreter:
+    """The interpreter running this file, which is the `{python}` Release Kit passed.
+
+    Its scripts directory is the one its installer writes console scripts to:
+    `Scripts` beside the executable in a Windows venv, `bin` in a POSIX one.
+    """
+
+    return Interpreter(Path(sys.executable), Path(sysconfig.get_path("scripts")), _installed)
+
+
+def pins(text: str) -> dict[str, str]:
+    """Every `name==version` in requirements-dev.txt; anything looser is refused."""
+
+    found = {}
+    for line in text.splitlines():
+        requirement = line.split("#", 1)[0].strip()
+        if not requirement:
+            continue
+        match = _PIN.fullmatch(requirement)
+        if match is None:
+            raise ValueError(f"requirements-dev.txt must pin exactly: {requirement}")
+        found[match.group(1)] = match.group(2)
+    return found
+
+
+def _pin_problems(interpreter: Interpreter, pinned: Mapping[str, str]) -> list[str]:
+    problems = []
+    for distribution, wanted in pinned.items():
+        installed = interpreter.version_of(distribution)
+        if installed is None:
+            problems.append(f"{distribution}: not installed; requirements-dev.txt pins {wanted}")
+        elif installed != wanted:
+            problems.append(
+                f"{distribution}: {installed} installed; requirements-dev.txt pins {wanted}"
+            )
+    return problems
+
+
+def require_toolchain(
+    interpreter: Interpreter, pinned: Mapping[str, str]
+) -> dict[str, tuple[str, ...]]:
+    """How to start each tool from this interpreter, or one refusal naming everything missing.
+
+    A console script is looked up in the interpreter's own scripts directory
+    alone: a same-named one on PATH belongs to some other environment.
+    """
+
+    problems = _pin_problems(interpreter, pinned)
+    commands: dict[str, tuple[str, ...]] = {}
+    for name, tool in TOOLS.items():
+        if tool.distribution not in pinned:
+            problems.append(f"{name}: {tool.distribution} is not pinned in requirements-dev.txt")
+        if tool.module is not None:
+            commands[name] = (str(interpreter.executable), "-m", tool.module)
+        elif tool.script is not None:
+            found = shutil.which(tool.script, path=str(interpreter.scripts))
+            if found is not None:
+                commands[name] = (found,)
+            elif interpreter.version_of(tool.distribution) is not None:
+                # A missing distribution is already reported; a missing script
+                # beside an installed one is a broken install.
+                problems.append(f"{name}: no {tool.script} console script in {interpreter.scripts}")
+    if problems:
+        listed = "\n".join(f"  - {problem}" for problem in problems)
+        raise ToolchainError(
+            f"release check: {interpreter.executable} does not hold the pinned gate"
+            f" toolchain:\n{listed}\n"
+            "Run the release with the project's virtual environment: create it"
+            " (uv venv .venv --python 3.11, or python -m venv .venv), install the"
+            " pins with .venv/Scripts/python -m pip install -r requirements-dev.txt,"
+            " then run .venv/Scripts/python .github/relkit.pyz release prepare"
+            " <version> (.venv/bin/python outside Windows)."
+        )
+    return commands
+
+
+def tool_environment(interpreter: Interpreter, base: Mapping[str, str]) -> dict[str, str]:
+    """`base` with the interpreter's scripts directory first on PATH.
+
+    semgrep's launcher starts `pysemgrep` through PATH and only appends its own
+    directory, so a shared install earlier on PATH would otherwise run instead.
+    """
+
+    environment = dict(base)
+    key = next((name for name in environment if name.upper() == "PATH"), "PATH")
+    rest = environment.get(key, "")
+    environment[key] = os.pathsep.join(part for part in (str(interpreter.scripts), rest) if part)
+    return environment
 
 
 def run(
@@ -67,11 +216,11 @@ def require_version(expected: str) -> None:
         raise ValueError("VERSION, requested release and desktop package must match")
 
 
-def isolated_environment(state: Path) -> dict[str, str]:
+def isolated_environment(state: Path, base: Mapping[str, str] | None = None) -> dict[str, str]:
     state.mkdir()
     for name in ("local", "roaming", "temp", "claude-sessions", "codex-rollouts", "documents"):
         (state / name).mkdir()
-    environment = os.environ.copy()
+    environment = dict(os.environ if base is None else base)
     for name in ("VALKAMA_CUTOVER", "VALKAMA_PROTECTED_STORE"):
         environment.pop(name, None)
     environment.update(
@@ -94,15 +243,27 @@ def isolated_environment(state: Path) -> dict[str, str]:
     return environment
 
 
-def check() -> None:
+def check(interpreter: Interpreter | None = None, requirements: str | None = None) -> None:
+    """Run every gate, each Python tool from the interpreter running this file.
+
+    The toolchain is verified against the pins before anything else, so a
+    wrong interpreter is refused in one message instead of one stage at a time.
+    """
+
+    interpreter = interpreter or running_interpreter()
+    if requirements is None:
+        requirements = REQUIREMENTS.read_text(encoding="utf-8")
+    tools = require_toolchain(interpreter, pins(requirements))
     require_version(version())
-    stages = [
-        ((sys.executable, "-m", "ruff", "check", "."), ROOT),
-        ((sys.executable, "-m", "ruff", "format", "--check", "."), ROOT),
-        (("typos",), ROOT),
+    base = tool_environment(interpreter, os.environ)
+    stages: list[tuple[str, tuple[str, ...], Path]] = [
+        ("ruff", (*tools["ruff"], "check", "."), ROOT),
+        ("ruff", (*tools["ruff"], "format", "--check", "."), ROOT),
+        ("typos", tools["typos"], ROOT),
         (
+            "vulture",
             (
-                "vulture",
+                *tools["vulture"],
                 "server",
                 "tests",
                 "valkama.py",
@@ -112,11 +273,12 @@ def check() -> None:
             ),
             ROOT,
         ),
-        (("mypy",), ROOT),
-        (("lint-imports", "--cache-dir", ".cache/import-linter"), ROOT),
+        ("mypy", tools["mypy"], ROOT),
+        ("lint-imports", (*tools["lint-imports"], "--cache-dir", ".cache/import-linter"), ROOT),
         (
+            "semgrep",
             (
-                "semgrep",
+                *tools["semgrep"],
                 "scan",
                 "--config",
                 "p/python",
@@ -131,32 +293,21 @@ def check() -> None:
             ROOT,
         ),
         (
-            (
-                sys.executable,
-                "-m",
-                "coverage",
-                "run",
-                "-m",
-                "unittest",
-                "discover",
-                "-s",
-                ".",
-                "-p",
-                "test_*.py",
-            ),
+            "coverage run",
+            (*tools["coverage"], "run", "-m", "unittest", "discover", "-s", ".", "-p", "test_*.py"),
             ROOT,
         ),
-        ((sys.executable, "-m", "coverage", "report"), ROOT),
-        ((NPM, "test"), ROOT / "web"),
-        ((NPM, "run", "typecheck"), ROOT / "web"),
-        ((NPM, "run", "build"), ROOT / "web"),
-        ((NPM, "test"), ROOT / "desktop"),
+        ("coverage", (*tools["coverage"], "report"), ROOT),
+        ("npm", (NPM, "test"), ROOT / "web"),
+        ("npm", (NPM, "run", "typecheck"), ROOT / "web"),
+        ("npm", (NPM, "run", "build"), ROOT / "web"),
+        ("npm", (NPM, "test"), ROOT / "desktop"),
     ]
-    for command, cwd in stages:
+    for stage, command, cwd in stages:
         sys.stdout.write(f"release check: {' '.join(command)}\n")
         sys.stdout.flush()
         # Gate output is not parsed; inherit pipes to preserve the tool's text.
-        if command[1:4] == ("-m", "coverage", "run"):
+        if stage == "coverage run":
             temp_root = (
                 (Path(os.environ["LOCALAPPDATA"]) / "Temp").resolve()
                 if sys.platform == "win32"
@@ -167,10 +318,10 @@ def check() -> None:
                 raise ValueError("check workspace must stay inside the temporary directory")
             task_parent.mkdir(exist_ok=True)
             with tempfile.TemporaryDirectory(prefix="valkama-check-", dir=task_parent) as task:
-                environment = isolated_environment(Path(task) / "user-state")
+                environment = isolated_environment(Path(task) / "user-state", base)
                 environment["GIT_CEILING_DIRECTORIES"] = task
                 subprocess.run(command, cwd=cwd, env=environment, check=True)
-        elif command[0] == "semgrep" and sys.platform == "win32":
+        elif stage == "semgrep" and sys.platform == "win32":
             # semgrep-core's native socketpair fails when its temporary socket
             # path is too long. Release coordinators often supply a deeply
             # nested TEMP; give only this process a short owned OS temp path.
@@ -180,10 +331,10 @@ def check() -> None:
                 raise ValueError("Semgrep workspace must stay inside the OS temporary directory")
             task_parent.mkdir(exist_ok=True)
             with tempfile.TemporaryDirectory(prefix="sg-", dir=task_parent) as task:
-                environment = {**os.environ, "TEMP": task, "TMP": task, "TMPDIR": task}
+                environment = {**base, "TEMP": task, "TMP": task, "TMPDIR": task}
                 subprocess.run(command, cwd=cwd, env=environment, check=True)
         else:
-            subprocess.run(command, cwd=cwd, check=True)
+            subprocess.run(command, cwd=cwd, env=base, check=True)
 
 
 def source_files() -> list[Path]:
@@ -387,7 +538,10 @@ def main() -> None:
     parser.add_argument("--work-dir", type=Path)
     args = parser.parse_args()
     if args.action == "check":
-        check()
+        try:
+            check()
+        except ToolchainError as error:
+            sys.exit(str(error))
     elif args.assets is None or args.version is None:
         parser.error("build and smoke require --assets and --version")
     elif args.action == "build":
