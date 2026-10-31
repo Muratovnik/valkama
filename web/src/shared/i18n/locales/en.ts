@@ -78,6 +78,7 @@ export const en = {
         'This build cannot read the local service response. Restart or update Valkama, then retry.',
       dependencyUnavailable: 'The local dependency for this view is unavailable.',
       mutationFailed: 'The change was not saved. Retry when the local service reconnects.',
+      notFound: 'There is no such record: it was deleted, or the address points elsewhere.',
       permissionDenied: 'The local service denied this request.',
       requestFailed: 'The local service did not complete the request.',
       requestTimeout:

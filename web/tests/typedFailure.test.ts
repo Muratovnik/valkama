@@ -34,6 +34,21 @@ test('unknown failures expose only a bounded stable technical code in both local
   )
 })
 
+test('a missing record is not offered again and says so in both locales', () => {
+  const missing = typedFailure(
+    Object.assign(new Error('no work item MAIN-12'), { status: 404, code: 'not_found' }),
+  )
+  assert.deepEqual(missing, { code: 'not_found', status: 404, retryable: false })
+  assert.equal(
+    localized('en', 'not_found'),
+    'There is no such record: it was deleted, or the address points elsewhere.',
+  )
+  assert.equal(
+    localized('ru', 'not_found'),
+    'Такой записи нет: её удалили или адрес указывает не туда.',
+  )
+})
+
 test('permission and contract failures are typed without preserving backend prose', () => {
   const denied = typedFailure(Object.assign(new Error('private backend prose'), { status: 403 }))
   assert.deepEqual(denied, { code: 'permission_denied', status: 403, retryable: false })

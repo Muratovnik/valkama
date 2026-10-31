@@ -71,6 +71,8 @@ export function typedFailure(error: unknown, fallbackCode = 'request_failed'): T
     return { code: 'permission_denied', status, retryable: false }
   if (state?.status === 'unavailable' && state.retry_action === undefined)
     return { code: 'dependency_unavailable', status, retryable: false }
+  // The service says the thing named is not there; asking again finds nothing new.
+  if (sourceCode === 'not_found') return { code: 'not_found', status, retryable: false }
   if (sourceCode.endsWith('_contract_invalid') || sourceCode === 'contract_invalid')
     return { code: 'contract_invalid', status, retryable: true }
   return { code: stableCode(sourceCode, 'unknown_failure'), status, retryable: true }
@@ -80,6 +82,7 @@ const KNOWN_FAILURE_KEYS: Readonly<Record<string, string>> = {
   contract_invalid: 'platform.failures.contractInvalid',
   dependency_unavailable: 'platform.failures.dependencyUnavailable',
   mutation_failed: 'platform.failures.mutationFailed',
+  not_found: 'platform.failures.notFound',
   permission_denied: 'platform.failures.permissionDenied',
   request_failed: 'platform.failures.requestFailed',
   request_timeout: 'platform.failures.requestTimeout',
