@@ -43,7 +43,7 @@ const passThrough = { template: '<div><slot /></div>' }
 const drawerFrame = {
   // The frame's head and body, as the real one lays them out.
   template:
-    '<div><header class="drawer-frame-head"><slot name="title" /><slot name="meta" /><slot name="actions" /><slot name="tabs" /></header><slot /></div>',
+    '<div><header class="drawer-frame-head"><slot name="title" /><slot name="controls" /><slot name="meta" /><slot name="actions" /><slot name="tabs" /></header><slot /></div>',
   methods: { scrollToTop() {} },
 }
 const overview = {

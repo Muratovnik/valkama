@@ -71,7 +71,8 @@ const choiceStub = {
 export const drawerFrameStub = {
   name: 'DrawerFrame',
   emits: ['close'],
-  template: '<div><slot name="meta" /><slot name="actions" /><slot name="tabs" /><slot /></div>',
+  template:
+    '<div><slot name="controls" /><slot name="meta" /><slot name="actions" /><slot name="tabs" /><slot /></div>',
   methods: { scrollToTop() {} },
 }
 

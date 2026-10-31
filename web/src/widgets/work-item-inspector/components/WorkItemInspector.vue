@@ -287,21 +287,24 @@ const close = () => void leave(() => emit('close'))
         </template>
       </template>
 
+      <template #controls>
+        <button
+          v-if="canGoBack"
+          class="head-back"
+          type="button"
+          :title="t('workItem.back')"
+          @click="void leave(() => emit('back'))"
+        >
+          <VIcon
+            name="chevron-left"
+            :size="16"
+          />
+          <span>{{ t('workItem.back') }}</span>
+        </button>
+      </template>
+
       <template #meta>
         <div class="inspector-meta">
-          <button
-            v-if="canGoBack"
-            class="head-back"
-            type="button"
-            :title="t('workItem.back')"
-            @click="void leave(() => emit('back'))"
-          >
-            <VIcon
-              name="chevron-left"
-              :size="16"
-            />
-            <span>{{ t('workItem.back') }}</span>
-          </button>
           <span class="head-reference">{{ reference }}</span>
         </div>
       </template>

@@ -191,6 +191,62 @@ test('a related item opens over the one it came from, and Back returns to it', a
   await expect(drawer.locator('.head-back')).toHaveCount(0)
 })
 
+/** The vertical centre of a box; NaN when there is none, so a comparison on it fails. */
+function centreY(box: { height: number; y: number } | null): number {
+  return box === null ? Number.NaN : box.y + box.height / 2
+}
+
+/** Opens a related card from the one in the column, so Back has a card to return to. */
+async function openRelatedCard(page: Page, width: number) {
+  await page.setViewportSize({ width, height: 700 })
+  await installBackend(page)
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
+  const drawer = page.locator('.drawer')
+  await drawer.getByRole('button', { name: /Relations/i }).click()
+  await drawer.locator('.link-open').first().click()
+  await expect(drawer.locator('.head-reference')).toHaveText(blockedWorkItem.reference)
+  return drawer
+}
+
+for (const width of [1440, 390]) {
+  test(`Back stays visible in the condensed head of a related card at ${width}px`, async ({
+    page,
+  }) => {
+    const drawer = await openRelatedCard(page, width)
+    const head = drawer.locator('.drawer-frame-head')
+    const back = drawer.locator('.head-back')
+    await expect(back).toBeVisible()
+
+    // Read down the body until the head condenses: the reference steps out, Back stays.
+    await drawer.locator('.drawer-frame-body').hover()
+    for (let step = 0; step < 6; step += 1) await page.mouse.wheel(0, 80)
+    await expect(head).toHaveClass(/condensed/u)
+    await expect(drawer.locator('.head-reference')).toBeHidden()
+    await expect(back).toBeVisible()
+
+    await back.click()
+    await expect(drawer.locator('.head-reference')).toHaveText(workItemRef.reference)
+    await expect(back).toHaveCount(0)
+  })
+
+  test(`Back sits beside Close in the head's top row at ${width}px, and comes before it`, async ({
+    page,
+  }) => {
+    const drawer = await openRelatedCard(page, width)
+    const back = drawer.locator('.head-back')
+    const close = drawer.locator('.drawer-frame-close')
+    expect(
+      Math.abs(centreY(await back.boundingBox()) - centreY(await close.boundingBox())),
+    ).toBeLessThan(4)
+
+    // Keyboard order in the head is Back, then Close.
+    await back.focus()
+    await page.keyboard.press('Tab')
+    await expect(close).toBeFocused()
+  })
+}
+
 test("a work item's plan anchor is readable and can be opened where it lives", async ({ page }) => {
   await installBackend(page)
   await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))

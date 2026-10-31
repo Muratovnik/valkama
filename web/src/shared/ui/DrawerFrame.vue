@@ -10,10 +10,10 @@ const head = ref<HTMLElement | null>(null)
 
 /**
  * The head gives its room back to the body once the body is read past it: the
- * title keeps one line and what stands under it steps out, while the actions
- * slot — a refusal, a question — and the tabs stay. Whole, the head of a long
- * title took a quarter of a desktop drawer and more of a phone's, for as long as
- * the drawer was read.
+ * title keeps one line and what stands under it steps out, while the controls
+ * — Back and Close — the actions slot, a refusal or a question, and the tabs
+ * stay. Whole, the head of a long title took a quarter of a desktop drawer and
+ * more of a phone's, for as long as the drawer was read.
  *
  * It condenses only past its own height and comes back only at the very top,
  * and the body is scrolled back by exactly the height the head gave up, so the
@@ -76,14 +76,17 @@ defineExpose({ scrollToTop })
           <slot name="meta" />
         </div>
       </div>
-      <button
-        class="drawer-frame-close"
-        type="button"
-        :aria-label="closeLabel"
-        @click="emit('close')"
-      >
-        <VIcon name="close" />
-      </button>
+      <div class="drawer-frame-controls">
+        <slot name="controls" />
+        <button
+          class="drawer-frame-close"
+          type="button"
+          :aria-label="closeLabel"
+          @click="emit('close')"
+        >
+          <VIcon name="close" />
+        </button>
+      </div>
       <div
         v-if="$slots.actions"
         class="drawer-frame-actions"
@@ -161,9 +164,17 @@ defineExpose({ scrollToTop })
   font-size: var(--font-size-dense);
 }
 
+/* The controls stay in the head's top row, beside the title, whether the head is
+   whole or condensed; their own top edge is the row's, as the close button's was. */
+.drawer-frame-controls {
+  display: flex;
+  grid-area: close;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
 .drawer-frame-close {
   display: grid;
-  grid-area: close;
   place-items: center;
   width: var(--size-control-target);
   height: var(--size-control-target);
