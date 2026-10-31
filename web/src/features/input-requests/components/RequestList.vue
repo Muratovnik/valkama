@@ -7,8 +7,14 @@
  * empty state when there is nothing at all. It used to stand alone on a row of
  * its own above that sentence, a button with nothing beside it to act on. A
  * host that already has a heading row puts the refresh there instead.
+ *
+ * Answering or declining a question removes the buttons that were focused, and
+ * focus used to fall to the page under the dialog. The list moves it on: to the
+ * next open question, or, with none left, to the line at the top that says so.
+ * A task's own section has no such line once read, so it keeps focus on the
+ * question just answered.
  */
-import { computed } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import RequestCard from '@/features/input-requests/components/RequestCard.vue'
@@ -53,11 +59,19 @@ const emptyLabel = computed(() => {
   if (props.partial) return t('requests.partialEmpty')
   return t(props.item ? 'requests.itemEmpty' : 'requests.empty')
 })
+/**
+ * The questions still waiting, which is what the rail counts. Answered ones stay
+ * on screen with their outcome, so counting the cards said 2 beside a rail's 1.
+ */
+const waiting = computed(
+  () => props.entries.filter((entry) => entry.request.status === 'pending').length,
+)
 /** What the refresh beside it would change: the first read, its failure, or the count. */
 const statusText = computed(() => {
   if (props.loading && !props.result) return t('requests.loading')
   if (props.failed) return t('requests.error')
-  if (props.entries.length) return t('requests.count', { count: props.entries.length })
+  if (waiting.value) return t('requests.count', { count: waiting.value })
+  if (props.entries.length) return t(props.item ? 'requests.itemEmpty' : 'requests.empty')
   return ''
 })
 // A host that carries its own refresh still needs the first read and a failure said.
@@ -70,8 +84,23 @@ const sources = computed(() =>
     key: JSON.stringify([source.project_id, source.space_ref]),
   })),
 )
+const cards: Record<string, { focus: () => void } | null> = {}
+const status = ref<HTMLElement | null>(null)
 function draftFor(entry: InputRequestEntry) {
   return props.drafts[requestIdentity(entry)] ?? {}
+}
+async function updated(entry: InputRequestEntry) {
+  emit('updated', entry)
+  if (entry.request.status === 'pending') return
+  await nextTick()
+  const key = requestIdentity(entry)
+  const at = props.entries.findIndex((candidate) => requestIdentity(candidate) === key)
+  const next = [...props.entries.slice(at + 1), ...props.entries.slice(0, Math.max(at, 0))].find(
+    (candidate) => candidate.request.status === 'pending',
+  )
+  if (next) cards[requestIdentity(next)]?.focus()
+  else if (status.value) status.value.focus()
+  else cards[key]?.focus()
 }
 </script>
 
@@ -93,8 +122,10 @@ function draftFor(entry: InputRequestEntry) {
       </p>
       <p
         v-else
+        ref="status"
         class="request-status"
         role="status"
+        tabindex="-1"
       >
         {{ statusText }}
       </p>
@@ -156,11 +187,13 @@ function draftFor(entry: InputRequestEntry) {
     <RequestCard
       v-for="entry in entries"
       :key="requestIdentity(entry)"
+      :ref="(card) => (cards[requestIdentity(entry)] = card as { focus: () => void } | null)"
       :entry="entry"
       :draft="draftFor(entry)"
       :show-task-link="!item"
+      :announce-pending="item"
       @update:draft="emit('draft', requestIdentity(entry), $event)"
-      @updated="emit('updated', $event)"
+      @updated="updated"
       @select="emit('select', $event)"
     />
   </div>
@@ -192,6 +225,17 @@ function draftFor(entry: InputRequestEntry) {
 
 .request-error {
   color: var(--color-danger);
+}
+
+/* Focus lands on the count line once the last question is answered. */
+.request-status:focus {
+  outline: none;
+}
+
+.request-status:focus-visible {
+  border-radius: var(--radius-control);
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: var(--space-half);
 }
 
 .request-note,

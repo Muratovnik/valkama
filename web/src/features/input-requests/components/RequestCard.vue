@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import RequestField from '@/features/input-requests/components/RequestField.vue'
 import { requestIdentity } from '@/features/input-requests/utils/requestIdentity.ts'
-import { validateAnswers } from '@/features/input-requests/utils/validateAnswers.ts'
+import { checkAnswers } from '@/features/input-requests/utils/validateAnswers.ts'
 
 import {
   answerInputRequest,
@@ -18,12 +18,23 @@ import type {
   InputRequestField,
 } from '@/shared/api/inputRequestModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
+import { isWebAuthor } from '@/shared/api/webAuthor.ts'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
 import VButton from '@/shared/ui/VButton.vue'
 
 const props = withDefaults(
-  defineProps<{ draft: InputAnswers; entry: InputRequestEntry; showTaskLink?: boolean }>(),
-  { showTaskLink: true },
+  defineProps<{
+    draft: InputAnswers
+    entry: InputRequestEntry
+    /**
+     * Say "waiting for your answer" on a pending request. A list that holds only
+     * those, in a dialog titled with the same words, leaves the line out rather
+     * than repeating its own title on every card.
+     */
+    announcePending?: boolean
+    showTaskLink?: boolean
+  }>(),
+  { showTaskLink: true, announcePending: true },
 )
 const emit = defineEmits<{
   'select': [target: PlanningTarget]
@@ -34,6 +45,10 @@ const { t, d } = useI18n()
 const local = ref(props.entry)
 const busy = ref(false)
 const error = ref('')
+/** The fields the last send refused, by id; each clears once it is edited. */
+const refused = ref<string[]>([])
+const card = ref<HTMLElement | null>(null)
+const fieldControls: Record<string, { focus: () => void } | null> = {}
 const requiresRefresh = ref(false)
 const now = ref(Date.now())
 let generation = 0
@@ -51,15 +66,21 @@ watch(
       generation++
       busy.value = false
       error.value = ''
+      refused.value = []
       requiresRefresh.value = false
     }
     local.value = entry
   },
 )
 const request = computed(() => local.value.request)
+/**
+ * Only a write the server refused or could not confirm, or a deadline that has
+ * passed here, needs the request read again. A field left empty does not: it
+ * once brought a second «Refresh» into a dialog that already had one.
+ */
+const canRefresh = computed(() => error.value !== '' || pastDue.value)
 const hasActions = computed(
-  () =>
-    request.value.status === 'pending' || error.value !== '' || pastDue.value || props.showTaskLink,
+  () => request.value.status === 'pending' || canRefresh.value || props.showTaskLink,
 )
 const pastDue = computed(() => {
   const expires = request.value.expires_at
@@ -85,19 +106,51 @@ const deadlineLabel = computed(() =>
     time: request.value.expires_at ? stamp(request.value.expires_at) : '',
   }),
 )
+/** Project and task; the space key is left out where the reference already begins with it. */
+const context = computed(() => {
+  const { project_id: project, space_ref: space } = props.entry.target
+  const reference = request.value.reference
+  return reference.startsWith(`${space.space_key}-`)
+    ? `${project} · ${reference}`
+    : `${project} · ${space.space_key} · ${reference}`
+})
+/**
+ * What happened, and who did it. This app signs its writes with one technical
+ * name, and the person reading is the one who wrote them, so that name reads
+ * as "you". Display only: the stored author is left as it is.
+ */
+const outcome = computed(() => {
+  const { status, answered_by: by } = request.value
+  if (status === 'pending') return props.announcePending ? t('requests.pending') : ''
+  if (isWebAuthor(by) && status !== 'expired')
+    return t(status === 'answered' ? 'requests.youAnswered' : 'requests.youDeclined')
+  const state = t(`requests.${status}`)
+  return by ? `${state} · ${t('requests.resolvedBy', { actor: by })}` : state
+})
+const author = computed(() =>
+  isWebAuthor(request.value.author) ? t('requests.you') : request.value.author,
+)
 const stamp = (value: string) => d(new Date(value), { dateStyle: 'medium', timeStyle: 'short' })
 
 function edit(field: InputRequestField, value: string | boolean | string[]) {
   emit('update:draft', { ...props.draft, [field.id]: value })
-  if (error.value === 'validation') error.value = ''
+  refused.value = refused.value.filter((id) => id !== field.id)
+}
+function fieldError(field: InputRequestField) {
+  return refused.value.includes(field.id) ? t(`requests.missing.${field.type}`) : ''
 }
 async function resolve(action: 'answer' | 'decline') {
   if (busy.value || !writable.value || requiresRefresh.value) return
-  const values = action === 'answer' ? validateAnswers(request.value.fields, props.draft) : {}
-  if (!values) {
-    error.value = 'validation'
+  const checked = action === 'answer' ? checkAnswers(request.value.fields, props.draft) : null
+  refused.value = checked?.refused ?? []
+  const first = refused.value[0]
+  if (first !== undefined) {
+    // Taken to the first field to fix, the reader hears its message with it.
+    await nextTick()
+    fieldControls[first]?.focus()
     return
   }
+  const values = checked?.values ?? {}
   const entry = local.value
   const identity = requestIdentity(entry)
   const current = ++generation
@@ -150,6 +203,10 @@ async function refresh() {
     if (current === generation) busy.value = false
   }
 }
+/** Moves focus to this request's heading, which names it. */
+function focus() {
+  card.value?.querySelector<HTMLElement>('.request-title')?.focus()
+}
 function display(field: InputRequestField): string {
   const value = request.value.answers?.[field.id]
   if (typeof value === 'boolean') return t(value ? 'requests.yes' : 'requests.no')
@@ -159,25 +216,26 @@ function display(field: InputRequestField): string {
   if (typeof value !== 'string') return t('requests.noAnswer')
   return field.type === 'choice' ? label(value) : value
 }
+defineExpose({ focus })
 </script>
 
 <template>
   <article
+    ref="card"
     class="request-card"
     :aria-busy="busyMark"
   >
     <header class="request-header">
-      <p class="request-context">
-        {{ entry.target.project_id }} · {{ entry.target.space_ref.space_key }} ·
-        {{ request.reference }}
-      </p>
+      <p class="request-context">{{ context }}</p>
       <SectionHeading
+        class="request-title"
         as="h3"
         level="panel"
+        tabindex="-1"
         >{{ request.title }}</SectionHeading
       >
       <p class="request-meta">
-        {{ t('requests.author', { actor: request.author }) }} · {{ stamp(request.created_at) }}
+        {{ t('requests.author', { actor: author }) }} · {{ stamp(request.created_at) }}
       </p>
       <p
         v-if="request.execution_id"
@@ -194,13 +252,12 @@ function display(field: InputRequestField): string {
     </header>
     <p class="request-prompt">{{ request.prompt }}</p>
     <p
+      v-if="outcome"
       class="request-state"
       role="status"
     >
-      {{ t(`requests.${request.status}`)
-      }}<template v-if="request.answered_by">
-        · {{ t('requests.resolvedBy', { actor: request.answered_by }) }}</template
-      ><template v-if="request.resolved_at"> · {{ stamp(request.resolved_at) }}</template>
+      {{ outcome
+      }}<template v-if="request.resolved_at"> · {{ stamp(request.resolved_at) }}</template>
     </p>
     <p
       v-if="request.expires_at && request.status === 'pending'"
@@ -227,9 +284,11 @@ function display(field: InputRequestField): string {
       <RequestField
         v-for="field in request.fields"
         :key="field.id"
+        :ref="(control) => (fieldControls[field.id] = control as { focus: () => void } | null)"
         :field="field"
         :model-value="draft[field.id]"
         :disabled="!writable || busy"
+        :error="fieldError(field)"
         @update:model-value="edit(field, $event)"
       />
     </div>
@@ -270,10 +329,10 @@ function display(field: InputRequestField): string {
         >{{ t('requests.decline') }}</VButton
       >
       <VButton
-        v-if="error || pastDue"
+        v-if="canRefresh"
         :disabled="busy"
         @click="refresh"
-        >{{ t('requests.refresh') }}</VButton
+        >{{ t('requests.checkStatus') }}</VButton
       >
       <VButton
         v-if="showTaskLink"
@@ -297,6 +356,18 @@ function display(field: InputRequestField): string {
 .request-header {
   display: grid;
   gap: var(--space-1);
+}
+
+/* Focus arrives here from the request answered before it. The ring follows the
+   platform's keyboard rule rather than appearing on every pointer answer. */
+.request-title:focus {
+  outline: none;
+}
+
+.request-title:focus-visible {
+  border-radius: var(--radius-control);
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: var(--space-half);
 }
 
 .request-context,

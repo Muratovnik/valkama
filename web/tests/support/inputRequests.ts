@@ -48,3 +48,28 @@ export function requestList(items = [requestEntry()]): InputRequestList {
     has_more: false,
   }
 }
+
+/** Two pending questions in one source, the first asked later than the second. */
+export function twoQuestions(): [InputRequestEntry, InputRequestEntry] {
+  const newer = requestEntry()
+  newer.request = {
+    ...newer.request,
+    request_id: '55555555-5555-4555-8555-555555555555',
+    title: 'Newer question',
+    created_at: '2026-10-24T11:00:00Z',
+  }
+  const older = requestEntry()
+  older.request = { ...older.request, title: 'Older question' }
+  return [newer, older]
+}
+export const answered = (entry: InputRequestEntry, by = 'user'): InputRequestEntry => ({
+  ...entry,
+  request: {
+    ...entry.request,
+    status: 'answered',
+    answers: { proceed: true },
+    answered_by: by,
+    resolved_at: '2026-10-24T12:00:00Z',
+    revision: 2,
+  },
+})

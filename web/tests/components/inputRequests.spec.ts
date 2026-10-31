@@ -15,11 +15,17 @@ import {
   InputRequestError,
 } from '@/shared/api/inputRequestApi.ts'
 import type { InputRequestList } from '@/shared/api/inputRequestModel.ts'
-import { inputRequestMessages } from '@/shared/i18n/inputRequestMessages.ts'
+import { messages } from '@/shared/i18n/index.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 
-import { requestEntry, requestList } from '../support/inputRequests.ts'
+import {
+  answered,
+  requestEntry,
+  requestList,
+  twoQuestions,
+} from '../support/inputRequests.ts'
 import { present } from '../support/present.ts'
+import { answer, checkedLabels, radioLabel, radios } from '../support/radioAnswers.ts'
 
 vi.mock('@/shared/api/inputRequestApi.ts', async (original) => ({
   ...(await original<typeof import('@/shared/api/inputRequestApi.ts')>()),
@@ -28,19 +34,20 @@ vi.mock('@/shared/api/inputRequestApi.ts', async (original) => ({
   fetchInputRequest: vi.fn(),
   fetchInputRequests: vi.fn(),
 }))
-const wrappers: ReturnType<typeof mount>[] = []
-const plugins = () => [createI18n({ legacy: false, locale: 'en', messages: inputRequestMessages })]
-const button = (wrapper: ReturnType<typeof mount>, name: string) =>
-  present(
-    wrapper.findAll('button').find((control) => control.text() === name),
-    name,
-  )
-const choice = (wrapper: ReturnType<typeof mount>, index = 0) =>
+type Wrapper = ReturnType<typeof mount>
+const wrappers: Wrapper[] = []
+const plugins = () => [createI18n({ legacy: false, locale: 'en', messages })]
+const buttons = (wrapper: Wrapper, name: string) =>
+  wrapper.findAll('button').filter((control) => control.text() === name)
+const button = (wrapper: Wrapper, name: string) => present(buttons(wrapper, name)[0], name)
+const choice = (wrapper: Wrapper, index = 0) =>
   present(wrapper.findAllComponents(ChoiceSelect)[index], `choice ${index + 1}`)
-const updateChoice = async (wrapper: ReturnType<typeof mount>, value: string, index = 0) => {
+const updateChoice = async (wrapper: Wrapper, value: string, index = 0) => {
   choice(wrapper, index).vm.$emit('update:modelValue', value)
   await flushPromises()
 }
+const describedMessage = (wrapper: Wrapper, control: { attributes: (name: string) => unknown }) =>
+  wrapper.get(`#${String(present(control.attributes('aria-describedby'), 'aria-describedby'))}`)
 function hub() {
   const wrapper = mount(InputRequestsHub, {
     props: { open: true },
@@ -59,6 +66,7 @@ function card(entry = requestEntry()) {
         void wrapper.setProps({ draft })
       },
     },
+    attachTo: document.body,
     global: { plugins: plugins() },
   })
   wrappers.push(wrapper)
@@ -84,11 +92,15 @@ describe('human input requests', () => {
     })
     wrappers.push(wrapper)
     await flushPromises()
-    expect(wrapper.findAll('button').some((control) => control.text() === 'Open task')).toBe(false)
+    expect(buttons(wrapper, 'Open task')).toHaveLength(0)
     const inbox = hub()
     await flushPromises()
     expect(button(inbox, 'Open task').exists()).toBe(true)
   })
+
+  // Yes/No is one click on a visible radio, with nothing chosen at first and no
+  // placeholder among the answers: the dropdown it replaced listed "Choose an
+  // answer" as a checked option, so one bit cost three clicks.
   it('requires an explicit boolean and sends false as an answer, without resuming execution', async () => {
     const entry = requestEntry()
     vi.mocked(answerInputRequest).mockResolvedValue({
@@ -96,23 +108,13 @@ describe('human input requests', () => {
       request: { ...entry.request, status: 'answered', answers: { proceed: false }, revision: 2 },
     })
     const wrapper = card(entry)
-    expect(choice(wrapper).props('options')).toEqual([
-      { value: '', label: 'Choose an answer' },
-      { value: 'true', label: 'Yes' },
-      { value: 'false', label: 'No' },
-    ])
-    expect(choice(wrapper).props('modelValue')).toBe('')
+    expect(wrapper.findComponent(ChoiceSelect).exists()).toBe(false)
+    expect(radios(wrapper).map((input) => radioLabel(input))).toEqual(['Yes', 'No'])
+    expect(checkedLabels(wrapper)).toEqual([])
     await button(wrapper, 'Send answer').trigger('click')
     expect(answerInputRequest).not.toHaveBeenCalled()
-    expect(wrapper.get('[role="alert"]').text()).toContain('required field')
-    await updateChoice(wrapper, 'false')
-    expect(choice(wrapper).props('modelValue')).toBe('false')
-    await updateChoice(wrapper, '')
-    expect(choice(wrapper).props('modelValue')).toBe('')
-    await button(wrapper, 'Send answer').trigger('click')
-    expect(answerInputRequest).not.toHaveBeenCalled()
-    expect(wrapper.get('[role="alert"]').text()).toContain('required field')
-    await updateChoice(wrapper, 'false')
+    await answer(wrapper, 'No')
+    expect(checkedLabels(wrapper)).toEqual(['No'])
     await button(wrapper, 'Send answer').trigger('click')
     await flushPromises()
     expect(answerInputRequest).toHaveBeenCalledExactlyOnceWith(entry, { proceed: false })
@@ -121,21 +123,76 @@ describe('human input requests', () => {
     expect(declineInputRequest).not.toHaveBeenCalled()
   })
 
+  // The refusal used to be one sentence at the foot of the card, tied to no
+  // field, and it brought a second Refresh into a dialog that had one.
+  it('names a refused field at the field itself and takes focus there', async () => {
+    const entry = requestEntry()
+    entry.request.fields = [
+      { id: 'proceed', label: 'Proceed', type: 'boolean', required: true, options: [] },
+      { id: 'note', label: 'Reason', type: 'text', required: true, options: [] },
+    ]
+    const wrapper = card(entry)
+    const group = wrapper.get('[role="radiogroup"]')
+    const note = wrapper.get('textarea')
+    expect(group.attributes('aria-invalid')).toBeUndefined()
+    expect(note.attributes('aria-invalid')).toBeUndefined()
+    await button(wrapper, 'Send answer').trigger('click')
+    await flushPromises()
+    expect(answerInputRequest).not.toHaveBeenCalled()
+    expect(group.attributes('aria-invalid')).toBe('true')
+    expect(describedMessage(wrapper, group).text()).toBe('Choose Yes or No.')
+    expect(note.attributes('aria-invalid')).toBe('true')
+    expect(describedMessage(wrapper, note).text()).toBe('Write an answer.')
+    expect(document.activeElement).toBe(radios(wrapper)[0]?.element)
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(buttons(wrapper, 'Check status')).toHaveLength(0)
+    // Fixing one field clears its own message and leaves the other standing.
+    await answer(wrapper, 'Yes')
+    expect(group.attributes('aria-invalid')).toBeUndefined()
+    expect(group.attributes('aria-describedby')).toBeUndefined()
+    expect(note.attributes('aria-invalid')).toBe('true')
+  })
+
+  it('keeps a long choice in a list whose caption is not one of its answers', async () => {
+    const entry = requestEntry()
+    const ids = ['one', 'two', 'three', 'four', 'five']
+    entry.request.fields = [
+      {
+        id: 'module',
+        label: 'Module',
+        type: 'choice',
+        required: true,
+        options: ids.map((id) => ({ id, label: id })),
+      },
+    ]
+    const wrapper = card(entry)
+    expect(wrapper.find('[role="radiogroup"]').exists()).toBe(false)
+    const options = choice(wrapper).props('options') as { value: string }[]
+    expect(options.map((option) => option.value)).toEqual(ids)
+    expect(choice(wrapper).props('placeholder')).toBe('Choose an answer')
+    await button(wrapper, 'Send answer').trigger('click')
+    await flushPromises()
+    expect(choice(wrapper).props('invalid')).toBe(true)
+    expect(choice(wrapper).props('describedby')).toBeTruthy()
+    await updateChoice(wrapper, 'five')
+    expect(choice(wrapper).props('invalid')).toBe(false)
+  })
+
   it.each([409, 503])(
     'keeps drafts on refused or unknown writes (%s) until explicit refresh',
     async (status) => {
       vi.mocked(answerInputRequest).mockRejectedValue(new InputRequestError('rejected', status))
       vi.mocked(fetchInputRequest).mockResolvedValue(requestEntry())
       const wrapper = card()
-      await updateChoice(wrapper, 'false')
+      await answer(wrapper, 'No')
       await button(wrapper, 'Send answer').trigger('click')
       await flushPromises()
-      expect(choice(wrapper).props('modelValue')).toBe('false')
+      expect(checkedLabels(wrapper)).toEqual(['No'])
       expect(button(wrapper, 'Send answer').attributes('disabled')).toBeDefined()
       expect(wrapper.get('[role="alert"]').text()).toContain('draft is kept')
-      await button(wrapper, 'Refresh').trigger('click')
+      await button(wrapper, 'Check status').trigger('click')
       await flushPromises()
-      expect(choice(wrapper).props('modelValue')).toBe('false')
+      expect(checkedLabels(wrapper)).toEqual(['No'])
       expect(button(wrapper, 'Send answer').attributes('disabled')).toBeUndefined()
     },
   )
@@ -143,15 +200,15 @@ describe('human input requests', () => {
   it('keeps unsent drafts across polling and closing and reopening the hub', async () => {
     const wrapper = hub()
     await flushPromises()
-    await updateChoice(wrapper, 'false')
-    expect(choice(wrapper).props('modelValue')).toBe('false')
+    await answer(wrapper, 'No')
+    expect(checkedLabels(wrapper)).toEqual(['No'])
     await vi.advanceTimersByTimeAsync(30_000)
     await flushPromises()
-    expect(choice(wrapper).props('modelValue')).toBe('false')
+    expect(checkedLabels(wrapper)).toEqual(['No'])
     await wrapper.setProps({ open: false })
     await wrapper.setProps({ open: true })
     await flushPromises()
-    expect(choice(wrapper).props('modelValue')).toBe('false')
+    expect(checkedLabels(wrapper)).toEqual(['No'])
     expect(answerInputRequest).not.toHaveBeenCalled()
   })
 
@@ -160,7 +217,7 @@ describe('human input requests', () => {
     if (state === 'readonly') entry.target.writable = false
     else entry.request.expires_at = '2020-01-01T00:00:00Z'
     const wrapper = card(entry)
-    expect(choice(wrapper).props('disabled')).toBe(true)
+    expect(wrapper.get('fieldset').attributes('disabled')).toBeDefined()
     await button(wrapper, 'Send answer').trigger('click')
     await button(wrapper, 'Decline').trigger('click')
     expect(answerInputRequest).not.toHaveBeenCalled()
@@ -220,9 +277,9 @@ describe('human input requests', () => {
     vi.mocked(fetchInputRequests).mockResolvedValue(requestList([requestEntry(), second]))
     const wrapper = hub()
     await flushPromises()
-    await updateChoice(wrapper, 'false')
-    expect(choice(wrapper, 0).props('modelValue')).toBe('false')
-    expect(choice(wrapper, 1).props('modelValue')).toBe('')
+    await answer(wrapper, 'No')
+    expect(checkedLabels(wrapper, 0)).toEqual(['No'])
+    expect(checkedLabels(wrapper, 1)).toEqual([])
   })
 
   it('declines without inventing an answer and shows the confirmed result', async () => {
@@ -237,7 +294,7 @@ describe('human input requests', () => {
     expect(declineInputRequest).toHaveBeenCalledExactlyOnceWith(entry)
     expect(answerInputRequest).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('Declined')
-    expect(wrapper.findComponent(ChoiceSelect).exists()).toBe(false)
+    expect(wrapper.find('input').exists()).toBe(false)
   })
 
   it('prevents overlapping polls and aborts outstanding reads on unmount', async () => {
@@ -273,18 +330,72 @@ describe('human input requests', () => {
     })
     const wrapper = card(entry)
     await wrapper.get('textarea').setValue('A useful reason')
-    expect(choice(wrapper).props('options')).toEqual([
-      { value: '', label: 'Choose an answer' },
-      { value: 'alpha', label: 'Alpha' },
-      { value: 'beta', label: 'Beta' },
-    ])
-    await updateChoice(wrapper, 'beta')
-    expect(choice(wrapper).props('modelValue')).toBe('beta')
-    await wrapper.get('input[value="alpha"]').setValue(true)
+    await answer(wrapper, 'Beta')
+    expect(checkedLabels(wrapper)).toEqual(['Beta'])
+    await wrapper.get('input[type="checkbox"][value="alpha"]').setValue(true)
     await button(wrapper, 'Send answer').trigger('click')
     await flushPromises()
     expect(answerInputRequest).toHaveBeenCalledExactlyOnceWith(entry, answers)
     expect(wrapper.get('dl').text()).toContain('A useful reason')
     expect(wrapper.get('dl').text()).toContain('Beta')
+  })
+
+  // Answering takes away the buttons that held focus. Focus used to fall to the
+  // page under the modal, the answered card moved to the end of the list, and
+  // the header still counted it while the rail did not.
+  it('keeps an answered question in place and moves focus and the count on', async () => {
+    const [newer, older] = twoQuestions()
+    vi.mocked(fetchInputRequests)
+      .mockResolvedValueOnce(requestList([newer, older]))
+      .mockResolvedValue(requestList([older]))
+    vi.mocked(answerInputRequest).mockResolvedValueOnce(answered(newer))
+    const wrapper = hub()
+    await flushPromises()
+    const titles = () => wrapper.findAll('.request-card h3').map((heading) => heading.text())
+    expect(titles()).toEqual(['Newer question', 'Older question'])
+    expect(wrapper.get('.request-status').text()).toBe('Waiting for an answer: 2')
+    await answer(wrapper, 'Yes', 0)
+    await button(wrapper, 'Send answer').trigger('click')
+    await flushPromises()
+    expect(titles()).toEqual(['Newer question', 'Older question'])
+    expect(wrapper.emitted('count')?.at(-1)).toEqual([1])
+    expect(wrapper.get('.request-status').text()).toBe('Waiting for an answer: 1')
+    expect(document.activeElement?.textContent).toBe('Older question')
+    expect(buttons(wrapper, 'Refresh')).toHaveLength(1)
+
+    vi.mocked(answerInputRequest).mockResolvedValueOnce(answered(older))
+    vi.mocked(fetchInputRequests).mockResolvedValue(requestList([]))
+    await answer(wrapper, 'Yes', 0)
+    await button(wrapper, 'Send answer').trigger('click')
+    await flushPromises()
+    expect(titles()).toEqual(['Newer question', 'Older question'])
+    expect(wrapper.emitted('count')?.at(-1)).toEqual([0])
+    // With nothing left to answer, focus stays in the dialog, on the line that says so.
+    expect(wrapper.get('.request-status').text()).toBe('No questions need your answer.')
+    expect(document.activeElement).toBe(wrapper.get('.request-status').element)
+  })
+
+  it('names the reader as the one who answered, without repeating the space key', () => {
+    const own = card(answered(requestEntry()))
+    expect(own.get('.request-context').text()).toBe('requests-project · TASK-7')
+    expect(own.get('.request-state').text()).toMatch(/^You answered · /)
+    expect(own.text()).not.toContain('user')
+    const byAgent = card(answered(requestEntry(), 'codex-session-1'))
+    expect(byAgent.get('.request-state').text()).toMatch(
+      /^Answer received · Resolved by codex-session-1 · /,
+    )
+  })
+
+  it('says "waiting for your answer" in a task, not under a dialog titled with it', async () => {
+    const inbox = hub()
+    await flushPromises()
+    expect(inbox.find('.request-state').exists()).toBe(false)
+    const item = mount(ItemInputRequests, {
+      props: { target: requestEntry().target },
+      global: { plugins: plugins() },
+    })
+    wrappers.push(item)
+    await flushPromises()
+    expect(item.get('.request-state').text()).toBe('Waiting for your answer')
   })
 })

@@ -25,8 +25,17 @@ export function useInputRequests(target: () => PlanningTarget | undefined) {
       if ((combined.get(key)?.request.revision ?? -1) <= entry.request.revision)
         combined.set(key, entry)
     }
+    // Open questions first, newest first, as the server lists them. A question
+    // answered here keeps its place among them: the read after the answer no
+    // longer returns it, and it used to come back from the confirmed copy at the
+    // end of the list, out from under the reader who had just answered it.
+    const open = (entry: InputRequestEntry) =>
+      entry.request.status === 'pending' || requestIdentity(entry) in resolved.value
     return [...combined.values()].sort(
-      (a, b) => Number(b.request.status === 'pending') - Number(a.request.status === 'pending'),
+      (a, b) =>
+        Number(open(b)) - Number(open(a)) ||
+        b.request.created_at.localeCompare(a.request.created_at) ||
+        b.request.request_id.localeCompare(a.request.request_id),
     )
   })
   const count = computed(() =>
