@@ -30,6 +30,8 @@ from server import housekeeping, mcp_surface, store
 from server.ops import tray
 from server.planning import api as planning_api
 from server.planning import service as planning_service
+from server.planning import tools as planning_tools
+from tests.planning_fixtures import bulk_items
 
 SPACE_NAME = "Wire Surface"
 SPACE_KEY = "WIR"
@@ -1130,6 +1132,106 @@ class CallIdentityTests(McpSurfaceTestCase):
             ("claude-code", "2.1.304", "confirmed"),
             (row["client"], row["client_version"], row["identity_state"]),
         )
+
+
+class ListPagingTests(McpSurfaceTestCase):
+    """A space larger than one page, read through the JSON-RPC loop an agent talks to."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        bulk_items(self.conn, SPACE_KEY, planning_service.MAX_LIST_PAGE + 1)
+
+    def read(self, name: str, msg_id: int = 7, **arguments: object) -> dict:
+        [answer] = self.converse(
+            {
+                "jsonrpc": "2.0",
+                "id": msg_id,
+                "method": "tools/call",
+                "params": params(name=name, arguments=arguments),
+            }
+        )
+        return answer["result"]
+
+    def page(self, name: str, **arguments: object) -> dict:
+        result = self.read(name, **arguments)
+        self.assertFalse(result["isError"], result)
+        return json.loads(result["content"][0]["text"])
+
+    def every_reference(self, name: str, limit: int, **arguments: object) -> list[str]:
+        seen: list[str] = []
+        offset: int | None = 0
+        while offset is not None:
+            answer = self.page(name, limit=limit, offset=offset, **arguments)
+            seen.extend(row["reference"] for row in answer["work_items"])
+            offset = answer["next_offset"]
+        return seen
+
+    def stored_references(self) -> set[str]:
+        return {
+            f"{SPACE_KEY}-{row[0]}" for row in self.conn.execute("SELECT number FROM work_items")
+        }
+
+    def test_a_full_page_says_it_was_cut_and_where_the_rest_starts(self) -> None:
+        cap = planning_service.MAX_LIST_PAGE
+        first = self.page("list_work_items", space=SPACE_KEY, limit=cap)
+        self.assertEqual(
+            (cap, True, cap), (len(first["work_items"]), first["truncated"], first["next_offset"])
+        )
+        rest = self.page("list_work_items", space=SPACE_KEY, limit=cap, offset=cap)
+        self.assertEqual(
+            (1, False, None), (len(rest["work_items"]), rest["truncated"], rest["next_offset"])
+        )
+        # A limit above the page size is answered with one page, and says so.
+        larger = self.page("list_work_items", space=SPACE_KEY, limit=cap * 5)
+        self.assertEqual(
+            (cap, True, cap),
+            (len(larger["work_items"]), larger["truncated"], larger["next_offset"]),
+        )
+
+    def test_a_complete_page_is_not_reported_cut(self) -> None:
+        self.conn.execute("DELETE FROM work_items WHERE number = 1")
+        self.conn.commit()
+        cap = planning_service.MAX_LIST_PAGE
+        whole = self.page("list_work_items", space=SPACE_KEY, limit=cap)
+        self.assertEqual(
+            (cap, False, None), (len(whole["work_items"]), whole["truncated"], whole["next_offset"])
+        )
+
+    def test_paging_a_list_reads_every_item_exactly_once(self) -> None:
+        for limit in (planning_service.MAX_LIST_PAGE, 333):
+            with self.subTest(limit=limit):
+                seen = self.every_reference("list_work_items", limit, space=SPACE_KEY)
+                self.assertEqual(len(seen), len(set(seen)))
+                self.assertEqual(self.stored_references(), set(seen))
+
+    def test_paging_a_search_reads_every_match_exactly_once(self) -> None:
+        cap = planning_service.MAX_SEARCH_PAGE
+        first = self.page("search_work_items", query="Bulk", limit=cap)
+        self.assertEqual(
+            (cap, True, cap), (len(first["work_items"]), first["truncated"], first["next_offset"])
+        )
+        seen = self.every_reference("search_work_items", cap, query="Bulk")
+        self.assertEqual(len(seen), len(set(seen)))
+        self.assertEqual(self.stored_references(), set(seen))
+
+    def test_an_offset_that_is_not_a_count_is_refused_as_invalid(self) -> None:
+        for name, arguments in (
+            ("list_work_items", {"space": SPACE_KEY}),
+            ("search_work_items", {"query": "Bulk"}),
+        ):
+            for offset in (-1, "two", 1.5, True):
+                with self.subTest(tool=name, offset=offset):
+                    result = self.read(name, offset=offset, **arguments)
+                    self.assertTrue(result["isError"])
+                    error = result["structuredContent"]["error"]
+                    self.assertEqual("invalid_request", error["code"])
+                    self.assertIn("offset", error["message"])
+
+    def test_a_call_without_offset_answers_the_first_compact_page(self) -> None:
+        answer = self.page("list_work_items", space=SPACE_KEY)
+        self.assertEqual(planning_tools.COMPACT_LIMIT, len(answer["work_items"]))
+        self.assertTrue(answer["truncated"])
+        self.assertEqual(planning_tools.COMPACT_LIMIT, answer["next_offset"])
 
 
 if __name__ == "__main__":

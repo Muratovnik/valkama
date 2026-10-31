@@ -17,7 +17,7 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Callable, Mapping
 
-from . import acknowledgements, api, model, read_model
+from . import acknowledgements, api, model, read_model, service
 
 READ_ONLY = {"readOnlyHint": True, "idempotentHint": True, "openWorldHint": False}
 WRITES = {"readOnlyHint": False, "destructiveHint": False, "openWorldHint": False}
@@ -59,9 +59,21 @@ COMPACT_LIMIT = 50
 _VERBOSE_ROWS = {
     "type": "boolean",
     "description": "Answer with the full items instead of one compact row per item."
-    " Without it the answer is capped at limit rows (default"
-    f" {COMPACT_LIMIT}) and says whether it was cut.",
+    " Without it the answer holds at most limit rows (default"
+    f" {COMPACT_LIMIT}).",
 }
+_OFFSET = {
+    "type": "integer",
+    "minimum": 0,
+    "description": "How many items to skip, for the next page: pass the next_offset"
+    " of the previous answer with the same filters.",
+}
+#: What every list and search says about paging, so an agent knows to keep going.
+_PAGING = (
+    " An answer holds one page: truncated is true when more items match, and"
+    " next_offset is the offset to pass for the next page (null on the last one)."
+    " Page until next_offset is null to read every match."
+)
 
 
 def _tool(
@@ -149,7 +161,8 @@ TOOLS = [
         "list_work_items",
         "List work items",
         "Items in state order, filtered by state, category, kind or holder. One compact"
-        " row per item: reference, title, kind, state, priority, parent and holder.",
+        " row per item: reference, title, kind, state, priority, parent and holder."
+        f" A page holds at most {service.MAX_LIST_PAGE} items." + _PAGING,
         READ_ONLY,
         {
             "space": _SPACE,
@@ -158,6 +171,7 @@ TOOLS = [
             "kind": {"type": "string", "enum": sorted(model.WORK_ITEM_KINDS)},
             "owner": _STR,
             "limit": _INT,
+            "offset": _OFFSET,
             "verbose": _VERBOSE_ROWS,
         },
     ),
@@ -165,9 +179,16 @@ TOOLS = [
         "search_work_items",
         "Search work items",
         "Match a phrase against titles, descriptions and closing summaries. One compact"
-        " row per item, with the matching comment line when that is what matched.",
+        " row per item, with the matching comment line when that is what matched."
+        f" A page holds at most {service.MAX_SEARCH_PAGE} items." + _PAGING,
         READ_ONLY,
-        {"query": _STR, "space": _SPACE, "limit": _INT, "verbose": _VERBOSE_ROWS},
+        {
+            "query": _STR,
+            "space": _SPACE,
+            "limit": _INT,
+            "offset": _OFFSET,
+            "verbose": _VERBOSE_ROWS,
+        },
         ["query"],
     ),
     _tool(
@@ -561,7 +582,7 @@ def _search(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object
     """`query` reads better than `q` in a tool call; the boundary keeps `q`."""
 
     parameters = {"q": [str(arguments["query"])]}
-    for name in ("space", "limit"):
+    for name in ("space", "limit", "offset"):
         if arguments.get(name) is not None:
             parameters[name] = [str(arguments[name])]
     answer = api.handle_get(conn, "/api/planning/search", parameters)
@@ -597,9 +618,9 @@ def _listing(
 
     The boundary answers every item with its checklist and labels, which is what
     a screen draws from and what floods a model that only wanted to find one
-    reference. `verbose` returns that answer untouched. Otherwise the call is
-    bounded: one row more than the limit is read, so the answer can say it was
-    cut instead of passing for the whole.
+    reference. `verbose` returns that answer untouched. Otherwise the default
+    limit is the compact one; either way the boundary's page says whether it was
+    cut and where the next page starts.
     """
 
     def run(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
@@ -607,29 +628,20 @@ def _listing(
         rest = {name: value for name, value in arguments.items() if name != "verbose"}
         if verbose:
             return read(conn, rest)
-        raw = rest.get("limit")
-        try:
-            limit = COMPACT_LIMIT if raw is None else max(1, int(str(raw), 10))
-        except ValueError as error:
-            raise api.PlanningHttpError(
-                400, "invalid_request", "limit must be an integer"
-            ) from error
-        answer = read(conn, {**rest, "limit": limit + 1})
+        if rest.get("limit") is None:
+            rest["limit"] = COMPACT_LIMIT
+        answer = read(conn, rest)
         if not isinstance(answer, dict):  # pragma: no cover - both reads answer a mapping
             return answer
-        items = answer["work_items"]
         return {
             **answer,
-            "work_items": [_compact_row(conn, item) for item in items[:limit]],
-            "truncated": len(items) > limit,
+            "work_items": [_compact_row(conn, item) for item in answer["work_items"]],
         }
 
     return run
 
 
 def _space(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
-    from . import service
-
     return service.get_planning_space(conn, str(arguments["space"]))
 
 
@@ -640,7 +652,16 @@ OPS: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], object]] = {
     "create_work_item": _acknowledged("/api/planning/work-items", acknowledgements.created),
     "get_work_item": _get("/api/planning/work-item", "id", unwrap="work_item"),
     "list_work_items": _listing(
-        _get("/api/planning/work-items", "space", "state", "category", "kind", "owner", "limit")
+        _get(
+            "/api/planning/work-items",
+            "space",
+            "state",
+            "category",
+            "kind",
+            "owner",
+            "limit",
+            "offset",
+        )
     ),
     "search_work_items": _listing(_search),
     "update_work_item": _acknowledged("/api/planning/work-item/update", acknowledgements.updated),

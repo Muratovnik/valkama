@@ -180,10 +180,25 @@ def _activity(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> 
     }
 
 
+def _offset(parameters: Mapping[str, list[str]]) -> int:
+    """Where a page starts. Refused as a domain error, so both surfaces carry its code."""
+
+    value = _first(parameters, "offset")
+    if value is None:
+        return 0
+    try:
+        offset = int(value, 10)
+    except ValueError:
+        offset = -1
+    if offset < 0:
+        raise model.PlanningError("offset must be a non-negative integer")
+    return offset
+
+
 def _work_items(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
     return {
         "interface_version": PLANNING_API_INTERFACE,
-        "work_items": service.list_work_items(
+        **service.list_work_items_page(
             conn,
             space=_first(parameters, "space"),
             state_key=_first(parameters, "state"),
@@ -191,6 +206,7 @@ def _work_items(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -
             kind=_first(parameters, "kind"),
             owner=_first(parameters, "owner"),
             limit=_int(_first(parameters, "limit"), "limit", 200),
+            offset=_offset(parameters),
         ),
     }
 
@@ -205,11 +221,12 @@ def _work_item(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) ->
 def _search(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
     return {
         "interface_version": PLANNING_API_INTERFACE,
-        "work_items": service.search_work_items(
+        **service.search_work_items_page(
             conn,
             _required(parameters, "q"),
             space=_first(parameters, "space"),
             limit=_int(_first(parameters, "limit"), "limit", 50),
+            offset=_offset(parameters),
         ),
     }
 

@@ -572,7 +572,8 @@ class PlanningCompactReadTests(unittest.TestCase):
         direct = planning_api.handle_get(self.conn, "/api/planning/work-items", {"space": ["QA"]})
         assert direct is not None
         self.assertEqual(direct[1], answer)
-        self.assertNotIn("truncated", answer)
+        # The boundary itself now says whether its page was the whole answer.
+        self.assertEqual((False, None), (answer["truncated"], answer["next_offset"]))
         found = self.call("search_work_items", query="Umbrella", verbose=True)
         searched = planning_api.handle_get(self.conn, "/api/planning/search", {"q": ["Umbrella"]})
         assert searched is not None

@@ -25,6 +25,13 @@ _NOW = "strftime('%Y-%m-%dT%H:%M:%SZ','now')"
 #: older transaction would otherwise be offered the same item forever.
 _READY_CLAIM_ATTEMPTS = 8
 
+#: The most items one page of a list carries. A larger limit is answered with
+#: this many and the offset of the next page, never with a silent cut.
+MAX_LIST_PAGE = 1000
+
+#: The same bound for one page of a search.
+MAX_SEARCH_PAGE = 200
+
 
 # -- reading -----------------------------------------------------------------
 
@@ -78,8 +85,13 @@ def list_work_items(
     kind: str | None = None,
     owner: str | None = None,
     limit: int | None = 200,
+    offset: int = 0,
 ) -> list[dict]:
-    """A bounded search, or the complete first-party model when limit is None."""
+    """Exactly `limit` items from `offset` on, or every one of them when limit is None.
+
+    Nothing here caps the count: a caller that wants a bounded page with an
+    honest account of what it left out asks `list_work_items_page`.
+    """
 
     clauses: list[str] = []
     parameters: list[object] = []
@@ -101,22 +113,56 @@ def list_work_items(
     query = with_clauses(
         "SELECT i.* FROM work_items i JOIN workflow_states s ON s.state_id = i.state_id", clauses
     )
-    query += " ORDER BY s.position, i.position, i.number"
-    if limit is not None:
-        query += " LIMIT ?"
-        parameters.append(max(1, min(int(limit), 1000)))
+    # The work item id closes the order: two spaces can tie on every other key,
+    # and an order with ties lets one page repeat an item the next page skips.
+    query += " ORDER BY s.position, i.position, i.number, i.work_item_id"
+    query += " LIMIT ? OFFSET ?"
+    parameters.extend([-1 if limit is None else max(1, int(limit)), _offset(offset)])
     rows = conn.execute(query, parameters).fetchall()
     return [read_model.present(conn, row) for row in rows]
 
 
+def list_work_items_page(
+    conn: sqlite3.Connection,
+    *,
+    space: str | None = None,
+    state_key: str | None = None,
+    category: str | None = None,
+    kind: str | None = None,
+    owner: str | None = None,
+    limit: int = 200,
+    offset: int = 0,
+) -> dict:
+    """One page of `list_work_items`, saying whether more follow and from where."""
+
+    size = max(1, min(int(limit), MAX_LIST_PAGE))
+    found = list_work_items(
+        conn,
+        space=space,
+        state_key=state_key,
+        category=category,
+        kind=kind,
+        owner=owner,
+        limit=size + 1,
+        offset=offset,
+    )
+    return _page(found, size, offset)
+
+
 def search_work_items(
-    conn: sqlite3.Connection, query: str, *, space: str | None = None, limit: int = 50
+    conn: sqlite3.Connection,
+    query: str,
+    *,
+    space: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
 ) -> list[dict]:
     """Items whose text, labels, source, summary or comments carry the query.
 
     A comment counts: an item is often findable only by what somebody wrote
     under it, and a hit there is reported as the matching line rather than as a
-    bare row, so the reader can see why the item came back.
+    bare row, so the reader can see why the item came back. Like
+    `list_work_items`, it returns exactly `limit` matches and caps nothing.
     """
 
     text = model.text_field(query, "query", limit=200)
@@ -144,8 +190,8 @@ def search_work_items(
         " JOIN planning_spaces p ON p.planning_space_id = i.planning_space_id",
         clauses,
     )
-    query += " ORDER BY i.updated_at DESC, i.work_item_id LIMIT ?"
-    rows = conn.execute(query, (*parameters, max(1, min(int(limit), 200)))).fetchall()
+    query += " ORDER BY i.updated_at DESC, i.work_item_id LIMIT ? OFFSET ?"
+    rows = conn.execute(query, (*parameters, max(1, int(limit)), _offset(offset))).fetchall()
     found = []
     for row in rows:
         item = read_model.present(conn, row)
@@ -155,6 +201,44 @@ def search_work_items(
             item["summary_hit"] = True
         found.append(item)
     return found
+
+
+def search_work_items_page(
+    conn: sqlite3.Connection,
+    query: str,
+    *,
+    space: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> dict:
+    """One page of `search_work_items`, saying whether more follow and from where."""
+
+    size = max(1, min(int(limit), MAX_SEARCH_PAGE))
+    found = search_work_items(conn, query, space=space, limit=size + 1, offset=offset)
+    return _page(found, size, offset)
+
+
+def _offset(value: object) -> int:
+    """Where a page starts: a count of items to skip, so never negative."""
+
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise model.PlanningError("offset must be a non-negative integer")
+    return value
+
+
+def _page(found: list[dict], size: int, offset: int) -> dict:
+    """A page read one item past its size, so a cut is known rather than guessed.
+
+    `next_offset` is where the following page starts when this one was cut, and
+    None when nothing follows: a caller pages until it is None.
+    """
+
+    truncated = len(found) > size
+    return {
+        "work_items": found[:size],
+        "truncated": truncated,
+        "next_offset": offset + size if truncated else None,
+    }
 
 
 # -- writing -----------------------------------------------------------------

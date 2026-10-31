@@ -25,6 +25,7 @@ from server.planning.routing import PlanningRouting
 from server.projects import project_registry, scopes
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
+from tests.planning_fixtures import bulk_items, item_ids
 from tests.registry_fixtures import project_entry, registry_bytes
 
 
@@ -93,6 +94,47 @@ class PlanningScopeHttpTests(unittest.TestCase):
             return response.status, json.loads(response.read())
         finally:
             client.close()
+
+    def test_the_work_item_list_pages_honestly_over_http(self) -> None:
+        """A space past one page: the cut is reported and paging reaches every item once."""
+
+        conn = store.connect()
+        try:
+            bulk_items(conn, "SAME", service.MAX_LIST_PAGE)
+            stored = item_ids(conn, "SAME")
+        finally:
+            conn.close()
+        cap = service.MAX_LIST_PAGE
+        self.assertEqual(cap + 1, len(stored))
+        status, first = self.request(f"/api/planning/work-items?space=SAME&limit={cap}")
+        self.assertEqual(200, status, first)
+        self.assertEqual(
+            (cap, True, cap), (len(first["work_items"]), first["truncated"], first["next_offset"])
+        )
+        seen = [item["work_item_id"] for item in first["work_items"]]
+        status, rest = self.request(f"/api/planning/work-items?space=SAME&limit={cap}&offset={cap}")
+        self.assertEqual(200, status, rest)
+        self.assertEqual(
+            (1, False, None), (len(rest["work_items"]), rest["truncated"], rest["next_offset"])
+        )
+        seen.extend(item["work_item_id"] for item in rest["work_items"])
+        self.assertEqual(len(seen), len(set(seen)))
+        self.assertEqual(stored, set(seen))
+        # Without offset the answer is the one it always was, plus the two fields.
+        status, plain = self.request("/api/planning/work-items?space=SAME")
+        self.assertEqual(200, status, plain)
+        self.assertEqual(
+            [item["work_item_id"] for item in first["work_items"][:200]],
+            [item["work_item_id"] for item in plain["work_items"]],
+        )
+        self.assertEqual((True, 200), (plain["truncated"], plain["next_offset"]))
+        for offset in ("-1", "two", "1.5"):
+            with self.subTest(offset=offset):
+                status, refused = self.request(
+                    f"/api/planning/work-items?space=SAME&offset={offset}"
+                )
+                self.assertEqual(400, status, refused)
+                self.assertEqual("invalid_request", refused["error"]["code"])
 
     def test_mapped_global_search_uses_verified_attached_target(self) -> None:
         self.bind("attached")
