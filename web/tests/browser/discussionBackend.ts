@@ -35,6 +35,8 @@ export async function installDiscussionBackend(page: Page) {
   })
   await page.route('**/api/planning/work-item/**', async (route) => {
     const request = route.request()
+    // Reads under this path (the card's chain) belong to the shared backend.
+    if (request.method() === 'GET') return route.fallback()
     const body = request.postDataJSON() as Record<string, unknown>
     writes.push(body)
     if (failNext) {
