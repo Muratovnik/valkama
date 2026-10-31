@@ -1,6 +1,6 @@
 ---
 status: draft
-card: 344
+card: 1260
 ---
 
 # ADR 0011: A release switch reaches a running session through a stdio front
