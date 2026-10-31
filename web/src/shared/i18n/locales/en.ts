@@ -194,7 +194,7 @@ export const en = {
     chainInvalid: 'This link names no chain this space can read; the graph shows the whole space.',
     chainUnavailable:
       'Chain {reference} cannot be shown here: {cause}. The graph shows the whole space.',
-    chainElsewhere: 'it belongs to another planning space',
+    chainElsewhere: 'its root is not among this space’s work items',
     unlinked: 'Unlinked · {count}',
     unlinkedToggle: 'Draw items with no links',
     closed: 'Closed · {count}',

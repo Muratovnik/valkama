@@ -154,8 +154,9 @@ export function usePlanningChainScope(options: ChainScopeOptions) {
   })
 
   // A reference names an item in whichever space owns its key, so a link can
-  // name a chain from another space. Its root is not among this space's items,
-  // and the graph, which draws only those, would be empty.
+  // name a chain from another space, and a root can be deleted while its graph
+  // is open. Either way the root is not among this space's items, and the
+  // graph, which draws only those, would be empty; the notice says just that.
   watch([chain, options.spaceItems], ([current, items]) => {
     if (current === null || items === null) return
     if (items.some((item) => item.work_item_id === current.root.work_item_id)) return
