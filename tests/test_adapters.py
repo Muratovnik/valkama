@@ -349,6 +349,16 @@ class CliTransportTests(unittest.TestCase):
         self.assertEqual({"call": "health"}, answer["seen"])
         self.assertNotIn("health", json.dumps(answer["argv"]))
 
+    @unittest.skipIf(sys.platform == "win32", "a session is the POSIX process group")
+    def test_an_adapter_leads_a_session_of_its_own(self) -> None:
+        # A timeout kills the adapter's process group, which must not be the
+        # server's: in the server's group only the adapter itself is stopped,
+        # and whatever it started outlives it.
+        leader = self.program(
+            "import json,os,sys;sys.stdin.read();print(json.dumps({'leads': os.getsid(0) == os.getpid()}))"
+        )
+        self.assertEqual({"leads": True}, leader.run_json({}))
+
     def test_a_program_that_is_not_there_is_named_rather_than_run(self) -> None:
         with self.assertRaises(transports.TransportError) as refused:
             transports.CliTransport(command=("valkama-no-such-program",)).run_json({})

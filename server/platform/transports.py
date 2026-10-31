@@ -63,6 +63,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 from dataclasses import dataclass, field
@@ -390,6 +391,9 @@ class CliTransport:
                 cwd=directory,
                 env=environment,
                 shell=False,
+                # Its own session on POSIX, so the tree a timeout stops is the
+                # adapter's and everything it started; Windows ignores it.
+                start_new_session=sys.platform != "win32",
             )
         except OSError as failure:
             raise TransportError("transport_unreachable", "the adapter did not start") from failure
