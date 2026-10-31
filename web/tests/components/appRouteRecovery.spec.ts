@@ -55,4 +55,25 @@ describe('route recovery actions', () => {
     expect(wrapper.findAll('.recovery-choice')).toHaveLength(2)
     expect(wrapper.text()).not.toContain('Retry')
   })
+
+  it.each(['unsupported-view', 'unsupported-scope', 'incompatible-entity'] as const)(
+    'names the module once, in one sentence, when it cannot open a route (%s)',
+    (reason) => {
+      const wrapper = mountRecovery({
+        failure: '',
+        pending: false,
+        unavailable: {
+          input_module_id: 'planning',
+          input_scope: { kind: 'global' },
+          reason,
+          recovery: { available_modules: ['planning'], kind: 'choose-module' },
+          status: 'unavailable',
+        },
+      })
+      expect(wrapper.text()).toContain(
+        'The “planning” module cannot open this address in the current scope.',
+      )
+      expect(wrapper.text()).not.toContain('.:')
+    },
+  )
 })

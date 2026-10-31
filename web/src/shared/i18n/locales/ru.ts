@@ -93,7 +93,6 @@ export const ru = {
       cancel: 'Отмена',
       expand: 'Показать полностью',
       collapse: 'Свернуть',
-      unavailable: 'Действие недоступно в текущей рабочей области.',
       // Named by the server, not by any call site here: the Kernel builds
       // `platform.actions.<permission_id>` from the adapter's declared
       // permissions, so a reachability scan over this repository cannot see them.
@@ -102,6 +101,7 @@ export const ru = {
     },
     route: {
       unknown: 'Раздел «{module}» недоступен. Выберите зарегистрированный раздел.',
+      unavailable: 'Раздел «{module}» не может открыть этот адрес в текущей рабочей области.',
       invalid: 'Некорректный URL Valkama. Откройте канонический маршрут раздела.',
     },
     planning: {

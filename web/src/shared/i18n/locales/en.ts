@@ -93,7 +93,6 @@ export const en = {
       cancel: 'Cancel',
       expand: 'Show all',
       collapse: 'Show less',
-      unavailable: 'This action is unavailable in the current scope.',
       // Named by the server, not by any call site here: the Kernel builds
       // `platform.actions.<permission_id>` from the adapter's declared
       // permissions, so a reachability scan over this repository cannot see them.
@@ -102,6 +101,7 @@ export const en = {
     },
     route: {
       unknown: 'The “{module}” module is not available. Choose a registered module.',
+      unavailable: 'The “{module}” module cannot open this address in the current scope.',
       invalid: 'This Valkama URL is invalid. Open a canonical module route.',
     },
     planning: {

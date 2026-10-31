@@ -34,14 +34,14 @@ const failureReason = computed(() => {
   return t(message.key, message.params ?? {})
 })
 const unavailableMessage = computed(() => {
-  if (props.unavailable?.reason === 'unsupported-view')
-    return `${t('platform.actions.unavailable')} ${props.unavailable.input_module_id}`
+  const module = props.unavailable?.input_module_id ?? ''
   if (
+    props.unavailable?.reason === 'unsupported-view' ||
     props.unavailable?.reason === 'unsupported-scope' ||
     props.unavailable?.reason === 'incompatible-entity'
   )
-    return `${t('platform.actions.unavailable')}: ${props.unavailable.input_module_id}`
-  return t('platform.route.unknown', { module: props.unavailable?.input_module_id ?? '' })
+    return t('platform.route.unavailable', { module })
+  return t('platform.route.unknown', { module })
 })
 </script>
 
