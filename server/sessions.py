@@ -263,6 +263,28 @@ def touch(
     return current
 
 
+def resume(conn: sqlite3.Connection, session_id: str, *, at: str) -> bool:
+    """Make an `ended` session `active` again because it acted after its end.
+
+    A client can resume an ended session without a new `SessionStart` and go
+    on writing. Its confirmed write calls are the only evidence, and without
+    this the session would read `ended` -- its claims `stale` -- while it works,
+    until the next start-up's lease expiry released them. Only a write the
+    client proved, made now, may call this: a drained or replayed hook event is
+    history and never brings a session back. A `failed` session stays failed
+    until an explicit start, and an end not older than `at` stands. Runs inside
+    the caller's transaction; the answer is whether the row changed.
+    """
+
+    cursor = conn.execute(
+        "UPDATE sessions SET status = 'active', ended_at = NULL, attention = '',"
+        " attention_seen = 0 WHERE id = ? AND status = 'ended'"
+        " AND ended_at IS NOT NULL AND ended_at < ?",
+        (session_id, _second(at)),
+    )
+    return cursor.rowcount > 0
+
+
 #: What a lifecycle transition does to a session row. A terminal status stays
 #: until an explicit start: a late end, turn or notification cannot downgrade a
 #: `failed` session or bring an ended one back, and only a live session can be

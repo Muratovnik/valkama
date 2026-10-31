@@ -298,17 +298,16 @@ def _heartbeat(conn: sqlite3.Connection, identity: Identity) -> None:
     hooks reported anything: without this, an agent whose hooks are silent
     would watch its own lease lapse while it writes. The call names the
     top-level session even inside a subagent, and that row is the one a lease
-    follows. A missing row is created, as a hook event would.
+    follows. A missing row is created, as a hook event would. A session that
+    ended before this call was resumed by its client, so it is active again.
     """
 
     if identity.state != CONFIRMED or identity.session_id is None:
         return
-    sessions.touch(
-        conn,
-        identity.session_id,
-        client=identity.client or "",
-        at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-    )
+    at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    if sessions.touch(conn, identity.session_id, client=identity.client or "", at=at):
+        # A call made now, after the session's end, is that session resumed.
+        sessions.resume(conn, identity.session_id, at=at)
 
 
 def acted_on(result: object) -> str | None:

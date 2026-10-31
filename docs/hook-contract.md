@@ -180,9 +180,13 @@ ended session look live.
 
 **Tool calls.** A confirmed Planning write call is a sign of life as well: it
 moves `last_seen` of its top-level session forward the same way, to the time
-the call arrived, and creates the row when it is missing. It changes no state,
-so it cannot reopen an ended session. A claim's lease is read from this
-column; see [Claims are leases](connection-contract.md#claims-are-leases).
+the call arrived, and creates the row when it is missing. A client can resume
+an ended session without sending `SessionStart`, so a confirmed call that
+arrives after the row's `ended_at` makes an `ended` session `active` again; a
+`failed` one stays failed. Only such a call does that: a drained or replayed
+hook event, whatever its time, never reopens a session. A claim's lease is
+read from this column; see
+[Claims are leases](connection-contract.md#claims-are-leases).
 
 **Subagents.** Inside a subagent, a client reports the parent's `session_id`
 plus the subagent's `agent_id`. The parent row is updated first (heartbeat

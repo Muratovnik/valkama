@@ -121,7 +121,10 @@ checkouts are therefore distinguishable even at the same version.
     is unchanged. The web reads records strictly, so a `web/dist` built before
     this change refuses every item; serve the one built with it.
   - A confirmed write call counts as a sign of life of its top-level session,
-    so a session whose hooks are silent stays live while it writes.
+    so a session whose hooks are silent stays live while it writes. One that
+    arrives after the session ended makes it `active` again, because a client
+    can resume an ended session without a new session start; its claims then
+    stay live. A drained or replayed hook event never does.
   - A stale lease is released by the first write that meets it:
     `claim_work_item` on that item, `claim_ready_work_item` in its space, and
     the start-up of an MCP server or `serve`, which now also drains the hook

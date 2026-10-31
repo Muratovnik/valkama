@@ -417,6 +417,71 @@ class ExpiryTests(LeaseTestCase):
         self.assertNotIn("released", [action for action, *_ in self.history()])
 
 
+class ResumedSessionTests(LeaseTestCase):
+    """A client may resume an ended session without a new `SessionStart` and keep writing."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.claim(codex(ONE), author="codex")
+        ended = (datetime.now(UTC) - timedelta(minutes=5)).strftime(SECOND)
+        self.set_session(ONE, status="ended", ended_at=ended, last_seen=ended)
+        self.assertEqual("stale", self.item()["claim_state"])
+
+    def session(self) -> dict:
+        row = self.conn.execute(
+            "SELECT status, ended_at, attention FROM sessions WHERE id = ?", (ONE,)
+        ).fetchone()
+        return dict(row)
+
+    def test_a_confirmed_write_after_the_end_makes_the_session_active_and_keeps_its_claim(
+        self,
+    ) -> None:
+        self.mcp(
+            "comment_work_item",
+            {"id": self.reference, "body": "still here", "author": "codex"},
+            codex(ONE),
+            started=True,
+        )
+        self.assertEqual({"status": "active", "ended_at": None, "attention": ""}, self.session())
+        self.assertEqual("live", self.item()["claim_state"])
+        self.assertEqual(0, housekeeping.run(self.conn).expired_leases)
+        self.assertEqual("codex", self.item()["claim_ref"])
+
+    def test_an_unconfirmed_write_revives_nothing(self) -> None:
+        self.mcp(
+            "comment_work_item",
+            {"id": self.reference, "body": "who am I", "author": "codex"},
+            None,
+            started=True,
+        )
+        self.assertEqual("ended", self.session()["status"])
+
+    def test_a_failed_session_stays_failed(self) -> None:
+        self.set_session(ONE, status="failed")
+        self.mcp(
+            "comment_work_item",
+            {"id": self.reference, "body": "after the failure", "author": "codex"},
+            codex(ONE),
+            started=True,
+        )
+        self.assertEqual("failed", self.session()["status"])
+
+    def test_a_drained_event_after_the_end_never_revives_the_session(self) -> None:
+        from server.hooks import ingest, normalize
+
+        later = (datetime.now(UTC) - timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        record = normalize.lifecycle_event(
+            "codex",
+            "stop",
+            {"session_id": ONE},
+            event_uid="00000000-0000-4000-8000-0000000000e1",
+            occurred_at=later,
+        )
+        assert record is not None
+        ingest.write(self.conn, [(record, later)], delivery="spooled")
+        self.assertEqual("ended", self.session()["status"])
+
+
 class StartUpTests(unittest.TestCase):
     def test_a_store_that_cannot_be_written_does_not_stop_a_surface(self) -> None:
         connection = mock.Mock()

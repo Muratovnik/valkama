@@ -210,7 +210,10 @@ its events are signed `valkama`.
 A confirmed call with a session is also a sign of life of that session. The
 first write of the call moves `last_seen` of the session row forward, creating
 the row when it is missing, exactly as a hook event does. Inside a subagent the
-call names its parent session, and the parent's row is the one that moves.
+call names its parent session, and the parent's row is the one that moves. A
+session whose row says `ended` before the call arrived was resumed by its
+client without a new session start, so the call makes it `active` again and its
+claims stay live. A `failed` session stays failed until a session start.
 
 ### Claims are leases
 
