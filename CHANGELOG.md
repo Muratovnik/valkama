@@ -186,6 +186,10 @@ checkouts are therefore distinguishable even at the same version.
   server's instructions and the `attach_work_item_ref` description no longer
   ask an agent to attach its session id as a ref, and they point to
   `apply_work_item_changes` for several writes to one item.
+- Moving an item to Review no longer warns about missing evidence when a
+  confirmed session has written to it: such a write names its session as a
+  session ref does. Before, an agent that stopped attaching session refs got
+  the warning on every move to Review without a commit ref.
 - Two sessions that sign with the same `author` no longer release or take
   over each other's claim. A confirmed session holds its claim whatever author
   it signs with, and any other caller needs `force` against a live lease. A

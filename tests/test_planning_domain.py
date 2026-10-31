@@ -7,7 +7,7 @@ import unittest
 from unittest import mock
 
 from server import store
-from server.planning import model, service, views
+from server.planning import calls, model, service, views
 from server.planning import store as planning_store
 
 
@@ -221,6 +221,21 @@ class PlanningDomainTests(unittest.TestCase):
         service.attach_ref(self.conn, created["reference"], "commit", "abc1234", author="tester")
         again = service.transition_work_item(self.conn, created["reference"], "todo")
         self.assertEqual([], again["warnings"])
+
+    def test_review_takes_a_confirmed_write_as_evidence_of_its_session(self) -> None:
+        unconfirmed = self.item("Written by a call nobody can vouch for")
+        with calls.bind(calls.Identity("unconfirmed", "mcp", session_id="s-1"), "comment"):
+            service.comment_work_item(
+                self.conn, unconfirmed["reference"], "started", author="tester"
+            )
+        warned = service.transition_work_item(self.conn, unconfirmed["reference"], "review")
+        self.assertEqual(1, len(warned["warnings"]))
+
+        confirmed = self.item("Written by a confirmed session")
+        with calls.bind(calls.Identity("confirmed", "claude-hook", session_id="s-2"), "comment"):
+            service.comment_work_item(self.conn, confirmed["reference"], "started", author="tester")
+        moved = service.transition_work_item(self.conn, confirmed["reference"], "review")
+        self.assertEqual([], moved["warnings"])
 
     def test_force_carries_a_refusal_through_and_records_the_override(self) -> None:
         created = self.item("Land the planning domain")

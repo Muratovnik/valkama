@@ -77,11 +77,20 @@ def findings(
         if warning:
             warnings.append(warning)
     if target["category"] == "review" and entering:
-        evidence = conn.execute(
-            "SELECT 1 FROM work_item_refs WHERE work_item_id = ?"
-            " AND kind IN ('session','commit') LIMIT 1",
-            (item["work_item_id"],),
-        ).fetchone()
+        # A confirmed write names its session as well as a session ref does, and
+        # agents no longer attach one by hand now that Valkama records it.
+        evidence = (
+            conn.execute(
+                "SELECT 1 FROM work_item_refs WHERE work_item_id = ?"
+                " AND kind IN ('session','commit') LIMIT 1",
+                (item["work_item_id"],),
+            ).fetchone()
+            or conn.execute(
+                "SELECT 1 FROM execution_events WHERE work_item_id = ? AND kind = 'planning_write'"
+                " AND identity_state = 'confirmed' AND COALESCE(session_id, '') <> '' LIMIT 1",
+                (item["work_item_id"],),
+            ).fetchone()
+        )
         if evidence is None:
             warnings.append(f"{reference} enters {target['name']} with no session or commit ref")
     if target["is_terminal"] and entering:
