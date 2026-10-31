@@ -108,12 +108,18 @@ function isReady(node: PlacedNode): boolean {
   return readyIdSet.value.has(node.work_item_id)
 }
 
-/** The parent's reference, or nothing when the node is a root. */
-function parentReference(node: PlacedNode): string | undefined {
-  return node.parent_id === null ? undefined : referenceById.value.get(node.parent_id)
-}
-
 const inChain = computed(() => props.scopeKind === 'chain')
+
+/**
+ * The parent's reference, or nothing when the node is a root — or when the
+ * parent is the chain's root, which the chip already names: on a chain filed
+ * under one epic, the same reference on every node says nothing.
+ */
+function parentReference(node: PlacedNode): string | undefined {
+  if (node.parent_id === null) return undefined
+  if (inChain.value && node.parent_id === props.epicId) return undefined
+  return referenceById.value.get(node.parent_id)
+}
 
 /** The chain's root, which the field marks; a chain is the only field that has one. */
 function isChainRoot(node: PlacedNode): boolean {

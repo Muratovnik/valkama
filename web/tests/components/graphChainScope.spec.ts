@@ -199,6 +199,27 @@ describe('the graph scoped to one chain', () => {
     expect(others.every((entry) => !entry.find('.flow-node-root').exists())).toBe(true)
   })
 
+  it('leaves out the origin chip that would only repeat the root, and keeps any other', async () => {
+    // 3 is filed under the root itself; 4 under an epic outside the chain.
+    const filed = items.map((entry) =>
+      entry.reference === 'VAL-4' ? { ...entry, parent_id: id(5) } : entry,
+    )
+    const graph = openGraph({
+      scopeKind: 'chain',
+      epicId: id(1),
+      chain,
+      edges: chainEdges,
+      items: filed,
+    })
+    await drawn(graph)
+    const cards = graph.findAllComponents(GraphNodeCard)
+    const card = (reference: string) =>
+      cards.find((entry) => entry.props('node').reference === reference)
+    expect(card('VAL-3')?.props('parentReference')).toBeUndefined()
+    expect(card('VAL-3')?.find('.flow-node-epic').exists()).toBe(false)
+    expect(card('VAL-4')?.get('.flow-node-epic').text()).toBe('VAL-5')
+  })
+
   it('names the chain in a chip that leads back to the whole space', async () => {
     const graph = openGraph({ scopeKind: 'chain', epicId: id(1), chain, edges: chainEdges })
     await drawn(graph)
