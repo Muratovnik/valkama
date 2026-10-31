@@ -10,335 +10,202 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+## [2.1.0](https://github.com/Muratovnik/valkama/compare/v2.0.0...v2.1.0) - 2026-11-01
+
+The bold entries at the top of **Changed** alter what existing MCP and HTTP
+calls do; an agent or integration written for 2.0.0 should read them first. The
+store is unchanged at schema 9, so the upgrade runs no migration.
+
 ### Added
 
-- A Valkama skill, `server/skill/valkama`, with the procedure around the
-  planning tools: finding or filing the item for a change, claiming it, its
-  checklist and step claims, batched writes, refs and links, blocking,
-  requests to the owner, merging duplicates, closing, and what a subagent
-  without the tools reports. `valkama skill install | status | uninstall`
-  writes it where Claude Code and Codex find a user's skills
-  (`~/.claude/skills/valkama` or `$CLAUDE_CONFIG_DIR/skills/valkama`, and
-  `~/.agents/skills/valkama`), from the release the launcher pins, without
-  touching either client's configuration. A manifest of digests keeps it
-  idempotent and leaves edited or foreign copies alone without `--force`.
-  `launcher install` refreshes every copy Valkama manages, and
-  `valkama doctor` reports each one.
-- `merge_work_items` (`POST /api/planning/work-item/merge`) folds items that are
-  one change into the item that survives, all or nothing. Their checklist steps
-  (with their ids, ticks and step claims), discussion comments, refs and links
-  move to it; each merged item is linked `duplicates` to it, gets a summary
-  naming it, loses its claim and closes in its cancelled state, keeping its own
-  history, reports and description. An item another session holds needs
-  `force`. It writes only events earlier builds already read, and no schema
-  changes.
-- `apply_work_item_changes` and `create_work_item` take a `checklist` group,
-  `{items, force?}` (`{items}` on a creation), which sets the steps as
-  `set_work_item_checklist` does, right after the claim. Claiming an item and
-  giving it its steps is one call, and `applied.checklist` lists the new step
-  ids. A step may be sent as `{text, done: true}`, here and to
-  `set_work_item_checklist`: it is recorded done by the caller with the event a
-  tick writes, so one call can set done steps, the summary and the closing
-  transition. The acknowledgement of `set_work_item_checklist` adds each
-  step's `done`.
-- `create_work_item` and `POST /api/planning/work-items` take `claim` and
-  `links` (`{other, kind}`), applied to the new item in the same transaction:
-  created, then claimed, then linked. A refused claim or link creates nothing
-  and names the step, as `apply_work_item_changes` does, and the answer adds
-  `applied`. Filing discovered work linked `discovered-from` and claimed takes
-  one call instead of three.
-- The board can be grouped by epic. Each epic is a lane headed by its
-  reference, title, state, open and closed counts, a fold, and actions to open
-  its card or narrow the board to its chain; the epic itself is the lane, not a
-  tile in it. Work under no epic comes last. A lane with nothing open starts
-  folded, and the lanes a reader folds or unfolds are remembered per space in
-  the browser. The grouping is part of the address, as the route key `group`.
-- A manual order of work. Dragging a tile within its column, or pressing Alt+↑
-  or Alt+↓ on a focused tile, places it among the tiles of its state, and the
-  move is announced to a screen reader; a drop in another column lands where it
-  was dropped. `update_work_item`, `transition_work_item`, the `transition`
-  group of `apply_work_item_changes`, and `POST /api/planning/work-item/update`
-  and `/transition` take `rank`: `first`, `last`, `before:<item>` or
-  `after:<item>`. The order is the item's existing `position`, so the store
-  format and schema 9 are unchanged and an earlier build reads the same order.
-- Each member of a chain carries `rank`, its place in the order of work across
-  the space, in `GET /api/planning/work-item/chain` and in the open member rows
-  of `get_work_item_chain`. The card's chain section lists open members in
-  that order.
-- The chain root carries its own mark on the graph: a «root» tag on its node,
-  and «chain root» in the node's accessible name. It stands one step above the
-  closed work around it even when it is closed itself.
-- The card's chain section draws a branch map. Each lane is one origin of the
-  work — the root's own children, each other epic, the work filed under no
-  epic — and every member is one segment of the same width along it: finished
-  work by closing time, then review and work in progress, then blocked, queued
-  and backlog work, so a lane's length is its volume and its grey tail is what
-  remains. A lane branches off the lane it was discovered from, at the task it
-  was discovered from. Pointing at a segment names the task, its state and its
-  holder, and a click opens it. A lane's label narrows the member list below to
-  that lane, with a chip that widens it back and a button that opens the lane's
-  epic. Each lane is one keyboard stop: Left and Right move between its tasks,
-  Page Up and Page Down between stretches of one state, Home and End to its
-  ends, Enter opens the task, and a live region says which task it is. On a
-  long chain, narrow segments of one state merge into one stretch, and work
-  under way is raised so that it still shows.
-- A running agent session follows `launcher install` without a restart. The
-  launcher's `mcp` is now a stdio front that keeps the client's pipe and runs
-  the pinned release's server behind it. A few seconds after an install it
-  switches to the new release between two requests, and tells a client that
-  can hear it that the tool list changed. Claude Code's CLI, as observed in
-  2.1.304, then lists the tools again, so a tool the new release added appears
-  in the session; a tool schema the model has already loaded can stay in its
-  context, the Desktop app's host path did not refresh, and a server-side
-  listen denylist can switch the notification off for a connection. The
-  front declares `tools.listChanged` and answers `subscriptions/listen` itself;
-  requests reach the server byte for byte. A release that does not start
-  leaves the session on the one it had, with one warning on the next tool
-  result. Codex lists the tools again only with its `mcp_tool_list_changed`
-  feature, which is off by default; its calls reach the new release either
-  way. See the
-  [connection contract](docs/connection-contract.md#a-release-switch-under-a-running-session).
-- The card's chain section says when the open part closes. Under the totals,
-  one line gives the last seven days — what was added and what closed — and
-  what that pace means: «At this pace the open work closes in about 9 days
-  (by Nov 9)» while more closes than is added; how much must close a day to
-  converge while it does not; that nothing moved, when nothing did. When the
-  days of the window disagree, the answer is a range, and one that has no far
-  end says the pace is uneven; past two weeks it is said in weeks, past nine
-  in months, and past a year it gives no figure. A chain with less than seven
-  days of history says how many days it has and gives no forecast.
+- **A chain of work**: what one item's work grew into, and whether it
+  converges. Scope `epic` is the root's children; scope `chain`, the default,
+  adds every item linked `discovered-from` the root or a member and every child
+  of a member, walking downward only. `GET /api/planning/work-item/chain` and
+  the MCP tool `get_work_item_chain` answer with the counts (total, closed,
+  open, ready, per category), the members grouped by parent, a per-day series
+  of created and closed members, and whether the last seven UTC days were
+  `growing`, `converging` or `steady`. The HTTP read adds every member, with
+  its `rank` in the order of work, and the `blocks` and `discovered-from` links
+  among them; the tool adds the open members as paged rows, active first. See
+  [Reading a chain of work](docs/connection-contract.md#reading-a-chain-of-work).
+- `list_work_items` and `GET /api/planning/work-items` take `parent`, and then
+  list only that item's children.
+- The work item card shows the item's chain. A branch map leads it: one lane
+  per origin of the work (the root's own children, each other epic, the work
+  under no epic), branching off the task it was discovered from, one segment
+  per member, coloured by progress (finished green, in progress blue, review
+  amber, queued and backlog grey, blocked red). A segment names and opens its
+  task, a lane label narrows the member list to that lane, and each lane is one
+  keyboard stop. Below it, one line counts the work under the root, and the
+  next turns the last seven days into a forecast: «At this pace the open work
+  closes in about 9 days (by Nov 9)», or how much must close a day to converge.
+  A chart of scope against done work and the members by state follow, the
+  finished ones folded under «Done».
+- A chain narrows every view. «Show on graph» closes the card and opens the
+  graph on the chain's open part (the root, marked «root», the open members and
+  every member that is the parent of another), with a «Closed · N» switch for
+  the rest; an epic lane's Chain action narrows Kanban and List to it. A chip
+  leaves the chain. The chain is in the address, as the Planning route keys
+  `chain`, `chain_scope` and `closed`, so a reload or a shared link comes back
+  to it. A link to a chain this space cannot show is answered with the whole
+  space and a notice; a chain whose read fails stays in the address and offers
+  Retry, unless the item does not exist.
+- An order of work that agents and the board share. `update_work_item`,
+  `transition_work_item`, the `transition` group of `apply_work_item_changes`
+  and their HTTP writes take `rank`: `first`, `last`, `before:<item>` or
+  `after:<item>`, a place among the items of the state. Lists follow that
+  order, and so does `claim_ready_work_item` (see Changed). On the board, drag
+  a tile within its column, or press Alt+↑ or Alt+↓ on it. The order is the
+  existing `position`, so an earlier build reads it too. See
+  [The order of work](docs/connection-contract.md#the-order-of-work).
+- The board can be grouped by epic (route key `group`): one lane per epic, with
+  its counts, a fold and actions to open its card or narrow the board to its
+  chain, and work under no epic last. A lane with nothing open starts folded,
+  and its Done and Cancelled cells show only a count until opened.
+- `merge_work_items` (`POST /api/planning/work-item/merge`) folds 1 to 20 items
+  that are one change into the one that survives, all or nothing: their steps
+  (with ids, ticks and step claims), discussion, refs and links move to it, and
+  each merged item is linked `duplicates`, summarized and closed as cancelled.
+  An item another session holds needs `force`. See
+  [Merging items that are one change](docs/connection-contract.md#merging-items-that-are-one-change).
+- `create_work_item` and `POST /api/planning/work-items` take `claim`,
+  `checklist` and `links`, applied in the creation's transaction; a refused
+  step creates nothing. `apply_work_item_changes` takes a `checklist` group too.
+  A step sent as `{text, done: true}`, there or to `set_work_item_checklist`,
+  is recorded as the caller's tick, so one call can set done steps, the summary
+  and the closing transition. See
+  [Creating an item with its claim, steps and links](docs/connection-contract.md#creating-an-item-with-its-claim-steps-and-links).
+- A write that names a state reads a category (`active`, `review`, `blocked`,
+  `completed`, `cancelled`, `queued`, `backlog`) as the one state that has it;
+  a key still wins. A name the workflow lacks is refused listing every state as
+  `key (category)`. See
+  [Naming a state](docs/connection-contract.md#naming-a-state).
+- A Valkama skill, `server/skill/valkama`: the procedure an agent follows
+  around the planning tools. `valkama skill install | status | uninstall`
+  (`--client claude|codex`, `--force`) writes it where Claude Code
+  (`~/.claude/skills/valkama`, or under `$CLAUDE_CONFIG_DIR`) and Codex
+  (`~/.agents/skills/valkama`) find a user's skills, from the pinned release,
+  without touching either client's configuration; an edited or foreign copy
+  needs `--force`. `launcher install` refreshes the unedited copies Valkama
+  manages but installs none, and `valkama doctor` reports each one. See
+  [Install the skill](SERVICE.md#install-the-skill).
 
 ### Changed
 
-- **A checklist write keeps the steps it repeats.** `set_work_item_checklist`
-  and the `checklist` group of `apply_work_item_changes` and `create_work_item`
-  read a step sent with the text of one the item has (or its `id`) as that
-  step: it keeps its `item_id`, claim and tick. Appending steps
-  to an item with claimed or completed steps no longer needs `force`, which
-  used to discard their state. Only leaving such a step out is refused, and
-  the refusal now names the steps it would lose. A step whose text did not
-  change keeps its `item_id` where it used to get a new one.
-- **A claim starts the work it takes, and a release puts it back in the
-  queue.** Claiming an item in a `backlog` or `queued` state — through
-  `claim_work_item`, `claim_ready_work_item`, the `claim` of
-  `create_work_item` and `apply_work_item_changes`, the HTTP writes, the
-  browser or a launch — also moves it to the workflow's first reachable
-  `active` state, as a `transitioned` event (`dev: claimed`). Review, blocked,
-  active and finished items keep their state. Releasing an item in an active
-  state, or a lease expiring on one, moves it to the first reachable `queued`
-  state, or the backlog (`todo: released`, `todo: lease-expired`), unless one
-  of its checklist steps is still claimed. The answers add `started` and
-  `requeued`, and a claim's move carries its warnings, such as a claim no
-  session confirmed. For existing agents: a separate transition to the active
-  state after a claim is no longer needed and is now a move within one state;
-  a claimed item's history gains one event and its revision one more step; a
-  claim that cannot reach an active state answers with a warning instead of a
-  launch failing on the transition guard; and the owner's release of a Dev
-  item in the browser moves it to Todo. See
+- **A claim starts the work it takes.** Claiming an item in a `backlog` or
+  `queued` state, by any route (`claim_work_item`, `claim_ready_work_item`, the
+  `claim` of `create_work_item` and `apply_work_item_changes`, HTTP, the
+  browser, a launch), also moves it to the first reachable `active` state: one
+  more `transitioned` event (`dev: claimed`) and one more revision. The answer
+  adds `started: {from, to}`. Review, blocked, active and finished items stay
+  where they are, and an item that can reach no active state is claimed where
+  it stands, with a warning (a launch of one used to fail). An agent no longer
+  needs its own transition to the active state after a claim (one sent anyway
+  is a move within one state, with one more event), and takes the next
+  `expected_revision` from the claim's answer. See
   [A claim starts the work](docs/connection-contract.md#a-claim-starts-the-work).
-- **A claim or a checklist step is held by the session that took it.** When
-  the client proved the call's session, `claim_ref`, a step's `claimed_by` and
-  `done_by` read `codex (session <id>)` or `claude (session <id>)`, with
-  `agent <id>` for a subagent, whatever `author` the call signed with; `author`
-  stays what the history records. A call with no confirmed session holds by
-  its `author`, as before. Two sessions signing with one name are two holders
-  of steps as of claims, and a step held under a name is still that name's.
-  The list, the card, the board, the graph, the chain and the MCP answers print
-  a holder the same way: its name and the start of its session
-  (`codex · 019a3c2e`). For existing agents: `list_work_items` with `owner`
-  matches the holder exactly, and a refusal names the holder by its label. See
+- **A release puts work under way back in the queue.** Releasing an `active`
+  item, by its holder, with `force` or by lease expiry, moves it to the first
+  reachable `queued` state, or else the backlog (`todo: released`,
+  `todo: lease-expired`), unless one of its steps is still claimed. The answer
+  adds `requeued: {from, to}`.
+- **A confirmed session holds its claims and steps.** When the client proved
+  the call's session, `claim_ref`, `claimed_by` and `done_by` read
+  `codex (session <id>)` or `claude (session <id>)`, and
+  `claude agent <id> (session <id>)` (or `codex agent …`) in a subagent,
+  whatever `author` the call signs with, so two sessions signing with one name
+  hold separately; other calls still hold by `author`. `list_work_items` with
+  `owner` matches the holder exactly, so pass the `claim_ref` the claim
+  returned. The web prints such a holder as `codex · 019a3c2e-5b7d`. See
   [Who holds a claim or a step](docs/connection-contract.md#who-holds-a-claim-or-a-step).
-- A state can be named by its category. `transition_work_item`,
-  `create_work_item`, the `transition` group of `apply_work_item_changes` and
-  their HTTP writes read `active`, `review`, `blocked`, `completed`,
-  `cancelled`, `queued` or `backlog` as the one state of the workflow that has
-  that category; a key still wins over a category. A category two states share
-  is refused naming their keys, and a name the workflow does not have is
-  refused listing every state as `key (category)` instead of saying only that
-  it is unknown. See
-  [Naming a state](docs/connection-contract.md#naming-a-state).
-- `launcher install` reaches every session whose front is running at once,
-  not only the sessions opened after it. Installing a commit that raises the
-  store schema therefore migrates the store through the first session that
-  switches, or, with none running, when the next session opens it. A session
-  opened with a release from before the front still warns until its client
-  restarts it.
-
-- A chain on the graph draws its open part by default: the root, the open
-  members, and every member that is the parent of another member, so each epic
-  the chain's work is filed under stays on the field, even one that closed with
-  all of its work. A «Closed · N» switch beside the chip draws the closed
-  members as well, and N is the number of nodes it adds. The chip still counts
-  the whole chain, and the legend names only the groups drawn. On a chain of
-  609 members, 489 of them closed, the default draws 123 nodes instead of 610.
-  Whether closed work is drawn is held apart for the chain and the whole
-  space, so leaving a chain gives the space back its own filter, and each
-  chain opens on its open part.
-- Chain views colour members by progress: finished green, in progress blue,
-  review amber, queued and backlog grey, blocked red. That holds in the card's
-  branch map, its member groups and its scope chart, and on the graph scoped to
-  a chain.
-- The branch map replaces the card's line of origins: each lane's label names
-  its epic, or says it has none, and its counts stand at the lane's end.
-- The card's scope chart is shorter and stands under the branch map.
-- The chain section's seven-day line replaces the bare «scope is growing»
-  verdict with the forecast above, and stands directly under the totals.
-- The branch map's legend names only the states its lanes draw, as the graph's
-  legend does, so «Blocked» no longer stands in bold over a chain with nothing
-  blocked.
-- A lane's finished count reads «12 done» rather than «12 ✓»: the check mark is
-  outside the interface font and fetched a fallback font for one glyph.
-- The scope chart's readout leads with its day, and the ceiling's figure has a
-  band of its own above the drawing.
-- The card's open-work breakdown wraps between its parts, never inside one,
-  and a separator ends the line it closes. The seven-day line keeps a number
-  with its unit and a date with the word before it.
-- In the card's chain section, a member row names its state only when its
-  group mixes states. A group in one state names it once, in its heading, and
-  the finished group is headed the same way.
-- The card's workable figure says what it counts: unheld, unblocked work in
-  any state work can start from, the backlog included.
-- A work item of an attached store shows the chain section with a note that
-  the chain is read for work items of the primary store only.
-- The «workable» mark on the chain section's member rows takes the quiet tone
-  of the holder beside it. It repeats down most open groups, and in the title's
-  colour it read louder than the titles.
+- **A checklist write keeps the steps it repeats.** A step sent with the text
+  (or `id`) of an existing one keeps its `item_id`, claim and tick, where it
+  used to get a new `item_id` and lose its state; steps are appended without
+  `force`. Leaving out a claimed or completed step is refused, naming it, and
+  `force` discards only the steps left out.
+- **A work item that does not exist is `not_found` (404)**, where it was
+  `invalid_request` (400): the item named, a `parent`, the other end of a link,
+  or a batch step. A malformed reference is still `invalid_request`.
+- **Acknowledgements carry more**: `started`, `requeued` and `warnings` after
+  a claim or release, `applied` from `create_work_item`, and each step's `done`
+  from `set_work_item_checklist`. See
+  [Tool results](docs/connection-contract.md#tool-results).
+- **The server lists 31 tools, up from 29**: `get_work_item_chain` and
+  `merge_work_items` are new.
+- **`claim_ready_work_item` takes the first ready item in the order of work**,
+  a `queued` state before a `backlog` one. Priority only breaks a tie, so an
+  urgent item nobody placed waits its turn.
+- **A source the search skipped names why.** The coverage `reason` of
+  `GET /api/modules/planning/search` is `store_not_attached`,
+  `store_unreadable`, `attached_list_unreadable`, `space_missing`,
+  `binding_conflict` or `search_failed`, where it was `source_unavailable`; the
+  request list across projects (`GET /api/modules/planning/requests`) names the
+  same reasons for a source it skips.
+- `launcher install` reaches running sessions. The launcher's `mcp` is now a
+  stdio front that keeps the client's pipe and, seconds after an install,
+  switches the server behind it to the new release between two requests. It
+  tells a client that can hear it when the tool list changed: Claude Code's CLI
+  (2.1.304) lists the tools again; Codex does so only with its
+  `mcp_tool_list_changed` feature, off by default, though its calls reach the
+  new release either way. A release that does not start leaves the session on
+  its old one, with a warning. An install that raises the store schema
+  therefore migrates the store through the first session that switches, or,
+  with none running, when the next session opens it. A session started before
+  the front still warns until restarted. See
+  [A release switch under a running session](docs/connection-contract.md#a-release-switch-under-a-running-session).
 - The desktop app is built on Electron 45 (Chromium 156), up from Electron 43.
-- The board no longer downloads Settings, and the libraries it runs ship as a
-  separate `vendor` chunk that keeps its hash across releases. The graph and
-  Settings download when the pointer or focus reaches the view switch or the
-  Settings entry, or when the address names them. A slow download keeps the
-  board on screen and then shows the loading panel; a failed one shows «Could
-  not load this view» with Retry, where the graph used to leave an empty stage.
-- `claim_ready_work_item` takes the first ready item in the order of work: a
-  `queued` state before the backlog, then the place inside the state. Priority
-  only breaks a tie, so an urgent item nobody placed no longer jumps the queue.
-- `get_work_item_chain` lists the open members of each group in the order of
-  work instead of by number.
-- A chain is no longer the graph's alone: Kanban and List draw only the chain
-  and its root while one is named, with the same chip to leave it, and
-  switching views keeps it. A chain the space cannot show is reported as
-  showing the whole space, in every view.
+- The board: finished columns stand last, so Blocked reads before Done; the
+  columns that fit share the width; a cell shows three tiles and «Show all · N»;
+  a column is one Tab stop, walked with the arrow keys; a large space regroups
+  without stalling.
+- The bar above the board, list and graph is two compact rows, its queue
+  folding into a menu when the row is full. Every count above the stage counts
+  the same items, the chain with its root or the whole space, and a view that
+  leaves items out of its counts says so.
+- The whole-space graph leaves out items no drawn link touches, with an
+  «Unlinked · N» switch. The graph's key lies on the field, so no switch moves
+  the bar; zoomed out, a node is a block of its state's colour; at phone width
+  the bar is one row.
+- The card's head pins only the title and the sections and condenses while the
+  body is read, with Back beside Close; the sections wrap on a phone.
+- The questions dialog keeps focus after an answer and counts only questions
+  still waiting, as the rail does («2+» when the count is incomplete). Yes/No
+  and short choices are radio buttons, a refused field says why at the field,
+  and projects are named by title.
+- The graph and Settings download on demand, and the libraries ship as a
+  `vendor` chunk that keeps its hash across releases. A failed download shows
+  «Could not load this view» with Retry.
+- A shell notice can be dismissed; the Settings subtitle names only its
+  sections; a text action rests on the control fill, so it reads as a control.
 
 ### Fixed
 
-- The rail prints the finder's shortcut as «Ctrl K». The «⌘» it also printed
-  is in neither interface font, and asking for it made every first screen
-  download the 193 kB fallback face.
-- The service sends the fallback font, the licence notice and the licence text
-  with their own content types instead of `application/octet-stream`.
-- A lane of one task on a long chain's branch map was a pixel-long stub under
-  its label. A lane is now drawn at least 16 pixels long, its tasks sharing the
-  length and a dot closing it, and the map narrows so that such a lane at the
-  far end still ends inside the card.
-- The chain section printed «+0 discovered, −0 closed»; a zero has no sign.
-- The readout over a branch map lane stands above the lane's label, so the
-  lane's own name and counts stay visible while its tasks are read.
-- The branch map's lane labels and the chain's «Done» disclosure show the same
-  focus ring as the section's other controls.
-- The branch map is never shown laid out at its fallback width: the drawing is
-  hidden until the card has measured it.
-- When a chain's root has no children of its own and each lane was discovered
-  from another, the branch map drew every lane from the start with no fork
-  between them. The lane holding the work discovered from the root now starts
-  the map, and the others branch off it.
-- A link naming a chain in an attached store no longer asks for the chain,
-  which is read from the primary store only. The whole space is shown with the
-  card's own note that the chain is available only for work items of the
-  primary store, and the chain keys are dropped from the address.
-- Russian plurals: a counted message picks among день, дня and дней by the
-  platform's plural rules, where it used to apply the English two-form rule.
-- The chain a graph is scoped to is now part of the address. The Planning
-  module's route state admits two more keys, `chain` (the root's reference)
-  and `chain_scope` (`chain` or `epic`), so a reload, a shared link, Back and
-  Forward come back to the same chain. Leaving it by the chip removes both
-  keys. A link that names no valid reference,
-  a reference the server does not know, or a chain from another planning space
-  shows the whole space with a notice saying why, and the keys are dropped.
-- The navigation rail names each entry by what it shows. A screen reader now
-  hears a module's attention count, which the entry's label used to hide; the
-  brand button is called Valkama, with where it goes in its tooltip; and the
-  finder's name includes the shortcut printed beside it. The «Needs my answer»
-  button is named the same way, so it says how many questions wait.
-- A route a module cannot open in the current scope says so in one sentence
-  that names the module, instead of a sentence followed by `.: planning`.
-- A chain link whose root is not among the space's work items says just that,
-  instead of always blaming another planning space; a root deleted while its
-  graph was open is one such case.
-- The release check runs every Python tool from the interpreter that runs it:
-  `python -m <tool>`, or the console script in that interpreter's own scripts
-  directory, which is also put first on `PATH` for each stage. A shared Python
-  first on `PATH` could otherwise supply typos, mypy or a semgrep whose
-  dependencies had drifted from its pin. Before the first stage it checks every
-  `requirements-dev.txt` pin against that interpreter and, when one is missing
-  or at another version, stops with one message naming the interpreter, each
-  package and what to run. `CONTRIBUTING.md` says how to run a release.
-- A search whose query is exactly a work-item reference, such as `MAIN-12` in
-  any case and with spaces around it, answers that item first: in
-  `search_work_items`, `GET /api/planning/search`, the mapped search behind the
-  task finder and the cross-scope `GET /api/search`. The primary store's item
-  leads and an attached store's item of the same reference follows; every other
-  match keeps its order. It used to come after every newer item that merely
-  mentioned it, and after every earlier project's, and a full page could leave
-  it out.
-- A source the mapped search could not read names why in its coverage `reason`:
-  `store_not_attached`, `store_unreadable`, `attached_list_unreadable`,
-  `space_missing`, `binding_conflict` or `search_failed`. Every source used to
-  say `source_unavailable`. The global request list names the same reasons for
-  a source it skips.
-- The task finder opens the first result on Enter as soon as the results are
-  shown. The first row was not highlighted when the results arrived, so Enter
-  did nothing until an arrow key was pressed. An Enter pressed while the search
-  is still running opens the first result when it arrives, unless the query
-  changes first.
-- The task finder's notice that not every project was searched now names each
-  skipped project and space, grouped by why it was skipped, above the results.
-  It used to give no source or reason at the top and list the sources under
-  every result, out of sight on a long list. A failure that stops the whole
-  search says whether the project list could not be read, a planning binding
-  is malformed, or the search took too long.
-- The task finder stands near the top of the window, so its search field no
-  longer moves up and down as results arrive and leave. A row clamps a long
-  title to two lines and shows the reference in the metadata font, and the
-  Retry button no longer stretches across the dialog.
-- A board move the server refused no longer leaves the tile in the column it
-  was dropped in: the tile stays where the next read of the space puts it.
-- A board move sends the revision the board read the item at, so a move made
-  after an agent changed the item is refused with `409` instead of written over
-  the agent's change.
-- A search on the board no longer hides why an item is blocked: an item whose
-  blocker the search leaves out is still marked blocked.
-- The module list's `updated_at` moves with the Planning route keys it
-  admits, which the `chain` keys had not done.
-
-## [2.1.0](https://github.com/Muratovnik/valkama/compare/v2.0.0...v2.1.0) - 2026-10-31
-
-### Added
-
-- A chain of work: what one item's work grew into, and whether it converges.
-  For a root item, scope `epic` is its children; scope `chain`, the default,
-  adds every item discovered from the root or a member and every child of a
-  member, until nothing new is found. `relates-to`, `duplicates` and `blocks`
-  never widen it, and the walk never goes upstream. The answer counts the
-  members (total, closed, open, ready, per category), groups them by parent,
-  gives a per-day series of created and closed members with running totals,
-  and says whether the last seven UTC days were growing, converging or steady.
-  `GET /api/planning/work-item/chain` carries every member and the `blocks` and
-  `discovered-from` links among them. The MCP tool `get_work_item_chain` carries
-  the same figures, the newest 30 days of the series, and the open members as
-  compact rows, active first, paged with `truncated` and `next_offset`.
-- `list_work_items` and `GET /api/planning/work-items` take `parent`, and then
-  list only that item's children.
-- The work item card shows the item's chain when it has one. It has a switch
-  between the epic and the whole chain, the totals with the open members split
-  by workflow category, and a chart of total scope against closed members by
-  day, with the open gap shaded. A sentence says whether the last seven days
-  grew or converged. Members are grouped by the parent they came from, and the
-  open ones are listed by category, with the holder and a mark on those ready
-  to start. «Show on graph» scopes the graph to the chain: it draws the members
-  and the root, recesses the done ones, and has a legend and a chip to leave.
-- The whole-space graph leaves out items that no drawn link touches, with a
-  switch that shows them again.
+- A search whose query is exactly a work-item reference, such as `MAIN-12`,
+  answers that item first in `search_work_items`, `GET /api/planning/search`,
+  the task finder's search and `GET /api/search`. It used to come after every
+  newer item that mentioned it, and a full page could leave it out.
+- The task finder opens the first result on Enter as soon as results show,
+  names each skipped project and space with the reason above the results, and
+  stays at the top of the window instead of moving as results arrive.
+- A board move the server refused no longer leaves the tile where it was
+  dropped, and a move sends the revision it read, so one made after an agent
+  changed the item is refused with `409` instead of overwriting it. A search on
+  the board no longer hides that an item is blocked.
+- The rail names each entry by what it shows, so a screen reader hears a
+  module's count and the questions waiting. The finder shortcut prints as
+  «Ctrl K»; its «⌘» made every first screen download a fallback font.
+- An address that names no page opens the app with «Section not found» and
+  status 404. Unreadable view settings in an address are reset with a notice,
+  a missing project lists the projects that exist, and a route a module cannot
+  open says so naming the module once.
+- The fallback font, the licence notice and the licence text are sent with
+  their own content types instead of `application/octet-stream`.
+- On POSIX, stopping a child process no longer kills the caller's process
+  group; a launch and an adapter run in a session of their own.
+- The release check runs every Python tool from its own interpreter, and stops
+  with one message when a `requirements-dev.txt` pin is missing or at another
+  version there.
 
 ## [2.0.0](https://github.com/Muratovnik/valkama/compare/v1.0.2...v2.0.0) - 2026-10-31
 
