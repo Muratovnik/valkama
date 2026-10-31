@@ -314,7 +314,7 @@ test('uppercase and off-scale weights are rejected as hierarchy devices', () => 
   assert.deepEqual(
     scanFixture(
       'future/fonts.css',
-      '@font-face { font-family: "Onest Workbench"; font-weight: 100 900; }',
+      '@font-face { font-family: "Onest Variable"; font-weight: 100 900; }',
     ),
     [],
   )

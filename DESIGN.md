@@ -38,15 +38,15 @@ typography:
     section: "16px"
     module: "18px"
   display:
-    fontFamily: "'Inter Variable', 'Onest Workbench', sans-serif"
+    fontFamily: "'Inter Variable', 'Onest Variable', sans-serif"
     fontSize: "1.5rem"
     lineHeight: 1.3
   interface:
-    fontFamily: "'Inter Variable', 'Onest Workbench', sans-serif"
+    fontFamily: "'Inter Variable', 'Onest Variable', sans-serif"
     fontSize: "1rem"
     lineHeight: 1.5
   control:
-    fontFamily: "'Inter Variable', 'Onest Workbench', sans-serif"
+    fontFamily: "'Inter Variable', 'Onest Variable', sans-serif"
     fontSize: "0.875rem"
     lineHeight: 1.4
   metadata:

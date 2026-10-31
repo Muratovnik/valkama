@@ -31,7 +31,7 @@
    being renamed. */
 
 @font-face {
-  font-family: 'Onest Workbench';
+  font-family: 'Onest Variable';
   font-weight: 100 900;
   font-style: normal;
   src: url('../../assets/fonts/Onest-Variable.ttf') format('truetype');
@@ -196,7 +196,7 @@
      one font and the choice carried nothing a reader could act on. What this
      product actually distinguishes is stated in DESIGN.md: the interface font,
      and the metadata font for what a person compares character by character. */
-  --font-family-interface: 'Inter Variable', 'Onest Workbench', sans-serif;
+  --font-family-interface: 'Inter Variable', 'Onest Variable', sans-serif;
   --font-family-mono: 'Cascadia Mono', consolas, monospace;
 
   /* Type roles: a whole `font` shorthand under one name.
