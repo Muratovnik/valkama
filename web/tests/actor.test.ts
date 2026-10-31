@@ -36,11 +36,16 @@ test('a holder prints its name and the start of its session, or its name alone',
   // The label the server writes for a claim whose client proved its session.
   assert.equal(
     holderName('codex (session 019a3c2e-5b7d-7c11-9e0f-2f4b6d8a1c3e)'),
-    'codex · 019a3c2e',
+    'codex · 019a3c2e-5b7d',
   )
   assert.equal(
     holderName('claude agent a7 (session 5937332f-1c2d-4e5f-8a9b-0c1d2e3f4a5b)'),
-    'claude agent a7 · 5937332f',
+    'claude agent a7 · 5937332f-1c2d',
+  )
+  // Two Codex sessions started a second apart share their first group.
+  assert.notEqual(
+    holderName('codex (session 019a3c2e-5b7d-7c11-9e0f-2f4b6d8a1c3e)'),
+    holderName('codex (session 019a3c2e-5f65-7d02-8a1b-3c5e7f9a2b4d)'),
   )
   // A holder signed by hand the old way reads the same way.
   assert.equal(holderName('claude-fable (session 1baa03d7)'), 'claude-fable · 1baa03d7')

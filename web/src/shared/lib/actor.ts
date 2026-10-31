@@ -32,8 +32,13 @@ export function actorSession(raw: string): string {
   return splitActor(raw).session
 }
 
-/** How many characters of a session id tell two holders apart at a glance. */
-const SESSION_PREFIX = 8
+/**
+ * How many characters of a session id tell two holders apart at a glance: its
+ * first two groups. Codex ids are UUIDv7, whose first 48 bits are the start
+ * time in milliseconds, so the first group alone repeats for sessions started
+ * within about a minute of each other.
+ */
+const SESSION_PREFIX = 13
 
 /**
  * Who holds a work item or a step, as every surface prints it. The server
