@@ -12,9 +12,11 @@
  * converts it, because a control that guesses its own type is how a numeric
  * field ends up holding `NaN` the moment the box is cleared.
  */
+import { computed } from 'vue'
+
 import VField from '@/shared/ui/VField.vue'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     label: string
     modelValue: string | number
@@ -25,6 +27,8 @@ withDefaults(
      */
     autofocus?: boolean
     disabled?: boolean
+    /** Why the value was refused; shown under the control and named by it. */
+    error?: string
     hint?: string
     inputmode?: 'numeric'
     list?: string
@@ -39,6 +43,7 @@ withDefaults(
   }>(),
   {
     hint: '',
+    error: '',
     placeholder: '',
     type: 'text',
     rows: 0,
@@ -55,6 +60,8 @@ withDefaults(
 )
 
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
+/** Absent rather than false, because `aria-invalid="false"` is a claim and not a default. */
+const invalidMark = computed(() => (props.error ? 'true' : undefined))
 
 function edited(event: Event) {
   emit('update:modelValue', (event.target as HTMLInputElement | HTMLTextAreaElement).value)
@@ -65,8 +72,10 @@ function edited(event: Event) {
   <!-- The wrapping element is the label, which is what associates the control. -->
   <!-- eslint-disable vuejs-accessibility/no-autofocus -->
   <VField
+    v-slot="{ errorId }"
     :label="label"
     :hint="hint"
+    :error="error"
   >
     <textarea
       v-if="rows"
@@ -78,6 +87,8 @@ function edited(event: Event) {
       :disabled="disabled"
       :autofocus="autofocus"
       :aria-label="label"
+      :aria-invalid="invalidMark"
+      :aria-describedby="errorId"
       @input="edited"
     />
     <input
@@ -96,6 +107,8 @@ function edited(event: Event) {
       :disabled="disabled"
       :autofocus="autofocus"
       :aria-label="label"
+      :aria-invalid="invalidMark"
+      :aria-describedby="errorId"
       @input="edited"
     />
   </VField>

@@ -22,8 +22,11 @@ const props = withDefaults(
     label: string
     modelValue: string
     options: readonly ChoiceOption[]
+    /** The id of the message that says why the choice was refused. */
+    describedby?: string
     disabled?: boolean
     emptyLabel?: string
+    invalid?: boolean
     placeholder?: string
     searchable?: boolean
     searchLabel?: string
@@ -34,10 +37,14 @@ const props = withDefaults(
     searchLabel: 'Search',
     emptyLabel: 'No matches',
     disabled: false,
+    describedby: undefined,
+    invalid: false,
   },
 )
 
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
+/** Absent rather than false, because `aria-invalid="false"` is a claim and not a default. */
+const invalidMark = computed(() => (props.invalid ? 'true' : undefined))
 const open = ref(false)
 const query = ref('')
 const searchInput = ref<HTMLInputElement | null>(null)
@@ -94,6 +101,8 @@ function updateOpen(value: boolean) {
         class="choice-trigger"
         :class="{ 'has-icon': selected?.icon }"
         :aria-label="label"
+        :aria-invalid="invalidMark"
+        :aria-describedby="describedby"
       >
         <ControlIcon
           v-if="selected?.icon"

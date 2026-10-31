@@ -11,11 +11,21 @@
  * native control: `SelectionControl` and `SegmentedControl` carry their own
  * accessible name, so their frame must be a `div` rather than a `<label>` that
  * would wrap a second name around them.
+ *
+ * An error is part of the field too: it stands under the control, and its id
+ * goes to the slot so the control can name it with `aria-describedby`. A form
+ * that only says "fill in the required fields" at its foot leaves the reader to
+ * find which field it meant.
  */
-withDefaults(defineProps<{ label: string; as?: 'label' | 'div'; hint?: string }>(), {
-  hint: '',
-  as: 'label',
-})
+import { computed, useId } from 'vue'
+
+const props = withDefaults(
+  defineProps<{ label: string; as?: 'label' | 'div'; error?: string; hint?: string }>(),
+  { hint: '', as: 'label', error: '' },
+)
+const errorId = useId()
+/** The message's id while there is a message, for the control to name. */
+const describedBy = computed(() => (props.error ? errorId : undefined))
 </script>
 
 <template>
@@ -24,7 +34,13 @@ withDefaults(defineProps<{ label: string; as?: 'label' | 'div'; hint?: string }>
     class="field"
   >
     <span class="field-label">{{ label }}</span>
-    <slot />
+    <slot :error-id="describedBy" />
+    <small
+      v-if="error"
+      :id="errorId"
+      class="field-error"
+      >{{ error }}</small
+    >
     <small
       v-if="hint"
       class="field-hint"
@@ -47,6 +63,11 @@ withDefaults(defineProps<{ label: string; as?: 'label' | 'div'; hint?: string }>
 
 .field-hint {
   color: var(--color-text-muted);
+  font: var(--font-detail);
+}
+
+.field-error {
+  color: var(--color-danger);
   font: var(--font-detail);
 }
 </style>
