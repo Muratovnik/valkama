@@ -6,6 +6,12 @@ import { fetchInputRequests } from '@/shared/api/inputRequestApi.ts'
 import type { InputRequestEntry, InputRequestList } from '@/shared/api/inputRequestModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 
+/**
+ * The questions still waiting, and whether they are all of them: a source that
+ * could not be read, or a list cut at its first page, makes `value` a floor.
+ */
+export type PendingCount = { incomplete: boolean; value: number }
+
 export function useInputRequests(target: () => PlanningTarget | undefined) {
   const result = ref<InputRequestList | null>(null)
   const loading = ref(false)
@@ -38,10 +44,15 @@ export function useInputRequests(target: () => PlanningTarget | undefined) {
         b.request.request_id.localeCompare(a.request.request_id),
     )
   })
-  const count = computed(() =>
-    !result.value || failed.value || partial.value || result.value.has_more
+  // A failed read says nothing about the count, so it stays unknown; an
+  // incomplete one still knows how many it found.
+  const count = computed<PendingCount | null>(() =>
+    !result.value || failed.value
       ? null
-      : entries.value.filter((entry) => entry.request.status === 'pending').length,
+      : {
+          value: entries.value.filter((entry) => entry.request.status === 'pending').length,
+          incomplete: partial.value || result.value.has_more,
+        },
   )
 
   async function refresh() {

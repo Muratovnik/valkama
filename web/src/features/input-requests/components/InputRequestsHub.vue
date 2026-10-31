@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 
 import RequestList from '@/features/input-requests/components/RequestList.vue'
 import { useInputRequests } from '@/features/input-requests/composables/useInputRequests.ts'
+import type { PendingCount } from '@/features/input-requests/composables/useInputRequests.ts'
 
 import type { InputAnswers } from '@/shared/api/inputRequestModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
@@ -12,7 +13,7 @@ import DialogFrame from '@/shared/ui/DialogFrame.vue'
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{
   close: []
-  count: [value: number | null]
+  count: [value: PendingCount | null]
   select: [target: PlanningTarget]
 }>()
 const { t } = useI18n()

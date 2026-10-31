@@ -23,6 +23,8 @@ import NavConnectionButton from '@/widgets/app-nav/components/NavConnectionButto
 import NavModuleList from '@/widgets/app-nav/components/NavModuleList.vue'
 import NavWorkActions from '@/widgets/app-nav/components/NavWorkActions.vue'
 
+import type { PendingCount } from '@/features/input-requests/composables/useInputRequests.ts'
+
 import type {
   ModuleId,
   ModuleManifest,
@@ -36,7 +38,7 @@ const props = withDefaults(
     modules: readonly ModuleManifest[]
     badges?: Partial<Record<ModuleId, number>>
     connection?: 'connecting' | 'live' | 'reconnecting'
-    pendingRequestCount?: number | null
+    pendingRequestCount?: PendingCount | null
     refreshing?: boolean
   }>(),
   { badges: () => ({}), connection: 'connecting', refreshing: false, pendingRequestCount: null },

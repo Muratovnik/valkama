@@ -37,7 +37,7 @@ vi.mock('@/shared/api/inputRequestApi.ts', async (original) => ({
 }))
 type Wrapper = ReturnType<typeof mount>
 const wrappers: Wrapper[] = []
-const plugins = () => [createI18n({ legacy: false, locale: 'en', messages })]
+const plugins = (locale: 'en' | 'ru' = 'en') => [createI18n({ legacy: false, locale, messages })]
 const buttons = (wrapper: Wrapper, name: string) =>
   wrapper.findAll('button').filter((control) => control.text() === name)
 const button = (wrapper: Wrapper, name: string) => present(buttons(wrapper, name)[0], name)
@@ -49,11 +49,11 @@ const updateChoice = async (wrapper: Wrapper, value: string, index = 0) => {
 }
 const describedMessage = (wrapper: Wrapper, control: { attributes: (name: string) => unknown }) =>
   wrapper.get(`#${String(present(control.attributes('aria-describedby'), 'aria-describedby'))}`)
-function hub() {
+function hub(locale: 'en' | 'ru' = 'en') {
   const wrapper = mount(InputRequestsHub, {
     props: { open: true },
     attachTo: document.body,
-    global: { plugins: plugins(), stubs: { teleport: true } },
+    global: { plugins: plugins(locale), stubs: { teleport: true } },
   })
   wrappers.push(wrapper)
   return wrapper
@@ -225,16 +225,17 @@ describe('human input requests', () => {
     expect(declineInputRequest).not.toHaveBeenCalled()
   })
 
-  it('treats unavailable and truncated counts as unknown and never calls an error an empty result', async () => {
+  it('keeps a truncated count as a floor, leaves a failed read unknown, and never calls an error an empty result', async () => {
     vi.mocked(fetchInputRequests)
       .mockResolvedValueOnce({ ...requestList([]), has_more: true })
       .mockRejectedValueOnce(new Error('offline'))
     const wrapper = hub()
     await flushPromises()
-    expect(wrapper.emitted('count')?.at(-1)).toEqual([null])
+    expect(wrapper.emitted('count')?.at(-1)).toEqual([{ value: 0, incomplete: true }])
     expect(wrapper.text()).toContain('first 100')
     await button(wrapper, 'Refresh').trigger('click')
     await flushPromises()
+    expect(wrapper.emitted('count')?.at(-1)).toEqual([null])
     expect(wrapper.text()).toContain('could not be refreshed')
     expect(wrapper.text()).not.toContain('No questions need')
   })
@@ -359,7 +360,7 @@ describe('human input requests', () => {
     await button(wrapper, 'Send answer').trigger('click')
     await flushPromises()
     expect(titles()).toEqual(['Newer question', 'Older question'])
-    expect(wrapper.emitted('count')?.at(-1)).toEqual([1])
+    expect(wrapper.emitted('count')?.at(-1)).toEqual([{ value: 1, incomplete: false }])
     expect(wrapper.get('.request-status').text()).toBe('Waiting for an answer: 1')
     expect(document.activeElement?.textContent).toBe('Older question')
     expect(buttons(wrapper, 'Refresh')).toHaveLength(1)
@@ -370,7 +371,7 @@ describe('human input requests', () => {
     await button(wrapper, 'Send answer').trigger('click')
     await flushPromises()
     expect(titles()).toEqual(['Newer question', 'Older question'])
-    expect(wrapper.emitted('count')?.at(-1)).toEqual([0])
+    expect(wrapper.emitted('count')?.at(-1)).toEqual([{ value: 0, incomplete: false }])
     // With nothing left to answer, focus stays in the dialog, on the line that says so.
     expect(wrapper.get('.request-status').text()).toBe('No questions need your answer.')
     expect(document.activeElement).toBe(wrapper.get('.request-status').element)

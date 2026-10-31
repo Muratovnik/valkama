@@ -16,18 +16,24 @@ import { computed } from 'vue'
 const props = withDefaults(
   defineProps<{
     value: number
+    /** The value is a floor: some of what it counts could not be read. */
+    incomplete?: boolean
     label?: string
     limit?: number
     placement?: 'overlay' | 'inline'
     tone?: 'quiet' | 'waiting'
   }>(),
-  { label: undefined, limit: 99, placement: 'overlay', tone: 'quiet' },
+  { label: undefined, limit: 99, incomplete: false, placement: 'overlay', tone: 'quiet' },
 )
 
-/** Past the limit the badge stops counting and says so, so the glyph stays one shape. */
-const shownValue = computed(() =>
-  props.value > props.limit ? `${props.limit}+` : String(props.value),
-)
+/**
+ * Past the limit the badge stops counting and says so, so the glyph stays one
+ * shape. A floor gets the same plus, so a reader cannot take it for the whole.
+ */
+const shownValue = computed(() => {
+  if (props.value > props.limit) return `${props.limit}+`
+  return props.incomplete ? `${props.value}+` : String(props.value)
+})
 </script>
 
 <template>

@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import type { PendingCount } from '@/features/input-requests/composables/useInputRequests.ts'
+
 import CountBadge from '@/shared/ui/CountBadge.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
-defineProps<{ pendingCount: number | null }>()
+defineProps<{ pendingCount: PendingCount | null }>()
 const emit = defineEmits<{ find: []; requests: [] }>()
 const { t } = useI18n()
 </script>
@@ -43,12 +45,15 @@ const { t } = useI18n()
       <span class="action-label">{{ t('requests.title') }}</span>
       <!-- Questions waiting are work for the reader: in the hint's grey, beside
            the Ctrl K shortcut, the number read as part of the furniture. -->
+      <!-- A count cut short by an unreadable source reads "2+": the number is
+           real, and the plus says the rest may still be waiting. -->
       <CountBadge
-        v-if="pendingCount !== null && pendingCount > 0"
+        v-if="pendingCount !== null && pendingCount.value > 0"
         class="action-count"
         placement="inline"
         tone="waiting"
-        :value="pendingCount"
+        :value="pendingCount.value"
+        :incomplete="pendingCount.incomplete"
       />
     </button>
   </div>

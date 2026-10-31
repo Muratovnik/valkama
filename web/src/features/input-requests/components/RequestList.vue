@@ -67,11 +67,16 @@ const emptyLabel = computed(() => {
 const waiting = computed(
   () => props.entries.filter((entry) => entry.request.status === 'pending').length,
 )
+/** The same condition the rail's count carries as its plus: a source or a page was not read. */
+const incomplete = computed(() => props.partial || Boolean(props.result?.has_more))
 /** What the refresh beside it would change: the first read, its failure, or the count. */
 const statusText = computed(() => {
   if (props.loading && !props.result) return t('requests.loading')
   if (props.failed) return t('requests.error')
-  if (waiting.value) return t('requests.count', { count: waiting.value })
+  if (waiting.value)
+    return t(incomplete.value ? 'requests.countIncomplete' : 'requests.count', {
+      count: waiting.value,
+    })
   if (props.entries.length) return t(props.item ? 'requests.itemEmpty' : 'requests.empty')
   return ''
 })
