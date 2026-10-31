@@ -33,15 +33,18 @@ const failureReason = computed(() => {
   const message = failureMessage(props.failure)
   return t(message.key, message.params ?? {})
 })
+/** Reasons a registered module gives when it cannot open this address here. */
+const CANNOT_OPEN_HERE = new Set<string>([
+  'unsupported-view',
+  'unsupported-scope',
+  'incompatible-entity',
+])
 const unavailableMessage = computed(() => {
   const module = props.unavailable?.input_module_id ?? ''
-  if (
-    props.unavailable?.reason === 'unsupported-view' ||
-    props.unavailable?.reason === 'unsupported-scope' ||
-    props.unavailable?.reason === 'incompatible-entity'
-  )
-    return t('platform.route.unavailable', { module })
-  return t('platform.route.unknown', { module })
+  const reason = props.unavailable?.reason ?? ''
+  return t(CANNOT_OPEN_HERE.has(reason) ? 'platform.route.unavailable' : 'platform.route.unknown', {
+    module,
+  })
 })
 </script>
 

@@ -91,8 +91,9 @@ export function usePlanningChainScope(options: ChainScopeOptions) {
   let controller: AbortController | undefined
 
   function keyOf(target: ChainTarget): string {
-    if (target.status !== 'chain') return ''
-    return JSON.stringify([options.space(), target.reference, target.scope])
+    return target.status === 'chain'
+      ? JSON.stringify([options.space(), target.reference, target.scope])
+      : ''
   }
 
   function settle(next: WorkItemChain | null, key = '') {

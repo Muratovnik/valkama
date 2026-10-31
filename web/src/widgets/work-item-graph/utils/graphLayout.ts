@@ -178,10 +178,11 @@ export function workNodes(
   showDone: boolean,
   scope: GraphScope = WHOLE_SPACE,
 ): WorkItemBrief[] {
-  if (scope.kind === 'chain') return chainNodes(source, scope, showDone)
-  return source.nodes.filter(
-    (node) => !node.container && (showDone || !node.state.is_terminal) && inScope(node, scope),
-  )
+  return scope.kind === 'chain'
+    ? chainNodes(source, scope, showDone)
+    : source.nodes.filter(
+        (node) => !node.container && (showDone || !node.state.is_terminal) && inScope(node, scope),
+      )
 }
 
 /**

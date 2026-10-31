@@ -68,8 +68,9 @@ function isDone(group: ChainGroup): boolean {
  * the same terms.
  */
 function detail(group: ChainGroup, member: ChainMember): string | null {
-  if (!isDone(group) && member.claim_ref) return actorName(member.claim_ref)
-  return rowStateName(props.groups[group], member)
+  return !isDone(group) && member.claim_ref
+    ? actorName(member.claim_ref)
+    : rowStateName(props.groups[group], member)
 }
 </script>
 
