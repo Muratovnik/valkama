@@ -360,6 +360,19 @@ class FailureTests(FrontTestCase):
         self.assertIn("broken", after_second_failure["result"]["content"][1]["text"])
         self.assertEqual(2, len(self.events("capabilities", "broken")))
 
+    def test_a_successful_switch_withdraws_the_warning_by_itself(self) -> None:
+        # The launcher then names nothing it can follow -- a drifted manifest --
+        # so only the switch itself can have withdrawn the warning.
+        front = self.front(self.release("good"))
+        self.switch(front, self.release("broken", capabilities_exit=1))
+        self.switch(front, self.release("next"))
+        self.pin = None
+
+        answer = self.call(front)
+
+        self.assertEqual("next", self.payload(answer)["release"])
+        self.assertEqual(1, len(answer["result"]["content"]), "the warning outlived its cause")
+
     def test_the_launcher_naming_the_running_release_again_withdraws_the_warning(self) -> None:
         good = self.release("good")
         front = self.front(good)

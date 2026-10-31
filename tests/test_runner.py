@@ -402,6 +402,21 @@ class RunnerLifecycleTests(unittest.TestCase):
         self.assertEqual([], self.runner.running())
 
 
+class SpawnGroupTests(unittest.TestCase):
+    @unittest.skipIf(sys.platform == "win32", "a session is the POSIX process group")
+    def test_a_launch_leads_a_session_of_its_own(self) -> None:
+        """Stopping a launch kills its process group, which must not be this process's."""
+
+        child = runner.Runner._default_spawn(
+            [sys.executable, "-c", "import os; print(os.getsid(0) == os.getpid())"],
+            os.getcwd(),
+            dict(os.environ),
+        )
+        output, _ = child.communicate(timeout=30)
+
+        self.assertEqual(b"True", output.strip())
+
+
 class WorktreeTests(unittest.TestCase):
     """Real Git, because the point is that the checkout actually appears."""
 
