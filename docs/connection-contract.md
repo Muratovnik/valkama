@@ -94,9 +94,11 @@ item: `reference`, `work_item_id`, `revision`, `state` (`key`, `name`,
 | `set_work_item_checklist` | `checklist`, the new steps as `item_id` and `text` |
 | `claim_work_item_checklist_item`, `tick_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by` |
 | `set_work_item_summary` | `summary_recorded: true` |
+| `apply_work_item_changes` | `applied`, what each group changed; `warnings` and `overridden` from its transition when there are any |
 
 Each of these tools takes an optional boolean `verbose`, false by default. With
-`verbose: true` the answer is the full item that `get_work_item` returns. The
+`verbose: true` the answer is the full item with its whole history, as
+`get_work_item` returns it with `full: true` but without `sessions`. The
 reads, `claim_ready_work_item` (the agent needs the item it just took),
 `create_planning_space`, `delete_work_item` and the tools that already answer
 briefly (`link_work_items`, `attach_work_item_ref`, `comment_work_item`) are
@@ -131,6 +133,87 @@ before (200 for a list, 50 for a search), and with the same `truncated` and
 `GET /api/planning/search` take the same `offset` parameter and carry the same
 two fields.
 
+### Reading one work item
+
+`get_work_item` answers with every current field of the item -- state,
+checklist, links, refs, summary, the lease -- but only the newest part of its
+history: the 5 most recent comments and the 10 most recent history events,
+oldest first. Beside them it carries `comments_total`, `events_total` and
+`history_truncated`, which is true when either list left something out. With
+the optional boolean `full: true` it answers with every comment and every
+event, and without the three counting fields.
+
+Both forms carry `sessions`: the agent sessions whose confirmed calls wrote to
+the item, in the order each first wrote there.
+
+```json
+{"session_id": "019a…", "client": "codex", "identity_source": "codex-meta",
+ "first_at": "2026-10-31T09:00:00.120Z", "last_at": "2026-10-31T09:40:12.004Z", "writes": 4}
+```
+
+Only a `confirmed` call with a session counts, so an unconfirmed call, a browser
+write and a write Valkama makes itself are not listed. `client` and
+`identity_source` are those of the session's latest call there, and `writes`
+counts its calls. A call is counted on the item it acted on first: a link counts
+for its source item, not its target. Because Valkama records this itself, a
+caller does not attach its own session id as a ref.
+
+The HTTP read `GET /api/planning/work-item` answers with the complete record and
+no `sessions`, as before. It takes the same cut as opt-in parameters:
+`comments` and `events` (non-negative integers, each keeping that many of the
+newest entries) and `sessions=true`. A count that is not a non-negative integer
+and a `sessions` other than `true` or `false` are refused with
+`invalid_request`.
+
+### Several changes in one call
+
+`apply_work_item_changes` applies several writes to one item in one call, all or
+nothing. It takes `id`, `author`, `expected_revision`, `verbose` and any of
+these groups, and applies them in this order:
+
+| Group | Shape | Works as |
+| --- | --- | --- |
+| `claim` | `true` | `claim_work_item`; `false` is no change |
+| `checklist_ticks` | list of `{item_id, done?}`, `done` true by default | `tick_work_item_checklist_item` |
+| `refs` | list of `{kind, value, label?}` | `attach_work_item_ref` |
+| `links` | list of `{other, kind, remove?}`, linking from this item | `link_work_items` |
+| `comment` | `{body, checklist_item_id?}` | `comment_work_item` |
+| `summary` | `{done, next, why?}` | `set_work_item_summary` |
+| `transition` | `{state, reason?, force?}` | `transition_work_item` |
+
+Each step is the write its single tool makes, with the same guards, events,
+revision bumps and refusals, so a closing transition is judged after the ticks
+and the summary sent with it. A list holds at most 100 entries. At least one
+group must name a change, and an entry with a field its group does not take is
+refused; both are `invalid_request` before anything is written.
+`expected_revision` is checked once, against the item as the call found it.
+
+The steps run inside one transaction. When one is refused, none of them is
+written, and the error body keeps the refusal's code, prefixes its message with
+the step, and names the step:
+
+```json
+{"error": {"code": "workflow_guard",
+ "message": "transition: [checklist] WIR-3 has 1 open checklist step(s); …",
+ "step": {"group": "transition", "index": 0}}}
+```
+
+`index` is the entry's position in a list group and 0 for the others. A refused
+stale revision keeps `expected` and `actual` beside it. The call is recorded as
+one call with its identity, and every row its steps write points to that call.
+
+The acknowledgement's `applied` names only the groups that changed something:
+
+```json
+{"claim": true, "checklist_ticks": [{"item_id": "…", "done": true}], "refs": 1,
+ "links": 1, "comment": {"comment_id": 41}, "summary": {"summary_comment_id": 42},
+ "transition": {"state": "done"}}
+```
+
+The single tools stay as they are. The batch is also the HTTP write
+`POST /api/planning/work-item/apply`, which takes the same body and answers with
+the full item and `applied`.
+
 ### Argument names
 
 The published schemas name one spelling for each argument. A Planning tool also
@@ -147,7 +230,8 @@ nothing below the MCP surface reads them.
 
 A Planning tool refuses an argument its schema does not have, and a required
 argument that is missing, naming the tool, the argument and the arguments the
-tool takes, for example `get_work_item: unknown argument 'item'; expected 'id'`.
+tool takes, for example
+`get_work_item: unknown argument 'item'; expected 'id' (required), 'full'`.
 
 Prompts and resources are deliberately not offered. Planning tools manage work;
 project context belongs elsewhere.
@@ -196,8 +280,8 @@ When the client opened with `initialize`, the `clientInfo` name and version it
 sent are recorded with each call; otherwise the client is named after the
 identity channel (`codex`, `claude`). Nothing else from `_meta` is stored.
 
-`get_work_item`, and a write with `verbose: true`, answer every history event
-with its call's identity:
+Every history event that `get_work_item` or a write with `verbose: true`
+answers with carries its call's identity:
 
 ```json
 {"action": "claimed", "detail": "", "author": "codex", "at": "2026-10-31T09:00:00Z",

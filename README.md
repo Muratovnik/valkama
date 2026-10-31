@@ -443,13 +443,22 @@ Three things make a card honest about its own progress:
   splitting a work item each hold their own step.
   `comment_work_item` accepts an optional `checklist_item_id`: the saved comment
   keeps a quote of that step even after it is renamed or removed.
-- **Typed refs** — commit hashes, session ids, memory entry ids — attached with
+- **Typed refs** — commit hashes, memory entry ids, urls — attached with
   `attach_work_item_ref`, so the next agent reads pointers instead of doing
-  archaeology.
+  archaeology. An agent's own session needs no ref: Valkama records the
+  confirmed session behind every write, and `get_work_item` lists those
+  sessions.
 - **An activity trace.** Creations, moves, claims, takeovers, releases,
   completions and link changes are all recorded with an author. `get_work_item`
-  returns it, so nobody has to guess who did what. Reordering within a lane is
-  deliberately *not* history.
+  returns the newest of it, and all of it with `full: true`, so nobody has to
+  guess who did what. Reordering within a lane is deliberately *not* history.
+
+An agent that finishes a step usually makes several writes to one card: tick it,
+attach the commit, comment, record the summary, move the card.
+`apply_work_item_changes` does them in one call, in a fixed order and all or
+nothing, so a closing move sees the ticks and the summary sent with it. The
+exact shapes are in
+[the connection contract](docs/connection-contract.md#several-changes-in-one-call).
 
 A claim also says whether anyone is still behind it. When the client proves its
 session, the claim is a lease on that session: `live` while the session is

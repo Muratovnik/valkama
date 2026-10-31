@@ -12,6 +12,17 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Added
 
+- The MCP tool `apply_work_item_changes` applies several writes to one work
+  item in one call: a claim, checklist ticks, refs, links, a comment, the
+  summary and a transition, in that order, so a closing transition sees the
+  ticks and the summary sent with it. Each step is the write its single tool
+  makes, with the same guards, events and revision bumps. The call is all or
+  nothing: a refused step writes nothing, and the error keeps the refusal's
+  code and names the step (`step: {group, index}`). The batch is recorded as one
+  call with its identity. It answers with the usual acknowledgement plus
+  `applied`, what each group changed; `verbose: true` returns the full item.
+  The HTTP write `POST /api/planning/work-item/apply` takes the same body. The
+  single tools are unchanged.
 - `valkama hook <client> <event>`, the command Claude Code and Codex hooks run.
   It records a session lifecycle event from stdin straight into the store, with
   no `serve` or MCP session running. It covers session start and end, subagent
@@ -162,6 +173,19 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Changed
 
+- The MCP tool `get_work_item` answers by default with the item's current
+  fields and only the newest part of its history: the 5 most recent comments
+  and 10 most recent events, with `comments_total`, `events_total` and
+  `history_truncated`. The new boolean argument `full: true` returns the
+  complete history, as the tool did before. The HTTP read
+  `GET /api/planning/work-item` is unchanged and takes the same cut as opt-in
+  `comments`, `events` and `sessions` parameters.
+- `get_work_item` also carries `sessions`: each agent session whose confirmed
+  calls wrote to the item, with its `client`, `identity_source`, `first_at`,
+  `last_at` and number of `writes`. Valkama records this itself, so the MCP
+  server's instructions and the `attach_work_item_ref` description no longer
+  ask an agent to attach its session id as a ref, and they point to
+  `apply_work_item_changes` for several writes to one item.
 - Two sessions that sign with the same `author` no longer release or take
   over each other's claim. A confirmed session holds its claim whatever author
   it signs with, and any other caller needs `force` against a live lease. A
