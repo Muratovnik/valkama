@@ -642,9 +642,10 @@ def _hand_back(
     abandoned either, because that list is of held items. So an item in an
     active state goes back to the first queued state its workflow lets it reach,
     or the backlog when there is none; the answer is that move, for the
-    caller's `requeued`, or None. Its checklist, comments and history stay. An item whose checklist still has a claimed step
-    stays active, because that step's holder is still its executor; review,
-    blocked and finished items stay where they are.
+    caller's `requeued`, or None. Its checklist, comments and history stay. An
+    item whose checklist still has a claimed step stays active, because that
+    step's holder is still its executor; review, blocked and finished items stay
+    where they are.
     """
 
     row = read_model.item_by_id(conn, identity)
