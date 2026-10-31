@@ -303,7 +303,9 @@ test('the finder top edge crosses no label behind it at 1440, 1024 and 390 wide'
     await expect
       .poll(async () => {
         const first = JSON.stringify(await dialog.boundingBox())
-        await page.waitForTimeout(150)
+        await page.evaluate(
+          () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+        )
         const animations = await page.evaluate(() => document.getAnimations().length)
         return animations === 0 && first === JSON.stringify(await dialog.boundingBox())
       })
