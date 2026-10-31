@@ -10,6 +10,26 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+### Added
+
+- The store gains what session identity and claim leases need, still at schema
+  9. A new append-only table `execution_events` records the execution tree:
+  client lifecycle events and every Planning write call with the identity it
+  carried. Its triggers refuse UPDATE and DELETE.
+  - `work_item_events`, `work_item_comments` and `work_item_refs` gain a
+    `call_id` link to the call that wrote them.
+  - `work_items` gains `claim_call_id`, the call that took the current claim.
+  - `sessions` gains `parent_session_id`, `agent_id`, `transcript_path` and
+    `client_version`.
+
+  The first open of an existing store by this build takes a verified snapshot
+  labelled `preidentity` and adds these columns once. Every existing row keeps
+  its values, and its new link is empty, which reads as "not confirmed".
+  Nothing reads or writes the new columns yet, and the MCP tools are unchanged.
+  An earlier schema-9 build still opens the store and writes to it. A
+  `claim_ref` write that does not name its call, which is how such a build
+  claims, clears the claim's link.
+
 ### Changed
 
 - **Breaking for every running client: store schema 9.** The first open by this

@@ -38,7 +38,10 @@ class PlanningInteractionsMigrationTests(unittest.TestCase):
         self.conn.execute(
             "CREATE TABLE work_item_events(id INTEGER PRIMARY KEY AUTOINCREMENT,work_item_id TEXT NOT NULL REFERENCES work_items(work_item_id) ON DELETE CASCADE,action TEXT NOT NULL CHECK(action IN ('created','summarized')),detail TEXT NOT NULL DEFAULT '',author TEXT NOT NULL DEFAULT 'agent',created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')))"
         )
-        self.conn.execute("INSERT INTO work_item_events SELECT * FROM future_events")
+        self.conn.execute(
+            "INSERT INTO work_item_events(id,work_item_id,action,detail,author,created_at)"
+            " SELECT id,work_item_id,action,detail,author,created_at FROM future_events"
+        )
         self.conn.execute("DROP TABLE future_events")
         self.conn.execute("CREATE INDEX work_item_events_item ON work_item_events(work_item_id,id)")
         self.conn.execute("CREATE INDEX retained_event_author ON work_item_events(author)")
@@ -52,12 +55,18 @@ class PlanningInteractionsMigrationTests(unittest.TestCase):
         self.conn.execute("DELETE FROM work_item_events WHERE id=999")
         self.conn.commit()
         self.identity = store_backups.logical_identity(self.conn)
-        self.comments = [
-            tuple(row) for row in self.conn.execute("SELECT * FROM work_item_comments ORDER BY id")
-        ]
-        self.events = [
-            tuple(row) for row in self.conn.execute("SELECT * FROM work_item_events ORDER BY id")
-        ]
+        # Read back through the columns this source has: later steps append
+        # columns, and what is held is that every value here is still there.
+        self.columns = {
+            table: [str(row[1]) for row in self.conn.execute(f"PRAGMA table_info({table})")]
+            for table in ("work_item_comments", "work_item_events")
+        }
+        self.comments = self.rows(self.conn, "work_item_comments")
+        self.events = self.rows(self.conn, "work_item_events")
+
+    def rows(self, conn: sqlite3.Connection, table: str) -> list[tuple]:
+        names = ", ".join(self.columns[table])
+        return [tuple(row) for row in conn.execute(f"SELECT {names} FROM {table} ORDER BY id")]
 
     def snapshots(self) -> list[Path]:
         return list((Path(self.path).parent / "backups").glob("*-preinteractions-*.sqlite3"))
@@ -70,17 +79,8 @@ class PlanningInteractionsMigrationTests(unittest.TestCase):
         )
         self.assertEqual(1, len(self.snapshots()))
         self.assertEqual(self.identity, store_backups.snapshot_identity(str(self.snapshots()[0])))
-        self.assertEqual(
-            self.comments,
-            [
-                tuple(row)[:6]
-                for row in self.conn.execute("SELECT * FROM work_item_comments ORDER BY id")
-            ],
-        )
-        self.assertEqual(
-            self.events,
-            [tuple(row) for row in self.conn.execute("SELECT * FROM work_item_events ORDER BY id")],
-        )
+        self.assertEqual(self.comments, self.rows(self.conn, "work_item_comments"))
+        self.assertEqual(self.events, self.rows(self.conn, "work_item_events"))
         self.assertIsNotNone(
             self.conn.execute(
                 "SELECT 1 FROM sqlite_master WHERE name='retained_event_author'"
@@ -122,13 +122,7 @@ class PlanningInteractionsMigrationTests(unittest.TestCase):
             replayed = store.connect()
             try:
                 self.assertFalse(planning_store.interactions_migration_needed(replayed))
-                self.assertEqual(
-                    self.events,
-                    [
-                        tuple(row)
-                        for row in replayed.execute("SELECT * FROM work_item_events ORDER BY id")
-                    ],
-                )
+                self.assertEqual(self.events, self.rows(replayed, "work_item_events"))
                 store_backups.integrity_check(replayed, source="restored migration")
             finally:
                 replayed.close()

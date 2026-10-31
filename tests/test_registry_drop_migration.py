@@ -43,6 +43,9 @@ RETIRED = {
     "integration_settings",
 }
 RETIRED_INDEXES = {"platform_adapter_links_item", "platform_registry_audit_entity"}
+#: What the same upgrade adds: session identity is an additive step every store
+#: older than it takes on the way, schema 8 included.
+ADDED = {"execution_events"}
 
 
 def _catalog(conn: sqlite3.Connection, kind: str) -> set[str]:
@@ -54,10 +57,26 @@ def _catalog(conn: sqlite3.Connection, kind: str) -> set[str]:
     }
 
 
-def _rows(conn: sqlite3.Connection, tables: set[str]) -> dict[str, list[tuple]]:
+def _columns(conn: sqlite3.Connection, tables: set[str]) -> dict[str, list[str]]:
     return {
-        table: [tuple(row) for row in conn.execute(f"SELECT * FROM {table} ORDER BY rowid")]
+        table: [str(row[1]) for row in conn.execute(f"PRAGMA table_info({table})")]
         for table in sorted(tables)
+    }
+
+
+def _rows(conn: sqlite3.Connection, columns: dict[str, list[str]]) -> dict[str, list[tuple]]:
+    """Every row of each table, read through the columns the source store had.
+
+    An additive step appends columns to some of these tables; what is held here
+    is that every value the source had is still where it was.
+    """
+
+    return {
+        table: [
+            tuple(row)
+            for row in conn.execute(f"SELECT {', '.join(names)} FROM {table} ORDER BY rowid")
+        ]
+        for table, names in columns.items()
     }
 
 
@@ -147,7 +166,8 @@ class SchemaEightMigrationTests(unittest.TestCase):
                 with self.subTest(table=table):
                     self.assertTrue(source.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
             kept = _catalog(source, "table") - RETIRED
-            before = _rows(source, kept)
+            shape = _columns(source, kept)
+            before = _rows(source, shape)
             before_counts = _counts(source)
             identity = store_backups.logical_identity(source)
         finally:
@@ -156,13 +176,13 @@ class SchemaEightMigrationTests(unittest.TestCase):
         conn = store.connect()
         self.addCleanup(conn.close)
         self.assertEqual(9, conn.execute("PRAGMA user_version").fetchone()[0])
-        self.assertEqual(kept, _catalog(conn, "table"))
+        self.assertEqual(kept | ADDED, _catalog(conn, "table"))
         self.assertEqual(set(), RETIRED_INDEXES & _catalog(conn, "index"))
         self.assertEqual(
             {"platform_store_metadata", "platform_ui_prefs"},
             {name for name in _catalog(conn, "table") if name.startswith("platform_")},
         )
-        self.assertEqual(before, _rows(conn, kept))
+        self.assertEqual(before, _rows(conn, shape))
         self.assertEqual("Kept with its history", planning.get_work_item(conn, "KEEP-1")["title"])
         self.assertEqual("ok", conn.execute("PRAGMA integrity_check").fetchone()[0])
 
@@ -191,7 +211,8 @@ class SchemaEightMigrationTests(unittest.TestCase):
         self.populated_source()
         source = sqlite3.connect(self.path)
         kept = _catalog(source, "table") - RETIRED
-        before = _rows(source, kept)
+        shape = _columns(source, kept)
+        before = _rows(source, shape)
         source.close()
         store.connect().close()
         restored = str(Path(self.path).parent / "restored.sqlite3")
@@ -204,8 +225,8 @@ class SchemaEightMigrationTests(unittest.TestCase):
             replayed = store.connect()
             self.addCleanup(replayed.close)
             self.assertEqual(9, replayed.execute("PRAGMA user_version").fetchone()[0])
-            self.assertEqual(kept, _catalog(replayed, "table"))
-            self.assertEqual(before, _rows(replayed, kept))
+            self.assertEqual(kept | ADDED, _catalog(replayed, "table"))
+            self.assertEqual(before, _rows(replayed, shape))
         # The restored store is the snapshot's own source, so the replay reuses
         # that recovery point instead of stacking a second copy of it.
         self.assertEqual(1, len(self.snapshots("preschema9")))

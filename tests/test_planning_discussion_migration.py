@@ -67,12 +67,11 @@ class PlanningDiscussionMigrationTests(unittest.TestCase):
                 dict(row) for row in self.conn.execute("SELECT * FROM work_items ORDER BY number")
             ],
             "comments": [
-                tuple(row)
+                dict(row)
                 for row in self.conn.execute("SELECT * FROM work_item_comments ORDER BY id")
             ],
             "events": [
-                tuple(row)
-                for row in self.conn.execute("SELECT * FROM work_item_events ORDER BY id")
+                dict(row) for row in self.conn.execute("SELECT * FROM work_item_events ORDER BY id")
             ],
         }
 
@@ -92,16 +91,21 @@ class PlanningDiscussionMigrationTests(unittest.TestCase):
             strict=True,
         ):
             self.assertEqual(original, {name: row[name] for name in original})
+        # Every value the source held, read by the names it had: the steps on the
+        # way append columns, and the appended ones are not what is held here.
         self.assertEqual(
             source["comments"],
             [
-                tuple(row)[:5]
+                {name: row[name] for name in source["comments"][0]}
                 for row in self.conn.execute("SELECT * FROM work_item_comments WHERE id=77")
             ],
         )
         self.assertEqual(
             source["events"],
-            [tuple(row) for row in self.conn.execute("SELECT * FROM work_item_events ORDER BY id")],
+            [
+                {name: row[name] for name in source["events"][0]}
+                for row in self.conn.execute("SELECT * FROM work_item_events ORDER BY id")
+            ],
         )
         first = service.get_work_item(self.conn, "OLD-1")
         report = first["comments"][-1]

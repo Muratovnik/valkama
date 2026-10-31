@@ -94,6 +94,11 @@ CREATE TABLE IF NOT EXISTS work_items(
     revision INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT {_NOW},
     updated_at TEXT NOT NULL DEFAULT {_NOW},
+    -- The write call that took the current claim: its session, agent, time and
+    -- whether that identity was confirmed are read from that row, so they are
+    -- never a second copy here. NULL for a claim recorded before identity
+    -- existed, and for one an older build wrote; see `migrate_identity`.
+    claim_call_id INTEGER REFERENCES execution_events(id),
     UNIQUE(planning_space_id, number)
 );
 CREATE INDEX IF NOT EXISTS work_items_state
@@ -121,7 +126,8 @@ CREATE TABLE IF NOT EXISTS work_item_comments(
     report TEXT NOT NULL DEFAULT '',
     checklist_item_id TEXT,
     checklist_item_text TEXT,
-    created_at TEXT NOT NULL DEFAULT {_NOW}
+    created_at TEXT NOT NULL DEFAULT {_NOW},
+    call_id INTEGER REFERENCES execution_events(id)
 );
 CREATE INDEX IF NOT EXISTS work_item_comments_item ON work_item_comments(work_item_id, id);
 CREATE TABLE IF NOT EXISTS work_item_refs(
@@ -132,6 +138,7 @@ CREATE TABLE IF NOT EXISTS work_item_refs(
     label TEXT NOT NULL DEFAULT '',
     author TEXT NOT NULL DEFAULT 'agent',
     created_at TEXT NOT NULL DEFAULT {_NOW},
+    call_id INTEGER REFERENCES execution_events(id),
     UNIQUE(work_item_id, kind, value)
 );
 CREATE TABLE IF NOT EXISTS work_item_events(
@@ -140,7 +147,8 @@ CREATE TABLE IF NOT EXISTS work_item_events(
     action TEXT NOT NULL CHECK(action IN ({_EVENT_ACTION_SQL})),
     detail TEXT NOT NULL DEFAULT '',
     author TEXT NOT NULL DEFAULT 'agent',
-    created_at TEXT NOT NULL DEFAULT {_NOW}
+    created_at TEXT NOT NULL DEFAULT {_NOW},
+    call_id INTEGER REFERENCES execution_events(id)
 );
 CREATE INDEX IF NOT EXISTS work_item_events_item ON work_item_events(work_item_id, id);
 CREATE TABLE IF NOT EXISTS work_item_requests(
@@ -280,6 +288,71 @@ def migrate_discussion(conn: sqlite3.Connection) -> None:
             SELECT RAISE(ABORT, 'work item summary must match its selected report');
         END
     """)
+
+
+#: The link from a Planning row to the write call that produced it, by table,
+#: as each one is added to a store created before session identity. Appended
+#: rather than placed: ALTER TABLE can only append, and a fresh store declares
+#: the same column last in the base schema above, so both shapes agree.
+_IDENTITY_COLUMNS = {
+    "work_items": ("claim_call_id", "claim_call_id INTEGER REFERENCES execution_events(id)"),
+    "work_item_events": ("call_id", "call_id INTEGER REFERENCES execution_events(id)"),
+    "work_item_comments": ("call_id", "call_id INTEGER REFERENCES execution_events(id)"),
+    "work_item_refs": ("call_id", "call_id INTEGER REFERENCES execution_events(id)"),
+}
+
+# What keeps `claim_call_id` honest against a writer that does not know it. A
+# build from before session identity still claims, takes over and releases by
+# writing `claim_ref` alone, and the link it leaves behind would then name the
+# previous holder's call -- a claim attributed to a session that never made it.
+# Every write that sets a holder here names a new call, and every release clears
+# the link in the same UPDATE, so a `claim_ref` write that leaves the link as it
+# was can only come from such a writer, and the claim it made is unconfirmed.
+# Call ids are unique, so the rule cannot tie the way a timestamp would.
+_CLAIM_FOLLOWS_CALL = """
+CREATE TRIGGER IF NOT EXISTS work_items_claim_follows_call
+AFTER UPDATE OF claim_ref ON work_items
+WHEN NEW.claim_call_id IS OLD.claim_call_id AND NEW.claim_call_id IS NOT NULL
+BEGIN
+    UPDATE work_items SET claim_call_id = NULL WHERE work_item_id = NEW.work_item_id;
+END
+"""
+
+
+def identity_migration_needed(conn: sqlite3.Connection) -> bool:
+    """Whether a Planning store predates the link to its write calls."""
+
+    tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "work_items" not in tables:
+        return False
+    for table, (column, _) in _IDENTITY_COLUMNS.items():
+        columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in columns:
+            return True
+    return (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='trigger' AND name='work_items_claim_follows_call'"
+        ).fetchone()
+        is None
+    )
+
+
+def migrate_identity(conn: sqlite3.Connection) -> None:
+    """Link Planning rows to the write call that made them, once.
+
+    Additive only: every existing row keeps its values and gains a NULL link,
+    which reads as a write nobody confirmed -- true of everything recorded
+    before identity existed. No row changes meaning, so the schema ratchet
+    stays where it is and a build from before this step still opens the store.
+    The trigger is created here rather than in the base schema, which runs
+    before this against tables that may not have the column yet.
+    """
+
+    for table, (column, definition) in _IDENTITY_COLUMNS.items():
+        columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in columns:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {definition}")
+    conn.execute(_CLAIM_FOLLOWS_CALL)
 
 
 SCHEMA_TABLES = (

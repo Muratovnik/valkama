@@ -103,7 +103,11 @@ CREATE TABLE IF NOT EXISTS sessions(
     attention_seen INTEGER NOT NULL DEFAULT 0,
     started_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
     last_seen TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
-    ended_at TEXT
+    ended_at TEXT,
+    parent_session_id TEXT NOT NULL DEFAULT '',
+    agent_id TEXT NOT NULL DEFAULT '',
+    transcript_path TEXT NOT NULL DEFAULT '',
+    client_version TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS session_events(
     id INTEGER PRIMARY KEY,
@@ -118,6 +122,55 @@ CREATE TABLE IF NOT EXISTS session_events(
 );
 CREATE INDEX IF NOT EXISTS session_events_session ON session_events(session_id, id);
 CREATE INDEX IF NOT EXISTS session_events_klass ON session_events(klass, id);
+"""
+    # The execution tree: what clients reported through their hooks, and every
+    # Planning write call with the identity it carried. Appended to and never
+    # edited, which the two triggers hold. Nothing here points out: history
+    # outlives a deleted work item, and a replayed event must not fail on a
+    # session row that has not been written yet. Planning rows point in.
+    + """
+CREATE TABLE IF NOT EXISTS execution_events(
+    id INTEGER PRIMARY KEY,
+    event_uid TEXT NOT NULL UNIQUE,
+    kind TEXT NOT NULL,
+    identity_state TEXT NOT NULL,
+    identity_source TEXT NOT NULL,
+    delivery TEXT NOT NULL DEFAULT 'direct',
+    received_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    occurred_at TEXT,
+    spooled_at TEXT,
+    client TEXT,
+    client_version TEXT,
+    hook_event TEXT,
+    tool TEXT,
+    session_id TEXT,
+    agent_id TEXT,
+    agent_type TEXT,
+    parent_session_id TEXT,
+    turn_id TEXT,
+    tool_use_id TEXT,
+    permission_mode TEXT,
+    model TEXT,
+    source TEXT,
+    reason TEXT,
+    cwd TEXT,
+    transcript_path TEXT,
+    archive_path TEXT,
+    archive_sha256 TEXT,
+    work_item_id TEXT
+);
+CREATE INDEX IF NOT EXISTS execution_events_session
+    ON execution_events(session_id, id) WHERE session_id IS NOT NULL;
+CREATE TRIGGER IF NOT EXISTS execution_events_append_only_update
+BEFORE UPDATE ON execution_events
+BEGIN
+    SELECT RAISE(ABORT, 'execution_events is append-only');
+END;
+CREATE TRIGGER IF NOT EXISTS execution_events_append_only_delete
+BEFORE DELETE ON execution_events
+BEGIN
+    SELECT RAISE(ABORT, 'execution_events is append-only');
+END;
 """
     # After both of the tables it points at: an execution names a work item and
     # the sessions that carried it, and a foreign key wants its target to exist.
@@ -270,9 +323,58 @@ SCHEMA_TABLES = (
     *planning_store.SCHEMA_TABLES,
     "sessions",
     "session_events",
+    "execution_events",
     *execution_store.SCHEMA_TABLES,
     *platform_core.SCHEMA_TABLES,
 )
+
+#: What a session row learned to say about itself when session identity
+#: arrived: the session a subagent row belongs to (or the one a resumed session
+#: continues), the subagent's own id, the transcript the client reported and its
+#: version. Appended to an existing table, declared last in the base schema.
+_SESSION_IDENTITY_COLUMNS = (
+    "parent_session_id",
+    "agent_id",
+    "transcript_path",
+    "client_version",
+)
+
+
+def _identity_migration_needed(conn: sqlite3.Connection) -> bool:
+    """Whether an existing store predates session identity.
+
+    Asked before the first write, like every other gate on a recovery point:
+    the answer decides whether a verified snapshot is taken first.
+    """
+
+    tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "sessions" not in tables:
+        return False
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(sessions)")}
+    return (
+        "execution_events" not in tables
+        or not set(_SESSION_IDENTITY_COLUMNS) <= columns
+        or planning_store.identity_migration_needed(conn)
+    )
+
+
+def _migrate_session_identity(conn: sqlite3.Connection) -> None:
+    """Give an existing `sessions` table the identity columns, once.
+
+    Additive: every column is text with an empty default, the table's own
+    style, so an older build's insert still lands and no row changes meaning.
+    """
+
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(sessions)")}
+    for column in _SESSION_IDENTITY_COLUMNS:
+        if column not in columns:
+            conn.execute(f"ALTER TABLE sessions ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
+    # Here rather than in the base schema: that runs before this, against a
+    # table that does not have the column yet.
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS sessions_parent ON sessions(parent_session_id)"
+        " WHERE parent_session_id != ''"
+    )
 
 
 def _snapshot_before_new_tables(conn: sqlite3.Connection) -> str | None:
@@ -555,6 +657,16 @@ def connect() -> sqlite3.Connection:
                 _, source_identity = store_backups.verified_snapshot(
                     conn, "preinteractions", locate=_backups
                 )
+            # Session identity is additive, so it takes its own recovery point
+            # only when nothing above took one already for this same open.
+            if (
+                source_identity is None
+                and pretable_backup is None
+                and _identity_migration_needed(conn)
+            ):
+                _, source_identity = store_backups.verified_snapshot(
+                    conn, "preidentity", locate=_backups
+                )
 
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA foreign_keys=ON")
@@ -590,6 +702,8 @@ def connect() -> sqlite3.Connection:
             planning_store.migrate_discussion(conn)
             planning_store.migrate_interactions(conn)
             planning_store.migrate_cancelled_state(conn)
+            planning_store.migrate_identity(conn)
+            _migrate_session_identity(conn)
             audit_migration = platform_migrations.schema_migration_needed(conn)
             audit_order_migration = platform_migrations.registry_audit_order_migration_needed(conn)
             authorization_migration = platform_migrations.authorization_owner_migration_needed(conn)

@@ -24,12 +24,15 @@ CREATED_AT = "2026-10-30T00:00:00Z"
 _NAME = re.compile(r"^CREATE\s+(?:UNIQUE\s+)?(?:TABLE|INDEX|TRIGGER)\s+(\w+)", re.IGNORECASE)
 
 
-def statements() -> list[tuple[str, str]]:
-    """Every captured statement with the name of the object it creates, in order."""
+def statements(fixture: Path = FIXTURE) -> list[tuple[str, str]]:
+    """Every captured statement with the name of the object it creates, in order.
+
+    The schema-9 fixture is read the same way, so it passes its own file.
+    """
 
     collected: list[tuple[str, str]] = []
     pending = ""
-    for line in FIXTURE.read_text(encoding="utf-8").splitlines(keepends=True):
+    for line in fixture.read_text(encoding="utf-8").splitlines(keepends=True):
         if not pending and line.startswith("--"):
             continue
         pending += line
@@ -37,11 +40,11 @@ def statements() -> list[tuple[str, str]]:
             statement = pending.strip()
             match = _NAME.match(statement)
             if match is None:
-                raise ValueError(f"unrecognised schema-8 statement: {statement[:60]}")
+                raise ValueError(f"unrecognised {fixture.name} statement: {statement[:60]}")
             collected.append((match.group(1), statement))
             pending = ""
     if pending.strip():
-        raise ValueError("the schema-8 fixture ends inside a statement")
+        raise ValueError(f"{fixture.name} ends inside a statement")
     return collected
 
 
