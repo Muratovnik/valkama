@@ -14,13 +14,14 @@ import pathlib
 import sqlite3
 import sys
 import tempfile
+import time
 import unittest
 from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from server import cli, processes, runner, store
+from server import cli, processes, runner, store, transcripts
 from server.executions import service as execution_service
 from server.hooks import spool
 from server.ops import configuration, doctor, setup
@@ -334,6 +335,72 @@ class DoctorHookTests(unittest.TestCase):
             "claude 2026-10-31T11:00:00.000Z, codex 2026-10-31T09:00:00.000Z",
             checks["hook-last-event"]["presentation"]["parameters"]["clients"],
         )
+
+    def test_the_transcript_archive_counts_copies_owed_copies_and_orphans(self) -> None:
+        conn = store.connect()
+        self.addCleanup(conn.close)
+        root = transcripts.directory(self.path)
+        os.makedirs(os.path.join(root, "S"))
+        with open(os.path.join(root, "S", "main-0123456789abcdef.jsonl"), "wb") as handle:
+            handle.write(b"{}\n")
+        self.event(
+            conn,
+            "1",
+            kind=transcripts.ARCHIVED,
+            identity_source="valkama",
+            session_id="S",
+            archive_path="S/main-0123456789abcdef.jsonl",
+            archive_sha256="x",
+        )
+        conn.commit()
+        check = self.by_id()["transcript-archive"]
+        self.assertEqual("ok", check["status"])
+        self.assertEqual(
+            {"archived": 1, "bytes": 3, "pending": 0, "orphans": 0, "lost": 0, "path": root},
+            check["presentation"]["parameters"],
+        )
+
+        self.event(
+            conn,
+            "2",
+            kind="session_end",
+            session_id="T",
+            transcript_path="C:/client/t.jsonl",
+            occurred_at="2020-01-01T00:00:00.000Z",
+        )
+        with open(os.path.join(root, "S", "main-fedcba9876543210.jsonl"), "wb") as handle:
+            handle.write(b"{}\n")
+        conn.commit()
+        check = self.by_id()["transcript-archive"]
+        parameters = check["presentation"]["parameters"]
+        self.assertEqual(
+            ("warn", 1, 1), (check["status"], parameters["pending"], parameters["orphans"])
+        )
+        self.assertIn("since 2020-01-01", check["detail"])
+        self.assertTrue(check["fix"])
+
+    def test_a_fresh_copy_owed_is_not_a_warning(self) -> None:
+        conn = store.connect()
+        self.addCleanup(conn.close)
+        self.event(
+            conn,
+            "1",
+            kind="session_end",
+            session_id="T",
+            transcript_path="C:/client/t.jsonl",
+            occurred_at=time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime()),
+        )
+        conn.commit()
+        check = self.by_id()["transcript-archive"]
+        self.assertEqual(
+            ("ok", 1), (check["status"], check["presentation"]["parameters"]["pending"])
+        )
+
+    def test_an_unreadable_archive_record_is_unknown(self) -> None:
+        made = sqlite3.connect(self.path)
+        made.execute("PRAGMA user_version=9")
+        made.close()
+        self.assertEqual("unknown", doctor._transcript_check(self.path)["status"])
 
     def test_a_store_without_the_execution_tree_is_unknown_not_a_crash(self) -> None:
         made = sqlite3.connect(self.path)

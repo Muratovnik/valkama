@@ -19,7 +19,7 @@ import time
 from dataclasses import dataclass
 from urllib.parse import quote
 
-from .. import sessions
+from .. import sessions, transcripts
 from . import spool
 from .normalize import HookEvent
 
@@ -240,11 +240,32 @@ def drain(
     return result
 
 
+def _archive(
+    conn: sqlite3.Connection, event: HookEvent, store_path: str, *, deadline: float
+) -> None:
+    """Copy the transcript an ending session names, inside the hook's budget.
+
+    The event is already committed, so nothing here can lose it. A copy that
+    does not fit, or a row the store would not take now, leaves the end pending
+    for `transcripts.sweep`.
+    """
+
+    try:
+        transcripts.archive_event(conn, event, store_path=store_path, deadline=deadline)
+    except sqlite3.Error:
+        pass
+
+
 def deliver(
     event: HookEvent, *, store_path: str, schema_version: int, occurred_ns: int, now: str
 ) -> str:
-    """Write one event directly and drain a little, or spool it. Returns what happened."""
+    """Write one event directly and drain a little, or spool it. Returns what happened.
 
+    After a direct write of a session end or subagent stop, the transcript it
+    names is archived when the copy fits the hook's budget; see `transcripts`.
+    """
+
+    started = time.monotonic()
     directory = spool.directory(store_path)
     try:
         conn = open_light(store_path, schema_version)
@@ -255,12 +276,14 @@ def deliver(
         return refusal.reason
     try:
         try:
-            write(conn, [(event, None)], delivery="direct")
+            inserted = write(conn, [(event, None)], delivery="direct")
         except sqlite3.Error as error:
             spool.write(
                 directory, event, occurred_ns=occurred_ns, spooled_at=now, reason=_reason(error)
             )
             return _reason(error)
+        if inserted:
+            _archive(conn, event, store_path, deadline=started + transcripts.HOOK_SECONDS)
         drain(conn, directory, max_files=HOOK_DRAIN_FILES, seconds=HOOK_DRAIN_SECONDS)
         return "direct"
     finally:

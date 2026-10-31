@@ -585,9 +585,22 @@ the session identity to a Valkama tool call and is the only case that prints
 anything. Only an allowlisted set of fields is kept: never the prompt, tool
 arguments or assistant text.
 
-`doctor` reports spool files still waiting, rejected spool files, and the last
-hook event from each client. The fields, the spool format and the session rules
-are in [the client hook contract](docs/hook-contract.md).
+When a session ends, the hook also copies the session's transcript, and a
+subagent's own transcript when the client reports one, into `transcripts/`
+beside the store, and records the copy's sha256. The copy survives the client
+deleting its original. A transcript too large to copy within the hook's time
+budget is left for the transcript sweep to copy later. Copies stay on this
+machine and never appear in an export. They are kept while an open work item
+refers to the session, and for at least 90 days after the later of the
+session's last activity and the closing of the last item that refers to it.
+Transcripts can contain secrets and personal data, so treat the store's
+directory accordingly.
+
+`doctor` reports spool files still waiting, rejected spool files, the last
+hook event from each client, and the transcript archive: copies kept, copies
+still owed and files no record names. The fields, the spool format, the session
+rules and the archive's retention are in
+[the client hook contract](docs/hook-contract.md).
 
 ## The desktop app and the tray
 
@@ -707,7 +720,8 @@ The maintained product contracts are:
 - [`docs/connection-contract.md`](docs/connection-contract.md) — what a client
   learns on connect, and how the server refuses to answer from a stale build.
 - [`docs/hook-contract.md`](docs/hook-contract.md) — what `valkama hook` keeps
-  from a client hook, the spool, and what each event does to a session.
+  from a client hook, the spool, what each event does to a session, and the
+  transcript archive.
 
 The superseded Improvements and session-event contracts remain in `docs/` as
 historical records; they do not describe supported endpoints.

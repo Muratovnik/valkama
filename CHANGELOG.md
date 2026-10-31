@@ -41,6 +41,27 @@ checkouts are therefore distinguishable even at the same version.
 
   The contract is in `docs/hook-contract.md`, which replaces the superseded
   session event contract. `POST /api/ingest` is unchanged.
+- A local transcript archive. When a session ends, `valkama hook` copies its
+  transcript, and a subagent's own transcript when the client reports one, into
+  `transcripts/` beside the store. The copy survives the client deleting the
+  original.
+  - Each copy is written through a `*.partial` file and renamed to a name made
+    from the session, the agent and the content's sha256. A
+    `transcript_archived` row in `execution_events` records the source path,
+    the archive path and the sha256. The content never enters the store.
+  - In the hook, a copy is made only for a source of at most 8 MiB that copies
+    within 1.2 seconds, which keeps the hook inside Codex's three-second
+    `SessionEnd` budget. Anything else stays owed. `transcripts.sweep` makes
+    owed copies, records a source that no longer exists, and purges copies by
+    the retention rule. The server start-up does not run it yet.
+  - Retention: copies are kept while a non-terminal work item refers to the
+    session, and for at least 90 days after the later of the session's last
+    activity and the newest terminal transition of a referring item. A purge
+    appends `transcript_purged` before it deletes the file, and the next sweep
+    removes a file a crash left behind.
+  - The export lists "transcript archive" among what it excludes and never
+    reads it. `doctor` reports copies kept and their size, copies owed, files
+    no row names and recorded copies missing from disk.
 - The store gains what session identity and claim leases need, still at schema
   9. A new append-only table `execution_events` records the execution tree:
   client lifecycle events and every Planning write call with the identity it

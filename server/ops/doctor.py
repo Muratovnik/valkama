@@ -32,7 +32,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from urllib import error, request
 
-from .. import runner, static_assets, store
+from .. import runner, static_assets, store, transcripts
 from ..executions import drivers as execution_drivers
 from ..hooks import ingest, spool
 from ..memory import service as memory_service
@@ -311,6 +311,7 @@ def _store_checks() -> list[dict]:
     checks.append(_open_execution_check())
     checks.extend(_spool_checks(path))
     checks.extend(_execution_event_checks(path))
+    checks.append(_transcript_check(path))
     return checks
 
 
@@ -447,6 +448,70 @@ def _execution_event_checks(path: str) -> list[dict]:
             )
         )
     return checks
+
+
+#: How old the oldest owed copy may be before the archive check warns. A copy
+#: too large for its hook is owed until the next sweep, which is normal.
+TRANSCRIPT_PENDING_WARN_DAYS = 1
+
+
+def _transcript_check(path: str) -> dict:
+    """The transcript archive: copies kept, copies owed, and files no row names."""
+
+    root = transcripts.directory(path)
+    try:
+        conn = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
+        try:
+            found = transcripts.summary(conn, root)
+            stale = bool(
+                found["oldest_pending"]
+                and conn.execute(
+                    "SELECT julianday('now') - julianday(?) >= ?",
+                    (found["oldest_pending"], TRANSCRIPT_PENDING_WARN_DAYS),
+                ).fetchone()[0]
+            )
+        finally:
+            conn.close()
+    except sqlite3.Error as failure:
+        return _check(
+            "transcript-archive",
+            "Transcript archive",
+            "unknown",
+            f"the execution tree could not be read: {failure}",
+            "Open the store once with the current build; it adds the table.",
+            presentation_code="transcript-archive-unreadable",
+        )
+    detail = (
+        f"{found['archived']} transcript copy(ies), {found['bytes']} bytes, in {root};"
+        f" {found['pending']} copy(ies) owed"
+        + (f" since {found['oldest_pending']}" if found["oldest_pending"] else "")
+        + f"; {found['orphans']} file(s) no row names"
+        + (f"; {found['lost']} recorded copy(ies) missing from disk" if found["lost"] else "")
+    )
+    parameters = {
+        key: found[key] for key in ("archived", "bytes", "pending", "orphans", "lost", "path")
+    }
+    if found["lost"] or found["orphans"] or stale:
+        return _check(
+            "transcript-archive",
+            "Transcript archive",
+            "warn",
+            detail,
+            "Owed copies and orphan files are settled by the transcript sweep a long-running"
+            " Valkama process runs; an owed copy whose source the client already deleted is"
+            " recorded as gone. A recorded copy missing from disk was removed outside"
+            " Valkama and cannot be restored from here.",
+            presentation_code="transcript-archive-attention",
+            parameters=parameters,
+        )
+    return _check(
+        "transcript-archive",
+        "Transcript archive",
+        "ok",
+        detail,
+        presentation_code="transcript-archive",
+        parameters=parameters,
+    )
 
 
 def _backup_check(path: str) -> dict:

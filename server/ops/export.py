@@ -17,6 +17,10 @@ in an export is still a claim that the export contains secrets, and the first
 person to see one treats the whole file as sensitive; a file that never carries
 them can be attached to an issue.
 
+Session transcripts never leave either. The archive beside the store holds
+whatever a session saw, secrets and personal data included, so this module never
+reads it, and nothing the export presents carries an archive's path or hash.
+
 Telemetry is not here either, and that is the layer's own rule rather than an
 omission: raw observations belong to whichever backend stores them, and a
 product that exported a copy would be the second copy §16.6 and §2.2 both
@@ -61,6 +65,7 @@ def export_installation(
             "raw telemetry, which belongs to the backend that stores it",
             "historical session event records",
             "execution records and execution-session links",
+            "transcript archive",
         ],
     }
     if "planning" in sections:

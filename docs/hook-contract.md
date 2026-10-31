@@ -220,6 +220,99 @@ as unconfirmed.
 Codex needs no transform. It sends the session and thread in the `_meta` of
 every MCP call.
 
+## The transcript archive
+
+When a session ends, Valkama keeps its own copy of the session's transcript, so
+the record survives the client deleting the original. The decision behind it is
+ADR 0010, point 7. Transcripts hold whatever the session saw, including secrets
+and personal data, so the copy stays on this machine and is kept only as long
+as the retention rule below allows.
+
+### What is copied
+
+| Event | Copied | Archive file |
+| --- | --- | --- |
+| `session_end` | `transcript_path` | `<session>/main-<hash>.jsonl` |
+| `subagent_stop` | `agent_transcript_path`, only when the client reports it | `<session>/agent-<agent>-<hash>.jsonl` |
+
+The archive is `transcripts/` beside the store file, created owner-only where
+the OS supports file modes. `<hash>` is the first 16 hex digits of the copy's
+sha256. `<session>` and `<agent>` are the ids when they consist only of
+`A-Z a-z 0-9 . _ -` and have at most 128 characters; any other id (`..`, a name
+Windows reserves, a trailing dot) is replaced by the first 32 hex digits of its
+sha256. Because names follow the content, archiving the same content again
+reuses the file, and a resumed session that ends again with more content adds
+a file.
+
+The source path loses the Windows extended-length prefix before it is read,
+like every path the hook keeps.
+
+### How a copy is made
+
+The source is streamed into a `*.partial` file in the destination directory
+while it is hashed, flushed to disk, and then renamed to its final name. A
+final name therefore always holds a complete copy. Then one row is appended to
+`execution_events`:
+
+| Column | Value |
+| --- | --- |
+| `kind` | `transcript_archived` |
+| `identity_state`, `identity_source` | `confirmed`, `valkama` |
+| `session_id`, `agent_id` | the session, and the agent for a subagent's copy |
+| `transcript_path` | the source path |
+| `archive_path` | the file, relative to `transcripts/`, with `/` separators |
+| `archive_sha256` | the sha256 of the copy |
+
+The content itself never enters the store, the spool, a log or `doctor`.
+
+### In the hook, or later
+
+The hook copies only after it has written the event directly, so a copy never
+costs the event. It copies only when the source is at most 8 MiB and the copy
+finishes within 1.2 seconds of the hook starting its delivery. Codex gives
+`SessionEnd` about three seconds; that bound keeps the hook's worst case, with
+its busy waits and drain, near 2.7 seconds.
+
+Anything else stays **owed**: an end with no `transcript_archived` row for the
+same session, agent and path after it. That covers a larger source, a slow
+copy, a source the hook could not read, an event that went to the spool, and a
+row the store would not take. The hook still exits 0 with nothing on stdout.
+
+`transcripts.sweep(conn)`, run from a long-lived process, makes every owed copy
+whatever its size. A source that no longer exists ends the debt with a
+`transcript_archived` row whose `archive_path` is empty and whose `reason` is
+`source-missing`. If the copy for that end is already in place because the
+hook renamed it but could not append the row, and its content matches its name,
+the sweep records that file instead. A source that cannot be read stays owed.
+The start-up of `serve` and the MCP server does not run the sweep yet, so owed
+copies wait until something does.
+
+### Retention
+
+A session's copies are kept while any work item that refers to the session is
+not in a terminal state. After that they are kept for at least 90 days, counted
+from the later of the session's `last_seen` and the newest terminal transition
+of any item that refers to it. An item refers to a session when:
+
+- it has a `session` ref whose value is the session id, a prefix of it, or
+  `<session>:<agent>`;
+- a Planning write call made in the session acted on it;
+- its current claim was taken by a call made in the session.
+
+The sweep removes a copy by appending a `transcript_purged` row (with
+`archive_path`, `archive_sha256` and `reason` `retention`) and only then
+deleting the file. A file the sweep finds with no current `transcript_archived`
+row (one whose newest row is the purge, or none at all) or an abandoned
+`*.partial` is an orphan; it is removed once it is more than ten minutes old,
+so a copy a hook has just renamed into place is not taken from the row about to
+name it.
+
+### What never leaves
+
+The installation export reads neither the archive nor its rows, and lists
+"transcript archive" among what it excludes. Store snapshots copy the database,
+which holds paths and hashes, never the archive directory.
+
 ## What `doctor` shows
 
 Under Installation → Store:
@@ -232,6 +325,10 @@ Under Installation → Store:
   by `identity_state` and `identity_source`.
 - **Last hook event**: the latest hook event per client. This is a warning when
   no hook has written to this store.
+- **Transcript archive**: copies kept and their total size, copies owed with the
+  oldest owed end, files no row names, and recorded copies missing from disk.
+  This is a warning when a file has no row, a recorded copy is missing, or a
+  copy has been owed for more than a day.
 
 ## Not covered
 
