@@ -26,6 +26,16 @@ checkouts are therefore distinguishable even at the same version.
   compact rows, active first, paged with `truncated` and `next_offset`.
 - `list_work_items` and `GET /api/planning/work-items` take `parent`, and then
   list only that item's children.
+- The work item card shows the item's chain when it has one. It has a switch
+  between the epic and the whole chain, the totals with the open members split
+  by workflow category, and a chart of total scope against closed members by
+  day, with the open gap shaded. A sentence says whether the last seven days
+  grew or converged. Members are grouped by the parent they came from, and the
+  open ones are listed by category, with the holder and a mark on those ready
+  to start. «Show on graph» scopes the graph to the chain: it draws the members
+  and the root, recesses the done ones, and has a legend and a chip to leave.
+- The whole-space graph leaves out items that no drawn link touches, with a
+  switch that shows them again.
 
 ## [2.0.0](https://github.com/Muratovnik/valkama/compare/v1.0.2...v2.0.0) - 2026-10-31
 
