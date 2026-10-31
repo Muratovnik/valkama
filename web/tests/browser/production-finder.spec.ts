@@ -275,6 +275,66 @@ test('a reopened finder replaces the query it kept when the reader types', async
   await expect(search).toHaveValue('MAIN-7')
 })
 
+// The finder's top edge must not cut a label of the workspace bar it covers:
+// the labels sit at 9px and below at every width, so the edge stays above them.
+test('the finder top edge crosses no label behind it at 1440, 1024 and 390 wide', async ({
+  page,
+}) => {
+  await installBackend(page)
+  for (const [width, height] of [
+    [1440, 900],
+    [1024, 768],
+    [390, 900],
+  ] as const) {
+    await page.setViewportSize({ width, height })
+    await page.goto(
+      serializePlatformRoute({
+        module_id: 'planning',
+        scope: projectScope,
+        entity: planningSpaceEntity(spaceRef),
+      }),
+    )
+    await expect(page.locator('.work-item-board')).toBeVisible()
+    await page.keyboard.press('Control+k')
+    const dialog = page.getByRole('dialog', { name: 'Find a task', exact: true })
+    await expect(dialog.getByRole('combobox')).toBeFocused()
+    // The dialog steps up into place; its edge is measured once it has settled,
+    // not while the entrance still moves it through the chrome.
+    await expect
+      .poll(async () => {
+        const first = JSON.stringify(await dialog.boundingBox())
+        await page.waitForTimeout(150)
+        const animations = await page.evaluate(() => document.getAnimations().length)
+        return animations === 0 && first === JSON.stringify(await dialog.boundingBox())
+      })
+      .toBe(true)
+    const edge = await dialog.boundingBox()
+    expect(edge, `finder box at ${width}px`).not.toBeNull()
+    const crossed = await page.evaluate(
+      (box) => {
+        const modal = document.querySelector('[aria-modal="true"]')
+        const found: string[] = []
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+          if (!node.textContent?.trim() || modal?.contains(node.parentElement ?? null)) continue
+          const range = document.createRange()
+          range.selectNodeContents(node)
+          for (const line of range.getClientRects()) {
+            const acrossEdge = line.top < box.y && line.bottom > box.y
+            const beside = line.right > box.x && line.left < box.x + box.width
+            if (acrossEdge && beside) found.push(node.textContent.trim())
+          }
+        }
+        return found
+      },
+      edge as NonNullable<typeof edge>,
+    )
+    expect(crossed, `labels under the finder top edge at ${width}px`).toEqual([])
+    await page.keyboard.press('Escape')
+    await expect(dialog).toBeHidden()
+  }
+})
+
 test.describe('in Russian', () => {
   test.use({ locale: 'ru-RU' })
 

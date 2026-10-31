@@ -81,7 +81,10 @@ const drawerWidth = computed(() =>
     Math.max(drawerMinimum.value, Math.round(preferredDrawerWidth.value)),
   ),
 )
-const TOP_PLACEMENT = { alignSelf: 'start', marginBlockStart: '10dvh', maxHeight: '86dvh' }
+// 4px under the window's top edge, above the first chrome label at every width
+// (9px at 390), so the edge crosses no label; the dialog padding above is cancelled.
+const TOP_EDGE = 'calc(4px - var(--space-5))'
+const TOP_PLACEMENT = { alignSelf: 'start', marginBlockStart: TOP_EDGE, maxHeight: '86dvh' }
 const surfaceStyle = computed(() => {
   if (props.placement === 'top') return TOP_PLACEMENT
   const width = viewportWidth.value <= DRAWER_NARROW_BREAKPOINT ? '100vw' : `${drawerWidth.value}px`
