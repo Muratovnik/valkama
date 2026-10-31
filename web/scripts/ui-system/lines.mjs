@@ -23,11 +23,11 @@ const LINE_DECLARATION =
   /(?:^|[{;])\s*border(?:-(?:top|right|bottom|left|inline|block)(?:-(?:start|end))?)?\s*:\s*([^;{}]+)/gi
 
 export const LINE_BUDGET = new Map([
-  // The shell. One floating warning toast (overlay), and the skip link that
-  // surfaces over content on focus (overlay). The rail's footer divider is on
-  // the rail now: `shell.css` used to draw it from outside the component it
-  // separates, and drew nothing else.
-  ['app/App.vue', 1],
+  // The shell. Its floating notice (overlay) is `AppNotice`; the skip link that
+  // surfaces over content on focus (overlay) is in `base.css`. The rail's footer
+  // divider is on the rail now: `shell.css` used to draw it from outside the
+  // component it separates, and drew nothing else.
+  ['app/components/AppNotice.vue', 1],
   ['app/styles/base.css', 1],
   ['widgets/app-nav/components/AppNav.vue', 1],
 

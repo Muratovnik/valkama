@@ -140,6 +140,9 @@ export const ru = {
   accessibility: {
     skipToContent: 'Перейти к основному содержимому',
   },
+  notice: {
+    dismiss: 'Закрыть уведомление',
+  },
   navigation: {
     home: 'К планированию',
   },

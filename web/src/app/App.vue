@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 
 import AppContextBar from '@/app/components/AppContextBar.vue'
 import AppModuleStage from '@/app/components/AppModuleStage.vue'
+import AppNotice from '@/app/components/AppNotice.vue'
 import AppRouteRecovery from '@/app/components/AppRouteRecovery.vue'
 import { useGlobalWorkActions } from '@/app/composables/useGlobalWorkActions.ts'
 import {
@@ -15,6 +16,7 @@ import { usePlatformEntryRestore } from '@/app/composables/usePlatformEntryResto
 import { usePlatformLiveFeed } from '@/app/composables/usePlatformLiveFeed.ts'
 import { DEFAULT_ROUTE, usePlatformNavigation } from '@/app/composables/usePlatformNavigation.ts'
 import { usePlatformReadModels } from '@/app/composables/usePlatformReadModels.ts'
+import { useShellNotice } from '@/app/composables/useShellNotice.ts'
 import { prefetchModule } from '@/app/moduleViews.ts'
 
 import AppNav from '@/widgets/app-nav/components/AppNav.vue'
@@ -33,7 +35,12 @@ import { provideProjectTitles } from '@/shared/lib/projectTitles.ts'
 import type { ResolvedRef } from '@/shared/types/reference.ts'
 
 const { t, te, locale } = useI18n()
-const notice = ref('')
+const {
+  act: actOnNotice,
+  current: currentNotice,
+  dismiss: dismissNotice,
+  message: notice,
+} = useShellNotice()
 
 function localizedFailure(failure: TypedFailure): string {
   const message = failureMessage(failure)
@@ -308,13 +315,12 @@ usePlatformEntryRestore({
         :context="sessionContext"
         @close="sessionContext = null"
       />
-      <div
-        v-if="notice"
-        class="notice"
-        role="status"
-      >
-        {{ notice }}
-      </div>
+      <AppNotice
+        v-if="currentNotice"
+        :notice="currentNotice"
+        @act="actOnNotice"
+        @dismiss="dismissNotice"
+      />
     </div>
   </div>
   <GlobalWorkFinder
@@ -346,20 +352,5 @@ usePlatformEntryRestore({
   overflow: hidden;
   border-top-left-radius: var(--radius-shell);
   container: workspace / inline-size;
-}
-
-.notice {
-  position: fixed;
-  right: 18px;
-  bottom: 18px;
-  z-index: 70;
-  max-width: 520px;
-  padding: var(--space-3);
-  border: 1px solid var(--color-rule-strong);
-  color: var(--color-text);
-  font-size: var(--font-size-dense);
-  background: var(--color-surface);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-overlay);
 }
 </style>

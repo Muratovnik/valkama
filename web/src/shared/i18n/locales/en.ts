@@ -139,6 +139,9 @@ export const en = {
   accessibility: {
     skipToContent: 'Skip to main content',
   },
+  notice: {
+    dismiss: 'Dismiss the notice',
+  },
   navigation: {
     home: 'Go to Planning',
   },
