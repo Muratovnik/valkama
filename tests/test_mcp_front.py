@@ -13,7 +13,9 @@ from __future__ import annotations
 import io
 import json
 import os
+import queue
 import shutil
+import subprocess
 import sys
 import tempfile
 import threading
@@ -26,6 +28,7 @@ from server import launcher, mcp_front
 from server.mcp_front import Front, ManifestPins, Pin
 
 FAKE = Path(__file__).resolve().parent / "fixtures" / "fake_mcp_release.py"
+HARNESS = Path(__file__).resolve().parent / "fixtures" / "front_harness.py"
 MODERN = {"_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28"}}
 SUBSCRIPTION = "io.modelcontextprotocol/subscriptionId"
 
@@ -469,6 +472,46 @@ class TransportTests(FrontTestCase):
         )
 
         self.assertEqual({"PYTHONUTF8": "1", "VALKAMA_NO_TRAY": "1"}, environment)
+
+
+class LiveStdinTests(FrontTestCase):
+    """The front as a session runs it: its main thread blocked on a real stdin pipe."""
+
+    def test_a_session_waiting_for_its_client_still_switches(self) -> None:
+        # On Windows a Python child handed the front's stdin does not finish
+        # starting while the main thread's read on it is pending; the
+        # `capabilities` run the watcher makes is such a child.
+        old, new = self.release("old"), self.release("new")
+        pin_file = self.root / "pin.json"
+        pin_file.write_text(json.dumps(old._asdict()), encoding="utf-8")
+        harness = subprocess.Popen(
+            [sys.executable, str(HARNESS), str(pin_file)],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
+        self.addCleanup(harness.stdout.close)
+        self.addCleanup(harness.wait, 20)
+        self.addCleanup(harness.stdin.close)
+        lines: queue.Queue[bytes] = queue.Queue()
+        threading.Thread(target=lambda: [lines.put(line) for line in harness.stdout]).start()
+
+        def ask(message: dict) -> dict:
+            harness.stdin.write(json.dumps(message).encode() + b"\n")
+            harness.stdin.flush()
+            return json.loads(lines.get(timeout=20))
+
+        ask({"jsonrpc": "2.0", "id": 1, "method": "server/discover"})
+        pin_file.write_text(json.dumps(new._asdict()), encoding="utf-8")
+
+        switched = wait_until(lambda: self.events("start", "new"), seconds=10)
+
+        self.assertTrue(switched, "the switch waited for the client's next message")
+        call = {"name": "ping_tool", "arguments": {}, **MODERN}
+        answer = ask({"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": call})
+        self.assertEqual("new", self.payload(answer)["release"])
+        (old_backend,) = self.events("start", "old")
+        self.assertFalse(alive(old_backend["pid"]))
 
 
 class ManifestPinTests(unittest.TestCase):

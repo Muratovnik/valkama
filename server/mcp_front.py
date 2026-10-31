@@ -269,6 +269,11 @@ def preflight(pin: Pin, *, timeout: float = PREFLIGHT_TIMEOUT) -> str | None:
     try:
         completed = subprocess.run(
             [pin.python, pin.script, "capabilities"],
+            # Not inherited. On Windows a Python child handed this process's
+            # stdin pipe does not finish starting while the front's main thread
+            # has a read pending on that pipe, so a switch the watcher began
+            # would wait for the client's next message.
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             timeout=timeout,
             check=False,
