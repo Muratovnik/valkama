@@ -158,6 +158,10 @@ checkouts are therefore distinguishable even at the same version.
   focus ring as the section's other controls.
 - The branch map is never shown laid out at its fallback width: the drawing is
   hidden until the card has measured it.
+- When a chain's root has no children of its own and each lane was discovered
+  from another, the branch map drew every lane from the start with no fork
+  between them. The lane holding the work discovered from the root now starts
+  the map, and the others branch off it.
 - Russian plurals: a counted message picks among день, дня and дней by the
   platform's plural rules, where it used to apply the English two-form rule.
 - The chain a graph is scoped to is now part of the address. The Planning

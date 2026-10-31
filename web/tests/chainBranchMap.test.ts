@@ -147,14 +147,50 @@ describe('the lanes of a chain', () => {
     })
     const { lanes } = layoutBranches(asChain(chain))
     expect(lanes).toHaveLength(3)
+    // Only the root's lane stands alone: a drawing that roots every lane in the
+    // cycle has no fork to check below, so it would pass without this.
+    expect(lanes.filter((lane) => lane.fork === null).map((lane) => lane.reference)).toEqual([
+      'MAP-1',
+    ])
     // Every fork names a lane drawn above it.
     for (const [row, lane] of lanes.entries()) {
-      if (!lane.fork) continue
+      if (row === 0) continue
       const parent = lanes.findIndex((candidate) => candidate.key === lane.fork?.lane)
       expect(parent).toBeGreaterThanOrEqual(0)
       expect(parent).toBeLessThan(row)
     }
   })
+
+  // The root is a task with no children of its own. X was found from it, the
+  // epic E from X, and Y from E's child E1, so each lane's best source is in the
+  // other and neither stands alone by itself. The lane holding X, found from the
+  // root, is the one drawn from the start, whichever the answer lists first.
+  it.each([
+    ['listed first', 1],
+    ['listed after a larger epic', 4],
+  ])(
+    'forks a lane off another when the root has no lane and the no-epic lane is %s',
+    (_, children) => {
+      const first = mapMember('MAP-20', 'backlog', null, { created: 1 })
+      const epic = mapMember('MAP-21', 'backlog', null, { created: 2 })
+      const late = mapMember('MAP-22', 'backlog', null, { created: 9 })
+      const below = Array.from({ length: children }, (_, index) =>
+        mapMember(`MAP-${30 + index}`, 'backlog', 'MAP-21', { created: 3 + index }),
+      )
+      const chain = chainOf(ROOT, [first, epic, late, ...below], {
+        edges: [
+          { from: first.work_item_id, to: ROOT.id, kind: 'discovered-from' },
+          found(epic, first),
+          found(late, below[0]),
+        ],
+      })
+      const { lanes } = layoutBranches(asChain(chain))
+      expect(lanes.map((lane) => lane.reference)).toEqual([null, 'MAP-21'])
+      expect(lanes[0].fork).toBeNull()
+      expect(lanes[1].fork).toEqual({ lane: '', index: 0 })
+      expect(lanes[1].start).toBe(1)
+    },
+  )
 
   it('reads the epic scope as a single lane', () => {
     const members = [

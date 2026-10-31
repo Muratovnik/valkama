@@ -170,9 +170,11 @@ function findMember(context: ForkContext, reference: string): ChainMember | unde
  * Hang every lane on the lane its best fork names, as long as that keeps the
  * whole a tree. A lane whose best source is not yet attached waits for it; when
  * nothing can move, discovery has a cycle, and the first lane with any attached
- * source takes it, which breaks the cycle with the least change.
+ * source takes it, which breaks the cycle with the least change. When no lane
+ * has one, one lane stands from the start — the one `standsFirst` prefers — and
+ * the rest still hang on it, so a cycle never turns into a set of loose lanes.
  */
-function attach(lanes: Lane[], roots: Lane[]) {
+function attach(lanes: Lane[], roots: Lane[], standsFirst: (lane: Lane) => boolean) {
   const attached = new Set<string>(roots.map((lane) => lane.key))
   const byKey = new Map(lanes.map((lane) => [lane.key, lane]))
   const waiting = lanes.filter((lane) => !attached.has(lane.key))
@@ -193,8 +195,7 @@ function attach(lanes: Lane[], roots: Lane[]) {
     )
     if (fallback)
       settle(fallback, fallback.candidates.find((candidate) => reachable(candidate)) ?? null)
-    // No source anywhere in the drawing: the lane stands on its own from the start.
-    else while (waiting.length) settle(waiting[0], null)
+    else settle(waiting.find((lane) => standsFirst(lane)) ?? waiting[0], null)
   }
 }
 
@@ -263,9 +264,15 @@ export function layoutBranches(chain: WorkItemChain): BranchLayout {
   for (const lane of present) if (lane !== own) lane.candidates = forkCandidates(lane, context)
 
   // Without the root's own lane, a lane found only from the root itself has no
-  // fork to draw and stands from the start, like the root's lane would.
-  const roots: Lane[] = own ? [own] : present.filter((lane) => lane.candidates.length === 0)
-  attach(present, roots)
+  // fork to draw and stands from the start, like the root's lane would. When
+  // every lane names another, none stands alone here, and `attach` starts from
+  // the one holding work found from the root rather than from all of them.
+  const fromRoot = (lane: Lane) =>
+    lane.members.some((member) =>
+      context.sources.get(member.work_item_id)?.includes(context.rootId),
+    )
+  const roots = own ? [own] : present.filter((lane) => lane.candidates.length === 0)
+  attach(present, roots, fromRoot)
 
   const rows: Lane[] = []
   for (const root of roots) placeRows(root, rows)
