@@ -89,6 +89,14 @@ const stateShape = {
 const stateSchema = strictObject(stateShape)
 const workflowStateSchema = strictObject({ ...stateShape, position: positiveInt(true) })
 
+/**
+ * Whether the session behind a claim is still there, computed by the server at
+ * every read. `unconfirmed` is a claim no session proved — every claim older
+ * than leases, and every claim made in this browser.
+ */
+const CLAIM_STATES = ['live', 'stale', 'unconfirmed'] as const
+const claimStateField = () => enumField(CLAIM_STATES).nullable()
+
 const checklistStepSchema = strictObject({
   id: boundedText(UUID, 36),
   text: boundedText(/^[^\u{0}]{1,1000}$/u, 1000),
@@ -107,6 +115,7 @@ const workItemBriefShape = {
   priority: enumField(PRIORITIES),
   state: stateSchema,
   claim_ref: actor(),
+  claim_state: claimStateField(),
   parent_id: boundedText(UUID, 36).nullable(),
   labels: boundedList(boundedText(/^[^\u{0}]{1,64}$/u, 64), 32),
   source: blankable(512),
@@ -191,8 +200,25 @@ const eventSchema = strictObject({
   identity: eventIdentitySchema,
 })
 
+/**
+ * The lease behind a claim. `holder` is `claim_ref`, the author the claim was
+ * signed with: a launch signs its runner, and the owner's own claims sign
+ * `user`, so the holder is never inferred from where the claim came from.
+ */
+const claimSchema = strictObject({
+  holder: boundedText(/^[^\u{0}]{1,128}$/u, 128),
+  state: enumField(CLAIM_STATES),
+  session_id: callField(),
+  agent_id: callField(),
+  source: boundedText(/^[a-z][a-z-]{0,63}$/u, 64).nullable(),
+  acquired_at: boundedText(ISO, 96).nullable(),
+  last_seen: boundedText(ISO, 96).nullable(),
+  expires_at: boundedText(ISO, 96).nullable(),
+})
+
 const workItemSchema = strictObject({
   ...workItemBriefShape,
+  claim: claimSchema.nullable(),
   comment_count: positiveInt(true).optional(),
   description: blankable(20_000),
   summary: summarySchema.nullable(),
@@ -253,6 +279,7 @@ const staleClaimSchema = strictObject({
   reference: boundedText(WORK_ITEM_REFERENCE, 20),
   title: boundedText(TITLE, 200),
   claim_ref: actor(),
+  claim_state: claimStateField(),
   state: boundedText(STATE_KEY, 32),
   last_event: boundedText(ISO, 96),
   quiet_days: positiveInt(true),

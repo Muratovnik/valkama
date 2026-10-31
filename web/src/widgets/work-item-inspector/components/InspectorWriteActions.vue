@@ -7,6 +7,10 @@
  * anyone else's, and used to answer every press of the button with that same
  * refusal. Another holder's claim is offered as a takeover instead, asked once
  * in place before the override is sent.
+ *
+ * A stale claim is different: nobody is behind it, and the server releases it
+ * before it takes the claim, so taking it over is an ordinary claim with no
+ * override to confirm.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -57,10 +61,11 @@ const nextStates = computed<ChoiceOption[]>(() => {
     .map((state) => ({ value: state.key, label: state.name }))
 })
 
-const claimAction = computed<'claim' | 'release' | 'takeover' | null>(() => {
+const claimAction = computed<'claim' | 'release' | 'takeover' | 'stale' | null>(() => {
   if (props.item.state.is_terminal) return null
   if (!props.item.claim_ref) return 'claim'
-  return isWebAuthor(props.item.claim_ref) ? 'release' : 'takeover'
+  if (isWebAuthor(props.item.claim_ref)) return 'release'
+  return props.item.claim_state === 'stale' ? 'stale' : 'takeover'
 })
 const takeoverDisabled = computed(() => props.busy || askingTakeover.value)
 const choiceDisabled = computed(() => props.busy || !nextStates.value.length)
@@ -98,6 +103,14 @@ function takeOver() {
       @click="askingTakeover = true"
     >
       {{ t('workItem.takeOver') }}
+    </VButton>
+    <VButton
+      v-else-if="claimAction === 'stale'"
+      variant="primary"
+      :disabled="busy"
+      @click="emit('claim')"
+    >
+      {{ t('workItem.lease.takeOver') }}
     </VButton>
     <VButton
       v-else-if="claimAction === 'claim'"

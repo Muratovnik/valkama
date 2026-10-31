@@ -74,6 +74,7 @@ function readModel(space: PlanningSpaceRef) {
         state: TODO,
         priority: 'high',
         claim_ref: '',
+        claim_state: null,
         parent_id: null,
         container: false,
         ready: true,

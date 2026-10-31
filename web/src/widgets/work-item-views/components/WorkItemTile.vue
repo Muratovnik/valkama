@@ -9,6 +9,9 @@
  * restated the whole record would make the wall of work unreadable, which is
  * what the inspector is for.
  *
+ * A stale claim is marked beside readiness: the tile still names a holder, and
+ * without the mark it reads as work in progress that nobody is doing.
+ *
  * Kind carries no icon. The icon set is closed and holds no glyph for a bug or
  * an epic, and three near-identical generic glyphs would be noise standing in
  * for meaning; most items are tasks, so the kind is named only when it is not.
@@ -35,6 +38,11 @@ const holderLabel = computed(() =>
   t(props.item.state.is_terminal ? 'workItem.previousHolder' : 'workItem.holder', {
     holder: props.item.claim_ref,
   }),
+)
+
+/** A finished item's former holder is history, not a claim to act on. */
+const staleClaim = computed(
+  () => props.item.claim_state === 'stale' && !props.item.state.is_terminal,
 )
 
 const steps = computed(() => ({
@@ -70,6 +78,13 @@ const steps = computed(() => ({
         dimension="work-item-readiness"
         state="ready"
         :label="t('workItem.ready')"
+      />
+      <SemanticState
+        v-if="staleClaim"
+        class="tile-mark"
+        dimension="claim-lease"
+        state="stale"
+        :label="t('workItem.lease.mark')"
       />
     </span>
     <strong class="tile-title">{{ props.item.title }}</strong>

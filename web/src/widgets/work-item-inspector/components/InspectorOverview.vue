@@ -11,6 +11,7 @@ import ItemInputRequests from '@/features/input-requests/components/ItemInputReq
 
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
+import { isWebAuthor } from '@/shared/api/webAuthor.ts'
 import { actorName } from '@/shared/lib/actor.ts'
 import { openSourceReference, sourceFeedback } from '@/shared/lib/sourceReference.ts'
 import { statePresentation } from '@/shared/lib/uiSystem.ts'
@@ -74,6 +75,26 @@ const claimLabel = computed(() =>
 const ownerLabel = computed(() =>
   t(props.item.state.is_terminal ? 'workItem.previousOwner' : 'workItem.owner'),
 )
+/**
+ * Whether anyone is still behind the claim, and until when. Shown only while
+ * the item is open: on a finished item the holder is history and its lease
+ * says nothing a reader could act on. Nor for this client's own claim: no
+ * session ever stands behind it, and telling the owner that nobody confirmed
+ * their own claim would read as a fault.
+ */
+const lease = computed(() => {
+  const claim = props.item.claim
+  if (props.item.state.is_terminal || !claim || isWebAuthor(claim.holder)) return null
+  return claim
+})
+const leaseDetail = computed(() => {
+  const claim = lease.value
+  if (!claim) return ''
+  if (claim.state === 'live' && claim.expires_at)
+    return t('workItem.lease.liveDetail', { date: when(claim.expires_at) })
+  if (claim.state === 'stale') return t('workItem.lease.staleDetail')
+  return t('workItem.lease.unconfirmedDetail')
+})
 
 /**
  * Opening the anchor, and what to say when the shell could not.
@@ -159,6 +180,21 @@ defineExpose({ revealChecklist, startOutcomeReport })
         </dt>
         <dd class="fact-value">
           {{ claimLabel }}
+        </dd>
+      </div>
+      <div
+        v-if="lease"
+        class="fact"
+      >
+        <dt class="fact-term">{{ t('workItem.lease.label') }}</dt>
+        <dd class="fact-value">
+          <SemanticState
+            class="fact-state"
+            dimension="claim-lease"
+            :state="lease.state"
+            :label="t(`workItem.lease.${lease.state}`)"
+          />
+          <small class="lease-detail">{{ leaseDetail }}</small>
         </dd>
       </div>
       <div class="fact">

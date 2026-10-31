@@ -29,6 +29,7 @@ function workItem(overrides: Partial<WorkItemBrief> = {}): WorkItemBrief {
       is_terminal: false,
     },
     claim_ref: '',
+    claim_state: null,
     parent_id: null,
     labels: [],
     source: '',
@@ -50,6 +51,7 @@ function placedNode(overrides: Partial<PlacedNode> = {}): PlacedNode {
 function fullWorkItem(overrides: Partial<WorkItem> = {}): WorkItem {
   return {
     ...workItem(),
+    claim: null,
     description: '',
     summary: null,
     summary_comment_id: null,
@@ -76,6 +78,30 @@ describe('Planning semantic presentation', () => {
     await wrapper.setProps({ items: [{ ...item, state: { ...item.state, is_terminal: true } }] })
     expect(wrapper.get('.list-claim').text()).toBe('Previously responsible: claude')
     expect(wrapper.get('.list-claim').attributes('title')).toBe('Previously responsible: claude')
+  })
+
+  it('marks a stale claim on the tile, and only while the work is open', async () => {
+    const wrapper = mount(WorkItemTile, {
+      props: { item: workItem({ claim_ref: 'codex', claim_state: 'live' }) },
+      global: { plugins: [i18n()] },
+    })
+    expect(wrapper.find('[data-dimension="claim-lease"]').exists()).toBe(false)
+    expect(wrapper.get('.tile-holder').text()).toBe('Responsible: codex')
+
+    await wrapper.setProps({ item: workItem({ claim_ref: 'codex', claim_state: 'stale' }) })
+    const mark = wrapper.get('[data-dimension="claim-lease"]')
+    expect(mark.attributes('data-state')).toBe('stale')
+    expect(mark.text()).toBe('Stale claim')
+    expect(wrapper.get('.tile-holder').text()).toBe('Responsible: codex')
+
+    await wrapper.setProps({
+      item: workItem({
+        claim_ref: 'codex',
+        claim_state: 'stale',
+        state: { ...workItem().state, is_terminal: true },
+      }),
+    })
+    expect(wrapper.find('[data-dimension="claim-lease"]').exists()).toBe(false)
   })
 
   it('keeps priority readable without colouring the whole card', async () => {

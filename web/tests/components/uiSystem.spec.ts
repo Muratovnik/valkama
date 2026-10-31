@@ -117,6 +117,18 @@ describe('shared UI contracts', () => {
     })
   })
 
+  it('marks only a stale claim as needing attention', () => {
+    expect(statePresentation('claim-lease', 'live')).toEqual({ emphasis: 'quiet', tone: 'success' })
+    expect(statePresentation('claim-lease', 'stale')).toEqual({
+      emphasis: 'strong',
+      tone: 'warning',
+    })
+    expect(statePresentation('claim-lease', 'unconfirmed')).toEqual({
+      emphasis: 'quiet',
+      tone: 'neutral',
+    })
+  })
+
   it('owns work-item readiness severity in the shared state table', () => {
     expect(statePresentation('work-item-readiness', 'ready')).toEqual({
       emphasis: 'quiet',
@@ -168,6 +180,7 @@ describe('shared UI contracts', () => {
 
   it('fails closed for owned state vocabularies while open dimensions remain neutral', () => {
     for (const dimension of [
+      'claim-lease',
       'connection-lifecycle',
       'platform-ui-state',
       'project-binding',

@@ -323,6 +323,42 @@ export const en = {
         title: 'Recovery points',
         detail: '{count} snapshots are available.',
       },
+      'hook-spool-pending': {
+        title: 'Hook events are waiting',
+        detail: '{count} hook event files wait in the spool; the oldest is from {oldest}.',
+        fix: 'Start any agent session or the local server once with the current build: it delivers the spool. Files that stay were written for another store schema; reinstall the launcher.',
+      },
+      'hook-spool-empty': {
+        title: 'Hook spool',
+        detail: 'No hook event is waiting.',
+      },
+      'hook-spool-rejected': {
+        title: 'Rejected hook events',
+        detail: '{count} spool files could not be read and were set aside.',
+        fix: 'Read the .rejected files in the spool folder; they are never retried. Delete each one once it is understood.',
+      },
+      'hook-delivery': {
+        title: 'Hook events from the spool',
+        detail: '{count} hook events reached the store through the spool in the last {days} days.',
+      },
+      'planning-write-identity': {
+        title: 'Planning write identity',
+        detail: 'Planning writes in the last {days} days by identity and source: {writes}',
+      },
+      'hook-last-event': {
+        title: 'Last hook event',
+        detail: 'Latest hook event per client: {clients}.',
+      },
+      'hook-last-event-none': {
+        title: 'No hook events',
+        detail: 'No client hook has written an event into this store.',
+        fix: 'Register the client hooks that run valkama hook. Until then sessions are seen only through tool calls and launches.',
+      },
+      'execution-events-unreadable': {
+        title: 'Execution events cannot be read',
+        detail: 'The execution tree could not be read.',
+        fix: 'Open the store once with the current build; it adds the table.',
+      },
       'attempts-store-unavailable': {
         title: 'Runs could not be checked',
         detail: 'The store is unavailable, so the state of runs is unknown.',
@@ -747,6 +783,17 @@ export const en = {
     takeOverQuestion:
       '{holder} holds this work. Take it over? The handover is recorded in the work history.',
     takeOverConfirm: 'Take over',
+    lease: {
+      label: 'Claim',
+      live: 'Live',
+      stale: 'Stale',
+      unconfirmed: 'Unconfirmed',
+      liveDetail: 'until {date}, unless the session shows a sign of life',
+      staleDetail: 'the session behind it is gone',
+      unconfirmedDetail: 'no session confirmed it',
+      mark: 'Stale claim',
+      takeOver: 'Take over',
+    },
     discard: {
       question: 'Unsaved changes will be lost: {drafts}.',
       confirm: 'Discard',

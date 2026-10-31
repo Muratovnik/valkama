@@ -64,6 +64,12 @@
   font: var(--font-note);
 }
 
+.lease-detail {
+  display: block;
+  color: var(--color-text-muted);
+  font: var(--font-note);
+}
+
 .fact-source {
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;

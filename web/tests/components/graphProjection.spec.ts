@@ -49,6 +49,7 @@ const item: WorkItemBrief = {
   priority: 'medium',
   state: { state_id: 'todo', key: 'todo', name: 'Todo', category: 'queued', is_terminal: false },
   claim_ref: '',
+  claim_state: null,
   parent_id: null,
   container: false,
   ready: true,

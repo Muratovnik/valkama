@@ -270,6 +270,98 @@ describe('inspector writes and their refusals', () => {
     wrapper.unmount()
   })
 
+  it('takes a stale claim over as a plain claim, with nothing to confirm', async () => {
+    const item: WorkItem = {
+      ...workItemFixture('Abandoned', 2),
+      claim_ref: 'codex',
+      claim_state: 'stale',
+      claim: {
+        holder: 'codex',
+        state: 'stale',
+        session_id: '019a3c2e-0001-7c11-9e0f-2f4b6d8a1c3e',
+        agent_id: null,
+        source: 'codex-meta',
+        acquired_at: '2026-08-01T10:00:00.000Z',
+        last_seen: '2026-08-02T10:00:00Z',
+        expires_at: null,
+      },
+    }
+    const writes = serveWrites({
+      '/api/planning/work-item/claim': () =>
+        json({ ...item, claim_ref: 'user', claim_state: 'unconfirmed', revision: 4 }),
+    })
+    const wrapper = mountInspector(item)
+    await flushPromises()
+
+    const lease = wrapper.get('[data-dimension="claim-lease"]')
+    expect(lease.attributes('data-state')).toBe('stale')
+    expect(lease.attributes('data-tone')).toBe('warning')
+    expect(wrapper.get('.lease-detail').text()).toBe('the session behind it is gone')
+    expect(wrapper.findAll('.head-actions button').map((button) => button.text())).toEqual([
+      'Take over',
+    ])
+
+    vi.mocked(fetchWorkItem).mockResolvedValue({
+      ...item,
+      claim_ref: 'user',
+      claim_state: 'unconfirmed',
+      claim: {
+        holder: 'user',
+        state: 'unconfirmed',
+        session_id: null,
+        agent_id: null,
+        source: 'browser',
+        acquired_at: '2026-08-27T18:00:00.000Z',
+        last_seen: null,
+        expires_at: null,
+      },
+      revision: 4,
+    })
+    await getButton(wrapper, 'Take over').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.confirm-strip').exists()).toBe(false)
+    expect(writes.map((write) => write.body)).toEqual([{ author: 'user', id: 'QA-320' }])
+    // The owner's own claim has no session behind it by design, so no lease is shown.
+    expect(wrapper.find('[data-dimension="claim-lease"]').exists()).toBe(false)
+    expect(wrapper.findAll('.head-actions button').map((button) => button.text())).toEqual([
+      'Release',
+    ])
+    wrapper.unmount()
+  })
+
+  it('shows a live lease with its expiry and a takeover that still asks first', async () => {
+    const item: WorkItem = {
+      ...workItemFixture('Held live', 2),
+      claim_ref: 'codex',
+      claim_state: 'live',
+      claim: {
+        holder: 'codex',
+        state: 'live',
+        session_id: '019a3c2e-0001-7c11-9e0f-2f4b6d8a1c3e',
+        agent_id: null,
+        source: 'codex-meta',
+        acquired_at: '2026-08-27T17:00:00.000Z',
+        last_seen: '2026-08-27T18:00:00Z',
+        expires_at: '2026-09-10T18:00:00Z',
+      },
+    }
+    const writes = serveWrites({})
+    const wrapper = mountInspector(item)
+    await flushPromises()
+
+    const lease = wrapper.get('[data-dimension="claim-lease"]')
+    expect(lease.attributes('data-state')).toBe('live')
+    expect(lease.text()).toBe('Live')
+    // The date is the activity format, which this harness's i18n leaves blank.
+    expect(wrapper.get('.lease-detail').text()).toMatch(
+      /^until .*, unless the session shows a sign of life$/u,
+    )
+    await getButton(wrapper, 'Take over').trigger('click')
+    expect(wrapper.get('.confirm-strip').text()).toContain('codex holds this work')
+    expect(writes).toHaveLength(0)
+    wrapper.unmount()
+  })
+
   it('asks before a close or a step back would drop an unsent comment or description', async () => {
     const item = workItemFixture('Drafts', 1)
     serveWrites({})

@@ -66,6 +66,7 @@ const testItem: WorkItemBrief = {
   state: REVIEW_STATE,
   priority: 'high',
   claim_ref: 'codex',
+  claim_state: 'unconfirmed',
   parent_id: '00000000-0000-4000-8000-000000000199',
   // Labels as long as the operator's own space carries, because a tile in a
   // 264px column is where this product keeps losing content off the edge and a

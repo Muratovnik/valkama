@@ -76,6 +76,7 @@ export const blockedWorkItem = {
   state: DEV_STATE,
   priority: 'medium',
   claim_ref: '',
+  claim_state: null,
   parent_id: null,
   labels: [],
   source: '',
@@ -99,6 +100,9 @@ const briefFields = {
   state: DEV_STATE,
   priority: 'high',
   claim_ref: 'codex',
+  // Signed by an agent but proved by no session, which is how every claim
+  // older than leases reads.
+  claim_state: 'unconfirmed' as const,
   parent_id: null,
   labels: ['platform', 'phase-1'],
   source: 'docs/plans/platform.md#kb:arch-plan',
@@ -124,6 +128,16 @@ const blockedBrief = { ...blockedWorkItem, comment_count: 0 }
 /** The full record the inspector reads, links included. */
 export const workItem = {
   ...briefFields,
+  claim: {
+    holder: 'codex',
+    state: 'unconfirmed',
+    session_id: null,
+    agent_id: null,
+    source: null,
+    acquired_at: null,
+    last_seen: null,
+    expires_at: null,
+  },
   description: 'Deliver the exact project vertical slice.',
   summary: null,
   summary_comment_id: null,
@@ -143,6 +157,7 @@ export const workItem = {
 
 export const blockedFullWorkItem = {
   ...blockedWorkItem,
+  claim: null,
   description: '',
   summary: null,
   summary_comment_id: null,
@@ -184,6 +199,7 @@ export const planningReadModel = {
       reference: workItemRef.reference,
       title: briefFields.title,
       claim_ref: 'codex',
+      claim_state: 'unconfirmed',
       state: DEV_STATE.key,
       last_event: now,
       quiet_days: 14,

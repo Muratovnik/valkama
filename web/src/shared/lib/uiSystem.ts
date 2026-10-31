@@ -2,6 +2,7 @@ type SemanticTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger'
 type SemanticEmphasis = 'quiet' | 'strong'
 
 export type ClosedStateDimension =
+  | 'claim-lease'
   | 'connection-lifecycle'
   | 'control-selection'
   | 'platform-ui-state'
@@ -49,6 +50,17 @@ const SEMANTIC_TONE_COLORS: Record<SemanticTone, string> = {
 }
 
 const STATE_PRESENTATION = {
+  /**
+   * Whether the session behind a claim is still there. Stale is the one that
+   * asks for a decision: the board says somebody holds the work and nobody
+   * does. Unconfirmed is the ordinary state of every older claim and of the
+   * owner's own, so it stays quiet rather than reading as a fault.
+   */
+  'claim-lease': {
+    live: { tone: 'success', emphasis: 'quiet' },
+    stale: { tone: 'warning', emphasis: 'strong' },
+    unconfirmed: { tone: 'neutral', emphasis: 'quiet' },
+  },
   'control-selection': {
     selected: { tone: 'success', emphasis: 'quiet' },
     unselected: { tone: 'neutral', emphasis: 'quiet' },
@@ -163,6 +175,7 @@ const STATE_PRESENTATION = {
   },
 } satisfies Record<StateDimension, Record<string, StatePresentation>>
 
+type ClaimLeaseState = keyof (typeof STATE_PRESENTATION)['claim-lease']
 type ConnectionLifecycleState = keyof (typeof STATE_PRESENTATION)['connection-lifecycle']
 type PlatformUiState = keyof (typeof STATE_PRESENTATION)['platform-ui-state']
 type ProjectBindingState = keyof (typeof STATE_PRESENTATION)['project-binding']
@@ -177,6 +190,7 @@ type WorkItemReadinessState = keyof (typeof STATE_PRESENTATION)['work-item-readi
  * future state that should read as neutral rather than break the whole view.
  */
 export type SemanticStatePair =
+  | { dimension: 'claim-lease'; state: ClaimLeaseState }
   | { dimension: 'connection-lifecycle'; state: ConnectionLifecycleState }
   | { dimension: 'control-selection'; state: 'selected' | 'unselected' }
   | { dimension: 'platform-ui-state'; state: PlatformUiState }
@@ -188,6 +202,7 @@ export type SemanticStatePair =
   | { dimension: OpenStateDimension; state: string }
 
 const CLOSED_STATE_DIMENSIONS = {
+  'claim-lease': true,
   'connection-lifecycle': true,
   'control-selection': true,
   'platform-ui-state': true,

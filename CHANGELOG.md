@@ -120,6 +120,11 @@ checkouts are therefore distinguishable even at the same version.
     `lease-expired: <holder>`, written by `valkama` under its own call row
     (source `valkama`, tool `lease-expiry`). Taking a stale claim over needs no
     `force`.
+  - The board marks a stale claim on its tile, and the inspector shows the
+    lease and its expiry. The owner takes a stale claim over without being
+    asked to confirm a takeover; the owner's own claim shows no lease.
+  - `doctor`'s hook and identity findings have their texts in the web's
+    Settings, in English and Russian.
 
 ### Changed
 
