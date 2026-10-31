@@ -40,6 +40,7 @@ const {
   current: currentNotice,
   dismiss: dismissNotice,
   message: notice,
+  say,
 } = useShellNotice()
 
 function localizedFailure(failure: TypedFailure): string {
@@ -62,7 +63,11 @@ const {
   switchScope,
   updateModuleState,
   writeRoute,
-} = usePlatformNavigation(() => t('platform.route.invalid'))
+} = usePlatformNavigation(
+  () => t('platform.route.notFound'),
+  (part) =>
+    say(t(part === 'state' ? 'platform.route.stateDropped' : 'platform.route.queryDropped')),
+)
 
 // The destination an address names starts downloading before the module list settles.
 watch(activeModule, prefetchModule, { immediate: true })
@@ -158,11 +163,15 @@ const selectedResourceRef = computed<EntityRef | undefined>(() => {
   return selected
 })
 const routeRecoveryFailure = computed(
-  () =>
-    routeFailure.value ||
-    liveRouteFailure.value ||
-    (modulesAuthoritative.value ? '' : modulesFailure.value),
+  () => routeFailure.value || (modulesAuthoritative.value ? '' : modulesFailure.value),
 )
+// A state the module's manifest does not admit is dropped, not shown as a
+// blocked module: the address keeps the module and scope, and says so once.
+watch(liveRouteFailure, (failure) => {
+  if (!failure) return
+  updateModuleState({})
+  say(t('platform.route.stateDropped'))
+})
 const primaryWriteScopeId = computed(() =>
   contextReady.value?.primary.is_writable === true
     ? contextReady.value.primary.data_scope_id

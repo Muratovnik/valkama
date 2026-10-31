@@ -4,10 +4,13 @@
  *
  * Three answers, and which one is right depends on why. A clean entry is still
  * waiting for the context read model that says where the operator was, so it shows
- * a wait rather than a failure. An unparseable URL is this app's own fault and
- * offers only home. A module the manifest does not carry is a URL from another
- * build or another workstation, so it offers the modules that do exist — naming
- * them is what turns a dead link into a choice.
+ * a wait rather than a failure. A path that names no section offers the way back
+ * to «Work», named after it. A module the manifest does not carry is a URL from
+ * another build or another workstation, so it offers the modules that do exist —
+ * naming them is what turns a dead link into a choice.
+ *
+ * The card stands at the top of the stage, where every other state card stands,
+ * and its actions are the product's buttons at their own width.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -18,6 +21,7 @@ import { uiLoading, uiUnavailable } from '@/shared/api/platformUiState.ts'
 import { failureMessage } from '@/shared/api/typedFailure.ts'
 import type { TypedFailure } from '@/shared/api/typedFailure.ts'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
+import VButton from '@/shared/ui/VButton.vue'
 
 const props = defineProps<{
   failure: string | TypedFailure | null
@@ -63,13 +67,13 @@ const unavailableMessage = computed(() => {
       :state="uiUnavailable(failureReason)"
       :retryable="false"
     />
-    <button
-      class="recovery-home"
-      type="button"
-      @click="emit('home')"
-    >
-      {{ t('navigation.home') }}
-    </button>
+    <div class="route-choices">
+      <VButton
+        class="recovery-home"
+        @click="emit('home')"
+        >{{ t('navigation.home') }}</VButton
+      >
+    </div>
   </section>
   <section
     v-else-if="unavailable"
@@ -80,15 +84,13 @@ const unavailableMessage = computed(() => {
       :retryable="false"
     />
     <div class="route-choices">
-      <button
+      <VButton
         v-for="module in unavailable.recovery.available_modules"
         :key="module"
         class="recovery-choice"
-        type="button"
         @click="emit('choose', module)"
+        >{{ t(`platform.modules.${module}`) }}</VButton
       >
-        {{ t(`platform.modules.${module}`) }}
-      </button>
     </div>
   </section>
 </template>
@@ -97,24 +99,15 @@ const unavailableMessage = computed(() => {
 .route-recovery {
   display: grid;
   gap: var(--space-4);
-  align-content: center;
-  min-height: 100%;
-  padding: var(--space-6);
+  align-content: start;
+  width: min(var(--size-module-column), 100%);
+  padding: var(--space-6) var(--size-page-gutter) var(--space-12);
+  margin: 0 auto;
 }
 
 .route-choices {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-}
-
-:is(.recovery-home, .recovery-choice) {
-  min-height: var(--size-control-height);
-  padding: 0 var(--space-4);
-  border: 0;
-  color: var(--color-text);
-  background: var(--color-control-surface);
-  border-radius: var(--radius-control);
-  cursor: pointer;
 }
 </style>

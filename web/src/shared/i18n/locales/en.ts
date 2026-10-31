@@ -103,7 +103,12 @@ export const en = {
     route: {
       unknown: 'The “{module}” module is not available. Choose a registered module.',
       unavailable: 'The “{module}” module cannot open this address in the current scope.',
-      invalid: 'This Valkama URL is invalid. Open a canonical module route.',
+      invalid: 'That choice cannot be opened in this section.',
+      notFound: 'Section not found: there is nothing at this address in Valkama.',
+      stateDropped:
+        'The view settings in the address could not be read and were reset; the section opened as usual.',
+      queryDropped:
+        'Part of the address could not be read and was dropped; the section opened without it.',
     },
     planning: {
       portfolio: 'Portfolio',
@@ -143,7 +148,7 @@ export const en = {
     dismiss: 'Dismiss the notice',
   },
   navigation: {
-    home: 'Go to Planning',
+    home: 'Go to Work',
   },
   language: {
     label: 'Language',

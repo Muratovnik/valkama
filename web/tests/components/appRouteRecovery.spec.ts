@@ -19,7 +19,7 @@ function mountRecovery(props: InstanceType<typeof AppRouteRecovery>['$props']) {
 describe('route recovery actions', () => {
   it('offers home for a route failure without rendering a no-op retry', () => {
     const wrapper = mountRecovery({ failure: 'Invalid route', pending: false, unavailable: null })
-    expect(wrapper.text()).toContain('Go to Planning')
+    expect(wrapper.text()).toContain('Go to Work')
     expect(wrapper.text()).not.toContain('Retry')
   })
 

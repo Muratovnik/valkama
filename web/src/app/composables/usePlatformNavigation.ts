@@ -42,16 +42,52 @@ function isCleanEntry(): boolean {
   return CLEAN_ENTRY_PATHS.has(current.path) && !current.fullPath.includes('?')
 }
 
-export function usePlatformNavigation(invalidRouteMessage: () => string) {
+/** What a readable address lost on the way in: its module state, or its whole query. */
+export type DroppedRoutePart = 'query' | 'state'
+
+/**
+ * Read the address, giving up the least that makes it readable.
+ *
+ * A path names a module and a scope; the query only says how that module is
+ * looked at. A query that does not read — a hand-edited `state`, a link cut
+ * short — used to block the whole module behind «invalid URL». Now the state
+ * is dropped first, then the whole query, and the module opens; only a path
+ * that names nothing fails.
+ */
+function readLocation(url: URL): {
+  dropped: DroppedRoutePart | null
+  resolved: PlatformRoute | PlatformRouteUnavailable
+} {
+  try {
+    return { dropped: null, resolved: resolvePlatformRoute(url) }
+  } catch (error) {
+    const attempts: [DroppedRoutePart, URL][] = []
+    if (url.searchParams.has('state')) {
+      const withoutState = new URL(url)
+      withoutState.searchParams.delete('state')
+      attempts.push(['state', withoutState])
+    }
+    if (url.search || url.hash) attempts.push(['query', new URL(url.pathname, url.origin)])
+    for (const [dropped, attempt] of attempts) {
+      try {
+        return { dropped, resolved: resolvePlatformRoute(attempt) }
+      } catch {
+        // The next attempt gives up more of the address.
+      }
+    }
+    throw error
+  }
+}
+
+export function usePlatformNavigation(
+  notFoundMessage: () => string,
+  dropped: (part: DroppedRoutePart) => void = () => {},
+) {
   const route = ref<PlatformRoute>(DEFAULT_ROUTE)
   const routeUnavailable = ref<PlatformRouteUnavailable | null>(null)
   const routeFailure = ref('')
   const entryRestorePending = ref(false)
   const pendingSession = ref('')
-
-  function currentLocation(): PlatformRoute | PlatformRouteUnavailable {
-    return resolvePlatformRoute(new URL(router.currentRoute.value.fullPath, location.origin))
-  }
 
   function applyLocation() {
     routeFailure.value = ''
@@ -65,7 +101,14 @@ export function usePlatformNavigation(invalidRouteMessage: () => string) {
     }
     entryRestorePending.value = false
     try {
-      const resolved = currentLocation()
+      const { dropped: lost, resolved } = readLocation(
+        new URL(router.currentRoute.value.fullPath, location.origin),
+      )
+      if (lost !== null) {
+        dropped(lost)
+        if (!isPlatformRouteUnavailable(resolved))
+          void router.replace(serializePlatformRoute(recoverWorkRoute(resolved)))
+      }
       if (isPlatformRouteUnavailable(resolved)) {
         routeUnavailable.value = resolved
         route.value = { module_id: 'planning', scope: resolved.input_scope }
@@ -83,7 +126,7 @@ export function usePlatformNavigation(invalidRouteMessage: () => string) {
       }
     } catch {
       routeUnavailable.value = null
-      routeFailure.value = invalidRouteMessage()
+      routeFailure.value = notFoundMessage()
       route.value = DEFAULT_ROUTE
     }
   }
