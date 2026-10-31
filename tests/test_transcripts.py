@@ -61,6 +61,12 @@ class ArchiveCase(unittest.TestCase):
         )
         patch.start()
         self.addCleanup(patch.stop)
+        # The hook's copy deadline counts from the start of delivery, so on a slow
+        # runner a copy a test expects made at once is left pending instead. The
+        # tests that are about that deadline set their own.
+        budget = mock.patch.object(transcripts, "HOOK_SECONDS", 60.0)
+        budget.start()
+        self.addCleanup(budget.stop)
         self.conn = store.connect()
         self.addCleanup(self.conn.close)
         self.root = transcripts.directory(self.path)

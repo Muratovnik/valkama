@@ -68,13 +68,15 @@ class ExportSectionTests(unittest.TestCase):
             occurred_at=normalize.timestamp(time.time_ns()),
         )
         assert record is not None
-        ingest.deliver(
-            record,
-            store_path=self.store_path,
-            schema_version=store.STORE_SCHEMA_VERSION,
-            occurred_ns=time.time_ns(),
-            now=normalize.timestamp(time.time_ns()),
-        )
+        # A generous copy deadline: a slow runner must not leave the copy pending.
+        with mock.patch.object(transcripts, "HOOK_SECONDS", 60.0):
+            ingest.deliver(
+                record,
+                store_path=self.store_path,
+                schema_version=store.STORE_SCHEMA_VERSION,
+                occurred_ns=time.time_ns(),
+                now=normalize.timestamp(time.time_ns()),
+            )
         (archive,) = transcripts.current(self.conn).values()
         planning_service.create_planning_space(
             self.conn, project_id="export", name="Export", key="EXP"
