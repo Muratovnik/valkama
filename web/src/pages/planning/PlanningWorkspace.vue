@@ -16,8 +16,8 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import PlanningChainFailure from '@/pages/planning/PlanningChainFailure.vue'
 import { usePlanningCensus } from '@/pages/planning/composables/usePlanningCensus.ts'
+import PlanningChainFailure from '@/pages/planning/PlanningChainFailure.vue'
 import PlanningWorkspaceBar from '@/pages/planning/PlanningWorkspaceBar.vue'
 import { graphView } from '@/pages/planning/utils/graphView.ts'
 
