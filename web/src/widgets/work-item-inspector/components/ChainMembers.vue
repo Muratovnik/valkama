@@ -262,5 +262,11 @@ function detail(group: ChainGroup, member: ChainMember): string | null {
   &:focus-visible {
     color: var(--color-text);
   }
+
+  &:focus-visible {
+    border-radius: var(--radius-status);
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+  }
 }
 </style>

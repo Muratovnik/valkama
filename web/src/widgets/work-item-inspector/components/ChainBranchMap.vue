@@ -10,9 +10,9 @@
  * per member, and the keyboard reaches the same tasks through one focusable
  * element per lane.
  *
- * Colour is never the only signal: the legend names every state, each lane's
- * counts are text, and the task under the pointer or the keyboard cursor is
- * named in full.
+ * Colour is never the only signal: the legend names every state the lanes
+ * draw, each lane's counts are text, and the task under the pointer or the
+ * keyboard cursor is named in full.
  */
 import { computed, ref, useId } from 'vue'
 
@@ -48,11 +48,18 @@ const { describe, laneCounts, laneLabel, laneName, legend, position, summary, t 
 
 const canvas = ref<HTMLElement | null>(null)
 const { width: measured } = useElementSize(canvas)
-/** Until the element has been measured — and in a test DOM, which never measures — a phone's width. */
+/**
+ * Until the element has been measured — and in a test DOM, which never measures —
+ * a phone's width. A drawing laid out at that guess is never shown: the canvas
+ * stays hidden until it has a width of its own, so the map cannot paint at one
+ * width and then jump to another.
+ */
 const FALLBACK_WIDTH = 342
 const width = computed(() => (measured.value > 0 ? measured.value : FALLBACK_WIDTH))
+const guessed = computed(() => measured.value <= 0)
 
 const layout = computed(() => layoutBranches(props.chain))
+const keys = computed(() => legend(layout.value.lanes))
 const drawing = computed(() =>
   drawBranches(layout.value, width.value, (lane) => ({
     name: laneName(lane),
@@ -113,9 +120,7 @@ const TIP_WIDTH = 280
 const TIP_HEIGHT = 100
 const mark = computed(() => {
   const current = shown.value
-  return (
-    current && { ...markAt(current.lane, current.index, drawing.value.unit), group: current.group }
-  )
+  return current && { ...markAt(current.lane, current.index), group: current.group }
 })
 const tipStyle = computed(() => {
   const current = shown.value
@@ -138,7 +143,7 @@ function countId(lane: LaneDrawing): string {
       aria-hidden="true"
     >
       <SemanticState
-        v-for="entry in legend"
+        v-for="entry in keys"
         :key="entry.state"
         dimension="work-item-chain-group"
         :state="entry.state"
@@ -148,6 +153,7 @@ function countId(lane: LaneDrawing): string {
     <div
       ref="canvas"
       class="branch-map-canvas"
+      :class="{ guessed }"
       :style="{ height: `${drawing.height}px` }"
     >
       <svg
@@ -299,6 +305,10 @@ function countId(lane: LaneDrawing): string {
 .branch-map-canvas {
   position: relative;
   min-width: 0;
+
+  &.guessed {
+    visibility: hidden;
+  }
 }
 
 .branch-map-svg {
@@ -418,6 +428,12 @@ function countId(lane: LaneDrawing): string {
 
   &.selected {
     color: var(--color-accent);
+  }
+
+  &:focus-visible {
+    border-radius: var(--radius-status);
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
   }
 }
 

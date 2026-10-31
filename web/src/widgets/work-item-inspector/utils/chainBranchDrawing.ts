@@ -5,9 +5,11 @@
  * stand.
  *
  * Every member keeps the same width, so the drawing scales by one number: a
- * unit as wide as fits, up to a comfortable maximum. Below a few pixels a lane
- * is drawn as one run per state, because three hundred one-pixel segments are
- * three hundred elements that say nothing more than one stroke does.
+ * unit as wide as fits, up to a comfortable maximum. The one exception is a
+ * lane too short to read as one, which is drawn at a least length its members
+ * share. Below a few pixels a lane is drawn as one run per state, because three
+ * hundred one-pixel segments are three hundred elements that say nothing more
+ * than one stroke does.
  */
 
 import { laneRuns } from '@/widgets/work-item-inspector/utils/chainBranchLayout.ts'
@@ -19,14 +21,25 @@ import type {
 
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 
-/** The member under an x position on this lane, clamped to its ends. */
-export function taskIndexAt(lane: BranchLane, x: number, unit: number): number {
-  const index = Math.floor(x / unit - lane.start)
+/**
+ * The member under an x position on this lane, clamped to its ends. A lane
+ * drawn at its least length spreads its members over it, `step` apart.
+ */
+export function taskIndexAt(lane: BranchLane, x: number, unit: number, step = unit): number {
+  const index = Math.floor((x - lane.start * unit) / step)
   return Math.min(lane.members.length - 1, Math.max(0, index))
 }
 
 /** The widest a unit is drawn, so that a short chain does not read as a long one. */
 const MAX_UNIT = 26
+/**
+ * The least length a lane is drawn at. In a map of six hundred members a lane of
+ * one is a pixel long and reads as a stray mark under its label rather than as a
+ * lane; at this length it is plainly a lane, and still plainly the shortest. Its
+ * members share the length evenly, and a dot closes it, so its end is as clear
+ * as its start.
+ */
+const LEAST_LANE = 16
 /** Below this a unit is too narrow to read alone, and a lane is drawn as runs. */
 const DENSE_UNIT = 6
 /** From this width a unit has room for a dot at each junction. */
@@ -143,6 +156,8 @@ export interface LaneDrawing {
   /** The label and its counts on two lines, where one line fits nowhere. */
   stacked: boolean
   stem: string | null
+  /** How far apart its members are drawn: the unit, or more on a lane drawn at its least length. */
+  step: number
   top: number
   x0: number
   x1: number
@@ -176,6 +191,32 @@ interface DrawScale {
   texts: (lane: BranchLane) => LaneTexts
 }
 
+/** How far apart a lane's members are drawn: one unit, unless that leaves the lane shorter than its least length. */
+function stepOf(lane: BranchLane, unit: number): number {
+  return Math.max(unit, LEAST_LANE / Math.max(1, lane.members.length))
+}
+
+/**
+ * The unit: as wide as fits, up to a comfortable maximum, and narrow enough that
+ * a lane stretched to its least length still ends inside the width. Narrowing
+ * can shorten another lane below its least, so it repeats until nothing moves.
+ */
+function unitFor(layout: BranchLayout, width: number): number {
+  let unit = layout.extent ? Math.min(MAX_UNIT, width / layout.extent) : MAX_UNIT
+  for (let changed = true; changed;) {
+    changed = false
+    for (const lane of layout.lanes) {
+      const end = lane.start * unit + lane.members.length * stepOf(lane, unit)
+      if (lane.start > 0 && end > width + 1e-9) {
+        const fits = Math.max(0, (width - LEAST_LANE) / lane.start)
+        if (fits < unit) changed = true
+        unit = Math.min(unit, fits)
+      }
+    }
+  }
+  return unit
+}
+
 const num = (value: number) => value.toFixed(2)
 
 function groupPaths(parts: Map<ChainGroup, string[]>): GroupPath[] {
@@ -189,26 +230,32 @@ function push(parts: Map<ChainGroup, string[]>, group: ChainGroup, part: string)
   parts.set(group, [...(parts.get(group) ?? []), part])
 }
 
-function lanePaths(lane: BranchLane, unit: number, y: number, dense: boolean): GroupPath[] {
+/** Where a lane is drawn along x: its start, and how far apart its members are. */
+interface LaneSpan {
+  step: number
+  x0: number
+}
+
+function lanePaths(lane: BranchLane, at: LaneSpan, y: number, dense: boolean): GroupPath[] {
   const least = dense ? LEAST_RUN : 0
-  const inset = dense ? 0 : Math.min(1, unit / 8)
+  const inset = dense ? 0 : Math.min(1, at.step / 8)
   const parts = new Map<ChainGroup, string[]>()
   for (const run of laneRuns(lane, dense)) {
-    const left = (lane.start + run.from) * unit + inset
-    const right = (lane.start + run.to) * unit - inset
+    const left = at.x0 + run.from * at.step + inset
+    const right = at.x0 + run.to * at.step - inset
     const spread = Math.max(0, least - (right - left)) / 2
     push(parts, run.group, `M${num(left - spread)},${num(y)} H${num(right + spread)}`)
   }
   return groupPaths(parts)
 }
 
-function lanePills(lane: BranchLane, unit: number): BranchPill[] {
+function lanePills(lane: BranchLane, at: LaneSpan): BranchPill[] {
   const pills: BranchPill[] = []
   let edge = -Infinity
   for (const run of laneRuns(lane, true)) {
     if (!CURRENT.has(run.group)) continue
-    const from = (lane.start + run.from) * unit
-    const to = (lane.start + run.to) * unit
+    const from = at.x0 + run.from * at.step
+    const to = at.x0 + run.to * at.step
     const length = Math.max(PILL, to - from)
     const left = Math.max(edge + PILL_GAP, (from + to - length) / 2)
     pills.push({ group: run.group, from: run.from, to: run.to, left, right: left + length })
@@ -229,19 +276,25 @@ function pillPaths(pills: BranchPill[], y: number): GroupPath[] {
   return groupPaths(parts)
 }
 
-/** A dot at every junction, in the colour of the member that starts there. */
-function laneDots(lane: BranchLane, unit: number, y: number): GroupPath[] {
-  const parts = new Map<ChainGroup, string[]>()
+/** A dot centred on `x`, as one subpath. */
+function dot(x: number, y: number): string {
   const arc = `a${DOT_RADIUS},${DOT_RADIUS} 0 1,0`
-  for (const [index, group] of lane.groups.entries()) {
-    if (!index) continue
-    const left = (lane.start + index) * unit - DOT_RADIUS
-    push(
-      parts,
-      group,
-      `M${num(left)},${num(y)} ${arc} ${2 * DOT_RADIUS},0 ${arc} ${-2 * DOT_RADIUS},0`,
-    )
-  }
+  return `M${num(x - DOT_RADIUS)},${num(y)} ${arc} ${2 * DOT_RADIUS},0 ${arc} ${-2 * DOT_RADIUS},0`
+}
+
+/**
+ * A dot at every junction where a unit has room for one, in the colour of the
+ * member that starts there; and on a lane drawn at its least length, a dot that
+ * closes it, in the colour of its last member, inside its end.
+ */
+function laneDots(lane: BranchLane, at: LaneSpan, y: number, scale: DrawScale): GroupPath[] {
+  const parts = new Map<ChainGroup, string[]>()
+  if (scale.dots)
+    for (const [index, group] of lane.groups.entries())
+      if (index) push(parts, group, dot(at.x0 + index * at.step, y))
+  const last = lane.groups.at(-1)
+  if (at.step > scale.unit && last)
+    push(parts, last, dot(at.x0 + lane.members.length * at.step - DOT_RADIUS, y))
   return groupPaths(parts)
 }
 
@@ -249,15 +302,15 @@ function laneDots(lane: BranchLane, unit: number, y: number): GroupPath[] {
  * Reference labels for current work, under the segments they name, where one
  * fits without touching the last or a stem leaving this lane.
  */
-function laneLabels(lane: BranchLane, y: number, scale: DrawScale): BranchLabel[] {
-  const { unit, width } = scale
+function laneLabels(lane: BranchLane, at: LaneSpan, y: number, scale: DrawScale): BranchLabel[] {
+  const { width } = scale
   const avoid = scale.stems.get(lane.key) ?? []
   const labels: BranchLabel[] = []
   let edge = -Infinity
   for (const [index, member] of lane.members.entries()) {
     if (!CURRENT.has(lane.groups[index])) continue
     const labelWidth = member.reference.length * CHARACTER + LABEL_PADDING
-    const centre = (lane.start + index + 0.5) * unit
+    const centre = at.x0 + (index + 0.5) * at.step
     const left = Math.max(0, Math.min(width - labelWidth, centre - labelWidth / 2))
     const right = left + labelWidth
     const crossed = avoid.some((stem) => stem > left - LABEL_GAP && stem < right + LABEL_GAP)
@@ -274,7 +327,8 @@ function laneLabels(lane: BranchLane, y: number, scale: DrawScale): BranchLabel[
 
 /** Where the stem of a lane's fork leaves its parent's line. */
 function stemX(parent: BranchLane, fork: LaneFork, unit: number): number {
-  return fork.index < 0 ? parent.start * unit : (parent.start + fork.index + 0.5) * unit
+  const x0 = parent.start * unit
+  return fork.index < 0 ? x0 : x0 + (fork.index + 0.5) * stepOf(parent, unit)
 }
 
 /** The x of every stem leaving each lane, which its reference labels keep clear of. */
@@ -370,29 +424,31 @@ function drawLane(
 ): LaneDrawing {
   const { unit, width, dense } = scale
   const { parent, top } = spot
-  const x0 = lane.start * unit
-  const x1 = (lane.start + lane.members.length) * unit
+  const at = { x0: lane.start * unit, step: stepOf(lane, unit) }
+  const { x0 } = at
+  const x1 = x0 + lane.members.length * at.step
   const stem = lane.fork && parent ? stemX(parent.lane, lane.fork, unit) : null
   const anchor = stem === null ? x0 : stem + LABEL_GAP
   const { before, head, stacked } = laneHead(lane, { anchor, row: spot.row, stem, top, x1 }, scale)
   const y = top + (stacked ? LANE_LABEL_STACKED : LANE_LABEL) + LANE_BAND / 2
-  const pills = dense ? lanePills(lane, unit) : []
+  const pills = dense ? lanePills(lane, at) : []
   return {
     lane,
     top,
     y,
     x0,
     x1,
+    step: at.step,
     head,
     before,
     stacked,
     band: laneBand(y, x0, x1, width),
     stem: stem === null || !parent ? null : stemPath(stem, parent.y, y, x0),
-    paths: lanePaths(lane, unit, y, dense),
+    paths: lanePaths(lane, at, y, dense),
     pills,
     raised: pillPaths(pills, y),
-    dots: scale.dots ? laneDots(lane, unit, y) : [],
-    labels: dense ? [] : laneLabels(lane, y, scale),
+    dots: laneDots(lane, at, y, scale),
+    labels: dense ? [] : laneLabels(lane, at, y, scale),
   }
 }
 
@@ -407,7 +463,7 @@ export function drawBranches(
   width: number,
   texts: (lane: BranchLane) => LaneTexts = (lane) => ({ name: lane.reference ?? '', counts: '' }),
 ): BranchDrawing {
-  const unit = layout.extent ? Math.min(MAX_UNIT, width / layout.extent) : MAX_UNIT
+  const unit = unitFor(layout, width)
   const scale: DrawScale = {
     unit,
     width,
@@ -441,11 +497,11 @@ export function drawBranches(
  * Where a member is drawn: its own unit, or its share of the raised mark it
  * belongs to, which may stand a few pixels from the unit in a dense lane.
  */
-function taskSpan(lane: LaneDrawing, index: number, unit: number) {
+function taskSpan(lane: LaneDrawing, index: number) {
   const pill = lane.pills.find((entry) => index >= entry.from && index < entry.to)
   if (!pill) {
-    const left = (lane.lane.start + index) * unit
-    return { left, right: left + unit }
+    const left = lane.x0 + index * lane.step
+    return { left, right: left + lane.step }
   }
   const share = (pill.right - pill.left) / (pill.to - pill.from)
   const left = pill.left + (index - pill.from) * share
@@ -458,14 +514,14 @@ function taskSpan(lane: LaneDrawing, index: number, unit: number) {
  */
 export function taskAt(lane: LaneDrawing, x: number, unit: number): number {
   const pill = lane.pills.find((entry) => x >= entry.left && x < entry.right)
-  if (!pill) return taskIndexAt(lane.lane, x, unit)
+  if (!pill) return taskIndexAt(lane.lane, x, unit, lane.step)
   const share = (pill.right - pill.left) / (pill.to - pill.from)
   return Math.min(pill.to - 1, pill.from + Math.floor((x - pill.left) / share))
 }
 
 /** The highlight over the task being looked at: where it is drawn, at least a few pixels wide. */
-export function markAt(lane: LaneDrawing, index: number, unit: number) {
-  const span = taskSpan(lane, index, unit)
+export function markAt(lane: LaneDrawing, index: number) {
+  const span = taskSpan(lane, index)
   const width = Math.max(span.right - span.left, LEAST_MARK)
   const centre = (span.left + span.right) / 2
   return { x: centre - width / 2, y: lane.y - MARK_HEIGHT / 2, width, height: MARK_HEIGHT }
@@ -473,9 +529,10 @@ export function markAt(lane: LaneDrawing, index: number, unit: number) {
 
 /**
  * The readout for the task it names, centred on the task inside the map's
- * width. It stands just above the lane's line, so the lanes below stay
- * readable, unless there is not room for it there — the first lane at the top
- * of a scrolled panel — and then just below.
+ * width. It stands above the lane's label line, so the lane's own name and
+ * counts stay readable while its tasks are read one by one, and so do the lanes
+ * below; unless there is not room for it there — the first lane at the top of a
+ * scrolled panel — and then just below the lane's line.
  */
 export function tipAt(
   lane: LaneDrawing,
@@ -484,11 +541,10 @@ export function tipAt(
   tip: { above: boolean; width: number },
 ): Box {
   const width = Math.min(tip.width, drawing.width)
-  const span = taskSpan(lane, index, drawing.unit)
+  const span = taskSpan(lane, index)
   const centre = (span.left + span.right) / 2
   const left = Math.max(0, Math.min(drawing.width - width, centre - width / 2))
-  const band = lane.band.top ?? 0
   return tip.above
-    ? { bottom: drawing.height - (band - TIP_GAP), left, width }
-    : { top: band + LANE_BAND + TIP_GAP, left, width }
+    ? { bottom: drawing.height - (lane.top - TIP_GAP), left, width }
+    : { top: (lane.band.top ?? 0) + LANE_BAND + TIP_GAP, left, width }
 }

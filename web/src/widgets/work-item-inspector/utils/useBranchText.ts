@@ -1,9 +1,21 @@
-import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { BranchLane } from '@/widgets/work-item-inspector/utils/chainBranchLayout.ts'
 
+import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 import { actorName } from '@/shared/lib/actor.ts'
+
+/**
+ * The map's five colours and the groups each one draws: queued and backlog work
+ * share the grey of what is ahead, so they share one key.
+ */
+const LEGEND: readonly { groups: readonly ChainGroup[]; label: string; state: ChainGroup }[] = [
+  { state: 'done', groups: ['done'], label: 'workItem.chain.group.done' },
+  { state: 'review', groups: ['review'], label: 'workItem.chain.group.review' },
+  { state: 'active', groups: ['active'], label: 'workItem.chain.group.active' },
+  { state: 'blocked', groups: ['blocked'], label: 'workItem.chain.group.blocked' },
+  { state: 'backlog', groups: ['queued', 'backlog'], label: 'workItem.chain.map.ahead' },
+]
 
 /**
  * What the branch map says in words: a lane's name and counts, the task a
@@ -63,14 +75,18 @@ export function useBranchText() {
     return t('workItem.chain.map.summary', { lanes: lanes.length, total, ...totals })
   }
 
-  /** The five readings of the map's colours, in the order a lane runs through them. */
-  const legend = computed(() => [
-    { state: 'done' as const, label: t('workItem.chain.group.done') },
-    { state: 'review' as const, label: t('workItem.chain.group.review') },
-    { state: 'active' as const, label: t('workItem.chain.group.active') },
-    { state: 'blocked' as const, label: t('workItem.chain.group.blocked') },
-    { state: 'backlog' as const, label: t('workItem.chain.map.ahead') },
-  ])
+  /**
+   * The readings of the colours this map draws, in the order a lane runs
+   * through them. A legend names what is on the drawing, as the graph's does: a
+   * key for a state no member is in reads as a claim that one is, and the
+   * blocked one would say so in bold.
+   */
+  function legend(lanes: readonly BranchLane[]) {
+    const drawn = new Set(lanes.flatMap((lane) => lane.groups))
+    return LEGEND.filter((entry) => entry.groups.some((group) => drawn.has(group))).map(
+      (entry) => ({ state: entry.state, label: t(entry.label) }),
+    )
+  }
 
   return { describe, laneCounts, laneLabel, laneName, legend, position, summary, t }
 }

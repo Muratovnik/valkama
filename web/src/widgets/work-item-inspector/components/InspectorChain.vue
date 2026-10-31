@@ -102,6 +102,13 @@ function chooseLane(key: string) {
 }
 
 /**
+ * The space a part of the breakdown is joined with, and joined to its
+ * separator: a line wraps between parts — «code review 2 ·» stays whole — and a
+ * separator ends the line it closes rather than starting the next.
+ */
+const KEEP = '\u{A0}'
+
+/**
  * The open work broken down by category, in the space's own state names where
  * a group has one, and how much of it the space would let someone take now.
  * That figure is the read model's rule — unheld, unblocked, in any state work
@@ -120,9 +127,9 @@ const breakdown = computed(() => {
           sharedStateName(current[group]) ?? t(`workItem.chain.group.${group}`)
         ).toLocaleLowerCase(locale.value),
         count: current[group].length,
-      }),
+      }).replaceAll(' ', KEEP),
     )
-    .join(' · ')
+    .join(`${KEEP}· `)
   const line = t('workItem.chain.openParts', { open: chain.open, parts })
   return chain.ready ? `${line}; ${t('workItem.chain.workable', { count: chain.ready })}` : line
 })

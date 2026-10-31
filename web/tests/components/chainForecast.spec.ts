@@ -37,7 +37,8 @@ function chainWith(open: number, changes: DayChanges, scope: 'chain' | 'epic' = 
   return { ...chainOf(ROOT, members, { scope, recent }), series }
 }
 
-function line(chain: unknown, locale: 'en' | 'ru') {
+/** The line as rendered, no-break spaces included. */
+function rendered(chain: unknown, locale: 'en' | 'ru') {
   const wrapper = mount(InspectorChain, {
     props: {
       chain: chain as WorkItemChain,
@@ -52,6 +53,11 @@ function line(chain: unknown, locale: 'en' | 'ru') {
   const text = wrapper.get('.chain-forecast').text()
   wrapper.unmount()
   return text
+}
+
+/** The line as read: where it may wrap is the business of one test below. */
+function line(chain: unknown, locale: 'en' | 'ru') {
+  return rendered(chain, locale).replaceAll('\u{A0}', ' ')
 }
 
 const BEFORE: DayChanges = { 40: [200, 100] }
@@ -139,6 +145,14 @@ describe('the forecast line of a chain', () => {
     expect(line(chainWith(20, BEFORE, 'epic'), 'ru')).toBe(
       'За 7 дней ничего не добавлено и не закрыто',
     )
+  })
+
+  it('keeps a number with its unit and a date with its preposition when it wraps', () => {
+    const steady = chainWith(81, { ...BEFORE, ...everyDay(1, 10) })
+    expect(rendered(steady, 'ru')).toBe(
+      'За 7\u{A0}дней: +7 обнаружено, −70 закрыто. При таком темпе открытое закроется примерно за 9\u{A0}дней (к\u{A0}9\u{A0}нояб.)',
+    )
+    expect(rendered(steady, 'en')).toContain('in about 9\u{A0}days (by\u{A0}Nov\u{A0}9)')
   })
 
   it('leaves an open-ended range open, and gives no figure past a year', () => {

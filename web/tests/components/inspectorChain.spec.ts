@@ -87,13 +87,14 @@ describe('the chain section of a card', () => {
     expect(chain.get('.chain-headline').text()).toBe('616 in all · 483 closed')
     // Open work by category, in the space's own state names, and the workable
     // count beside it rather than as a group of its own. It counts the backlog
-    // too, so it outnumbers the 14 to do, and it says so.
+    // too, so it outnumbers the 14 to do, and it says so. A name keeps its count,
+    // and a separator the part before it, when the line wraps.
     expect(chain.get('.chain-breakdown').text()).toBe(
-      '133 open: development 11 · code review 1 · todo 14 · backlog 107; workable: 115 — unheld and unblocked, backlog included',
+      '133 open: development\u{A0}11\u{A0}· code\u{A0}review\u{A0}1\u{A0}· todo\u{A0}14\u{A0}· backlog\u{A0}107; workable: 115 — unheld and unblocked, backlog included',
     )
     // 53 discovered against 42 closed: the open part grows unless more than
     // 53 ÷ 7 ≈ 7.57 close a day, said to a tenth and rounded up.
-    expect(chain.get('.chain-forecast').text()).toBe(
+    expect(chain.get('.chain-forecast').text().replaceAll('\u{A0}', ' ')).toBe(
       'Last 7 days: +53 discovered, −42 closed. New work arrives faster than it closes: to converge, more than 7.6 a day must close',
     )
     expect(chain.get('.chain-chart').attributes('aria-label')).toContain('616 now')
@@ -109,10 +110,10 @@ describe('the chain section of a card', () => {
       'VAL-900',
     ])
     expect(chain.findAll('.branch-map-count').map((count) => count.text())).toEqual([
-      '273 ✓',
-      '142 ✓ · 12 in progress · 88 ahead',
-      '58 ✓ · 30 ahead',
-      '10 ✓ · 3 ahead',
+      '273 done',
+      '142 done · 12 in progress · 88 ahead',
+      '58 done · 30 ahead',
+      '10 done · 3 ahead',
     ])
 
     const headings = chain.findAll('.chain-group-title').map((heading) => heading.text())

@@ -141,8 +141,11 @@ test('English and Russian catalogs translate checklist actors, activity, source 
 })
 
 test('a counted Russian message takes the form its number asks for, and English its two', () => {
-  const days = (count: number) => i18n.global.t('workItem.chain.forecast.day', { count }, count)
-  const weeks = (count: number) => i18n.global.t('workItem.chain.forecast.week', { count }, count)
+  // A number stays on the line of its unit; the forms are what is compared here.
+  const read = (key: string, count: number) =>
+    i18n.global.t(`workItem.chain.forecast.${key}`, { count }, count).replaceAll('\u{A0}', ' ')
+  const days = (count: number) => read('day', count)
+  const weeks = (count: number) => read('week', count)
   i18n.global.locale.value = 'ru'
   assert.deepEqual(
     [1, 2, 4, 5, 11, 12, 21, 22, 25, 111].map((count) => days(count)),

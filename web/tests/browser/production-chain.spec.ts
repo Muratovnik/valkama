@@ -239,7 +239,7 @@ test('the branch map gives a small chain a segment, a dot and a name per task', 
   await expect(section.locator('.branch-map-dot')).not.toHaveCount(0)
   await expect(section.locator('.branch-map-reference').first()).toHaveText('MAIN-1013')
   await expect(section.locator('.branch-map-count').first()).toHaveText(
-    '12 ✓ · 3 in progress · 5 ahead',
+    '12 done · 3 in progress · 5 ahead',
   )
   await expectNoSilentClipping(page, 'small chain map')
   await section.locator('.branch-map').screenshot(shot(info, 'chain-map-small-1440.png'))

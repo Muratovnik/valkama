@@ -122,10 +122,12 @@ function track(event: PointerEvent) {
     role="img"
     :aria-label="summary"
   >
+    <!-- The day leads: the three figures after it are that day's. -->
     <div
       class="chain-legend"
       aria-hidden="true"
     >
+      <span class="chain-day">{{ dayLabel(point.day) }}</span>
       <span class="chain-key"
         ><span class="chain-swatch swatch-total" />{{
           t('workItem.chain.seriesTotal', { count: point.total })
@@ -142,7 +144,6 @@ function track(event: PointerEvent) {
           t('workItem.chain.seriesOpen', { count: point.total - point.closed_total })
         }}</span
       >
-      <span class="chain-day">{{ dayLabel(point.day) }}</span>
     </div>
     <!-- Pointer-only enhancement: the readout above follows the pointer; the
          same numbers are in the figure's accessible name and the summary line. -->
@@ -225,8 +226,7 @@ function track(event: PointerEvent) {
 }
 
 .chain-day {
-  margin-inline-start: auto;
-  color: var(--color-text-tertiary);
+  color: var(--color-text);
 }
 
 .chain-swatch {
@@ -255,10 +255,12 @@ function track(event: PointerEvent) {
   }
 }
 
+/* The ceiling's figure stands in a band of its own above the drawing, so a
+   scope line at the ceiling runs under it rather than through it. */
 .chain-plot {
   position: relative;
-  height: 64px;
-  padding-top: var(--space-1);
+  height: 76px;
+  padding-top: var(--space-4);
 }
 
 .chain-ceiling {
@@ -307,7 +309,7 @@ function track(event: PointerEvent) {
 
 .chain-crosshair {
   position: absolute;
-  inset-block: 0;
+  inset-block: var(--space-4) 0;
   width: 1px;
   background: var(--color-rule-strong);
   pointer-events: none;

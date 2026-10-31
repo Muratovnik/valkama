@@ -106,6 +106,16 @@ checkouts are therefore distinguishable even at the same version.
 - The card's scope chart is shorter and stands under the branch map.
 - The chain section's seven-day line replaces the bare «scope is growing»
   verdict with the forecast above, and stands directly under the totals.
+- The branch map's legend names only the states its lanes draw, as the graph's
+  legend does, so «Blocked» no longer stands in bold over a chain with nothing
+  blocked.
+- A lane's finished count reads «12 done» rather than «12 ✓»: the check mark is
+  outside the interface font and fetched a fallback font for one glyph.
+- The scope chart's readout leads with its day, and the ceiling's figure has a
+  band of its own above the drawing.
+- The card's open-work breakdown wraps between its parts, never inside one,
+  and a separator ends the line it closes. The seven-day line keeps a number
+  with its unit and a date with the word before it.
 - In the card's chain section, a member row names its state only when its
   group mixes states. A group in one state names it once, in its heading, and
   the finished group is headed the same way.
@@ -137,7 +147,17 @@ checkouts are therefore distinguishable even at the same version.
   download the 193 kB fallback face.
 - The service sends the fallback font, the licence notice and the licence text
   with their own content types instead of `application/octet-stream`.
+- A lane of one task on a long chain's branch map was a pixel-long stub under
+  its label. A lane is now drawn at least 16 pixels long, its tasks sharing the
+  length and a dot closing it, and the map narrows so that such a lane at the
+  far end still ends inside the card.
 - The chain section printed «+0 discovered, −0 closed»; a zero has no sign.
+- The readout over a branch map lane stands above the lane's label, so the
+  lane's own name and counts stay visible while its tasks are read.
+- The branch map's lane labels and the chain's «Done» disclosure show the same
+  focus ring as the section's other controls.
+- The branch map is never shown laid out at its fallback width: the drawing is
+  hidden until the card has measured it.
 - Russian plurals: a counted message picks among день, дня and дней by the
   platform's plural rules, where it used to apply the English two-form rule.
 - The chain a graph is scoped to is now part of the address. The Planning

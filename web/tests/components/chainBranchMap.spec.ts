@@ -18,7 +18,13 @@ import ChainBranchMap from '@/widgets/work-item-inspector/components/ChainBranch
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
-import { branchedChain, mapId, smallBranchedChain } from '../fixtures/chainMap.ts'
+import {
+  branchedChain,
+  chainOf,
+  mapId,
+  mapMember,
+  smallBranchedChain,
+} from '../fixtures/chainMap.ts'
 
 const ROOT = { id: mapId(1), reference: 'MAP-1', title: 'Root' }
 const UNIT = 342 / 24
@@ -48,14 +54,40 @@ describe('the branch map', () => {
       'no epic',
     ])
     expect(wrapper.findAll('.branch-map-count').map((count) => count.text())).toEqual([
-      '12 ✓ · 3 in progress · 5 ahead',
-      '6 ✓ · 2 in progress · 12 ahead',
+      '12 done · 3 in progress · 5 ahead',
+      '6 done · 2 in progress · 12 ahead',
     ])
     expect(lanes(wrapper).map((lane) => lane.attributes('aria-label'))).toEqual([
       'Lane MAP-1 Root: 20 items; 12 finished, 3 in progress, 5 ahead',
       'Lane no epic: 20 items; 6 finished, 2 in progress, 12 ahead',
     ])
     wrapper.unmount()
+  })
+
+  it('keys only the states it draws, as the graph’s legend does', () => {
+    // Done, in progress and backlog work: nothing in review, nothing blocked.
+    const plain = chainOf(ROOT, [
+      mapMember('MAP-10', 'done', 'MAP-1'),
+      mapMember('MAP-11', 'active', 'MAP-1', { holder: 'codex' }),
+      mapMember('MAP-12', 'backlog', 'MAP-1'),
+    ])
+    const wrapper = mountMap(plain)
+    const legend = wrapper.get('.branch-map-legend')
+    expect(legend.findAll('.state-label').map((label) => label.text())).toEqual([
+      'Done',
+      'In progress',
+      'Ahead',
+    ])
+    // No key speaks for a state no member is in, the emphatic one least of all.
+    expect(legend.find('[data-emphasis="strong"]').exists()).toBe(false)
+    wrapper.unmount()
+
+    // Queued work alone is ahead too.
+    const queued = mountMap(chainOf(ROOT, [mapMember('MAP-10', 'queued', 'MAP-1')]))
+    expect(queued.findAll('.branch-map-legend .state-label').map((label) => label.text())).toEqual([
+      'Ahead',
+    ])
+    queued.unmount()
   })
 
   it('names the task under the pointer and marks it, and forgets it when the pointer leaves', async () => {

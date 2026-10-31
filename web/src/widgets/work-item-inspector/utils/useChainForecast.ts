@@ -41,12 +41,15 @@ export function useChainForecast(chain: () => WorkItemChain | null) {
     )
   }
 
+  /** The day or days a forecast lands on, kept on one line. */
   function dates(today: string, low: number, high: number): string {
     const format = dayFormat(locale.value)
     const from = seriesDate(dayAfter(today, low))
-    return low === high
-      ? format.format(from)
-      : format.formatRange(from, seriesDate(dayAfter(today, high)))
+    const text =
+      low === high
+        ? format.format(from)
+        : format.formatRange(from, seriesDate(dayAfter(today, high)))
+    return text.replaceAll(' ', '\u{A0}')
   }
 
   function converging(forecast: Extract<ChainForecast, { kind: 'converging' }>, today: string) {

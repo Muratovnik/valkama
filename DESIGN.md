@@ -518,7 +518,12 @@ finished green, in progress blue, review amber, ahead grey, blocked red — whic
 differs from a board card's tones on purpose: a card says what is happening to
 it now, a lane says how far it has come. The lane is a 3px status edge; where a
 member is narrower than a few pixels, work under way rides it as a raised
-rounded mark, so it is still seen without spending a surface on it.
+rounded mark, so it is still seen without spending a surface on it. No lane is
+drawn shorter than 16px: a lane of one or two tasks on a long chain is
+stretched to that, its tasks sharing the length, and a dot closes it, so it
+reads as a lane and still as the shortest; its counts say its volume. A chain
+view's legend names only the states its drawing holds, on the map as on the
+graph, so no key — least of all the emphatic «Blocked» — stands for nothing.
 Under the chain's totals, one line answers whether and when the open part
 closes, from the last seven days, and says so as a range when those days
 disagree.

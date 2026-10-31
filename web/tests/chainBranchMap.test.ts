@@ -318,6 +318,46 @@ describe('the drawing at a width', () => {
     expect(dense.lanes.flatMap((lane) => lane.labels)).toEqual([])
   })
 
+  it('draws a lane of one task in a dense map as a short lane with an end, not a pixel', () => {
+    const drawing = drawBranches(layoutBranches(live), 342)
+    expect(drawing.dense).toBe(true)
+    for (const reference of ['MAP-7001', 'MAP-7002']) {
+      const lane = drawing.lanes.find((drawn) => drawn.lane.reference === reference)
+      expect(lane?.lane.members).toHaveLength(1)
+      if (!lane) continue
+      // Long enough to read as a lane, and still the shortest by far: the
+      // root's own lane of 273 is over a hundred times its unit.
+      expect(lane.x1 - lane.x0).toBeGreaterThanOrEqual(16)
+      expect(lane.x1 - lane.x0).toBeLessThan(drawing.lanes[0].x1 / 10)
+      expect(lane.x1).toBeLessThanOrEqual(342)
+      // A dot closes it, and its one task is under the pointer anywhere along it.
+      expect(lane.dots.map((path) => path.group)).toEqual([lane.lane.groups[0]])
+      expect(taskAt(lane, lane.x1 - 1, drawing.unit)).toBe(0)
+      expect(lane.band.left ?? 0).toBeLessThanOrEqual(lane.x0)
+      expect((lane.band.left ?? 0) + (lane.band.width ?? 0)).toBeGreaterThanOrEqual(lane.x1)
+    }
+    // A lane long enough on its own is drawn at its true length, with no end dot.
+    expect(drawing.lanes[0].x1).toBeCloseTo(273 * drawing.unit, 6)
+    expect(drawing.lanes[0].dots).toEqual([])
+  })
+
+  it('narrows the unit so a short lane forked at the far end still ends inside the width', () => {
+    const own = Array.from({ length: 300 }, (_, index) =>
+      mapMember(`MAP-${1000 + index}`, 'done', 'MAP-1', { closed: index }),
+    )
+    const last = mapMember('MAP-2000', 'backlog', 'MAP-90', { created: 400 })
+    const layout = layoutBranches(
+      asChain(chainOf(ROOT, [...own, last], { edges: [found(last, own[299])] })),
+    )
+    // At 342 ÷ 301 a unit, the branch would start at 340.9 and its least
+    // length would run 15px past the edge.
+    const drawing = drawBranches(layout, 342)
+    const branch = drawing.lanes[1]
+    expect(branch.x1 - branch.x0).toBeGreaterThanOrEqual(16)
+    expect(branch.x1).toBeLessThanOrEqual(342 + 1e-9)
+    expect(drawing.unit).toBeLessThan(342 / 301)
+  })
+
   it('stacks the lanes top to bottom and draws each fork from its parent’s line to its own', () => {
     const layout = layoutBranches(asChain(smallBranchedChain(ROOT, 'MAP')))
     const drawing = drawBranches(layout, 620)
