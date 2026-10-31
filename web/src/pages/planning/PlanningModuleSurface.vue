@@ -20,6 +20,7 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { usePlanningChainScope } from '@/pages/planning/composables/usePlanningChainScope.ts'
 import { usePlanningPortfolio } from '@/pages/planning/composables/usePlanningPortfolio.ts'
 import { usePlanningSubscription } from '@/pages/planning/composables/usePlanningSubscription.ts'
 import PlanningPortfolio from '@/pages/planning/PlanningPortfolio.vue'
@@ -32,6 +33,7 @@ import WorkItemComposer from '@/features/work-item-compose/WorkItemComposer.vue'
 
 import { CutoverPendingError, fetchPlanning, transitionWorkItem } from '@/shared/api/planningApi.ts'
 import type { PlanningConnectionState } from '@/shared/api/planningApi.ts'
+import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import type { PlanningReadModel } from '@/shared/api/planningModel.ts'
 import type { PlatformContextReady } from '@/shared/api/platformApiTypes.ts'
 import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
@@ -160,6 +162,11 @@ const openIdentity = computed(() => {
     : `${projectId.value}:${space.data_scope_id}:${space.space_key}:${reference}`
 })
 const trail = ref<string[]>([])
+const {
+  chain: chainScope,
+  enter: enterChain,
+  exit: exitChain,
+} = usePlanningChainScope(() => version.value)
 const composerOpen = ref(false)
 
 const planningKey = computed(() =>
@@ -246,6 +253,7 @@ watch(
   () => {
     trail.value = []
     composerOpen.value = false
+    exitChain()
     invalidatePortfolio()
     void loadPlanning()
     if (props.scope.kind === 'global') void loadPortfolio()
@@ -300,6 +308,17 @@ function goBack() {
 
 function setView(mode: PlanningViewMode) {
   emit('state', { ...props.route.state, view: mode })
+}
+
+// A chain scopes the graph only; another view of the space is the whole space.
+watch(view, (mode) => {
+  if (mode !== 'graph') exitChain()
+})
+
+/** The card asked to see its chain: the graph, scoped to exactly that chain. */
+function showChain(chain: WorkItemChain) {
+  enterChain(chain)
+  if (view.value !== 'graph') setView('graph')
 }
 
 /**
@@ -372,6 +391,7 @@ defineExpose({ refresh })
   >
     <PlanningWorkspace
       :model="model"
+      :chain="chainScope"
       :scope-key="planningKey"
       :selected-id="selectedId"
       :warning="liveWarning"
@@ -380,6 +400,7 @@ defineExpose({ refresh })
       :view="view"
       :writable="writable"
       @create="composerOpen = true"
+      @exit-chain="exitChain"
       @open="(reference) => openItem(reference)"
       @transition="moveItem"
       @view="setView"
@@ -397,6 +418,7 @@ defineExpose({ refresh })
       :writable="writable"
       @back="goBack"
       @changed="loadPlanning"
+      @chain="showChain"
       @close="closeItem"
       @open="(reference) => openItem(reference, true)"
       @session="(id, family) => emit('open-session', id, family)"

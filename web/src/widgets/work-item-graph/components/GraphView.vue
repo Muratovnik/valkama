@@ -13,6 +13,7 @@ import '@vue-flow/controls/dist/style.css'
 import GraphBar from '@/widgets/work-item-graph/components/GraphBar.vue'
 import GraphControls from '@/widgets/work-item-graph/components/GraphControls.vue'
 import GraphEdge from '@/widgets/work-item-graph/components/GraphEdge.vue'
+import GraphEmptyState from '@/widgets/work-item-graph/components/GraphEmptyState.vue'
 import GraphLayoutStatus from '@/widgets/work-item-graph/components/GraphLayoutStatus.vue'
 import GraphNodeCard from '@/widgets/work-item-graph/components/GraphNodeCard.vue'
 import { useGraphProjection } from '@/widgets/work-item-graph/composables/useGraphProjection.ts'
@@ -28,6 +29,7 @@ import {
 } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import type { GraphScope } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 
+import { CHAIN_GROUPS, chainGroup } from '@/shared/api/planningChainGroups.ts'
 import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
 
 const props = defineProps<{
@@ -38,10 +40,12 @@ const props = defineProps<{
   scopeKind: GraphScope['kind']
   space: string
   version: number
+  /** The chain this field is scoped to, named in its header chip. */
+  chain?: { members: readonly string[]; reference: string; total: number } | null
   selectedId?: string | null
 }>()
 
-const emit = defineEmits<{ open: [reference: string] }>()
+const emit = defineEmits<{ 'exit-chain': []; 'open': [reference: string] }>()
 
 const GRAPH_FLOW_ID = 'valkama-work-graph'
 
@@ -60,10 +64,13 @@ const {
   retry,
   ready,
   showDone,
+  showUnlinked,
+  unlinked,
 } = useGraphProjection(
   () => ({
     edges: props.edges,
     epicId: props.epicId,
+    members: props.chain?.members,
     nodes: props.items,
     open: props.open,
     scopeKind: props.scopeKind,
@@ -72,6 +79,12 @@ const {
   }),
   () => props.selectedId ?? null,
 )
+
+/** Which empty the field is in, if any; the first cause wins. */
+const emptyKind = computed(() => {
+  if (emptySpace.value) return 'space'
+  return emptyOpen.value ? 'open' : null
+})
 
 const flowReady = ref(false)
 const fitted = ref(false)
@@ -100,11 +113,34 @@ function parentReference(node: PlacedNode): string | undefined {
   return node.parent_id === null ? undefined : referenceById.value.get(node.parent_id)
 }
 
-/** Outside the focused lineage, which is a fact about the field and not the node. */
-function isRecessed(id: string): boolean {
+const inChain = computed(() => props.scopeKind === 'chain')
+
+/**
+ * Outside the focused lineage, which is a fact about the field — or, in a
+ * chain, finished: the chain draws its closed work as the ground the open work
+ * stands on.
+ */
+function isRecessed(node: PlacedNode): boolean {
+  if (inChain.value && node.state.is_terminal) return true
   const focused = focusSet.value
-  return focused ? !focused.ids.has(id) : false
+  return focused ? !focused.ids.has(node.work_item_id) : false
 }
+
+/** The node's place in the chain, marked only when the field is one. */
+function nodeChainGroup(node: PlacedNode) {
+  return inChain.value ? chainGroup(node) : undefined
+}
+
+const chainChip = computed(() =>
+  props.chain ? { reference: props.chain.reference, total: props.chain.total } : null,
+)
+
+/** The chain groups the field draws, which is what its legend names. */
+const chainLegend = computed(() => {
+  if (!inChain.value || !placed.value) return []
+  const present = new Set(placed.value.nodes.map((node) => chainGroup(node)))
+  return CHAIN_GROUPS.filter((group) => present.has(group))
+})
 
 const flowNodes = computed<FlowNode<PlacedNode>[]>(() => {
   if (!placed.value) return []
@@ -217,10 +253,13 @@ watch([() => dimensions.value.width, () => dimensions.value.height], () => {
   fitted.value = false
   scheduleFitView()
 })
-watch([() => props.space, () => props.scopeKind, () => props.epicId, showDone], () => {
-  fitted.value = false
-  scheduleFitView()
-})
+watch(
+  [() => props.space, () => props.scopeKind, () => props.epicId, showDone, showUnlinked],
+  () => {
+    fitted.value = false
+    scheduleFitView()
+  },
+)
 </script>
 
 <template>
@@ -232,10 +271,15 @@ watch([() => props.space, () => props.scopeKind, () => props.epicId, showDone], 
   >
     <GraphBar
       v-model:show-done="showDone"
+      v-model:show-unlinked="showUnlinked"
+      :chain="chainChip"
+      :legend="chainLegend"
       :open-total="openTotal"
       :hidden-done="hiddenDone"
       :ready-count="ready.length"
+      :unlinked="unlinked"
       :has-edges="Boolean(placed?.edges.length)"
+      @exit-chain="emit('exit-chain')"
     />
 
     <GraphLayoutStatus
@@ -243,31 +287,18 @@ watch([() => props.space, () => props.scopeKind, () => props.epicId, showDone], 
       :pending="pending"
       @retry="retry"
     />
-    <p
-      v-if="emptySpace"
-      class="graph-empty"
-    >
-      {{ t('graph.empty') }}
-    </p>
-    <div
-      v-else-if="emptyOpen"
-      class="graph-empty graph-empty-open"
-    >
-      <span>{{ t('graph.emptyOpen') }}</span>
-      <button
-        class="graph-show-done"
-        type="button"
-        @click="showDone = true"
-      >
-        {{ t('graph.showDone', { count: hiddenDone }) }}
-      </button>
-    </div>
+    <GraphEmptyState
+      v-if="emptyKind"
+      :kind="emptyKind"
+      :count="hiddenDone"
+      @reveal="showDone = true"
+    />
 
     <!-- Hover cleanup only: leaving the canvas with a pointer clears the hover -->
     <!-- highlight. Nothing here is reachable or actionable by pointer alone. -->
     <!-- eslint-disable-next-line vuejs-accessibility/mouse-events-have-key-events, vuejs-accessibility/no-static-element-interactions -->
     <div
-      v-show="!emptySpace && !emptyOpen"
+      v-show="!emptyKind"
       class="graph-canvas"
       :class="[{ settled: fitted }]"
       @mouseleave="onFieldPointerLeave"
@@ -313,7 +344,8 @@ watch([() => props.space, () => props.scopeKind, () => props.epicId, showDone], 
           <GraphNodeCard
             :node="data"
             :ready="isReady(data)"
-            :recessed="isRecessed(data.work_item_id)"
+            :recessed="isRecessed(data)"
+            :chain-group="nodeChainGroup(data)"
             :parent-reference="parentReference(data)"
             @focus="onNodeFocus"
             @blur="onNodeBlur"
@@ -371,33 +403,6 @@ watch([() => props.space, () => props.scopeKind, () => props.epicId, showDone], 
   background: var(--color-surface-recess);
   overflow: hidden;
   border-radius: var(--radius-card);
-}
-
-.graph-empty {
-  padding: var(--space-7) 0;
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-note);
-}
-
-.graph-empty-open {
-  display: flex;
-  gap: var(--space-4);
-  align-items: center;
-}
-
-.graph-show-done {
-  height: 30px;
-  padding: 0 var(--space-3);
-  color: var(--color-action-primary);
-  font: var(--font-chip);
-  background: var(--color-control-surface);
-  border-radius: var(--radius-status);
-  cursor: pointer;
-
-  &:hover {
-    background: var(--color-surface-hover);
-  }
 }
 
 :deep(.vue-flow__background pattern circle) {

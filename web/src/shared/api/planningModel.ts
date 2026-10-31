@@ -21,7 +21,7 @@ import { enumField, ID, invalid, ISO, PROJECT_ID, UUID } from '@/shared/api/plat
 const PLANNING_READ_MODEL = 'valkama-planning-read-model' as const
 const PLANNING_API = 'valkama-planning-api' as const
 
-const STATE_CATEGORIES = [
+export const STATE_CATEGORIES = [
   'backlog',
   'queued',
   'active',
@@ -60,8 +60,8 @@ const EVENT_ACTIONS = [
 /** `VAL-142`: what a person types and what a URL carries. */
 export const WORK_ITEM_REFERENCE = /^[A-Z][A-Z0-9]{1,7}-[1-9]\d{0,8}$/u
 const SPACE_KEY = /^[A-Z][A-Z0-9]{1,7}$/u
-const STATE_KEY = /^[a-z][a-z0-9-]{0,31}$/u
-const TITLE = /^[^\u{0}]{1,200}$/u
+export const STATE_KEY = /^[a-z][a-z0-9-]{0,31}$/u
+export const TITLE = /^[^\u{0}]{1,200}$/u
 
 /**
  * A field that may be blank, which several of these are: an unheld item has no
@@ -69,7 +69,7 @@ const TITLE = /^[^\u{0}]{1,200}$/u
  * `boundedText` requires one character, so blank needs its own reader rather
  * than a pattern pretending an empty string is a value.
  */
-function blankable(max: number) {
+export function blankable(max: number) {
   return z
     .string()
     .max(max)
@@ -94,7 +94,7 @@ const workflowStateSchema = strictObject({ ...stateShape, position: positiveInt(
  * every read. `unconfirmed` is a claim no session proved — every claim older
  * than leases, and every claim made in this browser.
  */
-const CLAIM_STATES = ['live', 'stale', 'unconfirmed'] as const
+export const CLAIM_STATES = ['live', 'stale', 'unconfirmed'] as const
 const claimStateField = () => enumField(CLAIM_STATES).nullable()
 
 const checklistStepSchema = strictObject({

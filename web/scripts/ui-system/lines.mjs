@@ -255,7 +255,6 @@ export const CONTROL_SIZE_BUDGET = new Map([
   // the rest of the height. The height is the line and the air around it, so it
   // is the padding, and the ledger is exact in both directions — which is how
   // removing the literal shows up here as a failure until this entry goes too.
-  ['widgets/work-item-graph/components/GraphView.vue', 1],
   ['widgets/work-item-graph/components/GraphControls.vue', 1],
 ])
 

@@ -29,6 +29,7 @@ import {
   frontier,
   layout,
   neighborhood,
+  unlinkedIds,
   workNodes,
 } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import type {
@@ -49,6 +50,8 @@ type ProjectionInput = () => {
   scopeKind: GraphScope['kind']
   space: string
   version: number
+  /** The chain's member ids, in chain scope. */
+  members?: readonly string[]
 }
 
 export type GraphProjection = {
@@ -62,6 +65,9 @@ export type GraphProjection = {
   placed: Ref<GraphLayout | null>
   ready: ComputedRef<WorkItemBrief[]>
   showDone: Ref<boolean>
+  showUnlinked: Ref<boolean>
+  /** Items with no drawn link, which the field leaves out unless asked. */
+  unlinked: ComputedRef<number>
   applyFocus: (event: GraphFocusEvent) => void
   retry: () => void
 }
@@ -71,6 +77,7 @@ export function useGraphProjection(
   selected: () => string | null = () => null,
 ): GraphProjection {
   const showDone = ref(false)
+  const showUnlinked = ref(false)
   const focus = ref<ReturnType<typeof createGraphFocus>>(
     createGraphFocus({ ...input(), showDone: false }),
   )
@@ -85,7 +92,25 @@ export function useGraphProjection(
   // so the heading above and the field below never disagree.
   const scope = computed<GraphScope>(() => {
     const now = input()
-    return { kind: now.scopeKind, epicId: now.epicId }
+    return now.scopeKind === 'chain'
+      ? { kind: now.scopeKind, epicId: now.epicId, members: now.members ?? [] }
+      : { kind: now.scopeKind, epicId: now.epicId }
+  })
+
+  // A chain is drawn whole, so it has nothing to leave out.
+  const unlinkedSet = computed(() =>
+    source.value && scope.value.kind !== 'chain'
+      ? unlinkedIds(source.value, showDone.value, scope.value)
+      : new Set<string>(),
+  )
+  /** What ELK is given: the source, less the unlinked items unless they were asked for. */
+  const drawn = computed<GraphSource | null>(() => {
+    const data = source.value
+    if (!data || showUnlinked.value || unlinkedSet.value.size === 0) return data
+    return {
+      nodes: data.nodes.filter((node) => !unlinkedSet.value.has(node.work_item_id)),
+      edges: data.edges,
+    }
   })
 
   const focusContext = computed<GraphFocusContext>(() => ({
@@ -102,6 +127,7 @@ export function useGraphProjection(
         focusContext.value.scopeKind,
         focusContext.value.epicId,
         focusContext.value.showDone,
+        showUnlinked.value,
       ] as const,
     () => {
       focus.value = reduceGraphFocus(focus.value, { type: 'reset', context: focusContext.value })
@@ -121,12 +147,17 @@ export function useGraphProjection(
   })
 
   watch(
-    [source, scope, showDone, attempt],
+    [drawn, scope, showDone, attempt],
     async () => {
       const current = ++request
       stopLayout?.()
-      const data = source.value
-      const nextContext = JSON.stringify([input().space, scope.value, showDone.value])
+      const data = drawn.value
+      const nextContext = JSON.stringify([
+        input().space,
+        scope.value,
+        showDone.value,
+        showUnlinked.value,
+      ])
       if (!data || context !== nextContext) placed.value = null
       context = nextContext
       pending.value = Boolean(data)
@@ -192,6 +223,7 @@ export function useGraphProjection(
   const emptyOpen = computed(
     () => Boolean(source.value) && !emptySpace.value && !showDone.value && openTotal.value === 0,
   )
+  const unlinked = computed(() => unlinkedSet.value.size)
 
   function applyFocus(event: GraphFocusEvent) {
     focus.value = reduceGraphFocus(focus.value, event)
@@ -210,5 +242,7 @@ export function useGraphProjection(
     retry,
     ready,
     showDone,
+    showUnlinked,
+    unlinked,
   }
 }

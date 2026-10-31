@@ -7,6 +7,7 @@ import { Handle, Position } from '@vue-flow/core'
 
 import type { PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 
+import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 import { actorName } from '@/shared/lib/actor.ts'
 import { statePresentation } from '@/shared/lib/uiSystem.ts'
 import type { SemanticStatePair } from '@/shared/lib/uiSystem.ts'
@@ -15,6 +16,8 @@ const { node, ready } = defineProps<{
   node: PlacedNode
   ready: boolean
   recessed: boolean
+  /** Where the node stands in the chain the field is scoped to, marked on its edge. */
+  chainGroup?: ChainGroup
   parentReference?: string
 }>()
 const emit = defineEmits<{ blur: [id: string]; focus: [id: string] }>()
@@ -76,6 +79,12 @@ const ownerLabel = computed(() =>
     @focus="emit('focus', node.work_item_id)"
     @blur="emit('blur', node.work_item_id)"
   >
+    <span
+      v-if="chainGroup"
+      class="flow-node-chain"
+      aria-hidden="true"
+      :data-tone="statePresentation('work-item-chain-group', chainGroup).tone"
+    />
     <span class="flow-node-line">
       <span class="flow-node-meta">
         <span class="flow-node-id">{{ node.reference }}</span>
@@ -145,6 +154,33 @@ const ownerLabel = computed(() =>
     background: var(--color-surface-hover);
     outline: 2px solid var(--color-focus-ring);
     outline-offset: -2px;
+  }
+}
+
+/* The chain marker is a fill on the card's leading edge rather than a border:
+   the card's outline stays the one line it draws. */
+.flow-node-chain {
+  position: absolute;
+  inset-block: var(--space-2);
+  inset-inline-start: 0;
+  width: 3px;
+  background: var(--color-text-tertiary);
+  border-radius: var(--radius-status);
+
+  &[data-tone='success'] {
+    background: var(--color-success);
+  }
+
+  &[data-tone='warning'] {
+    background: var(--color-warning);
+  }
+
+  &[data-tone='info'] {
+    background: var(--color-info);
+  }
+
+  &[data-tone='danger'] {
+    background: var(--color-danger);
   }
 }
 

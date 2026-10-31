@@ -113,10 +113,15 @@ export function flowEdge(
   }
 }
 
-/** Which slice of the space the graph draws; mirrors the epic rail selection. */
+/**
+ * Which slice of the space the graph draws. `chain` is one chain of work: its
+ * root (in `epicId`) and the members the chain endpoint named, nothing else.
+ */
 export interface GraphScope {
   epicId: string | null
-  kind: 'all' | 'epic' | 'none'
+  kind: 'all' | 'chain' | 'epic' | 'none'
+  /** The chain's member ids; read only in chain scope. */
+  members?: readonly string[]
 }
 
 const WHOLE_SPACE: GraphScope = { kind: 'all', epicId: null }
@@ -142,16 +147,45 @@ export function workNodes(
   showDone: boolean,
   scope: GraphScope = WHOLE_SPACE,
 ): WorkItemBrief[] {
+  // A chain is read whole: its root is a container and most of it may be done,
+  // and dropping either would draw a different chain than the card describes.
+  if (scope.kind === 'chain') {
+    const chain = new Set([scope.epicId, ...(scope.members ?? [])])
+    return source.nodes.filter((node) => chain.has(node.work_item_id))
+  }
   return source.nodes.filter(
     (node) => !node.container && (showDone || !node.state.is_terminal) && inScope(node, scope),
   )
 }
 
+/**
+ * The drawn items no drawn link touches. A parent is a chip on its children and
+ * not a link, so an item related to nothing but its epic counts as unlinked: in
+ * a real space those are most of the items, and laid out as a grid they push
+ * the graph's actual structure off the screen.
+ *
+ * When nothing in view is linked there is no structure for them to crowd out,
+ * so none is reported and the field draws every item rather than none.
+ */
+export function unlinkedIds(
+  source: GraphSource,
+  showDone: boolean,
+  scope: GraphScope = WHOLE_SPACE,
+): Set<string> {
+  const drawn = workNodes(source, showDone, scope).map((node) => node.work_item_id)
+  const present = new Set(drawn)
+  const linked = new Set<string>()
+  for (const edge of source.edges) {
+    if (edge.kind === 'parent' || !present.has(edge.from) || !present.has(edge.to)) continue
+    linked.add(edge.from)
+    linked.add(edge.to)
+  }
+  return linked.size ? new Set(drawn.filter((id) => !linked.has(id))) : new Set<string>()
+}
+
 /** How many finished items the "show done" control is currently hiding. */
 export function doneCount(source: GraphSource, scope: GraphScope = WHOLE_SPACE): number {
-  return source.nodes.filter(
-    (node) => !node.container && node.state.is_terminal && inScope(node, scope),
-  ).length
+  return workNodes(source, true, scope).filter((node) => node.state.is_terminal).length
 }
 
 /** ELK owns ranking, cycle handling, component packing and obstacle routing. */

@@ -14,6 +14,7 @@ import type { Page } from '@playwright/test'
 
 import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 
+import { chainResponse, emptyChain } from '../fixtures/chain.ts'
 import { requestList } from '../support/inputRequests.ts'
 import { moduleRegistrations } from '../support/moduleRegistrations.ts'
 import { installBrowserDoubles } from './browserDoubles.ts'
@@ -142,6 +143,16 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
           const response = planningReadFor(url.searchParams, options.includeAttachedDuplicate)
           return fulfill(response.body, response.status)
         },
+        // Every card asks for its chain; these items head none.
+        '/api/planning/work-item/chain': () =>
+          fulfill(
+            chainResponse(
+              emptyChain(
+                workItemRef.reference,
+                url.searchParams.get('id') ?? workItem.work_item_id,
+              ),
+            ),
+          ),
         '/api/planning/activity': () =>
           fulfill({ interface_version: 'valkama-planning-api', activity: activityRows() }),
         '/api/sessions': () => fulfill({ sessions: structuredClone(monitorSessions), inbox: [] }),

@@ -238,6 +238,9 @@ defineExpose({ revealChecklist, startOutcomeReport })
       </li>
     </ul>
 
+    <!-- What the item is made of, which its host reads and owns. -->
+    <slot name="composition" />
+
     <InspectorDescription
       :item="item"
       :writable="writable"

@@ -10,6 +10,12 @@ import { planningSpaceEntity, planningWorkItemEntity } from '@/shared/api/platfo
 import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
+// The card asks for its chain on every open; this spec is about something else.
+vi.mock('@/shared/api/planningChainApi.ts', async () => {
+  const { noChainModule } = await import('../support/noChain.ts')
+  return noChainModule()
+})
+
 vi.mock('@/shared/api/planningApi.ts', async (load) => ({
   ...(await load<typeof import('@/shared/api/planningApi.ts')>()),
   subscribePlanning: vi.fn(() => vi.fn()),

@@ -14,6 +14,7 @@ import { useI18n } from 'vue-i18n'
 import WorkItemBoard from '@/widgets/work-item-views/components/WorkItemBoard.vue'
 import WorkItemList from '@/widgets/work-item-views/components/WorkItemList.vue'
 
+import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import { inWorkQueue } from '@/shared/api/planningModel.ts'
 import type { PlanningReadModel, WorkQueue } from '@/shared/api/planningModel.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
@@ -28,16 +29,19 @@ const props = defineProps<{
   version: number
   view: PlanningViewMode
   writable: boolean
+  /** The chain the graph is scoped to, when the owner asked to see one. */
+  chain?: WorkItemChain | null
   scopeKey?: string
   selectedId?: string | null
   warning?: string
 }>()
 
 const emit = defineEmits<{
-  create: []
-  open: [reference: string]
-  transition: [reference: string, stateKey: string]
-  view: [mode: PlanningViewMode]
+  'create': []
+  'exit-chain': []
+  'open': [reference: string]
+  'transition': [reference: string, stateKey: string]
+  'view': [mode: PlanningViewMode]
 }>()
 
 /** The graph pulls in Vue Flow, which no other view needs on first paint. */
@@ -79,6 +83,21 @@ const visibleItems = computed(() =>
         item.title.toLocaleLowerCase().includes(searchTerm.value)),
   ),
 )
+
+/** What the graph needs of a chain: who is in it, and what to call it. */
+const graphChain = computed(() =>
+  props.chain
+    ? {
+        members: props.chain.members.map((member) => member.work_item_id),
+        reference: props.chain.root.reference,
+        total: props.chain.total,
+      }
+    : null,
+)
+
+/** The whole space, or exactly one chain with the links the chain endpoint named. */
+const graphScopeKind = computed(() => (props.chain ? 'chain' : 'all'))
+const graphEdges = computed(() => props.chain?.edges ?? props.model.links)
 
 const VIEW_MODES: readonly PlanningViewMode[] = ['kanban', 'list', 'graph']
 
@@ -204,14 +223,16 @@ const counts = computed(() => {
       <WorkItemGraph
         v-else-if="view === 'graph'"
         v-show="visibleItems.length || !filtered"
-        scope-kind="all"
+        :scope-kind="graphScopeKind"
         :space="model.planning_space?.planning_space_id ?? ''"
         :items="visibleItems"
         :selected-id="selectedId"
-        :edges="model.links"
-        :epic-id="null"
+        :edges="graphEdges"
+        :epic-id="chain?.root.work_item_id ?? null"
+        :chain="graphChain"
         :open="true"
         :version="version"
+        @exit-chain="emit('exit-chain')"
         @open="(reference) => emit('open', reference)"
       />
     </div>

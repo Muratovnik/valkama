@@ -22,6 +22,12 @@ import {
   useInspectorHarness,
 } from '../support/inspectorHarness.ts'
 
+// The card asks for its chain on every open; this spec is about something else.
+vi.mock('@/shared/api/planningChainApi.ts', async () => {
+  const { noChainModule } = await import('../support/noChain.ts')
+  return noChainModule()
+})
+
 vi.mock('@/shared/api/executionApi.ts', async (load) => ({
   ...(await load<typeof import('@/shared/api/executionApi.ts')>()),
   fetchExecutionHistory: vi.fn(),

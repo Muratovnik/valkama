@@ -6,7 +6,7 @@
 export interface GraphFocusContext {
   epicId: string | null
   open: boolean
-  scopeKind: 'all' | 'epic' | 'none'
+  scopeKind: 'all' | 'chain' | 'epic' | 'none'
   showDone: boolean
   space: string
   version: number

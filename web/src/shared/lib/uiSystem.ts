@@ -8,6 +8,7 @@ export type ClosedStateDimension =
   | 'platform-ui-state'
   | 'project-binding'
   | 'session-feed-result'
+  | 'work-item-chain-group'
   | 'work-item-node-marker'
   | 'work-item-priority'
   | 'work-item-readiness'
@@ -87,6 +88,20 @@ const STATE_PRESENTATION = {
     medium: { tone: 'neutral', emphasis: 'quiet' },
     high: { tone: 'warning', emphasis: 'quiet' },
     urgent: { tone: 'danger', emphasis: 'strong' },
+  },
+  /**
+   * Where a member of a chain stands, as the card groups it and the graph marks
+   * it. Done is neutral rather than the green of an active state: in a chain the
+   * finished work is the background the open work is read against, and two
+   * greens would make the two indistinguishable on the graph.
+   */
+  'work-item-chain-group': {
+    active: { tone: 'success', emphasis: 'quiet' },
+    review: { tone: 'warning', emphasis: 'quiet' },
+    queued: { tone: 'info', emphasis: 'quiet' },
+    backlog: { tone: 'neutral', emphasis: 'quiet' },
+    blocked: { tone: 'danger', emphasis: 'strong' },
+    done: { tone: 'neutral', emphasis: 'quiet' },
   },
   'work-item-node-marker': {
     ready: { tone: 'neutral', emphasis: 'quiet' },
@@ -180,6 +195,7 @@ type ConnectionLifecycleState = keyof (typeof STATE_PRESENTATION)['connection-li
 type PlatformUiState = keyof (typeof STATE_PRESENTATION)['platform-ui-state']
 type ProjectBindingState = keyof (typeof STATE_PRESENTATION)['project-binding']
 type SessionFeedResultState = keyof (typeof STATE_PRESENTATION)['session-feed-result']
+type WorkItemChainGroupState = keyof (typeof STATE_PRESENTATION)['work-item-chain-group']
 type WorkItemNodeMarkerState = keyof (typeof STATE_PRESENTATION)['work-item-node-marker']
 type WorkItemPriorityState = keyof (typeof STATE_PRESENTATION)['work-item-priority']
 type WorkItemReadinessState = keyof (typeof STATE_PRESENTATION)['work-item-readiness']
@@ -196,6 +212,7 @@ export type SemanticStatePair =
   | { dimension: 'platform-ui-state'; state: PlatformUiState }
   | { dimension: 'project-binding'; state: ProjectBindingState }
   | { dimension: 'session-feed-result'; state: SessionFeedResultState }
+  | { dimension: 'work-item-chain-group'; state: WorkItemChainGroupState }
   | { dimension: 'work-item-node-marker'; state: WorkItemNodeMarkerState }
   | { dimension: 'work-item-priority'; state: WorkItemPriorityState }
   | { dimension: 'work-item-readiness'; state: WorkItemReadinessState }
@@ -208,6 +225,7 @@ const CLOSED_STATE_DIMENSIONS = {
   'platform-ui-state': true,
   'project-binding': true,
   'session-feed-result': true,
+  'work-item-chain-group': true,
   'work-item-node-marker': true,
   'work-item-priority': true,
   'work-item-readiness': true,

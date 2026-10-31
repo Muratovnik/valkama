@@ -24,6 +24,12 @@ import {
   workItemRef,
 } from '../browser/planningFixtures.ts'
 
+// The card asks for its chain on every open; this spec is about something else.
+vi.mock('@/shared/api/planningChainApi.ts', async () => {
+  const { noChainModule } = await import('../support/noChain.ts')
+  return noChainModule()
+})
+
 vi.mock('@/shared/api/planningApi.ts', async (load) => ({
   ...(await load<typeof import('@/shared/api/planningApi.ts')>()),
   fetchPlanning: vi.fn(),

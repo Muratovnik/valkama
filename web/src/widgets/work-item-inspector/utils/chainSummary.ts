@@ -1,0 +1,71 @@
+/**
+ * What the card says about a chain, derived from the one answer the server sent.
+ *
+ * Pure on purpose: the grouping is the claim the section makes — this many in
+ * progress, this many ready — and a claim is easier to check as a function of
+ * its input than through a mounted component.
+ */
+
+import type { ChainMember, ChainOrigin, WorkItemChain } from '@/shared/api/planningChainApi.ts'
+import { CHAIN_GROUPS, chainGroup } from '@/shared/api/planningChainGroups.ts'
+import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
+
+export type ChainGroups = Record<ChainGroup, ChainMember[]>
+
+function referenceNumber(reference: string): number {
+  return Number(reference.slice(reference.lastIndexOf('-') + 1))
+}
+
+/**
+ * Open work oldest first, so the item that has waited longest leads its group;
+ * finished work most recently closed first, because that is the part of the past
+ * a reader asks about.
+ */
+function byReference(left: ChainMember, right: ChainMember): number {
+  return referenceNumber(left.reference) - referenceNumber(right.reference)
+}
+
+function byClosing(left: ChainMember, right: ChainMember): number {
+  return (right.closed_at ?? '').localeCompare(left.closed_at ?? '') || byReference(left, right)
+}
+
+function memberOrder(group: ChainGroup) {
+  return group === 'done' ? byClosing : byReference
+}
+
+export function groupMembers(members: readonly ChainMember[]): ChainGroups {
+  const groups = Object.fromEntries(
+    CHAIN_GROUPS.map((group) => [group, []]),
+  ) as unknown as ChainGroups
+  for (const member of members) groups[chainGroup(member)].push(member)
+  for (const group of CHAIN_GROUPS) groups[group].sort(memberOrder(group))
+  return groups
+}
+
+/**
+ * The space's own name for a group, when every member in it is in one state:
+ * a workflow that calls its active state "Development" should read that here.
+ * A group spanning several states keeps the category's name.
+ */
+export function sharedStateName(members: readonly ChainMember[]): string | null {
+  const names = new Set(members.map((member) => member.state.name))
+  return names.size === 1 ? [...names][0] : null
+}
+
+/**
+ * The root's own children, and every other place the chain's members came to
+ * live: another epic they were filed under, or none. The server lists the root's
+ * own children first; this only separates them so the card can name them as the
+ * starting scope rather than as one more origin.
+ */
+export function splitOrigins(chain: WorkItemChain): { later: ChainOrigin[]; own?: ChainOrigin } {
+  const [first, ...rest] = chain.origins
+  if (first !== undefined && first.parent_reference === chain.root.reference)
+    return { own: first, later: rest }
+  return { later: chain.origins }
+}
+
+/** The day a series point names, read as a calendar date wherever the reader is. */
+export function seriesDate(day: string): Date {
+  return new Date(`${day}T00:00:00Z`)
+}

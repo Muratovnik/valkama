@@ -11,6 +11,12 @@ import { fetchWorkItem } from '@/shared/api/planningApi.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
+// The card asks for its chain on every open; this spec is about something else.
+vi.mock('@/shared/api/planningChainApi.ts', async () => {
+  const { noChainModule } = await import('../support/noChain.ts')
+  return noChainModule()
+})
+
 vi.mock('@/shared/api/executionApi.ts', async (load) => ({
   ...(await load<typeof import('@/shared/api/executionApi.ts')>()),
   fetchExecutionHistory: vi.fn(),

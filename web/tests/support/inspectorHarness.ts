@@ -75,7 +75,7 @@ export const drawerFrameStub = {
   methods: { scrollToTop() {} },
 }
 
-export function mountInspector(item: WorkItem) {
+export function mountInspector(item: WorkItem, overrides: { writable?: boolean } = {}) {
   vi.mocked(fetchWorkItem).mockResolvedValue(item)
   return mount(WorkItemInspector, {
     attachTo: document.body,
@@ -87,6 +87,7 @@ export function mountInspector(item: WorkItem) {
       resourceRef,
       workflow: workflowFor(item),
       writable: true,
+      ...overrides,
     },
     global: {
       plugins: [createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages })],

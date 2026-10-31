@@ -18,7 +18,7 @@ export default defineConfig({
     {
       name: 'production',
       testMatch:
-        /production-(?:adoption|discussion|execution|graph|inspector|loading|memory|modules|semantic-states|settings|shell)\.spec\.ts/,
+        /production-(?:adoption|chain|discussion|execution|graph|inspector|loading|memory|modules|semantic-states|settings|shell)\.spec\.ts/,
       use: {
         ...devices['Desktop Chrome'],
         baseURL: 'http://127.0.0.1:4175',

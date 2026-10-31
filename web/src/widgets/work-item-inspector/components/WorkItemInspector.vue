@@ -17,6 +17,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import InspectorActivity from '@/widgets/work-item-inspector/components/InspectorActivity.vue'
+import InspectorChain from '@/widgets/work-item-inspector/components/InspectorChain.vue'
 import InspectorExecution from '@/widgets/work-item-inspector/components/InspectorExecution.vue'
 import InspectorMemory from '@/widgets/work-item-inspector/components/InspectorMemory.vue'
 import InspectorOverview from '@/widgets/work-item-inspector/components/InspectorOverview.vue'
@@ -24,11 +25,13 @@ import InspectorRelations from '@/widgets/work-item-inspector/components/Inspect
 import InspectorWriteActions from '@/widgets/work-item-inspector/components/InspectorWriteActions.vue'
 import { provideDraftGuard } from '@/widgets/work-item-inspector/utils/useDraftGuard.ts'
 import { useInspectorWrites } from '@/widgets/work-item-inspector/utils/useInspectorWrites.ts'
+import { useWorkItemChain } from '@/widgets/work-item-inspector/utils/useWorkItemChain.ts'
 import { useWorkItemExecutions } from '@/widgets/work-item-inspector/utils/useWorkItemExecutions.ts'
 import { useWorkItemResource } from '@/widgets/work-item-inspector/utils/useWorkItemResource.ts'
 
 import LaunchDialog from '@/features/work-item-launch/LaunchDialog.vue'
 
+import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import type { PlanningWorkflow } from '@/shared/api/planningModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { planningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
@@ -61,6 +64,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   back: []
+  chain: [chain: WorkItemChain]
   changed: []
   close: []
   open: [reference: string]
@@ -166,6 +170,19 @@ watch(
   },
   { immediate: true },
 )
+
+// The chain is keyed by the item's own id, which only the loaded record carries,
+// and re-read whenever the inspector itself refreshes: once per open, once per
+// refresh, never twice for one answer. Like executions, the chain endpoint reads
+// the primary store only, so an attached store's item asks it nothing.
+const chain = useWorkItemChain()
+const chainRoot = computed(() => (props.writable ? (item.value?.work_item_id ?? '') : ''))
+watch(
+  () => `${chainRoot.value}:${props.refreshToken}`,
+  () => void chain.load(chainRoot.value),
+  { immediate: true },
+)
+const retryChain = () => void chain.load()
 
 // Every tab starts at its own top. The body is one scroller, so a tab opened
 // after reading far down another used to open at that same depth.
@@ -354,7 +371,21 @@ const close = () => void leave(() => emit('close'))
               @changed="reloaded"
               @refresh="load"
               @tick="tick"
-            />
+            >
+              <template #composition>
+                <InspectorChain
+                  :chain="chain.chain.value"
+                  :container="payload.container"
+                  :failed="chain.failed.value"
+                  :loading="chain.loading.value"
+                  :scope="chain.scope.value"
+                  @scope="chain.setScope"
+                  @retry="retryChain"
+                  @graph="(shown) => emit('chain', shown)"
+                  @open="(target) => void leave(() => emit('open', target))"
+                />
+              </template>
+            </InspectorOverview>
             <InspectorRelations
               v-if="section === 'relations'"
               :item="payload"
