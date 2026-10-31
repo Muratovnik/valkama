@@ -40,8 +40,6 @@ LEASE_PERIOD = timedelta(days=14)
 LIVE = "live"
 STALE = "stale"
 UNCONFIRMED = "unconfirmed"
-#: The values `claim_state` takes when there is a claim.
-STATES = (LIVE, STALE, UNCONFIRMED)
 
 #: Who signs the release of an expired lease, and the call tool it is recorded under.
 EXPIRY_AUTHOR = "valkama"

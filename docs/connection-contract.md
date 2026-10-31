@@ -248,6 +248,11 @@ Who may release or take over a claim follows the lease:
 
 An MCP server and `serve` also release every stale lease once when they start.
 
+The space's list of abandoned claims (`stale_claims` in the read model) holds
+every `stale` lease and every `unconfirmed` claim with no event for three days,
+except the owner's own claim made in the browser. A claim a launch took for its
+runner is listed like any other.
+
 A claim still counts as the executor that starting an item requires. Starting
 an item under an `unconfirmed` or a `stale` claim answers with a warning, not a
 refusal, unless the claim was taken in the browser.

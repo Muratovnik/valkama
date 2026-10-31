@@ -471,6 +471,20 @@ class AbandonedClaimTests(LeaseTestCase):
         self.conn.commit()
         self.assertEqual([(self.reference, "unconfirmed")], self.abandoned())
 
+    def test_a_launched_runner_claim_is_still_called_abandoned_when_quiet(self) -> None:
+        # A launch claims inside the browser's call, but for its runner.
+        status, _ = self.http(
+            self.listener(),
+            "POST",
+            "/api/planning/work-item/claim",
+            {"id": self.reference, "author": "codex:executor"},
+        )
+        self.assertEqual(200, status)
+        self.conn.execute("UPDATE work_item_events SET created_at = '2020-01-01T00:00:00Z'")
+        self.conn.execute("UPDATE work_items SET updated_at = '2020-01-01T00:00:00Z'")
+        self.conn.commit()
+        self.assertEqual([(self.reference, "unconfirmed")], self.abandoned())
+
     def test_the_owners_own_claim_is_never_called_abandoned(self) -> None:
         status, _ = self.http(
             self.listener(), "POST", "/api/planning/work-item/claim", {"id": self.reference}

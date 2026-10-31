@@ -66,8 +66,10 @@ def stale_claims(
 
     A lease a confirmed session holds is abandoned when it reads `stale`, however
     recently somebody else touched the item, and never while it is `live`. An
-    unconfirmed claim has only its quiet to go by: no event for `days`. A claim
-    taken in the browser is the owner's own and is not second-guessed here.
+    unconfirmed claim has only its quiet to go by: no event for `days`. The
+    owner's own claim, taken in the browser and signed `user`, is not
+    second-guessed here. A launch also claims through the browser, but for its
+    runner, and a runner that died leaves exactly the claim this list is for.
 
     A claim only goes stale while somebody is supposed to be working: the
     categories are asked of the workflow rather than named, so a space that
@@ -101,9 +103,8 @@ def stale_claims(
         claim_state = leases.state(conn, row)
         if claim_state == leases.LIVE:
             continue
-        if claim_state == leases.UNCONFIRMED and (
-            row["claim_source"] == calls.BROWSER or int(row["quiet_days"]) < int(days)
-        ):
+        owners_own = row["claim_source"] == calls.BROWSER and row["claim_ref"] == calls.OWNER_ACTOR
+        if claim_state == leases.UNCONFIRMED and (owners_own or int(row["quiet_days"]) < int(days)):
             continue
         abandoned.append(
             {

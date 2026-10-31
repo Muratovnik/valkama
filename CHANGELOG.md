@@ -134,7 +134,8 @@ checkouts are therefore distinguishable even at the same version.
   claim without a confirmed session is still compared by author.
 - The space's abandoned claims (`stale_claims`) follow the lease: a stale lease
   is listed at once and a live one never, whatever its quiet. The three-day
-  quiet rule stays for unconfirmed claims, except one taken in the browser.
+  quiet rule stays for unconfirmed claims, except the owner's own claim made
+  in the browser; a claim a launch took for its runner is still listed.
   Each entry carries `claim_state`.
 - Starting an item under an unconfirmed or stale claim answers with a warning.
   The claim still counts as the executor, and a claim taken in the browser
