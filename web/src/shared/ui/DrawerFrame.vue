@@ -136,8 +136,15 @@ defineExpose({ scrollToTop })
 
 /* The scrollbar is paid for out of the end inset, so the body's content ends
    where the head's does. Drawn inside a full inset it pushed every row 10px
-   short of the close button above it, and the column read as shifted. */
+   short of the close button above it, and the column read as shifted.
+
+   The body is the containing block of what is positioned inside it. Without
+   that, a visually hidden label far down a long section was placed against the
+   drawer instead, stretched the drawer's own scroll area to twice its height,
+   and the first `scrollIntoView` scrolled the drawer and left a blank band
+   under the body. */
 .drawer-frame-body {
+  position: relative;
   min-height: 0;
   padding: var(--space-6);
   padding-inline-end: calc(var(--space-6) - var(--size-scrollbar));

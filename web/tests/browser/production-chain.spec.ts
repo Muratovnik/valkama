@@ -77,6 +77,12 @@ for (const width of [1440, 390]) {
     await expect(section.locator('.chain-row.is-done')).toHaveCount(8)
     const done = section.locator('.chain-row.is-done').first()
     await done.scrollIntoViewIfNeeded()
+    // Only the drawer's body scrolls to bring a row into view; the drawer
+    // itself has nothing past its height, so no blank band opens under it.
+    const drawerScroll = await page
+      .locator('.drawer')
+      .evaluate((drawer) => [drawer.scrollTop, drawer.scrollHeight - drawer.clientHeight])
+    expect(drawerScroll).toEqual([0, 0])
     await page.locator('.drawer').screenshot(shot(info, `chain-card-expanded-${width}.png`))
   })
 }
