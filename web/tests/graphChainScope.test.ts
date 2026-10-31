@@ -3,11 +3,18 @@ import assert from 'node:assert/strict'
 import ELK from 'elkjs/lib/elk.bundled.js'
 import { test } from 'vitest'
 
-import { layout, unlinkedIds, workNodes } from '@/widgets/work-item-graph/utils/graphLayout.ts'
+import {
+  doneCount,
+  layout,
+  unlinkedIds,
+  workNodes,
+} from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import type { GraphScope, GraphSource } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 
 import { chainGroup } from '@/shared/api/planningChainGroups.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
+
+import { longChainSpace } from './fixtures/chainSpace.ts'
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 const OPEN = {
@@ -72,9 +79,15 @@ const space: GraphSource = {
 }
 const chain: GraphScope = { kind: 'chain', epicId: id(1), members: [id(2), id(3), id(4)] }
 
-test('chain scope keeps exactly the root and the members, the root and closed work included', () => {
+test('chain scope draws its open part by default and every member when closed work is asked for', () => {
+  // 2 is closed and the parent of nothing drawn, so the default leaves it out.
   const drawn = workNodes(space, false, chain).map((node) => node.reference)
-  assert.deepEqual(drawn, ['VAL-1', 'VAL-2', 'VAL-3', 'VAL-4'])
+  assert.deepEqual(drawn, ['VAL-1', 'VAL-3', 'VAL-4'])
+  assert.deepEqual(
+    workNodes(space, true, chain).map((node) => node.reference),
+    ['VAL-1', 'VAL-2', 'VAL-3', 'VAL-4'],
+  )
+  assert.equal(doneCount(space, chain), 1)
   // The whole space never draws the root (it is a container) nor, by default, done work.
   assert.deepEqual(
     workNodes(space, false).map((node) => node.reference),
@@ -86,7 +99,7 @@ test('the chain is laid out with only its own nodes, and a link to outside work 
   const placed = await layout(
     { nodes: space.nodes, edges: [{ from: id(4), to: id(2), kind: 'discovered-from' }] },
     new ELK(),
-    false,
+    true,
     chain,
   )
   assert.deepEqual(
@@ -125,4 +138,43 @@ test('a chain member is grouped by its workflow category, never by readiness', (
   assert.equal(at('blocked'), 'blocked')
   assert.equal(at('completed', true), 'done')
   assert.equal(at('cancelled', true), 'done')
+})
+
+test('a long chain draws the root, its open work and the epics that work is filed under', () => {
+  const { source, scope, root, openEpic, closedEpic } = longChainSpace()
+  const all = workNodes(source, true, scope)
+  // The whole chain: the root and its 600 members, the linked outsider left out;
+  // the 480 closed members and the closed root.
+  assert.equal(all.length, 601)
+  assert.equal(all.filter((node) => node.state.is_terminal).length, 481)
+
+  const drawn = workNodes(source, false, scope)
+  const ids = new Set(drawn.map((node) => node.work_item_id))
+  // The 120 open members, the closed root, and the closed epic three of them
+  // are still filed under; nothing else that is closed.
+  assert.equal(drawn.length, 122)
+  assert.ok(ids.has(root.work_item_id))
+  assert.ok(ids.has(openEpic.work_item_id))
+  assert.ok(ids.has(closedEpic.work_item_id))
+  assert.deepEqual(
+    drawn
+      .filter((node) => node.state.is_terminal)
+      .map((node) => node.reference)
+      .sort((left, right) => left.localeCompare(right)),
+    [closedEpic.reference, root.reference].sort((left, right) => left.localeCompare(right)),
+  )
+  // What the switch promises is exactly what it adds.
+  assert.equal(doneCount(source, scope), all.length - drawn.length)
+  assert.equal(doneCount(source, scope), 479)
+})
+
+test('a closed parent outside the chain does not come back with its open child', () => {
+  const outsider = item(20, { kind: 'epic', container: true, state: DONE })
+  const child = item(21, { parent_id: id(20) })
+  const nodes = { nodes: [root, outsider, child], edges: [] }
+  const scope: GraphScope = { kind: 'chain', epicId: id(1), members: [id(21)] }
+  assert.deepEqual(
+    workNodes(nodes, false, scope).map((node) => node.reference),
+    ['VAL-1', 'VAL-21'],
+  )
 })

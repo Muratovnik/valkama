@@ -141,6 +141,8 @@ describe('the whole-space graph and its unlinked items', () => {
     // The open/all filter still works beside it.
     await graph.get('button[aria-pressed="false"]').trigger('click')
     expect(await drawn(graph)).toContain('VAL-2')
+    // The whole space has no root to mark.
+    expect(graph.find('.flow-node-root').exists()).toBe(false)
   })
 })
 
@@ -148,9 +150,23 @@ describe('the graph scoped to one chain', () => {
   const chain = { members: [id(2), id(3), id(4)], reference: 'VAL-1', total: 3 }
   const chainEdges: PlanningEdge[] = [{ from: id(4), to: id(2), kind: 'discovered-from' }]
 
-  it('draws exactly the members and the root, closed work included but recessed', async () => {
+  it('draws the root and the open members, and the closed ones only when the switch is thrown', async () => {
     const graph = openGraph({ scopeKind: 'chain', epicId: id(1), chain, edges: chainEdges })
+    expect(await drawn(graph)).toEqual(['VAL-1', 'VAL-3', 'VAL-4'])
+    // One switch, and it is the closed one: a chain has no unlinked toggle and
+    // no open/all filter.
+    const toggle = graph.get('[role="switch"]')
+    expect(graph.findAll('[role="switch"]')).toHaveLength(1)
+    expect(toggle.text()).toBe('Closed · 1')
+    expect(toggle.attributes('aria-label')).toBe('Draw the closed members of the chain')
+    expect(toggle.attributes('aria-checked')).toBe('false')
+    expect(graph.find('.graph-filter').exists()).toBe(false)
+    // The chip still counts the whole chain.
+    expect(graph.get('.graph-chip').text()).toBe('Chain VAL-1 · 3')
+
+    await toggle.trigger('click')
     expect(await drawn(graph)).toEqual(['VAL-1', 'VAL-2', 'VAL-3', 'VAL-4'])
+    expect(graph.get('[role="switch"]').attributes('aria-checked')).toBe('true')
     const cards = graph.findAllComponents(GraphNodeCard)
     const card = (reference: string) =>
       cards.find((entry) => entry.props('node').reference === reference)
@@ -158,9 +174,29 @@ describe('the graph scoped to one chain', () => {
     expect(card('VAL-3')?.props('recessed')).toBe(false)
     expect(card('VAL-2')?.props('chainGroup')).toBe('done')
     expect(card('VAL-3')?.props('chainGroup')).toBe('queued')
-    // A chain is read whole: no unlinked toggle, no open/all filter.
-    expect(graph.find('[role="switch"]').exists()).toBe(false)
-    expect(graph.find('.graph-filter').exists()).toBe(false)
+  })
+
+  it('marks the root with a word and in its accessible name, closed or not', async () => {
+    const closedRoot = items.map((entry) =>
+      entry.reference === 'VAL-1' ? { ...entry, state: DONE } : entry,
+    )
+    const graph = openGraph({
+      scopeKind: 'chain',
+      epicId: id(1),
+      chain,
+      edges: chainEdges,
+      items: closedRoot,
+    })
+    await drawn(graph)
+    const cards = graph.findAllComponents(GraphNodeCard)
+    const root = cards.find((entry) => entry.props('node').reference === 'VAL-1')
+    expect(root?.props('root')).toBe(true)
+    // Closed, it still stands above the closed work rather than with it.
+    expect(root?.props('recessed')).toBe(false)
+    expect(root?.get('.flow-node-root').text()).toBe('root')
+    expect(root?.get('button').attributes('aria-label')).toBe('VAL-1 item 1 · Done · chain root')
+    const others = cards.filter((entry) => entry.props('node').reference !== 'VAL-1')
+    expect(others.every((entry) => !entry.find('.flow-node-root').exists())).toBe(true)
   })
 
   it('names the chain in a chip that leads back to the whole space', async () => {
@@ -173,12 +209,15 @@ describe('the graph scoped to one chain', () => {
     expect(graph.emitted('exit-chain')).toHaveLength(1)
   })
 
-  it('names in its legend the groups it draws', async () => {
+  it('names in its legend the groups it draws, and no group it leaves out', async () => {
     const graph = openGraph({ scopeKind: 'chain', epicId: id(1), chain, edges: chainEdges })
     await drawn(graph)
-    const legend = graph.get('.graph-legend').text()
-    expect(legend).toContain('To do')
-    expect(legend).toContain('Done')
-    expect(legend).not.toContain('In progress')
+    const legend = () => graph.get('.graph-legend').text()
+    expect(legend()).toContain('To do')
+    expect(legend()).not.toContain('Done')
+    expect(legend()).not.toContain('In progress')
+    await graph.get('[role="switch"]').trigger('click')
+    await drawn(graph)
+    expect(legend()).toContain('Done')
   })
 })

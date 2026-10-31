@@ -178,6 +178,8 @@ export const ru = {
     all: 'Все · {count}',
     frontier: 'Можно брать сейчас · {count}',
     readyMark: 'можно брать',
+    rootMark: 'корень',
+    rootLabel: 'корень цепочки',
     empty: 'В этом пространстве нет работы для проекции.',
     emptyOpen: 'Открытой работы нет — рисовать нечего.',
     showDone: 'Показать готовые · {count}',
@@ -190,8 +192,15 @@ export const ru = {
     focusWork: 'К рабочей задаче',
     chainChip: 'Цепочка {reference} · {count}',
     chainExit: 'Выйти из цепочки {reference} и показать всё пространство',
+    chainInvalid:
+      'Ссылка не называет цепочку, которую можно прочитать; граф показывает всё пространство.',
+    chainUnavailable:
+      'Цепочку {reference} здесь не показать: {cause}. Граф показывает всё пространство.',
+    chainElsewhere: 'она из другого пространства планирования',
     unlinked: 'Без связей · {count}',
     unlinkedToggle: 'Показывать работу без связей',
+    closed: 'Закрытые · {count}',
+    closedToggle: 'Показывать закрытые задачи цепочки',
   },
   launch: {
     title: 'Запустить попытку',

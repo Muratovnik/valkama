@@ -31,6 +31,8 @@ const props = defineProps<{
   writable: boolean
   /** The chain the graph is scoped to, when the owner asked to see one. */
   chain?: WorkItemChain | null
+  /** The route names a chain whose first read is still in flight. */
+  chainPending?: boolean
   scopeKey?: string
   selectedId?: string | null
   warning?: string
@@ -220,6 +222,13 @@ const counts = computed(() => {
         :links="model.links"
         @open="(reference) => emit('open', reference)"
       />
+      <p
+        v-else-if="view === 'graph' && chainPending"
+        class="workspace-note"
+        role="status"
+      >
+        {{ t('workItem.chain.loading') }}
+      </p>
       <WorkItemGraph
         v-else-if="view === 'graph'"
         v-show="visibleItems.length || !filtered"

@@ -20,7 +20,12 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { usePlanningChainScope } from '@/pages/planning/composables/usePlanningChainScope.ts'
+import {
+  chainTarget,
+  usePlanningChainScope,
+  withChain,
+} from '@/pages/planning/composables/usePlanningChainScope.ts'
+import type { ChainRefusal } from '@/pages/planning/composables/usePlanningChainScope.ts'
 import { usePlanningPortfolio } from '@/pages/planning/composables/usePlanningPortfolio.ts'
 import { usePlanningSubscription } from '@/pages/planning/composables/usePlanningSubscription.ts'
 import PlanningPortfolio from '@/pages/planning/PlanningPortfolio.vue'
@@ -162,16 +167,38 @@ const openIdentity = computed(() => {
     : `${projectId.value}:${space.data_scope_id}:${space.space_key}:${reference}`
 })
 const trail = ref<string[]>([])
-const {
-  chain: chainScope,
-  enter: enterChain,
-  exit: exitChain,
-} = usePlanningChainScope(() => version.value)
 const composerOpen = ref(false)
 
 const planningKey = computed(() =>
   JSON.stringify([props.scope, boundSpace.value, routeSelection.value.status]),
 )
+
+/**
+ * The route named a chain this space cannot show. It says so once and drops the
+ * keys, so the field is the whole space and the address says the same.
+ */
+function refuseChain(reference: string, why: ChainRefusal) {
+  const cause = why.kind === 'failed' ? why.message : t('graph.chainElsewhere')
+  emit(
+    'notice',
+    why.kind === 'invalid'
+      ? t('graph.chainInvalid')
+      : t('graph.chainUnavailable', { reference, cause }),
+  )
+  emit('state', withChain(props.route.state, null))
+}
+
+const {
+  scoped: chainScope,
+  pending: chainPending,
+  enter: enterChain,
+} = usePlanningChainScope({
+  target: () => chainTarget(props.route.state),
+  space: () => (boundSpace.value === undefined ? '' : planningKey.value),
+  spaceItems: () => model.value?.work_items ?? null,
+  version: () => version.value,
+  refused: refuseChain,
+})
 
 const selectedId = computed(
   () => model.value?.work_items.find((item) => item.reference === open.value)?.work_item_id ?? null,
@@ -253,7 +280,6 @@ watch(
   () => {
     trail.value = []
     composerOpen.value = false
-    exitChain()
     invalidatePortfolio()
     void loadPlanning()
     if (props.scope.kind === 'global') void loadPortfolio()
@@ -306,19 +332,24 @@ function goBack() {
   show(previous)
 }
 
+/** A chain scopes the graph only, so another view leaves it. */
 function setView(mode: PlanningViewMode) {
-  emit('state', { ...props.route.state, view: mode })
+  const state = mode === 'graph' ? props.route.state : withChain(props.route.state, null)
+  emit('state', { ...state, view: mode })
 }
 
-// A chain scopes the graph only; another view of the space is the whole space.
-watch(view, (mode) => {
-  if (mode !== 'graph') exitChain()
-})
+/** The chip's way back: the graph of the whole space. */
+function exitChain() {
+  emit('state', withChain(props.route.state, null))
+}
 
 /** The card asked to see its chain: the graph, scoped to exactly that chain. */
 function showChain(chain: WorkItemChain) {
   enterChain(chain)
-  if (view.value !== 'graph') setView('graph')
+  emit('state', {
+    ...withChain(props.route.state, { reference: chain.root.reference, scope: chain.scope }),
+    view: 'graph',
+  })
 }
 
 /**
@@ -392,6 +423,7 @@ defineExpose({ refresh })
     <PlanningWorkspace
       :model="model"
       :chain="chainScope"
+      :chain-pending="chainPending"
       :scope-key="planningKey"
       :selected-id="selectedId"
       :warning="liveWarning"

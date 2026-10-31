@@ -108,7 +108,7 @@ _MODULES = (
         "work",
         "platform.modules.planning",
         "layout-dashboard",
-        ["query", "view", "status"],
+        ["query", "view", "status", "chain", "chain_scope"],
         ["planning.spaces", "planning.work-items"],
         ["planning.project-spaces", "planning.work-items"],
         ["module.planning.create-work-item", "module.planning.open-work-item"],

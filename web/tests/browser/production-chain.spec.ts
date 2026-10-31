@@ -1,112 +1,41 @@
 /**
  * A chain read end to end in the built application: the card's section for an
- * epic shaped like VAL-384, and the graph scoped to a chain and back.
+ * epic shaped like VAL-384, the graph scoped to a chain and back, and the chain
+ * held in the address, so a reload, a link and Back come back to the same field.
  *
  * Each test saves what it looked at under its own output folder, so a reader can
  * see the composed result and not only that the assertions held.
  */
+import { writeFile } from 'node:fs/promises'
+
 import { expect, test } from '@playwright/test'
 import type { Page, TestInfo } from '@playwright/test'
 
-import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
+import { planningSpaceEntity, planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
-import { chainResponse, largeEpicChain } from '../fixtures/chain.ts'
+import { chainResponse } from '../fixtures/chain.ts'
 import { installBackend } from './backend.ts'
-import { planningReadModel, projectScope, workItem, workItemRef } from './planningFixtures.ts'
+import { largeChainHere, longChainHere, smallChain } from './chainFixtures.ts'
+import { projectScope, spaceRef, workItemRef } from './planningFixtures.ts'
 import { planningReadFor } from './planningReadFixture.ts'
 
-const identity = (id: number) => `00000000-0000-4000-8000-${String(id).padStart(12, '0')}`
-
-/** The large chain, renamed into this suite's space and rooted at its item. */
-function largeChainHere() {
-  const chain = JSON.parse(
-    JSON.stringify(largeEpicChain()).replaceAll('VAL-384', 'MAIN-264').replaceAll('VAL-', 'MAIN-'),
-  ) as ReturnType<typeof largeEpicChain>
-  return { ...chain, root: { ...chain.root, work_item_id: workItem.work_item_id } }
+/** What the address's module state says, decoded. */
+function routeState(page: Page): Record<string, unknown> {
+  const encoded = new URL(page.url()).searchParams.get('state')
+  return encoded === null
+    ? {}
+    : (JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8')) as Record<string, unknown>)
 }
 
-const [BACKLOG, DEV, DONE] = planningReadModel.workflow.states.map(
-  ({ position: _position, ...state }) => state,
-)
-
-/**
- * A chain small enough to draw legibly: six children of MAIN-264, four of them
- * closed, and ten items discovered from them, filed under no epic.
- */
-function smallChain() {
-  const brief = (number: number, state: typeof DEV, parent: string | null) => ({
-    ...planningReadModel.work_items[1],
-    work_item_id: identity(number),
-    reference: `MAIN-${number}`,
-    number,
-    title: `Chain step ${number}`,
-    state,
-    claim_ref: state === DEV ? 'codex' : '',
-    claim_state: state === DEV ? ('unconfirmed' as const) : null,
-    parent_id: parent,
-    ready: state === BACKLOG,
+/** The space's graph, at an address naming `state` beside the graph view. */
+function graphRoute(state: Record<string, string>) {
+  return serializePlatformRoute({
+    module_id: 'planning',
+    scope: projectScope,
+    entity: planningSpaceEntity(spaceRef),
+    state: { view: 'graph', ...state },
   })
-  const children = [DONE, DONE, DONE, DONE, DEV, BACKLOG].map((state, index) =>
-    brief(1001 + index, state, workItem.work_item_id),
-  )
-  const found = [DONE, DONE, DEV, DEV, BACKLOG, BACKLOG, BACKLOG, BACKLOG, DONE, BACKLOG].map(
-    (state, index) => brief(1101 + index, state, null),
-  )
-  const items = [...children, ...found]
-  const edges = [
-    ...found.map((item, index) => ({
-      from: item.work_item_id,
-      to: children[index % children.length].work_item_id,
-      kind: 'discovered-from' as const,
-    })),
-    { from: found[2].work_item_id, to: found[4].work_item_id, kind: 'blocks' as const },
-  ]
-  const closed = items.filter((item) => item.state.is_terminal).length
-  const chain = {
-    root: {
-      work_item_id: workItem.work_item_id,
-      reference: workItemRef.reference,
-      title: workItem.title,
-      kind: 'epic' as const,
-      container: true,
-      has_children: true,
-    },
-    scope: 'chain' as const,
-    total: items.length,
-    closed,
-    open: items.length - closed,
-    ready: items.filter((item) => item.ready).length,
-    by_category: {},
-    origins: [
-      { parent_reference: workItemRef.reference, parent_title: null, count: 6, open: 2 },
-      { parent_reference: null, parent_title: null, count: 10, open: 7 },
-    ],
-    series: [
-      { day: '2026-10-01', created: 6, closed: 0, total: 6, closed_total: 0 },
-      { day: '2026-10-20', created: 10, closed: 7, total: 16, closed_total: 7 },
-    ],
-    recent: { days: 7, created: 10, closed: 7, trend: 'growing' as const },
-    members: items.map((item) => ({
-      work_item_id: item.work_item_id,
-      reference: item.reference,
-      title: item.title,
-      state: {
-        key: item.state.key,
-        name: item.state.name,
-        category: item.state.category,
-        is_terminal: item.state.is_terminal,
-      },
-      claim_ref: item.claim_ref,
-      claim_state: item.claim_state,
-      parent_reference: item.parent_id ? workItemRef.reference : null,
-      created_at: '2026-10-01T10:00:00Z',
-      closed_at: item.state.is_terminal ? '2026-10-20T10:00:00Z' : null,
-      ready: item.ready,
-    })),
-    edges,
-  }
-  return { chain, items, edges }
 }
 
 async function serve(
@@ -175,7 +104,7 @@ for (const width of [1440, 390]) {
   })
 }
 
-test('Show on graph scopes the graph to the chain, and its chip leads back', async ({
+test('Show on graph draws the open part of the chain, its root marked, and the rest on request', async ({
   page,
 }, info) => {
   await page.setViewportSize({ width: 1440, height: 900 })
@@ -185,14 +114,28 @@ test('Show on graph scopes the graph to the chain, and its chip leads back', asy
   const section = await openCard(page)
   await section.getByRole('button', { name: 'Show on graph' }).click()
   const chip = page.locator('.graph-chip')
+  // The chip counts the whole chain; the field draws the root and the 9 open members.
   await expect(chip).toHaveText('Chain MAIN-264 · 16')
-  // Every member and the root, closed work included.
-  await expect(page.locator('.flow-node-card')).toHaveCount(17)
+  await expect(page.locator('.flow-node-card')).toHaveCount(10)
   await expect(page.locator('.graph-canvas')).toHaveClass(/settled/u)
+  const closed = page.getByRole('switch', { name: 'Draw the closed members of the chain' })
+  await expect(closed).toHaveText('Closed · 7')
+  await expect(closed).toHaveAttribute('aria-checked', 'false')
+  const root = page.getByRole('button', { name: /^MAIN-264 .* · chain root$/u })
+  await expect(root).toHaveCount(1)
+  await expect(root.locator('.flow-node-root')).toHaveText('root')
   await page.keyboard.press('Escape')
   await expect(page.locator('.drawer')).toHaveCount(0)
+  await expect(page.locator('.flow-node-card.recessed')).toHaveCount(0)
+  await page.locator('.graph').screenshot(shot(info, 'chain-graph-default.png'))
+
+  await closed.click()
+  // Every member and the root, closed work recessed.
+  await expect(page.locator('.flow-node-card')).toHaveCount(17)
+  await expect(page.locator('.graph-canvas')).toHaveClass(/settled/u)
   await expect(page.locator('.flow-node-card.recessed')).toHaveCount(7)
-  await page.locator('.graph').screenshot(shot(info, 'chain-graph.png'))
+  await expect(chip).toHaveText('Chain MAIN-264 · 16')
+  await page.locator('.graph').screenshot(shot(info, 'chain-graph-closed.png'))
 
   await chip.click()
   await expect(chip).toHaveCount(0)
@@ -200,5 +143,155 @@ test('Show on graph scopes the graph to the chain, and its chip leads back', asy
   await expect(page.getByRole('switch', { name: 'Draw items with no links' })).toBeVisible()
   await expect(page.locator('.graph')).toHaveAttribute('aria-busy', 'false')
   await expect(page.locator('.graph-canvas')).toHaveClass(/settled/u)
+  await expect(page.locator('.flow-node-root')).toHaveCount(0)
   await page.locator('.graph').screenshot(shot(info, 'space-graph-linked-only.png'))
+})
+
+test('the chain is held in the address: a reload keeps it, and leaving removes it', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await installBackend(page)
+  const { chain, items, edges } = smallChain()
+  await serve(page, chain, items, edges)
+  const section = await openCard(page)
+  await section.getByRole('button', { name: 'Show on graph' }).click()
+  const chip = page.locator('.graph-chip')
+  await expect(chip).toHaveText('Chain MAIN-264 · 16')
+  expect(routeState(page)).toEqual({ view: 'graph', chain: 'MAIN-264', chain_scope: 'chain' })
+
+  await page.reload()
+  await expect(chip).toHaveText('Chain MAIN-264 · 16')
+  await expect(page.locator('.flow-node-card')).toHaveCount(10)
+  // The card is in the address too, and came back with the chain.
+  await expect(page.locator('.drawer section.chain')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.drawer')).toHaveCount(0)
+
+  // Another view of the space is the whole space, and the address says so.
+  await page.getByRole('button', { name: 'Kanban', exact: true }).click()
+  await expect.poll(() => routeState(page)).toEqual({ view: 'kanban' })
+  await page.getByRole('button', { name: 'Graph', exact: true }).click()
+  await expect(page.locator('.graph')).toHaveAttribute('aria-busy', 'false')
+  await expect(chip).toHaveCount(0)
+
+  // Back in the chain from a link, the chip is the other way out.
+  await page.goto(graphRoute({ chain: 'MAIN-264', chain_scope: 'chain' }))
+  await expect(chip).toHaveText('Chain MAIN-264 · 16')
+  await chip.click()
+  await expect(chip).toHaveCount(0)
+  await expect.poll(() => routeState(page)).toEqual({ view: 'graph' })
+})
+
+test('Back and Forward land on the field the address names', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await installBackend(page)
+  const { chain, items, edges } = smallChain()
+  await serve(page, chain, items, edges)
+  const section = await openCard(page)
+  await section.getByRole('button', { name: 'Show on graph' }).click()
+  const chip = page.locator('.graph-chip')
+  await expect(chip).toHaveText('Chain MAIN-264 · 16')
+  // Closing the card is a step of its own; the chain stays.
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.drawer')).toHaveCount(0)
+  await expect(chip).toBeVisible()
+
+  await page.goBack()
+  await expect(page.locator('.drawer section.chain')).toBeVisible()
+  await expect(chip).toHaveText('Chain MAIN-264 · 16')
+  await page.goForward()
+  await expect(page.locator('.drawer')).toHaveCount(0)
+  await expect(chip).toHaveText('Chain MAIN-264 · 16')
+
+  // Leaving by the chip replaces the place rather than adding one, as a view
+  // switch does, so Back is the card that was open before it.
+  await chip.click()
+  await expect(chip).toHaveCount(0)
+  await page.goBack()
+  await expect(page.locator('.drawer section.chain')).toBeVisible()
+  await expect(chip).toHaveText('Chain MAIN-264 · 16')
+})
+
+test('a link naming a chain the space cannot show draws the whole space with a notice', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await installBackend(page)
+  const { chain, items, edges } = smallChain()
+  await serve(page, chain, items, edges)
+  const asked: string[] = []
+  await page.route('**/api/planning/work-item/chain?*', (route) => {
+    asked.push(new URL(route.request().url()).searchParams.get('id') ?? '')
+    return route.fulfill({
+      status: 400,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        error: { code: 'invalid_request', message: 'no work item MAIN-9999' },
+      }),
+    })
+  })
+  const notice = page.locator('.notice')
+  const chip = page.locator('.graph-chip')
+
+  await page.goto(graphRoute({ chain: 'MAIN-9999', chain_scope: 'chain' }))
+  await expect(notice).toHaveText(
+    'Chain MAIN-9999 cannot be shown here: no work item MAIN-9999. The graph shows the whole space.',
+  )
+  await expect(page.locator('.graph')).toHaveAttribute('aria-busy', 'false')
+  await expect(page.locator('.flow-node-card').first()).toBeVisible()
+  await expect(chip).toHaveCount(0)
+  await expect.poll(() => routeState(page)).toEqual({ view: 'graph' })
+
+  // A value that is no reference at all is refused without asking the server.
+  await page.goto(graphRoute({ chain: 'not a reference' }))
+  await expect(notice).toHaveText(
+    'This link names no chain this space can read; the graph shows the whole space.',
+  )
+  await expect(page.locator('.flow-node-card').first()).toBeVisible()
+  await expect(chip).toHaveCount(0)
+  await expect.poll(() => routeState(page)).toEqual({ view: 'graph' })
+  expect(asked).toEqual(['MAIN-9999'])
+})
+
+test('a long chain opened from a link draws its open part, and all of it on request', async ({
+  page,
+}, info) => {
+  test.setTimeout(120_000)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await installBackend(page)
+  const { chain, items, edges } = longChainHere()
+  await serve(page, chain, items, edges)
+  const timings: string[] = []
+  const started = Date.now()
+  await page.goto(graphRoute({ chain: 'MAIN-264', chain_scope: 'chain' }))
+  const chip = page.locator('.graph-chip')
+  await expect(chip).toHaveText('Chain MAIN-264 · 600')
+  // The root, the 120 open members and the closed epic three of them are under.
+  await expect(page.locator('.flow-node-card')).toHaveCount(122)
+  await expect(page.locator('.graph-canvas')).toHaveClass(/settled/u)
+  timings.push(`default, 122 nodes: link to settled ${Date.now() - started} ms`)
+  const whole = page.getByRole('button', { name: 'Fit whole graph' })
+  await page.locator('.graph').screenshot(shot(info, 'long-chain-default.png'))
+  await whole.click()
+  await page.locator('.graph').screenshot(shot(info, 'long-chain-default-whole.png'))
+
+  const closed = page.getByRole('switch', { name: 'Draw the closed members of the chain' })
+  await expect(closed).toHaveText('Closed · 479')
+  let toggled = Date.now()
+  await closed.click()
+  await expect(page.locator('.flow-node-card')).toHaveCount(601, { timeout: 60_000 })
+  await expect(page.locator('.graph-canvas')).toHaveClass(/settled/u, { timeout: 60_000 })
+  timings.push(`closed shown, 601 nodes: switch to settled ${Date.now() - toggled} ms`)
+  await page.locator('.graph').screenshot(shot(info, 'long-chain-closed.png'))
+  await whole.click()
+  await page.locator('.graph').screenshot(shot(info, 'long-chain-closed-whole.png'))
+
+  toggled = Date.now()
+  await closed.click()
+  await expect(page.locator('.flow-node-card')).toHaveCount(122)
+  await expect(page.locator('.graph-canvas')).toHaveClass(/settled/u)
+  timings.push(`closed hidden again, 122 nodes: switch to settled ${Date.now() - toggled} ms`)
+  // Kept beside the screenshots, so a reader sees what the change cost and saved.
+  await writeFile(info.outputPath('timings.txt'), timings.join('\n'))
 })

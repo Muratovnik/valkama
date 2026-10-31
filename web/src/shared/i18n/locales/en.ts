@@ -177,6 +177,8 @@ export const en = {
     all: 'All · {count}',
     frontier: 'Workable now · {count}',
     readyMark: 'workable',
+    rootMark: 'root',
+    rootLabel: 'chain root',
     empty: 'This space has no work to project.',
     emptyOpen: 'No open work to draw.',
     showDone: 'Show done · {count}',
@@ -189,8 +191,14 @@ export const en = {
     focusWork: 'Focus work',
     chainChip: 'Chain {reference} · {count}',
     chainExit: 'Leave chain {reference} and show the whole space',
+    chainInvalid: 'This link names no chain this space can read; the graph shows the whole space.',
+    chainUnavailable:
+      'Chain {reference} cannot be shown here: {cause}. The graph shows the whole space.',
+    chainElsewhere: 'it belongs to another planning space',
     unlinked: 'Unlinked · {count}',
     unlinkedToggle: 'Draw items with no links',
+    closed: 'Closed · {count}',
+    closedToggle: 'Draw the closed members of the chain',
   },
   launch: {
     title: 'Start an attempt',

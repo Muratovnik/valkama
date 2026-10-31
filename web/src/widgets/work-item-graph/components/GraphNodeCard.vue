@@ -12,13 +12,19 @@ import { actorName } from '@/shared/lib/actor.ts'
 import { statePresentation } from '@/shared/lib/uiSystem.ts'
 import type { SemanticStatePair } from '@/shared/lib/uiSystem.ts'
 
-const { node, ready } = defineProps<{
+const {
+  node,
+  ready,
+  root = false,
+} = defineProps<{
   node: PlacedNode
   ready: boolean
   recessed: boolean
   /** Where the node stands in the chain the field is scoped to, marked on its edge. */
   chainGroup?: ChainGroup
   parentReference?: string
+  /** The item the chain the field is scoped to grew from. */
+  root?: boolean
 }>()
 const emit = defineEmits<{ blur: [id: string]; focus: [id: string] }>()
 const { t } = useI18n()
@@ -49,6 +55,15 @@ const stateLabel = computed(() => (ready ? t('graph.readyMark') : node.state.nam
 const ownerLabel = computed(() =>
   t(node.state.is_terminal ? 'workItem.previousOwner' : 'graph.claimedBy'),
 )
+
+/** What a reader hears for the card: the same facts it shows, the root's mark included. */
+const accessibleName = computed(() =>
+  [
+    `${node.reference} ${node.title}`,
+    node.state.name,
+    ...(root ? [t('graph.rootLabel')] : []),
+  ].join(' · '),
+)
 </script>
 
 <template>
@@ -74,8 +89,9 @@ const ownerLabel = computed(() =>
       ready,
       'is-terminal': node.state.is_terminal,
       recessed,
+      root,
     }"
-    :aria-label="`${node.reference} ${node.title} · ${node.state.name}`"
+    :aria-label="accessibleName"
     @focus="emit('focus', node.work_item_id)"
     @blur="emit('blur', node.work_item_id)"
   >
@@ -88,6 +104,11 @@ const ownerLabel = computed(() =>
     <span class="flow-node-line">
       <span class="flow-node-meta">
         <span class="flow-node-id">{{ node.reference }}</span>
+        <span
+          v-if="root"
+          class="flow-node-root"
+          >{{ t('graph.rootMark') }}</span
+        >
         <span class="flow-node-state">{{ stateLabel }}</span>
       </span>
       <span
@@ -141,6 +162,13 @@ const ownerLabel = computed(() =>
 
   &.recessed {
     background: var(--color-surface-recess);
+  }
+
+  /* The root is what the rest of the chain grew from, so it stands one step
+     above the members whatever its state: closed, it would otherwise sink into
+     the ground with the closed work around it. */
+  &.root {
+    background: var(--color-surface-sheet);
   }
 
   &:hover {
@@ -253,6 +281,18 @@ const ownerLabel = computed(() =>
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* The root's mark: a word, so it reads without the colour, on the fill the
+   parent chip uses, in the full text tone so it outranks that chip. */
+.flow-node-root {
+  flex: 0 0 auto;
+  padding: var(--space-hair) var(--space-1);
+  color: var(--color-text);
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--color-control-surface);
+  border-radius: var(--radius-status);
 }
 
 .flow-node-epic {

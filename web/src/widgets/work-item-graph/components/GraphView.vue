@@ -115,13 +115,19 @@ function parentReference(node: PlacedNode): string | undefined {
 
 const inChain = computed(() => props.scopeKind === 'chain')
 
+/** The chain's root, which the field marks; a chain is the only field that has one. */
+function isChainRoot(node: PlacedNode): boolean {
+  return inChain.value && node.work_item_id === props.epicId
+}
+
 /**
  * Outside the focused lineage, which is a fact about the field — or, in a
  * chain, finished: the chain draws its closed work as the ground the open work
- * stands on.
+ * stands on. Its root is the exception, closed or not: it is what the rest grew
+ * from.
  */
 function isRecessed(node: PlacedNode): boolean {
-  if (inChain.value && node.state.is_terminal) return true
+  if (inChain.value && node.state.is_terminal && !isChainRoot(node)) return true
   const focused = focusSet.value
   return focused ? !focused.ids.has(node.work_item_id) : false
 }
@@ -156,7 +162,11 @@ const flowNodes = computed<FlowNode<PlacedNode>[]>(() => {
     connectable: false,
     selectable: false,
     focusable: false,
-    ariaLabel: `${node.reference} ${node.title} · ${node.state.name}`,
+    ariaLabel: [
+      `${node.reference} ${node.title}`,
+      node.state.name,
+      ...(isChainRoot(node) ? [t('graph.rootLabel')] : []),
+    ].join(' · '),
     class: 'graph-node',
     data: node,
   }))
@@ -347,6 +357,7 @@ watch(
             :recessed="isRecessed(data)"
             :chain-group="nodeChainGroup(data)"
             :parent-reference="parentReference(data)"
+            :root="isChainRoot(data)"
             @focus="onNodeFocus"
             @blur="onNodeBlur"
           />

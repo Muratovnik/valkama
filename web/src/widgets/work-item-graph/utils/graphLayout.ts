@@ -133,6 +133,34 @@ function inScope(node: WorkItemBrief, scope: GraphScope): boolean {
 }
 
 /**
+ * The part of a chain the graph draws: its root, its open members, and every
+ * member that is the parent of one drawn, so the epic a piece of open work was
+ * filed under stays on the field even once it closed. Closed work is most of a
+ * chain that has run for a while — four in five, in one that started this — and
+ * laying it all out cost seconds and drew a field too small to read, so it is
+ * drawn only when asked for. The root and the parents are drawn whatever their
+ * state, because without them the open work has nothing to stand on.
+ */
+function chainNodes(source: GraphSource, scope: GraphScope, showDone: boolean): WorkItemBrief[] {
+  const chain = new Set([scope.epicId, ...(scope.members ?? [])])
+  const members = source.nodes.filter((node) => chain.has(node.work_item_id))
+  if (showDone) return members
+  const byId = new Map(members.map((node) => [node.work_item_id, node]))
+  const kept = new Set<string | null>([scope.epicId])
+  for (const node of members) {
+    if (node.state.is_terminal) continue
+    // Up the parents for as long as they are in the chain; a visited parent
+    // has already brought its own, so the walk stops there.
+    let current: WorkItemBrief | undefined = node
+    while (current && !kept.has(current.work_item_id)) {
+      kept.add(current.work_item_id)
+      current = current.parent_id === null ? undefined : byId.get(current.parent_id)
+    }
+  }
+  return members.filter((node) => kept.has(node.work_item_id))
+}
+
+/**
  * The items the graph draws. A container is not work: it becomes the group chip
  * on its children, never a node. Container is the fact the server computed —
  * being somebody's parent — rather than the declared kind, so an ordinary task
@@ -141,18 +169,16 @@ function inScope(node: WorkItemBrief, scope: GraphScope): boolean {
  * they outnumber open work. Terminal is asked of the workflow rather than
  * matched against a state named "done", so a renamed or a second closing state
  * still counts.
+ *
+ * A chain is the exception to the container rule: its root and its epics are
+ * the shape of the chain, so they are drawn as nodes — see `chainNodes`.
  */
 export function workNodes(
   source: GraphSource,
   showDone: boolean,
   scope: GraphScope = WHOLE_SPACE,
 ): WorkItemBrief[] {
-  // A chain is read whole: its root is a container and most of it may be done,
-  // and dropping either would draw a different chain than the card describes.
-  if (scope.kind === 'chain') {
-    const chain = new Set([scope.epicId, ...(scope.members ?? [])])
-    return source.nodes.filter((node) => chain.has(node.work_item_id))
-  }
+  if (scope.kind === 'chain') return chainNodes(source, scope, showDone)
   return source.nodes.filter(
     (node) => !node.container && (showDone || !node.state.is_terminal) && inScope(node, scope),
   )
@@ -183,9 +209,15 @@ export function unlinkedIds(
   return linked.size ? new Set(drawn.filter((id) => !linked.has(id))) : new Set<string>()
 }
 
-/** How many finished items the "show done" control is currently hiding. */
+/**
+ * How many finished items the "show done" control is currently hiding.
+ *
+ * Counted as what showing them would add rather than as the closed items in
+ * scope: a chain draws a closed root or parent either way, and a count that
+ * included those would promise nodes the control never adds.
+ */
 export function doneCount(source: GraphSource, scope: GraphScope = WHOLE_SPACE): number {
-  return workNodes(source, true, scope).filter((node) => node.state.is_terminal).length
+  return workNodes(source, true, scope).length - workNodes(source, false, scope).length
 }
 
 /** ELK owns ranking, cycle handling, component packing and obstacle routing. */

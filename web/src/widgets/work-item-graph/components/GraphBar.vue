@@ -8,8 +8,9 @@
  * start now.
  *
  * Scoped to a chain, the filter gives way to a chip naming the chain — the way
- * back to the whole space — and to a legend for the marker each node carries,
- * because a chain is read whole and has no open-only view to switch to.
+ * back to the whole space — and to a legend for the marker each node carries.
+ * The chip counts the whole chain; the field draws its open part, and a switch
+ * beside the chip says how many closed members that leaves out and draws them.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -67,7 +68,16 @@ function updateFilter(value: 'all' | 'open') {
         :size="14"
       />
     </button>
-    <template v-else>
+    <ToggleSwitch
+      v-if="chain && hiddenDone"
+      class="graph-closed"
+      :label="t('graph.closedToggle')"
+      :model-value="showDone"
+      :on-label="t('graph.closed', { count: hiddenDone })"
+      :off-label="t('graph.closed', { count: hiddenDone })"
+      @update:model-value="(value) => emit('update:showDone', value)"
+    />
+    <template v-if="!chain">
       <SegmentedControl
         class="graph-filter"
         size="compact"

@@ -10,6 +10,34 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+### Added
+
+- The chain root carries its own mark on the graph: a «root» tag on its node,
+  and «chain root» in the node's accessible name. It stands one step above the
+  closed work around it even when it is closed itself.
+
+### Changed
+
+- A chain on the graph draws its open part by default: the root, the open
+  members, and every member that is the parent of one drawn, so the epics the
+  open work is filed under stay on the field. A «Closed · N» switch beside the
+  chip draws the closed members as well, and N is the number of nodes it adds.
+  The chip still counts the whole chain, and the legend names only the groups
+  drawn. On a chain of 600 members, 480 of them closed, the default draws 122
+  nodes instead of 601. Whether closed work is drawn is held apart for the
+  chain and the whole space, so leaving a chain gives the space back its own
+  filter, and each chain opens on its open part.
+
+### Fixed
+
+- The chain a graph is scoped to is now part of the address. The Planning
+  module's route state admits two more keys, `chain` (the root's reference)
+  and `chain_scope` (`chain` or `epic`), so a reload, a shared link, Back and
+  Forward come back to the same chain. Leaving it by the chip or by switching
+  to Kanban or List removes both keys. A link that names no valid reference,
+  a reference the server does not know, or a chain from another planning space
+  shows the whole space with a notice saying why, and the keys are dropped.
+
 ## [2.1.0](https://github.com/Muratovnik/valkama/compare/v2.0.0...v2.1.0) - 2026-10-31
 
 ### Added

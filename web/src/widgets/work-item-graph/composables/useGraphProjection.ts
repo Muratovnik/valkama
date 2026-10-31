@@ -76,7 +76,28 @@ export function useGraphProjection(
   input: ProjectionInput,
   selected: () => string | null = () => null,
 ): GraphProjection {
-  const showDone = ref(false)
+  /**
+   * Whether closed work is drawn, held once for the space and once for the
+   * chain in view. A chain opens on its open part whatever the space was set to,
+   * and leaving it gives the space back the filter it had: one flag for both made
+   * the closed members asked for in a chain arrive in the whole space as "All".
+   */
+  const spaceShowDone = ref(false)
+  const chainShowDone = ref(false)
+  const inChain = () => input().scopeKind === 'chain'
+  const showDone = computed({
+    get: () => (inChain() ? chainShowDone.value : spaceShowDone.value),
+    set: (value: boolean) => {
+      if (inChain()) chainShowDone.value = value
+      else spaceShowDone.value = value
+    },
+  })
+  watch(
+    () => (inChain() ? input().epicId : null),
+    () => {
+      chainShowDone.value = false
+    },
+  )
   const showUnlinked = ref(false)
   const focus = ref<ReturnType<typeof createGraphFocus>>(
     createGraphFocus({ ...input(), showDone: false }),
