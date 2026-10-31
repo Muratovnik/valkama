@@ -32,7 +32,7 @@ export const en = {
       sessions: 'Follow live agents and intervene when work stalls.',
       improvements: 'Turn repeated failures into verified changes.',
       analytics: 'Read flow, throughput, and operational signals.',
-      settings: 'Switch product modules and configure local language and session openers.',
+      settings: 'Interface language, session openers, and installation checks.',
       skills: 'Browse personal and project skills.',
       memory: 'Search what each project knows, and see what its work points at.',
     },
