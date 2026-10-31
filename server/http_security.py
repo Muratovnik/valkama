@@ -139,12 +139,41 @@ def require_host(headers: Headers, context: SecurityContext) -> None:
         )
 
 
+def _require_browser_fetch(headers: Headers, *, close: bool = False) -> None:
+    """Refuse a request that does not carry the fetch metadata a browser sets itself.
+
+    A browser adds `Sec-Fetch-Site` to every request it makes to a potentially
+    trustworthy origin, which 127.0.0.1 is, and a page script cannot set or
+    change it. `same-origin` is what the web client's own fetches carry, in a
+    browser tab and in the desktop app alike. An HTTP client a local process
+    runs -- curl, a script -- sends none unless it forges one on purpose, and a
+    process that does that could edit the store file directly; that is outside
+    what this boundary can tell apart. `Sec-Fetch-Mode` and `Sec-Fetch-Dest`
+    are not checked: a process that forges one header forges all of them, and
+    against another site in the browser `Sec-Fetch-Site` already decides.
+    """
+
+    values = _header_values(headers, "Sec-Fetch-Site")
+    if len(values) != 1 or values[0] != "same-origin":
+        raise RequestRefusedError(
+            403,
+            "fetch_metadata_refused",
+            "browser credentials are given only to a same-origin browser fetch",
+            close=close,
+        )
+
+
 def require_bootstrap_origin(headers: Headers, context: SecurityContext) -> None:
+    """The browser session token goes only to the web client's own same-origin fetch.
+
+    A same-origin GET carries no `Origin`, so an absent one is allowed; one
+    that is present must be an allowed origin.
+    """
+
     values = _header_values(headers, "Origin")
-    if not values:
-        return
-    if len(values) != 1 or values[0] not in context.allowed_origins:
+    if values and (len(values) != 1 or values[0] not in context.allowed_origins):
         raise RequestRefusedError(403, "origin_refused", "request Origin is not allowed")
+    _require_browser_fetch(headers)
 
 
 def _exact_secret(headers: Headers, name: str, expected: str) -> bool:
@@ -181,6 +210,7 @@ def require_write_authorization(
         raise RequestRefusedError(
             403, "origin_refused", "request Origin is not allowed", close=True
         )
+    _require_browser_fetch(headers, close=True)
     if _header_values(headers, "Authorization"):
         raise RequestRefusedError(
             401, "invalid_credentials", "browser credentials are required", close=True

@@ -250,6 +250,14 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- Any local process could obtain the browser session token, because
+  `GET /api/security/bootstrap` without an `Origin` returned it, and could
+  then write as the owner (`browser`, signed `user`) with a forged `Origin`.
+  The bootstrap and every write with the browser credential now also require
+  `Sec-Fetch-Site: same-origin`, the fetch metadata a browser sets on its own
+  requests; a request without it is refused with `403`
+  `fetch_metadata_refused`. The web client and the desktop app send it
+  already. The adapter endpoint is unchanged.
 - An MCP tool call refused for its arguments -- an unknown argument, a `limit`
   that is not an integer -- answered only with the text
   `PlanningHttpError: ...`. It now answers like every other refusal, with

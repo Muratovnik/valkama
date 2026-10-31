@@ -121,6 +121,7 @@ class PlatformHttpBoundaryTests(unittest.TestCase):
         self.write_headers = {
             "Content-Type": "application/json",
             "Origin": f"http://127.0.0.1:{self.server.server_port}",
+            "Sec-Fetch-Site": "same-origin",
             "X-Valkama-Session": self.server.security_context.browser_session_token,
         }
 

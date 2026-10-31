@@ -704,7 +704,11 @@ No endpoint serves integration definitions or loads third-party browser code.
 The listener accepts only the exact authority `127.0.0.1:<bound-port>`. Browser
 writes bootstrap a fresh process-scoped session credential and send it in
 `X-Valkama-Session`; the UI keeps it only in memory and retries one write after
-a server restart. Originless `/api/ingest` adapters instead read the persistent
+a server restart. The bootstrap and every write with that credential must carry
+`Sec-Fetch-Site: same-origin`, which a browser adds to its own same-origin
+requests and a plain HTTP client does not, so a local script that just asks is
+refused (`fetch_metadata_refused`); the trust boundary is stated in
+[the connection contract](docs/connection-contract.md#call-identity). Originless `/api/ingest` adapters instead read the persistent
 installation bearer from `~/.valkama/installation-token`. These credentials are
 not interchangeable, never belong in URLs, cookies, browser storage, argv, or
 environment variables, and every write must be an explicitly framed UTF-8 JSON

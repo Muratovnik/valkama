@@ -208,7 +208,21 @@ An event written before calls were recorded, or by the execution runner outside
 any call, has
 `{"state": "unconfirmed", "source": null, "session_id": null, "agent_id": null}`.
 A write from the browser UI is `confirmed` with source `browser` and no session;
-see [Local HTTP security](../README.md#local-http-security). A write Valkama
+see [Local HTTP security](../README.md#local-http-security).
+
+`browser` means this and no more: the request carried the fetch metadata a
+browser sets on its own -- `Sec-Fetch-Site: same-origin` -- together with the
+process's browser session token, and the token itself was handed out only to a
+request that carried the same metadata. A browser sets that header on every
+request to 127.0.0.1 and does not let a page change it; an HTTP client a local
+process runs sends none unless it forges it on purpose, and both the token
+bootstrap and every browser-credential write refuse a request without it, with
+`403` and the code `fetch_metadata_refused`. A local process that deliberately
+forges the header is outside this model: it runs as the owner and could edit
+the store file directly. The adapter endpoint, `/api/ingest` with the
+installation bearer and no `Origin`, is unchanged and needs no fetch metadata.
+
+A write Valkama
 makes on its own account, which today is only releasing an expired lease, is
 `confirmed` with source `valkama`, client `valkama` and tool `lease-expiry`, and
 its events are signed `valkama`.

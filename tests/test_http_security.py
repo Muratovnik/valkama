@@ -195,6 +195,8 @@ class HttpSecurityBoundaryTests(unittest.TestCase):
     def browser_headers(self, token: str | None = None) -> dict[str, str]:
         result = {
             "Origin": self.origin,
+            # What a browser adds to every same-origin fetch, and a script does not.
+            "Sec-Fetch-Site": "same-origin",
             "Content-Type": "application/json",
             "Content-Length": "2",
         }
@@ -252,7 +254,10 @@ class HttpSecurityBoundaryTests(unittest.TestCase):
 
     def test_bootstrap_is_no_store_and_returns_only_process_session_token(self) -> None:
         status, response_headers, body = self.request(
-            "GET", "/api/security/bootstrap", host=self.authority
+            "GET",
+            "/api/security/bootstrap",
+            host=self.authority,
+            request_headers={"Sec-Fetch-Site": "same-origin"},
         )
         self.assertEqual(200, status)
         self.assertEqual("no-store", response_headers["cache-control"])
@@ -264,6 +269,62 @@ class HttpSecurityBoundaryTests(unittest.TestCase):
         )
         self.assertNotIn(self.server.security_context.installation_token.encode(), body)
 
+    def test_bootstrap_answers_only_a_same_origin_browser_fetch(self) -> None:
+        """A local process that just asks -- curl, a script -- gets no browser token."""
+
+        refused = (
+            {},
+            {"Sec-Fetch-Site": "cross-site"},
+            {"Sec-Fetch-Site": "same-site"},
+            {"Sec-Fetch-Site": "none"},
+            {"Sec-Fetch-Site": "same-origin, same-origin"},
+            {"Origin": self.origin},
+        )
+        for extra in refused:
+            with self.subTest(extra=extra):
+                status, _, body = self.request(
+                    "GET", "/api/security/bootstrap", host=self.authority, request_headers=extra
+                )
+                self.assertEqual(403, status)
+                self.assertNotIn(self.server.security_context.browser_session_token.encode(), body)
+                self.assertEqual("fetch_metadata_refused", json.loads(body)["error"]["code"])
+        # Chromium's own same-origin fetch, as the web client sends it.
+        status, _, _ = self.request(
+            "GET",
+            "/api/security/bootstrap",
+            host=self.authority,
+            request_headers={
+                "Sec-Fetch-Site": "same-origin",
+                "Sec-Fetch-Mode": "cors",
+                "Sec-Fetch-Dest": "empty",
+            },
+        )
+        self.assertEqual(200, status)
+
+    def test_a_browser_write_without_browser_fetch_metadata_is_refused(self) -> None:
+        token = self.server.security_context.browser_session_token
+        for site in (None, "cross-site", "same-site", "none"):
+            with (
+                self.subTest(site=site),
+                mock.patch.object(
+                    http_surface, "connect", side_effect=AssertionError("database reached")
+                ),
+            ):
+                request_headers = self.browser_headers(token)
+                if site is None:
+                    del request_headers["Sec-Fetch-Site"]
+                else:
+                    request_headers["Sec-Fetch-Site"] = site
+                status, _, body = self.request(
+                    "POST",
+                    "/api/execution/launch",
+                    host=self.authority,
+                    request_headers=request_headers,
+                    body=b"{}",
+                )
+                self.assertEqual(403, status)
+                self.assertEqual("fetch_metadata_refused", json.loads(body)["error"]["code"])
+
     def test_bootstrap_rejects_foreign_and_null_origins(self) -> None:
         for origin in ("https://evil.test", "null", "http://localhost:5173"):
             with self.subTest(origin=origin):
@@ -271,7 +332,7 @@ class HttpSecurityBoundaryTests(unittest.TestCase):
                     "GET",
                     "/api/security/bootstrap",
                     host=self.authority,
-                    request_headers={"Origin": origin},
+                    request_headers={"Origin": origin, "Sec-Fetch-Site": "same-origin"},
                 )
                 self.assertEqual(403, status)
 
@@ -280,8 +341,16 @@ class HttpSecurityBoundaryTests(unittest.TestCase):
             ({}, 403),
             ({"Origin": "null"}, 403),
             ({"Origin": "https://evil.test"}, 403),
-            ({"Origin": self.origin}, 401),
-            ({"Origin": self.origin, "X-Valkama-Session": "stale"}, 401),
+            ({"Origin": self.origin}, 403),
+            ({"Origin": self.origin, "Sec-Fetch-Site": "same-origin"}, 401),
+            (
+                {
+                    "Origin": self.origin,
+                    "Sec-Fetch-Site": "same-origin",
+                    "X-Valkama-Session": "stale",
+                },
+                401,
+            ),
         )
         for extra, expected in cases:
             with (
