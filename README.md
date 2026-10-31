@@ -460,6 +460,12 @@ nothing, so a closing move sees the ticks and the summary sent with it. The
 exact shapes are in
 [the connection contract](docs/connection-contract.md#several-changes-in-one-call).
 
+Two items filed for one change — the same finding twice, or one cause found in
+two places — are folded together with `merge_work_items`. The surviving item
+takes their steps, discussion, refs and links, and each merged item closes as
+its duplicate with its own history intact
+([details](docs/connection-contract.md#merging-items-that-are-one-change)).
+
 A claim also says whether anyone is still behind it. When the client proves its
 session, the claim is a lease on that session: `live` while the session is
 active and has shown a sign of life — a hook event or a Valkama write — in the

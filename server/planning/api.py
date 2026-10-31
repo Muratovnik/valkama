@@ -480,6 +480,18 @@ def _link(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     )
 
 
+def _merge(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
+    return service.merge_work_items(
+        conn,
+        _text(payload, "id"),
+        _field(payload, "items"),
+        reason=str(payload.get("reason") or ""),
+        force=_flag(payload, "force"),
+        expected_revision=_optional_int(payload, "expected_revision"),
+        author=_author(payload),
+    )
+
+
 def _summary(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     return service.set_summary(
         conn,
@@ -836,6 +848,7 @@ _WRITES: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], dict]] =
     "/api/planning/work-item/checklist/claim": _checklist_claim,
     "/api/planning/work-item/checklist/tick": _checklist_tick,
     "/api/planning/work-item/link": _link,
+    "/api/planning/work-item/merge": _merge,
     "/api/planning/work-item/summary": _summary,
     "/api/planning/work-item/comment": _comment,
     "/api/planning/work-item/report": _report,

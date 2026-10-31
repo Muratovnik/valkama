@@ -195,6 +195,7 @@ ACKNOWLEDGED = (
     "report_work_item",
     "select_work_item_summary",
     "apply_work_item_changes",
+    "merge_work_items",
 )
 
 
@@ -350,6 +351,15 @@ class PlanningAcknowledgementTests(unittest.TestCase):
                 "comment_id": reports[-1]["id"],
                 "expected_revision": full["revision"],
             }
+        if tool == "merge_work_items":
+            twin = self.call("create_work_item", space="QA", title="Twin", author="one")
+            self.call("comment_work_item", id=twin["reference"], body="same cause")
+            return {
+                "id": ref,
+                "items": [twin["reference"]],
+                "reason": "one change",
+                "author": "one",
+            }
         return {
             "create_work_item": {"space": "QA", "title": "Another", "author": "one"},
             "update_work_item": {"id": ref, "title": "Edited", "labels": ["two"]},
@@ -409,7 +419,15 @@ class PlanningAcknowledgementTests(unittest.TestCase):
                     {
                         k: v
                         for k, v in answer.items()
-                        if k not in ("warnings", "applied", "started", "requeued")
+                        if k
+                        not in (
+                            "warnings",
+                            "applied",
+                            "started",
+                            "requeued",
+                            "merged",
+                            "overridden",
+                        )
                     },
                 )
 

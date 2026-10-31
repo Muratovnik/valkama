@@ -87,6 +87,23 @@ def queue_state(conn: sqlite3.Connection, row: sqlite3.Row) -> sqlite3.Row | Non
     return found
 
 
+def cancel_state(conn: sqlite3.Connection, row: sqlite3.Row) -> sqlite3.Row | None:
+    """The state a merged item closes in, or None when it has no way to close so.
+
+    The first `cancelled` state in workflow order that the item can reach from
+    where it stands: a duplicate is work that is not done, not work that is.
+    """
+
+    found: sqlite3.Row | None = conn.execute(
+        "SELECT s.* FROM workflow_states s JOIN workflow_transitions t"
+        " ON t.workflow_id = s.workflow_id AND t.to_state_id = s.state_id"
+        " WHERE s.workflow_id = ? AND s.category = 'cancelled' AND t.from_state_id = ?"
+        " ORDER BY s.position LIMIT 1",
+        (row["workflow_id"], row["state_id"]),
+    ).fetchone()
+    return found
+
+
 def _ordered(conn: sqlite3.Connection, workflow_id: str) -> list[sqlite3.Row]:
     return list(
         conn.execute(

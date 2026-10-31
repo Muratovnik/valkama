@@ -131,6 +131,16 @@ def step_changed(item: dict, arguments: Mapping[str, object]) -> dict:
     }
 
 
+def merged(item: dict, _arguments: Mapping[str, object]) -> dict:
+    """The survivor, and what each merged item handed it before it closed."""
+
+    answer = {**_base(item), "merged": item["merged"]}
+    for name in ("warnings", "overridden"):
+        if item.get(name):
+            answer[name] = item[name]
+    return answer
+
+
 def summarized(item: dict, _arguments: Mapping[str, object]) -> dict:
     """That the summary is recorded; its text is the caller's own."""
 

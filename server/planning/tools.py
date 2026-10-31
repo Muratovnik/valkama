@@ -469,6 +469,47 @@ TOOLS = [
         ["id", "other", "kind"],
     ),
     _tool(
+        "merge_work_items",
+        "Merge work items into one",
+        "Fold items that are one change — one cause, one fix — into the item that"
+        " survives (id), all or nothing. Their checklist steps, keeping ids, ticks"
+        " and step claims, their discussion comments, refs and links move to it;"
+        " each merged item is linked duplicates to it, gets a summary naming it, is"
+        " released and closes in its cancelled state. Their history, reports,"
+        " description and parent stay on them. Refused before anything is written:"
+        " an item in another space, a closed item, a merged item with children,"
+        f" more than {model.MAX_CHECKLIST} steps in all, or an item another session"
+        " holds unless force. The answer lists what each item moved.",
+        WRITES,
+        {
+            "id": {
+                "type": "string",
+                "description": "The item that survives, by its reference (VAL-142) or"
+                " its work_item_id.",
+            },
+            "items": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": service.MAX_MERGE_ITEMS,
+                "items": {"type": "string"},
+                "description": "The items that merge into id and close as its duplicates.",
+            },
+            "reason": {
+                "type": "string",
+                "description": "Why they are one change; recorded on both sides.",
+            },
+            "force": _FORCE,
+            "expected_revision": {
+                **_EXPECTED_REVISION,
+                "description": "The survivor's revision from a previous read; rejects a"
+                " stale merge.",
+            },
+            "author": _AUTHOR,
+            "verbose": _VERBOSE,
+        },
+        ["id", "items"],
+    ),
+    _tool(
         "attach_work_item_ref",
         "Attach a reference",
         "A structured pointer: a commit, an AgentMemory record id, or a url. Attach"
@@ -993,6 +1034,7 @@ OPS: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], object]] = {
         "/api/planning/work-item/checklist/tick", acknowledgements.step_changed
     ),
     "link_work_items": _post("/api/planning/work-item/link"),
+    "merge_work_items": _acknowledged("/api/planning/work-item/merge", acknowledgements.merged),
     "attach_work_item_ref": _post("/api/planning/work-item/ref"),
     "set_work_item_summary": _acknowledged(
         "/api/planning/work-item/summary", acknowledgements.summarized

@@ -960,6 +960,310 @@ def link_work_items(
     }
 
 
+#: The most items one merge folds into the item that survives it.
+MAX_MERGE_ITEMS = 20
+
+
+def merge_work_items(
+    conn: sqlite3.Connection,
+    reference: str,
+    items: object,
+    *,
+    reason: str = "",
+    force: bool = False,
+    expected_revision: int | None = None,
+    author: str | None = None,
+) -> dict:
+    """Fold items that turned out to be one change into the item that survives.
+
+    A finding filed twice, or two items with one cause and one fix, are one
+    change, and closing the extras as duplicates by hand lost what they held:
+    the steps someone ticked, the discussion, the commits, the links that made
+    other work wait. Here the survivor takes all of that — the steps with their
+    ids, ticks and step claims, the discussion comments, the refs, and the links
+    in their own direction — and each merged item is linked `duplicates` to it,
+    given a summary naming it, released and closed in its cancelled state. What
+    describes the merged item itself stays with it: its history, its reports,
+    its description, its parent, a ref the survivor already has, and the links
+    that would now tie the survivor to itself.
+
+    Each write is one a single tool makes, with that tool's event, so a build
+    that knows nothing of merging reads the result as links, checklists
+    replaced, a comment, a summary and a transition. All of it happens or none
+    of it does; what a caller can correct is refused before the first write.
+    `force` carries through a claim another session holds and a guard that
+    refuses the close, and each is recorded as `overridden`.
+    """
+
+    survivor = read_model.item_row(conn, reference)
+    _require_revision(survivor, expected_revision)
+    merged = _merged_rows(conn, survivor, items)
+    overridden = _merge_claims(conn, [survivor, *merged], author, force)
+    steps = model.checklist(survivor["checklist"])
+    moving = [model.checklist(row["checklist"]) for row in merged]
+    total = len(steps) + sum(len(found) for found in moving)
+    if total > model.MAX_CHECKLIST:
+        raise model.PlanningError(
+            f"{read_model.reference(conn, survivor)} would hold {total} checklist steps;"
+            f" a checklist holds at most {model.MAX_CHECKLIST}"
+        )
+    closing = []
+    for row in merged:
+        target = states.cancel_state(conn, row)
+        if target is None:
+            raise model.PlanningError(
+                f"{read_model.reference(conn, row)} cannot close as a duplicate: its workflow"
+                " has no cancelled state it can move to"
+            )
+        closing.append(target)
+    note = model.text_field(reason, "reason", limit=512, required=False)
+    if not conn.in_transaction:
+        conn.execute("BEGIN IMMEDIATE")
+    conn.execute("SAVEPOINT planning_merge")
+    try:
+        answer = _fold(
+            conn,
+            survivor,
+            steps,
+            list(zip(merged, moving, closing, strict=True)),
+            overridden=overridden,
+            note=note,
+            force=force,
+            author=author,
+        )
+    except BaseException:
+        conn.execute("ROLLBACK TO planning_merge")
+        conn.execute("RELEASE planning_merge")
+        raise
+    conn.execute("RELEASE planning_merge")
+    return answer
+
+
+def _merged_rows(
+    conn: sqlite3.Connection, survivor: sqlite3.Row, items: object
+) -> list[sqlite3.Row]:
+    """The items a merge folds in, each refused for what would make the merge untrue."""
+
+    if not isinstance(items, list) or not 1 <= len(items) <= MAX_MERGE_ITEMS:
+        raise model.PlanningError(f"items must list 1 to {MAX_MERGE_ITEMS} work items to merge")
+    survivor_id = str(survivor["work_item_id"])
+    survivor_ref = read_model.reference(conn, survivor)
+    if read_model.state_by_id(conn, str(survivor["state_id"]))["is_terminal"]:
+        raise model.PlanningError(
+            f"{survivor_ref} is closed; reopen it before merging work into it"
+        )
+    rows: list[sqlite3.Row] = []
+    seen = {survivor_id}
+    for entry in items:
+        row = read_model.item_row(conn, entry)
+        identity = str(row["work_item_id"])
+        found = read_model.reference(conn, row)
+        if identity == survivor_id:
+            raise model.PlanningError(f"{found} is the item the others merge into")
+        if identity in seen:
+            raise model.PlanningError(f"{found} is named twice")
+        seen.add(identity)
+        if str(row["planning_space_id"]) != str(survivor["planning_space_id"]):
+            raise model.PlanningError(
+                f"{found} lives in another planning space than {survivor_ref}"
+            )
+        state = read_model.state_by_id(conn, str(row["state_id"]))
+        if state["is_terminal"]:
+            raise model.PlanningError(
+                f"{found} is already closed in {state['name']}; a closed item keeps its outcome"
+            )
+        children = conn.execute(
+            "SELECT COUNT(*) FROM work_items WHERE parent_id = ?", (identity,)
+        ).fetchone()[0]
+        if children:
+            raise model.PlanningError(
+                f"{found} has {children} child item(s); give them another parent before merging it"
+            )
+        rows.append(row)
+    return rows
+
+
+def _merge_claims(
+    conn: sqlite3.Connection, rows: list[sqlite3.Row], author: str | None, force: bool
+) -> dict[str, str]:
+    """The claims of other sessions a merge would override, by item id.
+
+    Moving steps into an item someone else holds changes their work, and closing
+    an item someone else holds ends it, so either needs `force`. A stale lease
+    is nobody's work any more and does not stand in the way.
+    """
+
+    actor = model.actor(author)
+    caller = calls.current()
+    overridden: dict[str, str] = {}
+    for row in rows:
+        lease = leases.lease(conn, row)
+        if lease is None or lease.state == leases.STALE or leases.held_by(lease, caller, actor):
+            continue
+        if not force:
+            raise model.PlanningError(
+                f"{read_model.reference(conn, row)} is held by {lease.holder};"
+                " pass force to merge it anyway"
+            )
+        overridden[str(row["work_item_id"])] = lease.holder
+    return overridden
+
+
+def _fold(
+    conn: sqlite3.Connection,
+    survivor: sqlite3.Row,
+    steps: list[dict],
+    merging: list[tuple[sqlite3.Row, list[dict], sqlite3.Row]],
+    *,
+    overridden: dict[str, str],
+    note: str,
+    force: bool,
+    author: str | None,
+) -> dict:
+    """The writes of a merge, in order, once every refusal has had its say."""
+
+    survivor_id = str(survivor["work_item_id"])
+    survivor_ref = read_model.reference(conn, survivor)
+    # The first write of a call names what the call acted on: the survivor.
+    calls.call_id(conn, survivor_id)
+    involved = {survivor_id, *(str(row["work_item_id"]) for row, _steps, _target in merging)}
+    carried = [step for _row, found, _target in merging for step in found]
+    if carried:
+        set_checklist(conn, survivor_id, [*steps, *carried], force=True, author=author)
+    report: list[dict] = []
+    warnings: list[str] = []
+    forced: list[str] = []
+    if survivor_id in overridden:
+        _log(conn, survivor_id, "overridden", "claim", author)
+        forced.append(f"{survivor_ref}: claim")
+    for row, found, target in merging:
+        identity = str(row["work_item_id"])
+        reference = read_model.reference(conn, row)
+        moved = {
+            "steps": len(found),
+            "comments": conn.execute(
+                "UPDATE work_item_comments SET work_item_id = ? WHERE work_item_id = ?"
+                " AND report = ''",
+                (survivor_id, identity),
+            ).rowcount,
+            "refs": conn.execute(
+                "UPDATE OR IGNORE work_item_refs SET work_item_id = ? WHERE work_item_id = ?",
+                (survivor_id, identity),
+            ).rowcount,
+            "links": _repoint_links(conn, identity, survivor_id, involved, author),
+        }
+        if found:
+            set_checklist(conn, identity, [], force=True, author=author)
+        if not _linked(conn, identity, survivor_id, "duplicates"):
+            link_work_items(conn, identity, survivor_id, "duplicates", author=author)
+        current = read_model.item_by_id(conn, identity)
+        if current["claim_ref"]:
+            _hold(conn, current, "")
+            _log(conn, identity, "released", str(current["claim_ref"]), author)
+        if identity in overridden:
+            _log(conn, identity, "overridden", "claim", author)
+            forced.append(f"{reference}: claim")
+        summary = {
+            "done": f"Merged into {survivor_ref}, which now holds its {_counts(moved)}.",
+            "next": f"Continue in {survivor_ref}.",
+        }
+        if note:
+            summary["why"] = note
+        set_summary(conn, identity, summary, author=author)
+        closed = transition_work_item(
+            conn,
+            identity,
+            str(target["state_id"]),
+            reason=f"duplicate of {survivor_ref}",
+            force=force,
+            author=author,
+        )
+        warnings.extend(closed["warnings"])
+        forced.extend(f"{reference}: {guard}" for guard in closed.get("overridden", []))
+        parent = row["parent_id"]
+        if parent and parent not in (survivor["parent_id"], survivor_id):
+            warnings.append(
+                f"{reference} stays under"
+                f" {read_model.reference(conn, read_model.item_by_id(conn, str(parent)))};"
+                f" {survivor_ref} keeps its own parent"
+            )
+        pending = conn.execute(
+            "SELECT COUNT(*) FROM work_item_requests WHERE work_item_id = ? AND status = 'pending'",
+            (identity,),
+        ).fetchone()[0]
+        if pending:
+            warnings.append(f"{reference} has {pending} pending request(s); they close with it")
+        report.append(
+            {
+                "reference": reference,
+                "work_item_id": identity,
+                "state": str(target["key"]),
+                "moved": moved,
+            }
+        )
+    totals = {name: sum(entry["moved"][name] for entry in report) for name in report[0]["moved"]}
+    body = (
+        f"Merged {', '.join(entry['reference'] for entry in report)} into this item:"
+        f" {_counts(totals)} moved here."
+    )
+    comment_work_item(conn, survivor_id, f"{body} {note}" if note else body, author=author)
+    answer = read_model.present(conn, read_model.item_by_id(conn, survivor_id), full=True)
+    answer["merged"] = report
+    if warnings:
+        answer["warnings"] = warnings
+    if forced:
+        answer["overridden"] = forced
+    return answer
+
+
+def _repoint_links(
+    conn: sqlite3.Connection,
+    identity: str,
+    survivor_id: str,
+    involved: set[str],
+    author: str | None,
+) -> int:
+    """Move one merged item's links to the survivor, each in its own direction.
+
+    Removed and added through `link_work_items`, so the item at the other end
+    records both. A link to the survivor or to another item of the same merge
+    stays where it is: moved, it would tie the survivor to itself.
+    """
+
+    moved = 0
+    links = conn.execute(
+        "SELECT from_id, to_id, kind FROM work_item_links WHERE ? IN (from_id, to_id) ORDER BY id",
+        (identity,),
+    ).fetchall()
+    for link in links:
+        source, target, kind = str(link["from_id"]), str(link["to_id"]), str(link["kind"])
+        if (target if source == identity else source) in involved:
+            continue
+        link_work_items(conn, source, target, kind, remove=True, author=author)
+        source, target = (survivor_id, target) if source == identity else (source, survivor_id)
+        if not _linked(conn, source, target, kind):
+            link_work_items(conn, source, target, kind, author=author)
+        moved += 1
+    return moved
+
+
+def _linked(conn: sqlite3.Connection, source: str, target: str, kind: str) -> bool:
+    return (
+        conn.execute(
+            "SELECT 1 FROM work_item_links WHERE from_id = ? AND to_id = ? AND kind = ?",
+            (source, target, kind),
+        ).fetchone()
+        is not None
+    )
+
+
+def _counts(moved: dict[str, int]) -> str:
+    """`2 steps, 1 comment, 0 refs and 3 links`."""
+
+    parts = [f"{count} {name if count != 1 else name[:-1]}" for name, count in moved.items()]
+    return f"{', '.join(parts[:-1])} and {parts[-1]}"
+
+
 def attach_ref(
     conn: sqlite3.Connection,
     reference: str,

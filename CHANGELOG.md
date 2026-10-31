@@ -12,6 +12,14 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Added
 
+- `merge_work_items` (`POST /api/planning/work-item/merge`) folds items that are
+  one change into the item that survives, all or nothing. Their checklist steps
+  (with their ids, ticks and step claims), discussion comments, refs and links
+  move to it; each merged item is linked `duplicates` to it, gets a summary
+  naming it, loses its claim and closes in its cancelled state, keeping its own
+  history, reports and description. An item another session holds needs
+  `force`. It writes only events earlier builds already read, and no schema
+  changes.
 - `apply_work_item_changes` and `create_work_item` take a `checklist` group,
   `{items, force?}` (`{items}` on a creation), which sets the steps as
   `set_work_item_checklist` does, right after the claim. Claiming an item and

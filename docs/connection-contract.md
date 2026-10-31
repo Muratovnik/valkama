@@ -95,6 +95,7 @@ item: `reference`, `work_item_id`, `revision`, `state` (`key`, `name`,
 | `claim_work_item_checklist_item`, `tick_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by` |
 | `set_work_item_summary` | `summary_recorded: true` |
 | `apply_work_item_changes` | `applied`, what each group changed; `started` from its claim, `overridden` from its transition, and the `warnings` of both, when there are any |
+| `merge_work_items` | `merged`, what each item moved (see [Merging items that are one change](#merging-items-that-are-one-change)); `warnings` and `overridden` when there are any |
 
 Each of these tools takes an optional boolean `verbose`, false by default. With
 `verbose: true` the answer is the full item with its whole history, as
@@ -409,6 +410,68 @@ The answer adds `applied`, in the batch's style: `{"claim": true, "links": 2}`.
 The call is recorded once with its identity, and the creation's, the claim's and
 both ends of each link's events point to it. Without `claim`, `checklist` or
 `links`, the call and its answer are what they were before.
+
+### Merging items that are one change
+
+`merge_work_items` (`POST /api/planning/work-item/merge`) folds items that turned
+out to be one change into the item that survives. It takes `id`, the survivor;
+`items`, 1 to 20 items that merge into it; and optional `reason`, `force`,
+`expected_revision` (the survivor's), `author` and `verbose`. It is all or
+nothing, in one transaction.
+
+What moves to the survivor:
+
+- the checklist steps, after its own, with their `item_id`s, ticks and step
+  claims, so a step's holder finds it by the same id;
+- the discussion comments, including those bound to a step;
+- the refs, except one the survivor already has, which stays where it was;
+- the links, each in its own direction: `MAIN-13 blocks MAIN-20` becomes
+  `MAIN-12 blocks MAIN-20`. A link to the survivor or to another item of the
+  same merge stays on the merged item, because moved it would tie the survivor
+  to itself. A `blocks` link that arrives can make the survivor block work it
+  did not block before, and one into it can make it wait.
+
+Each merged item is then linked `duplicates` to the survivor, gets a summary
+naming it ("Merged into MAIN-12, which now holds its 2 steps, 1 comment, 0 refs
+and 1 link.", `next` "Continue in MAIN-12.", `why` the reason), loses its claim
+and closes in the first `cancelled` state its workflow reaches from where it
+stands, with the reason `duplicate of MAIN-12`. The survivor gets a comment
+saying what came in. What describes the merged item itself stays with it: its
+history, its reports, its description, labels and parent, and its pending
+requests, which read as expired with `task_closed` once it is closed. The
+survivor keeps its own state, holder, fields and parent; nothing is reopened or
+claimed.
+
+Refused with `invalid_request` before anything is written, naming the item:
+the survivor in `items`, an item named twice, an item in another planning space,
+a closed survivor or merged item, a merged item with children, more than 100
+steps in all, a workflow with no reachable cancelled state, and an item another
+session holds. A stale lease does not count, and a claim held by the caller is
+its own. `force` carries another session's claim through and is recorded as an
+`overridden` event with the detail `claim` on that item, and it carries a guard
+that refuses the close the way `transition_work_item` does.
+
+Every write is one a single tool makes, with that tool's event: `linked` and
+`unlinked` on both ends of each link, `checklist_replaced`, `released`,
+`summarized`, `transitioned` and `overridden`. No event action, field or table is
+new, so a build from before merging reads a merge as those ordinary changes. The
+call is recorded once, against the survivor.
+
+The answer is the survivor with `merged`, one entry per item in the order given,
+and `warnings` and `overridden` when there are any:
+
+```json
+{"reference": "MAIN-12", "revision": 9, "merged": [
+  {"reference": "MAIN-13", "work_item_id": "…", "state": "cancelled",
+   "moved": {"steps": 2, "comments": 1, "refs": 0, "links": 1}}],
+ "warnings": ["MAIN-13 stays under MAIN-4; MAIN-12 keeps its own parent"]}
+```
+
+A warning names a merged item that had another parent than the survivor, and one
+with pending requests. The HTTP write answers with the full survivor and the same
+`merged`, `warnings` and `overridden`; the tool answers with the acknowledgement
+unless `verbose` is true. Why it moves what it moves is
+[ADR 0013](decisions/0013-merging-work-items.md).
 
 ### Argument names
 
