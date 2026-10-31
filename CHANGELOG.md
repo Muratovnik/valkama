@@ -27,6 +27,16 @@ checkouts are therefore distinguishable even at the same version.
   nodes instead of 601. Whether closed work is drawn is held apart for the
   chain and the whole space, so leaving a chain gives the space back its own
   filter, and each chain opens on its open part.
+- The chain answer names a root with children once, as `has_children`; the
+  `container` field that always carried the same value is gone from
+  `GET /api/planning/work-item/chain` and `get_work_item_chain`.
+- In the card's chain section, a member row names its state only when its
+  group mixes states. A group in one state names it once, in its heading, and
+  the finished group is headed the same way.
+- The card's workable figure says what it counts: unheld, unblocked work in
+  any state work can start from, the backlog included.
+- A work item of an attached store shows the chain section with a note that
+  the chain is read for work items of the primary store only.
 
 ### Fixed
 
@@ -37,6 +47,8 @@ checkouts are therefore distinguishable even at the same version.
   to Kanban or List removes both keys. A link that names no valid reference,
   a reference the server does not know, or a chain from another planning space
   shows the whole space with a notice saying why, and the keys are dropped.
+- A wrapped origins line in the card's chain section no longer ends on a
+  separator.
 
 ## [2.1.0](https://github.com/Muratovnik/valkama/compare/v2.0.0...v2.1.0) - 2026-10-31
 
