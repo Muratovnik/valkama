@@ -364,6 +364,19 @@ the step, and names the step:
 stale revision keeps `expected` and `actual` beside it. The call is recorded as
 one call with its identity, and every row its steps write points to that call.
 
+The acknowledgement's `applied` names only the groups that changed something:
+
+```json
+{"claim": true, "checklist": [{"item_id": "…", "text": "write it", "done": false}],
+ "checklist_ticks": [{"item_id": "…", "done": true}], "refs": 1,
+ "links": 1, "comment": {"comment_id": 41}, "summary": {"summary_comment_id": 42},
+ "transition": {"state": "done"}}
+```
+
+The single tools stay as they are. The batch is also the HTTP write
+`POST /api/planning/work-item/apply`, which takes the same body and answers with
+the full item and `applied`.
+
 ### Creating an item with its claim, steps and links
 
 `create_work_item` (`POST /api/planning/work-items`) also takes three optional
@@ -396,19 +409,6 @@ The answer adds `applied`, in the batch's style: `{"claim": true, "links": 2}`.
 The call is recorded once with its identity, and the creation's, the claim's and
 both ends of each link's events point to it. Without `claim`, `checklist` or
 `links`, the call and its answer are what they were before.
-
-The acknowledgement's `applied` names only the groups that changed something:
-
-```json
-{"claim": true, "checklist": [{"item_id": "…", "text": "write it", "done": false}],
- "checklist_ticks": [{"item_id": "…", "done": true}], "refs": 1,
- "links": 1, "comment": {"comment_id": 41}, "summary": {"summary_comment_id": 42},
- "transition": {"state": "done"}}
-```
-
-The single tools stay as they are. The batch is also the HTTP write
-`POST /api/planning/work-item/apply`, which takes the same body and answers with
-the full item and `applied`.
 
 ### Argument names
 
