@@ -95,7 +95,8 @@ const mappedProjectResources = computed(() => {
     : []
 })
 const moduleStage = ref<InstanceType<typeof AppModuleStage> | null>(null)
-const planningConnection = ref<PlanningConnectionState>('connecting')
+/** The open space's stream; null while no space is open, and the shell's connection speaks. */
+const planningConnection = ref<PlanningConnectionState | null>('connecting')
 const { contextState, loadContext } = usePlatformReadModels()
 
 const {
@@ -124,7 +125,7 @@ const {
 
 const displayedConnection = computed(() =>
   activeModule.value === 'planning' && operatingScope.value.kind === 'project'
-    ? planningConnection.value
+    ? (planningConnection.value ?? connectionState.value)
     : connectionState.value,
 )
 

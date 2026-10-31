@@ -258,3 +258,36 @@ describe('Planning exact resource lifecycle', () => {
     wrapper.unmount()
   })
 })
+
+describe('an address that names a project this workstation does not have', () => {
+  it('says which project is missing, offers the projects that exist, and asks for no retry', async () => {
+    const wrapper = mount(PlanningModuleSurface, {
+      props: {
+        context: context(),
+        primaryWriteScopeId: dataScopeId,
+        route: {
+          module_id: 'planning',
+          scope: { kind: 'project', project_ref: { project_id: 'nonexistent' } },
+        },
+        scope: { kind: 'project', project_ref: { project_id: 'nonexistent' } },
+      },
+      global: {
+        plugins: [createI18n({ legacy: false, locale: 'en', messages })],
+        stubs: { PlanningWorkspace: true, WorkItemInspector: true, WorkItemComposer: true },
+      },
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain(
+      'Project “nonexistent” was not found. Choose a project and space below.',
+    )
+    expect(wrapper.text()).not.toContain('Retry')
+    // The picker is the portfolio of every project, read at global scope.
+    expect(vi.mocked(fetchPlatformPlanning)).toHaveBeenCalledWith({ kind: 'global' })
+    expect(wrapper.find('[data-scroll-owner="planning-portfolio"]').exists()).toBe(true)
+    // No space is open, so no space stream is opened, and the shell's own
+    // connection is the one the rail shows.
+    expect(vi.mocked(subscribePlanning)).not.toHaveBeenCalled()
+    expect(wrapper.emitted('connection')?.at(-1)).toEqual([null])
+    wrapper.unmount()
+  })
+})

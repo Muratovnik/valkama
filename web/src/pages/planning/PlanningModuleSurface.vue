@@ -27,7 +27,7 @@ import { usePlanningChainView } from '@/pages/planning/composables/usePlanningCh
 import { usePlanningMoves } from '@/pages/planning/composables/usePlanningMoves.ts'
 import { usePlanningPortfolio } from '@/pages/planning/composables/usePlanningPortfolio.ts'
 import { usePlanningSubscription } from '@/pages/planning/composables/usePlanningSubscription.ts'
-import PlanningPortfolio from '@/pages/planning/PlanningPortfolio.vue'
+import PlanningPortfolioFrame from '@/pages/planning/PlanningPortfolioFrame.vue'
 import PlanningWorkspace from '@/pages/planning/PlanningWorkspace.vue'
 import type { PlanningViewMode } from '@/pages/planning/PlanningWorkspace.vue'
 import { graphView } from '@/pages/planning/utils/graphView.ts'
@@ -69,7 +69,8 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'connection': [state: PlanningConnectionState]
+  /** The space's own stream, or null when no space is open and the shell's own connection speaks. */
+  'connection': [state: PlanningConnectionState | null]
   'entity': [entity?: EntityRef]
   'notice': [message: string]
   'open-project': [projectId: string]
@@ -130,11 +131,25 @@ const view = computed<PlanningViewMode>(() => {
 watch(view, (mode) => mode === 'graph' && graphView.prefetch(), { immediate: true })
 const grouping = computed(() => groupingOf(props.route.state))
 
+/**
+ * The project the address names, when this workstation has no such project.
+ * Its space can never load, so the page offers the projects that do exist.
+ */
+const missingProject = computed(() => {
+  const scope = props.scope
+  if (scope.kind !== 'project' || props.context === null) return null
+  const id = scope.project_ref.project_id
+  return props.context.projects.some((project) => project.project_id === id) ? null : id
+})
+const portfolioShown = computed(
+  () => props.scope.kind === 'global' || missingProject.value !== null,
+)
+
 const {
   state: portfolio,
   load: loadPortfolio,
   invalidate: invalidatePortfolio,
-} = usePlanningPortfolio(() => props.scope)
+} = usePlanningPortfolio(() => (missingProject.value ? { kind: 'global' } : props.scope))
 /**
  * Planning's own read model, held beside its status rather than inside one.
  *
@@ -147,6 +162,8 @@ const resource = shallowRef(createResource<PlanningReadModel>())
 const model = computed(() => resource.value.data)
 const stale = computed(() => resource.value.status === 'refreshing')
 const planning = ref<PlatformUiState>(uiLoading())
+/** A space the route cannot bind is not loaded by asking again. */
+const planningRetryable = computed(() => routeSelection.value.status !== 'unavailable')
 const version = ref(0)
 
 /** Which item the route names, and how deep the operator went to get there. */
@@ -224,7 +241,11 @@ const { connection: liveConnection, reconnect } = usePlanningSubscription(stream
 const liveWarning = computed(() =>
   liveConnection.value === 'reconnecting' ? t('workItem.liveUnavailable') : undefined,
 )
-watch(liveConnection, (state) => emit('connection', state), { immediate: true })
+watch(
+  [liveConnection, streamTarget],
+  ([state, target]) => emit('connection', target === null ? null : state),
+  { immediate: true },
+)
 
 async function loadPlanning() {
   const project = projectId.value
@@ -288,7 +309,7 @@ watch(
     composerOpen.value = false
     invalidatePortfolio()
     void loadPlanning()
-    if (props.scope.kind === 'global') void loadPortfolio()
+    if (portfolioShown.value) void loadPortfolio()
   },
   { immediate: true },
 )
@@ -359,7 +380,7 @@ function itemCreated(reference: string) {
 }
 
 async function refresh() {
-  if (props.scope.kind === 'global') {
+  if (portfolioShown.value) {
     await loadPortfolio()
     if (!['empty', 'ready'].includes(portfolio.value.status))
       throw new Error('Planning directory refresh failed')
@@ -375,28 +396,13 @@ defineExpose({ refresh })
 </script>
 
 <template>
-  <main
-    v-if="scope.kind === 'global'"
-    class="planning-frame"
-    tabindex="-1"
-    data-scroll-owner="planning-portfolio"
-    :aria-label="t('platform.modules.planning')"
-  >
-    <div class="planning-frame-content">
-      <PlatformStatePanel
-        :state="portfolio"
-        :empty-description="t('platform.planning.noSpacesDetail')"
-        @retry="loadPortfolio"
-      >
-        <template #default="{ payload }">
-          <PlanningPortfolio
-            :projects="payload.projects"
-            @open-project="(id) => emit('open-project', id)"
-          />
-        </template>
-      </PlatformStatePanel>
-    </div>
-  </main>
+  <PlanningPortfolioFrame
+    v-if="portfolioShown"
+    :portfolio="portfolio"
+    :missing-project="missingProject"
+    @retry="loadPortfolio"
+    @open-project="(id) => emit('open-project', id)"
+  />
 
   <div
     v-else-if="model"
@@ -455,6 +461,7 @@ defineExpose({ refresh })
     <div class="planning-frame-content">
       <PlatformStatePanel
         :state="planning"
+        :retryable="planningRetryable"
         @retry="loadPlanning"
       />
     </div>

@@ -22,7 +22,7 @@ const props = defineProps<{
   scope: OperatingScope
 }>()
 const emit = defineEmits<{
-  'connection': [state: 'connecting' | 'live' | 'reconnecting']
+  'connection': [state: 'connecting' | 'live' | 'reconnecting' | null]
   'entity': [entity?: EntityRef]
   'locale': [value: string]
   'notice': [message: string]
