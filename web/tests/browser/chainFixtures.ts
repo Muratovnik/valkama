@@ -5,9 +5,18 @@
  */
 import type { Page } from '@playwright/test'
 
+import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
+import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
+
 import { chainResponse, largeEpicChain } from '../fixtures/chain.ts'
 import { longChainSpace } from '../fixtures/chainSpace.ts'
-import { planningReadModel, workItem, workItemRef } from './planningFixtures.ts'
+import {
+  planningReadModel,
+  projectScope,
+  spaceRef,
+  workItem,
+  workItemRef,
+} from './planningFixtures.ts'
 import { planningReadFor } from './planningReadFixture.ts'
 
 const identity = (id: number) => `00000000-0000-4000-8000-${String(id).padStart(12, '0')}`
@@ -210,5 +219,39 @@ export async function serve(
       contentType: 'application/json',
       body: JSON.stringify(response.body),
     })
+  })
+}
+
+/** What the address's module state says, decoded. */
+export function routeState(page: Page): Record<string, unknown> {
+  const encoded = new URL(page.url()).searchParams.get('state')
+  return encoded === null
+    ? {}
+    : (JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8')) as Record<string, unknown>)
+}
+
+/** The space's graph, at an address naming `state` beside the graph view. */
+export function graphRoute(state: Record<string, string>) {
+  return serializePlatformRoute({
+    module_id: 'planning',
+    scope: projectScope,
+    entity: planningSpaceEntity(spaceRef),
+    state: { view: 'graph', ...state },
+  })
+}
+
+/** Whether the chain's root lies wholly inside the graph's field, as drawn. */
+export async function rootFramed(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const root = document.querySelector('.flow-node-card.root')?.getBoundingClientRect()
+    const field = document.querySelector('.graph-flow')?.getBoundingClientRect()
+    return Boolean(
+      root &&
+      field &&
+      root.left >= field.left &&
+      root.right <= field.right &&
+      root.top >= field.top &&
+      root.bottom <= field.bottom,
+    )
   })
 }

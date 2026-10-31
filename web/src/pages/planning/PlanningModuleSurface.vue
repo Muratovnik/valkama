@@ -22,14 +22,8 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import {
-  chainTarget,
-  groupingOf,
-  usePlanningChainScope,
-  withChain,
-  withGrouping,
-} from '@/pages/planning/composables/usePlanningChainScope.ts'
-import type { ChainRefusal } from '@/pages/planning/composables/usePlanningChainScope.ts'
+import { groupingOf, withGrouping } from '@/pages/planning/composables/usePlanningChainScope.ts'
+import { usePlanningChainView } from '@/pages/planning/composables/usePlanningChainView.ts'
 import { usePlanningMoves } from '@/pages/planning/composables/usePlanningMoves.ts'
 import { usePlanningPortfolio } from '@/pages/planning/composables/usePlanningPortfolio.ts'
 import { usePlanningSubscription } from '@/pages/planning/composables/usePlanningSubscription.ts'
@@ -44,7 +38,6 @@ import WorkItemComposer from '@/features/work-item-compose/WorkItemComposer.vue'
 
 import { CutoverPendingError, fetchPlanning } from '@/shared/api/planningApi.ts'
 import type { PlanningConnectionState } from '@/shared/api/planningApi.ts'
-import type { ChainScope, WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import type { PlanningReadModel } from '@/shared/api/planningModel.ts'
 import type { PlatformContextReady } from '@/shared/api/platformApiTypes.ts'
 import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
@@ -192,35 +185,25 @@ const primaryStore = computed(
     props.scope.kind === 'project' && props.primaryWriteScopeId === boundSpace.value?.data_scope_id,
 )
 
-/** What the operator is told about a chain the route named and this space cannot show. */
-function chainRefusalNotice(reference: string, why: ChainRefusal): string {
-  if (why.kind === 'invalid') return t('graph.chainInvalid')
-  // The card's own words, so the store a chain is missing from reads the same.
-  if (why.kind === 'primary') return t('workItem.chain.primaryOnly')
-  const cause = why.kind === 'failed' ? why.message : t('graph.chainElsewhere')
-  return t('graph.chainUnavailable', { reference, cause })
-}
-
-/**
- * The route named a chain this space cannot show. It says so once and drops the
- * keys, so the field is the whole space and the address says the same.
- */
-function refuseChain(reference: string, why: ChainRefusal) {
-  emit('notice', chainRefusalNotice(reference, why))
-  emit('state', withChain(props.route.state, null))
-}
-
 const {
-  scoped: chainScope,
+  chain: chainScope,
+  closed: chainClosed,
+  failure: chainFailure,
+  narrow,
   pending: chainPending,
-  enter: enterChain,
-} = usePlanningChainScope({
-  target: () => chainTarget(props.route.state),
+  retry: retryChain,
+  setClosed: setChainClosed,
+  show: showChain,
+} = usePlanningChainView({
+  state: () => props.route.state,
+  open: () => open.value,
+  close: () => closeItem(),
   space: () => (boundSpace.value === undefined ? '' : planningKey.value),
   primary: () => primaryStore.value,
   spaceItems: () => model.value?.work_items ?? null,
   version: () => version.value,
-  refused: refuseChain,
+  notice: (message) => emit('notice', message),
+  write: (state) => emit('state', state),
 })
 
 const selectedId = computed(
@@ -355,23 +338,6 @@ function setView(mode: PlanningViewMode) {
 }
 
 /**
- * The view the operator is in, narrowed to a chain — an epic's lane asked for
- * its own — or, given null, widened back to the whole space by the chip.
- */
-function narrow(chain: { reference: string; scope: ChainScope } | null) {
-  emit('state', withChain(props.route.state, chain))
-}
-
-/** The card asked to see its chain: the graph, scoped to exactly that chain. */
-function showChain(chain: WorkItemChain) {
-  enterChain(chain)
-  emit('state', {
-    ...withChain(props.route.state, { reference: chain.root.reference, scope: chain.scope }),
-    view: 'graph',
-  })
-}
-
-/**
  * A move on the board: a transition when the tile changed state, a placement
  * when it only changed place, and the workflow decides whether a transition is
  * allowed. A refused move is reported and the space re-read, so the tile goes
@@ -440,6 +406,8 @@ defineExpose({ refresh })
       :model="shownModel ?? model"
       :chain="chainScope"
       :chain-pending="chainPending"
+      :chain-closed="chainClosed"
+      :chain-failure="chainFailure"
       :grouping="grouping"
       :scope-key="planningKey"
       :selected-id="selectedId"
@@ -448,6 +416,8 @@ defineExpose({ refresh })
       :version="version"
       :view="view"
       :writable="writable"
+      @chain-closed="setChainClosed"
+      @retry-chain="retryChain"
       @create="composerOpen = true"
       @exit-chain="narrow(null)"
       @group="(next) => emit('state', withGrouping(route.state, next))"

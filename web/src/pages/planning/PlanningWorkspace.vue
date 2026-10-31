@@ -16,6 +16,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import PlanningChainFailure from '@/pages/planning/PlanningChainFailure.vue'
 import { graphView } from '@/pages/planning/utils/graphView.ts'
 
 import WorkItemBoard from '@/widgets/work-item-views/components/WorkItemBoard.vue'
@@ -42,6 +43,10 @@ const props = defineProps<{
   writable: boolean
   /** The chain the views are narrowed to, when the owner asked to see one. */
   chain?: WorkItemChain | null
+  /** The graph draws the chain's closed members too; the route keeps it. */
+  chainClosed?: boolean
+  /** The chain the route names could not be read; the views show the whole space. */
+  chainFailure?: { message: string; retryable: boolean } | null
   /** The route names a chain whose first read is still in flight. */
   chainPending?: boolean
   /** How the board is grouped: not at all, or into one lane per epic. */
@@ -52,11 +57,13 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
+  'chain-closed': [closed: boolean]
   'create': []
   'exit-chain': []
   'group': [grouping: BoardGrouping]
   'open': [reference: string]
   'place': [move: BoardMove]
+  'retry-chain': []
   'show-chain': [reference: string]
   'view': [mode: PlanningViewMode]
 }>()
@@ -292,6 +299,12 @@ const counts = computed(() => {
         @update:model-value="(value) => emit('group', value)"
       />
     </div>
+    <PlanningChainFailure
+      v-if="chainFailure"
+      :failure="chainFailure"
+      @dismiss="emit('exit-chain')"
+      @retry="emit('retry-chain')"
+    />
     <div class="workspace-stage">
       <p
         v-if="chainPending"
@@ -342,10 +355,12 @@ const counts = computed(() => {
         :edges="graphEdges"
         :epic-id="chain?.root.work_item_id ?? null"
         :chain="graphChain"
+        :show-closed="chainClosed"
         :open="true"
         :version="version"
         @exit-chain="emit('exit-chain')"
         @open="(reference) => emit('open', reference)"
+        @update:show-closed="(closed) => emit('chain-closed', closed)"
       />
     </div>
   </main>

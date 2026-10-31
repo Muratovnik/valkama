@@ -193,8 +193,16 @@ export const en = {
     chainChip: 'Chain {reference} · {count}',
     chainExit: 'Leave chain {reference} and show the whole space',
     chainInvalid: 'This link names no chain this space can read; the whole space is shown.',
-    chainUnavailable: 'Chain {reference} cannot be shown here: {cause}. The whole space is shown.',
-    chainElsewhere: 'its root is not among this space’s work items',
+    chainNotHere: 'Work item {reference} is not in this space. The whole space is shown.',
+    chainFailed: {
+      missing:
+        'Could not open chain {reference}: there is no such work item. The whole space is shown.',
+      unreachable:
+        'Could not open chain {reference}: the server is not answering. The whole space is shown.',
+      server:
+        'Could not open chain {reference}: the server answered with an error. The whole space is shown.',
+    },
+    chainDismiss: 'Dismiss',
     unlinked: 'Unlinked · {count}',
     unlinkedToggle: 'Draw items with no links',
     closed: 'Closed · {count}',

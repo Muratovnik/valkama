@@ -4,6 +4,7 @@ import type { Page } from '@playwright/test'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
+import { graphRoute, routeState, serve, smallChain } from './chainFixtures.ts'
 import { blockedWorkItem, projectScope } from './planningFixtures.ts'
 import { planningReadFor } from './planningReadFixture.ts'
 
@@ -164,3 +165,76 @@ for (const width of [1440, 390]) {
     }
   })
 }
+
+test('a link naming a chain no item answers to says so in its own words and keeps the chain', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await installBackend(page)
+  const { chain, items, edges } = smallChain()
+  await serve(page, chain, items, edges)
+  const asked: string[] = []
+  await page.route('**/api/planning/work-item/chain?*', (route) => {
+    asked.push(new URL(route.request().url()).searchParams.get('id') ?? '')
+    return route.fulfill({
+      status: 400,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        error: { code: 'invalid_request', message: 'no work item MAIN-9999' },
+      }),
+    })
+  })
+  const failure = page.locator('.chain-failure')
+  const chip = page.locator('.graph-chip')
+
+  await page.goto(graphRoute({ chain: 'MAIN-9999', chain_scope: 'chain' }))
+  // The cause in the product's words, never the server's.
+  await expect(failure.locator('.chain-failure-message')).toHaveText(
+    'Could not open chain MAIN-9999: there is no such work item. The whole space is shown.',
+  )
+  // Asking again cannot help a reference nothing answers to.
+  await expect(failure.getByRole('button', { name: 'Retry' })).toHaveCount(0)
+  await expect(page.locator('.graph')).toHaveAttribute('aria-busy', 'false')
+  await expect(page.locator('.flow-node-card').first()).toBeVisible()
+  await expect(chip).toHaveCount(0)
+  // The address keeps naming the chain until the operator lets it go.
+  expect(routeState(page)).toEqual({ view: 'graph', chain: 'MAIN-9999', chain_scope: 'chain' })
+  await failure.getByRole('button', { name: 'Dismiss' }).click()
+  await expect(failure).toHaveCount(0)
+  await expect.poll(() => routeState(page)).toEqual({ view: 'graph' })
+
+  // A value that is no reference at all is refused without asking the server.
+  const notice = page.locator('.notice')
+  await page.goto(graphRoute({ chain: 'not a reference' }))
+  await expect(notice).toHaveText(
+    'This link names no chain this space can read; the whole space is shown.',
+  )
+  await expect(page.locator('.flow-node-card').first()).toBeVisible()
+  await expect(chip).toHaveCount(0)
+  await expect.poll(() => routeState(page)).toEqual({ view: 'graph' })
+  expect(asked).toEqual(['MAIN-9999'])
+})
+
+test('a chain whose read failed is read again on Retry', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await installBackend(page)
+  const { chain, items, edges } = smallChain()
+  await serve(page, chain, items, edges)
+  let failing = true
+  await page.route('**/api/planning/work-item/chain?*', (route) =>
+    failing
+      ? route.fulfill({ status: 500, contentType: 'text/plain', body: 'boom' })
+      : route.fallback(),
+  )
+  const failure = page.locator('.chain-failure')
+  await page.goto(graphRoute({ chain: 'MAIN-264', chain_scope: 'chain' }))
+  await expect(failure.locator('.chain-failure-message')).toHaveText(
+    'Could not open chain MAIN-264: the server answered with an error. The whole space is shown.',
+  )
+  await expect(failure).not.toContainText('HTTP')
+  failing = false
+  await failure.getByRole('button', { name: 'Retry' }).click()
+  await expect(failure).toHaveCount(0)
+  await expect(page.locator('.graph-chip')).toHaveText('Chain MAIN-264 · 16')
+  await expect(page.locator('.flow-node-card')).toHaveCount(10)
+})

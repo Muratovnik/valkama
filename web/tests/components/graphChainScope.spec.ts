@@ -176,6 +176,22 @@ describe('the graph scoped to one chain', () => {
     expect(card('VAL-3')?.props('chainGroup')).toBe('queued')
   })
 
+  it('takes the closed switch from its host, and hands a change back rather than keeping it', async () => {
+    const graph = openGraph({
+      scopeKind: 'chain',
+      epicId: id(1),
+      chain,
+      edges: chainEdges,
+      showClosed: true,
+    })
+    // An address that says closed draws the closed members from the start.
+    expect(await drawn(graph)).toEqual(['VAL-1', 'VAL-2', 'VAL-3', 'VAL-4'])
+    await graph.get('[role="switch"]').trigger('click')
+    expect(graph.emitted('update:showClosed')).toEqual([[false]])
+    await graph.setProps({ showClosed: false })
+    expect(await drawn(graph)).toEqual(['VAL-1', 'VAL-3', 'VAL-4'])
+  })
+
   it('marks the root with a word and in its accessible name, closed or not', async () => {
     const closedRoot = items.map((entry) =>
       entry.reference === 'VAL-1' ? { ...entry, state: DONE } : entry,

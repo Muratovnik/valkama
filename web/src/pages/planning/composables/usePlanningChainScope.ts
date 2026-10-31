@@ -3,11 +3,17 @@ import { computed, onScopeDispose, shallowRef, watch } from 'vue'
 import { fetchWorkItemChain } from '@/shared/api/planningChainApi.ts'
 import type { ChainScope, WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import { WORK_ITEM_REFERENCE } from '@/shared/api/planningModel.ts'
+import { typedFailure } from '@/shared/api/typedFailure.ts'
+import type { TypedFailure } from '@/shared/api/typedFailure.ts'
 
 type RouteState = Record<string, string | number | boolean>
 
-/** The route keys that name a chain: its root's reference, and how far it reaches. */
-const CHAIN_KEYS = new Set(['chain', 'chain_scope'])
+/**
+ * The route keys that belong to a chain: its root's reference, how far it
+ * reaches, and whether its closed members are drawn. Leaving the chain or
+ * naming another drops all three, so a chain always opens on its open part.
+ */
+const CHAIN_KEYS = new Set(['chain', 'chain_scope', 'closed'])
 
 /** What the route asks every view of the space to be scoped to. */
 export type ChainTarget =
@@ -16,15 +22,18 @@ export type ChainTarget =
   | { reference: string; status: 'invalid' }
 
 /**
- * Why a chain the route named is not drawn: the link could never name one, its
- * root is in another space, the space is an attached store the chain endpoint
- * does not read, or the read failed with the server's own words.
+ * Why a chain the route named will not be drawn: the link could never name one,
+ * its root is in another space, or the space is an attached store the chain
+ * endpoint does not read. A read that failed is not among them — it may succeed
+ * when asked again, so it is held as a failure the route keeps.
  */
-export type ChainRefusal =
-  | { kind: 'elsewhere' }
-  | { kind: 'failed'; message: string }
-  | { kind: 'invalid' }
-  | { kind: 'primary' }
+export type ChainRefusal = { kind: 'elsewhere' } | { kind: 'invalid' } | { kind: 'primary' }
+
+/** A first read of the chain the route names that failed, and how. */
+export interface ChainFailure {
+  failure: TypedFailure
+  reference: string
+}
 
 /**
  * Read the chain out of the module's route state.
@@ -54,6 +63,17 @@ export function groupingOf(state: RouteState | undefined): 'epic' | 'none' {
 export function withGrouping(state: RouteState | undefined, grouping: 'epic' | 'none'): RouteState {
   const rest = Object.fromEntries(Object.entries(state ?? {}).filter(([key]) => key !== 'group'))
   return grouping === 'epic' ? { ...rest, group: grouping } : rest
+}
+
+/** Whether the chain's closed members are drawn; absent, as in an older address, is no. */
+export function closedOf(state: RouteState | undefined): boolean {
+  return state?.closed === true
+}
+
+/** The same state drawing the chain's closed members or not; the default leaves the key out. */
+export function withClosed(state: RouteState | undefined, closed: boolean): RouteState {
+  const rest = Object.fromEntries(Object.entries(state ?? {}).filter(([key]) => key !== 'closed'))
+  return closed ? { ...rest, closed } : rest
 }
 
 /** The same state naming this chain, or naming none when `chain` is null. */
@@ -99,11 +119,13 @@ interface ChainScopeOptions {
  * drawn closed. A failed re-read keeps the last chain: the field stays the chain
  * the owner asked for rather than falling back to the whole space without being
  * asked. A failed first read is different, because there is nothing to keep:
- * the route is told, and it shows the whole space.
+ * the views show the whole space, while the route still names the chain and the
+ * failure is held, so the operator can ask for it again or a reload can.
  */
 export function usePlanningChainScope(options: ChainScopeOptions) {
   const chain = shallowRef<WorkItemChain | null>(null)
   const pending = shallowRef(false)
+  const failure = shallowRef<ChainFailure | null>(null)
   /** The target the held chain answers, so a matching route needs no read. */
   const held = shallowRef('')
   let generation = 0
@@ -120,6 +142,7 @@ export function usePlanningChainScope(options: ChainScopeOptions) {
     controller?.abort()
     controller = undefined
     pending.value = false
+    failure.value = null
     chain.value = next
     held.value = next === null ? '' : key
   }
@@ -141,15 +164,14 @@ export function usePlanningChainScope(options: ChainScopeOptions) {
       pending.value = false
       // A re-read that failed keeps the chain drawn; the next movement retries.
       if (!first) return
-      const message = error instanceof Error ? error.message : String(error)
-      options.refused(target.reference, { kind: 'failed', message })
+      failure.value = { reference: target.reference, failure: typedFailure(error) }
     }
   }
 
   function follow() {
     const target = options.target()
     if (target.status === 'none') {
-      if (held.value || pending.value) settle(null)
+      if (held.value || pending.value || failure.value) settle(null)
       return
     }
     if (target.status === 'invalid') {
@@ -202,6 +224,12 @@ export function usePlanningChainScope(options: ChainScopeOptions) {
     }),
     /** True while a chain the route names is read for the first time. */
     pending,
+    /** The first read of the chain the route names failed; the route keeps naming it. */
+    failure,
+    /** Read the chain the route names again, after a failed first read. */
+    retry: () => {
+      if (failure.value !== null) follow()
+    },
     /** Hold the card's answer for the target the route is about to name. */
     enter: (next: WorkItemChain) =>
       settle(next, keyOf({ status: 'chain', reference: next.root.reference, scope: next.scope })),

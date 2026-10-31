@@ -46,6 +46,8 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{ 'exit-chain': []; 'open': [reference: string] }>()
+/** Whether a chain's closed members are drawn; the host keeps it in the address. */
+const showClosed = defineModel<boolean>('showClosed', { default: false })
 
 const GRAPH_FLOW_ID = 'valkama-work-graph'
 
@@ -78,6 +80,7 @@ const {
     version: props.version,
   }),
   () => props.selectedId ?? null,
+  showClosed,
 )
 
 /** Which empty the field is in, if any; the first cause wins. */

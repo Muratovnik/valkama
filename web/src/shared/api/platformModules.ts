@@ -108,7 +108,7 @@ export const OFFLINE_MODULE_FALLBACK: readonly ModuleManifest[] = Object.freeze(
     navigation_group: 'work',
     title_key: 'platform.modules.planning',
     icon_key: 'layout-dashboard',
-    allowed_keys: ['query', 'view', 'status', 'chain', 'chain_scope', 'group'],
+    allowed_keys: ['query', 'view', 'status', 'chain', 'chain_scope', 'closed', 'group'],
     readGlobal: ['planning.spaces', 'planning.work-items'],
     readProject: ['planning.project-spaces', 'planning.work-items'],
     actionGlobal: ['module.planning.create-work-item', 'module.planning.open-work-item'],

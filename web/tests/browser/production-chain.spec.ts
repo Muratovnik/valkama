@@ -13,38 +13,22 @@ import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 import type { Page, TestInfo } from '@playwright/test'
 
-import { planningSpaceEntity, planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
+import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { branchedChain, smallBranchedChain } from '../fixtures/chainMap.ts'
 import { installBackend } from './backend.ts'
-import { largeChainHere, longChainHere, serve, smallChain } from './chainFixtures.ts'
-import { expectNoSilentClipping } from './overflow.ts'
 import {
-  attachedWorkItemRef,
-  projectScope,
-  spaceRef,
-  workItem,
-  workItemRef,
-} from './planningFixtures.ts'
-
-/** What the address's module state says, decoded. */
-function routeState(page: Page): Record<string, unknown> {
-  const encoded = new URL(page.url()).searchParams.get('state')
-  return encoded === null
-    ? {}
-    : (JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8')) as Record<string, unknown>)
-}
-
-/** The space's graph, at an address naming `state` beside the graph view. */
-function graphRoute(state: Record<string, string>) {
-  return serializePlatformRoute({
-    module_id: 'planning',
-    scope: projectScope,
-    entity: planningSpaceEntity(spaceRef),
-    state: { view: 'graph', ...state },
-  })
-}
+  graphRoute,
+  largeChainHere,
+  longChainHere,
+  rootFramed,
+  routeState,
+  serve,
+  smallChain,
+} from './chainFixtures.ts'
+import { expectNoSilentClipping } from './overflow.ts'
+import { attachedWorkItemRef, projectScope, workItem, workItemRef } from './planningFixtures.ts'
 
 async function openCard(page: Page, view?: 'graph') {
   await page.goto(
@@ -274,8 +258,11 @@ test('Show on graph draws the open part of the chain, its root marked, and the r
   const root = page.getByRole('button', { name: /^MAIN-264 .* · chain root$/u })
   await expect(root).toHaveCount(1)
   await expect(root.locator('.flow-node-root')).toHaveText('root')
-  await page.keyboard.press('Escape')
+  // The card made way for the graph it asked for, and the root is in the frame.
   await expect(page.locator('.drawer')).toHaveCount(0)
+  expect(await rootFramed(page)).toBe(true)
+  // Its children are filed under the root, which the chip already names.
+  await expect(page.locator('.flow-node-epic')).toHaveCount(0)
   await expect(page.locator('.flow-node-card.recessed')).toHaveCount(0)
   await page.locator('.graph').screenshot(shot(info, 'chain-graph-default.png'))
 
@@ -308,15 +295,45 @@ test('the chain is held in the address: a reload keeps it, and leaving removes i
   await section.getByRole('button', { name: 'Show on graph' }).click()
   const chip = page.locator('.graph-chip')
   await expect(chip).toHaveText('Chain MAIN-264 · 16')
-  expect(routeState(page)).toEqual({ view: 'graph', chain: 'MAIN-264', chain_scope: 'chain' })
+  await expect
+    .poll(() => routeState(page))
+    .toEqual({
+      view: 'graph',
+      chain: 'MAIN-264',
+      chain_scope: 'chain',
+    })
+  await expect(page.locator('.drawer')).toHaveCount(0)
 
   await page.reload()
   await expect(chip).toHaveText('Chain MAIN-264 · 16')
   await expect(page.locator('.flow-node-card')).toHaveCount(10)
-  // The card is in the address too, and came back with the chain.
-  await expect(page.locator('.drawer section.chain')).toBeVisible()
-  await page.keyboard.press('Escape')
-  await expect(page.locator('.drawer')).toHaveCount(0)
+  await expect(page.locator('.graph-canvas')).toHaveClass(/settled/u)
+  // A reload frames the root again, as entering from the card did.
+  expect(await rootFramed(page)).toBe(true)
+
+  // The closed switch is in the address too, and a reload keeps it.
+  await page.getByRole('switch', { name: 'Draw the closed members of the chain' }).click()
+  await expect
+    .poll(() => routeState(page))
+    .toEqual({
+      view: 'graph',
+      chain: 'MAIN-264',
+      chain_scope: 'chain',
+      closed: true,
+    })
+  await page.reload()
+  await expect(page.locator('.flow-node-card')).toHaveCount(17)
+  await expect(
+    page.getByRole('switch', { name: 'Draw the closed members of the chain' }),
+  ).toHaveAttribute('aria-checked', 'true')
+  await page.getByRole('switch', { name: 'Draw the closed members of the chain' }).click()
+  await expect
+    .poll(() => routeState(page))
+    .toEqual({
+      view: 'graph',
+      chain: 'MAIN-264',
+      chain_scope: 'chain',
+    })
 
   // Another view keeps the chain: the board draws only its members and root,
   // and carries the same chip to leave it.
@@ -348,8 +365,8 @@ test('Back and Forward land on the field the address names', async ({ page }) =>
   await section.getByRole('button', { name: 'Show on graph' }).click()
   const chip = page.locator('.graph-chip')
   await expect(chip).toHaveText('Chain MAIN-264 · 16')
-  // Closing the card is a step of its own; the chain stays.
-  await page.keyboard.press('Escape')
+  // The card closed on its own, a step after the chain was named: Back is the
+  // card again, over the same chain.
   await expect(page.locator('.drawer')).toHaveCount(0)
   await expect(chip).toBeVisible()
 
@@ -367,47 +384,6 @@ test('Back and Forward land on the field the address names', async ({ page }) =>
   await page.goBack()
   await expect(page.locator('.drawer section.chain')).toBeVisible()
   await expect(chip).toHaveText('Chain MAIN-264 · 16')
-})
-
-test('a link naming a chain the space cannot show draws the whole space with a notice', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1440, height: 900 })
-  await installBackend(page)
-  const { chain, items, edges } = smallChain()
-  await serve(page, chain, items, edges)
-  const asked: string[] = []
-  await page.route('**/api/planning/work-item/chain?*', (route) => {
-    asked.push(new URL(route.request().url()).searchParams.get('id') ?? '')
-    return route.fulfill({
-      status: 400,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        error: { code: 'invalid_request', message: 'no work item MAIN-9999' },
-      }),
-    })
-  })
-  const notice = page.locator('.notice')
-  const chip = page.locator('.graph-chip')
-
-  await page.goto(graphRoute({ chain: 'MAIN-9999', chain_scope: 'chain' }))
-  await expect(notice).toHaveText(
-    'Chain MAIN-9999 cannot be shown here: no work item MAIN-9999. The whole space is shown.',
-  )
-  await expect(page.locator('.graph')).toHaveAttribute('aria-busy', 'false')
-  await expect(page.locator('.flow-node-card').first()).toBeVisible()
-  await expect(chip).toHaveCount(0)
-  await expect.poll(() => routeState(page)).toEqual({ view: 'graph' })
-
-  // A value that is no reference at all is refused without asking the server.
-  await page.goto(graphRoute({ chain: 'not a reference' }))
-  await expect(notice).toHaveText(
-    'This link names no chain this space can read; the whole space is shown.',
-  )
-  await expect(page.locator('.flow-node-card').first()).toBeVisible()
-  await expect(chip).toHaveCount(0)
-  await expect.poll(() => routeState(page)).toEqual({ view: 'graph' })
-  expect(asked).toEqual(['MAIN-9999'])
 })
 
 test('a long chain opened from a link draws its open part, and all of it on request', async ({

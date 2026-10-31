@@ -10,9 +10,11 @@ import { afterEach, beforeEach, test, vi } from 'vitest'
 
 import {
   chainTarget,
+  closedOf,
   groupingOf,
   usePlanningChainScope,
   withChain,
+  withClosed,
   withGrouping,
 } from '@/pages/planning/composables/usePlanningChainScope.ts'
 import type {
@@ -32,9 +34,15 @@ const fetchChain = vi.mocked(fetchWorkItemChain)
 
 const planning = OFFLINE_MODULE_FALLBACK.find((manifest) => manifest.module_id === 'planning')
 
-test('the planning manifest admits the chain and grouping keys and still refuses a key it never declared', () => {
+test('the planning manifest admits the chain, closed and grouping keys and still refuses a key it never declared', () => {
   assert.ok(planning)
-  const state = { view: 'kanban', chain: 'MAIN-12', chain_scope: 'epic', group: 'epic' }
+  const state = {
+    view: 'kanban',
+    chain: 'MAIN-12',
+    chain_scope: 'epic',
+    closed: true,
+    group: 'epic',
+  }
   assert.deepEqual(validateManifestRouteState(planning, state), state)
   assert.throws(
     () => validateManifestRouteState(planning, { ...state, chain_closed: true }),
@@ -89,6 +97,24 @@ test('withChain writes both keys and removes both, leaving every other key alone
   assert.deepEqual(named, { view: 'graph', query: 'x', chain: 'VAL-12', chain_scope: 'chain' })
   assert.deepEqual(withChain(named, null), { view: 'graph', query: 'x' })
   assert.deepEqual(withChain(undefined, null), {})
+})
+
+test('the closed switch is kept beside the chain, absent when off, and goes with the chain', () => {
+  const named = { view: 'graph', chain: 'VAL-12', chain_scope: 'chain' }
+  // An address written before the switch was kept reads as off.
+  assert.equal(closedOf(named), false)
+  const shown = withClosed(named, true)
+  assert.deepEqual(shown, { ...named, closed: true })
+  assert.equal(closedOf(shown), true)
+  for (const value of ['true', 1, false]) assert.equal(closedOf({ ...named, closed: value }), false)
+  assert.deepEqual(withClosed(shown, false), named)
+  // Leaving the chain, or naming another, opens it on its open part again.
+  assert.deepEqual(withChain(shown, null), { view: 'graph' })
+  assert.deepEqual(withChain(shown, { reference: 'VAL-500', scope: 'chain' }), {
+    view: 'graph',
+    chain: 'VAL-500',
+    chain_scope: 'chain',
+  })
 })
 
 /** The root id every chain here shares, which is what the space holds. */
@@ -167,16 +193,46 @@ test('a route opened cold reads the chain it names, and leaving drops it', async
   assert.equal(run.held.scoped.value, chain)
 })
 
-test('a first read that fails is refused with its cause and draws no chain', async () => {
-  fetchChain.mockRejectedValue(new Error('no work item VAL-9999'))
+test('a first read that fails is held with its code, refuses nothing, and is read again on request', async () => {
+  const refused = Object.assign(new Error('no work item VAL-9999'), {
+    code: 'invalid_request',
+    status: 400,
+  })
+  fetchChain.mockRejectedValueOnce(refused).mockResolvedValueOnce(chainOf('VAL-9999'))
   const run = harness({ status: 'chain', reference: 'VAL-9999', scope: 'chain' })
   active = run.scope
   await settled()
-  assert.deepEqual(run.refusals, [
-    ['VAL-9999', { kind: 'failed', message: 'no work item VAL-9999' }],
-  ])
+  // Not refused: the route keeps naming the chain, so a retry or a reload can read it.
+  assert.deepEqual(run.refusals, [])
+  assert.deepEqual(run.held.failure.value, {
+    reference: 'VAL-9999',
+    failure: { code: 'invalid_request', status: 400, retryable: true },
+  })
   assert.equal(run.held.scoped.value, null)
   assert.equal(run.held.pending.value, false)
+
+  run.held.retry()
+  // Asking again reads as the first read does, and the failure is gone meanwhile.
+  assert.equal(run.held.pending.value, true)
+  assert.equal(run.held.failure.value, null)
+  await settled()
+  assert.equal(fetchChain.mock.calls.length, 2)
+  assert.equal(run.held.scoped.value?.root.reference, 'VAL-9999')
+})
+
+test('a failure is let go once the route stops naming the chain', async () => {
+  fetchChain.mockRejectedValue(new Error('offline'))
+  const run = harness({ status: 'chain', reference: 'VAL-12', scope: 'chain' })
+  active = run.scope
+  await settled()
+  assert.ok(run.held.failure.value)
+  run.target.value = { status: 'none' }
+  await settled()
+  assert.equal(run.held.failure.value, null)
+  // With nothing failed, a retry asks for nothing.
+  run.held.retry()
+  await settled()
+  assert.equal(fetchChain.mock.calls.length, 1)
 })
 
 test('a malformed link is refused without a request', async () => {
