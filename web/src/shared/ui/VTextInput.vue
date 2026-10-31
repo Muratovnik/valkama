@@ -29,6 +29,8 @@ const props = withDefaults(
     disabled?: boolean
     /** Why the value was refused; shown under the control and named by it. */
     error?: string
+    /** The label reaches assistive technology only; see `VField`. */
+    hideLabel?: boolean
     hint?: string
     inputmode?: 'numeric'
     list?: string
@@ -38,6 +40,8 @@ const props = withDefaults(
     placeholder?: string
     /** Any positive value selects a textarea; content determines its height. */
     rows?: number
+    /** `compact` rides a toolbar of compact controls, as `SegmentedControl` does. */
+    size?: 'default' | 'compact'
     spellcheck?: boolean
     type?: 'text' | 'number' | 'date' | 'datetime-local'
   }>(),
@@ -56,6 +60,8 @@ const props = withDefaults(
     spellcheck: undefined,
     disabled: false,
     autofocus: false,
+    hideLabel: false,
+    size: 'default',
   },
 )
 
@@ -76,6 +82,7 @@ function edited(event: Event) {
     :label="label"
     :hint="hint"
     :error="error"
+    :hide-label="hideLabel"
   >
     <textarea
       v-if="rows"
@@ -94,6 +101,7 @@ function edited(event: Event) {
     <input
       v-else
       class="control"
+      :class="`size-${size}`"
       :type="type"
       :value="String(modelValue)"
       :placeholder="placeholder"
@@ -127,6 +135,10 @@ function edited(event: Event) {
 
   &:not(textarea) {
     block-size: var(--size-control-height);
+  }
+
+  &.size-compact {
+    block-size: var(--size-control-height-compact);
   }
 }
 

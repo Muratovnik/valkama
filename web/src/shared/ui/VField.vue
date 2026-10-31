@@ -20,8 +20,18 @@
 import { computed, useId } from 'vue'
 
 const props = withDefaults(
-  defineProps<{ label: string; as?: 'label' | 'div'; error?: string; hint?: string }>(),
-  { hint: '', as: 'label', error: '' },
+  defineProps<{
+    label: string
+    as?: 'label' | 'div'
+    error?: string
+    /**
+     * Keep the label for assistive technology only, for a field in a toolbar
+     * whose placeholder and neighbours already say what it is for.
+     */
+    hideLabel?: boolean
+    hint?: string
+  }>(),
+  { hint: '', as: 'label', error: '', hideLabel: false },
 )
 const errorId = useId()
 /** The message's id while there is a message, for the control to name. */
@@ -33,7 +43,11 @@ const describedBy = computed(() => (props.error ? errorId : undefined))
     :is="as"
     class="field"
   >
-    <span class="field-label">{{ label }}</span>
+    <span
+      class="field-label"
+      :class="{ 'visually-hidden': hideLabel }"
+      >{{ label }}</span
+    >
     <slot :error-id="describedBy" />
     <small
       v-if="error"

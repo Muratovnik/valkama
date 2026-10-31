@@ -30,8 +30,11 @@ const props = withDefaults(
     placeholder?: string
     searchable?: boolean
     searchLabel?: string
+    /** `compact` rides a toolbar of compact controls, as `SegmentedControl` does. */
+    size?: 'default' | 'compact'
   }>(),
   {
+    size: 'default',
     searchable: false,
     placeholder: '',
     searchLabel: 'Search',
@@ -89,7 +92,10 @@ function updateOpen(value: boolean) {
 </script>
 
 <template>
-  <div class="choice-select">
+  <div
+    class="choice-select"
+    :class="`size-${size}`"
+  >
     <SelectRoot
       :model-value="internalValue"
       :open="open"
@@ -232,6 +238,14 @@ function updateOpen(value: boolean) {
    same size; two numbers here would be the same drift the ramp exists to end. */
 .choice-trigger.has-icon {
   grid-template-columns: 24px minmax(0, 1fr) 18px;
+}
+
+/* The compact trigger stands as tall as a compact segmented track beside it,
+   and is no wider than its value needs, as a compact segment is. */
+.choice-select.size-compact .choice-trigger {
+  gap: var(--space-2);
+  min-height: var(--size-control-height-compact);
+  padding: 0 var(--space-2) 0 var(--space-3);
 }
 
 .choice-trigger:hover:not(:disabled),
