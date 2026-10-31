@@ -24,7 +24,7 @@ python valkama.py serve                 # http://127.0.0.1:8642/
 ```
 
 Python 3.11 or newer. If you touch the UI or the desktop shell you also need
-Node 20.19+ or 22.12+:
+Node 22.22.2+ or 24.15+:
 
 ```bash
 cd web     && npm ci
