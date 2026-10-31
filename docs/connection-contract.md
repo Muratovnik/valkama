@@ -662,8 +662,11 @@ Holding by session changes three comparisons:
   its own items by the holder its claim acknowledgement returned.
 
 The text is the `name (session id)` spelling the web already reads as a name
-and a session, and every surface prints a holder the same way: the name, then
-the first 8 characters of the session (`codex · 019a3c2e`). A store keeps one
+and a session; MCP and HTTP answers carry the full label, and every web surface
+prints a holder the same way: the name, then
+the first two groups of the session id (`codex · 019a3c2e-5b7d`), because
+UUIDv7 ids share their first group for sessions started within about a minute
+of each other. A store keeps one
 format: an earlier build reads the label as the name it always held, and no
 row changes meaning, so the store schema stays where it is. Claims taken before
 this change keep the text they were taken with until they are claimed again.
