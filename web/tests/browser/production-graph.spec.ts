@@ -4,7 +4,7 @@ import type { Page } from '@playwright/test'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
-import { graphRoute, routeState, serve, smallChain } from './chainFixtures.ts'
+import { graphRoute, longChainHere, routeState, serve, smallChain } from './chainFixtures.ts'
 import { blockedWorkItem, projectScope } from './planningFixtures.ts'
 import { planningReadFor } from './planningReadFixture.ts'
 
@@ -238,3 +238,69 @@ test('a chain whose read failed is read again on Retry', async ({ page }) => {
   await expect(page.locator('.graph-chip')).toHaveText('Chain MAIN-264 · 16')
   await expect(page.locator('.flow-node-card')).toHaveCount(10)
 })
+
+/** How many drawn cards a box on the field covers. */
+async function cardsUnder(page: Page, selector: string): Promise<number> {
+  return page.evaluate((target) => {
+    const box = document.querySelector(target)?.getBoundingClientRect()
+    return box
+      ? [...document.querySelectorAll('.flow-node-card')]
+          .map((card) => card.getBoundingClientRect())
+          .filter(
+            (card) =>
+              card.right > box.left &&
+              card.left < box.right &&
+              card.bottom > box.top &&
+              card.top < box.bottom,
+          ).length
+      : -1
+  }, selector)
+}
+
+for (const width of [1440, 1024]) {
+  test(`a long chain's bar stays one row and its key lies on the field at ${width}px`, async ({
+    page,
+  }) => {
+    test.setTimeout(120_000)
+    await page.setViewportSize({ width, height: 900 })
+    await installBackend(page)
+    const { chain, items, edges } = longChainHere()
+    await serve(page, chain, items, edges)
+    await page.goto(graphRoute({ chain: 'MAIN-264', chain_scope: 'chain' }))
+    await expect(page.locator('.graph-canvas')).toHaveClass(/settled/u)
+    const bar = page.locator('.graph-bar')
+    const chip = await page.locator('.graph-chip').boundingBox()
+    const frontier = await page.locator('.graph-frontier-count').boundingBox()
+    // One row: the chip and the frontier count stand side by side.
+    expect(
+      chip && frontier && Math.abs(chip.y + chip.height / 2 - (frontier.y + frontier.height / 2)),
+    ).toBeLessThan(4)
+    const before = {
+      bar: await bar.boundingBox(),
+      field: await page.locator('.graph-flow').boundingBox(),
+    }
+    await expect(page.locator('.graph-canvas .graph-legend')).toBeVisible()
+    await expect(page.locator('.graph-bar .graph-legend')).toHaveCount(0)
+    const key = await page.locator('.graph-legend').boundingBox()
+
+    const closed = page.getByRole('switch', { name: 'Draw the closed members of the chain' })
+    await closed.click()
+    await expect(page.locator('.flow-node-card')).toHaveCount(610, { timeout: 60_000 })
+    await expect(page.locator('.graph-canvas')).toHaveClass(/settled/u, { timeout: 60_000 })
+    // Throwing the switch moves nothing: not the bar, not the field, not the key.
+    expect(await bar.boundingBox()).toEqual(before.bar)
+    expect(await page.locator('.graph-flow').boundingBox()).toEqual(before.field)
+    expect(await page.locator('.graph-legend').boundingBox()).toEqual(key)
+    await expect(page.locator('.graph-legend-state:not(.held)').first()).toHaveText('Done')
+
+    // The whole of it, zoomed out past reading: an overview by state, framed
+    // clear of the key and the controls.
+    await page.getByRole('button', { name: 'Fit whole graph', exact: true }).click()
+    await expect(page.locator('.flow-node-card.overview')).toHaveCount(610)
+    await expect(page.locator('.flow-node-overview').first()).toBeVisible()
+    expect(await cardsUnder(page, '.vue-flow__controls')).toBe(0)
+    expect(await cardsUnder(page, '.graph-legend')).toBe(0)
+    await page.getByRole('button', { name: 'Zoom in', exact: true }).click()
+    await expect(page.locator('.flow-node-card.overview')).toHaveCount(610)
+  })
+}

@@ -72,7 +72,8 @@ export const LINE_BUDGET = new Map([
   // Graph cards need a neutral boundary where dependency wires meet their edges.
   ['widgets/work-item-graph/components/GraphNodeCard.vue', 1],
   ['widgets/work-item-graph/components/GraphControls.vue', 2],
-  ['widgets/work-item-graph/components/GraphBar.vue', 1],
+  // The graph's key draws its two line glyphs; the border is the drawing itself.
+  ['widgets/work-item-graph/components/GraphLegend.vue', 1],
 ])
 
 /**

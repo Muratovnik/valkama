@@ -17,6 +17,7 @@ import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
 const dimensions = ref({ width: 1200, height: 680 })
+const viewport = ref({ x: 0, y: 0, zoom: 1 })
 
 vi.mock('@vue-flow/core', async (original) => ({
   ...(await original<typeof import('@vue-flow/core')>()),
@@ -24,6 +25,7 @@ vi.mock('@vue-flow/core', async (original) => ({
     fitView: vi.fn().mockResolvedValue(true),
     setViewport: vi.fn().mockResolvedValue(true),
     dimensions,
+    viewport,
   }),
 }))
 
@@ -246,15 +248,40 @@ describe('the graph scoped to one chain', () => {
     expect(graph.emitted('exit-chain')).toHaveLength(1)
   })
 
-  it('names in its legend the groups it draws, and no group it leaves out', async () => {
+  it('names in its legend the groups it draws, and keeps the place of the one the switch adds', async () => {
     const graph = openGraph({ scopeKind: 'chain', epicId: id(1), chain, edges: chainEdges })
     await drawn(graph)
-    const legend = () => graph.get('.graph-legend').text()
-    expect(legend()).toContain('To do')
-    expect(legend()).not.toContain('Done')
-    expect(legend()).not.toContain('In progress')
+    const named = () => graph.findAll('.graph-legend-state:not(.held)').map((entry) => entry.text())
+    const places = () => graph.findAll('.graph-legend-state').map((entry) => entry.text())
+    expect(named()).toEqual(['To do'])
+    // «Done» is not drawn, so it is not named; its place is kept, unseen, so
+    // throwing the switch moves no word of the key.
+    expect(places()).toEqual(['Done', 'To do'])
+    expect(graph.get('.graph-legend-state.held').text()).toBe('Done')
     await graph.get('[role="switch"]').trigger('click')
     await drawn(graph)
-    expect(legend()).toContain('Done')
+    expect(named()).toEqual(['Done', 'To do'])
+    expect(places()).toEqual(['Done', 'To do'])
+    // The key lies on the field, not in the bar above it.
+    expect(graph.find('.graph-bar .graph-legend').exists()).toBe(false)
+    expect(graph.find('.graph-canvas .graph-legend').exists()).toBe(true)
+  })
+
+  it('draws each node as its colour and reference once the field is zoomed out past reading', async () => {
+    const graph = openGraph({ scopeKind: 'chain', epicId: id(1), chain, edges: chainEdges })
+    await drawn(graph)
+    expect(graph.find('.flow-node-overview').exists()).toBe(false)
+    viewport.value = { x: 0, y: 0, zoom: 0.3 }
+    await flushPromises()
+    const cards = graph.findAllComponents(GraphNodeCard)
+    expect(cards.every((card) => card.props('overview'))).toBe(true)
+    const card = cards.find((entry) => entry.props('node').reference === 'VAL-3')
+    expect(card?.get('.flow-node-overview').text()).toBe('VAL-3')
+    expect(card?.find('.flow-node-title').exists()).toBe(false)
+    // Its accessible name still says everything the card does.
+    expect(card?.get('button').attributes('aria-label')).toBe('VAL-3 item 3 · Todo')
+    viewport.value = { x: 0, y: 0, zoom: 1 }
+    await flushPromises()
+    expect(graph.find('.flow-node-overview').exists()).toBe(false)
   })
 })

@@ -1,10 +1,10 @@
 <script setup lang="ts">
 /** Shared planning data supplies the field; Vue Flow owns camera and interaction. */
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { Background } from '@vue-flow/background'
-import { MarkerType, PanOnScrollMode, Position, useVueFlow, VueFlow } from '@vue-flow/core'
+import { MarkerType, PanOnScrollMode, Position, VueFlow } from '@vue-flow/core'
 import type { Edge as FlowEdge, Node as FlowNode } from '@vue-flow/core'
 
 import '@vue-flow/core/dist/style.css'
@@ -15,10 +15,11 @@ import GraphControls from '@/widgets/work-item-graph/components/GraphControls.vu
 import GraphEdge from '@/widgets/work-item-graph/components/GraphEdge.vue'
 import GraphEmptyState from '@/widgets/work-item-graph/components/GraphEmptyState.vue'
 import GraphLayoutStatus from '@/widgets/work-item-graph/components/GraphLayoutStatus.vue'
+import GraphLegend from '@/widgets/work-item-graph/components/GraphLegend.vue'
 import GraphNodeCard from '@/widgets/work-item-graph/components/GraphNodeCard.vue'
+import { useGraphCamera } from '@/widgets/work-item-graph/composables/useGraphCamera.ts'
 import { useGraphNodeMarks } from '@/widgets/work-item-graph/composables/useGraphNodeMarks.ts'
 import { useGraphProjection } from '@/widgets/work-item-graph/composables/useGraphProjection.ts'
-import { graphCameraView } from '@/widgets/work-item-graph/utils/graphCamera.ts'
 import { NODE_HEIGHT, NODE_WIDTH } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import {
@@ -26,7 +27,6 @@ import {
   flowEdge,
   GRAPH_ZOOM_MAX,
   GRAPH_ZOOM_MIN,
-  graphFitViewOptions,
 } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import type { GraphScope } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 
@@ -89,9 +89,6 @@ const emptyKind = computed(() => {
   return emptyOpen.value ? 'open' : null
 })
 
-const flowReady = ref(false)
-const fitted = ref(false)
-
 const readyIdSet = computed(() => new Set(ready.value.map((node) => node.work_item_id)))
 
 /** A lit edge takes the accent; an unlit discovery stays quieter than a block. */
@@ -120,6 +117,20 @@ const {
   placed,
   scopeKind: () => props.scopeKind,
 })
+
+// Vue Flow owns the camera and all viewport math. The store is keyed so the
+// Controls child and this field share one camera instance.
+const { fitted, fitOptions, overview, onFlowInit, scheduleFitView } = useGraphCamera({
+  flowId: GRAPH_FLOW_ID,
+  placed,
+  readyIds: readyIdSet,
+  rootId: () => (inChain.value ? props.epicId : null),
+  selectedId: () => props.selectedId ?? null,
+  resets: [() => props.space, () => props.scopeKind, () => props.epicId, showDone, showUnlinked],
+})
+
+/** The chain has closed members, so the key keeps the place «Done» comes and goes from. */
+const keepDone = computed(() => inChain.value && hiddenDone.value > 0)
 
 const chainChip = computed(() =>
   props.chain ? { reference: props.chain.reference, total: props.chain.total } : null,
@@ -167,16 +178,6 @@ const flowEdges = computed<FlowEdge[]>(() => {
   })
 })
 
-// Vue Flow owns the camera and all viewport math. The store is keyed so the
-// Controls child and this component share one camera instance.
-const { dimensions, setViewport } = useVueFlow({ id: GRAPH_FLOW_ID })
-const fitOptions = graphFitViewOptions()
-let cameraRequest = 0
-
-onBeforeUnmount(() => {
-  cameraRequest += 1
-})
-
 function onFlowNodeMouseEnter(event: { node: { id: string } }) {
   applyFocus({ type: 'pointer-enter', id: event.node.id })
 }
@@ -202,52 +203,6 @@ function onNodeBlur(id: string) {
 function onFieldPointerLeave() {
   applyFocus({ type: 'field-leave' })
 }
-
-// Keep nodes hidden until the initial readable camera has settled.
-
-function scheduleFitView(focusOnly = false) {
-  if (!flowReady.value || (fitted.value && !focusOnly)) return
-  const request = ++cameraRequest
-  void nextTick(async () => {
-    if (!flowReady.value || request !== cameraRequest || !placed.value) return
-    const camera = graphCameraView(placed.value, dimensions.value, readyIdSet.value, {
-      selectedId: props.selectedId,
-      rootId: inChain.value ? props.epicId : null,
-      focusOnly,
-    })
-    if (!camera) return
-    const positioned = await setViewport(camera, { duration: 0 })
-    if (request === cameraRequest && positioned) fitted.value = true
-  })
-}
-
-function onFlowInit() {
-  flowReady.value = true
-  scheduleFitView()
-}
-
-// Filter projections replace nodes while the initialized Vue Flow canvas stays mounted.
-watch(
-  () => placed.value,
-  (projection) => {
-    if (projection) return
-    cameraRequest += 1
-    fitted.value = false
-  },
-)
-
-watch(placed, () => scheduleFitView())
-watch([() => dimensions.value.width, () => dimensions.value.height], () => {
-  fitted.value = false
-  scheduleFitView()
-})
-watch(
-  [() => props.space, () => props.scopeKind, () => props.epicId, showDone, showUnlinked],
-  () => {
-    fitted.value = false
-    scheduleFitView()
-  },
-)
 </script>
 
 <template>
@@ -261,12 +216,10 @@ watch(
       v-model:show-done="showDone"
       v-model:show-unlinked="showUnlinked"
       :chain="chainChip"
-      :legend="chainLegend"
       :open-total="openTotal"
       :hidden-done="hiddenDone"
       :ready-count="ready.length"
       :unlinked="unlinked"
-      :has-edges="Boolean(placed?.edges.length)"
       @exit-chain="emit('exit-chain')"
     />
 
@@ -291,6 +244,16 @@ watch(
       :class="[{ settled: fitted }]"
       @mouseleave="onFieldPointerLeave"
     >
+      <div
+        ref="legendPlace"
+        class="graph-legend-place"
+      >
+        <GraphLegend
+          :groups="chainLegend"
+          :has-edges="Boolean(placed?.edges.length)"
+          :keep-done="keepDone"
+        />
+      </div>
       <VueFlow
         :id="GRAPH_FLOW_ID"
         class="graph-flow"
@@ -336,6 +299,7 @@ watch(
             :chain-group="nodeChainGroup(data)"
             :parent-reference="parentReference(data)"
             :root="isChainRoot(data)"
+            :overview="overview"
             @focus="onNodeFocus"
             @blur="onNodeBlur"
           />
@@ -347,6 +311,7 @@ watch(
           :size="1"
         />
         <GraphControls
+          ref="controls"
           :fit-options="fitOptions"
           @focus-work="scheduleFitView(true)"
         />
@@ -382,6 +347,17 @@ watch(
   &.settled :deep(.vue-flow__transformationpane) {
     opacity: 1;
   }
+}
+
+.graph-legend-place {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  left: var(--space-3);
+  z-index: 5;
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: none;
 }
 
 .graph-flow {

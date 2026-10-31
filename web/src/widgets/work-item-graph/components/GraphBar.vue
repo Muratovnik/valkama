@@ -8,24 +8,21 @@
  * start now.
  *
  * Scoped to a chain, the filter gives way to a chip naming the chain — the way
- * back to the whole space — and to a legend for the marker each node carries.
- * The chip counts the whole chain; the field draws its open part, and a switch
- * beside the chip says how many closed members that leaves out and draws them.
+ * back to the whole space. The chip counts the whole chain; the field draws its
+ * open part, and a switch beside the chip says how many closed members that
+ * leaves out and draws them. The key to the markers lies on the field itself
+ * (`GraphLegend`), so this bar stays one row and never changes height with it.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 import ScopeChip from '@/shared/ui/ScopeChip.vue'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
-import SemanticState from '@/shared/ui/SemanticState.vue'
 import ToggleSwitch from '@/shared/ui/ToggleSwitch.vue'
 
 const props = defineProps<{
   chain: { reference: string; total: number } | null
-  hasEdges: boolean
   hiddenDone: number
-  legend: readonly ChainGroup[]
   openTotal: number
   readyCount: number
   showDone: boolean
@@ -90,25 +87,6 @@ function updateFilter(value: 'all' | 'open') {
         @update:model-value="(value) => emit('update:showUnlinked', value)"
       />
     </template>
-    <div
-      v-if="hasEdges || legend.length"
-      class="graph-legend"
-      aria-hidden="true"
-    >
-      <SemanticState
-        v-for="group in legend"
-        :key="group"
-        dimension="work-item-chain-group"
-        :state="group"
-        :label="t(`workItem.chain.group.${group}`)"
-      />
-      <template v-if="hasEdges">
-        <span class="graph-legend-item"><i class="stroke solid" />{{ t('graph.edgeBlocks') }}</span>
-        <span class="graph-legend-item"
-          ><i class="stroke dashed" />{{ t('graph.edgeDiscovered') }}</span
-        >
-      </template>
-    </div>
     <span class="graph-frontier-count">{{ t('graph.frontier', { count: readyCount }) }}</span>
   </div>
 </template>
@@ -123,29 +101,6 @@ function updateFilter(value: 'all' | 'open') {
   padding: var(--space-1) 0 var(--space-3);
 }
 
-.graph-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-4);
-  color: var(--color-text-muted);
-  font: var(--font-count);
-}
-
-.graph-legend-item {
-  display: inline-flex;
-  gap: var(--space-2);
-  align-items: center;
-}
-
-.stroke {
-  width: 18px;
-  border-top: 2px solid var(--color-graph-line);
-
-  &.dashed {
-    border-top-style: dashed;
-  }
-}
-
 .graph-frontier-count {
   margin-left: auto;
   color: var(--color-action-primary);
@@ -155,11 +110,6 @@ function updateFilter(value: 'all' | 'open') {
 @container workspace (width <= 586px) {
   .graph-bar {
     gap: var(--space-2);
-  }
-
-  .graph-legend {
-    flex-basis: 100%;
-    order: 3;
   }
 }
 </style>

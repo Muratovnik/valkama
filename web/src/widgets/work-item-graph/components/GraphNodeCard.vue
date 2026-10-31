@@ -15,6 +15,8 @@ import type { SemanticStatePair } from '@/shared/lib/uiSystem.ts'
 const {
   node,
   ready,
+  chainGroup,
+  overview = false,
   root = false,
 } = defineProps<{
   node: PlacedNode
@@ -22,6 +24,8 @@ const {
   recessed: boolean
   /** Where the node stands in the chain the field is scoped to, marked on its edge. */
   chainGroup?: ChainGroup
+  /** The field is zoomed out past reading: the card is its state's colour and its reference. */
+  overview?: boolean
   parentReference?: string
   /** The item the chain the field is scoped to grew from. */
   root?: boolean
@@ -90,46 +94,65 @@ const accessibleName = computed(() =>
       'is-terminal': node.state.is_terminal,
       recessed,
       root,
+      overview,
     }"
     :aria-label="accessibleName"
     @focus="emit('focus', node.work_item_id)"
     @blur="emit('blur', node.work_item_id)"
   >
     <span
-      v-if="chainGroup"
-      class="flow-node-chain"
-      aria-hidden="true"
-      :data-tone="statePresentation('work-item-chain-group', chainGroup).tone"
-    />
-    <span class="flow-node-line">
-      <span class="flow-node-meta">
-        <span class="flow-node-id">{{ node.reference }}</span>
+      v-if="overview"
+      class="flow-node-overview"
+    >
+      <i
+        v-if="chainGroup"
+        class="flow-node-dot"
+        :data-tone="statePresentation('work-item-chain-group', chainGroup).tone"
+      />
+      <i
+        v-else
+        class="flow-node-dot"
+        :data-tone="statePresentation('work-item-node-marker', markerState).tone"
+      />
+      <span class="flow-node-overview-reference">{{ node.reference }}</span>
+    </span>
+    <template v-else>
+      <span
+        v-if="chainGroup"
+        class="flow-node-chain"
+        aria-hidden="true"
+        :data-tone="statePresentation('work-item-chain-group', chainGroup).tone"
+      />
+      <span class="flow-node-line">
+        <span class="flow-node-meta">
+          <span class="flow-node-id">{{ node.reference }}</span>
+          <span
+            v-if="root"
+            class="flow-node-root"
+            >{{ t('graph.rootMark') }}</span
+          >
+          <span class="flow-node-state">{{ stateLabel }}</span>
+        </span>
         <span
-          v-if="root"
-          class="flow-node-root"
-          >{{ t('graph.rootMark') }}</span
+          v-if="parentReference"
+          class="flow-node-epic"
+          :title="`${t('workItem.parent')} ${parentReference}`"
+          >{{ parentReference }}</span
         >
-        <span class="flow-node-state">{{ stateLabel }}</span>
       </span>
       <span
-        v-if="parentReference"
-        class="flow-node-epic"
-        :title="`${t('workItem.parent')} ${parentReference}`"
-        >{{ parentReference }}</span
+        class="flow-node-title"
+        :title="node.title"
+        >{{ node.title }}</span
       >
-    </span>
-    <span
-      class="flow-node-title"
-      :title="node.title"
-      >{{ node.title }}</span
-    >
-    <span
-      v-if="node.claim_ref"
-      class="flow-node-owner"
-    >
-      <span class="flow-node-owner-state">{{ ownerLabel }}</span>
-      <span class="flow-node-owner-name">{{ holderName(node.claim_ref) }}</span>
-    </span>
+      <span
+        v-if="node.claim_ref"
+        class="flow-node-owner"
+      >
+        <span class="flow-node-owner-state">{{ ownerLabel }}</span>
+        <span class="flow-node-owner-name">{{ holderName(node.claim_ref) }}</span>
+      </span>
+    </template>
   </button>
 </template>
 
@@ -315,6 +338,71 @@ const accessibleName = computed(() =>
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+
+/* The overview: a card too small to read becomes a block of its state's colour
+   — the key's dot, grown to the card — with its reference on it. This is a
+   chain view's colour by progress, as on the card's branch map, at a zoom where
+   nothing else on the card survives. Finished work keeps its colour, quieter,
+   as the ground the open work stands on; the root is framed in the text colour,
+   so it is found without its word. */
+.flow-node-card.overview {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-6);
+  border-color: transparent;
+
+  &.recessed {
+    opacity: 0.55;
+  }
+
+  &.root {
+    background: var(--color-text);
+  }
+}
+
+.flow-node-overview {
+  display: contents;
+}
+
+.flow-node-dot {
+  position: absolute;
+  inset: 0;
+  background: var(--color-text-tertiary);
+  border-radius: var(--radius-status);
+
+  .flow-node-card.root & {
+    inset: var(--space-2);
+  }
+
+  &[data-tone='success'] {
+    background: var(--color-success);
+  }
+
+  &[data-tone='warning'] {
+    background: var(--color-warning);
+  }
+
+  &[data-tone='info'] {
+    background: var(--color-info);
+  }
+
+  &[data-tone='danger'] {
+    background: var(--color-danger);
+  }
+}
+
+/* Drawn in the field's own space, which the camera scales down: the type ramp's
+   largest step, scaled with the drawing rather than set off the ramp. */
+.flow-node-overview-reference {
+  position: relative;
+  color: var(--color-text-on-action);
+  font: var(--font-drawer-title);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transform: scale(2.2);
+  transform-origin: left center;
 }
 
 @media (prefers-reduced-motion: reduce) {

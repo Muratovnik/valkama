@@ -159,7 +159,12 @@ describe('graph camera ownership', () => {
     expect(whole).toBeDefined()
     expect(focus).toBeDefined()
     await whole?.trigger('click')
-    expect(camera.fitView).toHaveBeenCalledWith({ padding: 0.18, duration: 0, maxZoom: 1 })
+    // Framed clear of the controls along the bottom; this field draws no key on top.
+    expect(camera.fitView).toHaveBeenCalledWith({
+      padding: { top: '16px', bottom: '68px', left: '32px', right: '32px' },
+      duration: 0,
+      maxZoom: 1,
+    })
     await focus?.trigger('click')
     await flushPromises()
     expect(camera.setViewport).toHaveBeenCalledTimes(2)

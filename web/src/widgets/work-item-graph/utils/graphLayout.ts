@@ -73,11 +73,36 @@ export interface GraphFlowEdge {
 export interface GraphFitViewOptions {
   duration: number
   maxZoom: number
-  padding: number
+  padding: { bottom: `${number}px`; left: `${number}px`; right: `${number}px`; top: `${number}px` }
 }
 
-export function graphFitViewOptions(): GraphFitViewOptions {
-  return { padding: 0.18, duration: 0, maxZoom: 1 }
+/**
+ * What the field's own chrome covers, in screen pixels: the key along the top,
+ * the camera controls along the bottom. A framed camera keeps every node clear
+ * of both, so a control never sits on the work it frames.
+ */
+export interface GraphInsets {
+  bottom: number
+  top: number
+}
+
+/** The camera controls' row, 34px buttons inside a hairline, and the gap to the field's edge. */
+export const GRAPH_CONTROLS_BAND = 36 + 16
+const FRAME_GAP = 16
+
+export function graphFitViewOptions(
+  insets: GraphInsets = { top: 0, bottom: GRAPH_CONTROLS_BAND },
+): GraphFitViewOptions {
+  return {
+    padding: {
+      top: `${insets.top + FRAME_GAP}px`,
+      bottom: `${insets.bottom + FRAME_GAP}px`,
+      left: `${FRAME_GAP * 2}px`,
+      right: `${FRAME_GAP * 2}px`,
+    },
+    duration: 0,
+    maxZoom: 1,
+  }
 }
 
 /**
