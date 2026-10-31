@@ -749,12 +749,13 @@ class FramingTests(McpSurfaceTestCase):
 
 
 class StaleBuildWarningTests(McpSurfaceTestCase):
-    """A process that outlived its checkout says so on every answer it gives.
+    """A process that outlived its checkout says so, a few times in all.
 
     The client spawned this process from a working tree and owns its lifetime,
     so it cannot replace itself when that tree moves. What it can do is refuse
     to let the drift pass unmentioned, on the answer it is handing back rather
-    than in a log nobody reads.
+    than in a log nobody reads -- but not on every answer, because the agent
+    keeps each copy in its context and pays for it on every later request.
     """
 
     def answer(
@@ -809,6 +810,28 @@ class StaleBuildWarningTests(McpSurfaceTestCase):
         self.assertTrue(result["isError"])
         self.assertIn("Restart", result["content"][-1]["text"])
         self.assertEqual("workflow_guard", result["structuredContent"]["error"]["code"])
+
+    def test_the_next_answer_of_the_same_process_does_not_repeat_it(self) -> None:
+        watch = mock.Mock()
+        watch.drifted.return_value = True
+        call = {
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "params": params(name="list_planning_spaces", arguments={}),
+        }
+        with mock.patch.object(mcp_surface.static_assets, "SourceWatch", return_value=watch):
+            first, second = self.converse({**call, "id": 1}, {**call, "id": 2})
+        self.assertEqual(2, len(first["result"]["content"]))
+        self.assertEqual(1, len(second["result"]["content"]))
+
+    def test_reminders_need_a_long_gap_and_stop_after_a_few(self) -> None:
+        now = [0.0]
+        notice = mcp_surface._StaleNotice(clock=lambda: now[0])
+        seen = []
+        for at in (0, 60, 1799, 1800, 1801, 3600, 7200, 86400):
+            now[0] = float(at)
+            seen.append(notice.due())
+        self.assertEqual([True, False, False, True, False, True, False, False], seen)
 
 
 class TrayAssetTests(unittest.TestCase):

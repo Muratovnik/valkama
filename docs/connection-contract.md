@@ -337,9 +337,11 @@ Two guards make the skew impossible to miss instead.
 
 ### A process that went stale while it ran
 
-`static_assets.SourceWatch` covers this case. Every tool result from such a
-process carries an extra content block saying so and naming the one fix:
-restart the client session.
+`static_assets.SourceWatch` covers this case. The first tool result after the
+drift carries an extra content block saying so and naming the one fix: restart
+the client session. The agent keeps that block in its context, so it is not
+repeated on every answer: a reminder follows only when at least 30 minutes have
+passed since the last one, and a process sends three in all.
 
 It is appended, never prepended — `content[0]` stays the payload.
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import sys
+import time
 from collections.abc import Callable
 from typing import NamedTuple
 
@@ -368,6 +369,34 @@ def _in_era(
     return envelope
 
 
+class _StaleNotice:
+    """Which answers of a drifted process carry the warning.
+
+    The agent keeps a warning in its context once it has read it, and every later
+    request pays for each copy again. So the first answer after the drift carries
+    it, and a reminder follows only after a long gap, in case the first one was
+    compacted away -- a few in all, never one per answer.
+    """
+
+    LIMIT = 3
+    INTERVAL_SECONDS = 30 * 60
+
+    def __init__(self, clock: Callable[[], float] | None = None) -> None:
+        self._clock = clock or time.monotonic
+        self._sent = 0
+        self._last: float | None = None
+
+    def due(self) -> bool:
+        if self._sent >= self.LIMIT:
+            return False
+        now = self._clock()
+        if self._last is not None and now - self._last < self.INTERVAL_SECONDS:
+            return False
+        self._sent += 1
+        self._last = now
+        return True
+
+
 def _append_stale_warning(result: dict[str, object]) -> dict[str, object]:
     """Add the warning as a further content block, never in place of the answer.
 
@@ -413,6 +442,7 @@ def _mcp_loop(
 ) -> None:
     # The client owns this process's lifetime, so it cannot replace itself when
     # the tree moves. It can refuse to let the drift go unmentioned.
+    stale_notice = _StaleNotice()
     # Which era this process ended up in, decided by the first client that says
     # so and then fixed: `None` until an `initialize` arrives, the agreed
     # handshake version afterwards. The specification scopes that choice to the
@@ -560,7 +590,7 @@ def _mcp_loop(
                     "content": [{"type": "text", "text": f"{type(error).__name__}: {error}"}],
                     "isError": True,
                 }
-            if source_watch.drifted():
+            if source_watch.drifted() and stale_notice.due():
                 result = _append_stale_warning(result)
             _write_message({"jsonrpc": "2.0", "id": msg_id, "result": _in_era(result, legacy_era)})
         elif method == "ping":

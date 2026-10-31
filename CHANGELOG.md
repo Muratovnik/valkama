@@ -250,6 +250,11 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- An MCP server whose launcher had moved on to another build appended the
+  stale-build warning to every tool result, so a long session carried dozens of
+  copies and paid for each on every later request. The first result after the
+  drift carries it; a reminder follows only after at least 30 minutes, three in
+  all per process.
 - The desktop app refused to start or reuse the server on Windows builds that
   report a listening socket's TCP state as `Closed` or as no state at all:
   `launcher listener status` looked only for `Listen` sockets, found none and
