@@ -23,7 +23,7 @@ const { t } = useI18n()
         :size="20"
       />
       <span class="action-label">{{ t('finder.trigger') }}</span>
-      <kbd class="action-shortcut">⌘ / Ctrl K</kbd>
+      <kbd class="action-shortcut">Ctrl K</kbd>
     </button>
     <button
       class="work-action"

@@ -74,6 +74,11 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- The rail prints the finder's shortcut as «Ctrl K». The «⌘» it also printed
+  is in neither interface font, and asking for it made every first screen
+  download the 193 kB fallback face.
+- The service sends the fallback font, the licence notice and the licence text
+  with their own content types instead of `application/octet-stream`.
 - The chain a graph is scoped to is now part of the address. The Planning
   module's route state admits two more keys, `chain` (the root's reference)
   and `chain_scope` (`chain` or `epic`), so a reload, a shared link, Back and

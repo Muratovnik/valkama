@@ -26,6 +26,14 @@ describe('rail work actions', () => {
     expect(questions.text().trim()).toMatch(/^Needs my answer\s*3$/)
   })
 
+  // The interface font has no ⌘, and drawing one made every first screen fetch
+  // the 193 kB fallback face, which has none either.
+  it('prints the finder shortcut in glyphs the interface font draws', () => {
+    const finder = mountActions(null).findAll('button')[0]
+    expect(finder.find('kbd').text()).toBe('Ctrl K')
+    expect(finder.attributes('aria-keyshortcuts')).toBe('Control+k Meta+k')
+  })
+
   it('names it by its label alone while nothing waits', () => {
     const questions = mountActions(0).findAll('button')[1]
     expect(questions.attributes('aria-label')).toBeUndefined()
