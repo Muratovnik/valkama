@@ -1,10 +1,12 @@
 /**
- * The terminal cells a move has landed in. A card dropped into Done is drawn in
- * Done rather than hidden behind a count that just changed, so the cell it went
- * to opens. Keyed by lane and state: a landing opens that cell of that lane only.
+ * The lane cells a move has landed in past what they draw. A card dropped or
+ * moved to the fourth place of a cell that draws three is drawn there rather
+ * than hidden behind a count that just changed, so the cell it went to opens.
+ * Keyed by lane and state: a landing opens that cell of that lane only.
  */
 import { reactive } from 'vue'
 
+import { drawnInCell } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import type { BoardLane } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
 
@@ -17,10 +19,14 @@ export function useLandedCells(states: () => readonly WorkflowState[]) {
 
   return {
     isLanded: (lane: BoardLane, state: WorkflowState) => landed.has(key(lane, state)),
-    /** A move into a terminal state opens that cell of the lane the move was made in. */
-    land(lane: BoardLane, move: BoardMove) {
+    /**
+     * A move that lands past what its destination cell draws opens that cell of
+     * the lane the move was made in. `position` counts from one, as the stack reports it.
+     */
+    land(lane: BoardLane, move: BoardMove, landing: { position: number }) {
       const target = states().find((state) => state.key === move.state)
-      if (target?.is_terminal) landed.add(key(lane, target))
+      if (target !== undefined && landing.position > drawnInCell(target))
+        landed.add(key(lane, target))
     },
   }
 }

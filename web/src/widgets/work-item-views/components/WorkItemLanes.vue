@@ -269,7 +269,7 @@ function toggleLabel(lane: BoardLane): string {
               @dragging="drag"
               @edge="(reference, edge) => emit('edge', reference, edge)"
               @open="emit('open', $event)"
-              @place="(move, landing) => (land(lane, move), emit('place', move, landing))"
+              @place="(move, landing) => (land(lane, move, landing), emit('place', move, landing))"
             />
           </div>
         </template>

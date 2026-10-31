@@ -10,107 +10,11 @@
  * own output folder.
  */
 import { expect, test } from '@playwright/test'
-import type { Locator, Page, TestInfo } from '@playwright/test'
 
-import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
-import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
-
-import { chainResponse } from '../fixtures/chain.ts'
 import { installBackend } from './backend.ts'
-import { BACKLOG, boardSpace, chainOf, DEV, DONE, insertAt, LONG_EPIC } from './boardFixtures.ts'
+import { LONG_EPIC } from './boardFixtures.ts'
+import { cell, drag, lane, openBoard, routeState, serve, shot, tiles } from './boardPage.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { projectScope, spaceRef, workItem } from './planningFixtures.ts'
-import { planningReadFor } from './planningReadFixture.ts'
-
-interface Write {
-  body: Record<string, unknown>
-  path: string
-}
-
-/**
- * A server for one space that answers reads from its list and applies the
- * placements and transitions it is sent, refusing a move while `refuse` is set.
- */
-async function serve(page: Page, refuse: { message: string | null } = { message: null }) {
-  const space = boardSpace()
-  const writes: Write[] = []
-  await page.route('**/api/planning?*', async (route) => {
-    const response = planningReadFor(new URL(route.request().url()).searchParams)
-    if (response.status === 200 && 'work_items' in response.body)
-      response.body.work_items = [...response.body.work_items, ...(space as never[])]
-    await route.fulfill({
-      status: response.status,
-      contentType: 'application/json',
-      body: JSON.stringify(response.body),
-    })
-  })
-  const move = async (route: Parameters<Parameters<Page['route']>[1]>[0]) => {
-    const path = new URL(route.request().url()).pathname
-    const body = route.request().postDataJSON() as Record<string, unknown>
-    writes.push({ path, body })
-    if (refuse.message !== null)
-      return route.fulfill({
-        status: 409,
-        contentType: 'application/json',
-        body: JSON.stringify({ error: { code: 'conflict', message: refuse.message } }),
-      })
-    const at = space.findIndex((item) => item.reference === body.id)
-    const [item] = space.splice(at, 1)
-    const state = [BACKLOG, DEV, DONE].find((entry) => entry.key === body.state) ?? item.state
-    const moved = { ...item, state, revision: item.revision + 1 }
-    space.splice(insertAt(space, state, body.rank), 0, moved)
-    return route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        ...workItem,
-        work_item_id: moved.work_item_id,
-        reference: moved.reference,
-        number: moved.number,
-        title: moved.title,
-        state: moved.state,
-        parent_id: moved.parent_id,
-        revision: moved.revision,
-      }),
-    })
-  }
-  await page.route('**/api/planning/work-item/update', move)
-  await page.route('**/api/planning/work-item/transition', move)
-  await page.route('**/api/planning/work-item/chain?*', (route) =>
-    route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify(chainResponse(chainOf(space) as never)),
-    }),
-  )
-  return writes
-}
-
-function boardRoute(state: Record<string, string> = {}) {
-  return serializePlatformRoute({
-    module_id: 'planning',
-    scope: projectScope,
-    entity: planningSpaceEntity(spaceRef),
-    state: { view: 'kanban', ...state },
-  })
-}
-
-/** What the address's module state says, decoded. */
-function routeState(page: Page): Record<string, unknown> {
-  const encoded = new URL(page.url()).searchParams.get('state')
-  return encoded === null
-    ? {}
-    : (JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8')) as Record<string, unknown>)
-}
-
-function shot(info: TestInfo, name: string) {
-  return { path: info.outputPath(name), animations: 'disabled' as const }
-}
-
-const lane = (page: Page, title: string) => page.getByRole('region', { name: title, exact: true })
-const cell = (where: Locator, state: string) => where.locator(`ul[data-state="${state}"]`)
-const tiles = (where: Locator) =>
-  where
-    .locator('li[data-reference]')
-    .evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).dataset.reference))
 
 /** The sum of an rgb(a) colour's first three channels: a lighter fill has the larger sum. */
 function brightness(color: string): number {
@@ -118,12 +22,6 @@ function brightness(color: string): number {
     .slice(0, 3)
     .map(Number)
     .reduce((sum, value) => sum + value, 0)
-}
-
-async function openBoard(page: Page, state: Record<string, string> = { group: 'epic' }) {
-  await page.goto(boardRoute(state))
-  await expect(page.locator('.work-item-board')).toBeVisible()
-  await expect(page.locator('.work-item-board [data-reference]').first()).toBeVisible()
 }
 
 for (const [width, oneRow] of [
@@ -258,40 +156,6 @@ test('a lane shows its epic’s chain on the board, in every view, and the chip 
   await expect(page.locator('tbody tr')).toHaveCount(13)
 })
 
-interface Drag {
-  from: Locator
-  to: Locator
-  where: 'bottom' | 'top'
-  /** Where the screenshot of the held tile goes, when one is wanted. */
-  midway?: TestInfo
-}
-
-/** Drag `from` by the pointer to the top or bottom edge of `to`, a tile or a stack, as a hand does. */
-async function drag(page: Page, { from, midway, to, where }: Drag) {
-  const start = await from.boundingBox()
-  if (!start) throw new Error('a tile to drag is not on screen')
-  await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2)
-  await page.mouse.down()
-  // Once a drag is under way every cell of the lane stands as tall as the lane,
-  // so the target is measured then, as the hand sees it.
-  await page.mouse.move(start.x + start.width / 2 + 8, start.y + start.height / 2 + 8, {
-    steps: 4,
-  })
-  const end = await to.boundingBox()
-  if (!end) throw new Error('a place to drop on is not on screen')
-  const y = where === 'top' ? end.y + 6 : end.y + end.height - 6
-  await page.mouse.move(end.x + end.width / 2, y, { steps: 16 })
-  await page.mouse.move(end.x + end.width / 2, y + (where === 'top' ? 1 : -1), { steps: 2 })
-  if (midway) {
-    // The copy under the pointer is a list item outside its list: no marker.
-    const copy = page.locator('body > .sortable-fallback')
-    await expect(copy).toHaveCSS('list-style-type', 'none')
-    await expect(copy).toHaveCSS('opacity', '1')
-    await page.screenshot(shot(midway, 'w-board-drag-1440.png'))
-  }
-  await page.mouse.up()
-}
-
 test('a drag reorders a column and moves a tile across columns inside its lane', async ({
   page,
 }, info) => {
@@ -409,28 +273,6 @@ test('a lane is as tall as its tiles: an empty cell stays a low ground', async (
   const empty = await height('done')
   expect(empty, 'an empty cell is a drop-sized ground').toBeLessThanOrEqual(48)
   expect(full, 'the cell with a tile is a tile tall').toBeGreaterThan(empty * 2)
-})
-
-test('a closed Done cell is reached by Tab, and its button shows the cards it counts', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1440, height: 900 })
-  await installBackend(page)
-  await serve(page)
-  await openBoard(page)
-  const epic = lane(page, LONG_EPIC)
-  const more = epic.locator('.lane-cell[data-state="done"] .lane-more')
-  await expect(more).toHaveText('Show all · 1')
-  await expect(epic.locator('li[data-reference="MAIN-406"]')).toHaveCount(0)
-  // Tab from the lane's open tile reaches the button within a few stops.
-  await epic.locator('li[data-reference="MAIN-402"] > button').focus()
-  await expect(async () => {
-    await page.keyboard.press('Tab')
-    await expect(more).toBeFocused({ timeout: 200 })
-  }).toPass({ intervals: [0], timeout: 5000 })
-  await page.keyboard.press('Enter')
-  await expect(epic.locator('li[data-reference="MAIN-406"]')).toBeVisible()
-  await expect(more).toHaveCount(0)
 })
 
 test('arrows walk the tiles, and a tile moved from the keyboard is brought into view', async ({

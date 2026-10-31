@@ -20,6 +20,17 @@ export type BoardGrouping = 'epic' | 'none'
 /** The lane of the work filed under no epic. */
 export const NO_EPIC = 'none'
 
+/** Tiles a lane cell draws before it asks to show the rest. */
+const CELL_LIMIT = 3
+
+/**
+ * How many tiles a lane cell draws unasked. A terminal cell (Done, Cancelled)
+ * draws none: its work is finished, so it is counted and offered instead.
+ */
+export function drawnInCell(state: { is_terminal: boolean }): number {
+  return state.is_terminal ? 0 : CELL_LIMIT
+}
+
 export interface BoardLane {
   closed: number
   /** The epic heading the lane; null for the work under none. */

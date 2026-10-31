@@ -6,8 +6,8 @@
  * rest one click away. A lane of ninety backlog items used to be ninety tiles
  * tall, and every lane under it that far down the board. The first tiles are
  * the ones the order of work puts next, so they are the ones worth seeing. A
- * tile moved from the keyboard past what the cell draws opens the cell, so the
- * tile is drawn where it went and keeps its focus.
+ * tile that lands past what the cell draws, dropped or moved from the keyboard,
+ * opens the cell, so the tile is drawn where it went and keeps its focus.
  *
  * A terminal cell (Done, Cancelled) draws none of its tiles: that work is
  * finished, so the cell says how much there is and offers it. A lane of finished
@@ -18,6 +18,7 @@ import { useI18n } from 'vue-i18n'
 
 import WorkItemStack from '@/widgets/work-item-views/components/WorkItemStack.vue'
 import type { StackLanding } from '@/widgets/work-item-views/components/WorkItemStack.vue'
+import { drawnInCell } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
 
 import type { WorkflowState, WorkItemBrief } from '@/shared/api/planningModel.ts'
@@ -45,26 +46,18 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-/** Tiles a cell draws before it asks to show the rest. */
-const LIMIT = 3
+/** Tiles this cell draws unasked; a terminal cell draws none. */
+const drawn = computed(() => drawnInCell(props.state))
 
 /**
- * Tiles a cell draws unasked. A terminal cell draws none: its work is finished,
- * so it is counted and offered rather than standing its lane tall.
+ * The operator asked to see the whole cell, for as long as it is drawn. A move
+ * that lands past what the cell draws is shown whole by the lanes, which hold it.
  */
-const drawn = computed(() => (props.state.is_terminal ? 0 : LIMIT))
-
-/** The operator asked to see the whole cell, for as long as it is drawn. */
 const whole = ref(false)
 const showWhole = computed(() => whole.value || props.revealed)
 const limit = computed(() => (showWhole.value ? undefined : drawn.value))
 const hidden = computed(() => !showWhole.value && props.items.length > drawn.value)
 const showAllLabel = computed(() => t('workItem.lanes.showAll', { count: props.items.length }))
-
-function placed(move: BoardMove, landing: StackLanding) {
-  if (landing.keyboard && landing.position > drawn.value) whole.value = true
-  emit('place', move, landing)
-}
 </script>
 
 <template>
@@ -85,7 +78,7 @@ function placed(move: BoardMove, landing: StackLanding) {
       @dragging="emit('dragging', $event)"
       @edge="(reference, edge) => emit('edge', reference, edge)"
       @open="emit('open', $event)"
-      @place="placed"
+      @place="(move, landing) => emit('place', move, landing)"
     />
     <VButton
       v-if="hidden"
