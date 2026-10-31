@@ -439,8 +439,12 @@ class PlanningApiTests(unittest.TestCase):
                 },
             )
         self.assertEqual(
-            ("invalid_request", {"group": "links", "index": 1}),
-            (refused.exception.code, refused.exception.detail["step"]),
+            (404, "not_found", {"group": "links", "index": 1}),
+            (
+                refused.exception.status,
+                refused.exception.code,
+                refused.exception.detail["step"],
+            ),
         )
         # The HTTP surface commits what a handler leaves; the savepoint is what
         # keeps the item, its claim and its first link out of that commit.

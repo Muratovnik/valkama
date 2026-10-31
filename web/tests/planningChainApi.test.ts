@@ -44,10 +44,10 @@ describe('the chain read', () => {
   })
 
   it('carries the server code and status of a refusal', async () => {
-    answer({ error: { code: 'invalid_request', message: 'no work item VAL-9' } }, 400)
+    answer({ error: { code: 'not_found', message: 'no work item VAL-9' } }, 404)
     await expect(fetchWorkItemChain('VAL-9', 'chain')).rejects.toMatchObject({
-      code: 'invalid_request',
-      status: 400,
+      code: 'not_found',
+      status: 404,
       message: 'no work item VAL-9',
     })
   })

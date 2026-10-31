@@ -87,6 +87,15 @@ class PlanningError(ValueError):
     """A refusal a caller can act on, worded once."""
 
 
+class WorkItemNotFoundError(PlanningError):
+    """The caller named a work item, by reference or id, and no item answers to it.
+
+    Its own code rather than `invalid_request`: the request was well formed, the
+    item is simply not there, and a caller -- the web card, the graph's chain, an
+    agent -- says something different to a person about each.
+    """
+
+
 class WorkflowGuardError(PlanningError):
     """A transition the workflow does not permit, or permits only with force."""
 

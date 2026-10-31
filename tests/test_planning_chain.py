@@ -392,7 +392,8 @@ class ChainBoundaryTests(ChainFixture):
         )
         # A blank parameter is an absent one on every read here, so it is the default.
         self.assertEqual("chain", self.read(id=self.refs["R"], scope="")["scope"])
-        self.assertEqual((400, "invalid_request", "no work item QA-999"), self.refusal(id="QA-999"))
+        # A well-formed id that names nothing is not an invalid request: it has its own code.
+        self.assertEqual((404, "not_found", "no work item QA-999"), self.refusal(id="QA-999"))
         self.assertEqual((400, "invalid_request", "id is required"), self.refusal())
 
     def test_the_list_read_keeps_only_one_items_children(self) -> None:

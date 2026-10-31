@@ -116,7 +116,7 @@ match keeps its order, most recently changed first.
 `list_work_items` also takes `parent`, a work item by reference or id, and then
 lists only that item's children; the HTTP read `GET /api/planning/work-items`
 takes the same `parent` parameter. An unknown `parent` is refused with
-`invalid_request`.
+`not_found`.
 
 Each answer is one page. `truncated` is true when more items match than the page
 holds, and `next_offset` is then the offset of the next page; on the last page
@@ -134,6 +134,14 @@ API sends, both as the text content and as `structuredContent`:
 `{"error": {"code": "...", "message": "..."}}`. That holds for a refused
 argument (an unknown one, a missing one, a `limit` or `offset` that is not an
 integer: `invalid_request`) as much as for a guard refusal or a stale write.
+
+A work item named by reference or id that no item answers to is refused with
+`not_found`, and over HTTP with status 404, wherever it is named: the item a
+read or a write is about, a `parent`, the other end of a link, or a step of a
+batch, which keeps its `step`. A reference that does not read as one -- not
+`KEY-NUMBER` and no item's id -- is still `invalid_request`: the request is
+malformed, not about an item that is missing, and a caller tells a person
+something different about each.
 
 With `verbose: true` they answer with the full items, at the limits they had
 before (200 for a list, 50 for a search), and with the same `truncated` and
@@ -253,7 +261,7 @@ no `sessions`, as before. It takes the same cut as opt-in parameters:
 `comments` and `events` (non-negative integers, each keeping that many of the
 newest entries) and `sessions=true`. A count that is not a non-negative integer
 and a `sessions` other than `true` or `false` are refused with
-`invalid_request`.
+`invalid_request`; an unknown item is `not_found` (404).
 
 ### Reading a chain of work
 
@@ -303,8 +311,8 @@ states, then the place inside a state, as described in
 the chain, so two members' ranks are compared and never counted between: a gap
 means work outside the chain stands between them.
 
-A `scope` other than `chain` or `epic` is refused with `invalid_request`, and so
-is an unknown item, as on `GET /api/planning/work-item`.
+A `scope` other than `chain` or `epic` is refused with `invalid_request`; an
+unknown item is `not_found` (404), as on `GET /api/planning/work-item`.
 
 The MCP tool `get_work_item_chain` takes `id`, `scope`, `offset` and `limit`, and
 answers with the same fields except `members` and `edges`, with only the newest
@@ -408,7 +416,7 @@ to an unknown item, say — nothing is created, no number is spent, and the erro
 names the step the way a refused batch step does:
 
 ```json
-{"error": {"code": "invalid_request",
+{"error": {"code": "not_found",
  "message": "links[1]: no work item WIR-99",
  "step": {"group": "links", "index": 1}}}
 ```

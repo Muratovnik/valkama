@@ -68,9 +68,16 @@ describe('a chain the address names that cannot be read', () => {
   it.each([
     [
       'no item answers to the reference',
-      refusal('invalid_request', 400, 'no work item MAIN-9999'),
+      refusal('not_found', 404, 'no work item MAIN-9999'),
       'Не удалось открыть цепочку MAIN-9999: такой задачи нет. Показано всё пространство.',
       false,
+    ],
+    [
+      // The code decides, not the words: a refusal that reads like a missing item is not one.
+      'the request was refused for another reason',
+      refusal('invalid_request', 400, 'no work item MAIN-9999'),
+      'Не удалось открыть цепочку MAIN-9999: сервер ответил ошибкой. Показано всё пространство.',
+      true,
     ],
     [
       'the server failed',

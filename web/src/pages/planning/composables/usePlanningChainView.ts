@@ -46,10 +46,9 @@ interface ChainViewOptions {
 
 /** Why a first read failed, in the words the operator gets; never the server's own. */
 function failureCause(failure: ChainFailure['failure']): 'missing' | 'server' | 'unreachable' {
-  // The route only sends a well-formed reference and scope, so a refused
-  // request is the one thing left: no item answers to that reference.
-  if (failure.status === 404 || (failure.status === 400 && failure.code === 'invalid_request'))
-    return 'missing'
+  // The server names a reference no item answers to by its code; its message is
+  // for logs, and an operator is never told the server's own words.
+  if (failure.code === 'not_found') return 'missing'
   const silent = failure.code === 'request_failed' || failure.code === 'request_timeout'
   return silent && failure.status === null ? 'unreachable' : 'server'
 }

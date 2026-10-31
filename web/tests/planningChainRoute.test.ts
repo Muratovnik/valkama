@@ -195,8 +195,8 @@ test('a route opened cold reads the chain it names, and leaving drops it', async
 
 test('a first read that fails is held with its code, refuses nothing, and is read again on request', async () => {
   const refused = Object.assign(new Error('no work item VAL-9999'), {
-    code: 'invalid_request',
-    status: 400,
+    code: 'not_found',
+    status: 404,
   })
   fetchChain.mockRejectedValueOnce(refused).mockResolvedValueOnce(chainOf('VAL-9999'))
   const run = harness({ status: 'chain', reference: 'VAL-9999', scope: 'chain' })
@@ -206,7 +206,7 @@ test('a first read that fails is held with its code, refuses nothing, and is rea
   assert.deepEqual(run.refusals, [])
   assert.deepEqual(run.held.failure.value, {
     reference: 'VAL-9999',
-    failure: { code: 'invalid_request', status: 400, retryable: true },
+    failure: { code: 'not_found', status: 404, retryable: true },
   })
   assert.equal(run.held.scoped.value, null)
   assert.equal(run.held.pending.value, false)

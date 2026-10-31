@@ -34,7 +34,7 @@ def item_row(conn: sqlite3.Connection, reference: object) -> sqlite3.Row:
         (key, number),
     ).fetchone()
     if row is None:
-        raise model.PlanningError(f"no work item {text}")
+        raise model.WorkItemNotFoundError(f"no work item {text}")
     return row
 
 

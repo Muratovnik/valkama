@@ -177,10 +177,10 @@ test('a link naming a chain no item answers to says so in its own words and keep
   await page.route('**/api/planning/work-item/chain?*', (route) => {
     asked.push(new URL(route.request().url()).searchParams.get('id') ?? '')
     return route.fulfill({
-      status: 400,
+      status: 404,
       contentType: 'application/json',
       body: JSON.stringify({
-        error: { code: 'invalid_request', message: 'no work item MAIN-9999' },
+        error: { code: 'not_found', message: 'no work item MAIN-9999' },
       }),
     })
   })

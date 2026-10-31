@@ -115,6 +115,8 @@ def error_response(error: BaseException) -> tuple[int, dict]:
                 "actual": error.actual,
             }
         }
+    if isinstance(error, model.WorkItemNotFoundError):
+        return 404, {"error": {"code": "not_found", "message": str(error)}}
     if isinstance(error, model.WorkflowGuardError):
         return 409, {"error": {"code": "workflow_guard", "message": str(error)}}
     if isinstance(error, migration.MigrationRefused):

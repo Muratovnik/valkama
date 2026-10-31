@@ -1826,7 +1826,7 @@ class CreateWorkItemWithLinksTests(WireCallTestCase):
             ]
         )
         error = self.refusal("create_work_item", arguments, {"sessionId": self.SESSION})
-        self.assertEqual("invalid_request", error["code"])
+        self.assertEqual("not_found", error["code"])
         self.assertEqual({"group": "links", "index": 1}, error["step"])
         self.assertTrue(error["message"].startswith("links[1]: "), error["message"])
         self.assertIn(f"{SPACE_KEY}-99", error["message"])
@@ -2248,11 +2248,19 @@ class ChainToolTests(WireCallTestCase):
             ({"id": self.root, "offset": -1}, "offset must be a non-negative integer"),
             ({"id": self.root, "limit": True}, "limit must be a non-negative integer"),
             ({"id": self.root, "scope": "related"}, "scope must be chain or epic"),
-            ({"id": f"{SPACE_KEY}-999"}, f"no work item {SPACE_KEY}-999"),
+            (
+                {"id": "not a reference"},
+                "a work item reference reads as KEY-NUMBER, such as VAL-142",
+            ),
         ):
             with self.subTest(arguments=arguments):
                 error = self.refusal("get_work_item_chain", arguments)
                 self.assertEqual(("invalid_request", wanted), (error["code"], error["message"]))
+        # An item that is not there is not a malformed argument: it says so by its code.
+        error = self.refusal("get_work_item_chain", {"id": f"{SPACE_KEY}-999"})
+        self.assertEqual(
+            ("not_found", f"no work item {SPACE_KEY}-999"), (error["code"], error["message"])
+        )
 
     def test_list_work_items_keeps_only_the_named_parents_children(self) -> None:
         listed = self.answer("list_work_items", {"parent": self.root, "limit": 100})["work_items"]
@@ -2260,7 +2268,7 @@ class ChainToolTests(WireCallTestCase):
         self.assertEqual({self.root}, {row["parent"] for row in listed})
         self.assertEqual([], self.answer("list_work_items", {"parent": self.found})["work_items"])
         error = self.refusal("list_work_items", {"parent": f"{SPACE_KEY}-999"})
-        self.assertEqual("invalid_request", error["code"])
+        self.assertEqual("not_found", error["code"])
         # Without it the list is unchanged: every item in the space.
         self.assertEqual(
             39,
