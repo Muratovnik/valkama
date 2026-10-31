@@ -8,6 +8,25 @@ The MCP server reports itself as `<release>+<build>`, where the build is a diges
 over the modules the running process started with. Two servers from different
 checkouts are therefore distinguishable even at the same version.
 
+## [Unreleased]
+
+### Added
+
+- A chain of work: what one item's work grew into, and whether it converges.
+  For a root item, scope `epic` is its children; scope `chain`, the default,
+  adds every item discovered from the root or a member and every child of a
+  member, until nothing new is found. `relates-to`, `duplicates` and `blocks`
+  never widen it, and the walk never goes upstream. The answer counts the
+  members (total, closed, open, ready, per category), groups them by parent,
+  gives a per-day series of created and closed members with running totals,
+  and says whether the last seven UTC days were growing, converging or steady.
+  `GET /api/planning/work-item/chain` carries every member and the `blocks` and
+  `discovered-from` links among them. The MCP tool `get_work_item_chain` carries
+  the same figures, the newest 30 days of the series, and the open members as
+  compact rows, active first, paged with `truncated` and `next_offset`.
+- `list_work_items` and `GET /api/planning/work-items` take `parent`, and then
+  list only that item's children.
+
 ## [2.0.0](https://github.com/Muratovnik/valkama/compare/v1.0.2...v2.0.0) - 2026-10-31
 
 ### Added

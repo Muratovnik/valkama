@@ -68,7 +68,7 @@ Every tool carries a `title`, a description, a JSON Schema, and MCP behaviour
 
 | Set | `readOnlyHint` | `destructiveHint` | `idempotentHint` | Tools |
 | --- | --- | --- | --- | --- |
-| read-only | `true` | — | `true` | the reading tools: `list_planning_spaces`, `get_planning_space`, `get_work_item`, `list_work_items`, `search_work_items`, `list_platform_modules` |
+| read-only | `true` | — | `true` | the reading tools: `list_planning_spaces`, `get_planning_space`, `get_work_item`, `get_work_item_chain`, `list_work_items`, `search_work_items`, `list_platform_modules` |
 | writing | `false` | `false` | — | everything else |
 | destructive | `false` | `true` | — | `delete_work_item` |
 
@@ -109,6 +109,10 @@ answers with the full item.
 `reference`, `title`, `kind`, `state` (the key), `priority`, `parent` (a
 reference, or `null`), `claim_ref` and `claim_state`, plus `comment_hit` and
 `summary_hit` on a search that matched there. Without a `limit` they return at most 50 rows.
+`list_work_items` also takes `parent`, a work item by reference or id, and then
+lists only that item's children; the HTTP read `GET /api/planning/work-items`
+takes the same `parent` parameter. An unknown `parent` is refused with
+`invalid_request`.
 
 Each answer is one page. `truncated` is true when more items match than the page
 holds, and `next_offset` is then the offset of the next page; on the last page
@@ -164,6 +168,58 @@ no `sessions`, as before. It takes the same cut as opt-in parameters:
 newest entries) and `sessions=true`. A count that is not a non-negative integer
 and a `sessions` other than `true` or `false` are refused with
 `invalid_request`.
+
+### Reading a chain of work
+
+An epic's children are the work that was planned. Work found while doing them is
+linked `discovered-from` the item it was found from, and often lands under
+another epic or under none, so an epic can be closed with every child done while
+the work it started is still growing. A chain follows that growth.
+
+For a root item and a scope, the members are:
+
+- `epic`: the items whose parent is the root.
+- `chain`, the default: the root's children, then, repeated until nothing new is
+  found, every item linked `discovered-from` the root or a member, and every
+  child of a member.
+
+The walk goes downward only. It never adds a member's parent and never follows
+`discovered-from` from the item that was found to the item it was found from.
+`relates-to`, `duplicates` and `blocks` never add a member. The root is never a
+member, and members are always in the root's planning space.
+
+`GET /api/planning/work-item/chain?id=<reference or work_item_id>&scope=chain|epic`
+answers with `interface_version` and `chain`:
+
+| Field | What it holds |
+| --- | --- |
+| `root` | `work_item_id`, `reference`, `title`, `kind`, `container` and `has_children`, both true when any item names the root as its parent |
+| `scope` | `chain` or `epic` |
+| `total`, `closed`, `open`, `ready` | how many members there are, how many are in a terminal state, how many are not, and how many are ready |
+| `by_category` | members per workflow category, for the categories that have any |
+| `origins` | members grouped by their parent: `parent_reference` and `parent_title` (`null` for members without a parent), `count` and `open`. The root's own children come first, then the larger groups |
+| `series` | one entry per UTC day on which a member was created or closed, oldest first: `day` (`YYYY-MM-DD`), `created`, `closed`, and the running totals `total` and `closed_total` |
+| `recent` | the last 7 UTC days, today included: `days` (7), `created`, `closed`, and `trend`, which is `growing` when more were created than closed, `converging` when fewer, and `steady` otherwise |
+| `members` | every member, by number: `work_item_id`, `reference`, `title`, `state` (`key`, `name`, `category`, `is_terminal`), `claim_ref`, `claim_state`, `parent_reference`, `created_at`, `closed_at` and `ready` |
+| `edges` | the `blocks` and `discovered-from` links whose two ends are the root or members: `from`, `to` (work item ids) and `kind` |
+
+A member's `closed_at` is when it last changed state, if its state is terminal:
+the time of its latest transition, or of its last update when it never had one.
+It is `null` for an open member. `ready` is the rule every work item record
+uses: unheld, not a parent, in a state work can start from, and not blocked by
+anything unfinished.
+
+A `scope` other than `chain` or `epic` is refused with `invalid_request`, and so
+is an unknown item, as on `GET /api/planning/work-item`.
+
+The MCP tool `get_work_item_chain` takes `id`, `scope`, `offset` and `limit`, and
+answers with the same fields except `members` and `edges`, with only the newest
+30 entries of `series`. In their place it carries `open_members`, one compact
+row per open member: `reference`, `title`, `state` (the key), `claim_ref`,
+`ready` and `parent_reference`. They come in the order a reader acts on them:
+active members, then members in review, then ready ones, then the rest, each
+group by number. The rows are paged like a list: at most `limit` per answer, 50
+by default and at most 200, with `truncated` and `next_offset`.
 
 ### Several changes in one call
 
