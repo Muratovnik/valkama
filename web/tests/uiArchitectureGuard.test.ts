@@ -26,6 +26,11 @@ test('a layer may not import one above it', () => {
       "import x from '@/pages/skills/components/SkillsView.vue'",
       /widgets\/ must not import pages\/, which is above it/,
     ],
+    [
+      'shared/ui/lazyThing.ts',
+      "const view = lazyView(() => import('@/pages/settings/SettingsView.vue'))",
+      /shared\/ must not import pages\/, which is above it/,
+    ],
   ]
   for (const [file, source, expected] of cases) {
     const found = scanImportDirection([{ file, source }])

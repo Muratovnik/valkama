@@ -23,7 +23,9 @@ export function scanImportDirection(sources) {
     const [layer, slice] = file.split('/')
     const rank = LAYERS.indexOf(layer)
     if (rank === -1) continue
-    for (const match of source.matchAll(/from\s+['"]@\/([^'"]+)['"]/g)) {
+    // A dynamic `import()` is an import too. A lazy view changes when its code
+    // downloads, not which layer it belongs to, and this scan used to skip it.
+    for (const match of source.matchAll(/(?:from\s+|import\(\s*)['"]@\/([^'"]+)['"]/g)) {
       const [targetLayer, targetSlice] = match[1].split('/')
       const targetRank = LAYERS.indexOf(targetLayer)
       if (targetRank === -1) continue
