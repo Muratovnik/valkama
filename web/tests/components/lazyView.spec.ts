@@ -110,6 +110,19 @@ describe('a lazy view downloads on demand without blanking or flickering', () =>
     expect(wrapper.get('.downloaded').text()).toBe('Graph slot')
   })
 
+  // A failure was drawn with the information glyph every other status borrows; the
+  // card now carries the danger tone and the danger mark, and no glyph of its own.
+  it('draws a failed download as a failure, not as information', async () => {
+    const { calls, loader } = controlledLoader()
+    const wrapper = mountView(lazyView(loader).component)
+
+    calls[0]?.reject(new Error('Failed to fetch dynamically imported module'))
+    await flushPromises()
+    const alert = wrapper.get('[role="alert"]')
+    expect(alert.attributes('data-tone')).toBe('danger')
+    expect(alert.find('svg').exists()).toBe(false)
+  })
+
   it('shares one download between a prefetch and the mount that follows it', async () => {
     const { calls, loader } = controlledLoader()
     const view = lazyView(loader)
