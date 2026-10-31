@@ -178,6 +178,10 @@ test('grouped navigation keeps one optical icon box and corner badge without per
   // destination too and stands under the last of them rather than in the
   // footer beside the connection state.
   await expect(page.locator('.nav-group')).toHaveCount(2)
+  // The Work heading repeats the name of its one entry: it stays for readers and takes no line.
+  await expect(page.locator('.nav-group-heading-echo')).toHaveCount(1)
+  const echoedHeading = await page.locator('.nav-group-heading-echo').boundingBox()
+  expect(echoedHeading?.width ?? 0).toBeLessThanOrEqual(1)
   await expect(page.locator('.nav-utility .nav-item')).toHaveCount(0)
   // `.collapsed` was a class no template had rendered for some time, and the
   // rules that dressed it were dead in `shell.css` beside it. The rail narrows by
