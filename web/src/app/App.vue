@@ -316,6 +316,7 @@ usePlatformEntryRestore({
   </div>
   <GlobalWorkFinder
     :open="finderOpen"
+    :projects="contextReady?.projects ?? []"
     @close="finderOpen = false"
     @select="openTarget"
   />

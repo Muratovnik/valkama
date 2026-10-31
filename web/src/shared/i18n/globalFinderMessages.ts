@@ -21,6 +21,7 @@ export const globalFinderMessages = {
         space_missing: 'Planning space missing from its store',
         binding_conflict: 'Space bound to another project',
         search_failed: 'Search failed in the store',
+        requests_unavailable: 'Could not be read',
         other: 'Could not be read',
       },
       failures: {
@@ -60,6 +61,7 @@ export const globalFinderMessages = {
         space_missing: 'Пространства нет в его хранилище',
         binding_conflict: 'Пространство привязано к другому проекту',
         search_failed: 'Поиск в хранилище завершился ошибкой',
+        requests_unavailable: 'Не удалось прочитать',
         other: 'Не удалось прочитать',
       },
       failures: {

@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 
 import { searchGlobalPlanningWorkItems } from '@/shared/api/planningGlobalSearchApi.ts'
 import type { GlobalPlanningSearch } from '@/shared/api/planningGlobalSearchApi.ts'
+import { skippedSourceReason } from '@/shared/api/planningTarget.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { typedFailure } from '@/shared/api/typedFailure.ts'
 import CommandList from '@/shared/ui/CommandList.vue'
@@ -11,7 +12,14 @@ import DialogFrame from '@/shared/ui/DialogFrame.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import VButton from '@/shared/ui/VButton.vue'
 
-const props = defineProps<{ open: boolean }>()
+const props = withDefaults(
+  defineProps<{
+    open: boolean
+    /** The projects the app already lists, so a result can name its project by title. */
+    projects?: readonly { project_id: string; title: string }[]
+  }>(),
+  { projects: () => [] },
+)
 const emit = defineEmits<{ close: []; select: [target: PlanningTarget] }>()
 const { t } = useI18n()
 const query = ref('')
@@ -23,15 +31,6 @@ const failure = ref<string | null>(null)
 const pendingOpen = ref(false)
 const result = ref<GlobalPlanningSearch | null>(null)
 
-/** Why a source was not searched, by the code the server names it with. */
-const SOURCE_REASONS = new Set([
-  'store_not_attached',
-  'store_unreadable',
-  'attached_list_unreadable',
-  'space_missing',
-  'binding_conflict',
-  'search_failed',
-])
 /** A reason line names this many sources and counts the rest. */
 const SOURCES_SHOWN = 3
 /** The failures that stop every source at once, and the timeout. */
@@ -41,18 +40,22 @@ const FAILURES = new Set([
   'request_timeout',
 ])
 
+/** A project by its title, or by its id when the app's list does not hold it. */
+function projectName(projectId: string) {
+  return props.projects.find((project) => project.project_id === projectId)?.title ?? projectId
+}
+
 /**
  * The sources that were not searched, one line per reason. A raw reason never
- * reaches the screen: an unknown one reads as "could not be read".
+ * reaches the screen: the shared mapping reads an unknown one as "other".
  */
 const skipped = computed(() => {
   const groups = new Map<string, string[]>()
   for (const entry of result.value?.coverage ?? []) {
     if (entry.status !== 'unavailable') continue
-    const reason =
-      entry.reason !== null && SOURCE_REASONS.has(entry.reason) ? entry.reason : 'other'
+    const reason = skippedSourceReason(entry.reason)
     const sources = groups.get(reason) ?? []
-    sources.push(`${entry.project_id} · ${entry.space_ref.space_key}`)
+    sources.push(`${projectName(entry.project_id)} · ${entry.space_ref.space_key}`)
     groups.set(reason, sources)
   }
   return [...groups].map(([reason, sources]) => ({
@@ -91,7 +94,7 @@ const choices = computed(() =>
     title: entry.item.title,
     reference: entry.item.reference,
     detail: [
-      entry.target.project_id,
+      projectName(entry.target.project_id),
       entry.item.state.name,
       ...(entry.target.writable ? [] : [t('finder.readonly')]),
     ].join(' · '),

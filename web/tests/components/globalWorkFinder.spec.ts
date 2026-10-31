@@ -20,9 +20,9 @@ vi.mock('@/shared/api/planningGlobalSearchApi.ts', () => ({
 const wrappers: ReturnType<typeof mount>[] = []
 const i18n = () => createI18n({ legacy: false, locale: 'en', messages: globalFinderMessages })
 
-function finder() {
+function finder(projects: { project_id: string; title: string }[] = []) {
   const wrapper = mount(GlobalWorkFinder, {
-    props: { open: true },
+    props: { open: true, projects },
     attachTo: document.body,
     global: { plugins: [i18n()], stubs: { teleport: true } },
   })
@@ -290,6 +290,64 @@ describe('global task finder', () => {
     await vi.advanceTimersByTimeAsync(251)
     await flushPromises()
     expect(wrapper.findAll('[role="option"]')).toHaveLength(1)
+  })
+
+  // A result said the project's slug, which is what the server routes by and
+  // what nobody reads. The title the app already lists is what the rail shows.
+  it('names a result and a skipped source by the project title, and falls back to the id', async () => {
+    const response = finderResponse()
+    response.coverage.push(away('unlisted-project', 'GONE', 'store_unreadable'))
+    vi.mocked(searchGlobalPlanningWorkItems).mockResolvedValue(response)
+    const wrapper = finder([{ project_id: 'attached-project', title: 'Attached title' }])
+    await search(wrapper)
+    const option = wrapper.get('[role="option"]').text()
+    expect(option).toContain('Attached title · In progress')
+    expect(option).not.toContain('attached-project')
+    expect(wrapper.get('.finder-skipped-line').text()).toBe(
+      'Store could not be opened: unlisted-project · GONE',
+    )
+  })
+
+  // The shared reason mapping is the one the question list uses, so every code
+  // it can return needs a text here: a missing key would print the raw key.
+  it('gives every skipped-source code the finder text, never the raw key', async () => {
+    const codes = [
+      'store_not_attached',
+      'store_unreadable',
+      'attached_list_unreadable',
+      'space_missing',
+      'binding_conflict',
+      'search_failed',
+      'requests_unavailable',
+      'a raw server sentence',
+    ]
+    const response = finderResponse()
+    response.coverage = codes.map((code, index) => away(`p${index}`, `K${index}`, code))
+    vi.mocked(searchGlobalPlanningWorkItems).mockResolvedValue(response)
+    const wrapper = finder()
+    await search(wrapper)
+    const text = wrapper.get('.finder-feedback').text()
+    expect(text).not.toContain('finder.reasons')
+    expect(text).not.toContain('a raw server sentence')
+    // Seven codes name a reason of their own, and the raw sentence falls in `other`.
+    expect(wrapper.findAll('.finder-skipped-line')).toHaveLength(8)
+    expect(text).toContain(globalFinderMessages.en.finder.reasons.requests_unavailable)
+    expect(text).toContain(globalFinderMessages.en.finder.reasons.other)
+  })
+
+  // The query survives a close, and the reopened field used to keep the caret
+  // at its end: the next typing extended the old query instead of replacing it.
+  it('selects the kept query when it reopens, so the next typing replaces it', async () => {
+    vi.mocked(searchGlobalPlanningWorkItems).mockResolvedValue(finderResponse('MAIN-12'))
+    const wrapper = finder()
+    await search(wrapper, 'MAIN-12')
+    await wrapper.setProps({ open: false })
+    await wrapper.setProps({ open: true })
+    await vi.advanceTimersByTimeAsync(2)
+    const input = wrapper.get('[role="combobox"]').element as HTMLInputElement
+    expect(input.value).toBe('MAIN-12')
+    expect([input.selectionStart, input.selectionEnd]).toEqual([0, 'MAIN-12'.length])
+    expect(document.activeElement).toBe(input)
   })
 
   it('closes only the command layer on Escape and restores drawer focus', async () => {

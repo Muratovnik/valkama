@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, useId, useTemplateRef, watch } from 'vue'
+import { computed, onMounted, useId, useTemplateRef, watch } from 'vue'
 
 import { ListboxContent, ListboxFilter, ListboxItem, ListboxRoot } from 'reka-ui'
 
@@ -19,6 +19,15 @@ const emit = defineEmits<{
 const resultsId = useId()
 const busyMark = computed(() => props.loading || undefined)
 const root = useTemplateRef<{ highlightFirstItem: () => void }>('root')
+const field = useTemplateRef<{ $el: unknown }>('field')
+
+// A list mounts again each time it opens, and the query it kept stays in the
+// field. Selected, the next keystroke replaces it; left at the caret it was
+// extended, so "MAIN-12" plus "MAIN-7" became one string that matched nothing.
+onMounted(() => {
+  const input = field.value?.$el
+  if (input instanceof HTMLInputElement) input.select()
+})
 
 // Reka highlights the first row as the query is typed, but the rows arrive
 // after the keystroke, so it highlighted nothing and Enter opened nothing until
@@ -53,6 +62,7 @@ function submit(event: KeyboardEvent) {
     @keydown.enter="submit"
   >
     <ListboxFilter
+      ref="field"
       class="command-input"
       role="combobox"
       aria-autocomplete="list"

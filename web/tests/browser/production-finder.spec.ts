@@ -222,6 +222,59 @@ test('the task finder opens an exact hit on Enter and keeps every state legible'
   )
 })
 
+// The keyboard path a reader uses all day: search, close, open again, type. The
+// query kept from the first search must be replaced by the first keystroke.
+test('a reopened finder replaces the query it kept when the reader types', async ({ page }) => {
+  await installBackend(page)
+  await page.route('**/api/modules/planning/search?*', (route) =>
+    route.fulfill({
+      json: {
+        interface_version: 'valkama-planning-search',
+        query: workItemRef.reference,
+        limit: 50,
+        has_more: false,
+        items: [
+          finderRow(
+            {
+              project: projectId,
+              reference: workItemRef.reference,
+              title: LONG_TITLE,
+              writable: true,
+            },
+            1,
+          ),
+        ],
+        coverage: [
+          { project_id: projectId, space_ref: spaceRef, status: 'searched', reason: null },
+        ],
+      },
+    }),
+  )
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto(
+    serializePlatformRoute({
+      module_id: 'planning',
+      scope: projectScope,
+      entity: planningSpaceEntity(spaceRef),
+    }),
+  )
+  await expect(page.locator('.work-item-board')).toBeVisible()
+  await page.keyboard.press('Control+k')
+  const dialog = page.getByRole('dialog', { name: 'Find a task', exact: true })
+  const search = dialog.getByRole('combobox')
+  await expect(search).toBeFocused()
+  await page.keyboard.type(workItemRef.reference)
+  await expect(dialog.getByRole('option').first()).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(dialog).toBeHidden()
+
+  await page.keyboard.press('Control+k')
+  await expect(search).toBeFocused()
+  await expect(search).toHaveValue(workItemRef.reference)
+  await page.keyboard.type('MAIN-7')
+  await expect(search).toHaveValue('MAIN-7')
+})
+
 test.describe('in Russian', () => {
   test.use({ locale: 'ru-RU' })
 
