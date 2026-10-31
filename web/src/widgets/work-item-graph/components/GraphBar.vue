@@ -16,10 +16,10 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
+import ScopeChip from '@/shared/ui/ScopeChip.vue'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import ToggleSwitch from '@/shared/ui/ToggleSwitch.vue'
-import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
   chain: { reference: string; total: number } | null
@@ -55,19 +55,13 @@ function updateFilter(value: 'all' | 'open') {
 
 <template>
   <div class="graph-bar">
-    <button
+    <ScopeChip
       v-if="chain"
       class="graph-chip"
-      type="button"
-      :aria-label="t('graph.chainExit', { reference: chain.reference })"
-      @click="emit('exit-chain')"
-    >
-      {{ t('graph.chainChip', { reference: chain.reference, count: chain.total }) }}
-      <VIcon
-        name="close"
-        :size="14"
-      />
-    </button>
+      :label="t('graph.chainChip', { reference: chain.reference, count: chain.total })"
+      :exit-label="t('graph.chainExit', { reference: chain.reference })"
+      @exit="emit('exit-chain')"
+    />
     <ToggleSwitch
       v-if="chain && hiddenDone"
       class="graph-closed"
@@ -127,32 +121,6 @@ function updateFilter(value: 'all' | 'open') {
   gap: var(--space-2) var(--space-5);
   align-items: center;
   padding: var(--space-1) 0 var(--space-3);
-}
-
-/* The chain the field is scoped to, and the way back out of it. */
-.graph-chip {
-  display: inline-flex;
-  gap: var(--space-2);
-  align-items: center;
-  min-height: var(--size-control-height-compact);
-  padding: 0 var(--space-3);
-  border: 0;
-  color: var(--color-text-muted);
-  font: var(--font-chip);
-  font-variant-numeric: tabular-nums;
-  background: var(--color-surface-muted);
-  border-radius: var(--radius-control);
-  cursor: pointer;
-
-  &:hover {
-    color: var(--color-text);
-    background: var(--color-control-surface);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--color-focus-ring);
-    outline-offset: 2px;
-  }
 }
 
 .graph-legend {

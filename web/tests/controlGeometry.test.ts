@@ -31,7 +31,7 @@ const navList = source('../src/widgets/app-nav/components/NavModuleList.vue')
 const navConnection = source('../src/widgets/app-nav/components/NavConnectionButton.vue')
 const contextBar = source('../src/app/components/AppContextBar.vue')
 const lane = source('../src/widgets/work-item-views/components/WorkItemColumn.vue')
-const stack = source('../src/widgets/work-item-views/components/WorkItemColumn.vue')
+const stack = source('../src/widgets/work-item-views/components/WorkItemStack.vue')
 const card = source('../src/widgets/work-item-views/components/WorkItemTile.vue')
 
 test('a track owns the row and derives its segments, so it matches the button beside it', () => {
@@ -116,7 +116,7 @@ test('settings is a destination in the navigation, not a footer beside the conne
 })
 
 test('the space between two tiles belongs to the stack, so a column insets evenly', () => {
-  assert.match(compactCss(stack), /\.column-stack\{[^}]*gap:var\(--space-2\)/)
+  assert.match(compactCss(stack), /\.work-item-stack\{[^}]*gap:var\(--space-2\)/)
   assert.doesNotMatch(compactCss(card), /\.work-item-tile\{[^}]*margin-bottom/)
   // One rhythm down the tile, declared once, instead of three regions setting
   // their own margins in two different sizes.

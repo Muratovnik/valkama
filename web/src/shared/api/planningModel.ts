@@ -368,7 +368,6 @@ export function byState(
     }))
 }
 
-/** Which items nothing unfinished blocks, computed the same way the graph does. */
 /**
  * The items that can be started right now, as the server answered.
  *

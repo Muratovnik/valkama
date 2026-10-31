@@ -41,6 +41,9 @@ function member(state: StateName, parent: string | null, ready = false, claim = 
     created_at: '2026-10-20T10:00:00Z',
     closed_at: terminal ? '2026-10-29T10:00:00Z' : null,
     ready,
+    // The order of work follows the numbers here, so a group read by rank reads
+    // the way it did by reference.
+    rank: number,
   }
 }
 

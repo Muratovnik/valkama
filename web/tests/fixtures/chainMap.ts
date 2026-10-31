@@ -133,6 +133,24 @@ function seriesOf(members: MapMember[]) {
   })
 }
 
+/** The order of work by state category, as the server ranks a chain's members. */
+const WORK_ORDER = ['active', 'review', 'queued', 'backlog', 'blocked', 'completed', 'cancelled']
+const numberOf = (member: MapMember) => Number(member.reference.split('-').at(-1))
+
+/**
+ * Each member's place in the order of work: by category, then by number. These
+ * fixtures name one state per category, so that is the server's order too.
+ */
+function ranked(members: MapMember[]) {
+  const ordered = members.toSorted(
+    (left, right) =>
+      WORK_ORDER.indexOf(left.state.category) - WORK_ORDER.indexOf(right.state.category) ||
+      numberOf(left) - numberOf(right),
+  )
+  const rank = new Map(ordered.map((member, index) => [member.work_item_id, index + 1]))
+  return members.map((member) => ({ ...member, rank: rank.get(member.work_item_id) ?? 0 }))
+}
+
 /** A chain answer for these members and edges, its counts derived from them. */
 export function chainOf(root: MapRoot, members: MapMember[], extras: ChainExtras = {}) {
   const closed = members.filter((member) => member.state.is_terminal).length
@@ -156,7 +174,7 @@ export function chainOf(root: MapRoot, members: MapMember[], extras: ChainExtras
     origins: originsOf(root, members, extras.titles ?? {}),
     series: seriesOf(members),
     recent: { days: 7, created: 0, closed: 0, trend: 'steady' as const },
-    members,
+    members: ranked(members),
     edges: extras.edges ?? [],
   }
 }

@@ -9,7 +9,7 @@ type RouteState = Record<string, string | number | boolean>
 /** The route keys that name a chain: its root's reference, and how far it reaches. */
 const CHAIN_KEYS = new Set(['chain', 'chain_scope'])
 
-/** What the route asks the graph to be scoped to. */
+/** What the route asks every view of the space to be scoped to. */
 export type ChainTarget =
   | { status: 'none' }
   | { reference: string; scope: ChainScope; status: 'chain' }
@@ -25,21 +25,31 @@ export type ChainRefusal =
 /**
  * Read the chain out of the module's route state.
  *
- * A chain scopes the graph only, so another view names none whatever the keys
- * say. A missing `chain_scope` is the endpoint's own default. A value the
- * endpoint could never answer — not a reference, or a scope that is neither — is
- * reported as invalid rather than sent, so the operator hears which link was
- * wrong instead of watching a request fail.
+ * A chain scopes whichever view is open — the board, the list or the graph — so
+ * the view does not decide it. A missing `chain_scope` is the endpoint's own
+ * default. A value the endpoint could never answer — not a reference, or a scope
+ * that is neither — is reported as invalid rather than sent, so the operator
+ * hears which link was wrong instead of watching a request fail.
  */
 export function chainTarget(state: RouteState | undefined): ChainTarget {
-  if (state?.view !== 'graph') return { status: 'none' }
-  const reference = state.chain
-  const scope = state.chain_scope ?? 'chain'
-  if (reference === undefined && state.chain_scope === undefined) return { status: 'none' }
+  const reference = state?.chain
+  const scope = state?.chain_scope ?? 'chain'
+  if (reference === undefined && state?.chain_scope === undefined) return { status: 'none' }
   if (typeof reference !== 'string' || !WORK_ITEM_REFERENCE.test(reference))
     return { status: 'invalid', reference: String(reference ?? '') }
   if (scope !== 'chain' && scope !== 'epic') return { status: 'invalid', reference }
   return { status: 'chain', reference, scope }
+}
+
+/** The board's grouping as the route state carries it; anything else is none. */
+export function groupingOf(state: RouteState | undefined): 'epic' | 'none' {
+  return state?.group === 'epic' ? 'epic' : 'none'
+}
+
+/** The same state grouping the board so; the default leaves the key out. */
+export function withGrouping(state: RouteState | undefined, grouping: 'epic' | 'none'): RouteState {
+  const rest = Object.fromEntries(Object.entries(state ?? {}).filter(([key]) => key !== 'group'))
+  return grouping === 'epic' ? { ...rest, group: grouping } : rest
 }
 
 /** The same state naming this chain, or naming none when `chain` is null. */
@@ -67,7 +77,7 @@ interface ChainScopeOptions {
 }
 
 /**
- * The chain the workspace's graph is scoped to, if any.
+ * The chain the workspace's views are scoped to, if any.
  *
  * Which chain is the route's to say, in the `chain` and `chain_scope` keys the
  * module's manifest admits, so a reload, a bookmark or Back comes back to the

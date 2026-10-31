@@ -80,6 +80,19 @@
   opacity: 0.35;
 }
 
+/* The copy of a tile that follows the pointer. It is lifted off the board by a
+   shadow, and it is opaque: a tile read through the tiles it passes over is the
+   one thing on the screen the reader must not lose. The copy is a list item
+   moved out of its list, so it would grow the list's marker back. */
+.sortable-fallback {
+  box-shadow: var(--shadow-overlay);
+  /* stylelint-disable-next-line declaration-no-important -- the drop library
+     writes its own opacity inline on the copy */
+  opacity: 1 !important;
+  list-style: none;
+  cursor: grabbing;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

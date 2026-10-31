@@ -7,6 +7,11 @@
  * each fetched again and took the grouping apart; here the workflow, the items
  * and the links arrive once and each view projects what it needs. That is why a
  * state renamed in the workflow renames a column, a row and a node together.
+ *
+ * A chain the route names narrows every view, not only the graph: the board and
+ * the list draw its members and its root, with the same chip to leave it, and
+ * switching views keeps it. The graph draws the scope itself, so it still gets
+ * the whole space and the chain beside it.
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -15,12 +20,15 @@ import { graphView } from '@/pages/planning/utils/graphView.ts'
 
 import WorkItemBoard from '@/widgets/work-item-views/components/WorkItemBoard.vue'
 import WorkItemList from '@/widgets/work-item-views/components/WorkItemList.vue'
+import type { BoardGrouping } from '@/widgets/work-item-views/utils/boardLanes.ts'
+import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
 
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import { inWorkQueue } from '@/shared/api/planningModel.ts'
 import type { PlanningReadModel, WorkQueue } from '@/shared/api/planningModel.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import { LAZY_VIEW_LOADING_DELAY_MS } from '@/shared/ui/lazyView.ts'
+import ScopeChip from '@/shared/ui/ScopeChip.vue'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
@@ -32,10 +40,12 @@ const props = defineProps<{
   version: number
   view: PlanningViewMode
   writable: boolean
-  /** The chain the graph is scoped to, when the owner asked to see one. */
+  /** The chain the views are narrowed to, when the owner asked to see one. */
   chain?: WorkItemChain | null
   /** The route names a chain whose first read is still in flight. */
   chainPending?: boolean
+  /** How the board is grouped: not at all, or into one lane per epic. */
+  grouping?: BoardGrouping
   scopeKey?: string
   selectedId?: string | null
   warning?: string
@@ -44,8 +54,10 @@ const props = defineProps<{
 const emit = defineEmits<{
   'create': []
   'exit-chain': []
+  'group': [grouping: BoardGrouping]
   'open': [reference: string]
-  'transition': [reference: string, stateKey: string]
+  'place': [move: BoardMove]
+  'show-chain': [reference: string]
   'view': [mode: PlanningViewMode]
 }>()
 
@@ -106,8 +118,20 @@ const queues: WorkQueue[] = ['all', 'ready', 'assigned', 'blocked', 'review']
 const queueOptions = computed(() =>
   queues.map((value) => ({ value, label: t(`workItem.queue.${value}`) })),
 )
+/**
+ * The items a view of the board or the list works over: the chain's members and
+ * its root while the route names a chain, otherwise the whole space. The graph
+ * scopes itself and always takes the whole space. It follows the view on the
+ * stage, so a board kept on screen while the graph downloads stays narrowed.
+ */
+const scopeItems = computed(() => {
+  const chain = props.chain
+  if (!chain || stageView.value === 'graph') return props.model.work_items
+  const members = new Set([chain.root.work_item_id, ...chain.members.map((m) => m.work_item_id)])
+  return props.model.work_items.filter((item) => members.has(item.work_item_id))
+})
 const visibleItems = computed(() =>
-  props.model.work_items.filter(
+  scopeItems.value.filter(
     (item) =>
       inWorkQueue(item, queue.value) &&
       (!searchTerm.value ||
@@ -133,6 +157,24 @@ const graphEdges = computed(() => props.chain?.edges ?? props.model.links)
 
 const VIEW_MODES: readonly PlanningViewMode[] = ['kanban', 'list', 'graph']
 
+const GROUPINGS: readonly BoardGrouping[] = ['none', 'epic']
+const groupingSegments = computed(() =>
+  GROUPINGS.map((value) => ({ value, label: t(`workItem.lanes.grouping.${value}`) })),
+)
+const boardGrouping = computed(() => props.grouping ?? 'none')
+
+/** The chip naming the chain the board or the list is narrowed to; the graph draws its own. */
+const scopeChip = computed(() => {
+  const chain = props.chain
+  if (!chain || stageView.value === 'graph') return null
+  const reference = chain.root.reference
+  return {
+    label: t('graph.chainChip', { reference, count: chain.total }),
+    exit: t('graph.chainExit', { reference }),
+  }
+})
+const showScopeBar = computed(() => stageView.value === 'kanban' || scopeChip.value !== null)
+
 const viewSegments = computed(() =>
   VIEW_MODES.map((mode) => ({ value: mode, label: t(`workItem.view.${mode}`) })),
 )
@@ -146,7 +188,7 @@ const viewSegments = computed(() =>
 const countsBusy = computed(() => (props.stale ? true : undefined))
 
 const counts = computed(() => {
-  const items = props.model.work_items
+  const items = scopeItems.value
   return {
     total: items.length,
     open: items.filter((item) => !item.state.is_terminal).length,
@@ -226,13 +268,40 @@ const counts = computed(() => {
         class="workspace-counts"
         role="status"
         >{{
-          t('workItem.matchCount', { count: visibleItems.length, total: model.work_items.length })
+          t('workItem.matchCount', { count: visibleItems.length, total: scopeItems.length })
         }}</span
       >
     </div>
+    <div
+      v-if="showScopeBar"
+      class="workspace-scope"
+    >
+      <ScopeChip
+        v-if="scopeChip"
+        class="workspace-chip"
+        :label="scopeChip.label"
+        :exit-label="scopeChip.exit"
+        @exit="emit('exit-chain')"
+      />
+      <SegmentedControl
+        v-if="stageView === 'kanban'"
+        size="compact"
+        :label="t('workItem.lanes.groupingLabel')"
+        :model-value="boardGrouping"
+        :options="groupingSegments"
+        @update:model-value="(value) => emit('group', value)"
+      />
+    </div>
     <div class="workspace-stage">
+      <p
+        v-if="chainPending"
+        class="workspace-note"
+        role="status"
+      >
+        {{ t('workItem.chain.loading') }}
+      </p>
       <DataEmptyState
-        v-if="!visibleItems.length && filtered"
+        v-else-if="!visibleItems.length && filtered"
         :title="emptyTitle"
         :description="t('workItem.filterContext', { queue: t(`workItem.queue.${queue}`) })"
       >
@@ -241,30 +310,30 @@ const counts = computed(() => {
         >
       </DataEmptyState>
       <WorkItemBoard
-        v-if="stageView === 'kanban' && model.workflow"
+        v-if="!chainPending && stageView === 'kanban' && model.workflow"
         v-show="visibleItems.length || !filtered"
         :workflow="model.workflow"
         :items="visibleItems"
+        :scope-items="scopeItems"
+        :space-items="model.work_items"
+        :space-id="model.planning_space?.planning_space_id ?? ''"
         :links="model.links"
+        :filtered="filtered"
+        :grouping="boardGrouping"
+        :writable="writable"
+        @chain="(reference) => emit('show-chain', reference)"
         @open="(reference) => emit('open', reference)"
-        @transition="(reference, stateKey) => emit('transition', reference, stateKey)"
+        @place="(move) => emit('place', move)"
       />
       <WorkItemList
-        v-else-if="stageView === 'list'"
+        v-else-if="!chainPending && stageView === 'list'"
         v-show="visibleItems.length || !filtered"
         :items="visibleItems"
         :links="model.links"
         @open="(reference) => emit('open', reference)"
       />
-      <p
-        v-else-if="stageView === 'graph' && chainPending"
-        class="workspace-note"
-        role="status"
-      >
-        {{ t('workItem.chain.loading') }}
-      </p>
       <WorkItemGraph
-        v-else-if="stageView === 'graph'"
+        v-else-if="!chainPending && stageView === 'graph'"
         v-show="visibleItems.length || !filtered"
         :scope-kind="graphScopeKind"
         :space="model.planning_space?.planning_space_id ?? ''"
@@ -321,6 +390,20 @@ const counts = computed(() => {
   flex-wrap: wrap;
   gap: var(--space-3);
   align-items: end;
+}
+
+/* What the board or the list is narrowed to and how it is grouped: one row
+   above the field, where the graph keeps its own bar. */
+.workspace-scope {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  align-items: center;
+  min-width: 0;
+}
+
+.workspace-chip {
+  max-width: 100%;
 }
 
 .workspace-counts {

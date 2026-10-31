@@ -80,6 +80,8 @@ const memberSchema = strictObject({
   created_at: boundedText(ISO, 96),
   closed_at: boundedText(ISO, 96).nullable(),
   ready: z.boolean(),
+  /** The member's place in its space's order of work, 1 first: compare, never count. */
+  rank: positiveInt(),
 })
 
 const chainSchema = strictObject({

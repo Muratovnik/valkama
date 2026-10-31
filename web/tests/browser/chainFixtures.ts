@@ -77,7 +77,7 @@ export function smallChain() {
       { day: '2026-10-20', created: 10, closed: 7, total: 16, closed_total: 7 },
     ],
     recent: { days: 7, created: 10, closed: 7, trend: 'growing' as const },
-    members: items.map((item) => ({
+    members: items.map((item, index) => ({
       work_item_id: item.work_item_id,
       reference: item.reference,
       title: item.title,
@@ -93,6 +93,7 @@ export function smallChain() {
       created_at: '2026-10-01T10:00:00Z',
       closed_at: item.state.is_terminal ? '2026-10-20T10:00:00Z' : null,
       ready: item.ready,
+      rank: index + 1,
     })),
     edges,
   }
@@ -172,6 +173,7 @@ export function longChainHere() {
       created_at: '2026-10-01T10:00:00Z',
       closed_at: node.state.is_terminal ? '2026-10-20T10:00:00Z' : null,
       ready: items[index].ready,
+      rank: index + 1,
     })),
     edges,
   }

@@ -1,5 +1,5 @@
 /**
- * The chain the graph is scoped to lives in the route: which keys name it, what
+ * The chain every view is scoped to lives in the route: which keys name it, what
  * the module's manifest admits, and how the held answer follows the route.
  */
 import assert from 'node:assert/strict'
@@ -10,8 +10,10 @@ import { afterEach, beforeEach, test, vi } from 'vitest'
 
 import {
   chainTarget,
+  groupingOf,
   usePlanningChainScope,
   withChain,
+  withGrouping,
 } from '@/pages/planning/composables/usePlanningChainScope.ts'
 import type {
   ChainRefusal,
@@ -30,9 +32,9 @@ const fetchChain = vi.mocked(fetchWorkItemChain)
 
 const planning = OFFLINE_MODULE_FALLBACK.find((manifest) => manifest.module_id === 'planning')
 
-test('the planning manifest admits the chain keys and still refuses a key it never declared', () => {
+test('the planning manifest admits the chain and grouping keys and still refuses a key it never declared', () => {
   assert.ok(planning)
-  const state = { view: 'graph', chain: 'VAL-12', chain_scope: 'epic' }
+  const state = { view: 'kanban', chain: 'MAIN-12', chain_scope: 'epic', group: 'epic' }
   assert.deepEqual(validateManifestRouteState(planning, state), state)
   assert.throws(
     () => validateManifestRouteState(planning, { ...state, chain_closed: true }),
@@ -40,7 +42,7 @@ test('the planning manifest admits the chain keys and still refuses a key it nev
   )
 })
 
-test('a chain is read out of the graph view only, with the endpoint default for its scope', () => {
+test('a chain is read out of every view, with the endpoint default for its scope', () => {
   assert.deepEqual(chainTarget({ view: 'graph', chain: 'VAL-12', chain_scope: 'epic' }), {
     status: 'chain',
     reference: 'VAL-12',
@@ -51,7 +53,13 @@ test('a chain is read out of the graph view only, with the endpoint default for 
     reference: 'VAL-12',
     scope: 'chain',
   })
-  assert.deepEqual(chainTarget({ view: 'kanban', chain: 'VAL-12' }), { status: 'none' })
+  // The board and the list are narrowed by the same keys; it used to be the graph alone.
+  for (const view of ['kanban', 'list'])
+    assert.deepEqual(chainTarget({ view, chain: 'MAIN-12' }), {
+      status: 'chain',
+      reference: 'MAIN-12',
+      scope: 'chain',
+    })
   assert.deepEqual(chainTarget({ view: 'graph' }), { status: 'none' })
   assert.deepEqual(chainTarget(undefined), { status: 'none' })
 })
@@ -65,6 +73,15 @@ test('a value the endpoint could never answer is invalid rather than sent', () =
     { view: 'graph', chain_scope: 'epic' },
   ])
     assert.equal(chainTarget(state).status, 'invalid', JSON.stringify(state))
+})
+
+test('the grouping key names only an epic grouping, and leaves the address without it otherwise', () => {
+  assert.equal(groupingOf({ view: 'kanban', group: 'epic' }), 'epic')
+  for (const state of [{ view: 'kanban' }, { group: 'parent' }, { group: true }, undefined])
+    assert.equal(groupingOf(state), 'none', JSON.stringify(state))
+  const grouped = withGrouping({ view: 'kanban', chain: 'MAIN-12' }, 'epic')
+  assert.deepEqual(grouped, { view: 'kanban', chain: 'MAIN-12', group: 'epic' })
+  assert.deepEqual(withGrouping(grouped, 'none'), { view: 'kanban', chain: 'MAIN-12' })
 })
 
 test('withChain writes both keys and removes both, leaving every other key alone', () => {

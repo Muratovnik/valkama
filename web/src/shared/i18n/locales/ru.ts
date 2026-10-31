@@ -193,10 +193,8 @@ export const ru = {
     focusWork: 'К рабочей задаче',
     chainChip: 'Цепочка {reference} · {count}',
     chainExit: 'Выйти из цепочки {reference} и показать всё пространство',
-    chainInvalid:
-      'Ссылка не называет цепочку, которую можно прочитать; граф показывает всё пространство.',
-    chainUnavailable:
-      'Цепочку {reference} здесь не показать: {cause}. Граф показывает всё пространство.',
+    chainInvalid: 'Ссылка не называет цепочку, которую можно прочитать; показано всё пространство.',
+    chainUnavailable: 'Цепочку {reference} здесь не показать: {cause}. Показано всё пространство.',
     chainElsewhere: 'её корня нет среди задач этого пространства',
     unlinked: 'Без связей · {count}',
     unlinkedToggle: 'Показывать работу без связей',
@@ -832,6 +830,28 @@ export const ru = {
     liveUnavailable:
       'Обновления приостановлены. Обновите данные, чтобы увидеть актуальную работу и восстановить подключение.',
     columnEmpty: 'Пусто',
+    lanes: {
+      groupingLabel: 'Группировка доски',
+      grouping: {
+        none: 'Без группировки',
+        epic: 'По эпикам',
+      },
+      noEpic: 'Без эпика',
+      counts: 'открыто {open} · закрыто {closed}',
+      fold: 'Свернуть «{lane}»',
+      unfold: 'Развернуть «{lane}»',
+      open: 'Карточка',
+      openEpic: 'Открыть {reference}',
+      chain: 'Цепочка',
+      showChain: 'Показать цепочку {reference} на доске',
+      empty: 'В эпике пока нет задач.',
+    },
+    order: {
+      hint: 'Alt+↑ и Alt+↓ переставляют задачу внутри колонки.',
+      moved: '{reference}: {position} из {total} в «{state}»',
+      first: '{reference} уже первая',
+      last: '{reference} уже последняя',
+    },
     listEmpty: 'В этом пространстве ещё нет работы.',
     noSpace: 'У этого проекта пока нет пространства планирования.',
     cutoverPending:

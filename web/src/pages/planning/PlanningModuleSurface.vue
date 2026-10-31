@@ -16,16 +16,21 @@
  * identity and the route carries it.
  *
  * The local trail holds navigation depth; the route holds the item's identity.
+ * The route also holds how the space is looked at: the view, the chain every
+ * view is narrowed to, and whether the board is grouped by epic.
  */
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import {
   chainTarget,
+  groupingOf,
   usePlanningChainScope,
   withChain,
+  withGrouping,
 } from '@/pages/planning/composables/usePlanningChainScope.ts'
 import type { ChainRefusal } from '@/pages/planning/composables/usePlanningChainScope.ts'
+import { usePlanningMoves } from '@/pages/planning/composables/usePlanningMoves.ts'
 import { usePlanningPortfolio } from '@/pages/planning/composables/usePlanningPortfolio.ts'
 import { usePlanningSubscription } from '@/pages/planning/composables/usePlanningSubscription.ts'
 import PlanningPortfolio from '@/pages/planning/PlanningPortfolio.vue'
@@ -37,9 +42,9 @@ import WorkItemInspector from '@/widgets/work-item-inspector/components/WorkItem
 
 import WorkItemComposer from '@/features/work-item-compose/WorkItemComposer.vue'
 
-import { CutoverPendingError, fetchPlanning, transitionWorkItem } from '@/shared/api/planningApi.ts'
+import { CutoverPendingError, fetchPlanning } from '@/shared/api/planningApi.ts'
 import type { PlanningConnectionState } from '@/shared/api/planningApi.ts'
-import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
+import type { ChainScope, WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import type { PlanningReadModel } from '@/shared/api/planningModel.ts'
 import type { PlatformContextReady } from '@/shared/api/platformApiTypes.ts'
 import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
@@ -130,6 +135,7 @@ const view = computed<PlanningViewMode>(() => {
 })
 // An address that opens on the graph downloads it beside the space read, not after it.
 watch(view, (mode) => mode === 'graph' && graphView.prefetch(), { immediate: true })
+const grouping = computed(() => groupingOf(props.route.state))
 
 const {
   state: portfolio,
@@ -335,15 +341,17 @@ function goBack() {
   show(previous)
 }
 
-/** A chain scopes the graph only, so another view leaves it. */
+/** Another view of the same field: a chain the route names narrows that one too. */
 function setView(mode: PlanningViewMode) {
-  const state = mode === 'graph' ? props.route.state : withChain(props.route.state, null)
-  emit('state', { ...state, view: mode })
+  emit('state', { ...props.route.state, view: mode })
 }
 
-/** The chip's way back: the graph of the whole space. */
-function exitChain() {
-  emit('state', withChain(props.route.state, null))
+/**
+ * The view the operator is in, narrowed to a chain — an epic's lane asked for
+ * its own — or, given null, widened back to the whole space by the chip.
+ */
+function narrow(chain: { reference: string; scope: ChainScope } | null) {
+  emit('state', withChain(props.route.state, chain))
 }
 
 /** The card asked to see its chain: the graph, scoped to exactly that chain. */
@@ -356,22 +364,19 @@ function showChain(chain: WorkItemChain) {
 }
 
 /**
- * A drag across columns is a transition, and the workflow decides whether it is
- * allowed. A refused move is reported and the space re-read, so the tile snaps
+ * A move on the board: a transition when the tile changed state, a placement
+ * when it only changed place, and the workflow decides whether a transition is
+ * allowed. A refused move is reported and the space re-read, so the tile goes
  * back to where the store still says it is rather than lying about the drop.
+ * `shownModel` is the space with the moves still on their way drawn in, which is
+ * what the views read.
  */
-async function moveItem(reference: string, stateKey: string) {
-  if (!writable.value) {
-    emit('notice', t('platform.coreWrites.primaryOwnerRequired'))
-    return
-  }
-  try {
-    await transitionWorkItem({ id: reference, state: stateKey })
-  } catch (error) {
-    emit('notice', error instanceof Error ? error.message : String(error))
-  }
-  await loadPlanning()
-}
+const { model: shownModel, place: placeItem } = usePlanningMoves({
+  model,
+  notice: (message) => emit('notice', message),
+  reload: loadPlanning,
+  unwritable: () => (writable.value ? null : t('platform.coreWrites.primaryOwnerRequired')),
+})
 
 function itemCreated(reference: string) {
   composerOpen.value = false
@@ -424,9 +429,10 @@ defineExpose({ refresh })
     class="planning-workspace-shell"
   >
     <PlanningWorkspace
-      :model="model"
+      :model="shownModel ?? model"
       :chain="chainScope"
       :chain-pending="chainPending"
+      :grouping="grouping"
       :scope-key="planningKey"
       :selected-id="selectedId"
       :warning="liveWarning"
@@ -435,9 +441,11 @@ defineExpose({ refresh })
       :view="view"
       :writable="writable"
       @create="composerOpen = true"
-      @exit-chain="exitChain"
+      @exit-chain="narrow(null)"
+      @group="(next) => emit('state', withGrouping(route.state, next))"
       @open="(reference) => openItem(reference)"
-      @transition="moveItem"
+      @place="placeItem"
+      @show-chain="(reference) => narrow({ reference, scope: 'chain' })"
       @view="setView"
     />
 

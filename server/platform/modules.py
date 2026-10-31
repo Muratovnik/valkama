@@ -108,7 +108,7 @@ _MODULES = (
         "work",
         "platform.modules.planning",
         "layout-dashboard",
-        ["query", "view", "status", "chain", "chain_scope"],
+        ["query", "view", "status", "chain", "chain_scope", "group"],
         ["planning.spaces", "planning.work-items"],
         ["planning.project-spaces", "planning.work-items"],
         ["module.planning.create-work-item", "module.planning.open-work-item"],
@@ -159,7 +159,7 @@ _MODULES = (
 #: When the module list above last changed. A registration is never changed at
 #: runtime any more, so this is the one `updated_at` every registration reports;
 #: move it with a change to the list or to a manifest.
-DECLARED_AT = "2026-10-30T00:00:00Z"
+DECLARED_AT = "2026-10-31T00:00:00Z"
 
 
 def _registration(manifest: dict) -> dict:

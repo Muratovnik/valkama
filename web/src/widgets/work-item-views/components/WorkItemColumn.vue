@@ -5,12 +5,12 @@
  * The column exists because the workflow declares the state, not because the
  * product has six lanes. Its tone comes from the state's *category*, so a
  * renamed state keeps its reading and a second active state gets the same one.
+ * The tiles and the ways to reorder them are the stack's; the column is the
+ * ground they lie on, and what it is called.
  */
-import { ref } from 'vue'
-
-import { useSortable } from '@vueuse/integrations/useSortable'
-
-import WorkItemTile from '@/widgets/work-item-views/components/WorkItemTile.vue'
+import WorkItemStack from '@/widgets/work-item-views/components/WorkItemStack.vue'
+import type { StackLanding } from '@/widgets/work-item-views/components/WorkItemStack.vue'
+import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
 
 import type { WorkflowState, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
@@ -22,39 +22,16 @@ const props = defineProps<{
   items: WorkItemBrief[]
   readyIds: Set<string>
   state: WorkflowState
+  writable: boolean
+  hintId?: string
 }>()
 
 const emit = defineEmits<{
   dragging: [active: boolean]
-  moved: [reference: string, stateKey: string]
+  edge: [reference: string, edge: 'first' | 'last']
   open: [reference: string]
+  place: [move: BoardMove, landing: StackLanding]
 }>()
-
-// Readiness and blockedness are the space's answer, handed down as two sets; a
-// column asks about the item it is drawing rather than deciding either.
-const isReady = (item: WorkItemBrief) => props.readyIds.has(item.work_item_id)
-const isBlocked = (item: WorkItemBrief) => props.blockedIds.has(item.work_item_id)
-
-const list = ref<HTMLElement | null>(null)
-let draggedAt = 0
-
-useSortable(list, props.items, {
-  group: 'work-items',
-  animation: 150,
-  onStart: () => emit('dragging', true),
-  onEnd: (event: { item: HTMLElement; to: HTMLElement }) => {
-    emit('dragging', false)
-    draggedAt = Date.now()
-    const reference = event.item.dataset.reference
-    const target = event.to.dataset.state
-    if (reference && target) emit('moved', reference, target)
-  },
-})
-
-/** A click that lands within a quarter second of a drop was the drop. */
-function open(reference: string) {
-  if (Date.now() - draggedAt > 250) emit('open', reference)
-}
 </script>
 
 <template>
@@ -76,26 +53,23 @@ function open(reference: string) {
       <span class="column-count">{{ props.items.length }}</span>
     </header>
     <div class="column-scroll">
-      <ul
-        ref="list"
+      <WorkItemStack
         class="column-stack"
-        :data-state="props.state.key"
-      >
-        <li
-          v-for="item in props.items"
-          :key="item.work_item_id"
-          :data-reference="item.reference"
-        >
-          <WorkItemTile
-            :item="item"
-            :ready="isReady(item)"
-            :blocked="isBlocked(item)"
-            @open="open"
-          />
-        </li>
-      </ul>
+        group="work-items"
+        :state="props.state"
+        :items="props.items"
+        :ready-ids="props.readyIds"
+        :blocked-ids="props.blockedIds"
+        :hint-id="props.hintId"
+        :writable="props.writable"
+        @dragging="emit('dragging', $event)"
+        @edge="(reference, edge) => emit('edge', reference, edge)"
+        @open="emit('open', $event)"
+        @place="(move, landing) => emit('place', move, landing)"
+      />
       <DataEmptyState
         v-if="!props.items.length"
+        class="column-empty"
         :title="props.emptyLabel"
         compact
       />
@@ -144,21 +118,24 @@ function open(reference: string) {
 
 .column-scroll {
   position: relative;
+  display: flex;
   flex: 1 1 auto;
+  flex-direction: column;
   min-height: 72px;
   padding: var(--space-1) 0;
   overflow-y: auto;
   scrollbar-gutter: stable;
 }
 
-/* The space between two sheets belongs to the stack, so it is a gap and is
-   never spent after the last one. */
+/* The stack fills the column, so a tile dropped anywhere below the last one
+   lands last rather than nowhere; the empty note lies over that floor. */
 .column-stack {
-  display: grid;
-  gap: var(--space-2);
-  min-height: 18px;
-  padding: 0;
-  margin: 0;
-  list-style: none;
+  flex: 1 0 auto;
+}
+
+.column-empty {
+  position: absolute;
+  inset: var(--space-1) 0 auto;
+  pointer-events: none;
 }
 </style>

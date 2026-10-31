@@ -16,13 +16,17 @@ function referenceNumber(reference: string): number {
   return Number(reference.slice(reference.lastIndexOf('-') + 1))
 }
 
-/**
- * Open work oldest first, so the item that has waited longest leads its group;
- * finished work most recently closed first, because that is the part of the past
- * a reader asks about.
- */
 function byReference(left: ChainMember, right: ChainMember): number {
   return referenceNumber(left.reference) - referenceNumber(right.reference)
+}
+
+/**
+ * Open work in the order of work, so the item that will be taken next leads
+ * its group; finished work most recently closed first, because that is the part
+ * of the past a reader asks about.
+ */
+function byRank(left: ChainMember, right: ChainMember): number {
+  return left.rank - right.rank || byReference(left, right)
 }
 
 function byClosing(left: ChainMember, right: ChainMember): number {
@@ -30,7 +34,7 @@ function byClosing(left: ChainMember, right: ChainMember): number {
 }
 
 function memberOrder(group: ChainGroup) {
-  return group === 'done' ? byClosing : byReference
+  return group === 'done' ? byClosing : byRank
 }
 
 export function groupMembers(members: readonly ChainMember[]): ChainGroups {

@@ -332,8 +332,14 @@ test('the chain is held in the address: a reload keeps it, and leaving removes i
   await page.keyboard.press('Escape')
   await expect(page.locator('.drawer')).toHaveCount(0)
 
-  // Another view of the space is the whole space, and the address says so.
+  // Another view keeps the chain: the board draws only its members and root,
+  // and carries the same chip to leave it.
   await page.getByRole('button', { name: 'Kanban', exact: true }).click()
+  const kept = { view: 'kanban', chain: 'MAIN-264', chain_scope: 'chain' }
+  await expect.poll(() => routeState(page)).toEqual(kept)
+  await expect(page.locator('.workspace-chip')).toHaveText('Chain MAIN-264 · 16')
+  await expect(page.locator('.work-item-board [data-reference]')).toHaveCount(17)
+  await page.locator('.workspace-chip').click()
   await expect.poll(() => routeState(page)).toEqual({ view: 'kanban' })
   await page.getByRole('button', { name: 'Graph', exact: true }).click()
   await expect(page.locator('.graph')).toHaveAttribute('aria-busy', 'false')
@@ -400,7 +406,7 @@ test('a link naming a chain the space cannot show draws the whole space with a n
 
   await page.goto(graphRoute({ chain: 'MAIN-9999', chain_scope: 'chain' }))
   await expect(notice).toHaveText(
-    'Chain MAIN-9999 cannot be shown here: no work item MAIN-9999. The graph shows the whole space.',
+    'Chain MAIN-9999 cannot be shown here: no work item MAIN-9999. The whole space is shown.',
   )
   await expect(page.locator('.graph')).toHaveAttribute('aria-busy', 'false')
   await expect(page.locator('.flow-node-card').first()).toBeVisible()
@@ -410,7 +416,7 @@ test('a link naming a chain the space cannot show draws the whole space with a n
   // A value that is no reference at all is refused without asking the server.
   await page.goto(graphRoute({ chain: 'not a reference' }))
   await expect(notice).toHaveText(
-    'This link names no chain this space can read; the graph shows the whole space.',
+    'This link names no chain this space can read; the whole space is shown.',
   )
   await expect(page.locator('.flow-node-card').first()).toBeVisible()
   await expect(chip).toHaveCount(0)
