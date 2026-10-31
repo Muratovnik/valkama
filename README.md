@@ -500,10 +500,30 @@ executor, `done` needs every checklist item closed and a summary, `blocked`
 needs a linked blocker or a stated reason. A refusal names its guard, and
 `force=true` carries the move through as a recorded override.
 
-**Concurrent moves are resolved, not raced.** A drag sends the column the card
-was in when you grabbed it. If it has since moved, the server answers `409` with
-who moved it where, and the drop is refused rather than silently undoing an
-agent's work.
+**Concurrent moves are resolved, not raced.** A drag or a keyboard move sends
+the revision of the card as the board last read it. If an agent has moved or
+edited the card since, the server answers `409` with the revision it is at, the
+board says so, and the card stays where the next read of the space puts it
+rather than silently undoing the agent's work.
+
+**The board's order is the order work is taken in.** Dragging a card up or down
+its column, or pressing Alt+↑ or Alt+↓ on a focused card, places it among the
+cards of its state; the move is announced to a screen reader. Dropping it in
+another column moves it there at the place it was dropped. Agents see the same
+order: `claim_ready_work_item` takes the first ready item of it,
+`list_work_items` lists each state in it, and `update_work_item` and
+`transition_work_item` take a `rank` (`first`, `last`, `before:<item>` or
+`after:<item>`) to place an item themselves. Priority only breaks a tie. The
+order is the item's `position`, which every store already holds, so it needs
+no new schema; the exact rules are in
+[the connection contract](docs/connection-contract.md#the-order-of-work).
+
+**The board reads by epic.** Grouped by epic, each epic is a lane with its
+reference, title, open and closed counts and a fold; a lane with nothing open
+starts folded, and the board remembers the lanes you fold or unfold, per space,
+in the browser. Work under no epic comes last. A lane's Chain action narrows the
+board to that epic's chain, and the chain stays when you switch to List or
+Graph; its chip leaves it in every view.
 
 ### Migrating an older store
 
@@ -514,6 +534,12 @@ client after pinning the newer release with `launcher install`: each one
 starts its own server, and the first to open the store upgrades it. Schema 9
 dropped the extension registry's tables, the module rows and the integration
 switches; its snapshot is labelled `preschema9`.
+
+The order of work needs no migration. A placement is written to the item's
+`position`, a column every schema-9 store already has, so the schema stays 9, no
+snapshot is taken for it, and an earlier schema-9 build opens the same store and
+lists its states in the placed order. Such a build still puts a moved item last
+in its new state, and a later placement works from there.
 
 To go back to a build at schema 8, first stop every process that holds the
 store: the listener and every agent client, since each one runs its own server.

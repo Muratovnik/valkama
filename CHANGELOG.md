@@ -18,6 +18,24 @@ checkouts are therefore distinguishable even at the same version.
   and names the step, as `apply_work_item_changes` does, and the answer adds
   `applied`. Filing discovered work linked `discovered-from` and claimed takes
   one call instead of three.
+- The board can be grouped by epic. Each epic is a lane headed by its
+  reference, title, state, open and closed counts, a fold, and actions to open
+  its card or narrow the board to its chain; the epic itself is the lane, not a
+  tile in it. Work under no epic comes last. A lane with nothing open starts
+  folded, and the lanes a reader folds or unfolds are remembered per space in
+  the browser. The grouping is part of the address, as the route key `group`.
+- A manual order of work. Dragging a tile within its column, or pressing Alt+↑
+  or Alt+↓ on a focused tile, places it among the tiles of its state, and the
+  move is announced to a screen reader; a drop in another column lands where it
+  was dropped. `update_work_item`, `transition_work_item`, the `transition`
+  group of `apply_work_item_changes`, and `POST /api/planning/work-item/update`
+  and `/transition` take `rank`: `first`, `last`, `before:<item>` or
+  `after:<item>`. The order is the item's existing `position`, so the store
+  format and schema 9 are unchanged and an earlier build reads the same order.
+- Each member of a chain carries `rank`, its place in the order of work across
+  the space, in `GET /api/planning/work-item/chain` and in the open member rows
+  of `get_work_item_chain`. The card's chain section lists open members in
+  that order.
 - The chain root carries its own mark on the graph: a «root» tag on its node,
   and «chain root» in the node's accessible name. It stands one step above the
   closed work around it even when it is closed itself.
@@ -88,6 +106,15 @@ checkouts are therefore distinguishable even at the same version.
   Settings entry, or when the address names them. A slow download keeps the
   board on screen and then shows the loading panel; a failed one shows «Could
   not load this view» with Retry, where the graph used to leave an empty stage.
+- `claim_ready_work_item` takes the first ready item in the order of work: a
+  `queued` state before the backlog, then the place inside the state. Priority
+  only breaks a tie, so an urgent item nobody placed no longer jumps the queue.
+- `get_work_item_chain` lists the open members of each group in the order of
+  work instead of by number.
+- A chain is no longer the graph's alone: Kanban and List draw only the chain
+  and its root while one is named, with the same chip to leave it, and
+  switching views keeps it. A chain the space cannot show is reported as
+  showing the whole space, in every view.
 
 ### Fixed
 
@@ -99,8 +126,8 @@ checkouts are therefore distinguishable even at the same version.
 - The chain a graph is scoped to is now part of the address. The Planning
   module's route state admits two more keys, `chain` (the root's reference)
   and `chain_scope` (`chain` or `epic`), so a reload, a shared link, Back and
-  Forward come back to the same chain. Leaving it by the chip or by switching
-  to Kanban or List removes both keys. A link that names no valid reference,
+  Forward come back to the same chain. Leaving it by the chip removes both
+  keys. A link that names no valid reference,
   a reference the server does not know, or a chain from another planning space
   shows the whole space with a notice saying why, and the keys are dropped.
 - The navigation rail names each entry by what it shows. A screen reader now
@@ -149,6 +176,15 @@ checkouts are therefore distinguishable even at the same version.
   longer moves up and down as results arrive and leave. A row clamps a long
   title to two lines and shows the reference in the metadata font, and the
   Retry button no longer stretches across the dialog.
+- A board move the server refused no longer leaves the tile in the column it
+  was dropped in: the tile stays where the next read of the space puts it.
+- A board move sends the revision the board read the item at, so a move made
+  after an agent changed the item is refused with `409` instead of written over
+  the agent's change.
+- A search on the board no longer hides why an item is blocked: an item whose
+  blocker the search leaves out is still marked blocked.
+- The module list's `updated_at` moves with the Planning route keys it
+  admits, which the `chain` keys had not done.
 
 ## [2.1.0](https://github.com/Muratovnik/valkama/compare/v2.0.0...v2.1.0) - 2026-10-31
 
