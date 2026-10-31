@@ -156,10 +156,12 @@ describe('inspector drafts and the ways of leaving them', () => {
 
     // A departure the inspector already asked about is not asked twice when it
     // turns into a route change.
+    // The pass lasts only until the current task ends, so the route check runs
+    // before anything yields to the event loop: flushPromises would hand it a
+    // macrotask, and whether that comes before the pass expires depends on load.
     wrapper.getComponent(drawerFrameStub).vm.$emit('close')
     await flushPromises()
     await getButton(wrapper, 'Discard').trigger('click')
-    await flushPromises()
     expect(wrapper.emitted('close')).toHaveLength(1)
     expect(await mayLeave()).toBe(true)
     expect(wrapper.find('.confirm-strip').exists()).toBe(false)
