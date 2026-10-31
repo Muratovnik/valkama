@@ -8,12 +8,13 @@
  */
 import { createI18n } from 'vue-i18n'
 
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import PlanningWorkspace from '@/pages/planning/PlanningWorkspace.vue'
 
 import WorkItemBoard from '@/widgets/work-item-views/components/WorkItemBoard.vue'
+import WorkItemLaneCell from '@/widgets/work-item-views/components/WorkItemLaneCell.vue'
 
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
@@ -60,6 +61,8 @@ function live(wrapper: ReturnType<typeof board>) {
   return wrapper.get('[role="status"]').text()
 }
 
+const doneCell = (wrapper: ReturnType<typeof board>) => wrapper.get('.lane-cell[data-state="done"]')
+
 beforeEach(() => localStorage.clear())
 afterEach(() => {
   document.body.innerHTML = ''
@@ -98,6 +101,11 @@ describe('the board grouped by epic', () => {
     expect(wrapper.find('[data-reference="MAIN-20"]').exists()).toBe(false)
     await toggles()[1].trigger('click')
     await toggles()[0].trigger('click')
+    // Finished work is counted in its Done cell and drawn only on request.
+    expect(wrapper.find('[data-reference="MAIN-20"]').exists()).toBe(false)
+    const done = wrapper.get('.lane-cell[data-state="done"] .lane-more')
+    expect(done.text()).toBe('Show all · 1')
+    await done.trigger('click')
     expect(wrapper.find('[data-reference="MAIN-20"]').exists()).toBe(true)
     expect(wrapper.find('[data-reference="MAIN-10"]').exists()).toBe(false)
     wrapper.unmount()
@@ -260,6 +268,49 @@ describe('a lane cell', () => {
       [{ reference: 'MAIN-32', state: 'backlog', rank: 'after:MAIN-33' }],
     ])
     expect(backlog(wrapper)).toHaveLength(5)
+  })
+})
+
+describe('a terminal cell of the board grouped by epic', () => {
+  const finished = [
+    epic,
+    boardItem(10, 'backlog', { parent_id: epic.work_item_id }),
+    ...Array.from({ length: 4 }, (_, at) =>
+      boardItem(40 + at, 'done', { parent_id: epic.work_item_id }),
+    ),
+  ]
+  const finishedBoard = () => board({ grouping: 'epic', items: finished, spaceItems: finished })
+
+  it('draws none of its tiles, offers them by their count, and draws them on demand', async () => {
+    const wrapper = finishedBoard()
+    expect(doneCell(wrapper).findAll('[data-reference]')).toHaveLength(0)
+    expect(doneCell(wrapper).get('.lane-more').text()).toBe('Show all · 4')
+    await doneCell(wrapper).get('.lane-more').trigger('click')
+    expect(doneCell(wrapper).findAll('[data-reference]')).toHaveLength(4)
+    expect(doneCell(wrapper).find('.lane-more').exists()).toBe(false)
+  })
+
+  it('keeps the arrows reaching its Show all button, which is a Tab stop too', async () => {
+    const wrapper = finishedBoard()
+    tile(wrapper, 'MAIN-10').element.focus()
+    await tile(wrapper, 'MAIN-10').trigger('keydown', { key: 'ArrowRight' })
+    expect(document.activeElement).toBe(doneCell(wrapper).get('.lane-more').element)
+  })
+
+  it('shows the cell whole once a move lands in it, so the moved tile stays in sight', async () => {
+    const wrapper = finishedBoard()
+    // A drop from the backlog cell of the same lane into Done is handed up by that cell.
+    const backlogCell = wrapper
+      .findAllComponents(WorkItemLaneCell)
+      .find((cell) => cell.props('state').key === 'backlog')
+    backlogCell?.vm.$emit(
+      'place',
+      { reference: 'MAIN-10', state: 'done', rank: 'last' },
+      { keyboard: false, position: 5, total: 5 },
+    )
+    await flushPromises()
+    expect(doneCell(wrapper).findAll('[data-reference]')).toHaveLength(4)
+    expect(doneCell(wrapper).find('.lane-more').exists()).toBe(false)
   })
 })
 

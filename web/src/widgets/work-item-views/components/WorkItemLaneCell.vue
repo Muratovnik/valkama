@@ -8,6 +8,10 @@
  * the ones the order of work puts next, so they are the ones worth seeing. A
  * tile moved from the keyboard past what the cell draws opens the cell, so the
  * tile is drawn where it went and keeps its focus.
+ *
+ * A terminal cell (Done, Cancelled) draws none of its tiles: that work is
+ * finished, so the cell says how much there is and offers it. A lane of finished
+ * work therefore stands no taller than its open work does.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -25,6 +29,8 @@ const props = defineProps<{
   group: string
   items: WorkItemBrief[]
   readyIds: Set<string>
+  /** A move has landed in this cell while it was closed, so it is drawn whole. */
+  revealed: boolean
   state: WorkflowState
   writable: boolean
   hintId?: string
@@ -42,14 +48,21 @@ const { t } = useI18n()
 /** Tiles a cell draws before it asks to show the rest. */
 const LIMIT = 3
 
+/**
+ * Tiles a cell draws unasked. A terminal cell draws none: its work is finished,
+ * so it is counted and offered rather than standing its lane tall.
+ */
+const drawn = computed(() => (props.state.is_terminal ? 0 : LIMIT))
+
 /** The operator asked to see the whole cell, for as long as it is drawn. */
 const whole = ref(false)
-const limit = computed(() => (whole.value ? undefined : LIMIT))
-const hidden = computed(() => !whole.value && props.items.length > LIMIT)
+const showWhole = computed(() => whole.value || props.revealed)
+const limit = computed(() => (showWhole.value ? undefined : drawn.value))
+const hidden = computed(() => !showWhole.value && props.items.length > drawn.value)
 const showAllLabel = computed(() => t('workItem.lanes.showAll', { count: props.items.length }))
 
 function placed(move: BoardMove, landing: StackLanding) {
-  if (landing.keyboard && landing.position > LIMIT) whole.value = true
+  if (landing.keyboard && landing.position > drawn.value) whole.value = true
   emit('place', move, landing)
 }
 </script>

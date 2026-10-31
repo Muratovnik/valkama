@@ -18,8 +18,9 @@
  * Without Alt the arrows only move focus. A stack is one Tab stop — the tile
  * last focused in it — so a board of a thousand tiles is a handful of stops,
  * not a thousand; ↑ and ↓ walk the stack, Home and End go to its ends, and ←
- * and → go to the nearest stack beside it that holds a tile, in the same row of
- * the board: the next column, or the next cell of the same lane.
+ * and → go to the nearest stack beside it that holds a tile, or a closed cell's
+ * Show all button, in the same row of the board: the next column, or the next
+ * cell of the same lane.
  *
  * A stack may draw only its first `limit` tiles. It still reads every item, so
  * a move from the keyboard names its true neighbour and its true end.
@@ -155,6 +156,17 @@ function tilesOf(stack: Element): HTMLElement[] {
   return [...stack.querySelectorAll<HTMLElement>(':scope > li > button')]
 }
 
+/**
+ * What an arrow across the row can land on in a stack: its tiles, or, when it
+ * draws none, the Show all button of its cell, so a closed cell is still reached.
+ */
+function reachable(stack: Element): HTMLElement[] {
+  const tiles = tilesOf(stack)
+  if (tiles.length) return tiles
+  const more = stack.parentElement?.querySelector<HTMLElement>(':scope > .lane-more')
+  return more ? [more] : []
+}
+
 /** The tile at `index`, or the last one, in the nearest stack of this row that has any. */
 function across(step: -1 | 1, index: number): HTMLElement | undefined {
   const own = list.value
@@ -164,7 +176,7 @@ function across(step: -1 | 1, index: number): HTMLElement | undefined {
     (stack) => stack.closest('[data-board-row]') === row,
   )
   for (let at = stacks.indexOf(own) + step; at >= 0 && at < stacks.length; at += step) {
-    const tiles = tilesOf(stacks[at])
+    const tiles = reachable(stacks[at])
     if (tiles.length) return tiles[Math.min(index, tiles.length - 1)]
   }
   return undefined

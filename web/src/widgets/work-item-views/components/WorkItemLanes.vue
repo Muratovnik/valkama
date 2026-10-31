@@ -15,7 +15,8 @@
  *
  * A lane is as tall as what it holds, not as its fullest state: each cell is its
  * own height and draws only its first few tiles, and an empty one is a low
- * ground a tile can still be dropped on.
+ * ground a tile can still be dropped on. A terminal cell draws none of its
+ * tiles, so a lane of finished work is no taller than its open work.
  */
 import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -23,6 +24,7 @@ import { useI18n } from 'vue-i18n'
 import WorkItemLaneCell from '@/widgets/work-item-views/components/WorkItemLaneCell.vue'
 import type { StackLanding } from '@/widgets/work-item-views/components/WorkItemStack.vue'
 import { useColumnFit } from '@/widgets/work-item-views/composables/useColumnFit.ts'
+import { useLandedCells } from '@/widgets/work-item-views/composables/useLandedCells.ts'
 import { useLaneCollapse } from '@/widgets/work-item-views/composables/useLaneCollapse.ts'
 import type { BoardLane } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
@@ -56,6 +58,8 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const prefix = useId()
 const { folded, toggle } = useLaneCollapse(() => props.spaceId)
+
+const { isLanded, land } = useLandedCells(() => props.states)
 
 const scroller = ref<HTMLElement | null>(null)
 const track = ref<HTMLElement | null>(null)
@@ -260,11 +264,12 @@ function toggleLabel(lane: BoardLane): string {
               :ready-ids="props.readyIds"
               :blocked-ids="props.blockedIds"
               :hint-id="props.hintId"
+              :revealed="isLanded(lane, state)"
               :writable="props.writable"
               @dragging="drag"
               @edge="(reference, edge) => emit('edge', reference, edge)"
               @open="emit('open', $event)"
-              @place="(move, landing) => emit('place', move, landing)"
+              @place="(move, landing) => (land(lane, move), emit('place', move, landing))"
             />
           </div>
         </template>

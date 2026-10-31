@@ -151,14 +151,17 @@ for (const [width, oneRow] of [
       .locator('.lane-toggle')
       .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-expanded')))
     expect(expanded).toEqual(['true', 'false', 'false', 'true'])
-    // The epic is the lane; its children are its tiles, read state by state.
+    // The epic is the lane; its open children are its tiles. Its finished child
+    // is counted in the Done cell and drawn only on request.
     await expect(tiles(lanes.nth(0))).resolves.toEqual([
       'MAIN-402',
       'MAIN-403',
       'MAIN-404',
       'MAIN-405',
-      'MAIN-406',
     ])
+    await expect(lanes.nth(0).locator('.lane-cell[data-state="done"] .lane-more')).toHaveText(
+      'Show all · 1',
+    )
     await expect(page.locator('.work-item-board [data-reference="MAIN-401"]')).toHaveCount(0)
 
     // Unfolded by hand, the empty epic says so instead of drawing three blank cells.
@@ -209,6 +212,8 @@ test('a lane stays folded or unfolded the way it was left, across a reload', asy
   await closed.click()
   await expect(open).toHaveAttribute('aria-expanded', 'false')
   await expect(closed).toHaveAttribute('aria-expanded', 'true')
+  // Its finished work is counted in the Done cell, drawn on request.
+  await lane(page, 'The first board').locator('.lane-more').click()
   await expect(page.locator('[data-reference="MAIN-421"]')).toBeVisible()
   await page.reload()
   await expect(open).toHaveAttribute('aria-expanded', 'false')
@@ -234,7 +239,9 @@ test('a lane shows its epic’s chain on the board, in every view, and the chip 
   const chip = page.locator('.workspace-chip')
   await expect(chip).toHaveText('Chain MAIN-401 · 6')
   await expect(page.locator('.board-lane')).toHaveCount(1)
-  await expect(tiles(page.locator('.work-item-board'))).resolves.toHaveLength(5)
+  // The finished member is counted in the Done cell, not drawn.
+  await expect(tiles(page.locator('.work-item-board'))).resolves.toHaveLength(4)
+  await expect(page.locator('.lane-cell[data-state="done"] .lane-more')).toHaveText('Show all · 1')
   await page.screenshot(shot(info, 'w-board-chain-1440.png'))
 
   // Ungrouped, the root is a tile like its members; the chain stays.
@@ -402,6 +409,28 @@ test('a lane is as tall as its tiles: an empty cell stays a low ground', async (
   const empty = await height('done')
   expect(empty, 'an empty cell is a drop-sized ground').toBeLessThanOrEqual(48)
   expect(full, 'the cell with a tile is a tile tall').toBeGreaterThan(empty * 2)
+})
+
+test('a closed Done cell is reached by Tab, and its button shows the cards it counts', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await installBackend(page)
+  await serve(page)
+  await openBoard(page)
+  const epic = lane(page, LONG_EPIC)
+  const more = epic.locator('.lane-cell[data-state="done"] .lane-more')
+  await expect(more).toHaveText('Show all · 1')
+  await expect(epic.locator('li[data-reference="MAIN-406"]')).toHaveCount(0)
+  // Tab from the lane's open tile reaches the button within a few stops.
+  await epic.locator('li[data-reference="MAIN-402"] > button').focus()
+  await expect(async () => {
+    await page.keyboard.press('Tab')
+    await expect(more).toBeFocused({ timeout: 200 })
+  }).toPass({ intervals: [0], timeout: 5000 })
+  await page.keyboard.press('Enter')
+  await expect(epic.locator('li[data-reference="MAIN-406"]')).toBeVisible()
+  await expect(more).toHaveCount(0)
 })
 
 test('arrows walk the tiles, and a tile moved from the keyboard is brought into view', async ({
