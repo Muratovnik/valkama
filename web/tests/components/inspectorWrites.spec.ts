@@ -193,7 +193,7 @@ describe('inspector writes and their refusals', () => {
     // of it stays in the document behind the toggle.
     const reason = notice.get('.refusal-reason .collapsible-text')
     expect(reason.classes()).toContain('clamped')
-    expect(reason.attributes('style')).toContain('--collapsible-lines: 2')
+    expect(reason.attributes('style')).toContain('--collapsible-lines: 3')
     expect(reason.text()).toContain('before closing it')
 
     // The same choice again is a second request, not a no-op on a stale selection.

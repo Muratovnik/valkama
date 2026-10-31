@@ -8,10 +8,12 @@
  * the button that does it. Carrying the move through anyway is offered only when
  * the server accepts an override, and only after a second, explicit answer.
  *
- * The server's sentence is held to two lines. It names every refused guard at
+ * The server's sentence is held to three lines. It names every refused guard at
  * once, so it grows with each of them, and the head it stands in is pinned:
- * every line it took came out of the body on a phone. The hints and actions
- * above it say the same in the reader's language and stay whole.
+ * every line it took came out of the body on a phone. Three keep a usual reason
+ * whole on a desktop width, where a two-line hold added a toggle row instead of
+ * saving one. The hints and actions above it say the same in the reader's
+ * language and stay whole.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -80,7 +82,7 @@ function force() {
     <CollapsibleText
       class="refusal-reason"
       :text="t('workItem.refusal.reason', { reason: notice.reason })"
-      :lines="2"
+      :lines="3"
     />
     <template v-if="notice.force">
       <!-- Hidden rather than removed while asked, so the answer can hand focus
