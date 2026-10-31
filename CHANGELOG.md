@@ -49,6 +49,10 @@ checkouts are therefore distinguishable even at the same version.
   shows the whole space with a notice saying why, and the keys are dropped.
 - A wrapped origins line in the card's chain section no longer ends on a
   separator.
+- The navigation rail names each entry by what it shows. A screen reader now
+  hears a module's attention count, which the entry's label used to hide; the
+  brand button is called Valkama, with where it goes in its tooltip; and the
+  finder's name includes the shortcut printed beside it.
 
 ## [2.1.0](https://github.com/Muratovnik/valkama/compare/v2.0.0...v2.1.0) - 2026-10-31
 

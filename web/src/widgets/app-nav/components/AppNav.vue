@@ -82,7 +82,7 @@ function forwardPrefetch(module: ModuleId, trigger: 'hover' | 'focus') {
       <button
         class="app-brand"
         type="button"
-        :aria-label="t('navigation.home')"
+        :title="t('navigation.home')"
         @click="emit('home')"
       >
         <BrandMark

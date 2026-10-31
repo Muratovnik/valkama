@@ -25,7 +25,6 @@ export const ru = {
     settings: 'Настройки',
     skills: 'Навыки',
     memory: 'Память',
-    attention: 'Требуют внимания: {count}',
     unavailable:
       'Реестр разделов Valkama недоступен. Обновите страницу после переподключения локального сервиса.',
     description: {

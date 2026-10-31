@@ -25,7 +25,6 @@ export const en = {
     settings: 'Settings',
     skills: 'Skills',
     memory: 'Memory',
-    attention: '{count} items need attention',
     unavailable:
       'The Valkama module registry is unavailable. Refresh after the local service reconnects.',
     description: {

@@ -16,7 +16,6 @@ const { t } = useI18n()
       type="button"
       aria-keyshortcuts="Control+k Meta+k"
       :title="t('finder.trigger')"
-      :aria-label="t('finder.trigger')"
       @click="emit('find')"
     >
       <VIcon
@@ -94,7 +93,19 @@ const { t } = useI18n()
     padding: 0;
   }
 
-  :is(.action-label, .action-shortcut) {
+  /* Out of sight, never out of the name: the finder is named by what it
+     shows, so its label stays for a reader once the rail has no line for it,
+     and the shortcut, which `aria-keyshortcuts` already states, goes. */
+  .action-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .action-shortcut {
     display: none;
   }
 

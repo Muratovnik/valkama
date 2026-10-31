@@ -69,7 +69,6 @@ function currentState(module: ModuleManifest) {
       class="nav-item"
       :class="`module-${module.module_id}`"
       v-bind="currentState(module)"
-      :aria-label="moduleTitle(module)"
       :title="moduleTitle(module)"
       @pointerenter="emit('prefetch', module.module_id, 'hover')"
       @focus="emit('prefetch', module.module_id, 'focus')"
@@ -86,7 +85,6 @@ function currentState(module: ModuleManifest) {
         class="nav-item-count"
         placement="inline"
         :value="moduleBadge(module)"
-        :label="t('modules.attention', { count: moduleBadge(module) })"
       />
     </button>
   </section>
@@ -187,8 +185,16 @@ function currentState(module: ModuleManifest) {
     padding: 0;
   }
 
+  /* Out of sight, never out of the name. The entry is named by its content —
+     label and count, exactly what a sighted reader sees beside the icon — so
+     the label stays for a reader once the rail has no line for it. */
   .nav-item-label {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    clip-path: inset(50%);
   }
 
   /* No line to print a number on, so the count shares the icon's cell and rides
