@@ -54,8 +54,9 @@ checkouts are therefore distinguishable even at the same version.
 - `launcher install` reaches every session whose front is running at once,
   not only the sessions opened after it. Installing a commit that raises the
   store schema therefore migrates the store through the first session that
-  switches. A session opened with a release from before the front still warns
-  until its client restarts it.
+  switches, or, with none running, when the next session opens it. A session
+  opened with a release from before the front still warns until its client
+  restarts it.
 
 - A chain on the graph draws its open part by default: the root, the open
   members, and every member that is the parent of one drawn, so the epics the

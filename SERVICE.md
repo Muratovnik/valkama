@@ -67,7 +67,8 @@ child process. Within a few seconds of `launcher install` the front stops that
 server between two requests, starts the newly pinned release, and tells a client
 that can hear it that the tool list changed. So `launcher install` reaches
 running sessions at once, and an install that raises the store schema migrates
-the store through the first session that switches, not the next one opened.
+the store through the first session that switches, or, with none running, when
+the next session opens it.
 
 A release that does not start leaves the session on the release it had, and
 the next tool result carries one warning naming it and why. The store schema

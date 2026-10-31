@@ -164,11 +164,12 @@ Agent clients must register the service-owned command installed by
 `python valkama.py launcher install`; the user-facing command path is stable and
 contains no checkout path. That command runs a pinned release — one commit
 copied out of the checkout — so edits here reach client sessions and the live
-store only at the next `launcher install`, and then at once: the stdio front of
-every running session switches to the new release within seconds. Installing a
-commit that raises the store schema therefore migrates the live store right
-away, through the first session that switches: treat that install as the
-migration and give it the same backup and rollback. Only the
+store only at the next `launcher install`, and then at once: every running
+session that has a stdio front switches to the new release within seconds.
+Installing a commit that raises the store schema therefore migrates the live
+store through the first session that switches, or, with none running, when the
+next session opens it: treat that install as the migration and give it the
+same backup and rollback. Only the
 managed launcher shim records the current release entry point and interpreter.
 The desktop installer and tray may keep their
 own service-owned install records. Moving the repository therefore requires one
