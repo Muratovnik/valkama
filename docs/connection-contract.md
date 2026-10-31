@@ -119,6 +119,12 @@ exactly once, as long as nothing writes to the store in between; a write between
 two pages can move an item across the boundary. An `offset` that is negative or
 not an integer is refused with `invalid_request`.
 
+A refused MCP tool call answers with `isError: true` and the same body the HTTP
+API sends, both as the text content and as `structuredContent`:
+`{"error": {"code": "...", "message": "..."}}`. That holds for a refused
+argument (an unknown one, a missing one, a `limit` or `offset` that is not an
+integer: `invalid_request`) as much as for a guard refusal or a stale write.
+
 With `verbose: true` they answer with the full items, at the limits they had
 before (200 for a list, 50 for a search), and with the same `truncated` and
 `next_offset`. The HTTP reads `GET /api/planning/work-items` and

@@ -244,6 +244,10 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- An MCP tool call refused for its arguments -- an unknown argument, a `limit`
+  that is not an integer -- answered only with the text
+  `PlanningHttpError: ...`. It now answers like every other refusal, with
+  `structuredContent.error.code` (`invalid_request`) and the message.
 - `valkama export` wrote at most 1000 work items per Planning space and said
   nothing about the rest; the items lost were those in the last workflow
   states. It now reads every item page by page and checks the count against

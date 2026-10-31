@@ -847,6 +847,33 @@ class ToolArgumentTests(McpSurfaceTestCase):
         self.assertEqual(400, caught.exception.status)
         return caught.exception.message
 
+    def test_an_argument_refusal_reaches_the_client_with_its_code(self) -> None:
+        """Through the real loop: the code a caller can branch on, not only text."""
+
+        self.conn.commit()  # the loop opens its own connection
+        cases = {
+            "unknown argument": ("get_work_item", {"id": self.first, "colour": "red"}),
+            "a limit that is not an integer": (
+                "list_work_items",
+                {"space": SPACE_KEY, "limit": "many"},
+            ),
+        }
+        for name, (tool, arguments) in cases.items():
+            with self.subTest(name):
+                [answer] = self.converse(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 7,
+                        "method": "tools/call",
+                        "params": params(name=tool, arguments=arguments),
+                    }
+                )
+                result = answer["result"]
+                self.assertTrue(result["isError"])
+                error = result["structuredContent"]["error"]
+                self.assertEqual("invalid_request", error["code"])
+                self.assertEqual(error, json.loads(result["content"][0]["text"])["error"])
+
     def test_an_item_is_read_by_reference_or_ref_as_well_as_by_id(self) -> None:
         expected = self.call_tool("get_work_item", id=self.first)
         self.assertEqual(expected, self.call_tool("get_work_item", reference=self.first))

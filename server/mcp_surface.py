@@ -543,9 +543,10 @@ def _mcp_loop(
                 conn.commit()
                 content = _compact(data)
                 result = {"content": [{"type": "text", "text": content}], "isError": False}
-            except planning_model.PlanningError as error:
-                # A guard refusal and a stale write are answers, not crashes, so
-                # they carry the same structured body the HTTP boundary sends.
+            except (planning_model.PlanningError, planning_api.PlanningHttpError) as error:
+                # A guard refusal, a stale write and a refused argument are
+                # answers, not crashes, so they carry the same structured body
+                # and code the HTTP boundary sends.
                 conn.rollback()
                 payload = planning_api.error_response(error)[1]
                 result = {
