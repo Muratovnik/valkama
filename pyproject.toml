@@ -275,8 +275,9 @@ data_file = ".cache/coverage/data"
 # from 27% to 60%. Layer 1 took it to 79.56% and layer 2 to 79.64%.
 # Execution, scoped-read and registry regressions held the floor at 83%;
 # removing the extension registry with its code and tests left 84.14%.
-# The hook command and its suite took it to 85.28%.
-fail_under = 85
+# The hook command and its suite took it to 85.28%, and the chain read with
+# its card and graph to 86.45%.
+fail_under = 86
 precision = 2
 skip_covered = true
 exclude_also = [
