@@ -195,15 +195,23 @@ test('the task finder opens an exact hit on Enter and keeps every state legible'
     await expect(dialog).toBeHidden()
   }
 
-  // Keyboard only: open, type the reference, press Enter before the rows
-  // arrive, and land on the item.
-  mode = 'results'
+  // Keyboard only: open, type the reference, press Enter while the search is
+  // still out, and land on the item once the rows arrive. The answer is held,
+  // so Enter cannot reach a row that is already there.
+  mode = 'loading'
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.keyboard.press('Control+k')
   const dialog = page.getByRole('dialog', { name: 'Find a task', exact: true })
   await expect(dialog.getByRole('combobox')).toBeFocused()
+  const held = page.waitForRequest('**/api/modules/planning/search?*')
   await page.keyboard.type(workItemRef.reference)
+  await held
+  await expect(dialog.getByRole('status')).toContainText('Searching mapped projects')
   await page.keyboard.press('Enter')
+  await expect(dialog).toBeVisible()
+  await expect.poll(() => release).toBeDefined()
+  release?.()
+  release = undefined
   await expect(dialog).toBeHidden()
   await expect(page).toHaveURL(
     serializePlatformRoute({
