@@ -242,10 +242,11 @@ function callAttributeShape(expression, provenance, scope, resolving) {
   const callee = unwrapExpression(expression.callee)
   if (callee?.type === 'Identifier' && provenance.context.computed.has(callee.name)) {
     const returned = returnExpressions(expression.arguments[0])
-    if (returned.length === 0) return { styles: [], unknown: true }
-    return mergeAttributeShapes(
-      returned.map((entry) => attributeBagShape(entry, provenance, scope, resolving)),
-    )
+    return returned.length === 0
+      ? { styles: [], unknown: true }
+      : mergeAttributeShapes(
+          returned.map((entry) => attributeBagShape(entry, provenance, scope, resolving)),
+        )
   }
   if (callee?.type === 'Identifier' && provenance.context.refs.has(callee.name))
     return attributeBagShape(expression.arguments[0], provenance, scope, resolving)

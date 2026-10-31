@@ -84,8 +84,7 @@ function reason(value: unknown, path: string): string {
 }
 
 function optionalReason(value: unknown, path: string): string | undefined {
-  if (value === undefined) return undefined
-  return reason(value, path)
+  return value === undefined ? undefined : reason(value, path)
 }
 
 function timestamp(value: unknown, path: string): string {

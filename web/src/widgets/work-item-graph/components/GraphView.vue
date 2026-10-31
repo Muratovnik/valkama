@@ -129,7 +129,7 @@ function isChainRoot(node: PlacedNode): boolean {
 function isRecessed(node: PlacedNode): boolean {
   if (inChain.value && node.state.is_terminal && !isChainRoot(node)) return true
   const focused = focusSet.value
-  return focused ? !focused.ids.has(node.work_item_id) : false
+  return focused !== null && !focused.ids.has(node.work_item_id)
 }
 
 /** The node's place in the chain, marked only when the field is one. */

@@ -69,12 +69,11 @@ const contextReady = computed(() =>
 )
 const mappedProjectResources = computed(() => {
   const scope = operatingScope.value
-  if (scope.kind !== 'project') return []
-  return (
-    contextReady.value?.projects.find(
-      (project) => project.project_id === scope.project_ref.project_id,
-    )?.resources ?? []
-  )
+  return scope.kind === 'project'
+    ? (contextReady.value?.projects.find(
+        (project) => project.project_id === scope.project_ref.project_id,
+      )?.resources ?? [])
+    : []
 })
 const moduleStage = ref<InstanceType<typeof AppModuleStage> | null>(null)
 const planningConnection = ref<PlanningConnectionState>('connecting')

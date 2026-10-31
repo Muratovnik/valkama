@@ -51,10 +51,11 @@ const selected = computed(() => props.options.find((option) => option.value === 
 const internalValue = computed(() => encodeChoiceValue(codec.value, props.modelValue) ?? null)
 const filtered = computed(() => {
   const needle = query.value.trim().toLocaleLowerCase()
-  if (!needle) return [...props.options]
-  return props.options.filter((option) =>
-    `${option.label} ${option.description ?? ''}`.toLocaleLowerCase().includes(needle),
-  )
+  return needle
+    ? props.options.filter((option) =>
+        `${option.label} ${option.description ?? ''}`.toLocaleLowerCase().includes(needle),
+      )
+    : [...props.options]
 })
 
 function updateValue(value: unknown) {

@@ -65,10 +65,12 @@ export function cancelResource<T>(state: ResourceState<T>): ResourceState<T> {
 }
 
 function accepts<T>(state: ResourceState<T>, generation: number, key: string): boolean {
-  if (state.generation !== generation) return false
   // A pending key is authoritative during a refresh.  Without one, an
   // already committed stream may continue to publish updates for its key.
-  return state.pendingKey === key || (state.pendingKey === null && state.key === key)
+  return (
+    state.generation === generation &&
+    (state.pendingKey === key || (state.pendingKey === null && state.key === key))
+  )
 }
 
 /** Commit one response atomically, ignoring callbacks from older generations. */

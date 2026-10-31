@@ -164,8 +164,9 @@ function provenanceKind(node, context, resolving = new Set(), scope = null) {
   if (expression.type === 'Identifier') {
     if (identifierIsShadowed(expression, scope)) return null
     const definition = context.definitions.get(expression.name)
-    if (!definition || resolving.has(expression.name)) return null
-    return provenanceKind(definition, context, new Set(resolving).add(expression.name), null)
+    return !definition || resolving.has(expression.name)
+      ? null
+      : provenanceKind(definition, context, new Set(resolving).add(expression.name), null)
   }
   if (expression.type === 'MemberExpression') {
     const owner = provenanceKind(expression.object, context, resolving, scope)
@@ -226,8 +227,9 @@ function staticStringOptions(node, context, resolving = new Set(), scope = null)
   if (expression.type !== 'Identifier' || identifierIsShadowed(expression, scope))
     return { unknown: true, values: new Set() }
   const definition = context.definitions.get(expression.name)
-  if (!definition || resolving.has(expression.name)) return { unknown: true, values: new Set() }
-  return staticStringOptions(definition, context, new Set(resolving).add(expression.name), null)
+  return !definition || resolving.has(expression.name)
+    ? { unknown: true, values: new Set() }
+    : staticStringOptions(definition, context, new Set(resolving).add(expression.name), null)
 }
 
 export function presentationProvenance(program, source) {

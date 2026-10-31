@@ -21,10 +21,11 @@ const SRC = fileURLToPath(new URL('../src', import.meta.url))
 const LITERAL_KEY = /(?<![\w$])(?:\$t|te|tm|t)\(\s*(['"])([A-Za-z0-9_.]+)\1/g
 
 function catalogKeys(value: unknown, prefix = ''): string[] {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return [prefix]
-  return Object.entries(value as Record<string, unknown>)
-    .flatMap(([key, child]) => catalogKeys(child, prefix ? `${prefix}.${key}` : key))
-    .sort()
+  return !value || typeof value !== 'object' || Array.isArray(value)
+    ? [prefix]
+    : Object.entries(value as Record<string, unknown>)
+        .flatMap(([key, child]) => catalogKeys(child, prefix ? `${prefix}.${key}` : key))
+        .sort()
 }
 
 function sourceFiles(): string[] {

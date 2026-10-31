@@ -229,9 +229,9 @@ export function resolveManifestRouteAuthority(
   if (!manifest.supported_entity_kinds.includes(route.entity.kind))
     return { status: 'unavailable', reason: 'incompatible-entity' }
   const context = manifest.secondary_context[scopeKind]
-  if (context.behavior !== 'all' || !context.kinds.includes(route.entity.kind))
-    return { status: 'unavailable', reason: 'incompatible-entity' }
-  return { status: 'ready' }
+  return context.behavior === 'all' && context.kinds.includes(route.entity.kind)
+    ? { status: 'ready' }
+    : { status: 'unavailable', reason: 'incompatible-entity' }
 }
 
 function validateUnknownModuleState(value: unknown, path = 'state'): ModuleRouteState {

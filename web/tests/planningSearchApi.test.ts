@@ -35,7 +35,7 @@ describe('Planning related-task search', () => {
       new AbortController().signal,
     )
     const input = fetchMock.mock.calls[0][0]
-    if (typeof input !== 'string') throw new Error('Expected a URL string')
+    if (typeof input !== 'string') throw new TypeError('Expected a URL string')
     const url = new URL(input, 'https://example.test')
     expect(url.pathname).toBe('/api/planning/search')
     expect(Object.fromEntries(url.searchParams)).toEqual({ q: '42 & delivery', space, limit: '50' })

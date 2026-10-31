@@ -39,10 +39,9 @@ const SESSION_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3
 
 export function effectiveSessionCwd(target: SessionTarget): string {
   const root = target.space_root
-  if (root?.status === 'mapped' && root.resource_ref && root.canonical_root) {
-    return root.canonical_root
-  }
-  return ''
+  return root?.status === 'mapped' && root.resource_ref && root.canonical_root
+    ? root.canonical_root
+    : ''
 }
 
 function observedSessionCwd(target: SessionTarget): string {
@@ -112,8 +111,9 @@ function planTerminal(target: SessionTarget, cwd: string): OpenPlan {
 function planCustomCommand(command: string, target: SessionTarget, cwd: string): OpenPlan {
   if (!command.trim()) return { mode: 'refused', reason: 'no-command' }
   const argv = customArgv(command, target)
-  if (!argv.length) return { mode: 'refused', reason: 'no-command' }
-  return { mode: 'spawn', argv, cwd, display: display(argv) }
+  return argv.length
+    ? { mode: 'spawn', argv, cwd, display: display(argv) }
+    : { mode: 'refused', reason: 'no-command' }
 }
 
 export function planSessionOpen(target: SessionTarget, opener: SessionOpener): OpenPlan {
@@ -127,16 +127,16 @@ export function planSessionOpen(target: SessionTarget, opener: SessionOpener): O
   const cwd = effectiveSessionCwd(target)
   if (opener.kind === 'codex-app') return planCodexApp(target)
   if (opener.kind === 'vscode') {
-    if (!cwd) return { mode: 'refused', reason: 'no-cwd' }
-    return { mode: 'url', url: vscodeFolderUrl(cwd) }
+    return cwd ? { mode: 'url', url: vscodeFolderUrl(cwd) } : { mode: 'refused', reason: 'no-cwd' }
   }
   if (opener.kind === 'cursor') {
     if (!cwd) return { mode: 'refused', reason: 'no-cwd' }
     const argv = ['cursor', cwd]
     return { mode: 'spawn', argv, cwd, display: display(argv) }
   }
-  if (opener.kind === 'terminal') return planTerminal(target, cwd)
-  return planCustomCommand(opener.command, target, cwd)
+  return opener.kind === 'terminal'
+    ? planTerminal(target, cwd)
+    : planCustomCommand(opener.command, target, cwd)
 }
 
 export interface SessionOpenResult {

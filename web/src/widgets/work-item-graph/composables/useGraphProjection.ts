@@ -105,8 +105,7 @@ export function useGraphProjection(
 
   const source = computed<GraphSource | null>(() => {
     const now = input()
-    if (!now.open || !now.space) return null
-    return { nodes: now.nodes, edges: now.edges }
+    return now.open && now.space ? { nodes: now.nodes, edges: now.edges } : null
   })
 
   // The graph follows the epic rail: the selected scope decides what is drawn,
@@ -234,8 +233,7 @@ export function useGraphProjection(
     const selection = selected()
     const selectedVisible = placed.value.nodes.some((node) => node.work_item_id === selection)
     const active = activeGraphFocus(focus.value) ?? (selectedVisible ? selection : null)
-    if (active === null) return null
-    return neighborhood(placed.value.edges, active)
+    return active === null ? null : neighborhood(placed.value.edges, active)
   })
 
   const emptySpace = computed(

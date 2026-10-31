@@ -32,8 +32,9 @@ function numericStatus(value: unknown): number | null {
 function stateFrom(error: unknown): PlatformUiState | undefined {
   if (!(error instanceof Error) || !('state' in error)) return undefined
   const state = (error as Error & { state?: unknown }).state
-  if (state === null || typeof state !== 'object' || !('status' in state)) return undefined
-  return state as PlatformUiState
+  return state === null || typeof state !== 'object' || !('status' in state)
+    ? undefined
+    : (state as PlatformUiState)
 }
 
 function isTypedFailure(value: unknown): value is TypedFailure {

@@ -5,12 +5,11 @@ function validField(field: InputRequestField, value: InputAnswers[string]): bool
   if (field.type === 'text')
     return typeof value === 'string' && value.trim().length > 0 && value.length <= 8000
   const options = new Set(field.options.map((option) => option.id))
-  if (field.type === 'choice') return typeof value === 'string' && options.has(value)
-  return (
-    Array.isArray(value) &&
-    new Set(value).size === value.length &&
-    value.every((option) => options.has(option))
-  )
+  return field.type === 'choice'
+    ? typeof value === 'string' && options.has(value)
+    : Array.isArray(value) &&
+        new Set(value).size === value.length &&
+        value.every((option) => options.has(option))
 }
 
 export function validateAnswers(

@@ -15,8 +15,9 @@ export const DRAWER_NARROW_BREAKPOINT = 620
 
 function drawerMaximumForViewport(viewportWidth: number): number {
   const available = Math.max(0, Math.floor(viewportWidth))
-  if (available <= DRAWER_NARROW_BREAKPOINT) return available
-  return Math.min(DRAWER_MAX_WIDTH, available - DRAWER_VIEWPORT_GUTTER)
+  return available <= DRAWER_NARROW_BREAKPOINT
+    ? available
+    : Math.min(DRAWER_MAX_WIDTH, available - DRAWER_VIEWPORT_GUTTER)
 }
 
 export function clampDrawerWidth(width: number, viewportWidth: number): number {

@@ -15,14 +15,13 @@ const ACTOR_SESSION =
   /^(.*?)[\s·—-]*[([]\s*(?:session|сессия)[:#\s]*([0-9a-f][0-9a-f-]{5,})\s*[)\]]$/i
 
 export function splitActor(raw: string): ActorParts {
-  const value = (raw ?? '').trim()
+  const value = typeof raw === 'string' ? raw.trim() : ''
   const match = ACTOR_SESSION.exec(value)
   if (!match) return { name: value, session: '' }
   const name = match[1].trim()
   // "(session x)" with no name before it stays as it was written: an empty
   // executor column would claim nobody holds the work.
-  if (!name) return { name: value, session: match[2] }
-  return { name, session: match[2] }
+  return name ? { name, session: match[2] } : { name: value, session: match[2] }
 }
 
 export function actorName(raw: string): string {

@@ -70,9 +70,9 @@ export function rowStateName(group: readonly ChainMember[], member: ChainMember)
  */
 export function splitOrigins(chain: WorkItemChain): { later: ChainOrigin[]; own?: ChainOrigin } {
   const [first, ...rest] = chain.origins
-  if (first !== undefined && first.parent_reference === chain.root.reference)
-    return { own: first, later: rest }
-  return { later: chain.origins }
+  return first !== undefined && first.parent_reference === chain.root.reference
+    ? { own: first, later: rest }
+    : { later: chain.origins }
 }
 
 /** The day a series point names, read as a calendar date wherever the reader is. */

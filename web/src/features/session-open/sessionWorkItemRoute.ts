@@ -53,11 +53,8 @@ export function resolveSessionWorkItemRoute(
   const registration = registrations.find(
     (candidate) => candidate.manifest.module_id === 'planning',
   )
-  if (
-    !registration ||
+  return !registration ||
     resolveManifestRouteAuthority(registration.manifest, next).status === 'unavailable'
-  ) {
-    return null
-  }
-  return next
+    ? null
+    : next
 }

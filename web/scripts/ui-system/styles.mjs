@@ -224,19 +224,20 @@ function offScaleWeights(file, source) {
 
 /** Every window-width query in a file that is not allowed to ask. */
 function viewportQueries(file, source) {
-  if (viewportQueryOwners.has(file)) return []
-  return [...source.matchAll(/@media\s*\(\s*(?:width|min-width|max-width)/gi)].map(
-    ([, feature]) =>
-      `${file}: ask the container how much room there is, not the window${feature ?? ''}`,
-  )
+  return viewportQueryOwners.has(file)
+    ? []
+    : [...source.matchAll(/@media\s*\(\s*(?:width|min-width|max-width)/gi)].map(
+        () => `${file}: ask the container how much room there is, not the window`,
+      )
 }
 
 /** Literal colors, named in the message so the fix does not need a second look. */
 function localColors(file, source) {
   if (colorOwners.has(file)) return []
   const authoredHex = source.match(/#[0-9a-f]{3,8}\b/gi) ?? []
-  if (!authoredHex.length) return []
-  return [`${file}: local colors ${[...new Set(authoredHex)].join(', ')} must be semantic tokens`]
+  return authoredHex.length
+    ? [`${file}: local colors ${[...new Set(authoredHex)].join(', ')} must be semantic tokens`]
+    : []
 }
 
 /** A status color used to tint a whole surface rather than to mark it. */

@@ -21,8 +21,8 @@ vi.mock('@/widgets/work-item-graph/utils/graphLayoutEngine.ts', () => ({
   createGraphLayoutEngine: () => {
     const worker = {
       graph: null as ElkNode | null,
-      resolve: (_: ElkNode) => {},
-      reject: (_: Error) => {},
+      resolve: (_graph: ElkNode) => {},
+      reject: (_error: Error) => {},
       terminateWorker: vi.fn(),
     }
     workers.push(worker)

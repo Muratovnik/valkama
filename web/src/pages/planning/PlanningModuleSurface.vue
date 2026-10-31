@@ -205,9 +205,9 @@ const selectedId = computed(
 )
 
 const streamTarget = computed(() =>
-  projectId.value !== undefined && boundSpace.value !== undefined
-    ? { project: projectId.value, ...boundSpace.value }
-    : null,
+  projectId.value === undefined || boundSpace.value === undefined
+    ? null
+    : { project: projectId.value, ...boundSpace.value },
 )
 const { connection: liveConnection, reconnect } = usePlanningSubscription(streamTarget, (next) => {
   const key = planningKey.value

@@ -52,8 +52,7 @@ function line(read: (day: ChainDay) => number): string {
     .map((day, index) => {
       const level = y(read(day)).toFixed(2)
       const at = x(index).toFixed(2)
-      if (index === 0) return `M${at},${level}`
-      return `H${at} V${level}`
+      return index === 0 ? `M${at},${level}` : `H${at} V${level}`
     })
     .join(' ')
 }

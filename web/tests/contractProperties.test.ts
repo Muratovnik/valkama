@@ -136,7 +136,7 @@ test.prop([fc.oneof(fc.integer(), fc.constant(null), fc.constant(undefined))])(
     // around this one names. Nullable is not optional, and the property is what
     // made the difference explicit.
     expect(nullablePositiveInt().safeParse(value).success).toBe(
-      value !== null && value !== undefined ? value >= 1 : value === null,
+      value === null || value === undefined ? value === null : value >= 1,
     )
   },
 )

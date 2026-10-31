@@ -84,8 +84,7 @@ const ownerLabel = computed(() =>
  */
 const lease = computed(() => {
   const claim = props.item.claim
-  if (props.item.state.is_terminal || !claim || isWebAuthor(claim.holder)) return null
-  return claim
+  return props.item.state.is_terminal || !claim || isWebAuthor(claim.holder) ? null : claim
 })
 const leaseDetail = computed(() => {
   const claim = lease.value

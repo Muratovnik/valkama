@@ -44,13 +44,11 @@ export function resourceUiState<T>(
   }
 
   if (resource.status === 'ready') {
-    if (
-      observed.state.status === 'ready' &&
+    return observed.state.status === 'ready' &&
       options.empty !== undefined &&
       options.empty(observed.state.payload)
-    )
-      return uiEmpty(options.emptyReason)
-    return observed.state
+      ? uiEmpty(options.emptyReason)
+      : observed.state
   }
 
   if (observed.state.status === 'ready') {
