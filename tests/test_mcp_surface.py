@@ -778,7 +778,11 @@ class StaleBuildWarningTests(McpSurfaceTestCase):
     def test_discovery_names_the_build_so_two_servers_can_be_told_apart(self) -> None:
         watch = mock.Mock()
         watch.build_id = "abc123def456"
-        with mock.patch.object(mcp_surface.static_assets, "SourceWatch", return_value=watch):
+        # The release number is pinned here so that a version bump is not a test change.
+        with (
+            mock.patch.object(mcp_surface.static_assets, "SourceWatch", return_value=watch),
+            mock.patch.object(mcp_surface.static_assets, "release_version", return_value="1.0.2"),
+        ):
             [answer] = self.converse(
                 {"jsonrpc": "2.0", "id": 1, "method": "server/discover", "params": params()}
             )

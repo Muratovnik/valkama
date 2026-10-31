@@ -8,7 +8,7 @@ The MCP server reports itself as `<release>+<build>`, where the build is a diges
 over the modules the running process started with. Two servers from different
 checkouts are therefore distinguishable even at the same version.
 
-## [Unreleased]
+## [2.0.0] - 2026-10-31
 
 ### Added
 
