@@ -36,14 +36,18 @@ const { t } = useI18n()
       @click="emit('requests')"
     >
       <VIcon
+        class="action-icon"
         name="message-square"
         :size="20"
       />
       <span class="action-label">{{ t('requests.title') }}</span>
+      <!-- Questions waiting are work for the reader: in the hint's grey, beside
+           the Ctrl K shortcut, the number read as part of the furniture. -->
       <CountBadge
         v-if="pendingCount !== null && pendingCount > 0"
         class="action-count"
         placement="inline"
+        tone="waiting"
         :value="pendingCount"
       />
     </button>
@@ -113,9 +117,23 @@ const { t } = useI18n()
     display: none;
   }
 
+  /* No line for the count, so it shares the icon's cell and rides its top
+     corner, as the module list's count does. It was asked to be
+     `position: absolute`, which the badge's own inline placement outranks, so it
+     stayed in the row beside the icon and squeezed the glyph to 12px. One cell
+     overrides nothing the badge says about itself. */
+  .work-action:has(.action-count) {
+    display: grid;
+    grid-template-columns: 1fr;
+    place-items: center;
+  }
+
+  :is(.action-icon, .action-count) {
+    grid-area: 1/1;
+  }
+
   .action-count {
-    position: absolute;
-    inset: 0 0 auto auto;
+    place-self: start end;
   }
 }
 </style>

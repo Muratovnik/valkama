@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test'
 import { planningSpaceEntity, planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
+import { present } from '../support/present.ts'
 import { installBackend } from './backend.ts'
 import { installDiscussionBackend } from './discussionBackend.ts'
 import { installInputRequestBackend } from './inputRequestBackend.ts'
@@ -128,7 +129,20 @@ test('a required boolean remains unanswered until No is submitted and confirmed'
   const backend = await installBackend(page)
   const requests = await installInputRequestBackend(page)
   await page.goto('/')
-  await page.getByRole('button', { name: /^Needs my answer/ }).click()
+  // In the compact rail the waiting count rides the icon's corner as a badge:
+  // it used to stay in the row and squeeze the glyph, in the hint's grey.
+  const opener = page.getByRole('button', { name: /^Needs my answer/ })
+  await expect(opener.locator('.action-count')).toHaveText('1')
+  const [box, glyph, count] = await Promise.all(
+    [opener, opener.locator('svg'), opener.locator('.action-count')].map(async (part) =>
+      present(await part.boundingBox(), 'a laid-out box'),
+    ),
+  )
+  expect(glyph.width).toBe(20)
+  expect(glyph.x + glyph.width / 2).toBeCloseTo(box.x + box.width / 2, 0)
+  expect([count.y - box.y, box.x + box.width - (count.x + count.width)]).toEqual([0, 0])
+  await expect(opener.locator('.action-count')).toHaveCSS('font-weight', '600')
+  await opener.click()
   const dialog = page.getByRole('dialog', { name: 'Needs my answer', exact: true })
   const choice = dialog.getByRole('radiogroup', { name: 'Proceed · Required' })
   const no = choice.getByRole('radio', { name: 'No', exact: true })

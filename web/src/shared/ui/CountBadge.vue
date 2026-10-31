@@ -5,6 +5,11 @@
  * nothing. It is optional because the opposite case is just as real: a count
  * standing beside its own visible label already reads as "In the catalog 37",
  * and naming it again would override that with a worse sentence.
+ *
+ * `tone` says what the number is. Most counts describe a list — how many items
+ * a lane holds — and stay `quiet`. A count of things waiting for the reader, the
+ * questions an agent asked, is work to do: `waiting` gives it a filled ground,
+ * so it does not read as the shortcut hint printed beside it in the same grey.
  */
 import { computed } from 'vue'
 
@@ -14,8 +19,9 @@ const props = withDefaults(
     label?: string
     limit?: number
     placement?: 'overlay' | 'inline'
+    tone?: 'quiet' | 'waiting'
   }>(),
-  { label: undefined, limit: 99, placement: 'overlay' },
+  { label: undefined, limit: 99, placement: 'overlay', tone: 'quiet' },
 )
 
 /** Past the limit the badge stops counting and says so, so the glyph stays one shape. */
@@ -27,7 +33,7 @@ const shownValue = computed(() =>
 <template>
   <span
     class="count-badge"
-    :class="`placement-${placement}`"
+    :class="[`placement-${placement}`, `tone-${tone}`]"
     :aria-label="label"
     >{{ shownValue }}</span
   >
@@ -77,6 +83,18 @@ const shownValue = computed(() =>
     color: var(--color-text-on-dark-muted);
     font-weight: 500;
     background: none;
+  }
+
+  /* The overlay's ground and ink, standing in the line: a pill a little wider
+     than tall, so one digit and two both read as one shape. */
+  &.placement-inline.tone-waiting {
+    min-width: 18px;
+    height: 18px;
+    padding: 0 var(--space-1);
+    color: var(--color-text);
+    font-weight: 600;
+    background: var(--color-surface-active);
+    border-radius: 999px;
   }
 }
 </style>
