@@ -9,10 +9,15 @@ calls `run` once after it has opened the store.
 
 - deliver the hook spool: events a hook process could not write because the
   store was busy, missing or at another schema version;
-- release the Planning leases that went stale while no write met them.
+- release the Planning leases that went stale while no write met them;
+- sweep the transcript archive: make the copies a hook left owed, and purge
+  the ones retention releases.
 
 The spool goes first, because a delivered event can move a session's
-heartbeat forward and keep its lease from lapsing.
+heartbeat forward and keep its lease from lapsing, and a delivered session
+end is a copy the sweep then owes. The sweep is bounded in time, because a
+client waits for the MCP server it started; what it does not reach waits for
+the next start.
 """
 
 from __future__ import annotations
@@ -20,9 +25,13 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass, field
 
-from . import store
+from . import store, transcripts
 from .hooks import ingest, spool
 from .planning import service as planning_service
+
+#: How long the start-up sweep may keep starting new archive steps. A copy
+#: already under way still finishes, so this bounds the wait, not the copy.
+TRANSCRIPT_SWEEP_SECONDS = 2.0
 
 
 @dataclass
@@ -31,6 +40,7 @@ class Report:
 
     spool: ingest.DrainResult = field(default_factory=ingest.DrainResult)
     expired_leases: int = 0
+    transcripts: transcripts.SweepResult = field(default_factory=transcripts.SweepResult)
     #: The step that could not finish and why; the steps after it still ran.
     failures: list[str] = field(default_factory=list)
 
@@ -44,6 +54,7 @@ def run(conn: sqlite3.Connection) -> Report:
         report.expired_leases = expire_leases(conn)
     except sqlite3.Error as error:
         report.failures.append(f"lease expiry: {error}")
+    report.transcripts = transcripts.sweep(conn, seconds=TRANSCRIPT_SWEEP_SECONDS)
     return report
 
 
@@ -65,6 +76,8 @@ def start_up(conn: sqlite3.Connection) -> list[str]:
         lines.append(f"hook spool drain stopped: {report.spool.stopped}")
     if report.expired_leases:
         lines.append(f"released {report.expired_leases} expired Planning lease(s)")
+    if report.transcripts.stopped:
+        lines.append(f"transcript sweep stopped: {report.transcripts.stopped}")
     return lines
 
 

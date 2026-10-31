@@ -53,7 +53,9 @@ checkouts are therefore distinguishable even at the same version.
     within 1.2 seconds, which keeps the hook inside Codex's three-second
     `SessionEnd` budget. Anything else stays owed. `transcripts.sweep` makes
     owed copies, records a source that no longer exists, and purges copies by
-    the retention rule. The server start-up does not run it yet.
+    the retention rule. The start-up of an MCP server or `serve` runs it after
+    the spool drain and the lease expiry, starting no new step after two
+    seconds.
   - Retention: copies are kept while a non-terminal work item refers to the
     session, and for at least 90 days after the later of the session's last
     activity and the newest terminal transition of a referring item. A purge

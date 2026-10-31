@@ -436,11 +436,44 @@ class StartUpTests(unittest.TestCase):
             mock.patch.object(
                 housekeeping, "expire_leases", side_effect=store.sqlite3.OperationalError("locked")
             ),
+            mock.patch.object(
+                housekeeping.transcripts,
+                "sweep",
+                return_value=housekeeping.transcripts.SweepResult(),
+            ),
         ):
             self.assertEqual(
                 ["start-up maintenance: lease expiry: locked", "hook spool drain stopped: busy"],
                 housekeeping.start_up(mock.Mock()),
             )
+
+    def test_the_transcript_sweep_runs_last_and_bounded_and_says_when_it_stopped(self) -> None:
+        steps: list[str] = []
+        connection = mock.Mock()
+
+        def sweep(conn: object, *, seconds: float) -> object:
+            steps.append(f"sweep {seconds}")
+            self.assertIs(connection, conn)
+            return housekeeping.transcripts.SweepResult(archived=1, stopped="locked")
+
+        with (
+            mock.patch.object(
+                housekeeping,
+                "drain_spool",
+                side_effect=lambda _conn: (
+                    steps.append("drain") or housekeeping.ingest.DrainResult()
+                ),
+            ),
+            mock.patch.object(
+                housekeeping, "expire_leases", side_effect=lambda _conn: steps.append("leases") or 0
+            ),
+            mock.patch.object(housekeeping.transcripts, "sweep", side_effect=sweep),
+        ):
+            lines = housekeeping.start_up(connection)
+        self.assertEqual(
+            ["drain", "leases", f"sweep {housekeeping.TRANSCRIPT_SWEEP_SECONDS}"], steps
+        )
+        self.assertEqual(["transcript sweep stopped: locked"], lines)
 
 
 class AbandonedClaimTests(LeaseTestCase):

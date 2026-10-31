@@ -291,8 +291,10 @@ whatever its size. A source that no longer exists ends the debt with a
 `source-missing`. If the copy for that end is already in place because the
 hook renamed it but could not append the row, and its content matches its name,
 the sweep records that file instead. A source that cannot be read stays owed.
-The start-up of `serve` and the MCP server does not run the sweep yet, so owed
-copies wait until something does.
+The start-up of `serve` and the MCP server runs the sweep after the spool drain
+and the lease expiry. It starts no new step after two seconds, because a client
+waits for the MCP server it launched; a copy already under way still finishes,
+and what the sweep did not reach waits for the next start.
 
 ### Retention
 
