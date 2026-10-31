@@ -89,14 +89,15 @@ checkouts are therefore distinguishable even at the same version.
   restarts it.
 
 - A chain on the graph draws its open part by default: the root, the open
-  members, and every member that is the parent of one drawn, so the epics the
-  open work is filed under stay on the field. A «Closed · N» switch beside the
-  chip draws the closed members as well, and N is the number of nodes it adds.
-  The chip still counts the whole chain, and the legend names only the groups
-  drawn. On a chain of 600 members, 480 of them closed, the default draws 122
-  nodes instead of 601. Whether closed work is drawn is held apart for the
-  chain and the whole space, so leaving a chain gives the space back its own
-  filter, and each chain opens on its open part.
+  members, and every member that is the parent of another member, so each epic
+  the chain's work is filed under stays on the field, even one that closed with
+  all of its work. A «Closed · N» switch beside the chip draws the closed
+  members as well, and N is the number of nodes it adds. The chip still counts
+  the whole chain, and the legend names only the groups drawn. On a chain of
+  609 members, 489 of them closed, the default draws 123 nodes instead of 610.
+  Whether closed work is drawn is held apart for the chain and the whole
+  space, so leaving a chain gives the space back its own filter, and each
+  chain opens on its open part.
 - Chain views colour members by progress: finished green, in progress blue,
   review amber, queued and backlog grey, blocked red. That holds in the card's
   branch map, its member groups and its scope chart, and on the graph scoped to

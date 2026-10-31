@@ -134,30 +134,27 @@ function inScope(node: WorkItemBrief, scope: GraphScope): boolean {
 
 /**
  * The part of a chain the graph draws: its root, its open members, and every
- * member that is the parent of one drawn, so the epic a piece of open work was
- * filed under stays on the field even once it closed. Closed work is most of a
- * chain that has run for a while — four in five, in one that started this — and
- * laying it all out cost seconds and drew a field too small to read, so it is
- * drawn only when asked for. The root and the parents are drawn whatever their
- * state, because without them the open work has nothing to stand on.
+ * member that is the parent of another member — the epics the chain's work was
+ * filed under — so an origin epic stays on the field even once it and all of
+ * its work closed. Closed work is most of a chain that has run for a while —
+ * four in five, in one that started this — and laying it all out cost seconds
+ * and drew a field too small to read, so it is drawn only when asked for. The
+ * root and the epics are drawn whatever their state: they are the chain's
+ * shape, and without them the open work has nothing to stand on.
  */
 function chainNodes(source: GraphSource, scope: GraphScope, showDone: boolean): WorkItemBrief[] {
   const chain = new Set([scope.epicId, ...(scope.members ?? [])])
   const members = source.nodes.filter((node) => chain.has(node.work_item_id))
   if (showDone) return members
-  const byId = new Map(members.map((node) => [node.work_item_id, node]))
-  const kept = new Set<string | null>([scope.epicId])
-  for (const node of members) {
-    if (node.state.is_terminal) continue
-    // Up the parents for as long as they are in the chain; a visited parent
-    // has already brought its own, so the walk stops there.
-    let current: WorkItemBrief | undefined = node
-    while (current && !kept.has(current.work_item_id)) {
-      kept.add(current.work_item_id)
-      current = current.parent_id === null ? undefined : byId.get(current.parent_id)
-    }
-  }
-  return members.filter((node) => kept.has(node.work_item_id))
+  // Every in-chain ancestor of open work is some member's parent, so this one
+  // set also keeps the epics open work is filed under, however deep.
+  const parents = new Set(members.map((node) => node.parent_id))
+  return members.filter(
+    (node) =>
+      node.work_item_id === scope.epicId ||
+      !node.state.is_terminal ||
+      parents.has(node.work_item_id),
+  )
 }
 
 /**

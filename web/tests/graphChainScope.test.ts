@@ -140,32 +140,37 @@ test('a chain member is grouped by its workflow category, never by readiness', (
   assert.equal(at('cancelled', true), 'done')
 })
 
-test('a long chain draws the root, its open work and the epics that work is filed under', () => {
-  const { source, scope, root, openEpic, closedEpic } = longChainSpace()
+test('a long chain draws the root, its open work and every epic its work is filed under', () => {
+  const { source, scope, root, openEpic, closedEpic, doneEpic } = longChainSpace()
   const all = workNodes(source, true, scope)
-  // The whole chain: the root and its 600 members, the linked outsider left out;
-  // the 480 closed members and the closed root.
-  assert.equal(all.length, 601)
-  assert.equal(all.filter((node) => node.state.is_terminal).length, 481)
+  // The whole chain: the root and its 609 members, the linked outsider left out;
+  // the 489 closed members and the closed root.
+  assert.equal(all.length, 610)
+  assert.equal(all.filter((node) => node.state.is_terminal).length, 490)
 
   const drawn = workNodes(source, false, scope)
   const ids = new Set(drawn.map((node) => node.work_item_id))
-  // The 120 open members, the closed root, and the closed epic three of them
-  // are still filed under; nothing else that is closed.
-  assert.equal(drawn.length, 122)
+  // The 120 open members, the closed root, the closed epic three of them are
+  // still filed under, and the epic that closed with all of its work: an origin
+  // of the chain is drawn whether or not anything under it is still open.
+  // Nothing else that is closed.
+  assert.equal(drawn.length, 123)
   assert.ok(ids.has(root.work_item_id))
   assert.ok(ids.has(openEpic.work_item_id))
   assert.ok(ids.has(closedEpic.work_item_id))
+  assert.ok(ids.has(doneEpic.work_item_id))
   assert.deepEqual(
     drawn
       .filter((node) => node.state.is_terminal)
       .map((node) => node.reference)
       .sort((left, right) => left.localeCompare(right)),
-    [closedEpic.reference, root.reference].sort((left, right) => left.localeCompare(right)),
+    [closedEpic.reference, doneEpic.reference, root.reference].sort((left, right) =>
+      left.localeCompare(right),
+    ),
   )
-  // What the switch promises is exactly what it adds.
+  // What the switch promises is exactly what it adds: 610 drawn with it, 123 without.
   assert.equal(doneCount(source, scope), all.length - drawn.length)
-  assert.equal(doneCount(source, scope), 479)
+  assert.equal(doneCount(source, scope), 487)
 })
 
 test('a closed parent outside the chain does not come back with its open child', () => {

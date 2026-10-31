@@ -108,7 +108,7 @@ const reference = (number: number) => `MAIN-${10_000 + number}`
 
 /**
  * The long chain of the unit fixture, as this suite's space carries it: rooted at
- * MAIN-264, its 600 members filed in the space, and the answer the chain endpoint
+ * MAIN-264, its 609 members filed in the space, and the answer the chain endpoint
  * gives for them.
  */
 export function longChainHere() {

@@ -1,15 +1,16 @@
 /**
- * A long-running chain as the graph receives it: six hundred members, four in
- * five of them closed, with the shape a real one grows into.
+ * A long-running chain as the graph receives it: six hundred and nine members,
+ * four in five of them closed, with the shape a real one grows into.
  *
  * The root epic closed with its 270 children done. One child led to a second
  * epic, still open, that collected 240 items of its own (90 open); another led to
- * a follow-up epic that has closed while 3 of its 12 children are still open; and
- * 76 more items (26 open) were discovered from the root's children and filed
- * under no epic. That is 600 members: 480 closed and 120 open.
+ * a follow-up epic that has closed while 3 of its 12 children are still open; a
+ * third led to an epic that closed with all 8 of its children done; and 76 more
+ * items (26 open) were discovered from the root's children and filed under no
+ * epic. That is 609 members: 489 closed and 120 open.
  *
  * Built rather than written out, so the counts above are arithmetic a reader can
- * check, and so a test can ask what the default leaves out without a 600-row
+ * check, and so a test can ask what the default leaves out without a 609-row
  * literal.
  */
 import type { GraphScope, GraphSource } from '@/widgets/work-item-graph/utils/graphLayout.ts'
@@ -64,6 +65,7 @@ function batch(start: number, count: number, open: number, parent: string | null
 
 export function longChainSpace(): {
   closedEpic: WorkItemBrief
+  doneEpic: WorkItemBrief
   openEpic: WorkItemBrief
   root: WorkItemBrief
   scope: GraphScope
@@ -75,8 +77,19 @@ export function longChainSpace(): {
   const second = batch(1000, 240, 90, openEpic.work_item_id)
   const closedEpic = brief(3, true, null, true)
   const followUps = batch(2000, 12, 3, closedEpic.work_item_id)
+  const doneEpic = brief(4, true, null, true)
+  const finished = batch(2100, 8, 0, doneEpic.work_item_id)
   const loose = batch(3000, 76, 26, null)
-  const members = [...children, openEpic, ...second, closedEpic, ...followUps, ...loose]
+  const members = [
+    ...children,
+    openEpic,
+    ...second,
+    closedEpic,
+    ...followUps,
+    doneEpic,
+    ...finished,
+    ...loose,
+  ]
   const discovered = (from: WorkItemBrief, to: WorkItemBrief): PlanningEdge => ({
     from: from.work_item_id,
     to: to.work_item_id,
@@ -85,6 +98,7 @@ export function longChainSpace(): {
   const edges: PlanningEdge[] = [
     discovered(openEpic, children[0]),
     discovered(closedEpic, children[1]),
+    discovered(doneEpic, children[3]),
     ...loose.map((item, index) => discovered(item, children[(index * 7) % children.length])),
     ...second.slice(0, 80).flatMap((item, index) =>
       index % 2 === 0
@@ -103,6 +117,7 @@ export function longChainSpace(): {
       discovered(item, index < 160 ? children[(index * 3) % children.length] : second[index - 160]),
     ),
     ...followUps.map((item, index) => discovered(item, children[100 + index])),
+    ...finished.map((item, index) => discovered(item, children[120 + index])),
   ]
   // An item outside the chain, linked to it, which no scope of the chain draws.
   const outside = brief(9000, false, null)
@@ -111,6 +126,7 @@ export function longChainSpace(): {
     root,
     openEpic,
     closedEpic,
+    doneEpic,
     source: { nodes: [root, ...members, outside], edges },
     scope: {
       kind: 'chain',
