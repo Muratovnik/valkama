@@ -235,7 +235,7 @@ test('a chain whose read failed is read again on Retry', async ({ page }) => {
   failing = false
   await failure.getByRole('button', { name: 'Retry' }).click()
   await expect(failure).toHaveCount(0)
-  await expect(page.locator('.graph-chip')).toHaveText('Chain MAIN-264 · 16')
+  await expect(page.locator('.graph-chip')).toHaveText('Chain MAIN-264 · 17')
   await expect(page.locator('.flow-node-card')).toHaveCount(10)
 })
 
