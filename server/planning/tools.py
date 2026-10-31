@@ -71,7 +71,7 @@ _OFFSET = {
 #: The most open members one page of get_work_item_chain carries.
 CHAIN_PAGE = 200
 #: How many of a chain's newest series entries get_work_item_chain carries.
-CHAIN_SERIES_DAYS = 30
+CHAIN_SERIES_ENTRIES = 30
 #: How much history get_work_item carries unless the caller asks for all of it.
 RECENT_COMMENTS = 5
 RECENT_EVENTS = 10
@@ -206,7 +206,8 @@ TOOLS = [
         " item discovered from it or from a member and every child of a member;"
         " relates-to, duplicates and blocks never widen it. Answers with total,"
         " closed, open, ready, by_category, origins (members grouped by parent),"
-        f" the last {CHAIN_SERIES_DAYS} days of series and recent: the last 7 UTC"
+        f" the newest {CHAIN_SERIES_ENTRIES} entries of series (one per day with a"
+        " change) and recent: the last 7 UTC"
         " days' created and closed and a trend of growing, converging or steady."
         " open_members lists the open members, active first, then review, then"
         f" ready, then the rest; at most {CHAIN_PAGE} per page." + _PAGING,
@@ -827,7 +828,7 @@ def _chain(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
     found = dict(answer[1]["chain"])
     members = found.pop("members")
     found.pop("edges")
-    found["series"] = found["series"][-CHAIN_SERIES_DAYS:]
+    found["series"] = found["series"][-CHAIN_SERIES_ENTRIES:]
     open_members = sorted(
         (member for member in members if not member["state"]["is_terminal"]),
         key=_open_rank,
