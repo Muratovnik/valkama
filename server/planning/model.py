@@ -140,6 +140,18 @@ def multiline_field(value: object, field: str, *, limit: int = MAX_DESCRIPTION) 
     return value.strip()
 
 
+def count_field(value: object, field: str) -> int:
+    """A count of things, such as where a page starts: an integer, never negative.
+
+    A boolean is refused although Python calls it an integer, because `true`
+    sent as an offset is a caller's mistake, not the number one.
+    """
+
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise PlanningError(f"{field} must be a non-negative integer")
+    return value
+
+
 def enum_field(value: object, allowed: frozenset[str], field: str) -> str:
     if not isinstance(value, str) or value not in allowed:
         raise PlanningError(f"{field} must be one of {', '.join(sorted(allowed))}")

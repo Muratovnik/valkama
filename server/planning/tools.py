@@ -803,11 +803,7 @@ def _open_rank(member: dict) -> int:
 
 def _count_argument(arguments: Mapping[str, object], name: str, default: int) -> int:
     value = arguments.get(name)
-    if value is None:
-        return default
-    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
-        raise model.PlanningError(f"{name} must be a non-negative integer")
-    return value
+    return default if value is None else model.count_field(value, name)
 
 
 def _chain(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:

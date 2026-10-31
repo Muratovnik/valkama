@@ -189,6 +189,17 @@ class PlanningApiTests(unittest.TestCase):
         with self.assertRaisesRegex(planning_api.PlanningHttpError, "must be an integer"):
             planning_api.handle_get(self.conn, "/api/planning/work-items", {"limit": ["soon"]})
 
+    def test_a_page_offset_from_a_direct_caller_is_a_count(self) -> None:
+        # The typed rule the MCP chain tool applies to its own offset and limit.
+        wanted = "^offset must be a non-negative integer$"
+        for offset in (-1, True, "2"):
+            with self.subTest(offset=offset):
+                with self.assertRaisesRegex(model.PlanningError, wanted):
+                    service.list_work_items(self.conn, offset=offset)  # type: ignore[arg-type]
+                with self.assertRaisesRegex(model.PlanningError, wanted):
+                    service.search_work_items(self.conn, "x", offset=offset)  # type: ignore[arg-type]
+        self.assertEqual([], service.list_work_items(self.conn, space="QA", offset=5))
+
     # -- writes --------------------------------------------------------------
 
     def test_the_whole_path_of_one_item_goes_through_this_boundary(self) -> None:

@@ -141,7 +141,9 @@ def list_work_items(
     # and an order with ties lets one page repeat an item the next page skips.
     query += " ORDER BY s.position, i.position, i.number, i.work_item_id"
     query += " LIMIT ? OFFSET ?"
-    parameters.extend([-1 if limit is None else max(1, int(limit)), _offset(offset)])
+    parameters.extend(
+        [-1 if limit is None else max(1, int(limit)), model.count_field(offset, "offset")]
+    )
     rows = conn.execute(query, parameters).fetchall()
     return [read_model.present(conn, row) for row in rows]
 
@@ -217,7 +219,9 @@ def search_work_items(
         clauses,
     )
     query += " ORDER BY i.updated_at DESC, i.work_item_id LIMIT ? OFFSET ?"
-    rows = conn.execute(query, (*parameters, max(1, int(limit)), _offset(offset))).fetchall()
+    rows = conn.execute(
+        query, (*parameters, max(1, int(limit)), model.count_field(offset, "offset"))
+    ).fetchall()
     found = []
     for row in rows:
         item = read_model.present(conn, row)
@@ -242,14 +246,6 @@ def search_work_items_page(
     size = max(1, min(int(limit), MAX_SEARCH_PAGE))
     found = search_work_items(conn, query, space=space, limit=size + 1, offset=offset)
     return _page(found, size, offset)
-
-
-def _offset(value: object) -> int:
-    """Where a page starts: a count of items to skip, so never negative."""
-
-    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
-        raise model.PlanningError("offset must be a non-negative integer")
-    return value
 
 
 def _page(found: list[dict], size: int, offset: int) -> dict:
