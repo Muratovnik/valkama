@@ -139,3 +139,33 @@ test('English and Russian catalogs translate checklist actors, activity, source 
 
   i18n.global.locale.value = 'en'
 })
+
+test('a counted Russian message takes the form its number asks for, and English its two', () => {
+  const days = (count: number) => i18n.global.t('workItem.chain.forecast.day', { count }, count)
+  const weeks = (count: number) => i18n.global.t('workItem.chain.forecast.week', { count }, count)
+  i18n.global.locale.value = 'ru'
+  assert.deepEqual(
+    [1, 2, 4, 5, 11, 12, 21, 22, 25, 111].map((count) => days(count)),
+    [
+      '1 день',
+      '2 дня',
+      '4 дня',
+      '5 дней',
+      '11 дней',
+      '12 дней',
+      '21 день',
+      '22 дня',
+      '25 дней',
+      '111 дней',
+    ],
+  )
+  assert.deepEqual(
+    [1, 3, 6].map((count) => weeks(count)),
+    ['1 неделю', '3 недели', '6 недель'],
+  )
+  i18n.global.locale.value = 'en'
+  assert.deepEqual(
+    [1, 2, 21].map((count) => days(count)),
+    ['1 day', '2 days', '21 days'],
+  )
+})

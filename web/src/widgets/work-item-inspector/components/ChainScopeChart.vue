@@ -13,7 +13,7 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { seriesDate } from '@/widgets/work-item-inspector/utils/chainSummary.ts'
+import { dayFormat, seriesDate } from '@/widgets/work-item-inspector/utils/chainSummary.ts'
 
 import type { ChainDay } from '@/shared/api/planningChainApi.ts'
 import { statePresentation } from '@/shared/lib/uiSystem.ts'
@@ -74,9 +74,7 @@ const gapPath = computed(() => {
   return `${totalPath.value} V${closed[last]} ${back.join(' ')} Z`
 })
 
-const format = computed(
-  () => new Intl.DateTimeFormat(locale.value, { day: 'numeric', month: 'short', timeZone: 'UTC' }),
-)
+const format = computed(() => dayFormat(locale.value))
 function dayLabel(day: string): string {
   return format.value.format(seriesDate(day))
 }

@@ -21,6 +21,7 @@ import ChainBranchMap from '@/widgets/work-item-inspector/components/ChainBranch
 import ChainMembers from '@/widgets/work-item-inspector/components/ChainMembers.vue'
 import ChainScopeChart from '@/widgets/work-item-inspector/components/ChainScopeChart.vue'
 import { groupMembers, sharedStateName } from '@/widgets/work-item-inspector/utils/chainSummary.ts'
+import { useChainForecast } from '@/widgets/work-item-inspector/utils/useChainForecast.ts'
 
 import type { ChainScope, WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import { OPEN_CHAIN_GROUPS } from '@/shared/api/planningChainGroups.ts'
@@ -132,16 +133,7 @@ const headline = computed(() =>
     : '',
 )
 
-const trend = computed(() => {
-  const recent = props.chain?.recent
-  if (!recent) return ''
-  return t(props.chain?.scope === 'epic' ? 'workItem.chain.trendEpic' : 'workItem.chain.trend', {
-    days: recent.days,
-    created: recent.created,
-    closed: recent.closed,
-    verdict: t(`workItem.chain.verdict.${recent.trend}`),
-  })
-})
+const forecast = useChainForecast(() => props.chain)
 </script>
 
 <template>
@@ -214,8 +206,8 @@ const trend = computed(() => {
         <p class="chain-headline">
           {{ headline }}
         </p>
+        <p class="chain-forecast">{{ forecast }}</p>
         <p class="chain-breakdown">{{ breakdown }}</p>
-        <p class="chain-trend">{{ trend }}</p>
       </div>
 
       <ChainBranchMap
@@ -288,11 +280,17 @@ const trend = computed(() => {
 }
 
 .chain-breakdown,
-.chain-trend {
+.chain-forecast {
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
   font-variant-numeric: tabular-nums;
+}
+
+/* Whether and when the open part closes is what the totals above it are read
+   for, so it ranks next to them: their tone, the detail's size and weight. */
+.chain-forecast {
+  color: var(--color-text);
 }
 
 .chain-quiet {

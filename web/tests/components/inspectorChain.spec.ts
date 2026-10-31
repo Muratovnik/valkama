@@ -91,8 +91,10 @@ describe('the chain section of a card', () => {
     expect(chain.get('.chain-breakdown').text()).toBe(
       '133 open: development 11 · code review 1 · todo 14 · backlog 107; workable: 115 — unheld and unblocked, backlog included',
     )
-    expect(chain.get('.chain-trend').text()).toBe(
-      'Last 7 days: +53 discovered, −42 closed — scope is growing',
+    // 53 discovered against 42 closed: the open part grows unless more than
+    // 53 ÷ 7 ≈ 7.57 close a day, said to a tenth and rounded up.
+    expect(chain.get('.chain-forecast').text()).toBe(
+      'Last 7 days: +53 discovered, −42 closed. New work arrives faster than it closes: to converge, more than 7.6 a day must close',
     )
     expect(chain.get('.chain-chart').attributes('aria-label')).toContain('616 now')
     expect(chain.get('.chain-chart').attributes('aria-label')).toContain('483 closed and 133 open')
@@ -177,7 +179,7 @@ describe('the chain section of a card', () => {
     await getButton(wrapper, 'Epic').trigger('click')
     await flushPromises()
     expect(asked.map((query) => query.get('scope'))).toEqual(['chain', 'epic'])
-    expect(section(wrapper).get('.chain-trend').text()).toContain('+53 added')
+    expect(section(wrapper).get('.chain-forecast').text()).toContain('+53 added, −42 closed')
   })
 
   it('holds the place with a loading line only for an item known to have children', async () => {

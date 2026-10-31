@@ -519,6 +519,9 @@ differs from a board card's tones on purpose: a card says what is happening to
 it now, a lane says how far it has come. The lane is a 3px status edge; where a
 member is narrower than a few pixels, work under way rides it as a raised
 rounded mark, so it is still seen without spending a surface on it.
+Under the chain's totals, one line answers whether and when the open part
+closes, from the last seven days, and says so as a range when those days
+disagree.
 The related work/session/evidence context is one grouped relationship region,
 not a decorative sequence. Execution history and native session opening stay
 inside work-item context; Memory is a typed reference there.

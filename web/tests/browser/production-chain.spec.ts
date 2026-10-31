@@ -102,7 +102,9 @@ for (const width of [1440, 390]) {
     await expect(section.locator('.chain-breakdown')).toHaveText(
       '133 open: development 11 · code review 1 · todo 14 · backlog 107; workable: 115 — unheld and unblocked, backlog included',
     )
-    await expect(section.locator('.chain-trend')).toContainText('scope is growing')
+    await expect(section.locator('.chain-forecast')).toHaveText(
+      'Last 7 days: +53 discovered, −42 closed. New work arrives faster than it closes: to converge, more than 7.6 a day must close',
+    )
     await expect(section.getByRole('img')).toHaveAttribute('aria-label', /616 now/u)
     await section.screenshot(shot(info, `chain-card-${width}.png`))
     await section.getByRole('button', { name: 'Show all · 107' }).click()

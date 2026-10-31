@@ -85,6 +85,13 @@ interface MapRoot {
 
 interface ChainExtras {
   edges?: MapEdge[]
+  /** The last seven days as the server sums them; nothing moved unless given. */
+  recent?: {
+    closed: number
+    created: number
+    days: number
+    trend: 'converging' | 'growing' | 'steady'
+  }
   scope?: 'chain' | 'epic'
   /** Each parent epic's title, by reference. */
   titles?: Record<string, string>
@@ -173,10 +180,42 @@ export function chainOf(root: MapRoot, members: MapMember[], extras: ChainExtras
     by_category: byCategory,
     origins: originsOf(root, members, extras.titles ?? {}),
     series: seriesOf(members),
-    recent: { days: 7, created: 0, closed: 0, trend: 'steady' as const },
+    recent: extras.recent ?? { days: 7, created: 0, closed: 0, trend: 'steady' as const },
     members: ranked(members),
     edges: extras.edges ?? [],
   }
+}
+
+/** What each day added and closed, keyed by how many days before `today` it was. */
+export type DayChanges = Record<number, [created: number, closed: number]>
+
+function trendOf(created: number, closed: number) {
+  if (created > closed) return 'growing' as const
+  return created < closed ? ('converging' as const) : ('steady' as const)
+}
+
+/**
+ * A chain's series and seven-day window from per-day changes: the series in
+ * day order with running totals, and the window — `today` and the six days
+ * before it — summed as the server sums it.
+ */
+export function historyOf(today: string, changes: DayChanges) {
+  const dayBefore = (ago: number) =>
+    new Date(Date.parse(`${today}T00:00:00Z`) - ago * 86_400_000).toISOString().slice(0, 10)
+  let total = 0
+  let closedTotal = 0
+  const series = Object.entries(changes)
+    .map(([ago, change]) => [Number(ago), change] as const)
+    .sort(([left], [right]) => right - left)
+    .map(([ago, [created, closed]]) => {
+      total += created
+      closedTotal += closed
+      return { day: dayBefore(ago), created, closed, total, closed_total: closedTotal }
+    })
+  const window = series.filter((day) => day.day >= dayBefore(6))
+  const created = window.reduce((sum, day) => sum + day.created, 0)
+  const closed = window.reduce((sum, day) => sum + day.closed, 0)
+  return { series, recent: { days: 7, created, closed, trend: trendOf(created, closed) } }
 }
 
 export function found(from: MapMember, to: { work_item_id: string }): MapEdge {

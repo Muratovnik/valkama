@@ -69,6 +69,15 @@ checkouts are therefore distinguishable even at the same version.
   feature, which is off by default; its calls reach the new release either
   way. See the
   [connection contract](docs/connection-contract.md#a-release-switch-under-a-running-session).
+- The card's chain section says when the open part closes. Under the totals,
+  one line gives the last seven days — what was added and what closed — and
+  what that pace means: «At this pace the open work closes in about 9 days
+  (by Nov 9)» while more closes than is added; how much must close a day to
+  converge while it does not; that nothing moved, when nothing did. When the
+  days of the window disagree, the answer is a range, and one that has no far
+  end says the pace is uneven; past two weeks it is said in weeks, past nine
+  in months, and past a year it gives no figure. A chain with less than seven
+  days of history says how many days it has and gives no forecast.
 
 ### Changed
 
@@ -95,6 +104,8 @@ checkouts are therefore distinguishable even at the same version.
 - The branch map replaces the card's line of origins: each lane's label names
   its epic, or says it has none, and its counts stand at the lane's end.
 - The card's scope chart is shorter and stands under the branch map.
+- The chain section's seven-day line replaces the bare «scope is growing»
+  verdict with the forecast above, and stands directly under the totals.
 - In the card's chain section, a member row names its state only when its
   group mixes states. A group in one state names it once, in its heading, and
   the finished group is headed the same way.
@@ -126,6 +137,9 @@ checkouts are therefore distinguishable even at the same version.
   download the 193 kB fallback face.
 - The service sends the fallback font, the licence notice and the licence text
   with their own content types instead of `application/octet-stream`.
+- The chain section printed «+0 discovered, −0 closed»; a zero has no sign.
+- Russian plurals: a counted message picks among день, дня and дней by the
+  platform's plural rules, where it used to apply the English two-form rule.
 - The chain a graph is scoped to is now part of the address. The Planning
   module's route state admits two more keys, `chain` (the root's reference)
   and `chain_scope` (`chain` or `epic`), so a reload, a shared link, Back and

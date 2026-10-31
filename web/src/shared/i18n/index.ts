@@ -23,11 +23,35 @@ function initialLocale(): AppLocale {
 
 export const messages = { en, ru } as const
 
+const RUSSIAN = new Intl.PluralRules('ru')
+/** Which of a Russian message's three forms a number takes: день, дня, дней. */
+const RUSSIAN_FORMS: Record<Intl.LDMLPluralRule, number> = {
+  zero: 2,
+  one: 0,
+  two: 1,
+  few: 1,
+  many: 2,
+  // A fraction: «1,5 дня» takes the form of «2 дня».
+  other: 1,
+}
+
+/**
+ * How a `|`-separated message picks its form. English needs no rule — vue-i18n's
+ * default is the English one — but applies that same two-form rule to Russian,
+ * which has three, and would print «2 дней». The forms come from the platform's
+ * plural rules rather than from arithmetic on the last digits.
+ */
+export const pluralRules = {
+  ru: (choice: number, choicesLength: number) =>
+    choicesLength === 3 ? RUSSIAN_FORMS[RUSSIAN.select(Math.abs(choice))] : Number(choice !== 1),
+}
+
 export const i18n = createI18n({
   legacy: false,
   locale: initialLocale(),
   fallbackLocale: 'en',
   messages,
+  pluralRules,
   datetimeFormats: {
     en: {
       activity: {

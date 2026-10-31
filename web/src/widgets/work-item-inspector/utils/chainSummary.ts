@@ -70,3 +70,8 @@ export function rowStateName(group: readonly ChainMember[], member: ChainMember)
 export function seriesDate(day: string): Date {
   return new Date(`${day}T00:00:00Z`)
 }
+
+/** A chain's days as the card writes them — «9 нояб.», "Nov 9" — on the UTC calendar they are in. */
+export function dayFormat(locale: string): Intl.DateTimeFormat {
+  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' })
+}
