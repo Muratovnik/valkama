@@ -46,7 +46,6 @@ const rootSchema = strictObject({
   reference: reference(),
   title: title(),
   kind: enumField(WORK_ITEM_KINDS),
-  container: z.boolean(),
   has_children: z.boolean(),
 })
 

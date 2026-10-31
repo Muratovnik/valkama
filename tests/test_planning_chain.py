@@ -207,7 +207,6 @@ class ChainBoundaryTests(ChainFixture):
                 "reference": self.refs["R"],
                 "title": "R",
                 "kind": "epic",
-                "container": True,
                 "has_children": True,
             },
             by_reference["root"],
@@ -216,9 +215,7 @@ class ChainBoundaryTests(ChainFixture):
     def test_a_root_without_children_still_has_what_was_discovered_from_it(self) -> None:
         found = self.read(id=self.refs["D1"])
         self.assertEqual(["F"], self.names([m["reference"] for m in found["members"]]))
-        self.assertEqual(
-            (False, False), (found["root"]["container"], found["root"]["has_children"])
-        )
+        self.assertFalse(found["root"]["has_children"])
         self.assertEqual(0, self.read(id=self.refs["D1"], scope="epic")["total"])
 
     def test_counts_and_categories(self) -> None:

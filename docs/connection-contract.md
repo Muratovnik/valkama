@@ -193,7 +193,7 @@ answers with `interface_version` and `chain`:
 
 | Field | What it holds |
 | --- | --- |
-| `root` | `work_item_id`, `reference`, `title`, `kind`, `container` and `has_children`, both true when any item names the root as its parent |
+| `root` | `work_item_id`, `reference`, `title`, `kind` and `has_children`, true when any item names the root as its parent |
 | `scope` | `chain` or `epic` |
 | `total`, `closed`, `open`, `ready` | how many members there are, how many are in a terminal state, how many are not, and how many are ready |
 | `by_category` | members per workflow category, for the categories that have any |

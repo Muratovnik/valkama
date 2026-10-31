@@ -60,7 +60,6 @@ export function smallChain() {
       reference: workItemRef.reference,
       title: workItem.title,
       kind: 'epic' as const,
-      container: true,
       has_children: true,
     },
     scope: 'chain' as const,

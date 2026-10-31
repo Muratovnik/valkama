@@ -139,9 +139,6 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
             "reference": model.human_id(key, int(root["number"])),
             "title": root["title"],
             "kind": root["kind"],
-            # The read model calls an item with children a container; both
-            # names are published so a reader need not know that.
-            "container": root_id in children,
             "has_children": root_id in children,
         },
         "scope": scope,
