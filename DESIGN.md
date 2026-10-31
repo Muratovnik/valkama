@@ -331,7 +331,7 @@ glass, gradients, glow, oversized marketing headings, or game-like chrome.
   Tokens live in `tokens.css`, element defaults in `base.css`, application
   chrome in `shell.css`, and everything else in its component's scoped block.
 - The stylesheet language is CSS, and nesting is native and shallow. Chromium
-  150 — what the desktop app runs — ships nesting, `:has()`, `@container` and
+  156 — what the desktop app runs — ships nesting, `:has()`, `@container` and
   `@property`, so a preprocessor would buy none of them. It would also bring a
   second nesting language: Sass desugars textually without `:is()`, so the same
   source resolves to a different specificity than the browser gives it, and the

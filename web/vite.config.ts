@@ -12,7 +12,7 @@ export default defineConfig({
   // Lightning CSS, its CSS minifier, lowers any syntax the target predates.
   // Native nesting is the one this project uses, and Chrome 111 predates it:
   // at the default every nested rule is flattened back into repeated selectors
-  // and `user-select` gains a `-webkit-` twin. The desktop app runs Chromium 150
+  // and `user-select` gains a `-webkit-` twin. The desktop app runs Chromium 156
   // while a browser reader is on an evergreen one, so lowering it would spend
   // selector clarity to reach nobody.
   build: { outDir: 'dist', emptyOutDir: true, cssTarget: 'chrome150' },

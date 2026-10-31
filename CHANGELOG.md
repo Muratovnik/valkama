@@ -37,6 +37,7 @@ checkouts are therefore distinguishable even at the same version.
   any state work can start from, the backlog included.
 - A work item of an attached store shows the chain section with a note that
   the chain is read for work items of the primary store only.
+- The desktop app is built on Electron 45 (Chromium 156), up from Electron 43.
 
 ### Fixed
 

@@ -35,7 +35,7 @@ test('the renderer stays isolated, unprivileged and sandboxed', () => {
 })
 
 test('every packaged fuse keeps its hardened value', () => {
-  // Electron 43 supports all of these on Windows, including embedded ASAR
+  // Electron 45 supports all of these on Windows, including embedded ASAR
   // integrity, which needs Electron 30 or newer there.
   const expected = {
     runAsNode: false,
