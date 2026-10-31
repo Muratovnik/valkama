@@ -30,6 +30,22 @@ const searchSchema = strictObject({
 
 export type GlobalPlanningSearch = z.infer<typeof searchSchema>
 
+/**
+ * The refusals that stop the whole search rather than one source, by the code
+ * the server names them with. Anything else is an ordinary failed request.
+ */
+const SEARCH_REFUSALS = new Set(['project_registry_unavailable', 'planning_binding_invalid'])
+const refusalSchema = z.object({ error: z.object({ message: z.string() }) })
+
+function refusal(response: Response, payload: unknown): Error {
+  const parsed = refusalSchema.safeParse(payload)
+  const reason = parsed.success ? parsed.data.error.message : ''
+  return Object.assign(new Error(`HTTP ${response.status}`), {
+    code: SEARCH_REFUSALS.has(reason) ? reason : 'request_failed',
+    status: response.status,
+  })
+}
+
 export async function searchGlobalPlanningWorkItems(
   query: string,
   signal: AbortSignal,
@@ -42,7 +58,7 @@ export async function searchGlobalPlanningWorkItems(
     },
   )
   signal.throwIfAborted()
-  if (!response.ok) throw new Error(`HTTP ${response.status}`)
+  if (!response.ok) throw refusal(response, payload)
   const result = searchSchema.parse(payload)
   if (result.query !== query || result.limit !== 50) throw new Error('Search response mismatch')
   return result

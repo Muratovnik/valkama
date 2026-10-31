@@ -53,6 +53,17 @@ describe('global Planning search contract', () => {
     ).rejects.toThrow('does not match')
   })
 
+  it('carries a named refusal of the whole search and nothing else the body says', async () => {
+    serve({ error: { code: 'unavailable', message: 'project_registry_unavailable' } }, 409)
+    await expect(
+      searchGlobalPlanningWorkItems('needle', new AbortController().signal),
+    ).rejects.toMatchObject({ code: 'project_registry_unavailable', status: 409 })
+    serve({ error: { code: 'unavailable', message: 'C:/private/store is locked' } }, 409)
+    await expect(
+      searchGlobalPlanningWorkItems('needle', new AbortController().signal),
+    ).rejects.toMatchObject({ code: 'request_failed', status: 409 })
+  })
+
   it('rejects oversized responses and stale response queries', async () => {
     const payload = finderResponse()
     const item = present(payload.items[0], 'search item')

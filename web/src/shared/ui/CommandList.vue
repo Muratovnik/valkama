@@ -1,25 +1,54 @@
 <script setup lang="ts">
-import { computed, useId } from 'vue'
+import { computed, useId, useTemplateRef, watch } from 'vue'
 
 import { ListboxContent, ListboxFilter, ListboxItem, ListboxRoot } from 'reka-ui'
 
 const props = defineProps<{
-  items: readonly { detail: string; key: string; title: string }[]
+  items: readonly { detail: string; key: string; title: string; reference?: string }[]
   label: string
   loading: boolean
   placeholder: string
   query: string
   resultsLabel: string
 }>()
-const emit = defineEmits<{ 'select': [key: string]; 'update:query': [value: string] }>()
+const emit = defineEmits<{
+  'select': [key: string]
+  'submit': []
+  'update:query': [value: string]
+}>()
 const resultsId = useId()
 const busyMark = computed(() => props.loading || undefined)
+const root = useTemplateRef<{ highlightFirstItem: () => void }>('root')
+
+// Reka highlights the first row as the query is typed, but the rows arrive
+// after the keystroke, so it highlighted nothing and Enter opened nothing until
+// an arrow key was pressed. A new set of rows starts on its first one.
+watch(
+  () => props.items.map((item) => item.key).join('\n'),
+  (keys) => {
+    if (keys) root.value?.highlightFirstItem()
+  },
+  { flush: 'post' },
+)
+
+/**
+ * Enter that no row took: Reka stops the event when a row is highlighted, so
+ * one that reaches the root found none — the rows are still loading, or the
+ * pointer left the list and took the highlight with it.
+ */
+function submit(event: KeyboardEvent) {
+  if (event.isComposing || event.ctrlKey || event.metaKey || event.altKey) return
+  event.preventDefault()
+  emit('submit')
+}
 </script>
 
 <template>
   <ListboxRoot
+    ref="root"
     class="command-list"
     :highlight-on-hover="true"
+    @keydown.enter="submit"
   >
     <ListboxFilter
       class="command-input"
@@ -50,7 +79,13 @@ const busyMark = computed(() => props.loading || undefined)
         @select.prevent="emit('select', item.key)"
       >
         <span class="command-title">{{ item.title }}</span>
-        <span class="command-detail">{{ item.detail }}</span>
+        <span class="command-detail">
+          <template v-if="item.reference">
+            <span class="command-reference">{{ item.reference }}</span>
+            <span aria-hidden="true"> · </span>
+          </template>
+          {{ item.detail }}
+        </span>
       </ListboxItem>
     </ListboxContent>
   </ListboxRoot>
@@ -81,15 +116,20 @@ const busyMark = computed(() => props.loading || undefined)
 .command-results {
   display: grid;
   gap: var(--space-1);
-  max-height: min(50dvh, 480px);
+  max-height: min(45dvh, 440px);
   overflow-y: auto;
+  overscroll-behavior: contain;
+
+  &:empty {
+    display: none;
+  }
 }
 
 .command-result {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-1);
   min-width: 0;
-  padding: var(--space-3);
+  padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-control);
   cursor: pointer;
 
@@ -100,14 +140,25 @@ const busyMark = computed(() => props.loading || undefined)
   }
 }
 
+/* Two lines, then an ellipsis: a long title is a row, not a paragraph, and the
+   whole of it stays the option's accessible name. */
 .command-title {
-  font-size: var(--font-size-interface);
+  display: -webkit-box;
+  font: var(--font-name);
   overflow-wrap: anywhere;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .command-detail {
   color: var(--color-text-muted);
-  font-size: var(--font-size-dense);
+  font: var(--font-detail);
   overflow-wrap: anywhere;
+}
+
+.command-reference {
+  color: var(--color-text);
+  font-family: var(--font-family-mono);
 }
 </style>

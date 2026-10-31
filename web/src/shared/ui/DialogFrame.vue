@@ -14,10 +14,11 @@ const props = withDefaults(
     context?: string
     /** Why the last submit did not go through. */
     error?: string
+    placement?: 'center' | 'top'
     subtitle?: string
     surfaceClass?: string
   }>(),
-  { subtitle: '', surfaceClass: '', busy: false, context: '', error: '' },
+  { subtitle: '', surfaceClass: '', busy: false, context: '', error: '', placement: 'center' },
 )
 
 const emit = defineEmits<{ close: []; submit: [] }>()
@@ -33,6 +34,7 @@ const busyMark = computed(() => props.busy || undefined)
     :title="title"
     :aria-label="title"
     :surface-class="surfaceClass"
+    :placement="placement"
     @close="emit('close')"
   >
     <form

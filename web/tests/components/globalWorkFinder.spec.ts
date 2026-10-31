@@ -36,6 +36,16 @@ async function search(wrapper: ReturnType<typeof finder>, query = 'needle') {
   await flushPromises()
 }
 
+/** A source the search could not read, and the code it gave for why. */
+function away(project: string, key: string, reason: string) {
+  return {
+    project_id: project,
+    space_ref: { data_scope_id: '44444444-4444-4444-8444-444444444444', space_key: key },
+    status: 'unavailable' as const,
+    reason,
+  }
+}
+
 beforeEach(() => {
   vi.useFakeTimers()
   vi.resetAllMocks()
@@ -142,8 +152,9 @@ describe('global task finder', () => {
     source.reason = 'C:/private/database.sqlite'
     response.has_more = true
     await search(wrapper, 'other query')
-    expect(wrapper.text()).toContain('Some sources are unavailable.')
-    expect(wrapper.text()).toContain('source unavailable')
+    expect(wrapper.text()).toContain('No matching tasks in the projects that were searched.')
+    expect(wrapper.text()).toContain('Not every project was searched')
+    expect(wrapper.text()).toContain('Could not be read: attached-project · TASK')
     expect(wrapper.text()).toContain('More matches are available.')
     expect(wrapper.text()).not.toContain('No matching tasks.')
     expect(wrapper.text()).not.toContain('database.sqlite')
@@ -157,7 +168,7 @@ describe('global task finder', () => {
     vi.mocked(searchGlobalPlanningWorkItems).mockResolvedValue(response)
     const wrapper = finder()
     await search(wrapper)
-    expect(wrapper.text()).toContain('Results are incomplete.')
+    expect(wrapper.text()).toContain('Not every project was searched')
     expect(wrapper.findAll('[role="option"]')).toHaveLength(1)
     expect(wrapper.text()).not.toContain('More matches are available.')
     source.status = 'searched'
@@ -165,7 +176,102 @@ describe('global task finder', () => {
     response.has_more = true
     await search(wrapper, 'refined')
     expect(wrapper.text()).toContain('More matches are available.')
-    expect(wrapper.text()).not.toContain('Results are incomplete.')
+    expect(wrapper.text()).not.toContain('Not every project was searched')
+  })
+
+  it('names each source it could not search and why, above the results', async () => {
+    const response = finderResponse()
+    const searched = present(response.coverage[0], 'searched source')
+    response.coverage = [
+      searched,
+      away('demo-project', 'AWAY', 'store_not_attached'),
+      ...['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE'].map((key) =>
+        away(`${key.toLowerCase()}-project`, key, 'store_unreadable'),
+      ),
+      away('odd-project', 'ODD', 'C:/private/reason'),
+    ]
+    vi.mocked(searchGlobalPlanningWorkItems).mockResolvedValue(response)
+    const wrapper = finder()
+    await search(wrapper)
+    const lines = wrapper.findAll('.finder-skipped-line').map((line) => line.text())
+    expect(lines).toEqual([
+      'Store not attached: demo-project · AWAY',
+      'Store could not be opened: one-project · ONE, two-project · TWO, three-project · THREE and 2 more',
+      'Could not be read: odd-project · ODD',
+    ])
+    expect(wrapper.text()).not.toContain('C:/private')
+    // The notice is in the live region and comes before the rows it qualifies,
+    // not after a list that may be longer than the dialog.
+    const status = wrapper.get('[role="status"]')
+    expect(status.text()).toContain('Store not attached')
+    const listbox = wrapper.get('[role="listbox"]').element
+    expect(
+      status.element.compareDocumentPosition(listbox) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+  })
+
+  it('opens the first result on Enter with no arrow key, and shows its reference', async () => {
+    const response = finderResponse('main-12')
+    const exact = present(response.items[0], 'exact item')
+    response.items = [
+      exact,
+      {
+        target: { ...exact.target, project_id: 'other-project' },
+        item: { ...exact.item, work_item_id: '55555555-5555-4555-8555-555555555555' },
+      },
+    ]
+    vi.mocked(searchGlobalPlanningWorkItems).mockResolvedValue(response)
+    const wrapper = finder()
+    await search(wrapper, 'main-12')
+    await flushPromises()
+    const first = present(wrapper.findAll('[role="option"]')[0], 'first option')
+    expect(first.get('.command-reference').text()).toBe('TASK-7')
+    const input = wrapper.get('[role="combobox"]')
+    expect(input.attributes('aria-activedescendant')).toBe(first.attributes('id'))
+    await input.trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('select')).toEqual([[finderTarget()]])
+  })
+
+  it('opens the first result once it arrives when Enter came first', async () => {
+    let resolve: (value: GlobalPlanningSearch) => void = vi.fn()
+    vi.mocked(searchGlobalPlanningWorkItems).mockReturnValue(
+      new Promise((done) => {
+        resolve = done
+      }),
+    )
+    const wrapper = finder()
+    const input = wrapper.get('[role="combobox"]')
+    await input.setValue('needle')
+    await input.trigger('keydown', { key: 'Enter' })
+    expect(wrapper.text()).toContain('the first match opens when it arrives')
+    expect(wrapper.emitted('select')).toBeUndefined()
+    await vi.advanceTimersByTimeAsync(251)
+    resolve(finderResponse())
+    await flushPromises()
+    expect(wrapper.emitted('select')).toEqual([[finderTarget()]])
+  })
+
+  it('forgets an early Enter when the query changes before the rows arrive', async () => {
+    vi.mocked(searchGlobalPlanningWorkItems).mockResolvedValue(finderResponse('needles'))
+    const wrapper = finder()
+    const input = wrapper.get('[role="combobox"]')
+    await input.setValue('needle')
+    await input.trigger('keydown', { key: 'Enter' })
+    await input.setValue('needles')
+    await vi.advanceTimersByTimeAsync(251)
+    await flushPromises()
+    expect(wrapper.findAll('[role="option"]')).toHaveLength(1)
+    expect(wrapper.emitted('select')).toBeUndefined()
+  })
+
+  it('names a failure that stopped every source', async () => {
+    vi.mocked(searchGlobalPlanningWorkItems).mockRejectedValue(
+      Object.assign(new Error('HTTP 409'), { code: 'project_registry_unavailable', status: 409 }),
+    )
+    const wrapper = finder()
+    await search(wrapper)
+    expect(wrapper.text()).toContain('The project list could not be read, so nothing was searched.')
+    expect(wrapper.get('button.finder-retry').text()).toBe('Retry search')
   })
 
   it('shows a safe error and retries the same query', async () => {
@@ -174,7 +280,7 @@ describe('global task finder', () => {
       .mockResolvedValueOnce(finderResponse())
     const wrapper = finder()
     await search(wrapper)
-    expect(wrapper.text()).toContain('Search could not finish.')
+    expect(wrapper.text()).toContain('The search could not finish.')
     expect(wrapper.text()).not.toContain('C:/private')
     await wrapper.get('button.button').trigger('click')
     await vi.advanceTimersByTimeAsync(251)

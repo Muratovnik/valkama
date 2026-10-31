@@ -81,12 +81,14 @@ test('root keyboard finder opens the exact attached result with partial coverage
   await expect(search).toBeFocused()
   await search.fill('MAIN-264')
   await expect(dialog.getByRole('option')).toContainText('Read only')
-  await expect(dialog.getByRole('status')).toContainText('Results are incomplete.')
+  await expect(dialog.getByRole('status')).toContainText(
+    'Could not be read: offline-project · MAIN',
+  )
   await expect(dialog.getByRole('status')).toContainText('More matches are available.')
   await expectNoSilentClipping(page, 'Finder at 390px')
   await page.screenshot({ path: testInfo.outputPath('finder-narrow.png') })
   executionReads.length = 0
-  await page.keyboard.press('ArrowDown')
+  // The first row is already the one Enter opens; no arrow key is needed.
   await page.keyboard.press('Enter')
   await expect(dialog).toBeHidden()
   await expect(page).toHaveURL(

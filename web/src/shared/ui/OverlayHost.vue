@@ -28,6 +28,12 @@ const props = withDefaults(
     drawerMinWidth?: number
     interactive?: boolean
     layer?: 'drawer' | 'command'
+    /**
+     * Where a dialog stands. One whose height follows what is typed into it
+     * stands near the top: centred, its search field moved up and down the
+     * window with every result that arrived or left.
+     */
+    placement?: 'center' | 'top'
     resizable?: boolean
     resizeLabel?: string
     surfaceClass?: string
@@ -75,13 +81,12 @@ const drawerWidth = computed(() =>
     Math.max(drawerMinimum.value, Math.round(preferredDrawerWidth.value)),
   ),
 )
-const surfaceStyle = computed(() =>
-  isResizableDrawer.value
-    ? {
-        width: viewportWidth.value <= DRAWER_NARROW_BREAKPOINT ? '100vw' : `${drawerWidth.value}px`,
-      }
-    : undefined,
-)
+const TOP_PLACEMENT = { alignSelf: 'start', marginBlockStart: '10dvh', maxHeight: '86dvh' }
+const surfaceStyle = computed(() => {
+  if (props.placement === 'top') return TOP_PLACEMENT
+  const width = viewportWidth.value <= DRAWER_NARROW_BREAKPOINT ? '100vw' : `${drawerWidth.value}px`
+  return isResizableDrawer.value ? { width } : undefined
+})
 
 /**
  * Whether this overlay takes input, as the five attributes that say so.

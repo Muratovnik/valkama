@@ -117,6 +117,21 @@ checkouts are therefore distinguishable even at the same version.
   `space_missing`, `binding_conflict` or `search_failed`. Every source used to
   say `source_unavailable`. The global request list names the same reasons for
   a source it skips.
+- The task finder opens the first result on Enter as soon as the results are
+  shown. The first row was not highlighted when the results arrived, so Enter
+  did nothing until an arrow key was pressed. An Enter pressed while the search
+  is still running opens the first result when it arrives, unless the query
+  changes first.
+- The task finder's notice that not every project was searched now names each
+  skipped project and space, grouped by why it was skipped, above the results.
+  It used to give no source or reason at the top and list the sources under
+  every result, out of sight on a long list. A failure that stops the whole
+  search says whether the project list could not be read, a planning binding
+  is malformed, or the search took too long.
+- The task finder stands near the top of the window, so its search field no
+  longer moves up and down as results arrive and leave. A row clamps a long
+  title to two lines and shows the reference in the metadata font, and the
+  Retry button no longer stretches across the dialog.
 
 ## [2.1.0](https://github.com/Muratovnik/valkama/compare/v2.0.0...v2.1.0) - 2026-10-31
 
