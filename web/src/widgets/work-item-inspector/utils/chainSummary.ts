@@ -6,7 +6,7 @@
  * its input than through a mounted component.
  */
 
-import type { ChainMember, ChainOrigin, WorkItemChain } from '@/shared/api/planningChainApi.ts'
+import type { ChainMember } from '@/shared/api/planningChainApi.ts'
 import { CHAIN_GROUPS, chainGroup } from '@/shared/api/planningChainGroups.ts'
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 
@@ -60,19 +60,6 @@ export function sharedStateName(members: readonly ChainMember[]): string | null 
  */
 export function rowStateName(group: readonly ChainMember[], member: ChainMember): string | null {
   return sharedStateName(group) === null ? member.state.name : null
-}
-
-/**
- * The root's own children, and every other place the chain's members came to
- * live: another epic they were filed under, or none. The server lists the root's
- * own children first; this only separates them so the card can name them as the
- * starting scope rather than as one more origin.
- */
-export function splitOrigins(chain: WorkItemChain): { later: ChainOrigin[]; own?: ChainOrigin } {
-  const [first, ...rest] = chain.origins
-  return first !== undefined && first.parent_reference === chain.root.reference
-    ? { own: first, later: rest }
-    : { later: chain.origins }
 }
 
 /** The day a series point names, read as a calendar date wherever the reader is. */

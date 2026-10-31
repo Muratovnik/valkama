@@ -129,6 +129,23 @@ describe('shared UI contracts', () => {
     })
   })
 
+  it('colours a chain by progress: finished green, under way blue, review amber, ahead grey, stuck red', () => {
+    const tones = Object.fromEntries(
+      (['done', 'active', 'review', 'queued', 'backlog', 'blocked'] as const).map((group) => [
+        group,
+        statePresentation('work-item-chain-group', group).tone,
+      ]),
+    )
+    expect(tones).toEqual({
+      done: 'success',
+      active: 'info',
+      review: 'warning',
+      queued: 'neutral',
+      backlog: 'neutral',
+      blocked: 'danger',
+    })
+  })
+
   it('owns work-item readiness severity in the shared state table', () => {
     expect(statePresentation('work-item-readiness', 'ready')).toEqual({
       emphasis: 'quiet',

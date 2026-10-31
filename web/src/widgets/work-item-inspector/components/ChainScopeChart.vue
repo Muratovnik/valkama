@@ -16,6 +16,7 @@ import { useI18n } from 'vue-i18n'
 import { seriesDate } from '@/widgets/work-item-inspector/utils/chainSummary.ts'
 
 import type { ChainDay } from '@/shared/api/planningChainApi.ts'
+import { statePresentation } from '@/shared/lib/uiSystem.ts'
 
 const props = defineProps<{ series: readonly ChainDay[] }>()
 
@@ -133,9 +134,10 @@ function track(event: PointerEvent) {
         }}</span
       >
       <span class="chain-key"
-        ><span class="chain-swatch swatch-closed" />{{
-          t('workItem.chain.seriesClosed', { count: point.closed_total })
-        }}</span
+        ><span
+          class="chain-swatch swatch-closed"
+          :data-tone="statePresentation('work-item-chain-group', 'done').tone"
+        />{{ t('workItem.chain.seriesClosed', { count: point.closed_total }) }}</span
       >
       <span class="chain-key"
         ><span class="chain-swatch swatch-open" />{{
@@ -181,6 +183,7 @@ function track(event: PointerEvent) {
           class="chain-line line-closed"
           vector-effect="non-scaling-stroke"
           :d="closedPath"
+          :data-tone="statePresentation('work-item-chain-group', 'done').tone"
         />
       </svg>
       <span
@@ -237,8 +240,15 @@ function track(event: PointerEvent) {
     background: var(--color-text);
   }
 
+  /* Closed work in the chain's own colour for finished work, as the branch
+     map draws it; the swatch is a mark, so the tone is its ink. */
   &.swatch-closed {
-    background: var(--color-graph-line);
+    color: var(--color-text-tertiary);
+    background: currentcolor;
+
+    &[data-tone='success'] {
+      color: var(--color-success);
+    }
   }
 
   &.swatch-open {
@@ -249,7 +259,7 @@ function track(event: PointerEvent) {
 
 .chain-plot {
   position: relative;
-  height: 96px;
+  height: 64px;
   padding-top: var(--space-1);
 }
 
@@ -289,7 +299,11 @@ function track(event: PointerEvent) {
   }
 
   &.line-closed {
-    stroke: var(--color-graph-line);
+    stroke: var(--color-text-tertiary);
+
+    &[data-tone='success'] {
+      stroke: var(--color-success);
+    }
   }
 }
 

@@ -75,7 +75,7 @@ const eight = <T>(value: T) => Array.from({ length: 8 }, () => value)
 describe('the chain section of a card', () => {
   useInspectorHarness()
 
-  it('reads a VAL-384-shaped chain as totals, open work by category, trend, origins and groups', async () => {
+  it('reads a VAL-384-shaped chain as totals, open work by category, trend, lanes and groups', async () => {
     const asked = serveChain(json(chainResponse(largeEpicChain())))
     const wrapper = await open()
     const chain = section(wrapper)
@@ -97,10 +97,21 @@ describe('the chain section of a card', () => {
     expect(chain.get('.chain-chart').attributes('aria-label')).toContain('616 now')
     expect(chain.get('.chain-chart').attributes('aria-label')).toContain('483 closed and 133 open')
 
-    const origins = chain.get('.chain-origins').text()
-    expect(origins).toContain('Own epic VAL-384: 273 (open 0)')
-    expect(origins).toContain('Discovered later: VAL-779 — 242 (open 100)')
-    expect(origins).toContain('no epic — 88 (open 30)')
+    // Each origin is a lane of the map, its counts at its end; the textual
+    // origins line the map replaced is gone.
+    expect(chain.find('.chain-origins').exists()).toBe(false)
+    expect(chain.findAll('.branch-map-label').map((label) => label.text())).toEqual([
+      'VAL-384',
+      'VAL-779',
+      'no epic',
+      'VAL-900',
+    ])
+    expect(chain.findAll('.branch-map-count').map((count) => count.text())).toEqual([
+      '273 ✓',
+      '142 ✓ · 12 in progress · 88 ahead',
+      '58 ✓ · 30 ahead',
+      '10 ✓ · 3 ahead',
+    ])
 
     const headings = chain.findAll('.chain-group-title').map((heading) => heading.text())
     expect(headings).toEqual(['Development · 11', 'Code review · 1', 'Todo · 14', 'Backlog · 107'])
@@ -215,7 +226,7 @@ describe('the chain section of a card', () => {
     expect(section(wrapper).find('.chain-headline').exists()).toBe(false)
   })
 
-  it('opens a member, or an origin, through the card navigation', async () => {
+  it('opens a member, or a lane’s epic, through the card navigation', async () => {
     serveChain(json(chainResponse(largeEpicChain())))
     const wrapper = await open()
     const row = section(wrapper).findAll('.chain-row')[0]
@@ -223,8 +234,76 @@ describe('the chain section of a card', () => {
     await row.trigger('click')
     await flushPromises()
     await getButton(wrapper, 'VAL-779').trigger('click')
+    await getButton(wrapper, 'Open VAL-779').trigger('click')
     await flushPromises()
     expect(wrapper.emitted('open')).toEqual([[reference], ['VAL-779']])
+  })
+
+  it('narrows the member list to the lane chosen on the map, and widens it back', async () => {
+    serveChain(json(chainResponse(largeEpicChain())))
+    const wrapper = await open()
+    const headings = () =>
+      section(wrapper)
+        .findAll('.chain-group-title')
+        .map((heading) => heading.text())
+    const chip = () => section(wrapper).find('.chain-lane-chip')
+    expect(chip().exists()).toBe(false)
+
+    await getButton(wrapper, 'VAL-779').trigger('click')
+    expect(chip().text()).toBe('Lane VAL-779')
+    expect(chip().attributes('aria-label')).toBe('Lane VAL-779: show every lane')
+    expect(headings()).toEqual(['Development · 11', 'Code review · 1', 'Todo · 14', 'Backlog · 74'])
+    expect(getButton(wrapper, 'Done · 142').exists()).toBe(true)
+
+    // Another lane takes its place; the lane of no epic has no epic to open.
+    await getButton(wrapper, 'no epic').trigger('click')
+    expect(chip().text()).toBe('Lane no epic')
+    expect(headings()).toEqual(['Backlog · 30'])
+    expect(wrapper.findAll('button').some((button) => button.text().startsWith('Open '))).toBe(
+      false,
+    )
+
+    // The chip widens the list back, and so does the same label again.
+    await chip().trigger('click')
+    expect(chip().exists()).toBe(false)
+    expect(headings()).toEqual([
+      'Development · 11',
+      'Code review · 1',
+      'Todo · 14',
+      'Backlog · 107',
+    ])
+    await getButton(wrapper, 'VAL-900').trigger('click')
+    await getButton(wrapper, 'VAL-900').trigger('click')
+    expect(chip().exists()).toBe(false)
+  })
+
+  it('forgets a chosen lane the next answer does not have', async () => {
+    // The epic scope is the root's own children: one lane, and no VAL-900 in it.
+    const whole = largeEpicChain()
+    const epic = {
+      ...whole,
+      scope: 'epic' as const,
+      members: whole.members.filter((member) => member.parent_reference === 'VAL-384'),
+      total: 273,
+      closed: 273,
+      open: 0,
+      ready: 0,
+      by_category: { completed: 273 },
+      origins: whole.origins.slice(0, 1),
+      edges: [],
+    }
+    serveChain(json(chainResponse(whole)), json(chainResponse(epic)))
+    const wrapper = await open()
+    await getButton(wrapper, 'VAL-900').trigger('click')
+    expect(section(wrapper).find('.chain-lane-chip').exists()).toBe(true)
+    await getButton(wrapper, 'Epic').trigger('click')
+    await flushPromises()
+    expect(
+      section(wrapper)
+        .findAll('.branch-map-label')
+        .map((label) => label.text()),
+    ).toEqual(['VAL-384'])
+    expect(section(wrapper).find('.chain-lane-chip').exists()).toBe(false)
   })
 
   it('hands the chain it shows to the graph', async () => {

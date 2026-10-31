@@ -90,18 +90,22 @@ const STATE_PRESENTATION = {
     urgent: { tone: 'danger', emphasis: 'strong' },
   },
   /**
-   * Where a member of a chain stands, as the card groups it and the graph marks
-   * it. Done is neutral rather than the green of an active state: in a chain the
-   * finished work is the background the open work is read against, and two
-   * greens would make the two indistinguishable on the graph.
+   * Where a member of a chain stands, as the card's branch map draws it, its
+   * groups head it and the graph marks it. A chain is read as progress, so
+   * finished work is the green of something achieved and work under way is
+   * blue; review is the amber of a decision waiting, and everything still
+   * ahead — queued or backlog — is the one grey of what remains, which is what
+   * makes a lane's tail read as its unfinished volume. These differ from the
+   * board's `work-item-state` tones on purpose: there a card's colour says what
+   * is happening to it now, here a lane's colours say how far it has come.
    */
   'work-item-chain-group': {
-    active: { tone: 'success', emphasis: 'quiet' },
+    done: { tone: 'success', emphasis: 'quiet' },
+    active: { tone: 'info', emphasis: 'quiet' },
     review: { tone: 'warning', emphasis: 'quiet' },
-    queued: { tone: 'info', emphasis: 'quiet' },
+    queued: { tone: 'neutral', emphasis: 'quiet' },
     backlog: { tone: 'neutral', emphasis: 'quiet' },
     blocked: { tone: 'danger', emphasis: 'strong' },
-    done: { tone: 'neutral', emphasis: 'quiet' },
   },
   'work-item-node-marker': {
     ready: { tone: 'neutral', emphasis: 'quiet' },

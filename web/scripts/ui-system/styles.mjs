@@ -4,11 +4,13 @@
  * every token declared is used and every token used is declared.
  */
 
-// The chain's scope chart is a drawing of data, not an icon: its two lines and
-// the gap between them are plotted from a series, which no icon set can draw.
+// The chain's scope chart and branch map are drawings of data, not icons: the
+// chart plots two lines from a series, and the map draws one segment per member
+// along the lane it came from, which no icon set can draw.
 const svgOwners = new Set([
   'shared/ui/VIcon.vue',
   'shared/ui/BrandMark.vue',
+  'widgets/work-item-inspector/components/ChainBranchMap.vue',
   'widgets/work-item-inspector/components/ChainScopeChart.vue',
 ])
 const overlayOwners = new Set(['shared/ui/DialogFrame.vue', 'shared/ui/ResizableInspector.vue'])

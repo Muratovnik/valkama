@@ -14,22 +14,20 @@
  * says where a chain can be read instead of leaving the reader to wonder why
  * there is none.
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import ChainBranchMap from '@/widgets/work-item-inspector/components/ChainBranchMap.vue'
 import ChainMembers from '@/widgets/work-item-inspector/components/ChainMembers.vue'
 import ChainScopeChart from '@/widgets/work-item-inspector/components/ChainScopeChart.vue'
-import {
-  groupMembers,
-  sharedStateName,
-  splitOrigins,
-} from '@/widgets/work-item-inspector/utils/chainSummary.ts'
+import { groupMembers, sharedStateName } from '@/widgets/work-item-inspector/utils/chainSummary.ts'
 
-import type { ChainOrigin, ChainScope, WorkItemChain } from '@/shared/api/planningChainApi.ts'
+import type { ChainScope, WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import { OPEN_CHAIN_GROUPS } from '@/shared/api/planningChainGroups.ts'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import VButton from '@/shared/ui/VButton.vue'
+import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
   chain: WorkItemChain | null
@@ -64,17 +62,42 @@ const failureText = computed(() =>
   t(props.chain ? 'workItem.chain.refreshFailed' : 'workItem.chain.loadFailed'),
 )
 
-/** A parent's title as its tooltip, or no tooltip when the origin has no parent. */
-function originTitle(origin: ChainOrigin): string | undefined {
-  return origin.parent_title ?? undefined
-}
-
 const scopes = computed(() => [
   { value: 'epic' as const, label: t('workItem.chain.scopeEpic') },
   { value: 'chain' as const, label: t('workItem.chain.scopeChain') },
 ])
 
 const groups = computed(() => (props.chain ? groupMembers(props.chain.members) : null))
+
+/**
+ * The lane the member list is narrowed to, chosen on the map. It is a reading
+ * of the current answer, so a lane the answer no longer has — another scope,
+ * another refresh — reads as no filter rather than as an empty list.
+ */
+const chosenLane = ref<string | null>(null)
+const laneOf = (member: { parent_reference: string | null }) => member.parent_reference ?? ''
+const lane = computed(() => {
+  const key = chosenLane.value
+  return key !== null && props.chain?.members.some((member) => laneOf(member) === key) ? key : null
+})
+const listed = computed(() => {
+  const chain = props.chain
+  if (!chain || lane.value === null) return groups.value
+  return groupMembers(chain.members.filter((member) => laneOf(member) === lane.value))
+})
+const laneName = computed(() => lane.value || t('workItem.chain.noEpic'))
+/**
+ * The epic a narrowed lane came from, when it is another card to open: not the
+ * root, which is this card, and not the lane of work filed under no epic.
+ */
+const laneEpic = computed(() =>
+  lane.value && lane.value !== props.chain?.root.reference ? lane.value : null,
+)
+
+/** A lane label narrows the list to its lane; the same label again widens it back. */
+function chooseLane(key: string) {
+  chosenLane.value = lane.value === key ? null : key
+}
 
 /**
  * The open work broken down by category, in the space's own state names where
@@ -118,29 +141,6 @@ const trend = computed(() => {
     verdict: t(`workItem.chain.verdict.${recent.trend}`),
   })
 })
-
-const origins = computed(() => (props.chain ? splitOrigins(props.chain) : null))
-/**
- * The origin lines as text a reader hears whole. The gaps on screen are layout,
- * so each piece carries its own space and dash rather than relying on markup
- * between elements, which reads as one run-on word to a screen reader.
- */
-const ownLine = computed(() => {
-  const chain = props.chain
-  const own = origins.value?.own
-  if (!chain || !own) return ''
-  const label = t(
-    chain.root.kind === 'epic' ? 'workItem.chain.ownEpic' : 'workItem.chain.ownItem',
-    {
-      reference: chain.root.reference,
-    },
-  )
-  return `${label} ${t('workItem.chain.originCount', own)}`
-})
-const laterLabel = computed(() => `${t('workItem.chain.discoveredLater')} `)
-function entryCount(origin: ChainOrigin): string {
-  return ` — ${t('workItem.chain.originCount', origin)}`
-}
 </script>
 
 <template>
@@ -208,7 +208,7 @@ function entryCount(origin: ChainOrigin): string {
       </VButton>
     </div>
 
-    <template v-if="chain && groups && origins">
+    <template v-if="chain && groups && listed">
       <div class="chain-summary">
         <p class="chain-headline">
           {{ headline }}
@@ -217,45 +217,46 @@ function entryCount(origin: ChainOrigin): string {
         <p class="chain-trend">{{ trend }}</p>
       </div>
 
+      <ChainBranchMap
+        :chain="chain"
+        :filter="lane"
+        @lane="chooseLane"
+        @open="(reference) => emit('open', reference)"
+      />
+
       <ChainScopeChart
         v-if="chain.series.length > 1"
         :series="chain.series"
       />
 
-      <ul class="chain-origins">
-        <li
-          v-if="origins.own"
-          class="chain-origin"
+      <div
+        v-if="lane !== null"
+        class="chain-lane-filter"
+      >
+        <button
+          class="chain-lane-chip"
+          type="button"
+          :aria-label="t('workItem.chain.map.clearFilter', { name: laneName })"
+          @click="chosenLane = null"
         >
-          {{ ownLine }}
-        </li>
-        <li
-          v-if="origins.later.length"
-          class="chain-origin chain-origin-later"
+          {{ t('workItem.chain.map.filter', { name: laneName }) }}
+          <VIcon
+            name="close"
+            :size="14"
+          />
+        </button>
+        <VButton
+          v-if="laneEpic"
+          variant="ghost"
+          size="inline"
+          @click="emit('open', laneEpic)"
         >
-          <span class="chain-origin-label">{{ laterLabel }}</span>
-          <span
-            v-for="origin in origins.later"
-            :key="origin.parent_reference ?? ''"
-            class="chain-origin-entry"
-          >
-            <button
-              v-if="origin.parent_reference"
-              class="chain-origin-link"
-              type="button"
-              :title="originTitle(origin)"
-              @click="emit('open', origin.parent_reference)"
-            >
-              {{ origin.parent_reference }}
-            </button>
-            <span v-else>{{ t('workItem.chain.noEpic') }}</span>
-            <span class="chain-origin-count">{{ entryCount(origin) }}</span>
-          </span>
-        </li>
-      </ul>
+          {{ t('workItem.chain.map.openEpic', { reference: laneEpic }) }}
+        </VButton>
+      </div>
 
       <ChainMembers
-        :groups="groups"
+        :groups="listed"
         @open="(reference) => emit('open', reference)"
       />
     </template>
@@ -308,59 +309,37 @@ function entryCount(origin: ChainOrigin): string {
   font: var(--font-detail);
 }
 
-.chain-origins {
-  display: grid;
-  gap: var(--space-1);
-  padding: 0;
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-detail);
-  list-style: none;
-}
-
-.chain-origin {
+/* The lane the list below is narrowed to: a filled chip that is the way back
+   to every lane, the whole of it one target, and the way into its epic. */
+.chain-lane-filter {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-1) var(--space-2);
-  align-items: baseline;
+  gap: var(--space-2);
+  align-items: center;
 }
 
-.chain-origin-label {
-  color: var(--color-text-tertiary);
-}
-
-/* The separator opens the entry it introduces rather than closing the one
-   before it, so a wrapped line starts with «·» and never ends on one. */
-.chain-origin-entry {
+.chain-lane-chip {
   display: inline-flex;
-  gap: var(--space-1);
-  align-items: baseline;
-
-  & + &::before {
-    content: '·';
-    padding-inline-end: var(--space-1);
-    color: var(--color-text-tertiary);
-  }
-}
-
-.chain-origin-count {
-  font-variant-numeric: tabular-nums;
-}
-
-/* A reference riding a line of text: an inline target, not a form row. */
-.chain-origin-link {
-  min-block-size: var(--size-control-inline);
-  padding: 0;
+  gap: var(--space-2);
+  justify-self: start;
+  align-items: center;
+  min-height: var(--size-control-inline);
+  padding: 0 var(--space-2) 0 var(--space-3);
   border: 0;
-  color: var(--color-action-primary);
-  font: inherit;
+  color: var(--color-text);
+  font: var(--font-chip);
   font-variant-numeric: tabular-nums;
-  background: none;
+  background: var(--color-control-surface);
+  border-radius: var(--radius-control);
   cursor: pointer;
 
-  &:hover,
+  &:hover {
+    background: var(--color-surface-hover);
+  }
+
   &:focus-visible {
-    text-decoration: underline;
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
   }
 }
 </style>

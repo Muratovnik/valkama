@@ -15,6 +15,20 @@ checkouts are therefore distinguishable even at the same version.
 - The chain root carries its own mark on the graph: a «root» tag on its node,
   and «chain root» in the node's accessible name. It stands one step above the
   closed work around it even when it is closed itself.
+- The card's chain section draws a branch map. Each lane is one origin of the
+  work — the root's own children, each other epic, the work filed under no
+  epic — and every member is one segment of the same width along it: finished
+  work by closing time, then review and work in progress, then blocked, queued
+  and backlog work, so a lane's length is its volume and its grey tail is what
+  remains. A lane branches off the lane it was discovered from, at the task it
+  was discovered from. Pointing at a segment names the task, its state and its
+  holder, and a click opens it. A lane's label narrows the member list below to
+  that lane, with a chip that widens it back and a button that opens the lane's
+  epic. Each lane is one keyboard stop: Left and Right move between its tasks,
+  Page Up and Page Down between stretches of one state, Home and End to its
+  ends, Enter opens the task, and a live region says which task it is. On a
+  long chain, narrow segments of one state merge into one stretch, and work
+  under way is raised so that it still shows.
 
 ### Changed
 
@@ -27,6 +41,13 @@ checkouts are therefore distinguishable even at the same version.
   nodes instead of 601. Whether closed work is drawn is held apart for the
   chain and the whole space, so leaving a chain gives the space back its own
   filter, and each chain opens on its open part.
+- Chain views colour members by progress: finished green, in progress blue,
+  review amber, queued and backlog grey, blocked red. That holds in the card's
+  branch map, its member groups and its scope chart, and on the graph scoped to
+  a chain.
+- The branch map replaces the card's line of origins: each lane's label names
+  its epic, or says it has none, and its counts stand at the lane's end.
+- The card's scope chart is shorter and stands under the branch map.
 - The chain answer names a root with children once, as `has_children`; the
   `container` field that always carried the same value is gone from
   `GET /api/planning/work-item/chain` and `get_work_item_chain`.
@@ -48,8 +69,6 @@ checkouts are therefore distinguishable even at the same version.
   to Kanban or List removes both keys. A link that names no valid reference,
   a reference the server does not know, or a chain from another planning space
   shows the whole space with a notice saying why, and the keys are dropped.
-- A wrapped origins line in the card's chain section no longer ends on a
-  separator.
 - The navigation rail names each entry by what it shows. A screen reader now
   hears a module's attention count, which the entry's label used to hide; the
   brand button is called Valkama, with where it goes in its tooltip; and the

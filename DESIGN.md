@@ -511,6 +511,14 @@ Aggregate epic activity belongs only to the epic index, including its compact
 state; bundle headers on the board do not repeat a “working” label.
 Cards do not reserve empty tag or source regions. Graph nodes allocate separate
 rows for status, title, and relationship metadata so labels cannot collide.
+A card's chain section leads with a branch map: one lane per origin of work,
+one equal-width segment per member, finished work then current work then what
+is ahead, so a lane's length is its volume. Chain views colour by progress —
+finished green, in progress blue, review amber, ahead grey, blocked red — which
+differs from a board card's tones on purpose: a card says what is happening to
+it now, a lane says how far it has come. The lane is a 3px status edge; where a
+member is narrower than a few pixels, work under way rides it as a raised
+rounded mark, so it is still seen without spending a surface on it.
 The related work/session/evidence context is one grouped relationship region,
 not a decorative sequence. Execution history and native session opening stay
 inside work-item context; Memory is a typed reference there.

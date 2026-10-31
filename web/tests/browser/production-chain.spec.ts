@@ -1,13 +1,15 @@
 /**
  * A chain read end to end in the built application: the card's section for an
- * epic shaped like VAL-384, the graph scoped to a chain and back, and the chain
- * held in the address, so a reload, a link and Back come back to the same field.
+ * epic shaped like VAL-384, its branch map for a six-lane chain and a small one,
+ * the graph scoped to a chain and back, and the chain held in the address, so a
+ * reload, a link and Back come back to the same field.
  *
  * Each test saves what it looked at under its own output folder, so a reader can
  * see the composed result and not only that the assertions held.
  */
 import { writeFile } from 'node:fs/promises'
 
+import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 import type { Page, TestInfo } from '@playwright/test'
 
@@ -15,9 +17,17 @@ import { planningSpaceEntity, planningWorkItemEntity } from '@/shared/api/platfo
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { chainResponse } from '../fixtures/chain.ts'
+import { branchedChain, smallBranchedChain } from '../fixtures/chainMap.ts'
 import { installBackend } from './backend.ts'
 import { largeChainHere, longChainHere, smallChain } from './chainFixtures.ts'
-import { attachedWorkItemRef, projectScope, spaceRef, workItemRef } from './planningFixtures.ts'
+import { expectNoSilentClipping } from './overflow.ts'
+import {
+  attachedWorkItemRef,
+  projectScope,
+  spaceRef,
+  workItem,
+  workItemRef,
+} from './planningFixtures.ts'
 import { planningReadFor } from './planningReadFixture.ts'
 
 /** What the address's module state says, decoded. */
@@ -104,42 +114,106 @@ for (const width of [1440, 390]) {
   })
 }
 
-test('a wrapped origins line never ends on a separator', async ({ page }, info) => {
-  await page.setViewportSize({ width: 390, height: 1000 })
+const mapRoot = {
+  id: workItem.work_item_id,
+  reference: workItemRef.reference,
+  title: workItem.title,
+}
+
+/** What a lane's slider and the drawing say in the browser, read at once. */
+async function mapReading(page: Page) {
+  const section = page.locator('.drawer section.chain')
+  return {
+    labels: await section.locator('.branch-map-label').allTextContents(),
+    lanes: await section.getByRole('slider').count(),
+    // Every label line and target stays inside the map's own width.
+    outside: await section.locator('.branch-map-canvas').evaluate((canvas) => {
+      const edge = canvas.getBoundingClientRect()
+      return [...canvas.querySelectorAll('.branch-map-head, .branch-map-lane')]
+        .map((node) => node.getBoundingClientRect())
+        .filter((box) => box.left < edge.left - 1 || box.right > edge.right + 1).length
+    }),
+  }
+}
+
+for (const width of [1440, 390]) {
+  test(`the branch map draws a chain of six lanes at ${width}px`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: 1400 })
+    await installBackend(page)
+    await serve(page, branchedChain(mapRoot, 'MAIN'))
+    const section = await openCard(page)
+    expect(await mapReading(page)).toEqual({
+      labels: ['MAIN-264', 'MAIN-7001', 'MAIN-4000', 'MAIN-7002', 'MAIN-4001', 'no epic'],
+      lanes: 6,
+      outside: 0,
+    })
+    await expect(section.locator('figcaption')).toHaveText(
+      'Branch map: 6 lanes, 617 items; 485 finished, 13 in progress, 119 ahead.',
+    )
+    await expectNoSilentClipping(page, `chain map at ${width}px`)
+    await section.locator('.branch-map').screenshot(shot(info, `chain-map-large-${width}.png`))
+
+    // Work under way is raised out of the dense lane, and the pointer names it.
+    const raised = section.locator('.branch-map-run.raised').first()
+    const box = await raised.boundingBox()
+    expect(box).not.toBeNull()
+    const { x, y, width: across, height: tall } = box ?? { x: 0, y: 0, width: 0, height: 0 }
+    await page.mouse.move(x + across / 2, y + tall / 2)
+    await expect(section.locator('.branch-tip')).toContainText(/Code review|Development|Blocked/u)
+    await page.mouse.move(0, 0)
+    await expect(section.locator('.branch-tip')).toHaveCount(0)
+
+    // A lane label narrows the list below to its lane.
+    await section.getByRole('button', { name: 'Show only lane MAIN-4000' }).click()
+    await expect(section.locator('.chain-lane-chip')).toHaveText('Lane MAIN-4000')
+    await expect(section.locator('.chain-group-title')).toHaveText([
+      'Development · 8',
+      'Code review · 1',
+      'Todo · 14',
+      'Backlog · 56',
+      'Blocked · 1',
+    ])
+    await section.locator('.chain-lane-chip').click()
+    await expect(section.locator('.chain-lane-chip')).toHaveCount(0)
+
+    const results = await new AxeBuilder({ page })
+      .include('.drawer section.chain')
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+      .analyze()
+    expect(results.violations.map((violation) => violation.id)).toEqual([])
+
+    // The keyboard walks the root's lane to its last task and opens it.
+    await section.getByRole('slider').first().focus()
+    await page.keyboard.press('End')
+    await expect(section.getByRole('slider').first()).toHaveAttribute(
+      'aria-valuetext',
+      '273 of 273',
+    )
+    await page.keyboard.press('Enter')
+    const opened = serializePlatformRoute({
+      module_id: 'planning',
+      scope: projectScope,
+      entity: planningWorkItemEntity({ ...workItemRef, reference: 'MAIN-2272' }),
+    })
+    await expect.poll(() => new URL(page.url()).search).toBe(new URL(opened, page.url()).search)
+  })
+}
+
+test('the branch map gives a small chain a segment, a dot and a name per task', async ({
+  page,
+}, info) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
   await installBackend(page)
-  await serve(page, largeChainHere())
+  await serve(page, smallBranchedChain(mapRoot, 'MAIN'))
   const section = await openCard(page)
-  const line = section.locator('.chain-origin-later')
-  await expect(line).toBeVisible()
-  // Each entry's box, and what its two pseudo-elements draw, read in the browser.
-  const entries = await line.locator('.chain-origin-entry').evaluateAll((nodes) =>
-    nodes.map((node) => ({
-      top: Math.round(node.getBoundingClientRect().top),
-      before: getComputedStyle(node, '::before').content,
-      after: getComputedStyle(node, '::after').content,
-      text: node.textContent,
-    })),
+  expect(await mapReading(page)).toEqual({ labels: ['MAIN-264', 'no epic'], lanes: 2, outside: 0 })
+  await expect(section.locator('.branch-map-dot')).not.toHaveCount(0)
+  await expect(section.locator('.branch-map-reference').first()).toHaveText('MAIN-1013')
+  await expect(section.locator('.branch-map-count').first()).toHaveText(
+    '12 ✓ · 3 in progress · 5 ahead',
   )
-  expect(entries).toHaveLength(3)
-  // At this width the line does wrap, so the case under test is on screen.
-  expect(new Set(entries.map((entry) => entry.top)).size).toBeGreaterThan(1)
-  // The separator opens every entry but the first and closes none.
-  expect(entries.map((entry) => [entry.before, entry.after])).toEqual([
-    ['none', 'none'],
-    ['"·"', 'none'],
-    ['"·"', 'none'],
-  ])
-  // What a reader hears keeps each piece's own space and dash, and one separator
-  // between two entries.
-  await expect(line).toMatchAriaSnapshot(`
-    - listitem:
-      - text: "Discovered later:"
-      - button "MAIN-779"
-      - text: — 242 (open 100) · no epic — 88 (open 30) ·
-      - button "MAIN-900"
-      - text: — 13 (open 3)
-  `)
-  await line.screenshot(shot(info, 'chain-origins-390.png'))
+  await expectNoSilentClipping(page, 'small chain map')
+  await section.locator('.branch-map').screenshot(shot(info, 'chain-map-small-1440.png'))
 })
 
 test('an attached store item says where a chain is read, and asks for none', async ({
