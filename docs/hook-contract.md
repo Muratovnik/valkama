@@ -319,7 +319,9 @@ of any item that refers to it. An item refers to a session when:
 - it has a `session` ref whose value is the session id, a prefix of it, or
   `<session>:<agent>`;
 - a Planning write call made in the session acted on it;
-- its current claim was taken by a call made in the session.
+- its current claim was taken by a call made in the session;
+- an execution of it is linked to the session or to one of its subagents;
+- the session was launched for it (`sessions.work_item_id`).
 
 The sweep removes a copy by appending a `transcript_purged` row (with
 `archive_path`, `archive_sha256` and `reason` `retention`) and only then

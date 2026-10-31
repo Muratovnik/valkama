@@ -383,6 +383,26 @@ class RetentionTests(ArchiveCase):
         self.conn.commit()
         return int(cursor.lastrowid or 0)
 
+    def execution(self, work_item_id: str, session_id: str) -> None:
+        """An attempt at the item, with `session_id` linked to it as Executions links one."""
+
+        execution_id = next(self.uids)
+        self.conn.execute(
+            "INSERT INTO sessions(id, client) VALUES (?, 'codex') ON CONFLICT(id) DO NOTHING",
+            (session_id,),
+        )
+        self.conn.execute(
+            "INSERT INTO executions(execution_id, work_item_id, client_family, role,"
+            " environment, expected_effect, status) VALUES (?,?,?,?,?,?,?)",
+            (execution_id, work_item_id, "codex", "executor", "local", "change", "running"),
+        )
+        self.conn.execute(
+            "INSERT INTO execution_sessions(execution_id, session_id, relation)"
+            " VALUES (?, ?, 'launched')",
+            (execution_id, session_id),
+        )
+        self.conn.commit()
+
     def item_id(self, reference: str) -> str:
         return str(planning.get_work_item(self.conn, reference)["work_item_id"])
 
@@ -417,6 +437,13 @@ class RetentionTests(ArchiveCase):
             "claim": lambda ref: self.conn.execute(
                 "UPDATE work_items SET claim_call_id = ? WHERE work_item_id = ?",
                 (self.call_row(None), self.item_id(ref)),
+            ),
+            "execution": lambda ref: self.execution(self.item_id(ref), SESSION),
+            "execution of a subagent": lambda ref: self.execution(
+                self.item_id(ref), f"{SESSION}:{AGENT}"
+            ),
+            "launched for the item": lambda ref: self.conn.execute(
+                "UPDATE sessions SET work_item_id = ? WHERE id = ?", (self.item_id(ref), SESSION)
             ),
         }
         references = []

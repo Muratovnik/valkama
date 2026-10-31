@@ -412,8 +412,10 @@ def _newest(conn: sqlite3.Connection) -> dict[str, Archive | None]:
 #:
 #: An item refers to the session through a session ref naming it (exactly, by a
 #: prefix of it, or as one of its subagents), through any Planning write call
-#: the session made on it, or through a current claim the session took. A loose
-#: ref match only keeps a copy longer.
+#: the session made on it, through a current claim the session took, through an
+#: execution of the item the session (or one of its subagents) is linked to, or
+#: as the item the session was launched for. A loose match only keeps a copy
+#: longer.
 #:
 #: The moment is the later of the session's `last_seen` and the newest terminal
 #: transition of a referring item (its last update when no transition was
@@ -431,6 +433,12 @@ WITH referring(work_item_id) AS (
     UNION
     SELECT w.work_item_id FROM work_items w JOIN execution_events c ON c.id = w.claim_call_id
     WHERE c.session_id = :s
+    UNION
+    SELECT e.work_item_id FROM execution_sessions l
+    JOIN executions e ON e.execution_id = l.execution_id
+    WHERE l.session_id = :s OR substr(l.session_id, 1, length(:s) + 1) = :s || ':'
+    UNION
+    SELECT work_item_id FROM sessions WHERE id = :s AND work_item_id IS NOT NULL
 )
 SELECT
     (SELECT COUNT(*) FROM work_items w JOIN workflow_states st ON st.state_id = w.state_id

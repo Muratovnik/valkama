@@ -62,8 +62,10 @@ checkouts are therefore distinguishable even at the same version.
     share a budget of about three seconds and give up quickly on a store
     another writer holds.
   - Retention: copies are kept while a non-terminal work item refers to the
-    session, and for at least 90 days after the later of the session's last
-    activity and the newest terminal transition of a referring item. A purge
+    session (by a session ref, a write call, its current claim, an execution
+    linked to the session, or as the item the session was launched for), and
+    for at least 90 days after the later of the session's last activity and
+    the newest terminal transition of a referring item. A purge
     appends `transcript_purged` before it deletes the file, and the next sweep
     removes a file a crash left behind. A sweep deletes nothing else but an
     abandoned `*.partial`: a copy no row names, as after restoring the store
