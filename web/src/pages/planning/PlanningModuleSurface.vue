@@ -183,17 +183,30 @@ const planningKey = computed(() =>
 )
 
 /**
+ * The bound space is the confirmed writable primary store. Writes reach that
+ * store alone, and so does the chain endpoint, which is why an attached store's
+ * card has no chain and a chain its address names is refused the same way.
+ */
+const primaryStore = computed(
+  () =>
+    props.scope.kind === 'project' && props.primaryWriteScopeId === boundSpace.value?.data_scope_id,
+)
+
+/** What the operator is told about a chain the route named and this space cannot show. */
+function chainRefusalNotice(reference: string, why: ChainRefusal): string {
+  if (why.kind === 'invalid') return t('graph.chainInvalid')
+  // The card's own words, so the store a chain is missing from reads the same.
+  if (why.kind === 'primary') return t('workItem.chain.primaryOnly')
+  const cause = why.kind === 'failed' ? why.message : t('graph.chainElsewhere')
+  return t('graph.chainUnavailable', { reference, cause })
+}
+
+/**
  * The route named a chain this space cannot show. It says so once and drops the
  * keys, so the field is the whole space and the address says the same.
  */
 function refuseChain(reference: string, why: ChainRefusal) {
-  const cause = why.kind === 'failed' ? why.message : t('graph.chainElsewhere')
-  emit(
-    'notice',
-    why.kind === 'invalid'
-      ? t('graph.chainInvalid')
-      : t('graph.chainUnavailable', { reference, cause }),
-  )
+  emit('notice', chainRefusalNotice(reference, why))
   emit('state', withChain(props.route.state, null))
 }
 
@@ -204,6 +217,7 @@ const {
 } = usePlanningChainScope({
   target: () => chainTarget(props.route.state),
   space: () => (boundSpace.value === undefined ? '' : planningKey.value),
+  primary: () => primaryStore.value,
   spaceItems: () => model.value?.work_items ?? null,
   version: () => version.value,
   refused: refuseChain,
@@ -296,13 +310,7 @@ watch(
   { immediate: true },
 )
 
-const writable = computed(
-  () =>
-    props.scope.kind === 'project' &&
-    model.value !== null &&
-    boundSpace.value !== undefined &&
-    props.primaryWriteScopeId === boundSpace.value.data_scope_id,
-)
+const writable = computed(() => primaryStore.value && model.value !== null)
 
 onBeforeUnmount(() => {
   resource.value = cancelResource(resource.value)

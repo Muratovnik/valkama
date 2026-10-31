@@ -17,10 +17,14 @@ export type ChainTarget =
 
 /**
  * Why a chain the route named is not drawn: the link could never name one, its
- * root is in another space, or the read failed with the server's own words.
+ * root is in another space, the space is an attached store the chain endpoint
+ * does not read, or the read failed with the server's own words.
  */
 export type ChainRefusal =
-  { kind: 'elsewhere' } | { kind: 'failed'; message: string } | { kind: 'invalid' }
+  | { kind: 'elsewhere' }
+  | { kind: 'failed'; message: string }
+  | { kind: 'invalid' }
+  | { kind: 'primary' }
 
 /**
  * Read the chain out of the module's route state.
@@ -64,6 +68,11 @@ export function withChain(
 }
 
 interface ChainScopeOptions {
+  /**
+   * The bound space is the primary store. The chain endpoint reads that store
+   * alone, so a chain named in an attached one is refused rather than asked for.
+   */
+  primary: () => boolean
   /** The route named a chain this space cannot show. */
   refused: (reference: string, why: ChainRefusal) => void
   /** Which space the chain is read for, empty until one is bound; a change reads it again. */
@@ -96,7 +105,7 @@ export function usePlanningChainScope(options: ChainScopeOptions) {
   const chain = shallowRef<WorkItemChain | null>(null)
   const pending = shallowRef(false)
   /** The target the held chain answers, so a matching route needs no read. */
-  let held = ''
+  const held = shallowRef('')
   let generation = 0
   let controller: AbortController | undefined
 
@@ -112,7 +121,7 @@ export function usePlanningChainScope(options: ChainScopeOptions) {
     controller = undefined
     pending.value = false
     chain.value = next
-    held = next === null ? '' : key
+    held.value = next === null ? '' : key
   }
 
   async function read(
@@ -120,7 +129,7 @@ export function usePlanningChainScope(options: ChainScopeOptions) {
     key: string,
     first: boolean,
   ) {
-    settle(chain.value, held)
+    settle(chain.value, held.value)
     const request = generation
     controller = new AbortController()
     pending.value = first
@@ -140,7 +149,7 @@ export function usePlanningChainScope(options: ChainScopeOptions) {
   function follow() {
     const target = options.target()
     if (target.status === 'none') {
-      if (held || pending.value) settle(null)
+      if (held.value || pending.value) settle(null)
       return
     }
     if (target.status === 'invalid') {
@@ -149,19 +158,22 @@ export function usePlanningChainScope(options: ChainScopeOptions) {
       return
     }
     const key = keyOf(target)
-    if (key === held) return
+    if (key === held.value) return
     settle(null)
     // A reference is only meaningful once the route's space is bound, and
     // reading before that answers once for no space and again for the real one.
     if (options.space() === '') pending.value = true
-    else void read(target, key, true)
+    else if (options.primary()) void read(target, key, true)
+    else options.refused(target.reference, { kind: 'primary' })
   }
 
-  watch(() => JSON.stringify([options.space(), options.target()]), follow, { immediate: true })
+  watch(() => JSON.stringify([options.space(), options.primary(), options.target()]), follow, {
+    immediate: true,
+  })
   watch(options.version, () => {
     const target = options.target()
-    if (target.status === 'chain' && held !== '' && held === keyOf(target))
-      void read(target, held, false)
+    if (target.status === 'chain' && held.value !== '' && held.value === keyOf(target))
+      void read(target, held.value, false)
   })
 
   // A reference names an item in whichever space owns its key, so a link can
@@ -178,11 +190,16 @@ export function usePlanningChainScope(options: ChainScopeOptions) {
 
   return {
     /**
-     * The held chain, while the route still names it. Entering holds the card's
-     * answer a moment before the route moves; a move the router refused leaves
-     * the route on the whole space, and so does this.
+     * The held chain, while the route still names that chain. Entering holds the
+     * card's answer a moment before the route moves; a move the router refused
+     * leaves the route on the whole space, and so does this. A route that names
+     * another chain gets nothing until its own answer arrives, even in the tick
+     * before the held one is dropped.
      */
-    scoped: computed(() => (options.target().status === 'chain' ? chain.value : null)),
+    scoped: computed(() => {
+      const target = options.target()
+      return target.status === 'chain' && keyOf(target) === held.value ? chain.value : null
+    }),
     /** True while a chain the route names is read for the first time. */
     pending,
     /** Hold the card's answer for the target the route is about to name. */

@@ -98,8 +98,11 @@ function chainOf(reference: string, scope: 'chain' | 'epic' = 'chain'): WorkItem
   return { ...emptyChain(reference), scope } as WorkItemChain
 }
 
-/** The composable under a route the test moves, with every refusal recorded. */
-function harness(initial: ChainTarget, items = [{ work_item_id: ROOT }]) {
+/**
+ * The composable under a route the test moves, with every refusal recorded. The
+ * space is the primary store unless `primary` says it is an attached one.
+ */
+function harness(initial: ChainTarget, items = [{ work_item_id: ROOT }], primary = true) {
   const target = ref<ChainTarget>(initial)
   const version = ref(0)
   const refusals: [string, ChainRefusal][] = []
@@ -108,6 +111,7 @@ function harness(initial: ChainTarget, items = [{ work_item_id: ROOT }]) {
     usePlanningChainScope({
       target: () => target.value,
       space: () => 'space-1',
+      primary: () => primary,
       spaceItems: () => items,
       version: () => version.value,
       refused: (reference, cause) => refusals.push([reference, cause]),
@@ -155,6 +159,12 @@ test('a route opened cold reads the chain it names, and leaving drops it', async
   run.target.value = { status: 'none' }
   await settled()
   assert.equal(run.held.scoped.value, null)
+  // Leaving let the answer go, so naming the same chain again reads it again
+  // instead of drawing one nothing kept current while the route was elsewhere.
+  run.target.value = { status: 'chain', reference: 'VAL-12', scope: 'epic' }
+  await settled()
+  assert.equal(fetchChain.mock.calls.length, 2)
+  assert.equal(run.held.scoped.value, chain)
 })
 
 test('a first read that fails is refused with its cause and draws no chain', async () => {
@@ -228,4 +238,31 @@ test('a held chain is not drawn once the route stops naming it', () => {
   run.held.enter(chainOf('VAL-12'))
   // Entered, but the route has not moved: the field is still the whole space.
   assert.equal(run.held.scoped.value, null)
+})
+
+test('a held chain is not drawn for another chain the route names, before the route is followed', () => {
+  fetchChain.mockReturnValue(new Promise(() => {}))
+  for (const next of [
+    { status: 'chain', reference: 'VAL-500', scope: 'chain' },
+    { status: 'chain', reference: 'VAL-12', scope: 'epic' },
+  ] as const) {
+    const run = harness({ status: 'none' })
+    run.held.enter(chainOf('VAL-12'))
+    run.target.value = next
+    // Read in the same tick, before the watcher has dropped the held answer:
+    // it answers VAL-12 as a chain, which is not what the route now names.
+    assert.equal(run.held.scoped.value, null, JSON.stringify(next))
+    run.scope.stop()
+  }
+})
+
+test('a chain named in an attached store is refused as primary-only, with no request', async () => {
+  const run = harness({ status: 'chain', reference: 'VAL-12', scope: 'chain' }, undefined, false)
+  active = run.scope
+  await settled()
+  // The chain endpoint reads the primary store alone, as the card says.
+  assert.equal(fetchChain.mock.calls.length, 0)
+  assert.deepEqual(run.refusals, [['VAL-12', { kind: 'primary' }]])
+  assert.equal(run.held.scoped.value, null)
+  assert.equal(run.held.pending.value, false)
 })

@@ -163,6 +163,10 @@ checkouts are therefore distinguishable even at the same version.
   from another, the branch map drew every lane from the start with no fork
   between them. The lane holding the work discovered from the root now starts
   the map, and the others branch off it.
+- A link naming a chain in an attached store no longer asks for the chain,
+  which is read from the primary store only. The whole space is shown with the
+  card's own note that the chain is available only for work items of the
+  primary store, and the chain keys are dropped from the address.
 - Russian plurals: a counted message picks among день, дня and дней by the
   platform's plural rules, where it used to apply the English two-form rule.
 - The chain a graph is scoped to is now part of the address. The Planning

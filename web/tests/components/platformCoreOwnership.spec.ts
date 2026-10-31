@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import PlanningModuleSurface from '@/pages/planning/PlanningModuleSurface.vue'
 
+import { fetchWorkItemChain } from '@/shared/api/planningChainApi.ts'
 import type { PlatformContextReady } from '@/shared/api/platformApiTypes.ts'
 import { planningSpaceEntity, planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
@@ -133,7 +134,11 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 
-async function render(primaryWriteScopeId: string | null, space: PlanningSpaceRef) {
+async function render(
+  primaryWriteScopeId: string | null,
+  space: PlanningSpaceRef,
+  state: Record<string, string> = { view: 'list' },
+) {
   const i18n = createI18n({ legacy: false, locale: 'en', messages })
   const wrapper = mount(PlanningModuleSurface, {
     props: {
@@ -143,7 +148,7 @@ async function render(primaryWriteScopeId: string | null, space: PlanningSpaceRe
         module_id: 'planning' as const,
         scope,
         entity: planningSpaceEntity(space),
-        state: { view: 'list' },
+        state,
       },
       scope,
     },
@@ -301,5 +306,28 @@ describe('planning write ownership', () => {
 
     expect(fetchMock).not.toHaveBeenCalled()
     expect(wrapper.emitted('notice')).toHaveLength(1)
+  })
+
+  // The chain endpoint reads the primary store alone, like the card's chain.
+  it('refuses a chain an attached space names in the card’s words, asking nothing', async () => {
+    const read = vi.mocked(fetchWorkItemChain)
+    read.mockClear()
+    const wrapper = await render(primary.data_scope_id, attached, {
+      view: 'list',
+      chain: 'MAIN-264',
+    })
+    expect(read).not.toHaveBeenCalled()
+    expect(wrapper.emitted('notice')).toContainEqual([
+      'The chain is available only for work items of the primary store.',
+    ])
+    // The keys are dropped, so the address says the whole space too.
+    expect(wrapper.emitted('state')).toContainEqual([{ view: 'list' }])
+  })
+
+  it('reads a chain the primary space names', async () => {
+    const read = vi.mocked(fetchWorkItemChain)
+    read.mockClear()
+    await render(primary.data_scope_id, primary, { view: 'list', chain: 'MAIN-264' })
+    expect(read).toHaveBeenCalledWith('MAIN-264', 'chain', expect.any(AbortSignal))
   })
 })
