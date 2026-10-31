@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from . import calls, leases, model, ranking, read_model, store, transitions
+from . import calls, leases, model, ranking, read_model, states, store, transitions
 
 _NOW = "strftime('%Y-%m-%dT%H:%M:%SZ','now')"
 
@@ -332,7 +332,7 @@ def create_work_item(
     space_id = str(space_row["planning_space_id"])
     workflow = store.workflow_for_space(conn, space_id)
     target = (
-        _state_row(conn, str(workflow["workflow_id"]), state)
+        states.resolve(conn, str(workflow["workflow_id"]), state)
         if state
         else read_model.state_by_id(conn, str(workflow["initial_state_id"]))
     )
@@ -468,7 +468,7 @@ def transition_work_item(
 
     row = read_model.item_row(conn, reference)
     _require_revision(row, expected_revision)
-    target = _state_row(conn, str(row["workflow_id"]), state)
+    target = states.resolve(conn, str(row["workflow_id"]), state)
     placement = ranking.placement(rank) if rank is not None else None
     refusals, warnings = transitions.findings(conn, row, target, reason=reason)
     if refusals and not force:
@@ -1049,7 +1049,7 @@ def _space_row(conn: sqlite3.Connection, reference: object) -> sqlite3.Row:
 
 
 def _workflow_payload(conn: sqlite3.Connection, workflow: sqlite3.Row) -> dict:
-    states = store.states_for_workflow(conn, str(workflow["workflow_id"]))
+    rows = store.states_for_workflow(conn, str(workflow["workflow_id"]))
     return {
         "workflow_id": workflow["workflow_id"],
         "name": workflow["name"],
@@ -1063,24 +1063,13 @@ def _workflow_payload(conn: sqlite3.Connection, workflow: sqlite3.Row) -> dict:
                 "position": int(state["position"]),
                 "is_terminal": bool(state["is_terminal"]),
             }
-            for state in states
+            for state in rows
         ],
         "transitions": [
             {"from": source, "to": target}
             for source, target in store.transitions_for_workflow(conn, str(workflow["workflow_id"]))
         ],
     }
-
-
-def _state_row(conn: sqlite3.Connection, workflow_id: str, reference: object) -> sqlite3.Row:
-    text = model.text_field(reference, "workflow state", limit=64)
-    row = conn.execute(
-        "SELECT * FROM workflow_states WHERE workflow_id = ? AND (state_id = ? OR key = ?)",
-        (workflow_id, text, text),
-    ).fetchone()
-    if row is None:
-        raise model.PlanningError(f"this workflow has no state named {text}")
-    return row
 
 
 def _require_revision(row: sqlite3.Row, expected: int | None) -> None:

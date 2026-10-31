@@ -69,7 +69,9 @@ _PLANNING_TOOLS = planning_tools.TOOL_NAMES
 PLANNING_INSTRUCTIONS = (
     "Planned work lives in a planning space. A work item moves between the states"
     " its workflow declares; transition_work_item is how status changes, and the"
-    " state names come from the workflow rather than from this text."
+    " state names come from the workflow rather than from this text. A category"
+    " (active, review, blocked, completed, cancelled, queued, backlog) names the one"
+    " state that has it; a name the workflow lacks is refused with its states."
     " claim_work_item before starting — it is atomic, and it fails naming the"
     " holder rather than letting two agents work one item."
     " Umbrella work is kind=epic: its description bounds the scope, and children"

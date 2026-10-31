@@ -81,6 +81,15 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Changed
 
+- A state can be named by its category. `transition_work_item`,
+  `create_work_item`, the `transition` group of `apply_work_item_changes` and
+  their HTTP writes read `active`, `review`, `blocked`, `completed`,
+  `cancelled`, `queued` or `backlog` as the one state of the workflow that has
+  that category; a key still wins over a category. A category two states share
+  is refused naming their keys, and a name the workflow does not have is
+  refused listing every state as `key (category)` instead of saying only that
+  it is unknown. See
+  [Naming a state](docs/connection-contract.md#naming-a-state).
 - `launcher install` reaches every session whose front is running at once,
   not only the sessions opened after it. Installing a commit that raises the
   store schema therefore migrates the store through the first session that

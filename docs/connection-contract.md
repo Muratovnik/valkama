@@ -140,6 +140,37 @@ before (200 for a list, 50 for a search), and with the same `truncated` and
 `GET /api/planning/search` take the same `offset` parameter and carry the same
 two fields.
 
+### Naming a state
+
+A workflow's states are rows, so their keys belong to the space: the default
+workflow keys its active state `dev`, and another workflow may call it something
+else. What every workflow shares is the category. Wherever a write names a
+state -- the `state` of `transition_work_item`, of the `transition` group of
+`apply_work_item_changes`, of `create_work_item`, and of their HTTP writes -- it
+is read, in this order, as:
+
+1. a `state_id` or a key of the item's workflow;
+2. a category (`backlog`, `queued`, `active`, `review`, `blocked`, `completed`,
+   `cancelled`) that exactly one state of the workflow has.
+
+A key wins over a category, so `review` is the state keyed `review` even in a
+workflow that gives the review category to two states. A category that two or
+more states share is refused with `invalid_request`, naming their keys:
+`category active names 2 states in this workflow: dev, pairing; name one by its
+key`. A name that is neither is refused with `invalid_request` listing every
+state as `key (category)` and the categories that name a state alone:
+
+```text
+this workflow has no state named in_progress; its states are backlog (backlog),
+todo (queued), dev (active), review (review), done (completed), blocked (blocked),
+cancelled (cancelled); a category names a state when exactly one state has it:
+backlog, queued, active, review, completed, blocked, cancelled
+```
+
+Both refusals come before any guard and write nothing. Reads keep their two
+filters apart: `list_work_items` takes `state` as a key and `category` as a
+category.
+
 ### The order of work
 
 Every work item has a place among the items in its state, and that place is the

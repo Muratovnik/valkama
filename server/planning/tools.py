@@ -37,8 +37,11 @@ _SPACE = {
 }
 _STATE = {
     "type": "string",
-    "description": "Workflow state, by key or state_id. The states belong to the"
-    " space's workflow; read them from get_planning_space.",
+    "description": "Workflow state, by key or state_id, or by a category (backlog,"
+    " queued, active, review, blocked, completed, cancelled) when exactly one state"
+    " of the workflow has it. The states belong to the space's workflow; read them"
+    " from get_planning_space. A name the workflow does not have is refused with"
+    " its keys and categories.",
 }
 _EXPECTED_REVISION = {
     "type": "integer",
