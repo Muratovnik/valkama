@@ -22,6 +22,17 @@ if __name__ == "__main__":
 
         sys.exit(hook_main(sys.argv[2:]))
 
+    # The launcher's `mcp` is dispatched early too. When this is the release the
+    # launcher names, the process becomes the session's stdio front, which runs
+    # the server as a child; loading every surface into the front would only
+    # make each session slower to open. Otherwise it serves in-process below.
+    if sys.argv[1:] == ["mcp"]:
+        from server.mcp_front import main as front_main
+
+        status = front_main()
+        if status is not None:
+            sys.exit(status)
+
     from server.cli import main
 
     main()

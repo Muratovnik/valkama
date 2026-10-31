@@ -322,6 +322,11 @@ def _write_message(payload: dict) -> None:
 # Appended to a tool result once this process is provably running code its
 # launcher no longer starts. Written for the agent that receives it: it says what
 # is wrong with the answer it just got, and the one action that fixes it.
+#
+# A process the stdio front runs never sends it: the front starts it without the
+# launcher in its environment and follows the pin itself (`mcp_front`). What is
+# left is a process with no front -- a checkout run whose sources changed, or a
+# release the launcher started while its own files had drifted.
 STALE_BUILD_WARNING = (
     "WARNING: this Valkama MCP server is running code its launcher no longer"
     " starts — the source changed, or the launcher was pinned to another release,"
@@ -347,11 +352,12 @@ def _unsupported_version(msg_id: object, requested: object) -> dict[str, object]
 
 
 # How long a client may hold the answer to `tools/list` or `server/discover`.
-# Both are constants of this build: they cannot change while the process lives,
-# and a new build arrives as a new process with its own client session, which
-# fetches them again anyway. A short hint would therefore buy nothing but
-# re-fetches of identical bytes, and there is no `listChanged` notification
-# advertised here that a client could wait for instead of the clock.
+# Both are constants of this build: they cannot change while the process lives.
+# A new build arrives as a new process -- under the launcher, behind the same
+# stdio front, which declares `listChanged` and tells a client that can hear it
+# when the list changed; otherwise with a new client session, which fetches them
+# again anyway. A short hint would therefore buy nothing but re-fetches of
+# identical bytes.
 CACHE_HINTS = {"ttlMs": 3_600_000, "cacheScope": "public"}
 
 

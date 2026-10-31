@@ -170,7 +170,10 @@ quote-style = "double"
 # The one-way import rule the repository instructions state in prose, here so a tool can refuse
 # it: a surface may import domain, domain may never import a surface, and no
 # surface imports another. `cli` is the single exception by construction, since
-# choosing between the other two is what it is for, so it sits above both.
+# choosing between the other two is what it is for, so it sits above both. The
+# stdio front `mcp_front` is a third surface beside them and imports neither: it
+# runs the server as a child process, and the entry point, not `cli`, decides
+# whether a process is the front.
 # Its cache is the one that cannot be set here: import-linter reads `cache_dir`
 # from the command line only, and silently ignores it in this file. Both callers
 # pass `--cache-dir .cache/import-linter` instead — `tools/quality.py` and the
@@ -183,7 +186,7 @@ name = "Surfaces sit above the domain and never reach sideways"
 type = "layers"
 layers = [
   "cli",
-  "http_surface | mcp_surface",
+  "http_surface | mcp_surface | mcp_front",
   "app_shell : documents : executions : federation : hooks : housekeeping : memory : ops : planning : platform : processes : projects : refs : runner : sessions : static_assets : store : store_identity : telemetry : transcripts : ui_state : watchers",
 ]
 containers = ["server"]

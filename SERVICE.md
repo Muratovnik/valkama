@@ -61,10 +61,22 @@ back with a build that has this guard -- the stable command of the current
 release, or a checkout at least that new -- not with the older release's own
 `launcher install`.
 
-A running server notices when the launcher has been pinned to another release
-and appends a warning to its tool results until its client restarts it. The
-store schema still governs the opposite case: a release older than the store
-refuses to open it.
+A running session follows the pin. The stable command's `mcp` starts a stdio
+front that holds the client's pipe and runs the pinned release's server as a
+child process. Within a few seconds of `launcher install` the front stops that
+server between two requests, starts the newly pinned release, and tells a client
+that can hear it that the tool list changed. So `launcher install` reaches
+running sessions at once, and an install that raises the store schema migrates
+the store through the first session that switches, not the next one opened.
+
+A release that does not start leaves the session on the release it had, and
+the next tool result carries one warning naming it and why. The store schema
+still governs the opposite case: a release older than the store refuses to open
+it, so pinning back past a schema raise leaves running sessions where they are
+and makes new ones fail to start. A session opened with a release from before
+the front warns until its client restarts it, as it always did. What the front
+keeps and what each client does with the notification are in
+[the connection contract](docs/connection-contract.md#a-release-switch-under-a-running-session).
 
 The stable command can install too. Run from a release, `launcher install` pins
 from the checkout that release was copied from; `--checkout` names another one.

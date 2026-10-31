@@ -34,8 +34,11 @@ is complete on its own.
   before that change refuses the store instead of misreading it. Migrations here
   are forward-only and idempotent, so an added table or column does not need it;
   a changed meaning does. It is read before the first write, so it governs a
-  server that was spawned old. A server that went stale while it ran still holds
-  its connection, and `static_assets.SourceWatch` is what warns about that one.
+  server that was spawned old. Under the launcher a running session follows the
+  pin through its stdio front, `mcp_front`, which stops the old release before
+  the new one opens the store. A process with no front that went stale while it
+  ran still holds its connection, and `static_assets.SourceWatch` is what warns
+  about that one.
 - For Valkama changes run:
 
 ```powershell
@@ -109,8 +112,9 @@ answer questions about the store and know nothing about who asked: `store`,
 `sessions`, `federation`, `refs`, `documents`, `runner`, `processes`,
 `git_worktrees`, `static_assets`, `watchers`, `app_shell`, `ui_state`, plus the
 `planning/`, `executions/`, `platform/`, `store_identity/`, `memory/`,
-`projects/`, `ops/` and `telemetry/` subpackages. The three
-surfaces own no domain rule: `mcp_surface`, `http_surface` and `cli`.
+`projects/`, `ops/` and `telemetry/` subpackages. The four
+surfaces own no domain rule: `mcp_surface`, `mcp_front`, `http_surface` and
+`cli`.
 
 `store` keeps what only it can own — the schema, the ratchet, the store's own
 path, and the order a store is brought up in, read top to bottom in `connect()`.
@@ -146,8 +150,9 @@ nothing about what any of that means for the work.
 
 Imports run one way and this is the invariant to protect: a surface may import
 domain, domain may never import a surface, and no surface imports another. `cli`
-is the single exception by construction — choosing between the other two is what
-it is for.
+is the single exception by construction — choosing between the MCP and HTTP
+surfaces is what it is for. The stdio front imports neither: it runs the server
+as a child process, and `valkama.py` decides whether a process is the front.
 
 Read a shared mutable singleton through its own module, never by binding it:
 `runner.RUNNER`, not `from .runner import RUNNER`. A test that swaps one in
@@ -159,9 +164,11 @@ Agent clients must register the service-owned command installed by
 `python valkama.py launcher install`; the user-facing command path is stable and
 contains no checkout path. That command runs a pinned release — one commit
 copied out of the checkout — so edits here reach client sessions and the live
-store only at the next `launcher install`. Installing a commit that raises the
-store schema migrates the live store when the next session opens it: treat that
-install as the migration and give it the same backup and rollback. Only the
+store only at the next `launcher install`, and then at once: the stdio front of
+every running session switches to the new release within seconds. Installing a
+commit that raises the store schema therefore migrates the live store right
+away, through the first session that switches: treat that install as the
+migration and give it the same backup and rollback. Only the
 managed launcher shim records the current release entry point and interpreter.
 The desktop installer and tray may keep their
 own service-owned install records. Moving the repository therefore requires one

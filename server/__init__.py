@@ -31,15 +31,19 @@ questions about the store and knows nothing about who asked:
                     bring-up, and the external adapter contract and transports
     projects/       project and scope registries
 
-And below it the three surfaces, which own no domain rule of their own:
+And below it the surfaces, which own no domain rule of their own:
 
     mcp_surface.py  the tool catalogue, dispatch and the stdio message loop
+    mcp_front.py    the stdio front a launcher session runs: it holds the
+                    client's pipe and runs the pinned release's server behind it
     http_surface.py the JSON API, event streams and the built web UI
     cli.py          the subcommands
 
 Imports run one way: a surface may import domain, domain may not import a
 surface, and no surface imports another. `cli.py` is the single exception by
-construction — it is what chooses between the other two.
+construction — it is what chooses between the MCP and HTTP surfaces. The front
+imports neither of those: it runs the server as a child process, and
+`valkama.py` decides whether a process is the front.
 
 `valkama.py` next to this package remains the source entry point. Agent clients
 register the service-owned launcher created by `valkama.py launcher install`;
