@@ -51,14 +51,14 @@ test('the planning manifest admits the chain, closed and grouping keys and still
 })
 
 test('a chain is read out of every view, with the endpoint default for its scope', () => {
-  assert.deepEqual(chainTarget({ view: 'graph', chain: 'VAL-12', chain_scope: 'epic' }), {
+  assert.deepEqual(chainTarget({ view: 'graph', chain: 'MAIN-12', chain_scope: 'epic' }), {
     status: 'chain',
-    reference: 'VAL-12',
+    reference: 'MAIN-12',
     scope: 'epic',
   })
-  assert.deepEqual(chainTarget({ view: 'graph', chain: 'VAL-12' }), {
+  assert.deepEqual(chainTarget({ view: 'graph', chain: 'MAIN-12' }), {
     status: 'chain',
-    reference: 'VAL-12',
+    reference: 'MAIN-12',
     scope: 'chain',
   })
   // The board and the list are narrowed by the same keys; it used to be the graph alone.
@@ -77,7 +77,7 @@ test('a value the endpoint could never answer is invalid rather than sent', () =
     { view: 'graph', chain: 'not a reference' },
     { view: 'graph', chain: 'val-384' },
     { view: 'graph', chain: 384 },
-    { view: 'graph', chain: 'VAL-12', chain_scope: 'space' },
+    { view: 'graph', chain: 'MAIN-12', chain_scope: 'space' },
     { view: 'graph', chain_scope: 'epic' },
   ])
     assert.equal(chainTarget(state).status, 'invalid', JSON.stringify(state))
@@ -93,14 +93,14 @@ test('the grouping key names only an epic grouping, and leaves the address witho
 })
 
 test('withChain writes both keys and removes both, leaving every other key alone', () => {
-  const named = withChain({ view: 'graph', query: 'x' }, { reference: 'VAL-12', scope: 'chain' })
-  assert.deepEqual(named, { view: 'graph', query: 'x', chain: 'VAL-12', chain_scope: 'chain' })
+  const named = withChain({ view: 'graph', query: 'x' }, { reference: 'MAIN-12', scope: 'chain' })
+  assert.deepEqual(named, { view: 'graph', query: 'x', chain: 'MAIN-12', chain_scope: 'chain' })
   assert.deepEqual(withChain(named, null), { view: 'graph', query: 'x' })
   assert.deepEqual(withChain(undefined, null), {})
 })
 
 test('the closed switch is kept beside the chain, absent when off, and goes with the chain', () => {
-  const named = { view: 'graph', chain: 'VAL-12', chain_scope: 'chain' }
+  const named = { view: 'graph', chain: 'MAIN-12', chain_scope: 'chain' }
   // An address written before the switch was kept reads as off.
   assert.equal(closedOf(named), false)
   const shown = withClosed(named, true)
@@ -110,9 +110,9 @@ test('the closed switch is kept beside the chain, absent when off, and goes with
   assert.deepEqual(withClosed(shown, false), named)
   // Leaving the chain, or naming another, opens it on its open part again.
   assert.deepEqual(withChain(shown, null), { view: 'graph' })
-  assert.deepEqual(withChain(shown, { reference: 'VAL-500', scope: 'chain' }), {
+  assert.deepEqual(withChain(shown, { reference: 'MAIN-500', scope: 'chain' }), {
     view: 'graph',
-    chain: 'VAL-500',
+    chain: 'MAIN-500',
     chain_scope: 'chain',
   })
 })
@@ -163,22 +163,22 @@ afterEach(() => {
 test('entering from the card holds its answer, so the route that follows costs no read', async () => {
   const run = harness({ status: 'none' })
   active = run.scope
-  const chain = chainOf('VAL-12')
+  const chain = chainOf('MAIN-12')
   run.held.enter(chain)
-  run.target.value = { status: 'chain', reference: 'VAL-12', scope: 'chain' }
+  run.target.value = { status: 'chain', reference: 'MAIN-12', scope: 'chain' }
   await settled()
   assert.equal(fetchChain.mock.calls.length, 0)
   assert.equal(run.held.scoped.value, chain)
 })
 
 test('a route opened cold reads the chain it names, and leaving drops it', async () => {
-  const chain = chainOf('VAL-12', 'epic')
+  const chain = chainOf('MAIN-12', 'epic')
   fetchChain.mockResolvedValue(chain)
-  const run = harness({ status: 'chain', reference: 'VAL-12', scope: 'epic' })
+  const run = harness({ status: 'chain', reference: 'MAIN-12', scope: 'epic' })
   active = run.scope
   assert.equal(run.held.pending.value, true)
   await settled()
-  assert.deepEqual(fetchChain.mock.calls[0].slice(0, 2), ['VAL-12', 'epic'])
+  assert.deepEqual(fetchChain.mock.calls[0].slice(0, 2), ['MAIN-12', 'epic'])
   assert.equal(run.held.scoped.value, chain)
   assert.equal(run.held.pending.value, false)
 
@@ -187,26 +187,26 @@ test('a route opened cold reads the chain it names, and leaving drops it', async
   assert.equal(run.held.scoped.value, null)
   // Leaving let the answer go, so naming the same chain again reads it again
   // instead of drawing one nothing kept current while the route was elsewhere.
-  run.target.value = { status: 'chain', reference: 'VAL-12', scope: 'epic' }
+  run.target.value = { status: 'chain', reference: 'MAIN-12', scope: 'epic' }
   await settled()
   assert.equal(fetchChain.mock.calls.length, 2)
   assert.equal(run.held.scoped.value, chain)
 })
 
 test('a first read that fails is held with its code, refuses nothing, and is read again on request', async () => {
-  const refused = Object.assign(new Error('no work item VAL-9999'), {
+  const refused = Object.assign(new Error('no work item MAIN-9999'), {
     code: 'not_found',
     status: 404,
   })
-  fetchChain.mockRejectedValueOnce(refused).mockResolvedValueOnce(chainOf('VAL-9999'))
-  const run = harness({ status: 'chain', reference: 'VAL-9999', scope: 'chain' })
+  fetchChain.mockRejectedValueOnce(refused).mockResolvedValueOnce(chainOf('MAIN-9999'))
+  const run = harness({ status: 'chain', reference: 'MAIN-9999', scope: 'chain' })
   active = run.scope
   await settled()
   // Not refused: the route keeps naming the chain, so a retry or a reload can read it.
   assert.deepEqual(run.refusals, [])
   assert.deepEqual(run.held.failure.value, {
-    reference: 'VAL-9999',
-    failure: { code: 'not_found', status: 404, retryable: true },
+    reference: 'MAIN-9999',
+    failure: { code: 'not_found', status: 404, retryable: false },
   })
   assert.equal(run.held.scoped.value, null)
   assert.equal(run.held.pending.value, false)
@@ -217,12 +217,12 @@ test('a first read that fails is held with its code, refuses nothing, and is rea
   assert.equal(run.held.failure.value, null)
   await settled()
   assert.equal(fetchChain.mock.calls.length, 2)
-  assert.equal(run.held.scoped.value?.root.reference, 'VAL-9999')
+  assert.equal(run.held.scoped.value?.root.reference, 'MAIN-9999')
 })
 
 test('a failure is let go once the route stops naming the chain', async () => {
   fetchChain.mockRejectedValue(new Error('offline'))
-  const run = harness({ status: 'chain', reference: 'VAL-12', scope: 'chain' })
+  const run = harness({ status: 'chain', reference: 'MAIN-12', scope: 'chain' })
   active = run.scope
   await settled()
   assert.ok(run.held.failure.value)
@@ -244,9 +244,9 @@ test('a malformed link is refused without a request', async () => {
 })
 
 test('a re-read that fails keeps the chain drawn and refuses nothing', async () => {
-  const chain = chainOf('VAL-12')
+  const chain = chainOf('MAIN-12')
   fetchChain.mockResolvedValueOnce(chain).mockRejectedValueOnce(new Error('offline'))
-  const run = harness({ status: 'chain', reference: 'VAL-12', scope: 'chain' })
+  const run = harness({ status: 'chain', reference: 'MAIN-12', scope: 'chain' })
   active = run.scope
   await settled()
   run.version.value += 1
@@ -257,17 +257,17 @@ test('a re-read that fails keeps the chain drawn and refuses nothing', async () 
 })
 
 test('a different chain in the route replaces the held one rather than keeping it', async () => {
-  const first = chainOf('VAL-12')
-  const second = chainOf('VAL-500')
+  const first = chainOf('MAIN-12')
+  const second = chainOf('MAIN-500')
   const answers: ((chain: WorkItemChain) => void)[] = []
   fetchChain
     .mockResolvedValueOnce(first)
     .mockReturnValueOnce(new Promise((resolve) => answers.push(resolve)))
-  const run = harness({ status: 'chain', reference: 'VAL-12', scope: 'chain' })
+  const run = harness({ status: 'chain', reference: 'MAIN-12', scope: 'chain' })
   active = run.scope
   await settled()
   assert.equal(run.held.scoped.value, first)
-  run.target.value = { status: 'chain', reference: 'VAL-500', scope: 'chain' }
+  run.target.value = { status: 'chain', reference: 'MAIN-500', scope: 'chain' }
   await settled()
   // The old chain is not drawn while the new one is read.
   assert.equal(run.held.scoped.value, null)
@@ -291,7 +291,7 @@ test('a chain whose root is not in this space is refused rather than drawn empty
 test('a held chain is not drawn once the route stops naming it', () => {
   const run = harness({ status: 'none' })
   active = run.scope
-  run.held.enter(chainOf('VAL-12'))
+  run.held.enter(chainOf('MAIN-12'))
   // Entered, but the route has not moved: the field is still the whole space.
   assert.equal(run.held.scoped.value, null)
 })
@@ -299,26 +299,26 @@ test('a held chain is not drawn once the route stops naming it', () => {
 test('a held chain is not drawn for another chain the route names, before the route is followed', () => {
   fetchChain.mockReturnValue(new Promise(() => {}))
   for (const next of [
-    { status: 'chain', reference: 'VAL-500', scope: 'chain' },
-    { status: 'chain', reference: 'VAL-12', scope: 'epic' },
+    { status: 'chain', reference: 'MAIN-500', scope: 'chain' },
+    { status: 'chain', reference: 'MAIN-12', scope: 'epic' },
   ] as const) {
     const run = harness({ status: 'none' })
-    run.held.enter(chainOf('VAL-12'))
+    run.held.enter(chainOf('MAIN-12'))
     run.target.value = next
     // Read in the same tick, before the watcher has dropped the held answer:
-    // it answers VAL-12 as a chain, which is not what the route now names.
+    // it answers MAIN-12 as a chain, which is not what the route now names.
     assert.equal(run.held.scoped.value, null, JSON.stringify(next))
     run.scope.stop()
   }
 })
 
 test('a chain named in an attached store is refused as primary-only, with no request', async () => {
-  const run = harness({ status: 'chain', reference: 'VAL-12', scope: 'chain' }, undefined, false)
+  const run = harness({ status: 'chain', reference: 'MAIN-12', scope: 'chain' }, undefined, false)
   active = run.scope
   await settled()
   // The chain endpoint reads the primary store alone, as the card says.
   assert.equal(fetchChain.mock.calls.length, 0)
-  assert.deepEqual(run.refusals, [['VAL-12', { kind: 'primary' }]])
+  assert.deepEqual(run.refusals, [['MAIN-12', { kind: 'primary' }]])
   assert.equal(run.held.scoped.value, null)
   assert.equal(run.held.pending.value, false)
 })
