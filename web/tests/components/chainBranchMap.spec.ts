@@ -41,25 +41,28 @@ const lanes = (wrapper: VueWrapper) => wrapper.findAll('[role="slider"]')
 const at = (index: number) => ({ clientX: (index + 0.5) * UNIT })
 
 describe('the branch map', () => {
-  it('says in words what its colours draw', () => {
+  it('says in words what its colours draw, in the words the graph and the list use', () => {
     const wrapper = mountMap()
+    // Each group by the name the graph's legend and the member list give it,
+    // never a word of the map's own for several groups at once.
     expect(wrapper.get('figcaption').text()).toBe(
-      'Branch map: 2 lanes, 40 items; 18 finished, 5 in progress, 17 ahead.',
+      'Branch map: 2 lanes, 40 items; Done 18, Review 1, In progress 4, Blocked 1, To do 3, Backlog 13.',
     )
     expect(wrapper.findAll('.branch-map-legend .state-label').map((label) => label.text())).toEqual(
-      ['Done', 'Review', 'In progress', 'Blocked', 'Ahead'],
+      ['Done', 'Review', 'In progress', 'Blocked', 'To do', 'Backlog'],
     )
     expect(wrapper.findAll('.branch-map-label').map((label) => label.text())).toEqual([
       'MAP-1',
       'no epic',
     ])
+    // A lane's line says how much of it is done; its colours say the rest.
     expect(wrapper.findAll('.branch-map-count').map((count) => count.text())).toEqual([
-      '12 done · 3 in progress · 5 ahead',
-      '6 done · 2 in progress · 12 ahead',
+      '12 of 20 done',
+      '6 of 20 done',
     ])
     expect(lanes(wrapper).map((lane) => lane.attributes('aria-label'))).toEqual([
-      'Lane MAP-1 Root: 20 items; 12 finished, 3 in progress, 5 ahead',
-      'Lane no epic: 20 items; 6 finished, 2 in progress, 12 ahead',
+      'Lane MAP-1 Root: 20 items; Done 12, Review 1, In progress 2, Backlog 5',
+      'Lane no epic: 20 items; Done 6, In progress 2, Blocked 1, To do 3, Backlog 8',
     ])
     wrapper.unmount()
   })
@@ -76,16 +79,16 @@ describe('the branch map', () => {
     expect(legend.findAll('.state-label').map((label) => label.text())).toEqual([
       'Done',
       'In progress',
-      'Ahead',
+      'Backlog',
     ])
     // No key speaks for a state no member is in, the emphatic one least of all.
     expect(legend.find('[data-emphasis="strong"]').exists()).toBe(false)
     wrapper.unmount()
 
-    // Queued work alone is ahead too.
+    // Queued work alone is keyed as queued work, though it shares the backlog's grey.
     const queued = mountMap(chainOf(ROOT, [mapMember('MAP-10', 'queued', 'MAP-1')]))
     expect(queued.findAll('.branch-map-legend .state-label').map((label) => label.text())).toEqual([
-      'Ahead',
+      'To do',
     ])
     queued.unmount()
   })
@@ -127,10 +130,30 @@ describe('the branch map', () => {
     await own.trigger('click')
     await loose.trigger('click')
     expect(wrapper.emitted('lane')).toEqual([['MAP-1'], ['']])
+    // Nothing steps back while every lane is listed.
+    expect(wrapper.findAll('.receded')).toHaveLength(0)
     await wrapper.setProps({ filter: '' })
     expect(loose.attributes('aria-current')).toBe('true')
     expect(loose.classes()).toContain('selected')
     expect(own.attributes('aria-current')).toBeUndefined()
+    // The map itself marks the lane: every other lane — its line, its label
+    // line and its references — steps back, and the chosen one does not.
+    const [ownHead, looseHead] = wrapper.findAll('.branch-map-head')
+    expect(ownHead.classes()).toContain('receded')
+    expect(looseHead.classes()).not.toContain('receded')
+    const groups = wrapper.findAll('svg g')
+    expect(groups.map((group) => group.classes().includes('receded'))).toEqual([true, false])
+    // At 342px each lane names one task under way and counts the other two.
+    expect(
+      wrapper
+        .findAll('.branch-map-reference')
+        .map((reference) => [reference.text(), reference.classes().includes('receded')]),
+    ).toEqual([
+      ['MAP-1013', true],
+      ['+2', true],
+      ['MAP-1107', false],
+      ['+2', false],
+    ])
     wrapper.unmount()
   })
 

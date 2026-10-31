@@ -14,7 +14,7 @@
  * says where a chain can be read instead of leaving the reader to wonder why
  * there is none.
  */
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import ChainBranchMap from '@/widgets/work-item-inspector/components/ChainBranchMap.vue'
@@ -48,7 +48,7 @@ const emit = defineEmits<{
   scope: [scope: ChainScope]
 }>()
 
-const { t, locale } = useI18n()
+const { t } = useI18n()
 
 const visible = computed(() => {
   if (!props.readable) return true
@@ -96,51 +96,57 @@ const laneEpic = computed(() =>
   lane.value && lane.value !== props.chain?.root.reference ? lane.value : null,
 )
 
+/**
+ * The chip that heads a narrowed list. Choosing a lane brings it into view when
+ * it is not, so the list the choice narrowed is seen without looking for it.
+ */
+const laneFilter = ref<HTMLElement | null>(null)
+
 /** A lane label narrows the list to its lane; the same label again widens it back. */
-function chooseLane(key: string) {
+async function chooseLane(key: string) {
   chosenLane.value = lane.value === key ? null : key
+  if (chosenLane.value === null) return
+  await nextTick()
+  laneFilter.value?.scrollIntoView({ block: 'nearest' })
 }
 
 /**
  * The space a part of the breakdown is joined with, and joined to its
- * separator: a line wraps between parts — «code review 2 ·» stays whole — and a
+ * separator: a line wraps between parts — «Code review 2 ·» stays whole — and a
  * separator ends the line it closes rather than starting the next.
  */
 const KEEP = '\u{A0}'
 
 /**
- * The open work broken down by category, in the space's own state names where
- * a group has one, and how much of it the space would let someone take now.
- * That figure is the read model's rule — unheld, unblocked, in any state work
- * can start from, the backlog included — so it may exceed the to-do group, and
- * the wording says why rather than reading as one more category.
+ * The chain in one line: how much is done and how much is open, the open work
+ * by group — named as the board names its column where the whole group is in
+ * one state, and by the group's own word where it spans several — and how much
+ * of it the space would let someone take now. That figure is the read model's
+ * rule — unheld, unblocked, in any state work can start from, the backlog
+ * included — so it may exceed the to-do group, and the wording says why rather
+ * than reading as one more category. The total is the section's own count.
  */
-const breakdown = computed(() => {
+const summary = computed(() => {
   const chain = props.chain
   const current = groups.value
   if (!chain || !current) return ''
-  if (chain.open === 0) return t('workItem.chain.noneOpen')
+  if (chain.open === 0) return t('workItem.chain.summaryNoneOpen', { closed: chain.closed })
   const parts = OPEN_CHAIN_GROUPS.filter((group) => current[group].length > 0)
     .map((group) =>
       t('workItem.chain.part', {
-        group: (
-          sharedStateName(current[group]) ?? t(`workItem.chain.group.${group}`)
-        ).toLocaleLowerCase(locale.value),
+        group: sharedStateName(current[group]) ?? t(`workItem.chain.group.${group}`),
         count: current[group].length,
       }).replaceAll(' ', KEEP),
     )
     .join(`${KEEP}· `)
-  const line = t('workItem.chain.openParts', { open: chain.open, parts })
+  const line = t('workItem.chain.summary', { closed: chain.closed, open: chain.open, parts })
   return chain.ready ? `${line}; ${t('workItem.chain.workable', { count: chain.ready })}` : line
 })
 
-const headline = computed(() =>
-  props.chain
-    ? t('workItem.chain.headline', { total: props.chain.total, closed: props.chain.closed })
-    : '',
-)
-
 const forecast = useChainForecast(() => props.chain)
+
+/** The chart is the whole chain's history; under a narrowed list it follows the list. */
+const charted = computed(() => (props.chain?.series.length ?? 0) > 1)
 </script>
 
 <template>
@@ -209,14 +215,6 @@ const forecast = useChainForecast(() => props.chain)
     </div>
 
     <template v-if="chain && groups && listed">
-      <div class="chain-summary">
-        <p class="chain-headline">
-          {{ headline }}
-        </p>
-        <p class="chain-forecast">{{ forecast }}</p>
-        <p class="chain-breakdown">{{ breakdown }}</p>
-      </div>
-
       <ChainBranchMap
         :chain="chain"
         :filter="lane"
@@ -224,13 +222,19 @@ const forecast = useChainForecast(() => props.chain)
         @open="(reference) => emit('open', reference)"
       />
 
+      <div class="chain-summary">
+        <p class="chain-summary-line">{{ summary }}</p>
+        <p class="chain-forecast">{{ forecast }}</p>
+      </div>
+
       <ChainScopeChart
-        v-if="chain.series.length > 1"
+        v-if="charted && lane === null"
         :series="chain.series"
       />
 
       <div
         v-if="lane !== null"
+        ref="laneFilter"
         class="chain-lane-filter"
       >
         <button
@@ -259,6 +263,11 @@ const forecast = useChainForecast(() => props.chain)
         :groups="listed"
         @open="(reference) => emit('open', reference)"
       />
+
+      <ChainScopeChart
+        v-if="charted && lane !== null"
+        :series="chain.series"
+      />
     </template>
   </section>
 </template>
@@ -279,25 +288,20 @@ const forecast = useChainForecast(() => props.chain)
   gap: var(--space-1);
 }
 
-.chain-headline {
+.chain-summary-line {
   margin: 0;
   color: var(--color-text);
   font: var(--font-strong);
   font-variant-numeric: tabular-nums;
 }
 
-.chain-breakdown,
+/* Whether and when the open part closes is what the line above it is read
+   for, so it ranks next to it: its tone, the detail's size and weight. */
 .chain-forecast {
   margin: 0;
-  color: var(--color-text-muted);
+  color: var(--color-text);
   font: var(--font-detail);
   font-variant-numeric: tabular-nums;
-}
-
-/* Whether and when the open part closes is what the totals above it are read
-   for, so it ranks next to them: their tone, the detail's size and weight. */
-.chain-forecast {
-  color: var(--color-text);
 }
 
 .chain-quiet {
@@ -322,6 +326,9 @@ const forecast = useChainForecast(() => props.chain)
   flex-wrap: wrap;
   gap: var(--space-2);
   align-items: center;
+
+  /* Brought into view, it brings the first rows of its list with it. */
+  scroll-margin-block-end: calc(4 * var(--size-control-inline));
 }
 
 .chain-lane-chip {

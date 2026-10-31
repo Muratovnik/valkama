@@ -346,7 +346,7 @@ describe('the drawing at a width', () => {
         expect(right).toBeLessThanOrEqual(620)
         if (index) expect(left).toBeGreaterThan(boxes[index - 1][1])
       }
-      for (const label of lane.labels)
+      for (const label of lane.labels.filter(({ reference }) => !reference.startsWith('+')))
         expect(['review', 'active', 'blocked']).toContain(lane.lane.groups[label.index])
     }
     const dense = drawBranches(layoutBranches(live), 342)

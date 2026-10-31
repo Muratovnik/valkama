@@ -54,12 +54,15 @@ for (const width of [1440, 390]) {
     await installBackend(page)
     await serve(page, largeChainHere())
     const section = await openCard(page)
-    await expect(section.locator('.chain-headline')).toHaveText('616 in all · 483 closed')
-    await expect(section.locator('.chain-breakdown')).toHaveText(
-      '133 open: development 11 · code review 1 · todo 14 · backlog 107; workable: 115 — unheld and unblocked, backlog included',
+    // The map leads; one line of totals and the forecast follow it.
+    const map = await section.locator('.branch-map').boundingBox()
+    const line = await section.locator('.chain-summary-line').boundingBox()
+    expect((map?.y ?? Infinity) < (line?.y ?? 0)).toBe(true)
+    await expect(section.locator('.chain-summary-line')).toHaveText(
+      'Done 483 · open 133: Development 11 · Code review 1 · Todo 14 · Backlog 107; workable 115 (backlog included)',
     )
     await expect(section.locator('.chain-forecast')).toHaveText(
-      'Last 7 days: +53 discovered, −42 closed. New work arrives faster than it closes: to converge, more than 7.6 a day must close',
+      'Last 7 days: +53 added, −42 done. New work arrives faster than it closes: to converge, more than 7.6 a day must close',
     )
     await expect(section.getByRole('img')).toHaveAttribute('aria-label', /616 now/u)
     // The workable mark repeats down whole groups, so it takes the holder's
@@ -121,7 +124,7 @@ for (const width of [1440, 390]) {
       outside: 0,
     })
     await expect(section.locator('figcaption')).toHaveText(
-      'Branch map: 6 lanes, 617 items; 485 finished, 13 in progress, 119 ahead.',
+      'Branch map: 6 lanes, 617 items; Done 485, Review 2, In progress 11, Blocked 1, To do 20, Backlog 98.',
     )
     await expectNoSilentClipping(page, `chain map at ${width}px`)
     await section.locator('.branch-map').screenshot(shot(info, `chain-map-large-${width}.png`))
@@ -139,6 +142,11 @@ for (const width of [1440, 390]) {
     // A lane label narrows the list below to its lane.
     await section.getByRole('button', { name: 'Show only lane MAIN-4000' }).click()
     await expect(section.locator('.chain-lane-chip')).toHaveText('Lane MAIN-4000')
+    // The narrowed list is in view, not a chart's height below the label, and
+    // the map marks its lane by stepping every other lane back.
+    await expect(section.locator('.chain-lane-chip')).toBeInViewport()
+    await expect(section.locator('.chain-row').first()).toBeInViewport()
+    await expect(section.locator('.branch-map-head.receded')).toHaveCount(5)
     await expect(section.locator('.chain-group-title')).toHaveText([
       'Development · 8',
       'Code review · 1',
@@ -212,9 +220,7 @@ test('the branch map gives a small chain a segment, a dot and a name per task', 
   expect(await mapReading(page)).toEqual({ labels: ['MAIN-264', 'no epic'], lanes: 2, outside: 0 })
   await expect(section.locator('.branch-map-dot')).not.toHaveCount(0)
   await expect(section.locator('.branch-map-reference').first()).toHaveText('MAIN-1013')
-  await expect(section.locator('.branch-map-count').first()).toHaveText(
-    '12 done · 3 in progress · 5 ahead',
-  )
+  await expect(section.locator('.branch-map-count').first()).toHaveText('12 of 20 done')
   await expectNoSilentClipping(page, 'small chain map')
   await section.locator('.branch-map').screenshot(shot(info, 'chain-map-small-1440.png'))
 })

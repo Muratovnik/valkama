@@ -12,6 +12,13 @@
  * than one stroke does.
  */
 
+import {
+  CHARACTER,
+  LABEL_GAP,
+  labelHeight,
+  laneHead,
+} from '@/widgets/work-item-inspector/utils/chainBranchHead.ts'
+import type { Box, LaneTexts } from '@/widgets/work-item-inspector/utils/chainBranchHead.ts'
 import { laneRuns } from '@/widgets/work-item-inspector/utils/chainBranchLayout.ts'
 import type {
   BranchLane,
@@ -45,29 +52,15 @@ const DENSE_UNIT = 6
 /** From this width a unit has room for a dot at each junction. */
 const DOT_UNIT = 10
 const DOT_RADIUS = 2.5
-/**
- * The label line above a lane — two lines when the label and its counts have
- * room nowhere on one — its stroke band, the reference line under it, the gap.
- */
-const LANE_LABEL = 24
-const LANE_LABEL_STACKED = 42
+/** The stroke band, the reference line under it, the gap between lanes. */
 const LANE_BAND = 16
 const LANE_REFERENCES = 18
 const LANE_GAP = 8
 /** How far a stem bends into the lane it leads to. */
 const STEM_RADIUS = 6
-/**
- * An estimate of a text's advance at the interface size, enough to decide where
- * a label fits; a label that is wider than estimated ends in an ellipsis rather
- * than running into anything. A reference is set heavier than running text.
- */
-const CHARACTER = 7
-const REFERENCE_CHARACTER = 8.5
-const HEAD_GAP = 8
-/** Room left over an estimate, so a label that comes out a little wider still fits. */
-const SLACK_FACTOR = 1.1
 const LABEL_PADDING = 8
-const LABEL_GAP = 6
+/** Between two reference labels: wide enough that three of them read as three, not as one line of text. */
+const REFERENCE_GAP = 14
 /** A lone member in a merged lane is drawn at least this wide, centred where it is. */
 const LEAST_RUN = 4
 /** A raised mark's height, which is also its least length, and the gap between two. */
@@ -96,20 +89,6 @@ const PAINT_ORDER: readonly ChainGroup[] = [
 
 /** Work under way or stuck: what a reader names beside a segment, and what a dense lane raises. */
 const CURRENT = new Set<ChainGroup>(['review', 'active', 'blocked'])
-
-/** A box in the map's own pixels. */
-export interface Box {
-  /** From the map's bottom edge, for a box that grows upward from a point. */
-  bottom?: number
-  height?: number
-  /** From the map's start edge, or — for a box that ends at a point — `right` from its end edge. */
-  left?: number
-  maxWidth?: number
-  minWidth?: number
-  right?: number
-  top?: number
-  width?: number
-}
 
 interface BranchLabel {
   box: Box
@@ -140,12 +119,14 @@ interface BranchPill {
 export interface LaneDrawing {
   /** The lane's pointer and keyboard target: its stroke band, a little wider than the lane. */
   band: Box
-  /** The label line ends at its stem instead of starting beside it. */
+  /** The label line ends where the lane starts instead of starting beside it. */
   before: boolean
   /** One path of junction dots per group, empty where a unit has no room for them. */
   dots: GroupPath[]
   /** Where the lane's label line stands. */
   head: Box
+  /** The label line stands beside the lane on its own line, rather than above it. */
+  inline: boolean
   labels: BranchLabel[]
   lane: BranchLane
   /** Each group's stretches as one path, so a lane is a handful of elements. */
@@ -172,12 +153,6 @@ interface BranchDrawing {
   lanes: LaneDrawing[]
   unit: number
   width: number
-}
-
-/** The two texts a lane's label line carries, as the component will set them. */
-interface LaneTexts {
-  counts: string
-  name: string
 }
 
 interface DrawScale {
@@ -298,31 +273,56 @@ function laneDots(lane: BranchLane, at: LaneSpan, y: number, scale: DrawScale): 
   return groupPaths(parts)
 }
 
+/** A reference label's width: its text at the estimate, and the padding around it. */
+function referenceWidth(text: string): number {
+  return text.length * CHARACTER + LABEL_PADDING
+}
+
 /**
  * Reference labels for current work, under the segments they name, where one
- * fits without touching the last or a stem leaving this lane.
+ * fits without touching the last or a stem leaving this lane. When some do not
+ * fit, a last label says how many were left out — «+12» — so three references
+ * never read as all fifteen; it takes the place of the last reference that
+ * fits when there is no room for it after that one.
  */
 function laneLabels(lane: BranchLane, at: LaneSpan, y: number, scale: DrawScale): BranchLabel[] {
   const { width } = scale
   const avoid = scale.stems.get(lane.key) ?? []
+  const top = y + LANE_BAND / 2
+  const clear = (left: number, right: number) =>
+    left >= 0 &&
+    right <= width &&
+    !avoid.some((stem) => stem > left - LABEL_GAP && stem < right + LABEL_GAP)
   const labels: BranchLabel[] = []
   let edge = -Infinity
+  let current = 0
+  let first: number | null = null
   for (const [index, member] of lane.members.entries()) {
     if (!CURRENT.has(lane.groups[index])) continue
-    const labelWidth = member.reference.length * CHARACTER + LABEL_PADDING
+    current += 1
+    const labelWidth = referenceWidth(member.reference)
     const centre = at.x0 + (index + 0.5) * at.step
     const left = Math.max(0, Math.min(width - labelWidth, centre - labelWidth / 2))
-    const right = left + labelWidth
-    const crossed = avoid.some((stem) => stem > left - LABEL_GAP && stem < right + LABEL_GAP)
-    if (left < edge + LABEL_GAP || crossed) continue
-    labels.push({
-      index,
-      reference: member.reference,
-      box: { top: y + LANE_BAND / 2, left, width: labelWidth },
-    })
-    edge = right
+    first ??= left
+    if (left < edge + REFERENCE_GAP || !clear(left, left + labelWidth)) continue
+    labels.push({ index, reference: member.reference, box: { top, left, width: labelWidth } })
+    edge = left + labelWidth
   }
-  return labels
+  // Where the count of the rest goes: after the last reference, or in its place.
+  let rest = labels.length ? edge + REFERENCE_GAP : (first ?? at.x0)
+  for (;;) {
+    const omitted = current - labels.length
+    if (omitted === 0) return labels
+    const reference = `+${omitted}`
+    const labelWidth = referenceWidth(reference)
+    if (clear(rest, rest + labelWidth)) {
+      labels.push({ index: -1, reference, box: { top, left: rest, width: labelWidth } })
+      return labels
+    }
+    const dropped = labels.pop()
+    if (!dropped) return labels
+    rest = dropped.box.left ?? 0
+  }
 }
 
 /** Where the stem of a lane's fork leaves its parent's line. */
@@ -366,51 +366,6 @@ function stemPath(x: number, from: number, to: number, x0: number): string {
   return x0 > x + radius ? `${bend} H${num(x0)}` : bend
 }
 
-/** Where a lane's label and counts go, around the stem `anchor` stands beside. */
-interface HeadSpot {
-  anchor: number
-  row: number
-  stem: number | null
-  top: number
-  x1: number
-}
-
-/**
- * Where a lane's label line stands, the first of these that fits clear of
- * every stem crossing its row: on one line beside its stem, running to the
- * lane's end so the counts stand where it stops; on one line ending at the stem;
- * on two lines beside it; on two lines ending at it. A lane with no room
- * anywhere keeps two lines as far along as the width allows.
- */
-function laneHead(lane: BranchLane, spot: HeadSpot, scale: DrawScale) {
-  const { width } = scale
-  const texts = scale.texts(lane)
-  const name = texts.name.length * REFERENCE_CHARACTER * SLACK_FACTOR
-  const counts = texts.counts.length * CHARACTER * SLACK_FACTOR
-  const crossing = scale.crossing[spot.row] ?? []
-  const free = (left: number, right: number) =>
-    left >= 0 &&
-    right <= width &&
-    !crossing.some((x) => x > left - LABEL_GAP && x < right + LABEL_GAP)
-  const { anchor, top, x1, stem } = spot
-  const end = stem === null ? -1 : stem - LABEL_GAP
-  for (const stacked of [false, true]) {
-    const need = stacked ? Math.max(name, counts) : name + HEAD_GAP + counts
-    if (free(anchor, anchor + need)) {
-      const minWidth = stacked ? undefined : Math.max(0, x1 - anchor)
-      return {
-        before: false,
-        stacked,
-        head: { top, left: anchor, minWidth, maxWidth: width - anchor },
-      }
-    }
-    if (free(end - need, end))
-      return { before: true, stacked, head: { top, right: width - end, maxWidth: end } }
-  }
-  const left = Math.max(0, Math.min(anchor, width - Math.max(name, counts)))
-  return { before: false, stacked: true, head: { top, left, maxWidth: width - left } }
-}
-
 function laneBand(y: number, x0: number, x1: number, width: number): Box {
   const left = Math.max(0, x0 - SLACK)
   const right = Math.min(width, Math.max(x1 + SLACK, x0 + LEAST_TARGET))
@@ -428,9 +383,15 @@ function drawLane(
   const { x0 } = at
   const x1 = x0 + lane.members.length * at.step
   const stem = lane.fork && parent ? stemX(parent.lane, lane.fork, unit) : null
-  const anchor = stem === null ? x0 : stem + LABEL_GAP
-  const { before, head, stacked } = laneHead(lane, { anchor, row: spot.row, stem, top, x1 }, scale)
-  const y = top + (stacked ? LANE_LABEL_STACKED : LANE_LABEL) + LANE_BAND / 2
+  const crossing = scale.crossing[spot.row] ?? []
+  const { before, head, inline, stacked } = laneHead(
+    scale.texts(lane),
+    { crossing, stem, top, x0, x1 },
+    width,
+  )
+  const label = labelHeight(stacked)
+  // A label beside the lane is centred on its line; one above it takes a row.
+  const y = inline ? top + Math.max(label, LANE_BAND) / 2 : top + label + LANE_BAND / 2
   const pills = dense ? lanePills(lane, at) : []
   return {
     lane,
@@ -441,6 +402,7 @@ function drawLane(
     step: at.step,
     head,
     before,
+    inline,
     stacked,
     band: laneBand(y, x0, x1, width),
     stem: stem === null || !parent ? null : stemPath(stem, parent.y, y, x0),
@@ -480,7 +442,8 @@ export function drawBranches(
     const drawn = drawLane(lane, { parent, row, top }, scale)
     byKey.set(lane.key, drawn)
     const below = drawn.labels.length ? LANE_REFERENCES : 0
-    top = drawn.y + LANE_BAND / 2 + below + LANE_GAP
+    const label = drawn.inline ? labelHeight(drawn.stacked) / 2 : 0
+    top = drawn.y + Math.max(LANE_BAND / 2 + below, label) + LANE_GAP
   }
   const lanes = [...byKey.values()]
   return {

@@ -24,7 +24,8 @@ import {
   markAt,
   tipAt,
 } from '@/widgets/work-item-inspector/utils/chainBranchDrawing.ts'
-import type { Box, LaneDrawing } from '@/widgets/work-item-inspector/utils/chainBranchDrawing.ts'
+import type { LaneDrawing } from '@/widgets/work-item-inspector/utils/chainBranchDrawing.ts'
+import type { Box } from '@/widgets/work-item-inspector/utils/chainBranchHead.ts'
 import { layoutBranches } from '@/widgets/work-item-inspector/utils/chainBranchLayout.ts'
 import { useBranchCursor } from '@/widgets/work-item-inspector/utils/useBranchCursor.ts'
 import { useBranchText } from '@/widgets/work-item-inspector/utils/useBranchText.ts'
@@ -79,6 +80,12 @@ const { announcement, cursorOf, enter, exit, leave, move, openAt, point, roomAbo
 function isFiltered(lane: LaneDrawing): boolean {
   return props.filter === lane.lane.key
 }
+
+/**
+ * While the list is narrowed to one lane, every other lane steps back, so the
+ * map shows which lane the list below is and the label is not the only mark.
+ */
+const recedes = (lane: LaneDrawing) => props.filter !== null && !isFiltered(lane)
 
 function currentOf(lane: LaneDrawing): 'true' | undefined {
   return isFiltered(lane) ? 'true' : undefined
@@ -164,9 +171,10 @@ function countId(lane: LaneDrawing): string {
         :height="drawing.height"
         :viewBox="`0 0 ${drawing.width} ${drawing.height}`"
       >
-        <template
+        <g
           v-for="lane in drawing.lanes"
           :key="lane.lane.key"
+          :class="{ receded: recedes(lane) }"
         >
           <path
             v-if="lane.stem"
@@ -194,7 +202,7 @@ function countId(lane: LaneDrawing): string {
             :d="path.d"
             :data-tone="statePresentation('work-item-chain-group', path.group).tone"
           />
-        </template>
+        </g>
         <rect
           v-if="mark"
           class="branch-map-mark"
@@ -213,7 +221,7 @@ function countId(lane: LaneDrawing): string {
       >
         <div
           class="branch-map-head"
-          :class="{ before: lane.before, stacked: lane.stacked }"
+          :class="{ before: lane.before, stacked: lane.stacked, receded: recedes(lane) }"
           :style="place(lane.head)"
         >
           <button
@@ -258,6 +266,7 @@ function countId(lane: LaneDrawing): string {
           :key="label.reference"
           class="branch-map-reference"
           aria-hidden="true"
+          :class="{ receded: recedes(lane) }"
           :style="place(label.box)"
           >{{ label.reference }}</span
         >
@@ -326,28 +335,42 @@ function countId(lane: LaneDrawing): string {
   stroke-width: 2;
 }
 
-/* A lane is a status edge: 3px in the colour of the state it carries, the
-   neutral grey of work ahead unless a tone says otherwise. */
-.branch-map-run {
-  fill: none;
-  stroke: var(--color-text-tertiary);
-  stroke-width: 3;
+/* The lanes the narrowed list does not hold, stepped back behind the one it does. */
+.receded {
+  opacity: 0.3;
+}
+
+/* Each state's colour, named once for every mark that draws it: the neutral
+   grey of work ahead unless a tone says otherwise. That grey is the legend's
+   neutral key, and lighter than the stems, so the stretch ahead reads as part
+   of a lane and not as one more connector on the ground. */
+.branch-map-run,
+.branch-map-dot,
+.branch-map-mark {
+  --lane-tone: var(--color-text-muted);
 
   &[data-tone='success'] {
-    stroke: var(--color-success);
+    --lane-tone: var(--color-success);
   }
 
   &[data-tone='info'] {
-    stroke: var(--color-info);
+    --lane-tone: var(--color-info);
   }
 
   &[data-tone='warning'] {
-    stroke: var(--color-warning);
+    --lane-tone: var(--color-warning);
   }
 
   &[data-tone='danger'] {
-    stroke: var(--color-danger);
+    --lane-tone: var(--color-danger);
   }
+}
+
+/* A lane is a status edge: 3px in the colour of the state it carries. */
+.branch-map-run {
+  fill: none;
+  stroke: var(--lane-tone);
+  stroke-width: 3;
 
   /* Where a unit is a pixel or two, work under way or stuck would vanish at the
      line's weight; it stands out of the lane as a rounded mark instead. */
@@ -359,23 +382,7 @@ function countId(lane: LaneDrawing): string {
 
 .branch-map-dot,
 .branch-map-mark {
-  fill: var(--color-text-tertiary);
-
-  &[data-tone='success'] {
-    fill: var(--color-success);
-  }
-
-  &[data-tone='info'] {
-    fill: var(--color-info);
-  }
-
-  &[data-tone='warning'] {
-    fill: var(--color-warning);
-  }
-
-  &[data-tone='danger'] {
-    fill: var(--color-danger);
-  }
+  fill: var(--lane-tone);
 }
 
 /* The task being looked at stands out of its lane by a ring in the text tone,

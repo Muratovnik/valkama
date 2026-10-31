@@ -22,7 +22,7 @@ import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 type LaneStage = 'ahead' | 'current' | 'done'
 
 /** Where along a lane each group stands: finished, then current, then ahead. */
-const LANE_GROUP_ORDER: readonly ChainGroup[] = [
+export const LANE_GROUP_ORDER: readonly ChainGroup[] = [
   'done',
   'review',
   'active',

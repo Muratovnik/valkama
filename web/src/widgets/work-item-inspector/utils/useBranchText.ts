@@ -1,21 +1,18 @@
 import { useI18n } from 'vue-i18n'
 
+import { LANE_GROUP_ORDER } from '@/widgets/work-item-inspector/utils/chainBranchLayout.ts'
 import type { BranchLane } from '@/widgets/work-item-inspector/utils/chainBranchLayout.ts'
 
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 import { holderName } from '@/shared/lib/actor.ts'
 
-/**
- * The map's five colours and the groups each one draws: queued and backlog work
- * share the grey of what is ahead, so they share one key.
+/*
+ * The legend and every count name groups in the order a lane runs through
+ * them, in the groups' own words — the ones the graph's legend and the member
+ * list use. Queued and backlog work share the grey of what is ahead, as they
+ * share the graph's neutral dot, and each keeps its own name, so no word on the
+ * map stands for a set no other view names.
  */
-const LEGEND: readonly { groups: readonly ChainGroup[]; label: string; state: ChainGroup }[] = [
-  { state: 'done', groups: ['done'], label: 'workItem.chain.group.done' },
-  { state: 'review', groups: ['review'], label: 'workItem.chain.group.review' },
-  { state: 'active', groups: ['active'], label: 'workItem.chain.group.active' },
-  { state: 'blocked', groups: ['blocked'], label: 'workItem.chain.group.blocked' },
-  { state: 'backlog', groups: ['queued', 'backlog'], label: 'workItem.chain.map.ahead' },
-]
 
 /**
  * What the branch map says in words: a lane's name and counts, the task a
@@ -31,21 +28,42 @@ export function useBranchText() {
     return lane.reference ?? t('workItem.chain.noEpic')
   }
 
-  /** A lane's counts as text, the empty ones left out. */
+  /**
+   * What a lane's label line says after its name: how much of it is done, out
+   * of how much. Its length already draws its volume and its colours where the
+   * rest stands, so one figure is enough, and it is short enough to stand at
+   * the lane's end on a narrow map.
+   */
   function laneCounts(lane: BranchLane): string {
-    const parts: string[] = []
-    if (lane.counts.done) parts.push(t('workItem.chain.map.countDone', { count: lane.counts.done }))
-    if (lane.counts.current)
-      parts.push(t('workItem.chain.map.countCurrent', { count: lane.counts.current }))
-    if (lane.counts.ahead)
-      parts.push(t('workItem.chain.map.countAhead', { count: lane.counts.ahead }))
-    return parts.join(' · ')
+    return t('workItem.chain.map.countDone', {
+      done: lane.counts.done,
+      total: lane.members.length,
+    })
   }
 
-  /** A lane's accessible name: its parent and title, and every count in words. */
+  /** Every group these lanes hold and how many, in lane order, in the groups' own words. */
+  function groupParts(lanes: readonly BranchLane[]): string {
+    const counts = new Map<ChainGroup, number>()
+    for (const group of lanes.flatMap((lane) => lane.groups))
+      counts.set(group, (counts.get(group) ?? 0) + 1)
+    return LANE_GROUP_ORDER.filter((group) => counts.has(group))
+      .map((group) =>
+        t('workItem.chain.part', {
+          group: t(`workItem.chain.group.${group}`),
+          count: counts.get(group),
+        }),
+      )
+      .join(', ')
+  }
+
+  /** A lane's accessible name: its parent and title, and every group it holds. */
   function laneLabel(lane: BranchLane): string {
     const name = lane.title ? `${laneName(lane)} ${lane.title}` : laneName(lane)
-    return t('workItem.chain.map.lane', { name, total: lane.members.length, ...lane.counts })
+    return t('workItem.chain.map.lane', {
+      name,
+      total: lane.members.length,
+      parts: groupParts([lane]),
+    })
   }
 
   /** What a task is called aloud when the keyboard cursor reaches it. */
@@ -66,26 +84,25 @@ export function useBranchText() {
   }
 
   function summary(lanes: readonly BranchLane[], total: number): string {
-    const totals = { done: 0, current: 0, ahead: 0 }
-    for (const lane of lanes) {
-      totals.done += lane.counts.done
-      totals.current += lane.counts.current
-      totals.ahead += lane.counts.ahead
-    }
-    return t('workItem.chain.map.summary', { lanes: lanes.length, total, ...totals })
+    return t('workItem.chain.map.summary', {
+      lanes: lanes.length,
+      total,
+      parts: groupParts(lanes),
+    })
   }
 
   /**
-   * The readings of the colours this map draws, in the order a lane runs
-   * through them. A legend names what is on the drawing, as the graph's does: a
-   * key for a state no member is in reads as a claim that one is, and the
-   * blocked one would say so in bold.
+   * The groups this map draws, in the order a lane runs through them. A legend
+   * names what is on the drawing, as the graph's does: a key for a state no
+   * member is in reads as a claim that one is, and the blocked one would say so
+   * in bold.
    */
   function legend(lanes: readonly BranchLane[]) {
     const drawn = new Set(lanes.flatMap((lane) => lane.groups))
-    return LEGEND.filter((entry) => entry.groups.some((group) => drawn.has(group))).map(
-      (entry) => ({ state: entry.state, label: t(entry.label) }),
-    )
+    return LANE_GROUP_ORDER.filter((group) => drawn.has(group)).map((group) => ({
+      state: group,
+      label: t(`workItem.chain.group.${group}`),
+    }))
   }
 
   return { describe, laneCounts, laneLabel, laneName, legend, position, summary, t }

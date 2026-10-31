@@ -527,17 +527,22 @@ member is narrower than a few pixels, work under way rides it as a raised
 rounded mark, so it is still seen without spending a surface on it. No lane is
 drawn shorter than 16px: a lane of one or two tasks on a long chain is
 stretched to that, its tasks sharing the length, and a dot closes it, so it
-reads as a lane and still as the shortest; its counts say its volume. A chain
-view's legend names only the states its drawing holds, on the map as on the
-graph, so no key — least of all the emphatic «Blocked» — stands for nothing.
-The graph's key lies on the field's corner, not in the bar above it, and keeps
-the place of a state a switch can add, so no switch moves the bar or the
-field; every framing keeps the nodes clear of the key and the camera controls.
-Zoomed out past reading, the graph draws each node as a block of its state's
-colour with its reference, so the whole of a long chain reads as an overview.
-Under the chain's totals, one line answers whether and when the open part
-closes, from the last seven days, and says so as a range when those days
-disagree.
+reads as a lane and still as the shortest; its counts say its volume. A lane's
+label stands beside its own lane — after its end where there is room, else at
+its start — and never a row above it with only a stem to say whose it is. Where
+a lane names some of its work under way and not all, a last label says how
+many it left out. A chain view's legend names only the states its drawing
+holds, on the map as on the graph, so no key — least of all the emphatic
+«Blocked» — stands for nothing. Chain views name a single state as the board's
+column does and a group of states by the group's own word, never by a
+workflow key. The graph's key lies on the field's corner, not in the bar above
+it, and keeps the place of a state a switch can add, so no switch moves the bar
+or the field; every framing keeps the nodes clear of the key and the camera
+controls. Zoomed out past reading, the graph draws each node as a block of its
+state's colour with its reference, so the whole of a long chain reads as an
+overview. Under the map, one line gives the totals and a second answers
+whether and when the open part closes, from the last seven days, and says so
+as a range when those days disagree.
 The related work/session/evidence context is one grouped relationship region,
 not a decorative sequence. Execution history and native session opening stay
 inside work-item context; Memory is a typed reference there.

@@ -30,6 +30,11 @@ function signed(count: number, sign: '+' | '−'): string {
  * forecast replaces a bare "growing" or "converging" with the question the
  * reader has — whether, and when. A chain younger than the window says so
  * instead, and a window in which nothing moved says that and nothing more.
+ *
+ * Both scopes count the same thing — members created inside the window, and
+ * members closed inside it — so both say it in the same words. The chain scope
+ * used to call its new work "discovered", which a child filed as planned is
+ * not, and the epic scope "added", for one and the same count.
  */
 export function useChainForecast(chain: () => WorkItemChain | null) {
   const { t, locale } = useI18n()
@@ -94,17 +99,13 @@ export function useChainForecast(chain: () => WorkItemChain | null) {
     if (!current) return ''
     const today = utcToday()
     const { days, created, closed } = current.recent
-    const epic = current.scope === 'epic'
-    if (created === 0 && closed === 0)
-      return t(epic ? 'workItem.chain.forecast.quietEpic' : 'workItem.chain.forecast.quiet', {
-        days,
-      })
+    if (created === 0 && closed === 0) return t('workItem.chain.forecast.quiet', { days })
     const history = historyDays(current.series, today) ?? days
     const period =
       history < days
         ? t('workItem.chain.forecast.first', { count: history }, history)
         : t('workItem.chain.forecast.window', { days })
-    const facts = t(epic ? 'workItem.chain.forecast.factsEpic' : 'workItem.chain.forecast.facts', {
+    const facts = t('workItem.chain.forecast.facts', {
       period,
       created: signed(created, '+'),
       closed: signed(closed, '−'),

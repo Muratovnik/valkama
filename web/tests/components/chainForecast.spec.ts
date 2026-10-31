@@ -77,10 +77,10 @@ describe('the forecast line of a chain', () => {
     // 7 added and 70 closed: 9 a day, every day alike; 81 open is 9 days, 9 November.
     const steady = chainWith(81, { ...BEFORE, ...everyDay(1, 10) })
     expect(line(steady, 'en')).toBe(
-      'Last 7 days: +7 discovered, −70 closed. At this pace the open work closes in about 9 days (by Nov 9)',
+      'Last 7 days: +7 added, −70 done. At this pace the open work closes in about 9 days (by Nov 9)',
     )
     expect(line(steady, 'ru')).toBe(
-      'За 7 дней: +7 обнаружено, −70 закрыто. При таком темпе открытое закроется примерно за 9 дней (к 9 нояб.)',
+      'За 7 дней: +7 добавлено, −70 выполнено. При таком темпе открытое закроется примерно за 9 дней (к 9 нояб.)',
     )
   })
 
@@ -91,66 +91,67 @@ describe('the forecast line of a chain', () => {
     expect(line(bursts, 'ru')).toMatch(/закроется за 1–4 недели \(6–26 нояб\.\)$/u)
   })
 
-  it('says the open part grows, and what would turn it, when more is added than closed', () => {
+  it('says the open part grows, and what would turn it, when more is added than done', () => {
     const growing = chainWith(132, { ...BEFORE, 5: [70, 50], 1: [56, 57] })
     expect(line(growing, 'ru')).toBe(
-      'За 7 дней: +126 обнаружено, −107 закрыто. Новое появляется быстрее, чем закрывается: чтобы сойтись, нужно закрывать больше 18 в день',
+      'За 7 дней: +126 добавлено, −107 выполнено. Новое появляется быстрее, чем закрывается: чтобы сойтись, нужно закрывать больше 18 в день',
     )
     expect(line(growing, 'en')).toBe(
-      'Last 7 days: +126 discovered, −107 closed. New work arrives faster than it closes: to converge, more than 18 a day must close',
+      'Last 7 days: +126 added, −107 done. New work arrives faster than it closes: to converge, more than 18 a day must close',
     )
   })
 
   it('writes a zero without a sign', () => {
     // Nothing closed: 5 ÷ 7 ≈ 0.71 a day, rounded up to 0.8.
     expect(line(chainWith(20, { ...BEFORE, 3: [5, 0] }), 'en')).toBe(
-      'Last 7 days: +5 discovered, 0 closed. New work arrives faster than it closes: to converge, more than 0.8 a day must close',
+      'Last 7 days: +5 added, 0 done. New work arrives faster than it closes: to converge, more than 0.8 a day must close',
     )
     // Nothing open, so nothing to forecast: the facts alone.
     expect(line(chainWith(0, { ...BEFORE, 2: [0, 3] }), 'ru')).toBe(
-      'За 7 дней: 0 обнаружено, −3 закрыто',
+      'За 7 дней: 0 добавлено, −3 выполнено',
     )
   })
 
   it('says that nothing moved, and only that, when nothing did', () => {
     const quiet = chainWith(20, BEFORE)
-    expect(line(quiet, 'en')).toBe('Nothing discovered or closed in the last 7 days')
-    expect(line(quiet, 'ru')).toBe('За 7 дней ничего не обнаружено и не закрыто')
+    expect(line(quiet, 'en')).toBe('Nothing added or done in the last 7 days')
+    expect(line(quiet, 'ru')).toBe('За 7 дней ничего не добавлено и не выполнено')
   })
 
   it('says the open part holds when as much closes as is added', () => {
     expect(line(chainWith(20, { ...BEFORE, ...everyDay(2, 2) }), 'ru')).toBe(
-      'За 7 дней: +14 обнаружено, −14 закрыто. Открытое не убывает: чтобы сойтись, нужно закрывать больше 2 в день',
+      'За 7 дней: +14 добавлено, −14 выполнено. Открытое не убывает: чтобы сойтись, нужно закрывать больше 2 в день',
     )
   })
 
   it('names a young chain’s days and asks for a week before it forecasts', () => {
     expect(line(chainWith(30, { 2: [40, 5], 0: [0, 5] }), 'ru')).toBe(
-      'Первые 3 дня: +40 обнаружено, −10 закрыто. Для прогноза нужно 7 дней истории',
+      'Первые 3 дня: +40 добавлено, −10 выполнено. Для прогноза нужно 7 дней истории',
     )
     // A chain of one day, today.
     expect(line(chainWith(16, { 0: [20, 4] }), 'en')).toBe(
-      'First day: +20 discovered, −4 closed. A forecast needs 7 days of history',
+      'First day: +20 added, −4 done. A forecast needs 7 days of history',
     )
     expect(line(chainWith(16, { 0: [20, 4] }), 'ru')).toBe(
-      'Первый день: +20 обнаружено, −4 закрыто. Для прогноза нужно 7 дней истории',
+      'Первый день: +20 добавлено, −4 выполнено. Для прогноза нужно 7 дней истории',
     )
   })
 
-  it('reads an epic’s own children as added rather than discovered', () => {
-    const epic = chainWith(81, { ...BEFORE, ...everyDay(1, 10) }, 'epic')
-    expect(line(epic, 'en')).toBe(
-      'Last 7 days: +7 added, −70 closed. At this pace the open work closes in about 9 days (by Nov 9)',
-    )
+  it('says an epic’s count in the chain’s words, because it is the same measure', () => {
+    // Both scopes count the members created and closed in the window; only
+    // which members differs, and the scope switch above the line says that.
+    const days = { ...BEFORE, ...everyDay(1, 10) }
+    expect(line(chainWith(81, days, 'epic'), 'en')).toBe(line(chainWith(81, days), 'en'))
+    expect(line(chainWith(81, days, 'epic'), 'ru')).toBe(line(chainWith(81, days), 'ru'))
     expect(line(chainWith(20, BEFORE, 'epic'), 'ru')).toBe(
-      'За 7 дней ничего не добавлено и не закрыто',
+      'За 7 дней ничего не добавлено и не выполнено',
     )
   })
 
   it('keeps a number with its unit and a date with its preposition when it wraps', () => {
     const steady = chainWith(81, { ...BEFORE, ...everyDay(1, 10) })
     expect(rendered(steady, 'ru')).toBe(
-      'За 7\u{A0}дней: +7 обнаружено, −70 закрыто. При таком темпе открытое закроется примерно за 9\u{A0}дней (к\u{A0}9\u{A0}нояб.)',
+      'За 7\u{A0}дней: +7 добавлено, −70 выполнено. При таком темпе открытое закроется примерно за 9\u{A0}дней (к\u{A0}9\u{A0}нояб.)',
     )
     expect(rendered(steady, 'en')).toContain('in about 9\u{A0}days (by\u{A0}Nov\u{A0}9)')
   })
