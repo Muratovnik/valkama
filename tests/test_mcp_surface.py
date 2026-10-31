@@ -19,15 +19,18 @@ from __future__ import annotations
 import io
 import json
 import os
+import sqlite3
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from typing import ClassVar
 from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from server import housekeeping, mcp_surface, store
+from server import housekeeping, mcp_surface, store, transcripts
 from server.hooks import normalize, spool
 from server.ops import tray
 from server.planning import api as planning_api
@@ -114,6 +117,7 @@ class McpSurfaceTestCase(unittest.TestCase):
             mock.patch.object(sys, "stdin", Stdin(b"")),
             mock.patch.object(mcp_surface, "connect", return_value=connection),
             mock.patch.object(housekeeping, "start_up", return_value=[]),
+            mock.patch.object(housekeeping, "start_sweep", return_value=None),
             mock.patch.object(tray, "start", return_value=None),
         ):
             mcp_surface.mcp_main()
@@ -124,6 +128,7 @@ class McpSurfaceTestCase(unittest.TestCase):
         with (
             mock.patch.object(mcp_surface, "connect", return_value=connection),
             mock.patch.object(housekeeping, "start_up", return_value=[]),
+            mock.patch.object(housekeeping, "start_sweep", return_value=None),
             mock.patch.object(mcp_surface, "_mcp_loop", side_effect=RuntimeError("stdin failed")),
             self.assertRaisesRegex(RuntimeError, "stdin failed"),
         ):
@@ -183,6 +188,79 @@ class StartUpMaintenanceTests(McpSurfaceTestCase):
         )
         # And a second start finds nothing pending to trip over.
         self.assertEqual(1, len(self.start()[0]))
+
+    def test_a_store_another_writer_holds_still_answers_initialize_within_seconds(self) -> None:
+        """Before: the drain and the lease expiry each waited the full busy timeout."""
+
+        record = normalize.lifecycle_event(
+            "claude",
+            "stop",
+            {"session_id": "S"},
+            event_uid="00000000-0000-4000-8000-000000000002",
+            occurred_at="2026-10-31T10:00:00.000Z",
+        )
+        assert record is not None
+        spool.write(
+            self.spool_directory(),
+            record,
+            occurred_ns=1,
+            spooled_at="2026-10-31T10:00:01.000Z",
+            reason="busy",
+        )
+        holder = sqlite3.connect(store.db_path(), isolation_level=None)
+        self.addCleanup(holder.close)
+        real_connect = mcp_surface.connect
+
+        def connect_then_lose_the_store() -> sqlite3.Connection:
+            conn = real_connect()
+            holder.execute("BEGIN EXCLUSIVE")
+            return conn
+
+        started = time.monotonic()
+        with mock.patch.object(mcp_surface, "connect", side_effect=connect_then_lose_the_store):
+            answers, stderr = self.start()
+        elapsed = time.monotonic() - started
+        holder.execute("ROLLBACK")
+        self.assertEqual(1, len(answers))
+        self.assertLess(elapsed, housekeeping.START_UP_SECONDS + 1.0)
+        self.assertIn("hook spool drain stopped", stderr)
+        # Nothing was lost: the event is still pending for the next start.
+        self.assertEqual(1, len(spool.pending(self.spool_directory())))
+
+    def test_initialize_does_not_wait_for_a_transcript_copy(self) -> None:
+        source = os.path.join(self.home.name, "client-transcript.jsonl")
+        with open(source, "wb") as handle:
+            handle.write(b'{"type": "synthetic"}\n' * 64)
+        self.conn.execute(
+            "INSERT INTO execution_events(event_uid, kind, identity_state, identity_source,"
+            " session_id, transcript_path) VALUES (?, 'session_end', 'confirmed', 'hook', ?, ?)",
+            ("00000000-0000-4000-8000-000000000003", "S", source),
+        )
+        self.conn.commit()
+        entered, release = threading.Event(), threading.Event()
+        real_copy = transcripts.copy
+
+        def slow_copy(*args: object, **kwargs: object) -> transcripts.Copy:
+            entered.set()
+            release.wait(10)
+            return real_copy(*args, **kwargs)  # type: ignore[arg-type]
+
+        with mock.patch.object(transcripts, "copy", side_effect=slow_copy):
+            started = time.monotonic()
+            answers, _ = self.start()
+            elapsed = time.monotonic() - started
+            release.set()
+            for thread in threading.enumerate():
+                if thread.name == housekeeping.SWEEP_THREAD:
+                    thread.join(10)
+        self.assertEqual(1, len(answers))
+        self.assertLess(elapsed, 5.0)
+        self.assertTrue(entered.is_set())
+        self.assertEqual([], transcripts.pending(self.conn))
+        [archived] = self.conn.execute(
+            "SELECT archive_sha256 FROM execution_events WHERE kind = ?", (transcripts.ARCHIVED,)
+        ).fetchall()
+        self.assertTrue(archived[0])
 
     def test_an_unexpected_maintenance_failure_is_reported_and_the_server_still_starts(
         self,

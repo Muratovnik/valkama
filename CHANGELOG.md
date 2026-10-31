@@ -57,8 +57,10 @@ checkouts are therefore distinguishable even at the same version.
     `SessionEnd` budget. Anything else stays owed. `transcripts.sweep` makes
     owed copies, records a source that no longer exists, and purges copies by
     the retention rule. The start-up of an MCP server or `serve` runs it after
-    the spool drain and the lease expiry, starting no new step after two
-    seconds.
+    the spool drain and the lease expiry, in a background thread, so the first
+    request never waits for a copy. The drain and the lease expiry before it
+    share a budget of about three seconds and give up quickly on a store
+    another writer holds.
   - Retention: copies are kept while a non-terminal work item refers to the
     session, and for at least 90 days after the later of the session's last
     activity and the newest terminal transition of a referring item. A purge

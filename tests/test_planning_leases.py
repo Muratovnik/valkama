@@ -21,6 +21,7 @@ import os
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -436,44 +437,68 @@ class StartUpTests(unittest.TestCase):
             mock.patch.object(
                 housekeeping, "expire_leases", side_effect=store.sqlite3.OperationalError("locked")
             ),
-            mock.patch.object(
-                housekeeping.transcripts,
-                "sweep",
-                return_value=housekeeping.transcripts.SweepResult(),
-            ),
         ):
             self.assertEqual(
                 ["start-up maintenance: lease expiry: locked", "hook spool drain stopped: busy"],
                 housekeeping.start_up(mock.Mock()),
             )
 
-    def test_the_transcript_sweep_runs_last_and_bounded_and_says_when_it_stopped(self) -> None:
+    def test_the_drain_runs_first_within_the_budget_and_the_sweep_does_not_run(self) -> None:
         steps: list[str] = []
         connection = mock.Mock()
 
-        def sweep(conn: object, *, seconds: float) -> object:
-            steps.append(f"sweep {seconds}")
+        def drain(conn: object, *, seconds: float) -> object:
             self.assertIs(connection, conn)
-            return housekeeping.transcripts.SweepResult(archived=1, stopped="locked")
+            self.assertLess(seconds, housekeeping.START_UP_SECONDS)
+            steps.append("drain")
+            return housekeeping.ingest.DrainResult()
 
+        with (
+            mock.patch.object(housekeeping, "drain_spool", side_effect=drain),
+            mock.patch.object(
+                housekeeping, "expire_leases", side_effect=lambda _conn: steps.append("leases") or 0
+            ),
+            mock.patch.object(housekeeping.transcripts, "sweep") as sweep,
+        ):
+            self.assertEqual([], housekeeping.start_up(connection))
+        self.assertEqual(["drain", "leases"], steps)
+        sweep.assert_not_called()
+
+    def test_a_drain_that_spends_the_budget_leaves_the_leases_to_the_next_start(self) -> None:
         with (
             mock.patch.object(
                 housekeeping,
                 "drain_spool",
-                side_effect=lambda _conn: (
-                    steps.append("drain") or housekeeping.ingest.DrainResult()
-                ),
+                return_value=housekeeping.ingest.DrainResult(),
             ),
-            mock.patch.object(
-                housekeeping, "expire_leases", side_effect=lambda _conn: steps.append("leases") or 0
-            ),
-            mock.patch.object(housekeeping.transcripts, "sweep", side_effect=sweep),
+            mock.patch.object(housekeeping, "expire_leases") as expire,
         ):
-            lines = housekeeping.start_up(connection)
-        self.assertEqual(
-            ["drain", "leases", f"sweep {housekeeping.TRANSCRIPT_SWEEP_SECONDS}"], steps
-        )
-        self.assertEqual(["transcript sweep stopped: locked"], lines)
+            report = housekeeping.run(mock.Mock(), seconds=-1.0)
+        expire.assert_not_called()
+        self.assertEqual(["lease expiry: no time left; it runs at the next start"], report.failures)
+
+    def test_the_lease_expiry_gives_up_quickly_on_a_store_another_writer_holds(self) -> None:
+        directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(directory.cleanup)
+        path = os.path.join(directory.name, "valkama.sqlite3")
+        with mock.patch.dict(
+            os.environ, {"VALKAMA_DB": path, "HOME": directory.name, "USERPROFILE": directory.name}
+        ):
+            conn = store.connect()
+            self.addCleanup(conn.close)
+            holder = store.sqlite3.connect(path, isolation_level=None)
+            self.addCleanup(holder.close)
+            holder.execute("BEGIN EXCLUSIVE")
+            started = time.monotonic()
+            report = housekeeping.run(conn)
+            elapsed = time.monotonic() - started
+            holder.execute("ROLLBACK")
+            busy = conn.execute("PRAGMA busy_timeout").fetchone()[0]
+        self.assertLess(elapsed, housekeeping.START_UP_SECONDS)
+        self.assertEqual(1, len(report.failures), report.failures)
+        self.assertIn("lease expiry", report.failures[0])
+        # The connection's own timeout is back for the requests that follow.
+        self.assertEqual(5000, busy)
 
 
 class AbandonedClaimTests(LeaseTestCase):

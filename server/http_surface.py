@@ -1003,6 +1003,8 @@ def serve_main(port: int, *, development_origin: str | None = None) -> None:
         closed = execution_service.close_open_executions(startup, "the platform restarted")
         startup.commit()
         maintenance = housekeeping.start_up(startup)
+        # Unbounded, so beside the listener rather than before it.
+        housekeeping.start_sweep(startup, lambda line: print(line, file=sys.stderr))  # noqa: T201
     finally:
         startup.close()
     for line in maintenance:

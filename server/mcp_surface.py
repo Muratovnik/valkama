@@ -381,14 +381,23 @@ def _append_stale_warning(result: dict[str, object]) -> dict[str, object]:
     return result
 
 
+def _report(line: str) -> None:
+    """One diagnostic line on stderr: stdout is the protocol."""
+
+    print(f"valkama: {line}", file=sys.stderr)  # noqa: T201
+
+
 def mcp_main() -> None:
     """Own the stdio session and its database handle."""
     conn = connect()
     try:
-        # Before the first request: a lease that lapsed while no session ran
-        # is released here rather than reported as held to the first reader.
+        # Before the first request, and bounded: a lease that lapsed while no
+        # session ran is released here rather than reported as held to the
+        # first reader. The transcript sweep has no such bound, so it runs
+        # beside the loop and `initialize` never waits for it.
         for line in housekeeping.start_up(conn):
-            print(f"valkama: {line}", file=sys.stderr)  # noqa: T201
+            _report(line)
+        housekeeping.start_sweep(conn, _report)
         source_watch = static_assets.SourceWatch(
             static_assets.SOURCE_ROOT, launched_from=launcher.pinned_source_reader()
         )

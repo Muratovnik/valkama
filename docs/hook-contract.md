@@ -130,10 +130,14 @@ happened, one transaction per file, with `delivery = 'spooled'` and
 commits. Two callers drain the spool:
 
 - every hook, after its own direct write, for at most 50 files or 300 ms;
-- the start-up of an MCP server and of `serve`, which drains everything
-  pending once, before the first request, and then releases the Planning
-  leases that went stale. A failure there is reported on stderr and does not
-  stop the process from starting.
+- the start-up of an MCP server and of `serve`, which drains what is
+  pending before the first request and then releases the Planning leases
+  that went stale. Both steps together take about three seconds at most,
+  because a client gives the MCP server it launched only a few seconds to
+  answer: the drain starts no new file once its share is spent, and each step
+  waits at most a quarter of a second for a lock another writer holds. What
+  was not done waits for the next start. A failure there is reported on
+  stderr and does not stop the process from starting.
 
 Opening the store never drains it: a doctor, an export or a test that opens it
 writes nothing.
@@ -294,10 +298,12 @@ whatever its size. A source that no longer exists ends the debt with a
 `source-missing`. If the copy for that end is already in place because the
 hook renamed it but could not append the row, and its content matches its name,
 the sweep records that file instead. A source that cannot be read stays owed.
-The start-up of `serve` and the MCP server runs the sweep after the spool drain
-and the lease expiry. It starts no new step after two seconds, because a client
-waits for the MCP server it launched; a copy already under way still finishes,
-and what the sweep did not reach waits for the next start.
+The start-up of `serve` and the MCP server starts the sweep after the spool
+drain and the lease expiry, on its own connection in a background thread, when
+the archive directory exists or a copy is owed. Nothing waits for it: the
+server answers its first request while a large copy is still under way. A
+process that ends mid-copy leaves a `*.partial`, which a later sweep removes,
+and the copy stays owed.
 
 ### Retention
 

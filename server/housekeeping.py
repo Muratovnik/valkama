@@ -3,35 +3,56 @@
 Kept out of `store.connect()` on purpose: bring-up stays bring-up, and every
 doctor, export and test that opens a store would otherwise write as a side
 effect. A surface that owns a lasting connection -- the MCP loop, `serve` --
-calls `run` once after it has opened the store.
+calls `start_up` once after it has opened the store, and then `start_sweep`.
 
-`run` is a plain sequence of steps, each its own transaction:
+`run` is what has to happen before the first request, each step its own
+transaction:
 
 - deliver the hook spool: events a hook process could not write because the
   store was busy, missing or at another schema version;
-- release the Planning leases that went stale while no write met them;
-- sweep the transcript archive: make the copies a hook left owed, and purge
-  the ones retention releases.
+- release the Planning leases that went stale while no write met them.
 
 The spool goes first, because a delivered event can move a session's
-heartbeat forward and keep its lease from lapsing, and a delivered session
-end is a copy the sweep then owes. The sweep is bounded in time, because a
-client waits for the MCP server it started; what it does not reach waits for
-the next start.
+heartbeat forward and keep its lease from lapsing. Both steps share one budget,
+`START_UP_SECONDS`, because a client waits for the MCP server it started and
+gives up after its own timeout: the drain stops starting files when its share
+is spent, and every lock either step asks for is given up after
+`START_UP_BUSY_MS` instead of the connection's own busy timeout. A store
+another writer holds is an ordinary state; what was not done runs at the next
+start.
+
+The transcript sweep -- the copies a hook left owed, and the ones retention
+releases -- does not run before the first request at all. A copy has no size
+bound, and a transcript of hundreds of megabytes copied and flushed before
+`initialize` is answered makes a server the client has already given up on.
+`start_sweep` runs it on its own connection in a background thread, where
+nobody waits for it. A process that ends first leaves at most a `*.partial`,
+which a later sweep removes, and the copy stays owed.
 """
 
 from __future__ import annotations
 
+import contextlib
+import os
 import sqlite3
+import threading
+import time
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 
 from . import store, transcripts
 from .hooks import ingest, spool
 from .planning import service as planning_service
 
-#: How long the start-up sweep may keep starting new archive steps. A copy
-#: already under way still finishes, so this bounds the wait, not the copy.
-TRANSCRIPT_SWEEP_SECONDS = 2.0
+#: The whole budget of what runs before the first request. A client gives an
+#: MCP server some seconds to start (Codex ten by default), and interpreter
+#: start and the store's own bring-up come out of the same budget.
+START_UP_SECONDS = 3.0
+#: How long a start-up step waits for a lock another writer holds before it
+#: gives up and leaves its work to the next start.
+START_UP_BUSY_MS = 250
+#: The background sweep's thread, by name, so a test or a diagnosis can find it.
+SWEEP_THREAD = "valkama-transcript-sweep"
 
 
 @dataclass
@@ -40,28 +61,52 @@ class Report:
 
     spool: ingest.DrainResult = field(default_factory=ingest.DrainResult)
     expired_leases: int = 0
-    transcripts: transcripts.SweepResult = field(default_factory=transcripts.SweepResult)
     #: The step that could not finish and why; the steps after it still ran.
     failures: list[str] = field(default_factory=list)
 
 
-def run(conn: sqlite3.Connection) -> Report:
-    """Every start-up step, in order, on a connection outside any transaction."""
+def run(conn: sqlite3.Connection, *, seconds: float = START_UP_SECONDS) -> Report:
+    """Every step before the first request, in order, within about `seconds` in all.
+
+    `conn` must be outside any transaction. Its busy timeout is lowered for the
+    run and restored afterwards.
+    """
 
     report = Report()
-    try:
-        report.spool = drain_spool(conn)
-    except Exception as error:  # noqa: BLE001 -- reported; the next step still runs
-        report.failures.append(f"hook spool drain: {_describe(error)}")
-    try:
-        report.expired_leases = expire_leases(conn)
-    except Exception as error:  # noqa: BLE001 -- reported; the next step still runs
-        report.failures.append(f"lease expiry: {_describe(error)}")
-    try:
-        report.transcripts = transcripts.sweep(conn, seconds=TRANSCRIPT_SWEEP_SECONDS)
-    except Exception as error:  # noqa: BLE001 -- reported; the surface still starts
-        report.failures.append(f"transcript sweep: {_describe(error)}")
+    deadline = time.monotonic() + seconds
+    # What the lease expiry after the drain may still need: its own lock wait.
+    reserve = START_UP_BUSY_MS / 1000 * 2
+    with _short_busy_timeout(conn):
+        try:
+            report.spool = drain_spool(conn, seconds=max(0.0, seconds - reserve))
+        except Exception as error:  # noqa: BLE001 -- reported; the next step still runs
+            report.failures.append(f"hook spool drain: {_describe(error)}")
+        if time.monotonic() >= deadline:
+            report.failures.append("lease expiry: no time left; it runs at the next start")
+            return report
+        try:
+            report.expired_leases = expire_leases(conn)
+        except Exception as error:  # noqa: BLE001 -- reported; the surface still starts
+            report.failures.append(f"lease expiry: {_describe(error)}")
     return report
+
+
+@contextlib.contextmanager
+def _short_busy_timeout(conn: sqlite3.Connection) -> Iterator[None]:
+    """Lower the connection's busy timeout for a block, and restore it after."""
+
+    previous: int | None = None
+    try:
+        previous = int(conn.execute("PRAGMA busy_timeout").fetchone()[0])
+        conn.execute(f"PRAGMA busy_timeout = {int(START_UP_BUSY_MS)}")
+    except (sqlite3.Error, TypeError, ValueError):
+        previous = None
+    try:
+        yield
+    finally:
+        if previous is not None:
+            with contextlib.suppress(sqlite3.Error):
+                conn.execute(f"PRAGMA busy_timeout = {previous}")
 
 
 def _describe(error: Exception) -> str:
@@ -91,8 +136,6 @@ def start_up(conn: sqlite3.Connection) -> list[str]:
         lines.append(f"hook spool drain stopped: {report.spool.stopped}")
     if report.expired_leases:
         lines.append(f"released {report.expired_leases} expired Planning lease(s)")
-    if report.transcripts.stopped:
-        lines.append(f"transcript sweep stopped: {report.transcripts.stopped}")
     return lines
 
 
@@ -118,3 +161,48 @@ def expire_leases(conn: sqlite3.Connection) -> int:
         raise
     conn.commit()
     return expired
+
+
+def start_sweep(conn: sqlite3.Connection, report: Callable[[str], None]) -> threading.Thread | None:
+    """Start the transcript sweep in the background when the archive may owe or hold anything.
+
+    `conn` is only read, on the caller's thread, to decide whether there is
+    anything to do: an archive directory, or a copy still owed. The sweep
+    itself opens its own connection in the thread, because a connection
+    belongs to the thread that made it, and says what is worth saying through
+    `report`. The thread is a daemon: an ending process does not wait for a copy.
+    """
+
+    path = store.db_path()
+    root = transcripts.directory(path)
+    try:
+        if not os.path.isdir(root) and not transcripts.pending(conn):
+            return None
+    except Exception as error:  # noqa: BLE001 -- a surface starts whatever maintenance does
+        report(f"transcript sweep not started: {_describe(error)}")
+        return None
+    thread = threading.Thread(
+        target=_sweep, args=(path, root, report), name=SWEEP_THREAD, daemon=True
+    )
+    thread.start()
+    return thread
+
+
+def _sweep(path: str, root: str, report: Callable[[str], None]) -> None:
+    try:
+        conn = ingest.open_light(path, store.STORE_SCHEMA_VERSION)
+    except ingest.UnwritableError as refusal:
+        report(f"transcript sweep not started: {refusal}")
+        return
+    try:
+        # Nobody waits for this thread, so it may wait for a writer longer
+        # than a hook does.
+        conn.execute("PRAGMA busy_timeout = 5000")
+        result = transcripts.sweep(conn, root=root)
+    except Exception as error:  # noqa: BLE001 -- a background thread has nobody to raise to
+        report(f"transcript sweep did not finish: {_describe(error)}")
+        return
+    finally:
+        conn.close()
+    if result.stopped:
+        report(f"transcript sweep stopped: {result.stopped}")
