@@ -10,6 +10,7 @@ from __future__ import annotations
 import sqlite3
 
 from .documents import search_documents
+from .planning import model as planning_model
 from .planning import service as planning_service
 from .projects import scopes
 from .store import connect, db_path
@@ -91,6 +92,12 @@ def federated_search(query: str) -> dict:
         finally:
             connection.close()
         work_items.extend(found)
+    # Each scope already puts the item a reference names first; across scopes
+    # it leads as well, the primary's ahead of an attached one's, because
+    # `scopes.load` lists the primary first and the sort keeps that order.
+    reference = planning_model.exact_reference(text)
+    if reference is not None:
+        work_items.sort(key=lambda item: item["reference"] != reference)
     return {
         "query": text,
         "work_items": work_items,

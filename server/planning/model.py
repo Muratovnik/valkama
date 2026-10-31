@@ -272,6 +272,17 @@ def parse_human_id(value: object) -> tuple[str, int]:
     return match.group(1), int(match.group(2))
 
 
+def exact_reference(query: str) -> str | None:
+    """The reference a search query names exactly, such as `MAIN-12`, or None.
+
+    A person types `main-12` as readily as `MAIN-12`, and pastes it with a space
+    around it; both name the same item, so a search ranks that item first.
+    """
+
+    match = _HUMAN_ID.match(query.strip().upper())
+    return None if match is None else human_id(match.group(1), int(match.group(2)))
+
+
 def checklist(value: object) -> list[dict]:
     """The steps of one item, each with the id that lets two agents split it."""
 

@@ -183,6 +183,26 @@ class FederatedSearchTests(ScopeCase):
             [{"scope": "work", "detail": "IndexError: No item with that key"}], found["skipped"]
         )
 
+    def test_the_item_a_reference_names_leads_across_scopes(self) -> None:
+        """The primary's item first, the attached one of the same reference next."""
+
+        scopes.attach(self.primary, "work", self.work)
+        connection = store.connect()
+        planning_service.create_planning_space(
+            connection, project_id="mirror", name="Work mirror", key="WOR"
+        )
+        planning_service.create_work_item(connection, space="WOR", title="primary item")
+        planning_service.create_work_item(
+            connection, space="PER", title="later note", description="Depends on WOR-1."
+        )
+        connection.commit()
+        connection.close()
+        found = federation.federated_search(" wor-1 ")
+        self.assertEqual(
+            [("personal", "WOR-1"), ("work", "WOR-1"), ("personal", "PER-1")],
+            [(item["scope"], item["reference"]) for item in found["work_items"]],
+        )
+
     def test_an_unavailable_scope_is_named_too(self) -> None:
         scopes.attach(self.primary, "work", self.work)
         os.remove(self.work)

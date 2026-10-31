@@ -109,6 +109,9 @@ answers with the full item.
 `reference`, `title`, `kind`, `state` (the key), `priority`, `parent` (a
 reference, or `null`), `claim_ref` and `claim_state`, plus `comment_hit` and
 `summary_hit` on a search that matched there. Without a `limit` they return at most 50 rows.
+A search whose query is exactly a work-item reference -- `MAIN-12`, in any
+case, with surrounding spaces ignored -- answers that item first; every other
+match keeps its order, most recently changed first.
 `list_work_items` also takes `parent`, a work item by reference or id, and then
 lists only that item's children; the HTTP read `GET /api/planning/work-items`
 takes the same `parent` parameter. An unknown `parent` is refused with
@@ -479,7 +482,16 @@ There is no implicit permission grant or automatic execution resume.
 
 The browser's mapped search and request endpoints return exact project and
 Planning-space identities. Their list envelopes include source coverage and a
-truncation flag. A request detail or mutation returns the confirmed request with
+truncation flag. A source that was not read says why in `reason`, as one stable
+code: `store_not_attached` (the project's space lives in a store this server
+neither owns nor has attached), `store_unreadable` (an attached store could not
+be opened), `attached_list_unreadable` (the list of attached stores could not be
+read), `space_missing` (the bound store holds no such space), `binding_conflict`
+(the space is bound to another project), `search_failed` (the store opened but
+the search failed there) or `requests_unavailable` (an attached store predates
+human requests). The mapped search answers the item a reference query names
+first, the primary store's ahead of an attached store's, before it cuts the
+page. A request detail or mutation returns the confirmed request with
 its target; attached stores remain read-only. Existing Planning searches and
 the complete space read model keep their existing scope and limits.
 

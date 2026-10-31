@@ -15,6 +15,8 @@ is how a binding moved while the stream is open closes it.
 Three binding states come out of it: `mapped`, `unbound` (no binding, another
 project's binding, or a space the bound store does not hold) and `unavailable`
 (the bound store is not the primary and is not attached and readable).
+`unavailable_reason` says which of those a source is in as a stable code, so a
+cross-project read can name what it could not check and why.
 """
 
 from __future__ import annotations
@@ -34,6 +36,8 @@ from ..store_identity.refs import (
     validate_planning_space_ref,
 )
 from ..ui_state import PlatformHttpError
+
+_SPACE_MISSING = "Bound resource is unavailable"
 
 
 def one(parameters: Mapping[str, list[str]], key: str) -> str:
@@ -106,6 +110,12 @@ class PlanningRouting:
         self.conn = conn
         self.primary_db = os.path.abspath(primary_db)
         self.metadata = read_store_metadata(conn)
+        # Why an attached store is missing from `_stores`: the list of attached
+        # stores could not be read, or a store on it could not be opened. Without
+        # these a store that is simply not attached and one that is attached but
+        # unreadable would read as the same absence.
+        self.attached_list_unreadable = False
+        self.unopened_attached = 0
         self.projects_result = project_registry.read_registry(reader=registry_reader)
         self.projects = self.projects_result["projects"]
         # A binding is echoed to the browser in the context payload, so it has
@@ -126,6 +136,7 @@ class PlanningRouting:
         try:
             attached = scopes.load(self.primary_db)
         except scopes.ScopeError:
+            self.attached_list_unreadable = True
             attached = []
         for item in attached:
             if item.get("primary"):
@@ -138,6 +149,7 @@ class PlanningRouting:
                 finally:
                     store.close()
             except (sqlite3.Error, scopes.ScopeError, ScopeError):
+                self.unopened_attached += 1
                 continue
         return present
 
@@ -165,8 +177,31 @@ class PlanningRouting:
         if resources is None:
             return "unavailable", "Bound store is unavailable"
         if resource_ref not in resources:
-            return "unbound", "Bound resource is unavailable"
+            return "unbound", _SPACE_MISSING
         return "mapped", None
+
+    def unavailable_reason(self, project_id: str, space_ref: dict) -> str | None:
+        """Why this project's space cannot be read, as a stable code, or None.
+
+        `store_not_attached`: the bound store is neither the primary nor attached.
+        `store_unreadable`: an attached store could not be opened, and it may be
+        the bound one -- an unopened store names no `data_scope_id` to tell.
+        `attached_list_unreadable`: the list of attached stores could not be read.
+        `space_missing`: the bound store holds no such space.
+        `binding_conflict`: the registry binds the space to another project.
+        """
+
+        resource_ref = planning_space_entity(space_ref)
+        state, reason = self.resolve(project_id, resource_ref)
+        if state == "mapped":
+            return None
+        if state == "unavailable":
+            if self.attached_list_unreadable:
+                return "attached_list_unreadable"
+            return "store_unreadable" if self.unopened_attached else "store_not_attached"
+        if reason == _SPACE_MISSING:
+            return "space_missing"
+        return "binding_conflict"
 
     def require_mapping(self, project_id: str, space_ref: dict) -> None:
         state, reason = self.resolve(project_id, planning_space_entity(space_ref))

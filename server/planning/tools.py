@@ -249,8 +249,10 @@ TOOLS = [
     _tool(
         "search_work_items",
         "Search work items",
-        "Match a phrase against titles, descriptions and closing summaries. One compact"
-        " row per item, with the matching comment line when that is what matched."
+        "Match a phrase against titles, descriptions and closing summaries. A query that"
+        " is exactly a reference, such as MAIN-12 in any case, answers that item first."
+        " One compact row per item, with the matching comment line when that is what"
+        " matched."
         f" A page holds at most {service.MAX_SEARCH_PAGE} items." + _PAGING,
         READ_ONLY,
         {

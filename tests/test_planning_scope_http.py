@@ -292,7 +292,134 @@ class PlanningScopeHttpTests(unittest.TestCase):
         self.assertEqual(200, status, missing)
         self.assertEqual([], missing["items"])
         self.assertEqual("unavailable", missing["coverage"][0]["status"])
+        # The attached store is still listed but cannot be opened, and an
+        # unopened store names no identity, so this is all the read can say.
+        self.assertEqual("store_unreadable", missing["coverage"][0]["reason"])
         self.assertNotIn(str(self.root), json.dumps(missing))
+
+    def bind_projects(self, bindings: dict[str, dict]) -> None:
+        """Bind several projects at once, each to the space ref it is given."""
+
+        entries = []
+        for project_id, space_ref in bindings.items():
+            entry = project_entry(project_id, self.root / project_id)
+            entry["planning_binding"] = planning_space_entity(space_ref)
+            entries.append(entry)
+        self.registry.write_bytes(registry_bytes(entries))
+
+    def test_global_search_puts_the_item_a_reference_names_first(self) -> None:
+        """The exact item leads: the primary's, then an attached one's, then mentions.
+
+        Sources are read project by project, so an earlier project's item that
+        only mentions the reference used to lead, and with a page of one the
+        item itself was cut off.
+        """
+
+        conn = store.connect()
+        service.create_planning_space(conn, project_id="a-project", name="Alpha", key="AAA")
+        service.create_work_item(
+            conn, space="AAA", title="Mentions the other", description="See SAME-1 first."
+        )
+        conn.commit()
+        conn.close()
+        mention = {"data_scope_id": self.refs["primary"]["data_scope_id"], "space_key": "AAA"}
+        self.bind_projects(
+            {
+                "a-project": mention,
+                "b-project": self.refs["attached"],
+                "example-project": self.refs["primary"],
+            }
+        )
+        status, answer = self.request("/api/modules/planning/search?q=%20same-1%20")
+        self.assertEqual(200, status, answer)
+        self.assertEqual(
+            [
+                ("example-project", "SAME-1", True),
+                ("b-project", "SAME-1", False),
+                ("a-project", "AAA-1", True),
+            ],
+            [
+                (
+                    entry["target"]["project_id"],
+                    entry["item"]["reference"],
+                    entry["target"]["writable"],
+                )
+                for entry in answer["items"]
+            ],
+        )
+        status, page = self.request("/api/modules/planning/search?q=SAME-1&limit=1")
+        self.assertEqual(200, status, page)
+        self.assertEqual(
+            [("example-project", "SAME-1")],
+            [
+                (entry["target"]["project_id"], entry["item"]["reference"])
+                for entry in page["items"]
+            ],
+        )
+        self.assertTrue(page["has_more"])
+        # A query that is not a reference keeps the order sources are read in.
+        status, plain = self.request("/api/modules/planning/search?q=SAME")
+        self.assertEqual(200, status, plain)
+        self.assertEqual(
+            ["a-project", "b-project", "example-project"],
+            [entry["target"]["project_id"] for entry in plain["items"]],
+        )
+
+    def test_global_search_names_why_each_source_was_not_searched(self) -> None:
+        """Each unsearched source carries a code saying what stood in the way."""
+
+        foreign = {"data_scope_id": "99999999-9999-4999-8999-999999999999", "space_key": "AWAY"}
+        no_space = {"data_scope_id": self.refs["primary"]["data_scope_id"], "space_key": "NONE"}
+        self.bind_projects(
+            {
+                "example-project": self.refs["primary"],
+                "foreign-project": foreign,
+                "gone-project": no_space,
+            }
+        )
+        status, answer = self.request("/api/modules/planning/search?q=only")
+        self.assertEqual(200, status, answer)
+        self.assertEqual(
+            {
+                "example-project": ("searched", None),
+                "foreign-project": ("unavailable", "store_not_attached"),
+                "gone-project": ("unavailable", "space_missing"),
+            },
+            {
+                entry["project_id"]: (entry["status"], entry["reason"])
+                for entry in answer["coverage"]
+            },
+        )
+        self.assertEqual(["primary-only"], [entry["item"]["title"] for entry in answer["items"]])
+        status, questions = self.request(
+            "/api/modules/planning/requests?scope_kind=global&status=pending"
+        )
+        self.assertEqual(200, status, questions)
+        self.assertEqual(
+            [None, "store_not_attached", "space_missing"],
+            [entry["reason"] for entry in questions["coverage"]],
+        )
+        # An attached store that answers no search this build can ask fails that
+        # source alone, and says the search failed rather than the store vanished.
+        conn = sqlite3.connect(self.attached)
+        conn.execute("DROP TABLE work_item_comments")
+        conn.commit()
+        conn.close()
+        self.bind_projects({"b-project": self.refs["attached"]})
+        status, failed = self.request("/api/modules/planning/search?q=only")
+        self.assertEqual(200, status, failed)
+        self.assertEqual(
+            [("unavailable", "search_failed")],
+            [(entry["status"], entry["reason"]) for entry in failed["coverage"]],
+        )
+        # A list of attached stores that cannot be read is named as such.
+        Path(scopes.registry_path(str(self.primary))).write_text("{", encoding="utf-8")
+        status, unlisted = self.request("/api/modules/planning/search?q=only")
+        self.assertEqual(200, status, unlisted)
+        self.assertEqual(
+            [("unavailable", "attached_list_unreadable")],
+            [(entry["status"], entry["reason"]) for entry in unlisted["coverage"]],
+        )
 
     def test_global_new_reads_refuse_malformed_queries_and_read_every_source(self) -> None:
         for path in (

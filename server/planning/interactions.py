@@ -78,10 +78,17 @@ def search(routing: PlanningRouting, parameters: Mapping[str, list[str]]) -> dic
             "project_id": project_id,
             "space_ref": space_ref,
             "status": "unavailable",
-            "reason": "source_unavailable",
+            "reason": routing.unavailable_reason(project_id, space_ref),
         }
+        if entry["reason"] is not None:
+            coverage.append(entry)
+            continue
+        # Mapped, so what is left to go wrong is the store itself: it went away
+        # between the two reads, or it answers a search this build cannot ask.
+        entry["reason"] = "store_unreadable"
         try:
             with routing.planning_store(_store_parameters(project_id, space_ref)) as (conn, _key):
+                entry["reason"] = "search_failed"
                 found = service.search_work_items(
                     conn, query, space=space_ref["space_key"], limit=limit + 1
                 )
@@ -112,6 +119,7 @@ def search(routing: PlanningRouting, parameters: Mapping[str, list[str]]) -> dic
         except (api.PlanningHttpError, ValueError, sqlite3.Error, KeyError, TypeError):
             pass
         coverage.append(entry)
+    items = _exact_first(query, items)
     return {
         "interface_version": "valkama-planning-search",
         "query": query,
@@ -120,6 +128,27 @@ def search(routing: PlanningRouting, parameters: Mapping[str, list[str]]) -> dic
         "items": items[:limit],
         "coverage": coverage,
     }
+
+
+def _exact_first(query: str, items: list[dict]) -> list[dict]:
+    """The item a query names exactly ahead of the rest, before the page is cut.
+
+    Sources are read project by project, so without this the item `MAIN-12`
+    came after every item of an earlier project that merely mentions it. The
+    primary store's item leads, an attached store's item of the same reference
+    follows it, and every other match keeps the order it was read in.
+    """
+
+    reference = model.exact_reference(query)
+    if reference is None:
+        return items
+
+    def rank(entry: dict) -> int:
+        if entry["item"]["reference"] != reference:
+            return 2
+        return 0 if entry["target"]["writable"] else 1
+
+    return sorted(items, key=rank)
 
 
 def _exact_parameters(parameters: Mapping[str, list[str]], extras: set[str]) -> tuple[str, dict]:
@@ -191,12 +220,20 @@ def request_list(routing: PlanningRouting, parameters: Mapping[str, list[str]]) 
     seen: set[tuple[str, str]] = set()
     more = False
     for project_id, space_ref in resources:
+        # A global read names why a source was skipped; an exact one refuses
+        # below with the routing's own answer instead.
+        skipped = (
+            routing.unavailable_reason(project_id, space_ref) if scope_kind == "global" else None
+        )
         entry: dict = {
             "project_id": project_id,
             "space_ref": space_ref,
             "status": "unavailable",
-            "reason": "requests_unavailable",
+            "reason": skipped or "requests_unavailable",
         }
+        if skipped is not None:
+            coverage.append(entry)
+            continue
         try:
             with routing.planning_store(_store_parameters(project_id, space_ref)) as (conn, _key):
                 _capability(conn)

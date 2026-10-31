@@ -104,6 +104,19 @@ checkouts are therefore distinguishable even at the same version.
   `requirements-dev.txt` pin against that interpreter and, when one is missing
   or at another version, stops with one message naming the interpreter, each
   package and what to run. `CONTRIBUTING.md` says how to run a release.
+- A search whose query is exactly a work-item reference, such as `MAIN-12` in
+  any case and with spaces around it, answers that item first: in
+  `search_work_items`, `GET /api/planning/search`, the mapped search behind the
+  task finder and the cross-scope `GET /api/search`. The primary store's item
+  leads and an attached store's item of the same reference follows; every other
+  match keeps its order. It used to come after every newer item that merely
+  mentioned it, and after every earlier project's, and a full page could leave
+  it out.
+- A source the mapped search could not read names why in its coverage `reason`:
+  `store_not_attached`, `store_unreadable`, `attached_list_unreadable`,
+  `space_missing`, `binding_conflict` or `search_failed`. Every source used to
+  say `source_unavailable`. The global request list names the same reasons for
+  a source it skips.
 
 ## [2.1.0](https://github.com/Muratovnik/valkama/compare/v2.0.0...v2.1.0) - 2026-10-31
 

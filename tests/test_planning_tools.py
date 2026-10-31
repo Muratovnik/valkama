@@ -639,6 +639,43 @@ class PlanningCompactReadTests(unittest.TestCase):
         self.assertNotIn("checklist", row)
         self.assertFalse(answer["truncated"])
 
+    def test_a_search_for_a_reference_answers_that_item_first(self) -> None:
+        """The item a query names leads the first page; the rest keep their order.
+
+        Here it is the oldest match and every other match only mentions it, so
+        newest-first put it past the end of a page.
+        """
+
+        target = self.call("create_work_item", space="QA", title="The one asked for")
+        self.conn.execute(
+            "UPDATE work_items SET updated_at = '2020-01-01T00:00:00Z' WHERE work_item_id = ?",
+            (target["work_item_id"],),
+        )
+        for number in range(3):
+            self.call(
+                "create_work_item",
+                space="QA",
+                title=f"Mention {number}",
+                description=f"Follows up {target['reference']}.",
+            )
+        mentions = [
+            row["reference"]
+            for row in self.call("search_work_items", query="Follows up")["work_items"]
+        ]
+        answer = self.call("search_work_items", query=f"  {target['reference'].lower()} ", limit=2)
+        self.assertEqual(
+            [target["reference"], mentions[0]],
+            [row["reference"] for row in answer["work_items"]],
+        )
+        self.assertTrue(answer["truncated"])
+        rest = self.call(
+            "search_work_items", query=target["reference"], limit=2, offset=answer["next_offset"]
+        )
+        self.assertEqual(mentions[1:], [row["reference"] for row in rest["work_items"]])
+        # A space filter keeps the rule: the item still leads inside its space.
+        scoped = self.call("search_work_items", query=target["reference"], space="QA", limit=1)
+        self.assertEqual([target["reference"]], [row["reference"] for row in scoped["work_items"]])
+
     def test_a_search_is_capped_by_default_and_says_so(self) -> None:
         self.fill(planning_tools.COMPACT_LIMIT + 5)
         answer = self.call("search_work_items", query="Filler")

@@ -410,6 +410,29 @@ class PlanningDomainTests(unittest.TestCase):
         scoped = service.search_work_items(self.conn, "planning", space=self.space["key"])
         self.assertEqual(2, len(scoped))
 
+    def test_search_puts_the_item_a_reference_names_ahead_of_newer_mentions(self) -> None:
+        exact = self.item("Asked for by number")
+        for number in range(2, 13):
+            self.item(f"Filler {number}", description=f"Mentions {exact['reference']}")
+        self.conn.execute(
+            "UPDATE work_items SET updated_at = '2020-01-01T00:00:00Z' WHERE work_item_id = ?",
+            (exact["work_item_id"],),
+        )
+        # QA-10..QA-12 also carry "QA-1" in their reference, and every filler
+        # mentions it, so each of them matches and is newer than the item.
+        newest_first = [item["reference"] for item in service.search_work_items(self.conn, "QA")]
+        for query in ("QA-1", "qa-1", "  Qa-1  "):
+            with self.subTest(query=query):
+                found = [item["reference"] for item in service.search_work_items(self.conn, query)]
+                self.assertEqual(["QA-1", *[ref for ref in newest_first if ref != "QA-1"]], found)
+                self.assertEqual(
+                    ["QA-1"],
+                    [
+                        item["reference"]
+                        for item in service.search_work_items(self.conn, query, limit=1)
+                    ],
+                )
+
     def test_activity_reads_newest_first_across_spaces(self) -> None:
         created = self.item("First")
         service.claim_work_item(self.conn, created["reference"], author="tester")
