@@ -130,6 +130,66 @@ tool takes, for example `get_work_item: unknown argument 'item'; expected 'id'`.
 Prompts and resources are deliberately not offered. Planning tools manage work;
 project context belongs elsewhere.
 
+### Call identity
+
+Every Planning write call records who made it: one row in the execution tree
+per call, which every event, comment and ref the call writes points to. The row
+is `confirmed` when the client proved the session, and `unconfirmed` otherwise.
+An unconfirmed call is still accepted and runs exactly as before. The `author`
+argument is text the caller writes about itself and is never identity, and
+neither is the environment of the server process.
+
+The server reads identity from the request, not from the arguments a model
+writes:
+
+| Client sends | Result | `source` |
+| --- | --- | --- |
+| `params._meta.sessionId` (Codex) | `confirmed`. The session is `sessionId`; the agent is `_meta.threadId` when it differs from `sessionId` (a subagent's own thread); `_meta.callId` is kept as the tool use id. | `codex-meta` |
+| the same, with an `_identity` argument that names another session, call or agent | `unconfirmed`, with the session from `_meta` | `codex-meta-mismatch` |
+| an `_identity` argument whose `tool_use_id` equals `params._meta["claudecode/toolUseId"]` (Claude Code) | `confirmed`, with the session and agent from `_identity` | `claude-hook` |
+| an `_identity` argument and no `claudecode/toolUseId` in `_meta` | `unconfirmed`, with the session and agent from `_identity` | `claude-hook-unverified` |
+| an `_identity` argument whose `tool_use_id` differs from `claudecode/toolUseId` | `unconfirmed`, with the session and agent from `_identity` | `claude-hook-mismatch` |
+| none of these | `unconfirmed`, no session | `mcp` |
+
+A model cannot know the id of the call it is about to make, so a matching
+`tool_use_id` is what tells an `_identity` added by a client hook from one the
+model typed. Neither `_meta` key is documented by its client; both are checked,
+never assumed.
+
+`_identity` is the argument a client's `PreToolUse` hook adds to every call of
+this server:
+
+```json
+{"session_id": "<hook session id>", "tool_use_id": "<hook tool use id>", "agent_id": "<optional>", "agent_type": "<optional>"}
+```
+
+Each value is a string of at most 200 characters, and other keys are ignored.
+The server removes `_identity` from the arguments of every tool, reads included,
+before it checks them against the tool's schema, so no tool refuses it and no
+handler sees it. No published input schema names it, and `tools/list` is the
+same with or without a hook. An `_identity` that does not match this shape is
+dropped: the call runs and is recorded as if it carried none.
+
+When the client opened with `initialize`, the `clientInfo` name and version it
+sent are recorded with each call; otherwise the client is named after the
+identity channel (`codex`, `claude`). Nothing else from `_meta` is stored.
+
+`get_work_item`, and a write with `verbose: true`, answer every history event
+with its call's identity:
+
+```json
+{"action": "claimed", "detail": "", "author": "codex", "at": "2026-10-31T09:00:00Z",
+ "identity": {"state": "confirmed", "source": "codex-meta", "session_id": "019a…", "agent_id": null}}
+```
+
+An event written before calls were recorded, or by the execution runner outside
+any call, has
+`{"state": "unconfirmed", "source": null, "session_id": null, "agent_id": null}`.
+A write from the browser UI is `confirmed` with source `browser` and no session;
+see [Local HTTP security](../README.md#local-http-security).
+The short acknowledgements, the list rows and every other tool result are
+unchanged.
+
 ### Questions and decisions
 
 `create_work_item_request` creates a persistent question or decision for one work

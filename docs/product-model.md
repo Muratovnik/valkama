@@ -104,8 +104,14 @@ technical store-generation guard.
   views, migration fixtures, and the legacy MCP wire translator.
 - Provider-native payloads terminate at their Adapter. UI reads normalized
   Valkama projections with provenance and bounded diagnostics.
-- OTel and provider hooks are observational feeds, not authoritative session
-  identity or lifecycle state.
+- Session identity comes from the client, not from the agent. A lifecycle
+  event takes its session from the hook input; an MCP write takes it from the
+  call — Codex `_meta.sessionId` and `_meta.threadId`, or an `_identity`
+  argument a Claude Code `PreToolUse` hook adds, which the server removes
+  before schema validation. A write without verifiable identity is accepted
+  and marked `unconfirmed`. The MCP server's process environment and
+  free-text author strings are never identity; OTel remains an observational
+  feed.
 
 ## Work-item context
 

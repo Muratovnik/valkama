@@ -635,6 +635,13 @@ environment variables, and every write must be an explicitly framed UTF-8 JSON
 object. Vite development is the only extra browser origin and must be enabled by
 the exact `--development-origin http://127.0.0.1:5173` flag shown above.
 
+A Planning write that passes the browser credential is the owner's: its call is
+recorded as `confirmed` with source `browser` and no agent session, and when the
+request names no `author` it is signed `user`, so a claim, a checklist tick or a
+comment made by hand reads as the owner's. `/api/ingest` is not such a write.
+How agent calls are identified is in
+[the connection contract](docs/connection-contract.md#call-identity).
+
 The token file is atomically created with the restrictive file mode supported
 by the Python standard library. This boundary protects the loopback web surface
 from hostile sites and DNS rebinding; it does not isolate malicious native code

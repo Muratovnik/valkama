@@ -25,10 +25,30 @@ checkouts are therefore distinguishable even at the same version.
   The first open of an existing store by this build takes a verified snapshot
   labelled `preidentity` and adds these columns once. Every existing row keeps
   its values, and its new link is empty, which reads as "not confirmed".
-  Nothing reads or writes the new columns yet, and the MCP tools are unchanged.
+  The step itself writes nothing into them, and the MCP tools are unchanged.
   An earlier schema-9 build still opens the store and writes to it. A
   `claim_ref` write that does not name its call, which is how such a build
   claims, clears the claim's link.
+- Every Planning write call records who made it. Each MCP tool call and each
+  browser write that changes Planning adds one `planning_write` row to
+  `execution_events`, inside the call's own transaction, and every event,
+  comment and ref the call writes points to it. A refused call leaves no row.
+  The row is `confirmed` when the client proved the session: Codex through
+  `_meta.sessionId`, Claude Code through an `_identity` argument whose
+  `tool_use_id` matches `_meta["claudecode/toolUseId"]`, the browser through
+  its session credential. Anything else is accepted and recorded as
+  `unconfirmed`. The `author` text and the server's environment are never
+  identity. See `docs/connection-contract.md#call-identity`.
+  - Every tool accepts and removes an `_identity` argument before checking its
+    schema, so a `PreToolUse` hook that adds one breaks no call. A malformed
+    one is dropped, never refused. `tools/list` is unchanged.
+  - History events in `get_work_item`, a `verbose` write and the HTTP item
+    read carry `identity`: `state`, `source`, `session_id` and `agent_id`. An
+    event recorded before this reads as `unconfirmed` with the rest `null`.
+    The web reads records strictly, so a `web/dist` built before this change
+    refuses every item; serve the one built with it.
+  - A write made by the execution runner outside any call records no call row
+    and reads as `unconfirmed`.
 
 ### Changed
 
@@ -107,6 +127,9 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- A claim, checklist claim or checklist tick made in the browser was signed
+  `agent`, while a comment made there was signed `user`. A browser write that
+  names no author, or an empty one, is now signed `user`.
 - Load the global Work directory from project and space counts, keeping large
   work histories within the bounded UI response. The full directory API remains
   available without the optional `directory_only=true` query.
