@@ -55,9 +55,10 @@ IDENTITY_SOURCE = "valkama"
 HOOK_MAX_BYTES = 8 * 1024 * 1024
 HOOK_SECONDS = 1.2
 
-#: How long a file without a current row is left alone before `sweep` removes
-#: it. A hook renames its copy into place and appends the row a moment later;
-#: a sweep between the two must not take the file away from the row.
+#: How long a purged copy or an abandoned `*.partial` is left alone before
+#: `sweep` removes it. A hook renames its copy into place and appends the row a
+#: moment later; a sweep between the two must not take the file away from the
+#: row about to name it again.
 ORPHAN_GRACE_SECONDS = 600
 
 #: Retention: kept while an open item refers to the session, and for at least this
@@ -378,6 +379,18 @@ class Archive:
 def current(conn: sqlite3.Connection) -> dict[str, Archive]:
     """Every archive path whose newest row is a copy rather than a purge."""
 
+    return {path: archive for path, archive in _newest(conn).items() if archive is not None}
+
+
+def purged(conn: sqlite3.Connection) -> set[str]:
+    """Every archive path whose newest row is its purge: the only names a sweep deletes."""
+
+    return {path for path, archive in _newest(conn).items() if archive is None}
+
+
+def _newest(conn: sqlite3.Connection) -> dict[str, Archive | None]:
+    """Each archive path any row names, with its copy, or None when its newest row is a purge."""
+
     newest: dict[str, Archive | None] = {}
     for row in conn.execute(
         "SELECT kind, archive_path, archive_sha256, client, session_id, agent_id,"
@@ -391,7 +404,7 @@ def current(conn: sqlite3.Connection) -> dict[str, Archive]:
             if kind == ARCHIVED
             else None
         )
-    return {path: archive for path, archive in newest.items() if archive is not None}
+    return newest
 
 
 #: What retention needs to know about session `:s`, in one read: how many
@@ -466,7 +479,7 @@ def sweep(
     root: str | None = None,
     now: str | None = None,
 ) -> SweepResult:
-    """Copy what is pending, purge what retention releases, remove orphan files.
+    """Copy what is pending, purge what retention releases, finish interrupted removals.
 
     `conn` must not be inside a transaction: each row is its own. With
     `seconds`, no new step starts once that much time has passed; a copy
@@ -498,7 +511,7 @@ def sweep(
                 _purge(conn, root, archives)
                 result.purged += len(archives)
         if not out_of_time():
-            result.orphans = _remove_orphans(root, current(conn))
+            result.orphans = _remove_orphans(root, purged(conn))
     except sqlite3.Error as error:
         result.stopped = str(error)
     return result
@@ -640,20 +653,36 @@ def _files(root: str) -> list[tuple[str, str, os.stat_result]]:
     return found
 
 
-def _is_orphan(relative: str, archives: dict[str, Archive]) -> bool:
+def _is_unnamed(relative: str, archives: dict[str, Archive]) -> bool:
+    """A file no current row names: what `doctor` reports, not what a sweep deletes."""
+
     name = relative.rpartition("/")[2]
     if name.endswith(PARTIAL_SUFFIX):
         return True
     return name.endswith(ARCHIVE_SUFFIX) and relative not in archives
 
 
-def _remove_orphans(root: str, archives: dict[str, Archive]) -> int:
-    """Remove copies no current row names, and abandoned partials, past the grace period."""
+def _removable(relative: str, purged_paths: set[str]) -> bool:
+    """A file a sweep may delete: an abandoned partial, or a copy whose newest row is its purge.
+
+    A copy no row names at all is never one of them. A store restored from a
+    snapshot older than its archive, or a second store in the same directory,
+    has no rows for files that may be the only copies left; such a file is
+    adopted when an owed end matches it (`_adoptable`) and otherwise left for
+    `doctor` to report.
+    """
+
+    name = relative.rpartition("/")[2]
+    return name.endswith(PARTIAL_SUFFIX) or relative in purged_paths
+
+
+def _remove_orphans(root: str, purged_paths: set[str]) -> int:
+    """Remove purged copies a crash left behind, and abandoned partials, past the grace period."""
 
     cutoff = time.time() - ORPHAN_GRACE_SECONDS
     removed = 0
     for relative, path, info in _files(root):
-        if _is_orphan(relative, archives) and info.st_mtime <= cutoff:
+        if _removable(relative, purged_paths) and info.st_mtime <= cutoff:
             try:
                 os.remove(path)
             except OSError:
@@ -668,7 +697,8 @@ def summary(conn: sqlite3.Connection, root: str) -> dict:
 
     `archived` and `bytes` count current copies whose file is there, `lost`
     current copies whose file is not, `pending` copies still owed, and
-    `orphans` files under the root that no current row names.
+    `orphans` files under the root that no current row names -- which a sweep
+    removes only when their newest row is a purge or they are a partial.
     """
 
     archives = current(conn)
@@ -687,6 +717,6 @@ def summary(conn: sqlite3.Connection, root: str) -> dict:
         "lost": len(archives) - len(present),
         "pending": len(owed),
         "oldest_pending": oldest,
-        "orphans": sum(1 for relative in files if _is_orphan(relative, archives)),
+        "orphans": sum(1 for relative in files if _is_unnamed(relative, archives)),
         "path": root,
     }

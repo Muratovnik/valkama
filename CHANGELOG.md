@@ -60,7 +60,9 @@ checkouts are therefore distinguishable even at the same version.
     session, and for at least 90 days after the later of the session's last
     activity and the newest terminal transition of a referring item. A purge
     appends `transcript_purged` before it deletes the file, and the next sweep
-    removes a file a crash left behind.
+    removes a file a crash left behind. A sweep deletes nothing else but an
+    abandoned `*.partial`: a copy no row names, as after restoring the store
+    from a snapshot, is kept and reported by `doctor`.
   - The export lists "transcript archive" among what it excludes and never
     reads it. `doctor` reports copies kept and their size, copies owed, files
     no row names and recorded copies missing from disk.

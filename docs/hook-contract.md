@@ -310,11 +310,14 @@ of any item that refers to it. An item refers to a session when:
 
 The sweep removes a copy by appending a `transcript_purged` row (with
 `archive_path`, `archive_sha256` and `reason` `retention`) and only then
-deleting the file. A file the sweep finds with no current `transcript_archived`
-row (one whose newest row is the purge, or none at all) or an abandoned
-`*.partial` is an orphan; it is removed once it is more than ten minutes old,
-so a copy a hook has just renamed into place is not taken from the row about to
-name it.
+deleting the file. The sweep deletes only two other kinds of file, once they
+are more than ten minutes old: a copy whose newest row is its
+`transcript_purged` (a crash came between the row and the delete), and an
+abandoned `*.partial`. A copy that no row names at all is never deleted. A store
+restored from a snapshot older than its archive, or another store in the same
+directory, has no rows for files that may be the only copies left: the sweep
+records such a file when an owed end matches its name and content, and
+otherwise leaves it for `doctor` to report.
 
 ### What never leaves
 

@@ -488,7 +488,7 @@ class OrphanTests(ArchiveCase):
         os.utime(path, (when, when))
         return path
 
-    def test_files_no_row_names_go_after_the_grace_period_and_current_copies_stay(self) -> None:
+    def test_only_abandoned_partials_go_and_files_without_a_row_stay(self) -> None:
         source = self.transcript("session.jsonl", synthetic(3))
         self.deliver("session-end", transcript_path=source)
         (kept,) = self.files()
@@ -496,13 +496,56 @@ class OrphanTests(ArchiveCase):
         os.utime(os.path.join(self.root, *kept.split("/")), (time.time() - old,) * 2)
         self.place("stray/main-0123456789abcdef.jsonl", age=old)
         self.place("stray/.abc.partial", age=old)
-        self.place("young/main-fedcba9876543210.jsonl", age=0)
+        self.place("young/.def.partial", age=0)
         self.place("stray/notes.txt", age=old)
 
-        self.assertEqual(2, self.sweep().orphans)
+        self.assertEqual(1, self.sweep().orphans)
         self.assertEqual(
-            sorted([kept, "stray/notes.txt", "young/main-fedcba9876543210.jsonl"]), self.files()
+            sorted(
+                [kept, "stray/main-0123456789abcdef.jsonl", "stray/notes.txt", "young/.def.partial"]
+            ),
+            self.files(),
         )
+
+    def test_an_archive_restored_without_its_rows_survives_every_sweep(self) -> None:
+        """A store restored from a snapshot older than its archive, or another store
+        sharing the directory, has no row for these files; they may be the only copies left."""
+
+        old = transcripts.ORPHAN_GRACE_SECONDS * 10
+        restored = [
+            self.place(f"{SESSION}/main-0123456789abcdef.jsonl", age=old),
+            self.place(f"{SESSION}/agent-{AGENT}-fedcba9876543210.jsonl", age=old),
+            self.place("another-session/main-00112233445566ff.jsonl", age=old),
+        ]
+        for _ in range(3):
+            self.assertEqual(0, self.sweep().orphans)
+        self.assertTrue(all(os.path.exists(path) for path in restored))
+        self.assertEqual(3, transcripts.summary(self.conn, self.root)["orphans"])
+
+    def test_a_file_whose_newest_row_is_its_purge_is_removed(self) -> None:
+        source = self.transcript("session.jsonl", synthetic(3))
+        self.deliver("session-end", transcript_path=source)
+        (kept,) = self.files()
+        (archived,) = self.rows()
+        self.conn.execute(
+            "INSERT INTO execution_events(event_uid, kind, identity_state, identity_source,"
+            " session_id, archive_path, archive_sha256, reason) VALUES (?,?,?,?,?,?,?,?)",
+            (
+                next(self.uids),
+                transcripts.PURGED,
+                "confirmed",
+                "valkama",
+                SESSION,
+                kept,
+                archived["archive_sha256"],
+                transcripts.RETENTION,
+            ),
+        )
+        self.conn.commit()
+        old = time.time() - transcripts.ORPHAN_GRACE_SECONDS - 1
+        os.utime(os.path.join(self.root, *kept.split("/")), (old, old))
+        self.assertEqual(1, self.sweep().orphans)
+        self.assertEqual([], self.files())
 
     def test_the_summary_counts_copies_owed_orphans_and_lost(self) -> None:
         data = synthetic(3)

@@ -497,10 +497,11 @@ def _transcript_check(path: str) -> dict:
             "Transcript archive",
             "warn",
             detail,
-            "Owed copies and orphan files are settled by the transcript sweep a long-running"
-            " Valkama process runs; an owed copy whose source the client already deleted is"
-            " recorded as gone. A recorded copy missing from disk was removed outside"
-            " Valkama and cannot be restored from here.",
+            "Owed copies are settled by the transcript sweep a long-running Valkama process"
+            " runs; an owed copy whose source the client already deleted is recorded as gone."
+            " A file no row names is never deleted by Valkama: after a store restore it may be"
+            " the only copy left, so keep it or remove it by hand. A recorded copy missing"
+            " from disk was removed outside Valkama and cannot be restored from here.",
             presentation_code="transcript-archive-attention",
             parameters=parameters,
         )
