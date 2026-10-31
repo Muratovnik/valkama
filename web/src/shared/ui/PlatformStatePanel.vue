@@ -60,9 +60,8 @@ const busyMark = computed(() => props.state.status === 'loading' || undefined)
 const panelIcon = computed(() => (props.state.status === 'permission-denied' ? 'check' : 'info'))
 
 /**
- * A failure is marked with the ring a danger state carries in `SemanticState`, not
- * with the information glyph: the app has no error glyph, and "i" told the reader
- * the download had merely informed them of something.
+ * A failure is marked with a danger disc, not with the information glyph: the app
+ * has no error glyph, and "i" told the reader the failure was only information.
  */
 const failed = computed(
   () => props.state.status === 'error' || props.state.status === 'unavailable',
@@ -199,8 +198,8 @@ const failed = computed(
   border-inline-start: 3px solid var(--color-danger);
 }
 
-/* The ring a danger state draws in SemanticState, set in the icon's 22px column so
-   the title keeps the place an icon gives it. */
+/* A filled danger disc in the icon's 22px column, so the title keeps the place an
+   icon gives it. A disc is a fill, not a drawn line, so the line budget is unchanged. */
 .platform-state-mark {
   position: relative;
   display: block;
@@ -212,8 +211,7 @@ const failed = computed(
   content: '';
   position: absolute;
   inset: 5px;
-  box-sizing: border-box;
-  border: 2px solid var(--color-danger);
+  background: var(--color-danger);
   border-radius: 50%;
 }
 
