@@ -62,7 +62,10 @@ def stop_process_tree(process: Any, *, wait_timeout: float = 2.0) -> bool:
 
     An agent client spawns its own children, so `terminate()` leaves them
     running with the pipe still open. Windows needs `taskkill /T`, POSIX needs
-    the process group, and both fall back to terminating the child alone.
+    the process group, and both fall back to terminating the child alone. On
+    POSIX the group is the child's tree only when the child was started in one
+    of its own (`start_new_session=True`); a child left in the caller's group
+    is stopped alone, because killing that group kills the caller too.
 
     This lived in three places — the launch runner, the evaluation sandbox and
     the job supervisor — and the copies had already drifted apart: only two of
@@ -92,9 +95,11 @@ def stop_process_tree(process: Any, *, wait_timeout: float = 2.0) -> bool:
         # does not exist on Windows, and the platform check is what tells a
         # type checker this line is unreachable there.
         with contextlib.suppress(OSError, subprocess.SubprocessError):
-            os.killpg(os.getpgid(pid), signal.SIGKILL)
-            process.wait(timeout=wait_timeout)
-            return True
+            group = os.getpgid(pid)
+            if group != os.getpgrp():
+                os.killpg(group, signal.SIGKILL)
+                process.wait(timeout=wait_timeout)
+                return True
     try:
         process.terminate()
         process.wait(timeout=wait_timeout)

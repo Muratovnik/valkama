@@ -568,7 +568,8 @@ class Runner:
         creation = 0
         if sys.platform == "win32":
             # Its own group, so stopping a launch stops the tree it started and
-            # not this platform process with it.
+            # not this platform process with it. On POSIX the same is a session
+            # of its own, below.
             creation = subprocess.CREATE_NEW_PROCESS_GROUP
         return subprocess.Popen(
             argv,
@@ -578,6 +579,7 @@ class Runner:
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             creationflags=creation,
+            start_new_session=sys.platform != "win32",
         )
 
     def launch(
