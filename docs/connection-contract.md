@@ -91,7 +91,7 @@ item: `reference`, `work_item_id`, `revision`, `state` (`key`, `name`,
 | `update_work_item` | `updated`, the names of the fields it edited |
 | `transition_work_item` | `warnings` and `overridden` when there are any |
 | `claim_work_item` | `claim_ref` is the holder and `claim_state` its lease; `started`, `requeued` and `warnings` when there are any (see [A claim starts the work](#a-claim-starts-the-work)) |
-| `set_work_item_checklist` | `checklist`, the new steps as `item_id` and `text` |
+| `set_work_item_checklist` | `checklist`, the new steps as `item_id`, `text` and `done` |
 | `claim_work_item_checklist_item`, `tick_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by` |
 | `set_work_item_summary` | `summary_recorded: true` |
 | `apply_work_item_changes` | `applied`, what each group changed; `started` from its claim, `overridden` from its transition, and the `warnings` of both, when there are any |
@@ -323,6 +323,7 @@ these groups, and applies them in this order:
 | Group | Shape | Works as |
 | --- | --- | --- |
 | `claim` | `true` | `claim_work_item`; `false` is no change |
+| `checklist` | `{items, force?}`, each step text or `{text, done?}` | `set_work_item_checklist` |
 | `checklist_ticks` | list of `{item_id, done?}`, `done` true by default | `tick_work_item_checklist_item` |
 | `refs` | list of `{kind, value, label?}` | `attach_work_item_ref` |
 | `links` | list of `{other, kind, remove?}`, linking from this item | `link_work_items` |
@@ -332,7 +333,19 @@ these groups, and applies them in this order:
 
 Each step is the write its single tool makes, with the same guards, events,
 revision bumps and refusals, so a closing transition is judged after the ticks
-and the summary sent with it. A list holds at most 100 entries. At least one
+and the summary sent with it.
+
+`checklist` replaces the steps, as `set_work_item_checklist` does: it refuses
+to discard a claimed or completed step without `force`. The new steps get new
+`item_id`s, which `applied.checklist` lists as `{item_id, text, done}`, so
+`checklist_ticks` in the same call can name only steps the item already had,
+and those are gone once `checklist` replaced them. A step that is done when it
+is set is sent as `{"text": "…", "done": true}` instead: it is recorded done by
+the caller, with the `checklist_completed` event a tick writes, so a call that
+sets done steps, a summary and a closing transition closes the item. The same
+step shape is what `set_work_item_checklist` takes; a step that names its own
+`id`, which only the HTTP write accepts, is one carried over and keeps the
+`done_by` it carries. A list holds at most 100 entries. At least one
 group must name a change, and an entry with a field its group does not take is
 refused; both are `invalid_request` before anything is written.
 `expected_revision` is checked once, against the item as the call found it.
@@ -351,23 +364,25 @@ the step, and names the step:
 stale revision keeps `expected` and `actual` beside it. The call is recorded as
 one call with its identity, and every row its steps write points to that call.
 
-### Creating an item with its claim and links
+### Creating an item with its claim, steps and links
 
-`create_work_item` (`POST /api/planning/work-items`) also takes two optional
+`create_work_item` (`POST /api/planning/work-items`) also takes three optional
 arguments that act on the item it creates:
 
 | Argument | Shape | Works as |
 | --- | --- | --- |
 | `claim` | `true` | `claim_work_item`; `false` is no change |
+| `checklist` | `{items}`, as the batch's group takes it, without `force` | `set_work_item_checklist` |
 | `links` | list of `{other, kind}`, linking from the new item, at most 100 | `link_work_items` |
 
 They apply in the same transaction as the creation: the item is created, then
-claimed, then linked, each step being the write its single tool makes, with its
-events. The claim starts the new item, so an item created with `claim: true`
-answers in its active state with `started`. Work found en route is filed in one call this way, linked
-`discovered-from` the item it was found from. A malformed `claim` or `links`,
-or an entry with a field other than `other` and `kind`, is refused with
-`invalid_request` before anything is written. When a step is refused — a link
+claimed, then given its steps, then linked, each step being the write its
+single tool makes, with its events. The claim starts the new item, so an item
+created with `claim: true` answers in its active state with `started`. Work
+found en route is filed in one call this way, linked `discovered-from` the item
+it was found from. A malformed `claim`, `checklist` or `links`, or an entry
+with a field its argument does not take, is refused with `invalid_request`
+before anything is written. When a step is refused — a link
 to an unknown item, say — nothing is created, no number is spent, and the error
 names the step the way a refused batch step does:
 
@@ -379,13 +394,14 @@ names the step the way a refused batch step does:
 
 The answer adds `applied`, in the batch's style: `{"claim": true, "links": 2}`.
 The call is recorded once with its identity, and the creation's, the claim's and
-both ends of each link's events point to it. Without `claim` or `links`, the
-call and its answer are what they were before.
+both ends of each link's events point to it. Without `claim`, `checklist` or
+`links`, the call and its answer are what they were before.
 
 The acknowledgement's `applied` names only the groups that changed something:
 
 ```json
-{"claim": true, "checklist_ticks": [{"item_id": "…", "done": true}], "refs": 1,
+{"claim": true, "checklist": [{"item_id": "…", "text": "write it", "done": false}],
+ "checklist_ticks": [{"item_id": "…", "done": true}], "refs": 1,
  "links": 1, "comment": {"comment_id": 41}, "summary": {"summary_comment_id": 42},
  "transition": {"state": "done"}}
 ```

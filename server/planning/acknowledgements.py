@@ -108,7 +108,10 @@ def claimed(item: dict, _arguments: Mapping[str, object]) -> dict:
 def checklist_replaced(item: dict, _arguments: Mapping[str, object]) -> dict:
     """The new steps, because their ids are what every later call names."""
 
-    steps = [{"item_id": step["id"], "text": step["text"]} for step in item["checklist"]]
+    steps = [
+        {"item_id": step["id"], "text": step["text"], "done": step["done"]}
+        for step in item["checklist"]
+    ]
     return {**_base(item), "checklist": steps}
 
 

@@ -340,7 +340,7 @@ def handle_post(
 
 
 def _create(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
-    """A new item, then its claim, then its links, as one all-or-nothing change.
+    """A new item, then its claim, its checklist and its links, as one all-or-nothing change.
 
     Each step after the creation is the write its single tool makes, inside one
     savepoint with the creation, so a refused link or claim leaves no item, no
@@ -621,6 +621,7 @@ def _author(payload: Mapping[str, object]) -> str | None:
 #: after the ticks and the summary sent beside it.
 APPLY_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
     ("claim", frozenset()),
+    ("checklist", frozenset({"items", "force"})),
     ("checklist_ticks", frozenset({"item_id", "done"})),
     ("refs", frozenset({"kind", "value", "label"})),
     ("links", frozenset({"other", "kind", "remove"})),
@@ -632,6 +633,7 @@ APPLY_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
 #: order. A link from a new item has nothing to remove, so `remove` is not taken.
 CREATE_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
     ("claim", frozenset()),
+    ("checklist", frozenset({"items"})),
     ("links", frozenset({"other", "kind"})),
 )
 #: The groups that are lists of entries rather than one object.
@@ -707,6 +709,12 @@ def _apply_step(
     if group == "claim":
         claimed = _claim(conn, base)
         return {name: claimed[name] for name in ("started", "warnings") if claimed.get(name)}, True
+    if group == "checklist":
+        replaced = _checklist(conn, {**entry, **base})
+        return {}, [
+            {"item_id": step["id"], "text": step["text"], "done": step["done"]}
+            for step in replaced["checklist"]
+        ]
     if group == "checklist_ticks":
         _checklist_tick(conn, {**entry, **base})
         return {}, {"item_id": entry.get("item_id"), "done": entry.get("done", True)}

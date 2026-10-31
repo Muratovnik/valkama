@@ -12,6 +12,15 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Added
 
+- `apply_work_item_changes` and `create_work_item` take a `checklist` group,
+  `{items, force?}` (`{items}` on a creation), which sets the steps as
+  `set_work_item_checklist` does, right after the claim. Claiming an item and
+  giving it its steps is one call, and `applied.checklist` lists the new step
+  ids. A step may be sent as `{text, done: true}`, here and to
+  `set_work_item_checklist`: it is recorded done by the caller with the event a
+  tick writes, so one call can set done steps, the summary and the closing
+  transition. The acknowledgement of `set_work_item_checklist` adds each
+  step's `done`.
 - `create_work_item` and `POST /api/planning/work-items` take `claim` and
   `links` (`{other, kind}`), applied to the new item in the same transaction:
   created, then claimed, then linked. A refused claim or link creates nothing

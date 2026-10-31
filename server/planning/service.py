@@ -801,6 +801,14 @@ def set_checklist(
     expected_revision: int | None = None,
     author: str | None = None,
 ) -> dict:
+    """Replace the steps; a new step may arrive already done.
+
+    A step is text, or `{text, done}`. One sent done is recorded as done by the
+    caller, with the `checklist_completed` event a tick would write, so setting
+    a step done and ticking it after are one history. A step that names its own
+    `id` is one being carried over, and keeps the state it carries.
+    """
+
     row = read_model.item_row(conn, reference)
     _require_revision(row, expected_revision)
     existing = model.checklist(row["checklist"])
@@ -811,8 +819,23 @@ def set_checklist(
             " pass force to discard that state explicitly"
         )
     replacement = model.checklist(items)
+    # The steps as sent, beside the steps as read; anything but a list (a stored
+    # checklist's JSON text) carries nothing new.
+    sent = items if isinstance(items, list) else [None] * len(replacement)
+    completed = [
+        step
+        for step, raw in zip(replacement, sent, strict=True)
+        if step["done"] and isinstance(raw, dict) and not raw.get("id") and not step["done_by"]
+    ]
+    if completed:
+        label = calls.holder(author)
+        for step in completed:
+            step["done_by"] = label
     _write(conn, row, ["checklist = ?"], [model.dumps(replacement)])
-    _log(conn, str(row["work_item_id"]), "checklist_replaced", str(len(replacement)), author)
+    identity = str(row["work_item_id"])
+    _log(conn, identity, "checklist_replaced", str(len(replacement)), author)
+    for step in completed:
+        _log(conn, identity, "checklist_completed", step["text"][:120], author)
     return read_model.present(
         conn, read_model.item_by_id(conn, str(row["work_item_id"])), full=True
     )

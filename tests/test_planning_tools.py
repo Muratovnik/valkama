@@ -440,7 +440,10 @@ class PlanningAcknowledgementTests(unittest.TestCase):
         replaced = self.call("set_work_item_checklist", **arguments)
         stored = self.call("get_work_item", id=self.ref)["checklist"]
         self.assertEqual(
-            [{"item_id": step["id"], "text": step["text"]} for step in stored],
+            [
+                {"item_id": step["id"], "text": step["text"], "done": step["done"]}
+                for step in stored
+            ],
             replaced["checklist"],
         )
         self.assertEqual(["x", "y"], [step["text"] for step in replaced["checklist"]])

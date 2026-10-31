@@ -68,6 +68,24 @@ _VERBOSE = {
     "type": "boolean",
     "description": "Answer with the full work item instead of the short acknowledgement.",
 }
+#: One checklist step as a caller sends it: its text, or its text and whether it is done.
+_STEP = {
+    "anyOf": [
+        {"type": "string"},
+        {
+            "type": "object",
+            "properties": {"text": _STR, "done": _BOOL},
+            "required": ["text"],
+        },
+    ]
+}
+_STEPS = {
+    "type": "array",
+    "maxItems": model.MAX_CHECKLIST,
+    "description": "The steps, in order: text, or {text, done}. A step sent done=true"
+    " is recorded as done by you, as a tick would record it.",
+    "items": _STEP,
+}
 #: Rows a list or a search answers with when the caller names no limit.
 COMPACT_LIMIT = 50
 _VERBOSE_ROWS = {
@@ -149,10 +167,11 @@ TOOLS = [
         "Create a work item",
         "One unit of planned work. It starts in the workflow's initial state unless"
         " you name another. kind=epic is a parent; a hierarchy is one level deep."
-        " claim and links act on the new item in the same call, all or nothing:"
-        " it is created, then claimed, then linked, each as its single tool does."
-        " A refused claim or link creates nothing and names the step and the"
-        " refusal's code. With either, the answer adds applied, what each changed.",
+        " claim, checklist and links act on the new item in the same call, all or"
+        " nothing: it is created, then claimed, then given its steps, then linked,"
+        " each as its single tool does. A refused step creates nothing and names the"
+        " step and the refusal's code. With any of them, the answer adds applied,"
+        " what each changed.",
         WRITES,
         {
             "space": _SPACE,
@@ -174,6 +193,13 @@ TOOLS = [
                 "description": "true claims the new item as claim_work_item does,"
                 " which starts it: it is created in its first state and then moved"
                 " to the active one.",
+            },
+            "checklist": {
+                "type": "object",
+                "description": "The new item's steps, as set_work_item_checklist takes"
+                " them; applied after the claim and before the links.",
+                "properties": {"items": _STEPS},
+                "required": ["items"],
             },
             "links": {
                 "type": "array",
@@ -379,11 +405,13 @@ TOOLS = [
         "set_work_item_checklist",
         "Set a work item's checklist",
         "Replace the steps. Existing claimed or completed state is protected;"
-        " force discards it explicitly.",
+        " force discards it explicitly. The answer lists the new steps with the"
+        " item_id every later tick or step claim names. apply_work_item_changes"
+        " and create_work_item take the same steps as their checklist group.",
         WRITES,
         {
             "id": _REFERENCE,
-            "items": {"type": "array", "items": {"type": "string"}},
+            "items": _STEPS,
             "force": _FORCE,
             "expected_revision": _EXPECTED_REVISION,
             "author": _AUTHOR,
@@ -525,7 +553,8 @@ TOOLS = [
         "Apply several changes to a work item",
         "Several writes to one item in one call, all or nothing. Each group works"
         " exactly as its single tool does, and they apply in this order: claim,"
-        " checklist_ticks, refs, links, comment, summary, transition — so a closing"
+        " checklist, checklist_ticks, refs, links, comment, summary, transition — so"
+        " a claim and its steps take one call, and a closing"
         " transition sees the ticks and the summary sent with it, and a transition"
         " sent with claim moves an item the claim has already started. A refused step"
         " writes nothing and names the step and the refusal's code. Name at least"
@@ -538,6 +567,15 @@ TOOLS = [
                 "type": "boolean",
                 "description": "true claims the item as claim_work_item does,"
                 " starting it when it is in a backlog or queued state.",
+            },
+            "checklist": {
+                "type": "object",
+                "description": "Replace the steps as set_work_item_checklist does, after"
+                " the claim and before the ticks. The new steps get new item_ids, so"
+                " checklist_ticks in the same call cannot name them: send a step"
+                " done=true instead. applied.checklist lists the new item_ids.",
+                "properties": {"items": _STEPS, "force": _FORCE},
+                "required": ["items"],
             },
             "checklist_ticks": {
                 "type": "array",
