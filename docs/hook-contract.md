@@ -116,6 +116,12 @@ fields:
 
 `spool_reason` is `missing`, `schema`, `busy` or `error`.
 
+The hook creates only `spool/`, never the store's own directory. Whether that
+directory exists is how the first full open decides that no store from an
+earlier product name is waiting to be adopted. A hook that created it would
+make that open start an empty store. Until the directory exists, an event that
+cannot be written directly is lost, with a line on stderr.
+
 ### Draining the spool
 
 Spool files are delivered in filename order, which is the order the events
@@ -230,9 +236,9 @@ Under Installation → Store:
 ## Not covered
 
 - An event a hook process never got to write is lost. That happens when the
-  client kills the hook before the spool file is renamed into place, or when the
-  spool directory cannot be written. Doctor's last event per client shows the
-  gap.
+  client kills the hook before the spool file is renamed into place, when the
+  store's directory does not exist yet, or when the spool cannot be written.
+  Doctor's last event per client shows the gap.
 - `client_version` stays empty: neither client reports its version in hook
   input.
 - The HTTP `POST /api/ingest` path is unchanged and still accepts the four

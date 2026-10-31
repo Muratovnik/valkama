@@ -21,7 +21,9 @@ checkouts are therefore distinguishable even at the same version.
   A subagent gets its own row, `<session>:<agent>`, under its parent.
   - The write is a light open of a store that already exists at the current
     schema. A busy, missing or other-version store, or a failed insert, sends
-    the event to `spool/` beside the store instead. Spool files are delivered
+    the event to `spool/` beside the store instead. A hook never creates the
+    store's own directory, because its existence is what stops the first open
+    from adopting a store written under an earlier product name. Spool files are delivered
     later by the next successful hook write, or by `housekeeping.drain_spool`.
     Delivery is idempotent on the event's uid. An event older than what the
     store already knows is kept as history and changes no session, so a late

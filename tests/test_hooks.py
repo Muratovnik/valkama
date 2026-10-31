@@ -475,6 +475,7 @@ class LightOpenTests(StoreCase):
 
     def test_a_missing_store_spools_and_is_not_created(self) -> None:
         missing = os.path.join(self.home.name, "elsewhere", "valkama.sqlite3")
+        os.makedirs(os.path.dirname(missing))
         reason = ingest.deliver(
             lifecycle(),
             store_path=missing,
@@ -485,6 +486,20 @@ class LightOpenTests(StoreCase):
         self.assertEqual("missing", reason)
         self.assertFalse(os.path.exists(missing))
         self.assertEqual(1, len(spool.pending(spool.directory(missing))))
+
+    def test_a_missing_store_directory_is_never_created(self) -> None:
+        # Its existence is what tells the first full open that no store from an
+        # earlier product name waits to be adopted.
+        root = os.path.join(self.home.name, "never-opened")
+        with self.assertRaises(FileNotFoundError):
+            ingest.deliver(
+                lifecycle(),
+                store_path=os.path.join(root, "valkama.sqlite3"),
+                schema_version=store.STORE_SCHEMA_VERSION,
+                occurred_ns=1,
+                now="2026-10-31T10:00:00.500Z",
+            )
+        self.assertFalse(os.path.exists(root))
 
     def test_a_current_version_store_without_the_execution_tree_spools(self) -> None:
         # A schema-9 store an earlier build wrote has no `execution_events` yet.
@@ -591,6 +606,8 @@ class DrainTests(StoreCase):
         self.spool_event(lifecycle())
         self.conn.execute("BEGIN")
         result = ingest.drain(self.conn, self.spool)
+        # The caller's own transaction survives the refused drain.
+        self.assertTrue(self.conn.in_transaction)
         self.conn.rollback()
         self.assertTrue(result.stopped)
         self.assertEqual(1, len(spool.pending(self.spool)))
@@ -671,6 +688,7 @@ class EntryProcessTests(unittest.TestCase):
         self.home = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.addCleanup(self.home.cleanup)
         self.path = os.path.join(self.home.name, "store", "valkama.sqlite3")
+        os.makedirs(os.path.dirname(self.path))
         self.env = {
             **os.environ,
             "VALKAMA_DB": self.path,

@@ -29,9 +29,19 @@ def directory(store_path: str) -> str:
 
 
 def write(spool: str, record: HookEvent, *, occurred_ns: int, spooled_at: str, reason: str) -> str:
-    """Spool one event and return its file. The file appears whole or not at all."""
+    """Spool one event and return its file. The file appears whole or not at all.
 
-    os.makedirs(spool, exist_ok=True)
+    The store's own directory must already exist; this creates only `spool/`
+    inside it. That directory's existence is what tells the first full open
+    that no store from an earlier product name is waiting to be adopted, so a
+    hook that created it would make that open start an empty store instead.
+    Without it the write fails, and the event is lost with a line on stderr.
+    """
+
+    try:
+        os.mkdir(spool)
+    except FileExistsError:
+        pass
     name = f"{occurred_ns:020d}-{record.event_uid}{PENDING_SUFFIX}"
     final = os.path.join(spool, name)
     temporary = os.path.join(spool, f".{name}.tmp")
