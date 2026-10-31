@@ -262,6 +262,23 @@ class SwitchTests(FrontTestCase):
         )
         self.assertEqual([], after_cancel)
 
+    def test_a_change_the_client_never_heard_is_announced_once_it_can_hear(self) -> None:
+        # Compared with what the client holds, not with the release before:
+        # "b" and "c" list the same tools, and only the client still has "a"'s.
+        front = self.front(self.release("a", tools=["one"]))
+        self.send(front, "tools/list", MODERN)
+        self.switch(front, self.release("b", tools=["one", "two"]))
+        (ack,) = self.send(
+            front, "subscriptions/listen", {**MODERN, "notifications": {"toolsListChanged": True}}
+        )
+
+        heard = self.switch(front, self.release("c", tools=["one", "two"]))
+
+        self.assertEqual(["notifications/tools/list_changed"], [frame["method"] for frame in heard])
+        self.assertEqual(
+            ack["params"]["_meta"][SUBSCRIPTION], heard[0]["params"]["_meta"][SUBSCRIPTION]
+        )
+
     def test_a_stream_that_asks_for_nothing_hears_nothing(self) -> None:
         front = self.front(self.release("a", tools=["one"]))
         self.send(front, "tools/list", MODERN)
@@ -333,10 +350,43 @@ class FailureTests(FrontTestCase):
         broken = self.release("broken", capabilities_exit=1)
         self.switch(front, broken)
         self.switch(front, self.release("next"))
+        after_success = self.call(front)
         self.switch(front, broken)
+        after_second_failure = self.call(front)
 
-        self.assertEqual("next", self.payload(self.call(front))["release"])
+        self.assertEqual("next", self.payload(after_success)["release"])
+        self.assertEqual(1, len(after_success["result"]["content"]), "a stale warning came")
+        self.assertEqual("next", self.payload(after_second_failure)["release"])
+        self.assertIn("broken", after_second_failure["result"]["content"][1]["text"])
         self.assertEqual(2, len(self.events("capabilities", "broken")))
+
+    def test_the_launcher_naming_the_running_release_again_withdraws_the_warning(self) -> None:
+        good = self.release("good")
+        front = self.front(good)
+        self.switch(front, self.release("broken", capabilities_exit=1))
+        self.switch(front, good)
+
+        answer = self.call(front)
+
+        self.assertEqual(1, len(answer["result"]["content"]), "the warning outlived its cause")
+
+    def test_a_backend_that_will_not_exit_is_never_joined_by_another(self) -> None:
+        front = self.front(self.release("old"))
+        running = front._backend
+        assert running is not None
+        self.addCleanup(running.stop, 1.0)
+
+        with mock.patch.object(running, "stop", return_value=False):
+            self.switch(front, self.release("new"))
+        self.ids += 1
+        lost = front.handle(
+            json.dumps({"jsonrpc": "2.0", "id": self.ids, "method": "ping", **MODERN}).encode()
+        )
+
+        self.assertFalse(lost)
+        (answer,) = self.frames()
+        self.assertIn("did not exit", answer["error"]["message"])
+        self.assertEqual([], self.events("start", "new"))
 
     def test_a_release_that_fails_to_start_brings_the_previous_one_back(self) -> None:
         front = self.front(self.release("good"))
@@ -554,6 +604,34 @@ class ManifestPinTests(unittest.TestCase):
             mock.patch.object(launcher, "pinned_source_reader", return_value=None),
         ):
             self.assertIsNone(mcp_front.main(), "a checkout run is not the pinned release")
+
+    def test_the_release_the_launcher_names_runs_behind_a_front(self) -> None:
+        release = self.directory / "release"
+        release.mkdir()
+        shutil.copyfile(FAKE, release / "valkama.py")
+        settings = {"name": "pinned", "log": str(self.directory / "events.jsonl")}
+        (release / "fake.json").write_text(json.dumps(settings), encoding="utf-8")
+        status = {
+            **self.status,
+            "python": sys.executable,
+            "source_script": str(release / "valkama.py"),
+        }
+        discover = {"jsonrpc": "2.0", "id": 1, "method": "server/discover"}
+        stdin = mock.Mock(buffer=io.BytesIO(json.dumps(discover).encode() + b"\n"))
+        stdout = mock.Mock(buffer=io.BytesIO())
+        with (
+            mock.patch.dict(os.environ, {launcher.LAUNCHER_ENV: str(self.directory)}),
+            mock.patch.object(launcher, "pinned_source_reader", return_value=lambda: None),
+            mock.patch.object(launcher, "status", return_value=status),
+            mock.patch.object(sys, "stdin", stdin),
+            mock.patch.object(sys, "stdout", stdout),
+        ):
+            code = mcp_front.main()
+
+        self.assertEqual(0, code)
+        (answer,) = [json.loads(line) for line in stdout.buffer.getvalue().splitlines()]
+        self.assertEqual("release pinned", answer["result"]["instructions"])
+        self.assertTrue(answer["result"]["capabilities"]["tools"]["listChanged"])
 
 
 if __name__ == "__main__":

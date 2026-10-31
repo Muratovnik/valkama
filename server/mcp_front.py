@@ -70,12 +70,17 @@ _CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 
 # Appended once to a tool result after a switch failed. Written for the agent
 # that receives it: what happened, what it means for the answer it got, and who
-# can fix it.
+# can fix it. A session tries a refused release again only once the launcher
+# names another one -- pinning the same commit again names the same release --
+# so the remedies offered are the two that reach it: a restart, which starts the
+# pinned release afresh, and pinning another release.
 SWITCH_FAILED_WARNING = (
     "WARNING: the Valkama launcher now pins release {revision}, and this session"
     " could not switch to it: {reason}. This session keeps answering from the"
-    " release it had, and a session opened now would fail the same way, so tell"
-    " the owner: the fix is `launcher install` with a release that starts."
+    " release it had, and tries again only when the launcher pins another"
+    " release. Tell the owner: restarting this session starts {revision} afresh,"
+    " which helps if the failure has passed; otherwise `launcher install"
+    " --revision` with a release that starts reaches this session too."
 )
 
 
@@ -93,6 +98,10 @@ class Pin(NamedTuple):
 
 class BackendFailedError(RuntimeError):
     """A release did not start: it would not run, or it exited before answering."""
+
+
+class BackendStuckError(BackendFailedError):
+    """A release failed and its process would not exit, so no other may start beside it."""
 
 
 class BackendExitedError(RuntimeError):
@@ -172,9 +181,16 @@ class Backend:
     the last lines are kept, because they are what says why a release failed.
     """
 
-    def __init__(self, pin: Pin, *, echo: Callable[[bytes], None] = _echo) -> None:
+    def __init__(
+        self,
+        pin: Pin,
+        *,
+        echo: Callable[[bytes], None] = _echo,
+        report: Callable[[str], None] = _report,
+    ) -> None:
         self.pin = pin
         self._echo = echo
+        self._report = report
         self._lines: queue.Queue[bytes | None] = queue.Queue()
         self._stderr: collections.deque[str] = collections.deque(maxlen=20)
         self.process = subprocess.Popen(
@@ -184,6 +200,10 @@ class Backend:
             stderr=subprocess.PIPE,
             env=backend_environment(os.environ),
             creationflags=_CREATE_NO_WINDOW,
+            # A session of its own on POSIX, so the process group that
+            # `processes.stop_process_tree` kills is the backend's tree and not
+            # the front's, which is also the client's. Windows ignores it.
+            start_new_session=sys.platform != "win32",
         )
         stdin, stdout, stderr = self.process.stdin, self.process.stdout, self.process.stderr
         if stdin is None or stdout is None or stderr is None:  # pragma: no cover - PIPE gives all
@@ -236,12 +256,13 @@ class Backend:
         code = self.process.poll()
         return f"it exited with status {code}" if code is not None else ""
 
-    def stop(self, timeout: float) -> None:
+    def stop(self, timeout: float) -> bool:
         """Close stdin, which is how a server is asked to exit, then insist.
 
-        Its streams are read to the end afterwards, so `tail` then holds the
-        last thing it said: a release that exits writes its reason to stderr,
-        and that line can arrive after its stdout has already closed.
+        True once the backend process has exited. Its streams are read to the
+        end afterwards, so `tail` then holds the last thing it said: a release
+        that exits writes its reason to stderr, and that line can arrive after
+        its stdout has already closed.
         """
 
         with contextlib.suppress(OSError, ValueError):
@@ -249,13 +270,18 @@ class Backend:
         try:
             self.process.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
-            processes.stop_process_tree(self.process)
+            if not processes.stop_process_tree(self.process):
+                self._report(
+                    f"release {self.pin.label} was stopped alone: its process tree could"
+                    " not be killed whole, so a process it started may still run"
+                )
         for pump in self._pumps:
             pump.join(timeout=timeout)
         for stream in (self.process.stdout, self.process.stderr):
             if stream is not None:
                 with contextlib.suppress(OSError, ValueError):
                     stream.close()
+        return self.process.poll() is not None
 
 
 def preflight(pin: Pin, *, timeout: float = PREFLIGHT_TIMEOUT) -> str | None:
@@ -632,7 +658,9 @@ class Front:
         if pin is None or pin == self._refused:
             return
         if pin == self._pin:
-            self._refused = None
+            # The launcher names the release this session runs again, so a
+            # warning about a switch away from it no longer says anything true.
+            self._refused = self._warning = None
             return
         self._switch(pin)
 
@@ -643,13 +671,17 @@ class Front:
             return
         previous = self._pin
         # Stopped before the next one starts: the next one may migrate the store
-        # as it opens it, and the old one must not write after that.
-        self._stop_backend()
+        # as it opens it, and the old one must not write after that. One that
+        # will not exit is therefore never joined by another.
+        if not self._stop_backend():
+            self._lost = f"release {self._label(previous)} did not exit, so none starts beside it"
+            self._report(self._lost)
+            return
         try:
             self._backend = self._launch(pin)
         except BackendFailedError as failure:
             self._refuse(pin, str(failure))
-            if previous is None:
+            if previous is None or isinstance(failure, BackendStuckError):
                 self._lost = str(failure)
                 return
             try:
@@ -658,20 +690,24 @@ class Front:
                 self._lost = f"{previous.label} could not start again either: {again}"
             return
         self._pin = pin
-        self._refused = None
+        self._refused = self._warning = None
         self._report(f"this session now runs release {pin.label}")
         self._announce()
+
+    @staticmethod
+    def _label(pin: Pin | None) -> str:
+        return pin.label if pin is not None else "nothing"
 
     def _refuse(self, pin: Pin, reason: str) -> None:
         self._refused = pin
         self._warning = SWITCH_FAILED_WARNING.format(revision=pin.label, reason=reason)
-        self._report(f"stayed on {self._pin.label if self._pin else 'nothing'}: {reason}")
+        self._report(f"stayed on {self._label(self._pin)}: {reason}")
 
     def _launch(self, pin: Pin) -> Backend:
         """Start a release and bring it to where the client already is."""
 
         try:
-            backend = Backend(pin, echo=self._echo)
+            backend = Backend(pin, echo=self._echo, report=self._report)
         except OSError as error:
             raise BackendFailedError(f"it could not be run: {error}") from error
         try:
@@ -683,14 +719,19 @@ class Front:
                 if self._initialized:
                     backend.send(_encode({"jsonrpc": "2.0", "method": "notifications/initialized"}))
         except (BackendExitedError, TimeoutError) as error:
-            backend.stop(self._stop_timeout)
+            if not backend.stop(self._stop_timeout):
+                raise BackendStuckError(
+                    f"release {pin.label} did not answer and did not exit:"
+                    f" {backend.tail() or error}"
+                ) from error
             raise BackendFailedError(backend.tail() or str(error)) from error
         return backend
 
-    def _stop_backend(self) -> None:
+    def _stop_backend(self) -> bool:
+        """Stop the running backend; True once its process has exited."""
+
         backend, self._backend = self._backend, None
-        if backend is not None:
-            backend.stop(self._stop_timeout)
+        return backend is None or backend.stop(self._stop_timeout)
 
     def _announce(self) -> None:
         """Tell the client its tool list changed, when it did and the client can hear it."""
