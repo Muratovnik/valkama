@@ -49,13 +49,27 @@ def run(conn: sqlite3.Connection) -> Report:
     """Every start-up step, in order, on a connection outside any transaction."""
 
     report = Report()
-    report.spool = drain_spool(conn)
+    try:
+        report.spool = drain_spool(conn)
+    except Exception as error:  # noqa: BLE001 -- reported; the next step still runs
+        report.failures.append(f"hook spool drain: {_describe(error)}")
     try:
         report.expired_leases = expire_leases(conn)
-    except sqlite3.Error as error:
-        report.failures.append(f"lease expiry: {error}")
-    report.transcripts = transcripts.sweep(conn, seconds=TRANSCRIPT_SWEEP_SECONDS)
+    except Exception as error:  # noqa: BLE001 -- reported; the next step still runs
+        report.failures.append(f"lease expiry: {_describe(error)}")
+    try:
+        report.transcripts = transcripts.sweep(conn, seconds=TRANSCRIPT_SWEEP_SECONDS)
+    except Exception as error:  # noqa: BLE001 -- reported; the surface still starts
+        report.failures.append(f"transcript sweep: {_describe(error)}")
     return report
+
+
+def _describe(error: Exception) -> str:
+    """A store error says enough by its text; anything else also names its type."""
+
+    if isinstance(error, sqlite3.Error | OSError):
+        return str(error)
+    return f"{type(error).__name__}: {error}"
 
 
 def start_up(conn: sqlite3.Connection) -> list[str]:
@@ -63,14 +77,15 @@ def start_up(conn: sqlite3.Connection) -> list[str]:
 
     A surface must start even when maintenance cannot finish -- a store locked
     by another writer is an ordinary state, not a reason to refuse an agent its
-    tools -- so a failure is reported, never raised. The answer is lines for the
-    process's stderr; stdout belongs to a protocol in the MCP case.
+    tools -- so a failure is reported, never raised, whatever it is. The answer
+    is lines for the process's stderr; stdout belongs to a protocol in the MCP
+    case.
     """
 
     try:
         report = run(conn)
-    except (sqlite3.Error, OSError) as error:
-        return [f"start-up maintenance did not finish: {error}"]
+    except Exception as error:  # noqa: BLE001 -- a surface starts whatever maintenance does
+        return [f"start-up maintenance did not finish: {_describe(error)}"]
     lines = [f"start-up maintenance: {failure}" for failure in report.failures]
     if report.spool.stopped:
         lines.append(f"hook spool drain stopped: {report.spool.stopped}")

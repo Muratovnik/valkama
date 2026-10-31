@@ -214,6 +214,12 @@ def drain(
     A file is deleted only after its transaction commits, so a crash in between
     replays it as no-ops. A file another process holds is left for the next
     drain; a store error stops the drain and leaves the rest pending.
+
+    Nothing a file holds makes a drain raise. A file is read from disk, so its
+    content is input: one that fails validation, or that fails to apply for any
+    reason other than the store itself, is set aside as `*.rejected` and the
+    drain goes on. A long-lived process drains at start-up, and a file left
+    pending that raised would stop every later start the same way.
     """
 
     result = DrainResult()
@@ -227,6 +233,8 @@ def drain(
             events = spool.read(path)
         except OSError:
             continue
+        except Exception:  # noqa: BLE001 -- file content, never a reason to stop
+            events = None
         if events is None:
             result.rejected += spool.reject(path)
             continue
@@ -235,6 +243,9 @@ def drain(
         except sqlite3.Error as error:
             result.stopped = str(error)
             break
+        except Exception:  # noqa: BLE001 -- `write` rolled back; the file is the cause
+            result.rejected += spool.reject(path)
+            continue
         spool.remove(path)
         result.files += 1
     return result

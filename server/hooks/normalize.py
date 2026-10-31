@@ -207,7 +207,16 @@ def read_spool_line(line: dict) -> tuple[HookEvent, str] | None:
     `lifecycle_event` produces.
     """
 
-    if line.get("v") != SPOOL_VERSION or not set(line) <= _FIELDS | _SPOOL_ONLY:
+    version = line.get("v")
+    if type(version) is not int or version != SPOOL_VERSION:
+        return None
+    if not set(line) <= _FIELDS | _SPOOL_ONLY:
+        return None
+    # Every value is text or absent before anything looks one up: a list or an
+    # object from disk would otherwise reach a dictionary lookup and raise.
+    if not all(
+        value is None or isinstance(value, str) for key, value in line.items() if key != "v"
+    ):
         return None
     spooled_at = line.get("spooled_at")
     if not isinstance(spooled_at, str) or not _TIMESTAMP.fullmatch(spooled_at):
@@ -219,18 +228,19 @@ def read_spool_line(line: dict) -> tuple[HookEvent, str] | None:
         record = HookEvent(**values)
     except TypeError:
         return None
-    if not _UID.fullmatch(str(record.event_uid)) or not _TIMESTAMP.fullmatch(
-        str(record.occurred_at)
-    ):
-        return None
-    if record.client not in CLIENT_EVENTS or _KIND_OF_HOOK.get(record.hook_event) != record.kind:
-        return None
+    for field in ("event_uid", "occurred_at", "client", "hook_event", "kind"):
+        if not isinstance(getattr(record, field), str):
+            return None
     for field, limit in LIMITS.items():
         value = getattr(record, field)
         if value is None and field != "session_id":
             continue
         if not isinstance(value, str) or not value or len(value) > limit:
             return None
+    if not _UID.fullmatch(record.event_uid) or not _TIMESTAMP.fullmatch(record.occurred_at):
+        return None
+    if record.client not in CLIENT_EVENTS or _KIND_OF_HOOK.get(record.hook_event) != record.kind:
+        return None
     return record, spooled_at
 
 

@@ -206,6 +206,12 @@ class NormalizeTests(unittest.TestCase):
             "wrong type": {"cwd": 5},
             "empty session": {"session_id": ""},
             "missing field": {"session_id": None},
+            # Unhashable values used to reach a dictionary lookup and raise.
+            "client is a list": {"client": ["x"]},
+            "hook_event is an object": {"hook_event": {}},
+            "kind is a list": {"kind": ["turn_end"]},
+            "version is a boolean": {"v": True},
+            "version is a list": {"v": [1]},
         }
         for name, change in changes.items():
             with self.subTest(name):
@@ -594,6 +600,40 @@ class DrainTests(StoreCase):
         result = ingest.drain(self.conn, self.spool)
         self.assertEqual((1, 1, 3), (result.files, result.inserted, result.rejected))
         self.assertEqual({"pending": 0, "oldest": None, "rejected": 3}, spool.summary(self.spool))
+
+    def test_no_file_content_makes_a_drain_raise(self) -> None:
+        good = json.loads(
+            normalize.spool_line(lifecycle(), spooled_at="2026-10-31T10:00:01.000Z", reason="busy")
+        )
+        os.makedirs(self.spool, exist_ok=True)
+        bodies = {
+            "1-client.jsonl": {**good, "client": ["x"]},
+            "2-hook.jsonl": {**good, "hook_event": {}},
+            "3-kind.jsonl": {**good, "kind": {"a": 1}},
+            "4-reason.jsonl": {**good, "spool_reason": ["busy"]},
+        }
+        for name, body in bodies.items():
+            with open(os.path.join(self.spool, name), "wb") as handle:
+                handle.write(json.dumps(body).encode("utf-8") + b"\n")
+        result = ingest.drain(self.conn, self.spool)
+        self.assertEqual((0, 4), (result.files, result.rejected))
+        self.assertEqual({"pending": 0, "oldest": None, "rejected": 4}, spool.summary(self.spool))
+
+    def test_an_unexpected_failure_on_one_file_sets_it_aside_and_the_drain_goes_on(self) -> None:
+        self.spool_event(lifecycle(uid=UID_A, at="2026-10-31T10:00:01.000Z"))
+        self.spool_event(lifecycle(uid=UID_B, at="2026-10-31T10:00:02.000Z"))
+        real = ingest.record
+        calls = iter([True, False])
+
+        def flaky(conn: sqlite3.Connection, event: normalize.HookEvent, **kwargs: object) -> bool:
+            if next(calls):
+                raise ValueError("a value the store refused to interpret")
+            return real(conn, event, **kwargs)  # type: ignore[arg-type]
+
+        with mock.patch.object(ingest, "record", side_effect=flaky):
+            result = ingest.drain(self.conn, self.spool)
+        self.assertEqual((1, 1, 1), (result.files, result.inserted, result.rejected))
+        self.assertFalse(self.conn.in_transaction)
 
     def test_a_bounded_drain_leaves_the_rest_for_later(self) -> None:
         for number, uid in enumerate((UID_A, UID_B, UID_C)):

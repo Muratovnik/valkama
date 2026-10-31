@@ -27,7 +27,10 @@ checkouts are therefore distinguishable even at the same version.
     later by the next successful hook write, or by `housekeeping.drain_spool`.
     Delivery is idempotent on the event's uid. An event older than what the
     store already knows is kept as history and changes no session, so a late
-    drain cannot revive an ended session.
+    drain cannot revive an ended session. A spool file that fails validation,
+    including a list or an object where a string belongs, is set aside as
+    `*.rejected`; no file content stops a drain, and a failure in start-up
+    maintenance is reported on stderr without stopping the server.
   - The command always exits 0 and prints nothing, whatever its input. It keeps
     an allowlist of fields and never the prompt, tool arguments, assistant text
     or Codex turn metadata.

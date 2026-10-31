@@ -22,11 +22,13 @@ import os
 import sys
 import tempfile
 import unittest
+from typing import ClassVar
 from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from server import housekeeping, mcp_surface, store
+from server.hooks import normalize, spool
 from server.ops import tray
 from server.planning import api as planning_api
 from server.planning import service as planning_service
@@ -127,6 +129,70 @@ class McpSurfaceTestCase(unittest.TestCase):
         ):
             mcp_surface.mcp_main()
         connection.close.assert_called_once_with()
+
+
+class StartUpMaintenanceTests(McpSurfaceTestCase):
+    """What the start-up maintenance may never do: keep a client from its `initialize` answer."""
+
+    INITIALIZE: ClassVar[dict] = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {"protocolVersion": "2025-06-18"},
+    }
+
+    def spool_directory(self) -> str:
+        directory = spool.directory(store.db_path())
+        os.makedirs(directory, exist_ok=True)
+        return directory
+
+    def start(self) -> tuple[list[dict], str]:
+        stderr = io.StringIO()
+        with mock.patch.object(sys, "stderr", stderr):
+            answers = self.converse(self.INITIALIZE)
+        return answers, stderr.getvalue()
+
+    def test_malformed_spool_files_are_set_aside_and_the_server_still_starts(self) -> None:
+        record = normalize.lifecycle_event(
+            "claude",
+            "stop",
+            {"session_id": "S"},
+            event_uid="00000000-0000-4000-8000-000000000001",
+            occurred_at="2026-10-31T10:00:00.000Z",
+        )
+        assert record is not None
+        good = json.loads(
+            normalize.spool_line(record, spooled_at="2026-10-31T10:00:01.000Z", reason="busy")
+        )
+        directory = self.spool_directory()
+        bodies = {
+            "00000000000000000001-client.jsonl": json.dumps({**good, "client": ["x"]}).encode(),
+            "00000000000000000002-hook.jsonl": json.dumps({**good, "hook_event": {}}).encode(),
+            "00000000000000000003-garbage.jsonl": b"\x00\xff{not json\n[1, 2]\n",
+        }
+        for name, body in bodies.items():
+            with open(os.path.join(directory, name), "wb") as handle:
+                handle.write(body + b"\n")
+
+        answers, _ = self.start()
+        [answer] = answers
+        self.assertEqual("2025-06-18", answer["result"]["protocolVersion"])
+        self.assertEqual(
+            sorted(name.removesuffix(".jsonl") + ".rejected" for name in bodies),
+            sorted(os.listdir(directory)),
+        )
+        # And a second start finds nothing pending to trip over.
+        self.assertEqual(1, len(self.start()[0]))
+
+    def test_an_unexpected_maintenance_failure_is_reported_and_the_server_still_starts(
+        self,
+    ) -> None:
+        with mock.patch.object(
+            housekeeping.ingest, "drain", side_effect=TypeError("unhashable type: 'list'")
+        ):
+            answers, stderr = self.start()
+        self.assertEqual(1, len(answers))
+        self.assertIn("unhashable type: 'list'", stderr)
 
 
 class DiscoveryTests(McpSurfaceTestCase):

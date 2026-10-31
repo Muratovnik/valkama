@@ -143,9 +143,12 @@ event that is already there inserts nothing and changes no session. A drain
 that commits and dies before deleting its file therefore replays as no-ops.
 
 A file that cannot be read back is renamed to `*.rejected`, kept, and never
-retried. This covers a line that is not JSON, an unknown `v`, an unknown key, or
-a value outside the shapes above. A store at a different schema version leaves
-files pending until a build at that version opens it.
+retried. This covers a line that is not JSON, an unknown `v`, an unknown key, a
+value that is not a string (a list or an object included), or a value outside
+the shapes above, and a file whose events fail to apply for any reason other
+than the store itself. A file's content never stops a drain or the start-up
+that runs it. A store at a different schema version leaves files pending until
+a build at that version opens it.
 
 ## What an event does to a session
 
