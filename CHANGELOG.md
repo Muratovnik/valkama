@@ -250,6 +250,11 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- The desktop app refused to start or reuse the server on Windows builds that
+  report a listening socket's TCP state as `Closed` or as no state at all:
+  `launcher listener status` looked only for `Listen` sockets, found none and
+  called a port that the managed server held `free`. A listener is now any
+  socket on the port with no remote end, whatever state Windows reports.
 - Any local process could obtain the browser session token, because
   `GET /api/security/bootstrap` without an `Origin` returned it, and could
   then write as the owner (`browser`, signed `user`) with a forged `Origin`.

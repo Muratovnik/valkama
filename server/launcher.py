@@ -51,9 +51,11 @@ _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 _WINDOWS_LISTENER_QUERY = r"""& {
 param([int]$Port)
 $ErrorActionPreference = "Stop"
+# A listener is a socket on the port with no remote end. Some Windows builds report
+# a listening socket's State as Closed or as nothing at all, so State is not read.
 $connections = @(
-    Get-NetTCPConnection -State Listen -ErrorAction Stop |
-        Where-Object { $_.LocalPort -eq $Port }
+    Get-NetTCPConnection -ErrorAction Stop |
+        Where-Object { $_.LocalPort -eq $Port -and $_.RemotePort -eq 0 }
 )
 $owners = @()
 foreach ($processId in @($connections | Select-Object -ExpandProperty OwningProcess -Unique)) {

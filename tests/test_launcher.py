@@ -5,6 +5,7 @@ import contextlib
 import io
 import json
 import os
+import socket
 import stat
 import subprocess
 import sys
@@ -490,6 +491,17 @@ class LauncherTests(unittest.TestCase):
 
                 with self.assertRaisesRegex(launcher.LauncherError, message):
                     launcher._windows_listener_processes(8642, runner=runner)
+
+    @unittest.skipUnless(os.name == "nt", "the listener inventory reads Windows' TCP table")
+    def test_windows_listener_inventory_finds_a_real_listener(self) -> None:
+        # Some Windows builds report a listening socket's State as Closed or as no
+        # state at all, so the inventory must not depend on State being Listen.
+        with socket.socket() as listener:
+            listener.bind(("127.0.0.1", 0))
+            listener.listen()
+            port = listener.getsockname()[1]
+            owners = launcher._windows_listener_processes(port)
+        self.assertEqual([os.getpid()], [owner["pid"] for owner in owners])
 
     def test_listener_lifecycle_validates_platform_port_and_exit_races(self) -> None:
         self.install(platform_name="nt")
