@@ -14,6 +14,9 @@ is complete on its own.
 
 - Read `README.md` before changing a tool. `CONTRIBUTING.md` states the same
   gates for a human contributor.
+- `server/skill/valkama` is the skill clients install to work the planning
+  tools. A change to what a planning tool does updates it in the same change;
+  `tests/test_skill_content.py` checks only that the tools it names exist.
 - Preserve supported external MCP handshake and tool schemas. Preserve existing
   local data through a verified backup, one forward-only migration, and a
   tested restore path. A migrated store has one runtime schema: never add a

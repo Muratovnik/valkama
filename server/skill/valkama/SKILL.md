@@ -1,0 +1,202 @@
+---
+name: valkama
+description: Track work in a Valkama planning space through the Valkama MCP tools — find or file the work item for a change, claim it, keep its checklist, refs and links, merge duplicates, block it, ask the owner a question, and close it with a summary. Use when a task names Valkama or a Valkama work item (a reference such as MAIN-12 in a Valkama space), calls a Valkama planning tool (claim_work_item, apply_work_item_changes and the rest), or when the owner's instructions say to track work in Valkama, and when a subagent without those tools must report its work for the item. Not for other trackers such as GitHub issues, Jira or Linear, a client's own session task list, or writing a plan document.
+---
+
+# Valkama planning
+
+Valkama keeps planned work as work items in a planning space. The `valkama` MCP
+server publishes the tools named here; the server's own instructions repeat the
+core rules, and this skill is the procedure around them. Every write is
+recorded with its author and with the session the client proved, so the item's
+history is what the next agent reads instead of re-deriving the work.
+
+The owner's instructions and the project's instructions come first. They may
+name the planning space, add what an item must carry, or say how to ask the
+owner something; where they differ from this skill, follow them.
+
+## What an item is
+
+An item is one change: it can be integrated and reverted on its own, usually
+as one branch or pull request, takes hours to a couple of days, and closes when
+a test-based "done when" holds, checked by a verify command the item names. A
+finding is evidence attached to an item, not an item of its own. Work that
+shares a cause, a fix or one mechanical rule is one item. Read
+[the work model](references/work-model.md) before filing several items,
+splitting one, or handing items to other agents.
+
+## Start
+
+1. **Find the space.** Use the space the instructions name; otherwise
+   `list_planning_spaces` and pick the one whose project is the repository you
+   work in. A space is named by its key (`MAIN`), its name or its id.
+2. **Find the item before filing one.** `search_work_items` with the words of
+   the change; a query that is exactly a reference (`MAIN-12`) answers that
+   item first. `list_work_items` filters by `state`, `category`, `kind`,
+   `parent` and `owner`. Claim the item that already covers the work.
+3. **File it only when none does.** `create_work_item` with `space`, `title`
+   and a `description` that is the brief: goal, context, constraints, the
+   "done when" and its verify command. A plan in the repository is referenced
+   by `source` (`docs/plan.md#kb:a7f3`), not copied. Umbrella work is
+   `kind: epic`, its children name it as `parent`; the hierarchy is one level
+   deep. Pass `claim: true` and `checklist` when you take it at once.
+4. **Claim before working.** `claim_work_item`, or `claim_ready_work_item` to
+   take the next ready item of a space. A claim is atomic and refuses naming
+   the holder when someone else has the item. It also starts the work: an
+   item in a backlog or queued state moves to the first active state, and the
+   acknowledgement's `started` says so. Send no separate transition to start.
+
+The holder is the session your client proved, written as
+`claim_ref: "codex (session <id>)"`; `author` is the name the history records
+for your call, and the holder only when no session is confirmed. Sign every
+call with the same `author`.
+
+A claim is a lease. It reads `live` while its session is active, `stale` once
+the session ended or was quiet for 14 days, and `unconfirmed` when no session
+was proved. A stale claim is taken over without `force`; a live one is
+someone's work, so take it over only on an instruction that says so.
+`release: true` gives an item back and requeues it from the active state,
+unless a checklist step of it is still claimed.
+
+## Work the item
+
+**Checklist.** Keep the steps you actually take. Send them with the claim in one
+call (`apply_work_item_changes` with `claim: true` and `checklist`), and send
+a step that is already done as `{"text": "…", "done": true}`. A step sent with
+the text of one the item has keeps its id, claim and tick, so add steps by
+sending the existing ones first and the new ones after; the acknowledgement
+lists every step's `item_id`. Tick a step by its `item_id` with
+`tick_work_item_checklist_item`, and `done: false` reopens it. Leaving out a
+claimed or completed step is refused unless `force`, which discards its state.
+
+**Shared items.** When agents split one item, each claims its step with
+`claim_work_item_checklist_item` before working on it and ticks it when done.
+Item and step claims are independent: a step's holder need not hold the item.
+
+**One call for several writes.** Writes to one item go in one
+`apply_work_item_changes` call, applied in this order and all or nothing:
+`claim`, `checklist`, `checklist_ticks`, `refs`, `links`, `comment`,
+`summary`, `transition`. A refused step writes nothing and names the group
+and index to correct. Pass the `revision` of the last acknowledgement as
+`expected_revision` to refuse a stale write.
+
+**Refs.** `attach_work_item_ref` (or the `refs` group) records a `commit`, a
+`memory` record id materially used, or a `url`. Your own session needs no ref:
+Valkama records the session of every write.
+
+**Comments.** `comment_work_item` is for what the fields have no place for: a
+decision and its reason, evidence, a handoff. `checklist_item_id` ties a
+comment to a step.
+
+**Links.** `link_work_items` takes `kind`:
+
+- `blocks` carries readiness: an item that something unfinished blocks is not
+  ready, and the take-next queue skips it;
+- `discovered-from` records work found while doing another item. File it in the
+  `create_work_item` call itself:
+  `links: [{"other": "MAIN-12", "kind": "discovered-from"}]`;
+- `relates-to` and `duplicates` carry meaning only.
+
+Steps of the same change stay on the checklist; a link is for separate work.
+
+**Order.** Inside a state, items keep the order the board shows and
+`claim_ready_work_item` takes work in. `update_work_item` and
+`transition_work_item` take `rank`: `first`, `last`, `before:MAIN-12` or
+`after:MAIN-12`, naming an item in the same state. Placing an item first is
+what makes it next; priority only breaks a tie.
+
+**Reading.** `get_work_item` returns the item with its newest comments and
+events and the sessions that wrote to it; `full: true` returns all of its
+history. `get_work_item_chain` shows what an item's work grew into and whether
+it converges. Read the history before assuming who did what.
+
+## Blocked work
+
+When another item blocks the work, link it: `blocks` from the blocking item to
+this one (`link_work_items` with `id` the blocker, `other` this item). When the
+blocker is outside Valkama, transition to the blocked state with a `reason` and
+say what would unblock it in a comment. A transition to a blocked state is
+refused without a linked blocker or a reason.
+
+## Asking the owner
+
+`create_work_item_request` puts a typed `question` or `decision` on the item,
+with a `prompt` and up to 12 `fields` (`text`, `choice`, `multi_choice` or
+`boolean`). The owner answers it in Valkama; read the answer with
+`get_work_item_request`, or `list_work_item_requests` by space and status. A
+pending request expires when its item closes. Whether to ask through a
+request, the client or a message is the owner's rule; this tool is how the
+question is kept on the item.
+
+## Merging items that are one change
+
+When two items turn out to be one change — the same finding filed twice, one
+cause found from two places — `merge_work_items` folds them into the item that
+survives (`id`), with `items` the ones that fold in and a `reason`. The
+survivor takes their steps (ids, ticks and step claims kept), discussion,
+refs and links; each merged item is linked `duplicates` to it, gets a summary
+naming it and closes in its cancelled state. It is refused, writing nothing,
+for an item another session holds (unless `force`), a closed item, an item in
+another space or a merged item with children. Merge before handing the work to
+anyone.
+
+## Close
+
+1. Tick the steps that were done. A step still open keeps the item from
+   completing: do it, or file it as an item of its own linked
+   `discovered-from` this one and leave it off this checklist.
+2. Record the summary: `done` (what was done), `next` (what comes next) and
+   `why` only when the choice is not obvious. `set_work_item_summary`, or the
+   `summary` group.
+3. Transition to the completed state, or to review when someone must check the
+   result first. A state is named by its key or by a category that one state
+   has (`completed`, `review`, `cancelled`); a name the workflow lacks is
+   refused listing its states.
+
+Steps 1 to 3 go in one `apply_work_item_changes` call, often with the last
+commit as a ref. A terminal state is refused while a step is open or without a
+summary. `force: true` carries a refusal through and records it as
+`overridden`: use it only when the record would still be true.
+
+**Not done.** Work that is not needed, duplicated or superseded closes in the
+cancelled state. It needs the summary, which starts with why (`Not needed:`,
+`Duplicate of MAIN-12`, `Superseded by MAIN-12`), and leaves undone steps open,
+because ticking them would claim work that did not happen. For a duplicate,
+prefer `merge_work_items`; otherwise link `duplicates` to the survivor and copy
+anything unique there first. `delete_work_item` is only for an item that should
+never have existed, and it refuses while the item has children.
+
+## Delegating
+
+A worker writes to its own item: it claims it, ticks its steps, attaches refs
+and comments. The agent that delegated files the new items a worker reports
+and closes them, after grouping the findings by cause, so two workers' reports
+of one cause become one item. Hand one agent several items only as the
+[work model](references/work-model.md#one-agent-several-items) allows.
+
+A subagent without the Valkama tools writes nothing to Valkama. It returns, for
+the delegating agent to record:
+
+- the item reference it worked on and the steps it finished, by `item_id` or
+  text;
+- the commits it made and anything else worth a ref;
+- each finding with its evidence (command, error text, versions), its cause,
+  and where it belongs: a step of this item, a new item linked
+  `discovered-from` this one, or the same change as an existing item;
+- what blocked it, and any question for the owner with its options.
+
+## When a call is refused
+
+| Refusal | What to do |
+| --- | --- |
+| `revision_conflict` | Someone wrote since your read: read the item, then retry on the new `revision`. |
+| A claim held by another | Take other work, or take it over only on an instruction (`force: true`). |
+| `workflow_guard` with `[executor]` | Claim the item or a step before moving it to an active state. |
+| `workflow_guard` with `[checklist]` or `[summary]` | Tick what was done, move undone work to an item of its own, record the summary, then close. |
+| `workflow_guard` with `[blocker]` | Link the blocking item, or give the reason. |
+| `workflow_guard` with `[transition]` | The workflow has no such move; go through a state it allows. |
+| An unknown state | The refusal lists the workflow's states and the categories that name one. |
+| A refused batch or creation step | The message starts with the group and index; correct that entry. |
+
+Exact argument shapes, acknowledgements and limits are in
+[the tool reference](references/tools.md).
