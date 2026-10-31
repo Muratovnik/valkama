@@ -239,10 +239,16 @@ interface Drag {
 /** Drag `from` by the pointer to the top or bottom edge of `to`, a tile or a stack, as a hand does. */
 async function drag(page: Page, { from, midway, to, where }: Drag) {
   const start = await from.boundingBox()
-  const end = await to.boundingBox()
-  if (!start || !end) throw new Error('a tile to drag is not on screen')
+  if (!start) throw new Error('a tile to drag is not on screen')
   await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2)
   await page.mouse.down()
+  // Once a drag is under way every cell of the lane stands as tall as the lane,
+  // so the target is measured then, as the hand sees it.
+  await page.mouse.move(start.x + start.width / 2 + 8, start.y + start.height / 2 + 8, {
+    steps: 4,
+  })
+  const end = await to.boundingBox()
+  if (!end) throw new Error('a place to drop on is not on screen')
   const y = where === 'top' ? end.y + 6 : end.y + end.height - 6
   await page.mouse.move(end.x + end.width / 2, y, { steps: 16 })
   await page.mouse.move(end.x + end.width / 2, y + (where === 'top' ? 1 : -1), { steps: 2 })
@@ -355,4 +361,70 @@ test('Alt+Arrow moves a focused tile one place and the move is announced', async
   await page.keyboard.press('Alt+ArrowDown')
   await expect(live).toHaveText('MAIN-402 is already last')
   expect(writes).toHaveLength(2)
+})
+
+test('a lane is as tall as its tiles: an empty cell stays a low ground', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await installBackend(page)
+  await serve(page)
+  await openBoard(page)
+  const loose = lane(page, 'No epic')
+  // A lane out of sight skips its layout, so it is measured in view.
+  await loose.scrollIntoViewIfNeeded()
+  const height = async (state: string) => {
+    const box = await loose.locator(`.lane-cell[data-state="${state}"]`).boundingBox()
+    return box?.height ?? 0
+  }
+  const full = await height('backlog')
+  const empty = await height('done')
+  expect(empty, 'an empty cell is a drop-sized ground').toBeLessThanOrEqual(48)
+  expect(full, 'the cell with a tile is a tile tall').toBeGreaterThan(empty * 2)
+})
+
+test('arrows walk the tiles, and a tile moved from the keyboard is brought into view', async ({
+  page,
+}, info) => {
+  await page.setViewportSize({ width: 1024, height: 640 })
+  await installBackend(page)
+  await serve(page)
+  await openBoard(page)
+  const epic = lane(page, LONG_EPIC)
+  const tile = (reference: string) => epic.locator(`li[data-reference="${reference}"] > button`)
+  // One Tab stop per cell; a bare arrow moves focus and nothing else.
+  await expect(cell(epic, 'backlog').locator('button[tabindex="0"]')).toHaveCount(1)
+  await tile('MAIN-402').focus()
+  await page.keyboard.press('ArrowDown')
+  await expect(tile('MAIN-403')).toBeFocused()
+  await expect(tile('MAIN-403')).toHaveAttribute('tabindex', '0')
+  await expect(tile('MAIN-402')).toHaveAttribute('tabindex', '-1')
+  await page.keyboard.press('ArrowRight')
+  await expect(tile('MAIN-405')).toBeFocused()
+  await page.keyboard.press('ArrowLeft')
+  await page.keyboard.press('Home')
+  await expect(tile('MAIN-402')).toBeFocused()
+
+  // Moved to the end of its cell, the tile stays focused and in sight.
+  const scroller = page.locator('.work-item-lanes')
+  await page.keyboard.press('Alt+ArrowDown')
+  await expect
+    .poll(() => tiles(cell(epic, 'backlog')))
+    .toEqual(['MAIN-403', 'MAIN-402', 'MAIN-404'])
+  await page.keyboard.press('Alt+ArrowDown')
+  await expect
+    .poll(() => tiles(cell(epic, 'backlog')))
+    .toEqual(['MAIN-403', 'MAIN-404', 'MAIN-402'])
+  await expect(tile('MAIN-402')).toBeFocused()
+  await expect
+    .poll(async () => {
+      const [box, port] = await Promise.all([
+        tile('MAIN-402').boundingBox(),
+        scroller.boundingBox(),
+      ])
+      if (!box || !port) return 'not drawn'
+      return box.y >= port.y && box.y + box.height <= port.y + port.height
+        ? 'in view'
+        : 'out of view'
+    })
+    .toBe('in view')
+  await page.screenshot(shot(info, 'w-board-keyboard-1024.png'))
 })

@@ -887,9 +887,10 @@ export const en = {
       chain: 'Chain',
       showChain: 'Show the chain of {reference} on the board',
       empty: 'Nothing in this epic yet.',
+      showAll: 'Show all · {count}',
     },
     order: {
-      hint: 'Alt+Up and Alt+Down move the work item within its column.',
+      hint: 'Arrow keys move focus between work items; Alt+Up and Alt+Down move the work item within its column.',
       moved: '{reference} moved: {position} of {total} in {state}',
       first: '{reference} is already first',
       last: '{reference} is already last',

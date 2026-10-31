@@ -4,7 +4,8 @@
  * graph read — or, grouped by epic, one lane of those columns per epic.
  *
  * The columns come from `workflow.states`, in the order the workflow gives
- * them. Nothing here knows there are six, or that one of them is called Dev.
+ * them, the terminal states last. Nothing here knows there are six, or that one
+ * of them is called Dev.
  * A state's tiles arrive in the order of work, and moving one — by drag, or by
  * Alt+↑/↓ on a focused tile — is handed up as the state it goes to and where it
  * lands, for the page to send. What the move did is said aloud here, because a
@@ -16,6 +17,8 @@ import { useI18n } from 'vue-i18n'
 import WorkItemColumn from '@/widgets/work-item-views/components/WorkItemColumn.vue'
 import WorkItemLanes from '@/widgets/work-item-views/components/WorkItemLanes.vue'
 import type { StackLanding } from '@/widgets/work-item-views/components/WorkItemStack.vue'
+import { useColumnFit } from '@/widgets/work-item-views/composables/useColumnFit.ts'
+import { terminalLast } from '@/widgets/work-item-views/utils/boardColumns.ts'
 import { boardLanes } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import type { BoardGrouping } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
@@ -57,7 +60,7 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const hintId = `${useId()}-reorder`
 
-const columns = computed(() => byState(props.workflow, props.items))
+const columns = computed(() => terminalLast(byState(props.workflow, props.items)))
 const states = computed(() => columns.value.map((column) => column.state))
 const ready = computed(() => readyIds(props.items))
 const blocked = computed(() => {
@@ -84,6 +87,8 @@ const lanes = computed(() =>
 )
 const grouped = computed(() => props.grouping === 'epic')
 const hint = computed(() => (props.writable ? hintId : undefined))
+/** Flat, the columns are one row the arrows cross; grouped, each lane is its own. */
+const boardRow = computed(() => (grouped.value ? undefined : ''))
 
 /** What the last move did, for a screen reader; a polite live region reads it. */
 const announcement = ref('')
@@ -91,6 +96,9 @@ const dragging = ref(false)
 /** The tile a keyboard move should hand focus back to once it is drawn again. */
 let refocus: string | null = null
 const root = ref<HTMLElement | null>(null)
+/** Flat, the board is its own scroller and its own track; grouped, the lanes size theirs. */
+const flatRoot = computed(() => (grouped.value ? null : root.value))
+const { columnWidth } = useColumnFit(flatRoot, flatRoot, () => columns.value.length)
 
 function stateName(key: string): string {
   return props.workflow.states.find((state) => state.key === key)?.name ?? key
@@ -131,7 +139,11 @@ watch(
     const tile = [...(root.value?.querySelectorAll<HTMLElement>('[data-reference]') ?? [])].find(
       (element) => element.dataset.reference === wanted,
     )
-    tile?.querySelector<HTMLElement>('button')?.focus()
+    const button = tile?.querySelector<HTMLElement>('button')
+    // The tile keeps its element across the move, so it is often still focused
+    // and focusing it again would scroll nothing; it is brought into view here.
+    button?.focus({ preventScroll: true })
+    button?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
   },
   { flush: 'post' },
 )
@@ -142,7 +154,8 @@ watch(
     ref="root"
     class="work-item-board"
     :class="{ dragging, grouped }"
-    :style="{ '--column-count': columns.length }"
+    :data-board-row="boardRow"
+    :style="{ '--column-count': columns.length, '--column-width': columnWidth }"
   >
     <WorkItemLanes
       v-if="grouped"
@@ -202,13 +215,15 @@ watch(
      declaration here is the fallback, so a board with no inline style is one
      wide rather than zero. */
   --column-count: 1;
+  --column-width: minmax(208px, 1fr);
 
   display: grid;
-  grid-template-columns: repeat(var(--column-count), minmax(250px, 1fr));
+  grid-template-columns: repeat(var(--column-count), var(--column-width));
   gap: var(--space-2);
   height: 100%;
   min-height: 0;
   overflow: auto hidden;
+  scroll-snap-type: x proximity;
 
   /* This board owns horizontal scrolling. Paint containment keeps off-screen
      lanes from enlarging the hidden Planning shell while preserving access

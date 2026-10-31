@@ -12,12 +12,17 @@
  * another lane would give it another epic, which is an edit of what the work is
  * part of, not of where it stands. Each lane's stacks therefore share a drop
  * group of their own.
+ *
+ * A lane is as tall as what it holds, not as its fullest state: each cell is its
+ * own height and draws only its first few tiles, and an empty one is a low
+ * ground a tile can still be dropped on.
  */
-import { computed, useId } from 'vue'
+import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import WorkItemStack from '@/widgets/work-item-views/components/WorkItemStack.vue'
+import WorkItemLaneCell from '@/widgets/work-item-views/components/WorkItemLaneCell.vue'
 import type { StackLanding } from '@/widgets/work-item-views/components/WorkItemStack.vue'
+import { useColumnFit } from '@/widgets/work-item-views/composables/useColumnFit.ts'
 import { useLaneCollapse } from '@/widgets/work-item-views/composables/useLaneCollapse.ts'
 import type { BoardLane } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
@@ -51,6 +56,28 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const prefix = useId()
 const { folded, toggle } = useLaneCollapse(() => props.spaceId)
+
+const scroller = ref<HTMLElement | null>(null)
+const track = ref<HTMLElement | null>(null)
+const { columnWidth, visibleWidth } = useColumnFit(scroller, track, () => props.states.length)
+
+/** A drag is under way, so every cell stands as tall as its lane to take the drop. */
+const dragging = ref(false)
+
+/** Each lane's tiles by state, read once per change rather than once per cell. */
+const cells = computed(() => {
+  const byLane = new Map<string, Map<string, WorkItemBrief[]>>()
+  for (const lane of props.lanes) {
+    const byState = new Map<string, WorkItemBrief[]>()
+    for (const item of lane.items) {
+      const held = byState.get(item.state.state_id)
+      if (held === undefined) byState.set(item.state.state_id, [item])
+      else held.push(item)
+    }
+    byLane.set(lane.id, byState)
+  }
+  return byLane
+})
 
 /** What each column holds across the lanes drawn, for the header that names it. */
 const stateCounts = computed(() => {
@@ -90,7 +117,12 @@ function counts(lane: BoardLane): string {
 }
 
 function inState(lane: BoardLane, state: WorkflowState): WorkItemBrief[] {
-  return lane.items.filter((item) => item.state.state_id === state.state_id)
+  return cells.value.get(lane.id)?.get(state.state_id) ?? []
+}
+
+function drag(active: boolean) {
+  dragging.value = active
+  emit('dragging', active)
 }
 
 function isEmpty(lane: BoardLane): boolean {
@@ -118,10 +150,19 @@ function toggleLabel(lane: BoardLane): string {
 
 <template>
   <div
+    ref="scroller"
     class="work-item-lanes"
-    :style="{ '--column-count': props.states.length }"
+    :class="{ dragging }"
+    :style="{
+      '--column-count': props.states.length,
+      '--column-width': columnWidth,
+      '--board-visible-width': visibleWidth,
+    }"
   >
-    <div class="lanes-track">
+    <div
+      ref="track"
+      class="lanes-track"
+    >
       <div
         class="lanes-head"
         aria-hidden="true"
@@ -207,28 +248,23 @@ function toggleLabel(lane: BoardLane): string {
             v-else
             :id="bodyId(lane)"
             class="lane-cells"
+            data-board-row
           >
-            <div
+            <WorkItemLaneCell
               v-for="state in props.states"
               :key="state.state_id"
-              class="lane-cell"
-              :data-state="state.key"
-            >
-              <WorkItemStack
-                class="lane-stack"
-                :group="laneGroup(lane)"
-                :state="state"
-                :items="inState(lane, state)"
-                :ready-ids="props.readyIds"
-                :blocked-ids="props.blockedIds"
-                :hint-id="props.hintId"
-                :writable="props.writable"
-                @dragging="emit('dragging', $event)"
-                @edge="(reference, edge) => emit('edge', reference, edge)"
-                @open="emit('open', $event)"
-                @place="(move, landing) => emit('place', move, landing)"
-              />
-            </div>
+              :group="laneGroup(lane)"
+              :state="state"
+              :items="inState(lane, state)"
+              :ready-ids="props.readyIds"
+              :blocked-ids="props.blockedIds"
+              :hint-id="props.hintId"
+              :writable="props.writable"
+              @dragging="drag"
+              @edge="(reference, edge) => emit('edge', reference, edge)"
+              @open="emit('open', $event)"
+              @place="(move, landing) => emit('place', move, landing)"
+            />
           </div>
         </template>
       </section>
@@ -239,22 +275,36 @@ function toggleLabel(lane: BoardLane): string {
 <style scoped>
 /* One scroller for both axes: the lanes stack downwards and the states run
    sideways, and the header row and each lane heading stay where they are read.
-   The scroller is a container so a heading can ask how wide the visible part is. */
+   The visible width a heading is held to is measured, because a container
+   query counts the vertical scrollbar in and cut the heading's last action by
+   the bar's width; the container stays for the fallback and the narrow wrap. */
 .work-item-lanes {
   --column-count: 1;
+  --column-width: minmax(208px, 1fr);
+
+  /* What a lane heading is held to until the scroller has been measured. */
+  --board-visible-width: 100cqi;
+
+  /* One track list for the header row and every lane. */
+  --lane-tracks: repeat(var(--column-count), var(--column-width));
 
   height: 100%;
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
+  scroll-snap-type: x proximity;
   container: board-lanes / inline-size;
+
+  /* A tile focused or brought into view stops below the sticky row of state
+     names (a state line and its inset, 32px) rather than under it. */
+  scroll-padding-block-start: calc(var(--size-control-height-compact) + var(--space-2));
 }
 
 /* Every row of the board lays itself on the same tracks, so a state stands at
    one x in every lane. */
 .lanes-track {
   display: grid;
-  grid-template-columns: repeat(var(--column-count), minmax(250px, 1fr));
+  grid-template-columns: var(--lane-tracks);
   gap: var(--space-2);
   padding-bottom: var(--space-4);
 }
@@ -275,6 +325,7 @@ function toggleLabel(lane: BoardLane): string {
   gap: var(--space-2);
   align-items: center;
   padding-inline: var(--space-3);
+  scroll-snap-align: start;
 }
 
 .lanes-state-count {
@@ -285,12 +336,19 @@ function toggleLabel(lane: BoardLane): string {
 
 /* A lane is its heading and a row of grounds; the space above the next heading
    is what separates two lanes, so nothing is drawn between them. */
+
+/* A lane repeats the tracks rather than borrowing them as a subgrid: the tracks
+   are measured widths, so they line up the same, and a lane that stands on its
+   own can skip layout while it is scrolled out of sight. Laying out every lane
+   of a space was most of what regrouping the board cost. */
 .board-lane {
   display: grid;
-  grid-template-columns: subgrid;
+  grid-template-columns: var(--lane-tracks);
   grid-column: 1 / -1;
-  row-gap: var(--space-2);
+  gap: var(--space-2);
   padding-top: var(--space-3);
+  contain-intrinsic-size: auto 240px;
+  content-visibility: auto;
 }
 
 /* Held at the left edge of what is visible, however far the states scroll.
@@ -306,7 +364,7 @@ function toggleLabel(lane: BoardLane): string {
   justify-self: start;
   align-items: center;
   min-width: 0;
-  max-width: 100cqi;
+  max-width: var(--board-visible-width);
 }
 
 .lane-toggle {
@@ -387,25 +445,17 @@ function toggleLabel(lane: BoardLane): string {
   font: var(--font-detail);
 }
 
+/* Each cell is as tall as its own tiles, so a lane of one card is one card
+   tall. While a tile is dragged every cell stretches to its lane, so an empty
+   state is a whole lane's height to drop on rather than a strip. */
 .lane-cells {
   display: grid;
   grid-template-columns: subgrid;
   grid-column: 1 / -1;
-}
+  align-items: start;
 
-/* Each state of a lane is a ground like a column's, and as tall as the
-   tallest of its row, so an empty one is a place a tile can still be dropped. */
-.lane-cell {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 72px;
-  padding: var(--space-2);
-  background: var(--color-surface);
-  border-radius: var(--radius-card);
-}
-
-.lane-stack {
-  flex: 1 0 auto;
+  .dragging & {
+    align-items: stretch;
+  }
 }
 </style>

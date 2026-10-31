@@ -888,9 +888,10 @@ export const ru = {
       chain: 'Цепочка',
       showChain: 'Показать цепочку {reference} на доске',
       empty: 'В эпике пока нет задач.',
+      showAll: 'Показать все · {count}',
     },
     order: {
-      hint: 'Alt+↑ и Alt+↓ переставляют задачу внутри колонки.',
+      hint: 'Стрелки переводят фокус между задачами, Alt+↑ и Alt+↓ переставляют задачу внутри колонки.',
       moved: '{reference}: {position} из {total} в «{state}»',
       first: '{reference} уже первая',
       last: '{reference} уже последняя',

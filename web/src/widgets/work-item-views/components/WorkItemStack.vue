@@ -14,8 +14,17 @@
  * Alt+↑ and Alt+↓ move a focused tile one place up or down its stack, for a
  * reader without a pointer. Several stacks share one `group` when a tile may
  * cross between them — the columns of a board, or the cells of one lane.
+ *
+ * Without Alt the arrows only move focus. A stack is one Tab stop — the tile
+ * last focused in it — so a board of a thousand tiles is a handful of stops,
+ * not a thousand; ↑ and ↓ walk the stack, Home and End go to its ends, and ←
+ * and → go to the nearest stack beside it that holds a tile, in the same row of
+ * the board: the next column, or the next cell of the same lane.
+ *
+ * A stack may draw only its first `limit` tiles. It still reads every item, so
+ * a move from the keyboard names its true neighbour and its true end.
  */
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import { useSortable } from '@vueuse/integrations/useSortable'
 import type { SortableEvent } from 'sortablejs'
@@ -43,6 +52,8 @@ const props = defineProps<{
   writable: boolean
   /** The element a keyboard hint is read from, or nothing when no move is possible. */
   hintId?: string
+  /** Draw only this many tiles; every item is still read. */
+  limit?: number
 }>()
 
 const emit = defineEmits<{
@@ -54,6 +65,20 @@ const emit = defineEmits<{
 
 const list = ref<HTMLElement | null>(null)
 let droppedAt = 0
+
+const shown = computed(() =>
+  props.limit === undefined ? props.items : props.items.slice(0, props.limit),
+)
+/**
+ * The item whose tile is this stack's Tab stop: the one last focused while it is
+ * still drawn here, otherwise the first. Held by item rather than by place, so
+ * the stop moves with a tile Alt+↓ moved.
+ */
+const active = ref<string | null>(null)
+const stop = computed(() => {
+  const held = shown.value.some((item) => item.work_item_id === active.value)
+  return held ? active.value : (shown.value[0]?.work_item_id ?? null)
+})
 
 const isReady = (item: WorkItemBrief) => props.readyIds.has(item.work_item_id)
 const isBlocked = (item: WorkItemBrief) => props.blockedIds.has(item.work_item_id)
@@ -119,11 +144,61 @@ function open(reference: string) {
   if (Date.now() - droppedAt > 250) emit('open', reference)
 }
 
+function tabStop(item: WorkItemBrief): 0 | -1 {
+  return item.work_item_id === stop.value ? 0 : -1
+}
+
 const STEPS: Record<string, -1 | 1> = { ArrowDown: 1, ArrowUp: -1 }
+
+/** The tiles a stack draws, as the buttons focus lands on. */
+function tilesOf(stack: Element): HTMLElement[] {
+  return [...stack.querySelectorAll<HTMLElement>(':scope > li > button')]
+}
+
+/** The tile at `index`, or the last one, in the nearest stack of this row that has any. */
+function across(step: -1 | 1, index: number): HTMLElement | undefined {
+  const own = list.value
+  const row = own?.closest('[data-board-row]')
+  if (!own || !row) return undefined
+  const stacks = [...row.querySelectorAll('.work-item-stack')].filter(
+    (stack) => stack.closest('[data-board-row]') === row,
+  )
+  for (let at = stacks.indexOf(own) + step; at >= 0 && at < stacks.length; at += step) {
+    const tiles = tilesOf(stacks[at])
+    if (tiles.length) return tiles[Math.min(index, tiles.length - 1)]
+  }
+  return undefined
+}
+
+const WALKS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'])
+
+/** Where a bare arrow, Home or End sends focus from the tile at `index`. */
+function target(key: string, index: number): HTMLElement | undefined {
+  const own = list.value === null ? [] : tilesOf(list.value)
+  if (key === 'ArrowUp') return own[index - 1]
+  if (key === 'ArrowDown') return own[index + 1]
+  if (key === 'Home') return own[0]
+  if (key === 'End') return own.at(-1)
+  return across(key === 'ArrowLeft' ? -1 : 1, index)
+}
+
+/**
+ * A walk past the last tile stays where it is. It does not fall through to the
+ * scroller either, which would slide the focused tile away from the reader.
+ */
+function walked(event: KeyboardEvent, index: number) {
+  if (!WALKS.has(event.key) || event.ctrlKey || event.metaKey || event.shiftKey) return
+  event.preventDefault()
+  target(event.key, index)?.focus()
+}
 
 function stepped(event: KeyboardEvent, index: number) {
   const step = STEPS[event.key]
-  if (!props.writable || step === undefined || !event.altKey) return
+  if (!event.altKey) {
+    walked(event, index)
+    return
+  }
+  if (!props.writable || step === undefined) return
   if (event.ctrlKey || event.metaKey || event.shiftKey) return
   event.preventDefault()
   const item = props.items[index]
@@ -154,14 +229,16 @@ function keyHint(): string | undefined {
     :data-state="props.state.key"
   >
     <li
-      v-for="(item, index) in props.items"
+      v-for="(item, index) in shown"
       :key="item.work_item_id"
       :data-reference="item.reference"
+      @focusin="active = item.work_item_id"
     >
       <WorkItemTile
         :item="item"
         :ready="isReady(item)"
         :blocked="isBlocked(item)"
+        :tabindex="tabStop(item)"
         :aria-keyshortcuts="keyHint()"
         :aria-describedby="props.hintId"
         @keydown="stepped($event, index)"

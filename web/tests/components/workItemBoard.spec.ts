@@ -9,7 +9,7 @@
 import { createI18n } from 'vue-i18n'
 
 import { mount } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import PlanningWorkspace from '@/pages/planning/PlanningWorkspace.vue'
 
@@ -169,14 +169,147 @@ describe('moving a tile from the keyboard', () => {
     expect(tile(readOnly, 'MAIN-10').attributes('aria-keyshortcuts')).toBeUndefined()
   })
 
-  it('hands focus back to the tile it moved once the move is drawn', async () => {
+  it('hands focus back to the tile it moved once the move is drawn, and brings it into view', async () => {
     const wrapper = board()
-    tile(wrapper, 'MAIN-10').element.focus()
+    const moved = tile(wrapper, 'MAIN-10').element
+    // The element survives the move, still focused: focusing it again scrolls
+    // nothing, so being brought into view has to be asked for.
+    const scroll = vi.fn()
+    Object.defineProperty(moved, 'scrollIntoView', { value: scroll, configurable: true })
+    moved.focus()
     await tile(wrapper, 'MAIN-10').trigger('keydown', { key: 'ArrowDown', altKey: true })
-    const [moved, ...rest] = space
-    await wrapper.setProps({ items: [rest[0], moved, ...rest.slice(1)] })
+    const [first, ...rest] = space
+    await wrapper.setProps({ items: [rest[0], first, ...rest.slice(1)] })
     await wrapper.vm.$nextTick()
-    expect(document.activeElement).toBe(tile(wrapper, 'MAIN-10').element)
+    expect(document.activeElement).toBe(moved)
+    expect(scroll).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' })
+  })
+
+  it('draws a column a page at a time, and a tile moved past that page where it lands', async () => {
+    const many = Array.from({ length: 35 }, (_, at) => boardItem(100 + at))
+    const wrapper = board({ items: many, spaceItems: many })
+    const drawn = () => wrapper.findAll('[data-state="backlog"] li[data-reference]').length
+    expect(drawn()).toBe(30)
+    expect(wrapper.get('[data-state="backlog"] .column-count').text()).toBe('35')
+    await tile(wrapper, 'MAIN-129').trigger('keydown', { key: 'ArrowDown', altKey: true })
+    expect(wrapper.emitted('place')).toEqual([
+      [{ reference: 'MAIN-129', state: 'backlog', rank: 'after:MAIN-130' }],
+    ])
+    expect(drawn()).toBe(35)
+  })
+})
+
+const backlog = (wrapper: ReturnType<typeof board>) =>
+  wrapper.findAll('.lane-cell[data-state="backlog"] li[data-reference]').map((item) => item.text())
+const stops = (wrapper: ReturnType<typeof board>) =>
+  wrapper
+    .findAll('li[data-reference] > button[tabindex="0"]')
+    .map((button) => button.element.closest('li')?.dataset.reference)
+const focused = () => document.activeElement?.closest('li')?.dataset.reference
+
+describe('the columns of the board', () => {
+  it('stands the terminal states last, so a state after Done is read before it', () => {
+    const blocked = {
+      ...boardWorkflow.states[0],
+      state_id: 'blocked-state',
+      key: 'blocked',
+      name: 'Blocked',
+      category: 'blocked' as const,
+      position: 9,
+    }
+    const workflow = { ...boardWorkflow, states: [...boardWorkflow.states, blocked] }
+    const order = (grouping: 'epic' | 'none') => {
+      const wrapper = board({ workflow, grouping })
+      const row = grouping === 'epic' ? wrapper.findAll('.lane-cells')[0] : wrapper
+      return row
+        .findAll(grouping === 'epic' ? '.lane-cell' : '.work-item-column')
+        .map((column) => column.attributes('data-state'))
+    }
+    expect(order('none')).toEqual(['backlog', 'todo', 'dev', 'blocked', 'done'])
+    expect(order('epic')).toEqual(['backlog', 'todo', 'dev', 'blocked', 'done'])
+  })
+})
+
+describe('a lane cell', () => {
+  const crowded = [
+    epic,
+    ...Array.from({ length: 5 }, (_, at) =>
+      boardItem(30 + at, 'backlog', { parent_id: epic.work_item_id }),
+    ),
+    boardItem(36, 'todo', { parent_id: epic.work_item_id }),
+  ]
+  const crowdedBoard = () => board({ grouping: 'epic', items: crowded, spaceItems: crowded })
+
+  it('draws its first three tiles and offers the rest by their count', async () => {
+    const wrapper = crowdedBoard()
+    expect(backlog(wrapper)).toHaveLength(3)
+    expect(backlog(wrapper)[0]).toContain('MAIN-30')
+    const more = wrapper.get('.lane-cell[data-state="backlog"] .lane-more')
+    expect(more.text()).toBe('Show all · 5')
+    // A cell that holds no more than it draws offers nothing.
+    expect(wrapper.find('.lane-cell[data-state="todo"] .lane-more').exists()).toBe(false)
+    await more.trigger('click')
+    expect(backlog(wrapper)).toHaveLength(5)
+    expect(wrapper.find('.lane-cell[data-state="backlog"] .lane-more').exists()).toBe(false)
+  })
+
+  it('shows a tile moved past what it draws, so the moved tile can keep focus', async () => {
+    const wrapper = crowdedBoard()
+    await tile(wrapper, 'MAIN-32').trigger('keydown', { key: 'ArrowDown', altKey: true })
+    expect(wrapper.emitted('place')).toEqual([
+      [{ reference: 'MAIN-32', state: 'backlog', rank: 'after:MAIN-33' }],
+    ])
+    expect(backlog(wrapper)).toHaveLength(5)
+  })
+})
+
+describe('walking the board from the keyboard', () => {
+  it('makes each column one Tab stop that follows the tile focused in it', async () => {
+    const wrapper = board()
+    expect(stops(wrapper)).toEqual(['MAIN-10', 'MAIN-13', 'MAIN-1', 'MAIN-20'])
+    tile(wrapper, 'MAIN-10').element.focus()
+    await tile(wrapper, 'MAIN-10').trigger('keydown', { key: 'ArrowDown' })
+    expect(focused()).toBe('MAIN-11')
+    await wrapper.vm.$nextTick()
+    expect(stops(wrapper)).toEqual(['MAIN-11', 'MAIN-13', 'MAIN-1', 'MAIN-20'])
+    await tile(wrapper, 'MAIN-11').trigger('keydown', { key: 'End' })
+    expect(focused()).toBe('MAIN-12')
+    await tile(wrapper, 'MAIN-12').trigger('keydown', { key: 'Home' })
+    expect(focused()).toBe('MAIN-10')
+    // Nothing above the first tile: focus stays, and the key is not left to scroll the board.
+    const up = new KeyboardEvent('keydown', { key: 'ArrowUp', cancelable: true, bubbles: true })
+    tile(wrapper, 'MAIN-10').element.dispatchEvent(up)
+    expect(focused()).toBe('MAIN-10')
+    expect(up.defaultPrevented).toBe(true)
+    // No move is asked for by a bare arrow.
+    expect(wrapper.emitted('place')).toBeUndefined()
+  })
+
+  it('crosses to the nearest column with work, at the same place or the last one', async () => {
+    const wrapper = board()
+    tile(wrapper, 'MAIN-11').element.focus()
+    await tile(wrapper, 'MAIN-11').trigger('keydown', { key: 'ArrowRight' })
+    expect(focused()).toBe('MAIN-13')
+    await tile(wrapper, 'MAIN-13').trigger('keydown', { key: 'ArrowRight' })
+    expect(focused()).toBe('MAIN-1')
+    await tile(wrapper, 'MAIN-1').trigger('keydown', { key: 'ArrowRight' })
+    expect(focused()).toBe('MAIN-20')
+    await tile(wrapper, 'MAIN-20').trigger('keydown', { key: 'ArrowRight' })
+    expect(focused()).toBe('MAIN-20')
+    await tile(wrapper, 'MAIN-20').trigger('keydown', { key: 'ArrowLeft' })
+    expect(focused()).toBe('MAIN-1')
+  })
+
+  it('crosses only between the cells of one lane, past the empty ones', async () => {
+    const wrapper = board({ grouping: 'epic' })
+    tile(wrapper, 'MAIN-11').element.focus()
+    await tile(wrapper, 'MAIN-11').trigger('keydown', { key: 'ArrowRight' })
+    expect(focused()).toBe('MAIN-13')
+    // Dev and Done of this lane are empty, and the lane below is another row.
+    await tile(wrapper, 'MAIN-13').trigger('keydown', { key: 'ArrowRight' })
+    expect(focused()).toBe('MAIN-13')
+    await tile(wrapper, 'MAIN-13').trigger('keydown', { key: 'ArrowLeft' })
+    expect(focused()).toBe('MAIN-10')
   })
 })
 
