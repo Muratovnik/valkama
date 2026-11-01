@@ -96,15 +96,33 @@ function open(reference: TextReference) {
 }
 
 /* An in-app reference is a button, because what it does is open something here
-   rather than go to an address; it reads as the link it is. */
+   rather than go to an address; it reads as the link it is.
+
+   A button is an atomic box even where it is declared inline, and the global
+   button floor (one control row, 40px) made every line holding a reference a
+   control row tall. So the box takes the text's own line height and no floor.
+   The pointer target is a 24px band centred on the text, drawn by the
+   pseudo-element: it is positioned, so it takes no room in the line box. */
 .rich-reference {
-  display: inline;
+  position: relative;
+  display: inline-block;
+  vertical-align: baseline;
+  min-block-size: 0;
   padding: 0;
   border: 0;
   font: inherit;
   text-align: inherit;
   background: none;
   cursor: pointer;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset-inline: 0;
+    top: 50%;
+    height: 24px;
+    translate: 0 -50%;
+  }
 
   &.identifier {
     font-family: var(--font-family-mono);

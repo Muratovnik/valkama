@@ -150,6 +150,80 @@ test('a long markdown report holds on a whole line, opens, and links what resolv
   await expect(drawer.locator('.head-reference')).toHaveText('MAIN-264')
 })
 
+test('a line that holds a reference is as tall as a line of plain text', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  const backend = await installDiscussionBackend(page)
+  backend.item.refs.push({
+    kind: 'commit',
+    value: 'a1b2c3d4e5f6',
+    label: 'fix: wire contract',
+    author: 'agent',
+    at: now,
+  })
+  await page.route('**/api/ref?*', (route) =>
+    route.fulfill({
+      json: {
+        kind: 'commit',
+        value: 'a1b2c3d4e5f6',
+        resolved: true,
+        repository: '/work/repo',
+        detail: '',
+      },
+    }),
+  )
+  backend.item.comments.push({
+    id: 2,
+    kind: 'report',
+    report: {
+      done: [
+        'Plain line one',
+        // A work item reference in prose, and a commit hash as code (monospace, smaller).
+        'Line two holds MAIN-265 and `a1b2c3d` in its text',
+        'Plain line three',
+        '',
+        'Plain paragraph one',
+        'Plain paragraph two',
+        'Plain paragraph three',
+      ].join('\n'),
+      next: '',
+      why: '',
+    },
+    body: '',
+    author: 'agent',
+    at: now,
+    checklist_item_id: null,
+    checklist_item_text: null,
+  })
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
+  const entry = page.locator('.drawer .thread-entry').filter({ hasText: 'Plain line one' })
+  // The first paragraph holds the reference in its second of three lines; the
+  // second is three lines of plain text, the control.
+  const referenced = entry.locator('.rich-paragraph').nth(0)
+  const plain = entry.locator('.rich-paragraph').nth(1)
+  await expect(referenced.locator('.rich-reference')).toHaveText(['MAIN-265', 'a1b2c3d'])
+
+  const measure = (locator: typeof referenced) =>
+    locator.evaluate((element) => ({
+      height: element.getBoundingClientRect().height,
+      line: Number.parseFloat(getComputedStyle(element).lineHeight),
+      // The pointer target is the band the reference's ::before draws, so the
+      // line box does not have to grow to hold it.
+      targets: [...element.querySelectorAll('.rich-reference')].map((reference) =>
+        Number.parseFloat(getComputedStyle(reference, '::before').height),
+      ),
+    }))
+  const withReference = await measure(referenced)
+  const control = await measure(plain)
+
+  // Three lines each: a reference must not make its line taller than the text beside it.
+  expect(control.height).toBeCloseTo(3 * control.line, 0)
+  expect(withReference.height).toBeCloseTo(control.height, 0)
+  // Every pointer target, prose and monospace alike, stays at least 24px tall.
+  expect(withReference.targets).toHaveLength(2)
+  for (const target of withReference.targets) expect(target).toBeGreaterThanOrEqual(24)
+})
+
 test('a new task is described in the markdown editor, inside the dialog that owns Escape', async ({
   page,
 }) => {
