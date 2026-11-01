@@ -240,9 +240,12 @@ for (const width of [1440, 390]) {
     let before = await topOf(probe)
     await page.mouse.wheel(0, 80)
     await expect(head).toHaveClass(/condensed/u)
-    const freed = whole - (await heightOf(head))
-    expect(freed).toBeGreaterThan(20)
-    await expect.poll(() => topOf(probe)).toBeCloseTo(before - 80 - freed, 0)
+    // The head is read with the text: the frame after the class lands, the sections'
+    // row takes its last 4px.
+    await expect
+      .poll(async () => (await topOf(probe)) - (before - 80 - (whole - (await heightOf(head)))))
+      .toBeCloseTo(0, 0)
+    expect(whole - (await heightOf(head))).toBeGreaterThan(20)
     before = await topOf(probe)
     for (let step = 0; step < 5; step += 1) {
       await page.mouse.wheel(0, 80)

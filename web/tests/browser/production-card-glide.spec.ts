@@ -77,16 +77,17 @@ for (const width of [1440, 390]) {
 
     await body.evaluate((node) => node.scrollTo({ top: 4 }))
     await expect(head).toHaveClass(/condensed/u)
+    // The glide's transform counts toward the scrollable overflow while it runs, so
+    // the range is read once the text has settled, and the head with it: the frame
+    // after the class lands, the sections' row takes its last 4px.
+    await expect
+      .poll(() => body.evaluate((node) => node.getAnimations({ subtree: true }).length))
+      .toBe(0)
     // The condensed range is the whole range less the room the head gave up, or the
     // 1px the guard needs where that is larger: no blank below a short text, and the
     // reader can still scroll. One pixel of rounding is allowed.
     const condensedHead = await box(head)
     const room = whole - condensedHead.height
-    // The glide's transform counts toward the scrollable overflow while it runs, so
-    // the range is read once the text has settled.
-    await expect
-      .poll(() => body.evaluate((node) => node.getAnimations({ subtree: true }).length))
-      .toBe(0)
     const condensedRange = await rangeOf()
     expect(
       condensedRange,
@@ -229,11 +230,16 @@ for (const width of [1440, 390]) {
 
     await body.evaluate((node) => node.scrollTo({ top: 10 }))
     await expect(head).toHaveClass(/condensed/u)
-    const condensed = await box(head)
     const pad = await body.evaluate((node) => Number.parseFloat(getComputedStyle(node).paddingTop))
+    // The head is read with the text: the frame after the class lands, the sections'
+    // row takes its last 4px.
     await expect
-      .poll(() => text.evaluate((node) => node.getBoundingClientRect().top))
-      .toBeCloseTo(condensed.y + condensed.height + pad - 10, 0)
+      .poll(async () => {
+        const condensed = await box(head)
+        const top = await text.evaluate((node) => node.getBoundingClientRect().top)
+        return top - (condensed.y + condensed.height + pad - 10)
+      })
+      .toBeCloseTo(0, 0)
     const durations = await body.evaluate((node) =>
       node
         .getAnimations({ subtree: true })
