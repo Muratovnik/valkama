@@ -98,7 +98,7 @@ class AppShellTests(unittest.TestCase):
             {
                 "interface_version": "valkama-ui-state",
                 "status": "unavailable",
-                "reason": "Project registry is unavailable",
+                "reason": "platform.planning.registryUnavailable",
             },
             state,
         )

@@ -50,7 +50,7 @@ def planning_payload(routing: PlanningRouting, parameters: Mapping[str, list[str
         return {
             "interface_version": PLANNING_INTERFACE,
             "scope": scope,
-            "state": envelope("unavailable", reason="Project registry is unavailable"),
+            "state": envelope("unavailable", reason="platform.planning.registryUnavailable"),
         }
     if scope["kind"] == "global":
         projects = [_planning_project(routing, item) for item in routing.projects]

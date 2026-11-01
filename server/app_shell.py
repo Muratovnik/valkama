@@ -99,7 +99,7 @@ def context_payload(routing: PlanningRouting, parameters: Mapping[str, list[str]
         "ui_prefs": ui_prefs_record(routing.conn),
     }
     if routing.projects_result["status"] != "available":
-        state = envelope("unavailable", reason="Project registry is unavailable")
+        state = envelope("unavailable", reason="platform.planning.registryUnavailable")
     else:
         if scope["kind"] == "project":
             routing.project(scope["project_ref"]["project_id"])

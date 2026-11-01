@@ -123,6 +123,8 @@ export const en = {
       reviewBinding: 'Review project setup',
       workItemCount: '{count} work items',
       noSpaces: 'No bound planning spaces yet.',
+      registryUnavailable:
+        'The project list could not be read. Open Settings to check the installation.',
       noSpacesDetail: 'Run the Host Runtime project setup, bind a planning space, then refresh.',
     },
     sessionsScope: {
