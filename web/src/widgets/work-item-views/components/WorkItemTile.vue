@@ -77,7 +77,7 @@ const emit = defineEmits<{
 }>()
 const open = () => emit('open', props.item.reference)
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const id = useId()
 
 /** The runs of the tile, in reading order; the registry decides each mark. */
@@ -108,6 +108,15 @@ const labelRun = computed(() =>
     room.value === undefined ? {} : { labelRoom: room.value },
     LABELS,
   ),
+)
+
+/**
+ * What the chips say. A line's first reading changes its room and rarely its
+ * chips, and a board's lines are all read in one frame; the runs keep what they
+ * drew unless what they say has changed, so that frame redraws almost nothing.
+ */
+const labelKey = computed(() =>
+  labelRun.value.map((mark) => mark.value).join(String.fromCodePoint(0)),
 )
 
 /** A finished item's former holder is history, not a claim to act on. */
@@ -142,6 +151,7 @@ const describedBy = computed(() => {
         :is="drawMarks(leadRun, { surface: 'tile', words })"
         v-if="leadRun.length"
         :id="leadId"
+        v-memo="[leadRun, locale]"
         class="tile-lead"
         @click="open"
       />
@@ -157,6 +167,7 @@ const describedBy = computed(() => {
       >
         <component
           :is="drawMarks(exceptionRun, { fold: true, surface: 'tile', words })"
+          v-memo="[exceptionRun, locale]"
           @click="open"
         />
         <SemanticState
@@ -196,12 +207,14 @@ const describedBy = computed(() => {
       "
       v-if="labelRun.length"
       ref="labelLine"
+      v-memo="[labelKey, props.filter, locale]"
       class="tile-labels"
     />
     <component
       :is="drawMarks(factRun, { surface: 'tile', words })"
       v-if="factRun.length"
       :id="factsId"
+      v-memo="[factRun, locale]"
       class="tile-facts"
     />
   </div>
