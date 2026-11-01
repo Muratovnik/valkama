@@ -30,6 +30,8 @@ export function useColumnFit(
 
   const width = computed(() => columnWidth(available.value, count(), gap.value))
   return {
+    /** The measured numbers behind the two strings, for a reader that has to do arithmetic with them. */
+    measured: computed(() => ({ available: available.value, gap: gap.value, width: width.value })),
     /** Each column's width, or nothing to keep the stylesheet's own track. */
     columnWidth: computed(() => (width.value === null ? undefined : `${width.value}px`)),
     /**

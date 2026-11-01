@@ -17,8 +17,18 @@
  * own height and draws only its first few tiles, and an empty one is a low
  * ground a tile can still be dropped on. A terminal cell draws none of its
  * tiles, so a lane of finished work is no taller than its open work.
+ *
+ * A workflow wider than the board leaves some states off to the side, and a
+ * lane whose work sits only there read as an empty lane with a blank gap — the
+ * gap being the off-screen cell's height. So a lane's heading names the open
+ * work it holds out of sight, and on which side: «2 в «Review» →». Finished
+ * work is already counted in the heading, so it is named only when nothing of
+ * the lane is in view. The heading also stays at the top while its lane passes
+ * under the row of state names, so a lane in view always says whose it is.
  */
 import { computed, ref, useId } from 'vue'
+
+import { useEventListener } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 
 import WorkItemLaneCell from '@/widgets/work-item-views/components/WorkItemLaneCell.vue'
@@ -26,6 +36,7 @@ import type { StackLanding } from '@/widgets/work-item-views/components/WorkItem
 import { useColumnFit } from '@/widgets/work-item-views/composables/useColumnFit.ts'
 import { useLandedCells } from '@/widgets/work-item-views/composables/useLandedCells.ts'
 import { useLaneCollapse } from '@/widgets/work-item-views/composables/useLaneCollapse.ts'
+import { columnsInView } from '@/widgets/work-item-views/utils/boardColumns.ts'
 import type { BoardLane } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
 
@@ -63,7 +74,34 @@ const { isLanded, land, settle } = useLandedCells(() => props.states)
 
 const scroller = ref<HTMLElement | null>(null)
 const track = ref<HTMLElement | null>(null)
-const { columnWidth, visibleWidth } = useColumnFit(scroller, track, () => props.states.length)
+const { columnWidth, measured, visibleWidth } = useColumnFit(
+  scroller,
+  track,
+  () => props.states.length,
+)
+
+/** How far the states are scrolled sideways, read once a frame at most. */
+const scrollLeft = ref(0)
+let reading = 0
+useEventListener(
+  scroller,
+  'scroll',
+  () => {
+    if (reading !== 0) return
+    reading = requestAnimationFrame(() => {
+      reading = 0
+      scrollLeft.value = scroller.value?.scrollLeft ?? 0
+    })
+  },
+  { passive: true },
+)
+
+/** The states in view, as indexes; each is a number, so a scroll inside one column changes nothing. */
+const inView = computed(() =>
+  columnsInView({ ...measured.value, count: props.states.length, scrollLeft: scrollLeft.value }),
+)
+const firstInView = computed(() => inView.value.first)
+const lastInView = computed(() => inView.value.last)
 
 /** A drag is under way, so every cell stands as tall as its lane to take the drop. */
 const dragging = ref(false)
@@ -124,6 +162,44 @@ function inState(lane: BoardLane, state: WorkflowState): WorkItemBrief[] {
   return cells.value.get(lane.id)?.get(state.state_id) ?? []
 }
 
+/** What a lane holds out of sight on one side, as «2 в «Review», 1 в «Blocked»»; empty when nothing. */
+function outOfSight(lane: BoardLane, states: WorkflowState[], seen: boolean): string {
+  return states
+    .filter((state) => inState(lane, state).length > 0 && (!state.is_terminal || !seen))
+    .map((state) =>
+      t('workItem.lanes.inState', { count: inState(lane, state).length, state: state.name }),
+    )
+    .join(', ')
+}
+
+/** Each open lane's work out of sight, to the left and to the right of the states in view. */
+const elsewhere = computed(() => {
+  const first = firstInView.value
+  const last = lastInView.value
+  const left = props.states.slice(0, first)
+  const right = props.states.slice(last + 1)
+  const shown = props.states.slice(first, last + 1)
+  const notes = new Map<string, { left: string; right: string }>()
+  if (!left.length && !right.length) return notes
+  for (const lane of props.lanes) {
+    if (!isOpen(lane) || isEmpty(lane)) continue
+    const seen = shown.some((state) => inState(lane, state).length > 0)
+    notes.set(lane.id, {
+      left: outOfSight(lane, left, seen),
+      right: outOfSight(lane, right, seen),
+    })
+  }
+  return notes
+})
+
+function isAway(lane: BoardLane): boolean {
+  const note = elsewhere.value.get(lane.id)
+  return note !== undefined && (note.left !== '' || note.right !== '')
+}
+
+/** Some lane names work out of sight, so some heading may stand two rows tall. */
+const anyAway = computed(() => props.lanes.some(isAway))
+
 function drag(active: boolean) {
   dragging.value = active
   emit('dragging', active)
@@ -156,7 +232,7 @@ function toggleLabel(lane: BoardLane): string {
   <div
     ref="scroller"
     class="work-item-lanes"
-    :class="{ dragging }"
+    :class="{ dragging, away: anyAway }"
     :style="{
       '--column-count': props.states.length,
       '--column-width': columnWidth,
@@ -192,7 +268,10 @@ function toggleLabel(lane: BoardLane): string {
         :aria-label="title(lane)"
         :data-lane="lane.id"
       >
-        <header class="lane-head">
+        <header
+          class="lane-head"
+          :class="{ away: isAway(lane) }"
+        >
           <button
             class="lane-toggle"
             type="button"
@@ -221,6 +300,19 @@ function toggleLabel(lane: BoardLane): string {
             :label="lane.epic.state.name"
           />
           <span class="lane-counts">{{ counts(lane) }}</span>
+          <span
+            v-if="elsewhere.get(lane.id)?.left"
+            class="lane-elsewhere"
+            ><span aria-hidden="true">← </span
+            ><span class="visually-hidden">{{ t('workItem.lanes.offLeft') }} </span
+            >{{ elsewhere.get(lane.id)?.left }}</span
+          >
+          <span
+            v-if="elsewhere.get(lane.id)?.right"
+            class="lane-elsewhere"
+            ><span class="visually-hidden">{{ t('workItem.lanes.offRight') }} </span
+            >{{ elsewhere.get(lane.id)?.right }}<span aria-hidden="true"> →</span></span
+          >
           <span
             v-if="lane.epic"
             class="lane-actions"
@@ -295,15 +387,22 @@ function toggleLabel(lane: BoardLane): string {
   /* One track list for the header row and every lane. */
   --lane-tracks: repeat(var(--column-count), var(--column-width));
 
+  /* The row of state names, and how tall a lane heading held under it while
+     its lane passes stands: one compact control each, two rows for a heading
+     that wraps on a narrow board. */
+  --lanes-head-block: var(--size-control-height-compact);
+  --lane-head-block: var(--size-control-height-compact);
+
   height: 100%;
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
 
   /* A tile focused or brought into view stops below the sticky row of state
-     names (a state line and its inset, 32px) rather than under it, and short
-     of the bottom edge by more than its focus ring reaches. */
-  scroll-padding-block: calc(var(--size-control-height-compact) + var(--space-2)) var(--space-2);
+     names and the lane heading held under it rather than under them, and
+     short of the bottom edge by more than its focus ring reaches. */
+  scroll-padding-block: calc(var(--lanes-head-block) + var(--lane-head-block) + var(--space-2))
+    var(--space-2);
   scroll-snap-type: x proximity;
   container: board-lanes / inline-size;
 }
@@ -320,10 +419,11 @@ function toggleLabel(lane: BoardLane): string {
 .lanes-head {
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 2;
   display: grid;
   grid-template-columns: subgrid;
   grid-column: 1 / -1;
+  min-height: var(--lanes-head-block);
   padding: 0 0 var(--space-2);
   background: var(--color-canvas);
 }
@@ -367,20 +467,27 @@ function toggleLabel(lane: BoardLane): string {
   }
 }
 
-/* Held at the left edge of what is visible, however far the states scroll.
+/* Held at the left edge of what is visible, however far the states scroll,
+   and under the row of state names while its lane passes, on the workspace's
+   own ground so the tiles go under it rather than through it. It leaves with
+   the last of its lane, because a sticky box never leaves its own section.
    One row while it fits, the title giving way first; on a narrow board the
    state, counts and actions take a second row instead of squeezing the title
    down to its reference. */
 .lane-head {
   position: sticky;
+  top: var(--lanes-head-block);
   left: 0;
+  z-index: 1;
   display: flex;
   grid-column: 1 / -1;
   gap: var(--space-1) var(--space-3);
   justify-self: start;
   align-items: center;
+  width: var(--board-visible-width);
   min-width: 0;
-  max-width: var(--board-visible-width);
+  min-height: var(--size-control-height-compact);
+  background: var(--color-canvas);
 }
 
 .lane-toggle {
@@ -441,15 +548,46 @@ function toggleLabel(lane: BoardLane): string {
   font-variant-numeric: tabular-nums;
 }
 
+/* Where the lane's work out of sight is, beside the counts it explains. It is
+   the one part of the heading that wraps inside itself, so a narrow board
+   names every state it lists rather than running the last one off the edge. */
+.lane-elsewhere {
+  flex: 0 1 auto;
+  min-width: 0;
+  color: var(--color-text-muted);
+  font: var(--font-count);
+  font-variant-numeric: tabular-nums;
+}
+
 .lane-actions {
   display: inline-flex;
   flex: 0 0 auto;
   gap: var(--space-1);
 }
 
+/* A heading that also says where its work out of sight is would squeeze its
+   title down to a letter, so it takes a second row instead. */
+.lane-head.away {
+  flex-wrap: wrap;
+}
+
 @container board-lanes (width <= 560px) {
   .lane-head {
     flex-wrap: wrap;
+  }
+}
+
+/* A heading of two rows — a narrow board's, or one naming work out of sight —
+   stands that tall under the state names, so a tile brought into view stops
+   below both. The scroller cannot query itself, so the workspace it fills is
+   asked for the narrow case. */
+.work-item-lanes.away {
+  --lane-head-block: calc(var(--size-control-height-compact) * 2 + var(--space-1));
+}
+
+@container workspace (width <= 600px) {
+  .work-item-lanes {
+    --lane-head-block: calc(var(--size-control-height-compact) * 2 + var(--space-1));
   }
 }
 

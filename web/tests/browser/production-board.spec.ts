@@ -322,3 +322,44 @@ test('arrows walk the tiles, and a tile moved from the keyboard is brought into 
     .toBe('in view')
   await page.screenshot(shot(info, 'w-board-keyboard-1024.png'))
 })
+
+test('a lane names the work it holds out of sight and keeps its heading while it is in view', async ({
+  page,
+}, info) => {
+  // One column wide: the long epic's Backlog is in view, its Dev tile is not.
+  await page.setViewportSize({ width: 390, height: 700 })
+  await installBackend(page)
+  await serve(page)
+  await openBoard(page)
+  const epic = lane(page, LONG_EPIC)
+  const note = epic.locator('.lane-elsewhere')
+  await expect(note).toHaveText(['To the right: 1 in Dev →'])
+  // Finished work is counted in the heading already, so it is not named while
+  // anything of the lane is in view.
+  await expect(note).not.toContainText('Done')
+
+  const scroller = page.locator('.work-item-lanes')
+  const dev = epic.locator('.lane-cell[data-state="dev"]')
+  await scroller.evaluate(
+    (element, left) => element.scrollTo({ left }),
+    await dev.evaluate((cell) => (cell as HTMLElement).offsetLeft),
+  )
+  await expect(note).toHaveText(['← To the left: 3 in Backlog'])
+
+  // Scrolled down past the heading while the lane's cells are still in view,
+  // the heading stays, held under the row of state names.
+  await scroller.evaluate((element) => element.scrollTo({ left: 0 }))
+  const backlog = epic.locator('.lane-cell[data-state="backlog"]')
+  await backlog.evaluate((cell) => {
+    const lanes = cell.closest('.work-item-lanes') as HTMLElement
+    lanes.scrollTop += cell.getBoundingClientRect().top - lanes.getBoundingClientRect().top + 60
+  })
+  const [head, states, body] = await Promise.all([
+    epic.locator('.lane-head').boundingBox(),
+    page.locator('.lanes-head').boundingBox(),
+    backlog.boundingBox(),
+  ])
+  expect(body && states && body.y + body.height > states.y + states.height).toBe(true)
+  expect(Math.round(head?.y ?? 0)).toBe(Math.round((states?.y ?? 0) + (states?.height ?? 0)))
+  await page.screenshot(shot(info, 'w-board-lane-elsewhere-390.png'))
+})

@@ -37,3 +37,27 @@ export function columnWidth(available: number, count: number, gap: number): numb
   const fit = Math.max(1, Math.min(count, Math.floor((available + gap) / (COLUMN_FLOOR + gap))))
   return Math.max(COLUMN_FLOOR, (available - gap * (fit - 1)) / fit)
 }
+
+/**
+ * Which columns a sideways scroll shows, as the first and last index in view: a
+ * column is in view when its middle is. `width` and `gap` are what the columns
+ * were drawn at; with nothing measured every column counts as in view, so a
+ * board that cannot be measured says nothing is off to either side.
+ */
+export function columnsInView(input: {
+  available: number
+  count: number
+  gap: number
+  scrollLeft: number
+  width: number | null
+}): { first: number; last: number } {
+  const { available, count, gap, scrollLeft, width } = input
+  if (width === null || available <= 0 || count < 1) return { first: 0, last: count - 1 }
+  const step = width + gap
+  const middle = (index: number) => index * step + width / 2
+  let first = 0
+  while (first < count - 1 && middle(first) < scrollLeft) first += 1
+  let last = count - 1
+  while (last > first && middle(last) > scrollLeft + available) last -= 1
+  return { first, last }
+}

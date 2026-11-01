@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   COLUMN_FLOOR,
+  columnsInView,
   columnWidth,
   terminalLast,
 } from '@/widgets/work-item-views/utils/boardColumns.ts'
@@ -50,5 +51,32 @@ describe('the width of a column', () => {
     expect(columnWidth(120, 7, 8)).toBe(COLUMN_FLOOR)
     expect(columnWidth(0, 7, 8)).toBeNull()
     expect(columnWidth(1116, 0, 8)).toBeNull()
+  })
+})
+
+describe('the columns a sideways scroll shows', () => {
+  // Seven columns 229px wide with 8px between them in a 703px board: three fit.
+  const board = { available: 703, count: 7, gap: 8, width: 229 }
+
+  it('shows the first three at rest and none of the four beyond', () => {
+    expect(columnsInView({ ...board, scrollLeft: 0 })).toEqual({ first: 0, last: 2 })
+  })
+
+  it('counts a column in view once its middle is, from either side', () => {
+    // Scrolled by half a column: the first column's middle has left, the fourth's has come in.
+    expect(columnsInView({ ...board, scrollLeft: 130 })).toEqual({ first: 1, last: 3 })
+    expect(columnsInView({ ...board, scrollLeft: 100 })).toEqual({ first: 0, last: 2 })
+  })
+
+  it('ends at the last column when scrolled to the end', () => {
+    expect(columnsInView({ ...board, scrollLeft: 7 * 237 - 8 - 703 })).toEqual({
+      first: 4,
+      last: 6,
+    })
+  })
+
+  it('counts every column in view when nothing was measured', () => {
+    expect(columnsInView({ ...board, scrollLeft: 0, width: null })).toEqual({ first: 0, last: 6 })
+    expect(columnsInView({ ...board, available: 0, scrollLeft: 0 })).toEqual({ first: 0, last: 6 })
   })
 })

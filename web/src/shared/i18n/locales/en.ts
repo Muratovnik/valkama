@@ -915,6 +915,9 @@ export const en = {
       empty: 'Nothing in this epic yet.',
       showAll: 'Show all · {count}',
       showFewer: 'Show fewer',
+      inState: '{count} in {state}',
+      offLeft: 'To the left:',
+      offRight: 'To the right:',
     },
     order: {
       hint: 'Arrow keys move focus between work items. Alt+Up and Alt+Down move the work item past its neighbour in the same state. The order is shared by the whole board: one order per state, across all epics.',
