@@ -545,7 +545,14 @@ phone-wide workspace the bar is one row — the filter or the chip and a «Graph
 options» button that opens the switch and the key under it — the frontier count
 takes the key's place in the upper strip, and the camera controls
 keep one row, so the field keeps most of the screen and no camera control falls
-outside it. «Show on graph» from a card whose map has a branch chosen opens the
+outside it. The field opens with its drawing in view: whole where it reads at
+reading size, else from its first node at the top-left at reading size; a chain
+opens on its root and an open card on its item, and no opening frame leaves
+empty ground beside work it cuts. A new queue or search frames the field
+afresh; a live refresh does not move the camera. The keys to the chain list its
+groups as a lane runs, finished first, while the card's totals line and member
+list run as work is taken, what is under way first. «Show on graph» from a card
+whose map has a branch chosen opens the
 chain framed on that branch — the whole of its work where that reads, else its
 beginning at reading size — with its members edged in the selection accent, a
 chip naming the branch that lets it go, and the branch in the address; focus
