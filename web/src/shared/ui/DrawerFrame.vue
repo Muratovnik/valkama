@@ -19,7 +19,7 @@ const head = ref<HTMLElement | null>(null)
  * identity line over the title, the facts under it, then whatever the head asks
  * or reports, then the tabs. All of it stands outside the body's scroll.
  *
- * The head gives its room back to the body once the body is read past it: the
+ * The head gives its room back to the body as soon as the body moves: the
  * title keeps one line and the identity line and subtitle step out, while the
  * controls — Back and Close — the actions slot, a refusal or a question, and
  * the tabs stay. The facts slot moves up beside the title and is told it is
@@ -29,28 +29,51 @@ const head = ref<HTMLElement | null>(null)
  * quarter of a desktop drawer and more of a phone's; keeping the facts line,
  * a full-width action and two rows of tabs, it still pinned a third of a phone.
  *
- * It condenses only past its own height and comes back only at the very top,
- * and the body is scrolled back by exactly the height the head gave up, so the
- * text under the reader's eye does not move and a scroll near either threshold
- * cannot flip it back and forth.
+ * It is whole exactly at the top of the body and condensed at every position
+ * below it, so a read-down reader has the compact head from the first step, and
+ * a card too short to scroll a head's height condenses as well. The only
+ * boundary is the top, which is why nothing flips at it: the head condenses on
+ * any scroll past 0 and is whole again only at 0.
+ *
+ * Condensing gives the head's room to the body's height, and the body's scroll
+ * range would shrink by as much, which a browser answers by clamping the reader
+ * to the new end, the top of a short card. A spacer at the head of the body
+ * takes the same room back: the range is unchanged, the position stays, and the
+ * text under the reader's eye moves by the distance scrolled and no more. Where
+ * the reader is nearer the top than the room, the spacer shows as a band under
+ * the condensed head until the reader has scrolled past it.
  */
 const condensed = ref(false)
-/** How far past the head's own height the body is read before the head condenses. */
-const CONDENSE_AFTER = 24
+/** The room the condensed head gave back, held at the head of the body by the spacer. */
+const room = ref(0)
 
 async function follow() {
   const scroller = body.value
   const whole = head.value
   if (!scroller || !whole) return
   if (condensed.value) {
-    if (scroller.scrollTop <= 0) condensed.value = false
+    if (scroller.scrollTop <= 0) {
+      condensed.value = false
+      room.value = 0
+    }
     return
   }
-  const before = whole.offsetHeight
-  if (scroller.scrollTop <= before + CONDENSE_AFTER) return
+  if (scroller.scrollTop > 0) await condense(scroller, whole, scroller.scrollTop)
+}
+
+/**
+ * Condenses the head with the reader at `top`. The head's room is known only
+ * once it is rendered condensed, and the browser clamps a position to a shrunken
+ * range as soon as layout runs, so the position is set again from `top` once the
+ * spacer is in place rather than read back.
+ */
+async function condense(scroller: HTMLElement, whole: HTMLElement, top: number) {
+  const full = whole.offsetHeight
   condensed.value = true
   await nextTick()
-  scroller.scrollTop -= before - whole.offsetHeight
+  room.value = full - whole.offsetHeight
+  await nextTick()
+  scroller.scrollTop = top
 }
 
 /**
@@ -74,14 +97,27 @@ function position(): DrawerPosition {
 }
 
 /**
- * Back to a position read earlier, head and all. The head is condensed first,
- * so the scroll that follows does not condense it again and subtract the
- * height it gave up from a position that was taken with it already given up.
+ * Back to a position read earlier, head and all. A condensed position is taken
+ * the way a scroll condenses the head: the head is condensed and its spacer set
+ * first, and the position is set once that is in place. Whole, the head is only
+ * ever at the top.
  */
 async function restore(at: DrawerPosition) {
-  condensed.value = at.condensed
-  await nextTick()
-  if (body.value) body.value.scrollTop = at.top
+  const scroller = body.value
+  const whole = head.value
+  if (!scroller || !whole) return
+  if (!at.condensed || at.top <= 0) {
+    condensed.value = false
+    room.value = 0
+    await nextTick()
+    scroller.scrollTop = at.top
+    return
+  }
+  if (condensed.value) {
+    scroller.scrollTop = at.top
+    return
+  }
+  await condense(scroller, whole, at.top)
 }
 
 defineExpose({ position, restore, scrollToTop })
@@ -155,6 +191,11 @@ defineExpose({ position, restore, scrollToTop })
       class="drawer-frame-body"
       @scroll.passive="follow"
     >
+      <div
+        v-if="room"
+        class="drawer-frame-room"
+        :style="{ height: `${room}px` }"
+      />
       <slot />
     </div>
   </div>
