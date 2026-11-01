@@ -373,7 +373,18 @@ class PlanningDomainTests(unittest.TestCase):
         self.assertEqual(7, len(payload["workflow"]["states"]))
         self.assertEqual(2, len(payload["work_items"]))
         self.assertEqual(
-            [{"from": first["work_item_id"], "to": second["work_item_id"], "kind": "relates-to"}],
+            [
+                {
+                    "from": first["work_item_id"],
+                    "to": second["work_item_id"],
+                    "kind": "relates-to",
+                    "reference": first["reference"],
+                    "state_name": "Backlog",
+                    "state_category": "backlog",
+                    "is_terminal": False,
+                    "state_unavailable": None,
+                }
+            ],
             payload["links"],
         )
         # Nothing is pre-grouped: a lane-shaped key would make Kanban the model.
@@ -621,6 +632,88 @@ class PlanningDomainTests(unittest.TestCase):
                 link["is_terminal"],
                 link["state_unavailable"],
             ),
+        )
+
+    @staticmethod
+    def source_of(payload: dict, target: str) -> list[tuple]:
+        return [
+            (
+                link["reference"],
+                link["kind"],
+                link["state_name"],
+                link["state_category"],
+                link["is_terminal"],
+                link["state_unavailable"],
+            )
+            for link in payload["links"]
+            if link["to"] == target
+        ]
+
+    def test_a_view_carries_a_blocker_from_another_space_with_its_state(self) -> None:
+        """A space's view holds the links into it too, each naming its source's state.
+
+        It used to read only the links leaving the space, so an item blocked
+        from another space was shown with nothing to say why it could not be
+        taken, and the graph could not name what it waited on.
+        """
+
+        blocked = self.item("Blocked from elsewhere")
+        other_space = service.create_planning_space(
+            self.conn, project_id="other-project", name="Other Space", key="OTH"
+        )
+        foreign = service.create_work_item(
+            self.conn, space=other_space["key"], title="Elsewhere", state="review"
+        )
+        service.link_work_items(self.conn, foreign["reference"], blocked["reference"], "blocks")
+        # Another kind of link from there stays that space's to show.
+        service.link_work_items(self.conn, foreign["reference"], blocked["reference"], "relates-to")
+
+        here = views.planning_payload(self.conn, space=self.space["key"])
+        self.assertEqual(
+            [(foreign["reference"], "blocks", "Review", "review", False, None)],
+            self.source_of(here, blocked["work_item_id"]),
+        )
+        # The other space's view still carries the same link, leaving it.
+        there = views.planning_payload(self.conn, space=other_space["key"])
+        self.assertEqual(["blocks", "relates-to"], sorted(link["kind"] for link in there["links"]))
+        graph = {
+            node["reference"]: node
+            for node in views.graph_payload(self.conn, space=self.space["key"])["nodes"]
+        }
+        self.assertEqual(
+            (False, 1), (graph[blocked["reference"]]["ready"], graph[blocked["reference"]]["depth"])
+        )
+
+        # Finished, the foreign blocker blocks nothing: the item is workable again.
+        self.close(foreign["reference"], "done")
+        here = views.planning_payload(self.conn, space=self.space["key"])
+        self.assertEqual(
+            [(foreign["reference"], "blocks", "Done", "completed", True, None)],
+            self.source_of(here, blocked["work_item_id"]),
+        )
+        graph = {
+            node["reference"]: node
+            for node in views.graph_payload(self.conn, space=self.space["key"])["nodes"]
+        }
+        self.assertEqual(
+            (True, 0), (graph[blocked["reference"]]["ready"], graph[blocked["reference"]]["depth"])
+        )
+
+    def test_a_view_link_whose_source_has_no_readable_state_blocks_nothing(self) -> None:
+        """Unknown is said as unknown, and an unknown blocker is not an open one."""
+
+        blocked = self.item("Blocked work")
+        blocker = self.item("Damaged")
+        service.link_work_items(self.conn, blocker["reference"], blocked["reference"], "blocks")
+        self.conn.commit()
+        self.conn.execute("PRAGMA foreign_keys=OFF")
+        self.conn.execute(
+            "UPDATE work_items SET state_id = ? WHERE work_item_id = ?",
+            ("00000000-0000-4000-8000-000000000000", blocker["work_item_id"]),
+        )
+        self.assertEqual(
+            [(blocker["reference"], "blocks", None, None, None, "state_missing")],
+            self.source_of(views.planning_payload(self.conn), blocked["work_item_id"]),
         )
 
     def test_an_item_cannot_link_to_itself(self) -> None:

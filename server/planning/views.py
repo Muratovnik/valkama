@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from . import calls, leases, model, service, store
+from . import calls, leases, model, read_model, service, store
 
 READ_MODEL_INTERFACE = f"{model.PLANNING_INTERFACE}-read-model"
 
@@ -181,9 +181,12 @@ def graph_payload(conn: sqlite3.Connection, *, space: str | None = None) -> dict
         }
     items = {str(item["work_item_id"]): item for item in payload["work_items"]}
     edges = list(payload["links"])
+    # A block holds while its source is open, and the link names the source's
+    # state whichever space it lives in: a finished blocker in another space
+    # must not make an item wait, nor an open one go unseen.
     blockers: dict[str, list[str]] = {identity: [] for identity in items}
     for edge in payload["links"]:
-        if edge["kind"] == "blocks" and edge["to"] in blockers:
+        if edge["kind"] == "blocks" and edge["to"] in blockers and edge["is_terminal"] is False:
             blockers[edge["to"]].append(edge["from"])
     edges.extend(
         {"from": str(item["parent_id"]), "to": identity, "kind": "parent"}
@@ -197,11 +200,7 @@ def graph_payload(conn: sqlite3.Connection, *, space: str | None = None) -> dict
             return depth[identity]
         if identity in seen:
             return 0  # a blocks-cycle is visible in the graph; do not hang here
-        open_blockers = [
-            blocker
-            for blocker in blockers.get(identity, [])
-            if not (items.get(blocker) or {}).get("state", {}).get("is_terminal")
-        ]
+        open_blockers = blockers.get(identity, [])
         value = (
             0
             if not open_blockers
@@ -272,15 +271,46 @@ def _mermaid_id(reference: str) -> str:
 
 
 def _links(conn: sqlite3.Connection, planning_space_id: str) -> list[dict]:
-    return [
-        {"from": str(row["from_id"]), "to": str(row["to_id"]), "kind": str(row["kind"])}
-        for row in conn.execute(
-            "SELECT l.from_id, l.to_id, l.kind FROM work_item_links l"
-            " JOIN work_items f ON f.work_item_id = l.from_id"
-            " WHERE f.planning_space_id = ? ORDER BY l.id",
-            (planning_space_id,),
+    """The links leaving the space and the blocks into it, each naming its source.
+
+    The source is the end a reader asks about: a block holds while its source
+    is open, and that source may live in another space, whose items this view
+    does not carry, so its reference and state come with the link. Only links
+    leaving the space used to be read, so a blocker in another space was
+    missing from every view: an item was not workable and nothing said why, and
+    a finished foreign blocker could not be told from an open one. Another
+    space's other links into this one stay that space's to show. The source's state comes the way the item read model's links name
+    their other end (`read_model.links`): null, with the reason beside it, when
+    the store cannot resolve it — which never means the source is open.
+    """
+
+    found = []
+    for row in conn.execute(
+        "SELECT l.from_id, l.to_id, l.kind, f.number, p.key AS space_key,"
+        " s.name AS state_name, s.category AS state_category, s.is_terminal"
+        " FROM work_item_links l"
+        " JOIN work_items f ON f.work_item_id = l.from_id"
+        " JOIN work_items t ON t.work_item_id = l.to_id"
+        " JOIN planning_spaces p ON p.planning_space_id = f.planning_space_id"
+        " LEFT JOIN workflow_states s ON s.state_id = f.state_id"
+        " WHERE f.planning_space_id = ?"
+        "  OR (t.planning_space_id = ? AND l.kind = 'blocks') ORDER BY l.id",
+        (planning_space_id, planning_space_id),
+    ):
+        readable = row["state_category"] is not None
+        found.append(
+            {
+                "from": str(row["from_id"]),
+                "to": str(row["to_id"]),
+                "kind": str(row["kind"]),
+                "reference": model.human_id(str(row["space_key"]), int(row["number"])),
+                "state_name": row["state_name"] if readable else None,
+                "state_category": row["state_category"] if readable else None,
+                "is_terminal": bool(row["is_terminal"]) if readable else None,
+                "state_unavailable": None if readable else read_model.STATE_MISSING,
+            }
         )
-    ]
+    return found
 
 
 def space_for_project(conn: sqlite3.Connection, project_id: str) -> dict | None:

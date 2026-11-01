@@ -129,8 +129,8 @@ class PlanningApiTests(unittest.TestCase):
         graph = self.get("/api/planning/graph")
         self.assertEqual(set(items), {node["reference"] for node in graph["nodes"]})
         self.assertIn(
-            {"from": blocked["work_item_id"], "to": review["work_item_id"], "kind": "blocks"},
-            graph["edges"],
+            (blocked["work_item_id"], review["work_item_id"], "blocks"),
+            [(edge["from"], edge["to"], edge["kind"]) for edge in graph["edges"]],
         )
         self.assertEqual(200, len(self.get("/api/planning/work-items")["work_items"]))
         self.assertEqual(

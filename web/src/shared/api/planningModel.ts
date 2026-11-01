@@ -140,11 +140,37 @@ const summarySchema = strictObject({
 })
 
 /**
- * A link and the state of the item at its other end, which may live in another
- * space and so another workflow. A finished blocker blocks nothing, and the
- * item's own state cannot say so. The state is null, with the reason beside
- * it, when the store cannot resolve it, and absent from a server that predates
- * it: neither means the other end is open.
+ * The state a link names for the item at one of its ends, which may live in
+ * another space and so another workflow: null, with the reason beside it, when
+ * the store cannot resolve it, and absent from a server that predates it.
+ * Neither means that end is open.
+ */
+const linkEndState = {
+  state_name: boundedText(TITLE, 200).nullable().optional(),
+  state_category: enumField(STATE_CATEGORIES).nullable().optional(),
+  is_terminal: z.boolean().nullable().optional(),
+  state_unavailable: enumField(['state_missing'] as const)
+    .nullable()
+    .optional(),
+}
+
+/** A state is either known or said to be unavailable, never neither. */
+const linkEndStateSaid = [
+  (link: {
+    is_terminal?: boolean | null
+    state_category?: string | null
+    state_unavailable?: string | null
+  }) =>
+    link.state_category === undefined ||
+    (link.state_category === null
+      ? link.is_terminal === null && typeof link.state_unavailable === 'string'
+      : typeof link.is_terminal === 'boolean' && link.state_unavailable === null),
+  { message: 'Link state is neither known nor said to be unavailable' },
+] as const
+
+/**
+ * A link and the state of the item at its other end. A finished blocker blocks
+ * nothing, and the item's own state cannot say so.
  */
 const linkSchema = strictObject({
   kind: enumField(LINK_KINDS),
@@ -152,20 +178,8 @@ const linkSchema = strictObject({
   work_item_id: boundedText(UUID, 36),
   reference: boundedText(WORK_ITEM_REFERENCE, 20),
   title: boundedText(TITLE, 200),
-  state_name: boundedText(TITLE, 200).nullable().optional(),
-  state_category: enumField(STATE_CATEGORIES).nullable().optional(),
-  is_terminal: z.boolean().nullable().optional(),
-  state_unavailable: enumField(['state_missing'] as const)
-    .nullable()
-    .optional(),
-}).refine(
-  (link) =>
-    link.state_category === undefined ||
-    (link.state_category === null
-      ? link.is_terminal === null && typeof link.state_unavailable === 'string'
-      : typeof link.is_terminal === 'boolean' && link.state_unavailable === null),
-  { message: 'Link state is neither known nor said to be unavailable' },
-)
+  ...linkEndState,
+}).refine(...linkEndStateSaid)
 
 const refSchema = strictObject({
   kind: enumField(REF_KINDS),
@@ -293,11 +307,19 @@ const workflowSchema = strictObject({
 //: as a link, so the graph's edge kinds are the link kinds plus that one.
 const GRAPH_EDGE_KINDS = [...LINK_KINDS, 'parent'] as const
 
+/**
+ * A link with an end in the space, and the state of its source — the end a
+ * reader asks about, since a block holds while its source is open. The source
+ * may live in another space, so its reference and state come with the link
+ * rather than from the space's items. A chain's edges carry neither.
+ */
 const edgeSchema = strictObject({
   from: boundedText(UUID, 36),
   to: boundedText(UUID, 36),
   kind: enumField(GRAPH_EDGE_KINDS),
-})
+  reference: boundedText(WORK_ITEM_REFERENCE, 20).optional(),
+  ...linkEndState,
+}).refine(...linkEndStateSaid)
 
 /**
  * A held item nothing has touched for long enough that its ownership reads as
