@@ -74,6 +74,21 @@ describe('FacetMarks', () => {
     expect(ru.get('[data-facet="readiness"]').text()).toBe('Ждёт MAIN-7')
   })
 
+  it('folds a run that must keep one line, keeping the word as name and hover text', () => {
+    const item = boardItem(1, 'todo', { ready: false })
+    const context = { waitingOn: 'MAIN-7' }
+    const loose = marks({ item, context, facets: ['readiness'] })
+    expect(loose.get('.facet-marks').classes()).not.toContain('fold')
+    // Unfolded, a glyph shown with its word needs no hover text.
+    expect(loose.get('[data-facet="readiness"]').attributes('title')).toBeUndefined()
+    const folded = marks({ item, context, facets: ['readiness'], fold: true })
+    expect(folded.get('.facet-marks').classes()).toContain('fold')
+    const mark = folded.get('[data-facet="readiness"]')
+    // The word stays in the mark, so a screen reader still reads it out.
+    expect(mark.get('.facet-word').text()).toBe('Waiting on MAIN-7')
+    expect(mark.attributes('title')).toBe('Waiting on MAIN-7')
+  })
+
   it('gives the graph one quiet label for workable, the same words the queue uses', () => {
     const wrapper = marks(
       { item: boardItem(1, 'backlog'), surface: 'graph', facets: ['state', 'readiness'] },

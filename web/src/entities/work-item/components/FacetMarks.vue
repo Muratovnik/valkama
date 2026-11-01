@@ -11,6 +11,10 @@
  * A glyph is coloured by its tone and the word beside it stays in the quiet
  * ink: the hue says how much a fact asks, the glyph says which fact it is. A
  * glyph shown alone keeps its word as the accessible name and the hover text.
+ *
+ * A run that must stay on one line folds: when it runs out of room a mark
+ * keeps its glyph and its word drops out of sight, still read out and still the
+ * hover text. A tile's first line folds, so its marks never push it to two.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -42,6 +46,8 @@ const props = withDefaults(
     filter?: WorkFilter
     /** Kind, priority and label marks become buttons that filter. */
     filterable?: boolean
+    /** The run stays on one line: short of room, a mark shows its glyph alone. */
+    fold?: boolean
     /** False inside a container that is one Tab stop. */
     tabbable?: boolean
   }>(),
@@ -50,6 +56,7 @@ const props = withDefaults(
     context: () => ({}),
     filter: () => EMPTY_WORK_FILTER,
     filterable: false,
+    fold: false,
     tabbable: true,
   },
 )
@@ -86,9 +93,12 @@ const activeMark = (mark: FacetMark) => active(mark) || undefined
 /** The glyph is drawn and its word is only read out. */
 const glyphOnly = (mark: FacetMark) => mark.form === 'glyph' && mark.glyph !== null
 
-/** What a pointer shows: what a click does, or the word a lone glyph stands for. */
+/** A glyph whose word may fold out of sight, so the pointer is told it. */
+const foldable = (mark: FacetMark) => props.fold && mark.glyph !== null
+
+/** What a pointer shows: what a click does, or the word a glyph stands for. */
 const hoverText = (mark: FacetMark) =>
-  filterName(mark) ?? (glyphOnly(mark) ? word(mark) : undefined)
+  filterName(mark) ?? (glyphOnly(mark) || foldable(mark) ? word(mark) : undefined)
 
 /**
  * Out of the Tab order inside a container that is one Tab stop; the default
@@ -110,6 +120,7 @@ function pressLabel(label: string) {
 <template>
   <span
     class="facet-marks"
+    :class="{ fold: props.fold }"
     :data-surface="props.surface"
   >
     <template
@@ -219,6 +230,23 @@ function pressLabel(label: string) {
 
   .facet-mark[data-active] & {
     color: var(--color-text);
+  }
+}
+
+/* One line, whatever the room: the run does not wrap, and inside a mark the
+   word wraps under its glyph onto a line that is clipped, so a mark short of
+   room shows its glyph alone. The word is still in the mark, so it is still
+   read out, and the hover text says it. */
+.facet-marks.fold {
+  flex-wrap: nowrap;
+  max-width: 100%;
+
+  /* Folded, the glyph keeps the end of the run, where the whole mark ended. */
+  .facet-mark {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    max-block-size: 1lh;
+    overflow: hidden;
   }
 }
 
