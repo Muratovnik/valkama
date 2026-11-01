@@ -293,6 +293,7 @@ defineExpose({ focus: focusText })
         :spellcheck="false"
         :label="t('workItem.filter.label')"
         :placeholder="t('workItem.filter.placeholder')"
+        :short-placeholder="t('workItem.filter.placeholderShort')"
         :model-value="filter.text"
         :completion="completion"
         hide-label

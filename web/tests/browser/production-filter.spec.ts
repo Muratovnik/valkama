@@ -49,6 +49,8 @@ for (const width of [1440, 1024]) {
     })
     expect(geometry.oneLine, 'one row of controls').toBe(true)
     expect(geometry.height).toBeLessThanOrEqual(84)
+    // The field has room for its whole hint here.
+    await expect(field(page)).toHaveAttribute('placeholder', 'Reference or title')
     // The one primary action ends the row.
     expect(geometry.last).toContain('workspace-action')
     // A filter does not make the bar taller.
@@ -161,4 +163,55 @@ test('on a phone the view, the filter and the action share the first line', asyn
   await page.keyboard.press('Escape')
   await expect(chips(page)).toHaveText(['Label: phase-1'])
   await expectNoSilentClipping(page, 'Work bar at 390px')
+})
+
+test('on a phone the field’s hint fits it, and the grouping says its word until a filter needs the room', async ({
+  page,
+}) => {
+  await open(page, 390, 844)
+  // The whole hint was cut to «Reference or t»; the short one fits, and the
+  // field's name stays whole.
+  await expect(field(page)).toHaveAttribute('placeholder', 'Search')
+  await expect(field(page)).toHaveAccessibleName('Filter work')
+  const hint = await field(page).evaluate((input: HTMLInputElement) => {
+    const style = getComputedStyle(input)
+    const context = document.createElement('canvas').getContext('2d')
+    if (!context) return { text: Number.NaN, room: 0 }
+    context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
+    return {
+      text: context.measureText(input.placeholder).width,
+      room:
+        input.clientWidth -
+        Number.parseFloat(style.paddingInlineStart) -
+        Number.parseFloat(style.paddingInlineEnd),
+    }
+  })
+  expect(hint.text, JSON.stringify(hint)).toBeLessThanOrEqual(hint.room)
+  // The switch says what it does beside the counts, on the bar's second line.
+  const grouping = page.getByRole('switch', { name: 'Group the board by epic' })
+  await expect(grouping.locator('.toggle-state')).toHaveText('By epic')
+  await expect(grouping.locator('.toggle-state')).toBeVisible()
+  const line = async () =>
+    page.locator('.workspace-head').evaluate((head) => {
+      const box = (selector: string) =>
+        head.querySelector(selector)?.getBoundingClientRect() ?? new DOMRect()
+      return {
+        height: head.getBoundingClientRect().height,
+        switchBottom: box('.workspace-grouping').bottom,
+        figuresTop: box('.workspace-figures').top,
+      }
+    })
+  const resting = await line()
+  expect(resting.height).toBeLessThanOrEqual(100)
+  expect(resting.figuresTop).toBeLessThan(resting.switchBottom)
+  // A filter's reset takes the word's room rather than a third line, so the
+  // work does not move as a filter turns on; the switch keeps its name.
+  await field(page).fill('MAIN')
+  await expect(page.locator('.workspace-figures')).toContainText('Reset')
+  await expect(grouping.locator('.toggle-state')).toBeHidden()
+  await expect(grouping).toHaveAccessibleName('Group the board by epic')
+  const filtered = await line()
+  expect(filtered.height).toBe(resting.height)
+  expect(filtered.figuresTop).toBeLessThan(filtered.switchBottom)
+  await expectNoSilentClipping(page, 'Work bar at 390px with a filter')
 })

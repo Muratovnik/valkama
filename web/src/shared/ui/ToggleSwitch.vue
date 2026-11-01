@@ -109,10 +109,12 @@ function toggle(current: boolean) {
 }
 
 /* A host short of room hides the word by declaring `--toggle-state-display:
-   none`; the switch keeps its label as the accessible name either way. */
+   none`; the switch keeps its label as the accessible name either way. The
+   word keeps one width as it changes, which a host whose two words are one
+   word gives back with `--toggle-state-min-width: 0`. */
 .toggle-state {
   display: var(--toggle-state-display, inline);
-  min-width: 92px;
+  min-width: var(--toggle-state-min-width, 92px);
   font: var(--font-label);
   text-align: left;
 }

@@ -617,7 +617,10 @@ The bar above the views is two rows and no more: the view, the queue, the
 search and, on the board, the grouping as compact controls on one row, then
 what is drawn and how much of it beside the one primary action. The queue
 folds into a menu where the row cannot hold its segments beside a usable
-search. Every number in the bar counts one population — the space, or a chain
+search. The search's hint is whole where it fits and one word where it would
+be cut. On a phone the grouping switch shares the counts' line and says its
+word there, and gives the word up to the reset while a filter is on, so the
+work does not move as a filter turns on. Every number in the bar counts one population — the space, or a chain
 with its root — and a view that draws fewer items says what it leaves out.
 Epic progress, lane state, and active work share the same semantic palette.
 Aggregate epic activity belongs only to the epic index, including its compact

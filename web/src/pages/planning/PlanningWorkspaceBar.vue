@@ -89,6 +89,12 @@ function pickView(mode: string) {
  */
 const countsBusy = computed(() => (props.busy ? true : undefined))
 
+/**
+ * Present while a filter is on, and absent otherwise: the attribute is what
+ * the phone's line reads to give the switch's word up to the reset.
+ */
+const filteredMark = computed(() => (props.filtered ? true : undefined))
+
 const grouped = computed(() => props.grouping === 'epic')
 function group(on: boolean) {
   emit('group', on ? 'epic' : 'none')
@@ -136,7 +142,10 @@ const exclusionText = computed(() => {
 </script>
 
 <template>
-  <header class="workspace-head">
+  <header
+    class="workspace-head"
+    :data-filtered="filteredMark"
+  >
     <div class="workspace-tools">
       <!-- Reaching for the switch is the intent to use it: the board and the
            list are already here, so the graph is what it would download. -->
@@ -169,7 +178,9 @@ const exclusionText = computed(() => {
         @chips="focusChips"
       />
       <!-- Grouping is on or off, so it is a switch; where the row is short its
-           name stays the switch's accessible name and its hover text. -->
+           name stays the switch's accessible name and its hover text. On a
+           phone it shares the counts' line, says its word there, and gives the
+           word up to the reset while a filter is on. -->
       <ToggleSwitch
         v-if="grouping !== null"
         class="workspace-grouping"
@@ -354,7 +365,8 @@ const exclusionText = computed(() => {
 }
 
 /* Where the row cannot hold the switch's word, the switch keeps its name as
-   its accessible name and hover text. */
+   its accessible name and hover text. On a phone the switch moves to the
+   second line, beside the counts, where its word has room again. */
 @container workspace (width < 1000px) {
   .workspace-grouping {
     --toggle-state-display: none;
@@ -411,6 +423,19 @@ const exclusionText = computed(() => {
   .workspace-grouping,
   .workspace-figures {
     order: 2;
+  }
+
+  /* The switch's word, as long as it is: «По эпикам» beside the counts. A
+     filter's reset needs that room, and the line holds the two only without
+     the word, so the word yields to it rather than the counts taking a third
+     line and the work moving down as a filter turns on. */
+  .workspace-grouping {
+    --toggle-state-display: inline;
+    --toggle-state-min-width: 0;
+
+    .workspace-head[data-filtered] & {
+      --toggle-state-display: none;
+    }
   }
 
   .workspace-figures {

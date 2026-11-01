@@ -17,6 +17,8 @@ export const workFilterMessages = {
     filter: {
       label: 'Filter work',
       placeholder: 'Reference or title',
+      // Where the field is too narrow for the whole hint, a phone's bar.
+      placeholderShort: 'Search',
       clearText: 'Clear the text',
       menu: 'Filter',
       menuNamed: 'Filter: {count} picked',
@@ -47,6 +49,7 @@ export const workFilterMessages = {
     filter: {
       label: 'Фильтр работы',
       placeholder: 'Номер или название',
+      placeholderShort: 'Поиск',
       clearText: 'Очистить текст',
       menu: 'Фильтр',
       menuNamed: 'Фильтр: выбрано {count}',

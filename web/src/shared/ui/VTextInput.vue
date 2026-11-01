@@ -23,8 +23,15 @@
  * The value is always emitted as a string. A caller that needs a number
  * converts it, because a control that guesses its own type is how a numeric
  * field ends up holding `NaN` the moment the box is cleared.
+ *
+ * A one-line field whose room changes with the row it rides — the Work bar's
+ * filter is 81px of text on a phone — may name a `shortPlaceholder`. The field
+ * measures its whole placeholder against its own text box and shows the short
+ * one where the whole one would be cut: «Номер или і» said less than «Поиск».
  */
-import { computed, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, useTemplateRef, watch } from 'vue'
+
+import { useResizeObserver } from '@vueuse/core'
 
 import VField from '@/shared/ui/VField.vue'
 
@@ -54,6 +61,8 @@ const props = withDefaults(
     placeholder?: string
     /** Any positive value selects a textarea; content determines its height. */
     rows?: number
+    /** A one-line field's placeholder where the whole one would be cut; see above. */
+    shortPlaceholder?: string
     /** `compact` rides a toolbar of compact controls, as `SegmentedControl` does. */
     size?: 'default' | 'compact'
     spellcheck?: boolean
@@ -63,6 +72,7 @@ const props = withDefaults(
     hint: '',
     error: '',
     placeholder: '',
+    shortPlaceholder: '',
     type: 'text',
     rows: 0,
     inputmode: undefined,
@@ -99,6 +109,33 @@ const combobox = computed(() =>
         'aria-expanded': props.completion.expanded ?? false,
       }
     : {},
+)
+
+/**
+ * Whether the whole placeholder is wider than the text box it sits in. The
+ * whole placeholder is drawn out of sight in the control's font and measured;
+ * where nothing can be measured it fits, and the whole one shows.
+ */
+const ghost = useTemplateRef<HTMLElement>('ghost')
+const cut = ref(false)
+function measure() {
+  const control = element.value
+  if (!props.shortPlaceholder || !control || !ghost.value) {
+    cut.value = false
+    return
+  }
+  const style = getComputedStyle(control)
+  const inset =
+    (Number.parseFloat(style.paddingInlineStart) || 0) +
+    (Number.parseFloat(style.paddingInlineEnd) || 0)
+  cut.value = ghost.value.offsetWidth > control.clientWidth - inset
+}
+useResizeObserver(element, measure)
+watch([() => props.placeholder, () => props.shortPlaceholder], () => nextTick(measure))
+// The words are measured again once the product's fonts have arrived.
+onMounted(() => void document.fonts?.ready.then(measure))
+const shownPlaceholder = computed(() =>
+  cut.value && props.shortPlaceholder ? props.shortPlaceholder : props.placeholder,
 )
 
 function edited(event: Event) {
@@ -147,7 +184,7 @@ defineExpose({
       :class="`size-${size}`"
       :type="type"
       :value="String(modelValue)"
-      :placeholder="placeholder"
+      :placeholder="shownPlaceholder"
       :inputmode="inputmode"
       :min="min"
       :max="max"
@@ -164,6 +201,16 @@ defineExpose({
       @input="edited"
       @keydown="emit('keydown', $event)"
     />
+    <span
+      v-if="shortPlaceholder && !rows"
+      class="placeholder-room"
+      aria-hidden="true"
+      ><span
+        ref="ghost"
+        class="placeholder-ghost"
+        >{{ placeholder }}</span
+      ></span
+    >
   </VField>
 </template>
 
@@ -197,6 +244,22 @@ textarea.control {
   field-sizing: content;
   font: var(--font-editor);
   resize: none;
+}
+
+/* The whole placeholder, drawn to be measured: no room, no pointer, nothing
+   for a reader, and nothing that can widen what holds the field. */
+.placeholder-room {
+  position: absolute;
+  inline-size: 0;
+  block-size: 0;
+  overflow: hidden;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.placeholder-ghost {
+  font: var(--font-control);
+  white-space: nowrap;
 }
 
 .control:hover:not(:disabled) {
