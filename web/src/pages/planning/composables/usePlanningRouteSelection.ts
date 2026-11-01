@@ -54,7 +54,7 @@ export function usePlanningRouteSelection(inputs: RouteInputs) {
   /** The canonical Kernel identity whose project binding owns local source access. */
   const spaceResourceRef = computed<PlanningSpaceEntityRef | undefined>(() => {
     const bound = space.value
-    return bound === undefined ? undefined : (planningSpaceEntity(bound) as PlanningSpaceEntityRef)
+    return bound === undefined ? undefined : planningSpaceEntity(bound)
   })
 
   const projectId = computed(() => {

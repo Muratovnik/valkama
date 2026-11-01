@@ -8,6 +8,7 @@ import {
   requiredString,
   UUID_LOWERCASE,
 } from '@/shared/api/platformRefGuards.ts'
+import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
 
 /** The shape of a planning space key: short, uppercase, and stable. */
 const SPACE_KEY = /^[A-Z][A-Z0-9]{1,7}$/u
@@ -113,7 +114,7 @@ function decodePlanningResource(value: string, path: string): unknown {
   }
 }
 
-export function planningSpaceEntity(value: PlanningSpaceRef): EntityRef {
+export function planningSpaceEntity(value: PlanningSpaceRef): PlanningSpaceEntityRef {
   const space = validatePlanningSpaceRef(value)
   return {
     kind: 'planning-space',
