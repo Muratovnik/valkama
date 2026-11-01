@@ -590,7 +590,11 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
 - **Writing free text:** `MarkdownEditor` owns the field: a preview drawn by
   `RichText`, `#` and a query to link a task, Ctrl+Enter to send. The field
   stays a multi-line text box naming its list of completions, and the list
-  stands under the field rather than at the caret. Every multi-line field whose
+  floats beside the field rather than at the caret: under it where the window
+  has room, over it where it does not, never taller than the room it got and
+  scrolled to the active row. It stood in the flow under the field, so a
+  comment field at the foot of a card showed two of its eight rows, or none.
+  Every multi-line field whose
   text `RichText` will draw is one — a card's description, a comment, a report
   section, a new task's description, a text answer to a question — and its host
   sets one Write | Preview switch above all of its fields, says what Ctrl+Enter

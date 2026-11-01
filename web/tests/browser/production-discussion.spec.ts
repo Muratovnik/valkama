@@ -4,7 +4,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installDiscussionBackend } from './discussionBackend.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { projectScope } from './planningFixtures.ts'
+import { planningSpace, projectScope } from './planningFixtures.ts'
 
 test('description, comments and selected reports survive a fresh item read', async ({ page }) => {
   const backend = await installDiscussionBackend(page)
@@ -97,5 +97,82 @@ for (const width of [900, 390]) {
     await expect(drawer.getByRole('alert')).toContainText('The task changed.')
     await expect(comment).toHaveValue('A retained comment draft')
     await expectNoSilentClipping(page, `Discussion recovery at ${width}px`)
+  })
+}
+
+/**
+ * The `#` list opens beside the field it belongs to and stays inside the window:
+ * under the field where the window has room, over it where it does not. It used
+ * to stand in the flow under the field at its full height, so a comment field at
+ * the foot of the screen showed none of its eight rows. The short window leaves
+ * less room than eight rows take, so the list scrolls to the row the keys reach.
+ */
+for (const viewport of [
+  { width: 1440, height: 900 },
+  { width: 390, height: 844 },
+  { width: 1024, height: 420 },
+]) {
+  test(`the # suggestions stay inside a ${viewport.width}×${viewport.height} window`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport)
+    await installDiscussionBackend(page)
+    const found = Array.from({ length: 8 }, (_, index) => ({
+      work_item_id: `00000000-0000-4000-8000-00000000010${index}`,
+      planning_space_id: planningSpace.planning_space_id,
+      reference: `MAIN-${100 + index}`,
+      title: `Parser step ${index + 1}`,
+      state: { name: 'Doing' },
+      claim_ref: '',
+    }))
+    await page.route('**/api/planning/search?*', (route) =>
+      route.fulfill({ json: { interface_version: 'valkama-planning-api', work_items: found } }),
+    )
+    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+    await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
+    const drawer = page.locator('.drawer')
+    const comment = drawer.getByRole('textbox', { name: 'Comment', exact: true })
+    // The field at the foot of the window, where a list under it has no room.
+    await comment.evaluate((element) => element.scrollIntoView({ block: 'end' }))
+    await comment.click()
+    await page.keyboard.type('See #Parser')
+    const list = page.getByRole('listbox', { name: 'Tasks' })
+    await expect(list.getByRole('option')).toHaveCount(8)
+
+    const inside = async () => {
+      const box = (await list.boundingBox()) ?? { x: -1, y: -1, width: 0, height: 0 }
+      expect(box.y).toBeGreaterThanOrEqual(0)
+      expect(box.x).toBeGreaterThanOrEqual(0)
+      expect(box.y + box.height).toBeLessThanOrEqual(viewport.height)
+      expect(box.x + box.width).toBeLessThanOrEqual(viewport.width)
+    }
+    await inside()
+    // The list does not cover the line being written.
+    const field = await comment.boundingBox()
+    const box = await list.boundingBox()
+    expect(field && box && (box.y + box.height <= field.y || box.y >= field.y + field.height)).toBe(
+      true,
+    )
+
+    // The keys walk the list, and the active row is always one the reader can see.
+    for (let step = 0; step < 8; step += 1) {
+      await page.keyboard.press(step < 3 ? 'ArrowDown' : 'ArrowUp')
+      const active = list.locator('[aria-selected="true"]')
+      await expect(active).toBeInViewport()
+      const row = await active.boundingBox()
+      const shown = await list.boundingBox()
+      expect(
+        row &&
+          shown &&
+          row.y >= shown.y - 0.5 &&
+          row.y + row.height <= shown.y + shown.height + 0.5,
+      ).toBe(true)
+    }
+    await inside()
+    // Three down and five up wraps past the first row to the seventh; Enter writes it.
+    await page.keyboard.press('Enter')
+    await expect(comment).toHaveValue('See MAIN-106 ')
+    await expect(list).toHaveCount(0)
+    await expect(drawer).toBeVisible()
   })
 }

@@ -6,17 +6,26 @@
  * Everything this text becomes is drawn by `RichText`, so the preview is the
  * same component the card will use — what it shows is what the card will show.
  * Typing `#` and a few characters asks the host's `suggest` for work items;
- * the list stands under the field rather than at the caret, so it never covers
+ * the list stands beside the field rather than at the caret, so it never covers
  * the line being written, and choosing one writes its reference in place of
  * the `#` query. The keys belong to the field while the list is open: the
  * arrows walk it, Enter or Tab takes the active row and Escape closes it
  * without closing the card around it.
+ *
+ * The list floats on the window, placed by the engine that places the choice
+ * lists: under the field where the window has room, over it where it does not,
+ * never taller than the room it got, and scrolled to the active row. It stood
+ * in the flow under the field at its full height, so a comment field at the
+ * foot of a card showed two of its eight rows, or none. It stays inside the
+ * field's own dialog in the document, so the dialog still owns it.
  *
  * What a work item is and how to find one is the host's to say: the editor is a
  * text control and knows nothing about planning.
  */
 import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+
+import { autoUpdate, flip, hide, offset, size, useFloating } from '@floating-ui/vue'
 
 import RichText from '@/shared/ui/RichText.vue'
 import VField from '@/shared/ui/VField.vue'
@@ -62,6 +71,9 @@ const { t } = useI18n()
 /** How long typing pauses before the host is asked, and how many rows are shown. */
 const SUGGEST_DELAY = 200
 const SUGGEST_LIMIT = 8
+/** The list's distance from the field, and the margin it keeps from the window's edge. */
+const LIST_GAP = 4
+const WINDOW_MARGIN = 8
 /** A `#` that starts a word, then the query up to the caret. */
 const TRIGGER = /(?:^|[\s([{])#([^\s#]{1,40})$/u
 
@@ -76,6 +88,31 @@ let request: AbortController | null = null
 let timer: ReturnType<typeof setTimeout> | undefined
 
 const open = computed(() => trigger.value !== null && searched.value)
+const list = ref<HTMLElement | null>(null)
+const anchor = computed(() => (open.value ? (field.value?.control() ?? null) : null))
+const { x, y, middlewareData } = useFloating(anchor, list, {
+  open,
+  placement: 'bottom-start',
+  strategy: 'fixed',
+  transform: false,
+  whileElementsMounted: autoUpdate,
+  middleware: [
+    offset(LIST_GAP),
+    flip({ padding: WINDOW_MARGIN }),
+    size({
+      padding: WINDOW_MARGIN,
+      apply({ availableHeight, elements, rects }) {
+        Object.assign(elements.floating.style, {
+          width: `${rects.reference.width}px`,
+          maxHeight: `${Math.max(0, availableHeight)}px`,
+        })
+      },
+    }),
+    hide(),
+  ],
+})
+/** A field scrolled out of its panel takes its list with it. */
+const detached = computed(() => middlewareData.value.hide?.referenceHidden === true)
 const hasText = computed(() => props.modelValue.trim() !== '')
 const isActive = (index: number) => index === active.value
 const activeId = computed(() =>
@@ -185,6 +222,9 @@ function keydown(event: KeyboardEvent) {
   } else if (count && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
     event.preventDefault()
     active.value = (active.value + (event.key === 'ArrowDown' ? 1 : count - 1)) % count
+    // The list holds no more than the room it got, so the row walked to is brought into it.
+    const row = list.value?.querySelectorAll('[role="option"]')[active.value]
+    row?.scrollIntoView({ block: 'nearest', container: 'nearest' } as ScrollIntoViewOptions)
   } else if (count && (event.key === 'Enter' || event.key === 'Tab') && !event.shiftKey) {
     event.preventDefault()
     void choose(active.value)
@@ -242,8 +282,11 @@ defineExpose({
     <ul
       v-if="open && !preview"
       :id="listId"
+      ref="list"
       class="markdown-suggestions"
       role="listbox"
+      :class="{ detached }"
+      :style="{ left: `${x}px`, top: `${y}px` }"
       :aria-label="t('editor.suggestions')"
     >
       <!-- Focus stays in the field, which names the active row; a row is pointed
@@ -298,15 +341,28 @@ defineExpose({
   color: var(--color-text-muted);
 }
 
-/* A sheet under the field: the rows are the field's own continuation, so they
-   take the field's width and no line of their own. */
+/* A sheet beside the field: the rows are the field's own continuation, so they
+   take the field's width. It floats over what follows instead of pushing it
+   down, and scrolls inside the room the window leaves it. */
 .markdown-suggestions {
+  position: fixed;
+  z-index: 120;
   display: grid;
+  align-content: start;
   padding: var(--space-1);
   margin: 0;
+  border: 1px solid var(--color-rule-strong);
   background: var(--color-surface-sheet);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border-radius: var(--radius-control);
+  box-shadow: 0 14px 34px var(--color-shadow);
   list-style: none;
+}
+
+/* The field has scrolled out of its panel, under the head or past the foot. */
+.markdown-suggestions.detached {
+  visibility: hidden;
 }
 
 .markdown-suggestion {
