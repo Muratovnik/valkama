@@ -368,10 +368,12 @@ defineExpose({ position, restore, scrollToTop })
   scrollbar-gutter: stable;
 }
 
-/* Condensed, the text is at least a window tall, so the scroll range never falls
-   below the reader's place and a short card keeps its one-row head. The blank
-   under short text is the viewport area below it; a long text is its own length. */
+/* Condensed, the text is at least the body's own height plus a pixel, so the scroll
+   range never falls to zero and a short card keeps its one-row head. The percentage
+   resolves against the body's content box, so the range the guard adds is 1px and
+   the reader is never scrolled into blank below a short text. A long text is its
+   own length. */
 .drawer-frame-content.condensed {
-  min-height: 100vh;
+  min-height: calc(100% + 1px);
 }
 </style>

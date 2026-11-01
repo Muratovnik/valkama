@@ -77,6 +77,22 @@ for (const width of [1440, 390]) {
 
     await body.evaluate((node) => node.scrollTo({ top: 4 }))
     await expect(head).toHaveClass(/condensed/u)
+    // The condensed range is the whole range less the room the head gave up, or the
+    // 1px the guard needs where that is larger: no blank below a short text, and the
+    // reader can still scroll. One pixel of rounding is allowed.
+    const condensedHead = await box(head)
+    const room = whole - condensedHead.height
+    // The glide's transform counts toward the scrollable overflow while it runs, so
+    // the range is read once the text has settled.
+    await expect
+      .poll(() => body.evaluate((node) => node.getAnimations({ subtree: true }).length))
+      .toBe(0)
+    const condensedRange = await rangeOf()
+    expect(
+      condensedRange,
+      `whole range ${range}, room ${room}, whole head ${whole}, condensed head ${condensedHead.height}`,
+    ).toBeLessThanOrEqual(Math.max(range - room, 1) + 1)
+    expect(condensedRange).toBeGreaterThanOrEqual(1)
 
     await body.evaluate((node) => node.scrollTo({ top: node.scrollHeight }))
     await expect(head).toHaveClass(/condensed/u)
