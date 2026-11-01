@@ -23,7 +23,10 @@ for (const width of [1440, 390]) {
     )
     const canvas = page.locator('.graph-canvas.settled')
     await expect(canvas).toBeVisible()
-    const card = page.locator('.flow-node-card').filter({ hasText: blockedWorkItem.reference })
+    // By its own reference: the node it blocks names it too («Waiting on …»).
+    const card = page.locator('.flow-node-card').filter({
+      has: page.locator('.flow-node-id').getByText(blockedWorkItem.reference, { exact: true }),
+    })
     await expect(card).toBeVisible()
     const toolbar = await page.locator('.workspace-head').boundingBox()
     const frame = await page.locator('.graph-flow').boundingBox()
