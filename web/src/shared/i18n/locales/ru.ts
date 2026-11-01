@@ -9,6 +9,7 @@ import { memoryProviderMessages } from '@/shared/i18n/memoryProviderMessages.ts'
 import { platformIntegrationMessages } from '@/shared/i18n/platformIntegrationMessages.ts'
 import { richTextMessages } from '@/shared/i18n/richTextMessages.ts'
 import { workItemFacetMessages } from '@/shared/i18n/workItemFacetMessages.ts'
+import { workItemHeadMessages } from '@/shared/i18n/workItemHeadMessages.ts'
 
 export const ru = {
   history: activityMessages.ru.history,
@@ -931,6 +932,7 @@ export const ru = {
       improvement: 'Улучшение',
     },
     ...workItemFacetMessages.ru,
+    ...workItemHeadMessages.ru,
     kindLabel: 'Тип',
     state: 'Состояние',
     priority: 'Приоритет',
@@ -939,7 +941,7 @@ export const ru = {
     previousOwner: 'Ранее отвечал',
     previousHolder: 'Ранее отвечал: {holder}',
     claim: 'Взять',
-    release: 'Освободить',
+    release: 'Отпустить',
     takeOver: 'Забрать себе',
     takeOverQuestion:
       'Работу держит {holder}. Забрать её себе? Передача будет записана в историю работы.',

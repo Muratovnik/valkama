@@ -9,11 +9,17 @@ const body = ref<HTMLElement | null>(null)
 const head = ref<HTMLElement | null>(null)
 
 /**
+ * The head reads top down as what the record is, then what holds for it: the
+ * identity line over the title, the facts under it, then whatever the head asks
+ * or reports, then the tabs. All of it stands outside the body's scroll.
+ *
  * The head gives its room back to the body once the body is read past it: the
- * title keeps one line and what stands under it steps out, while the controls
- * — Back and Close — the actions slot, a refusal or a question, and the tabs
- * stay. Whole, the head of a long title took a quarter of a desktop drawer and
- * more of a phone's, for as long as the drawer was read.
+ * title keeps one line and the identity line and subtitle step out, while the
+ * controls — Back and Close — the facts, the actions slot, a refusal or a
+ * question, and the tabs stay. The facts slot is told it is condensed, so it
+ * can keep its one line and let the rest go. Whole, the head of a long title
+ * took a quarter of a desktop drawer and more of a phone's, for as long as the
+ * drawer was read.
  *
  * It condenses only past its own height and comes back only at the very top,
  * and the body is scrolled back by exactly the height the head gave up, so the
@@ -80,23 +86,9 @@ defineExpose({ position, restore, scrollToTop })
       class="drawer-frame-head"
       :class="{ condensed }"
     >
-      <div class="drawer-frame-title">
-        <h2 class="drawer-frame-name">
-          <slot name="title">{{ title }}</slot>
-        </h2>
-        <p
-          v-if="subtitle"
-          class="drawer-frame-subtitle"
-        >
-          {{ subtitle }}
-        </p>
-        <div
-          v-if="$slots.meta"
-          class="drawer-frame-meta"
-        >
-          <slot name="meta" />
-        </div>
-      </div>
+      <!-- The controls come first in the document and stand at the row's end:
+           opening the drawer puts focus on Back or Close, as it did when the
+           head started with the title, and not on the first fact over it. -->
       <div class="drawer-frame-controls">
         <slot name="controls" />
         <button
@@ -107,6 +99,32 @@ defineExpose({ position, restore, scrollToTop })
         >
           <VIcon name="close" />
         </button>
+      </div>
+      <div class="drawer-frame-title">
+        <div
+          v-if="$slots.identity"
+          class="drawer-frame-identity"
+        >
+          <slot name="identity" />
+        </div>
+        <h2 class="drawer-frame-name">
+          <slot name="title">{{ title }}</slot>
+        </h2>
+        <p
+          v-if="subtitle"
+          class="drawer-frame-subtitle"
+        >
+          {{ subtitle }}
+        </p>
+      </div>
+      <div
+        v-if="$slots.facts"
+        class="drawer-frame-facts"
+      >
+        <slot
+          name="facts"
+          :condensed="condensed"
+        />
       </div>
       <div
         v-if="$slots.actions"
@@ -132,11 +150,14 @@ defineExpose({ position, restore, scrollToTop })
 </template>
 
 <style scoped>
+/* The drawer is resizable and its width is the workspace's, not the
+   viewport's, so what it holds lays itself out against the drawer. */
 .drawer-frame {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-height: 100%;
   background: var(--color-surface);
+  container: drawer / inline-size;
 }
 
 .drawer-frame-head {
@@ -145,7 +166,7 @@ defineExpose({ position, restore, scrollToTop })
   z-index: 2;
   display: grid;
   flex: 0 0 auto;
-  grid-template-areas: 'title close' 'actions actions' 'tabs tabs';
+  grid-template-areas: 'title close' 'facts facts' 'actions actions' 'tabs tabs';
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-3) var(--space-4);
   padding: var(--space-6) var(--space-6) 0;
@@ -174,9 +195,20 @@ defineExpose({ position, restore, scrollToTop })
   }
 
   .drawer-frame-subtitle,
-  .drawer-frame-meta {
+  .drawer-frame-identity {
     display: none;
   }
+}
+
+/* The identity line is a line of small facts over the title, so it sits
+   closer to the title than the title does to anything else. */
+.drawer-frame-identity {
+  margin-bottom: var(--space-1);
+}
+
+.drawer-frame-facts {
+  grid-area: facts;
+  min-width: 0;
 }
 
 .drawer-frame-subtitle {

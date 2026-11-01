@@ -12,20 +12,16 @@ import ItemInputRequests from '@/features/input-requests/components/ItemInputReq
 
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
-import { isWebAuthor } from '@/shared/api/webAuthor.ts'
 import { holderName } from '@/shared/lib/actor.ts'
-import { openSourceReference, sourceFeedback } from '@/shared/lib/sourceReference.ts'
-import { statePresentation } from '@/shared/lib/uiSystem.ts'
-import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
+import { semanticStatePresentation, statePresentation } from '@/shared/lib/uiSystem.ts'
+import RichText from '@/shared/ui/RichText.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
-import SemanticState from '@/shared/ui/SemanticState.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
   item: WorkItem
-  resourceRef: PlanningSpaceEntityRef
   writable: boolean
   target?: PlanningTarget
 }>()
@@ -36,7 +32,7 @@ const emit = defineEmits<{
   tick: [itemId: string, done: boolean]
 }>()
 
-const { t, d } = useI18n()
+const { t } = useI18n()
 const discussion = ref<InstanceType<typeof InspectorDiscussion> | null>(null)
 const checklistSection = ref<HTMLElement | null>(null)
 function discussStep(stepId: string) {
@@ -65,80 +61,40 @@ const stepCount = computed(() =>
 function stepState(done: boolean) {
   return done ? 'done' : 'open'
 }
-/** Who holds the item, or the phrase for nobody — never a blank cell. */
-const claimLabel = computed(() =>
-  props.item.claim_ref ? holderName(props.item.claim_ref) : t('workItem.noClaim'),
-)
-const ownerLabel = computed(() =>
-  t(props.item.state.is_terminal ? 'workItem.previousOwner' : 'workItem.owner'),
-)
-/**
- * Whether anyone is still behind the claim, and until when. Shown only while
- * the item is open: on a finished item the holder is history and its lease
- * says nothing a reader could act on. Nor for this client's own claim: no
- * session ever stands behind it, and telling the owner that nobody confirmed
- * their own claim would read as a fault.
- */
-const lease = computed(() => {
-  const claim = props.item.claim
-  return props.item.state.is_terminal || !claim || isWebAuthor(claim.holder) ? null : claim
-})
-const leaseDetail = computed(() => {
-  const claim = lease.value
-  if (!claim) return ''
-  if (claim.state === 'live' && claim.expires_at)
-    return t('workItem.lease.liveDetail', { date: when(claim.expires_at) })
-  if (claim.state === 'stale') return t('workItem.lease.staleDetail')
-  return t('workItem.lease.unconfirmedDetail')
-})
-
-/**
- * Opening the anchor, and what to say when the shell could not.
- *
- * The desktop shell opens a validated local reference; a browser has no
- * local-file authority, so it copies the path and says so. Both are useful and
- * only one of them is silent, which is why the note exists at all.
- */
-const sourceNote = ref('')
-
-async function openSource() {
-  const result = await openSourceReference({
-    source: props.item.source,
-    resource_ref: props.resourceRef,
-  })
-  const outcome = sourceFeedback(result)
-  if (outcome === 'copied') sourceNote.value = t('source.copied')
-  else if (outcome === 'failed')
-    sourceNote.value = t('source.failed', { message: result.error ?? '' })
-  else sourceNote.value = ''
-}
-
-function when(value: string): string {
-  const date = new Date(value)
-  return Number.isNaN(date.valueOf()) ? value : d(date, 'activity')
-}
+/** A blocker as the facet registry words a wait: «Ждёт MAIN-12», then what it is. */
+const blockerTone = semanticStatePresentation({
+  dimension: 'work-item-readiness',
+  state: 'blocked',
+}).tone
 
 defineExpose({ revealChecklist, startOutcomeReport })
 </script>
 
 <template>
   <div class="overview">
-    <section
+    <ul
       v-if="blockers.length"
-      class="overview-section"
+      class="blockers"
     >
-      <SectionHeading
-        as="h3"
-        level="panel"
-        >{{ t('workItem.queue.blocked') }}</SectionHeading
-      >
-      <p
+      <li
         v-for="link in blockers"
         :key="link.reference"
+        class="blocker"
       >
-        {{ link.reference }} — {{ link.title }}
-      </p>
-    </section>
+        <VIcon
+          class="blocker-glyph"
+          name="waiting"
+          :data-tone="blockerTone"
+          :size="14"
+          :stroke-width="2"
+        />
+        <RichText
+          class="blocker-text"
+          :source="`${t('workItem.facet.waiting', { reference: link.reference })} — ${link.title}`"
+          inline
+        />
+      </li>
+    </ul>
     <section
       v-if="nextStep"
       class="overview-section"
@@ -150,90 +106,6 @@ defineExpose({ revealChecklist, startOutcomeReport })
       >
       <p>{{ nextStep?.text }}</p>
     </section>
-    <dl class="facts">
-      <div class="fact">
-        <dt class="fact-term">{{ t('workItem.state') }}</dt>
-        <dd class="fact-value">
-          <SemanticState
-            class="fact-state"
-            dimension="work-item-state"
-            :state="item.state.category"
-            :label="item.state.name"
-          />
-        </dd>
-      </div>
-      <div class="fact">
-        <dt class="fact-term">{{ t('workItem.priority') }}</dt>
-        <dd class="fact-value">{{ t(`priority.${item.priority}`) }}</dd>
-      </div>
-      <div class="fact">
-        <dt class="fact-term">{{ t('workItem.kindLabel') }}</dt>
-        <dd class="fact-value">{{ t(`workItem.kind.${item.kind}`) }}</dd>
-      </div>
-      <div class="fact">
-        <dt class="fact-term">
-          {{ ownerLabel }}
-        </dt>
-        <dd class="fact-value">
-          {{ claimLabel }}
-        </dd>
-      </div>
-      <div
-        v-if="lease"
-        class="fact"
-      >
-        <dt class="fact-term">{{ t('workItem.lease.label') }}</dt>
-        <dd class="fact-value">
-          <SemanticState
-            class="fact-state"
-            dimension="claim-lease"
-            :state="lease.state"
-            :label="t(`workItem.lease.${lease.state}`)"
-          />
-          <small class="lease-detail">{{ leaseDetail }}</small>
-        </dd>
-      </div>
-      <div class="fact">
-        <dt class="fact-term">{{ t('workItem.updated') }}</dt>
-        <dd class="fact-value">{{ when(item.updated_at) }}</dd>
-      </div>
-      <div
-        v-if="item.source"
-        class="fact fact-wide"
-      >
-        <dt class="fact-term">{{ t('workItem.source') }}</dt>
-        <dd class="fact-value fact-source">
-          <button
-            class="source-anchor"
-            type="button"
-            :title="t('source.open')"
-            @click="openSource"
-          >
-            {{ item.source }}
-          </button>
-          <small
-            v-if="sourceNote"
-            class="source-notice"
-            role="status"
-            >{{ sourceNote }}</small
-          >
-        </dd>
-      </div>
-    </dl>
-
-    <ul
-      v-if="item.labels.length"
-      class="labels"
-    >
-      <li
-        v-for="label in item.labels"
-        :key="label"
-        class="label"
-      >
-        {{ label }}
-      </li>
-    </ul>
-
     <!-- What the item is made of, which its host reads and owns. -->
     <slot name="composition" />
 

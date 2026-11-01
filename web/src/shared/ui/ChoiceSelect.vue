@@ -117,16 +117,23 @@ function updateOpen(value: boolean) {
         />
         <span class="choice-value">
           <SelectValue :placeholder="placeholder">
-            <strong
-              class="choice-title"
-              :class="{ placeholder: !selected }"
-              >{{ selected?.label || placeholder }}</strong
+            <!-- A host may draw the chosen value its own way — a state with
+                 its dot — and the list below still names every option. -->
+            <slot
+              name="value"
+              :selected="selected"
             >
-            <small
-              v-if="selected?.description"
-              class="choice-note"
-              >{{ selected.description }}</small
-            >
+              <strong
+                class="choice-title"
+                :class="{ placeholder: !selected }"
+                >{{ selected?.label || placeholder }}</strong
+              >
+              <small
+                v-if="selected?.description"
+                class="choice-note"
+                >{{ selected.description }}</small
+              >
+            </slot>
           </SelectValue>
         </span>
         <ControlIcon

@@ -25,6 +25,10 @@ const drawerDetails = readFileSync(
   new URL('../src/widgets/work-item-inspector/components/InspectorOverview.vue', import.meta.url),
   'utf8',
 )
+const drawerFacts = readFileSync(
+  new URL('../src/widgets/work-item-inspector/components/InspectorFacts.vue', import.meta.url),
+  'utf8',
+)
 const drawerDetailsCss = readFileSync(
   new URL('../src/widgets/work-item-inspector/components/InspectorOverview.css', import.meta.url),
   'utf8',
@@ -272,7 +276,7 @@ test('Planning components carry presentation tones instead of remapping operatio
   assert.match(graphNode, /statePresentation\('work-item-node-marker', markerState\)\.tone/)
   assert.doesNotMatch(graphNode, /class="claimed"|'claimed':/)
 
-  assert.match(drawerDetails, /dimension="work-item-state"[\s\S]*:state="item\.state\.category"/)
+  assert.match(drawerFacts, /dimension="work-item-state"[\s\S]*:state="item\.state\.category"/)
   assert.match(drawerDetails, /<style scoped src="\.\/InspectorOverview\.css">/)
   assert.match(
     drawerDetailsCss,

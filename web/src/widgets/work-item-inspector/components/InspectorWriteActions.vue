@@ -1,150 +1,181 @@
 <script setup lang="ts">
 /**
- * The two writes that change what an item is — who holds it and what state it
- * is in — and the takeover question that comes with them. A refusal of either
- * is the host's to show, in the head that stays in view while the body scrolls,
- * because a refused tick far down the card has to be seen where it was made.
+ * The one thing to do about an item from its head, or why there is nothing.
  *
- * Release is this client's act on its own claim; the server refuses it on
- * anyone else's, and used to answer every press of the button with that same
- * refusal. Another holder's claim is offered as a takeover instead, asked once
- * in place before the override is sent.
+ * Who holds the item decides it. Nobody: «Взять», unless the item is an epic,
+ * whose work is its tasks, or waits on an open blocker — then the reason stands
+ * where the action would, so the head never offers a take its own facts argue
+ * against. This client: «Отпустить». Another holder: a takeover, asked once in
+ * place before the override is sent; release on someone else's claim was a
+ * button the server refused on every press.
  *
- * A stale claim is different: nobody is behind it, and the server releases it
- * before it takes the claim, so taking it over is an ordinary claim with no
- * override to confirm.
+ * A stale claim has nobody behind it, and the server releases it before it
+ * takes the claim, so taking it over is an ordinary claim with no override to
+ * confirm. A finished item offers nothing.
+ *
+ * A refusal of any of these is the host's to show, in the head that stays in
+ * view while the body scrolls.
  */
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import type { PlanningWorkflow, WorkItem } from '@/shared/api/planningModel.ts'
+import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { isWebAuthor } from '@/shared/api/webAuthor.ts'
 import { holderName } from '@/shared/lib/actor.ts'
-import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
-import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
+import { semanticStatePresentation } from '@/shared/lib/uiSystem.ts'
 import ConfirmStrip from '@/shared/ui/ConfirmStrip.vue'
 import VButton from '@/shared/ui/VButton.vue'
+import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
   busy: boolean
   item: WorkItem
-  workflow: PlanningWorkflow | null
+  /** The reference of an open item this one waits on, or null for none. */
+  waitingOn: string | null
 }>()
 
 const emit = defineEmits<{
   'claim': []
-  'move': [stateKey: string]
   'release': []
   'take-over': []
 }>()
 
+/** Whether the takeover question is open, so the host can give it the width. */
+const asking = defineModel<boolean>('asking', { default: false })
+
 const { t } = useI18n()
-const askingTakeover = ref(false)
 
-/** The states this item may move to, which is the workflow's answer, not a list. */
-const nextStates = computed<ChoiceOption[]>(() => {
-  const workflow = props.workflow
-  if (!workflow) return []
-  const allowed = new Set(
-    workflow.transitions
-      .filter((transition) => transition.from === props.item.state.state_id)
-      .map((transition) => transition.to),
-  )
-  return workflow.states
-    .filter((state) => allowed.has(state.state_id))
-    .map((state) => ({ value: state.key, label: state.name }))
+type Action = 'claim' | 'release' | 'takeover' | 'stale' | 'epic' | 'waiting'
+
+const action = computed<Action | null>(() => {
+  const { item } = props
+  if (item.state.is_terminal) return null
+  if (item.claim_ref) {
+    if (isWebAuthor(item.claim_ref)) return 'release'
+    return item.claim_state === 'stale' ? 'stale' : 'takeover'
+  }
+  if (item.container) return 'epic'
+  return props.waitingOn ? 'waiting' : 'claim'
 })
 
-const claimAction = computed<'claim' | 'release' | 'takeover' | 'stale' | null>(() => {
-  if (props.item.state.is_terminal) return null
-  if (!props.item.claim_ref) return 'claim'
-  if (isWebAuthor(props.item.claim_ref)) return 'release'
-  return props.item.claim_state === 'stale' ? 'stale' : 'takeover'
-})
-const takeoverDisabled = computed(() => props.busy || askingTakeover.value)
-const choiceDisabled = computed(() => props.busy || !nextStates.value.length)
 const takeoverQuestion = computed(() =>
   t('workItem.takeOverQuestion', { holder: holderName(props.item.claim_ref) }),
 )
 
-// An action select, not a value: the model stays empty, so the same state can
-// be chosen again after the server refused it.
-const stateChoice = computed({
-  get: () => '',
-  set: (value: string) => {
-    if (value) emit('move', value)
-  },
-})
-
 function takeOver() {
-  askingTakeover.value = false
+  asking.value = false
   emit('take-over')
 }
+
+/** A wait on a blocker carries the readiness facet's tone; an epic carries none. */
+const WAITING_TONE = semanticStatePresentation({
+  dimension: 'work-item-readiness',
+  state: 'blocked',
+}).tone
+const waitingText = computed(() =>
+  t('workItem.facet.waiting', { reference: props.waitingOn ?? '' }),
+)
+/** A stale claim is taken as a plain claim, but it is still a takeover to the reader. */
+const claimLabel = computed(() =>
+  action.value === 'stale' ? t('workItem.lease.takeOver') : t('workItem.claim'),
+)
 </script>
 
 <template>
-  <div class="head-actions">
+  <div
+    v-if="action"
+    class="write-actions"
+  >
+    <p
+      v-if="action === 'waiting'"
+      class="write-reason"
+      :data-tone="WAITING_TONE"
+    >
+      <VIcon
+        class="write-reason-glyph"
+        name="waiting"
+        :size="14"
+        :stroke-width="2"
+      />
+      {{ waitingText }}
+    </p>
+    <p
+      v-else-if="action === 'epic'"
+      class="write-reason"
+    >
+      <VIcon
+        class="write-reason-glyph"
+        name="kind-epic"
+        :size="14"
+        :stroke-width="2"
+      />
+      {{ t('workItem.head.epic') }}
+    </p>
+    <ConfirmStrip
+      v-else-if="asking"
+      :message="takeoverQuestion"
+      :confirm-label="t('workItem.takeOverConfirm')"
+      :cancel-label="t('workItem.cancel')"
+      @confirm="takeOver"
+      @cancel="asking = false"
+    />
     <VButton
-      v-if="claimAction === 'release'"
+      v-else-if="action === 'takeover'"
+      class="write-action"
+      :disabled="busy"
+      @click="asking = true"
+    >
+      {{ t('workItem.takeOver') }}
+    </VButton>
+    <VButton
+      v-else-if="action === 'release'"
+      class="write-action"
+      variant="secondary"
       :disabled="busy"
       @click="emit('release')"
     >
       {{ t('workItem.release') }}
     </VButton>
     <VButton
-      v-else-if="claimAction === 'takeover'"
-      :disabled="takeoverDisabled"
-      @click="askingTakeover = true"
-    >
-      {{ t('workItem.takeOver') }}
-    </VButton>
-    <VButton
-      v-else-if="claimAction === 'stale'"
+      v-else
+      class="write-action"
       variant="primary"
       :disabled="busy"
       @click="emit('claim')"
     >
-      {{ t('workItem.lease.takeOver') }}
+      {{ claimLabel }}
     </VButton>
-    <VButton
-      v-else-if="claimAction === 'claim'"
-      variant="primary"
-      :disabled="busy"
-      @click="emit('claim')"
-    >
-      {{ t('workItem.claim') }}
-    </VButton>
-    <ChoiceSelect
-      v-model="stateChoice"
-      class="state-choice"
-      :label="t('workItem.moveTo')"
-      :placeholder="t('workItem.moveTo')"
-      :options="nextStates"
-      :disabled="choiceDisabled"
-    />
   </div>
-  <ConfirmStrip
-    v-if="askingTakeover"
-    :message="takeoverQuestion"
-    :confirm-label="t('workItem.takeOverConfirm')"
-    :cancel-label="t('workItem.cancel')"
-    @confirm="takeOver"
-    @cancel="askingTakeover = false"
-  />
 </template>
 
 <style scoped>
-.head-actions {
-  display: flex;
-  flex: 1 1 auto;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  align-items: end;
+.write-actions {
+  display: grid;
   min-width: 0;
 }
 
-.state-choice {
-  flex: 1 1 auto;
-  min-width: 0;
+/* Full width where the head stacks it under the labels; its own label's width
+   where it ends the facts line. */
+.write-action {
+  width: 100%;
+}
+
+.write-reason {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+  min-height: var(--size-control-inline);
+  margin: 0;
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+}
+
+.write-reason-glyph {
+  flex: 0 0 auto;
+  color: var(--color-text-tertiary);
+
+  .write-reason[data-tone='danger'] & {
+    color: var(--color-danger);
+  }
 }
 </style>

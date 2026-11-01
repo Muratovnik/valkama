@@ -10,7 +10,7 @@ import { commentWorkItem, publishWorkItemReport } from '@/shared/api/planningApi
 import { checklistCommentMessages } from '@/shared/i18n/checklistCommentMessages.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
-import { deferred, getButton, inspectorResourceRef, workItemFixture } from '../fixtures/workItem.ts'
+import { deferred, getButton, workItemFixture } from '../fixtures/workItem.ts'
 import { present } from '../support/present.ts'
 
 vi.mock('@/shared/api/planningApi.ts', async (load) => ({
@@ -55,7 +55,7 @@ describe('checklist-linked comments', () => {
     item.checklist.reverse()
     const wrapper = mount(InspectorOverview, {
       attachTo: document.body,
-      props: { item, writable: true, resourceRef: inspectorResourceRef },
+      props: { item, writable: true },
       global: global(),
     })
     const form = wrapper.get('form')

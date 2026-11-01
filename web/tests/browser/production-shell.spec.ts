@@ -199,7 +199,7 @@ function centreY(box: { height: number; y: number } | null): number {
 /** Opens a related card from the one in the column, so Back has a card to return to. */
 async function openRelatedCard(page: Page, width: number) {
   await page.setViewportSize({ width, height: 700 })
-  await installBackend(page)
+  await installBackend(page, { longRead: true })
   await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
   const drawer = page.locator('.drawer')
@@ -260,6 +260,13 @@ test("a work item's plan anchor is readable and can be opened where it lives", a
   await installBackend(page)
   await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
+  // The head offers the anchor as an icon; its whole path stands with the
+  // item's other references.
+  await expect(page.locator('.drawer .identity-source')).toHaveAttribute(
+    'aria-label',
+    /docs\/plans\/platform\.md#kb:arch-plan$/u,
+  )
+  await page.locator('.drawer').getByRole('button', { name: 'Relations', exact: true }).click()
   const anchor = page.locator('.drawer .source-anchor')
   await expect(anchor).toHaveText('docs/plans/platform.md#kb:arch-plan')
 
@@ -309,7 +316,10 @@ test('an attached same-key space stays readable but never reaches primary-only p
     )
     .toContain(`data_scope_id=${attachedDataScopeId}`)
   await expect(page.locator('.drawer')).toContainText('Attached:')
-  await expect(page.locator('.drawer .head-actions')).toHaveCount(0)
+  await expect(page.locator('.drawer .write-actions')).toHaveCount(0)
+  // The state is read, not offered as a move, where nothing can be written.
+  await expect(page.locator('.drawer .card-state')).toBeVisible()
+  await expect(page.locator('.drawer').getByRole('combobox')).toHaveCount(0)
   await expect(page.locator('.drawer').getByRole('button', { name: /^Execution$/i })).toHaveCount(0)
   expect(executionReads).toEqual([])
   await expect(page.locator('.drawer .discussion-form')).toHaveCount(0)

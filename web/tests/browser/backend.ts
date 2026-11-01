@@ -50,8 +50,20 @@ type BackendOptions = {
   activity?: 'bound' | 'unbound'
   includeAttachedDuplicate?: boolean
   includeUnboundPlanningProject?: boolean
+  /**
+   * A card's body long enough to be read past its head. The head holds the
+   * item's facts and its action, so a fixture card's own body is shorter than
+   * a scroll that condenses the head needs.
+   */
+  longRead?: boolean
   uiPrefs?: unknown
 }
+
+/** Paragraphs enough to scroll a drawer body well past any head. */
+const LONG_READ = Array.from(
+  { length: 40 },
+  (_, index) => `Paragraph ${index + 1} of a description long enough to be read.`,
+).join('\n\n')
 
 const SESSION_TOKEN = 'playwright-session-token'.padEnd(64, 'x')
 
@@ -282,10 +294,11 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
           }
           const exact = requestedScopeId === attachedDataScopeId ? attachedWorkItemRef : workItemRef
           const exactRef = { ...exact, reference: requestedReference }
-          const answered =
+          const card =
             requestedReference === blockedWorkItem.reference
               ? blockedFullWorkItem
               : { ...workItem, revision: 3 }
+          const answered = options.longRead ? { ...card, description: LONG_READ } : card
           platformReads.push(`${path}?${url.searchParams.toString()}`)
           return fulfill({
             interface_version: 'valkama-planning-work-item',

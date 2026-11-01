@@ -197,17 +197,13 @@ describe('inspector drafts and the ways of leaving them', () => {
     const live = mountInspector(open)
     await flushPromises()
     // The control: the same item while it is live reports both.
-    expect(headings(live)).toEqual(
-      expect.arrayContaining([
-        messages.en.workItem.queue.blocked,
-        messages.en.workItem.summaryNext,
-      ]),
-    )
+    expect(live.get('.blockers').text()).toContain('Waiting on QA-100 — The step before')
+    expect(headings(live)).toContain(messages.en.workItem.summaryNext)
     live.unmount()
 
     const closed = mountInspector({ ...open, state: DONE })
     await flushPromises()
-    expect(headings(closed)).not.toContain(messages.en.workItem.queue.blocked)
+    expect(closed.find('.blockers').exists()).toBe(false)
     expect(headings(closed)).not.toContain(messages.en.workItem.summaryNext)
     expect(closed.text()).not.toContain('The step before')
     closed.unmount()

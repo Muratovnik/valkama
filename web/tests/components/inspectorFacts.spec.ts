@@ -1,0 +1,192 @@
+/**
+ * The card's facts line: the state as its own menu, the registry's marks, and
+ * one action — or the reason there is none — decided by who holds the item.
+ */
+import { createI18n } from 'vue-i18n'
+
+import { mount } from '@vue/test-utils'
+import { describe, expect, it } from 'vitest'
+
+import InspectorFacts from '@/widgets/work-item-inspector/components/InspectorFacts.vue'
+
+import type { PlanningWorkflow, WorkItem } from '@/shared/api/planningModel.ts'
+import { messages } from '@/shared/i18n/index.ts'
+
+import { workItemFixture } from '../fixtures/workItem.ts'
+
+type Link = WorkItem['links'][number]
+
+const QUEUED = {
+  state_id: '00000000-0000-4000-8000-000000000004',
+  key: 'todo',
+  name: 'To do',
+  category: 'queued' as const,
+  is_terminal: false,
+}
+
+function item(overrides: Partial<WorkItem> = {}): WorkItem {
+  return { ...workItemFixture('Facts', 1), state: QUEUED, priority: 'medium', ...overrides }
+}
+
+function blockedBy(reference: string, terminal: boolean): Link {
+  return {
+    kind: 'blocks',
+    direction: 'incoming',
+    work_item_id: '00000000-0000-4000-8000-000000000012',
+    reference,
+    title: 'The work before',
+    state_name: terminal ? 'Done' : 'Development',
+    state_category: terminal ? 'completed' : 'active',
+    is_terminal: terminal,
+    state_unavailable: null,
+  }
+}
+
+const workflow: PlanningWorkflow = {
+  workflow_id: 'workflow',
+  name: 'Task workflow',
+  initial_state_id: QUEUED.state_id,
+  states: [
+    { ...QUEUED, position: 0 },
+    {
+      state_id: '00000000-0000-4000-8000-000000000005',
+      key: 'dev',
+      name: 'Development',
+      category: 'active',
+      is_terminal: false,
+      position: 1,
+    },
+  ],
+  transitions: [{ from: QUEUED.state_id, to: '00000000-0000-4000-8000-000000000005' }],
+}
+
+const choiceStub = {
+  name: 'ChoiceSelect',
+  props: ['modelValue', 'options', 'label'],
+  emits: ['update:modelValue'],
+  template: '<span class="choice-stub"><slot name="value" /></span>',
+}
+
+function facts(record: WorkItem, props: { busy?: boolean; writable?: boolean } = {}) {
+  return mount(InspectorFacts, {
+    props: { item: record, workflow, busy: false, writable: true, ...props },
+    global: {
+      plugins: [createI18n({ legacy: false, locale: 'en', messages })],
+      stubs: { ChoiceSelect: choiceStub, VIcon: true },
+    },
+  })
+}
+
+const actionText = (wrapper: ReturnType<typeof facts>) =>
+  wrapper.find('.write-actions').exists() ? wrapper.get('.write-actions').text() : null
+
+describe('the one action a card offers', () => {
+  it.each([
+    { case: 'nobody holds it', record: item(), says: 'Claim' },
+    {
+      case: 'it waits on an open blocker',
+      record: item({ links: [blockedBy('MAIN-12', false)] }),
+      says: 'Waiting on MAIN-12',
+    },
+    {
+      case: 'its only blocker has finished',
+      record: item({ links: [blockedBy('MAIN-12', true)] }),
+      says: 'Claim',
+    },
+    {
+      case: 'it is an epic',
+      record: item({ container: true }),
+      says: 'Epic — take a task from it',
+    },
+    {
+      case: 'another holds the epic',
+      record: item({ container: true, claim_ref: 'claude' }),
+      says: 'Take over',
+    },
+    { case: 'this client holds it', record: item({ claim_ref: 'user' }), says: 'Release' },
+    {
+      case: 'it is finished',
+      record: item({ state: { ...QUEUED, category: 'completed', is_terminal: true } }),
+      says: null,
+    },
+  ])('says $says when $case', ({ record, says }) => {
+    const wrapper = facts(record)
+    expect(actionText(wrapper)).toBe(says)
+    // A reason is not a button: nothing to press where the facts argue against it.
+    const pressable = wrapper.findAll('.write-actions button').map((button) => button.text())
+    expect(pressable).toEqual(says && !/Waiting|Epic/u.test(says) ? [says] : [])
+  })
+
+  it('offers no action where the card cannot write', () => {
+    expect(facts(item(), { writable: false }).find('.write-actions').exists()).toBe(false)
+  })
+})
+
+describe('the state as the menu that moves it', () => {
+  it('names where the item is, unchoosable, above where it may go', () => {
+    const chip = facts(item()).getComponent(choiceStub)
+    expect(chip.props('modelValue')).toBe('todo')
+    expect(chip.props('label')).toBe('State: To do. Move to another state')
+    expect(chip.props('options')).toEqual([
+      { value: 'todo', label: 'To do', disabled: true },
+      { value: 'dev', label: 'Development' },
+    ])
+    expect(chip.text()).toBe('To do')
+  })
+
+  it('asks for a move to another state, and not while a write is in flight', async () => {
+    const idle = facts(item())
+    idle.getComponent(choiceStub).vm.$emit('update:modelValue', 'dev')
+    idle.getComponent(choiceStub).vm.$emit('update:modelValue', 'todo')
+    expect(idle.emitted('move')).toEqual([['dev']])
+
+    const busy = facts(item(), { busy: true })
+    busy.getComponent(choiceStub).vm.$emit('update:modelValue', 'dev')
+    expect(busy.emitted('move')).toBeUndefined()
+  })
+
+  it('is a plain state where nothing can move it', () => {
+    const wrapper = facts(item(), { writable: false })
+    expect(wrapper.findComponent(choiceStub).exists()).toBe(false)
+    expect(wrapper.get('.card-state').attributes('data-dimension')).toBe('work-item-state')
+  })
+})
+
+describe('the marks beside the state', () => {
+  it('colours an urgent priority and keeps the default one quiet', () => {
+    const urgent = facts(item({ priority: 'urgent' })).get('[data-facet="priority"]')
+    expect(urgent.attributes('data-tone')).toBe('danger')
+    expect(urgent.text()).toBe('Urgent')
+    const medium = facts(item()).get('[data-facet="priority"]')
+    expect(medium.attributes('data-tone')).toBe('neutral')
+    expect(medium.classes()).toContain('quiet')
+  })
+
+  it('names the epic where the host knows its reference', () => {
+    const record = item({ parent_id: '00000000-0000-4000-8000-000000000099' })
+    expect(facts(record).find('[data-facet="parent"]').exists()).toBe(false)
+    const wrapper = mount(InspectorFacts, {
+      props: { item: record, workflow, busy: false, writable: true, parentReference: 'MAIN-9' },
+      global: {
+        plugins: [createI18n({ legacy: false, locale: 'en', messages })],
+        stubs: { ChoiceSelect: choiceStub, VIcon: true },
+      },
+    })
+    expect(wrapper.get('[data-facet="parent"]').text()).toBe('MAIN-9')
+  })
+
+  it('adds a pressed label to the filter, and lets the labels go when the head condenses', async () => {
+    const wrapper = facts(item({ labels: ['platform', 'phase-1'] }))
+    const chips = wrapper.findAll('.card-labels button')
+    expect(chips.map((chip) => chip.attributes('aria-label'))).toEqual([
+      'Filter: label platform',
+      'Filter: label phase-1',
+    ])
+    expect(chips.every((chip) => chip.attributes('tabindex') === undefined)).toBe(true)
+    await chips[1].trigger('click')
+    expect(wrapper.emitted('filter')).toEqual([[{ facet: 'labels', value: 'phase-1' }]])
+
+    await wrapper.setProps({ condensed: true })
+    expect(wrapper.find('.card-labels').exists()).toBe(false)
+  })
+})

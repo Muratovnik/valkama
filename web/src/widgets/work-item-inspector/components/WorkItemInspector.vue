@@ -7,21 +7,20 @@
  * empty inside Overview, which is what keeps the shell honest while later layers
  * are still being built.
  *
- * The head that stays in view is the item's name, its reference and the
- * sections, and the reference steps out once the body is read past the head:
- * with the two writes and the holder pinned too it took a quarter of a desktop
- * drawer and a third of a phone's. The two writes
- * that change what the item *is* — who holds it and what state it is in — open
- * the body instead, above every section. Both refuse rather than force: a
- * refusal shows the server's reason in the head, where it is seen however far
- * down the write was made, and overriding is a second, explicit answer rather
- * than a default. Who holds the item is said once, beside its claim in the
- * overview, not again in the head.
+ * The head stays outside the body's scroll and reads as who the item is, then
+ * what holds for it, then what to do: the identity line over the title, the
+ * facts under it — the state as the menu that moves it, the priority, the
+ * holder, the epic — with the one action at their end, the labels, and the
+ * sections. It used to put a full-width write row and a section before the
+ * facts, which started half way down the drawer. The writes refuse rather than
+ * force: a refusal shows the server's reason in the head, where it is seen
+ * however far down the write was made, and overriding is a second, explicit
+ * answer rather than a default.
  *
  * A reference the service says names nothing is not a failure: there is nothing
  * to retry and no section to open. The card says so once, under a title that
- * already is the reference, with no reference line, no tabs and no writes, and
- * Close is the way on.
+ * already is the reference, with no identity line, no facts, no tabs and no
+ * writes, and Close is the way on.
  */
 import { computed, ref, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -29,12 +28,13 @@ import { useI18n } from 'vue-i18n'
 import InspectorActivity from '@/widgets/work-item-inspector/components/InspectorActivity.vue'
 import InspectorChain from '@/widgets/work-item-inspector/components/InspectorChain.vue'
 import InspectorExecution from '@/widgets/work-item-inspector/components/InspectorExecution.vue'
+import InspectorFacts from '@/widgets/work-item-inspector/components/InspectorFacts.vue'
+import InspectorIdentity from '@/widgets/work-item-inspector/components/InspectorIdentity.vue'
 import InspectorMemory from '@/widgets/work-item-inspector/components/InspectorMemory.vue'
 import InspectorNotices from '@/widgets/work-item-inspector/components/InspectorNotices.vue'
 import InspectorOverview from '@/widgets/work-item-inspector/components/InspectorOverview.vue'
 import InspectorReferenceScope from '@/widgets/work-item-inspector/components/InspectorReferenceScope.vue'
 import InspectorRelations from '@/widgets/work-item-inspector/components/InspectorRelations.vue'
-import InspectorWriteActions from '@/widgets/work-item-inspector/components/InspectorWriteActions.vue'
 import type { InspectorReturn } from '@/widgets/work-item-inspector/utils/inspectorReturn.ts'
 import { inspectorTarget } from '@/widgets/work-item-inspector/utils/inspectorTarget.ts'
 import { titleRuns } from '@/widgets/work-item-inspector/utils/titleRuns.ts'
@@ -47,6 +47,8 @@ import { useWorkItemExecutions } from '@/widgets/work-item-inspector/utils/useWo
 import { useWorkItemResource } from '@/widgets/work-item-inspector/utils/useWorkItemResource.ts'
 
 import LaunchDialog from '@/features/work-item-launch/LaunchDialog.vue'
+
+import type { WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import type { PlanningWorkflow } from '@/shared/api/planningModel.ts'
@@ -73,6 +75,8 @@ const props = defineProps<{
   resourceRef: PlanningSpaceEntityRef
   workflow: PlanningWorkflow | null
   writable: boolean
+  /** The epic's reference, which the record names only by id; the host's model knows it. */
+  parentReference?: string | null
   /** Where this card was left, when Back is what opened it again. */
   returnTo?: InspectorReturn | null
 }>()
@@ -82,6 +86,8 @@ const emit = defineEmits<{
   chain: [chain: WorkItemChain, branch: string | null]
   changed: []
   close: []
+  /** A label pressed on the card, for the Work filter. */
+  filter: [token: WorkFilterToken]
   /** Another card opened from this one, and where this one was left. */
   open: [reference: string, from: InspectorReturn]
   session: [sessionId: string, clientFamily: string]
@@ -293,11 +299,32 @@ const close = () => void leave(() => emit('close'))
 
       <template
         v-if="!missing"
-        #meta
+        #identity
       >
-        <div class="inspector-meta">
-          <span class="head-reference">{{ reference }}</span>
-        </div>
+        <InspectorIdentity
+          :item="item"
+          :reference="reference"
+          :resource-ref="resourceRef"
+        />
+      </template>
+
+      <template
+        v-if="item && !missing"
+        #facts="{ condensed }"
+      >
+        <InspectorFacts
+          :item="item"
+          :workflow="workflow"
+          :busy="busy"
+          :writable="writable"
+          :condensed="condensed"
+          :parent-reference="parentReference"
+          @claim="claim"
+          @release="release"
+          @take-over="takeOver"
+          @move="moveTo"
+          @filter="(token) => emit('filter', token)"
+        />
       </template>
 
       <template
@@ -333,20 +360,6 @@ const close = () => void leave(() => emit('close'))
         </div>
       </template>
 
-      <div
-        v-if="item && writable"
-        class="inspector-writes"
-      >
-        <InspectorWriteActions
-          :item="item"
-          :workflow="workflow"
-          :busy="busy"
-          @claim="claim"
-          @release="release"
-          @take-over="takeOver"
-          @move="moveTo"
-        />
-      </div>
       <InspectorReferenceScope
         :key="reference"
         :item="item"
@@ -379,7 +392,6 @@ const close = () => void leave(() => emit('close'))
               v-show="section === 'overview'"
               ref="overview"
               :item="payload"
-              :resource-ref="resourceRef"
               :target="target"
               :writable="writable && !busy"
               @changed="reloaded"
@@ -405,6 +417,7 @@ const close = () => void leave(() => emit('close'))
             <InspectorRelations
               v-if="section === 'relations'"
               :item="payload"
+              :resource-ref="resourceRef"
               :writable="writable && !busy"
               @changed="reloaded"
               @session="(id, family) => emit('session', id, family)"

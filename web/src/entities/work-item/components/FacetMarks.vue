@@ -24,20 +24,20 @@ import { FACET_ORDER, surfaceMarks } from '@/entities/work-item/utils/facets.ts'
 import type {
   FacetContext,
   FacetId,
+  FacetItem,
   FacetMark,
   FacetSurface,
 } from '@/entities/work-item/utils/facets.ts'
 import { EMPTY_WORK_FILTER, hasToken } from '@/entities/work-item/utils/workFilter.ts'
 import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
-import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { semanticStatePresentation } from '@/shared/lib/uiSystem.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = withDefaults(
   defineProps<{
-    item: WorkItemBrief
+    item: FacetItem
     surface: FacetSurface
     context?: FacetContext
     /** The facets this run prints, in order; the registry still decides each one. */

@@ -691,6 +691,23 @@ state's colour with its reference, so the whole of a long chain reads as an
 overview. Under the map, one line gives the totals and a second answers
 whether and when the open part closes, from the last seven days, and says so
 as a range when those days disagree.
+A card's head stands outside the body's scroll and reads as who the item is,
+what holds for it, then what to do. Over the title one tertiary line names the
+kind (glyph and word), the reference (it copies itself), when it last changed
+and, where the item has one, its plan anchor as an icon; the anchor's whole path
+stands in Relations with the item's other references. Under the title one line
+of facts in the registry's marks: the state, which is its own transition menu —
+the state is said once, and a move the server refuses leaves the chip naming
+where the item is — then the priority glyph and word, the holder with its lease
+as a tooltip and a warning dot once nobody is behind it, and the epic. One
+action ends that line on a wide drawer and stands at full width under the
+labels on a narrow one: «Взять», «Отпустить» on this client's claim, «Забрать
+себе» on another's; where the facts argue against taking it the reason stands
+there instead — «Ждёт MAIN-12» while an open blocker remains, «Эпик — возьмите
+задачу из него» on an epic. Labels follow as chips that add themselves to the
+filter, then the tabs. Reading down the body condenses the head to the title's
+one line, the facts, the action and the tabs. The body names only blockers that
+are still open.
 The related work/session/evidence context is one grouped relationship region,
 not a decorative sequence. Execution history and native session opening stay
 inside work-item context; Memory is a typed reference there.

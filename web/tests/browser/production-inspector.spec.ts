@@ -54,9 +54,12 @@ test('Russian relations keep one hierarchy, aligned controls, and narrow content
   await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
   const drawer = page.locator('.drawer')
-  // The holder is named once, in the facts, and not again in the head.
-  await expect(drawer.locator('.fact').filter({ hasText: 'Ответственный' })).toContainText('codex')
-  await expect(drawer.locator('.drawer-frame-head')).not.toContainText('codex')
+  // The holder is named once, among the facts in the head, and the body holds
+  // no fact grid that says it again (a step's own holder is the step's).
+  await expect(drawer.locator('.drawer-frame-head .card-holder')).toContainText(
+    /Ответственный:\s*codex/u,
+  )
+  await expect(drawer.locator('.drawer-frame-body')).not.toContainText('Ответственный')
   await drawer.getByRole('button', { name: 'Отчёт о работе', exact: true }).click()
   const result = drawer.getByRole('textbox', { name: 'Что сделано', exact: true })
   const longDraft =
@@ -208,7 +211,7 @@ for (const width of [1440, 390]) {
   }) => {
     await page.addInitScript(() => localStorage.setItem('valkama-locale', 'ru'))
     await page.setViewportSize({ width, height: 700 })
-    await installBackend(page)
+    await installBackend(page, { longRead: true })
     await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
     await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
     const drawer = page.locator('.drawer')
@@ -232,7 +235,7 @@ for (const width of [1440, 390]) {
     const whole = await heightOf(head)
     const body = drawer.locator('.drawer-frame-body')
     await body.hover()
-    const probe = drawer.locator('.inspector-writes')
+    const probe = drawer.locator('.drawer-frame-body .overview > :first-child')
     let before = await topOf(probe)
     for (let step = 0; step < 6; step += 1) {
       await page.mouse.wheel(0, 80)

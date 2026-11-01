@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 
 import GraphNodeCard from '@/widgets/work-item-graph/components/GraphNodeCard.vue'
 import type { PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
-import InspectorOverview from '@/widgets/work-item-inspector/components/InspectorOverview.vue'
+import InspectorFacts from '@/widgets/work-item-inspector/components/InspectorFacts.vue'
 import WorkItemList from '@/widgets/work-item-views/components/WorkItemList.vue'
 import WorkItemTile from '@/widgets/work-item-views/components/WorkItemTile.vue'
 
@@ -193,27 +193,12 @@ describe('Planning semantic presentation', () => {
   })
 
   it('renders the inspector state from its shared workflow-state presentation', () => {
-    const wrapper = mount(InspectorOverview, {
-      props: {
-        item: fullWorkItem(),
-        resourceRef: {
-          kind: 'planning-space',
-          resource_id:
-            'eyJkYXRhX3Njb3BlX2lkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAxIiwic3BhY2Vfa2V5IjoiQUcifQ',
-        },
-        writable: true,
-      },
-      global: {
-        plugins: [i18n()],
-        stubs: {
-          InspectorReserved: true,
-          InspectorSummary: true,
-          SectionHeading: true,
-          VIcon: true,
-        },
-      },
+    // With no way to move it, the state is the plain mark the board draws.
+    const wrapper = mount(InspectorFacts, {
+      props: { item: fullWorkItem(), workflow: null, busy: false, writable: true },
+      global: { plugins: [i18n()], stubs: { VIcon: true } },
     })
 
-    expect(wrapper.get('.fact-state').attributes('data-tone')).toBe('danger')
+    expect(wrapper.get('.card-state').attributes('data-tone')).toBe('danger')
   })
 })

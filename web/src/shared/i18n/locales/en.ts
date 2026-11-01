@@ -9,6 +9,7 @@ import { memoryProviderMessages } from '@/shared/i18n/memoryProviderMessages.ts'
 import { platformIntegrationMessages } from '@/shared/i18n/platformIntegrationMessages.ts'
 import { richTextMessages } from '@/shared/i18n/richTextMessages.ts'
 import { workItemFacetMessages } from '@/shared/i18n/workItemFacetMessages.ts'
+import { workItemHeadMessages } from '@/shared/i18n/workItemHeadMessages.ts'
 
 export const en = {
   history: activityMessages.en.history,
@@ -932,6 +933,7 @@ export const en = {
       improvement: 'Improvement',
     },
     ...workItemFacetMessages.en,
+    ...workItemHeadMessages.en,
     kindLabel: 'Kind',
     state: 'State',
     priority: 'Priority',

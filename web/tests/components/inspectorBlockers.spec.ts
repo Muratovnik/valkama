@@ -15,7 +15,7 @@ import InspectorOverview from '@/widgets/work-item-inspector/components/Inspecto
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
-import { inspectorResourceRef, workItemFixture } from '../fixtures/workItem.ts'
+import { workItemFixture } from '../fixtures/workItem.ts'
 
 type Link = WorkItem['links'][number]
 
@@ -52,7 +52,7 @@ const UNREADABLE = {
 function overview(links: Link[]) {
   const item = { ...workItemFixture('Waiting work', 1), links }
   return mount(InspectorOverview, {
-    props: { item, writable: false, resourceRef: inspectorResourceRef },
+    props: { item, writable: false },
     global: {
       plugins: [createI18n({ legacy: false, locale: 'en', messages })],
       stubs: {

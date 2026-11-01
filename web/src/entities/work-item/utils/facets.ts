@@ -23,6 +23,24 @@ import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { holderName } from '@/shared/lib/actor.ts'
 import type { IconName, SemanticStatePair } from '@/shared/lib/uiSystem.ts'
 
+/**
+ * What the registry reads of an item: the fields every facet comes from. A
+ * board brief and a card's full record both carry them, and the registry does
+ * not ask for the rest.
+ */
+export type FacetItem = Pick<
+  WorkItemBrief,
+  | 'checklist'
+  | 'claim_ref'
+  | 'claim_state'
+  | 'kind'
+  | 'labels'
+  | 'parent_id'
+  | 'priority'
+  | 'ready'
+  | 'state'
+>
+
 export type FacetSurface = 'tile' | 'list' | 'graph' | 'card' | 'finder'
 export type FacetId =
   'kind' | 'priority' | 'state' | 'readiness' | 'labels' | 'holder' | 'parent' | 'steps'
@@ -188,13 +206,13 @@ const PRIORITY_GLYPHS: Record<WorkItemBrief['priority'], IconName | null> = {
 }
 
 /** Readiness as a facet value: startable, waiting on an open blocker, or neither. */
-export function readinessOf(item: WorkItemBrief, context: FacetContext = {}): string | null {
+export function readinessOf(item: FacetItem, context: FacetContext = {}): string | null {
   if (item.state.is_terminal) return null
   if (context.waitingOn) return 'waiting'
   return item.ready ? 'ready' : null
 }
 
-function steps(item: WorkItemBrief) {
+function steps(item: FacetItem) {
   return {
     done: item.checklist.filter((step) => step.done).length,
     total: item.checklist.length,
@@ -202,7 +220,7 @@ function steps(item: WorkItemBrief) {
 }
 
 /** The value one facet has on one item, or null when the item has none. */
-function valueOf(facet: FacetId, item: WorkItemBrief, context: FacetContext): string | null {
+function valueOf(facet: FacetId, item: FacetItem, context: FacetContext): string | null {
   if (facet === 'kind') return item.kind
   if (facet === 'priority') return item.priority
   if (facet === 'state') return item.state.category
@@ -223,7 +241,7 @@ function valueOf(facet: FacetId, item: WorkItemBrief, context: FacetContext): st
 export function printsFacet(
   facet: FacetId,
   surface: FacetSurface,
-  item: WorkItemBrief,
+  item: FacetItem,
   context: FacetContext = {},
 ): boolean {
   const rule = FACET_RULES[facet][surface]
@@ -241,7 +259,7 @@ export function printsFacet(
   return true
 }
 
-function kindMark(item: WorkItemBrief, form: FacetForm): FacetMark {
+function kindMark(item: FacetItem, form: FacetForm): FacetMark {
   return {
     facet: 'kind',
     value: item.kind,
@@ -254,7 +272,7 @@ function kindMark(item: WorkItemBrief, form: FacetForm): FacetMark {
   }
 }
 
-function priorityMark(item: WorkItemBrief, form: FacetForm): FacetMark {
+function priorityMark(item: FacetItem, form: FacetForm): FacetMark {
   return {
     facet: 'priority',
     value: item.priority,
@@ -267,7 +285,7 @@ function priorityMark(item: WorkItemBrief, form: FacetForm): FacetMark {
   }
 }
 
-function stateMark(item: WorkItemBrief, form: FacetForm): FacetMark {
+function stateMark(item: FacetItem, form: FacetForm): FacetMark {
   return {
     facet: 'state',
     value: item.state.category,
@@ -299,12 +317,12 @@ function readinessMark(value: string, form: FacetForm, context: FacetContext): F
 }
 
 /** Nobody, in a column, is a dash; in a sentence of facts it is said. */
-function holderText(item: WorkItemBrief, surface: FacetSurface): FacetText {
+function holderText(item: FacetItem, surface: FacetSurface): FacetText {
   if (item.claim_ref) return { literal: holderName(item.claim_ref) }
   return surface === 'list' ? { literal: '—' } : { key: 'workItem.noClaim' }
 }
 
-function holderMark(item: WorkItemBrief, form: FacetForm, surface: FacetSurface): FacetMark {
+function holderMark(item: FacetItem, form: FacetForm, surface: FacetSurface): FacetMark {
   const stale = item.claim_state === 'stale' && !item.state.is_terminal
   return {
     facet: 'holder',
@@ -323,7 +341,7 @@ function holderMark(item: WorkItemBrief, form: FacetForm, surface: FacetSurface)
  * A chip per label the surface has room for, then one quiet «+N» for the rest
  * (form `word`, no filter), which the surface's own open target explains.
  */
-function labelMarks(item: WorkItemBrief, rule: FacetRule): FacetMark[] {
+function labelMarks(item: FacetItem, rule: FacetRule): FacetMark[] {
   const shown = rule.limit === undefined ? item.labels : item.labels.slice(0, rule.limit)
   const rest = item.labels.length - shown.length
   const more: FacetMark[] = rest
@@ -362,7 +380,7 @@ function labelMarks(item: WorkItemBrief, rule: FacetRule): FacetMark[] {
 export function facetMarks(
   facet: FacetId,
   surface: FacetSurface,
-  item: WorkItemBrief,
+  item: FacetItem,
   context: FacetContext = {},
 ): FacetMark[] {
   const rule = FACET_RULES[facet][surface]
@@ -408,7 +426,7 @@ export function facetMarks(
 /** Every mark a surface prints for an item, facet by facet in reading order. */
 export function surfaceMarks(
   surface: FacetSurface,
-  item: WorkItemBrief,
+  item: FacetItem,
   context: FacetContext = {},
   facets: readonly FacetId[] = FACET_ORDER,
 ): FacetMark[] {

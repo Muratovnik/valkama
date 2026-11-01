@@ -3,93 +3,37 @@
   gap: var(--space-section);
 }
 
-/* Several columns of short facts, each a term over its value. A single column
-   made the drawer scroll past five one-word answers before the description. */
 .overview-section {
   display: grid;
   gap: var(--space-heading-content);
 }
 
-.facts {
+.blockers {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
-  gap: var(--space-3) var(--space-4);
-  margin: 0;
-}
-
-.fact {
-  display: grid;
-  gap: var(--space-label-value);
-  align-content: start;
-  min-width: 0;
-}
-
-.fact-wide {
-  grid-column: 1 / -1;
-}
-
-.fact-term {
-  color: var(--color-text-tertiary);
-  font: var(--font-detail);
-}
-
-.fact-value {
-  margin: 0;
-  color: var(--color-text);
-  font: var(--font-line);
-}
-
-.source-anchor {
-  display: flex;
-  align-items: start;
-  padding: 0;
-  border: 0;
-  color: var(--color-action-primary);
-  font: inherit;
-  text-align: start;
-  overflow-wrap: anywhere;
-  background: none;
-  cursor: pointer;
-
-  &:hover,
-  &:focus-visible {
-    text-decoration: underline;
-  }
-}
-
-.source-notice {
-  display: block;
-  margin-top: var(--space-1);
-  color: var(--color-text-muted);
-  font: var(--font-note);
-}
-
-.lease-detail {
-  display: block;
-  color: var(--color-text-muted);
-  font: var(--font-note);
-}
-
-.fact-source {
-  font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
-}
-
-.labels {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-2);
+  gap: var(--space-1);
   padding: 0;
   margin: 0;
   list-style: none;
 }
 
-.label {
-  padding: 0 var(--space-1);
-  color: var(--color-text-muted);
-  font: var(--font-detail);
-  background: var(--color-surface-recess);
-  border-radius: var(--radius-status);
+/* A wait reads as the facet does everywhere else: its glyph in the hue of a
+   stop, then «Ждёт» and the reference, which opens the blocker. */
+.blocker {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: baseline;
+  color: var(--color-text);
+  font: var(--font-line);
+}
+
+.blocker-glyph {
+  align-self: center;
+  color: var(--color-text-tertiary);
+
+  &[data-tone='danger'] {
+    color: var(--color-danger);
+  }
 }
 
 .quiet {

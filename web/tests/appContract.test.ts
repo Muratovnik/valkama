@@ -23,6 +23,9 @@ const coreApi = source('../src/shared/api/api.ts')
 const nav = source('../src/widgets/app-nav/components/AppNav.vue')
 const inspector = source('../src/widgets/work-item-inspector/components/WorkItemInspector.vue')
 const overview = source('../src/widgets/work-item-inspector/components/InspectorOverview.vue')
+const sourceOpen = source('../src/widgets/work-item-inspector/utils/useSourceOpen.ts')
+const identity = source('../src/widgets/work-item-inspector/components/InspectorIdentity.vue')
+const relations = source('../src/widgets/work-item-inspector/components/InspectorRelations.vue')
 const sourceReference = source('../src/shared/lib/sourceReference.ts')
 const inspectorMemory = source('../src/widgets/work-item-inspector/components/InspectorMemory.vue')
 const workspace = source('../src/pages/planning/PlanningWorkspace.vue')
@@ -99,13 +102,23 @@ test('source opening carries only canonical Planning-space authority', () => {
   assert.match(planningSurface, /planningSpaceEntity\(space\)/)
   assert.match(planningSurface, /:resource-ref="boundSpaceResourceRef"/)
   assert.match(inspector, /:resource-ref="resourceRef"/)
+  // The head's icon and the Relations row open the anchor through one owner,
+  // each with the card's own space as its authority.
   assert.match(
-    overview,
-    /openSourceReference\(\{\s*source: props\.item\.source,\s*resource_ref: props\.resourceRef,?\s*\}\)/,
+    sourceOpen,
+    /openSourceReference\(\{\s*source: source\(\),\s*resource_ref: resourceRef\(\)\s*\}\)/,
   )
+  for (const opener of [identity, relations])
+    assert.match(
+      opener,
+      /useSourceOpen\(\s*\(\) => props\.item\??\.source[^,]*,\s*\(\) => props\.resourceRef,?\s*\)/,
+    )
   assert.match(sourceReference, /openSource\(request\)/)
   assert.match(sourceReference, /clipboard\.writeText\(request\.source\)/)
-  assert.doesNotMatch(`${planningSurface}\n${inspector}\n${overview}`, /sourceRoot|source_root/)
+  assert.doesNotMatch(
+    `${planningSurface}\n${inspector}\n${overview}\n${sourceOpen}`,
+    /sourceRoot|source_root/,
+  )
 })
 
 test('session navigation refuses ambiguous project ownership', () => {

@@ -73,7 +73,7 @@ export const drawerFrameStub = {
   name: 'DrawerFrame',
   emits: ['close'],
   template:
-    '<div><slot name="controls" /><slot name="meta" /><slot name="actions" /><slot name="tabs" /><slot /></div>',
+    '<div><slot name="identity" /><slot name="controls" /><slot name="facts" :condensed="false" /><slot name="actions" /><slot name="tabs" /><slot /></div>',
   methods: {
     position: () => ({ condensed: false, top: 0 }),
     restore: async () => {},

@@ -3,17 +3,23 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import RelatedWorkPicker from '@/widgets/work-item-inspector/components/RelatedWorkPicker.vue'
+import { useSourceOpen } from '@/widgets/work-item-inspector/utils/useSourceOpen.ts'
 
 import { linkWorkItems, planningRefusal } from '@/shared/api/planningApi.ts'
 import { LINK_KINDS } from '@/shared/api/planningModel.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { actorName } from '@/shared/lib/actor.ts'
+import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
 import RichText from '@/shared/ui/RichText.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
-const props = defineProps<{ item: WorkItem; writable: boolean }>()
+const props = defineProps<{
+  item: WorkItem
+  resourceRef: PlanningSpaceEntityRef
+  writable: boolean
+}>()
 const emit = defineEmits<{
   changed: []
   open: [reference: string]
@@ -75,6 +81,15 @@ async function remove(link: Link) {
     busy.value = false
   }
 }
+/**
+ * The plan anchor is one of the item's references, so its whole path stands
+ * here with them; the head offers it only as an icon.
+ */
+const { note: sourceNote, open: openSource } = useSourceOpen(
+  () => props.item.source,
+  () => props.resourceRef,
+)
+
 function when(value: string): string {
   const date = new Date(value)
   return Number.isNaN(date.valueOf()) ? value : d(date, 'activity')
@@ -180,9 +195,29 @@ function when(value: string): string {
       />
       <p class="quiet">{{ t('workItem.refsIntro') }}</p>
       <ul
-        v-if="item.refs.length"
+        v-if="item.refs.length || item.source"
         class="ref-list"
       >
+        <li
+          v-if="item.source"
+          class="ref-row"
+        >
+          <span class="ref-kind">{{ t('workItem.source') }}</span>
+          <button
+            class="ref-value source-anchor"
+            type="button"
+            :title="t('source.open')"
+            @click="openSource"
+          >
+            {{ item.source }}
+          </button>
+          <small
+            v-if="sourceNote"
+            class="source-notice"
+            role="status"
+            >{{ sourceNote }}</small
+          >
+        </li>
         <li
           v-for="reference in item.refs"
           :key="`${reference.kind}-${reference.value}-${reference.at}`"
@@ -334,6 +369,25 @@ function when(value: string): string {
   color: var(--color-text);
   font: var(--font-line);
   overflow-wrap: anywhere;
+}
+
+.source-anchor {
+  padding: 0;
+  border: 0;
+  color: var(--color-action-primary);
+  text-align: start;
+  background: none;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    text-decoration: underline;
+  }
+}
+
+.source-notice {
+  color: var(--color-text-muted);
+  font: var(--font-note);
 }
 
 .ref-meta {

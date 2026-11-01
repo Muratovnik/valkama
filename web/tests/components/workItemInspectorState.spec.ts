@@ -43,7 +43,7 @@ const passThrough = { template: '<div><slot /></div>' }
 const drawerFrame = {
   // The frame's head and body, as the real one lays them out.
   template:
-    '<div><header class="drawer-frame-head"><slot name="title" /><slot name="controls" /><slot name="meta" /><slot name="actions" /><slot name="tabs" /></header><slot /></div>',
+    '<div><header class="drawer-frame-head"><slot name="identity" /><slot name="title" /><slot name="controls" /><slot name="facts" :condensed="false" /><slot name="actions" /><slot name="tabs" /></header><slot /></div>',
   methods: {
     position: () => ({ condensed: false, top: 0 }),
     restore: async () => {},
@@ -51,8 +51,8 @@ const drawerFrame = {
   },
 }
 const overview = {
-  props: ['item', 'resourceRef'],
-  template: '<div class="overview-probe">{{ item.title }}:{{ resourceRef.resource_id }}</div>',
+  props: ['item'],
+  template: '<div class="overview-probe">{{ item.title }}</div>',
 }
 
 function mountInspector(realOverview = false) {
@@ -122,9 +122,7 @@ describe('WorkItemInspector resource state', () => {
     await flushPromises()
 
     expect(fetchWorkItem).toHaveBeenCalledTimes(2)
-    expect(wrapper.get('.overview-probe').text()).toBe(
-      `Recovered work item:${resourceRef.resource_id}`,
-    )
+    expect(wrapper.get('.overview-probe').text()).toBe('Recovered work item')
   })
 
   it('says a reference that names nothing is not there, once, with no section and no retry', async () => {
@@ -137,7 +135,7 @@ describe('WorkItemInspector resource state', () => {
     await flushPromises()
 
     const head = wrapper.get('.drawer-frame-head')
-    // The title is the reference, and nothing under it says it again.
+    // The title is the reference, and nothing over or under it says it again.
     expect(head.text()).toBe('QA-320')
     expect(wrapper.text().match(/QA-320/gu)).toHaveLength(1)
     expect(head.find('.inspector-tabs').exists()).toBe(false)
@@ -146,7 +144,7 @@ describe('WorkItemInspector resource state', () => {
       'There is no such record: it was deleted, or the address points elsewhere.',
     )
     expect(wrapper.find('.platform-state-panel').exists()).toBe(false)
-    expect(wrapper.find('.inspector-writes').exists()).toBe(false)
+    expect(wrapper.find('.card-facts-block').exists()).toBe(false)
     expect(wrapper.findAll('button').map((button) => button.text())).toEqual([])
     // The execution module is never asked about a record that does not exist.
     expect(fetchExecutionHistory).not.toHaveBeenCalled()
@@ -221,9 +219,7 @@ describe('WorkItemInspector resource state', () => {
     await flushPromises()
 
     expect(fetchWorkItem).toHaveBeenCalledTimes(3)
-    expect(wrapper.get('.overview-probe').text()).toBe(
-      `Updated work item:${resourceRef.resource_id}`,
-    )
+    expect(wrapper.get('.overview-probe').text()).toBe('Updated work item')
   })
   it('retains description and comment drafts across tabs and a background refresh', async () => {
     const item = record('Task', 1)
@@ -286,27 +282,27 @@ describe('WorkItemInspector resource state', () => {
       })
       await flushPromises()
 
-      const ownerFact = wrapper
-        .findAll('.fact')
-        .find(
-          (fact) =>
-            fact.find('dt').text() === (terminal ? 'Previously responsible' : 'Responsible'),
-        )
-      expect(ownerFact?.find('dd').text()).toBe(claimed ? holder : 'No active claim')
-      // The holder is named once, in the facts; the head that stays in view
-      // holds the title, the reference and the sections, not the holder again.
+      // The holder is named once, among the facts in the head that stays in
+      // view, as responsible while the item is open and as history once it is done.
       const head = wrapper.get('.drawer-frame-head')
-      if (claimed) expect(head.text()).not.toContain(holder)
-      expect(head.find('.head-actions').exists()).toBe(false)
-      const actions = wrapper
-        .findAll('.inspector-writes .head-actions button')
-        .map((button) => button.text())
+      const holderFact = head.get('.card-holder')
+      expect(holderFact.text()).toContain(claimed ? holder : 'No active claim')
+      expect(holderFact.get('.visually-hidden').text()).toBe(
+        terminal ? 'Previously responsible:' : 'Responsible:',
+      )
+      expect(wrapper.text().split(claimed ? holder : 'No active claim')).toHaveLength(2)
+      const actions = head.findAll('.write-actions button').map((button) => button.text())
       expect(actions).toEqual(action)
+      // The state is the menu that moves it, wherever the card can write.
       expect(wrapper.findComponent({ name: 'ChoiceSelect' }).exists()).toBe(writable)
       if (writable) {
         expect(wrapper.getComponent({ name: 'ChoiceSelect' }).props()).toMatchObject({
           disabled: false,
-          options: [{ value: 'queued', label: 'Queued' }],
+          modelValue: 'dev',
+          options: [
+            { value: 'dev', label: 'Development', disabled: true },
+            { value: 'queued', label: 'Queued' },
+          ],
         })
       }
       expect(item.claim_ref).toBe(holder)
@@ -318,7 +314,7 @@ describe('WorkItemInspector resource state', () => {
 describe('inspector relations hierarchy', () => {
   it('names related work and evidence independently and opens the related-task picker', async () => {
     const wrapper = mount(InspectorRelations, {
-      props: { item: record('Связанная работа', 1), writable: true },
+      props: { item: record('Связанная работа', 1), resourceRef, writable: true },
       global: {
         plugins: [createI18n({ legacy: false, locale: 'ru', messages })],
         stubs: { RelatedWorkPicker: true },

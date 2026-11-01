@@ -120,7 +120,7 @@ describe('inspector writes and their refusals', () => {
     const wrapper = mountInspector(item)
     await flushPromises()
 
-    expect(wrapper.findAll('.head-actions button').map((button) => button.text())).toEqual([
+    expect(wrapper.findAll('.write-actions button').map((button) => button.text())).toEqual([
       'Take over',
     ])
     await getButton(wrapper, 'Take over').trigger('click')
@@ -131,7 +131,7 @@ describe('inspector writes and their refusals', () => {
     await wrapper.get('.confirm-strip .confirm-go').trigger('click')
     await flushPromises()
     expect(writes.at(-1)?.body).toEqual({ author: 'user', id: 'QA-320', force: true })
-    expect(wrapper.findAll('.head-actions button').map((button) => button.text())).toEqual([
+    expect(wrapper.findAll('.write-actions button').map((button) => button.text())).toEqual([
       'Release',
     ])
 
@@ -139,7 +139,7 @@ describe('inspector writes and their refusals', () => {
     await getButton(wrapper, 'Release').trigger('click')
     await flushPromises()
     expect(writes.at(-1)?.body).toEqual({ author: 'user', id: 'QA-320', release: true })
-    expect(wrapper.findAll('.head-actions button').map((button) => button.text())).toEqual([
+    expect(wrapper.findAll('.write-actions button').map((button) => button.text())).toEqual([
       'Claim',
     ])
     wrapper.unmount()
@@ -168,11 +168,15 @@ describe('inspector writes and their refusals', () => {
     const wrapper = mountInspector(item)
     await flushPromises()
 
-    const lease = wrapper.get('[data-dimension="claim-lease"]')
+    // A lease nobody is behind any more is a warning dot on the holder, and
+    // the holder's tooltip says why.
+    const lease = wrapper.get('.card-holder [data-dimension="claim-lease"]')
     expect(lease.attributes('data-state')).toBe('stale')
     expect(lease.attributes('data-tone')).toBe('warning')
-    expect(wrapper.get('.lease-detail').text()).toBe('the session behind it is gone')
-    expect(wrapper.findAll('.head-actions button').map((button) => button.text())).toEqual([
+    expect(wrapper.get('.card-holder').attributes('title')).toBe(
+      'Claim: Stale — the session behind it is gone',
+    )
+    expect(wrapper.findAll('.write-actions button').map((button) => button.text())).toEqual([
       'Take over',
     ])
 
@@ -198,7 +202,7 @@ describe('inspector writes and their refusals', () => {
     expect(writes.map((write) => write.body)).toEqual([{ author: 'user', id: 'QA-320' }])
     // The owner's own claim has no session behind it by design, so no lease is shown.
     expect(wrapper.find('[data-dimension="claim-lease"]').exists()).toBe(false)
-    expect(wrapper.findAll('.head-actions button').map((button) => button.text())).toEqual([
+    expect(wrapper.findAll('.write-actions button').map((button) => button.text())).toEqual([
       'Release',
     ])
     wrapper.unmount()
@@ -224,13 +228,14 @@ describe('inspector writes and their refusals', () => {
     const wrapper = mountInspector(item)
     await flushPromises()
 
-    const lease = wrapper.get('[data-dimension="claim-lease"]')
-    expect(lease.attributes('data-state')).toBe('live')
-    expect(lease.text()).toBe('Live')
+    // A live lease is no warning: it is the holder's tooltip, read out with the name.
+    expect(wrapper.find('[data-dimension="claim-lease"]').exists()).toBe(false)
+    const holder = wrapper.get('.card-holder')
     // The date is the activity format, which this harness's i18n leaves blank.
-    expect(wrapper.get('.lease-detail').text()).toMatch(
-      /^until .*, unless the session shows a sign of life$/u,
+    expect(holder.attributes('title')).toMatch(
+      /^Claim: Live — until .*, unless the session shows a sign of life$/u,
     )
+    expect(holder.text()).toContain('unless the session shows a sign of life')
     await getButton(wrapper, 'Take over').trigger('click')
     expect(wrapper.get('.confirm-strip').text()).toContain('codex holds this work')
     expect(writes).toHaveLength(0)
