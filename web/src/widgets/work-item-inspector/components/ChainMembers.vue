@@ -211,7 +211,7 @@ defineExpose({ restoreView, reveal, view })
               <span
                 v-if="member.ready"
                 class="chain-row-ready"
-                >{{ t('workItem.chain.workableMark') }}</span
+                >{{ t('workItem.facet.ready') }}</span
               >
               <span
                 v-if="holder(group, member)"

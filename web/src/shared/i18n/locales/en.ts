@@ -800,7 +800,6 @@ export const en = {
       summaryNoneOpen: 'Under the root: {total} · {done} · nothing open',
       part: '{group} {count}',
       workable: 'workable {count} (backlog included)',
-      workableMark: 'workable',
       group: {
         active: 'In progress',
         review: 'Review',

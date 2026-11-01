@@ -192,5 +192,14 @@ test('readiness has one label in each language, wherever it is printed', () => {
       'Ready to work',
     ])
       assert.ok(!values(catalog).some((value) => value.includes(retired)), `${locale}: ${retired}`)
+    // A mark that reads as the label is the label, not a lowercase second copy
+    // of it; inside a sentence the words stay lowercase («…; можно брать 3»).
+    assert.deepEqual(
+      values(catalog).filter(
+        (value) => value !== label && value.toLowerCase() === label.toLowerCase(),
+      ),
+      [],
+      locale,
+    )
   }
 })

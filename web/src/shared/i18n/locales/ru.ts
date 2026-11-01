@@ -799,7 +799,6 @@ export const ru = {
       summaryNoneOpen: 'Под корнем: {total} · {done} · открытых нет',
       part: '{group} {count}',
       workable: 'можно брать {count} (включая бэклог)',
-      workableMark: 'можно брать',
       group: {
         active: 'В работе',
         review: 'Проверка',
