@@ -396,7 +396,7 @@ function updateOpen(value: boolean) {
 .choice-check {
   width: 18px;
   height: 18px;
-  color: var(--color-success);
+  color: var(--color-text);
 }
 
 .choice-empty {

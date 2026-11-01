@@ -9,6 +9,7 @@ import { test } from 'vitest'
 import { scanUiTree } from '../scripts/check-ui-system.mjs'
 import { scanBorderBudget, scanControlSizes, scanHiddenRules } from '../scripts/ui-system/lines.mjs'
 import { SEMANTIC_TONES } from '../scripts/ui-system/semantic-colors.mjs'
+import { FILL_BUDGET, scanMeaningFills } from '../scripts/ui-system/styles.mjs'
 
 /** One file with one style block, which is what most of these fixtures are. */
 const styled = (name, css) => ({ file: `future/${name}.vue`, source: `<style>${css}</style>` })
@@ -192,6 +193,59 @@ test('the drawn-line ledger is exact in both directions and names its tokens', (
   // nothing from the budget.
   const reserved = [styled('Panel', '.a { border: 1px solid transparent; }')]
   assert.deepEqual(scanBorderBudget(reserved, new Map()), [])
+})
+
+test('a meaning colour that fills an area is a recorded exception, exactly', () => {
+  // The case that earned the ledger: a thrown switch painted the green of
+  // finished work, which the tint rule could not see because nothing was mixed.
+  const track = [styled('Switch', '.on .track { background: var(--color-success); }')]
+  assert.match(scanMeaningFills(track, new Map())[0], /fills 1 area\(s\).*FILL_BUDGET/)
+  assert.deepEqual(scanMeaningFills(track, new Map([['future/Switch.vue', 1]])), [])
+
+  // Every member of the family counts, in either property spelling.
+  for (const tone of SEMANTIC_TONES) {
+    const dot = [styled('Dot', `.dot { background-color: var(--color-${tone}); }`)]
+    assert.equal(scanMeaningFills(dot, new Map()).length, 1, tone)
+  }
+
+  // Exact in both directions: a fill that went away fails until its entry does.
+  assert.match(scanMeaningFills(track, new Map([['future/Switch.vue', 2]]))[0], /says 2/)
+  assert.deepEqual(
+    scanMeaningFills(
+      track,
+      new Map([
+        ['future/Switch.vue', 1],
+        ['future/Gone.vue', 1],
+      ]),
+    ),
+    ['future/Gone.vue: FILL_BUDGET keeps an entry for a file the tree does not have; remove it'],
+  )
+
+  // Not fills: a neutral ground, a tint (the tint rule's), a line, text, and a
+  // comment that names the colour.
+  const marks = [
+    styled(
+      'Marks',
+      [
+        '.a { background: var(--color-control-surface); }',
+        '.b { background: color-mix(in srgb, var(--color-danger) 8%, transparent); }',
+        '.c { border-inline-start: 3px solid var(--color-info); }',
+        '.d { color: var(--color-warning); }',
+        '/* .e { background: var(--color-success); } */',
+      ].join('\n'),
+    ),
+  ]
+  assert.deepEqual(scanMeaningFills(marks, new Map()), [])
+})
+
+test('the product tree fills with a meaning colour only where the ledger says', () => {
+  // The default root is the product tree, and its ledger is the real one; the
+  // switch is not on it, so a switch painted a hue again fails here.
+  assert.equal(FILL_BUDGET.has('shared/ui/ToggleSwitch.vue'), false)
+  assert.deepEqual(
+    scanUiTree().filter((violation) => /FILL_BUDGET/.test(violation)),
+    [],
+  )
 })
 
 test('a hairline drawn as a ground is counted as the line it is', () => {

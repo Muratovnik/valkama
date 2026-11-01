@@ -4,6 +4,7 @@
  * every token declared is used and every token used is declared.
  */
 
+import { staleEntries } from './lines.mjs'
 import { SEMANTIC_COLOR_REFERENCE } from './semantic-colors.mjs'
 
 // The chain's scope chart and branch map are drawings of data, not icons: the
@@ -258,6 +259,55 @@ function tintedSurfaces(file, source) {
     if (!value.includes('color-mix(') || !SEMANTIC_COLOR.test(value)) continue
     violations.push(
       `${file}: a status color tints a surface here; carry the state in text, a dot or a 3px inline-start marker`,
+    )
+  }
+  return violations
+}
+
+/**
+ * The meaning colours that fill an area, each one an argued exception.
+ *
+ * The tint rule above only sees `color-mix`, so a meaning colour written
+ * straight into a `background` passed it: the toggle's track was painted the
+ * green of finished work whenever it was on, which said "done" about a switch
+ * that only says "on". A meaning colour marks — text, a glyph, a line, a dot
+ * — and the few places where a fill *is* the mark are recorded here with the
+ * role that earns it:
+ *
+ *   dot   — a disc of a few pixels that is the whole indicator;
+ *   edge  — a 3px bar standing in for a status edge;
+ *   check — a ticked step's 16px box, which is the checkmark's own ground;
+ *   block — the zoomed-out graph's node, drawn as one tone because nothing
+ *           else of it is legible at that scale.
+ *
+ * Exact in both directions, like `LINE_BUDGET`: one fill more fails, one fewer
+ * fails until the entry is corrected, and an entry for a file that is gone
+ * fails too.
+ */
+export const FILL_BUDGET = new Map([
+  ['shared/ui/PlatformStatePanel.vue', 1], // dot: the failure mark's 12px disc.
+  ['widgets/app-nav/components/NavConnectionButton.vue', 2], // dot: live and reconnecting.
+  // edge: the chain bar, four tones; block: the zoomed-out node, four tones.
+  ['widgets/work-item-graph/components/GraphNodeCard.vue', 8],
+  ['widgets/work-item-inspector/components/InspectorOverview.css', 1], // check: a done step.
+])
+
+const FILL_DECLARATION = /(?:^|[{;])\s*(?:background|background-color)\s*:([^;{}]*)/gi
+
+export function scanMeaningFills(sources, budget = FILL_BUDGET) {
+  const violations = staleEntries(sources, budget, 'FILL_BUDGET')
+  for (const { file, source } of sources) {
+    if (!/\.(?:vue|css)$/.test(file)) continue
+    const css = source.replaceAll(/\/\*[\s\S]*?\*\//g, '')
+    let fills = 0
+    for (const [, value] of css.matchAll(FILL_DECLARATION)) {
+      // A mixed colour is a tint, and the tint rule owns that.
+      if (SEMANTIC_COLOR.test(value) && !value.includes('color-mix(')) fills += 1
+    }
+    const allowed = budget.get(file) ?? 0
+    if (fills === allowed) continue
+    violations.push(
+      `${file}: fills ${fills} area(s) with a meaning colour, the ledger says ${allowed} — a meaning colour marks text, a glyph, a line or a dot; a fill that is the mark itself is recorded in FILL_BUDGET with its role`,
     )
   }
   return violations

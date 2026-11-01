@@ -121,7 +121,7 @@ function drawnLines(file, source) {
  * — retired modules and a deleted inspector head among them — and any of those
  * paths coming back would have inherited a budget nobody had argued for.
  */
-function staleEntries(sources, budget, ledger) {
+export function staleEntries(sources, budget, ledger) {
   const present = new Set(sources.map(({ file }) => file))
   return [...budget.keys()]
     .filter((file) => !present.has(file))

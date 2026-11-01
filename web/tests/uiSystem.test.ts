@@ -109,6 +109,21 @@ test('a hue on a work item means one thing, and ordinary work carries none', () 
   assert.equal(statePresentation('work-item-node-marker', 'claimed').tone, tone('active'))
 })
 
+test('a chosen control carries no meaning hue, and a done step keeps the green of finished work', () => {
+  // A switch that is on, a ticked box, a chosen option: shape and ink say it.
+  // Selected was success, so "on" read as "done".
+  for (const state of ['selected', 'unselected'] as const) {
+    assert.equal(statePresentation('control-selection', state).tone, 'neutral', state)
+  }
+  // A checklist step is work rather than a control, so its own dimension says
+  // finished — the same hue a completed item's state takes.
+  assert.equal(
+    statePresentation('checklist-step', 'done').tone,
+    statePresentation('work-item-state', 'completed').tone,
+  )
+  assert.equal(statePresentation('checklist-step', 'open').tone, 'neutral')
+})
+
 test('selection policy uses one custom accessible implementation on every screen', () => {
   assert.equal(selectionMode({ optionCount: 4 }), 'combobox')
   assert.equal(selectionMode({ optionCount: 4, hasIcons: true }), 'combobox')

@@ -101,8 +101,11 @@ function toggle(current: boolean) {
   transition: transform var(--duration-quick) var(--ease-out);
 }
 
-.toggle-switch[data-tone='success'] .toggle-track {
-  background: var(--color-success);
+.toggle-switch[aria-checked='true'] .toggle-track {
+  /* On is where a control stands, not a meaning, so the track takes the
+     primary-action ink rather than a hue. It was the green of finished work,
+     which said "done" about a switch that only says "on". */
+  background: var(--color-action-primary);
 }
 
 .toggle-switch[aria-checked='true'] .toggle-knob {

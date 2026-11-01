@@ -66,7 +66,7 @@ const stepCount = computed(() =>
   steps.value.total ? t('workItem.checklistProgress', steps.value) : '',
 )
 function stepState(done: boolean) {
-  return done ? 'selected' : 'unselected'
+  return done ? 'done' : 'open'
 }
 /** Who holds the item, or the phrase for nobody — never a blank cell. */
 const claimLabel = computed(() =>
@@ -275,7 +275,7 @@ defineExpose({ revealChecklist, startOutcomeReport })
             type="button"
             role="checkbox"
             :class="{ done: step.done }"
-            :data-tone="statePresentation('control-selection', stepState(step.done)).tone"
+            :data-tone="statePresentation('checklist-step', stepState(step.done)).tone"
             :disabled="!writable"
             :aria-checked="step.done"
             @click="emit('tick', step.id, !step.done)"

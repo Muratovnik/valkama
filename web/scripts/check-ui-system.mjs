@@ -19,7 +19,13 @@ import {
 } from './ui-system/lines.mjs'
 import { scanSemanticStateOwnership } from './ui-system/semantic-states.mjs'
 import { collectVueSources, defaultSourceRoot } from './ui-system/sources.mjs'
-import { scanTokenHygiene, scanTypeStyles, scanUiSources } from './ui-system/styles.mjs'
+import {
+  FILL_BUDGET,
+  scanMeaningFills,
+  scanTokenHygiene,
+  scanTypeStyles,
+  scanUiSources,
+} from './ui-system/styles.mjs'
 
 export function scanUiTree(root = defaultSourceRoot) {
   const sources = collectVueSources(root)
@@ -30,12 +36,14 @@ export function scanUiTree(root = defaultSourceRoot) {
   const product = root === defaultSourceRoot
   const budget = product ? LINE_BUDGET : new Map()
   const sizes = product ? CONTROL_SIZE_BUDGET : new Map()
+  const fills = product ? FILL_BUDGET : new Map()
   return [
     ...scanUiSources(sources),
     ...scanSemanticStateOwnership(sources),
     ...scanTokenHygiene(sources),
     ...scanTypeStyles(sources),
     ...scanBorderBudget(sources, budget),
+    ...scanMeaningFills(sources, fills),
     ...scanHiddenRules(sources),
     ...scanControlSizes(sources, sizes),
     ...scanScopeEscapes(sources),

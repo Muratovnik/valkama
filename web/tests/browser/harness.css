@@ -75,3 +75,22 @@
     background: var(--color-surface);
   }
 }
+
+.marks-harness {
+  display: grid;
+  gap: var(--space-4);
+  align-content: start;
+  min-height: 100vh;
+  padding: var(--space-4);
+  background: var(--color-canvas);
+}
+
+.marks-harness-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3);
+  background: var(--color-surface-muted);
+  border-radius: var(--radius-card);
+}

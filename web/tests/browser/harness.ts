@@ -20,6 +20,7 @@ import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 import '@/app/styles/index.css'
 
+import { marksSurface } from './marksSurface.ts'
 import { now } from './planningFixtures.ts'
 
 import './harness.css'
@@ -162,6 +163,7 @@ const Harness = defineComponent({
       surfaceDialog.value = true
     }
     const selectedRuntime = ref('codex')
+    if (requestedSurface === 'marks') return marksSurface
     if (contextHarness) {
       return () =>
         h('main', { class: 'harness-shell' }, [

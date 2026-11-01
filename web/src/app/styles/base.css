@@ -121,7 +121,7 @@ textarea {
 }
 
 input:is([type='checkbox'], [type='radio']) {
-  accent-color: var(--color-success);
+  accent-color: var(--color-action-primary);
 }
 
 button:focus-visible,

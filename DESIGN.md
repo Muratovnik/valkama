@@ -235,7 +235,12 @@ chrome.
   panel spends a whole surface on what its own sentence already says, and a
   screen holding several of them reads as a screen full of alarms.
   `check:ui-system` rejects a meaning colour blended into a background or a
-  container border. The family it guards is declared once
+  container border, and holds the few areas filled with one straight — a dot,
+  a 3px edge, a ticked step's box, the zoomed-out graph node — to an exact
+  ledger (`FILL_BUDGET`), each with its role. A control's own state is not on
+  it: a switch that is on, a checked box and a chosen option take neutral
+  ink — the primary-action fill, the text tone — because "on" is where a
+  control stands, and the green that painted it said "done". The family it guards is declared once
   (`scripts/ui-system/semantic-colors.mjs`) and shared by the tint rule, the
   line ledger and the state-ownership rule; a test holds it equal to the tones
   `uiSystem.ts` paints with, so a new meaning colour cannot arrive unguarded.

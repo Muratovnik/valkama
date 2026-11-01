@@ -2,6 +2,7 @@ type SemanticTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger'
 type SemanticEmphasis = 'quiet' | 'strong'
 
 export type ClosedStateDimension =
+  | 'checklist-step'
   | 'claim-lease'
   | 'connection-lifecycle'
   | 'control-selection'
@@ -62,9 +63,24 @@ const STATE_PRESENTATION = {
     stale: { tone: 'warning', emphasis: 'strong' },
     unconfirmed: { tone: 'neutral', emphasis: 'quiet' },
   },
+  /**
+   * A control's chosen state is said by its shape and its ink — a thrown
+   * switch, a ticked box, a check beside an option — never by a meaning hue.
+   * Selected was success, so every switch that was on and every chosen option
+   * wore the green of finished work.
+   */
   'control-selection': {
-    selected: { tone: 'success', emphasis: 'quiet' },
+    selected: { tone: 'neutral', emphasis: 'quiet' },
     unselected: { tone: 'neutral', emphasis: 'quiet' },
+  },
+  /**
+   * A step of a checklist, which is work and not a control: a done step is
+   * finished, so it takes the green of finished work. It used to borrow
+   * `control-selection`, which tied the checklist's colour to every switch.
+   */
+  'checklist-step': {
+    done: { tone: 'success', emphasis: 'quiet' },
+    open: { tone: 'neutral', emphasis: 'quiet' },
   },
   /**
    * A work item's state, keyed by its *category* rather than its name.
@@ -209,6 +225,7 @@ const STATE_PRESENTATION = {
   },
 } satisfies Record<StateDimension, Record<string, StatePresentation>>
 
+type ChecklistStepState = keyof (typeof STATE_PRESENTATION)['checklist-step']
 type ClaimLeaseState = keyof (typeof STATE_PRESENTATION)['claim-lease']
 type ConnectionLifecycleState = keyof (typeof STATE_PRESENTATION)['connection-lifecycle']
 type PlatformUiState = keyof (typeof STATE_PRESENTATION)['platform-ui-state']
@@ -225,6 +242,7 @@ type WorkItemReadinessState = keyof (typeof STATE_PRESENTATION)['work-item-readi
  * future state that should read as neutral rather than break the whole view.
  */
 export type SemanticStatePair =
+  | { dimension: 'checklist-step'; state: ChecklistStepState }
   | { dimension: 'claim-lease'; state: ClaimLeaseState }
   | { dimension: 'connection-lifecycle'; state: ConnectionLifecycleState }
   | { dimension: 'control-selection'; state: 'selected' | 'unselected' }
@@ -238,6 +256,7 @@ export type SemanticStatePair =
   | { dimension: OpenStateDimension; state: string }
 
 const CLOSED_STATE_DIMENSIONS = {
+  'checklist-step': true,
   'claim-lease': true,
   'connection-lifecycle': true,
   'control-selection': true,
