@@ -135,6 +135,7 @@ const KEEP = '\u{A0}'
  * The total is said as what it is — the work under the root, the root itself
  * not counted — because the board's chain chip counts the root too and reads
  * one more for the same chain; an unlabelled 306 beside a 307 read as a fault.
+ * It is the section's only count, so it is never one of two numbers for "the chain".
  *
  * Finished work is named like every other group, by the word its heading and
  * the map's legend use, so «Done 179» here is the «Done · 179» below.
@@ -168,10 +169,11 @@ const charted = computed(() => (props.chain?.series.length ?? 0) > 1)
     :aria-busy="busy"
     :aria-label="t('workItem.chain.title')"
   >
-    <SectionHeader
-      :title="t('workItem.chain.title')"
-      :count="chain?.total ?? ''"
-    >
+    <!-- No count beside the heading: the line under the map is the card's one
+         number for the chain and says what it counts, the work under the root.
+         A bare 306 here stood beside the board's «Chain MAIN-1 · 307», which
+         counts the root as well, and in Epic scope it named a third population. -->
+    <SectionHeader :title="t('workItem.chain.title')">
       <template
         v-if="chain"
         #actions

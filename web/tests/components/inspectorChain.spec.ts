@@ -95,6 +95,10 @@ describe('the chain section of a card', () => {
       'chain-members',
     ])
     expect(chain.findAll('.chain-summary p')).toHaveLength(2)
+    // The heading carries no bare count of its own: the totals line is the
+    // section's one number for the chain, and it says what it counts.
+    expect(chain.get('.section-header').text()).toBe('Chain Show on graph')
+    expect(chain.find('.section-header-count').exists()).toBe(false)
     // Done and open, the open work by group in the board's own state names —
     // never lowercased keys — and the workable count beside it rather than as a
     // group of its own. It counts the backlog too, so it outnumbers the 14 to
