@@ -4,7 +4,7 @@ import { createI18n } from 'vue-i18n'
 
 import { test } from 'vitest'
 
-import { failureMessage, typedFailure } from '@/shared/api/typedFailure.ts'
+import { failureMessage, failureMessageKey, typedFailure } from '@/shared/api/typedFailure.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
 function localized(locale: 'en' | 'ru', code: string): string {
@@ -71,6 +71,14 @@ test('an exact read answered 404 is a missing record, not a dependency that is d
     status: 409,
     retryable: false,
   })
+})
+
+test('a key alone never leads to the unknown sentence with its technical code left empty', () => {
+  const unknown = { code: 'internal', status: 500, retryable: true }
+  assert.equal(failureMessageKey(unknown), 'platform.failures.requestFailed')
+  assert.equal(failureMessage(unknown).params?.code, 'internal')
+  const known = { code: 'not_found', status: 404, retryable: false }
+  assert.equal(failureMessageKey(known), 'platform.failures.notFound')
 })
 
 test('permission and contract failures are typed without preserving backend prose', () => {

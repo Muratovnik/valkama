@@ -6,7 +6,7 @@ import type { PlatformPlanningReady } from '@/shared/api/platformPlanningTypes.t
 import type { OperatingScope } from '@/shared/api/platformRoute.ts'
 import { uiError, uiLoading } from '@/shared/api/platformUiState.ts'
 import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
-import { failureMessageKey, typedFailure } from '@/shared/api/typedFailure.ts'
+import { failureMessage, typedFailure } from '@/shared/api/typedFailure.ts'
 
 export function usePlanningPortfolio(scope: () => OperatingScope) {
   const { t } = useI18n()
@@ -22,7 +22,9 @@ export function usePlanningPortfolio(scope: () => OperatingScope) {
       const payload = await fetchPlatformPlanning(scope())
       if (current === generation) state.value = payload.state
     } catch (error) {
-      if (current === generation) state.value = uiError(t(failureMessageKey(typedFailure(error))))
+      if (current !== generation) return
+      const message = failureMessage(typedFailure(error))
+      state.value = uiError(t(message.key, message.params ?? {}))
     }
   }
   onBeforeUnmount(invalidate)

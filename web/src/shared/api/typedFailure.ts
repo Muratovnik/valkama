@@ -106,6 +106,12 @@ export function failureMessage(failure: TypedFailure): FailureMessage {
     : { key }
 }
 
+/**
+ * The copy's key alone, for a reader that translates it later. A key cannot carry
+ * the technical code, so an unknown failure reads as the generic one rather than
+ * as the unknown sentence with its code left empty.
+ */
 export function failureMessageKey(failure: TypedFailure): string {
-  return failureMessage(failure).key
+  const message = failureMessage(failure)
+  return message.params === undefined ? message.key : 'platform.failures.requestFailed'
 }

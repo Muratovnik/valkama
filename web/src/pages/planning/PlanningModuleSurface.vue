@@ -60,7 +60,7 @@ import {
   rejectResource,
   resolveResource,
 } from '@/shared/api/resourceState.ts'
-import { failureMessageKey, typedFailure } from '@/shared/api/typedFailure.ts'
+import { failureMessage, typedFailure } from '@/shared/api/typedFailure.ts'
 import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 
@@ -288,7 +288,8 @@ async function loadPlanning() {
       planning.value = uiUnavailable(t('workItem.cutoverPending'))
       return
     }
-    const reason = t(failureMessageKey(typedFailure(error)))
+    const message = failureMessage(typedFailure(error))
+    const reason = t(message.key, message.params ?? {})
     resource.value = rejectResource(resource.value, generation, key, reason)
     if (model.value === null) planning.value = uiError(reason)
     else emit('notice', reason)
