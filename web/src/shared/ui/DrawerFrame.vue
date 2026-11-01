@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { nextTick, ref } from 'vue'
 
+import { useEventListener } from '@vueuse/core'
+
 import VIcon from '@/shared/ui/VIcon.vue'
 
 defineProps<{
@@ -83,19 +85,60 @@ async function setCondensed(next: boolean) {
   const offset = before - text.getBoundingClientRect().top
   const glide = glideOf(text)
   if (offset === 0 || glide.duration === 0) return
-  text.animate([{ transform: `translateY(${offset}px)` }, { transform: 'translateY(0)' }], {
-    duration: glide.duration,
-    easing: glide.easing,
-  })
+  const animation = text.animate(
+    [{ transform: `translateY(${offset}px)` }, { transform: 'translateY(0)' }],
+    { duration: glide.duration, easing: glide.easing },
+  )
+  if (pressed) hold(animation)
 }
+
+/**
+ * A press belongs to what was under the pointer when it went down, and a click
+ * reaches a control only if the release lands on it too. So the glide stands still
+ * from the press to the release and goes on after. Moving under a held pointer, or
+ * ending at once because the press focused the control, took the control from under
+ * the release, and the click went to whatever held both points: the press did nothing.
+ * The text hears the press and the body does not: the body's scrollbar is a press
+ * too, one that scrolls, and it would hold the glide its own scroll starts. Only the
+ * button a click belongs to holds it: a menu's button may not report its release.
+ */
+let pressed = false
+
+/**
+ * Pausing alone takes effect on the next frame, one step further on, which at the
+ * glide's quickest is enough to leave a pointer on a control's edge behind. Setting
+ * the time holds it where it is drawn now.
+ */
+function hold(animation: Animation) {
+  const drawn = animation.currentTime
+  animation.pause()
+  animation.currentTime = drawn
+}
+
+function holdGlide(event: PointerEvent) {
+  if (event.button !== 0) return
+  pressed = true
+  for (const animation of content.value?.getAnimations() ?? []) hold(animation)
+}
+
+function freeGlide() {
+  if (!pressed) return
+  pressed = false
+  for (const animation of content.value?.getAnimations() ?? []) animation.play()
+}
+
+useEventListener(window, 'pointerup', freeGlide)
+useEventListener(window, 'pointercancel', freeGlide)
 
 /**
  * A focus move inside the body places its control by the text's settled place.
  * A glide in flight is a transform, and a scroll into view measures the transform,
  * so the control would be brought in at the place the text was passing and sit
- * out of view once the glide ends. The glide ends at once instead.
+ * out of view once the glide ends. The glide ends at once instead. The focus a
+ * press gives its control places nothing: that control is under the pointer.
  */
 function settleGlide() {
+  if (pressed) return
   for (const animation of content.value?.getAnimations() ?? []) animation.finish()
 }
 
@@ -209,6 +252,7 @@ defineExpose({ position, restore, scrollToTop })
         ref="content"
         class="drawer-frame-content"
         :class="{ condensed }"
+        @pointerdown.capture="holdGlide"
       >
         <slot />
       </div>

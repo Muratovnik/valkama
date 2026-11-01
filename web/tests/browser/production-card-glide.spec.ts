@@ -242,3 +242,60 @@ for (const width of [1440, 390]) {
     expect(durations.every((duration) => duration <= 1)).toBe(true)
   })
 }
+
+/**
+ * A press that lands while the text glides reaches the control it went down on. The
+ * glide is lengthened so a press from outside the page is certain to fall inside it,
+ * and the pointer is held long enough for an unheld glide to carry the control away.
+ * The press focuses the control, and a glide ended by that focus did the same at once.
+ * The hold starts with the press: a glide that went on one more frame took the control
+ * from under a pointer on its edge.
+ */
+test('a press during the glide reaches its control, and the glide goes on after it', async ({
+  page,
+}) => {
+  const drawer = await openReadCard(page, 390, 'long')
+  const body = drawer.locator('.drawer-frame-body')
+  const text = drawer.locator('.drawer-frame-content')
+  const edit = drawer.getByRole('button', { name: 'Изменить описание', exact: true })
+  await text.evaluate((node) => node.style.setProperty('--duration-surface', '4s'))
+  const { x, y } = await box(body)
+  await page.mouse.move(x + 40, y + 40)
+  await page.mouse.wheel(0, 100)
+  await expect
+    .poll(() => body.evaluate((node) => node.getAnimations({ subtree: true }).length))
+    .toBe(1)
+
+  // What the press found drawn, and what is drawn twenty frames on: a third of a
+  // second, as a person's press lasts, in which the glide would have gone on under it.
+  const drawn = text.evaluate(
+    (node) =>
+      new Promise<string[]>((done) => {
+        document.addEventListener(
+          'pointerdown',
+          async () => {
+            const atPress = getComputedStyle(node).transform
+            for (let frame = 0; frame < 20; frame += 1) {
+              await new Promise(requestAnimationFrame)
+            }
+            done([atPress, getComputedStyle(node).transform])
+          },
+          { once: true },
+        )
+      }),
+  )
+  const seen = await box(edit)
+  await page.mouse.move(seen.x + seen.width / 2, seen.y + seen.height / 2)
+  await page.mouse.down()
+  const [atPress, after] = await drawn
+  expect(atPress).not.toBe('none')
+  expect(after).toBe(atPress)
+  await page.mouse.up()
+
+  await expect(drawer.getByRole('textbox', { name: 'Описание', exact: true })).toBeVisible()
+  const heldStill = await body.evaluate(
+    (node) =>
+      node.getAnimations({ subtree: true }).filter((glide) => glide.playState === 'paused').length,
+  )
+  expect(heldStill).toBe(0)
+})
