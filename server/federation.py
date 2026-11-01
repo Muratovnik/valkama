@@ -94,10 +94,9 @@ def federated_search(query: str) -> dict:
         work_items.extend(found)
     # Each scope already puts the item a reference names first; across scopes
     # it leads as well, the primary's ahead of an attached one's, because
-    # `scopes.load` lists the primary first and the sort keeps that order.
-    reference = planning_model.exact_reference(text)
-    if reference is not None:
-        work_items.sort(key=lambda item: item["reference"] != reference)
+    # `scopes.load` lists the primary first and the sort keeps that order. A
+    # number alone names each space's item of that number, which lead the same way.
+    work_items.sort(key=lambda item: not planning_model.names_exactly(text, item["reference"]))
     return {
         "query": text,
         "work_items": work_items,

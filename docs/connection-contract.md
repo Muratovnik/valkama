@@ -112,7 +112,9 @@ reference, or `null`), `claim_ref` and `claim_state`, plus `comment_hit` and
 `summary_hit` on a search that matched there. Without a `limit` they return at most 50 rows.
 A search whose query is exactly a work-item reference -- `MAIN-12`, in any
 case, with surrounding spaces ignored -- answers that item first; every other
-match keeps its order, most recently changed first.
+match keeps its order, most recently changed first. A query that is a number
+alone -- `12` -- does the same for the item numbered 12: in a search scoped to
+a space that is one item, and without a space it is each space's item 12.
 `list_work_items` also takes `parent`, a work item by reference or id, and then
 lists only that item's children; the HTTP read `GET /api/planning/work-items`
 takes the same `parent` parameter. An unknown `parent` is refused with
@@ -811,7 +813,8 @@ read), `space_missing` (the bound store holds no such space), `binding_conflict`
 the search failed there) or `requests_unavailable` (an attached store predates
 human requests). The mapped search answers the item a reference query names
 first, the primary store's ahead of an attached store's, before it cuts the
-page. A request detail or mutation returns the confirmed request with
+page; a query that is a number alone answers each source's item of that number
+first the same way. A request detail or mutation returns the confirmed request with
 its target; attached stores remain read-only. Existing Planning searches and
 the complete space read model keep their existing scope and limits.
 

@@ -707,6 +707,20 @@ class PlanningCompactReadTests(unittest.TestCase):
         scoped = self.call("search_work_items", query=target["reference"], space="QA", limit=1)
         self.assertEqual([target["reference"]], [row["reference"] for row in scoped["work_items"]])
 
+    def test_a_search_for_a_number_in_a_space_answers_that_item_first(self) -> None:
+        """An agent asking a space for `1` gets QA-1, not the newest of QA-10 and up."""
+
+        self.fill(12)
+        self.conn.execute(
+            "UPDATE work_items SET updated_at = '2020-01-01T00:00:00Z' WHERE work_item_id = ?",
+            (self.epic["work_item_id"],),
+        )
+        answer = self.call("search_work_items", query="1", space="QA", limit=1)
+        self.assertEqual(
+            [self.epic["reference"]], [row["reference"] for row in answer["work_items"]]
+        )
+        self.assertTrue(answer["truncated"])
+
     def test_a_search_is_capped_by_default_and_says_so(self) -> None:
         self.fill(planning_tools.COMPACT_LIMIT + 5)
         answer = self.call("search_work_items", query="Filler")

@@ -144,15 +144,17 @@ def _exact_first(query: str, items: list[dict]) -> list[dict]:
     Sources are read project by project, so without this the item `MAIN-12`
     came after every item of an earlier project that merely mentions it. The
     primary store's item leads, an attached store's item of the same reference
-    follows it, and every other match keeps the order it was read in.
+    follows it, and every other match keeps the order it was read in. A number
+    alone names each source's item of that number: each source puts its own
+    first, and this keeps a later source's from falling behind an earlier
+    source's mentions.
     """
 
-    reference = model.exact_reference(query)
-    if reference is None:
+    if model.exact_reference(query) is None and model.exact_number(query) is None:
         return items
 
     def rank(entry: dict) -> int:
-        if entry["item"]["reference"] != reference:
+        if not model.names_exactly(query, entry["item"]["reference"]):
             return 2
         return 0 if entry["target"]["writable"] else 1
 

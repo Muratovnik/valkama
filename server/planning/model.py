@@ -73,6 +73,7 @@ _SPACE_KEY = re.compile(r"^[A-Z][A-Z0-9]{1,7}$")
 _STATE_KEY = re.compile(r"^[a-z][a-z0-9-]{0,31}$")
 _SAFE_TEXT = re.compile(r"^[^\x00\r\n]{0,512}$")
 _HUMAN_ID = re.compile(r"^([A-Z][A-Z0-9]{1,7})-([1-9][0-9]{0,8})$")
+_ITEM_NUMBER = re.compile(r"^[1-9][0-9]{0,8}$")
 
 MAX_TITLE = 200
 MAX_DESCRIPTION = 20_000
@@ -290,6 +291,29 @@ def exact_reference(query: str) -> str | None:
 
     match = _HUMAN_ID.match(query.strip().upper())
     return None if match is None else human_id(match.group(1), int(match.group(2)))
+
+
+def exact_number(query: str) -> int | None:
+    """The item number a search query is by itself, such as `12`, or None.
+
+    An editor's `#12` asks its space's search for `12`, and a person types the
+    number alone into a search scoped to a space: both mean the item numbered
+    12 there, while MAIN-120 and every mention of 12 match the same text. Read
+    across spaces, the number names each space's item of that number.
+    """
+
+    text = query.strip()
+    return int(text) if _ITEM_NUMBER.match(text) else None
+
+
+def names_exactly(query: str, reference: str) -> bool:
+    """Whether a search query names this reference itself: whole, or by number."""
+
+    exact = exact_reference(query)
+    if exact is not None:
+        return reference == exact
+    number = exact_number(query)
+    return number is not None and reference.endswith(f"-{number}")
 
 
 def checklist(value: object) -> list[dict]:

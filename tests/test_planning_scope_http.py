@@ -435,6 +435,59 @@ class PlanningScopeHttpTests(unittest.TestCase):
             [entry["target"]["project_id"] for entry in plain["items"]],
         )
 
+    def test_global_search_puts_each_source_item_a_number_names_first(self) -> None:
+        """`1` names each source's item 1, ahead of an earlier source's newer matches.
+
+        Each source answers its own item 1 first; the sources are read project by
+        project, so without the merge keeping them first a later source's item
+        came after every match of an earlier one, and a short page cut it off.
+        """
+
+        conn = store.connect()
+        service.create_planning_space(conn, project_id="a-project", name="Alpha", key="AAA")
+        for number in range(1, 12):
+            service.create_work_item(conn, space="AAA", title=f"Alpha {number}")
+        for number, updated in ((1, "2020"), (10, "2021"), (11, "2022")):
+            conn.execute(
+                "UPDATE work_items SET updated_at = ? WHERE number = ? AND planning_space_id ="
+                " (SELECT planning_space_id FROM planning_spaces WHERE key = 'AAA')",
+                (f"{updated}-01-01T00:00:00Z", number),
+            )
+        conn.commit()
+        conn.close()
+        alpha = {"data_scope_id": self.refs["primary"]["data_scope_id"], "space_key": "AAA"}
+        self.bind_projects(
+            {
+                "a-project": alpha,
+                "b-project": self.refs["attached"],
+                "example-project": self.refs["primary"],
+            }
+        )
+        status, answer = self.request("/api/modules/planning/search?q=1")
+        self.assertEqual(200, status, answer)
+        self.assertEqual(
+            [
+                ("a-project", "AAA-1"),
+                ("example-project", "SAME-1"),
+                ("b-project", "SAME-1"),
+                ("a-project", "AAA-11"),
+                ("a-project", "AAA-10"),
+            ],
+            [
+                (entry["target"]["project_id"], entry["item"]["reference"])
+                for entry in answer["items"]
+            ],
+        )
+        status, page = self.request("/api/modules/planning/search?q=1&limit=2")
+        self.assertEqual(200, status, page)
+        self.assertEqual(
+            [("a-project", "AAA-1"), ("example-project", "SAME-1")],
+            [
+                (entry["target"]["project_id"], entry["item"]["reference"])
+                for entry in page["items"]
+            ],
+        )
+
     def test_global_search_names_why_each_source_was_not_searched(self) -> None:
         """Each unsearched source carries a code saying what stood in the way."""
 

@@ -203,6 +203,24 @@ class FederatedSearchTests(ScopeCase):
             [(item["scope"], item["reference"]) for item in found["work_items"]],
         )
 
+    def test_the_items_a_number_names_lead_across_scopes(self) -> None:
+        """`1` names each space's item 1: the primary's, then the attached one's."""
+
+        scopes.attach(self.primary, "work", self.work)
+        connection = store.connect()
+        for number in range(1, 12):
+            planning_service.create_work_item(connection, space="PER", title=f"note {number}")
+        connection.execute(
+            "UPDATE work_items SET updated_at = '2020-01-01T00:00:00Z' WHERE number = 1"
+        )
+        connection.commit()
+        connection.close()
+        found = federation.federated_search(" 1 ")
+        self.assertEqual(
+            [("personal", "PER-1"), ("work", "WOR-1")],
+            [(item["scope"], item["reference"]) for item in found["work_items"][:2]],
+        )
+
     def test_an_unavailable_scope_is_named_too(self) -> None:
         scopes.attach(self.primary, "work", self.work)
         os.remove(self.work)

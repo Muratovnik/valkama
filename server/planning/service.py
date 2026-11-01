@@ -193,9 +193,11 @@ def search_work_items(
     `list_work_items`, it returns exactly `limit` matches and caps nothing.
 
     A query that is exactly a reference puts that item first, and every other
-    match keeps its order, newest change first. The order is decided before
-    the page is cut, so the item a person typed the number of never falls off
-    the page behind the items that only mention it.
+    match keeps its order, newest change first. A query that is a number alone
+    does the same for the item of that number, or across spaces for each
+    space's item of it. The order is decided before the page is cut, so the
+    item a person typed the number of never falls off the page behind the
+    items that only mention it.
     """
 
     text = model.text_field(query, "query", limit=200)
@@ -225,10 +227,14 @@ def search_work_items(
     )
     order = "i.updated_at DESC, i.work_item_id"
     reference = model.exact_reference(text)
+    number = model.exact_number(text)
     if reference is not None:
         key, number = model.parse_human_id(reference)
         order = "CASE WHEN p.key = ? AND i.number = ? THEN 0 ELSE 1 END, " + order
         parameters.extend([key, number])
+    elif number is not None:
+        order = "CASE WHEN i.number = ? THEN 0 ELSE 1 END, " + order
+        parameters.append(number)
     query += " ORDER BY " + order + " LIMIT ? OFFSET ?"
     rows = conn.execute(
         query, (*parameters, max(1, int(limit)), model.count_field(offset, "offset"))

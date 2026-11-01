@@ -446,6 +446,48 @@ class PlanningDomainTests(unittest.TestCase):
                     ],
                 )
 
+    def test_search_puts_the_item_a_number_alone_names_ahead_of_newer_matches(self) -> None:
+        """`1` in a space is the item numbered 1 there, however much else matches.
+
+        An editor's `#1` asks the space's search for `1`: QA-10 and up carry it
+        in their reference and are newer, so newest-first put the item past
+        them, and a page of one cut it off.
+        """
+
+        other = service.create_planning_space(
+            self.conn, project_id="second", name="Release", key="REL"
+        )
+        exact = self.item("Asked for by number")
+        for number in range(2, 13):
+            self.item(f"Filler {number}")
+        service.create_work_item(self.conn, space="REL", title="The other space's first")
+        self.conn.execute(
+            "UPDATE work_items SET updated_at = '2020-01-01T00:00:00Z' WHERE number = 1",
+        )
+        newest_first = [
+            item["reference"]
+            for item in service.search_work_items(self.conn, "QA-1", space=self.space["key"])
+            if item["reference"] != exact["reference"]
+        ]
+        for query in ("1", "  1 "):
+            with self.subTest(query=query):
+                scoped = service.search_work_items(self.conn, query, space=self.space["key"])
+                self.assertEqual(
+                    [exact["reference"], *newest_first], [item["reference"] for item in scoped]
+                )
+                page = service.search_work_items(self.conn, query, space=self.space["key"], limit=1)
+                self.assertEqual([exact["reference"]], [item["reference"] for item in page])
+                # Without a space the number names each space's item of it.
+                both = service.search_work_items(self.conn, query, limit=2)
+                self.assertEqual(
+                    {exact["reference"], f"{other['key']}-1"},
+                    {item["reference"] for item in both},
+                )
+        # Only the number by itself names an item; anything else is a phrase.
+        for phrase in ("01", "1a", "#1", "0"):
+            with self.subTest(phrase=phrase):
+                self.assertIsNone(model.exact_number(phrase))
+
     def test_activity_reads_newest_first_across_spaces(self) -> None:
         created = self.item("First")
         service.claim_work_item(self.conn, created["reference"], author="tester")
