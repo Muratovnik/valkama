@@ -123,6 +123,61 @@ describe('WorkItemInspector resource state', () => {
     )
   })
 
+  it('says a reference that names nothing is not there, once, with no section and no retry', async () => {
+    vi.mocked(fetchWorkItem).mockRejectedValueOnce({
+      code: 'not_found',
+      retryable: false,
+      status: 404,
+    })
+    const wrapper = mountInspector(true)
+    await flushPromises()
+
+    const head = wrapper.get('.drawer-frame-head')
+    // The title is the reference, and nothing under it says it again.
+    expect(head.text()).toBe('QA-320')
+    expect(wrapper.text().match(/QA-320/gu)).toHaveLength(1)
+    expect(head.find('.inspector-tabs').exists()).toBe(false)
+    // An absence, not a broken view: the sentence and nothing to retry.
+    expect(wrapper.get('.data-empty').text()).toBe(
+      'There is no such record: it was deleted, or the address points elsewhere.',
+    )
+    expect(wrapper.find('.platform-state-panel').exists()).toBe(false)
+    expect(wrapper.find('.inspector-writes').exists()).toBe(false)
+    expect(wrapper.findAll('button').map((button) => button.text())).toEqual([])
+    // The execution module is never asked about a record that does not exist.
+    expect(fetchExecutionHistory).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('reads the attempts once for an item it found, after the item', async () => {
+    vi.mocked(fetchWorkItem).mockResolvedValueOnce(record('Found', 1))
+    const wrapper = mountInspector(true)
+    await flushPromises()
+    expect(fetchExecutionHistory).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
+  it('drops the card of an item deleted while it is open, rather than keep a stale one', async () => {
+    vi.mocked(fetchWorkItem).mockResolvedValueOnce(record('Soon gone', 1))
+    const wrapper = mountInspector()
+    await flushPromises()
+    expect(wrapper.find('.overview-probe').exists()).toBe(true)
+
+    vi.mocked(fetchWorkItem).mockRejectedValueOnce({
+      code: 'not_found',
+      retryable: false,
+      status: 404,
+    })
+    await wrapper.setProps({ refreshToken: 1 })
+    await flushPromises()
+
+    expect(wrapper.find('.overview-probe').exists()).toBe(false)
+    expect(wrapper.find('.platform-state-banner').exists()).toBe(false)
+    expect(wrapper.get('.data-empty').text()).toContain('There is no such record')
+    expect(wrapper.find('.inspector-tabs').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it('keeps a reference in the title whole, and the title as it was written', async () => {
     vi.mocked(fetchWorkItem).mockResolvedValueOnce(
       record('Findings after the review (follow-up to MAIN-384)', 1),

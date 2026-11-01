@@ -49,6 +49,7 @@ import type { LaunchPacket } from '@/shared/types/launch.ts'
 import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import ConfirmStrip from '@/shared/ui/ConfirmStrip.vue'
+import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import DrawerFrame from '@/shared/ui/DrawerFrame.vue'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 import ResizableInspector from '@/shared/ui/ResizableInspector.vue'
@@ -101,6 +102,7 @@ function readFailureReason(failure: TypedFailure): string {
 const {
   item,
   load: loadResource,
+  missing,
   retryable: readRetryable,
   state,
 } = useWorkItemResource(
@@ -170,9 +172,19 @@ watch(
   ],
   () => {
     void load()
-    // Execution endpoints name primary-store items by reference only.
-    if (props.writable) void loadExecutions()
-    else if (section.value === 'execution') section.value = 'overview'
+    if (!props.writable && section.value === 'execution') section.value = 'overview'
+  },
+  { immediate: true },
+)
+
+// The attempts are read for an item the read found, never for a reference that
+// names nothing: a stale link used to ask the execution module about a record
+// that does not exist, twice. Execution endpoints name primary-store items by
+// reference only, so an attached store's item asks nothing either.
+watch(
+  () => (props.writable && item.value ? `${item.value.work_item_id}:${props.refreshToken}` : ''),
+  (key) => {
+    if (key) void loadExecutions()
   },
   { immediate: true },
 )
@@ -302,7 +314,12 @@ const close = () => void leave(() => emit('close'))
         </VButton>
       </template>
 
-      <template #meta>
+      <!-- A missing record has no name of its own: the title already is its
+           reference, and saying it a second time under itself says nothing. -->
+      <template
+        v-if="!missing"
+        #meta
+      >
         <div class="inspector-meta">
           <span class="head-reference">{{ reference }}</span>
         </div>
@@ -340,7 +357,10 @@ const close = () => void leave(() => emit('close'))
         </div>
       </template>
 
-      <template #tabs>
+      <template
+        v-if="!missing"
+        #tabs
+      >
         <div class="inspector-tabs">
           <SegmentedControl
             v-model="shownSection"
@@ -370,7 +390,14 @@ const close = () => void leave(() => emit('close'))
         :key="reference"
         class="inspector"
       >
+        <!-- Not a failure: the address names nothing, so there is nothing to
+             retry and no section to open, and Close is the way on. -->
+        <DataEmptyState
+          v-if="missing"
+          :title="t('platform.failures.notFound')"
+        />
         <PlatformStatePanel
+          v-else
           :state="state"
           :retryable="readRetryable"
           @retry="load"

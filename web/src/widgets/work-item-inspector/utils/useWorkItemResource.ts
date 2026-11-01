@@ -19,7 +19,14 @@ import { typedFailure } from '@/shared/api/typedFailure.ts'
 import type { TypedFailure } from '@/shared/api/typedFailure.ts'
 import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
 
-/** One inspector record, keyed so refreshes retain only the same work item. */
+/**
+ * One inspector record, keyed so refreshes retain only the same work item.
+ *
+ * A record the service says is not there is `missing`, not a failed read: there
+ * is nothing to retry and nothing to show. That holds for a refresh too — an
+ * item deleted while its card is open drops the last answer rather than keeping
+ * a card for a record that no longer exists, whose writes would all be refused.
+ */
 export function useWorkItemResource(
   reference: () => string,
   target: () => { project: string; resource: PlanningSpaceEntityRef },
@@ -29,7 +36,10 @@ export function useWorkItemResource(
     ResourceState<Observed<WorkItem>>
   >
   const state = computed(() => resourceUiState(resource.value, { failureReason }))
-  const item = computed(() => ('payload' in state.value ? state.value.payload : null))
+  const missing = computed(() => resource.value.failure?.code === 'not_found')
+  const item = computed(() =>
+    !missing.value && 'payload' in state.value ? state.value.payload : null,
+  )
   const retryable = computed(() => resource.value.failure?.retryable ?? false)
 
   async function load() {
@@ -59,5 +69,5 @@ export function useWorkItemResource(
   onBeforeUnmount(() => {
     resource.value = cancelResource(resource.value)
   })
-  return { item, load, retryable, state }
+  return { item, load, missing, retryable, state }
 }
