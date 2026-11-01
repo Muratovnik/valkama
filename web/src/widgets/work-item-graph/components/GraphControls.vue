@@ -21,7 +21,6 @@ import type { FitViewParams } from '@vue-flow/core'
 import { GRAPH_FLOW_ID } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 
 const props = defineProps<{ fitOptions: FitViewParams }>()
-const emit = defineEmits<{ 'focus-work': [] }>()
 const { t } = useI18n()
 const { fitView, maxZoom, minZoom, viewport, zoomIn, zoomOut } = useVueFlow({ id: GRAPH_FLOW_ID })
 const atMax = computed(() => viewport.value.zoom >= maxZoom.value)
@@ -53,12 +52,6 @@ const atMin = computed(() => viewport.value.zoom <= minZoom.value)
         >−</span
       >
       <span class="visually-hidden">{{ t('graph.zoomOut') }}</span>
-    </ControlButton>
-    <ControlButton
-      class="control-button control-action"
-      @click="emit('focus-work')"
-    >
-      {{ t('graph.focusWork') }}
     </ControlButton>
     <ControlButton
       class="control-button control-action"

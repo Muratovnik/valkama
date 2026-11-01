@@ -203,7 +203,6 @@ export const en = {
     zoomIn: 'Zoom in',
     zoomOut: 'Zoom out',
     zoomReset: 'Fit whole graph',
-    focusWork: 'Focus work',
     options: 'Graph options and key',
     chainChip: 'Chain {reference} · {count}',
     chainExit: 'Leave chain {reference} and show the whole space',

@@ -113,6 +113,21 @@ describe('graph camera ownership', () => {
     graph.unmount()
   })
 
+  it('frames a new narrowing of the items afresh, and still not a refresh of the same one', async () => {
+    const other = { ...item, work_item_id: 'work-2', reference: 'TEST-2', number: 2 }
+    const graph = await openGraph([item, other])
+    expect(camera.setViewport).toHaveBeenCalledTimes(1)
+    // The queue or the search narrowed the items: the new layout is framed.
+    await graph.setProps({ items: [other], filter: '["ready","test-2"]' })
+    await vi.waitFor(() => expect(camera.setViewport).toHaveBeenCalledTimes(2))
+    // The same narrowing refreshed by the stream: the camera stays.
+    await graph.setProps({ items: [{ ...other, revision: 1 }], version: 2 })
+    await flushPromises()
+    await vi.waitFor(() => expect(graph.attributes('aria-busy')).toBe('false'))
+    expect(camera.setViewport).toHaveBeenCalledTimes(2)
+    graph.unmount()
+  })
+
   it('keeps the initialized canvas alive through repeated open/all filters and empty projections', async () => {
     const done = {
       ...item,
@@ -153,13 +168,13 @@ describe('graph camera ownership', () => {
     graph.unmount()
   })
 
-  it('exposes whole graph and focus actions and resets only for scope changes', async () => {
+  it('exposes the whole graph, no destinationless camera jump, and resets only for scope changes', async () => {
     const graph = await openGraph()
     const buttons = graph.findAll('button')
     const whole = buttons.find((button) => button.text() === 'Fit whole graph')
-    const focus = buttons.find((button) => button.text() === 'Focus work')
     expect(whole).toBeDefined()
-    expect(focus).toBeDefined()
+    // «Focus work» named no destination: it went to whichever workable item came first.
+    expect(buttons.some((button) => button.text() === 'Focus work')).toBe(false)
     await whole?.trigger('click')
     // The key and the controls stand beside the flow, so the whole flow is field
     // and the framing leaves only its own air round the work.
@@ -168,13 +183,10 @@ describe('graph camera ownership', () => {
       duration: 0,
       maxZoom: 1,
     })
-    await focus?.trigger('click')
-    await flushPromises()
-    expect(camera.setViewport).toHaveBeenCalledTimes(2)
     await graph.setProps({ scopeKind: 'none' })
-    await vi.waitFor(() => expect(camera.setViewport).toHaveBeenCalledTimes(3))
+    await vi.waitFor(() => expect(camera.setViewport).toHaveBeenCalledTimes(2))
     await graph.setProps({ space: 'space-2' })
-    await vi.waitFor(() => expect(camera.setViewport).toHaveBeenCalledTimes(4))
+    await vi.waitFor(() => expect(camera.setViewport).toHaveBeenCalledTimes(3))
     graph.unmount()
   })
 })

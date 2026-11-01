@@ -44,6 +44,8 @@ const props = defineProps<{
   branch?: { head: string | null; members: readonly string[]; reference: string } | null
   /** The chain this field is scoped to, named in its header chip. */
   chain?: { members: readonly string[]; reference: string; total: number } | null
+  /** The queue and the search the items were narrowed by; a new one frames the field afresh. */
+  filter?: string
   /** Moves each time the host asks the field to take focus once it is framed. */
   focusRequest?: number
   selectedId?: string | null
@@ -133,23 +135,22 @@ const {
 
 // Vue Flow owns the camera and all viewport math. The store is keyed so the
 // controls in the strip below and this field share one camera instance.
-const { anchorId, fitted, fitOptions, overview, onFlowInit, reveal, scheduleFitView } =
-  useGraphCamera({
-    branch: () => branchFrame.value,
-    flowId: GRAPH_FLOW_ID,
-    placed,
-    readyIds: readyIdSet,
-    rootId: () => (inChain.value ? props.epicId : null),
-    selectedId: () => props.selectedId ?? null,
-    resets: [
-      () => props.space,
-      () => props.scopeKind,
-      () => props.epicId,
-      () => props.branch?.reference,
-      showDone,
-      showUnlinked,
-    ],
-  })
+const { anchorId, fitted, fitOptions, overview, onFlowInit, reveal } = useGraphCamera({
+  branch: () => branchFrame.value,
+  flowId: GRAPH_FLOW_ID,
+  placed,
+  rootId: () => (inChain.value ? props.epicId : null),
+  selectedId: () => props.selectedId ?? null,
+  resets: [
+    () => props.space,
+    () => props.scopeKind,
+    () => props.epicId,
+    () => props.branch?.reference,
+    showDone,
+    showUnlinked,
+  ],
+  reframes: [() => props.filter],
+})
 
 /** The chain has closed members, so the key keeps the place «Done» comes and goes from. */
 const keepDone = computed(() => inChain.value && hiddenDone.value > 0)
@@ -332,10 +333,7 @@ function onFieldPointerLeave() {
           :size="1"
         />
       </VueFlow>
-      <GraphControls
-        :fit-options="fitOptions"
-        @focus-work="scheduleFitView(true)"
-      />
+      <GraphControls :fit-options="fitOptions" />
     </div>
   </section>
 </template>

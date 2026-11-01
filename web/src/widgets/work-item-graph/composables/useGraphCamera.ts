@@ -37,7 +37,12 @@ interface CameraInput {
   /** The Vue Flow store this field's canvas and controls share. */
   flowId: string
   placed: Ref<GraphLayout | null>
-  readyIds: Ref<Set<string>>
+  /**
+   * Changes that narrow the same field anew: the queue, the search. The field
+   * stays drawn while it is laid out again, and the camera frames the new
+   * layout when it arrives, as it framed the first.
+   */
+  reframes: WatchSource[]
   /** Changes that make a new field rather than a refresh of this one. */
   resets: WatchSource[]
   /** The branch of the chain the card chose, which the camera frames whole. */
@@ -56,17 +61,16 @@ export function useGraphCamera(input: CameraInput) {
     cameraRequest += 1
   })
 
-  function scheduleFitView(focusOnly = false) {
-    if (!flowReady.value || (fitted.value && !focusOnly)) return
+  function scheduleFitView(again = false) {
+    if (!flowReady.value || (fitted.value && !again)) return
     const request = ++cameraRequest
     void nextTick(async () => {
       const placed = input.placed.value
       if (!flowReady.value || request !== cameraRequest || !placed) return
-      const camera = graphCameraView(placed, dimensions.value, input.readyIds.value, {
+      const camera = graphCameraView(placed, dimensions.value, {
         branch: input.branch(),
         selectedId: input.selectedId(),
         rootId: input.rootId(),
-        focusOnly,
       })
       if (!camera) return
       const positioned = await setViewport(camera, { duration: 0 })
@@ -102,10 +106,15 @@ export function useGraphCamera(input: CameraInput) {
     scheduleFitView()
   }
 
+  let reframe = false
+  watch(input.reframes, () => {
+    reframe = true
+  })
   // Filter projections replace nodes while the initialized Vue Flow canvas stays mounted.
   watch(input.placed, (projection) => {
     if (projection) {
-      scheduleFitView()
+      scheduleFitView(reframe)
+      reframe = false
       return
     }
     cameraRequest += 1
@@ -125,7 +134,7 @@ export function useGraphCamera(input: CameraInput) {
         selectedId: input.selectedId(),
         rootId: input.rootId(),
       }
-      return graphAnchor(placed, input.readyIds.value, options)?.work_item_id ?? null
+      return graphAnchor(placed, options)?.work_item_id ?? null
     }),
     /** «Fit whole graph». */
     fitOptions: graphFitViewOptions(),
@@ -134,8 +143,6 @@ export function useGraphCamera(input: CameraInput) {
       flowReady.value = true
       scheduleFitView()
     },
-    /** Frame the field again; `focusOnly` is «Focus work», which goes to workable work. */
-    scheduleFitView,
     reveal,
   }
 }

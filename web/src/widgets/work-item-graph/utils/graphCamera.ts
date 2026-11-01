@@ -9,6 +9,9 @@ import { readingOrder } from '@/widgets/work-item-graph/utils/graphWalk.ts'
 
 const READABLE_ZOOM = 0.75
 
+/** A padding the fit options state in pixels, as a number. */
+const pixels = (value: string) => Number.parseFloat(value)
+
 function fitNodes(nodes: PlacedNode[], dimensions: Dimensions): ViewportTransform {
   const left = Math.min(...nodes.map((node) => node.x))
   const top = Math.min(...nodes.map((node) => node.y))
@@ -33,7 +36,6 @@ export interface GraphBranchFrame {
 
 interface AnchorOptions {
   branch?: GraphBranchFrame | null
-  focusOnly?: boolean
   rootId?: string | null
   selectedId?: string | null
 }
@@ -45,7 +47,7 @@ interface AnchorOptions {
  * the branch is drawn.
  */
 function branchWork(graph: GraphLayout, options: AnchorOptions): PlacedNode[] {
-  const branch = options.focusOnly ? null : options.branch
+  const branch = options.branch
   if (!branch) return []
   const drawn = graph.nodes.filter((node) => branch.ids.has(node.work_item_id)).sort(readingOrder)
   const work = drawn.filter((node) => node.work_item_id !== branch.headId)
@@ -56,67 +58,112 @@ function branchWork(graph: GraphLayout, options: AnchorOptions): PlacedNode[] {
  * The node a field is placed around, and the one the keyboard enters it on:
  * the first work of the branch the card chose, then the open card's item,
  * then — for a chain — the root the chain grew from, so a reload or a link
- * lands on the same place the card's «Show on graph» does; then the first
- * workable item. «Focus work» asks for workable work, so it skips the branch
- * and the root.
+ * lands on the same place the card's «Show on graph» does; else the field's
+ * first node as it is read.
  */
 export function graphAnchor(
   graph: GraphLayout,
-  readyIds: Set<string>,
   options: AnchorOptions = {},
 ): PlacedNode | undefined {
   const [head] = branchWork(graph, options)
   const selected = graph.nodes.find((node) => node.work_item_id === options.selectedId)
-  const root = options.focusOnly
-    ? undefined
-    : graph.nodes.find((node) => node.work_item_id === options.rootId)
-  const incoming = new Set(graph.edges.map((edge) => edge.to))
-  return (
-    head ??
-    selected ??
-    root ??
-    graph.nodes.find((node) => readyIds.has(node.work_item_id)) ??
-    graph.nodes.find((node) => !incoming.has(node.work_item_id)) ??
-    graph.nodes[0]
-  )
+  const root = graph.nodes.find((node) => node.work_item_id === options.rootId)
+  return head ?? selected ?? root ?? [...graph.nodes].sort(readingOrder)[0]
 }
 
 /**
- * The branch the card chose: the whole of its work when that reads at its
- * size, otherwise its beginning at reading size, the rest of it running on to
- * the right and below — the layout keeps an epic's work together.
+ * A run of nodes from its beginning: the whole of it when that reads at its
+ * size, otherwise its first node at the top-left at reading size, the rest
+ * running on to the right and below.
  */
-function branchView(work: PlacedNode[], dimensions: Dimensions): ViewportTransform {
-  const whole = fitNodes(work, dimensions)
+function beginningView(nodes: PlacedNode[], dimensions: Dimensions): ViewportTransform {
+  const whole = fitNodes(nodes, dimensions)
   if (whole.zoom >= READABLE_ZOOM) return whole
   const { padding } = graphFitViewOptions()
-  const [first] = work
+  const [first] = nodes
   return {
-    x: Number.parseFloat(padding.left) - first.x * READABLE_ZOOM,
-    y: Number.parseFloat(padding.top) - first.y * READABLE_ZOOM,
+    x: pixels(padding.left) - first.x * READABLE_ZOOM,
+    y: pixels(padding.top) - first.y * READABLE_ZOOM,
     zoom: READABLE_ZOOM,
   }
 }
 
 /**
- * Where the camera starts: on the branch the card chose, if one is drawn
- * (`branchView`); else the whole field when it reads at that size, otherwise
- * the anchor (`graphAnchor`) and its direct links.
+ * One axis of a framing kept on the drawing: where the drawing is wider than
+ * the field, no edge of the field is left empty past the drawing's own edge;
+ * where it fits, it starts at the field's start, as it is read.
+ */
+function onDrawing(
+  position: number,
+  zoom: number,
+  span: { end: number; start: number },
+  field: { gapEnd: number; gapStart: number; size: number },
+): number {
+  const start = field.gapStart - span.start * zoom
+  if ((span.end - span.start) * zoom <= field.size - field.gapStart - field.gapEnd) return start
+  const end = field.size - field.gapEnd - span.end * zoom
+  return Math.min(start, Math.max(end, position))
+}
+
+/**
+ * A framing narrower than the whole field, moved so the drawing fills the
+ * field: centred on an anchor near the drawing's edge, it would show empty
+ * ground on that side while the drawing runs off the other. The move is never
+ * more than that empty ground, so the anchor stays in sight.
+ */
+function keptOnDrawing(
+  camera: ViewportTransform,
+  graph: GraphLayout,
+  dimensions: Dimensions,
+): ViewportTransform {
+  const { padding } = graphFitViewOptions()
+  const across = {
+    start: Math.min(...graph.nodes.map((node) => node.x)),
+    end: Math.max(...graph.nodes.map((node) => node.x + NODE_WIDTH)),
+  }
+  const down = {
+    start: Math.min(...graph.nodes.map((node) => node.y)),
+    end: Math.max(...graph.nodes.map((node) => node.y + NODE_HEIGHT)),
+  }
+  return {
+    x: onDrawing(camera.x, camera.zoom, across, {
+      gapStart: pixels(padding.left),
+      gapEnd: pixels(padding.right),
+      size: dimensions.width,
+    }),
+    y: onDrawing(camera.y, camera.zoom, down, {
+      gapStart: pixels(padding.top),
+      gapEnd: pixels(padding.bottom),
+      size: dimensions.height,
+    }),
+    zoom: camera.zoom,
+  }
+}
+
+/**
+ * Where the camera starts: the branch the card chose, from its beginning; else
+ * the whole field when it reads at that size and no card is open; else the
+ * open card's item or the chain's root with its direct links; else the field
+ * from its beginning. Every framing but the whole one is kept on the drawing
+ * (`keptOnDrawing`).
  */
 export function graphCameraView(
   graph: GraphLayout,
   dimensions: Dimensions,
-  readyIds: Set<string>,
   options: AnchorOptions = {},
 ): ViewportTransform | null {
   if (!graph.nodes.length || !dimensions.width || !dimensions.height) return null
   const branch = branchWork(graph, options)
-  if (branch.length) return branchView(branch, dimensions)
+  if (branch.length) return keptOnDrawing(beginningView(branch, dimensions), graph, dimensions)
   const whole = fitNodes(graph.nodes, dimensions)
-  const selected = graph.nodes.find((node) => node.work_item_id === options.selectedId)
-  if (!options.focusOnly && !selected && whole.zoom >= READABLE_ZOOM) return whole
+  const selected = graph.nodes.some((node) => node.work_item_id === options.selectedId)
+  if (!selected && whole.zoom >= READABLE_ZOOM) return whole
+  const anchor = graphAnchor(graph, options) ?? graph.nodes[0]
+  if (!selected && anchor.work_item_id !== options.rootId) {
+    const field = [...graph.nodes].sort(readingOrder)
+    return keptOnDrawing(beginningView(field, dimensions), graph, dimensions)
+  }
 
-  const anchor = graphAnchor(graph, readyIds, options) ?? graph.nodes[0]
   const contextIds = new Set([anchor.work_item_id])
   for (const edge of graph.edges) {
     if (edge.from === anchor.work_item_id) contextIds.add(edge.to)
@@ -126,5 +173,6 @@ export function graphCameraView(
     graph.nodes.filter((node) => contextIds.has(node.work_item_id)),
     dimensions,
   )
-  return context.zoom >= READABLE_ZOOM ? context : fitNodes([anchor], dimensions)
+  const framed = context.zoom >= READABLE_ZOOM ? context : fitNodes([anchor], dimensions)
+  return keptOnDrawing(framed, graph, dimensions)
 }

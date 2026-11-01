@@ -169,6 +169,9 @@ const graphBranch = computed(() => {
   return { reference: branch, members, head: head ?? null }
 })
 
+/** What the items are narrowed by: the graph frames a new narrowing afresh. */
+const graphFilter = computed(() => JSON.stringify([queue.value, searchTerm.value]))
+
 /** The whole space, or exactly one chain with the links the chain endpoint named. */
 const graphScopeKind = computed(() => (props.chain ? 'chain' : 'all'))
 const graphEdges = computed(() => props.chain?.edges ?? props.model.links)
@@ -268,6 +271,7 @@ const matchCount = computed(() => (filtered.value ? matchedItems.value.length : 
         :edges="graphEdges"
         :epic-id="chain?.root.work_item_id ?? null"
         :chain="graphChain"
+        :filter="graphFilter"
         :branch="graphBranch"
         :focus-request="graphFocus"
         :show-closed="chainClosed"
