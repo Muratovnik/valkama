@@ -176,6 +176,38 @@ def workable(
     return not container and not claim_ref and category in ("backlog", "queued") and not blocked()
 
 
+def closing(
+    conn: sqlite3.Connection, row: sqlite3.Row, terminal: bool
+) -> tuple[str | None, str | None]:
+    """When a finished item closed, and who held it then; both null for open work.
+
+    It closed at its latest transition, the rule a chain's `closed_at` uses, or
+    when it was last written if it never moved. Whoever held it then is the
+    claim still on it, for an item closed before a close ended its claim, or
+    else the holder the newest release since that transition names: the one
+    the close itself wrote, or the separate release that used to follow it.
+    No such release means it closed unheld. One query, and only for a closed
+    item, because a board reads every item of a space through here.
+    """
+
+    if not terminal:
+        return None, None
+    identity = str(row["work_item_id"])
+    found = conn.execute(
+        "SELECT t.created_at, (SELECT e.detail FROM work_item_events e"
+        "  WHERE e.work_item_id = ? AND e.action = 'released' AND e.id > t.id"
+        "  AND e.detail != '' ORDER BY e.id DESC LIMIT 1)"
+        " FROM (SELECT id, created_at FROM work_item_events WHERE work_item_id = ?"
+        "  AND action = 'transitioned' ORDER BY id DESC LIMIT 1) t",
+        (identity, identity),
+    ).fetchone()
+    closed_at = str(found[0]) if found is not None else str(row["updated_at"])
+    if row["claim_ref"]:
+        return closed_at, str(row["claim_ref"])
+    holder = leases.released_holder(str(found[1])) if found is not None and found[1] else ""
+    return closed_at, holder or None
+
+
 def present(
     conn: sqlite3.Connection,
     row: sqlite3.Row,
@@ -226,6 +258,7 @@ def present(
     # meets it, and the state says so rather than hiding it.
     lease = leases.lease(conn, row)
     record["claim_state"] = lease.state if lease is not None else None
+    record["closed_at"], record["last_claim_ref"] = closing(conn, row, bool(state["is_terminal"]))
     record["container"] = is_container(conn, identity)
     record["ready"] = workable(
         container=record["container"],

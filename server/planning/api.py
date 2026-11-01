@@ -745,7 +745,10 @@ def _apply_step(
         return {}, {"summary_comment_id": answer["summary_comment_id"]}
     answer = _transition(conn, {**entry, **base})
     found = {name: answer[name] for name in ("warnings", "overridden") if answer.get(name)}
-    return found, {"state": answer["state"]["key"]}
+    moved = {"state": answer["state"]["key"]}
+    if answer.get("released"):
+        moved["released"] = answer["released"]
+    return found, moved
 
 
 def _apply(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:

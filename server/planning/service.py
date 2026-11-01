@@ -470,6 +470,16 @@ def transition_work_item(
 
     Last is where a build without placements puts a moved item too, so an item
     that enters a state queues behind the work already ordered there.
+
+    A terminal state ends every claim on the item in the same write: a claim
+    says somebody is working it, and nobody works a closed item. Closed items
+    used to keep a live claim until a second call released it, or until the
+    lease ran out a fortnight later, and read as held all that time. The
+    holder is not lost: the `released` event names it, and the read model's
+    `last_claim_ref` reads it back. A step claim ends too. A completed close
+    never has one, since every step is ticked and a tick clears its claim; a
+    cancelled or forced close can, and its open steps stay open, unheld.
+    Reopening the item later restores nothing.
     """
 
     row = read_model.item_row(conn, reference)
@@ -488,16 +498,28 @@ def transition_work_item(
     )
     if position is None:
         position = float(row["position"])
-    _write(
-        conn,
-        row,
-        ["state_id = ?", "position = ?"],
-        [str(target["state_id"]), position],
-    )
+    updates = ["state_id = ?", "position = ?"]
+    parameters: list[object] = [str(target["state_id"]), position]
+    held = str(row["claim_ref"]) if target["is_terminal"] else ""
+    steps = model.checklist(row["checklist"])
+    unheld = [step for step in steps if target["is_terminal"] and step["claimed_by"]]
+    if held:
+        updates += ["claim_ref = ?", "claim_call_id = ?"]
+        parameters += ["", None]
+    if unheld:
+        for step in unheld:
+            step["claimed_by"] = ""
+        updates.append("checklist = ?")
+        parameters.append(model.dumps(steps))
+    _write(conn, row, updates, parameters)
     detail = str(target["key"])
     if reason.strip():
         detail = f"{detail}: {model.text_field(reason, 'reason', limit=512)}"
     _log(conn, str(row["work_item_id"]), "transitioned", detail, author)
+    if held:
+        _log(conn, str(row["work_item_id"]), "released", held, author)
+    for step in unheld:
+        _log(conn, str(row["work_item_id"]), "checklist_released", step["text"][:120], author)
     if refusals:
         _log(
             conn,
@@ -510,6 +532,8 @@ def transition_work_item(
         conn, read_model.item_by_id(conn, str(row["work_item_id"])), full=True
     )
     answer["warnings"] = warnings
+    if held:
+        answer["released"] = held
     if refusals:
         answer["overridden"] = [guard for guard, _ in refusals]
     return answer
@@ -1587,7 +1611,8 @@ def _write(
 def _hold(conn: sqlite3.Connection, row: sqlite3.Row, holder: str) -> None:
     """Set who holds an item, and the call that took it, in one guarded write.
 
-    The only writer of `claim_ref`. The holder and the call travel together, so
+    The only writer of `claim_ref` but one: a transition into a terminal state
+    clears both columns in its own write. The holder and the call travel together, so
     a lease always names the call that took it; a release clears both. A build
     that writes `claim_ref` alone leaves the call unchanged, and the store's
     `work_items_claim_follows_call` trigger clears it, which makes that claim

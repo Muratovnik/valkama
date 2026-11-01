@@ -177,6 +177,15 @@ describe('the facets a list row prints', () => {
     expect(wrapper.get('tbody').text()).not.toContain('Workable')
   })
 
+  it('says who held a closed item although its close ended the claim', async () => {
+    const wrapper = await rows([
+      boardItem(1, 'done', { last_claim_ref: 'claude (session 5937aa01-1234-4c00)' }),
+      boardItem(2, 'done', { last_claim_ref: null }),
+    ])
+    expect(cells(wrapper, 0)[4].text()).toBe('Previously responsible: claude · 5937aa01-1234')
+    expect(cells(wrapper, 1)[4].text()).toBe('—')
+  })
+
   it('leads every reference with two glyph slots, filled or not, and drops the kind word', async () => {
     const wrapper = await rows([
       boardItem(1, 'backlog', { kind: 'improvement', priority: 'urgent' }),

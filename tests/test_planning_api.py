@@ -253,9 +253,11 @@ class PlanningApiTests(unittest.TestCase):
                 "transitioned",
                 "summarized",
                 "transitioned",
+                "released",
             ],
             [event["action"] for event in closed["events"]],
         )
+        self.assertEqual(("", "one"), (closed["claim_ref"], closed["released"]))
 
     def test_update_accepts_source_without_disturbing_identity_or_attached_records(self) -> None:
         created = self.post(

@@ -352,8 +352,11 @@ TOOLS = [
         " ticked and a closing summary, a blocked state needs a blocker or a"
         " stated reason. A cancelled state needs only the summary, saying why the"
         " work stopped; its undone steps stay open. force carries a refusal"
-        " through and records it. The item goes last in its new state unless rank"
-        " places it.",
+        " through and records it. A terminal state also ends the item's claim and"
+        " any step claim, in the same write and whoever holds them; the history"
+        " records the release, the answer names the holder as released, and"
+        " last_claim_ref keeps reading it. Reopening restores no claim. The item"
+        " goes last in its new state unless rank places it.",
         WRITES,
         {
             "id": _REFERENCE,
@@ -380,7 +383,8 @@ TOOLS = [
         " names both states. Review, blocked, active and finished items keep their"
         " state. Releasing an active item puts it back in the first queued state"
         " (or the backlog), named in requeued, unless one of its checklist steps is"
-        " still claimed.",
+        " still claimed. Closing an item releases it already: no release is needed"
+        " after a transition to a terminal state.",
         WRITES,
         {
             "id": _REFERENCE,
@@ -603,7 +607,8 @@ TOOLS = [
         " checklist, checklist_ticks, refs, links, comment, summary, transition — so"
         " a claim and its steps take one call, and a closing"
         " transition sees the ticks and the summary sent with it, and a transition"
-        " sent with claim moves an item the claim has already started. A refused step"
+        " sent with claim moves an item the claim has already started; a closing"
+        " transition releases the claim, so no release call follows. A refused step"
         " writes nothing and names the step and the refusal's code. Name at least"
         " one group. Answers with the acknowledgement and applied, what each group"
         " changed.",

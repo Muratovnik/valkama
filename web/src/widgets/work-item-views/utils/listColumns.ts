@@ -6,6 +6,8 @@
  * a fact and its sort into the title's heading, so the row still says it and
  * the list can still be ordered by it.
  */
+import { holderRef } from '@/entities/work-item/utils/facets.ts'
+
 import { PRIORITIES } from '@/shared/api/planningModel.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 
@@ -72,7 +74,7 @@ function sortValue(item: WorkItemBrief, key: SortKey): number | string {
   if (key === 'title') return item.title.toLocaleLowerCase()
   if (key === 'state') return item.state.name.toLocaleLowerCase()
   if (key === 'priority') return urgency.get(item.priority) ?? 0
-  if (key === 'claim') return item.claim_ref.toLocaleLowerCase()
+  if (key === 'claim') return holderRef(item).toLocaleLowerCase()
   if (key === 'checklist') {
     const { done, total } = stepsOf(item)
     return total ? done / total : -1

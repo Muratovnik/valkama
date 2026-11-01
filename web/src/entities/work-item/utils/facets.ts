@@ -39,7 +39,13 @@ export type FacetSubject = Pick<WorkItemBrief, 'kind' | 'priority'> & {
 } & Partial<
     Pick<
       WorkItemBrief,
-      'checklist' | 'claim_ref' | 'claim_state' | 'labels' | 'parent_id' | 'ready'
+      | 'checklist'
+      | 'claim_ref'
+      | 'claim_state'
+      | 'labels'
+      | 'last_claim_ref'
+      | 'parent_id'
+      | 'ready'
     >
   >
 
@@ -280,7 +286,7 @@ function valueOf(facet: FacetId, item: FacetSubject, context: FacetContext): str
   if (facet === 'state') return item.state.category
   if (facet === 'readiness') return readinessOf(item, context)
   if (facet === 'labels') return item.labels?.length ? item.labels.join(',') : null
-  if (facet === 'holder') return item.claim_ref || null
+  if (facet === 'holder') return holderRef(item) || null
   if (facet === 'parent')
     return item.parent_id && context.parentReference ? context.parentReference : null
   return item.checklist?.length ? 'steps' : null
@@ -379,24 +385,37 @@ function readinessMark(value: string, rule: FacetRule, context: FacetContext): F
  * somebody still on it.
  */
 function holderText(item: FacetSubject, surface: FacetSurface): FacetText {
-  if (item.claim_ref && item.state.is_terminal)
-    return { key: 'workItem.previousHolder', params: { holder: holderName(item.claim_ref) } }
-  if (item.claim_ref) return { literal: holderName(item.claim_ref) }
+  const holder = holderRef(item)
+  if (holder && item.state.is_terminal)
+    return { key: 'workItem.previousHolder', params: { holder: holderName(holder) } }
+  if (holder) return { literal: holderName(holder) }
   return surface === 'list' ? { literal: '—' } : { key: 'workItem.noClaim' }
+}
+
+/**
+ * Who the holder facet names: the claim on open work, and on finished work
+ * whoever held it when it closed. A close ends the claim, so the server says
+ * that holder apart; an item closed while closing still left the claim on it
+ * carries no such field, and its claim is that holder.
+ */
+export function holderRef(item: FacetSubject): string {
+  const current = item.claim_ref ?? ''
+  return item.state.is_terminal ? item.last_claim_ref || current : current
 }
 
 function holderMark(item: FacetSubject, form: FacetForm, surface: FacetSurface): FacetMark {
   const stale = item.claim_state === 'stale' && !item.state.is_terminal
+  const holder = holderRef(item)
   return {
     facet: 'holder',
-    value: item.claim_ref ?? '',
+    value: holder,
     form,
-    glyph: item.claim_ref ? 'holder' : null,
+    glyph: holder ? 'holder' : null,
     text: holderText(item, surface),
     // Only a stale claim has something to say; a live or unconfirmed one is quiet.
     tone: stale ? { dimension: 'claim-lease', state: 'stale' } : PLAIN,
     filter: null,
-    quiet: !item.claim_ref,
+    quiet: !holder,
   }
 }
 

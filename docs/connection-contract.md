@@ -89,12 +89,12 @@ item: `reference`, `work_item_id`, `revision`, `state` (`key`, `name`,
 | --- | --- |
 | `create_work_item` | `title`, `kind`, `priority`; `applied` when it took `claim` or `links`; `started` and `warnings` from its claim when there are any |
 | `update_work_item` | `updated`, the names of the fields it edited |
-| `transition_work_item` | `warnings` and `overridden` when there are any |
+| `transition_work_item` | `released`, the holder a close released (see [A close ends the claims](#a-close-ends-the-claims)); `warnings` and `overridden`; each when there is one |
 | `claim_work_item` | `claim_ref` is the holder and `claim_state` its lease; `started`, `requeued` and `warnings` when there are any (see [A claim starts the work](#a-claim-starts-the-work)) |
 | `set_work_item_checklist` | `checklist`, the steps as `item_id`, `text` and `done` |
 | `claim_work_item_checklist_item`, `tick_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by` |
 | `set_work_item_summary` | `summary_recorded: true` |
-| `apply_work_item_changes` | `applied`, what each group changed; `started` from its claim, `overridden` from its transition, and the `warnings` of both, when there are any |
+| `apply_work_item_changes` | `applied`, what each group changed, with `released` in `applied.transition` when a close released a claim; `started` from its claim, `overridden` from its transition, and the `warnings` of both, when there are any |
 | `merge_work_items` | `merged`, what each item moved (see [Merging items that are one change](#merging-items-that-are-one-change)); `warnings` and `overridden` when there are any |
 
 Each of these tools takes an optional boolean `verbose`, false by default. With
@@ -788,6 +788,51 @@ may have come from, so the queue offers it before new backlog work.
 `transition` sent beside `claim` in one `apply_work_item_changes` call applies
 after the claim's move: `{"claim": true, "transition": {"state": "review"}}`
 moves a backlog item to `dev` and then to `review`.
+
+### A close ends the claims
+
+A claim says somebody is working the item, and nobody works a closed one. So a
+transition into a terminal state -- `completed` or `cancelled`, by
+`is_terminal` -- releases the item's claim in the same write, whoever holds it.
+The rule is in the one transition every surface makes: `transition_work_item`,
+the `transition` group of `apply_work_item_changes`, the HTTP transition, a
+drop on the board's Done column and the card's state menu. Closing therefore
+takes one write, and the item stops reading as held at once instead of when its
+lease runs out. `merge_work_items` already released each merged item before
+closing it, and still does.
+
+The history records the release beside the transition, with the same author
+and call: `transitioned` (`done`), then `released` with the holder's
+`claim_ref` as its detail. The answer names that holder as `released`, in the
+acknowledgement, the `verbose` record and the HTTP answer, and in
+`applied.transition` of a batch: `{"state": "done", "released": "codex (session 019a…)"}`.
+A close of an item nobody holds releases nothing and carries no `released`. A
+move between open states keeps the claim.
+
+A checklist step's claim ends too, recorded as `checklist_released` with the
+step's text. A completed close never has one: the guard requires every step
+ticked, and a tick clears the step's claim. A cancelled close leaves its undone
+steps open, and so can a close `force` carried past the checklist guard; those
+steps stay open and become unheld, so a reopened item does not read as being
+worked by their former holders.
+
+Reopening a closed item -- a transition back to an open state -- restores no
+claim. Whoever takes the work again claims it.
+
+Who held the item is still on the record. Every item record, full or listed,
+carries two fields that are `null` for open work:
+
+| Field | For a closed item |
+| --- | --- |
+| `closed_at` | when its latest transition happened, the rule a chain member's `closed_at` follows; when it was last written if it never moved |
+| `last_claim_ref` | who held it when it closed, as `claim_ref` names a holder; `null` when it closed unheld |
+
+`last_claim_ref` is the claim still on the item, for one a build before this
+rule closed with its claim left live; otherwise the holder named by the newest
+`released` event since the item's latest transition -- the release the close
+wrote, or a separate release sent after an older close, including a lease that
+expired then. A release before the close is not the holder at the close, and
+the field is `null`.
 
 ### Questions and decisions
 

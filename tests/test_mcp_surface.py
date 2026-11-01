@@ -1528,7 +1528,8 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
         self.assertEqual("done", answer["state"]["key"])
         # The claim started the item before the transition closed it.
         self.assertEqual({"from": "backlog", "to": "dev"}, answer["started"])
-        self.assertEqual("one", answer["claim_ref"])
+        # The close ended the claim the batch took, in the same call.
+        self.assertEqual(("", None), (answer["claim_ref"], answer["claim_state"]))
         self.assertNotIn("events", answer)
         item = planning_service.get_work_item(self.conn, self.reference)
         self.assertEqual(item["revision"], answer["revision"])
@@ -1544,7 +1545,7 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
                 "links": 1,
                 "comment": {"comment_id": comment["id"]},
                 "summary": {"summary_comment_id": item["summary_comment_id"]},
-                "transition": {"state": "done"},
+                "transition": {"state": "done", "released": "one"},
             },
             answer["applied"],
         )
@@ -1570,8 +1571,9 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
                 "linked",
                 "summarized",
                 "transitioned",
+                "released",
             ],
-            [event["action"] for event in item["events"]][-7:],
+            [event["action"] for event in item["events"]][-8:],
         )
 
     def test_one_batch_is_one_call_and_every_row_points_at_it(self) -> None:

@@ -78,6 +78,8 @@ export function blankable(max: number) {
 
 /** Free text an agent wrote about itself, bounded and never resolved. */
 const actor = () => blankable(128)
+/** A holder that is somebody: `claim_ref` as it reads while the item is held. */
+const holderField = () => boundedText(/^[^\u{0}]{1,128}$/u, 128)
 
 const stateShape = {
   state_id: boundedText(UUID, 36),
@@ -127,6 +129,17 @@ const workItemBriefShape = {
   container: z.boolean(),
   /** Startable right now: unheld, uncontained, unblocked, not yet started. */
   ready: z.boolean(),
+  /**
+   * When a finished item closed: its latest transition. Null for open work, and
+   * absent from a server that predates it.
+   */
+  closed_at: boundedText(ISO, 96).nullable().optional(),
+  /**
+   * Who held a finished item when it closed, as `claim_ref` names a holder. A
+   * close ends the claim, so `claim_ref` is blank by then. Null for open work
+   * and for an item closed unheld.
+   */
+  last_claim_ref: holderField().nullable().optional(),
 }
 const workItemBriefSchema = strictObject({
   ...workItemBriefShape,
@@ -240,7 +253,7 @@ const eventSchema = strictObject({
  * `user`, so the holder is never inferred from where the claim came from.
  */
 const claimSchema = strictObject({
-  holder: boundedText(/^[^\u{0}]{1,128}$/u, 128),
+  holder: holderField(),
   state: enumField(CLAIM_STATES),
   session_id: callField(),
   agent_id: callField(),
@@ -273,6 +286,8 @@ const workItemSchema = strictObject({
   // A claim that started the item, and a release that put it back in the queue.
   started: stateMoveSchema.optional(),
   requeued: stateMoveSchema.optional(),
+  // The holder whose claim a close ended.
+  released: holderField().optional(),
 })
 
 const spaceIdentityShape = {

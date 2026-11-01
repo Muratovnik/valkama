@@ -57,11 +57,16 @@ def _moved(item: dict) -> dict:
     """What a claim or a release did to the state, and what the caller must not miss.
 
     `started` is a claim moving unstarted work into the active state; `requeued`
-    a release putting work under way back in the queue; `warnings` what the
-    move's guards had to say, or why an item that should have moved did not.
+    a release putting work under way back in the queue; `released` the holder
+    whose claim a move into a terminal state ended; `warnings` what the move's
+    guards had to say, or why an item that should have moved did not.
     """
 
-    return {name: item[name] for name in ("started", "requeued", "warnings") if item.get(name)}
+    return {
+        name: item[name]
+        for name in ("started", "requeued", "released", "warnings")
+        if item.get(name)
+    }
 
 
 def created(item: dict, _arguments: Mapping[str, object]) -> dict:

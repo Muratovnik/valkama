@@ -168,3 +168,14 @@ def expiry_detail(found: Lease) -> str:
     """What the `released` event of an expired lease records."""
 
     return f"{EXPIRY_REASON}: {found.holder}"
+
+
+def released_holder(detail: str) -> str:
+    """The holder a `released` event names, whether a caller or an expiry released it.
+
+    A caller's release records the holder as it was; an expiry records it after
+    `expiry_detail`'s prefix. Blank when the release named nobody.
+    """
+
+    prefix = f"{EXPIRY_REASON}: "
+    return detail[len(prefix) :] if detail.startswith(prefix) else detail

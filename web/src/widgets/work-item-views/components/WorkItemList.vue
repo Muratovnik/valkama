@@ -38,6 +38,7 @@ import { fitFor, isFolded, LIST_COLUMNS } from '@/widgets/work-item-views/utils/
 import type { SortKey } from '@/widgets/work-item-views/utils/listColumns.ts'
 
 import FacetMarks from '@/entities/work-item/components/FacetMarks.vue'
+import { holderRef } from '@/entities/work-item/utils/facets.ts'
 import type { FacetContext } from '@/entities/work-item/utils/facets.ts'
 import { waitingOn } from '@/entities/work-item/utils/waiting.ts'
 import { EMPTY_WORK_FILTER } from '@/entities/work-item/utils/workFilter.ts'
@@ -226,7 +227,7 @@ useListKeys(root, {
               />
               <!-- A dash says "nobody" under a heading; on a line of facts it says nothing. -->
               <FacetMarks
-                v-if="item.claim_ref"
+                v-if="holderRef(item)"
                 surface="list"
                 :item="item"
                 :facets="['holder']"

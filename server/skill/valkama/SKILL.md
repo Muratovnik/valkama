@@ -56,7 +56,8 @@ the session ended or was quiet for 14 days, and `unconfirmed` when no session
 was proved. A stale claim is taken over without `force`; a live one is
 someone's work, so take it over only on an instruction that says so.
 `release: true` gives an item back and requeues it from the active state,
-unless a checklist step of it is still claimed.
+unless a checklist step of it is still claimed. Closing an item releases it:
+send no release after the closing transition.
 
 ## Work the item
 
@@ -154,7 +155,11 @@ anyone.
    refused listing its states.
 
 Steps 1 to 3 go in one `apply_work_item_changes` call, often with the last
-commit as a ref. A terminal state is refused while a step is open or without a
+commit as a ref. The transition to a completed or cancelled state also ends
+your claim and any step claims in that write, so the item stops reading as
+held; `applied.transition.released` names the holder, and the item's
+`last_claim_ref` keeps it. Reopening the item restores no claim: claim it again
+to work it. A terminal state is refused while a step is open or without a
 summary. `force: true` carries a refusal through and records it as
 `overridden`: use it only when the record would still be true.
 
