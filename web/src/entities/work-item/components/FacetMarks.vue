@@ -21,19 +21,16 @@
  * the hover text: a tile shows «⛔ MAIN-12» and says «Ждёт MAIN-12».
  *
  * A run of label chips that must keep one line fits: as many whole chips as
- * the line has room for, then «+N». The room is measured against a copy of
- * the chips drawn out of sight and handed to the registry, which still says
- * which chips print and what the count says.
+ * the line has room for, then «+N». The room comes from the line's width and
+ * the chips' words, worked out without drawing anything to measure, and is
+ * handed to the registry, which still says which chips print and what the
+ * count says.
  */
 import { computed, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import LabelChip from '@/entities/work-item/components/LabelChip.vue'
-import {
-  GHOST_CHIP,
-  GHOST_MORE,
-  useLabelRoom,
-} from '@/entities/work-item/composables/useLabelRoom.ts'
+import { useLabelRoom } from '@/entities/work-item/composables/useLabelRoom.ts'
 import {
   FACET_ORDER,
   facetMarks,
@@ -95,9 +92,9 @@ const fits = () => props.fit && props.facets.includes('labels')
 /** Every chip the registry would print with no line to fit, and the widest count. */
 const candidates = computed(() =>
   fits()
-    ? facetMarks('labels', props.surface, props.item, props.context).filter(
-        (mark) => mark.form === 'chips',
-      )
+    ? facetMarks('labels', props.surface, props.item, props.context)
+        .filter((mark) => mark.form === 'chips')
+        .map((mark) => mark.value)
     : [],
 )
 const moreSample = computed(() =>
@@ -108,12 +105,12 @@ const moreSample = computed(() =>
     : undefined,
 )
 
-const room = useLabelRoom(
-  useTemplateRef<HTMLElement>('line'),
-  useTemplateRef<HTMLElement>('ghost'),
-  () => props.item.labels ?? [],
-  fits,
-)
+const room = useLabelRoom(useTemplateRef<HTMLElement>('line'), {
+  candidates: () => candidates.value,
+  enabled: fits,
+  more: () => (moreSample.value ? word(moreSample.value) : undefined),
+  total: () => props.item.labels?.length ?? 0,
+})
 
 /** What the registry is asked with: the host's context, and the room the line measured. */
 const asked = computed(() =>
@@ -252,27 +249,6 @@ function pressLabel(label: string) {
         >
       </component>
     </template>
-    <span
-      v-if="candidates.length"
-      ref="ghost"
-      class="facet-ghost"
-      aria-hidden="true"
-      :data-total="props.item.labels?.length ?? 0"
-    >
-      <LabelChip
-        v-for="mark in candidates"
-        :key="mark.value"
-        :data-ghost="GHOST_CHIP"
-        :label="mark.value"
-        :filterable="false"
-      />
-      <span
-        v-if="moreSample"
-        class="facet-mark"
-        :data-ghost="GHOST_MORE"
-        >{{ word(moreSample) }}</span
-      >
-    </span>
   </span>
 </template>
 
@@ -398,20 +374,6 @@ function pressLabel(label: string) {
   .facet-mark {
     flex: none;
   }
-}
-
-/* The chips drawn out of sight to be measured: no height, no pointer, nothing
-   for a reader, and nothing that can widen what holds them. */
-.facet-ghost {
-  position: absolute;
-  inset-inline: 0;
-  top: 0;
-  display: flex;
-  flex-wrap: wrap;
-  block-size: 0;
-  overflow: hidden;
-  pointer-events: none;
-  visibility: hidden;
 }
 
 /* The glyph alone on screen, its word still read out. */
