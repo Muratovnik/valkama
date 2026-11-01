@@ -17,8 +17,9 @@ export default defineConfig({
     },
     {
       name: 'production',
-      testMatch:
-        /production-(?:adoption|board|chain|discussion|execution|finder|graph|inspector|lazy|loading|memory|modules|semantic-states|settings|shell)\.spec\.ts/,
+      // Every production spec but the Russian one, which runs in its own
+      // locale below: a list of names skipped each spec nobody added to it.
+      testMatch: /production-(?!locale\.)[a-z-]+\.spec\.ts/,
       use: {
         ...devices['Desktop Chrome'],
         baseURL: 'http://127.0.0.1:4175',
