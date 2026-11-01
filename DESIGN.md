@@ -626,10 +626,16 @@ Cards do not reserve empty tag or source regions.
 A board tile prints exceptions, not defaults. Its first line is a priority
 glyph when the priority is not medium, a kind glyph when the item is not a
 plain task, the reference, and at its end only what stops the work — the open
-blocker it waits on, a stale claim; the line never wraps, and an exception short
+blocker it waits on, drawn as its glyph and its reference («⛔ MAIN-12», named
+«Ждёт MAIN-12»), a stale claim; the line never wraps, and an exception short
 of room keeps its glyph and says its words on hover. The title follows, at most
-three lines, then up to three label chips and a count of the rest, then the
-holder and the steps when there are any. Workable, medium and a plain task are
+three lines, then the labels on one line — as many whole chips as it holds, up
+to three, then «+N», which opens the card like the rest of the sheet; the
+chips' 28px pointer boxes are the line's height once, not a row per chip — then
+the holder and the steps when there are any. A chip's face is a percentage of
+white over whatever it lies on, so it stays a step above a resting tile, a
+hovered tile and a list row alike; the control grey it used to be is the
+hovered tile's own tone. Workable, medium and a plain task are
 never printed: they are the norm of the columns that hold them. The title is
 the open target, stretched over the whole sheet, so the sheet opens wherever it
 is clicked and stays one Tab stop; the glyphs and chips lie above it as filter
