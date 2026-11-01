@@ -198,7 +198,8 @@ server lists the same 31 tools with the same schemas.
   and the app reach a window sooner. What the commands print is unchanged.
 - A long list shows its first screen at once and fills in the rest right after,
   with its columns already at their final width; until the rest arrive, a scroll
-  stops at the last row drawn.
+  stops at the last row drawn. The whole list of about 1,200 rows finishes
+  painting later than in 2.1.0, by about 1.4 to 1.9 times.
 - Board tiles and list rows draw far fewer components and elements, all of a
   board's tile labels are fitted in one pass, and a tile out of sight is not laid
   out until it is reached. Opening a list no longer lays out every row to measure
