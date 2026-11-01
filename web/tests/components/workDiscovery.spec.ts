@@ -131,18 +131,18 @@ describe('work discovery', () => {
     })
     const header = wrapper.get('th')
     await header.get('button').trigger('click')
-    expect(wrapper.findAll('tbody tr').map((row) => row.get('button').text())).toEqual([
+    expect(wrapper.findAll('tbody tr').map((row) => row.get('.list-open').text())).toEqual([
       'MAIN-264',
       'MAIN-265',
     ])
     expect(wrapper.get('tbody').text()).toContain(item.claim_ref)
     expect(wrapper.get('tbody tr').findAll('td')).toHaveLength(7)
     expect(wrapper.get('tbody tr td:last-child').text()).not.toBe('')
-    await wrapper.get('tbody tr').get('button').trigger('click')
+    await wrapper.get('tbody tr').get('.list-open').trigger('click')
     expect(wrapper.emitted('open')).toEqual([['MAIN-264']])
     await header.get('button').trigger('click')
     expect(header.attributes('aria-sort')).toBe('descending')
-    expect(wrapper.findAll('tbody tr').map((row) => row.get('button').text())).toEqual([
+    expect(wrapper.findAll('tbody tr').map((row) => row.get('.list-open').text())).toEqual([
       'MAIN-265',
       'MAIN-264',
     ])

@@ -11,6 +11,7 @@ import WorkItemList from '@/widgets/work-item-views/components/WorkItemList.vue'
 import WorkItemListHead from '@/widgets/work-item-views/components/WorkItemListHead.vue'
 import { LIST_COLUMNS } from '@/widgets/work-item-views/utils/listColumns.ts'
 
+import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { i18n as appI18n } from '@/shared/i18n/index.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 
@@ -151,6 +152,89 @@ describe('the list rows', () => {
     expect(recent[6].text()).not.toContain(String(year))
     expect(older[5].text()).toBe('—')
     expect(older[6].text()).toContain(String(year - 1))
+  })
+})
+
+const OTHER = '00000000-0000-4000-8000-000000009999'
+
+async function rows(rowItems: WorkItemBrief[], links: PlanningEdge[] = []) {
+  const wrapper = mount(WorkItemList, {
+    attachTo: document.body,
+    props: { items: rowItems, links },
+    global: { plugins: [i18n()] },
+  })
+  await flushPromises()
+  return wrapper
+}
+const cells = (wrapper: Awaited<ReturnType<typeof rows>>, index: number) =>
+  wrapper.findAll('tbody tr')[index].findAll('td')
+
+describe('the facets a list row prints', () => {
+  it('says nobody holds an unheld item with a dash, never that it is workable', async () => {
+    const wrapper = await rows([boardItem(1, 'backlog', { ready: true })])
+    const holder = cells(wrapper, 0)[4]
+    expect(holder.text()).toBe('—')
+    expect(wrapper.get('tbody').text()).not.toContain('Workable')
+  })
+
+  it('leads every reference with two glyph slots, filled or not, and drops the kind word', async () => {
+    const wrapper = await rows([
+      boardItem(1, 'backlog', { kind: 'improvement', priority: 'urgent' }),
+      boardItem(2, 'backlog', { kind: 'task', priority: 'medium' }),
+    ])
+    for (const index of [0, 1])
+      expect(cells(wrapper, index)[0].findAll('.list-slot')).toHaveLength(2)
+    const glyphs = (index: number) =>
+      cells(wrapper, index)[0]
+        .findAll('.facet-mark')
+        .map((mark) => mark.attributes('data-facet'))
+    expect(glyphs(0)).toEqual(['priority', 'kind'])
+    expect(glyphs(1)).toEqual([])
+    // The kind is the glyph; the title says only the title.
+    expect(cells(wrapper, 0)[1].text()).toBe('Item 1')
+  })
+
+  it('says the default priority quietly in its column, without a glyph', async () => {
+    const wrapper = await rows([
+      boardItem(1, 'backlog', { priority: 'medium' }),
+      boardItem(2, 'backlog', { priority: 'high' }),
+    ])
+    const medium = cells(wrapper, 0)[3].get('.facet-mark')
+    expect(medium.text()).toBe('Medium')
+    expect(medium.classes()).toContain('quiet')
+    expect(medium.find('.facet-glyph').exists()).toBe(false)
+    const high = cells(wrapper, 1)[3].get('.facet-mark')
+    expect(high.text()).toBe('High')
+    expect(high.find('.facet-glyph').exists()).toBe(true)
+  })
+
+  it('filters by a glyph without opening the row, and keeps the row one Tab stop', async () => {
+    const wrapper = await rows([boardItem(1, 'backlog', { kind: 'bug', priority: 'high' })])
+    const kind = cells(wrapper, 0)[0].get('[data-facet="kind"]')
+    expect(kind.element.tagName).toBe('BUTTON')
+    expect(kind.attributes('tabindex')).toBe('-1')
+    await kind.trigger('click')
+    expect(wrapper.emitted('filter')).toEqual([[{ facet: 'kind', value: 'bug' }]])
+    expect(wrapper.emitted('open')).toBeUndefined()
+  })
+
+  it('names what an item waits on, a blocker in another space included', async () => {
+    const link: PlanningEdge = {
+      from: OTHER,
+      to: boardItem(1).work_item_id,
+      kind: 'blocks',
+      reference: 'OTH-7',
+      state_name: 'Review',
+      state_category: 'review',
+      is_terminal: false,
+      state_unavailable: null,
+    }
+    const wrapper = await rows([boardItem(1)], [link])
+    expect(cells(wrapper, 0)[1].text()).toContain('Waiting on OTH-7')
+    await wrapper.setProps({
+      links: [{ ...link, state_name: 'Done', state_category: 'completed', is_terminal: true }],
+    })
+    expect(cells(wrapper, 0)[1].text()).not.toContain('Waiting on')
   })
 })
 

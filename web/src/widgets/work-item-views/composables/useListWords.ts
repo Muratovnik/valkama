@@ -1,41 +1,27 @@
 /**
- * What each list row spells out in words: who holds the item, or whether it is
- * there to be taken, and when it last changed.
+ * What each list row spells out beyond its marks: when the item last changed,
+ * and the holder's whole name for the hover of a column that cuts it short.
  *
  * Made once per change of the items or the language rather than once per
  * drawing: a keystroke that moves focus redraws rows, and formatting a date is
- * the dearest thing a row does.
+ * the dearest thing a row does. Who holds an item is the facet registry's to
+ * say, so the hover reads the same words the column prints.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { stepsOf } from '@/widgets/work-item-views/utils/listColumns.ts'
+import { facetMarks } from '@/entities/work-item/utils/facets.ts'
 
-import { readyIds } from '@/shared/api/planningModel.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
-import { holderName } from '@/shared/lib/actor.ts'
 
-export interface RowWords {
-  claim: string
-  /** Checklist progress under the «Steps» heading, or a dash for none. */
-  steps: string
-  /** The same progress as a fact under the title, where no heading names it. */
-  stepsFact: string
+interface RowWords {
+  holder: string
   updated: string
 }
 
 export function useListWords(items: () => readonly WorkItemBrief[]) {
   const { t, d, locale } = useI18n()
-  const ready = computed(() => readyIds([...items()]))
   const thisYear = new Date().getFullYear()
-
-  function claimLabel(item: WorkItemBrief): string {
-    if (item.claim_ref)
-      return item.state.is_terminal
-        ? t('workItem.previousHolder', { holder: holderName(item.claim_ref) })
-        : holderName(item.claim_ref)
-    return ready.value.has(item.work_item_id) ? t('workItem.facet.ready') : '—'
-  }
 
   /** When, to the minute; the year only when it is not this one, so nothing is left out. */
   function when(value: string): string {
@@ -44,29 +30,27 @@ export function useListWords(items: () => readonly WorkItemBrief[]) {
     return d(date, date.getFullYear() === thisYear ? 'day' : 'activity')
   }
 
-  function progress(item: WorkItemBrief, key: string): string {
-    const steps = stepsOf(item)
-    return steps.total ? t(key, steps) : '—'
+  function holder(item: WorkItemBrief): string {
+    const [mark] = facetMarks('holder', 'list', item)
+    if (!mark) return ''
+    return 'literal' in mark.text ? mark.text.literal : t(mark.text.key, mark.text.params ?? {})
   }
 
   const words = computed(() => {
     void locale.value
-    return new Map(
+    return new Map<string, RowWords>(
       items().map((item) => [
         item.work_item_id,
-        {
-          claim: claimLabel(item),
-          steps: progress(item, 'workItem.list.steps'),
-          stepsFact: progress(item, 'workItem.checklistProgress'),
-          updated: when(item.updated_at),
-        },
+        { holder: holder(item), updated: when(item.updated_at) },
       ]),
     )
   })
 
+  const wordsOf = (item: WorkItemBrief): RowWords =>
+    words.value.get(item.work_item_id) ?? { holder: '', updated: '' }
+
   return {
-    ready,
-    wordsOf: (item: WorkItemBrief): RowWords =>
-      words.value.get(item.work_item_id) ?? { claim: '', steps: '', stepsFact: '', updated: '' },
+    holderOf: (item: WorkItemBrief) => wordsOf(item).holder,
+    updatedOf: (item: WorkItemBrief) => wordsOf(item).updated,
   }
 }

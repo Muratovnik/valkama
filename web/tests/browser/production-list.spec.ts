@@ -194,3 +194,42 @@ test('a phone-width list offers the folded orders as one choice that turns them 
   await facts.click()
   await expect(page.locator('.drawer')).toHaveCount(1)
 })
+
+test('at the fold the title keeps 36 characters, the references align and nobody reads as workable', async ({
+  page,
+}, info) => {
+  await page.setViewportSize({ width: 1440, height: 800 })
+  await installBackend(page)
+  await serve(page)
+  await openList(page)
+  const list = page.locator('.work-item-list')
+  await expect(list.locator('tbody tr').first()).toBeVisible()
+  // The narrowest list that still stands every column side by side.
+  await list.evaluate((element) => {
+    element.style.inlineSize = '900px'
+  })
+  await expect(list).toHaveAttribute('data-fit', 'wide')
+  const measured = await list.evaluate((element) => {
+    const title = element.querySelector<HTMLElement>('tbody .list-title')
+    const probe = document.createElement('span')
+    probe.style.cssText = 'position:absolute;visibility:hidden;inline-size:1ch'
+    title?.append(probe)
+    const characters =
+      (title?.getBoundingClientRect().width ?? 0) / probe.getBoundingClientRect().width
+    probe.remove()
+    const starts = [...element.querySelectorAll('tbody .list-open')].map((open) =>
+      Math.round(open.getBoundingClientRect().left),
+    )
+    const glyphs = [...element.querySelectorAll('tbody .list-ref')].map(
+      (cell) => cell.querySelectorAll('.facet-glyph').length,
+    )
+    return { characters, starts: [...new Set(starts)], glyphs: [...new Set(glyphs)] }
+  })
+  expect(measured.characters).toBeGreaterThanOrEqual(36)
+  // Rows with and without glyphs, and every reference starts at one edge.
+  expect(measured.glyphs.length).toBeGreaterThan(1)
+  expect(measured.starts).toHaveLength(1)
+  await expect(list.locator('tbody')).not.toContainText('Workable')
+  await expectNoSilentClipping(page, 'list at 900px of list')
+  await page.screenshot(shot(info, 'w-list-900.png'))
+})

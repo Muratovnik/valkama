@@ -22,7 +22,8 @@ export interface ListColumn {
 }
 
 export const LIST_COLUMNS: readonly ListColumn[] = [
-  { key: 'reference', label: 'workItem.list.reference', numeric: true },
+  // The reference starts after its glyph slots, so its heading starts where they do.
+  { key: 'reference', label: 'workItem.list.reference' },
   { key: 'title', label: 'workItem.list.title' },
   { key: 'state', label: 'workItem.list.state' },
   { key: 'priority', label: 'workItem.list.priority' },
@@ -59,7 +60,7 @@ export function fitFor(width: number): Fit {
 
 const urgency = new Map(PRIORITIES.map((priority, index) => [priority, PRIORITIES.length - index]))
 
-export function stepsOf(item: WorkItemBrief): { done: number; total: number } {
+function stepsOf(item: WorkItemBrief): { done: number; total: number } {
   return {
     done: item.checklist.filter((step) => step.done).length,
     total: item.checklist.length,
