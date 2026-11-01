@@ -56,7 +56,7 @@ const item: WorkItemBrief = {
   comment_count: 0,
 }
 
-async function openGraph(items = [item]) {
+async function openGraph(items = [item], space = 'space-1') {
   const graph = mount(GraphView, {
     props: {
       items,
@@ -64,7 +64,7 @@ async function openGraph(items = [item]) {
       epicId: null,
       open: true,
       scopeKind: 'all',
-      space: 'space-1',
+      space,
       version: 1,
     },
     global: {
@@ -96,6 +96,7 @@ describe('graph camera ownership', () => {
     vi.clearAllMocks()
     camera.initialized = false
     dimensions.value = { width: 1200, height: 680 }
+    viewport.value = { x: 0, y: 0, zoom: 1 }
   })
 
   it('places the first camera and preserves it across revision, data, and selection refreshes', async () => {
@@ -113,19 +114,50 @@ describe('graph camera ownership', () => {
     graph.unmount()
   })
 
-  it('frames a new narrowing of the items afresh, and still not a refresh of the same one', async () => {
+  it('leaves the camera where it is for a new narrowing that keeps work in sight, and for its refresh', async () => {
     const other = { ...item, work_item_id: 'work-2', reference: 'TEST-2', number: 2 }
     const graph = await openGraph([item, other])
     expect(camera.setViewport).toHaveBeenCalledTimes(1)
-    // The queue or the search narrowed the items: the new layout is framed.
+    // The queue or the search narrowed the items, and what is left stands in sight.
     await graph.setProps({ items: [other], filter: '["ready","test-2"]' })
-    await vi.waitFor(() => expect(camera.setViewport).toHaveBeenCalledTimes(2))
+    await flushPromises()
+    await vi.waitFor(() => expect(graph.attributes('aria-busy')).toBe('false'))
+    expect(camera.setViewport).toHaveBeenCalledTimes(1)
     // The same narrowing refreshed by the stream: the camera stays.
     await graph.setProps({ items: [{ ...other, revision: 1 }], version: 2 })
     await flushPromises()
     await vi.waitFor(() => expect(graph.attributes('aria-busy')).toBe('false'))
+    expect(camera.setViewport).toHaveBeenCalledTimes(1)
+    graph.unmount()
+  })
+
+  it('pans onto a narrowing that left nothing in sight, at the zoom the operator chose', async () => {
+    const other = { ...item, work_item_id: 'work-2', reference: 'TEST-2', number: 2 }
+    const graph = await openGraph([item, other])
+    // The operator zoomed and panned far from the work.
+    viewport.value = { x: -40_000, y: -40_000, zoom: 0.6 }
+    await graph.setProps({ items: [other], filter: '["ready","test-2"]' })
+    await vi.waitFor(() => expect(camera.setViewport).toHaveBeenCalledTimes(2))
+    expect(camera.setViewport.mock.calls.at(-1)?.[0]).toMatchObject({ zoom: 0.6 })
+    // A switch narrows the same way: with work in sight again, it moves nothing.
+    viewport.value = camera.setViewport.mock.calls.at(-1)?.[0] as typeof viewport.value
+    graph.findComponent(GraphBar).vm.$emit('update:showUnlinked', true)
+    await nextTick()
+    await vi.waitFor(() => expect(graph.attributes('aria-busy')).toBe('false'))
     expect(camera.setViewport).toHaveBeenCalledTimes(2)
     graph.unmount()
+  })
+
+  it('finds the camera where it was left on coming back to the same scope from another view', async () => {
+    const graph = await openGraph([item], 'space-return')
+    viewport.value = { x: 140, y: 60, zoom: 0.8 }
+    graph.unmount()
+    camera.initialized = false
+    vi.clearAllMocks()
+    const again = await openGraph([item], 'space-return')
+    expect(camera.setViewport).toHaveBeenCalledTimes(1)
+    expect(camera.setViewport.mock.calls[0]?.[0]).toEqual({ x: 140, y: 60, zoom: 0.8 })
+    again.unmount()
   })
 
   it('keeps the initialized canvas alive through repeated open/all filters and empty projections', async () => {
@@ -157,12 +189,17 @@ describe('graph camera ownership', () => {
     graph.unmount()
   })
 
-  it('reframes readable work when the actual viewport changes size', async () => {
+  it('keeps the camera when the field changes size, and pans only when that leaves nothing in sight', async () => {
     const graph = await openGraph()
-    const previous = camera.setViewport.mock.calls.at(-1)?.[0]
+    viewport.value = { x: 0, y: 0, zoom: 1 }
     dimensions.value = { width: 302, height: 300 }
+    await flushPromises()
+    await nextTick()
+    expect(camera.setViewport).toHaveBeenCalledTimes(1)
+    viewport.value = { x: 900, y: 0, zoom: 1 }
+    dimensions.value = { width: 300, height: 300 }
     await vi.waitFor(() => expect(camera.setViewport).toHaveBeenCalledTimes(2))
-    expect(camera.setViewport.mock.calls.at(-1)?.[0]).not.toEqual(previous)
+    expect(camera.setViewport.mock.calls.at(-1)?.[0]).toMatchObject({ zoom: 1 })
     expect(graph.get('.graph-canvas').classes()).toContain('settled')
     expect(camera.mounts).toHaveBeenCalledTimes(1)
     graph.unmount()

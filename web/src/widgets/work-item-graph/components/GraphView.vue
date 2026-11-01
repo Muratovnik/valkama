@@ -144,15 +144,13 @@ const { anchorId, fitted, fitOptions, overview, onFlowInit, reveal } = useGraphC
   placed,
   rootId: () => (inChain.value ? props.epicId : null),
   selectedId: () => props.selectedId ?? null,
-  resets: [
+  scopes: [
     () => props.space,
     () => props.scopeKind,
     () => props.epicId,
     () => props.branch?.reference,
-    showDone,
-    showUnlinked,
   ],
-  reframes: [() => props.filter],
+  narrowings: [() => props.filter, showDone, showUnlinked],
 })
 
 /** The chain has closed members, so the key keeps the place «Done» comes and goes from. */

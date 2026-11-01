@@ -5,7 +5,7 @@ import { NODE_HEIGHT, NODE_WIDTH } from '@/widgets/work-item-graph/utils/graphGe
 import type { PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import { GRAPH_ZOOM_MIN, graphFitViewOptions } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import type { GraphLayout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
-import { readingOrder } from '@/widgets/work-item-graph/utils/graphWalk.ts'
+import { nodeCentre, readingOrder } from '@/widgets/work-item-graph/utils/graphWalk.ts'
 
 const READABLE_ZOOM = 0.75
 
@@ -175,4 +175,74 @@ export function graphCameraView(
   )
   const framed = context.zoom >= READABLE_ZOOM ? context : fitNodes([anchor], dimensions)
   return keptOnDrawing(framed, graph, dimensions)
+}
+
+/**
+ * Why the field might move its camera now.
+ *
+ * - `open`: a different scope opened — another project, chain or branch — or
+ *   the field is drawn for the first time.
+ * - `narrowed`: the queue, the search or a switch changed what is drawn.
+ * - `resized`: the field's box changed size under a drawing.
+ * - `refresh`: the same field arrived again with new data.
+ */
+export type GraphCameraCause = 'narrowed' | 'open' | 'refresh' | 'resized'
+
+/** Whether a node's centre stands inside the field at this camera. */
+function seen(node: PlacedNode, camera: ViewportTransform, dimensions: Dimensions): boolean {
+  const centre = nodeCentre(node)
+  const x = centre.x * camera.zoom + camera.x
+  const y = centre.y * camera.zoom + camera.y
+  return x >= 0 && y >= 0 && x <= dimensions.width && y <= dimensions.height
+}
+
+/**
+ * The camera at the same zoom, moved onto the drawing: the whole of it centred
+ * when it fits at this zoom, else centred on its first node as it is read.
+ */
+function panOnto(
+  graph: GraphLayout,
+  camera: ViewportTransform,
+  dimensions: Dimensions,
+): ViewportTransform {
+  const { padding } = graphFitViewOptions()
+  const left = Math.min(...graph.nodes.map((node) => node.x))
+  const top = Math.min(...graph.nodes.map((node) => node.y))
+  const right = Math.max(...graph.nodes.map((node) => node.x + NODE_WIDTH))
+  const bottom = Math.max(...graph.nodes.map((node) => node.y + NODE_HEIGHT))
+  const fits =
+    (right - left) * camera.zoom <=
+      dimensions.width - pixels(padding.left) - pixels(padding.right) &&
+    (bottom - top) * camera.zoom <= dimensions.height - pixels(padding.top) - pixels(padding.bottom)
+  const [first] = [...graph.nodes].sort(readingOrder)
+  const centre = fits ? { x: (left + right) / 2, y: (top + bottom) / 2 } : nodeCentre(first)
+  return {
+    x: dimensions.width / 2 - centre.x * camera.zoom,
+    y: dimensions.height / 2 - centre.y * camera.zoom,
+    zoom: camera.zoom,
+  }
+}
+
+/**
+ * Where the camera goes, or null to leave it where the operator put it.
+ *
+ * The camera is the operator's. The field places it when a scope opens, by
+ * the opening frame (`graphCameraView`); a refresh never moves it; and a new
+ * queue, search or switch — or a field that changed size — moves it only when
+ * not one drawn node is left in sight, and then only across, at the zoom the
+ * operator chose. The explicit «Fit whole graph» is the one way to change the
+ * zoom besides the operator's own, and it is Vue Flow's own fit.
+ */
+export function graphCameraMove(
+  cause: GraphCameraCause,
+  graph: GraphLayout,
+  field: { camera: ViewportTransform; dimensions: Dimensions },
+  options: AnchorOptions = {},
+): ViewportTransform | null {
+  const { camera, dimensions } = field
+  if (!graph.nodes.length || !dimensions.width || !dimensions.height) return null
+  if (cause === 'open') return graphCameraView(graph, dimensions, options)
+  if (cause === 'refresh') return null
+  if (graph.nodes.some((node) => seen(node, camera, dimensions))) return null
+  return panOnto(graph, camera, dimensions)
 }

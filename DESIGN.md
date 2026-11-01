@@ -613,8 +613,18 @@ keep one row, so the field keeps most of the screen and no camera control falls
 outside it. The field opens with its drawing in view: whole where it reads at
 reading size, else from its first node at the top-left at reading size; a chain
 opens on its root and an open card on its item, and no opening frame leaves
-empty ground beside work it cuts. A new queue or search frames the field
-afresh; a live refresh does not move the camera. The keys to the chain list its
+empty ground beside work it cuts. The camera is the operator's. A data refresh
+and any change of queue, search or switch never moves or zooms it; it moves
+only when a different scope opens — another project, another chain, a branch
+from a card's «Show on graph» — by the opening frame above, on the explicit
+«Fit whole graph», and when after a narrowing not one drawn node is left in
+sight, and then only across, at the operator's zoom: onto the whole of what is
+drawn where that fits, else onto its first node as it is read. A field that
+changes size follows the last rule, and leaving the graph for another view
+and coming back to the same scope finds the camera where it was left. The
+2.1.0 rule that framed the field afresh on every new queue or search was
+withdrawn by the owner after use: each narrowing cost the operator their place
+and their zoom. The keys to the chain list its
 groups as a lane runs, finished first, while the card's totals line and member
 list run as work is taken, what is under way first. «Show on graph» from a card
 whose map has a branch chosen opens the
