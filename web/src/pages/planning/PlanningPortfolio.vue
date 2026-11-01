@@ -4,6 +4,8 @@
  *
  * Project identity leads each row. Binding state is a separate operational
  * fact, and an unbound project routes to the canonical Settings recovery view.
+ * Only a project that is not mapped says its state: «Mapped» on every card, beside
+ * the «Open project» that already says so, told the reader nothing.
  */
 import { useI18n } from 'vue-i18n'
 
@@ -42,6 +44,7 @@ function bindingRecoveryRoute(projectId: string) {
           >
         </div>
         <SemanticState
+          v-if="project.binding_state !== 'mapped'"
           dimension="project-binding"
           variant="badge"
           :label="t(`platform.bindings.${project.binding_state}`)"

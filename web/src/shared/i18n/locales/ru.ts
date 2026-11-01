@@ -58,6 +58,7 @@ export const ru = {
     scope: { label: 'Рабочая область', global: 'Глобально' },
     bindings: {
       mapped: 'Связан',
+      missing: 'Не найден',
       unbound: 'Не связан',
       unavailable: 'Недоступен',
     },

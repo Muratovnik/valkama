@@ -58,6 +58,7 @@ export const en = {
     scope: { label: 'Operating scope', global: 'Global' },
     bindings: {
       mapped: 'Mapped',
+      missing: 'Not found',
       unbound: 'Unbound',
       unavailable: 'Unavailable',
     },

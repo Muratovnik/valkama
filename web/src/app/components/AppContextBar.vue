@@ -47,6 +47,22 @@ const { t } = useI18n()
  */
 const scopeSearchable = computed(() => scopeOptions.value.length > 7)
 
+/**
+ * The project the address names when this workstation does not have it. The
+ * selector stood blank over a page saying that project was not found; it names
+ * the project the address asked for, marked as missing and not choosable.
+ */
+const missingProject = computed<ChoiceOption[]>(() => {
+  const scope = props.scope
+  if (scope.kind !== 'project' || !props.projects.length) return []
+  const id = scope.project_ref.project_id
+  if (props.projects.some((project) => project.project_id === id)) return []
+  const missing = t('platform.bindings.missing')
+  return [
+    { value: `project:${id}`, label: id, description: missing, icon: 'client', disabled: true },
+  ]
+})
+
 const scopeOptions = computed<ChoiceOption[]>(() => [
   { value: 'global', label: t('platform.scope.global'), icon: 'client' },
   ...props.projects.map((project) => ({
@@ -59,6 +75,7 @@ const scopeOptions = computed<ChoiceOption[]>(() => [
     icon: 'client' as const,
     disabled: project.binding_state !== 'mapped',
   })),
+  ...missingProject.value,
 ])
 
 const selectedScopeValue = computed(() =>

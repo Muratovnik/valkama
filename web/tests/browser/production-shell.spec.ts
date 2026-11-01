@@ -337,6 +337,25 @@ test('an address that names no section is the main region and claims no section'
   }
 })
 
+// An address naming a project this workstation lacks left the scope selector
+// blank, and every project card repeated «Mapped» beside «Open project».
+test('a missing project is named in the scope selector, and mapped cards carry no badge', async ({
+  page,
+}) => {
+  await installBackend(page)
+  await page.goto(
+    serializePlatformRoute({
+      module_id: 'planning',
+      scope: { kind: 'project', project_ref: { project_id: 'gone-project' } },
+    }),
+  )
+  await expect(page.locator('.planning-missing-project')).toContainText('gone-project')
+  await expect(page.locator('.operating-scope [role="combobox"]')).toContainText('gone-project')
+  const project = page.locator('.portfolio-project').filter({ hasText: projectId })
+  await expect(project.getByRole('button', { name: /Open project/i })).toBeVisible()
+  await expect(project.getByText('Mapped', { exact: true })).toHaveCount(0)
+})
+
 const MODULE_SCOPES = PLATFORM_MODULE_IDS.map((moduleId) => ({
   moduleId,
   scope: projectScope,
