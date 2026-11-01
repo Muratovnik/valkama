@@ -22,6 +22,7 @@ const planningApi = source('../src/shared/api/platformPlanningApi.ts')
 const coreApi = source('../src/shared/api/api.ts')
 const nav = source('../src/widgets/app-nav/components/AppNav.vue')
 const inspector = source('../src/widgets/work-item-inspector/components/WorkItemInspector.vue')
+const inspectorTabs = source('../src/widgets/work-item-inspector/components/InspectorTabs.vue')
 const overview = source('../src/widgets/work-item-inspector/components/InspectorOverview.vue')
 const sourceOpen = source('../src/widgets/work-item-inspector/utils/useSourceOpen.ts')
 const identity = source('../src/widgets/work-item-inspector/components/InspectorIdentity.vue')
@@ -238,8 +239,10 @@ test('common responsive controls keep keyboard focus and 44px targets', () => {
   assert.match(compactCss(contextBar), /@containermain\(width<=586px\)/)
   // The inspector's section switch is the shared segmented control rather than a
   // tablist of its own, so the row it stands in is the primitive's answer. It
-  // lives in the shared frame now, with the two writes it sits beside.
-  assert.match(inspector, /<SegmentedControl/)
+  // lives in the shared frame now, with the two writes it sits beside, as the
+  // card's own strip of sections.
+  assert.match(inspector, /<InspectorTabs/)
+  assert.match(inspectorTabs, /<SegmentedControl/)
   assert.match(
     compactCss(segmented),
     /\.segmented-option\{[^}]*min-height:calc\(var\(--size-control-height\)/,

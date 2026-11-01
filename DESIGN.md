@@ -741,7 +741,11 @@ labels on a narrow one: «Взять», «Отпустить» on this client's 
 there instead — «Ждёт MAIN-12» while an open blocker remains, «Эпик — возьмите
 задачу из него» on an epic. Labels follow as chips that add themselves to the
 filter, then the tabs. Reading down the body condenses the head to the title's
-one line, the facts, the action and the tabs. The body names only blockers that
+one line with the action at its end, and the tabs on one row that scrolls,
+the one shown and the one focused brought into it; the facts and labels go
+with the body. Pinned no taller than the title and tabs of 2.1.0, it says which
+item this is and keeps the action and every section in reach: keeping the
+facts, a full-width action and two rows of tabs, it held 279px of a phone. The body names only blockers that
 are still open.
 The related work/session/evidence context is one grouped relationship region,
 not a decorative sequence. Execution history and native session opening stay

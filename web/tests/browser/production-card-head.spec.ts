@@ -190,7 +190,15 @@ test('a reference in a checklist step opens its card, and pressing the step text
   expect(ticks).toHaveLength(1)
 })
 
-/** A card whose body is long enough to hold its description to a few lines. */
+/**
+ * Read down a long card and the part of the head that stays is the item's
+ * title on one line, its one action and the sections on one row: no taller
+ * than the head 2.1.0 pinned, which held the title and the sections. The 2.2
+ * head kept the facts, a full-width action on a phone and two rows of
+ * sections, and pinned 279px of an 844px phone.
+ */
+const PINNED_AT_MOST: Readonly<Record<number, number>> = { 1440: 141, 1024: 141, 390: 175 }
+
 async function openLongCard(page: Page, width: number) {
   await page.addInitScript(() => localStorage.setItem('valkama-locale', 'ru'))
   await page.setViewportSize({ width, height: 844 })
@@ -205,6 +213,50 @@ async function openLongCard(page: Page, width: number) {
   const drawer = page.locator('.drawer')
   await expect(drawer.locator('.card-facts')).toBeVisible()
   return drawer
+}
+
+for (const width of [1440, 1024, 390]) {
+  test(`a card read down keeps its title, its action and one row of sections at ${width}px`, async ({
+    page,
+  }) => {
+    const drawer = await openLongCard(page, width)
+    const head = drawer.locator('.drawer-frame-head')
+    const action = drawer.locator('.card-action').getByRole('button')
+    await expect(action).toBeVisible()
+    await drawer
+      .locator('.drawer-frame-body')
+      .evaluate((node) => node.scrollTo({ top: node.scrollHeight }))
+    await expect(head).toHaveClass(/condensed/u)
+
+    const pinned = await box(head)
+    expect(pinned.height).toBeLessThanOrEqual(PINNED_AT_MOST[width] ?? 0)
+    // Which item this is: its title, on one line.
+    const title = head.locator('h2')
+    const line = await title.evaluate((node) =>
+      Number.parseFloat(getComputedStyle(node).lineHeight),
+    )
+    const named = await box(title)
+    expect(named.height).toBeLessThanOrEqual(line + 1)
+    // The one action, inside what stays.
+    const button = await box(action)
+    expect(button.y).toBeGreaterThanOrEqual(pinned.y)
+    expect(button.y + button.height).toBeLessThanOrEqual(pinned.y + pinned.height)
+    await expect(drawer.locator('.card-facts')).toBeHidden()
+
+    // The sections keep one row, and each one the keyboard reaches is brought into view.
+    const tabs = drawer.locator('.inspector-tabs').getByRole('button')
+    const tops = await tabs.evaluateAll((nodes) =>
+      nodes.map((node) => Math.round(node.getBoundingClientRect().top)),
+    )
+    expect(new Set(tops).size).toBe(1)
+    await tabs.first().focus()
+    const count = await tabs.count()
+    for (let index = 1; index < count; index += 1) {
+      await page.keyboard.press('Tab')
+      await expect(tabs.nth(index)).toBeFocused()
+      await expect(tabs.nth(index)).toBeInViewport({ ratio: 0.99 })
+    }
+  })
 }
 
 for (const width of [1440, 390]) {

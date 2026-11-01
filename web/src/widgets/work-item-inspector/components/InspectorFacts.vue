@@ -18,8 +18,9 @@
  * The action ends the facts line where the drawer is wide and stands at full
  * width under the labels where it is not; a question about it takes the whole
  * width wherever it is asked. Labels are buttons that add themselves to the
- * Work filter, and step out with the rest of the head's detail when it
- * condenses.
+ * Work filter. When the head condenses the facts line and the labels step out
+ * with the rest of the head's detail, and the action alone stays, at its own
+ * width, at the end of the title's row.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -43,7 +44,7 @@ const props = withDefaults(
     item: WorkItem
     workflow: PlanningWorkflow | null
     writable: boolean
-    /** The head is condensed while the body is read: the labels step out. */
+    /** The head is condensed while the body is read: only the action stays. */
     condensed?: boolean
     /** The epic's reference; the record carries only its id. */
     parentReference?: string | null
@@ -132,7 +133,7 @@ const filterLabel = (label: string) => emit('filter', { facet: 'labels', value: 
 <template>
   <div
     class="card-facts-block"
-    :class="{ asking }"
+    :class="{ asking, condensed }"
   >
     <div class="card-facts">
       <ChoiceSelect
@@ -281,6 +282,17 @@ const filterLabel = (label: string) => emit('filter', { facet: 'labels', value: 
   .card-facts-block.asking {
     grid-template-areas: 'facts' 'labels' 'action';
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Read down the body, the head keeps the action in reach and lets the facts
+   go with the labels; it stands beside the title, as wide as its own label. */
+.card-facts-block.condensed {
+  grid-template-areas: 'action';
+  grid-template-columns: auto;
+
+  .card-facts {
+    display: none;
   }
 }
 </style>

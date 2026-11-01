@@ -14,14 +14,6 @@
   white-space: nowrap;
 }
 
-/* Every section is named on the strip at every width: where one row cannot
-   hold them the strip takes a second row, rather than a scrollbar that hid the
-   last section behind its own arrows on a phone. */
-.inspector-tabs {
-  width: 100%;
-  padding-bottom: var(--space-3);
-}
-
 .inspector-read-recovery {
   display: flex;
   justify-content: flex-end;

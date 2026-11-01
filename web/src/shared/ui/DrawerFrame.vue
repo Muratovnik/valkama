@@ -15,11 +15,13 @@ const head = ref<HTMLElement | null>(null)
  *
  * The head gives its room back to the body once the body is read past it: the
  * title keeps one line and the identity line and subtitle step out, while the
- * controls — Back and Close — the facts, the actions slot, a refusal or a
- * question, and the tabs stay. The facts slot is told it is condensed, so it
- * can keep its one line and let the rest go. Whole, the head of a long title
- * took a quarter of a desktop drawer and more of a phone's, for as long as the
- * drawer was read.
+ * controls — Back and Close — the actions slot, a refusal or a question, and
+ * the tabs stay. The facts slot moves up beside the title and is told it is
+ * condensed, so it keeps only what has to stay in reach — the card's one
+ * action — and lets the rest scroll away with the body; the tabs slot is told
+ * too, so it can keep to one row. Whole, the head of a long title took a
+ * quarter of a desktop drawer and more of a phone's; keeping the facts line,
+ * a full-width action and two rows of tabs, it still pinned a third of a phone.
  *
  * It condenses only past its own height and comes back only at the very top,
  * and the body is scrolled back by exactly the height the head gave up, so the
@@ -136,7 +138,10 @@ defineExpose({ position, restore, scrollToTop })
         v-if="$slots.tabs"
         class="drawer-frame-tabs"
       >
-        <slot name="tabs" />
+        <slot
+          name="tabs"
+          :condensed="condensed"
+        />
       </div>
     </header>
     <div
@@ -186,8 +191,13 @@ defineExpose({ position, restore, scrollToTop })
   overflow-wrap: anywhere;
 }
 
-/* Condensed, the title is one line and the lines under it step out. */
+/* Condensed, the title is one line and the lines under it step out; what is
+   left of the facts stands at the end of the title's row, before the controls. */
 .drawer-frame-head.condensed {
+  grid-template-areas: 'title facts close' 'actions actions actions' 'tabs tabs tabs';
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+
   .drawer-frame-name {
     white-space: nowrap;
     overflow: hidden;
@@ -254,6 +264,21 @@ defineExpose({ position, restore, scrollToTop })
 
 .drawer-frame-tabs {
   grid-area: tabs;
+  min-width: 0;
+}
+
+/* A phone-wide drawer has no title row to spare: Back and Close already share
+   it, so the action ends the tabs' row instead, centred on the tabs above the
+   strip's own foot, and the title keeps the width that says which item this is. */
+@container drawer (width < 520px) {
+  .drawer-frame-head.condensed {
+    grid-template-areas: 'title close' 'actions actions' 'tabs facts';
+    grid-template-columns: minmax(0, 1fr) auto;
+
+    .drawer-frame-facts {
+      padding-bottom: var(--space-3);
+    }
+  }
 }
 
 /* The scrollbar is paid for out of the end inset, so the body's content ends

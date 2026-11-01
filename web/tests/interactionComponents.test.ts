@@ -119,7 +119,7 @@ test('the inspector exposes its emits, related navigation, and shared focus owne
   assert.match(drawer, /emit\('open'/)
   assert.match(drawer, /<ResizableInspector/)
   assert.match(drawer, /<DrawerFrame/)
-  assert.match(drawer, /<SegmentedControl/)
+  assert.match(drawer, /<InspectorTabs/)
   assert.doesNotMatch(drawer, /<InspectorDrawer|<InspectorHead/)
   // The header's controls and the tabs name `--size-control-target` rather than
   // writing 44, which is the token for exactly that number.

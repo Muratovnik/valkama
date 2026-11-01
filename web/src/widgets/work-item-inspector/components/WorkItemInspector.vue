@@ -35,6 +35,7 @@ import InspectorNotices from '@/widgets/work-item-inspector/components/Inspector
 import InspectorOverview from '@/widgets/work-item-inspector/components/InspectorOverview.vue'
 import InspectorReferenceScope from '@/widgets/work-item-inspector/components/InspectorReferenceScope.vue'
 import InspectorRelations from '@/widgets/work-item-inspector/components/InspectorRelations.vue'
+import InspectorTabs from '@/widgets/work-item-inspector/components/InspectorTabs.vue'
 import type { InspectorReturn } from '@/widgets/work-item-inspector/utils/inspectorReturn.ts'
 import { inspectorTarget } from '@/widgets/work-item-inspector/utils/inspectorTarget.ts'
 import { titleRuns } from '@/widgets/work-item-inspector/utils/titleRuns.ts'
@@ -61,7 +62,6 @@ import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import DrawerFrame from '@/shared/ui/DrawerFrame.vue'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 import ResizableInspector from '@/shared/ui/ResizableInspector.vue'
-import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -347,17 +347,14 @@ const close = () => void leave(() => emit('close'))
 
       <template
         v-if="!missing"
-        #tabs
+        #tabs="{ condensed }"
       >
-        <div class="inspector-tabs">
-          <SegmentedControl
-            v-model="shownSection"
-            size="compact"
-            :label="t('workItem.sections')"
-            :options="sections"
-            wrap
-          />
-        </div>
+        <InspectorTabs
+          v-model="shownSection"
+          :condensed="condensed"
+          :label="t('workItem.sections')"
+          :sections="sections"
+        />
       </template>
 
       <InspectorReferenceScope
