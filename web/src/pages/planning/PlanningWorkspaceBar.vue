@@ -463,7 +463,11 @@ const exclusionText = computed(() => {
     flex: 1 1 auto;
   }
 
-  .workspace-closed {
+  /* The closed items and the epics drawn as rows are facts the wide bar has room
+     for: on a phone the line keeps the counts and the switch's word, and a third
+     fact would make the bar taller while a filter turns on. */
+  .workspace-closed,
+  .workspace-rows {
     display: none;
   }
 

@@ -11,6 +11,7 @@ import type { Page } from '@playwright/test'
 import { parsePlatformRoute, serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
+import { openBoard, serve } from './boardPage.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { projectScope } from './planningFixtures.ts'
 
@@ -61,6 +62,29 @@ for (const width of [1440, 1024]) {
     await expectNoSilentClipping(page, `Work bar at ${width}px`)
   })
 }
+
+test('the grouped board says its epics as rows on the counts line, where a phone has no room for it', async ({
+  page,
+}) => {
+  // The board's own fixture has epics to draw as rows; the flat board is the start.
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await installBackend(page)
+  await serve(page)
+  await openBoard(page, {})
+  const grouping = page.getByRole('switch', { name: 'Group the board by epic' })
+  const rows = page.locator('.workspace-rows')
+  await expect(rows).toBeHidden()
+  await grouping.click()
+  await expect(rows).toBeVisible()
+  await expect(rows).toContainText(/epics? as (rows|a row)/)
+  await grouping.click()
+  await expect(rows).toBeHidden()
+  // A phone keeps the line at its height: the rows are not drawn there at all.
+  await page.setViewportSize({ width: 390, height: 844 })
+  await grouping.click()
+  await expect(page.locator('.workspace-figures')).toBeVisible()
+  await expect(rows).toBeHidden()
+})
 
 test('a filter survives a reload and Back, because the address holds it', async ({ page }) => {
   await open(page)
