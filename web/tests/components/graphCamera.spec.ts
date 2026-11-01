@@ -18,10 +18,12 @@ const camera = vi.hoisted(() => ({
   mounts: vi.fn(),
 }))
 const dimensions = ref({ width: 1200, height: 680 })
+const viewport = ref({ x: 0, y: 0, zoom: 1 })
+const zoomLimits = { minZoom: ref(0.01), maxZoom: ref(1.45) }
 
 vi.mock('@vue-flow/core', async (original) => ({
   ...(await original<typeof import('@vue-flow/core')>()),
-  useVueFlow: () => ({ ...camera, dimensions }),
+  useVueFlow: () => ({ ...camera, ...zoomLimits, dimensions, viewport }),
 }))
 
 vi.mock('@/widgets/work-item-graph/utils/graphLayoutEngine.ts', () => ({
@@ -159,9 +161,10 @@ describe('graph camera ownership', () => {
     expect(whole).toBeDefined()
     expect(focus).toBeDefined()
     await whole?.trigger('click')
-    // Framed clear of the controls along the bottom; this field draws no key on top.
+    // The key and the controls stand beside the flow, so the whole flow is field
+    // and the framing leaves only its own air round the work.
     expect(camera.fitView).toHaveBeenCalledWith({
-      padding: { top: '16px', bottom: '68px', left: '32px', right: '32px' },
+      padding: { top: '16px', bottom: '16px', left: '32px', right: '32px' },
       duration: 0,
       maxZoom: 1,
     })

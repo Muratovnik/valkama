@@ -4,20 +4,16 @@ import type { Dimensions, ViewportTransform } from '@vue-flow/core'
 import { NODE_HEIGHT, NODE_WIDTH } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import { GRAPH_ZOOM_MIN, graphFitViewOptions } from '@/widgets/work-item-graph/utils/graphLayout.ts'
-import type { GraphInsets, GraphLayout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
+import type { GraphLayout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 
 const READABLE_ZOOM = 0.75
 
-function fitNodes(
-  nodes: PlacedNode[],
-  dimensions: Dimensions,
-  insets?: GraphInsets,
-): ViewportTransform {
+function fitNodes(nodes: PlacedNode[], dimensions: Dimensions): ViewportTransform {
   const left = Math.min(...nodes.map((node) => node.x))
   const top = Math.min(...nodes.map((node) => node.y))
   const right = Math.max(...nodes.map((node) => node.x + NODE_WIDTH))
   const bottom = Math.max(...nodes.map((node) => node.y + NODE_HEIGHT))
-  const options = graphFitViewOptions(insets)
+  const options = graphFitViewOptions()
   return getTransformForBounds(
     { x: left, y: top, width: right - left, height: bottom - top },
     dimensions.width,
@@ -41,13 +37,12 @@ export function graphCameraView(
   readyIds: Set<string>,
   options: {
     focusOnly?: boolean
-    insets?: GraphInsets
     rootId?: string | null
     selectedId?: string | null
   } = {},
 ): ViewportTransform | null {
   if (!graph.nodes.length || !dimensions.width || !dimensions.height) return null
-  const whole = fitNodes(graph.nodes, dimensions, options.insets)
+  const whole = fitNodes(graph.nodes, dimensions)
   const selected = graph.nodes.find((node) => node.work_item_id === options.selectedId)
   if (!options.focusOnly && !selected && whole.zoom >= READABLE_ZOOM) return whole
 
@@ -69,7 +64,6 @@ export function graphCameraView(
   const context = fitNodes(
     graph.nodes.filter((node) => contextIds.has(node.work_item_id)),
     dimensions,
-    options.insets,
   )
-  return context.zoom >= READABLE_ZOOM ? context : fitNodes([anchor], dimensions, options.insets)
+  return context.zoom >= READABLE_ZOOM ? context : fitNodes([anchor], dimensions)
 }

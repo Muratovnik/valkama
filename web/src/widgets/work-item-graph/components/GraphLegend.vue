@@ -7,7 +7,8 @@
  * shared one row with the chip, the switch and the frontier count, and at any
  * width under a wide monitor it wrapped — and wrapped again when the closed
  * members brought «Done» into it, pushing the whole field down under the
- * operator's pointer. The host keeps the field's framing clear of it.
+ * operator's pointer. It stands in the strip above the flow, so no node is
+ * ever drawn under it.
  *
  * It names only what the field draws. «Done» is the one entry the closed switch
  * adds, so while the chain has closed members its place is kept, unseen, before

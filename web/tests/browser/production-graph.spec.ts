@@ -47,7 +47,7 @@ for (const width of [1440, 390]) {
     await page.setViewportSize({ width: width === 1440 ? 390 : 1440, height: 900 })
     await expect(card).toBeInViewport({ ratio: 0.95 })
     await expect(canvas).toBeVisible()
-    const controlsBox = await page.locator('.vue-flow__controls').boundingBox()
+    const controlsBox = await page.locator('.graph-controls').boundingBox()
     const cardBox = await card.boundingBox()
     expect(controlsBox?.height).toBeLessThan(100)
     expect(cardBox && controlsBox && cardBox.y + cardBox.height <= controlsBox.y).toBe(true)
@@ -240,21 +240,50 @@ test('a chain whose read failed is read again on Retry', async ({ page }) => {
 })
 
 /** How many drawn cards a box on the field covers. */
+/**
+ * How many cards are drawn under the chrome `selector` names: each card's box
+ * as the flow clips it, since what lies past the flow's edge is not drawn.
+ */
 async function cardsUnder(page: Page, selector: string): Promise<number> {
   return page.evaluate((target) => {
     const box = document.querySelector(target)?.getBoundingClientRect()
-    return box
-      ? [...document.querySelectorAll('.flow-node-card')]
-          .map((card) => card.getBoundingClientRect())
-          .filter(
-            (card) =>
-              card.right > box.left &&
-              card.left < box.right &&
-              card.bottom > box.top &&
-              card.top < box.bottom,
-          ).length
-      : -1
+    const flow = document.querySelector('.graph-flow')?.getBoundingClientRect()
+    if (!box || !flow) return -1
+    return [...document.querySelectorAll('.flow-node-card')]
+      .map((card) => card.getBoundingClientRect())
+      .map((card) => ({
+        left: Math.max(card.left, flow.left),
+        right: Math.min(card.right, flow.right),
+        top: Math.max(card.top, flow.top),
+        bottom: Math.min(card.bottom, flow.bottom),
+      }))
+      .filter(
+        (card) =>
+          card.right > box.left &&
+          card.left < box.right &&
+          card.bottom > box.top &&
+          card.top < box.bottom,
+      ).length
   }, selector)
+}
+
+/**
+ * Whether the flow and the chrome `selector` names share a pixel. They never
+ * should: the chrome stands in strips beside the flow, so no camera can put a
+ * node under it.
+ */
+async function flowMeets(page: Page, selector: string): Promise<boolean> {
+  const flow = await page.locator('.graph-flow').boundingBox()
+  const box = await page.locator(selector).boundingBox()
+  // A box that is not there cannot be shown clear of the flow.
+  return (
+    !flow ||
+    !box ||
+    (flow.x < box.x + box.width &&
+      box.x < flow.x + flow.width &&
+      flow.y < box.y + box.height &&
+      box.y < flow.y + flow.height)
+  )
 }
 
 for (const width of [1440, 1024]) {
@@ -281,6 +310,12 @@ for (const width of [1440, 1024]) {
     }
     const fieldKey = page.locator('.graph-canvas .graph-legend')
     await expect(fieldKey).toBeVisible()
+    // The first framing, at reading zoom on a field far larger than the screen:
+    // the key and the controls stand beside the flow, so no card is under them.
+    expect(await flowMeets(page, '.graph-canvas .graph-legend')).toBe(false)
+    expect(await flowMeets(page, '.graph-controls')).toBe(false)
+    expect(await cardsUnder(page, '.graph-controls')).toBe(0)
+    expect(await cardsUnder(page, '.graph-canvas .graph-legend')).toBe(0)
     // The bar keeps a key only for a narrow workspace, out of sight at this width.
     await expect(page.locator('.graph-bar .graph-legend')).toBeHidden()
     await expect(page.locator('.graph-options-toggle')).toBeHidden()
@@ -295,13 +330,15 @@ for (const width of [1440, 1024]) {
     expect(await page.locator('.graph-flow').boundingBox()).toEqual(before.field)
     expect(await fieldKey.boundingBox()).toEqual(key)
     await expect(fieldKey.locator('.graph-legend-state:not(.held)').first()).toHaveText('Done')
+    expect(await cardsUnder(page, '.graph-controls')).toBe(0)
+    expect(await cardsUnder(page, '.graph-canvas .graph-legend')).toBe(0)
 
     // The whole of it, zoomed out past reading: an overview by state, framed
     // clear of the key and the controls.
     await page.getByRole('button', { name: 'Fit whole graph', exact: true }).click()
     await expect(page.locator('.flow-node-card.overview')).toHaveCount(610)
     await expect(page.locator('.flow-node-overview').first()).toBeVisible()
-    expect(await cardsUnder(page, '.vue-flow__controls')).toBe(0)
+    expect(await cardsUnder(page, '.graph-controls')).toBe(0)
     expect(await cardsUnder(page, '.graph-canvas .graph-legend')).toBe(0)
     await page.getByRole('button', { name: 'Zoom in', exact: true }).click()
     await expect(page.locator('.flow-node-card.overview')).toHaveCount(610)
@@ -333,14 +370,23 @@ test('at a phone width the bar is one row and its options open under it', async 
   await expect(page.locator('.graph-frontier-on-field')).toBeVisible()
   await expect(page.locator('.graph-canvas .graph-legend')).toBeHidden()
 
-  // Every camera control stands inside the field: none is cut off.
+  // Every camera control stands inside the field, none is cut off, and the four
+  // keep one row; neither they nor the count stand on the flow.
   const field = await page.locator('.graph-canvas').boundingBox()
+  const tops = new Set<number>()
   for (const control of await page.locator('.graph-controls button').all()) {
     const box = await control.boundingBox()
     expect(field && box && box.y + box.height).toBeLessThanOrEqual(
       (field?.y ?? 0) + (field?.height ?? 0),
     )
+    expect(field && box && box.x + box.width).toBeLessThanOrEqual(
+      (field?.x ?? 0) + (field?.width ?? 0),
+    )
+    tops.add(Math.round(box?.y ?? -1))
   }
+  expect(tops.size).toBe(1)
+  expect(await flowMeets(page, '.graph-controls')).toBe(false)
+  expect(await flowMeets(page, '.graph-frontier-on-field')).toBe(false)
 
   // By keyboard: the button opens the switch and the key under the row.
   await toggle.focus()

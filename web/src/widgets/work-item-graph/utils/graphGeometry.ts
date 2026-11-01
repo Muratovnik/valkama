@@ -14,6 +14,12 @@ export const NODE_HEIGHT = 112
 export const MARGIN = 24
 
 /**
+ * The field's Vue Flow store. The canvas and the camera controls beside it are
+ * not parent and child, so the controls find the field's camera by this id.
+ */
+export const GRAPH_FLOW_ID = 'valkama-work-graph'
+
+/**
  * Siblings of one parent stay together, and within a parent the item number
  * decides. Numbers order the rows rather than ids because a work item id is a
  * UUID: sorting by it would scatter siblings created minutes apart.

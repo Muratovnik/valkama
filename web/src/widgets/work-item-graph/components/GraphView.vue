@@ -21,7 +21,11 @@ import GraphNodeCard from '@/widgets/work-item-graph/components/GraphNodeCard.vu
 import { useGraphCamera } from '@/widgets/work-item-graph/composables/useGraphCamera.ts'
 import { useGraphNodeMarks } from '@/widgets/work-item-graph/composables/useGraphNodeMarks.ts'
 import { useGraphProjection } from '@/widgets/work-item-graph/composables/useGraphProjection.ts'
-import { NODE_HEIGHT, NODE_WIDTH } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+import {
+  GRAPH_FLOW_ID,
+  NODE_HEIGHT,
+  NODE_WIDTH,
+} from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import {
   edgeKey,
@@ -49,8 +53,6 @@ const props = defineProps<{
 const emit = defineEmits<{ 'exit-chain': []; 'open': [reference: string] }>()
 /** Whether a chain's closed members are drawn; the host keeps it in the address. */
 const showClosed = defineModel<boolean>('showClosed', { default: false })
-
-const GRAPH_FLOW_ID = 'valkama-work-graph'
 
 const { t } = useI18n()
 
@@ -120,7 +122,7 @@ const {
 })
 
 // Vue Flow owns the camera and all viewport math. The store is keyed so the
-// Controls child and this field share one camera instance.
+// controls in the strip below and this field share one camera instance.
 const { fitted, fitOptions, overview, onFlowInit, scheduleFitView } = useGraphCamera({
   flowId: GRAPH_FLOW_ID,
   placed,
@@ -250,6 +252,9 @@ function onFieldPointerLeave() {
 
     <!-- Hover cleanup only: leaving the canvas with a pointer clears the hover -->
     <!-- highlight. Nothing here is reachable or actionable by pointer alone. -->
+    <!-- The frame holds three rows: the key's strip, the flow, the controls' -->
+    <!-- strip. The chrome is beside the flow rather than on it, so no node is -->
+    <!-- ever drawn under it, however the camera stands. -->
     <!-- eslint-disable-next-line vuejs-accessibility/mouse-events-have-key-events, vuejs-accessibility/no-static-element-interactions -->
     <div
       v-show="!emptyKind"
@@ -257,10 +262,7 @@ function onFieldPointerLeave() {
       :class="[{ settled: fitted }]"
       @mouseleave="onFieldPointerLeave"
     >
-      <div
-        ref="legendPlace"
-        class="graph-legend-place"
-      >
+      <div class="graph-legend-place">
         <GraphFieldCorner
           :groups="chainLegend"
           :has-edges="hasEdges"
@@ -324,12 +326,11 @@ function onFieldPointerLeave() {
           :gap="24"
           :size="1"
         />
-        <GraphControls
-          ref="controls"
-          :fit-options="fitOptions"
-          @focus-work="scheduleFitView(true)"
-        />
       </VueFlow>
+      <GraphControls
+        :fit-options="fitOptions"
+        @focus-work="scheduleFitView(true)"
+      />
     </div>
   </section>
 </template>
@@ -344,11 +345,15 @@ function onFieldPointerLeave() {
 }
 
 .graph-canvas {
-  position: relative;
+  display: grid;
   flex: 1 1 auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   min-height: 0;
   padding: 0;
+  border: 1px solid var(--color-rule);
+  background: var(--color-surface-recess);
   overflow: hidden;
+  border-radius: var(--radius-card);
 
   /* The field, the dots and the frame are drawn immediately; only the nodes wait
      for the camera, so opening the graph shows an empty field settling into a
@@ -364,24 +369,22 @@ function onFieldPointerLeave() {
 }
 
 .graph-legend-place {
-  position: absolute;
-  top: var(--space-3);
-  right: var(--space-3);
-  left: var(--space-3);
-  z-index: 5;
   display: flex;
   justify-content: flex-end;
-  pointer-events: none;
+  align-items: center;
+
+  /* The key's row is one line tall whether or not it draws anything yet, so a
+     switch that brings the first link or state into it moves no node. */
+  min-height: calc(24px + 2 * var(--space-2));
+  padding: var(--space-2) var(--space-3);
 }
 
 .graph-flow {
   width: 100%;
   height: 100%;
   min-height: 360px;
-  border: 1px solid var(--color-rule);
   background: var(--color-surface-recess);
   overflow: hidden;
-  border-radius: var(--radius-card);
 }
 
 :deep(.vue-flow__background pattern circle) {

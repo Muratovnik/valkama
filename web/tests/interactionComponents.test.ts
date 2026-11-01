@@ -95,10 +95,11 @@ test('GraphView delegates camera behavior to Vue Flow and keeps graph nodes non-
   assert.match(graph, /useGraphProjection/)
   assert.match(graph, /applyFocus\(\{ type: 'pointer-enter'/)
   assert.match(graph, /<VueFlow/)
-  // The camera controls are their own component, because the chrome they wear is
-  // eight rules into Vue Flow's own DOM and none of it is about the field.
-  assert.match(graph, /<GraphControls/)
-  assert.match(graphControls, /<Controls/)
+  // The camera controls are their own component, in the strip under the flow
+  // rather than on it, so they find the field's camera by its id.
+  assert.match(graph, /<\/VueFlow>\s*<GraphControls/)
+  assert.match(graphControls, /<ControlButton/)
+  assert.match(graphControls, /useVueFlow\(\{ id: GRAPH_FLOW_ID \}\)/)
   assert.match(graph, /<Background/)
   assert.match(graph, /:pan-on-drag="true"/)
   assert.match(graph, /zoom-activation-key-code="Control"/)

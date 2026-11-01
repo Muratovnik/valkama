@@ -26,6 +26,8 @@ vi.mock('@vue-flow/core', async (original) => ({
     setViewport: vi.fn().mockResolvedValue(true),
     dimensions,
     viewport,
+    minZoom: ref(0.01),
+    maxZoom: ref(1.45),
   }),
 }))
 

@@ -5,8 +5,8 @@
  *
  * Narrow, the bar has no room for the count and opens the key under its
  * options button instead, so the count takes the key's corner and stays in
- * sight. The host measures this corner to keep every framing clear of it, so
- * whichever of the two is drawn, the nodes are never under it.
+ * sight. Either way it stands in the strip above the flow, so no node is ever
+ * drawn under it.
  */
 import { useI18n } from 'vue-i18n'
 
