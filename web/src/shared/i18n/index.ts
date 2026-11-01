@@ -61,10 +61,22 @@ export const i18n = createI18n({
         hour: '2-digit',
         minute: '2-digit',
       },
+      day: {
+        month: 'short',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      },
     },
     ru: {
       activity: {
         year: 'numeric',
+        month: 'short',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      },
+      day: {
         month: 'short',
         day: '2-digit',
         hour: '2-digit',

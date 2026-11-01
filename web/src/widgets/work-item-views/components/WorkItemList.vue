@@ -5,13 +5,33 @@
  * A table rather than a wall, because a list answers a different question:
  * across every state at once, what is urgent, what is unheld, what moved last.
  * Kanban answers where the work sits.
+ *
+ * The title is what a row is read for, so it takes the width the other columns
+ * leave; they are as wide as what they hold, and the holder, whose values run
+ * long, stops at a measure and ends in an ellipsis with the whole name on
+ * hover. Where the list is too narrow for every column, columns give way in a
+ * stated order rather than being pushed off the edge (`listColumns.ts`).
+ *
+ * The rows are one Tab stop, as the board's tiles are: the row last focused.
+ * ↑ and ↓ walk the rows, Home and End go to the ends, Enter opens the card,
+ * and closing the card brings focus back to the row it was opened from.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { PRIORITIES, readyIds } from '@/shared/api/planningModel.ts'
+import { useEventListener, useResizeObserver } from '@vueuse/core'
+
+import { useListSort } from '@/widgets/work-item-views/composables/useListSort.ts'
+import { useListWords } from '@/widgets/work-item-views/composables/useListWords.ts'
+import {
+  fitFor,
+  isFolded,
+  LIST_COLUMNS,
+  stepsOf,
+} from '@/widgets/work-item-views/utils/listColumns.ts'
+import type { ListColumn, SortKey } from '@/widgets/work-item-views/utils/listColumns.ts'
+
 import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
-import { holderName } from '@/shared/lib/actor.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
@@ -23,23 +43,19 @@ const props = defineProps<{
 
 const emit = defineEmits<{ open: [reference: string] }>()
 
-const { t, d } = useI18n()
+const { t, locale } = useI18n()
 
-type SortKey = 'reference' | 'title' | 'state' | 'priority' | 'claim' | 'checklist' | 'updated'
+const { ariaSort, descending, rows, sortBy, sortKey } = useListSort(() => props.items)
 
-const sortKey = ref<SortKey>('updated')
-const descending = ref(true)
+const root = ref<HTMLElement | null>(null)
+const width = ref(0)
+useResizeObserver(root, ([entry]) => {
+  width.value = entry.contentRect.width
+})
+const fit = computed(() => fitFor(width.value))
+const wide = computed(() => fit.value === 'wide')
 
-const ready = computed(() => readyIds(props.items))
-
-const urgency = new Map(PRIORITIES.map((priority, index) => [priority, PRIORITIES.length - index]))
-
-function steps(item: WorkItemBrief): { done: number; total: number } {
-  return {
-    done: item.checklist.filter((step) => step.done).length,
-    total: item.checklist.length,
-  }
-}
+const { ready, wordsOf } = useListWords(() => props.items)
 
 /**
  * The three cells whose content is a decision, named where the decision is made.
@@ -50,78 +66,96 @@ function steps(item: WorkItemBrief): { done: number; total: number } {
  */
 const numericMark = (column: { numeric?: boolean }) => (column.numeric ? 'true' : undefined)
 
-/** Who holds the item, or whether it is there to be taken. */
-function claimLabel(item: WorkItemBrief): string {
-  if (item.claim_ref)
-    return item.state.is_terminal
-      ? t('workItem.previousHolder', { holder: holderName(item.claim_ref) })
-      : holderName(item.claim_ref)
-  return ready.value.has(item.work_item_id) ? t('workItem.ready') : '—'
-}
-
-/** Checklist progress, or a dash for an item that declares no steps. */
+/** Checklist progress as a fraction under the «Steps» heading, or a dash for none. */
 function checklistLabel(item: WorkItemBrief): string {
-  const progress = steps(item)
-  return progress.total ? t('workItem.checklistProgress', progress) : '—'
+  const progress = stepsOf(item)
+  return progress.total ? t('workItem.list.steps', progress) : '—'
 }
 
-function value(item: WorkItemBrief, key: SortKey): number | string {
-  if (key === 'reference') return item.number
-  if (key === 'title') return item.title.toLocaleLowerCase()
-  if (key === 'state') return item.state.name.toLocaleLowerCase()
-  if (key === 'priority') return urgency.get(item.priority) ?? 0
-  if (key === 'claim') return item.claim_ref.toLocaleLowerCase()
-  if (key === 'checklist') {
-    const { done, total } = steps(item)
-    return total ? done / total : -1
-  }
-  return item.updated_at
+/** The same progress as a fact under the title, where no heading names it. */
+function checklistFact(item: WorkItemBrief): string {
+  return t('workItem.checklistProgress', stepsOf(item))
 }
 
-const rows = computed(() => {
-  const key = sortKey.value
-  const direction = descending.value ? -1 : 1
-  return [...props.items].sort((left, right) => {
-    const a = value(left, key)
-    const b = value(right, key)
-    if (a === b) return left.number - right.number
-    return (a > b ? 1 : -1) * direction
-  })
+const folded = (key: SortKey) => isFolded(fit.value, key)
+const shownColumns = computed(() => LIST_COLUMNS.filter((column) => !folded(column.key)))
+const foldedColumns = computed(() => LIST_COLUMNS.filter((column) => folded(column.key)))
+
+/** The sorts a heading offers: its own, and on the title's the columns folded under it. */
+function sortsIn(column: ListColumn): ListColumn[] {
+  return column.key === 'title' ? [column, ...foldedColumns.value] : [column]
+}
+
+function headClass(column: ListColumn) {
+  return { 'list-head-title': column.key === 'title' }
+}
+
+/** A sort a heading carries for a column folded under it, rather than its own. */
+function sortClass(sort: ListColumn, column: ListColumn) {
+  return { folded: sort.key !== column.key }
+}
+
+/**
+ * The row that is the list's Tab stop: the one last focused while it is still
+ * listed, otherwise the first. Held by item, so it follows a row a sort moved.
+ */
+const active = ref<string | null>(null)
+const stop = computed(() => {
+  const held = rows.value.some((item) => item.work_item_id === active.value)
+  return held ? active.value : (rows.value[0]?.work_item_id ?? null)
 })
 
-function sortBy(key: SortKey) {
-  if (sortKey.value === key) descending.value = !descending.value
-  else {
-    sortKey.value = key
-    // The columns people scan for "what changed" and "what is urgent" read
-    // newest and highest first; a name reads A to Z.
-    descending.value = key === 'updated' || key === 'priority' || key === 'checklist'
-  }
+function tabStop(item: WorkItemBrief): 0 | -1 {
+  return item.work_item_id === stop.value ? 0 : -1
 }
 
-function ariaSort(key: SortKey): 'ascending' | 'descending' | 'none' {
-  if (sortKey.value !== key) return 'none'
-  return descending.value ? 'descending' : 'ascending'
+/** What a row depends on; walking a thousand rows redraws only the two focus moved between. */
+function memo(item: WorkItemBrief): unknown[] {
+  return [item, tabStop(item), ready.value.has(item.work_item_id), fit.value, locale.value]
 }
 
-function when(value: string): string {
-  const date = new Date(value)
-  return Number.isNaN(date.valueOf()) ? value : d(date, 'activity')
+/** The row button an event happened on, if it happened on one. */
+function rowButton(event: Event): HTMLElement | null {
+  const target = event.target as Partial<Element> | null
+  return target?.closest?.<HTMLElement>('.list-open') ?? null
 }
 
-const COLUMNS: { key: SortKey; label: string; numeric?: boolean }[] = [
-  { key: 'reference', label: 'workItem.list.reference', numeric: true },
-  { key: 'title', label: 'workItem.list.title' },
-  { key: 'state', label: 'workItem.list.state' },
-  { key: 'priority', label: 'workItem.list.priority' },
-  { key: 'claim', label: 'workItem.list.claim' },
-  { key: 'checklist', label: 'workItem.list.checklist', numeric: true },
-  { key: 'updated', label: 'workItem.list.updated' },
-]
+/** A bare arrow, Home or End moves focus between rows and scrolls nothing else. */
+function walked(event: KeyboardEvent) {
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
+  const row = rowButton(event)?.closest('tr')
+  const body = row?.parentElement
+  if (!row || !body) return
+  const next = {
+    ArrowDown: row.nextElementSibling,
+    ArrowUp: row.previousElementSibling,
+    End: body.lastElementChild,
+    Home: body.firstElementChild,
+  }[event.key]
+  if (next === undefined) return
+  event.preventDefault()
+  next?.querySelector<HTMLElement>('.list-open')?.focus()
+}
+
+// One listener each for the whole list rather than three on every row: a
+// space of a thousand rows paid for three thousand of them on every opening.
+useEventListener(root, 'keydown', walked)
+useEventListener(root, 'focusin', (event: FocusEvent) => {
+  const id = rowButton(event)?.dataset.id
+  if (id !== undefined) active.value = id
+})
+useEventListener(root, 'click', (event: MouseEvent) => {
+  const reference = rowButton(event)?.dataset.reference
+  if (reference !== undefined) emit('open', reference)
+})
 </script>
 
 <template>
-  <div class="work-item-list">
+  <div
+    ref="root"
+    class="work-item-list"
+    :data-fit="fit"
+  >
     <table class="list-table">
       <caption class="visually-hidden">
         {{
@@ -131,27 +165,33 @@ const COLUMNS: { key: SortKey; label: string; numeric?: boolean }[] = [
       <thead>
         <tr>
           <th
-            v-for="column in COLUMNS"
+            v-for="column in shownColumns"
             :key="column.key"
-            class="list-head"
             scope="col"
+            class="list-head"
+            :class="headClass(column)"
             :aria-sort="ariaSort(column.key)"
             :data-numeric="numericMark(column)"
           >
-            <button
-              type="button"
-              class="list-sort"
-              @click="sortBy(column.key)"
-            >
-              {{ t(column.label) }}
-              <VIcon
-                v-if="sortKey === column.key"
-                name="chevron-down"
-                class="list-sort-mark"
-                :class="{ ascending: !descending }"
-                :size="14"
-              />
-            </button>
+            <span class="list-sorts">
+              <button
+                v-for="sort in sortsIn(column)"
+                :key="sort.key"
+                type="button"
+                class="list-sort"
+                :class="sortClass(sort, column)"
+                @click="sortBy(sort.key)"
+              >
+                {{ t(sort.label) }}
+                <VIcon
+                  v-if="sortKey === sort.key"
+                  name="chevron-down"
+                  class="list-sort-mark"
+                  :class="{ ascending: !descending }"
+                  :size="14"
+                />
+              </button>
+            </span>
           </th>
         </tr>
       </thead>
@@ -159,6 +199,7 @@ const COLUMNS: { key: SortKey; label: string; numeric?: boolean }[] = [
         <tr
           v-for="item in rows"
           :key="item.work_item_id"
+          v-memo="memo(item)"
           class="list-row"
         >
           <td
@@ -168,7 +209,9 @@ const COLUMNS: { key: SortKey; label: string; numeric?: boolean }[] = [
             <button
               type="button"
               class="list-open"
-              @click="emit('open', item.reference)"
+              :tabindex="tabStop(item)"
+              :data-id="item.work_item_id"
+              :data-reference="item.reference"
             >
               {{ item.reference }}
             </button>
@@ -180,28 +223,69 @@ const COLUMNS: { key: SortKey; label: string; numeric?: boolean }[] = [
               class="list-kind"
               >{{ t(`workItem.kind.${item.kind}`) }}</span
             >
+            <span
+              v-if="!wide"
+              class="list-facts"
+            >
+              <SemanticState
+                v-if="folded('state')"
+                dimension="work-item-state"
+                :state="item.state.category"
+                :label="item.state.name"
+              />
+              <span class="list-fact">{{ t(`priority.${item.priority}`) }}</span>
+              <span class="list-fact list-fact-claim">{{ wordsOf(item).claim }}</span>
+              <span
+                v-if="folded('checklist') && item.checklist.length"
+                class="list-fact"
+                >{{ checklistFact(item) }}</span
+              >
+              <span
+                v-if="folded('updated')"
+                class="list-fact"
+                >{{ wordsOf(item).updated }}</span
+              >
+            </span>
           </td>
-          <td class="list-cell">
+          <td
+            v-if="!folded('state')"
+            class="list-cell"
+          >
             <SemanticState
               dimension="work-item-state"
               :state="item.state.category"
               :label="item.state.name"
             />
           </td>
-          <td class="list-cell">{{ t(`priority.${item.priority}`) }}</td>
           <td
-            class="list-cell list-claim"
-            :title="claimLabel(item)"
+            v-if="!folded('priority')"
+            class="list-cell"
           >
-            {{ claimLabel(item) }}
+            {{ t(`priority.${item.priority}`) }}
           </td>
           <td
+            v-if="!folded('claim')"
+            class="list-cell"
+          >
+            <span
+              class="list-claim"
+              :title="wordsOf(item).claim"
+              >{{ wordsOf(item).claim }}</span
+            >
+          </td>
+          <td
+            v-if="!folded('checklist')"
             class="list-cell"
             data-numeric="true"
           >
             {{ checklistLabel(item) }}
           </td>
-          <td class="list-cell">{{ when(item.updated_at) }}</td>
+          <td
+            v-if="!folded('updated')"
+            class="list-cell"
+          >
+            {{ wordsOf(item).updated }}
+          </td>
         </tr>
       </tbody>
     </table>
@@ -214,30 +298,40 @@ const COLUMNS: { key: SortKey; label: string; numeric?: boolean }[] = [
 </template>
 
 <style scoped>
+/* A row focused from the keyboard stops below the sticky head rather than
+   under it. */
 .work-item-list {
   height: 100%;
   min-height: 0;
   background: var(--color-surface);
   overflow: auto;
   border-radius: var(--radius-card);
+  scroll-padding-block: var(--size-control-height) var(--space-1);
 }
 
 .list-table {
   width: 100%;
-  min-width: 1120px;
   border-collapse: collapse;
 }
 
 /* The head stays while the rows move, because a sorted column with its label
-   scrolled away is a column of unexplained values. */
+   scrolled away is a column of unexplained values. Every column but the title
+   is as wide as what it holds; the title takes the rest. */
 .list-head {
   position: sticky;
   top: 0;
   z-index: 1;
+  vertical-align: bottom;
+  width: 1%;
   padding: 0;
   text-align: start;
   white-space: nowrap;
   background: var(--color-surface);
+}
+
+.list-head-title {
+  width: auto;
+  white-space: normal;
 }
 
 :is(.list-head, .list-cell)[data-numeric='true'] {
@@ -245,16 +339,28 @@ const COLUMNS: { key: SortKey; label: string; numeric?: boolean }[] = [
   text-align: end;
 }
 
+/* A heading's sorts: one, or on the title's heading the title's and those of
+   the columns folded under it, side by side. */
+.list-sorts {
+  display: flex;
+  flex-wrap: wrap;
+
+  .list-head[data-numeric='true'] & {
+    justify-content: flex-end;
+  }
+}
+
 .list-sort {
   display: inline-flex;
+  flex: 1 1 auto;
   gap: var(--space-1);
   align-items: center;
-  width: 100%;
   padding: var(--space-2) var(--space-3);
   border: 0;
   color: var(--color-text-muted);
   font: var(--font-column-head);
   text-align: inherit;
+  white-space: nowrap;
   background: none;
   cursor: pointer;
 
@@ -266,6 +372,22 @@ const COLUMNS: { key: SortKey; label: string; numeric?: boolean }[] = [
   .list-head[data-numeric='true'] & {
     justify-content: flex-end;
   }
+
+  .list-sorts:has(> :nth-child(2)) > & {
+    flex: 0 0 auto;
+  }
+
+  /* The sorts of the folded columns follow the title's own as one run, in the
+     order their facts take under the title, set apart by a dot that is not
+     part of any name. */
+  &.folded {
+    padding-inline: var(--space-1);
+
+    &::before {
+      content: '·' / '';
+      padding-inline-end: var(--space-1);
+    }
+  }
 }
 
 /* One chevron, turned over. The icon set holds no upward chevron, and adding a
@@ -275,10 +397,12 @@ const COLUMNS: { key: SortKey; label: string; numeric?: boolean }[] = [
   transform: rotate(180deg);
 }
 
+/* The row the keyboard is on is marked as the row the pointer is over. */
 .list-row {
   border-top: 1px solid var(--color-rule);
 
-  &:hover {
+  &:hover,
+  &:focus-within {
     background: var(--color-surface-hover);
   }
 }
@@ -307,7 +431,7 @@ const COLUMNS: { key: SortKey; label: string; numeric?: boolean }[] = [
 }
 
 .list-title {
-  min-width: 28ch;
+  min-width: 16ch;
   color: var(--color-text);
   overflow-wrap: anywhere;
   white-space: normal;
@@ -322,7 +446,32 @@ const COLUMNS: { key: SortKey; label: string; numeric?: boolean }[] = [
   font: var(--font-detail);
 }
 
+/* The columns folded under the title, as one muted line of facts that wraps
+   rather than running off the row. */
+.list-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  align-items: center;
+  padding-top: var(--space-1);
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+}
+
+.list-fact {
+  min-width: 0;
+}
+
+.list-fact-claim {
+  overflow-wrap: anywhere;
+}
+
+/* The one column whose values run long stops at a measure; the whole name is
+   its hover. */
 .list-claim {
-  min-width: 20ch;
+  display: block;
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>

@@ -1,0 +1,115 @@
+/**
+ * The list's rows as one composite: a single Tab stop that follows the row last
+ * focused, arrows and Home/End that walk the rows, and Enter that opens a card.
+ */
+import { flushPromises, mount } from '@vue/test-utils'
+import { afterEach, describe, expect, it } from 'vitest'
+
+import WorkItemList from '@/widgets/work-item-views/components/WorkItemList.vue'
+
+import { i18n as appI18n } from '@/shared/i18n/index.ts'
+
+import { boardItem } from '../fixtures/board.ts'
+import { i18n } from '../support/workItemBoardHarness.ts'
+
+afterEach(() => {
+  document.body.innerHTML = ''
+})
+
+// Sorted by number for the reader's sake: the list sorts by Updated, and these
+// were updated in the order of their numbers, so the newest leads.
+const items = [1, 2, 3, 4].map((number) =>
+  boardItem(number, 'backlog', { updated_at: `2026-10-0${number}T10:00:00Z` }),
+)
+
+async function list() {
+  const wrapper = mount(WorkItemList, {
+    attachTo: document.body,
+    props: { items, links: [] },
+    global: { plugins: [i18n()] },
+  })
+  // The list listens once for all its rows, from the moment it is in the page.
+  await flushPromises()
+  return wrapper
+}
+
+const buttons = (wrapper: Awaited<ReturnType<typeof list>>) =>
+  wrapper.findAll<HTMLButtonElement>('tbody .list-open')
+const focusedReference = () => document.activeElement?.textContent?.trim()
+const press = (key: string, extra: KeyboardEventInit = {}) =>
+  document.activeElement?.dispatchEvent(
+    new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...extra }),
+  )
+
+describe('the list rows', () => {
+  it('are one Tab stop, the first row until another is focused', async () => {
+    const wrapper = await list()
+    const stops = buttons(wrapper).filter((button) => button.attributes('tabindex') === '0')
+    expect(stops.map((button) => button.text())).toEqual(['MAIN-4'])
+    buttons(wrapper)[2].element.focus()
+    await wrapper.vm.$nextTick()
+    const after = buttons(wrapper).filter((button) => button.attributes('tabindex') === '0')
+    expect(after.map((button) => button.text())).toEqual(['MAIN-2'])
+  })
+
+  it('walk with the arrows, Home and End, and stop at either end', async () => {
+    const wrapper = await list()
+    buttons(wrapper)[0].element.focus()
+    press('ArrowDown')
+    expect(focusedReference()).toBe('MAIN-3')
+    press('End')
+    expect(focusedReference()).toBe('MAIN-1')
+    press('ArrowDown')
+    expect(focusedReference()).toBe('MAIN-1')
+    press('Home')
+    expect(focusedReference()).toBe('MAIN-4')
+    press('ArrowUp')
+    expect(focusedReference()).toBe('MAIN-4')
+    // A modified arrow is someone else's shortcut.
+    press('ArrowDown', { shiftKey: true })
+    expect(focusedReference()).toBe('MAIN-4')
+    await wrapper.vm.$nextTick()
+    expect(buttons(wrapper)[0].attributes('tabindex')).toBe('0')
+  })
+
+  it('open the focused row’s card', async () => {
+    const wrapper = await list()
+    await buttons(wrapper)[1].trigger('click')
+    expect(wrapper.emitted('open')).toEqual([['MAIN-3']])
+  })
+
+  it('keep the Tab stop on the row a new order moved', async () => {
+    const wrapper = await list()
+    buttons(wrapper)[1].element.focus()
+    await wrapper.get('thead .list-sort').trigger('click')
+    const stops = buttons(wrapper).filter((button) => button.attributes('tabindex') === '0')
+    expect(stops.map((button) => button.text())).toEqual(['MAIN-3'])
+  })
+
+  it('show the steps as a fraction under their heading, and a year only when it is not this one', () => {
+    const year = new Date().getFullYear()
+    const wrapper = mount(WorkItemList, {
+      props: {
+        items: [
+          boardItem(7, 'backlog', {
+            updated_at: `${year}-03-04T10:00:00Z`,
+            checklist: [
+              { id: 'a', text: 'one', done: true, claimed_by: '', done_by: '' },
+              { id: 'b', text: 'two', done: false, claimed_by: '', done_by: '' },
+            ],
+          }),
+          boardItem(8, 'backlog', { updated_at: `${year - 1}-03-04T10:00:00Z` }),
+        ],
+        links: [],
+      },
+      // The application's own formats, which name the shortened date.
+      global: { plugins: [appI18n] },
+    })
+    const [recent, older] = wrapper.findAll('tbody tr').map((row) => row.findAll('td'))
+    expect(recent[5].text()).toBe('1/2')
+    expect(recent[6].text()).toContain('Mar')
+    expect(recent[6].text()).not.toContain(String(year))
+    expect(older[5].text()).toBe('—')
+    expect(older[6].text()).toContain(String(year - 1))
+  })
+})

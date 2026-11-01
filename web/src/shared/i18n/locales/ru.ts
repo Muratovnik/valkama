@@ -1086,6 +1086,7 @@ export const ru = {
       priority: 'Приоритет',
       claim: 'Исполнитель',
       checklist: 'Шаги',
+      steps: '{done}/{total}',
       updated: 'Обновлено',
     },
   },

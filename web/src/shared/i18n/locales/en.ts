@@ -1087,6 +1087,7 @@ export const en = {
       priority: 'Priority',
       claim: 'Assignee',
       checklist: 'Steps',
+      steps: '{done}/{total}',
       updated: 'Updated',
     },
   },
