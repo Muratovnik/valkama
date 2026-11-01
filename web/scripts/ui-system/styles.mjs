@@ -4,6 +4,8 @@
  * every token declared is used and every token used is declared.
  */
 
+import { SEMANTIC_COLOR_REFERENCE } from './semantic-colors.mjs'
+
 // The chain's scope chart and branch map are drawings of data, not icons: the
 // chart plots two lines from a series, and the map draws one segment per member
 // along the lane it came from, which no icon set can draw.
@@ -74,14 +76,15 @@ const viewportQueryOwners = new Set([
 ])
 
 /**
- * The four status colours, which mark a state and never fill a surface.
+ * The meaning colours, which mark a state and never fill a surface.
  *
- * One prefix and four names, where this used to be a `--status-*` family the
- * palette does not declare plus the four real ones. A fixture in
- * `uiSystemGuard.test.ts` is what noticed the rename: a pattern over the old
- * spelling stops matching silently, and the rule then reports nothing at all.
+ * The family is declared once, in `semantic-colors.mjs`. It used to be a
+ * `--status-*` family the palette does not declare plus the four real ones,
+ * and a fixture in `uiSystemGuard.test.ts` is what noticed the rename: a
+ * pattern over the old spelling stops matching silently, and the rule then
+ * reports nothing at all.
  */
-const SEMANTIC_COLOR = /--color-(?:danger|success|warning|info)\b/
+const SEMANTIC_COLOR = SEMANTIC_COLOR_REFERENCE
 
 /**
  * Declarations that paint an area rather than a mark.

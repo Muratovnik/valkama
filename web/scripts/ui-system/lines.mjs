@@ -6,6 +6,8 @@
  * disguise. A control's height comes from the scale, not from a literal.
  */
 
+import { SEMANTIC_COLOR_NAMES } from './semantic-colors.mjs'
+
 /**
  * The colours a drawn line may be, all under one namespace.
  *
@@ -14,10 +16,14 @@
  * declare, kept alive here because a regex over names cannot notice that. The
  * shared `--color-` prefix is what makes the list short enough to read, and
  * `check:ui-system` already fails on a token used but never declared, so the
- * dead branches were guarding nothing.
+ * dead branches were guarding nothing. The meaning colours — a status edge —
+ * come from the one family list, so a new one is a line colour the moment it
+ * is a meaning colour.
  */
-const LINE_TOKENS =
-  /var\(\s*--color-(?:rule(?:-strong)?|tooltip-border|danger|success|warning|info|action-primary|navigation|graph-line(?:-muted)?)\b|currentcolor/i
+const LINE_TOKENS = new RegExp(
+  String.raw`var\(\s*--color-(?:rule(?:-strong)?|tooltip-border|${SEMANTIC_COLOR_NAMES}|action-primary|navigation|graph-line(?:-muted)?)\b|currentcolor`,
+  'i',
+)
 
 const LINE_DECLARATION =
   /(?:^|[{;])\s*border(?:-(?:top|right|bottom|left|inline|block)(?:-(?:start|end))?)?\s*:\s*([^;{}]+)/gi

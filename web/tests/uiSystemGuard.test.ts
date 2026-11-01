@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { test } from 'vitest'
 
 import { scanUiTree } from '../scripts/check-ui-system.mjs'
 import { scanBorderBudget, scanControlSizes, scanHiddenRules } from '../scripts/ui-system/lines.mjs'
+import { SEMANTIC_TONES } from '../scripts/ui-system/semantic-colors.mjs'
 
 /** One file with one style block, which is what most of these fixtures are. */
 const styled = (name, css) => ({ file: `future/${name}.vue`, source: `<style>${css}</style>` })
@@ -113,6 +115,30 @@ test('a literal color is rejected in stylesheets and modules, not only component
     const violations = scanFixture(file, 'export const brand = "#3355ff"')
     assert.equal(violations.length, 1, file)
     assert.match(violations[0], /must be semantic tokens/)
+  }
+})
+
+test('the guarded meaning colours are exactly the tones the state owner paints with', () => {
+  // The family was three regexes in three rules. The one owner of which tones
+  // exist is `uiSystem.ts`; a tone added there and not here would be a meaning
+  // colour free to tint a surface, which is the failure this pins.
+  const owner = readFileSync(
+    fileURLToPath(new URL('../src/shared/lib/uiSystem.ts', import.meta.url)),
+    'utf8',
+  )
+  const body = /SEMANTIC_TONE_TOKENS[^=]*=\s*\{([^}]*)\}/.exec(owner)?.[1] ?? ''
+  const painted = [...body.matchAll(/(\w+):\s*'--color-([\w-]+)'/g)]
+    .filter(([, tone]) => tone !== 'neutral')
+    .map(([, tone]) => tone)
+    .sort()
+  assert.deepEqual(painted, [...SEMANTIC_TONES].sort())
+  for (const tone of SEMANTIC_TONES) {
+    const tinted = scanFixture(
+      'future/Alert.vue',
+      scoped(`.note { background: color-mix(in srgb, var(--color-${tone}) 8%, transparent); }`),
+    )
+    assert.equal(tinted.length, 1, tone)
+    assert.match(tinted[0], /tints a surface/, tone)
   }
 })
 

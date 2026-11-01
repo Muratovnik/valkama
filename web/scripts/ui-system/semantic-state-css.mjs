@@ -10,6 +10,8 @@ import {
 import { parse as parseCss } from 'postcss'
 import selectorParser from 'postcss-selector-parser'
 
+import { SEMANTIC_COLOR_PROPERTY } from './semantic-colors.mjs'
+
 export const SEMANTIC_MARK_PROPERTY =
   /^(?:accent-color|background(?:-color|-image)?|border(?:(?:-(?:block|inline)(?:-(?:start|end))?|-(?:top|right|bottom|left))(?:-color)?|-color)?|box-shadow|caret-color|color|column-rule(?:-color)?|fill|filter|flood-color|lighting-color|outline(?:-color)?|stop-color|stroke|text-decoration-color|text-emphasis-color|text-shadow|-webkit-text-fill-color|-webkit-text-stroke(?:-color)?)$/u
 
@@ -159,7 +161,7 @@ function customPropertyReferences(value) {
 
 function directStatusTones(value) {
   return customPropertyReferences(value)
-    .map((property) => /^--color-(danger|info|success|warning)$/u.exec(property)?.[1])
+    .map((property) => SEMANTIC_COLOR_PROPERTY.exec(property)?.[1])
     .filter(Boolean)
 }
 
@@ -178,8 +180,7 @@ function customPropertyDefinitions(rules) {
 function valueToneSources(value, definitions, resolving = new Set()) {
   const sources = directStatusTones(value).map((tone) => ({ selectors: [], tone }))
   for (const property of customPropertyReferences(value)) {
-    if (/^--color-(?:danger|info|success|warning)$/u.test(property) || resolving.has(property))
-      continue
+    if (SEMANTIC_COLOR_PROPERTY.test(property) || resolving.has(property)) continue
     for (const definition of definitions.get(property) ?? [])
       for (const source of valueToneSources(
         definition.value,
