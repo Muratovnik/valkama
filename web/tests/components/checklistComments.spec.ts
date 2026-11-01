@@ -163,14 +163,14 @@ describe('checklist-linked comments', () => {
       props: { item, writable: true },
       global: global(),
     })
-    await wrapper.get('input[type="checkbox"]').setValue(true)
+    await getButton(wrapper, 'Work report').trigger('click')
     await wrapper.get('textarea[aria-label="What was done"]').setValue('Report delivery')
     await wrapper.get('textarea[aria-label="What comes next"]').setValue('Report next')
     await wrapper.vm.discussStep(stepA)
-    expect(wrapper.get('input[type="checkbox"]').attributes('disabled')).toBeDefined()
+    expect(getButton(wrapper, 'Work report').attributes('disabled')).toBeDefined()
     expect(wrapper.text()).toContain('Your report draft is retained')
     await getButton(wrapper, 'Remove step link').trigger('click')
-    await wrapper.get('input[type="checkbox"]').setValue(true)
+    await getButton(wrapper, 'Work report').trigger('click')
     expect(
       (wrapper.get('textarea[aria-label="What was done"]').element as HTMLTextAreaElement).value,
     ).toBe('Report delivery')

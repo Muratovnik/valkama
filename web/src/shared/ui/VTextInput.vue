@@ -8,11 +8,19 @@
  * `date` control is already localized, keyboard-complete and screen-reader
  * complete, and the shared part worth owning is the field around it.
  *
+ * A textarea can also offer completions as it is typed in (`MarkdownEditor`):
+ * `completion` names the list it controls and the row that is active, and the
+ * keys and the caret are the host's, through `keydown` and `control()`. It
+ * stays a multi-line text box rather than becoming a combobox, which has no
+ * multi-line form and would have a screen reader announce something else; a
+ * text box may carry `aria-autocomplete` and an active descendant. The list
+ * itself belongs to the host.
+ *
  * The value is always emitted as a string. A caller that needs a number
  * converts it, because a control that guesses its own type is how a numeric
  * field ends up holding `NaN` the moment the box is cleared.
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 import VField from '@/shared/ui/VField.vue'
 
@@ -26,6 +34,8 @@ const props = withDefaults(
      * which is the case the accessibility rule against autofocus excludes.
      */
     autofocus?: boolean
+    /** A textarea that offers a list of completions; see the note above. */
+    completion?: { controls: string; activeDescendant?: string }
     disabled?: boolean
     /** Why the value was refused; shown under the control and named by it. */
     error?: string
@@ -60,18 +70,28 @@ const props = withDefaults(
     spellcheck: undefined,
     disabled: false,
     autofocus: false,
+    completion: undefined,
     hideLabel: false,
     size: 'default',
   },
 )
 
-const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
+const emit = defineEmits<{
+  'keydown': [event: KeyboardEvent]
+  'update:modelValue': [value: string]
+}>()
+const element = ref<HTMLInputElement | HTMLTextAreaElement | null>(null)
 /** Absent rather than false, because `aria-invalid="false"` is a claim and not a default. */
 const invalidMark = computed(() => (props.error ? 'true' : undefined))
 
 function edited(event: Event) {
   emit('update:modelValue', (event.target as HTMLInputElement | HTMLTextAreaElement).value)
 }
+
+defineExpose({
+  /** The native control, for a host that reads or places the caret. */
+  control: () => element.value,
+})
 </script>
 
 <template>
@@ -86,7 +106,11 @@ function edited(event: Event) {
   >
     <textarea
       v-if="rows"
+      ref="element"
       class="control"
+      :aria-autocomplete="completion && 'list'"
+      :aria-controls="completion?.controls"
+      :aria-activedescendant="completion?.activeDescendant"
       :rows="rows"
       :value="String(modelValue)"
       :placeholder="placeholder"
@@ -97,9 +121,11 @@ function edited(event: Event) {
       :aria-invalid="invalidMark"
       :aria-describedby="errorId"
       @input="edited"
+      @keydown="emit('keydown', $event)"
     />
     <input
       v-else
+      ref="element"
       class="control"
       :class="`size-${size}`"
       :type="type"

@@ -8,6 +8,7 @@ import { linkWorkItems, planningRefusal } from '@/shared/api/planningApi.ts'
 import { LINK_KINDS } from '@/shared/api/planningModel.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { actorName } from '@/shared/lib/actor.ts'
+import RichText from '@/shared/ui/RichText.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
@@ -195,11 +196,12 @@ function when(value: string): string {
             @click="emit('session', reference.value, '')"
           >
             {{ reference.label || reference.value }}</button
-          ><span
+          ><RichText
             v-else
             class="ref-value"
-            >{{ reference.label || reference.value }}</span
-          >
+            :source="reference.label || reference.value"
+            inline
+          />
           <span class="ref-meta">{{
             t('workItem.refAttached', {
               author: actorName(reference.author),

@@ -5,11 +5,10 @@
  * word to a reader, but its hyphen is a break opportunity to the browser, which
  * set «MAIN-» at the end of one line and «384)» at the start of the next. A
  * reference is its own run, so the host can keep it whole; the text itself is
- * untouched, so a copied title still names the reference it says.
+ * untouched, so a copied title still names the reference it says. What counts
+ * as a reference is the one reading free text uses (`textReferences.ts`).
  */
-
-/** A reference as the planning model writes one, inside running text. */
-const REFERENCE = /\b[A-Z][A-Z0-9]{1,7}-[1-9]\d{0,8}\b/gu
+import { splitReferences } from '@/shared/lib/textReferences.ts'
 
 export interface TitleRun {
   text: string
@@ -18,13 +17,7 @@ export interface TitleRun {
 }
 
 export function titleRuns(title: string): TitleRun[] {
-  const runs: TitleRun[] = []
-  let from = 0
-  for (const match of title.matchAll(REFERENCE)) {
-    if (match.index > from) runs.push({ text: title.slice(from, match.index), whole: false })
-    runs.push({ text: match[0], whole: true })
-    from = match.index + match[0].length
-  }
-  if (from < title.length) runs.push({ text: title.slice(from), whole: false })
-  return runs
+  return splitReferences(title).map((run) =>
+    typeof run === 'string' ? { text: run, whole: false } : { text: run.value, whole: true },
+  )
 }

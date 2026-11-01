@@ -1,0 +1,137 @@
+/**
+ * A card with a long markdown work report, as an agent writes one.
+ *
+ * What a unit test cannot see: that the held report ends on a whole line of
+ * text rather than through one, that it opens and closes, that Tab into a link
+ * below the cut opens it instead of scrolling it out of shape, that markdown
+ * headings stay out of the card's outline, and that a reference opens the card
+ * or the record it names in the real application.
+ */
+import { expect, test } from '@playwright/test'
+
+import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
+
+import { installDiscussionBackend } from './discussionBackend.ts'
+import { expectNoSilentClipping } from './overflow.ts'
+import { now, projectScope } from './planningFixtures.ts'
+
+const steps = Array.from(
+  { length: 18 },
+  (_, index) => `- Step ${index + 1}: **checked** with \`npm test\` on a long enough line to wrap`,
+)
+const report = [
+  '## Delivered',
+  '',
+  'Shipped in `a1b2c3d`, see MAIN-265; MAIN-999 and SHA-256 stay text.',
+  '',
+  // Code is set smaller than the text, so the lines after it leave the text's grid.
+  '```',
+  'npm test',
+  'npm run build',
+  '```',
+  '',
+  ...steps,
+  '',
+  '[Notes](https://example.org/notes) and [bad](javascript:alert(1)) <b>raw</b>',
+].join('\n')
+
+test('a long markdown report holds on a whole line, opens, and links what resolves', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  const backend = await installDiscussionBackend(page)
+  backend.item.refs.push({
+    kind: 'commit',
+    value: 'a1b2c3d4e5f6',
+    label: 'fix: wire contract',
+    author: 'agent',
+    at: now,
+  })
+  backend.item.comments.push({
+    id: 1,
+    kind: 'report',
+    report: { done: report, next: 'Review MAIN-265', why: '' },
+    body: '',
+    author: 'agent',
+    at: now,
+    checklist_item_id: null,
+    checklist_item_text: null,
+  })
+  await page.route('**/api/ref?*', (route) =>
+    route.fulfill({
+      json: {
+        kind: 'commit',
+        value: 'a1b2c3d4e5f6',
+        resolved: true,
+        repository: '/work/repo',
+        detail: 'a1b2c3d agent\nfix: wire contract\n src/a.ts | 2 +-',
+      },
+    }),
+  )
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
+  const drawer = page.locator('.drawer')
+  const entry = drawer.locator('.thread-entry').filter({ hasText: 'Delivered' })
+  const held = entry.locator('.collapsible-text')
+
+  // Headings in the text are emphasised paragraphs, under the card's own outline.
+  await expect(entry.locator('h1, h2, h3, h4, h5, h6')).toHaveCount(0)
+  await expect(entry.locator('.rich-heading')).toHaveText('Delivered')
+  await expect(entry.locator('li')).toHaveCount(18)
+
+  // Held to ten lines of 24px, ending on the last whole line of text.
+  const box = await held.evaluate((element) => {
+    const range = document.createRange()
+    range.selectNodeContents(element)
+    const { top } = element.getBoundingClientRect()
+    const bottom = top + element.clientHeight
+    const crossing = [...range.getClientRects()].filter(
+      (rect) => rect.height > 0 && rect.top < bottom - 0.5 && rect.bottom > bottom + 0.5,
+    )
+    return {
+      held: element.clientHeight,
+      full: element.scrollHeight,
+      crossing: crossing.filter((rect) => rect.height < 40).length,
+    }
+  })
+  expect(box.held).toBeLessThanOrEqual(240)
+  expect(box.held).toBeGreaterThan(200)
+  expect(box.full).toBeGreaterThan(box.held * 2)
+  expect(box.crossing).toBe(0)
+  await entry.getByRole('button', { name: 'Show all', exact: true }).click()
+  await expect.poll(() => held.evaluate((element) => element.clientHeight)).toBe(box.full)
+  await entry.getByRole('button', { name: 'Show less', exact: true }).click()
+  await expect.poll(() => held.evaluate((element) => element.clientHeight)).toBe(box.held)
+
+  // References link only where they resolve; unsafe markup stays text.
+  await expect(entry.getByRole('button', { name: 'MAIN-265' })).toHaveCount(2)
+  await expect(entry.getByRole('button', { name: 'MAIN-999' })).toHaveCount(0)
+  await expect(entry.getByRole('button', { name: 'SHA-256' })).toHaveCount(0)
+  await expect(entry).toContainText('MAIN-999 and SHA-256 stay text.')
+  await expect(entry.locator('a[href^="javascript"], b, img')).toHaveCount(0)
+  await expect(entry).toContainText('<b>raw</b>')
+  const notes = entry.getByRole('link', { name: 'Notes' })
+  await expect(notes).toHaveAttribute('target', '_blank')
+  await expect(notes).toHaveAttribute('rel', 'noopener noreferrer')
+
+  // Tab into a link below the cut opens the text rather than scrolling it.
+  await notes.focus()
+  await expect(entry.getByRole('button', { name: 'Show less', exact: true })).toBeVisible()
+  expect(await held.evaluate((element) => element.scrollTop)).toBe(0)
+  await expectNoSilentClipping(page, 'Markdown report at 1440px')
+
+  // A commit the card carries opens its record; the dialog closes back onto the card.
+  await entry.getByRole('button', { name: 'a1b2c3d' }).click()
+  const record = page.getByRole('dialog', { name: 'Commit' })
+  await expect(record).toContainText('fix: wire contract')
+  await expect(record).toContainText('src/a.ts | 2 +-')
+  await page.keyboard.press('Escape')
+  await expect(record).toHaveCount(0)
+  await expect(drawer).toHaveCount(1)
+
+  // Another task of the space opens in the card, and Back returns here.
+  await entry.getByRole('button', { name: 'MAIN-265' }).first().click()
+  await expect(drawer.locator('.head-reference')).toHaveText('MAIN-265')
+  await drawer.getByRole('button', { name: 'Back', exact: true }).click()
+  await expect(drawer.locator('.head-reference')).toHaveText('MAIN-264')
+})

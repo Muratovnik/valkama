@@ -28,6 +28,7 @@ import { groupingOf, withGrouping } from '@/pages/planning/composables/usePlanni
 import { usePlanningChainView } from '@/pages/planning/composables/usePlanningChainView.ts'
 import { usePlanningMoves } from '@/pages/planning/composables/usePlanningMoves.ts'
 import { usePlanningPortfolio } from '@/pages/planning/composables/usePlanningPortfolio.ts'
+import { usePlanningReferenceLinks } from '@/pages/planning/composables/usePlanningReferenceLinks.ts'
 import { usePlanningSubscription } from '@/pages/planning/composables/usePlanningSubscription.ts'
 import PlanningPortfolioFrame from '@/pages/planning/PlanningPortfolioFrame.vue'
 import PlanningWorkspace from '@/pages/planning/PlanningWorkspace.vue'
@@ -344,6 +345,9 @@ function show(reference: string | null) {
       : planningWorkItemEntity({ space_ref: space, reference }),
   )
 }
+
+// References written in this space's texts open its items (see the composable).
+usePlanningReferenceLinks(boundSpace, model, openItem)
 
 function openItem(reference: string, related = false, left: InspectorReturn | null = null) {
   returning.value = null

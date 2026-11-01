@@ -54,6 +54,9 @@ export const LINE_BUDGET = new Map([
   ['shared/ui/OverlayHeader.vue', 1],
   ['shared/ui/OverlayHost.vue', 1],
   ['shared/ui/SemanticState.vue', 1],
+  // Markdown in free text: a quote's edge (the step quote's own), a thematic
+  // break and a table's row dividers, which is what a reader expects of each.
+  ['shared/ui/RichBlocks.vue', 3],
 
   // Widgets and pages: row and section dividers, table header rules, sticky
   // edges, timeline spines — plus status edges where a state names itself.
@@ -68,6 +71,7 @@ export const LINE_BUDGET = new Map([
   // Planning's own surfaces. Overview divides the facts from the record; the
   // list's sticky header stands on the rule that stops it melting into row one.
   ['widgets/work-item-inspector/components/InspectorDiscussion.vue', 2], // Composer divider and frozen step quote.
+  ['widgets/work-item-inspector/components/InspectorThread.vue', 1], // A comment's frozen step quote.
   ['widgets/work-item-inspector/components/InspectorSummary.vue', 1],
   ['widgets/work-item-inspector/components/InspectorOverview.css', 1],
   ['widgets/work-item-inspector/components/InspectorExecution.vue', 1],

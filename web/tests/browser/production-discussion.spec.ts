@@ -19,19 +19,19 @@ test('description, comments and selected reports survive a fresh item read', asy
     .getByRole('textbox', { name: 'Comment', exact: true })
     .fill('Please check the result')
   await drawer.locator('.discussion-form button[type="submit"]').click()
-  await expect(drawer.locator('.discussion-body')).toHaveText('Please check the result')
-  await expect(drawer.locator('.discussion-body')).toHaveCSS('font-size', '15px')
-  await drawer.getByRole('checkbox', { name: 'Work report', exact: true }).check()
+  await expect(drawer.locator('.thread-text')).toHaveText('Please check the result')
+  await expect(drawer.locator('.thread-text')).toHaveCSS('font-size', '15px')
+  await drawer.getByRole('button', { name: 'Work report', exact: true }).click()
   for (const title of ['First result', 'Second result']) {
     await drawer.getByRole('textbox', { name: 'What was done', exact: true }).fill(title)
     await drawer.getByRole('textbox', { name: 'What comes next', exact: true }).fill('Review')
     await drawer.getByRole('checkbox', { name: 'Make task outcome', exact: true }).check()
     await drawer.getByRole('button', { name: 'Publish report', exact: true }).click()
-    await expect(drawer.locator('.discussion-entry')).toHaveCount(title === 'First result' ? 2 : 3)
+    await expect(drawer.locator('.thread-entry')).toHaveCount(title === 'First result' ? 2 : 3)
   }
-  const first = drawer.locator('.discussion-entry').filter({ hasText: 'First result' })
+  const first = drawer.locator('.thread-entry').filter({ hasText: 'First result' })
   await first.getByRole('button', { name: 'Make task outcome', exact: true }).click()
-  await expect(first.locator('.discussion-label')).toHaveText('Work report · task outcome')
+  await expect(first.locator('.thread-label')).toHaveText('Work report · task outcome')
   expect(backend.writes.at(-1)).toEqual({
     author: 'user',
     id: backend.item.work_item_id,
@@ -40,7 +40,7 @@ test('description, comments and selected reports survive a fresh item read', asy
   })
   await page.reload()
   await expect(drawer.locator('.description-copy')).toHaveText('An editable goal')
-  await expect(drawer.locator('.discussion-entry')).toHaveCount(3)
+  await expect(drawer.locator('.thread-entry')).toHaveCount(3)
   const outcome = drawer.locator('.outcome')
   await expect(outcome.locator('.outcome-body')).toBeHidden()
   await expect(outcome.locator('.outcome-preview')).toBeVisible()
@@ -85,7 +85,7 @@ for (const width of [900, 390]) {
     await drawer.getByRole('button', { name: 'Refresh task', exact: true }).click()
     await expect(description).toHaveValue(draft)
     await drawer.getByRole('button', { name: 'Save description', exact: true }).click()
-    await expect(drawer.locator('.description-copy')).toHaveText(draft)
+    await expect(drawer.locator('.description-copy')).toHaveText(draft, { useInnerText: true })
     expect(backend.writes.at(-1)?.expected_revision).toBe(4)
     const comment = drawer.getByRole('textbox', { name: 'Comment', exact: true })
     await comment.fill('A retained comment draft')

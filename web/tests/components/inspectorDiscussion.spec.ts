@@ -130,7 +130,7 @@ describe('task description and discussion', () => {
       props: { item, writable: true },
       global: editingPlugins(),
     })
-    await wrapper.get('input[type="checkbox"]').setValue(true)
+    await getButton(wrapper, 'Work report').trigger('click')
     await wrapper.get('textarea[aria-label="What was done"]').setValue('Completed')
     await wrapper.get('textarea[aria-label="What comes next"]').setValue('Validate')
     await wrapper.get('.discussion-option:last-of-type input').setValue(true)
@@ -160,7 +160,7 @@ describe('task description and discussion', () => {
       props: { item, writable: true },
       global: editingPlugins(),
     })
-    await wrapper.get('input[type="checkbox"]').setValue(true)
+    await getButton(wrapper, 'Work report').trigger('click')
     await wrapper.get('textarea[aria-label="What was done"]').setValue('Investigation')
     await wrapper.get('textarea[aria-label="What comes next"]').setValue('Review')
     vi.mocked(publishWorkItemReport).mockResolvedValueOnce(item)
@@ -195,7 +195,7 @@ describe('task description and discussion', () => {
     expect(wrapper.text()).toContain('<img src=x>')
     expect(wrapper.find('img').exists()).toBe(false)
     vi.mocked(selectWorkItemSummary).mockResolvedValueOnce(item)
-    await wrapper.get('.discussion-entry button').trigger('click')
+    await wrapper.get('.thread-entry button').trigger('click')
     await flushPromises()
     expect(selectWorkItemSummary).toHaveBeenCalledWith({
       id: item.work_item_id,
@@ -205,8 +205,8 @@ describe('task description and discussion', () => {
     await wrapper.setProps({
       item: { ...item, summary_comment_id: 11, summary: { done: '<img src=x>', next: 'Review' } },
     })
-    expect(wrapper.get('.discussion-label').text()).toContain('task outcome')
-    expect(wrapper.find('.discussion-entry button').exists()).toBe(false)
+    expect(wrapper.get('.thread-label').text()).toContain('task outcome')
+    expect(wrapper.find('.thread-entry button').exists()).toBe(false)
     const outcome = mount(InspectorSummary, {
       props: {
         item: { ...item, summary_comment_id: 11, summary: { done: '<img src=x>', next: 'Review' } },
@@ -250,7 +250,7 @@ describe('task description and discussion', () => {
       props: { item, writable: false },
       global: editingPlugins(),
     })
-    const entries = wrapper.findAll('.discussion-entry')
+    const entries = wrapper.findAll('.thread-entry')
     // 13:00Z, then 15:00+03:00 (12:00Z), then the entry with no recorded time.
     expect(entries.map((entry) => entry.attributes('id'))).toEqual([
       'work-report-1',

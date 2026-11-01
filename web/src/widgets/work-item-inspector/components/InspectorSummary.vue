@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import InspectorReport from '@/widgets/work-item-inspector/components/InspectorReport.vue'
 
 import type { WorkItem } from '@/shared/api/planningModel.ts'
+import RichText from '@/shared/ui/RichText.vue'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
 import VButton from '@/shared/ui/VButton.vue'
 
@@ -39,7 +40,12 @@ function viewReport() {
     </details>
     <div class="outcome-preview">
       <span class="outcome-preview-label">{{ t('workItem.outcomePreview') }}</span>
-      <p class="outcome-preview-text">{{ item.summary.done }}</p>
+      <p class="outcome-preview-text">
+        <RichText
+          :source="item.summary.done"
+          inline
+        />
+      </p>
     </div>
     <VButton
       v-if="item.summary_comment_id !== null"

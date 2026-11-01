@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import RichText from '@/shared/ui/RichText.vue'
+
 defineProps<{ report: { done: string; next: string; why?: string } }>()
 const { t } = useI18n()
 </script>
@@ -9,18 +11,18 @@ const { t } = useI18n()
   <dl class="report">
     <div class="report-field">
       <dt class="report-term">{{ t('workItem.summaryDone') }}</dt>
-      <dd class="report-value">{{ report.done }}</dd>
+      <dd class="report-value"><RichText :source="report.done" /></dd>
     </div>
     <div
       v-if="report.why"
       class="report-field"
     >
       <dt class="report-term">{{ t('workItem.summaryWhy') }}</dt>
-      <dd class="report-value">{{ report.why }}</dd>
+      <dd class="report-value"><RichText :source="report.why" /></dd>
     </div>
     <div class="report-field">
       <dt class="report-term">{{ t('workItem.summaryNext') }}</dt>
-      <dd class="report-value">{{ report.next }}</dd>
+      <dd class="report-value"><RichText :source="report.next" /></dd>
     </div>
   </dl>
 </template>
@@ -46,6 +48,5 @@ const { t } = useI18n()
   margin: 0;
   font: var(--font-editor);
   overflow-wrap: anywhere;
-  white-space: pre-wrap;
 }
 </style>

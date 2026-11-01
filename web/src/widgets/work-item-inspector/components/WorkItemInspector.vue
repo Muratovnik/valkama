@@ -31,6 +31,7 @@ import InspectorChain from '@/widgets/work-item-inspector/components/InspectorCh
 import InspectorExecution from '@/widgets/work-item-inspector/components/InspectorExecution.vue'
 import InspectorMemory from '@/widgets/work-item-inspector/components/InspectorMemory.vue'
 import InspectorOverview from '@/widgets/work-item-inspector/components/InspectorOverview.vue'
+import InspectorReferenceScope from '@/widgets/work-item-inspector/components/InspectorReferenceScope.vue'
 import InspectorRefusal from '@/widgets/work-item-inspector/components/InspectorRefusal.vue'
 import InspectorRelations from '@/widgets/work-item-inspector/components/InspectorRelations.vue'
 import InspectorWriteActions from '@/widgets/work-item-inspector/components/InspectorWriteActions.vue'
@@ -216,8 +217,7 @@ const { capture } = useInspectorReturn({
 })
 
 /** Open another card from this one, after the draft guard, saying where this one was left. */
-const openFrom = (reference: string) =>
-  void leave(() => emit('open', reference, capture(reference)))
+const openFrom = (to: string) => void leave(() => emit('open', to, capture(to)))
 
 const title = computed(() => item.value?.title || props.reference)
 const titleText = computed(() => titleRuns(title.value))
@@ -370,9 +370,10 @@ const close = () => void leave(() => emit('close'))
           @move="moveTo"
         />
       </div>
-      <article
+      <InspectorReferenceScope
         :key="reference"
-        class="inspector"
+        :item="item"
+        @open="openFrom"
       >
         <DataEmptyState
           v-if="missing"
@@ -456,7 +457,7 @@ const close = () => void leave(() => emit('close'))
             />
           </template>
         </PlatformStatePanel>
-      </article>
+      </InspectorReferenceScope>
     </DrawerFrame>
   </ResizableInspector>
 

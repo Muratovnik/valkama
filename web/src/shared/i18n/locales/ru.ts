@@ -7,12 +7,15 @@ import { inputRequestMessages } from '@/shared/i18n/inputRequestMessages.ts'
 import { memoryProviderMessages } from '@/shared/i18n/memoryProviderMessages.ts'
 /* Русский каталог; tests/i18n.test.ts проверяет совпадение ключей. */
 import { platformIntegrationMessages } from '@/shared/i18n/platformIntegrationMessages.ts'
+import { richTextMessages } from '@/shared/i18n/richTextMessages.ts'
 
 export const ru = {
   history: activityMessages.ru.history,
   checklistComment: checklistCommentMessages.ru.checklistComment,
   finder: globalFinderMessages.ru.finder,
   requests: inputRequestMessages.ru.requests,
+  editor: richTextMessages.ru.editor,
+  textLinks: richTextMessages.ru.textLinks,
   app: {
     title: 'Valkama',
   },

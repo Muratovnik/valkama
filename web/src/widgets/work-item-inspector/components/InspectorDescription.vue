@@ -4,19 +4,33 @@ import { useI18n } from 'vue-i18n'
 
 import { useDraftSource } from '@/widgets/work-item-inspector/utils/useDraftGuard.ts'
 import { useInspectorMutation } from '@/widgets/work-item-inspector/utils/useInspectorMutation.ts'
+import { workItemSuggest } from '@/widgets/work-item-inspector/utils/workItemSuggest.ts'
 
 import { updateWorkItemDescription } from '@/shared/api/planningApi.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
+import MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
+import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import VButton from '@/shared/ui/VButton.vue'
-import VTextInput from '@/shared/ui/VTextInput.vue'
 
 const props = defineProps<{ item: WorkItem; writable: boolean }>()
 const emit = defineEmits<{ changed: []; refresh: [] }>()
 const { t } = useI18n()
 const editing = ref(false)
+const previewing = ref(false)
 const draft = ref('')
+const suggest = workItemSuggest(() => props.item)
+const view = computed({
+  get: () => (previewing.value ? 'preview' : 'write'),
+  set: (value: 'preview' | 'write') => {
+    previewing.value = value === 'preview'
+  },
+})
+const views = computed(() => [
+  { value: 'write' as const, label: t('editor.write') },
+  { value: 'preview' as const, label: t('editor.preview') },
+])
 let seeded = ''
 watch(
   () => props.item.work_item_id,
@@ -24,6 +38,7 @@ watch(
     draft.value = props.item.description
     seeded = props.item.description
     editing.value = false
+    previewing.value = false
   },
   { immediate: true },
 )
@@ -55,6 +70,7 @@ function save() {
     () => {
       seeded = draft.value
       editing.value = false
+      previewing.value = false
     },
   )
 }
@@ -62,6 +78,7 @@ function cancel() {
   draft.value = props.item.description
   seeded = props.item.description
   editing.value = false
+  previewing.value = false
 }
 </script>
 
@@ -88,12 +105,23 @@ function cancel() {
       class="description-form"
       @submit.prevent="save"
     >
-      <VTextInput
+      <SegmentedControl
+        v-model="view"
+        class="description-view"
+        size="compact"
+        :label="t('editor.view')"
+        :options="views"
+      />
+      <MarkdownEditor
         v-model="draft"
         :label="t('workItem.description')"
+        :action="t('workItem.saveDescription')"
+        :preview="previewing"
+        :suggest="suggest"
         :rows="4"
         :maxlength="20000"
         :disabled="pending"
+        @submit="save"
       />
       <p
         v-if="errorKey"
@@ -149,6 +177,10 @@ function cancel() {
   gap: var(--space-heading-content);
 }
 
+.description-view {
+  justify-self: start;
+}
+
 .description-actions {
   display: flex;
   flex-wrap: wrap;
@@ -160,7 +192,6 @@ function cancel() {
   margin: 0;
   font: var(--font-editor);
   overflow-wrap: anywhere;
-  white-space: pre-wrap;
 
   &.empty {
     color: var(--color-text-muted);

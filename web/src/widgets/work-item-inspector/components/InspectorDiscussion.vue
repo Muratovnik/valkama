@@ -5,16 +5,23 @@
  * The composer comes first and the newest entry right under it. It used to sit
  * after every entry ever written, oldest first, so writing a comment on a busy
  * item began with scrolling past all of them, and the latest report — the one a
- * reader came for — was the last thing on the page. Long entries are held to a
- * few lines until expanded, so one report a screen long no longer pushes the
- * rest of the thread out of reach.
+ * reader came for — was the last thing on the page. The thread itself is
+ * `InspectorThread`.
+ *
+ * The composer writes one of two things, chosen up front: a comment, which is
+ * free markdown, or a work report, which is a template of three sections the
+ * server keeps apart (what was done, why, what next). Both are written in the
+ * shared markdown editor — a preview of exactly what the thread will show, `#`
+ * to link a task of this space, Ctrl+Enter to send.
  */
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import InspectorReport from '@/widgets/work-item-inspector/components/InspectorReport.vue'
+import InspectorThread from '@/widgets/work-item-inspector/components/InspectorThread.vue'
+import { anchorState } from '@/widgets/work-item-inspector/utils/checklistAnchor.ts'
 import { useDraftSource } from '@/widgets/work-item-inspector/utils/useDraftGuard.ts'
 import { useInspectorMutation } from '@/widgets/work-item-inspector/utils/useInspectorMutation.ts'
+import { workItemSuggest } from '@/widgets/work-item-inspector/utils/workItemSuggest.ts'
 
 import {
   commentWorkItem,
@@ -22,21 +29,44 @@ import {
   selectWorkItemSummary,
 } from '@/shared/api/planningApi.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
-import { actorName, actorSession } from '@/shared/lib/actor.ts'
-import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
+import MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
+import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import VButton from '@/shared/ui/VButton.vue'
-import VTextInput from '@/shared/ui/VTextInput.vue'
 
 const props = defineProps<{ item: WorkItem; writable: boolean }>()
 const emit = defineEmits<{ changed: []; refresh: [] }>()
-const { t, d } = useI18n()
+const { t } = useI18n()
 const note = ref('')
 const reporting = ref(false)
+const previewing = ref(false)
 const makeCurrent = ref(false)
 const report = reactive({ done: '', next: '', why: '' })
 const anchor = ref<{ id: string; text: string } | null>(null)
 const composer = ref<HTMLFormElement | null>(null)
+
+const suggest = workItemSuggest(() => props.item)
+/** Comment or report, as one choice; a comment on a step cannot be a report. */
+const kind = computed({
+  get: () => (reporting.value ? 'report' : 'comment'),
+  set: (value: 'comment' | 'report') => {
+    reporting.value = value === 'report'
+  },
+})
+const kinds = computed(() => [
+  { value: 'comment' as const, label: t('workItem.comment') },
+  { value: 'report' as const, label: t('workItem.workReport'), disabled: Boolean(anchor.value) },
+])
+const view = computed({
+  get: () => (previewing.value ? 'preview' : 'write'),
+  set: (value: 'preview' | 'write') => {
+    previewing.value = value === 'preview'
+  },
+})
+const views = computed(() => [
+  { value: 'write' as const, label: t('editor.write') },
+  { value: 'preview' as const, label: t('editor.preview') },
+])
 
 useDraftSource('comment', () => Boolean(note.value.trim()))
 useDraftSource('report', () => reporting.value && Boolean(report.done || report.next || report.why))
@@ -66,34 +96,19 @@ async function startReport() {
 function removeAnchor() {
   anchor.value = null
 }
-function anchorState(id: string, text: string | null | undefined) {
-  const step = props.item.checklist.find((entry) => entry.id === id)
-  if (!step) return 'removed'
-  return step.text === text ? 'current' : 'changed'
-}
-function quoteLabel(id: string, text: string | null | undefined) {
-  return t(`checklistComment.${anchorState(id, text)}`)
-}
-const anchorHint = computed(() => {
-  if (!anchor.value) return ''
-  const state = anchorState(anchor.value.id, anchor.value.text)
-  return state === 'current' ? '' : t(`checklistComment.${state}Hint`)
-})
-function commentTime(at: string | null) {
-  const time = at === null ? Number.NaN : Date.parse(at)
-  return Number.isNaN(time) ? Number.NEGATIVE_INFINITY : time
-}
-/** Newest first; an entry with no recorded time goes last, where its age puts it. */
-const comments = computed(() =>
-  [...props.item.comments].sort(
-    (left, right) => commentTime(right.at) - commentTime(left.at) || right.id - left.id,
-  ),
+/** How the step this comment is about stands now, which the quote and its hint say. */
+const anchorStanding = computed(() =>
+  anchor.value ? anchorState(props.item, anchor.value.id, anchor.value.text) : 'current',
+)
+const anchorHint = computed(() =>
+  anchorStanding.value === 'current' ? '' : t(`checklistComment.${anchorStanding.value}Hint`),
 )
 watch(
   () => props.item.work_item_id,
   () => {
     note.value = ''
     reporting.value = false
+    previewing.value = false
     makeCurrent.value = false
     anchor.value = null
     Object.assign(report, { done: '', next: '', why: '' })
@@ -109,16 +124,6 @@ const canSend = computed(() =>
 const publishLabel = computed(() =>
   t(reporting.value ? 'workItem.publishReport' : 'workItem.noteSend'),
 )
-function reportLabel(commentId: number) {
-  return t(
-    commentId === props.item.summary_comment_id ? 'workItem.currentOutcome' : 'workItem.workReport',
-  )
-}
-function when(value: string | null) {
-  if (value === null) return t('workItem.unknownTime')
-  const date = new Date(value)
-  return Number.isNaN(date.valueOf()) ? value : d(date, 'activity')
-}
 function publish() {
   if (!props.writable || !canSend.value) return
   const id = props.item.work_item_id
@@ -134,6 +139,7 @@ function publish() {
       () => {
         Object.assign(report, { done: '', next: '', why: '' })
         makeCurrent.value = false
+        previewing.value = false
       },
     )
   } else {
@@ -148,6 +154,7 @@ function publish() {
       () => {
         note.value = ''
         anchor.value = null
+        previewing.value = false
       },
     )
   }
@@ -185,7 +192,7 @@ defineExpose({ discussStep, startReport })
       >
         <strong>{{ t('checklistComment.linked') }}</strong>
         <blockquote class="step-quote">
-          <span>{{ quoteLabel(anchor.id, anchor.text) }}</span>
+          <span>{{ t(`checklistComment.${anchorStanding}`) }}</span>
           <p class="discussion-body">{{ anchor.text }}</p>
         </blockquote>
         <p
@@ -202,35 +209,55 @@ defineExpose({ discussStep, startReport })
         >
         <p class="discussion-empty">{{ t('checklistComment.reportHint') }}</p>
       </div>
-      <label class="discussion-option"
-        ><input
-          v-model="reporting"
-          type="checkbox"
-          :disabled="pending || Boolean(anchor)"
-        />{{ t('workItem.workReport') }}</label
-      >
+      <div class="discussion-toolbar">
+        <SegmentedControl
+          v-model="kind"
+          size="compact"
+          :label="t('editor.kind')"
+          :options="kinds"
+        />
+        <SegmentedControl
+          v-model="view"
+          size="compact"
+          :label="t('editor.view')"
+          :options="views"
+        />
+      </div>
       <template v-if="reporting">
-        <VTextInput
+        <MarkdownEditor
           v-model="report.done"
           :label="t('workItem.summaryDone')"
+          :action="publishLabel"
+          :hint="false"
+          :preview="previewing"
+          :suggest="suggest"
           :rows="3"
           :maxlength="4000"
           :disabled="pending"
+          @submit="publish"
         />
-        <VTextInput
+        <MarkdownEditor
           v-model="report.why"
           :label="t('workItem.summaryWhy')"
+          :action="publishLabel"
           :hint="t('workItem.summaryWhyHint')"
+          :preview="previewing"
+          :suggest="suggest"
           :rows="2"
           :maxlength="4000"
           :disabled="pending"
+          @submit="publish"
         />
-        <VTextInput
+        <MarkdownEditor
           v-model="report.next"
           :label="t('workItem.summaryNext')"
+          :action="publishLabel"
+          :preview="previewing"
+          :suggest="suggest"
           :rows="3"
           :maxlength="4000"
           :disabled="pending"
+          @submit="publish"
         />
         <label class="discussion-option"
           ><input
@@ -240,13 +267,17 @@ defineExpose({ discussStep, startReport })
           />{{ t('workItem.makeOutcome') }}</label
         >
       </template>
-      <VTextInput
+      <MarkdownEditor
         v-else
         v-model="note"
         :label="t('workItem.comment')"
+        :action="publishLabel"
+        :preview="previewing"
+        :suggest="suggest"
         :rows="3"
         :maxlength="8000"
         :disabled="pending"
+        @submit="publish"
       />
       <p
         v-if="errorKey"
@@ -277,55 +308,12 @@ defineExpose({ discussStep, startReport })
         >
       </div>
     </form>
-    <ol
-      v-if="item.comments.length"
-      class="discussion-feed"
-    >
-      <li
-        v-for="entry in comments"
-        :id="`work-report-${entry.id}`"
-        :key="entry.id"
-        class="discussion-entry"
-        tabindex="-1"
-      >
-        <div class="discussion-meta">
-          <span
-            >{{ actorName(entry.author) || t('workItem.unknownAuthor') }}
-            <span v-if="actorSession(entry.author)">{{ actorSession(entry.author) }}</span></span
-          >
-          <span>{{ when(entry.at) }}</span>
-        </div>
-        <template v-if="entry.kind === 'report' && entry.report">
-          <strong class="discussion-label">{{ reportLabel(entry.id) }}</strong>
-          <InspectorReport :report="entry.report" />
-          <VButton
-            v-if="writable && entry.id !== item.summary_comment_id"
-            class="discussion-action"
-            :disabled="pending"
-            @click="select(entry.id)"
-            >{{ t('workItem.makeOutcome') }}</VButton
-          >
-        </template>
-        <blockquote
-          v-if="entry.kind === 'comment' && entry.checklist_item_id"
-          class="step-quote"
-        >
-          <strong>{{ quoteLabel(entry.checklist_item_id, entry.checklist_item_text) }}</strong>
-          <p class="discussion-body">{{ entry.checklist_item_text }}</p>
-        </blockquote>
-        <CollapsibleText
-          v-if="entry.kind === 'comment'"
-          class="discussion-body"
-          :text="entry.body"
-        />
-      </li>
-    </ol>
-    <p
-      v-else
-      class="discussion-empty"
-    >
-      {{ t('workItem.noDiscussion') }}
-    </p>
+    <InspectorThread
+      :item="item"
+      :pending="pending"
+      :writable="writable"
+      @select="select"
+    />
   </section>
 </template>
 
@@ -333,38 +321,6 @@ defineExpose({ discussStep, startReport })
 .discussion {
   display: grid;
   gap: var(--space-heading-content);
-}
-
-.discussion-feed {
-  display: grid;
-  gap: var(--space-3);
-  padding: 0;
-  margin: 0;
-  list-style: none;
-}
-
-/* A sheet on the drawer's ground: the card is visible, so its padding reads
-   as the card's inset rather than as text shifted off the column. */
-.discussion-entry {
-  display: grid;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  background: var(--color-surface-sheet);
-  border-radius: var(--radius-card);
-  scroll-margin-top: var(--space-4);
-}
-
-.discussion-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  justify-content: space-between;
-  color: var(--color-text-tertiary);
-  font: var(--font-detail);
-}
-
-.discussion-label {
-  font: var(--font-strong);
 }
 
 .discussion-body {
@@ -405,6 +361,17 @@ defineExpose({ discussStep, startReport })
   gap: var(--space-2);
   align-items: center;
   font: var(--font-line);
+}
+
+/* What is written and how it is looked at, one row: the two choices are made
+   before the text, so they lead it, and they are two groups, so they stand
+   apart. */
+.discussion-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: space-between;
+  align-items: center;
 }
 
 .discussion-actions {

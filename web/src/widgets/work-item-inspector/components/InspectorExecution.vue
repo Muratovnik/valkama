@@ -24,6 +24,7 @@ import {
 import type { Execution } from '@/shared/api/executionModel.ts'
 import { actorName } from '@/shared/lib/actor.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
+import RichText from '@/shared/ui/RichText.vue'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import VButton from '@/shared/ui/VButton.vue'
@@ -225,18 +226,16 @@ function evidence(attempt: Execution): string {
               <span class="attempt-when">{{ when(attempt.started_at) }}</span>
             </div>
 
-            <p
+            <RichText
               v-if="attempt.result?.delivery"
               class="attempt-delivery"
-            >
-              {{ attempt.result.delivery }}
-            </p>
-            <p
+              :source="attempt.result.delivery"
+            />
+            <RichText
               v-if="attempt.result?.unresolved"
               class="attempt-unresolved"
-            >
-              {{ t('execution.unresolved', { detail: attempt.result.unresolved }) }}
-            </p>
+              :source="t('execution.unresolved', { detail: attempt.result.unresolved })"
+            />
 
             <dl class="attempt-facts">
               <div class="attempt-fact">
@@ -260,12 +259,11 @@ function evidence(attempt: Execution): string {
             </dl>
             <details class="attempt-context">
               <summary>{{ t('history.detail') }}</summary>
-              <p
+              <RichText
                 v-if="attempt.result?.oracle"
                 class="attempt-delivery"
-              >
-                {{ attempt.result.oracle }}
-              </p>
+                :source="attempt.result.oracle"
+              />
               <p class="attempt-shape">{{ attempt.execution_id }} · {{ attempt.cwd }}</p>
               <p
                 v-if="attempt.ended_at"

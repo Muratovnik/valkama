@@ -6,6 +6,7 @@ import AppContextBar from '@/app/components/AppContextBar.vue'
 import AppModuleStage from '@/app/components/AppModuleStage.vue'
 import AppNotice from '@/app/components/AppNotice.vue'
 import AppRouteRecovery from '@/app/components/AppRouteRecovery.vue'
+import { useAppReferenceLinks } from '@/app/composables/useAppReferenceLinks.ts'
 import { useGlobalWorkActions } from '@/app/composables/useGlobalWorkActions.ts'
 import {
   resolveResourceSelection,
@@ -236,6 +237,13 @@ async function openSession(sessionId: string, _clientFamily: string, navigate = 
   }
 }
 const sessionContext = ref<ResolvedRef | null>(null)
+// References written in free text, anywhere in the shell: see the composable.
+useAppReferenceLinks({
+  projects: () => contextReady.value?.projects ?? [],
+  openTarget,
+  openSession: (id) => void openSession(id, ''),
+  say,
+})
 watch([pendingSession, modulesSettled, contextReady], () => {
   if (!pendingSession.value || !modulesSettled.value || !contextReady.value) return
   const id = pendingSession.value

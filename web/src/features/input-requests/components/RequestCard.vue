@@ -21,6 +21,7 @@ import type {
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { isWebAuthor } from '@/shared/api/webAuthor.ts'
 import { projectTitle, useProjectTitles } from '@/shared/lib/projectTitles.ts'
+import RichText from '@/shared/ui/RichText.vue'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
 import VButton from '@/shared/ui/VButton.vue'
 
@@ -272,7 +273,10 @@ defineExpose({ focus, focusOutcome })
         {{ t('requests.session', { id: request.session_id }) }}
       </p>
     </header>
-    <p class="request-prompt">{{ request.prompt }}</p>
+    <RichText
+      class="request-prompt"
+      :source="request.prompt"
+    />
     <p
       v-if="outcome"
       class="request-state"
@@ -324,8 +328,8 @@ defineExpose({ focus, focusOutcome })
         v-for="field in request.fields"
         :key="field.id"
         ><dt>{{ field.label }}</dt>
-        <dd class="request-value">{{ display(field) }}</dd></template
-      >
+        <dd class="request-value"><RichText :source="display(field)" /></dd
+      ></template>
     </dl>
     <p
       v-if="error"
@@ -402,10 +406,7 @@ defineExpose({ focus, focusOutcome })
 }
 
 .request-prompt {
-  margin: 0;
   font: var(--font-editor);
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
 }
 
 .request-state {
@@ -428,7 +429,6 @@ defineExpose({ focus, focusOutcome })
 .request-value {
   margin: 0 0 var(--space-2);
   overflow-wrap: anywhere;
-  white-space: pre-wrap;
 }
 
 .request-error {

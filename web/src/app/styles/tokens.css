@@ -265,6 +265,9 @@
   --font-chip: 600 var(--font-size-dense)/var(--line-height-flat) var(--font-family-interface);
   --font-count: 400 var(--font-size-dense)/var(--line-height-flat) var(--font-family-interface);
 
+  /* Code a person reads as a block: a code sample in a text, a command's output. */
+  --font-code: 400 var(--font-size-dense)/var(--line-height-normal) var(--font-family-mono);
+
   /* ─────────────────────────────────────────────────────────────────────
      Semantic: what a value is for. This is the tier the application names.
      ───────────────────────────────────────────────────────────────────── */

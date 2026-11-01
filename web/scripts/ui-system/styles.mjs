@@ -17,8 +17,14 @@ const svgOwners = new Set([
 ])
 const overlayOwners = new Set(['shared/ui/DialogFrame.vue', 'shared/ui/ResizableInspector.vue'])
 const dialogOwners = new Set(['shared/ui/OverlayHost.vue'])
-// CommandList owns keyboard navigation of search results; ChoiceSelect owns form values.
-const selectionOwners = new Set(['shared/ui/ChoiceSelect.vue', 'shared/ui/CommandList.vue'])
+// CommandList owns keyboard navigation of search results; ChoiceSelect owns form values;
+// MarkdownEditor owns the completions a text field offers as it is typed in, whose
+// keys stay with the field (`aria-activedescendant`) rather than with a list.
+const selectionOwners = new Set([
+  'shared/ui/ChoiceSelect.vue',
+  'shared/ui/CommandList.vue',
+  'shared/ui/MarkdownEditor.vue',
+])
 const segmentedOwners = new Set(['shared/ui/SegmentedControl.vue'])
 /**
  * Files allowed to author a text control.

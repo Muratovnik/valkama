@@ -13,6 +13,7 @@ import type { ActivityEntry } from '@/widgets/work-item-inspector/utils/inspecto
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { actorName, actorSession } from '@/shared/lib/actor.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
+import RichText from '@/shared/ui/RichText.vue'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
 import VButton from '@/shared/ui/VButton.vue'
 
@@ -126,17 +127,19 @@ function referenceValue(entry: ActivityEntry) {
             <span class="entry-title">{{ title(entry) }}</span>
             <span class="entry-at">{{ when(entry.at) }}</span>
           </div>
-          <p
+          <RichText
             v-if="entry.detail"
             class="entry-detail"
-          >
-            {{ entry.detail }}
-          </p>
+            :source="entry.detail"
+          />
           <p
             v-if="referenceValue(entry)"
             class="entry-reference"
           >
-            {{ referenceValue(entry) }}
+            <RichText
+              :source="referenceValue(entry)"
+              inline
+            />
           </p>
           <p
             v-if="entry.author"
@@ -227,7 +230,6 @@ function referenceValue(entry: ActivityEntry) {
   color: var(--color-text-muted);
   font: var(--font-note);
   overflow-wrap: anywhere;
-  white-space: pre-wrap;
 }
 
 .entry-reference {

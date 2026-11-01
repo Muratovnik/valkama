@@ -260,22 +260,18 @@ test('Discuss step reveals the composer and retains a frozen quote after rename 
     .getByRole('textbox', { name: 'Comment', exact: true })
     .fill('Keep the acceptance criterion explicit')
   await composer.locator('button[type="submit"]').click()
-  await expect(drawer.locator('.discussion-entry .step-quote')).toContainText('Frontend contract')
+  await expect(drawer.locator('.thread-entry .thread-quote')).toContainText('Frontend contract')
   expect(backend.writes.at(-1)).toMatchObject({
     checklist_item_id: backend.item.checklist[0].id,
     body: 'Keep the acceptance criterion explicit',
   })
   backend.item.checklist[0].text = 'Renamed criterion'
   await page.reload()
-  await expect(drawer.locator('.discussion-entry .step-quote')).toContainText(
-    'Step text has changed',
-  )
-  await expect(drawer.locator('.discussion-entry .step-quote')).toContainText('Frontend contract')
+  await expect(drawer.locator('.thread-entry .thread-quote')).toContainText('Step text has changed')
+  await expect(drawer.locator('.thread-entry .thread-quote')).toContainText('Frontend contract')
   backend.item.checklist = []
   await page.reload()
-  await expect(drawer.locator('.discussion-entry .step-quote')).toContainText(
-    'Step has been removed',
-  )
-  await expect(drawer.locator('.discussion-entry .step-quote')).toContainText('Frontend contract')
+  await expect(drawer.locator('.thread-entry .thread-quote')).toContainText('Step has been removed')
+  await expect(drawer.locator('.thread-entry .thread-quote')).toContainText('Frontend contract')
   await expectNoSilentClipping(page, 'Frozen checklist discussion at 390px')
 })

@@ -81,6 +81,7 @@ function force() {
     </ul>
     <CollapsibleText
       class="refusal-reason"
+      format="plain"
       :text="t('workItem.refusal.reason', { reason: notice.reason })"
       :lines="3"
     />
