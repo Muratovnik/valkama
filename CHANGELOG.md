@@ -167,6 +167,10 @@ server lists the same 31 tools with the same schemas.
   status` without loading the whole command line, and on Windows reads who
   listens on a port from the system instead of through PowerShell, so the tray
   and the app reach a window sooner. What the commands print is unchanged.
+- For contributors: `npm run typecheck`, and with it `npm run build`, now
+  type-check every file under `web/tests/`, so a spec that calls a helper that
+  does not exist, or builds a fixture of the wrong shape, fails the gate rather
+  than only the run that reaches it.
 
 ### Fixed
 
