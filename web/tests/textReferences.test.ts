@@ -62,4 +62,17 @@ describe('commit names', () => {
     expect(sameCommit('a1b2c3d', 'a1b2c3e')).toBe(false)
     expect(sameCommit('a1b2c3', 'a1b2c3d')).toBe(false)
   })
+
+  // The same examples as tests/test_refs.py (CommitValueRuleTests), which hold
+  // the server to this rule.
+  it('compare the revision after a repository name, and a value without one whole', () => {
+    expect(sameCommit('repo@a1b2c3d', 'a1b2c3d')).toBe(true)
+    expect(sameCommit('my-repo a1b2c3d', 'a1b2c3d')).toBe(true)
+    expect(sameCommit('a1b2c3d', 'a1b2c3d')).toBe(true)
+    expect(sameCommit('HEAD@{1234567}', '{1234567}')).toBe(false)
+    expect(sameCommit('HEAD@{1234567}', 'HEAD@{1234567}')).toBe(true)
+    expect(sameCommit('-x@a1b2c3d', 'a1b2c3d')).toBe(false)
+    expect(sameCommit('fix the bug', 'the bug')).toBe(false)
+    expect(sameCommit('repo@--output=x', '--output=x')).toBe(true)
+  })
 })
