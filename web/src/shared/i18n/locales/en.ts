@@ -1091,6 +1091,10 @@ export const en = {
       checklist: 'Steps',
       steps: '{done}/{total}',
       updated: 'Updated',
+      sortBy: 'Sort by',
+      sortOther: 'Order',
+      sortAscending: 'Sort ascending',
+      sortDescending: 'Sort descending',
     },
   },
 

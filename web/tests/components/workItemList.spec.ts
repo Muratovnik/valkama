@@ -1,13 +1,17 @@
 /**
  * The list's rows as one composite: a single Tab stop that follows the row last
- * focused, arrows and Home/End that walk the rows, and Enter that opens a card.
+ * focused, arrows and Home/End that walk the rows, and Enter that opens a card;
+ * and the head that offers a narrow list's folded orders as one choice.
  */
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import WorkItemList from '@/widgets/work-item-views/components/WorkItemList.vue'
+import WorkItemListHead from '@/widgets/work-item-views/components/WorkItemListHead.vue'
+import { LIST_COLUMNS } from '@/widgets/work-item-views/utils/listColumns.ts'
 
 import { i18n as appI18n } from '@/shared/i18n/index.ts'
+import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 
 import { boardItem } from '../fixtures/board.ts'
 import { i18n } from '../support/workItemBoardHarness.ts'
@@ -112,5 +116,46 @@ describe('the list rows', () => {
     expect(recent[6].text()).not.toContain(String(year))
     expect(older[5].text()).toBe('—')
     expect(older[6].text()).toContain(String(year - 1))
+  })
+})
+
+describe('the list head on a narrow list', () => {
+  const folded = LIST_COLUMNS.filter((column) => !['reference', 'title'].includes(column.key))
+
+  function head(sortKey: (typeof LIST_COLUMNS)[number]['key']) {
+    return mount(WorkItemListHead, {
+      props: {
+        sortState: () => 'none' as const,
+        columns: LIST_COLUMNS.filter((column) => !folded.includes(column)),
+        descending: true,
+        folded,
+        narrow: true,
+        sortKey,
+      },
+      global: { plugins: [i18n()] },
+    })
+  }
+
+  it('offers the folded columns as one choice rather than a run of buttons', () => {
+    const wrapper = head('title')
+    expect(wrapper.findAll('.list-sort').map((sort) => sort.text())).toEqual(['Ref', 'Title'])
+    const choice = wrapper.getComponent(ChoiceSelect)
+    expect(choice.props('options').map((option) => option.value)).toEqual(
+      folded.map((column) => column.key),
+    )
+    // Nothing to turn over until a folded order is the list's.
+    expect(choice.props('modelValue')).toBe('')
+    choice.vm.$emit('update:modelValue', 'priority')
+    expect(wrapper.emitted('sort')).toEqual([['priority']])
+  })
+
+  it('turns a chosen folded order over from the same choice', () => {
+    const wrapper = head('updated')
+    const choice = wrapper.getComponent(ChoiceSelect)
+    expect(choice.props('modelValue')).toBe('updated')
+    const turn = choice.props('options').at(-1)
+    expect(turn?.label).toBe('Sort ascending')
+    choice.vm.$emit('update:modelValue', turn?.value)
+    expect(wrapper.emitted('sort')).toEqual([['updated']])
   })
 })

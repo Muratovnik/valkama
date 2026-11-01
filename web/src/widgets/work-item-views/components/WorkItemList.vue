@@ -21,15 +21,15 @@ import { useI18n } from 'vue-i18n'
 
 import { useEventListener, useResizeObserver } from '@vueuse/core'
 
+import WorkItemListHead from '@/widgets/work-item-views/components/WorkItemListHead.vue'
 import { useListSort } from '@/widgets/work-item-views/composables/useListSort.ts'
 import { useListWords } from '@/widgets/work-item-views/composables/useListWords.ts'
 import { fitFor, isFolded, LIST_COLUMNS } from '@/widgets/work-item-views/utils/listColumns.ts'
-import type { ListColumn, SortKey } from '@/widgets/work-item-views/utils/listColumns.ts'
+import type { SortKey } from '@/widgets/work-item-views/utils/listColumns.ts'
 
 import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
-import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
   items: WorkItemBrief[]
@@ -60,17 +60,9 @@ onMounted(() => {
 const drawnRows = computed(() => (measured.value ? rows.value : []))
 const fit = computed(() => fitFor(width.value))
 const wide = computed(() => fit.value === 'wide')
+const narrow = computed(() => fit.value === 'narrow')
 
 const { ready, wordsOf } = useListWords(() => props.items)
-
-/**
- * The three cells whose content is a decision, named where the decision is made.
- *
- * A column that sorts numerically must carry the mark and every other column must
- * not carry it at all — `data-numeric="false"` styles as a truthy attribute
- * selector, which is how the text columns once came out right-aligned.
- */
-const numericMark = (column: { numeric?: boolean }) => (column.numeric ? 'true' : undefined)
 
 /** A dash says "nobody" under a heading; on a line of facts it says nothing, so it is left out. */
 function holdsClaimFact(item: WorkItemBrief): boolean {
@@ -80,20 +72,6 @@ function holdsClaimFact(item: WorkItemBrief): boolean {
 const folded = (key: SortKey) => isFolded(fit.value, key)
 const shownColumns = computed(() => LIST_COLUMNS.filter((column) => !folded(column.key)))
 const foldedColumns = computed(() => LIST_COLUMNS.filter((column) => folded(column.key)))
-
-/** The sorts a heading offers: its own, and on the title's the columns folded under it. */
-function sortsIn(column: ListColumn): ListColumn[] {
-  return column.key === 'title' ? [column, ...foldedColumns.value] : [column]
-}
-
-function headClass(column: ListColumn) {
-  return { 'list-head-title': column.key === 'title' }
-}
-
-/** A sort a heading carries for a column folded under it, rather than its own. */
-function sortClass(sort: ListColumn, column: ListColumn) {
-  return { folded: sort.key !== column.key }
-}
 
 /**
  * The row that is the list's Tab stop: the one last focused while it is still
@@ -162,39 +140,15 @@ useEventListener(root, 'click', (event: MouseEvent) => {
           t('workItem.list.caption')
         }}
       </caption>
-      <thead>
-        <tr>
-          <th
-            v-for="column in shownColumns"
-            :key="column.key"
-            scope="col"
-            class="list-head"
-            :class="headClass(column)"
-            :aria-sort="ariaSort(column.key)"
-            :data-numeric="numericMark(column)"
-          >
-            <span class="list-sorts">
-              <button
-                v-for="sort in sortsIn(column)"
-                :key="sort.key"
-                type="button"
-                class="list-sort"
-                :class="sortClass(sort, column)"
-                @click="sortBy(sort.key)"
-              >
-                {{ t(sort.label) }}
-                <VIcon
-                  v-if="sortKey === sort.key"
-                  name="chevron-down"
-                  class="list-sort-mark"
-                  :class="{ ascending: !descending }"
-                  :size="14"
-                />
-              </button>
-            </span>
-          </th>
-        </tr>
-      </thead>
+      <WorkItemListHead
+        :sort-state="ariaSort"
+        :columns="shownColumns"
+        :descending="descending"
+        :folded="foldedColumns"
+        :narrow="narrow"
+        :sort-key="sortKey"
+        @sort="sortBy"
+      />
       <tbody>
         <tr
           v-for="item in drawnRows"
@@ -318,87 +272,9 @@ useEventListener(root, 'click', (event: MouseEvent) => {
   border-collapse: collapse;
 }
 
-/* The head stays while the rows move, because a sorted column with its label
-   scrolled away is a column of unexplained values. Every column but the title
-   is as wide as what it holds; the title takes the rest. */
-.list-head {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  vertical-align: bottom;
-  width: 1%;
-  padding: 0;
-  text-align: start;
-  white-space: nowrap;
-  background: var(--color-surface);
-}
-
-.list-head-title {
-  width: auto;
-  white-space: normal;
-}
-
-:is(.list-head, .list-cell)[data-numeric='true'] {
+.list-cell[data-numeric='true'] {
   font-variant-numeric: tabular-nums;
   text-align: end;
-}
-
-/* A heading's sorts: one, or on the title's heading the title's and those of
-   the columns folded under it, side by side. */
-.list-sorts {
-  display: flex;
-  flex-wrap: wrap;
-
-  .list-head[data-numeric='true'] & {
-    justify-content: flex-end;
-  }
-}
-
-.list-sort {
-  display: inline-flex;
-  flex: 1 1 auto;
-  gap: var(--space-1);
-  align-items: center;
-  padding: var(--space-2) var(--space-3);
-  border: 0;
-  color: var(--color-text-muted);
-  font: var(--font-column-head);
-  text-align: inherit;
-  white-space: nowrap;
-  background: none;
-  cursor: pointer;
-
-  &:hover,
-  &:focus-visible {
-    color: var(--color-text);
-  }
-
-  .list-head[data-numeric='true'] & {
-    justify-content: flex-end;
-  }
-
-  .list-sorts:has(> :nth-child(2)) > & {
-    flex: 0 0 auto;
-  }
-
-  /* The sorts of the folded columns follow the title's own as one run, in the
-     order their facts take under the title, set apart by a dot that is not
-     part of any name. */
-  &.folded {
-    padding-inline: var(--space-1);
-
-    &::before {
-      content: '·' / '';
-      padding-inline-end: var(--space-1);
-    }
-  }
-}
-
-/* One chevron, turned over. The icon set holds no upward chevron, and adding a
-   second glyph to say the opposite of the first is how two marks for one idea
-   start to disagree. */
-.list-sort-mark.ascending {
-  transform: rotate(180deg);
 }
 
 /* The row the keyboard is on is marked as the row the pointer is over. */

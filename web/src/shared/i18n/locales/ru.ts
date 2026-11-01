@@ -1090,6 +1090,10 @@ export const ru = {
       checklist: 'Шаги',
       steps: '{done}/{total}',
       updated: 'Обновлено',
+      sortBy: 'Сортировать по',
+      sortOther: 'Порядок',
+      sortAscending: 'Сортировать по возрастанию',
+      sortDescending: 'Сортировать по убыванию',
     },
   },
 
