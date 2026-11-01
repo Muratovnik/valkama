@@ -85,6 +85,17 @@ describe('a graph node', () => {
     expect(quiet.find('.flow-node-owner').exists()).toBe(false)
   })
 
+  it('names who held finished work although the close ended the claim', () => {
+    const closed = card({
+      node: node('done', { claim_ref: '', last_claim_ref: 'claude (session 5937aa01-1234-4c00)' }),
+    })
+    const owner = closed.get('.flow-node-owner')
+    expect(owner.get('.flow-node-owner-state').text()).toBe('Previously responsible')
+    expect(owner.get('.flow-node-owner-name').text()).toBe('claude · 5937aa01-1234')
+    const unheld = card({ node: node('done', { claim_ref: '', last_claim_ref: null }) })
+    expect(unheld.find('.flow-node-owner').exists()).toBe(false)
+  })
+
   it('draws its chain edge in the hue of its state’s dot', () => {
     for (const state of ['backlog', 'todo', 'dev', 'done'] as const) {
       // Not workable, so the state itself is what the node says.

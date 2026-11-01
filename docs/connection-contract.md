@@ -821,7 +821,8 @@ claim. Whoever takes the work again claims it.
 
 Who held the item is still on the record. The full record (`get_work_item`, a
 `verbose` answer, `GET /api/planning/work-item`) and the briefs of the HTTP
-reads (`GET /api/planning`, `GET /api/planning/work-items`) carry two fields
+reads (`GET /api/planning`, `GET /api/planning/work-items`) and the nodes of
+`GET /api/planning/graph` carry two fields
 that are `null` for open work; the compact rows of `list_work_items` and
 `search_work_items` do not:
 

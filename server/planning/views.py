@@ -221,6 +221,9 @@ def graph_payload(conn: sqlite3.Connection, *, space: str | None = None) -> dict
                 "state": item["state"],
                 "priority": item["priority"],
                 "claim_ref": item["claim_ref"],
+                # A close ends the claim; these say when, and who held it then.
+                "closed_at": item["closed_at"],
+                "last_claim_ref": item["last_claim_ref"],
                 "parent_id": item["parent_id"],
                 # Both come from the item's own record: readiness is one
                 # question with one answer, and the depth below is the only

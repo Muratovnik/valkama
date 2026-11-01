@@ -14,7 +14,7 @@ import { Handle, Position } from '@vue-flow/core'
 import type { PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 
 import FacetMarks from '@/entities/work-item/components/FacetMarks.vue'
-import { printsFacet } from '@/entities/work-item/utils/facets.ts'
+import { holderRef, printsFacet } from '@/entities/work-item/utils/facets.ts'
 
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 import { holderName } from '@/shared/lib/actor.ts'
@@ -79,6 +79,11 @@ const readinessLabel = computed(() => {
 const ownerLabel = computed(() =>
   t(node.state.is_terminal ? 'workItem.previousOwner' : 'graph.claimedBy'),
 )
+/**
+ * Who the foot names: the claim on open work, and on finished work whoever
+ * held it when it closed, since a close ends the claim.
+ */
+const holder = computed(() => holderRef(node))
 
 /** The kind leads; high or urgent waits at the foot, as a second glyph on line one cut the state short. */
 const KIND = ['kind'] as const
@@ -192,12 +197,12 @@ const accessibleName = computed(() =>
         >{{ node.title }}</span
       >
       <span
-        v-if="node.claim_ref || asksAttention"
+        v-if="holder || asksAttention"
         class="flow-node-owner"
       >
-        <template v-if="node.claim_ref">
+        <template v-if="holder">
           <span class="flow-node-owner-state">{{ ownerLabel }}</span>
-          <span class="flow-node-owner-name">{{ holderName(node.claim_ref) }}</span>
+          <span class="flow-node-owner-name">{{ holderName(holder) }}</span>
         </template>
         <FacetMarks
           class="flow-node-priority"

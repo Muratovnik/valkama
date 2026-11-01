@@ -258,6 +258,29 @@ class LastHolderTests(CloseTestCase):
 
 
 class SurfaceTests(CloseTestCase):
+    def test_the_graph_names_who_held_a_closed_item(self) -> None:
+        closed = self.held_item()
+        service.transition_work_item(self.conn, closed, "done", author="agent")
+        open_item = self.held_item()
+
+        nodes = {
+            node["reference"]: node
+            for node in views.graph_payload(self.conn, space=self.key)["nodes"]
+        }
+
+        self.assertEqual(
+            ("", "agent"), (nodes[closed]["claim_ref"], nodes[closed]["last_claim_ref"])
+        )
+        self.assertIsNotNone(nodes[closed]["closed_at"])
+        self.assertEqual(
+            ("agent", None, None),
+            (
+                nodes[open_item]["claim_ref"],
+                nodes[open_item]["closed_at"],
+                nodes[open_item]["last_claim_ref"],
+            ),
+        )
+
     def test_the_transition_tool_answers_with_the_release(self) -> None:
         reference = self.held_item()
 
