@@ -39,6 +39,17 @@ def resolve_ref(
     if not value:
         raise ValueError("a ref value is required")
     if kind == "commit":
+        # A value is a revision and only that: one that begins like an option
+        # is not asked about (`--output=` would have git write a file), the
+        # options end before it, and `^{commit}` keeps `rev:path` from reading
+        # a file out of the repository.
+        if value.startswith("-"):
+            return {
+                "kind": kind,
+                "value": value,
+                "resolved": False,
+                "detail": "a commit ref cannot begin with '-'",
+            }
         for root in doc_roots():
             if not os.path.isdir(os.path.join(root, ".git")):
                 continue
@@ -54,7 +65,8 @@ def resolve_ref(
                         "--stat",
                         "--no-color",
                         "--format=%h %an %ad%n%s",
-                        value,
+                        "--end-of-options",
+                        f"{value}^{{commit}}",
                     ],
                     encoding="utf-8",
                     errors="replace",
