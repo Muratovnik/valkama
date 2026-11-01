@@ -165,8 +165,10 @@ store is unchanged at schema 9, so the upgrade runs no migration.
   columns that fit share the width; a large space regroups without stalling.
   The list gives titles the spare width and, on a narrow window, folds State,
   Priority and Assignee, then Steps and Updated, under the title, whose heading
-  keeps their sort. A board column and the list's rows are each one Tab stop,
-  walked with the arrow keys, Home and End.
+  keeps their sort; at phone width the heading stays one line. A click anywhere
+  in a list row opens its card. A board column and the list's rows are each one
+  Tab stop, walked with the arrow keys, Home and End; Page Up and Page Down move
+  through the list a screen at a time.
 - The bar above the board, list and graph is two compact rows, its queue
   folding into a menu when the row is full. Every count above the stage counts
   the same items, the chain with its root or the whole space, and a view that
@@ -174,9 +176,12 @@ store is unchanged at schema 9, so the upgrade runs no migration.
 - The whole-space graph leaves out items no drawn link touches, with an
   «Unlinked · N» switch. The key and the camera controls stand in strips above
   and below the drawing, never over a node, and on a chain the key names groups
-  as the card does. The nodes are one Tab stop, walked by the arrow keys with
-  the camera following. Zoomed out, a node is a block of its state's colour; at
-  phone width the bar and the camera controls are one row each.
+  as the card does. The graph opens with its work in view — whole where it
+  reads, else from its first item at the top-left — and a new queue or search
+  frames it afresh; the «Focus work» control is gone. The nodes are one Tab
+  stop, walked by the arrow keys with the camera following. Zoomed out, a node
+  is a block of its state's colour; at phone width the bar and the camera
+  controls are one row each.
 - The card's head pins only the title and the sections and condenses while the
   body is read, with Back beside Close; the sections wrap on a phone. Back
   reopens the parent card where it was read, with focus on the entry opened.
