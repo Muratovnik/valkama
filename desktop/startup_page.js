@@ -17,14 +17,14 @@ const PAGE_COLORS = {
   background: '#0e0f10',
   raised: '#191a1b',
   text: '#ececec',
-  muted: '#b3b3b3',
+  muted: '#c4c4c4',
   rule: 'rgb(255 255 255 / 8%)',
   action: '#ececec',
   actionText: '#0d0d0d',
-  control: '#303030',
+  control: '#3b3b3b',
   focus: '#7cacf8',
   info: '#7cacf8',
-  danger: '#ef8479',
+  danger: '#f99a8f',
   warning: '#d9b06a',
 }
 const PAGE_TOKENS = {
