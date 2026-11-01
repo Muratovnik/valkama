@@ -290,8 +290,8 @@ describe('the route state', () => {
     }
     const { state } = writeWorkFilter({ view: 'list' }, filter, manifest.state_schema.max_bytes)
     assert.deepEqual(
-      Object.keys(state).sort(),
-      [...Object.values(WORK_FILTER_STATE_KEYS), 'view'].sort(),
+      new Set(Object.keys(state)),
+      new Set([...Object.values(WORK_FILTER_STATE_KEYS), 'view']),
     )
     // Refused, the whole state is dropped and a reload comes back unfiltered.
     assert.doesNotThrow(() => validateManifestRouteState(manifest, state))
