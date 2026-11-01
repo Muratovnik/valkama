@@ -25,6 +25,23 @@ describe('route recovery actions', () => {
     expect(wrapper.element.tagName).toBe('MAIN')
   })
 
+  it('reads an address that names nothing as absence, not as an outage', () => {
+    const lost = mountRecovery({
+      failure: 'Section not found: there is nothing at this address in Valkama.',
+      pending: false,
+      unavailable: null,
+    })
+    expect(lost.text()).not.toContain('Unavailable')
+    expect(lost.find('[data-tone="danger"]').exists()).toBe(false)
+    expect(lost.text()).toContain('Section not found: there is nothing at this address in Valkama.')
+    const typed = mountRecovery({
+      failure: { code: 'request_failed', retryable: true, status: 500 },
+      pending: false,
+      unavailable: null,
+    })
+    expect(typed.text()).toContain('Unavailable')
+  })
+
   it('localizes typed module failures without presenting raw diagnostic detail', () => {
     const wrapper = mountRecovery({
       failure: {
@@ -56,6 +73,7 @@ describe('route recovery actions', () => {
     })
     expect(wrapper.findAll('.recovery-choice')).toHaveLength(2)
     expect(wrapper.text()).not.toContain('Retry')
+    expect(wrapper.text()).not.toContain('Unavailable')
   })
 
   it.each(['unsupported-view', 'unsupported-scope', 'incompatible-entity'] as const)(

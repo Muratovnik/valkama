@@ -18,7 +18,7 @@ import { useI18n } from 'vue-i18n'
 
 import type { ModuleId } from '@/shared/api/platformModuleContract.ts'
 import type { PlatformRouteUnavailable } from '@/shared/api/platformRoute.ts'
-import { uiLoading, uiUnavailable } from '@/shared/api/platformUiState.ts'
+import { uiEmpty, uiLoading, uiUnavailable } from '@/shared/api/platformUiState.ts'
 import { failureMessage } from '@/shared/api/typedFailure.ts'
 import type { TypedFailure } from '@/shared/api/typedFailure.ts'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
@@ -44,6 +44,17 @@ const CANNOT_OPEN_HERE = new Set<string>([
   'unsupported-scope',
   'incompatible-entity',
 ])
+/**
+ * The address names nothing: a path no section owns, or a section this build
+ * does not carry. That is an answer rather than an outage, so it reads as the
+ * product's quiet absence, not under «Unavailable» with the failure mark — a
+ * mistyped link used to look like a broken installation.
+ */
+const lost = computed(
+  () =>
+    (typeof props.failure === 'string' && props.failure !== '') ||
+    props.unavailable?.reason === 'unknown-module',
+)
 const unavailableMessage = computed(() => {
   const module = props.unavailable?.input_module_id ?? ''
   const reason = props.unavailable?.reason ?? ''
@@ -51,6 +62,12 @@ const unavailableMessage = computed(() => {
     module,
   })
 })
+const failureState = computed(() =>
+  lost.value ? uiEmpty(failureReason.value) : uiUnavailable(failureReason.value),
+)
+const unavailableState = computed(() =>
+  lost.value ? uiEmpty(unavailableMessage.value) : uiUnavailable(unavailableMessage.value),
+)
 </script>
 
 <template>
@@ -64,7 +81,7 @@ const unavailableMessage = computed(() => {
     />
     <template v-else-if="failureReason">
       <PlatformStatePanel
-        :state="uiUnavailable(failureReason)"
+        :state="failureState"
         :retryable="false"
       />
       <div class="route-choices">
@@ -77,7 +94,7 @@ const unavailableMessage = computed(() => {
     </template>
     <template v-else-if="unavailable">
       <PlatformStatePanel
-        :state="uiUnavailable(unavailableMessage)"
+        :state="unavailableState"
         :retryable="false"
       />
       <div class="route-choices">
