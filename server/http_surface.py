@@ -845,11 +845,14 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 kind = _first_value(parameters, "kind") or ""
                 value = _first_value(parameters, "value") or ""
+                # The card's planning space, by its exact identity: a commit is
+                # looked for in the repository the registry binds it to as well.
+                space = _first_value(parameters, "space")
                 conn = connect()
                 try:
                     # Keep the same connection-aware resolver used by MCP and
                     # retain its bounded Claude transcript fallback.
-                    answer = resolve_ref(kind, value, conn=conn)
+                    answer = resolve_ref(kind, value, conn=conn, space=space)
                 finally:
                     conn.close()
                 body = json.dumps(answer, ensure_ascii=False)

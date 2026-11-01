@@ -21,17 +21,48 @@ from .sessions import session_context
 from .store import REF_KINDS, connect
 
 
+def _commit_roots(space: str | None) -> list[str]:
+    """The repositories a commit is looked for in, the card's own project first.
+
+    `space` is the exact identity of the card's planning space, never a path:
+    the directory it leads to is the one the project registry binds that space
+    to, and nothing else. An identity that does not parse is refused, so a
+    crafted value reaches no directory at all; one the registry does not bind
+    adds nothing, and the configured document roots are asked as before.
+    """
+
+    roots: list[str] = []
+    if space is not None:
+        mapping = project_registry.resolve_space_root(
+            {"kind": "planning-space", "resource_id": space}
+        )
+        if mapping["status"] == "malformed":
+            raise ValueError("space must be a planning space's exact identity")
+        if mapping["status"] == "mapped":
+            roots.append(str(mapping["canonical_root"]))
+    seen = {os.path.normcase(os.path.abspath(root)) for root in roots}
+    for root in doc_roots():
+        key = os.path.normcase(os.path.abspath(root))
+        if key not in seen:
+            seen.add(key)
+            roots.append(root)
+    return roots
+
+
 def resolve_ref(
     kind: str,
     value: str,
     conn: sqlite3.Connection | None = None,
+    *,
+    space: str | None = None,
 ) -> dict:
     """Read-only context for one card ref, so a timeline row means something.
 
-    Bounded and local: a commit is resolved with git in a configured document
-    root, a session only as the existence and size of its transcript (its
-    contents are deliberately out of scope), and a memory id only as the
-    pointer it is, because provider resolution is outside this process.
+    Bounded and local: a commit is resolved with git in the repository the
+    registry binds the card's `space` to and in the configured document roots,
+    a session only as the existence and size of its transcript (its contents
+    are deliberately out of scope), and a memory id only as the pointer it is,
+    because provider resolution is outside this process.
     """
     if kind not in REF_KINDS:
         raise ValueError(f"unknown ref kind {kind!r}")
@@ -50,8 +81,9 @@ def resolve_ref(
                 "resolved": False,
                 "detail": "a commit ref cannot begin with '-'",
             }
-        for root in doc_roots():
-            if not os.path.isdir(os.path.join(root, ".git")):
+        for root in _commit_roots(space):
+            # A linked worktree's `.git` is a file, and it is a repository too.
+            if not os.path.exists(os.path.join(root, ".git")):
                 continue
             try:
                 # Git's stat is human-facing context; replacement preserves a
@@ -91,7 +123,7 @@ def resolve_ref(
             "kind": kind,
             "value": value,
             "resolved": False,
-            "detail": "commit not found in any configured document root",
+            "detail": "commit not found in the project's repository or any configured document root",
         }
     if kind == "session":
         # The platform's own session table first: it knows every observed client,

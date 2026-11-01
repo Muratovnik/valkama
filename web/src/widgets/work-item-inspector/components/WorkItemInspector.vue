@@ -373,6 +373,7 @@ const close = () => void leave(() => emit('close'))
       <InspectorReferenceScope
         :key="reference"
         :item="item"
+        :space="resourceRef.resource_id"
         @open="openFrom"
       >
         <DataEmptyState

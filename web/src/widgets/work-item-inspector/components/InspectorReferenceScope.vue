@@ -12,7 +12,11 @@ import { useInspectorReferenceLinks } from '@/widgets/work-item-inspector/utils/
 
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 
-const props = defineProps<{ item: WorkItem | null }>()
+const props = defineProps<{
+  item: WorkItem | null
+  /** The card's planning space, by its exact identity, for the commit lookup. */
+  space?: string
+}>()
 const emit = defineEmits<{ open: [reference: string] }>()
 
 const { peeked } = useInspectorReferenceLinks({
@@ -27,6 +31,7 @@ const { peeked } = useInspectorReferenceLinks({
     <InspectorRefPeek
       v-if="peeked"
       :record="peeked"
+      :space="space"
       @close="peeked = null"
     />
   </article>

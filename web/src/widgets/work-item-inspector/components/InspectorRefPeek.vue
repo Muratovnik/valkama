@@ -5,8 +5,9 @@
  * Valkama holds one record of either: the ref on this card, with who attached
  * it, when and under what label. That is shown first, because it answers
  * without asking anyone. A commit is then looked up the way the planning tools
- * look one up (`/api/ref`): git, in the configured document roots, names its
- * subject and the files it changed. A memory id is a pointer into AgentMemory,
+ * look one up (`/api/ref`): git, in the repository the card's project is
+ * registered at and in the configured document roots, names its subject and
+ * the files it changed. A memory id is a pointer into AgentMemory,
  * which this process cannot read, so the dialog says so rather than pretending
  * to have looked.
  */
@@ -20,7 +21,11 @@ import type { ResolvedRef } from '@/shared/types/reference.ts'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
 import RichText from '@/shared/ui/RichText.vue'
 
-const props = defineProps<{ record: WorkItem['refs'][number] }>()
+const props = defineProps<{
+  record: WorkItem['refs'][number]
+  /** The card's planning space, by its exact identity; none outside a project. */
+  space?: string
+}>()
 const emit = defineEmits<{ close: [] }>()
 const { t, d } = useI18n()
 
@@ -29,7 +34,7 @@ const failed = ref(false)
 const loading = ref(false)
 
 watch(
-  () => `${props.record.kind}:${props.record.value}`,
+  () => `${props.record.kind}:${props.record.value}:${props.space ?? ''}`,
   (_key, _previous, onCleanup) => {
     resolved.value = null
     failed.value = false
@@ -39,7 +44,7 @@ watch(
       current = false
     })
     loading.value = true
-    resolveRef('commit', props.record.value)
+    resolveRef('commit', props.record.value, props.space)
       .then((answer) => {
         if (current) resolved.value = answer
       })

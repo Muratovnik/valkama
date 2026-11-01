@@ -9,11 +9,12 @@
  */
 import { expect, test } from '@playwright/test'
 
+import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installDiscussionBackend } from './discussionBackend.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { now, projectScope } from './planningFixtures.ts'
+import { now, projectScope, spaceRef } from './planningFixtures.ts'
 
 const steps = Array.from(
   { length: 18 },
@@ -57,8 +58,10 @@ test('a long markdown report holds on a whole line, opens, and links what resolv
     checklist_item_id: null,
     checklist_item_text: null,
   })
-  await page.route('**/api/ref?*', (route) =>
-    route.fulfill({
+  const lookups: URLSearchParams[] = []
+  await page.route('**/api/ref?*', (route) => {
+    lookups.push(new URL(route.request().url()).searchParams)
+    return route.fulfill({
       json: {
         kind: 'commit',
         value: 'a1b2c3d4e5f6',
@@ -66,8 +69,8 @@ test('a long markdown report holds on a whole line, opens, and links what resolv
         repository: '/work/repo',
         detail: 'a1b2c3d agent\nfix: wire contract\n src/a.ts | 2 +-',
       },
-    }),
-  )
+    })
+  })
   await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
   const drawer = page.locator('.drawer')
@@ -125,6 +128,10 @@ test('a long markdown report holds on a whole line, opens, and links what resolv
   const record = page.getByRole('dialog', { name: 'Commit' })
   await expect(record).toContainText('fix: wire contract')
   await expect(record).toContainText('src/a.ts | 2 +-')
+  // Asked with the card's exact space, so the project's own repository is searched.
+  expect(lookups.map((query) => [query.get('value'), query.get('space')])).toEqual([
+    ['a1b2c3d4e5f6', planningSpaceEntity(spaceRef).resource_id],
+  ])
   await page.keyboard.press('Escape')
   await expect(record).toHaveCount(0)
   await expect(drawer).toHaveCount(1)
