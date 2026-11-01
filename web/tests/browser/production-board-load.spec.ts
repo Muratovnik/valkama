@@ -280,6 +280,75 @@ test('a list row draws what it shows, with one component for its state', async (
   expect(Math.max(...nodes)).toBeLessThanOrEqual(LIST_ROW_NODES)
 })
 
+test('a long list paints its first rows first, then all of them, and no column moves', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await installBackend(page)
+  // Everything that makes a column wider lies in the last row, the longest
+  // unchanged, far below the fold; a date of another year prints its year too.
+  const updated_at = new Date().toISOString()
+  const rows = Array.from({ length: 300 }, (_, index) =>
+    brief(1000 + index, stateOf(0), { updated_at }),
+  )
+  rows[280] = brief(9280, stateOf(2), {
+    reference: 'MAIN-99280',
+    claim_ref: 'a holder with a long name',
+    priority: 'urgent',
+    checklist: Array.from({ length: 12 }, (_, at) => ({
+      id: identity(3000 + at),
+      text: 'Step',
+      done: false,
+      claimed_by: '',
+      done_by: '',
+    })),
+    updated_at: '2020-08-28T20:08:00Z',
+  })
+  const gate: { open?: () => void } = {}
+  const answered = new Promise<void>((resolve) => {
+    gate.open = resolve
+  })
+  await serveSpace(page, rows, [], answered)
+  await page.addInitScript(() => {
+    const frames: { cells: number[]; rows: number }[] = []
+    Object.assign(globalThis, { listFrames: frames })
+    const watch = () => {
+      const row = document.querySelector<HTMLTableRowElement>('tbody tr')
+      const count = document.querySelectorAll('tbody tr:not(.list-row-held)').length
+      if (row && frames.at(-1)?.rows !== count)
+        frames.push({
+          cells: [...row.cells].map((cell) => cell.getBoundingClientRect().left),
+          rows: count,
+        })
+      requestAnimationFrame(watch)
+    }
+    requestAnimationFrame(watch)
+  })
+  const reading = page.waitForRequest('**/api/planning?*')
+  const opening = openList(page)
+  await reading
+  await page.evaluate(() => document.fonts.ready)
+  await stillFrames(page)
+  gate.open?.()
+  await opening
+  const list = page.locator('.work-item-list tbody tr')
+  await expect(list).toHaveCount(300)
+  await stillFrames(page)
+  const frames = await page.evaluate(
+    () => (globalThis as unknown as { listFrames: { cells: number[]; rows: number }[] }).listFrames,
+  )
+  // Under what fills the list's height at first, and every row in the end.
+  expect(frames[0]?.rows).toBeLessThan(60)
+  expect(frames.at(-1)?.rows).toBe(300)
+  // The widths the far rows need were there from the first frame.
+  expect(frames.at(-1)?.cells).toEqual(frames[0]?.cells)
+  await expect(page.locator('.list-row-held')).toHaveCount(0)
+  // Every row in its place, one that gave its widths included.
+  await list.last().scrollIntoViewIfNeeded()
+  await expect(list.last()).toBeInViewport()
+  await expect(list.last().locator('.list-open')).toHaveText('MAIN-99280')
+})
+
 test('a closed filter menu draws none of its options', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await installBackend(page)

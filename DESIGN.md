@@ -689,6 +689,10 @@ on Done from another column still closes, wherever the drop lands, and stands
 on top.
 Graph nodes allocate separate rows for status, title, and relationship
 metadata so labels cannot collide.
+A long list paints what fills its height first and draws every other row right
+after, with its columns already as wide as all the rows need; no row is ever
+taken out of the page again, so a sort, a filter, the keyboard and find in page
+reach all of them once it has settled.
 A list row, a graph node and a search result print a work item's facets only
 through the facet registry, and print the exception, not the default. A list
 row leads its reference with the priority (but medium) and the kind (but a

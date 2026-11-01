@@ -34,12 +34,18 @@ import WorkItemListHead from '@/widgets/work-item-views/components/WorkItemListH
 import { useListKeys } from '@/widgets/work-item-views/composables/useListKeys.ts'
 import { useListSort } from '@/widgets/work-item-views/composables/useListSort.ts'
 import { useListWords } from '@/widgets/work-item-views/composables/useListWords.ts'
+import { useStagedRows } from '@/widgets/work-item-views/composables/useStagedRows.ts'
 import { fitFor, isFolded, LIST_COLUMNS } from '@/widgets/work-item-views/utils/listColumns.ts'
 import type { SortKey } from '@/widgets/work-item-views/utils/listColumns.ts'
 
 import { drawMarks, drawWordCell } from '@/entities/work-item/components/drawMarks.ts'
 import { useMarkWords } from '@/entities/work-item/composables/useMarkWords.ts'
-import { holderRef, leadMarks, surfaceMarks } from '@/entities/work-item/utils/facets.ts'
+import {
+  facetMarks,
+  holderRef,
+  leadMarks,
+  surfaceMarks,
+} from '@/entities/work-item/utils/facets.ts'
 import type { FacetContext, FacetId, FacetMark } from '@/entities/work-item/utils/facets.ts'
 import { waitingOn } from '@/entities/work-item/utils/waiting.ts'
 import { EMPTY_WORK_FILTER } from '@/entities/work-item/utils/workFilter.ts'
@@ -75,16 +81,38 @@ useResizeObserver(root, ([entry]) => {
  * the columns folded, which doubled what opening the list cost there.
  */
 const measured = ref(false)
-onMounted(() => {
-  width.value = root.value?.clientWidth ?? 0
-  measured.value = true
-})
-const drawnRows = computed(() => (measured.value ? rows.value : []))
 const fit = computed(() => fitFor(width.value))
 const wide = computed(() => fit.value === 'wide')
 const narrow = computed(() => fit.value === 'narrow')
 
 const { holderOf, updatedOf } = useListWords(() => props.items)
+
+const words = useMarkWords()
+/** The first word a row's facet prints, as a width in its column. */
+const facetWord = (item: WorkItemBrief, facet: FacetId) => {
+  const [mark] = facetMarks(facet, 'list', item)
+  return mark ? words.say(mark.text) : ''
+}
+const staged = useStagedRows<WorkItemBrief>({
+  columns: [
+    { font: '--font-line', word: (item) => item.reference },
+    { font: '--font-line', word: (item) => item.title },
+    { font: '--font-field-label', word: (item) => item.state.name },
+    { font: '--font-detail', word: (item) => facetWord(item, 'priority') },
+    { font: '--font-detail', word: holderOf },
+    { font: '--font-detail', word: (item) => facetWord(item, 'steps') },
+    { font: '--font-line', word: updatedOf },
+  ],
+  root: () => root.value,
+  rows: () => rows.value,
+})
+onMounted(() => {
+  width.value = root.value?.clientWidth ?? 0
+  measured.value = true
+  staged.stage()
+})
+const drawnRows = computed(() => (measured.value ? staged.rows.value : []))
+const heldForWidths = (item: WorkItemBrief) => staged.held(item)
 
 const waiting = computed(() => waitingOn(props.links, props.items))
 /**
@@ -131,6 +159,7 @@ function tabStop(item: WorkItemBrief): 0 | -1 {
 function memo(item: WorkItemBrief): unknown[] {
   return [
     item,
+    staged.held(item),
     tabStop(item),
     waiting.value.get(item.work_item_id),
     fit.value,
@@ -147,7 +176,6 @@ const pass = (token: WorkFilterToken) => emit('filter', token)
  * a component for each came to eleven instances a row, some fourteen thousand on
  * a space of a thousand rows, for marks that hold no state of their own.
  */
-const words = useMarkWords()
 const facts = (item: WorkItemBrief, facets: readonly FacetId[], asked: FacetContext = {}) =>
   drawMarks(surfaceMarks('list', item, asked, facets), { surface: 'list', words })
 /** One mark in a cell of its own. */
@@ -216,6 +244,7 @@ useListKeys(root, {
           :key="item.work_item_id"
           v-memo="memo(item)"
           class="list-row"
+          :class="{ 'list-row-held': heldForWidths(item) }"
         >
           <td class="list-cell list-ref-cell">
             <component
@@ -352,6 +381,11 @@ useListKeys(root, {
   &:focus-within {
     background: var(--color-surface-hover);
   }
+}
+
+/* In the first frame only for the widths it gives its columns. */
+.list-row-held {
+  visibility: collapse;
 }
 
 .list-cell {
