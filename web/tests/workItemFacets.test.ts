@@ -430,6 +430,22 @@ test('a surface reads its marks out in one order, the lead marks first', () => {
   )
 })
 
+test('a tile and a graph node read their glyphs; the list and the card filter by them', () => {
+  // The owner's decision: there the priority and the kind are plain marks.
+  const subject = item({ kind: 'improvement', priority: 'urgent', labels: ['x'] })
+  const filters = (surface: FacetSurface) =>
+    surfaceMarks(surface, subject, {}, ['priority', 'kind', 'labels']).map((mark) => mark.filter)
+  const urgent = { facet: 'priority', value: 'urgent' }
+  const improvement = { facet: 'kind', value: 'improvement' }
+  const label = { facet: 'labels', value: 'x' }
+  assert.deepEqual(filters('tile'), [null, null, label])
+  assert.deepEqual(filters('graph'), [null, null])
+  assert.deepEqual(filters('list').slice(0, 2), [urgent, improvement])
+  assert.deepEqual(filters('card'), [urgent, improvement, label])
+  // The glyph the list leads its reference with filters as its column does.
+  assert.deepEqual(leadMarks('priority', 'list', subject)[0]?.filter, urgent)
+})
+
 test('only kind, priority and labels filter, as the owner decided', () => {
   const subject = item(
     {

@@ -260,9 +260,11 @@ describe('a tile on the board', () => {
     await chip.trigger('click')
     expect(wrapper.emitted('filter')).toEqual([[{ facet: 'labels', value: 'agent-packets' }]])
     expect(wrapper.emitted('open')).toBeUndefined()
-    // The priority glyph filters as well, also without opening anything.
-    await wrapper.get('[data-reference="MAIN-10"] [data-facet="priority"]').trigger('click')
-    expect(wrapper.emitted('filter')?.[1]).toEqual([{ facet: 'priority', value: 'high' }])
+    // The priority glyph is read, not pressed: it is no button and adds nothing.
+    const glyph = wrapper.get('[data-reference="MAIN-10"] [data-facet="priority"]')
+    expect(glyph.element.tagName).toBe('SPAN')
+    await glyph.trigger('click')
+    expect(wrapper.emitted('filter')).toHaveLength(1)
     expect(wrapper.emitted('open')).toBeUndefined()
     // The title opens it.
     await tile(wrapper, 'MAIN-10').trigger('click')

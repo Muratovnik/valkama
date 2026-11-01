@@ -126,6 +126,10 @@ describe('Planning semantic presentation', () => {
     expect(kind.get('.facet-word').classes()).toContain('facet-word-hidden')
     expect(kind.get('.facet-word').text()).toBe('Improvement')
     expect(wrapper.get('.work-item-tile').attributes('data-tone')).toBeUndefined()
+    // Read, not pressed: the glyphs are no buttons, and the one Tab stop says them.
+    expect(wrapper.get('.tile-line').findAll('button')).toHaveLength(0)
+    const described = wrapper.get('.tile-open').attributes('aria-describedby') ?? ''
+    expect(described.split(' ')).toContain(wrapper.get('.tile-lead').attributes('id'))
 
     await wrapper.setProps({ item: workItem({ priority: 'high' }) })
     expect(wrapper.get('[data-facet="priority"]').attributes('data-tone')).toBe('warning')

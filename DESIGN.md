@@ -671,9 +671,12 @@ hovered tile and a list row alike; the control grey it used to be is the
 hovered tile's own tone. Workable, medium and a plain task are
 never printed: they are the norm of the columns that hold them. The title is
 the open target, stretched over the whole sheet, so the sheet opens wherever it
-is clicked and stays one Tab stop; the glyphs and chips lie above it as filter
-buttons out of the Tab order. On the board grouped by epic an empty cell draws
-no ground until a tile of its lane is dragged and could land there.
+is clicked and stays one Tab stop; the chips lie above it as filter buttons out
+of the Tab order. The priority and kind glyphs are read, not pressed, as on a
+graph node: each spends its 14px and no 28px pointer box, the two keep the
+line's own small gap, and the list, the card and the «Фильтр» menu filter by
+them. On the board grouped by epic an empty cell draws no ground until a tile
+of its lane is dragged and could land there.
 The Done column, and a lane's Done cell, stand newest closed first, by the time
 of the item's latest transition; nothing there is planned, so the manual order
 of the other columns does not apply. A tile does not move within Done, by drag

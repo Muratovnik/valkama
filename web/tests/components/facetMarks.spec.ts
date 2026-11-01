@@ -140,7 +140,12 @@ describe('FacetMarks', () => {
 
   it('adds a kind, a priority or a label to the filter, and offers to take it out once it is in', async () => {
     const item = boardItem(1, 'backlog', { kind: 'bug', priority: 'high', labels: ['ui', 'board'] })
-    const wrapper = marks({ item, filterable: true, filter: { text: '', labels: ['ui'] } })
+    const wrapper = marks({
+      item,
+      surface: 'card',
+      filterable: true,
+      filter: { text: '', labels: ['ui'] },
+    })
     await wrapper.get('[data-facet="kind"]').trigger('click')
     await wrapper.get('[data-facet="priority"]').trigger('click')
     const [ui, board] = wrapper.findAll('.label-chip')
@@ -158,11 +163,35 @@ describe('FacetMarks', () => {
 
   it('keeps its buttons out of the Tab order inside a container that is one Tab stop', () => {
     const item = boardItem(1, 'backlog', { kind: 'bug', labels: ['ui'] })
+    const inRow = marks({
+      item,
+      surface: 'list',
+      facets: ['kind'],
+      lead: true,
+      filterable: true,
+      tabbable: false,
+    })
+    expect(inRow.get('[data-facet="kind"]').attributes('tabindex')).toBe('-1')
     const inTile = marks({ item, filterable: true, tabbable: false })
-    expect(inTile.get('[data-facet="kind"]').attributes('tabindex')).toBe('-1')
     expect(inTile.get('.label-chip').attributes('tabindex')).toBe('-1')
     const inCard = marks({ item, surface: 'card', filterable: true })
     expect(inCard.get('[data-facet="kind"]').attributes('tabindex')).toBeUndefined()
+  })
+
+  it('draws a tile’s glyphs as text even where its chips filter', async () => {
+    const item = boardItem(1, 'backlog', { kind: 'bug', priority: 'high', labels: ['ui'] })
+    const wrapper = marks({ item, filterable: true, tabbable: false })
+    for (const facet of ['kind', 'priority']) {
+      const glyph = wrapper.get(`[data-facet="${facet}"]`)
+      expect(glyph.element.tagName, facet).toBe('SPAN')
+      expect(glyph.attributes('tabindex'), facet).toBeUndefined()
+      await glyph.trigger('click')
+    }
+    // The glyph keeps its word as the pointer's hover text, not a filter's name.
+    expect(wrapper.get('[data-facet="priority"]').attributes('title')).toBe('High')
+    expect(wrapper.emitted('filter')).toBeUndefined()
+    await wrapper.get('.label-chip').trigger('click')
+    expect(wrapper.emitted('filter')).toEqual([[{ facet: 'labels', value: 'ui' }]])
   })
 
   it('folds labels past the tile’s three into a count', () => {

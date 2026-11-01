@@ -101,6 +101,14 @@ interface FacetRule {
   only?: readonly string[]
   /** Not on a finished or cancelled item. */
   openOnly?: boolean
+  /**
+   * The mark is read, not pressed: a click on it adds nothing to the filter.
+   * A tile and a graph node are one open target each, and a glyph that
+   * filtered spent a 28px pointer box of a line that has to hold the
+   * reference and what stops the work. The list, the card and the bar's
+   * filter menu filter by the same values.
+   */
+  plain?: boolean
   /** When this facet prints, it takes the place of `state`. */
   replacesState?: boolean
   /**
@@ -120,9 +128,9 @@ const FACET_RULES: Readonly<Record<FacetId, Partial<Record<FacetSurface, FacetRu
   // Kind carries no colour. A plain task is the norm, so it has no glyph and
   // only the card names it in words.
   kind: {
-    tile: { form: 'glyph', only: ['bug', 'epic', 'improvement'] },
+    tile: { form: 'glyph', only: ['bug', 'epic', 'improvement'], plain: true },
     list: { form: 'glyph', only: ['bug', 'epic', 'improvement'] },
-    graph: { form: 'glyph', only: ['bug', 'epic', 'improvement'] },
+    graph: { form: 'glyph', only: ['bug', 'epic', 'improvement'], plain: true },
     card: { form: 'glyph-word' },
     finder: { form: 'glyph', only: ['bug', 'epic', 'improvement'] },
   },
@@ -131,9 +139,9 @@ const FACET_RULES: Readonly<Record<FacetId, Partial<Record<FacetSurface, FacetRu
   // column reads as unknown, and leads the reference with the others' glyphs;
   // the column says the word alone, since the glyph already leads the row.
   priority: {
-    tile: { form: 'glyph', only: ['low', 'high', 'urgent'] },
+    tile: { form: 'glyph', only: ['low', 'high', 'urgent'], plain: true },
     list: { form: 'word', always: true, lead: ['low', 'high', 'urgent'] },
-    graph: { form: 'glyph', only: ['high', 'urgent'] },
+    graph: { form: 'glyph', only: ['high', 'urgent'], plain: true },
     card: { form: 'glyph-word', always: true },
     finder: { form: 'glyph', only: ['high', 'urgent'] },
   },
@@ -202,8 +210,10 @@ export interface FacetMark {
   facet: FacetId
   /**
    * What a click on the mark adds to the filter, or null when it filters
-   * nothing. Kind, priority and labels filter, as the owner decided; the
-   * filter model takes every facet, and the bar's menu reaches the rest.
+   * nothing. Kind, priority and labels filter, as the owner decided, except
+   * where a surface reads its glyphs rather than presses them (`plain`: a
+   * tile and a graph node); the filter model takes every facet, and the
+   * bar's menu reaches the rest.
    */
   filter: WorkFilterToken | null
   form: FacetForm
@@ -319,7 +329,7 @@ export function printsFacet(
   return true
 }
 
-function kindMark(item: FacetSubject, form: FacetForm): FacetMark {
+function kindMark(item: FacetSubject, { form, plain }: FacetRule): FacetMark {
   return {
     facet: 'kind',
     value: item.kind,
@@ -327,12 +337,12 @@ function kindMark(item: FacetSubject, form: FacetForm): FacetMark {
     glyph: KIND_GLYPHS[item.kind],
     text: { key: `workItem.kind.${item.kind}` },
     tone: PLAIN,
-    filter: { facet: 'kind', value: item.kind },
+    filter: plain ? null : { facet: 'kind', value: item.kind },
     quiet: false,
   }
 }
 
-function priorityMark(item: FacetSubject, form: FacetForm): FacetMark {
+function priorityMark(item: FacetSubject, { form, plain }: FacetRule): FacetMark {
   return {
     facet: 'priority',
     value: item.priority,
@@ -340,7 +350,7 @@ function priorityMark(item: FacetSubject, form: FacetForm): FacetMark {
     glyph: PRIORITY_GLYPHS[item.priority],
     text: { key: `priority.${item.priority}` },
     tone: { dimension: 'work-item-priority', state: item.priority },
-    filter: { facet: 'priority', value: item.priority },
+    filter: plain ? null : { facet: 'priority', value: item.priority },
     quiet: item.priority === 'medium',
   }
 }
@@ -470,8 +480,8 @@ export function facetMarks(
   const rule = FACET_RULES[facet][surface]
   if (!rule || rule.form === 'action' || !printsFacet(facet, surface, item, context)) return []
   const { form } = rule
-  if (facet === 'kind') return [kindMark(item, form)]
-  if (facet === 'priority') return [priorityMark(item, form)]
+  if (facet === 'kind') return [kindMark(item, rule)]
+  if (facet === 'priority') return [priorityMark(item, rule)]
   if (facet === 'state') return [stateMark(item, form)]
   if (facet === 'labels') return labelMarks(item, rule, context)
   if (facet === 'holder') return [holderMark(item, form, surface)]

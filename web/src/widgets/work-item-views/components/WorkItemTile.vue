@@ -20,11 +20,14 @@
  * registry's to say (`surface: 'tile'`); this file only places the runs.
  *
  * The open target is the title, stretched over the whole sheet, so the sheet
- * still opens wherever it is clicked and is still one Tab stop. The marks that
- * filter — the glyphs and the label chips — are buttons beside it rather than
- * inside it, out of the Tab order: a button cannot hold a button, and a board
- * of a thousand tiles stays a handful of Tab stops. The card's labels and the
- * bar's filter reach the same filter from the keyboard.
+ * still opens wherever it is clicked and is still one Tab stop. The label
+ * chips filter, and are buttons beside it rather than inside it, out of the
+ * Tab order: a button cannot hold a button, and a board of a thousand tiles
+ * stays a handful of Tab stops. The card's labels and the bar's filter reach
+ * the same filter from the keyboard. The priority and kind glyphs are read,
+ * not pressed — the registry says so for the tile — so they spend their
+ * 14px and no pointer box, and the line keeps its room for what stops the
+ * work.
  */
 import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -91,14 +94,17 @@ const exceptions = computed(() => prints(EXCEPTIONS) || staleClaim.value)
 const labels = computed(() => prints(LABELS))
 const facts = computed(() => prints(FACTS))
 
+const leadId = `${id}-lead`
 const exceptionsId = `${id}-exceptions`
 const factsId = `${id}-facts`
 /**
- * The title is the target's name; what stops the work and who holds it are
- * read after it, then the stack's hint about moving it.
+ * The title is the target's name; the priority and the kind, what stops the
+ * work and who holds it are read after it, then the stack's hint about moving
+ * it.
  */
 const describedBy = computed(() => {
   const ids = [
+    lead.value ? leadId : '',
     exceptions.value ? exceptionsId : '',
     facts.value ? factsId : '',
     props.hintId ?? '',
@@ -110,20 +116,14 @@ const describedBy = computed(() => {
 <template>
   <div class="work-item-tile">
     <span class="tile-line">
-      <span
+      <FacetMarks
         v-if="lead"
+        :id="leadId"
         class="tile-lead"
-      >
-        <FacetMarks
-          surface="tile"
-          :item="props.item"
-          :facets="LEAD"
-          :filter="props.filter"
-          :tabbable="false"
-          filterable
-          @filter="emit('filter', $event)"
-        />
-      </span>
+        surface="tile"
+        :item="props.item"
+        :facets="LEAD"
+      />
       <span
         class="tile-reference"
         aria-hidden="true"
@@ -219,8 +219,9 @@ const describedBy = computed(() => {
 }
 
 /* Identity and exceptions on one line that never wraps: the reference keeps
-   its width, and the exceptions on the right give way first. The glyphs' own
-   boxes already pad them, so the gap is the small one. */
+   its width, and the exceptions on the right give way first. The gap is the
+   one a glyph keeps from its word inside a mark, so the glyphs and the
+   reference read as one run. */
 .tile-line {
   display: flex;
   gap: var(--space-1);
@@ -230,18 +231,21 @@ const describedBy = computed(() => {
   font: var(--font-detail);
 }
 
-/* The glyphs filter, and the exceptions say on hover what a folded glyph
-   stands for; both come before the open target, which would otherwise lie over
-   them and take the pointer. */
+/* The glyphs and a folded exception say on hover what they stand for; both
+   come before the open target, which would otherwise lie over them and take
+   the pointer. */
 .tile-lead,
 .tile-exceptions {
   position: relative;
   z-index: 1;
 }
 
-.tile-lead {
+/* Two bare glyphs keep the line's own gap: the wider one between marks was
+   room between the 28px pointer boxes they no longer have. */
+.tile-line > .tile-lead {
   display: flex;
   flex: 0 0 auto;
+  column-gap: var(--space-1);
 }
 
 .tile-reference {
