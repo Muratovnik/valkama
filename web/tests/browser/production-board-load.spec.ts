@@ -17,6 +17,15 @@ import { openBoard } from './boardPage.ts'
 import { planningReadModel } from './planningFixtures.ts'
 import { planningReadFor } from './planningReadFixture.ts'
 
+/**
+ * No trace here: this file counts the page's own layouts, and tracing adds some
+ * of its own. The trace's snapshot of the DOM reads every element's scroll
+ * offsets, and a read inside a tile left out of sight (`content-visibility`)
+ * lays that one tile out: one layout a tile, with nothing of the application on
+ * its stack, in whichever runs a snapshot fell after the tiles were drawn.
+ */
+test.use({ trace: 'off' })
+
 const identity = (n: number) => `00000000-0000-4000-8000-${String(5000 + n).padStart(12, '0')}`
 
 /** A workflow of six states, as wide a board as a desktop column is narrow. */
@@ -97,8 +106,14 @@ function space(labelled: boolean) {
   )
 }
 
-async function serveSpace(page: Page, items: object[], links: object[] = []) {
+async function serveSpace(
+  page: Page,
+  items: object[],
+  links: object[] = [],
+  answered: Promise<void> = Promise.resolve(),
+) {
   await page.route('**/api/planning?*', async (route) => {
+    await answered
     const response = planningReadFor(new URL(route.request().url()).searchParams)
     if (response.status === 200 && 'work_items' in response.body)
       Object.assign(response.body, { workflow, work_items: items, links, stale_claims: [] })
@@ -110,23 +125,45 @@ async function serveSpace(page: Page, items: object[], links: object[] = []) {
   })
 }
 
-/** The page's layouts from its first byte until the board stands still. */
-async function layoutsToSettle(page: Page, labelled: boolean) {
-  await installBackend(page)
-  await serveSpace(page, space(labelled))
-  const devtools = await page.context().newCDPSession(page)
-  await devtools.send('Performance.enable')
-  await openBoard(page, {})
-  await expect(page.locator('.work-item-tile')).not.toHaveCount(0)
-  // Two frames with nothing left to do: every observer has answered.
-  await page.evaluate(
+/** Two frames with nothing left to do: every observer has answered. */
+const stillFrames = (page: Page) =>
+  page.evaluate(
     () =>
       new Promise<void>((done) => {
         requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 300)))
       }),
   )
-  const { metrics } = await devtools.send('Performance.getMetrics')
-  return metrics.find((metric) => metric.name === 'LayoutCount')?.value ?? Number.NaN
+
+/**
+ * The layouts of drawing the board, read from before the space's data arrives
+ * until the board stands still. The shell's own layouts before that are left
+ * out: they come to five to nine with or without labels, as the font's arrival
+ * falls, and said nothing about what a label costs but moved the difference.
+ */
+async function layoutsToSettle(page: Page, labelled: boolean) {
+  await installBackend(page)
+  const gate: { open?: () => void } = {}
+  const answered = new Promise<void>((resolve) => {
+    gate.open = resolve
+  })
+  await serveSpace(page, space(labelled), [], answered)
+  const devtools = await page.context().newCDPSession(page)
+  await devtools.send('Performance.enable')
+  const layouts = async () => {
+    const { metrics } = await devtools.send('Performance.getMetrics')
+    return metrics.find((metric) => metric.name === 'LayoutCount')?.value ?? Number.NaN
+  }
+  const reading = page.waitForRequest('**/api/planning?*')
+  const opening = openBoard(page, {})
+  await reading
+  await page.evaluate(() => document.fonts.ready)
+  await stillFrames(page)
+  const before = await layouts()
+  gate.open?.()
+  await opening
+  await expect(page.locator('.work-item-tile')).not.toHaveCount(0)
+  await stillFrames(page)
+  return (await layouts()) - before
 }
 
 test('labels cost a board a few layouts, not one a tile', async ({ browser }) => {
