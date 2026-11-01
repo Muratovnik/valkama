@@ -49,16 +49,25 @@ describe('PlanningPortfolio', () => {
     expect(rows[1]?.find('.binding-reason').exists()).toBe(false)
   })
 
+  // «Mapped» on every card, beside the «Open project» that says the same, told
+  // the reader nothing; only a project that cannot be opened names its state.
   it.each([
-    ['en', ['Mapped', 'Unbound', 'Unavailable']],
-    ['ru', ['Связан', 'Не связан', 'Недоступен']],
+    ['en', ['Unbound', 'Unavailable']],
+    ['ru', ['Не связан', 'Недоступен']],
   ] as const)(
-    'renders every binding state through the shared semantic owner in %s',
+    'renders every binding state but mapped through the shared semantic owner in %s',
     (locale, labels) => {
-      const states = portfolio(locale).findAll('[data-dimension="project-binding"]')
+      const wrapper = portfolio(locale)
+      const states = wrapper.findAll('[data-dimension="project-binding"]')
 
-      expect(states.map((state) => state.attributes('data-state'))).toEqual(bindingStates)
+      expect(states.map((state) => state.attributes('data-state'))).toEqual([
+        'unbound',
+        'unavailable',
+      ])
       expect(states.map((state) => state.text())).toEqual(labels)
+      const mapped = wrapper.findAll('.portfolio-project')[0]
+      expect(mapped?.find('[data-dimension="project-binding"]').exists()).toBe(false)
+      expect(mapped?.find('button.open-project').exists()).toBe(true)
     },
   )
 
