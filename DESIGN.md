@@ -637,6 +637,20 @@ buttons out of the Tab order. On the board grouped by epic an empty cell draws
 no ground until a tile of its lane is dragged and could land there.
 Graph nodes allocate separate rows for status, title, and relationship
 metadata so labels cannot collide.
+A list row, a graph node and a search result print a work item's facets only
+through the facet registry, and print the exception, not the default. A list
+row leads its reference with the priority (but medium) and the kind (but a
+task) in two fixed glyph slots, so references align whether or not a row has
+glyphs; the priority column still says medium, quietly and without a glyph,
+because a blank cell in a sortable column reads as unknown; the holder column
+says nobody with a dash, never «Workable»; the labels sit under the title
+from 900px of list; an open blocker is named, «Waiting on MAIN-12», wherever it
+lives. A graph node leads with the kind, says its state as a dot and a name
+in the hue of its chain edge, says workable quietly in the state's place and
+never in heavier ink, and puts high or urgent at its foot; its glyphs are read,
+not pressed, since the card is one button. A search result leads with the
+same glyphs, then its state's dot and name and its project; results share
+their columns so every reference and title start at one edge.
 A card's chain section leads with a branch map: one lane per origin of work,
 one equal-width segment per member, finished work then current work then what
 is ahead, so a lane's length is its volume. Chain views colour with the
