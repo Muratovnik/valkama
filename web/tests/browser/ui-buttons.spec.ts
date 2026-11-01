@@ -20,11 +20,11 @@ test('every button weight keeps its label legible at rest, hovered and disabled,
   const looks: ButtonLooks[] = []
   for (const button of await buttons.all()) {
     await page.mouse.move(0, 0)
-    const rest = await button.evaluate(drawnColours, 'own')
+    const rest = await button.evaluate(drawnColours, 'own' as const)
     // A disabled button refuses actionability, so the pointer goes to its box.
     const box = await button.boundingBox()
     await page.mouse.move((box?.x ?? 0) + 4, (box?.y ?? 0) + 4)
-    const hover = await button.evaluate(drawnColours, 'own')
+    const hover = await button.evaluate(drawnColours, 'own' as const)
     looks.push({ hover, name: (await button.getAttribute('data-case')) ?? '', rest })
   }
   expect(buttonStateFailures(looks)).toEqual([])

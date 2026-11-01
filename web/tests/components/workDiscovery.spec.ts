@@ -52,7 +52,7 @@ function workspace(locale = 'en', large = false) {
       stale: false,
       stateBytes: 2048,
       version: 1,
-      view: 'list',
+      view: 'list' as const,
       writable: true,
       // The route answers a write with the state it was given, as the shell does.
       onState: (state: Record<string, string | number | boolean>) =>
@@ -92,7 +92,7 @@ describe('work discovery', () => {
     await wrapper.get('input').setValue('MAIN-264')
     expect(wrapper.get('.data-empty').text()).toContain('No work matches this filter.')
     await button(wrapper, 'Clear the text').trigger('click')
-    expect(wrapper.get('.data-empty').exists()).toBe(true)
+    expect(wrapper.find('.data-empty').exists()).toBe(true)
     await button(wrapper, 'Reset the filter').trigger('click')
     expect(wrapper.findAll('tbody tr')).toHaveLength(2)
     expect(wrapper.emitted('view')).toBeUndefined()

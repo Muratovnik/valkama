@@ -7,6 +7,8 @@
 import { flushPromises } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 
+import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
+
 import { chainResponse, largeEpicChain } from '../fixtures/chain.ts'
 import { workItemFixture } from '../fixtures/workItem.ts'
 import { json, mountInspector, useInspectorHarness } from '../support/inspectorHarness.ts'
@@ -25,11 +27,11 @@ vi.mock('@/shared/api/planningApi.ts', async (load) => ({
 const ROOT = { ...workItemFixture('Planning rethink', 1), container: true }
 
 /** A block into `to` from an item of another space, open or finished. */
-function outsideBlock(to: string, number: number, open: boolean) {
+function outsideBlock(to: string, number: number, open: boolean): WorkItemChain['edges'][number] {
   return {
     from: `00000000-0000-4000-8000-00000000990${number}`,
     to,
-    kind: 'blocks' as const,
+    kind: 'blocks',
     reference: `OTH-${number}`,
     state_name: open ? 'Review' : 'Done',
     state_category: open ? 'review' : 'completed',

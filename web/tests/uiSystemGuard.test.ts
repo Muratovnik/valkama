@@ -12,22 +12,25 @@ import { SEMANTIC_TONES } from '../scripts/ui-system/semantic-colors.mjs'
 import { FILL_BUDGET, scanMeaningFills } from '../scripts/ui-system/styles.mjs'
 
 /** One file with one style block, which is what most of these fixtures are. */
-const styled = (name, css) => ({ file: `future/${name}.vue`, source: `<style>${css}</style>` })
+const styled = (name: string, css: string) => ({
+  file: `future/${name}.vue`,
+  source: `<style>${css}</style>`,
+})
 
 /** The wrapper nine fixtures spelled out around the one rule under test. */
-const scoped = (css) => `<style scoped>${css}</style>`
+const scoped = (css: string) => `<style scoped>${css}</style>`
 
 /** One file in the control band, carrying exactly the declaration under test. */
-const control = (declaration) => [
+const control = (declaration: string) => [
   { file: 'future/Control.vue', source: `<style>.a { ${declaration}; }</style>` },
 ]
 
-function scanFixture(relativePath, source) {
+function scanFixture(relativePath: string, source: string) {
   return scanFixtures({ [relativePath]: source })
 }
 
 /** A tree, for the rules that need more than one file to have a subject. */
-function scanFixtures(files) {
+function scanFixtures(files: Record<string, string>) {
   const root = mkdtempSync(join(tmpdir(), 'valkama-ui-guard-'))
   try {
     for (const [relativePath, source] of Object.entries(files)) {

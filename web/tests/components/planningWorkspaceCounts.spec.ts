@@ -91,7 +91,7 @@ function workspace(props: Partial<InstanceType<typeof PlanningWorkspace>['$props
       stale: false,
       stateBytes: 2048,
       version: 1,
-      view: 'kanban',
+      view: 'kanban' as const,
       writable: true,
       // The route answers a write with the state it was given, as the shell does.
       onState: (state: Record<string, string | number | boolean>) =>

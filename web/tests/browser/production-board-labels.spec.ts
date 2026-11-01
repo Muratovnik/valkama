@@ -15,8 +15,8 @@ import { projectScope } from './planningFixtures.ts'
 
 /** How far a chip's drawn face stands above the sheet it lies on, as a WCAG 2 ratio. */
 async function lift(chip: Locator, sheet: Locator) {
-  const face = await chip.locator('.chip-face').evaluate(drawnColours, 'own')
-  const ground = await sheet.evaluate(drawnColours, 'own')
+  const face = await chip.locator('.chip-face').evaluate(drawnColours, 'own' as const)
+  const ground = await sheet.evaluate(drawnColours, 'own' as const)
   const [light = 0, dark = 0] = [face.fillLuminance, ground.fillLuminance].toSorted(
     (left, right) => right - left,
   )

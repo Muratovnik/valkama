@@ -30,7 +30,7 @@ describe('a lane cell', () => {
     const wrapper = crowdedBoard()
     expect(backlog(wrapper)).toHaveLength(3)
     expect(backlog(wrapper)[0]).toContain('MAIN-30')
-    const more = wrapper.get('.lane-cell[data-state="backlog"] .lane-more')
+    const more = wrapper.get<HTMLElement>('.lane-cell[data-state="backlog"] .lane-more')
     expect(more.text()).toBe('Show all · 5')
     // A cell that holds no more than it draws offers nothing.
     expect(wrapper.find('.lane-cell[data-state="todo"] .lane-more').exists()).toBe(false)
@@ -77,7 +77,7 @@ describe('a lane cell', () => {
       { keyboard: false, position: 6, total: 6 },
     )
     await flushPromises()
-    const more = wrapper.get('.lane-cell[data-state="backlog"] .lane-more')
+    const more = wrapper.get<HTMLElement>('.lane-cell[data-state="backlog"] .lane-more')
     expect(more.text()).toBe('Show fewer')
     await more.trigger('click')
     await flushPromises()
@@ -87,7 +87,7 @@ describe('a lane cell', () => {
 
   it('walks from a tile to the toggle and back from it with the arrows', async () => {
     const wrapper = crowdedBoard()
-    const more = wrapper.get('.lane-cell[data-state="backlog"] .lane-more')
+    const more = wrapper.get<HTMLElement>('.lane-cell[data-state="backlog"] .lane-more')
     tile(wrapper, 'MAIN-32').element.focus()
     await tile(wrapper, 'MAIN-32').trigger('keydown', { key: 'ArrowDown' })
     expect(document.activeElement).toBe(more.element)

@@ -17,8 +17,14 @@ import type { GraphScope, GraphSource } from '@/widgets/work-item-graph/utils/gr
 
 import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
 
-const OPEN = { state_id: 'todo', key: 'todo', name: 'Todo', category: 'queued', is_terminal: false }
-const DONE = {
+const OPEN: WorkItemBrief['state'] = {
+  state_id: 'todo',
+  key: 'todo',
+  name: 'Todo',
+  category: 'queued',
+  is_terminal: false,
+}
+const DONE: WorkItemBrief['state'] = {
   state_id: 'done',
   key: 'done',
   name: 'Done',
@@ -55,7 +61,7 @@ function brief(
     created_at: '2026-10-01T10:00:00Z',
     updated_at: '2026-10-01T10:00:00Z',
     comment_count: 0,
-  } as WorkItemBrief
+  }
 }
 
 /** `count` items under `parent`, the first `open` of them still open. */

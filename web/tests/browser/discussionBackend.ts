@@ -54,15 +54,23 @@ export async function installDiscussionBackend(page: Page) {
     } else {
       const report =
         (body.report as { done: string; next: string; why?: string } | undefined) ?? null
-      const entry: WorkItem['comments'][number] = {
-        id: item.comments.length + 1,
-        kind: report ? 'report' : 'comment',
-        report,
-        body: report ? '' : String(body.body),
-        author: 'user',
-        at: now,
-        ...checklistQuote(item, report ? undefined : body.checklist_item_id),
-      }
+      const saved = { id: item.comments.length + 1, author: 'user', at: now }
+      const entry: WorkItem['comments'][number] = report
+        ? {
+            ...saved,
+            kind: 'report',
+            report,
+            body: '',
+            checklist_item_id: null,
+            checklist_item_text: null,
+          }
+        : {
+            ...saved,
+            kind: 'comment',
+            report: null,
+            body: String(body.body),
+            ...checklistQuote(item, body.checklist_item_id),
+          }
       item.comments.push(entry)
       if (body.make_current === true) {
         item.summary = report

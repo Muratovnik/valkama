@@ -12,6 +12,7 @@ import { rankWorkItem, transitionWorkItem } from '@/shared/api/planningApi.ts'
 import type { PlanningReadModel, WorkItem } from '@/shared/api/planningModel.ts'
 
 import { boardItem, boardState, boardWorkflow, references } from './fixtures/board.ts'
+import type { BoardStateKey } from './fixtures/board.ts'
 import { deferred, workItemFixture } from './fixtures/workItem.ts'
 
 vi.mock('@/shared/api/planningApi.ts', () => ({
@@ -33,7 +34,7 @@ function readModel(): PlanningReadModel {
   }
 }
 
-function answer(revision: number, state = 'backlog' as const): WorkItem {
+function answer(revision: number, state: BoardStateKey = 'backlog'): WorkItem {
   return { ...workItemFixture('moved', revision), state: boardState(state) }
 }
 

@@ -293,7 +293,7 @@ describe('task description and discussion', () => {
     expect(selectedReport.text()).toContain(report.done.trim())
     expect(selectedReport.text()).toContain(report.next)
     expect(selectedReport.text()).toContain(report.why)
-    expect(wrapper.get('textarea[aria-label="Comment"]').exists()).toBe(true)
+    expect(wrapper.find('textarea[aria-label="Comment"]').exists()).toBe(true)
     wrapper.unmount()
   })
 

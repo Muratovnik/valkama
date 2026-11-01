@@ -340,7 +340,11 @@ describe('the drawing at a width', () => {
     const labels = wide.lanes.flatMap((lane) => lane.labels)
     expect(labels.length).toBeGreaterThan(0)
     for (const lane of wide.lanes) {
-      const boxes = lane.labels.map(({ box }) => [box.left, box.left + (box.width ?? 0)])
+      // A label the layout left unplaced has no left edge, and NaN fails every bound below.
+      const boxes = lane.labels.map(({ box }) => {
+        const left = box.left ?? Number.NaN
+        return [left, left + (box.width ?? 0)]
+      })
       for (const [index, [left, right]] of boxes.entries()) {
         expect(left).toBeGreaterThanOrEqual(0)
         expect(right).toBeLessThanOrEqual(620)

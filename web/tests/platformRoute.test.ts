@@ -68,6 +68,7 @@ test('route rejects non-canonical entity/state payloads and mismatched project e
 
 test('syntactically valid future module routes await persisted authority', () => {
   const resolved = resolvePlatformRoute('/modules/future-module/global')
+  assert.ok('module_id' in resolved, 'a well-formed route is held as a route, not refused')
   assert.equal(resolved.module_id, 'future-module')
   assert.deepEqual(resolved.scope, { kind: 'global' })
   assert.equal(parsePlatformRoute('/modules/future-module/global').module_id, 'future-module')

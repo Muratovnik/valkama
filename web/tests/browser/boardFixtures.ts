@@ -7,25 +7,22 @@
  * taken from the client, so the order a test expects after a move is the
  * server's answer and not the board's guess.
  */
+import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
+
 import { planningReadModel } from './planningFixtures.ts'
 
 const identity = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 export const [BACKLOG, DEV, DONE] = planningReadModel.workflow.states.map(
   ({ position: _position, ...state }) => state,
 )
-export type State = typeof BACKLOG
+type State = typeof BACKLOG
 
 export const LONG_EPIC =
   'Board lanes: read the space by chain, with each epic’s open and closed work counted where its lane begins'
 const EMPTY_EPIC =
   'An epic opened yesterday and given nothing yet, titled long enough to need an ellipsis at every width'
 
-function brief(
-  number: number,
-  state: State,
-  title: string,
-  extra: Partial<(typeof planningReadModel.work_items)[number]> = {},
-) {
+function brief(number: number, state: State, title: string, extra: Partial<WorkItemBrief> = {}) {
   return {
     ...planningReadModel.work_items[1],
     work_item_id: identity(number),
@@ -68,7 +65,7 @@ export function boardSpace(): Brief[] {
 }
 
 /** Where `rank` puts an item among the items of `state`, in a flat list grouped later. */
-export function insertAt(items: Brief[], state: State, rank: unknown) {
+export function insertAt(items: Brief[], state: Brief['state'], rank: unknown) {
   const peers = items.flatMap((item, at) => (item.state.key === state.key ? [at] : []))
   const anchor = typeof rank === 'string' ? /^(before|after):(.+)$/u.exec(rank) : null
   if (anchor) {

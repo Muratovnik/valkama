@@ -19,7 +19,9 @@ test('common UI state grammar validates all supported states', () => {
   assert.equal(uiReady({ rows: [] }).status, 'ready')
   assert.equal(uiEmpty('No rows').status, 'empty')
   assert.equal(uiPermissionDenied('Grant required').status, 'permission-denied')
-  assert.equal(uiDegraded({ rows: [] }, '2026-08-13T12:00:00Z').stale, true)
+  const degraded = uiDegraded({ rows: [] }, '2026-08-13T12:00:00Z')
+  assert.ok(degraded.status === 'degraded')
+  assert.equal(degraded.stale, true)
 })
 test('degraded is only valid with explicit stale payload and timestamp', () => {
   assert.throws(
@@ -100,5 +102,6 @@ test('validated payloads clone safely and enforce deterministic UTF-8 bounds', (
   const input = { nested: { value: 'safe' } }
   const output = uiReady(input)
   input.nested.value = 'mutated'
+  assert.ok(output.status === 'ready')
   assert.deepEqual(output.payload, { nested: { value: 'safe' } })
 })

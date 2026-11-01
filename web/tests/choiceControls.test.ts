@@ -21,7 +21,9 @@ test('choice values use non-empty injective tokens, including the logical empty 
   assert.ok(tokens.every(Boolean))
   assert.equal(new Set(tokens).size, options.length)
   for (const option of options) {
-    assert.equal(decodeChoiceValue(codec, encodeChoiceValue(codec, option.value)), option.value)
+    const token = encodeChoiceValue(codec, option.value)
+    assert.ok(token !== null, option.label)
+    assert.equal(decodeChoiceValue(codec, token), option.value)
   }
 })
 

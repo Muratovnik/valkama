@@ -12,6 +12,10 @@
  * of the exact-binding endpoints is that neither the key nor the reference is
  * enough to answer.
  */
+import type { WorkItem, WorkItemBrief } from '@/shared/api/planningModel.ts'
+
+/** A brief as an item's own record carries it, before the read adds its comment count. */
+type BriefFields = Omit<WorkItemBrief, 'comment_count'>
 
 export const projectId = 'example-project'
 export const dataScopeId = '123e4567-e89b-42d3-a456-426614174000'
@@ -66,7 +70,7 @@ export const planningSpace = {
 }
 
 /** The item `MAIN-264` is blocked by. Opening it is what makes Back reachable. */
-export const blockedWorkItem = {
+export const blockedWorkItem: BriefFields = {
   work_item_id: identity(265),
   planning_space_id: planningSpace.planning_space_id,
   reference: 'MAIN-265',
@@ -88,7 +92,7 @@ export const blockedWorkItem = {
   updated_at: now,
 }
 
-const briefFields = {
+const briefFields: BriefFields = {
   work_item_id: identity(264),
   planning_space_id: planningSpace.planning_space_id,
   reference: workItemRef.reference,
@@ -126,7 +130,7 @@ const workItemBrief = { ...briefFields, comment_count: 0 }
 const blockedBrief = { ...blockedWorkItem, comment_count: 0 }
 
 /** The full record the inspector reads, links included. */
-export const workItem = {
+export const workItem: WorkItem = {
   ...briefFields,
   claim: {
     holder: 'codex',
@@ -155,7 +159,7 @@ export const workItem = {
   events: [],
 }
 
-export const blockedFullWorkItem = {
+export const blockedFullWorkItem: WorkItem = {
   ...blockedWorkItem,
   claim: null,
   description: '',

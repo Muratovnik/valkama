@@ -8,6 +8,7 @@
  * Built rather than written out, so the counts are arithmetic a reader can
  * check against the numbers above instead of a 600-row literal.
  */
+import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
 
 const CHAIN_ROOT_ID = '00000000-0000-4000-8000-000000000384'
 
@@ -125,8 +126,6 @@ export function emptyChain(reference = 'QA-320', id = '00000000-0000-4000-8000-0
 }
 
 /** The wire envelope every planning read arrives in. */
-export function chainResponse(
-  chain: ReturnType<typeof largeEpicChain> | ReturnType<typeof emptyChain>,
-) {
+export function chainResponse(chain: WorkItemChain) {
   return { interface_version: 'valkama-planning-api', chain }
 }

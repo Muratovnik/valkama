@@ -302,7 +302,7 @@ describe('the chain section of a card', () => {
   it('refuses a payload whose counts disagree with its members', async () => {
     serveChain(json(chainResponse({ ...largeEpicChain(), total: 617, open: 134 })))
     const wrapper = await open()
-    expect(section(wrapper).get('[role="alert"]').exists()).toBe(true)
+    expect(section(wrapper).find('[role="alert"]').exists()).toBe(true)
     expect(section(wrapper).find('.chain-summary-line').exists()).toBe(false)
   })
 

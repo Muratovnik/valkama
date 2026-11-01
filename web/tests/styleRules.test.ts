@@ -11,7 +11,7 @@ const configFile = fileURLToPath(new URL('../stylelint.config.ts', import.meta.u
 const repoPath = (file: string) => fileURLToPath(new URL(`../${file}`, import.meta.url))
 
 /** How many type-selector warnings one file earns under the real config. */
-const typeSelectors = async (codeFilename, code) => {
+const typeSelectors = async (codeFilename: string, code: string) => {
   const { results } = await stylelint.lint({ code, codeFilename, configFile })
   return results[0].warnings.filter((warning) => warning.rule === 'selector-max-type').length
 }
@@ -24,12 +24,12 @@ const typeSelectors = async (codeFilename, code) => {
  * config rather than re-implementing the regexes here, which would only prove
  * that a copy of them agrees with itself.
  */
-async function rejectedIndexes(declarations) {
+async function rejectedIndexes(declarations: string[]) {
   const code = declarations
     .map((declaration, index) => `.probe-${index} { ${declaration} }`)
     .join('\n')
   const { results } = await stylelint.lint({ code, codeFilename: 'src/probe.css', configFile })
-  const rejected = new Set()
+  const rejected = new Set<number>()
   for (const warning of results[0].warnings) {
     if (warning.rule === 'declaration-property-value-allowed-list') rejected.add(warning.line - 1)
   }
@@ -37,7 +37,7 @@ async function rejectedIndexes(declarations) {
 }
 
 /** Every index, which is what a list of refused declarations must come back as. */
-const all = (declarations) => declarations.map((_, index) => index)
+const all = (declarations: string[]) => declarations.map((_, index) => index)
 
 /**
  * The type ramp, enforced.

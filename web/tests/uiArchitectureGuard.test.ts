@@ -4,8 +4,11 @@ import { test } from 'vitest'
 
 import { scanImportCycles, scanImportDirection } from '../scripts/ui-system/imports.mjs'
 
+/** The importing file, its source, and what the refusal must say. */
+type ImportCase = [file: string, source: string, expected: RegExp]
+
 test('a layer may not import one above it', () => {
-  const cases = [
+  const cases: ImportCase[] = [
     [
       'shared/ui/Thing.vue',
       "import x from '@/entities/session/sessionDerivations.ts'",
@@ -40,7 +43,7 @@ test('a layer may not import one above it', () => {
 })
 
 test('a slice may not import a sibling slice of its own layer', () => {
-  const cases = [
+  const cases: ImportCase[] = [
     [
       'widgets/work-item-inspector/components/WorkItemInspector.vue',
       "import x from '@/widgets/work-item-views/components/WorkItemColumn.vue'",

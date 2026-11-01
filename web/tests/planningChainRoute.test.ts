@@ -31,6 +31,9 @@ import { validateManifestRouteState } from '@/shared/api/platformRoute.ts'
 
 import { emptyChain } from './fixtures/chain.ts'
 
+/** What the module keeps in its route, as the scope composable reads it. */
+type RouteState = NonNullable<Parameters<typeof chainTarget>[0]>
+
 vi.mock('@/shared/api/planningChainApi.ts', () => ({ fetchWorkItemChain: vi.fn() }))
 const fetchChain = vi.mocked(fetchWorkItemChain)
 
@@ -76,20 +79,26 @@ test('a chain is read out of every view, with the endpoint default for its scope
 })
 
 test('a value the endpoint could never answer is invalid rather than sent', () => {
-  for (const state of [
+  const states: RouteState[] = [
     { view: 'graph', chain: 'not a reference' },
     { view: 'graph', chain: 'main-384' },
     { view: 'graph', chain: 384 },
     { view: 'graph', chain: 'MAIN-12', chain_scope: 'space' },
     { view: 'graph', chain_scope: 'epic' },
-  ])
+  ]
+  for (const state of states)
     assert.equal(chainTarget(state).status, 'invalid', JSON.stringify(state))
 })
 
 test('the grouping key names only an epic grouping, and leaves the address without it otherwise', () => {
   assert.equal(groupingOf({ view: 'kanban', group: 'epic' }), 'epic')
-  for (const state of [{ view: 'kanban' }, { group: 'parent' }, { group: true }, undefined])
-    assert.equal(groupingOf(state), 'none', JSON.stringify(state))
+  const ungrouped: Parameters<typeof groupingOf>[0][] = [
+    { view: 'kanban' },
+    { group: 'parent' },
+    { group: true },
+    undefined,
+  ]
+  for (const state of ungrouped) assert.equal(groupingOf(state), 'none', JSON.stringify(state))
   const grouped = withGrouping({ view: 'kanban', chain: 'MAIN-12' }, 'epic')
   assert.deepEqual(grouped, { view: 'kanban', chain: 'MAIN-12', group: 'epic' })
   assert.deepEqual(withGrouping(grouped, 'none'), { view: 'kanban', chain: 'MAIN-12' })
@@ -224,7 +233,8 @@ test('a first read that fails is held with its code, refuses nothing, and is rea
     code: 'not_found',
     status: 404,
   })
-  fetchChain.mockRejectedValueOnce(refused).mockResolvedValueOnce(chainOf('MAIN-9999'))
+  const answer = chainOf('MAIN-9999')
+  fetchChain.mockRejectedValueOnce(refused).mockResolvedValueOnce(answer)
   const run = harness({ status: 'chain', reference: 'MAIN-9999', scope: 'chain' })
   active = run.scope
   await settled()
@@ -243,7 +253,7 @@ test('a first read that fails is held with its code, refuses nothing, and is rea
   assert.equal(run.held.failure.value, null)
   await settled()
   assert.equal(fetchChain.mock.calls.length, 2)
-  assert.equal(run.held.scoped.value?.root.reference, 'MAIN-9999')
+  assert.equal(run.held.scoped.value, answer)
 })
 
 test('a failure is let go once the route stops naming the chain', async () => {

@@ -12,6 +12,7 @@ import {
   recoverWorkRoute,
   serializePlatformRoute,
 } from '@/shared/api/platformRoute.ts'
+import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { dataScopeId, planningReadModel, spaceRef } from './browser/planningFixtures.ts'
 import { planningReadFor } from './browser/planningReadFixture.ts'
@@ -28,7 +29,7 @@ test('retired deep routes recover into Work in the same operating scope', () => 
     )
     expect(recoverWorkRoute(old)).toEqual({ module_id: 'planning', scope })
   }
-  const unknown = { module_id: 'future', scope }
+  const unknown: PlatformRoute = { module_id: 'future', scope }
   expect(recoverWorkRoute(unknown)).toBe(unknown)
   expect(() => parsePlatformRoute('/modules/skills/global?unknown=x')).toThrow()
 })
@@ -126,7 +127,7 @@ test('exact-session context and retained refs do not request a session fleet or 
     resolved: false,
     detail: 'Missing exact session',
   }
-  const fetch = vi.fn(async () => new Response(JSON.stringify(payload)))
+  const fetch = vi.fn<typeof globalThis.fetch>(async () => new Response(JSON.stringify(payload)))
   vi.stubGlobal('fetch', fetch)
   expect(await fetchSessionContext('exact id')).toEqual(payload)
   expect(await resolveRef('session', 'exact id')).toEqual(payload)
@@ -155,7 +156,7 @@ test('the global Work portfolio requests the bounded project directory without f
       },
     },
   }
-  const fetch = vi.fn(async () => new Response(JSON.stringify(payload)))
+  const fetch = vi.fn<typeof globalThis.fetch>(async () => new Response(JSON.stringify(payload)))
   vi.stubGlobal('fetch', fetch)
   expect(await fetchPlatformPlanning({ kind: 'global' })).toEqual(payload)
   expect(fetch).toHaveBeenCalledWith(

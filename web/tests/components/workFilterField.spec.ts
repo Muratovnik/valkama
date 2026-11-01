@@ -25,7 +25,7 @@ function field(filter: WorkFilter = EMPTY_WORK_FILTER, locale = 'en') {
   const wrapper = mount(WorkFilterField, {
     attachTo: document.body,
     props: {
-      'categories': ['backlog', 'queued', 'review', 'blocked'],
+      'categories': ['backlog', 'queued', 'review', 'blocked'] as const,
       'held': 7,
       items,
       filter,

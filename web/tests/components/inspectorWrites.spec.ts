@@ -41,7 +41,7 @@ vi.mock('@/shared/api/planningApi.ts', async (load) => ({
 const SUMMARY_REFUSAL =
   '[summary] QA-320 has no closing summary; record what was done and what comes next before closing it'
 
-const transitions = (writes: { path: string }[]) =>
+const transitions = (writes: ReturnType<typeof serveWrites>) =>
   writes.filter((write) => write.path === '/api/planning/work-item/transition')
 
 describe('inspector writes and their refusals', () => {

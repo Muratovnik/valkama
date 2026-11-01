@@ -39,8 +39,14 @@ vi.mock('@/widgets/work-item-graph/utils/graphLayoutEngine.ts', () => ({
 }))
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
-const OPEN = { state_id: 'todo', key: 'todo', name: 'Todo', category: 'queued', is_terminal: false }
-const DONE = {
+const OPEN: WorkItemBrief['state'] = {
+  state_id: 'todo',
+  key: 'todo',
+  name: 'Todo',
+  category: 'queued',
+  is_terminal: false,
+}
+const DONE: WorkItemBrief['state'] = {
   state_id: 'done',
   key: 'done',
   name: 'Done',
@@ -71,7 +77,7 @@ function item(n: number, overrides: Partial<WorkItemBrief> = {}): WorkItemBrief 
     updated_at: '2026-10-22T10:00:00Z',
     comment_count: 0,
     ...overrides,
-  } as WorkItemBrief
+  }
 }
 
 // Root 1 (an epic) with children 2 (done) and 3; 4 discovered from 2; 5 and 6

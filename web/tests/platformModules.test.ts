@@ -22,7 +22,12 @@ import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { moduleRegistrations, modulesPayload } from './support/moduleRegistrations.ts'
 
-const EXPECTED_SECONDARY_CONTEXTS = {
+/** The entity kinds a module's secondary context admits, at each operating level, by module id. */
+type SecondaryKinds = Readonly<
+  Record<string, { global: readonly string[]; project: readonly string[] }>
+>
+
+const EXPECTED_SECONDARY_CONTEXTS: SecondaryKinds = {
   planning: {
     global: ['project', 'planning-space'],
     project: ['planning-space', 'work-item'],
@@ -314,15 +319,18 @@ test('direct and history route changes are rechecked against manifest authority'
     te: () => false,
     translate: (key) => key,
   })
-  assert.equal(authority.routeUnavailable.value, null)
+  // Read afresh after each route change: an assertion on the ref itself would
+  // narrow it for the compiler, which cannot see the route write recompute it.
+  const unavailable = () => authority.routeUnavailable.value
+  assert.equal(unavailable(), null)
   route.value = {
     ...route.value,
     entity: { kind: 'session', client_family: 'codex', session_id: 'session-1' },
   }
-  assert.equal(authority.routeUnavailable.value?.reason, 'incompatible-entity')
+  assert.equal(unavailable()?.reason, 'incompatible-entity')
   route.value = {
     module_id: 'planning',
     scope: { kind: 'project', project_ref: { project_id: 'project-alpha' } },
   }
-  assert.equal(authority.routeUnavailable.value, null)
+  assert.equal(unavailable(), null)
 })

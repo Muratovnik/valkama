@@ -168,7 +168,7 @@ describe('human input requests', () => {
     ]
     const wrapper = card(entry)
     expect(wrapper.find('[role="radiogroup"]').exists()).toBe(false)
-    const options = choice(wrapper).props('options') as { value: string }[]
+    const options = choice(wrapper).props('options')
     expect(options.map((option) => option.value)).toEqual(ids)
     expect(choice(wrapper).props('placeholder')).toBe('Choose an answer')
     await button(wrapper, 'Send answer').trigger('click')

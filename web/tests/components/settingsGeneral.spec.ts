@@ -101,7 +101,7 @@ describe('SettingsGeneral opener catalog', () => {
     const wrapper = mountGeneral()
     await flushPromises()
 
-    expect(wrapper.get('.settings-general-catalog-note').exists()).toBe(true)
+    expect(wrapper.find('.settings-general-catalog-note').exists()).toBe(true)
     expect(wrapper.findAllComponents(SelectionControl)[2]?.props('modelValue')).toBe('terminal')
   })
 

@@ -17,14 +17,14 @@ import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { longChainSpace } from './fixtures/chainSpace.ts'
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
-const OPEN = {
+const OPEN: WorkItemBrief['state'] = {
   state_id: id(900),
   key: 'todo',
   name: 'Todo',
   category: 'queued',
   is_terminal: false,
 }
-const DONE = {
+const DONE: WorkItemBrief['state'] = {
   state_id: id(901),
   key: 'done',
   name: 'Done',
@@ -55,7 +55,7 @@ function item(n: number, overrides: Partial<WorkItemBrief> = {}): WorkItemBrief 
     ready: false,
     comment_count: 0,
     ...overrides,
-  } as WorkItemBrief
+  }
 }
 
 // A space: an epic root (1) with a closed child (2) and an open child (3); an
