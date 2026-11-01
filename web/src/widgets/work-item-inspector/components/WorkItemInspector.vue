@@ -30,9 +30,9 @@ import InspectorActivity from '@/widgets/work-item-inspector/components/Inspecto
 import InspectorChain from '@/widgets/work-item-inspector/components/InspectorChain.vue'
 import InspectorExecution from '@/widgets/work-item-inspector/components/InspectorExecution.vue'
 import InspectorMemory from '@/widgets/work-item-inspector/components/InspectorMemory.vue'
+import InspectorNotices from '@/widgets/work-item-inspector/components/InspectorNotices.vue'
 import InspectorOverview from '@/widgets/work-item-inspector/components/InspectorOverview.vue'
 import InspectorReferenceScope from '@/widgets/work-item-inspector/components/InspectorReferenceScope.vue'
-import InspectorRefusal from '@/widgets/work-item-inspector/components/InspectorRefusal.vue'
 import InspectorRelations from '@/widgets/work-item-inspector/components/InspectorRelations.vue'
 import InspectorWriteActions from '@/widgets/work-item-inspector/components/InspectorWriteActions.vue'
 import type { InspectorReturn } from '@/widgets/work-item-inspector/utils/inspectorReturn.ts'
@@ -55,7 +55,6 @@ import type { TypedFailure } from '@/shared/api/typedFailure.ts'
 import { INSPECTOR_DRAWER_STORAGE_KEY } from '@/shared/lib/shellLayout.ts'
 import type { LaunchPacket } from '@/shared/types/launch.ts'
 import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
-import ConfirmStrip from '@/shared/ui/ConfirmStrip.vue'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import DrawerFrame from '@/shared/ui/DrawerFrame.vue'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
@@ -239,12 +238,6 @@ function followGuard(guard: string) {
   else if (guard === 'checklist') overview.value?.revealChecklist()
 }
 
-const discardQuestion = computed(() =>
-  t('workItem.discard.question', {
-    drafts: unsaved.value.map((kind) => t(`workItem.discard.${kind}`)).join(', '),
-  }),
-)
-
 /**
  * Leave this item — close it, step back, or open another — after asking when
  * that would drop a draft. The question stands in the head; the drawer stays
@@ -311,32 +304,18 @@ const close = () => void leave(() => emit('close'))
         v-if="headSlot"
         #actions
       >
-        <div class="head-stack">
-          <InspectorRefusal
-            v-if="notice"
-            :notice="notice"
-            :busy="busy"
-            @dismiss="dismissNotice"
-            @force="force"
-            @guard="followGuard"
-          />
-          <p
-            v-if="writeError"
-            class="head-error"
-            role="alert"
-          >
-            {{ writeError }}
-          </p>
-          <ConfirmStrip
-            v-if="asking"
-            tone="danger"
-            :message="discardQuestion"
-            :confirm-label="t('workItem.discard.confirm')"
-            :cancel-label="t('workItem.discard.keep')"
-            @confirm="discard"
-            @cancel="keepEditing"
-          />
-        </div>
+        <InspectorNotices
+          :asking="asking"
+          :busy="busy"
+          :error="writeError"
+          :notice="notice"
+          :unsaved="unsaved"
+          @discard="discard"
+          @dismiss="dismissNotice"
+          @force="force"
+          @guard="followGuard"
+          @keep="keepEditing"
+        />
       </template>
 
       <template
