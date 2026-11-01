@@ -187,6 +187,34 @@ test('a closed filter menu draws none of its options', async ({ page }) => {
   await expect(menu.locator('[role="option"]', { hasText: 'agent-packets' })).toBeVisible()
 })
 
+test('a press on a tile opens its card wherever it lands, marks included', async ({ page }) => {
+  await installBackend(page)
+  const blocker = brief(1012, stateOf(2))
+  const worst = brief(1008, stateOf(1), { priority: 'urgent', kind: 'improvement' })
+  await serveSpace(
+    page,
+    [worst, blocker],
+    [{ from: blocker.work_item_id, to: worst.work_item_id, kind: 'blocks' }],
+  )
+  await openBoard(page, {})
+  const sheet = page.locator('[data-reference="MAIN-1008"] .work-item-tile')
+  await expect(sheet).toBeVisible()
+  const onTheBoard = page.url()
+  // A real pointer, which is what lands on whichever box lies on top. Opening a
+  // card moves the address to it; the title is the control.
+  for (const target of [
+    '.tile-open',
+    '[data-facet="priority"]',
+    '[data-facet="kind"]',
+    '[data-facet="readiness"]',
+  ]) {
+    await sheet.locator(target).first().click()
+    await expect(page, target).not.toHaveURL(onTheBoard)
+    await page.goBack()
+    await expect(page).toHaveURL(onTheBoard)
+  }
+})
+
 for (const width of [1440, 1024] as const)
   test(`the widest first line keeps its blocker whole at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })

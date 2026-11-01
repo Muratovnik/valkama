@@ -27,7 +27,9 @@
  * the same filter from the keyboard. The priority and kind glyphs are read,
  * not pressed — the registry says so for the tile — so they spend their
  * 14px and no pointer box, and the line keeps its room for what stops the
- * work.
+ * work. They and the exceptions lie above the open target to say on hover what
+ * they stand for, so a press on them opens the card itself: for a pointer the
+ * sheet is one target, and the keyboard's way in stays the open target.
  */
 import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -71,6 +73,7 @@ const emit = defineEmits<{
   keydown: [event: KeyboardEvent]
   open: [reference: string]
 }>()
+const open = () => emit('open', props.item.reference)
 
 const { t } = useI18n()
 const id = useId()
@@ -123,6 +126,7 @@ const describedBy = computed(() => {
         surface="tile"
         :item="props.item"
         :facets="LEAD"
+        @click="open"
       />
       <span
         class="tile-reference"
@@ -140,6 +144,7 @@ const describedBy = computed(() => {
           :facets="EXCEPTIONS"
           :context="context"
           fold
+          @click="open"
         />
         <SemanticState
           v-if="staleClaim"
@@ -147,6 +152,7 @@ const describedBy = computed(() => {
           dimension="claim-lease"
           state="stale"
           :label="t('workItem.lease.mark')"
+          @click="open"
         />
       </span>
     </span>
@@ -157,7 +163,7 @@ const describedBy = computed(() => {
       :title="props.item.title"
       :aria-keyshortcuts="props.keyShortcuts"
       :aria-describedby="describedBy"
-      @click="emit('open', props.item.reference)"
+      @click="open"
       @keydown="emit('keydown', $event)"
     >
       <span class="visually-hidden">{{ `${props.item.reference} ` }}</span>
@@ -233,11 +239,12 @@ const describedBy = computed(() => {
 
 /* The glyphs and a folded exception say on hover what they stand for; both
    come before the open target, which would otherwise lie over them and take
-   the pointer. */
+   the pointer. A press on them opens the card all the same. */
 .tile-lead,
 .tile-exceptions {
   position: relative;
   z-index: 1;
+  cursor: pointer;
 }
 
 /* Two bare glyphs keep the line's own gap: the wider one between marks was

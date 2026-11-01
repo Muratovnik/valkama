@@ -260,15 +260,16 @@ describe('a tile on the board', () => {
     await chip.trigger('click')
     expect(wrapper.emitted('filter')).toEqual([[{ facet: 'labels', value: 'agent-packets' }]])
     expect(wrapper.emitted('open')).toBeUndefined()
-    // The priority glyph is read, not pressed: it is no button and adds nothing.
+    // The priority glyph is read, not pressed as a filter: it is no button and
+    // adds nothing to the filter. It lies on the sheet, so it opens the card.
     const glyph = wrapper.get('[data-reference="MAIN-10"] [data-facet="priority"]')
     expect(glyph.element.tagName).toBe('SPAN')
     await glyph.trigger('click')
     expect(wrapper.emitted('filter')).toHaveLength(1)
-    expect(wrapper.emitted('open')).toBeUndefined()
-    // The title opens it.
-    await tile(wrapper, 'MAIN-10').trigger('click')
     expect(wrapper.emitted('open')).toEqual([['MAIN-10']])
+    // So does the title.
+    await tile(wrapper, 'MAIN-10').trigger('click')
+    expect(wrapper.emitted('open')).toEqual([['MAIN-10'], ['MAIN-10']])
   })
 
   it('stays one Tab stop however many marks filter', () => {
@@ -278,6 +279,12 @@ describe('a tile on the board', () => {
       .findAll('button, a, [tabindex]')
       .filter((element) => (element.element as HTMLElement).tabIndex >= 0)
     expect(focusable.map((element) => element.classes())).toEqual([['tile-open']])
+  })
+
+  it('opens the card from a press on what stops the work', async () => {
+    const wrapper = board({ links: [{ from: boardId(13), to: boardId(10), kind: 'blocks' }] })
+    await wrapper.get('[data-reference="MAIN-10"] [data-facet="readiness"]').trigger('click')
+    expect(wrapper.emitted('open')).toEqual([['MAIN-10']])
   })
 
   it('names an open blocker, never a finished one, and never says workable', () => {
