@@ -588,7 +588,14 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
 - **Writing free text:** `MarkdownEditor` owns the field: a preview drawn by
   `RichText`, `#` and a query to link a task, Ctrl+Enter to send. The field
   stays a multi-line text box naming its list of completions, and the list
-  stands under the field rather than at the caret. A long text held by
+  stands under the field rather than at the caret. Every multi-line field whose
+  text `RichText` will draw is one — a card's description, a comment, a report
+  section, a new task's description, a text answer to a question — and its host
+  sets one Write | Preview switch above all of its fields, says what Ctrl+Enter
+  does with its own button's words, and decides where `#` searches: the space
+  the text belongs to, or nowhere when the host cannot name that space in the
+  store the search reads. A launch prompt is not one: it goes to the agent's
+  command line as typed and nothing here draws it. A long text held by
   `CollapsibleText` ends on its last whole line, and a link below the cut that
   takes focus opens the text.
 
