@@ -1,6 +1,7 @@
 /**
  * The board's cells in the built application: a tile dropped past what an open cell draws
- * stays in sight, and a closed Done cell is reached by Tab and opened by Enter.
+ * stays in sight, and a closed Done cell is reached by Tab, opened and closed again by
+ * Enter, with focus on what it revealed and then back on its toggle.
  *
  * The server is the board's double, which keeps the order it is told.
  */
@@ -53,7 +54,21 @@ test('a closed Done cell is reached by Tab, and its button shows the cards it co
     await page.keyboard.press('Tab')
     await expect(more).toBeFocused({ timeout: 200 })
   }).toPass({ intervals: [0], timeout: 5000 })
+  await expect(more).toHaveAttribute('aria-expanded', 'false')
   await page.keyboard.press('Enter')
-  await expect(epic.locator('li[data-reference="MAIN-406"]')).toBeVisible()
-  await expect(more).toHaveCount(0)
+  const revealed = epic.locator('li[data-reference="MAIN-406"] > button')
+  await expect(revealed).toBeVisible()
+  // Focus goes to the card it revealed, and the toggle now closes the cell.
+  await expect(revealed).toBeFocused()
+  await expect(more).toHaveText('Show fewer')
+  await expect(more).toHaveAttribute('aria-expanded', 'true')
+  await page.keyboard.press('ArrowDown')
+  await expect(more).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(epic.locator('li[data-reference="MAIN-406"]')).toHaveCount(0)
+  await expect(more).toBeFocused()
+  await expect(more).toHaveText('Show all · 1')
+  // From the toggle the arrows lead back to the cards: no dead end.
+  await page.keyboard.press('ArrowLeft')
+  await expect(page.locator(':focus')).toHaveAttribute('class', /work-item-tile/u)
 })

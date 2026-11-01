@@ -28,5 +28,9 @@ export function useLandedCells(states: () => readonly WorkflowState[]) {
       if (target !== undefined && landing.position > drawnInCell(target))
         landed.add(key(lane, target))
     },
+    /** The reader closed the cell, so a landing no longer holds it open. */
+    settle(lane: BoardLane, state: WorkflowState) {
+      landed.delete(key(lane, state))
+    },
   }
 }

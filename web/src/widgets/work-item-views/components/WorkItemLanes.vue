@@ -59,7 +59,7 @@ const { t } = useI18n()
 const prefix = useId()
 const { folded, toggle } = useLaneCollapse(() => props.spaceId)
 
-const { isLanded, land } = useLandedCells(() => props.states)
+const { isLanded, land, settle } = useLandedCells(() => props.states)
 
 const scroller = ref<HTMLElement | null>(null)
 const track = ref<HTMLElement | null>(null)
@@ -266,6 +266,7 @@ function toggleLabel(lane: BoardLane): string {
               :hint-id="props.hintId"
               :revealed="isLanded(lane, state)"
               :writable="props.writable"
+              @collapse="settle(lane, state)"
               @dragging="drag"
               @edge="(reference, edge) => emit('edge', reference, edge)"
               @open="emit('open', $event)"

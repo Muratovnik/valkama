@@ -12,8 +12,14 @@
  * A terminal cell (Done, Cancelled) draws none of its tiles: that work is
  * finished, so the cell says how much there is and offers it. A lane of finished
  * work therefore stands no taller than its open work does.
+ *
+ * The offer is a disclosure, and it closes as it opens. Opened, the cell grows
+ * below where the reader was and focus goes to the first tile it revealed;
+ * closed, focus comes back to the toggle, which stays at the end of the cell.
+ * Either way focus lands on something drawn, never on the page. The toggle is
+ * part of the cell's arrow walk, so an arrow key always leads back to the tiles.
  */
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import WorkItemStack from '@/widgets/work-item-views/components/WorkItemStack.vue'
@@ -38,6 +44,8 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
+  /** The reader closed the cell, which takes back a landing that opened it. */
+  collapse: []
   dragging: [active: boolean]
   edge: [reference: string, edge: 'first' | 'last']
   open: [reference: string]
@@ -45,6 +53,10 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const stackId = useId()
+
+const cell = ref<HTMLElement | null>(null)
+const stack = ref<InstanceType<typeof WorkItemStack> | null>(null)
 
 /** Tiles this cell draws unasked; a terminal cell draws none. */
 const drawn = computed(() => drawnInCell(props.state))
@@ -56,16 +68,49 @@ const drawn = computed(() => drawnInCell(props.state))
 const whole = ref(false)
 const showWhole = computed(() => whole.value || props.revealed)
 const limit = computed(() => (showWhole.value ? undefined : drawn.value))
-const hidden = computed(() => !showWhole.value && props.items.length > drawn.value)
-const showAllLabel = computed(() => t('workItem.lanes.showAll', { count: props.items.length }))
+/** The cell holds more than it draws, so it offers the rest, or offers to put it away again. */
+const offered = computed(() => props.items.length > drawn.value)
+const toggleLabel = computed(() =>
+  showWhole.value
+    ? t('workItem.lanes.showFewer')
+    : t('workItem.lanes.showAll', { count: props.items.length }),
+)
+
+function toggleButton(): HTMLElement | null {
+  return cell.value?.querySelector<HTMLElement>(':scope > .lane-more') ?? null
+}
+
+async function flip() {
+  if (showWhole.value) {
+    whole.value = false
+    emit('collapse')
+    await nextTick()
+    const button = toggleButton()
+    // The toggle keeps its element while the cell shrinks above it, so focusing
+    // it again scrolls nothing; it is brought back into view here.
+    button?.focus({ preventScroll: true })
+    button?.scrollIntoView({ block: 'nearest' })
+    return
+  }
+  whole.value = true
+  await nextTick()
+  stack.value?.focusAt(drawn.value)
+}
+
+function walk(event: KeyboardEvent) {
+  stack.value?.walkFrom(event, toggleButton())
+}
 </script>
 
 <template>
   <div
+    ref="cell"
     class="lane-cell"
     :data-state="props.state.key"
   >
     <WorkItemStack
+      :id="stackId"
+      ref="stack"
       class="lane-stack"
       :group="props.group"
       :state="props.state"
@@ -81,12 +126,15 @@ const showAllLabel = computed(() => t('workItem.lanes.showAll', { count: props.i
       @place="(move, landing) => emit('place', move, landing)"
     />
     <VButton
-      v-if="hidden"
+      v-if="offered"
       class="lane-more"
       variant="ghost"
       size="inline"
-      @click="whole = true"
-      >{{ showAllLabel }}</VButton
+      :aria-expanded="showWhole"
+      :aria-controls="stackId"
+      @click="flip"
+      @keydown="walk"
+      >{{ toggleLabel }}</VButton
     >
   </div>
 </template>

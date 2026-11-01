@@ -35,8 +35,76 @@ describe('a lane cell', () => {
     // A cell that holds no more than it draws offers nothing.
     expect(wrapper.find('.lane-cell[data-state="todo"] .lane-more').exists()).toBe(false)
     await more.trigger('click')
+    await flushPromises()
     expect(backlog(wrapper)).toHaveLength(5)
-    expect(wrapper.find('.lane-cell[data-state="backlog"] .lane-more').exists()).toBe(false)
+  })
+
+  it('opens and closes as a disclosure, with focus on what it revealed and then on itself', async () => {
+    const wrapper = crowdedBoard()
+    const cell = wrapper.get('.lane-cell[data-state="backlog"]')
+    const more = cell.get('.lane-more')
+    const list = cell.get('ul')
+    expect(more.attributes('aria-expanded')).toBe('false')
+    expect(more.attributes('aria-controls')).toBe(list.attributes('id'))
+    expect(list.attributes('id')).toBeTruthy()
+
+    await more.trigger('click')
+    await flushPromises()
+    expect(backlog(wrapper)).toHaveLength(5)
+    expect(more.text()).toBe('Show fewer')
+    expect(more.attributes('aria-expanded')).toBe('true')
+    // The toggle stays at the end of the cell, after the tiles it revealed.
+    expect(cell.element.lastElementChild).toBe(more.element)
+    // Focus goes to the first tile it revealed, not to the page.
+    expect(document.activeElement).toBe(tile(wrapper, 'MAIN-33').element)
+
+    await more.trigger('click')
+    await flushPromises()
+    expect(backlog(wrapper)).toHaveLength(3)
+    expect(more.text()).toBe('Show all · 5')
+    expect(more.attributes('aria-expanded')).toBe('false')
+    expect(document.activeElement).toBe(more.element)
+  })
+
+  it('closes a cell a landing opened, once the reader asks', async () => {
+    const wrapper = crowdedBoard()
+    const todoCell = wrapper
+      .findAllComponents(WorkItemLaneCell)
+      .find((cell) => cell.props('state').key === 'todo')
+    todoCell?.vm.$emit(
+      'place',
+      { reference: 'MAIN-36', state: 'backlog', rank: 'last' },
+      { keyboard: false, position: 6, total: 6 },
+    )
+    await flushPromises()
+    const more = wrapper.get('.lane-cell[data-state="backlog"] .lane-more')
+    expect(more.text()).toBe('Show fewer')
+    await more.trigger('click')
+    await flushPromises()
+    expect(backlog(wrapper)).toHaveLength(3)
+    expect(more.attributes('aria-expanded')).toBe('false')
+  })
+
+  it('walks from a tile to the toggle and back from it with the arrows', async () => {
+    const wrapper = crowdedBoard()
+    const more = wrapper.get('.lane-cell[data-state="backlog"] .lane-more')
+    tile(wrapper, 'MAIN-32').element.focus()
+    await tile(wrapper, 'MAIN-32').trigger('keydown', { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(more.element)
+    await more.trigger('keydown', { key: 'ArrowUp' })
+    expect(document.activeElement).toBe(tile(wrapper, 'MAIN-32').element)
+    more.element.focus()
+    await more.trigger('keydown', { key: 'Home' })
+    expect(document.activeElement).toBe(tile(wrapper, 'MAIN-30').element)
+    more.element.focus()
+    // Across the row from the toggle: the next cell's nearest tile.
+    await more.trigger('keydown', { key: 'ArrowRight' })
+    expect(document.activeElement).toBe(tile(wrapper, 'MAIN-36').element)
+    // Alt moves nothing from the toggle.
+    more.element.focus()
+    await more.trigger('keydown', { key: 'ArrowUp', altKey: true })
+    expect(document.activeElement).toBe(more.element)
+    expect(wrapper.emitted('place')).toBeUndefined()
   })
 
   it('shows a tile moved past what it draws, so the moved tile can keep focus', async () => {
@@ -61,7 +129,7 @@ describe('a lane cell', () => {
     )
     await flushPromises()
     expect(backlog(wrapper)).toHaveLength(5)
-    expect(wrapper.find('.lane-cell[data-state="backlog"] .lane-more').exists()).toBe(false)
+    expect(wrapper.get('.lane-cell[data-state="backlog"] .lane-more').text()).toBe('Show fewer')
   })
 
   it('keeps an open cell at its limit when a drop lands among the tiles it draws', async () => {
@@ -94,16 +162,26 @@ describe('a terminal cell of the board grouped by epic', () => {
     const wrapper = finishedBoard()
     expect(doneCell(wrapper).findAll('[data-reference]')).toHaveLength(0)
     expect(doneCell(wrapper).get('.lane-more').text()).toBe('Show all · 4')
-    await doneCell(wrapper).get('.lane-more').trigger('click')
+    const more = doneCell(wrapper).get('.lane-more')
+    await more.trigger('click')
+    await flushPromises()
     expect(doneCell(wrapper).findAll('[data-reference]')).toHaveLength(4)
-    expect(doneCell(wrapper).find('.lane-more').exists()).toBe(false)
+    expect(document.activeElement).toBe(tile(wrapper, 'MAIN-40').element)
+    await more.trigger('click')
+    await flushPromises()
+    expect(doneCell(wrapper).findAll('[data-reference]')).toHaveLength(0)
+    expect(document.activeElement).toBe(more.element)
   })
 
-  it('keeps the arrows reaching its Show all button, which is a Tab stop too', async () => {
+  it('keeps the arrows reaching its Show all button, and leading back from it', async () => {
     const wrapper = finishedBoard()
+    const more = doneCell(wrapper).get('.lane-more')
     tile(wrapper, 'MAIN-10').element.focus()
     await tile(wrapper, 'MAIN-10').trigger('keydown', { key: 'ArrowRight' })
-    expect(document.activeElement).toBe(doneCell(wrapper).get('.lane-more').element)
+    expect(document.activeElement).toBe(more.element)
+    // No dead end: the arrows go back across the lane to the tile they came from.
+    await more.trigger('keydown', { key: 'ArrowLeft' })
+    expect(document.activeElement).toBe(tile(wrapper, 'MAIN-10').element)
   })
 
   it('shows the cell whole once a move lands in it, so the moved tile stays in sight', async () => {
@@ -119,6 +197,6 @@ describe('a terminal cell of the board grouped by epic', () => {
     )
     await flushPromises()
     expect(doneCell(wrapper).findAll('[data-reference]')).toHaveLength(4)
-    expect(doneCell(wrapper).find('.lane-more').exists()).toBe(false)
+    expect(doneCell(wrapper).get('.lane-more').text()).toBe('Show fewer')
   })
 })
