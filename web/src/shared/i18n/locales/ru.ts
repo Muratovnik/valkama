@@ -878,7 +878,9 @@ export const ru = {
       graph: 'Граф',
     },
     viewLabel: 'Представление',
-    spaceCounts: 'Открыто: {open} из {total} · из них назначено: {held}',
+    // Two facts, each kept on one line: a narrow bar breaks between them.
+    spaceOpen: 'Открыто: {open} из {total}',
+    spaceHeld: 'из них назначено: {held}',
     searchLabel: 'Найти работу',
     searchPlaceholder: 'Номер или название',
     clearSearch: 'Очистить поиск',

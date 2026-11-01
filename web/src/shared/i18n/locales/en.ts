@@ -880,7 +880,9 @@ export const en = {
       graph: 'Graph',
     },
     viewLabel: 'View',
-    spaceCounts: '{open} open of {total} · {held} open claimed',
+    // Two facts, each kept on one line: a narrow bar breaks between them.
+    spaceOpen: '{open} open of {total}',
+    spaceHeld: '{held} open claimed',
     searchLabel: 'Find work',
     searchPlaceholder: 'Reference or title',
     clearSearch: 'Clear search',

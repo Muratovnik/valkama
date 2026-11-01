@@ -189,7 +189,8 @@ const exclusionText = computed(() => {
         <span
           class="workspace-counts"
           :aria-busy="countsBusy"
-          >{{ t('workItem.spaceCounts', counts) }}</span
+          ><span class="workspace-fact">{{ t('workItem.spaceOpen', counts) }}</span> ·
+          <span class="workspace-fact">{{ t('workItem.spaceHeld', counts) }}</span></span
         >
         <span
           v-if="matches !== null"
@@ -332,6 +333,11 @@ const exclusionText = computed(() => {
   color: var(--color-text-muted);
   font: var(--font-count);
   font-variant-numeric: tabular-nums;
+}
+
+/* A fact never breaks inside itself: «Открыто: 319 из 1267» wrapped mid-number at 390. */
+.workspace-fact {
+  white-space: nowrap;
 }
 
 .workspace-note {
