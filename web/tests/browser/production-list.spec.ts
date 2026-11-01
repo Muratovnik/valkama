@@ -57,7 +57,7 @@ for (const [width, headings, foldedSorts, choice] of [
     // The reference's heading starts where the references do, not over the
     // glyph slots that lead them.
     const [heading, reference] = await list.evaluate((element) =>
-      ['thead .list-head-reference .list-sort', 'tbody .list-open'].map((selector) => {
+      ['thead th:first-child .list-sort', 'tbody .list-open'].map((selector) => {
         const text = [...(element.querySelector(selector)?.childNodes ?? [])].find(
           (child) => child.nodeType === Node.TEXT_NODE && child.textContent?.trim(),
         )
