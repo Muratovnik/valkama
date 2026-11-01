@@ -102,3 +102,28 @@ export function boardLanes(input: {
         rank(left) - rank(right),
     )
 }
+
+/** A state a lane holds work in, and how much. */
+export interface HeldIn<State> {
+  count: number
+  state: State
+}
+
+/**
+ * What a lane holds out of sight on each side of the columns `first` to `last`.
+ * Finished work is counted in the lane's heading already, so a terminal state
+ * is named only when nothing of the lane is in view.
+ */
+export function outOfSight<State extends { is_terminal: boolean }>(
+  states: readonly State[],
+  first: number,
+  last: number,
+  count: (state: State) => number,
+): { left: HeldIn<State>[]; right: HeldIn<State>[] } {
+  const seen = states.slice(first, last + 1).some((state) => count(state) > 0)
+  const held = (side: readonly State[]) =>
+    side
+      .map((state) => ({ state, count: count(state) }))
+      .filter((entry) => entry.count > 0 && (!entry.state.is_terminal || !seen))
+  return { left: held(states.slice(0, first)), right: held(states.slice(last + 1)) }
+}

@@ -27,23 +27,21 @@
  * under the row of state names, so a lane in view always says whose it is.
  */
 import { computed, ref, useId } from 'vue'
-
-import { useEventListener } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 
 import WorkItemLaneCell from '@/widgets/work-item-views/components/WorkItemLaneCell.vue'
+import WorkItemLaneHead from '@/widgets/work-item-views/components/WorkItemLaneHead.vue'
 import type { StackLanding } from '@/widgets/work-item-views/components/WorkItemStack.vue'
 import { useColumnFit } from '@/widgets/work-item-views/composables/useColumnFit.ts'
+import { useColumnsInView } from '@/widgets/work-item-views/composables/useColumnsInView.ts'
 import { useLandedCells } from '@/widgets/work-item-views/composables/useLandedCells.ts'
 import { useLaneCollapse } from '@/widgets/work-item-views/composables/useLaneCollapse.ts'
-import { columnsInView } from '@/widgets/work-item-views/utils/boardColumns.ts'
-import type { BoardLane } from '@/widgets/work-item-views/utils/boardLanes.ts'
+import { outOfSight } from '@/widgets/work-item-views/utils/boardLanes.ts'
+import type { BoardLane, HeldIn } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
 
 import type { WorkflowState, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
-import VButton from '@/shared/ui/VButton.vue'
-import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
   blockedIds: Set<string>
@@ -80,28 +78,7 @@ const { columnWidth, measured, visibleWidth } = useColumnFit(
   () => props.states.length,
 )
 
-/** How far the states are scrolled sideways, read once a frame at most. */
-const scrollLeft = ref(0)
-let reading = 0
-useEventListener(
-  scroller,
-  'scroll',
-  () => {
-    if (reading !== 0) return
-    reading = requestAnimationFrame(() => {
-      reading = 0
-      scrollLeft.value = scroller.value?.scrollLeft ?? 0
-    })
-  },
-  { passive: true },
-)
-
-/** The states in view, as indexes; each is a number, so a scroll inside one column changes nothing. */
-const inView = computed(() =>
-  columnsInView({ ...measured.value, count: props.states.length, scrollLeft: scrollLeft.value }),
-)
-const firstInView = computed(() => inView.value.first)
-const lastInView = computed(() => inView.value.last)
+const inView = useColumnsInView(scroller, measured, () => props.states.length)
 
 /** A drag is under way, so every cell stands as tall as its lane to take the drop. */
 const dragging = ref(false)
@@ -146,59 +123,48 @@ function bodyId(lane: BoardLane): string {
   return `${prefix}-${lane.id}`
 }
 
-function chevron(lane: BoardLane): 'chevron-down' | 'chevron-right' {
-  return isFolded(lane) ? 'chevron-right' : 'chevron-down'
-}
-
 function title(lane: BoardLane): string {
   return lane.epic?.title ?? t('workItem.lanes.noEpic')
-}
-
-function counts(lane: BoardLane): string {
-  return t('workItem.lanes.counts', { open: lane.open, closed: lane.closed })
 }
 
 function inState(lane: BoardLane, state: WorkflowState): WorkItemBrief[] {
   return cells.value.get(lane.id)?.get(state.state_id) ?? []
 }
 
-/** What a lane holds out of sight on one side, as «2 в «Review», 1 в «Blocked»»; empty when nothing. */
-function outOfSight(lane: BoardLane, states: WorkflowState[], seen: boolean): string {
-  return states
-    .filter((state) => inState(lane, state).length > 0 && (!state.is_terminal || !seen))
-    .map((state) =>
-      t('workItem.lanes.inState', { count: inState(lane, state).length, state: state.name }),
-    )
+/** «2 в «Review», 1 в «Blocked»». */
+function heldWords(held: HeldIn<WorkflowState>[]): string {
+  return held
+    .map(({ count, state }) => t('workItem.lanes.inState', { count, state: state.name }))
     .join(', ')
 }
 
 /** Each open lane's work out of sight, to the left and to the right of the states in view. */
 const elsewhere = computed(() => {
-  const first = firstInView.value
-  const last = lastInView.value
-  const left = props.states.slice(0, first)
-  const right = props.states.slice(last + 1)
-  const shown = props.states.slice(first, last + 1)
   const notes = new Map<string, { left: string; right: string }>()
-  if (!left.length && !right.length) return notes
+  const first = inView.first.value
+  const last = inView.last.value
+  if (first === 0 && last === props.states.length - 1) return notes
   for (const lane of props.lanes) {
     if (!isOpen(lane) || isEmpty(lane)) continue
-    const seen = shown.some((state) => inState(lane, state).length > 0)
-    notes.set(lane.id, {
-      left: outOfSight(lane, left, seen),
-      right: outOfSight(lane, right, seen),
-    })
+    const { left, right } = outOfSight(
+      props.states,
+      first,
+      last,
+      (state) => inState(lane, state).length,
+    )
+    if (left.length || right.length)
+      notes.set(lane.id, { left: heldWords(left), right: heldWords(right) })
   }
   return notes
 })
 
-function isAway(lane: BoardLane): boolean {
-  const note = elsewhere.value.get(lane.id)
-  return note !== undefined && (note.left !== '' || note.right !== '')
+/** What the lane's heading says it holds out of sight on one side; empty when nothing. */
+function away(lane: BoardLane, side: 'left' | 'right'): string {
+  return elsewhere.value.get(lane.id)?.[side] ?? ''
 }
 
 /** Some lane names work out of sight, so some heading may stand two rows tall. */
-const anyAway = computed(() => props.lanes.some(isAway))
+const anyAway = computed(() => elsewhere.value.size > 0)
 
 function drag(active: boolean) {
   dragging.value = active
@@ -211,20 +177,6 @@ function isEmpty(lane: BoardLane): boolean {
 
 function laneGroup(lane: BoardLane): string {
   return `lane:${lane.id}`
-}
-
-function openEpic(lane: BoardLane) {
-  if (lane.epic) emit('open', lane.epic.reference)
-}
-
-function showChain(lane: BoardLane) {
-  if (lane.epic) emit('chain', lane.epic.reference)
-}
-
-function toggleLabel(lane: BoardLane): string {
-  return t(isFolded(lane) ? 'workItem.lanes.unfold' : 'workItem.lanes.fold', {
-    lane: title(lane),
-  })
 }
 </script>
 
@@ -268,71 +220,16 @@ function toggleLabel(lane: BoardLane): string {
         :aria-label="title(lane)"
         :data-lane="lane.id"
       >
-        <header
-          class="lane-head"
-          :class="{ away: isAway(lane) }"
-        >
-          <button
-            class="lane-toggle"
-            type="button"
-            :aria-expanded="isOpen(lane)"
-            :aria-controls="bodyId(lane)"
-            :aria-label="toggleLabel(lane)"
-            @click="toggle(lane, props.filtered)"
-          >
-            <VIcon
-              class="lane-chevron"
-              :name="chevron(lane)"
-              :size="16"
-            />
-            <span
-              v-if="lane.epic"
-              class="lane-reference"
-              >{{ lane.epic.reference }}</span
-            >
-            <span class="lane-title">{{ title(lane) }}</span>
-          </button>
-          <SemanticState
-            v-if="lane.epic"
-            class="lane-state"
-            dimension="work-item-state"
-            :state="lane.epic.state.category"
-            :label="lane.epic.state.name"
-          />
-          <span class="lane-counts">{{ counts(lane) }}</span>
-          <span
-            v-if="elsewhere.get(lane.id)?.left"
-            class="lane-elsewhere"
-            ><span aria-hidden="true">← </span
-            ><span class="visually-hidden">{{ t('workItem.lanes.offLeft') }} </span
-            >{{ elsewhere.get(lane.id)?.left }}</span
-          >
-          <span
-            v-if="elsewhere.get(lane.id)?.right"
-            class="lane-elsewhere"
-            ><span class="visually-hidden">{{ t('workItem.lanes.offRight') }} </span
-            >{{ elsewhere.get(lane.id)?.right }}<span aria-hidden="true"> →</span></span
-          >
-          <span
-            v-if="lane.epic"
-            class="lane-actions"
-          >
-            <VButton
-              variant="ghost"
-              size="inline"
-              :aria-label="t('workItem.lanes.openEpic', { reference: lane.epic.reference })"
-              @click="openEpic(lane)"
-              >{{ t('workItem.lanes.open') }}</VButton
-            >
-            <VButton
-              variant="ghost"
-              size="inline"
-              :aria-label="t('workItem.lanes.showChain', { reference: lane.epic.reference })"
-              @click="showChain(lane)"
-              >{{ t('workItem.lanes.chain') }}</VButton
-            >
-          </span>
-        </header>
+        <WorkItemLaneHead
+          :lane="lane"
+          :open="isOpen(lane)"
+          :body-id="bodyId(lane)"
+          :left="away(lane, 'left')"
+          :right="away(lane, 'right')"
+          @toggle="toggle(lane, props.filtered)"
+          @open="emit('open', $event)"
+          @chain="emit('chain', $event)"
+        />
         <template v-if="isOpen(lane)">
           <p
             v-if="isEmpty(lane)"
@@ -465,116 +362,6 @@ function toggleLabel(lane: BoardLane): string {
 
   &.open {
     contain-intrinsic-size: auto 480px;
-  }
-}
-
-/* Held at the left edge of what is visible, however far the states scroll,
-   and under the row of state names while its lane passes, on the workspace's
-   own ground so the tiles go under it rather than through it. It leaves with
-   the last of its lane, because a sticky box never leaves its own section.
-   One row while it fits, the title giving way first; on a narrow board the
-   state, counts and actions take a second row instead of squeezing the title
-   down to its reference. */
-.lane-head {
-  position: sticky;
-  top: var(--lanes-head-block);
-  left: 0;
-  z-index: 1;
-  display: flex;
-  grid-column: 1 / -1;
-  gap: var(--space-1) var(--space-3);
-  justify-self: start;
-  align-items: center;
-  width: var(--board-visible-width);
-  min-width: 0;
-  min-height: var(--size-control-height-compact);
-  background: var(--color-canvas);
-}
-
-.lane-toggle {
-  display: inline-flex;
-  flex: 0 1 auto;
-  gap: var(--space-2);
-  align-items: center;
-  min-width: 0;
-  min-height: var(--size-control-height-compact);
-  padding: 0 var(--space-2) 0 var(--space-1);
-  border: 0;
-  color: var(--color-text);
-  text-align: start;
-  background: transparent;
-  border-radius: var(--radius-control);
-  cursor: pointer;
-
-  &:hover {
-    background: var(--color-surface-hover);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--color-focus-ring);
-    outline-offset: 2px;
-  }
-}
-
-.lane-chevron {
-  flex: 0 0 auto;
-  color: var(--color-text-muted);
-}
-
-.lane-reference {
-  flex: 0 0 auto;
-  color: var(--color-text-muted);
-  font: var(--font-detail);
-  font-variant-numeric: tabular-nums;
-}
-
-/* The title is what gives way: the reference and the state beside it are
-   shorter and say which lane this is. */
-.lane-title {
-  min-width: 0;
-  font: var(--font-row-title);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.lane-state {
-  flex: 0 0 auto;
-}
-
-.lane-counts {
-  flex: 0 0 auto;
-  color: var(--color-text-muted);
-  font: var(--font-count);
-  font-variant-numeric: tabular-nums;
-}
-
-/* Where the lane's work out of sight is, beside the counts it explains. It is
-   the one part of the heading that wraps inside itself, so a narrow board
-   names every state it lists rather than running the last one off the edge. */
-.lane-elsewhere {
-  flex: 0 1 auto;
-  min-width: 0;
-  color: var(--color-text-muted);
-  font: var(--font-count);
-  font-variant-numeric: tabular-nums;
-}
-
-.lane-actions {
-  display: inline-flex;
-  flex: 0 0 auto;
-  gap: var(--space-1);
-}
-
-/* A heading that also says where its work out of sight is would squeeze its
-   title down to a letter, so it takes a second row instead. */
-.lane-head.away {
-  flex-wrap: wrap;
-}
-
-@container board-lanes (width <= 560px) {
-  .lane-head {
-    flex-wrap: wrap;
   }
 }
 

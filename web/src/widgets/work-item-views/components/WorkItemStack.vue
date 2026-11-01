@@ -217,8 +217,6 @@ function walkFrom(event: KeyboardEvent, from: HTMLElement | null) {
   if (index >= 0) walked(event, index)
 }
 
-defineExpose({ focusAt, walkFrom })
-
 function stepped(event: KeyboardEvent, index: number) {
   const step = STEPS[event.key]
   if (!event.altKey) {
@@ -247,6 +245,8 @@ const shortcuts = 'Alt+ArrowUp Alt+ArrowDown'
 function keyHint(): string | undefined {
   return props.writable ? shortcuts : undefined
 }
+
+defineExpose({ focusAt, walkFrom })
 </script>
 
 <template>

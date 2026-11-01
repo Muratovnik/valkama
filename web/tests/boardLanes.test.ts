@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { boardLanes, NO_EPIC } from '@/widgets/work-item-views/utils/boardLanes.ts'
+import { boardLanes, NO_EPIC, outOfSight } from '@/widgets/work-item-views/utils/boardLanes.ts'
 
 import { boardEpic, boardId, boardItem, references } from './fixtures/board.ts'
 
@@ -98,5 +98,36 @@ describe('the board grouped by epic', () => {
       visible: [orphan],
     })
     expect(found.map((lane) => lane.id)).toEqual([NO_EPIC])
+  })
+})
+
+const laneStates = ['backlog', 'todo', 'dev', 'review', 'done'].map((key) => ({
+  key,
+  is_terminal: key === 'done',
+}))
+const holding = (held: Record<string, number>) => (state: { key: string }) => held[state.key] ?? 0
+const named = (side: { count: number; state: { key: string } }[]) =>
+  side.map((entry) => `${entry.count} ${entry.state.key}`)
+
+describe('what a lane holds out of sight', () => {
+  it('names the open work on each side of the columns in view', () => {
+    const { left, right } = outOfSight(laneStates, 1, 2, holding({ backlog: 2, dev: 1, review: 3 }))
+    expect(named(left)).toEqual(['2 backlog'])
+    expect(named(right)).toEqual(['3 review'])
+  })
+
+  it('names finished work only when nothing of the lane is in view', () => {
+    expect(named(outOfSight(laneStates, 0, 2, holding({ dev: 1, done: 5 })).right)).toEqual([])
+    expect(named(outOfSight(laneStates, 0, 2, holding({ review: 2, done: 5 })).right)).toEqual([
+      '2 review',
+      '5 done',
+    ])
+  })
+
+  it('names nothing when every column with work is in view', () => {
+    expect(outOfSight(laneStates, 0, 4, holding({ backlog: 1, done: 3 }))).toEqual({
+      left: [],
+      right: [],
+    })
   })
 })
