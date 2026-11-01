@@ -49,6 +49,30 @@ test('a missing record is not offered again and says so in both locales', () => 
   )
 })
 
+function unavailable(status: number): Error {
+  return Object.assign(new Error('Exact work item is unavailable'), {
+    status,
+    state: {
+      interface_version: 'valkama-ui-state',
+      status: 'unavailable',
+      reason: 'Exact work item is unavailable',
+    },
+  })
+}
+
+test('an exact read answered 404 is a missing record, not a dependency that is down', () => {
+  assert.deepEqual(typedFailure(unavailable(404)), {
+    code: 'not_found',
+    status: 404,
+    retryable: false,
+  })
+  assert.deepEqual(typedFailure(unavailable(409)), {
+    code: 'dependency_unavailable',
+    status: 409,
+    retryable: false,
+  })
+})
+
 test('permission and contract failures are typed without preserving backend prose', () => {
   const denied = typedFailure(Object.assign(new Error('private backend prose'), { status: 403 }))
   assert.deepEqual(denied, { code: 'permission_denied', status: 403, retryable: false })

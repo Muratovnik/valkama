@@ -69,6 +69,10 @@ export function typedFailure(error: unknown, fallbackCode = 'request_failed'): T
 
   if (state?.status === 'permission-denied' || status === 401 || status === 403)
     return { code: 'permission_denied', status, retryable: false }
+  // The state grammar has no word for "not there", so an exact read the service
+  // answers 404 says `unavailable`; the status is what tells it from an outage.
+  if (state?.status === 'unavailable' && status === 404)
+    return { code: 'not_found', status, retryable: false }
   if (state?.status === 'unavailable' && state.retry_action === undefined)
     return { code: 'dependency_unavailable', status, retryable: false }
   // The service says the thing named is not there; asking again finds nothing new.
