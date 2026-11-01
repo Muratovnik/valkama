@@ -19,7 +19,7 @@
  * view is narrowed to, whether the board is grouped by epic, and the filter,
  * which the workspace owns and writes back within the manifest's bound.
  */
-import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, shallowRef, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { groupingOf, withGrouping } from '@/pages/planning/composables/usePlanningChainScope.ts'
@@ -38,6 +38,8 @@ import WorkItemInspector from '@/widgets/work-item-inspector/components/WorkItem
 import type { InspectorReturn } from '@/widgets/work-item-inspector/utils/inspectorReturn.ts'
 
 import WorkItemComposer from '@/features/work-item-compose/WorkItemComposer.vue'
+
+import type { WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
 import { CutoverPendingError, fetchPlanning } from '@/shared/api/planningApi.ts'
 import type { PlanningConnectionState } from '@/shared/api/planningApi.ts'
@@ -186,6 +188,18 @@ const {
   notice: (message) => emit('notice', message),
   write: (state) => emit('state', state),
 })
+
+/** The open item's epic, by reference: the card's facts line names it. */
+const parentReference = computed(() => {
+  const items = model.value?.work_items ?? []
+  const parent = items.find((item) => item.reference === open.value)?.parent_id
+  return parent ? (items.find((item) => item.work_item_id === parent)?.reference ?? null) : null
+})
+/** The workspace owns the filter; the card's label chips reach it here. */
+const workspace = useTemplateRef<{ toggleFilter: (token: WorkFilterToken) => void }>('workspace')
+function filterFromCard(token: WorkFilterToken) {
+  workspace.value?.toggleFilter(token)
+}
 
 const selectedId = computed(
   () => model.value?.work_items.find((item) => item.reference === open.value)?.work_item_id ?? null,
@@ -381,6 +395,7 @@ defineExpose({ refresh })
     class="planning-workspace-shell"
   >
     <PlanningWorkspace
+      ref="workspace"
       :model="shownModel ?? model"
       :route-state="route.state"
       :state-bytes="stateBytes"
@@ -421,10 +436,12 @@ defineExpose({ refresh })
       :refresh-token="version"
       :workflow="model.workflow"
       :writable="writable"
+      :parent-reference="parentReference"
       @back="goBack"
       @changed="loadPlanning"
       @chain="showChain"
       @close="closeItem"
+      @filter="filterFromCard"
       @open="(reference, left) => openItem(reference, true, left)"
       @session="(id, family) => emit('open-session', id, family)"
     />

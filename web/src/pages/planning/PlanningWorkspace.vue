@@ -204,6 +204,9 @@ const barGrouping = computed(() => (stageView.value === 'kanban' ? boardGrouping
 const barExclusion = computed(() =>
   census.exclusion.value?.kind === 'graph-parents' ? census.exclusion.value : null,
 )
+
+/** A mark pressed outside the views — the card beside them — reaches the same filter. */
+defineExpose({ toggleFilter })
 </script>
 
 <template>
@@ -270,6 +273,7 @@ const barExclusion = computed(() =>
         :space-items="model.work_items"
         :space-id="model.planning_space?.planning_space_id ?? ''"
         :links="model.links"
+        :filter="filter"
         :filtered="filtered"
         :grouping="boardGrouping"
         :writable="writable"

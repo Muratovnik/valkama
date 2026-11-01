@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import PlanningWorkspace from '@/pages/planning/PlanningWorkspace.vue'
 
+import WorkItemBoard from '@/widgets/work-item-views/components/WorkItemBoard.vue'
 import WorkItemList from '@/widgets/work-item-views/components/WorkItemList.vue'
 
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
@@ -177,6 +178,19 @@ describe('one filter for every view', () => {
     list.vm.$emit('filter', { facet: 'kind', value: 'epic' })
     await nextTick()
     expect(list.props('items')).toHaveLength(space.length)
+  })
+
+  it('hands the board the filter, and takes a mark from the card beside the views', async () => {
+    const wrapper = workspace({ routeState: undefined })
+    // What the card's label chips call through the surface.
+    wrapper.vm.toggleFilter({ facet: 'labels', value: 'ui' })
+    await nextTick()
+    // The board marks a chip already in the filter as the way back out of it.
+    expect(wrapper.getComponent(WorkItemBoard).props('filter')).toEqual({
+      text: '',
+      labels: ['ui'],
+    })
+    expect(wrapper.emitted('state')?.at(-1)).toEqual([{ labels: 'ui' }])
   })
 
   it('reads the filter the address holds, and drops it when the address does', async () => {
