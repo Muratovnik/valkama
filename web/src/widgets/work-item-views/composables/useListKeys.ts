@@ -84,7 +84,8 @@ export function useListKeys(
 
   useEventListener(root, 'click', (event: MouseEvent) => {
     const direct = within(event, OPENER)
-    if (!direct && (selecting() || within(event, '.list-facts'))) return
+    // The facts folded under a title are part of the row, and the whole row opens it.
+    if (!direct && selecting()) return
     const opener = direct ?? within(event, 'tbody tr')?.querySelector<HTMLElement>(OPENER)
     const reference = opener?.dataset.reference
     if (reference === undefined) return

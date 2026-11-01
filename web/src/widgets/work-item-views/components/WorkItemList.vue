@@ -314,7 +314,6 @@ useListKeys(root, {
   padding-top: var(--space-1);
   color: var(--color-text-muted);
   font: var(--font-detail);
-  cursor: auto;
 }
 
 .list-fact {
