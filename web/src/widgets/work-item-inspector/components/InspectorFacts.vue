@@ -122,6 +122,11 @@ const ownerLabel = computed(() =>
 )
 /** The lease where one stands behind the claim; otherwise what the name is. */
 const holderTitle = computed(() => leaseText.value || ownerLabel.value)
+/**
+ * What a screen reader hears before the holder mark. On finished work the mark
+ * already says «Ранее отвечал: X», so the label would say it twice.
+ */
+const spokenOwner = computed(() => (props.item.state.is_terminal ? '' : `${ownerLabel.value}:`))
 
 function when(value: string): string {
   const date = new Date(value)
@@ -170,7 +175,11 @@ const filterLabel = (label: string) => emit('filter', { facet: 'labels', value: 
         class="card-holder"
         :title="holderTitle"
       >
-        <span class="visually-hidden">{{ ownerLabel }}:</span>
+        <span
+          v-if="spokenOwner"
+          class="visually-hidden"
+          >{{ spokenOwner }}</span
+        >
         <FacetMarks
           surface="card"
           :item="item"

@@ -287,9 +287,11 @@ describe('WorkItemInspector resource state', () => {
       const head = wrapper.get('.drawer-frame-head')
       const holderFact = head.get('.card-holder')
       expect(holderFact.text()).toContain(claimed ? holder : 'No active claim')
-      expect(holderFact.get('.visually-hidden').text()).toBe(
-        terminal ? 'Previously responsible:' : 'Responsible:',
-      )
+      // Finished work's mark already says «Previously responsible: …», so no
+      // hidden label says it before the mark a second time.
+      if (terminal) expect(holderFact.find('.visually-hidden').exists()).toBe(false)
+      else expect(holderFact.get('.visually-hidden').text()).toBe('Responsible:')
+      expect(holderFact.text().split('Previously responsible').length).toBeLessThanOrEqual(2)
       expect(wrapper.text().split(claimed ? holder : 'No active claim')).toHaveLength(2)
       const actions = head.findAll('.write-actions button').map((button) => button.text())
       expect(actions).toEqual(action)
