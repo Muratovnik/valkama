@@ -4,11 +4,12 @@ import { useI18n } from 'vue-i18n'
 
 import { useDraftSource } from '@/widgets/work-item-inspector/utils/useDraftGuard.ts'
 import { useInspectorMutation } from '@/widgets/work-item-inspector/utils/useInspectorMutation.ts'
-import { workItemSuggest } from '@/widgets/work-item-inspector/utils/workItemSuggest.ts'
 
 import { updateWorkItemDescription } from '@/shared/api/planningApi.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
+import { workItemSuggest } from '@/shared/lib/workItemSuggest.ts'
 import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
+import { useEditorView } from '@/shared/ui/editorView.ts'
 import MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
@@ -18,19 +19,12 @@ const props = defineProps<{ item: WorkItem; writable: boolean }>()
 const emit = defineEmits<{ changed: []; refresh: [] }>()
 const { t } = useI18n()
 const editing = ref(false)
-const previewing = ref(false)
+const { previewing, view, views } = useEditorView()
 const draft = ref('')
-const suggest = workItemSuggest(() => props.item)
-const view = computed({
-  get: () => (previewing.value ? 'preview' : 'write'),
-  set: (value: 'preview' | 'write') => {
-    previewing.value = value === 'preview'
-  },
-})
-const views = computed(() => [
-  { value: 'write' as const, label: t('editor.write') },
-  { value: 'preview' as const, label: t('editor.preview') },
-])
+const suggest = workItemSuggest(
+  () => props.item.planning_space_id,
+  () => props.item.work_item_id,
+)
 let seeded = ''
 watch(
   () => props.item.work_item_id,

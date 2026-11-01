@@ -21,7 +21,6 @@ import InspectorThread from '@/widgets/work-item-inspector/components/InspectorT
 import { anchorState } from '@/widgets/work-item-inspector/utils/checklistAnchor.ts'
 import { useDraftSource } from '@/widgets/work-item-inspector/utils/useDraftGuard.ts'
 import { useInspectorMutation } from '@/widgets/work-item-inspector/utils/useInspectorMutation.ts'
-import { workItemSuggest } from '@/widgets/work-item-inspector/utils/workItemSuggest.ts'
 
 import {
   commentWorkItem,
@@ -29,6 +28,8 @@ import {
   selectWorkItemSummary,
 } from '@/shared/api/planningApi.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
+import { workItemSuggest } from '@/shared/lib/workItemSuggest.ts'
+import { useEditorView } from '@/shared/ui/editorView.ts'
 import MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
@@ -39,13 +40,16 @@ const emit = defineEmits<{ changed: []; refresh: [] }>()
 const { t } = useI18n()
 const note = ref('')
 const reporting = ref(false)
-const previewing = ref(false)
+const { previewing, view, views } = useEditorView()
 const makeCurrent = ref(false)
 const report = reactive({ done: '', next: '', why: '' })
 const anchor = ref<{ id: string; text: string } | null>(null)
 const composer = ref<HTMLFormElement | null>(null)
 
-const suggest = workItemSuggest(() => props.item)
+const suggest = workItemSuggest(
+  () => props.item.planning_space_id,
+  () => props.item.work_item_id,
+)
 /** Comment or report, as one choice; a comment on a step cannot be a report. */
 const kind = computed({
   get: () => (reporting.value ? 'report' : 'comment'),
@@ -56,16 +60,6 @@ const kind = computed({
 const kinds = computed(() => [
   { value: 'comment' as const, label: t('workItem.comment') },
   { value: 'report' as const, label: t('workItem.workReport'), disabled: Boolean(anchor.value) },
-])
-const view = computed({
-  get: () => (previewing.value ? 'preview' : 'write'),
-  set: (value: 'preview' | 'write') => {
-    previewing.value = value === 'preview'
-  },
-})
-const views = computed(() => [
-  { value: 'write' as const, label: t('editor.write') },
-  { value: 'preview' as const, label: t('editor.preview') },
 ])
 
 useDraftSource('comment', () => Boolean(note.value.trim()))
