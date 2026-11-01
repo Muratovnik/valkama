@@ -166,6 +166,36 @@ class ModuleRegistryTests(unittest.TestCase):
             self.assertEqual(values["supported_entity_kinds"], manifest["supported_entity_kinds"])
             self.assertEqual(values["feature_capabilities"], manifest["feature_capabilities"])
 
+    def test_planning_state_admits_every_key_the_work_filter_writes(self) -> None:
+        """A reload keeps the filter only if the manifest admits its keys.
+
+        The browser drops a whole route state that names a key the manifest does
+        not list, so a filter the bar wrote into the address came back empty.
+        The keys are read from the module that writes them.
+        """
+
+        source = (
+            pathlib.Path(__file__).parents[1]
+            / "web"
+            / "src"
+            / "entities"
+            / "work-item"
+            / "utils"
+            / "workFilter.ts"
+        ).read_text(encoding="utf-8")
+        block = re.search(r"WORK_FILTER_STATE_KEYS = \{(.*?)\}", source, flags=re.DOTALL)
+        self.assertIsNotNone(block)
+        written = re.findall(r"'([^']+)'", block.group(1))
+        self.assertEqual(
+            ["query", "ready", "held", "cat", "kind", "pri", "labels", "holder"], written
+        )
+        planning = next(
+            item for item in platform_modules.module_manifests() if item["module_id"] == "planning"
+        )
+        allowed = planning["state_schema"]["allowed_keys"]
+        self.assertLessEqual(set(written), set(allowed))
+        self.assertEqual(len(allowed), len(set(allowed)))
+
     def test_every_surface_answers_the_one_list_this_build_declares(self) -> None:
         """Planning, Memory and Settings, enabled and fixed, the same from every door."""
 

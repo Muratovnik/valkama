@@ -242,19 +242,8 @@ describe('the route state', () => {
   })
 
   test('the whole state stays within the manifest’s bound, dropping the last labels first', () => {
-    const planning = OFFLINE_MODULE_FALLBACK.find((module) => module.module_id === 'planning')
-    assert.ok(planning)
-    // The manifest must admit the filter's keys before the route carries them.
-    const manifest = {
-      ...planning,
-      state_schema: {
-        ...planning.state_schema,
-        allowed_keys: [
-          ...planning.state_schema.allowed_keys,
-          ...Object.values(WORK_FILTER_STATE_KEYS),
-        ],
-      },
-    }
+    const manifest = OFFLINE_MODULE_FALLBACK.find((module) => module.module_id === 'planning')
+    assert.ok(manifest)
     // Three-byte characters, so three values at their 240-character bound
     // outweigh the manifest's 2048 bytes together, which Latin text cannot.
     const filter: WorkFilter = {
@@ -284,6 +273,28 @@ describe('the route state', () => {
       writeWorkFilter({ view: 'kanban' }, filter, manifest.state_schema.max_bytes).state,
       state,
     )
+  })
+
+  test('every facet the filter writes is a key the planning manifest admits', () => {
+    const manifest = OFFLINE_MODULE_FALLBACK.find((module) => module.module_id === 'planning')
+    assert.ok(manifest)
+    const filter: WorkFilter = {
+      text: 'MAIN',
+      ready: true,
+      held: true,
+      category: ['review'],
+      kind: ['bug'],
+      priority: ['high'],
+      labels: ['ui'],
+      holder: ['claude'],
+    }
+    const { state } = writeWorkFilter({ view: 'list' }, filter, manifest.state_schema.max_bytes)
+    assert.deepEqual(
+      Object.keys(state).sort(),
+      [...Object.values(WORK_FILTER_STATE_KEYS), 'view'].sort(),
+    )
+    // Refused, the whole state is dropped and a reload comes back unfiltered.
+    assert.doesNotThrow(() => validateManifestRouteState(manifest, state))
   })
 
   test('a hand-edited state is read as no filter on that facet, not as a broken route', () => {
