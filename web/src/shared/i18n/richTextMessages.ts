@@ -25,7 +25,7 @@ export const richTextMessages = {
       loading: 'Looking up the commit…',
       failed: 'Git could not be asked. Try again later.',
       commitMissing:
-        "Git did not find this commit in the repository of the task's project or in the configured document roots.",
+        "Git did not find this commit in the task's project, the configured document roots or any other registered project.",
       memoryPointer:
         'This points at an AgentMemory record. Its text lives there; Valkama keeps only the pointer.',
     },
@@ -52,7 +52,7 @@ export const richTextMessages = {
       loading: 'Ищу коммит…',
       failed: 'Не удалось спросить git. Попробуйте ещё раз позже.',
       commitMissing:
-        'Git не нашёл этот коммит ни в репозитории проекта задачи, ни в настроенных корнях документов.',
+        'Git не нашёл этот коммит ни в проекте задачи, ни в настроенных корнях документов, ни в других зарегистрированных проектах.',
       memoryPointer:
         'Это указатель на запись в AgentMemory. Её текст хранится там, Valkama хранит только ссылку.',
     },
