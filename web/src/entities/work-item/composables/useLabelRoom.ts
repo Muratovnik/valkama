@@ -23,6 +23,9 @@
 import { computed, onScopeDispose, shallowRef, watch } from 'vue'
 import type { ComputedRef, Ref } from 'vue'
 
+import type { MarkWords } from '@/entities/work-item/composables/useMarkWords.ts'
+import { facetMarks } from '@/entities/work-item/utils/facets.ts'
+import type { FacetContext, FacetSubject, FacetSurface } from '@/entities/work-item/utils/facets.ts'
 import { chipsThatFit } from '@/entities/work-item/utils/labelRoom.ts'
 
 /** What every line measures with, read from the first drawn chip and kept for the page. */
@@ -126,7 +129,7 @@ function remeasure() {
 if (typeof document !== 'undefined') document.fonts?.addEventListener('loadingdone', remeasure)
 
 /** What a host knows of the run it fits on one line. */
-export interface LabelLine {
+interface LabelLine {
   /** The chips that might print, in order, as the registry would print them with no line. */
   candidates: () => readonly string[]
   /** The line fits its chips at all; otherwise it is not observed. */
@@ -141,7 +144,7 @@ export interface LabelLine {
  * The room, or undefined until the line has been measured — which leaves the
  * registry's own limit in force, as a host that does not measure gets it.
  */
-export function useLabelRoom(
+function useLabelRoom(
   line: Ref<HTMLElement | null>,
   run: LabelLine,
 ): ComputedRef<number | undefined> {
@@ -179,5 +182,40 @@ export function useLabelRoom(
     const drawn = metrics.value
     const room = width.value
     return run.enabled() && room !== undefined && drawn ? fit(drawn, room) : undefined
+  })
+}
+
+/** A run of one item's chips that has to fit one line, as the registry would print them. */
+export interface LabelFit {
+  words: MarkWords
+  context: () => FacetContext
+  enabled: () => boolean
+  item: () => FacetSubject
+  surface: () => FacetSurface
+}
+
+/** The room of one item's chips on its line, in the registry's own terms. */
+export function useLabelFit(line: Ref<HTMLElement | null>, fit: LabelFit) {
+  /** Every chip the registry would print with no line to fit. */
+  const candidates = computed(() =>
+    fit.enabled()
+      ? facetMarks('labels', fit.surface(), fit.item(), fit.context())
+          .filter((mark) => mark.form === 'chips')
+          .map((mark) => mark.value)
+      : [],
+  )
+  /** The widest count the line could print. */
+  const moreSample = computed(() =>
+    fit.enabled()
+      ? facetMarks('labels', fit.surface(), fit.item(), { ...fit.context(), labelRoom: 1 }).find(
+          (mark) => mark.form !== 'chips',
+        )
+      : undefined,
+  )
+  return useLabelRoom(line, {
+    candidates: () => candidates.value,
+    enabled: fit.enabled,
+    more: () => (moreSample.value ? fit.words.say(moreSample.value.text) : undefined),
+    total: () => fit.item().labels?.length ?? 0,
   })
 }

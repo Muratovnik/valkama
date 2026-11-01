@@ -1,0 +1,260 @@
+/*
+ * What a run of marks looks like on every surface. It is one stylesheet rather
+ * than a component's scoped block because a list row and a tile draw their marks
+ * as plain elements (`drawMarks.ts`), with no component of their own to carry a
+ * scope; every class here is written by that one module.
+ */
+
+.facet-marks {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  align-items: center;
+  min-width: 0;
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+}
+
+.facet-mark {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  background: none;
+
+  &.filters {
+    /* Above a stretched open target drawn earlier in the same container. */
+    position: relative;
+
+    /* A glyph is 14px; the target is the 28px a line of content may spend,
+       centred on it, so neighbouring glyphs do not share a hit area. */
+    justify-content: center;
+    min-inline-size: var(--size-control-inline);
+    min-block-size: var(--size-control-inline);
+    border-radius: var(--radius-status);
+    cursor: pointer;
+
+    &:hover .facet-word {
+      color: var(--color-text);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-focus-ring);
+      outline-offset: 2px;
+    }
+  }
+}
+
+/* A run of one mark is that mark: the line's ink and its font, and no wrapping
+   inside it, so a word short of room ends in an ellipsis. */
+.facet-mark.facet-marks {
+  flex-wrap: nowrap;
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+}
+
+/* A word alone in a table cell is the mark itself, a plain piece of text; a
+   button keeps the target's box and centres its word by being a button. */
+.facet-mark.facet-word-alone {
+  display: inline;
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+
+  &::before {
+    content: none;
+  }
+
+  &.filters {
+    display: inline-block;
+  }
+
+  &[data-tone='info'] {
+    color: var(--color-info);
+  }
+
+  &[data-tone='success'] {
+    color: var(--color-success);
+  }
+
+  &[data-tone='warning'] {
+    color: var(--color-warning);
+  }
+
+  &[data-tone='danger'] {
+    color: var(--color-danger);
+  }
+
+  &.quiet {
+    color: var(--color-text-tertiary);
+  }
+
+  &[data-active],
+  &.filters:hover {
+    color: var(--color-text);
+  }
+}
+
+.facet-word {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  /* A word alone carries the tone its glyph would have: with no glyph beside
+     it, the word is the only place left to say how much the fact asks. It
+     comes before the quiet, picked and hovered inks, which say something else
+     and win a tie. */
+  .facet-mark[data-tone='info'] &:where(.facet-word-alone) {
+    color: var(--color-info);
+  }
+
+  .facet-mark[data-tone='success'] &:where(.facet-word-alone) {
+    color: var(--color-success);
+  }
+
+  .facet-mark[data-tone='warning'] &:where(.facet-word-alone) {
+    color: var(--color-warning);
+  }
+
+  .facet-mark[data-tone='danger'] &:where(.facet-word-alone) {
+    color: var(--color-danger);
+  }
+
+  .facet-mark.quiet & {
+    color: var(--color-text-tertiary);
+  }
+
+  .facet-mark[data-active] & {
+    color: var(--color-text);
+  }
+}
+
+/* One line, whatever the room: the run does not wrap, and inside a mark the
+   word wraps under its glyph onto a line that is clipped, so a mark short of
+   room shows its glyph alone. The word is still in the mark, so it is still
+   read out, and the hover text says it. */
+.facet-marks.fold {
+  flex-wrap: nowrap;
+  max-width: 100%;
+
+  /* Folded, the glyph keeps the end of the run, where the whole mark ended. */
+  .facet-mark {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    max-block-size: 1lh;
+    overflow: hidden;
+  }
+}
+
+/* A mark lines up with the text beside it on its first item, and the first
+   item was the glyph, whose lower edge stood in for a baseline: the word sat
+   two pixels above the row. A zero-width letter ahead of the glyph, centred as
+   the word is, gives the mark a letter's baseline; it takes no room, and it
+   says nothing to a screen reader. */
+.facet-mark::before {
+  content: '\200b' / '';
+  margin-inline-end: calc(-1 * var(--space-1));
+}
+
+/* One line of chips: a chip with no room is not drawn at all — the registry
+   counts it in «+N» — and the last one drawn may shorten rather than spill. The
+   chips' 28px pointer boxes are the line's height, once. */
+.facet-marks.fit {
+  flex-wrap: nowrap;
+  max-width: 100%;
+
+  .facet-chip {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  .facet-mark {
+    flex: none;
+  }
+}
+
+/* The glyph alone on screen, its word still read out. */
+.facet-word-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+/* A glyph is tertiary ink unless its tone says more. Kind never does: a type
+   is not a state, and a coloured kind would read as one more alarm. */
+.facet-glyph {
+  flex: 0 0 auto;
+  color: var(--color-text-tertiary);
+
+  .facet-mark[data-tone='info'] & {
+    color: var(--color-info);
+  }
+
+  .facet-mark[data-tone='success'] & {
+    color: var(--color-success);
+  }
+
+  .facet-mark[data-tone='warning'] & {
+    color: var(--color-warning);
+  }
+
+  .facet-mark[data-tone='danger'] & {
+    color: var(--color-danger);
+  }
+}
+
+/* The box is what a pointer hits and the face is what is drawn: a button keeps
+   the 28px a line of content may spend on a target, and the chip inside it
+   stays the height of its text, as a chip that only names a label does. */
+.label-chip {
+  /* Above a stretched open target drawn earlier in the same container. */
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+  background: none;
+
+  &.filters {
+    min-block-size: var(--size-control-inline);
+    cursor: pointer;
+
+    &:hover,
+    &[data-active] {
+      color: var(--color-text);
+    }
+
+    &:focus-visible {
+      border-radius: var(--radius-status);
+      outline: 2px solid var(--color-focus-ring);
+      outline-offset: 2px;
+    }
+  }
+}
+
+.chip-face {
+  max-width: 100%;
+  padding: var(--space-hair) var(--space-2);
+  white-space: nowrap;
+  background: var(--color-chip-face);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-radius: var(--radius-status);
+
+  /* Pointed at, or in the filter: a further lift over the same ground, so it
+     rises on a hovered tile too, where a fixed grey would sink. */
+  .label-chip.filters:hover &,
+  .label-chip[data-active] & {
+    background: var(--color-chip-face-raised);
+  }
+}

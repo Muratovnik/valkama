@@ -37,9 +37,10 @@ import { useListWords } from '@/widgets/work-item-views/composables/useListWords
 import { fitFor, isFolded, LIST_COLUMNS } from '@/widgets/work-item-views/utils/listColumns.ts'
 import type { SortKey } from '@/widgets/work-item-views/utils/listColumns.ts'
 
-import FacetMarks from '@/entities/work-item/components/FacetMarks.vue'
-import { holderRef } from '@/entities/work-item/utils/facets.ts'
-import type { FacetContext } from '@/entities/work-item/utils/facets.ts'
+import { drawMarks, drawWordCell } from '@/entities/work-item/components/drawMarks.ts'
+import { useMarkWords } from '@/entities/work-item/composables/useMarkWords.ts'
+import { holderRef, leadMarks, surfaceMarks } from '@/entities/work-item/utils/facets.ts'
+import type { FacetContext, FacetId, FacetMark } from '@/entities/work-item/utils/facets.ts'
 import { waitingOn } from '@/entities/work-item/utils/waiting.ts'
 import { EMPTY_WORK_FILTER } from '@/entities/work-item/utils/workFilter.ts'
 import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
@@ -94,10 +95,15 @@ const waiting = computed(() => waitingOn(props.links, props.items))
 function context(item: WorkItemBrief): FacetContext {
   return { waitingOn: waiting.value.get(item.work_item_id) ?? null, width: width.value }
 }
-/** The glyphs before a reference, one fixed slot each. */
-const LEAD = ['priority', 'kind'] as const
 /** A glyph is a 14px mark; on a phone's list it is read, and the bar filters. */
 const glyphsFilter = computed(() => !narrow.value)
+
+/** The facets of a row's runs, each in the place the row gives it. */
+const UNDER: readonly FacetId[] = ['readiness', 'labels']
+const STATE: readonly FacetId[] = ['state']
+const PRIORITY: readonly FacetId[] = ['priority']
+const HOLDER: readonly FacetId[] = ['holder']
+const STEPS: readonly FacetId[] = ['steps']
 
 const folded = (key: SortKey) => isFolded(fit.value, key)
 const shownColumns = computed(() => LIST_COLUMNS.filter((column) => !folded(column.key)))
@@ -135,6 +141,43 @@ function memo(item: WorkItemBrief): unknown[] {
 }
 
 const pass = (token: WorkFilterToken) => emit('filter', token)
+
+/**
+ * A row's runs are drawn here as plain elements. A row holds seven of them, and
+ * a component for each came to eleven instances a row, some fourteen thousand on
+ * a space of a thousand rows, for marks that hold no state of their own.
+ */
+const words = useMarkWords()
+const facts = (item: WorkItemBrief, facets: readonly FacetId[], asked: FacetContext = {}) =>
+  drawMarks(surfaceMarks('list', item, asked, facets), { surface: 'list', words })
+/** One mark in a cell of its own. */
+const fact = (item: WorkItemBrief, facet: readonly FacetId[]) =>
+  drawMarks(surfaceMarks('list', item, {}, facet), { solo: true, surface: 'list', words })
+/** A run that filters, out of the Tab order: the row stays one stop. */
+const filtering = (marks: readonly FacetMark[], filterable = true) =>
+  drawMarks(marks, {
+    filter: props.filter,
+    filterable,
+    onFilter: pass,
+    surface: 'list',
+    tabbable: false,
+    words,
+  })
+/** A column's word, the mark and nothing round it. */
+const word = (item: WorkItemBrief, facets: readonly FacetId[]) =>
+  drawWordCell(surfaceMarks('list', item, {}, facets), { surface: 'list', words })
+const priorityWord = (item: WorkItemBrief) =>
+  drawWordCell(surfaceMarks('list', item, {}, PRIORITY), {
+    filter: props.filter,
+    filterable: true,
+    onFilter: pass,
+    surface: 'list',
+    tabbable: false,
+    words,
+  })
+/** The glyph before a reference, in its fixed slot. */
+const lead = (item: WorkItemBrief, facet: FacetId) =>
+  filtering(leadMarks(facet, 'list', item), glyphsFilter.value)
 
 // One listener each for the whole list rather than three on every row: a
 // space of a thousand rows paid for three thousand of them on every opening.
@@ -175,68 +218,44 @@ useListKeys(root, {
           class="list-row"
         >
           <td class="list-cell list-ref-cell">
-            <span class="list-ref">
-              <FacetMarks
-                v-for="facet in LEAD"
-                :key="facet"
-                class="list-slot"
-                surface="list"
-                :item="item"
-                :facets="[facet]"
-                :filter="props.filter"
-                :filterable="glyphsFilter"
-                :tabbable="false"
-                lead
-                @filter="pass"
-              />
-              <button
-                type="button"
-                class="list-open"
-                :tabindex="tabStop(item)"
-                :data-id="item.work_item_id"
-                :data-reference="item.reference"
-              >
-                {{ item.reference }}
-              </button>
-            </span>
+            <component
+              :is="lead(item, 'priority')"
+              class="list-slot"
+            />
+            <component
+              :is="lead(item, 'kind')"
+              class="list-slot"
+            />
+            <button
+              type="button"
+              class="list-open"
+              :tabindex="tabStop(item)"
+              :data-id="item.work_item_id"
+              :data-reference="item.reference"
+            >
+              {{ item.reference }}
+            </button>
           </td>
           <td class="list-cell list-title">
             <span class="list-name">{{ item.title }}</span>
             <span
               v-if="wide"
               class="list-under"
-              ><FacetMarks
-                surface="list"
-                :item="item"
-                :facets="['readiness', 'labels']"
-                :context="context(item)"
-                :filter="props.filter"
-                :tabbable="false"
-                filterable
-                @filter="pass"
+              ><component :is="filtering(surfaceMarks('list', item, context(item), UNDER))"
             /></span>
             <span
               v-else
               class="list-facts"
             >
-              <FacetMarks
-                surface="list"
-                :item="item"
-                :facets="factFacets"
-                :context="context(item)"
-              />
+              <component :is="facts(item, factFacets, context(item))" />
               <!-- A dash says "nobody" under a heading; on a line of facts it says nothing. -->
-              <FacetMarks
+              <component
+                :is="facts(item, HOLDER)"
                 v-if="holderRef(item)"
-                surface="list"
-                :item="item"
-                :facets="['holder']"
               />
-              <FacetMarks
+              <component
+                :is="facts(item, STEPS)"
                 v-if="folded('checklist') && item.checklist.length"
-                surface="list"
-                :item="item"
-                :facets="['steps']"
               />
               <span
                 v-if="folded('updated')"
@@ -249,35 +268,21 @@ useListKeys(root, {
             v-if="!folded('state')"
             class="list-cell"
           >
-            <FacetMarks
-              surface="list"
-              :item="item"
-              :facets="['state']"
-            />
+            <component :is="fact(item, STATE)" />
           </td>
           <td
             v-if="!folded('priority')"
             class="list-cell"
           >
-            <FacetMarks
-              surface="list"
-              :item="item"
-              :facets="['priority']"
-              :filter="props.filter"
-              :tabbable="false"
-              filterable
-              @filter="pass"
-            />
+            <component :is="priorityWord(item)" />
           </td>
           <td
             v-if="!folded('claim')"
-            class="list-cell"
+            class="list-cell list-holder"
           >
-            <FacetMarks
+            <component
+              :is="word(item, HOLDER)"
               class="list-claim"
-              surface="list"
-              :item="item"
-              :facets="['holder']"
               :title="holderOf(item)"
             />
           </td>
@@ -286,11 +291,7 @@ useListKeys(root, {
             class="list-cell"
             data-numeric="true"
           >
-            <FacetMarks
-              surface="list"
-              :item="item"
-              :facets="['steps']"
-            />
+            <component :is="word(item, STEPS)" />
           </td>
           <td
             v-if="!folded('updated')"
@@ -424,9 +425,15 @@ useListKeys(root, {
   min-width: 0;
 }
 
-/* The one column whose values run long stops at a measure; the whole name is
-   its hover. */
+/* The one column whose values run long stops at a measure, and the cell's
+   padding is outside it; the whole name is its hover. */
+.list-holder {
+  max-width: calc(10rem + 2 * var(--space-3));
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .list-claim {
-  max-width: 10rem;
+  cursor: inherit;
 }
 </style>

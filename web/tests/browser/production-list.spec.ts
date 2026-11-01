@@ -234,7 +234,7 @@ test('at the fold the title keeps 36 characters, the references align and nobody
     const starts = [...element.querySelectorAll('tbody .list-open')].map((open) =>
       Math.round(open.getBoundingClientRect().left),
     )
-    const glyphs = [...element.querySelectorAll('tbody .list-ref')].map(
+    const glyphs = [...element.querySelectorAll('tbody .list-ref-cell')].map(
       (cell) => cell.querySelectorAll('.facet-glyph').length,
     )
     return { characters, starts: [...new Set(starts)], glyphs: [...new Set(glyphs)] }
@@ -243,11 +243,13 @@ test('at the fold the title keeps 36 characters, the references align and nobody
   // column says the word, in the colour the glyph has.
   const priority = await list.evaluate((element) =>
     [...element.querySelectorAll('tbody tr')].map((row) => {
-      const glyph = row.querySelector('.list-ref .facet-mark[data-facet="priority"] .facet-glyph')
+      const glyph = row.querySelector(
+        '.list-ref-cell .facet-mark[data-facet="priority"] .facet-glyph',
+      )
       const column = row.querySelector<HTMLElement>(
         'td:not(.list-ref-cell) .facet-mark[data-facet="priority"]',
       )
-      const word = column?.querySelector('.facet-word')
+      const word = column
       return {
         glyphs: row.querySelectorAll('.facet-mark[data-facet="priority"] .facet-glyph').length,
         tone: column?.dataset.tone ?? null,

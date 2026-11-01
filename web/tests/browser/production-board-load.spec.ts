@@ -13,7 +13,7 @@ import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
-import { openBoard } from './boardPage.ts'
+import { openBoard, openList } from './boardPage.ts'
 import { planningReadModel } from './planningFixtures.ts'
 import { planningReadFor } from './planningReadFixture.ts'
 
@@ -64,6 +64,9 @@ const stateOf = (index: number) => {
 }
 
 const POOL = ['agent-packets', 'coordinator', 'decision-review', 'ui', 'runtime-state', 'docs']
+
+/** The fullest row of this space, drawn with nothing to spare. */
+const LIST_ROW_NODES = 43
 
 function brief(number: number, state: ReturnType<typeof stateOf>, extra: object = {}) {
   return {
@@ -209,6 +212,72 @@ test('a tile draws what it shows and nothing to measure it by', async ({ page })
   await expect(page.locator('[data-ghost], .facet-ghost')).toHaveCount(0)
   // Whole chips only: a chip counted as fitting is never shortened.
   expect(drawn.cut).toBe(0)
+})
+
+/**
+ * The component instances under each element that matches, from the tree the
+ * application is really running: a production build has no other way to say.
+ */
+const instancesUnder = (page: Page, selector: string) =>
+  page.evaluate((match) => {
+    interface Drawn {
+      children?: unknown
+      component?: { subTree: Drawn } | null
+      el?: Element | null
+      suspense?: { activeBranch: Drawn | null } | null
+    }
+    const counts = new Map<Element, number>()
+    const inside = (node: Drawn) =>
+      [
+        node.component?.subTree,
+        node.suspense?.activeBranch,
+        ...(Array.isArray(node.children) ? (node.children as Drawn[]) : []),
+      ].filter((child) => child && typeof child === 'object') as Drawn[]
+    const walk = (node: Drawn, host: Element | null) => {
+      const under = host ?? (node.el instanceof Element && node.el.matches(match) ? node.el : null)
+      if (under) counts.set(under, (counts.get(under) ?? 0) + (node.component ? 1 : 0))
+      for (const child of inside(node)) walk(child, under)
+    }
+    const root = document.querySelector('#app') as Element & { _vnode?: Drawn }
+    if (root._vnode) walk(root._vnode, null)
+    return [...counts.values()]
+  }, selector)
+
+test('a tile costs one component, whatever it prints', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await installBackend(page)
+  await serveSpace(page, space(true))
+  await openBoard(page, {})
+  await expect(page.locator('.tile-labels > [data-facet="labels"]').first()).toBeVisible()
+  const tiles = await page.locator('.work-item-tile').count()
+  const instances = await instancesUnder(page, '[data-reference] .work-item-tile')
+  expect(instances).toHaveLength(tiles)
+  // The tile itself. A component for each run, chip and glyph, and two more
+  // under every glyph, came to about nine a tile.
+  expect(Math.max(...instances)).toBeLessThanOrEqual(1)
+})
+
+test('a list row draws what it shows, with one component for its state', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await installBackend(page)
+  await serveSpace(page, space(true))
+  await openList(page)
+  const rows = page.locator('.work-item-list tbody tr')
+  await expect(rows).toHaveCount(60)
+  await expect(rows.first().locator('.label-chip').first()).toBeVisible()
+  const nodes = await rows.evaluateAll((all) =>
+    all.map((row) => row.querySelectorAll('*').length + 1),
+  )
+  const instances = await instancesUnder(page, '.work-item-list tbody tr')
+  expect(instances).toHaveLength(60)
+  // The state is the one component a row keeps. A component for each of a row's
+  // seven runs, each chip and each glyph came to eleven a row.
+  expect(Math.max(...instances)).toBeLessThanOrEqual(1)
+  // Seven cells; two glyphs in their slots, each a box, an svg and its strokes,
+  // eleven of them for a bug; the reference; the title; two chips and a count;
+  // the state and three words. A box around each word and a word inside it was
+  // ten more a row.
+  expect(Math.max(...nodes)).toBeLessThanOrEqual(LIST_ROW_NODES)
 })
 
 test('a closed filter menu draws none of its options', async ({ page }) => {

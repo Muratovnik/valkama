@@ -31,11 +31,13 @@
  * they stand for, so a press on them opens the card itself: for a pointer the
  * sheet is one target, and the keyboard's way in stays the open target.
  */
-import { computed, useId } from 'vue'
+import { computed, useId, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import FacetMarks from '@/entities/work-item/components/FacetMarks.vue'
-import { printsFacet } from '@/entities/work-item/utils/facets.ts'
+import { drawMarks } from '@/entities/work-item/components/drawMarks.ts'
+import { useLabelFit } from '@/entities/work-item/composables/useLabelRoom.ts'
+import { useMarkWords } from '@/entities/work-item/composables/useMarkWords.ts'
+import { surfaceMarks } from '@/entities/work-item/utils/facets.ts'
 import type { FacetContext, FacetId } from '@/entities/work-item/utils/facets.ts'
 import { EMPTY_WORK_FILTER } from '@/entities/work-item/utils/workFilter.ts'
 import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
@@ -84,18 +86,35 @@ const EXCEPTIONS: readonly FacetId[] = ['readiness']
 const LABELS: readonly FacetId[] = ['labels']
 const FACTS: readonly FacetId[] = ['holder', 'steps']
 
+/** The runs are drawn here as plain elements: a tile holds three or four, a board hundreds. */
+const words = useMarkWords()
 const context = computed<FacetContext>(() => ({ waitingOn: props.waitingOn }))
-const prints = (facets: readonly FacetId[]) =>
-  facets.some((facet) => printsFacet(facet, 'tile', props.item, context.value))
+const leadRun = computed(() => surfaceMarks('tile', props.item, context.value, LEAD))
+const exceptionRun = computed(() => surfaceMarks('tile', props.item, context.value, EXCEPTIONS))
+const factRun = computed(() => surfaceMarks('tile', props.item, context.value, FACTS))
+
+/** The chips keep one line: as many as it has room for, and «+N» for the rest. */
+const room = useLabelFit(useTemplateRef<HTMLElement>('labelLine'), {
+  context: () => ({}),
+  enabled: () => (props.item.labels?.length ?? 0) > 0,
+  item: () => props.item,
+  surface: () => 'tile',
+  words,
+})
+const labelRun = computed(() =>
+  surfaceMarks(
+    'tile',
+    props.item,
+    room.value === undefined ? {} : { labelRoom: room.value },
+    LABELS,
+  ),
+)
 
 /** A finished item's former holder is history, not a claim to act on. */
 const staleClaim = computed(
   () => props.item.claim_state === 'stale' && !props.item.state.is_terminal,
 )
-const lead = computed(() => prints(LEAD))
-const exceptions = computed(() => prints(EXCEPTIONS) || staleClaim.value)
-const labels = computed(() => prints(LABELS))
-const facts = computed(() => prints(FACTS))
+const exceptions = computed(() => exceptionRun.value.length > 0 || staleClaim.value)
 
 const leadId = `${id}-lead`
 const exceptionsId = `${id}-exceptions`
@@ -107,9 +126,9 @@ const factsId = `${id}-facts`
  */
 const describedBy = computed(() => {
   const ids = [
-    lead.value ? leadId : '',
+    leadRun.value.length ? leadId : '',
     exceptions.value ? exceptionsId : '',
-    facts.value ? factsId : '',
+    factRun.value.length ? factsId : '',
     props.hintId ?? '',
   ].filter(Boolean)
   return ids.length ? ids.join(' ') : undefined
@@ -119,13 +138,11 @@ const describedBy = computed(() => {
 <template>
   <div class="work-item-tile">
     <span class="tile-line">
-      <FacetMarks
-        v-if="lead"
+      <component
+        :is="drawMarks(leadRun, { surface: 'tile', words })"
+        v-if="leadRun.length"
         :id="leadId"
         class="tile-lead"
-        surface="tile"
-        :item="props.item"
-        :facets="LEAD"
         @click="open"
       />
       <span
@@ -138,12 +155,8 @@ const describedBy = computed(() => {
         :id="exceptionsId"
         class="tile-exceptions"
       >
-        <FacetMarks
-          surface="tile"
-          :item="props.item"
-          :facets="EXCEPTIONS"
-          :context="context"
-          fold
+        <component
+          :is="drawMarks(exceptionRun, { fold: true, surface: 'tile', words })"
           @click="open"
         />
         <SemanticState
@@ -169,25 +182,27 @@ const describedBy = computed(() => {
       <span class="visually-hidden">{{ `${props.item.reference} ` }}</span>
       <strong class="tile-title">{{ props.item.title }}</strong>
     </button>
-    <FacetMarks
-      v-if="labels"
+    <component
+      :is="
+        drawMarks(labelRun, {
+          filter: props.filter,
+          filterable: true,
+          fit: true,
+          onFilter: (token) => emit('filter', token),
+          surface: 'tile',
+          tabbable: false,
+          words,
+        })
+      "
+      v-if="labelRun.length"
+      ref="labelLine"
       class="tile-labels"
-      surface="tile"
-      :item="props.item"
-      :facets="LABELS"
-      :filter="props.filter"
-      :tabbable="false"
-      filterable
-      fit
-      @filter="emit('filter', $event)"
     />
-    <FacetMarks
-      v-if="facts"
+    <component
+      :is="drawMarks(factRun, { surface: 'tile', words })"
+      v-if="factRun.length"
       :id="factsId"
       class="tile-facts"
-      surface="tile"
-      :item="props.item"
-      :facets="FACTS"
     />
   </div>
 </template>

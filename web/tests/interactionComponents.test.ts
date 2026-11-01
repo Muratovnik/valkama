@@ -182,7 +182,7 @@ test('one place draws who holds an item, and the shell owns scope presentation',
   // the tile prints its holder through the facet registry's tile rule.
   // Rendered owner labels are covered in planningPresentation.spec.ts.
   assert.match(card, /const FACTS: readonly FacetId\[\] = \['holder', 'steps'\]/)
-  assert.match(card, /:facets="FACTS"/)
+  assert.match(card, /surfaceMarks\('tile', props\.item, context\.value, FACTS\)/)
   assert.doesNotMatch(lane, /bundle-active|t\('work\.active'\)/)
   assert.match(graphNode, /class="flow-node-owner-state"/)
   assert.match(
@@ -260,11 +260,11 @@ test('a work-item tile is one control, not a card with an arrow footer', () => {
   // and every one of them is kept out of the Tab order.
   assert.doesNotMatch(card, /source-open|openSource|↗/)
   assert.match(card, /<button\s+class="tile-open"/)
-  assert.match(card, /@click="emit\('open', props\.item\.reference\)"/)
+  assert.match(card, /const open = \(\) => emit\('open', props\.item\.reference\)/)
   assert.equal((card.match(/<button/g) ?? []).length, 1, 'one open target per tile')
-  const filterRuns = (card.match(/^\s+filterable$/gmu) ?? []).length
+  const filterRuns = (card.match(/filterable: true/g) ?? []).length
   assert.ok(filterRuns > 0)
-  assert.equal((card.match(/:tabbable="false"/g) ?? []).length, filterRuns)
+  assert.equal((card.match(/tabbable: false/g) ?? []).length, filterRuns)
 })
 
 test('Planning components carry presentation tones instead of remapping operational state', () => {

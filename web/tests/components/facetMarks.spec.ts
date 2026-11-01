@@ -1,3 +1,4 @@
+import { nextTick } from 'vue'
 import { createI18n } from 'vue-i18n'
 
 /**
@@ -236,5 +237,41 @@ describe('FacetMarks in a column', () => {
       'priority',
     ])
     expect(lead.get('.facet-word').classes()).toContain('facet-word-hidden')
+  })
+})
+
+describe('the words of a mark', () => {
+  it('follows a change of language though it keeps what it has looked up', async () => {
+    const plugin = i18n('en')
+    const wrapper = mount(FacetMarks, {
+      props: {
+        surface: 'list',
+        item: boardItem(1, 'backlog', { kind: 'bug' }),
+        facets: ['kind'],
+        filterable: true,
+      },
+      global: { plugins: [plugin] },
+    })
+    const name = () => wrapper.get('[data-facet="kind"]').attributes('aria-label')
+    const english = name()
+    expect(english).toContain('Bug')
+    plugin.global.locale.value = 'ru'
+    await nextTick()
+    expect(name()).not.toBe(english)
+    plugin.global.locale.value = 'en'
+    await nextTick()
+    expect(name()).toBe(english)
+  })
+
+  it('says a pressed glyph in its name and draws no second word for it', () => {
+    const wrapper = marks({
+      surface: 'list',
+      item: boardItem(1, 'backlog', { kind: 'bug' }),
+      facets: ['kind'],
+      filterable: true,
+    })
+    const mark = wrapper.get('[data-facet="kind"]')
+    expect(mark.attributes('aria-label')).toContain('Bug')
+    expect(mark.find('.facet-word').exists()).toBe(false)
   })
 })

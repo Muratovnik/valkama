@@ -219,7 +219,7 @@ describe('the facets a list row prints', () => {
       const column = cells(wrapper, index)[3].get('.facet-mark')
       expect(column.text()).toBe(word)
       // The word alone, in the tone its glyph has before the reference.
-      expect(column.find('.facet-word-alone').exists()).toBe(true)
+      expect(column.classes()).toContain('facet-word-alone')
       expect(column.attributes('data-tone')).toBe(tone)
       const glyphs = wrapper
         .findAll('tbody tr')
