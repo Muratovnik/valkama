@@ -109,7 +109,10 @@ chrome.
   and disclosure; taking it from the gaps instead is what made the shell read as
   crowded — rows whose parts touch are read as one blur rather than scanned.
 - The context bar names the current module once. A module must not repeat the
-  same title or introductory copy merely to fill space.
+  same title or introductory copy merely to fill space. A line under the name
+  earns its place only by stating a fact the reader acts on; every module once
+  carried a sentence describing what the module is, which the rail and the
+  screen already said, and it took a second row of the header for it.
 - The shell has two zones and they must read as two. The chrome — the
   navigation rail and the context bar — is the dark backing of the whole
   window, and the workspace is a lighter panel lying on it. Two adjacent zones

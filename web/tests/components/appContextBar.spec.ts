@@ -34,7 +34,6 @@ function manifest(moduleId: string) {
 function mountBar(moduleId: string) {
   return mount(AppContextBar, {
     props: {
-      description: 'Description',
       projects,
       resources: selectableProjectResources(manifest(moduleId), resources),
       scope,

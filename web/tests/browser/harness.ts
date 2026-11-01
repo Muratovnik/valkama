@@ -173,8 +173,6 @@ const Harness = defineComponent({
           }),
           h('div', { class: 'app-main context-harness-main' }, [
             h(AppContextBar, {
-              description:
-                'Follow live agents and intervene when work requires a careful operator response.',
               projects: contextProjects,
               resources: contextResources,
               resourceRef: contextResources[0]?.resource_ref,

@@ -7,6 +7,10 @@
  * stop at a rule, which left the shell with three greys meeting in one corner and
  * no zone anyone could name.
  *
+ * The module's name and nothing else about it. A line under it describing what
+ * the module is said what the rail and the screen already show, and it took a
+ * second row of the header to say it.
+ *
  * No caption before either selector. A control states its own subject — the
  * workspace or resource by its identifier — so a label beside it is
  * the same word twice, and it was taking a grid track from the value that has to
@@ -25,7 +29,6 @@ import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 
 const props = defineProps<{
-  description: string
   projects: PlatformContextReady['projects']
   resources: ProjectDirectoryResource[]
   scope: OperatingScope
@@ -103,11 +106,6 @@ const selectedResourceValue = computed(() =>
   <header class="context-bar">
     <div class="context-title">
       <h1 class="module-title">{{ title }}</h1>
-      <small
-        v-if="description"
-        class="module-description"
-        >{{ description }}</small
-      >
     </div>
     <div class="context-controls">
       <div class="operating-scope">
@@ -173,13 +171,6 @@ const selectedResourceValue = computed(() =>
   letter-spacing: -0.01em;
 }
 
-.module-description {
-  display: block;
-  margin-top: var(--space-half);
-  color: var(--color-text-muted);
-  font-size: var(--font-size-dense);
-}
-
 /* Keep the optional resource selector in the scope-control cluster so it takes
    space only when a project has multiple resources. */
 .context-controls {
@@ -213,10 +204,6 @@ const selectedResourceValue = computed(() =>
 @container main (width <= 764px) {
   .context-bar {
     grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .module-description {
-    display: none;
   }
 
   .context-controls {

@@ -27,15 +27,6 @@ export const en = {
     memory: 'Memory',
     unavailable:
       'The Valkama module registry is unavailable. Refresh after the local service reconnects.',
-    description: {
-      planning: 'Plan work, dependencies, and delivery state.',
-      sessions: 'Follow live agents and intervene when work stalls.',
-      improvements: 'Turn repeated failures into verified changes.',
-      analytics: 'Read flow, throughput, and operational signals.',
-      settings: 'Interface language, session openers, and installation checks.',
-      skills: 'Browse personal and project skills.',
-      memory: 'Search what each project knows, and see what its work points at.',
-    },
   },
   platform: {
     modules: {

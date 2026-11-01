@@ -178,9 +178,6 @@ const currentModule = computed(() => (routeLost.value ? null : activeModule.valu
 const contextTitle = computed(() =>
   routeLost.value ? t('platform.route.lostTitle') : moduleTitle.value,
 )
-const contextDescription = computed(() =>
-  routeLost.value ? '' : t(`modules.description.${activeModule.value}`),
-)
 // A state the module's manifest does not admit is dropped, not shown as a
 // blocked module: the address keeps the module and scope, and says so once.
 watch(liveRouteFailure, (failure) => {
@@ -290,7 +287,6 @@ usePlatformEntryRestore({
     <div class="app-main">
       <AppContextBar
         :title="contextTitle"
-        :description="contextDescription"
         :scope="operatingScope"
         :resource-ref="selectedResourceRef"
         :resources="availableProjectResources"

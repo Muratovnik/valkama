@@ -124,3 +124,22 @@ test('Russian Work bar keeps its controls on one row and folds the queue at narr
     'true',
   )
 })
+
+/**
+ * The context bar names the module once and says nothing else about it. A line
+ * under the name that describes what the module is tells the reader what the
+ * rail and the screen already show, and it took a second row of the header for it.
+ */
+test('the context bar names each module and adds no introductory copy', async ({ page }) => {
+  await installBackend(page)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  for (const [module, name] of [
+    ['planning', 'Работа'],
+    ['settings', 'Настройки'],
+  ] as const) {
+    await page.goto(serializePlatformRoute({ module_id: module, scope: projectScope }))
+    const title = page.locator('.context-title')
+    await expect(title.getByRole('heading', { level: 1, name })).toBeVisible()
+    await expect(title).toHaveText(name)
+  }
+})
