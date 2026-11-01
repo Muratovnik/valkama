@@ -12,6 +12,7 @@ import { actorName } from '@/shared/lib/actor.ts'
 import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
 import RichText from '@/shared/ui/RichText.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
+import SemanticState from '@/shared/ui/SemanticState.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -148,7 +149,17 @@ function when(value: string): string {
               @click="emit('open', link.reference)"
             >
               <span class="link-reference">{{ link.reference }}</span>
-              <span class="link-title">{{ link.title }}</span>
+              <span class="link-body">
+                <span class="link-title">{{ link.title }}</span>
+                <!-- The other end's state, when the server could say it: a finished blocker reads as finished. -->
+                <SemanticState
+                  v-if="link.state_category && link.state_name"
+                  variant="inline"
+                  dimension="work-item-state"
+                  :state="link.state_category"
+                  :label="link.state_name"
+                />
+              </span>
             </button>
             <VButton
               v-if="writable"
@@ -334,6 +345,14 @@ function when(value: string): string {
   font: var(--font-line);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.link-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  align-items: baseline;
+  min-width: 0;
 }
 
 .link-title {
