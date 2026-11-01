@@ -189,8 +189,10 @@ const exclusionText = computed(() => {
         <span
           class="workspace-counts"
           :aria-busy="countsBusy"
-          ><span class="workspace-fact">{{ t('workItem.spaceOpen', counts) }}</span> ·
-          <span class="workspace-fact">{{ t('workItem.spaceHeld', counts) }}</span></span
+          ><span class="workspace-fact">{{ t('workItem.spaceOpen', counts) }} ·</span>&#32;<span
+            class="workspace-fact"
+            >{{ t('workItem.spaceHeld', counts) }}</span
+          ></span
         >
         <span
           v-if="matches !== null"
@@ -335,7 +337,9 @@ const exclusionText = computed(() => {
   font-variant-numeric: tabular-nums;
 }
 
-/* A fact never breaks inside itself: «Открыто: 319 из 1267» wrapped mid-number at 390. */
+/* A fact never breaks inside itself: «Открыто: 319 из 1267» wrapped mid-number at 390.
+   The separator rides on the end of the first fact, so a break never leaves it
+   alone on a line or at the start of the next. */
 .workspace-fact {
   white-space: nowrap;
 }
