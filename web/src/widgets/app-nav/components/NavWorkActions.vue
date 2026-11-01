@@ -46,9 +46,19 @@ const { t } = useI18n()
       <!-- Questions waiting are work for the reader: in the hint's grey, beside
            the Ctrl K shortcut, the number read as part of the furniture. -->
       <!-- A count cut short by an unreadable source reads "2+": the number is
-           real, and the plus says the rest may still be waiting. -->
+           real, and the plus says the rest may still be waiting. A read that
+           failed outright reads "?", named for a reader: gone, it read as zero. -->
       <CountBadge
-        v-if="pendingCount !== null && pendingCount.value > 0"
+        v-if="pendingCount === 'unknown'"
+        class="action-count"
+        placement="inline"
+        tone="waiting"
+        :value="0"
+        :label="t('requests.countUnknown')"
+        unknown
+      />
+      <CountBadge
+        v-else-if="pendingCount !== null && pendingCount.value > 0"
         class="action-count"
         placement="inline"
         tone="waiting"

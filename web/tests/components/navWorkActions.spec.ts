@@ -7,7 +7,7 @@ import NavWorkActions from '@/widgets/app-nav/components/NavWorkActions.vue'
 
 import { messages } from '@/shared/i18n/index.ts'
 
-type Pending = { incomplete: boolean; value: number } | null
+type Pending = { incomplete: boolean; value: number } | 'unknown' | null
 
 function mountActions(pendingCount: Pending) {
   return mount(NavWorkActions, {
@@ -35,6 +35,16 @@ describe('rail work actions', () => {
     expect(floor.text().trim()).toMatch(/^Needs my answer\s*2\+$/)
     const whole = mountActions({ value: 2, incomplete: false }).findAll('button')[1]
     expect(whole.text().trim()).toMatch(/^Needs my answer\s*2$/)
+  })
+
+  // A read that failed says nothing about the count. Hidden, the count read as
+  // zero waiting questions; it shows a mark that is no number, named for a reader.
+  it('marks a count that could not be read instead of hiding it', () => {
+    const questions = mountActions('unknown').findAll('button')[1]
+    const mark = questions.get('.count-badge')
+    expect(mark.text()).toBe('?')
+    expect(mark.attributes('aria-label')).toBe('could not be checked')
+    expect(questions.text().trim()).toMatch(/^Needs my answer\s*\?$/)
   })
 
   // The interface font has no ⌘, and drawing one made every first screen fetch

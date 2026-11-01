@@ -10,6 +10,10 @@
  * a lane holds — and stay `quiet`. A count of things waiting for the reader, the
  * questions an agent asked, is work to do: `waiting` gives it a filled ground,
  * so it does not read as the shortcut hint printed beside it in the same grey.
+ *
+ * `unknown` is a count that could not be read at all. It shows a question mark
+ * rather than vanishing, because a count that disappears reads as zero; `label`
+ * then says why, since a bare "?" names nothing.
  */
 import { computed } from 'vue'
 
@@ -22,8 +26,17 @@ const props = withDefaults(
     limit?: number
     placement?: 'overlay' | 'inline'
     tone?: 'quiet' | 'waiting'
+    /** Nothing could be read, so there is no number to show. */
+    unknown?: boolean
   }>(),
-  { label: undefined, limit: 99, incomplete: false, placement: 'overlay', tone: 'quiet' },
+  {
+    label: undefined,
+    limit: 99,
+    incomplete: false,
+    placement: 'overlay',
+    tone: 'quiet',
+    unknown: false,
+  },
 )
 
 /**
@@ -31,6 +44,7 @@ const props = withDefaults(
  * shape. A floor gets the same plus, so a reader cannot take it for the whole.
  */
 const shownValue = computed(() => {
+  if (props.unknown) return '?'
   if (props.value > props.limit) return `${props.limit}+`
   return props.incomplete ? `${props.value}+` : String(props.value)
 })
