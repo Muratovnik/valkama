@@ -295,13 +295,19 @@ answers with `interface_version` and `chain`:
 | `series` | one entry per UTC day on which a member was created or closed, oldest first: `day` (`YYYY-MM-DD`), `created`, `closed`, and the running totals `total` and `closed_total` |
 | `recent` | the last 7 UTC days, today included: `days` (7), `created`, `closed`, and `trend`, which is `growing` when more were created than closed, `converging` when fewer, and `steady` otherwise |
 | `members` | every member, by number: `work_item_id`, `reference`, `title`, `state` (`key`, `name`, `category`, `is_terminal`), `claim_ref`, `claim_state`, `parent_reference`, `created_at`, `closed_at`, `ready` and `rank` |
-| `edges` | the `blocks` and `discovered-from` links whose two ends are the root or members: `from`, `to` (work item ids) and `kind` |
+| `edges` | the `discovered-from` links whose two ends are the root or members, and every `blocks` link into the root or a member, wherever its source lives: `from`, `to` (work item ids), `kind`, and the source's `reference`, `state_name`, `state_category`, `is_terminal` and `state_unavailable` |
 
 A member's `closed_at` is when it last changed state, if its state is terminal:
 the time of its latest transition, or of its last update when it never had one.
 It is `null` for an open member. `ready` is the rule every work item record
 uses: unheld, not a parent, in a state work can start from, and not blocked by
 anything unfinished.
+
+An edge names its source because a member waits on its blocker whether or not
+that blocker belongs to the chain, or to the space, so `from` need not be a
+member. When the store cannot resolve the source's state, `state_name`,
+`state_category` and `is_terminal` are `null` and `state_unavailable` is
+`state_missing`; such a source is unknown, not open, and blocks nothing.
 
 A member's `rank` is its 1-based place in the order of work across its whole
 planning space: the states by category (`active`, `review`, `queued`,
