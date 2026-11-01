@@ -23,7 +23,8 @@ import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { holderName } from '@/shared/lib/actor.ts'
 import type { IconName, SemanticStatePair } from '@/shared/lib/uiSystem.ts'
 
-export type FacetSurface = 'tile' | 'list' | 'graph' | 'card' | 'finder'
+/** `chain` is a member row of a card's chain: a list of items that holds no facets but readiness. */
+export type FacetSurface = 'tile' | 'list' | 'graph' | 'card' | 'finder' | 'chain'
 export type FacetId =
   'kind' | 'priority' | 'state' | 'readiness' | 'labels' | 'holder' | 'parent' | 'steps'
 
@@ -133,6 +134,8 @@ const FACET_RULES: Readonly<Record<FacetId, Partial<Record<FacetSurface, FacetRu
     list: { form: 'glyph-word', only: ['waiting'] },
     graph: { form: 'glyph-word', replacesState: true },
     card: { form: 'action' },
+    // A chain member reads as the norm of its group: workable prints nothing.
+    chain: { form: 'glyph-word', only: ['waiting'] },
   },
   labels: {
     tile: { form: 'chips', limit: 3 },
@@ -209,11 +212,35 @@ const PRIORITY_GLYPHS: Record<WorkItemBrief['priority'], IconName | null> = {
   low: 'priority-low',
 }
 
+/**
+ * What readiness reads of an item: its state and whether it is workable. A
+ * chain member carries exactly these, so it needs no kind or priority to be
+ * given a readiness mark.
+ */
+export type ReadinessSubject = Pick<FacetSubject, 'state' | 'ready'>
+
 /** Readiness as a facet value: startable, waiting on an open blocker, or neither. */
-export function readinessOf(item: FacetSubject, context: FacetContext = {}): string | null {
+export function readinessOf(item: ReadinessSubject, context: FacetContext = {}): string | null {
   if (item.state.is_terminal) return null
   if (context.waitingOn) return 'waiting'
   return item.ready ? 'ready' : null
+}
+
+/**
+ * The readiness mark one surface prints for an item, or none: the surface's
+ * rule decides whether the value prints at all, so a ready item on a surface
+ * that prints only the exception returns nothing.
+ */
+export function readinessMarks(
+  item: ReadinessSubject,
+  surface: FacetSurface,
+  context: FacetContext = {},
+): FacetMark[] {
+  const rule = FACET_RULES.readiness[surface]
+  if (!rule || rule.form === 'action') return []
+  const value = readinessOf(item, context)
+  const printed = value !== null && (!rule.only || rule.only.includes(value))
+  return printed ? [readinessMark(value, rule.form, context)] : []
 }
 
 function steps(item: FacetSubject) {
@@ -403,10 +430,7 @@ export function facetMarks(
   if (facet === 'state') return [stateMark(item, form)]
   if (facet === 'labels') return labelMarks(item, rule)
   if (facet === 'holder') return [holderMark(item, form, surface)]
-  if (facet === 'readiness') {
-    const value = readinessOf(item, context)
-    return value ? [readinessMark(value, form, context)] : []
-  }
+  if (facet === 'readiness') return readinessMarks(item, surface, context)
   if (facet === 'parent')
     return [
       {

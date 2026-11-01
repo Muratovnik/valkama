@@ -24,6 +24,8 @@ import { groupLabels, groupMembers } from '@/widgets/work-item-inspector/utils/c
 import type { ChainView } from '@/widgets/work-item-inspector/utils/inspectorReturn.ts'
 import { useChainForecast } from '@/widgets/work-item-inspector/utils/useChainForecast.ts'
 
+import { waitingOn } from '@/entities/work-item/utils/waiting.ts'
+
 import type { ChainScope, WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import { OPEN_CHAIN_GROUPS } from '@/shared/api/planningChainGroups.ts'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
@@ -71,6 +73,11 @@ const scopes = computed(() => [
 ])
 
 const groups = computed(() => (props.chain ? groupMembers(props.chain.members) : null))
+
+/** The open blocker each member waits on, where the blocker is another member of this chain. */
+const waiting = computed(() =>
+  props.chain ? waitingOn(props.chain.edges, props.chain.members) : new Map<string, string>(),
+)
 
 /** One word per group for the whole section: the map's legend, the line under it and the list. */
 const labels = computed(() =>
@@ -303,6 +310,7 @@ defineExpose({ restore, reveal, view })
         ref="members"
         :groups="listed"
         :labels="labels"
+        :waiting="waiting"
         @open="(reference) => emit('open', reference)"
       />
 

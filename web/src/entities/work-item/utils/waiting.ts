@@ -9,6 +9,15 @@
  */
 import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
 
+/** A link as the rule reads it: its ends and kind, and the source's state when the view carries it. */
+export type WaitingLink = Pick<PlanningEdge, 'from' | 'to' | 'kind'> &
+  Partial<Pick<PlanningEdge, 'reference' | 'is_terminal'>>
+
+/** An item as the rule reads it: its id, its reference and whether it has finished. */
+export type WaitingItem = Pick<WorkItemBrief, 'work_item_id' | 'reference'> & {
+  state: Pick<WorkItemBrief['state'], 'is_terminal'>
+}
+
 /**
  * The open blocker each blocked item waits on, by the blocked item's id; the
  * first open one in link order when several are.
@@ -20,8 +29,8 @@ import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
  * taken for an open blocker: unknown is not open.
  */
 export function waitingOn(
-  links: readonly PlanningEdge[],
-  items: readonly WorkItemBrief[],
+  links: readonly WaitingLink[],
+  items: readonly WaitingItem[],
 ): Map<string, string> {
   const byId = new Map(items.map((item) => [item.work_item_id, item]))
   const waiting = new Map<string, string>()

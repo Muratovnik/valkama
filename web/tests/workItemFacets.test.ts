@@ -11,6 +11,7 @@ import {
   facetMarks,
   leadMarks,
   printsFacet,
+  readinessMarks,
   readinessOf,
   surfaceMarks,
 } from '@/entities/work-item/utils/facets.ts'
@@ -195,6 +196,22 @@ describe('readiness', () => {
     assert.deepEqual(facetMarks('readiness', 'card', workable), [])
     assert.deepEqual(facetMarks('readiness', 'card', waiting, blocker), [])
     assert.equal(printsFacet('readiness', 'finder', waiting, blocker), false)
+  })
+
+  test('a chain member prints only the exception: what it waits on, and nothing when workable', () => {
+    assert.deepEqual(readinessMarks(workable, 'chain', {}), [])
+    const mark = only(readinessMarks(waiting, 'chain', blocker))
+    assert.equal(mark.value, 'waiting')
+    assert.deepEqual(mark.text, { key: 'workItem.facet.waiting', params: { reference: 'MAIN-7' } })
+    assert.equal(semanticStatePresentation(mark.tone).tone, 'danger')
+    // Finished work says nothing about readiness, whatever blocks it.
+    assert.deepEqual(readinessMarks(item({}, 'done'), 'chain', blocker), [])
+  })
+
+  test('a chain member prints no other facet, so its row has no state word or priority', () => {
+    for (const facet of ['kind', 'priority', 'state', 'labels', 'holder', 'steps'] as const) {
+      assert.equal(printsFacet(facet, 'chain', waiting, blocker), false, facet)
+    }
   })
 })
 

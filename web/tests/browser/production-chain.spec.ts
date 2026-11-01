@@ -66,20 +66,20 @@ for (const width of [1440, 390]) {
       'Last 7 days: +53 added, −42 done. New work arrives faster than it closes: to converge, more than 7.6 a day must close',
     )
     await expect(section.getByRole('img')).toHaveAttribute('aria-label', /616 now/u)
-    // The workable mark repeats down whole groups, so it takes the holder's
-    // quiet tone rather than competing with the titles.
+    // Workable is the norm of its group, so no row prints it. A member that
+    // waits on an open blocker names what it waits on, in the danger tone.
+    await expect(section.getByText('Workable', { exact: true })).toHaveCount(0)
+    await expect(section.locator('.chain-row-waiting').first()).toContainText('Waiting on')
     const tone = (selector: string) =>
       section
         .locator(selector)
         .first()
         .evaluate((node) => getComputedStyle(node).color)
-    expect(await tone('.chain-row-ready')).toBe(await tone('.chain-row-detail'))
-    expect(await tone('.chain-row-ready')).not.toBe(await tone('.chain-row-title'))
+    expect(await tone('.chain-row-waiting')).not.toBe(await tone('.chain-row-title'))
     // At a phone's width a row gives the holder's room to the title; the
-    // state word and the workable mark stay.
+    // state word and the waiting mark stay.
     const holder = section.locator('.chain-row-holder').first()
     await expect(holder).toBeVisible({ visible: width >= 480 })
-    await expect(section.locator('.chain-row-ready').first()).toBeVisible()
     await section.screenshot(shot(info, `chain-card-${width}.png`))
     await section.getByRole('button', { name: 'Show all · 107' }).click()
     await section.getByRole('button', { name: 'Done · 483' }).click()

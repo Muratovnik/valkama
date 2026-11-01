@@ -21,6 +21,9 @@ import { rowStateName } from '@/widgets/work-item-inspector/utils/chainSummary.t
 import type { ChainGroups, GroupLabels } from '@/widgets/work-item-inspector/utils/chainSummary.ts'
 import type { MembersView } from '@/widgets/work-item-inspector/utils/inspectorReturn.ts'
 
+import { readinessMarks } from '@/entities/work-item/utils/facets.ts'
+import type { FacetMark } from '@/entities/work-item/utils/facets.ts'
+
 import type { ChainMember } from '@/shared/api/planningChainApi.ts'
 import { CHAIN_GROUPS } from '@/shared/api/planningChainGroups.ts'
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
@@ -33,6 +36,8 @@ const props = defineProps<{
   groups: ChainGroups
   /** The section's word for each group, read off the whole chain. */
   labels: GroupLabels
+  /** The open blocker each member waits on, by the member's id. */
+  waiting: ReadonlyMap<string, string>
 }>()
 const emit = defineEmits<{ open: [reference: string] }>()
 const { t } = useI18n()
@@ -145,6 +150,17 @@ function holder(group: ChainGroup, member: ChainMember): string | null {
 function stateWord(group: ChainGroup, member: ChainMember): string | null {
   return holder(group, member) ? null : rowStateName(props.labels[group], member)
 }
+/** The readiness mark a member prints: the registry's rule, given what the member waits on. */
+function readinessFor(member: ChainMember): FacetMark[] {
+  return readinessMarks(member, 'chain', {
+    waitingOn: props.waiting.get(member.work_item_id) ?? null,
+  })
+}
+
+/** A mark's word, as the registry says it: a literal, or a message with its parameters. */
+function markWord(mark: FacetMark): string {
+  return 'literal' in mark.text ? mark.text.literal : t(mark.text.key, mark.text.params ?? {})
+}
 defineExpose({ restoreView, reveal, view })
 </script>
 
@@ -208,11 +224,14 @@ defineExpose({ restoreView, reveal, view })
                 :title="member.title"
                 >{{ member.title }}</span
               >
-              <span
-                v-if="member.ready"
-                class="chain-row-ready"
-                >{{ t('workItem.facet.ready') }}</span
-              >
+              <SemanticState
+                v-for="mark in readinessFor(member)"
+                :key="mark.facet"
+                class="chain-row-waiting"
+                variant="inline"
+                v-bind="mark.tone"
+                :label="markWord(mark)"
+              />
               <span
                 v-if="holder(group, member)"
                 class="chain-row-detail chain-row-holder"
@@ -315,12 +334,10 @@ defineExpose({ restoreView, reveal, view })
   text-overflow: ellipsis;
 }
 
-/* Most open rows are workable, so the word repeats down a whole group: in the
-   holder's quiet tone it is there for a reader who looks, and leaves the
-   titles to be read first. */
-.chain-row-ready {
+/* Workable is the norm of its group, so a row prints nothing for it; a member
+   that waits on an open blocker says what it waits on. */
+.chain-row-waiting {
   grid-column: 3;
-  color: var(--color-text-tertiary);
   font: var(--font-detail);
   white-space: nowrap;
 }

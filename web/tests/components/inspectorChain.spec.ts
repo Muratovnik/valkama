@@ -140,7 +140,8 @@ describe('the chain section of a card', () => {
     expect(chain.findAll('.chain-row.is-done')).toHaveLength(0)
     // The holder, not the state, names who has the work in progress.
     expect(chain.findAll('.chain-row')[0].text()).toContain('codex')
-    expect(chain.findAll('.chain-row-ready').length).toBeGreaterThan(0)
+    // Workable is the norm of an open group, so no row prints it.
+    expect(chain.text()).not.toContain('Workable')
   })
 
   it('calls each group one thing in the legend, the totals line and the headings', async () => {
