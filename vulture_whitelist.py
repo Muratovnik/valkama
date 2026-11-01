@@ -16,6 +16,8 @@ _.do_POST  # unused method (server\http_surface.py)
 _.do_PUT  # unused method (server\http_surface.py)
 _.do_OPTIONS  # unused method (server\http_surface.py)
 _.close_connection  # unused attribute (server\http_surface.py)
+# socketserver reads this class attribute in `server_bind` to decide SO_REUSEADDR.
+_.allow_reuse_address  # unused variable (server\http_surface.py)
 _.row_factory  # unused attribute (server\projects\scopes.py)
 _.row_factory  # unused attribute (server\store.py)
 
