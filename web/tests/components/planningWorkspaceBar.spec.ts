@@ -107,6 +107,8 @@ describe('the work bar', () => {
     const wrapper = bar({ filter: { text: 'x', labels: ['ui'] }, filtered: true })
     await wrapper.get('.workspace-figures button').trigger('click')
     expect(wrapper.emitted<[WorkFilter]>('update:filter')?.at(-1)?.[0]).toEqual(EMPTY_WORK_FILTER)
+    // The button went with the filter; the caret is in the field, not on the page.
+    expect(document.activeElement).toBe(wrapper.get('input').element)
   })
 
   it('shows each picked facet as a chip that takes itself out', async () => {

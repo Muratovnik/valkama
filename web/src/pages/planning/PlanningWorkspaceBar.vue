@@ -113,6 +113,11 @@ const field = useTemplateRef<{ focus: () => void }>('field')
 function focusField() {
   field.value?.focus()
 }
+/** Reset takes the button that did it away, so the caret goes to the field. */
+function reset() {
+  filter.value = EMPTY_WORK_FILTER
+  focusField()
+}
 const chips = useTemplateRef<{ focusLast: () => boolean }>('chips')
 function focusChips() {
   chips.value?.focusLast()
@@ -218,7 +223,7 @@ const exclusionText = computed(() => {
           <VButton
             size="inline"
             variant="ghost"
-            @click="filter = EMPTY_WORK_FILTER"
+            @click="reset"
             >{{ t('workItem.filter.reset') }}</VButton
           ></template
         >
