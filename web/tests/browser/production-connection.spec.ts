@@ -40,7 +40,11 @@ for (const viewport of [
       await expect(rail).toHaveAttribute('data-tone', 'success')
       const stage = page.locator('.workspace-stage')
       const drawn = page.locator(view === 'kanban' ? '.work-item-column' : '.vue-flow').first()
-      await expect(drawn).toBeVisible()
+      // The graph's bar gains its options button once the field is laid out, 4px at a
+      // phone width: the place to hold is the one the field has from then on.
+      await expect(
+        page.locator(view === 'kanban' ? '.work-item-column' : '.graph-canvas.settled').first(),
+      ).toBeVisible()
       const place = async () => {
         const [stageBox, drawnBox] = await Promise.all([stage.boundingBox(), drawn.boundingBox()])
         return { stage: stageBox?.y, drawn: drawnBox?.y }
