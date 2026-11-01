@@ -766,12 +766,14 @@ labels on a narrow one: «Взять», «Отпустить» on this client's 
 себе» on another's; where the facts argue against taking it the reason stands
 there instead — «Ждёт MAIN-12» while an open blocker remains, «Эпик — возьмите
 задачу из него» on an epic. Labels follow as chips that add themselves to the
-filter, then the tabs. Reading down the body condenses the head to the title's
-one line and the tabs on one row that scrolls, the one shown and the one
+filter, then the tabs. The first scroll of the body condenses the head to the
+title's one line and the tabs on one row that scrolls, the one shown and the one
 focused brought into it; the action ends the title's row on a wide drawer and
 the tabs' row on a narrow one, where Back and Close hold the title's. The facts
 and labels go with the body, and so does a reason standing where the action
-would; a takeover question takes the row under the title while it is asked.
+would; a takeover question takes the row under the title while it is asked. The text
+keeps the place it had, so the first scroll leaves a band of blank body under the
+condensed head until the reader has scrolled past the room the head gave up.
 Pinned no taller than the title and tabs of 2.1.0, it says which item this is
 and keeps the action and every section in reach: keeping the facts, a
 full-width action and two rows of tabs, it held 279px of a phone. The body
