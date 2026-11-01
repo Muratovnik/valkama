@@ -1,4 +1,5 @@
-import { onBeforeUnmount, ref, shallowRef } from 'vue'
+import { onBeforeUnmount, ref, shallowRef, toValue, watch } from 'vue'
+import type { MaybeRefOrGetter } from 'vue'
 
 import { fetchWorkItemChain } from '@/shared/api/planningChainApi.ts'
 import type { ChainScope, WorkItemChain } from '@/shared/api/planningChainApi.ts'
@@ -11,8 +12,16 @@ import type { ChainScope, WorkItemChain } from '@/shared/api/planningChainApi.ts
  * A refresh keeps the last answer on screen while it runs: the section is a
  * summary a reader is in the middle of, and blanking it on every live update of
  * the space would make it flicker.
+ *
+ * The chain is keyed by the item's own id, which only the loaded record carries,
+ * so `root` is empty until the card has its item, and stays empty for an item
+ * of an attached store, whose chain the endpoint cannot read. It is read once
+ * per root and once per `refresh` change, never twice for one answer.
  */
-export function useWorkItemChain() {
+export function useWorkItemChain(
+  root: MaybeRefOrGetter<string>,
+  refresh: MaybeRefOrGetter<number>,
+) {
   const chain = shallowRef<WorkItemChain | null>(null)
   const scope = ref<ChainScope>('chain')
   const loading = ref(false)
@@ -58,6 +67,12 @@ export function useWorkItemChain() {
     scope.value = next
     void load()
   }
+
+  watch(
+    () => `${toValue(root)}:${toValue(refresh)}`,
+    () => void load(toValue(root)),
+    { immediate: true },
+  )
 
   onBeforeUnmount(cancel)
   return { chain, failed, load, loading, scope, setScope }

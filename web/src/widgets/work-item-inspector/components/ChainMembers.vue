@@ -19,6 +19,7 @@ import { useI18n } from 'vue-i18n'
 
 import { rowStateName } from '@/widgets/work-item-inspector/utils/chainSummary.ts'
 import type { ChainGroups, GroupLabels } from '@/widgets/work-item-inspector/utils/chainSummary.ts'
+import type { MembersView } from '@/widgets/work-item-inspector/utils/inspectorReturn.ts'
 
 import type { ChainMember } from '@/shared/api/planningChainApi.ts'
 import { CHAIN_GROUPS } from '@/shared/api/planningChainGroups.ts'
@@ -86,6 +87,35 @@ async function toggle(group: ChainGroup) {
   target?.scrollIntoView({ block: 'nearest' })
 }
 
+/** Which groups are open, so a card left for another can be read again the same way. */
+function view(): MembersView {
+  return {
+    doneOpen: doneOpen.value,
+    expanded: CHAIN_GROUPS.filter((group) => expanded[group]),
+  }
+}
+
+function restoreView(next: MembersView) {
+  doneOpen.value = next.doneOpen
+  for (const group of next.expanded) expanded[group] = true
+}
+
+/**
+ * The row of one member, shown even where it sat past a group's first rows or
+ * under the folded Done, or null when the list does not hold it.
+ */
+async function reveal(reference: string): Promise<HTMLElement | null> {
+  const group = CHAIN_GROUPS.find((key) =>
+    props.groups[key].some((member) => member.reference === reference),
+  )
+  if (group === undefined) return null
+  if (isDone(group)) doneOpen.value = true
+  if (props.groups[group].findIndex((member) => member.reference === reference) >= LIMIT)
+    expanded[group] = true
+  await nextTick()
+  return within(group)?.querySelector<HTMLElement>(`[data-reference="${reference}"]`) ?? null
+}
+
 /** The heading a group stands under: its name and how many it holds. */
 function groupHeading(group: ChainGroup): string {
   return t('workItem.chain.groupCount', {
@@ -115,6 +145,7 @@ function holder(group: ChainGroup, member: ChainMember): string | null {
 function stateWord(group: ChainGroup, member: ChainMember): string | null {
   return holder(group, member) ? null : rowStateName(props.labels[group], member)
 }
+defineExpose({ restoreView, reveal, view })
 </script>
 
 <template>
@@ -167,6 +198,7 @@ function stateWord(group: ChainGroup, member: ChainMember): string | null {
             <button
               class="chain-row"
               type="button"
+              :data-reference="member.reference"
               :class="{ 'is-done': isDone(group) }"
               @click="emit('open', member.reference)"
             >

@@ -12,6 +12,7 @@ import type { VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, vi } from 'vitest'
 
 import WorkItemInspector from '@/widgets/work-item-inspector/components/WorkItemInspector.vue'
+import type { InspectorReturn } from '@/widgets/work-item-inspector/utils/inspectorReturn.ts'
 
 import { fetchExecutionHistory } from '@/shared/api/executionApi.ts'
 import { fetchWorkItem } from '@/shared/api/planningApi.ts'
@@ -73,10 +74,17 @@ export const drawerFrameStub = {
   emits: ['close'],
   template:
     '<div><slot name="controls" /><slot name="meta" /><slot name="actions" /><slot name="tabs" /><slot /></div>',
-  methods: { scrollToTop() {} },
+  methods: {
+    position: () => ({ condensed: false, top: 0 }),
+    restore: async () => {},
+    scrollToTop() {},
+  },
 }
 
-export function mountInspector(item: WorkItem, overrides: { writable?: boolean } = {}) {
+export function mountInspector(
+  item: WorkItem,
+  overrides: { returnTo?: InspectorReturn; writable?: boolean } = {},
+) {
   vi.mocked(fetchWorkItem).mockResolvedValue(item)
   return mount(WorkItemInspector, {
     attachTo: document.body,

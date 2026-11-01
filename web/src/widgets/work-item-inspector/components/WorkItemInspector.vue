@@ -17,8 +17,13 @@
  * down the write was made, and overriding is a second, explicit answer rather
  * than a default. Who holds the item is said once, beside its claim in the
  * overview, not again in the head.
+ *
+ * A reference the service says names nothing is not a failure: there is nothing
+ * to retry and no section to open. The card says so once, under a title that
+ * already is the reference, with no reference line, no tabs and no writes, and
+ * Close is the way on.
  */
-import { computed, ref, watch } from 'vue'
+import { computed, ref, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import InspectorActivity from '@/widgets/work-item-inspector/components/InspectorActivity.vue'
@@ -29,8 +34,12 @@ import InspectorOverview from '@/widgets/work-item-inspector/components/Inspecto
 import InspectorRefusal from '@/widgets/work-item-inspector/components/InspectorRefusal.vue'
 import InspectorRelations from '@/widgets/work-item-inspector/components/InspectorRelations.vue'
 import InspectorWriteActions from '@/widgets/work-item-inspector/components/InspectorWriteActions.vue'
+import type { InspectorReturn } from '@/widgets/work-item-inspector/utils/inspectorReturn.ts'
+import { inspectorTarget } from '@/widgets/work-item-inspector/utils/inspectorTarget.ts'
 import { titleRuns } from '@/widgets/work-item-inspector/utils/titleRuns.ts'
 import { provideDraftGuard } from '@/widgets/work-item-inspector/utils/useDraftGuard.ts'
+import { useInspectorReturn } from '@/widgets/work-item-inspector/utils/useInspectorReturn.ts'
+import { useInspectorSections } from '@/widgets/work-item-inspector/utils/useInspectorSections.ts'
 import { useInspectorWrites } from '@/widgets/work-item-inspector/utils/useInspectorWrites.ts'
 import { useWorkItemChain } from '@/widgets/work-item-inspector/utils/useWorkItemChain.ts'
 import { useWorkItemExecutions } from '@/widgets/work-item-inspector/utils/useWorkItemExecutions.ts'
@@ -40,14 +49,11 @@ import LaunchDialog from '@/features/work-item-launch/LaunchDialog.vue'
 
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import type { PlanningWorkflow } from '@/shared/api/planningModel.ts'
-import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
-import { planningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import { failureMessage, typedFailure } from '@/shared/api/typedFailure.ts'
 import type { TypedFailure } from '@/shared/api/typedFailure.ts'
 import { INSPECTOR_DRAWER_STORAGE_KEY } from '@/shared/lib/shellLayout.ts'
 import type { LaunchPacket } from '@/shared/types/launch.ts'
 import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
-import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import ConfirmStrip from '@/shared/ui/ConfirmStrip.vue'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import DrawerFrame from '@/shared/ui/DrawerFrame.vue'
@@ -67,6 +73,8 @@ const props = defineProps<{
   resourceRef: PlanningSpaceEntityRef
   workflow: PlanningWorkflow | null
   writable: boolean
+  /** Where this card was left, when Back is what opened it again. */
+  returnTo?: InspectorReturn | null
 }>()
 
 const emit = defineEmits<{
@@ -74,17 +82,19 @@ const emit = defineEmits<{
   chain: [chain: WorkItemChain]
   changed: []
   close: []
-  open: [reference: string]
+  /** Another card opened from this one, and where this one was left. */
+  open: [reference: string, from: InspectorReturn]
   session: [sessionId: string, clientFamily: string]
 }>()
 
 const { t } = useI18n()
 
-type Section = 'activity' | 'execution' | 'memory' | 'overview' | 'relations'
-
 const busy = ref(false)
-const section = ref<Section>('overview')
 const frame = ref<InstanceType<typeof DrawerFrame> | null>(null)
+const { leaveUnreadable, section, sections, shownSection } = useInspectorSections(
+  () => props.writable,
+  () => frame.value?.scrollToTop(),
+)
 const overview = ref<InstanceType<typeof InspectorOverview> | null>(null)
 const { asking, discard, keep: keepEditing, leave, unsaved } = provideDraftGuard()
 
@@ -149,12 +159,18 @@ const {
   executions,
   launchError,
   launchOpen,
-  load: loadExecutions,
   loading: executionsLoading,
   openLaunch,
   start: startLaunch,
   stop: stopExecution,
-} = useWorkItemExecutions(() => props.reference, busy, reloaded)
+  // Read for an item the read found, again on every refresh. Execution endpoints
+  // name primary-store items by reference only, so an attached one asks nothing.
+} = useWorkItemExecutions(
+  () => props.reference,
+  busy,
+  reloaded,
+  () => (props.writable && item.value ? `${item.value.work_item_id}:${props.refreshToken}` : ''),
+)
 
 /** The refusal is worded here, where the catalog is, not inside the composable. */
 function submitLaunch(packet: LaunchPacket) {
@@ -172,19 +188,7 @@ watch(
   ],
   () => {
     void load()
-    if (!props.writable && section.value === 'execution') section.value = 'overview'
-  },
-  { immediate: true },
-)
-
-// The attempts are read for an item the read found, never for a reference that
-// names nothing: a stale link used to ask the execution module about a record
-// that does not exist, twice. Execution endpoints name primary-store items by
-// reference only, so an attached store's item asks nothing either.
-watch(
-  () => (props.writable && item.value ? `${item.value.work_item_id}:${props.refreshToken}` : ''),
-  (key) => {
-    if (key) void loadExecutions()
+    leaveUnreadable()
   },
   { immediate: true },
 )
@@ -193,51 +197,33 @@ watch(
 // and re-read whenever the inspector itself refreshes: once per open, once per
 // refresh, never twice for one answer. Like executions, the chain endpoint reads
 // the primary store only, so an attached store's item asks it nothing.
-const chain = useWorkItemChain()
 const chainRoot = computed(() => (props.writable ? (item.value?.work_item_id ?? '') : ''))
-watch(
-  () => `${chainRoot.value}:${props.refreshToken}`,
-  () => void chain.load(chainRoot.value),
-  { immediate: true },
-)
+const chain = useWorkItemChain(chainRoot, toRef(props, 'refreshToken'))
 const retryChain = () => void chain.load()
 
-// Every tab starts at its own top. The body is one scroller, so a tab opened
-// after reading far down another used to open at that same depth.
-watch(section, () => frame.value?.scrollToTop())
+const chainSection = ref<InstanceType<typeof InspectorChain> | null>(null)
+const { capture } = useInspectorReturn({
+  chain: chainSection,
+  frame,
+  returnTo: props.returnTo ?? null,
+  reference: () => props.reference,
+  scope: chain.scope,
+  section: shownSection,
+  settled: () =>
+    item.value !== null &&
+    !chain.loading.value &&
+    (chainRoot.value === '' || chain.chain.value !== null || chain.failed.value),
+})
 
-const sections = computed<ChoiceOption[]>(() => [
-  { value: 'overview' as const, label: t('workItem.overview') },
-  ...(props.writable
-    ? [{ value: 'execution' as const, label: t('workItem.section.execution') }]
-    : []),
-  { value: 'memory' as const, label: t('workItem.section.memory') },
-  { value: 'relations' as const, label: t('workItem.relations') },
-  { value: 'activity' as const, label: t('workItem.activity') },
-])
+/** Open another card from this one, after the draft guard, saying where this one was left. */
+const openFrom = (reference: string) =>
+  void leave(() => emit('open', reference, capture(reference)))
 
 const title = computed(() => item.value?.title || props.reference)
 const titleText = computed(() => titleRuns(title.value))
-const target = computed<PlanningTarget | undefined>(() => {
-  const space = planningSpaceRef(props.resourceRef)
-  return props.projectId && space
-    ? {
-        project_id: props.projectId,
-        space_ref: space,
-        reference: props.reference,
-        writable: props.writable,
-      }
-    : undefined
-})
+const target = computed(() => inspectorTarget(props))
 /** The head holds what has to be answered or read before going on, and only while it does. */
 const headSlot = computed(() => Boolean(notice.value || writeError.value) || asking.value)
-
-const shownSection = computed({
-  get: () => section.value,
-  set: (value: string) => {
-    section.value = value as Section
-  },
-})
 
 /** The next step a guard asks for, taken where the inspector can take it. */
 function followGuard(guard: string) {
@@ -314,8 +300,6 @@ const close = () => void leave(() => emit('close'))
         </VButton>
       </template>
 
-      <!-- A missing record has no name of its own: the title already is its
-           reference, and saying it a second time under itself says nothing. -->
       <template
         v-if="!missing"
         #meta
@@ -390,8 +374,6 @@ const close = () => void leave(() => emit('close'))
         :key="reference"
         class="inspector"
       >
-        <!-- Not a failure: the address names nothing, so there is nothing to
-             retry and no section to open, and Close is the way on. -->
         <DataEmptyState
           v-if="missing"
           :title="t('platform.failures.notFound')"
@@ -427,6 +409,7 @@ const close = () => void leave(() => emit('close'))
             >
               <template #composition>
                 <InspectorChain
+                  ref="chainSection"
                   :chain="chain.chain.value"
                   :container="payload.container"
                   :failed="chain.failed.value"
@@ -436,7 +419,7 @@ const close = () => void leave(() => emit('close'))
                   @scope="chain.setScope"
                   @retry="retryChain"
                   @graph="(shown) => emit('chain', shown)"
-                  @open="(target) => void leave(() => emit('open', target))"
+                  @open="openFrom"
                 />
               </template>
             </InspectorOverview>
@@ -446,7 +429,7 @@ const close = () => void leave(() => emit('close'))
               :writable="writable && !busy"
               @changed="reloaded"
               @session="(id, family) => emit('session', id, family)"
-              @open="(target) => void leave(() => emit('open', target))"
+              @open="openFrom"
             />
             <InspectorExecution
               v-else-if="section === 'execution'"

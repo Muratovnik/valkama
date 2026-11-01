@@ -44,7 +44,11 @@ const drawerFrame = {
   // The frame's head and body, as the real one lays them out.
   template:
     '<div><header class="drawer-frame-head"><slot name="title" /><slot name="controls" /><slot name="meta" /><slot name="actions" /><slot name="tabs" /></header><slot /></div>',
-  methods: { scrollToTop() {} },
+  methods: {
+    position: () => ({ condensed: false, top: 0 }),
+    restore: async () => {},
+    scrollToTop() {},
+  },
 }
 const overview = {
   props: ['item', 'resourceRef'],

@@ -1,6 +1,7 @@
 /**
  * A card's chain members walked from the keyboard in the built application: a
- * long group opened and closed again without focus falling out of the drawer.
+ * long group opened and closed again without focus falling out of the drawer, and
+ * a member opened and left by Back, which brings the reader to the same place.
  */
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -60,5 +61,36 @@ for (const width of [1440, 390]) {
     await expect(group.locator('.chain-row')).toHaveCount(8)
     await expect(toggle).toHaveAttribute('aria-expanded', 'false')
     expect(await focusOnPage(page)).toBe(false)
+  })
+
+  test(`Back reopens the parent where it was read, focus on the member it opened, at ${width}px`, async ({
+    page,
+  }) => {
+    const section = await openChain(page, width)
+    const drawer = page.locator('.drawer')
+    const body = drawer.locator('.drawer-frame-body')
+    const group = section.locator('section.chain-group[aria-label="Backlog"]')
+    await group.locator('.chain-more').click()
+    const row = group.locator('.chain-row').nth(20)
+    const reference = (await row.getAttribute('data-reference')) ?? ''
+    await row.evaluate((element) => element.scrollIntoView({ block: 'center' }))
+    const before = await body.evaluate((element) => element.scrollTop)
+    const rowTop = () =>
+      drawer
+        .locator(`.chain-row[data-reference="${reference}"]`)
+        .evaluate((element) => element.getBoundingClientRect().top)
+    const topBefore = await rowTop()
+    expect(before).toBeGreaterThan(300)
+
+    await row.focus()
+    await page.keyboard.press('Enter')
+    await expect(drawer.locator('.head-back')).toBeVisible()
+    await drawer.locator('.head-back').click()
+
+    // The parent is read again from the same depth, with the member's row under focus.
+    const back = drawer.locator(`.chain-row[data-reference="${reference}"]`)
+    await expect(back).toBeFocused()
+    expect(Math.abs((await body.evaluate((element) => element.scrollTop)) - before)).toBeLessThan(2)
+    expect(Math.abs((await rowTop()) - topBefore)).toBeLessThan(2)
   })
 }

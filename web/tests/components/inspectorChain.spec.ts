@@ -315,7 +315,10 @@ describe('the chain section of a card', () => {
     await getButton(wrapper, 'MAIN-779').trigger('click')
     await getButton(wrapper, 'Open MAIN-779').trigger('click')
     await flushPromises()
-    expect(wrapper.emitted('open')).toEqual([[reference], ['MAIN-779']])
+    expect(wrapper.emitted('open')).toEqual([
+      [reference, expect.objectContaining({ opened: reference, reference: ROOT.reference })],
+      ['MAIN-779', expect.objectContaining({ opened: 'MAIN-779', section: 'overview' })],
+    ])
   })
 
   it('narrows the member list to the lane chosen on the map, and widens it back', async () => {

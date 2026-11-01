@@ -49,7 +49,28 @@ function scrollToTop() {
   body.value?.scrollTo({ top: 0 })
 }
 
-defineExpose({ scrollToTop })
+/** Where the body is read to, for a host that will bring the reader back to it. */
+interface DrawerPosition {
+  condensed: boolean
+  top: number
+}
+
+function position(): DrawerPosition {
+  return { condensed: condensed.value, top: body.value?.scrollTop ?? 0 }
+}
+
+/**
+ * Back to a position read earlier, head and all. The head is condensed first,
+ * so the scroll that follows does not condense it again and subtract the
+ * height it gave up from a position that was taken with it already given up.
+ */
+async function restore(at: DrawerPosition) {
+  condensed.value = at.condensed
+  await nextTick()
+  if (body.value) body.value.scrollTop = at.top
+}
+
+defineExpose({ position, restore, scrollToTop })
 </script>
 
 <template>

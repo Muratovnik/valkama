@@ -16,6 +16,8 @@
  * identity and the route carries it.
  *
  * The local trail holds navigation depth; the route holds the item's identity.
+ * Each step of the trail also holds where its card was left, which the card
+ * hands over as it opens another, so Back reopens it there and not at its top.
  * The route also holds how the space is looked at: the view, the chain every
  * view is narrowed to, and whether the board is grouped by epic.
  */
@@ -33,6 +35,7 @@ import type { PlanningViewMode } from '@/pages/planning/PlanningWorkspace.vue'
 import { graphView } from '@/pages/planning/utils/graphView.ts'
 
 import WorkItemInspector from '@/widgets/work-item-inspector/components/WorkItemInspector.vue'
+import type { InspectorReturn } from '@/widgets/work-item-inspector/utils/inspectorReturn.ts'
 
 import WorkItemComposer from '@/features/work-item-compose/WorkItemComposer.vue'
 
@@ -185,7 +188,9 @@ const openIdentity = computed(() => {
     ? ''
     : `${projectId.value}:${space.data_scope_id}:${space.space_key}:${reference}`
 })
-const trail = ref<string[]>([])
+const trail = ref<{ left: InspectorReturn | null; reference: string }[]>([])
+/** Where the card Back is reopening was left; read by that card alone. */
+const returning = ref<InspectorReturn | null>(null)
 const composerOpen = ref(false)
 
 const planningKey = computed(() =>
@@ -306,6 +311,7 @@ watch(
   readKey,
   () => {
     trail.value = []
+    returning.value = null
     composerOpen.value = false
     invalidatePortfolio()
     void loadPlanning()
@@ -335,14 +341,16 @@ function show(reference: string | null) {
   )
 }
 
-function openItem(reference: string, related = false) {
+function openItem(reference: string, related = false, left: InspectorReturn | null = null) {
+  returning.value = null
   if (related && open.value !== null && open.value !== reference)
-    trail.value = [...trail.value, open.value]
+    trail.value = [...trail.value, { reference: open.value, left }]
   show(reference)
 }
 
 function closeItem() {
   trail.value = []
+  returning.value = null
   show(null)
 }
 
@@ -350,7 +358,8 @@ function goBack() {
   const previous = trail.value.at(-1)
   if (previous === undefined) return
   trail.value = trail.value.slice(0, -1)
-  show(previous)
+  returning.value = previous.left
+  show(previous.reference)
 }
 
 /** Another view of the same field: a chain the route names narrows that one too. */
@@ -440,6 +449,7 @@ defineExpose({ refresh })
       :resource-ref="boundSpaceResourceRef"
       :project-id="inspectorProjectId"
       :can-go-back="canGoBack"
+      :return-to="returning"
       :refresh-token="version"
       :workflow="model.workflow"
       :writable="writable"
@@ -447,7 +457,7 @@ defineExpose({ refresh })
       @changed="loadPlanning"
       @chain="showChain"
       @close="closeItem"
-      @open="(reference) => openItem(reference, true)"
+      @open="(reference, left) => openItem(reference, true, left)"
       @session="(id, family) => emit('open-session', id, family)"
     />
   </div>

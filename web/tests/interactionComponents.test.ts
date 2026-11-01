@@ -109,7 +109,7 @@ test('GraphView delegates camera behavior to Vue Flow and keeps graph nodes non-
 
 test('the inspector exposes its emits, related navigation, and shared focus ownership', () => {
   assert.match(drawer, /'?close'?: \[\]/)
-  assert.match(drawer, /'?open'?: \[reference: string\]/)
+  assert.match(drawer, /'?open'?: \[reference: string, from: InspectorReturn\]/)
   assert.match(drawer, /'?changed'?: \[\]/)
   assert.match(drawer, /emit\('open'/)
   assert.match(drawer, /<ResizableInspector/)

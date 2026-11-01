@@ -221,11 +221,27 @@ describe('planning write ownership', () => {
     const firstInspector = inspector().vm
 
     // A related item, opened from inside the inspector, stacks on the first one.
-    inspector().vm.$emit('open', 'MAIN-265')
+    // The card says where it was left, and the page keeps that with the step.
+    const left = {
+      chain: null,
+      opened: 'MAIN-265',
+      reference: 'MAIN-264',
+      scroll: { condensed: true, top: 640 },
+      section: 'overview',
+    }
+    inspector().vm.$emit('open', 'MAIN-265', left)
     await follow()
     expect(inspector().props('reference')).toBe('MAIN-265')
     expect(inspector().props('canGoBack')).toBe(true)
+    expect(inspector().props('returnTo')).toBeNull()
     expect(inspector().vm).not.toBe(firstInspector)
+
+    // Back reopens the first card with where it was left, and only that card.
+    inspector().vm.$emit('back')
+    await follow()
+    expect(inspector().props('reference')).toBe('MAIN-264')
+    expect(inspector().props('canGoBack')).toBe(false)
+    expect(inspector().props('returnTo')).toEqual(left)
   })
 
   it('resets the inspector for an equally named item in another planning space', async () => {

@@ -123,7 +123,10 @@ describe('inspector drafts and the ways of leaving them', () => {
     await flushPromises()
     await getButton(wrapper, 'Discard').trigger('click')
     await flushPromises()
-    expect(wrapper.emitted('open')).toEqual([['QA-100']])
+    // The card it leaves goes with it, so Back can bring the reader to the same place.
+    expect(wrapper.emitted('open')).toEqual([
+      ['QA-100', expect.objectContaining({ opened: 'QA-100', section: 'relations' })],
+    ])
     wrapper.unmount()
   })
 

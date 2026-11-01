@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import type { Ref } from 'vue'
 
 import {
@@ -22,11 +22,18 @@ import type { LaunchPacket } from '@/shared/types/launch.ts'
  * `busy` is the inspector's, not this composable's. A launch and a transition
  * are both writes on the same item, and two independent busy flags would let an
  * operator start one while the other was still in flight.
+ *
+ * `readFor` says when to read: a key that changes for every answer worth a new
+ * read, and is empty while there is nothing to ask about. The card keys it on
+ * an item its read found, so a reference that names nothing is never asked
+ * about — a stale link used to send the execution module two requests for a
+ * record that does not exist.
  */
 export function useWorkItemExecutions(
   reference: () => string,
   busy: Ref<boolean>,
   onChanged: () => Promise<void>,
+  readFor: () => string,
 ) {
   const executions = ref<readonly Execution[]>([])
   const error = ref('')
@@ -101,13 +108,20 @@ export function useWorkItemExecutions(
     }
   }
 
+  watch(
+    readFor,
+    (key) => {
+      if (key) void load()
+    },
+    { immediate: true },
+  )
+
   return {
     capabilities,
     error,
     executions,
     launchError,
     launchOpen,
-    load,
     loading,
     openLaunch,
     start,

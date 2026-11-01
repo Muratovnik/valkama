@@ -21,6 +21,7 @@ import ChainBranchMap from '@/widgets/work-item-inspector/components/ChainBranch
 import ChainMembers from '@/widgets/work-item-inspector/components/ChainMembers.vue'
 import ChainScopeChart from '@/widgets/work-item-inspector/components/ChainScopeChart.vue'
 import { groupLabels, groupMembers } from '@/widgets/work-item-inspector/utils/chainSummary.ts'
+import type { ChainView } from '@/widgets/work-item-inspector/utils/inspectorReturn.ts'
 import { useChainForecast } from '@/widgets/work-item-inspector/utils/useChainForecast.ts'
 
 import type { ChainScope, WorkItemChain } from '@/shared/api/planningChainApi.ts'
@@ -156,10 +157,33 @@ const summary = computed(() => {
   return chain.ready ? `${line}; ${t('workItem.chain.workable', { count: chain.ready })}` : line
 })
 
+const members = ref<InstanceType<typeof ChainMembers> | null>(null)
+
+/** How this section is being read, apart from the scope, which the card holds. */
+function view(): Omit<ChainView, 'scope'> {
+  return {
+    lane: lane.value,
+    ...(members.value?.view() ?? { doneOpen: false, expanded: [] }),
+  }
+}
+
+/** Read the section the same way again: the lane chosen on the map, and the open groups. */
+async function restore(next: Omit<ChainView, 'scope'>) {
+  chosenLane.value = next.lane
+  await nextTick()
+  members.value?.restoreView(next)
+}
+
+/** The row of a member, shown, or null when the section does not list it. */
+async function reveal(reference: string) {
+  return (await members.value?.reveal(reference)) ?? null
+}
+
 const forecast = useChainForecast(() => props.chain)
 
 /** The chart is the whole chain's history; under a narrowed list it follows the list. */
 const charted = computed(() => (props.chain?.series.length ?? 0) > 1)
+defineExpose({ restore, reveal, view })
 </script>
 
 <template>
@@ -275,6 +299,7 @@ const charted = computed(() => (props.chain?.series.length ?? 0) > 1)
       </div>
 
       <ChainMembers
+        ref="members"
         :groups="listed"
         :labels="labels"
         @open="(reference) => emit('open', reference)"
