@@ -384,16 +384,16 @@ test('inspector textareas fit loaded and edited content and shrink after deletio
 test('inspector facts and section headings keep a shared spacing rhythm', async ({ page }) => {
   await page.goto('/tests/browser/harness.html?lang=en&surface=work-item')
   const drawer = page.locator('.drawer')
-  await expect(drawer.locator('.fact').first()).toBeVisible()
-  const labelGap = await drawer
-    .locator('.fact dt')
-    .first()
-    .evaluate((element) => {
-      const next = element.nextElementSibling
-      if (!next) throw new Error('Expected a value after the label')
-      return next.getBoundingClientRect().top - element.getBoundingClientRect().bottom
-    })
-  expect(labelGap).toBe(8)
+  // The facts are one line of marks, not a grid of labels over values: what
+  // shares the facts line's first row shares its centre, chip and words alike.
+  await expect(drawer.locator('.card-facts').first()).toBeVisible()
+  const firstRow = await drawer.locator('.card-facts > *').evaluateAll((elements) => {
+    const boxes = elements.map((element) => element.getBoundingClientRect())
+    const rowEnd = boxes[0].bottom
+    return boxes.filter((box) => box.top < rowEnd).map((box) => box.top + box.height / 2)
+  })
+  expect(firstRow.length).toBeGreaterThan(1)
+  expect(Math.max(...firstRow) - Math.min(...firstRow)).toBeLessThan(1)
   const gaps = await drawer.evaluate((element) =>
     [
       ['.description-heading h3', '.description-copy'],
@@ -411,8 +411,4 @@ test('inspector facts and section headings keep a shared spacing rhythm', async 
     const content = drawer.locator(selector).filter({ visible: true }).first()
     await expect(content).toHaveCSS('font-size', '15px')
   }
-  const labelHeights = await drawer
-    .locator('.fact dt')
-    .evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().height))
-  expect(Math.max(...labelHeights) - Math.min(...labelHeights)).toBeLessThan(1)
 })
