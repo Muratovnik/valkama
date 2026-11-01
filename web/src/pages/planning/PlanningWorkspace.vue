@@ -287,6 +287,7 @@ defineExpose({ toggleFilter })
         v-show="matchedItems.length || !filtered"
         :items="visibleItems"
         :links="model.links"
+        :filter="filter"
         @filter="toggleFilter"
         @open="(reference) => emit('open', reference)"
       />
@@ -308,7 +309,6 @@ defineExpose({ toggleFilter })
         :version="version"
         @exit-chain="emit('exit-chain')"
         @exit-branch="emit('exit-branch')"
-        @filter="toggleFilter"
         @open="(reference) => emit('open', reference)"
         @update:show-closed="(closed) => emit('chain-closed', closed)"
       />
