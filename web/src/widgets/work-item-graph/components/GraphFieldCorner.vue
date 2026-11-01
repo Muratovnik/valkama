@@ -1,12 +1,11 @@
 <script setup lang="ts">
 /**
- * What lies on the field's corner: the key, or in a phone-wide workspace the
- * frontier count.
+ * What stands in the strip above the field's flow: the key, or in a
+ * phone-wide workspace the frontier count.
  *
  * Narrow, the bar has no room for the count and opens the key under its
- * options button instead, so the count takes the key's corner and stays in
- * sight. Either way it stands in the strip above the flow, so no node is ever
- * drawn under it.
+ * options button instead, so the count takes the key's place and stays in
+ * sight. Either way it is off the flow, so no node is ever drawn under it.
  */
 import { useI18n } from 'vue-i18n'
 

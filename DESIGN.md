@@ -537,13 +537,13 @@ many it left out. A chain view's legend names only the states its drawing
 holds, on the map as on the graph, so no key — least of all the emphatic
 «Blocked» — stands for nothing. Chain views name a single state as the board's
 column does and a group of states by the group's own word, never by a
-workflow key. The graph's key lies on the field's corner, not in the bar above
-it, and keeps the place of a state a switch can add, so no switch moves the bar
-or the field. The key and the camera controls stand in the field's own strips
-above and below the flow, never on it, so no framing and no pan puts a node
-under either. In a phone-wide workspace the bar is one row — the filter or the
-chip and a «Graph options» button that opens the switch and the key under it —
-the frontier count takes the key's corner of the field, and the camera controls
+workflow key. The graph's key stands in the field's own strip above the flow,
+not in the bar, and keeps the place of a state a switch can add, so no switch
+moves the bar or the field; the camera controls stand in the strip below. Neither
+lies on the flow, so no framing and no pan puts a node under either. In a
+phone-wide workspace the bar is one row — the filter or the chip and a «Graph
+options» button that opens the switch and the key under it — the frontier count
+takes the key's place in the upper strip, and the camera controls
 keep one row, so the field keeps most of the screen and no camera control falls
 outside it. «Show on graph» from a card whose map has a branch chosen opens the
 chain framed on that branch — the whole of its work where that reads, else its

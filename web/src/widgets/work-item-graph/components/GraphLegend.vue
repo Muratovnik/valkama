@@ -3,12 +3,11 @@
  * The key to the field: which place in the chain each marker colour is, and
  * which line is a block and which only context.
  *
- * It lies on the field's corner rather than in the bar above it. In the bar it
- * shared one row with the chip, the switch and the frontier count, and at any
- * width under a wide monitor it wrapped — and wrapped again when the closed
+ * It stands in the field's strip above the flow rather than in the bar. In the
+ * bar it shared one row with the chip, the switch and the frontier count, and at
+ * any width under a wide monitor it wrapped — and wrapped again when the closed
  * members brought «Done» into it, pushing the whole field down under the
- * operator's pointer. It stands in the strip above the flow, so no node is
- * ever drawn under it.
+ * operator's pointer. Off the flow, no node is ever drawn under it.
  *
  * It names only what the field draws. «Done» is the one entry the closed switch
  * adds, so while the chain has closed members its place is kept, unseen, before
