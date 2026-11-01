@@ -66,11 +66,11 @@ test('a background refresh of the graph moves neither the field nor the camera',
 })
 
 /**
- * The camera is the operator's: a new queue narrows what is drawn and leaves
+ * The camera is the operator's: a new filter narrows what is drawn and leaves
  * the zoom the operator chose. It used to frame the field afresh, which threw
  * the zoom away on every narrowing.
  */
-test('a new queue keeps the zoom the operator chose', async ({ page }) => {
+test('a new filter keeps the zoom the operator chose', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await installBackend(page)
   await page.goto(
@@ -88,10 +88,13 @@ test('a new queue keeps the zoom the operator chose', async ({ page }) => {
   const chosen = await scale()
   expect(chosen).toBeDefined()
 
-  const queue = page.getByRole('group', { name: 'Work queue' })
-  for (const segment of [/^Blocked/u, /^All/u]) {
-    await queue.getByRole('button', { name: segment }).click()
-    await expect(page.locator('.graph')).not.toHaveAttribute('aria-busy', 'true')
-    await expect.poll(scale).toBe(chosen)
-  }
+  // A state picked from the filter's menu, then the filter reset.
+  await page.getByRole('button', { name: 'Filter', exact: true }).click()
+  await page.getByRole('option', { name: 'In progress' }).click()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.graph')).not.toHaveAttribute('aria-busy', 'true')
+  await expect.poll(scale).toBe(chosen)
+  await page.locator('.workspace-figures').getByRole('button', { name: 'Reset' }).click()
+  await expect(page.locator('.graph')).not.toHaveAttribute('aria-busy', 'true')
+  await expect.poll(scale).toBe(chosen)
 })

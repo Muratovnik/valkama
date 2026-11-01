@@ -70,14 +70,14 @@ function oneLine(boxes: { bottom: number; top: number }[]) {
   return Math.max(...boxes.map((box) => box.top)) < Math.min(...boxes.map((box) => box.bottom))
 }
 
-test('Russian Work bar keeps its controls on one row and folds the queue at narrow widths', async ({
+test('Russian Work bar keeps its controls on one row and folds the presets at narrow widths', async ({
   page,
 }) => {
   await installBackend(page)
   await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
   await expect(page.locator('.work-item-tile').first()).toBeVisible()
-  const queueSegments = page.getByRole('group', { name: 'Очередь работы' })
-  const queueMenu = page.getByRole('combobox', { name: 'Очередь работы' })
+  const presets = page.getByRole('group', { name: 'Быстрые фильтры' })
+  const trigger = page.getByRole('button', { name: 'Фильтр', exact: true })
 
   for (const [width, height] of [
     [1440, 900],
@@ -86,43 +86,27 @@ test('Russian Work bar keeps its controls on one row and folds the queue at narr
     await page.setViewportSize({ width, height })
     await expect(page.getByRole('switch', { name: 'Группировать доску по эпикам' })).toBeVisible()
     expect(oneLine(await toolBoxes(page)), `one row at ${width}px`).toBe(true)
-    // Two rows: the controls, then the counts beside «Новая работа».
+    // One row of controls, one line of state.
     const head = await page.locator('.workspace-head').boundingBox()
-    expect(head?.height ?? Infinity, `bar height at ${width}px`).toBeLessThanOrEqual(100)
+    expect(head?.height ?? Infinity, `bar height at ${width}px`).toBeLessThanOrEqual(84)
+    await expect(page.locator('.workspace-figures')).toContainText('открыт')
     await expectNoSilentClipping(page, `Russian Work bar at ${width}px`)
   }
   await page.setViewportSize({ width: 1440, height: 900 })
-  await expect(queueSegments).toBeVisible()
-  await expect(queueMenu).toBeHidden()
+  await expect(presets).toBeVisible()
   await page.setViewportSize({ width: 1024, height: 768 })
-  await expect(queueSegments).toBeHidden()
-  await expect(queueMenu).toHaveText('Вся работа')
+  // Where the row cannot hold them, the presets are the menu's first group.
+  await expect(presets).toBeHidden()
+  await trigger.click()
+  await expect(page.getByRole('group', { name: 'Быстрые фильтры' })).toBeVisible()
+  await page.getByRole('option', { name: 'В работе' }).click()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.workspace-chips .filter-chip')).toHaveText(['Состояние: В работе'])
 
   await page.setViewportSize({ width: 390, height: 844 })
-  await expect(queueMenu).toBeVisible()
-  // The counts share a row with «Новая работа» rather than pushing it below.
-  const status = await page
-    .locator('.workspace-figures, .workspace-action')
-    .evaluateAll((elements) =>
-      elements.map((element) => {
-        const box = element.getBoundingClientRect()
-        return { top: box.top, bottom: box.bottom }
-      }),
-    )
-  expect(status).toHaveLength(2)
-  expect(oneLine(status)).toBe(true)
   const stage = await page.locator('.workspace-stage').boundingBox()
   expect(844 - (stage?.y ?? 844), 'the work gets most of the window').toBeGreaterThan(844 / 2)
   await expectNoSilentClipping(page, 'Russian Work bar at 390px')
-
-  await queueMenu.click()
-  await page.getByRole('option', { name: 'Заблокировано' }).click()
-  await expect(queueMenu).toHaveText('Заблокировано')
-  await page.setViewportSize({ width: 1440, height: 900 })
-  await expect(queueSegments.getByRole('button', { name: 'Заблокировано' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  )
 })
 
 /**

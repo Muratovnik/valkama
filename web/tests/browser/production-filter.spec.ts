@@ -1,0 +1,164 @@
+/**
+ * The Work filter in the built application: one row of controls and a head no
+ * taller than 84px where the bar has room, a filter that survives a reload and
+ * Back because the address holds it, the same token whichever way it was made,
+ * and the keyboard of the bar — `/`, ↓, Enter, Escape one step at a time, ←
+ * to the chips and Backspace out of them.
+ */
+import { expect, test } from '@playwright/test'
+import type { Page } from '@playwright/test'
+
+import { parsePlatformRoute, serializePlatformRoute } from '@/shared/api/platformRoute.ts'
+
+import { installBackend } from './backend.ts'
+import { expectNoSilentClipping } from './overflow.ts'
+import { projectScope } from './planningFixtures.ts'
+
+const board = serializePlatformRoute({ module_id: 'planning', scope: projectScope })
+
+/** The module state the address holds now. */
+async function addressState(page: Page) {
+  const url = new URL(page.url())
+  return parsePlatformRoute(`${url.pathname}${url.search}`).state ?? {}
+}
+
+async function open(page: Page, width = 1440, height = 900) {
+  await page.setViewportSize({ width, height })
+  await installBackend(page)
+  await page.goto(board)
+  await expect(page.locator('.work-item-tile').first()).toBeVisible()
+}
+
+const field = (page: Page) => page.getByRole('combobox', { name: 'Filter work' })
+const chips = (page: Page) => page.locator('.workspace-chips .filter-chip')
+
+for (const width of [1440, 1024]) {
+  test(`the bar is one row of controls and at most 84px tall at ${width}px`, async ({ page }) => {
+    await open(page, width)
+    const geometry = await page.locator('.workspace-head').evaluate((head) => {
+      const tools = [...head.querySelectorAll<HTMLElement>('.workspace-tools > *')].filter(
+        (element) => element.offsetParent !== null,
+      )
+      const boxes = tools.map((element) => element.getBoundingClientRect())
+      return {
+        height: head.getBoundingClientRect().height,
+        oneLine:
+          Math.max(...boxes.map((box) => box.top)) < Math.min(...boxes.map((box) => box.bottom)),
+        last: tools.at(-1)?.className ?? '',
+      }
+    })
+    expect(geometry.oneLine, 'one row of controls').toBe(true)
+    expect(geometry.height).toBeLessThanOrEqual(84)
+    // The one primary action ends the row.
+    expect(geometry.last).toContain('workspace-action')
+    // A filter does not make the bar taller.
+    await field(page).fill('MAIN')
+    await expect(page.locator('.workspace-figures')).toContainText('Reset')
+    const filtered = await page.locator('.workspace-head').boundingBox()
+    expect(filtered?.height).toBe(geometry.height)
+    await expectNoSilentClipping(page, `Work bar at ${width}px`)
+  })
+}
+
+test('a filter survives a reload and Back, because the address holds it', async ({ page }) => {
+  await open(page)
+  await page.getByRole('button', { name: 'Filter', exact: true }).click()
+  await page.getByRole('option', { name: 'phase-1' }).click()
+  await page.keyboard.press('Escape')
+  await field(page).fill('MAIN-26')
+  await expect(chips(page)).toHaveText(['Label: phase-1'])
+  await expect.poll(() => addressState(page)).toEqual({ query: 'MAIN-26', labels: 'phase-1' })
+  await expect(page.locator('.workspace-figures')).toContainText('1 of')
+
+  await page.reload()
+  await expect(page.locator('.work-item-tile').first()).toBeVisible()
+  await expect(chips(page)).toHaveText(['Label: phase-1'])
+  await expect(field(page)).toHaveValue('MAIN-26')
+  await expect(page.locator('.work-item-tile')).toHaveCount(1)
+
+  await page.locator('.work-item-tile').first().click()
+  await expect(page.locator('.drawer')).toBeVisible()
+  await page.goBack()
+  await expect(page.locator('.drawer')).toHaveCount(0)
+  await expect(chips(page)).toHaveText(['Label: phase-1'])
+  await expect(page.locator('.work-item-tile')).toHaveCount(1)
+})
+
+test('a preset and the menu make the same filter', async ({ page }) => {
+  await open(page)
+  await page.getByRole('button', { name: 'Assigned' }).click()
+  const fromPreset = await addressState(page)
+  expect(fromPreset).toEqual({ held: true })
+  await page.getByRole('button', { name: 'Assigned' }).click()
+  await expect.poll(() => addressState(page)).toEqual({})
+
+  await page.getByRole('button', { name: 'Filter', exact: true }).click()
+  await page.getByRole('option', { name: /^Assigned/u }).click()
+  await expect.poll(() => addressState(page)).toEqual(fromPreset)
+  await expect(page.getByRole('button', { name: /^Assigned/u })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+})
+
+test('the bar’s keyboard: `/`, ↓ and Enter, Escape one step at a time, ← and Backspace', async ({
+  page,
+}) => {
+  await open(page)
+  await page.locator('.workspace-stage').click({ position: { x: 4, y: 4 } })
+  await page.keyboard.press('/')
+  await expect(field(page)).toBeFocused()
+
+  // Typing narrows the menu; ↓ opens it on its first value; Enter takes it.
+  await page.keyboard.type('phase')
+  await page.keyboard.press('ArrowDown')
+  await expect(field(page)).toHaveAttribute('aria-expanded', 'true')
+  await expect(page.getByRole('option')).toHaveText(['phase-1'])
+  await page.keyboard.press('Enter')
+  await expect(chips(page)).toHaveText(['Label: phase-1'])
+  await expect(field(page)).toHaveValue('')
+
+  // Escape: the menu, then the text, then the field — and never the page behind.
+  await page.keyboard.type('MAIN')
+  await page.keyboard.press('Escape')
+  await expect(field(page)).toHaveAttribute('aria-expanded', 'false')
+  await expect(field(page)).toHaveValue('MAIN')
+  await page.keyboard.press('Escape')
+  await expect(field(page)).toHaveValue('')
+  await expect(field(page)).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(field(page)).not.toBeFocused()
+  await expect(chips(page)).toHaveText(['Label: phase-1'])
+
+  // ← from the start of the text reaches the chips; Backspace takes one out.
+  await field(page).focus()
+  await page.keyboard.press('ArrowLeft')
+  await expect(chips(page).last()).toBeFocused()
+  await page.keyboard.press('ArrowRight')
+  await expect(field(page)).toBeFocused()
+  await page.keyboard.press('Backspace')
+  await expect(chips(page)).toHaveCount(0)
+  await expect.poll(() => addressState(page)).toEqual({})
+})
+
+test('on a phone the view, the filter and the action share the first line', async ({ page }) => {
+  await open(page, 390, 844)
+  const first = await page
+    .locator('.workspace-view-menu, .workspace-filter, .workspace-action')
+    .evaluateAll((elements) =>
+      elements.map((element) => {
+        const box = element.getBoundingClientRect()
+        return { top: box.top, bottom: box.bottom }
+      }),
+    )
+  expect(first).toHaveLength(3)
+  // One line: each starts above where every other ends.
+  expect(Math.max(...first.map((box) => box.top))).toBeLessThan(
+    Math.min(...first.map((box) => box.bottom)),
+  )
+  await page.getByRole('button', { name: 'Filter', exact: true }).click()
+  await page.getByRole('option', { name: 'phase-1' }).click()
+  await page.keyboard.press('Escape')
+  await expect(chips(page)).toHaveText(['Label: phase-1'])
+  await expectNoSilentClipping(page, 'Work bar at 390px')
+})
