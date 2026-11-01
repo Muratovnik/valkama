@@ -81,10 +81,10 @@ interface FacetRule {
   /** Not on the grouped board, whose lane says it. */
   flatOnly?: boolean
   /**
-   * These values also lead the reference as a glyph, apart from where the
-   * surface prints the facet itself: the list says the priority in its own
-   * column and marks it again before the reference, where the eye runs down
-   * the list.
+   * These values lead the reference as a glyph, apart from where the surface
+   * prints the facet itself: the list marks the priority before the
+   * reference, where the eye runs down the list, and its column says the word
+   * in its tone, so a row draws the glyph once.
    */
   lead?: readonly string[]
   /** Chips before the rest fold into «+N». */
@@ -122,10 +122,11 @@ const FACET_RULES: Readonly<Record<FacetId, Partial<Record<FacetSurface, FacetRu
   },
   // Medium is the default and is not news on a tile, a node or a finder row.
   // The list keeps it as a quiet word, because a blank cell in a sortable
-  // column reads as unknown, and leads the reference with the others' glyphs.
+  // column reads as unknown, and leads the reference with the others' glyphs;
+  // the column says the word alone, since the glyph already leads the row.
   priority: {
     tile: { form: 'glyph', only: ['low', 'high', 'urgent'] },
-    list: { form: 'glyph-word', always: true, lead: ['low', 'high', 'urgent'] },
+    list: { form: 'word', always: true, lead: ['low', 'high', 'urgent'] },
     graph: { form: 'glyph', only: ['high', 'urgent'] },
     card: { form: 'glyph-word', always: true },
     finder: { form: 'glyph', only: ['high', 'urgent'] },

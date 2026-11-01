@@ -310,14 +310,23 @@ useListKeys(root, {
 
 <style scoped>
 /* A row focused from the keyboard stops below the sticky head rather than
-   under it. */
+   under it. Where a reference starts in its cell — the cell's inset and the
+   two glyph slots before it — is declared here for the head, which starts the
+   reference's heading there rather than over the glyphs. */
 .work-item-list {
+  --list-slot-size: var(--size-control-inline);
+  --list-reference-start: calc(var(--space-3) + 2 * (var(--list-slot-size) + var(--space-1)));
+
   height: 100%;
   min-height: 0;
   background: var(--color-surface);
   overflow: auto;
   border-radius: var(--radius-card);
   scroll-padding-block: var(--size-control-height) var(--space-1);
+
+  &[data-fit='narrow'] {
+    --list-slot-size: var(--space-4);
+  }
 }
 
 .list-table {
@@ -380,13 +389,9 @@ useListKeys(root, {
 .list-slot {
   place-content: center center;
   vertical-align: middle;
-  inline-size: var(--size-control-inline);
+  inline-size: var(--list-slot-size);
   block-size: 1lh;
   margin-inline-end: var(--space-1);
-
-  .work-item-list[data-fit='narrow'] & {
-    inline-size: var(--space-4);
-  }
 }
 
 /* An open blocker and the labels, on their own line under the title. */

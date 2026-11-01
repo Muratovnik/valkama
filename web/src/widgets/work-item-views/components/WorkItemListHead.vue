@@ -46,7 +46,10 @@ function sortsIn(column: ListColumn): readonly ListColumn[] {
 }
 
 function headClass(column: ListColumn) {
-  return { 'list-head-title': holdsTitle(column) }
+  return {
+    'list-head-title': holdsTitle(column),
+    'list-head-reference': column.key === 'reference',
+  }
 }
 
 /** A sort a heading carries for a column folded under it, rather than its own. */
@@ -216,6 +219,13 @@ function choose(value: string) {
       padding-inline-end: var(--space-1);
     }
   }
+}
+
+/* The reference's heading starts over the reference rather than over the
+   glyphs that lead it, at the start the list declares; it is the cell's inset
+   where no list declares one. */
+.list-head-reference > .list-sorts > .list-sort {
+  padding-inline-start: max(var(--space-3), var(--list-reference-start, 0px));
 }
 
 .list-sort-choice {

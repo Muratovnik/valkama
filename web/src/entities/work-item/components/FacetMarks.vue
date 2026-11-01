@@ -10,7 +10,8 @@
  *
  * A glyph is coloured by its tone and the word beside it stays in the quiet
  * ink: the hue says how much a fact asks, the glyph says which fact it is. A
- * glyph shown alone keeps its word as the accessible name and the hover text.
+ * glyph shown alone keeps its word as the accessible name and the hover text;
+ * a word shown alone, under a heading that names the fact, takes the tone.
  *
  * A run that must stay on one line folds: when it runs out of room a mark
  * keeps its glyph and its word drops out of sight, still read out and still the
@@ -237,6 +238,12 @@ function pressLabel(label: string) {
           >
           <span class="facet-word-hidden">{{ word(mark) }}</span>
         </template>
+        <!-- A word alone is a word of its own, which takes the mark's tone. -->
+        <span
+          v-else-if="wordOnly(mark)"
+          class="facet-word facet-word-alone"
+          >{{ word(mark) }}</span
+        >
         <span
           v-else
           class="facet-word"
@@ -319,6 +326,26 @@ function pressLabel(label: string) {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+
+  /* A word alone carries the tone its glyph would have: with no glyph beside
+     it, the word is the only place left to say how much the fact asks. It
+     comes before the quiet, picked and hovered inks, which say something else
+     and win a tie. */
+  .facet-mark[data-tone='info'] &:where(.facet-word-alone) {
+    color: var(--color-info);
+  }
+
+  .facet-mark[data-tone='success'] &:where(.facet-word-alone) {
+    color: var(--color-success);
+  }
+
+  .facet-mark[data-tone='warning'] &:where(.facet-word-alone) {
+    color: var(--color-warning);
+  }
+
+  .facet-mark[data-tone='danger'] &:where(.facet-word-alone) {
+    color: var(--color-danger);
+  }
 
   .facet-mark.quiet & {
     color: var(--color-text-tertiary);

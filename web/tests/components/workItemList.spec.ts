@@ -194,18 +194,31 @@ describe('the facets a list row prints', () => {
     expect(cells(wrapper, 0)[1].text()).toBe('Item 1')
   })
 
-  it('says the default priority quietly in its column, without a glyph', async () => {
+  it('says each priority once a row: its glyph before the reference, its word in the column', async () => {
     const wrapper = await rows([
       boardItem(1, 'backlog', { priority: 'medium' }),
       boardItem(2, 'backlog', { priority: 'high' }),
+      boardItem(3, 'backlog', { priority: 'low' }),
     ])
     const medium = cells(wrapper, 0)[3].get('.facet-mark')
     expect(medium.text()).toBe('Medium')
     expect(medium.classes()).toContain('quiet')
-    expect(medium.find('.facet-glyph').exists()).toBe(false)
-    const high = cells(wrapper, 1)[3].get('.facet-mark')
-    expect(high.text()).toBe('High')
-    expect(high.find('.facet-glyph').exists()).toBe(true)
+    for (const [index, word, tone] of [
+      [1, 'High', 'warning'],
+      [2, 'Low', 'neutral'],
+    ] as const) {
+      const column = cells(wrapper, index)[3].get('.facet-mark')
+      expect(column.text()).toBe(word)
+      // The word alone, in the tone its glyph has before the reference.
+      expect(column.find('.facet-word-alone').exists()).toBe(true)
+      expect(column.attributes('data-tone')).toBe(tone)
+      const glyphs = wrapper
+        .findAll('tbody tr')
+        [index].findAll('.facet-mark[data-facet="priority"] .facet-glyph')
+      expect(glyphs).toHaveLength(1)
+    }
+    for (const index of [0, 1, 2])
+      expect(cells(wrapper, index)[3].find('.facet-glyph').exists()).toBe(false)
   })
 
   it('filters by a glyph without opening the row, and keeps the row one Tab stop', async () => {

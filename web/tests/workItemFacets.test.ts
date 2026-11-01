@@ -98,17 +98,19 @@ describe('priority', () => {
     }
   })
 
-  test('the list column says every priority, the default as a quiet word with no glyph', () => {
-    for (const priority of PRIORITIES)
+  test('the list column says every priority as its word, the default quietly', () => {
+    for (const priority of PRIORITIES) {
       assert.ok(printsFacet('priority', 'list', item({ priority })))
+      // The glyph leads the reference; the column says the word alone, so a row
+      // draws the chevron once.
+      assert.equal(only(facetMarks('priority', 'list', item({ priority }))).form, 'word')
+    }
     const medium = only(facetMarks('priority', 'list', item({ priority: 'medium' })))
-    assert.equal(medium.glyph, null)
     assert.equal(medium.quiet, true)
     assert.deepEqual(medium.text, { key: 'priority.medium' })
     const high = only(facetMarks('priority', 'list', item({ priority: 'high' })))
-    assert.equal(high.form, 'glyph-word')
-    assert.equal(high.glyph, 'priority-high')
     assert.equal(high.quiet, false)
+    assert.deepEqual(high.tone, { dimension: 'work-item-priority', state: 'high' })
   })
 
   test('the card always says it, glyph and word', () => {
@@ -356,7 +358,7 @@ const lead = (surface: FacetSurface, subject: WorkItemBrief) =>
   (['priority', 'kind'] as const).flatMap((facet) => leadMarks(facet, surface, subject))
 
 describe('the glyphs that lead a reference', () => {
-  test('the list leads with every priority but the default, as well as saying it in its column', () => {
+  test('the list leads with every priority but the default, and says it in its column in words', () => {
     for (const priority of PRIORITIES) {
       const marks = lead('list', item({ priority }))
       assert.deepEqual(
@@ -364,9 +366,9 @@ describe('the glyphs that lead a reference', () => {
         priority === 'medium' ? [] : [['glyph', `priority-${priority}`]],
         priority,
       )
-      // The column still says it, the default included.
+      // The column still says it, the default included, as a word.
       assert.equal(printsFacet('priority', 'list', item({ priority })), true)
-      assert.equal(only(facetMarks('priority', 'list', item({ priority }))).form, 'glyph-word')
+      assert.equal(only(facetMarks('priority', 'list', item({ priority }))).form, 'word')
     }
   })
 

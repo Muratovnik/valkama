@@ -647,8 +647,10 @@ A list row, a graph node and a search result print a work item's facets only
 through the facet registry, and print the exception, not the default. A list
 row leads its reference with the priority (but medium) and the kind (but a
 task) in two fixed glyph slots, so references align whether or not a row has
-glyphs; the priority column still says medium, quietly and without a glyph,
-because a blank cell in a sortable column reads as unknown; the holder column
+glyphs, and the reference's heading starts where they do; the priority column
+says every priority as its word alone, in its tone, since the glyph already
+leads the row, and medium quietly, because a blank cell in a sortable column
+reads as unknown; the holder column
 says nobody with a dash, never «Workable»; the labels sit under the title
 from 900px of list; an open blocker is named, «Waiting on MAIN-12», wherever it
 lives. A graph node leads with the kind, says its state as a dot and a name

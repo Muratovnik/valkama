@@ -54,6 +54,20 @@ for (const [width, headings, foldedSorts, choice] of [
     expect(facts > 0).toBe(foldedSorts > 0 || choice)
     // One line of head, as tall as the control row the rows scroll under.
     expect(geometry.head, 'the head is one line').toBeLessThanOrEqual(41)
+    // The reference's heading starts where the references do, not over the
+    // glyph slots that lead them.
+    const [heading, reference] = await list.evaluate((element) =>
+      ['thead .list-head-reference .list-sort', 'tbody .list-open'].map((selector) => {
+        const text = [...(element.querySelector(selector)?.childNodes ?? [])].find(
+          (child) => child.nodeType === Node.TEXT_NODE && child.textContent?.trim(),
+        )
+        if (!text) return Number.NaN
+        const range = document.createRange()
+        range.selectNodeContents(text)
+        return range.getBoundingClientRect().left
+      }),
+    )
+    expect(Math.abs(heading - reference), `${heading} → ${reference}`).toBeLessThanOrEqual(1)
     await expectNoSilentClipping(page, `list at ${width}px`)
     await page.screenshot(shot(info, `w-list-${width}.png`))
   })
@@ -225,6 +239,27 @@ test('at the fold the title keeps 36 characters, the references align and nobody
     )
     return { characters, starts: [...new Set(starts)], glyphs: [...new Set(glyphs)] }
   })
+  // A row says its priority once: the glyph leads the reference, and the
+  // column says the word, in the colour the glyph has.
+  const priority = await list.evaluate((element) =>
+    [...element.querySelectorAll('tbody tr')].map((row) => {
+      const glyph = row.querySelector('.list-ref .facet-mark[data-facet="priority"] .facet-glyph')
+      const column = row.querySelector<HTMLElement>(
+        'td:not(.list-ref-cell) .facet-mark[data-facet="priority"]',
+      )
+      const word = column?.querySelector('.facet-word')
+      return {
+        glyphs: row.querySelectorAll('.facet-mark[data-facet="priority"] .facet-glyph').length,
+        tone: column?.dataset.tone ?? null,
+        glyph: glyph ? getComputedStyle(glyph).color : null,
+        word: word ? getComputedStyle(word).color : null,
+      }
+    }),
+  )
+  expect(Math.max(...priority.map((row) => row.glyphs))).toBe(1)
+  const hued = priority.filter((row) => row.tone === 'warning' || row.tone === 'danger')
+  expect(hued.length).toBeGreaterThan(0)
+  for (const row of hued) expect(row.word).toBe(row.glyph)
   expect(measured.characters).toBeGreaterThanOrEqual(36)
   // Rows with and without glyphs, and every reference starts at one edge.
   expect(measured.glyphs.length).toBeGreaterThan(1)
