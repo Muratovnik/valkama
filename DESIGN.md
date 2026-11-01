@@ -25,7 +25,7 @@ colors:
   brand-spark-from: "#7cacf8"
   brand-spark-to: "#ececec"
   action-primary: "#ececec"
-  danger: "#f79186"
+  danger: "#f99a8f"
   success: "#7bd6a1"
   warning: "#d9b06a"
 

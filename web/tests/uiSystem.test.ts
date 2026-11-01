@@ -65,7 +65,7 @@ test('canvas visualizations use the same semantic colors as component states', (
   assert.equal(stateColor('work-item-state', 'active'), '#7cacf8')
   assert.equal(stateColor('work-item-state', 'review'), '#d9b06a')
   assert.equal(stateColor('work-item-state', 'completed'), '#7bd6a1')
-  assert.equal(stateColor('work-item-state', 'blocked'), '#f79186')
+  assert.equal(stateColor('work-item-state', 'blocked'), '#f99a8f')
 })
 
 /**

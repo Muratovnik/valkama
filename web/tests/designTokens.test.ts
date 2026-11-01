@@ -280,6 +280,13 @@ test('every colour that carries meaning reads as text on a card and as a mark on
       `${tone} as a mark on a pressed control is ${between(tone, '--color-surface-active').toFixed(2)}:1`,
     )
   }
+  // The one meaning colour written as a label on a control: a danger action
+  // keeps its red word when hovered, and the hover fill is the pressed rung.
+  // It stood at 4.20:1 there when the ladder moved under it.
+  assert.ok(
+    between('--color-action-danger', '--color-surface-active') >= 4.5,
+    `a hovered danger label is ${between('--color-action-danger', '--color-surface-active').toFixed(2)}:1`,
+  )
 })
 
 test('two ladder roles never land on one tone', () => {

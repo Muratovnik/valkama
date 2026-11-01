@@ -47,7 +47,7 @@ const SEMANTIC_TONE_COLORS: Record<SemanticTone, string> = {
   info: '#7cacf8',
   success: '#7bd6a1',
   warning: '#d9b06a',
-  danger: '#f79186',
+  danger: '#f99a8f',
 }
 
 const STATE_PRESENTATION = {
