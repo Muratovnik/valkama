@@ -71,24 +71,52 @@ def comment_count(conn: sqlite3.Connection, row: sqlite3.Row) -> int:
     )
 
 
+#: Why a link cannot say what state its other end is in. The item is there — a
+#: link cannot outlive it — but its state row is not, which only a store written
+#: without its foreign keys can hold.
+STATE_MISSING = "state_missing"
+
+
 def links(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
-    outgoing = conn.execute(
-        "SELECT kind, to_id AS other, 1 AS outgoing FROM work_item_links WHERE from_id = ?"
-        " UNION ALL"
-        " SELECT kind, from_id AS other, 0 AS outgoing FROM work_item_links WHERE to_id = ?"
-        " ORDER BY kind, other",
+    """Both directions of an item's links, each naming the state of its other end.
+
+    A reader judges a link by that state: a finished blocker blocks nothing, and
+    the item's own state cannot tell it so. The other end may live in another
+    space and so another workflow, which is why its state is read here rather
+    than looked up in the reader's workflow. One query for every link, because
+    an item with dozens of links used to cost two queries for each.
+    """
+
+    rows = conn.execute(
+        "SELECT l.kind, l.outgoing, o.work_item_id, o.number, o.title, p.key AS space_key,"
+        " s.name AS state_name, s.category AS state_category, s.is_terminal"
+        " FROM ("
+        "  SELECT kind, to_id AS other, 1 AS outgoing FROM work_item_links WHERE from_id = ?"
+        "  UNION ALL"
+        "  SELECT kind, from_id AS other, 0 AS outgoing FROM work_item_links WHERE to_id = ?"
+        " ) l"
+        " LEFT JOIN work_items o ON o.work_item_id = l.other"
+        " LEFT JOIN planning_spaces p ON p.planning_space_id = o.planning_space_id"
+        " LEFT JOIN workflow_states s ON s.state_id = o.state_id"
+        " ORDER BY l.kind, l.other",
         (work_item_id, work_item_id),
     ).fetchall()
     found = []
-    for row in outgoing:
-        other = item_by_id(conn, str(row["other"]))
+    for row in rows:
+        if row["work_item_id"] is None or row["space_key"] is None:
+            raise model.PlanningError("work item disappeared mid-write")
+        readable = row["state_category"] is not None
         found.append(
             {
                 "kind": row["kind"],
                 "direction": "outgoing" if row["outgoing"] else "incoming",
-                "work_item_id": other["work_item_id"],
-                "reference": reference(conn, other),
-                "title": other["title"],
+                "work_item_id": row["work_item_id"],
+                "reference": model.human_id(str(row["space_key"]), int(row["number"])),
+                "title": row["title"],
+                "state_name": row["state_name"] if readable else None,
+                "state_category": row["state_category"] if readable else None,
+                "is_terminal": bool(row["is_terminal"]) if readable else None,
+                "state_unavailable": None if readable else STATE_MISSING,
             }
         )
     return found

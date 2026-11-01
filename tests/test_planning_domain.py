@@ -534,6 +534,95 @@ class PlanningDomainTests(unittest.TestCase):
             [(link["kind"], link["direction"], link["reference"]) for link in backward],
         )
 
+    def close(self, reference: str, state: str) -> None:
+        service.set_summary(self.conn, reference, {"done": "d", "next": "n"})
+        service.transition_work_item(self.conn, reference, state)
+
+    @staticmethod
+    def other_end(links: list[dict]) -> dict[str, tuple]:
+        return {
+            link["reference"]: (
+                link["direction"],
+                link["state_name"],
+                link["state_category"],
+                link["is_terminal"],
+                link["state_unavailable"],
+            )
+            for link in links
+        }
+
+    def test_a_link_says_whether_its_other_end_is_still_open(self) -> None:
+        """A reader judges a blocker by the state of the item at the link's other end.
+
+        Without it a card listed a finished blocker as blocking, because the
+        only state it could see was its own item's.
+        """
+
+        blocked = self.item("Blocked work")
+        open_blocker = self.item("Still open")
+        done_blocker = self.item("Finished")
+        cancelled_blocker = self.item("Not needed")
+        other_space = service.create_planning_space(
+            self.conn, project_id="other-project", name="Other Space", key="OTH"
+        )
+        foreign = service.create_work_item(
+            self.conn, space=other_space["key"], title="Elsewhere", state="review"
+        )
+        for blocker in (open_blocker, done_blocker, cancelled_blocker, foreign):
+            service.link_work_items(self.conn, blocker["reference"], blocked["reference"], "blocks")
+        self.close(done_blocker["reference"], "done")
+        self.close(cancelled_blocker["reference"], "cancelled")
+
+        self.assertEqual(
+            {
+                open_blocker["reference"]: ("incoming", "Backlog", "backlog", False, None),
+                done_blocker["reference"]: ("incoming", "Done", "completed", True, None),
+                cancelled_blocker["reference"]: (
+                    "incoming",
+                    "Cancelled",
+                    "cancelled",
+                    True,
+                    None,
+                ),
+                foreign["reference"]: ("incoming", "Review", "review", False, None),
+            },
+            self.other_end(service.get_work_item(self.conn, blocked["reference"])["links"]),
+        )
+        # The other direction names the blocked item's state, not the blocker's own.
+        self.close(blocked["reference"], "done")
+        for blocker in (open_blocker, foreign):
+            with self.subTest(blocker=blocker["reference"]):
+                self.assertEqual(
+                    {blocked["reference"]: ("outgoing", "Done", "completed", True, None)},
+                    self.other_end(service.get_work_item(self.conn, blocker["reference"])["links"]),
+                )
+
+    def test_a_link_whose_other_end_has_no_readable_state_says_so(self) -> None:
+        """A state the store cannot resolve is reported as unknown, never as open."""
+
+        blocked = self.item("Blocked work")
+        blocker = self.item("Damaged")
+        service.link_work_items(self.conn, blocker["reference"], blocked["reference"], "blocks")
+        # The pragma is ignored inside a transaction.
+        self.conn.commit()
+        self.conn.execute("PRAGMA foreign_keys=OFF")
+        self.conn.execute(
+            "UPDATE work_items SET state_id = ? WHERE work_item_id = ?",
+            ("00000000-0000-4000-8000-000000000000", blocker["work_item_id"]),
+        )
+        (link,) = service.get_work_item(self.conn, blocked["reference"])["links"]
+        self.assertEqual(
+            (blocker["reference"], "Damaged", None, None, None, "state_missing"),
+            (
+                link["reference"],
+                link["title"],
+                link["state_name"],
+                link["state_category"],
+                link["is_terminal"],
+                link["state_unavailable"],
+            ),
+        )
+
     def test_an_item_cannot_link_to_itself(self) -> None:
         first = self.item("First")
         with self.assertRaisesRegex(model.PlanningError, "linked to itself"):

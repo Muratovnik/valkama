@@ -61,3 +61,43 @@ class PlanningScaleTests(unittest.TestCase):
             self.assertEqual(identities[0], items[1]["parent_id"])
             self.assertTrue(items[2]["ready"])
             self.assertEqual({1}, {item["comment_count"] for item in items})
+
+    def test_an_item_read_costs_the_same_however_many_links_it_has(self) -> None:
+        """Each link names its other end's state without a query of its own.
+
+        The read used to look each other end up separately, two statements a
+        link; naming that end's state as well must not make it three.
+        """
+
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            mock.patch.dict(os.environ, {"VALKAMA_DB": os.path.join(directory, "valkama.sqlite3")}),
+            closing(store.connect()) as conn,
+        ):
+            service.create_planning_space(conn, project_id="test", name="Links", key="LK")
+            few = service.create_work_item(conn, space="LK", title="Few links")["reference"]
+            many = service.create_work_item(conn, space="LK", title="Many links")["reference"]
+            for number in range(150):
+                other = service.create_work_item(conn, space="LK", title=f"Other {number}")
+                service.link_work_items(conn, other["reference"], many, "blocks")
+                if number < 2:
+                    service.link_work_items(conn, other["reference"], few, "blocks")
+            conn.commit()
+
+            def statements(reference: str) -> tuple[int, int]:
+                count = 0
+
+                def trace(_statement: str) -> None:
+                    nonlocal count
+                    count += 1
+
+                conn.set_trace_callback(trace)
+                try:
+                    links = len(service.get_work_item(conn, reference)["links"])
+                finally:
+                    conn.set_trace_callback(None)
+                return links, count
+
+            (few_links, few_cost), (many_links, many_cost) = statements(few), statements(many)
+            self.assertEqual((2, 150), (few_links, many_links))
+            self.assertEqual(few_cost, many_cost)

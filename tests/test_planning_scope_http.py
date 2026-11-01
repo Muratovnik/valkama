@@ -148,6 +148,76 @@ class PlanningScopeHttpTests(unittest.TestCase):
         self.assertFalse(answer["items"][0]["target"]["writable"])
         self.assertFalse(answer["has_more"])
 
+    def test_global_search_marks_each_result_with_kind_priority_and_state(self) -> None:
+        """A result row draws its kind, priority and state tone from the result itself."""
+
+        conn = store.connect()
+        try:
+            closed = service.create_work_item(
+                conn, space="SAME", title="closed only", kind="bug", priority="urgent"
+            )
+            service.set_summary(conn, closed["reference"], {"done": "d", "next": "n"})
+            service.transition_work_item(conn, closed["reference"], "done")
+            conn.commit()
+        finally:
+            conn.close()
+        self.bind_projects({"example-project": self.refs["primary"], "b": self.refs["attached"]})
+        status, answer = self.request("/api/modules/planning/search?q=only")
+        self.assertEqual(200, status, answer)
+        self.assertEqual(
+            {
+                ("b", "SAME-1"): ("task", "medium", "Backlog", "backlog", False),
+                ("example-project", "SAME-1"): ("task", "medium", "Backlog", "backlog", False),
+                ("example-project", "SAME-2"): ("bug", "urgent", "Done", "completed", True),
+            },
+            {
+                (entry["target"]["project_id"], entry["item"]["reference"]): (
+                    entry["item"]["kind"],
+                    entry["item"]["priority"],
+                    entry["item"]["state"]["name"],
+                    entry["item"]["state"]["category"],
+                    entry["item"]["state"]["is_terminal"],
+                )
+                for entry in answer["items"]
+            },
+        )
+
+    def test_an_attached_item_says_the_state_of_its_links_other_end(self) -> None:
+        """The inspector's read of an attached store names a closed blocker as closed."""
+
+        with mock.patch.dict(os.environ, {"VALKAMA_DB": str(self.attached)}):
+            conn = store.connect()
+            try:
+                blocker = service.create_work_item(conn, space="SAME", title="attached blocker")
+                service.link_work_items(conn, blocker["reference"], "SAME-1", "blocks")
+                service.set_summary(conn, blocker["reference"], {"done": "d", "next": "n"})
+                service.transition_work_item(conn, blocker["reference"], "done")
+                conn.commit()
+            finally:
+                conn.close()
+        self.bind("attached")
+        inspector = "/api/modules/planning/work-item?" + urlencode(
+            {
+                "scope_kind": "project",
+                "project_id": "example-project",
+                **self.refs["attached"],
+                "reference": "SAME-1",
+            }
+        )
+        status, answer = self.request(inspector)
+        self.assertEqual(200, status, answer)
+        (link,) = answer["state"]["payload"]["work_item"]["links"]
+        self.assertEqual(
+            ("incoming", "SAME-2", "completed", True, None),
+            (
+                link["direction"],
+                link["reference"],
+                link["state_category"],
+                link["is_terminal"],
+                link["state_unavailable"],
+            ),
+        )
+
     def test_request_platform_create_answer_and_detail_share_exact_envelope(self) -> None:
         body = {
             "project_id": "example-project",

@@ -110,7 +110,15 @@ def search(routing: PlanningRouting, parameters: Mapping[str, list[str]]) -> dic
                                 "planning_space_id": item["planning_space_id"],
                                 "reference": item["reference"],
                                 "title": item["title"],
-                                "state": {"name": item["state"]["name"]},
+                                # What a result row marks beside the title: the
+                                # kind and priority glyphs and the state's tone.
+                                "kind": item["kind"],
+                                "priority": item["priority"],
+                                "state": {
+                                    "name": item["state"]["name"],
+                                    "category": item["state"]["category"],
+                                    "is_terminal": item["state"]["is_terminal"],
+                                },
                                 "claim_ref": item["claim_ref"],
                             },
                         }

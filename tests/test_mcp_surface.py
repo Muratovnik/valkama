@@ -2021,6 +2021,54 @@ class CompactWorkItemReadTests(WireCallTestCase):
             ),
         )
 
+    def test_a_link_names_its_other_ends_state_and_the_tool_schema_is_unchanged(self) -> None:
+        """The read gained fields on its links; what an agent sends stayed the same."""
+
+        blocker = planning_service.create_work_item(self.conn, space=SPACE_KEY, title="Blocker")
+        planning_service.link_work_items(self.conn, blocker["reference"], self.reference, "blocks")
+        planning_service.set_summary(self.conn, blocker["reference"], {"done": "d", "next": "n"})
+        planning_service.transition_work_item(self.conn, blocker["reference"], "done")
+        self.conn.commit()
+        (link,) = self.answer("get_work_item", {"id": self.reference})["links"]
+        self.assertEqual(
+            {
+                "kind": "blocks",
+                "direction": "incoming",
+                "work_item_id": blocker["work_item_id"],
+                "reference": blocker["reference"],
+                "title": "Blocker",
+                "state_name": "Done",
+                "state_category": "completed",
+                "is_terminal": True,
+                "state_unavailable": None,
+            },
+            link,
+        )
+        [listed] = self.converse(
+            {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": params()}
+        )
+        tool = next(t for t in listed["result"]["tools"] if t["name"] == "get_work_item")
+        self.assertEqual({"name", "title", "annotations", "description", "inputSchema"}, set(tool))
+        self.assertEqual(
+            {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "A work item, by its reference (MAIN-142) or its"
+                        " work_item_id.",
+                    },
+                    "full": {
+                        "type": "boolean",
+                        "description": "Answer with every comment and history event instead"
+                        " of the newest ones.",
+                    },
+                },
+                "required": ["id"],
+            },
+            tool["inputSchema"],
+        )
+
     def test_full_must_be_a_boolean(self) -> None:
         error = self.refusal("get_work_item", {"id": self.reference, "full": "yes"})
         self.assertEqual(
