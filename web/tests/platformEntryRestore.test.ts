@@ -2,16 +2,21 @@ import assert from 'node:assert/strict'
 
 import { nextTick, ref } from 'vue'
 
-import { test } from 'vitest'
+import { test, vi } from 'vitest'
 
 import {
   resolvedPreferredRoute,
   usePlatformEntryRestore,
 } from '@/app/composables/usePlatformEntryRestore.ts'
 
+import { savePlatformUiPrefs } from '@/shared/api/platformApi.ts'
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { moduleRegistrations } from './support/moduleRegistrations.ts'
+
+vi.mock('@/shared/api/platformApi.ts', () => ({
+  savePlatformUiPrefs: vi.fn(() => Promise.resolve({})),
+}))
 
 type EntryInputs = Parameters<typeof usePlatformEntryRestore>[0]
 type ContextReady = NonNullable<EntryInputs['contextReady']['value']>
@@ -58,6 +63,43 @@ async function restoreInOrder(first: 'context' | 'modules'): Promise<PlatformRou
   await (first === 'context' ? settleModules() : settleContext())
   return written
 }
+
+test('an address naming no listed section is not remembered as the place to come back to', async () => {
+  vi.useFakeTimers()
+  try {
+    const route: EntryInputs['route'] = ref({ module_id: 'planning', scope: { kind: 'global' } })
+    const modulesSettled = ref(false)
+    usePlatformEntryRestore({
+      blocked: ref(false),
+      contextReady: ref(preferred),
+      contextState: ref({
+        interface_version: 'valkama-ui-state',
+        status: 'ready',
+        payload: preferred,
+      }),
+      defaultRoute: { module_id: 'planning', scope: { kind: 'global' } },
+      entryRestorePending: ref(false),
+      modules: ref(moduleRegistrations().map((item) => item.manifest)),
+      modulesSettled,
+      route,
+      writeRoute: () => {},
+    })
+    // The lost address arrives before the module list does, as on a direct load.
+    route.value = { module_id: 'not-a-module', scope: { kind: 'global' } }
+    await nextTick()
+    modulesSettled.value = true
+    await nextTick()
+    await vi.advanceTimersByTimeAsync(500)
+    route.value = { module_id: 'settings', scope: { kind: 'global' } }
+    await nextTick()
+    await vi.advanceTimersByTimeAsync(500)
+    assert.deepEqual(vi.mocked(savePlatformUiPrefs).mock.calls, [
+      [{ module_id: 'settings', scope: { kind: 'global' } }],
+    ])
+  } finally {
+    vi.useRealTimers()
+  }
+})
 
 test('clean entry waits when context resolves before modules', async () => {
   assert.deepEqual(await restoreInOrder('context'), [preferred.ui_prefs])

@@ -104,12 +104,18 @@ export function usePlatformEntryRestore(inputs: EntryInputs) {
   watch(
     () =>
       [
+        inputs.modulesSettled.value,
         inputs.route.value.module_id,
         JSON.stringify(inputs.route.value.scope),
         JSON.stringify(inputs.route.value.entity),
       ] as const,
     () => {
-      if (inputs.entryRestorePending.value || inputs.blocked.value) return
+      if (inputs.entryRestorePending.value || inputs.blocked.value || !inputs.modulesSettled.value)
+        return
+      // An address naming a section the shell does not list lost its way; it is
+      // not the place to come back to next time.
+      const moduleId = inputs.route.value.module_id
+      if (!inputs.modules.value.some((module) => module.module_id === moduleId)) return
       const prefs: PlatformUiPrefs = {
         module_id: inputs.route.value.module_id,
         scope: inputs.route.value.scope,
