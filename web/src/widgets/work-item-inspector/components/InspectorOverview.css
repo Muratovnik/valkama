@@ -17,7 +17,9 @@
 }
 
 /* A wait reads as the facet does everywhere else: its glyph in the hue of a
-   stop, then «Ждёт» and the reference, which opens the blocker. */
+   stop, then «Ждёт» and the reference, which opens the blocker. The glyph sits
+   on the first line's baseline, as a letter would, and a long title wraps
+   under the words rather than under the glyph. */
 .blocker {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -27,8 +29,10 @@
   font: var(--font-line);
 }
 
+/* A glyph's baseline is its bottom edge; the margin sets it a little below the
+   line's baseline, where a letter's descender would end. */
 .blocker-glyph {
-  align-self: center;
+  margin-bottom: calc(-2 * var(--space-hair));
   color: var(--color-text-tertiary);
 
   &[data-tone='danger'] {
