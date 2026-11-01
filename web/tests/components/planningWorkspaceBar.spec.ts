@@ -76,7 +76,8 @@ describe('the work bar', () => {
   it.each([
     ['en', 2, 3, '2 open of 3'],
     ['ru', 1, 3, '1\u{A0}открытая из 3'],
-    ['ru', 3, 30, '3\u{A0}открытых из 30'],
+    // The few form of the adjective agrees with the nominative count: «3 открытые».
+    ['ru', 3, 30, '3\u{A0}открытые из 30'],
     ['ru', 21, 30, '21\u{A0}открытая из 30'],
   ])('says how much is open, unfiltered (%s, %i)', (locale, open, total, line) => {
     const wrapper = bar({ counts: { ...COUNTS, open, total } }, locale)
@@ -84,10 +85,43 @@ describe('the work bar', () => {
   })
 
   it.each([
+    ['en', 1, '1 epic as a row'],
+    ['en', 2, '2 epics as rows'],
+    ['ru', 1, '1\u{A0}эпик строкой'],
+    ['ru', 2, '2\u{A0}эпика строками'],
+    ['ru', 5, '5\u{A0}эпиков строками'],
+    ['ru', 21, '21\u{A0}эпик строкой'],
+  ] as const)(
+    'says how many epics the grouped board draws as rows (%s, %i)',
+    (locale, epics, text) => {
+      const wrapper = bar(
+        { grouping: 'epic', exclusion: { kind: 'lane-heads', count: epics } },
+        locale,
+      )
+      // Unfiltered, the rows come last on the counts line: no Reset follows them.
+      expect(wrapper.get('.workspace-figures').text().endsWith(`· ${text}`)).toBe(true)
+    },
+  )
+
+  it('says nothing about rows where the board is flat or not on the stage', async () => {
+    const wrapper = bar({ exclusion: { kind: 'lane-heads', count: 2 } })
+    expect(wrapper.get('.workspace-figures').text()).not.toContain('row')
+    await wrapper.setProps({ grouping: 'none' })
+    expect(wrapper.get('.workspace-figures').text()).not.toContain('row')
+  })
+
+  it.each([
     ['en', [42, 319, 0], '42 of 319 open · Reset'],
-    ['en', [5, 319, 2], '5 of 319 open · 2 more closed · Reset'],
+    ['en', [5, 319, 2], '5 of 319 open · Reset'],
     ['ru', [42, 319, 0], '42 из 319\u{A0}открытых · Сбросить'],
-    ['ru', [1, 21, 1], '1 из 21\u{A0}открытой · ещё 1\u{A0}закрытая · Сбросить'],
+    ['ru', [1, 21, 1], '1 из 21\u{A0}открытой · Сбросить'],
+    // With nothing open let through, the closed ones that came with it are said.
+    ['en', [0, 319, 1], '0 of 319 open · 1 closed match · Reset'],
+    ['en', [0, 319, 3], '0 of 319 open · 3 closed matches · Reset'],
+    ['ru', [0, 319, 1], '0 из 319\u{A0}открытых · есть 1\u{A0}закрытая · Сбросить'],
+    ['ru', [0, 319, 2], '0 из 319\u{A0}открытых · есть 2\u{A0}закрытые · Сбросить'],
+    ['ru', [0, 319, 5], '0 из 319\u{A0}открытых · есть 5\u{A0}закрытых · Сбросить'],
+    ['ru', [0, 319, 21], '0 из 319\u{A0}открытых · есть 21\u{A0}закрытая · Сбросить'],
     // Nothing let through is a number too, not the open count it is out of.
     ['en', [0, 319, 0], '0 of 319 open · Reset'],
     ['ru', [0, 319, 0], '0 из 319\u{A0}открытых · Сбросить'],

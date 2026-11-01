@@ -9,9 +9,9 @@
  * population, and two of them repeated columns the board already draws.
  *
  * The line under it answers the filter: how much of the open work it lets
- * through, with the way back out of it. The held count rides its preset, and
- * the grouped board's lane heads say what they are themselves; the line used
- * to carry three numbers and a sentence about epics.
+ * through, with the way back out of it. The held count rides its preset. On the
+ * grouped board the line also says how many epics are drawn as rows, the one
+ * thing its columns do not count.
  */
 import { computed, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -107,10 +107,26 @@ const countsText = computed(() => {
     ? t('workItem.filter.matched', { matched: matchedOpen, open }, open)
     : t('workItem.filter.open', { open, total }, open)
 })
-/** The closed items a filter let through, which the views draw as well. */
+/**
+ * The closed items a filter let through, said only when it let through no open
+ * one: beside open matches they are the views' own extra items and the line
+ * does not carry them.
+ */
 const closedText = computed(() => {
-  const count = props.counts.matchedClosed
-  return props.filtered && count ? t('workItem.filter.closedToo', { count }, count) : ''
+  const closed = props.counts.matchedClosed
+  return props.filtered && props.counts.matchedOpen === 0 && closed
+    ? t('workItem.filter.closedToo', { closed }, closed)
+    : ''
+})
+/**
+ * The epics the grouped board draws as rows, counted by the census exclusion the
+ * counts already use: the board's columns do not hold them.
+ */
+const rowsText = computed(() => {
+  const left = props.exclusion
+  return props.grouping === 'epic' && left?.kind === 'lane-heads'
+    ? t('workItem.countsExclude.laneHeads', { epics: left.count }, left.count)
+    : ''
 })
 
 const tokens = computed(() => filterTokens(filter.value))
@@ -229,6 +245,11 @@ const exclusionText = computed(() => {
           class="workspace-closed"
         >
           · <span class="workspace-fact">{{ closedText }}</span></span
+        ><span
+          v-if="rowsText"
+          class="workspace-rows"
+        >
+          · <span class="workspace-fact">{{ rowsText }}</span></span
         ><template v-if="filtered">
           ·
           <VButton

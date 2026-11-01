@@ -197,12 +197,10 @@ const chipReference = computed(() =>
 /** The board's grouping while the board is on the stage, which is when it can be grouped. */
 const barGrouping = computed(() => (stageView.value === 'kanban' ? boardGrouping.value : null))
 /**
- * What the view leaves out of the counts, said in the bar only for the graph.
- * The grouped board's epics head its lanes, so the lanes' own head says it.
+ * What the view leaves out of the counts: the graph's parents, which the bar
+ * says as a sentence, and the grouped board's epics, which it says as rows.
  */
-const barExclusion = computed(() =>
-  census.exclusion.value?.kind === 'graph-parents' ? census.exclusion.value : null,
-)
+const barExclusion = computed(() => census.exclusion.value)
 
 /** A mark pressed outside the views — the card beside them — reaches the same filter. */
 defineExpose({ toggleFilter })

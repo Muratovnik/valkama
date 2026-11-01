@@ -37,7 +37,7 @@ export const workFilterMessages = {
       remove: 'Remove from filter: {name}',
       open: '{open} open of {total}',
       matched: '{matched} of {open} open',
-      closedToo: '{count} more closed',
+      closedToo: '{closed} closed match | {closed} closed matches',
       reset: 'Reset',
       incomplete: 'The filter is too long for the address: a reload keeps only part of it.',
       empty: 'No work matches this filter.',
@@ -66,11 +66,11 @@ export const workFilterMessages = {
       },
       chip: '{facet}: {value}',
       remove: 'Убрать из фильтра: {name}',
-      open: '{open}\u{A0}открытая из {total} | {open}\u{A0}открытых из {total} | {open}\u{A0}открытых из {total}',
+      open: '{open}\u{A0}открытая из {total} | {open}\u{A0}открытые из {total} | {open}\u{A0}открытых из {total}',
       matched:
         '{matched} из {open}\u{A0}открытой | {matched} из {open}\u{A0}открытых | {matched} из {open}\u{A0}открытых',
       closedToo:
-        'ещё {count}\u{A0}закрытая | ещё {count}\u{A0}закрытые | ещё {count}\u{A0}закрытых',
+        'есть {closed}\u{A0}закрытая | есть {closed}\u{A0}закрытые | есть {closed}\u{A0}закрытых',
       reset: 'Сбросить',
       incomplete:
         'Фильтр не поместился в адрес целиком: после перезагрузки сохранится только часть.',

@@ -870,8 +870,7 @@ export const en = {
     },
     viewLabel: 'View',
     countsExclude: {
-      laneHeads:
-        '{count} epic is a row heading, not a card in a column | {count} epics are row headings, not cards in columns',
+      laneHeads: '{epics} epic as a row | {epics} epics as rows',
       graphParents:
         '{count} parent task is drawn as a group, not a node ({open} open) | {count} parent tasks are drawn as groups, not nodes ({open} open)',
     },

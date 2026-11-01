@@ -631,7 +631,9 @@ search. The search's hint is whole where it fits and one word where it would
 be cut. On a phone the grouping switch shares the counts' line and says its
 word there, and gives the word up to the reset while a filter is on, so the
 work does not move as a filter turns on. Every number in the bar counts one population — the space, or a chain
-with its root — and a view that draws fewer items says what it leaves out.
+with its root — and a view that draws fewer items says what it leaves out: the
+grouped board says how many epics it draws as rows, and a filter names the
+closed items it let through only when no open one matched.
 Epic progress, lane state, and active work share the same semantic palette.
 Aggregate epic activity belongs only to the epic index, including its compact
 state; bundle headers on the board do not repeat a “working” label.
