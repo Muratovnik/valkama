@@ -58,6 +58,11 @@ export function useBranchText(groupName: (group: ChainGroup) => string) {
       .join(', ')
   }
 
+  /** The two texts a lane's label line carries, as the drawing lays them out. */
+  function laneTexts(lane: BranchLane) {
+    return { name: laneName(lane), counts: laneCounts(lane) }
+  }
+
   /** A lane's accessible name: its parent and title, and every group it holds. */
   function laneLabel(lane: BranchLane): string {
     const name = lane.title ? `${laneName(lane)} ${lane.title}` : laneName(lane)
@@ -107,5 +112,5 @@ export function useBranchText(groupName: (group: ChainGroup) => string) {
     }))
   }
 
-  return { describe, laneCounts, laneLabel, laneName, legend, position, summary, t }
+  return { describe, laneCounts, laneLabel, laneName, laneTexts, legend, position, summary, t }
 }

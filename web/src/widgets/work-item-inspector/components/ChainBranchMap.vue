@@ -25,7 +25,7 @@ import {
   tipAt,
 } from '@/widgets/work-item-inspector/utils/chainBranchDrawing.ts'
 import type { LaneDrawing } from '@/widgets/work-item-inspector/utils/chainBranchDrawing.ts'
-import { boxStyle } from '@/widgets/work-item-inspector/utils/chainBranchHead.ts'
+import type { Box } from '@/widgets/work-item-inspector/utils/chainBranchHead.ts'
 import { layoutBranches } from '@/widgets/work-item-inspector/utils/chainBranchLayout.ts'
 import type { GroupLabels } from '@/widgets/work-item-inspector/utils/chainSummary.ts'
 import { useBranchCursor } from '@/widgets/work-item-inspector/utils/useBranchCursor.ts'
@@ -48,9 +48,8 @@ const emit = defineEmits<{
   open: [reference: string]
 }>()
 
-const { describe, laneCounts, laneLabel, laneName, legend, position, summary, t } = useBranchText(
-  (group) => props.labels[group].text,
-)
+const { describe, laneCounts, laneLabel, laneName, laneTexts, legend, position, summary, t } =
+  useBranchText((group) => props.labels[group].text)
 
 const canvas = ref<HTMLElement | null>(null)
 const { width: measured } = useElementSize(canvas)
@@ -66,12 +65,7 @@ const guessed = computed(() => measured.value <= 0)
 
 const layout = computed(() => layoutBranches(props.chain))
 const keys = computed(() => legend(layout.value.lanes))
-const drawing = computed(() =>
-  drawBranches(layout.value, width.value, (lane) => ({
-    name: laneName(lane),
-    counts: laneCounts(lane),
-  })),
-)
+const drawing = computed(() => drawBranches(layout.value, width.value, laneTexts))
 
 const { announcement, cursorOf, enter, exit, leave, move, openAt, point, roomAbove, shown } =
   useBranchCursor({
@@ -99,6 +93,25 @@ const positionOf = (lane: LaneDrawing) => position(cursorOf(lane.lane), lane.lan
 
 const caption = computed(() => summary(layout.value.lanes, layout.value.total))
 
+/** A length of the drawing as a style value; an absent one sets nothing. */
+function px(value: number | undefined): string | undefined {
+  return value === undefined ? undefined : `${value}px`
+}
+
+/** A box of the drawing as a style, in the logical properties the map is laid out by. */
+function place(box: Box) {
+  return {
+    insetBlockStart: px(box.top),
+    insetBlockEnd: px(box.bottom),
+    insetInlineStart: px(box.left),
+    insetInlineEnd: px(box.right),
+    width: px(box.width),
+    height: px(box.height),
+    minWidth: px(box.minWidth),
+    maxWidth: px(box.maxWidth),
+  }
+}
+
 /** The mark over the task being looked at, and its readout over the lane. */
 const TIP_WIDTH = 280
 /** The readout's height, near enough to know whether it fits above a lane. */
@@ -111,7 +124,7 @@ const tipStyle = computed(() => {
   const current = shown.value
   if (!current) return {}
   const above = roomAbove(current.lane) >= TIP_HEIGHT
-  return boxStyle(tipAt(current.lane, current.index, drawing.value, { above, width: TIP_WIDTH }))
+  return place(tipAt(current.lane, current.index, drawing.value, { above, width: TIP_WIDTH }))
 })
 
 const hintId = useId()
@@ -201,7 +214,7 @@ function countId(lane: LaneDrawing): string {
         <div
           class="branch-map-head"
           :class="{ before: lane.before, stacked: lane.stacked, receded: recedes(lane) }"
-          :style="boxStyle(lane.head)"
+          :style="place(lane.head)"
         >
           <button
             class="branch-map-label"
@@ -232,7 +245,7 @@ function countId(lane: LaneDrawing): string {
           :aria-valuetext="positionOf(lane)"
           :aria-label="laneLabel(lane.lane)"
           :aria-describedby="hintId"
-          :style="boxStyle(lane.band)"
+          :style="place(lane.band)"
           @pointermove="point(lane, $event)"
           @pointerleave="leave"
           @click="openAt(lane, $event)"
@@ -246,7 +259,7 @@ function countId(lane: LaneDrawing): string {
           class="branch-map-reference"
           aria-hidden="true"
           :class="{ receded: recedes(lane) }"
-          :style="boxStyle(label.box)"
+          :style="place(label.box)"
           >{{ label.reference }}</span
         >
       </template>
