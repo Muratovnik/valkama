@@ -584,7 +584,9 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   its own space (through its draft guard and Back) and for the commits and
   memory ids it carries as refs, the shell for another known space and for
   session ids the server knows. Whatever no layer claims — `SHA-256`, a number
-  missing from the space — is the text it was.
+  missing from the space — is the text it was. A modal dialog that could only
+  open a card behind itself — the new task's preview — claims every reference as
+  text.
 - **Writing free text:** `MarkdownEditor` owns the field: a preview drawn by
   `RichText`, `#` and a query to link a task, Ctrl+Enter to send. The field
   stays a multi-line text box naming its list of completions, and the list
