@@ -29,7 +29,7 @@ export function isGraphWalkKey(key: string): key is GraphWalkKey {
 }
 
 /** The field as it is read: top to bottom, then left to right. */
-function readingOrder(left: PlacedNode, right: PlacedNode): number {
+export function readingOrder(left: PlacedNode, right: PlacedNode): number {
   return left.y - right.y || left.x - right.x
 }
 

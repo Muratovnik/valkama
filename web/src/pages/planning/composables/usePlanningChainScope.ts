@@ -10,10 +10,18 @@ type RouteState = Record<string, string | number | boolean>
 
 /**
  * The route keys that belong to a chain: its root's reference, how far it
- * reaches, and whether its closed members are drawn. Leaving the chain or
- * naming another drops all three, so a chain always opens on its open part.
+ * reaches, whether its closed members are drawn, and the branch of it the card
+ * chose. Leaving the chain or naming another drops all four, so a chain always
+ * opens on its open part.
  */
-const CHAIN_KEYS = new Set(['chain', 'chain_scope', 'closed'])
+const CHAIN_KEYS = new Set(['chain', 'chain_scope', 'closed', 'branch'])
+
+/**
+ * How the address spells the branch of work filed under no epic. A branch is
+ * named by the epic its work was filed under, and that one has none, so it
+ * takes a word no reference can be.
+ */
+const NO_EPIC_BRANCH = 'none'
 
 /** What the route asks every view of the space to be scoped to. */
 export type ChainTarget =
@@ -74,6 +82,24 @@ export function closedOf(state: RouteState | undefined): boolean {
 export function withClosed(state: RouteState | undefined, closed: boolean): RouteState {
   const rest = Object.fromEntries(Object.entries(state ?? {}).filter(([key]) => key !== 'closed'))
   return closed ? { ...rest, closed } : rest
+}
+
+/**
+ * The branch of the chain the address names: an epic's reference, `''` for the
+ * work filed under no epic, null for none. A value that could name no branch is
+ * `undefined`, so the surface can say the link was wrong and drop it.
+ */
+export function branchOf(state: RouteState | undefined): string | null | undefined {
+  const value = state?.branch
+  if (value === undefined) return null
+  if (value === NO_EPIC_BRANCH) return ''
+  return typeof value === 'string' && WORK_ITEM_REFERENCE.test(value) ? value : undefined
+}
+
+/** The same state naming this branch of its chain, or none when `branch` is null. */
+export function withBranch(state: RouteState | undefined, branch: string | null): RouteState {
+  const rest = Object.fromEntries(Object.entries(state ?? {}).filter(([key]) => key !== 'branch'))
+  return branch === null ? rest : { ...rest, branch: branch === '' ? NO_EPIC_BRANCH : branch }
 }
 
 /** The same state naming this chain, or naming none when `chain` is null. */

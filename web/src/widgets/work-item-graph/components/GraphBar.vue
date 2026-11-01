@@ -13,12 +13,16 @@
  * leaves out and draws them. The key to the markers lies on the field itself
  * (`GraphLegend`), so this bar stays one row and never changes height with it.
  *
+ * A branch of the chain the card chose has a chip of its own beside the chain's,
+ * and letting it go gives the field back the whole chain.
+ *
  * In a phone-wide workspace the filter and a switch do not share one row, and
  * three stacked rows left the field half the screen. There the bar keeps only
  * the filter or the chip; the switch and the key (the `legend` slot) open under
  * a «Graph options» button, and the host draws the frontier count on the field
- * where the key was. The narrow layout is the container's, so nothing here
- * measures the window.
+ * where the key was. A branch chip takes a second row there: it is a choice the
+ * operator made and wants named, not chrome. The narrow layout is the
+ * container's, so nothing here measures the window.
  */
 import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -30,6 +34,8 @@ import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
+  /** The branch of the chain the field is framed on: an epic's reference, `''` for none. */
+  branch: string | null
   chain: { reference: string; total: number } | null
   hiddenDone: number
   /** The field draws a key, so the narrow bar has one to offer. */
@@ -42,12 +48,16 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
+  'exit-branch': []
   'exit-chain': []
   'update:showDone': [value: boolean]
   'update:showUnlinked': [value: boolean]
 }>()
 const { t } = useI18n()
 const filter = computed(() => (props.showDone ? 'all' : 'open'))
+const branchName = computed(() =>
+  props.branch === '' ? t('workItem.chain.noEpic') : (props.branch ?? ''),
+)
 const options = computed(() => [
   { value: 'open' as const, label: t('graph.openOnly', { count: props.openTotal }) },
   {
@@ -84,6 +94,13 @@ const hasOptions = computed(() => switchShown.value || props.keyed)
       :model-value="filter"
       :options="options"
       @update:model-value="updateFilter"
+    />
+    <ScopeChip
+      v-if="chain && branch !== null"
+      class="graph-branch-chip"
+      :label="t('graph.branchChip', { name: branchName })"
+      :exit-label="t('graph.branchExit', { name: branchName })"
+      @exit="emit('exit-branch')"
     />
     <VButton
       v-if="hasOptions"
@@ -171,9 +188,14 @@ const hasOptions = computed(() => switchShown.value || props.keyed)
   }
 
   /* Open, the options take the room under the row; the field gives it back when
-     they close. */
-  .graph-bar:has(.graph-options.open) {
+     they close. A chosen branch takes the row under the chain's chip, the
+     options button staying beside the chain's. */
+  .graph-bar:has(:is(.graph-options.open, .graph-branch-chip)) {
     flex-wrap: wrap;
+  }
+
+  .graph-branch-chip {
+    order: 1;
   }
 
   .graph-options.open {
@@ -182,6 +204,7 @@ const hasOptions = computed(() => switchShown.value || props.keyed)
     flex-direction: column;
     gap: var(--space-2);
     align-items: flex-start;
+    order: 2;
   }
 
   .graph-options-legend {

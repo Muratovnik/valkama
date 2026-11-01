@@ -159,6 +159,47 @@ describe('«Show on graph»', () => {
     run.wrapper.unmount()
   })
 
+  it('names the branch the card chose beside the chain, and asks the graph to take focus', () => {
+    const run = surface({ view: 'kanban', branch: 'MAIN-7' }, 'ru', 'MAIN-264')
+    const chain = emptyChain('MAIN-264') as WorkItemChain
+    expect(run.view().shown.value).toBe(0)
+    run.view().show(chain, 'MAIN-40')
+    run.view().show(chain, '')
+    run.view().show(chain)
+    const named = { view: 'graph', chain: 'MAIN-264', chain_scope: 'chain' }
+    // A branch from an earlier chain never survives into the next one.
+    expect(run.written).toEqual([
+      { ...named, branch: 'MAIN-40' },
+      { ...named, branch: 'none' },
+      named,
+    ])
+    expect(run.view().shown.value).toBe(3)
+    run.wrapper.unmount()
+  })
+
+  it('reads the branch out of the address, and lets it go without leaving the chain', () => {
+    fetchChain.mockResolvedValue(emptyChain('MAIN-264') as WorkItemChain)
+    const named = { view: 'graph', chain: 'MAIN-264', chain_scope: 'chain', closed: true }
+    const run = surface({ ...named, branch: 'MAIN-40' })
+    expect(run.view().branch.value).toBe('MAIN-40')
+    run.view().exitBranch()
+    expect(run.written).toEqual([named])
+    run.state.value = { ...named, branch: 'none' }
+    expect(run.view().branch.value).toBe('')
+    run.wrapper.unmount()
+  })
+
+  it('says once that a link names no branch, and drops it', async () => {
+    fetchChain.mockResolvedValue(emptyChain('MAIN-264') as WorkItemChain)
+    const named = { view: 'graph', chain: 'MAIN-264', chain_scope: 'chain' }
+    const run = surface({ ...named, branch: 'everything' }, 'en')
+    await nextTick()
+    expect(run.notices).toEqual(['This link names no branch of a chain; the whole chain is shown.'])
+    expect(run.written).toEqual([named])
+    expect(run.view().branch.value).toBeNull()
+    run.wrapper.unmount()
+  })
+
   it('closes nothing when the next route is not that chain', async () => {
     const run = surface({ view: 'kanban' }, 'ru', 'MAIN-264')
     run.view().show(emptyChain('MAIN-264') as WorkItemChain)

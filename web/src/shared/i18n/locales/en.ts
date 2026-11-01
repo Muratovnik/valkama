@@ -205,6 +205,9 @@ export const en = {
     options: 'Graph options and key',
     chainChip: 'Chain {reference} · {count}',
     chainExit: 'Leave chain {reference} and show the whole space',
+    branchChip: 'Branch {name}',
+    branchExit: 'Clear branch {name} and show the whole chain',
+    branchInvalid: 'This link names no branch of a chain; the whole chain is shown.',
     chainInvalid: 'This link names no chain this space can read; the whole space is shown.',
     chainNotHere: 'Work item {reference} is not in this space. The whole space is shown.',
     chainFailed: {

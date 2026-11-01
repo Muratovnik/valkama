@@ -79,7 +79,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   back: []
-  chain: [chain: WorkItemChain]
+  chain: [chain: WorkItemChain, branch: string | null]
   changed: []
   close: []
   /** Another card opened from this one, and where this one was left. */
@@ -418,7 +418,7 @@ const close = () => void leave(() => emit('close'))
                   :scope="chain.scope.value"
                   @scope="chain.setScope"
                   @retry="retryChain"
-                  @graph="(shown) => emit('chain', shown)"
+                  @graph="(shown, branch) => emit('chain', shown, branch)"
                   @open="openFrom"
                 />
               </template>

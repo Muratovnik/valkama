@@ -43,7 +43,8 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  graph: [chain: WorkItemChain]
+  /** The branch chosen on the map rides along: an epic's reference, `''` for no epic, or null. */
+  graph: [chain: WorkItemChain, branch: string | null]
   open: [reference: string]
   retry: []
   scope: [scope: ChainScope]
@@ -205,7 +206,7 @@ defineExpose({ restore, reveal, view })
         <VButton
           variant="ghost"
           size="inline"
-          @click="emit('graph', chain)"
+          @click="emit('graph', chain, lane)"
         >
           {{ t('workItem.chain.showOnGraph') }}
         </VButton>

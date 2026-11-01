@@ -19,6 +19,7 @@ import type { Ref, WatchSource } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 
 import { graphAnchor, graphCameraView } from '@/widgets/work-item-graph/utils/graphCamera.ts'
+import type { GraphBranchFrame } from '@/widgets/work-item-graph/utils/graphCamera.ts'
 import { NODE_HEIGHT, NODE_WIDTH } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import { FRAME_GAP, graphFitViewOptions } from '@/widgets/work-item-graph/utils/graphLayout.ts'
@@ -39,6 +40,8 @@ interface CameraInput {
   readyIds: Ref<Set<string>>
   /** Changes that make a new field rather than a refresh of this one. */
   resets: WatchSource[]
+  /** The branch of the chain the card chose, which the camera frames whole. */
+  branch: () => GraphBranchFrame | null
   /** The chain's root, which the camera starts on, in chain scope. */
   rootId: () => string | null
   selectedId: () => string | null
@@ -60,6 +63,7 @@ export function useGraphCamera(input: CameraInput) {
       const placed = input.placed.value
       if (!flowReady.value || request !== cameraRequest || !placed) return
       const camera = graphCameraView(placed, dimensions.value, input.readyIds.value, {
+        branch: input.branch(),
         selectedId: input.selectedId(),
         rootId: input.rootId(),
         focusOnly,
@@ -116,7 +120,11 @@ export function useGraphCamera(input: CameraInput) {
     anchorId: computed(() => {
       const placed = input.placed.value
       if (!placed) return null
-      const options = { selectedId: input.selectedId(), rootId: input.rootId() }
+      const options = {
+        branch: input.branch(),
+        selectedId: input.selectedId(),
+        rootId: input.rootId(),
+      }
       return graphAnchor(placed, input.readyIds.value, options)?.work_item_id ?? null
     }),
     /** «Fit whole graph». */

@@ -9,10 +9,12 @@ import { effectScope, nextTick, ref } from 'vue'
 import { afterEach, beforeEach, test, vi } from 'vitest'
 
 import {
+  branchOf,
   chainTarget,
   closedOf,
   groupingOf,
   usePlanningChainScope,
+  withBranch,
   withChain,
   withClosed,
   withGrouping,
@@ -34,7 +36,7 @@ const fetchChain = vi.mocked(fetchWorkItemChain)
 
 const planning = OFFLINE_MODULE_FALLBACK.find((manifest) => manifest.module_id === 'planning')
 
-test('the planning manifest admits the chain, closed and grouping keys and still refuses a key it never declared', () => {
+test('the planning manifest admits the chain, closed, branch and grouping keys and still refuses a key it never declared', () => {
   assert.ok(planning)
   const state = {
     view: 'kanban',
@@ -42,6 +44,7 @@ test('the planning manifest admits the chain, closed and grouping keys and still
     chain_scope: 'epic',
     closed: true,
     group: 'epic',
+    branch: 'MAIN-40',
   }
   assert.deepEqual(validateManifestRouteState(planning, state), state)
   assert.throws(
@@ -97,6 +100,29 @@ test('withChain writes both keys and removes both, leaving every other key alone
   assert.deepEqual(named, { view: 'graph', query: 'x', chain: 'MAIN-12', chain_scope: 'chain' })
   assert.deepEqual(withChain(named, null), { view: 'graph', query: 'x' })
   assert.deepEqual(withChain(undefined, null), {})
+})
+
+test('the branch is an epic of the chain or the work under none, and goes with the chain', () => {
+  const named = { view: 'graph', chain: 'MAIN-12', chain_scope: 'chain' }
+  assert.equal(branchOf(named), null)
+  const epic = withBranch(named, 'MAIN-40')
+  assert.deepEqual(epic, { ...named, branch: 'MAIN-40' })
+  assert.equal(branchOf(epic), 'MAIN-40')
+  // The work filed under no epic has a word of its own in the address.
+  const none = withBranch(named, '')
+  assert.deepEqual(none, { ...named, branch: 'none' })
+  assert.equal(branchOf(none), '')
+  assert.deepEqual(withBranch(epic, null), named)
+  // A value no branch could be is told apart from no branch at all.
+  for (const value of ['main-40', 'everything', 40, true])
+    assert.equal(branchOf({ ...named, branch: value }), undefined, String(value))
+  // Leaving the chain, or naming another, lets the branch go with it.
+  assert.deepEqual(withChain({ ...epic, closed: true }, null), { view: 'graph' })
+  assert.deepEqual(withChain(epic, { reference: 'MAIN-13', scope: 'chain' }), {
+    view: 'graph',
+    chain: 'MAIN-13',
+    chain_scope: 'chain',
+  })
 })
 
 test('the closed switch is kept beside the chain, absent when off, and goes with the chain', () => {

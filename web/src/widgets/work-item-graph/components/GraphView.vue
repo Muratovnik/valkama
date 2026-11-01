@@ -37,12 +37,19 @@ const props = defineProps<{
   scopeKind: GraphScope['kind']
   space: string
   version: number
+  /**
+   * The branch of the chain the card chose: the epic it was filed under (`''`
+   * for none), its members, and that epic's own id when the chain holds it.
+   */
+  branch?: { head: string | null; members: readonly string[]; reference: string } | null
   /** The chain this field is scoped to, named in its header chip. */
   chain?: { members: readonly string[]; reference: string; total: number } | null
+  /** Moves each time the host asks the field to take focus once it is framed. */
+  focusRequest?: number
   selectedId?: string | null
 }>()
 
-const emit = defineEmits<{ 'exit-chain': []; 'open': [reference: string] }>()
+const emit = defineEmits<{ 'exit-branch': []; 'exit-chain': []; 'open': [reference: string] }>()
 /** Whether a chain's closed members are drawn; the host keeps it in the address. */
 const showClosed = defineModel<boolean>('showClosed', { default: false })
 
@@ -76,6 +83,7 @@ const {
   }),
   () => props.selectedId ?? null,
   showClosed,
+  () => branchFrame.value?.ids ?? null,
 )
 
 /** Which empty the field is in, if any; the first cause wins. */
@@ -85,6 +93,20 @@ const emptyKind = computed(() => {
 })
 
 const readyIdSet = computed(() => new Set(ready.value.map((node) => node.work_item_id)))
+
+/** The branch as drawn: framed whole and kept lit. None while nothing of it is on the field. */
+const branchFrame = computed(() => {
+  const branch = props.branch
+  if (!branch || !placed.value) return null
+  const wanted = new Set(branch.head === null ? branch.members : [branch.head, ...branch.members])
+  const ids = new Set(
+    placed.value.nodes.map((node) => node.work_item_id).filter((id) => wanted.has(id)),
+  )
+  return ids.size ? { headId: branch.head, ids } : null
+})
+/** Whether a node is in the branch the card chose. */
+const inBranch = (node: PlacedNode) => branchFrame.value?.ids.has(node.work_item_id) ?? false
+const branchChip = computed(() => (branchFrame.value ? (props.branch?.reference ?? null) : null))
 
 /** Whether the space says this node is ready, asked per node it draws. */
 function isReady(node: PlacedNode): boolean {
@@ -111,12 +133,20 @@ const {
 // controls in the strip below and this field share one camera instance.
 const { anchorId, fitted, fitOptions, overview, onFlowInit, reveal, scheduleFitView } =
   useGraphCamera({
+    branch: () => branchFrame.value,
     flowId: GRAPH_FLOW_ID,
     placed,
     readyIds: readyIdSet,
     rootId: () => (inChain.value ? props.epicId : null),
     selectedId: () => props.selectedId ?? null,
-    resets: [() => props.space, () => props.scopeKind, () => props.epicId, showDone, showUnlinked],
+    resets: [
+      () => props.space,
+      () => props.scopeKind,
+      () => props.epicId,
+      () => props.branch?.reference,
+      showDone,
+      showUnlinked,
+    ],
   })
 
 /** The chain has closed members, so the key keeps the place «Done» comes and goes from. */
@@ -142,6 +172,8 @@ const {
 } = useGraphKeyboard({
   anchorId,
   canvas: useTemplateRef<HTMLElement>('canvas'),
+  fitted,
+  focusRequest: () => props.focusRequest,
   placed,
   reveal,
 })
@@ -161,8 +193,7 @@ function onFlowNodeClick(event: { node: { id: string } }) {
 }
 
 function onNodeFocus(id: string) {
-  keyboardFocus(id)
-  applyFocus({ type: 'focus', id })
+  if (keyboardFocus(id)) applyFocus({ type: 'focus', id })
 }
 
 function onNodeBlur(id: string) {
@@ -185,12 +216,14 @@ function onFieldPointerLeave() {
       v-model:show-done="showDone"
       v-model:show-unlinked="showUnlinked"
       :chain="chainChip"
+      :branch="branchChip"
       :open-total="openTotal"
       :hidden-done="hiddenDone"
       :ready-count="ready.length"
       :unlinked="unlinked"
       :keyed="keyed"
       @exit-chain="emit('exit-chain')"
+      @exit-branch="emit('exit-branch')"
     >
       <template #legend>
         <GraphLegend
@@ -278,6 +311,7 @@ function onFieldPointerLeave() {
             :node="data"
             :ready="isReady(data)"
             :recessed="isRecessed(data)"
+            :marked="inBranch(data)"
             :chain-group="nodeChainGroup(data)"
             :parent-reference="parentReference(data)"
             :root="isChainRoot(data)"

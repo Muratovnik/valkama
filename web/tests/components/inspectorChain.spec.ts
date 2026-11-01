@@ -408,9 +408,23 @@ describe('the chain section of a card', () => {
     serveChain(json(chainResponse(largeEpicChain())))
     const wrapper = await open()
     await getButton(wrapper, 'Show on graph').trigger('click')
-    const [[shown]] = wrapper.emitted('chain') as [[{ root: { reference: string }; total: number }]]
+    const [[shown, branch]] = wrapper.emitted('chain') as [
+      [{ root: { reference: string }; total: number }, string | null],
+    ]
     expect(shown.root.reference).toBe('MAIN-384')
     expect(shown.total).toBe(616)
+    // No branch chosen on the map: the graph is framed on the root.
+    expect(branch).toBeNull()
+  })
+
+  it('hands the graph the branch chosen on the map', async () => {
+    serveChain(json(chainResponse(largeEpicChain())))
+    const wrapper = await open()
+    await getButton(wrapper, 'MAIN-900').trigger('click')
+    await getButton(wrapper, 'Show on graph').trigger('click')
+    await getButton(wrapper, 'MAIN-900').trigger('click')
+    await getButton(wrapper, 'Show on graph').trigger('click')
+    expect((wrapper.emitted('chain') ?? []).map(([, branch]) => branch)).toEqual(['MAIN-900', null])
   })
 
   it('reads once per open and once per refresh, and never for an attached store', async () => {

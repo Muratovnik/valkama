@@ -208,14 +208,17 @@ const primaryStore = computed(
 )
 
 const {
+  branch: chainBranch,
   chain: chainScope,
   closed: chainClosed,
+  exitBranch,
   failure: chainFailure,
   narrow,
   pending: chainPending,
   retry: retryChain,
   setClosed: setChainClosed,
   show: showChain,
+  shown: chainShown,
 } = usePlanningChainView({
   state: () => props.route.state,
   open: () => open.value,
@@ -420,9 +423,11 @@ defineExpose({ refresh })
     <PlanningWorkspace
       :model="shownModel ?? model"
       :chain="chainScope"
+      :chain-branch="chainBranch"
       :chain-pending="chainPending"
       :chain-closed="chainClosed"
       :chain-failure="chainFailure"
+      :graph-focus="chainShown"
       :grouping="grouping"
       :scope-key="planningKey"
       :selected-id="selectedId"
@@ -435,6 +440,7 @@ defineExpose({ refresh })
       @retry-chain="retryChain"
       @create="composerOpen = true"
       @exit-chain="narrow(null)"
+      @exit-branch="exitBranch"
       @group="(next) => emit('state', withGrouping(route.state, next))"
       @open="(reference) => openItem(reference)"
       @place="placeItem"

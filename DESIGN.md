@@ -545,7 +545,13 @@ under either. In a phone-wide workspace the bar is one row — the filter or the
 chip and a «Graph options» button that opens the switch and the key under it —
 the frontier count takes the key's corner of the field, and the camera controls
 keep one row, so the field keeps most of the screen and no camera control falls
-outside it. Zoomed out past reading, the graph draws each node as a block of its
+outside it. «Show on graph» from a card whose map has a branch chosen opens the
+chain framed on that branch — the whole of its work where that reads, else its
+beginning at reading size — with its members edged in the selection accent, a
+chip naming the branch that lets it go, and the branch in the address; focus
+goes to the graph, never to the page. The field is one Tab stop: the arrows
+walk to the nearest node their way, Home and End to the first and last as the
+field is read, and the camera follows. Zoomed out past reading, the graph draws each node as a block of its
 state's colour with its reference, so the whole of a long chain reads as an
 overview. Under the map, one line gives the totals and a second answers
 whether and when the open part closes, from the last seven days, and says so

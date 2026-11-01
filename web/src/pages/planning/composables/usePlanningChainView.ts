@@ -8,13 +8,15 @@
  * reload, a link and Back land on what the operator saw.
  */
 
-import { computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import {
+  branchOf,
   chainTarget,
   closedOf,
   usePlanningChainScope,
+  withBranch,
   withChain,
   withClosed,
 } from '@/pages/planning/composables/usePlanningChainScope.ts'
@@ -110,15 +112,38 @@ export function usePlanningChainView(options: ChainViewOptions) {
     if (arrived && state?.view === 'graph' && options.open() !== null) options.close()
   })
 
-  /** The card asked to see its chain: the graph, scoped to exactly that chain, with the card closed. */
-  function show(chain: WorkItemChain) {
+  /**
+   * How many times the card has asked for the graph. The card it asked from
+   * closes, so focus would fall to the page; the graph takes it once it has
+   * framed what was asked for.
+   */
+  const shown = ref(0)
+
+  /**
+   * The card asked to see its chain: the graph, scoped to exactly that chain and
+   * framed on the branch the card chose on its map, if any, with the card closed.
+   */
+  function show(chain: WorkItemChain, branch: string | null = null) {
     scope.enter(chain)
     closeOnArrival = chain.root.reference
-    options.write({
-      ...withChain(options.state(), { reference: chain.root.reference, scope: chain.scope }),
-      view: 'graph',
+    shown.value += 1
+    const named = withChain(options.state(), {
+      reference: chain.root.reference,
+      scope: chain.scope,
     })
+    options.write({ ...withBranch(named, branch), view: 'graph' })
   }
+
+  // A branch the address names that no branch could be: said once, and dropped.
+  watch(
+    () => branchOf(options.state()),
+    (branch) => {
+      if (branch !== undefined) return
+      options.notice(t('graph.branchInvalid'))
+      options.write(withBranch(options.state(), null))
+    },
+    { immediate: true },
+  )
 
   return {
     chain: scope.scoped,
@@ -131,5 +156,10 @@ export function usePlanningChainView(options: ChainViewOptions) {
       options.write(withChain(options.state(), chain)),
     closed: computed(() => closedOf(options.state())),
     setClosed: (closed: boolean) => options.write(withClosed(options.state(), closed)),
+    /** The branch of the chain the graph is framed on: a reference, `''` for no epic, or null. */
+    branch: computed(() => branchOf(options.state()) ?? null),
+    /** Widen the graph from the branch back to the whole chain. */
+    exitBranch: () => options.write(withBranch(options.state(), null)),
+    shown,
   }
 }

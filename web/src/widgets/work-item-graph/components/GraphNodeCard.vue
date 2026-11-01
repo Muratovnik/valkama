@@ -16,6 +16,7 @@ const {
   node,
   ready,
   chainGroup,
+  marked = false,
   overview = false,
   root = false,
   tabbable = false,
@@ -25,6 +26,8 @@ const {
   recessed: boolean
   /** Where the node stands in the chain the field is scoped to, marked on its edge. */
   chainGroup?: ChainGroup
+  /** In the branch of the chain the card chose, which the field frames and lights. */
+  marked?: boolean
   /** The field is zoomed out past reading: the card is its state's colour and its reference. */
   overview?: boolean
   parentReference?: string
@@ -101,6 +104,7 @@ const accessibleName = computed(() =>
       recessed,
       root,
       overview,
+      marked,
     }"
     :aria-label="accessibleName"
     :tabindex="tabIndex"
@@ -199,6 +203,13 @@ const accessibleName = computed(() =>
      the ground with the closed work around it. */
   &.root {
     background: var(--color-surface-sheet);
+  }
+
+  /* A member of the branch the card chose: its edge takes the selection
+     accent, so the branch stands out of the field whatever else is lit; the
+     parent chip on each card names the branch in words. */
+  &.marked {
+    border-color: var(--color-accent);
   }
 
   &:hover {
@@ -358,6 +369,10 @@ const accessibleName = computed(() =>
   align-items: center;
   padding: 0 var(--space-6);
   border-color: transparent;
+
+  &.marked {
+    border-color: var(--color-accent);
+  }
 
   &.recessed {
     opacity: 0.55;

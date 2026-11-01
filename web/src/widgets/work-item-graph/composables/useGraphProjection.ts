@@ -26,6 +26,7 @@ import type {
 } from '@/widgets/work-item-graph/utils/graphFocus.ts'
 import {
   doneCount,
+  edgeKey,
   frontier,
   layout,
   neighborhood,
@@ -76,6 +77,7 @@ export function useGraphProjection(
   input: ProjectionInput,
   selected: () => string | null = () => null,
   chainShowDone: Ref<boolean> = ref(false),
+  branch: () => ReadonlySet<string> | null = () => null,
 ): GraphProjection {
   /**
    * Whether closed work is drawn, held once for the space and once for the
@@ -223,9 +225,20 @@ export function useGraphProjection(
   /**
    * Focus keeps the complete transitive lineage, including every branch and
    * cycle reachable through dependency/discovery edges. Unrelated work dims.
+   *
+   * A branch of the chain the card chose stays lit instead, with the links
+   * inside it, until it is let go: the keyboard walking it keeps it lit, and
+   * only a pointer resting on a node shows that node's lineage for a moment.
    */
   const focusSet = computed(() => {
     if (!placed.value) return null
+    const pinned = branch()
+    if (pinned && focus.value.active !== 'hover') {
+      const edges = placed.value.edges.filter(
+        (edge) => pinned.has(edge.from) && pinned.has(edge.to),
+      )
+      return { ids: new Set(pinned), edges: new Set(edges.map((edge) => edgeKey(edge))) }
+    }
     const selection = selected()
     const selectedVisible = placed.value.nodes.some((node) => node.work_item_id === selection)
     const active = activeGraphFocus(focus.value) ?? (selectedVisible ? selection : null)

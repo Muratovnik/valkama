@@ -40,12 +40,16 @@ const props = defineProps<{
   writable: boolean
   /** The chain the views are narrowed to, when the owner asked to see one. */
   chain?: WorkItemChain | null
+  /** The branch of the chain the graph is framed on: an epic's reference, `''` for no epic. */
+  chainBranch?: string | null
   /** The graph draws the chain's closed members too; the route keeps it. */
   chainClosed?: boolean
   /** The chain the route names could not be read; the views show the whole space. */
   chainFailure?: { message: string; retryable: boolean } | null
   /** The route names a chain whose first read is still in flight. */
   chainPending?: boolean
+  /** Moves each time the card asks for the graph, which then takes focus. */
+  graphFocus?: number
   /** How the board is grouped: not at all, or into one lane per epic. */
   grouping?: BoardGrouping
   scopeKey?: string
@@ -56,6 +60,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'chain-closed': [closed: boolean]
   'create': []
+  'exit-branch': []
   'exit-chain': []
   'group': [grouping: BoardGrouping]
   'open': [reference: string]
@@ -144,6 +149,25 @@ const graphChain = computed(() =>
       }
     : null,
 )
+
+/**
+ * The branch of the chain the graph is framed on, as the chain's own answer
+ * lists it — the members filed under that epic, or under none — and the epic
+ * itself, which heads it when it is in the chain.
+ */
+const graphBranch = computed(() => {
+  const chain = props.chain
+  const branch = props.chainBranch
+  if (!chain || branch === null || branch === undefined) return null
+  const members = chain.members
+    .filter((member) => (member.parent_reference ?? '') === branch)
+    .map((member) => member.work_item_id)
+  const head =
+    branch === chain.root.reference
+      ? chain.root.work_item_id
+      : chain.members.find((member) => branch !== '' && member.reference === branch)?.work_item_id
+  return { reference: branch, members, head: head ?? null }
+})
 
 /** The whole space, or exactly one chain with the links the chain endpoint named. */
 const graphScopeKind = computed(() => (props.chain ? 'chain' : 'all'))
@@ -244,10 +268,13 @@ const matchCount = computed(() => (filtered.value ? matchedItems.value.length : 
         :edges="graphEdges"
         :epic-id="chain?.root.work_item_id ?? null"
         :chain="graphChain"
+        :branch="graphBranch"
+        :focus-request="graphFocus"
         :show-closed="chainClosed"
         :open="true"
         :version="version"
         @exit-chain="emit('exit-chain')"
+        @exit-branch="emit('exit-branch')"
         @open="(reference) => emit('open', reference)"
         @update:show-closed="(closed) => emit('chain-closed', closed)"
       />

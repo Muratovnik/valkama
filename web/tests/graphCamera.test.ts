@@ -4,7 +4,7 @@ import type { ViewportTransform } from '@vue-flow/core'
 import ELK from 'elkjs/lib/elk.bundled.js'
 import { test } from 'vitest'
 
-import { graphCameraView } from '@/widgets/work-item-graph/utils/graphCamera.ts'
+import { graphAnchor, graphCameraView } from '@/widgets/work-item-graph/utils/graphCamera.ts'
 import { NODE_HEIGHT, NODE_WIDTH } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import { layout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 
@@ -100,4 +100,56 @@ test('a chain starts on its root rather than on the first workable item', async 
   })
   assert.ok(work)
   inCamera(placed, 1, work)
+})
+/** The first of `numbers` as the field is read: top to bottom, then left to right. */
+function firstRead(placed: Awaited<ReturnType<typeof graph>>, numbers: number[]) {
+  const ids = new Set(numbers.map((number) => nodeId(number)))
+  return placed.nodes
+    .filter((node) => ids.has(node.work_item_id))
+    .sort((left, right) => left.y - right.y || left.x - right.x)[0]
+}
+
+test('a branch the card chose is framed whole when it reads, its epic lit but not framed', async () => {
+  const placed = await graph(214)
+  const work = [40, 41, 42]
+  // The epic heading the branch, drawn far from its work.
+  const branch = {
+    headId: nodeId(200),
+    ids: new Set([...work, 200].map((number) => nodeId(number))),
+  }
+  const camera = graphCameraView(placed, SIZE, new Set([nodeId(1)]), {
+    branch,
+    rootId: nodeId(150),
+    selectedId: nodeId(60),
+  })
+  assert.ok(camera)
+  assert.ok(camera.zoom >= 0.75)
+  // Every node of the branch's work, rather than the root or the open card with its links.
+  for (const number of work) inCamera(placed, number, camera)
+  // The keyboard enters on the branch's first work as the field is read.
+  assert.equal(
+    graphAnchor(placed, new Set([nodeId(1)]), { branch, rootId: nodeId(150) })?.work_item_id,
+    firstRead(placed, work).work_item_id,
+  )
+  // A branch with nothing drawn but its epic is framed on the epic.
+  const alone = { headId: nodeId(200), ids: new Set([nodeId(200)]) }
+  const epic = graphCameraView(placed, SIZE, new Set(), { branch: alone })
+  assert.ok(epic)
+  inCamera(placed, 200, epic)
+  // «Focus work» still asks for work, branch or not.
+  const ready = graphCameraView(placed, SIZE, new Set([nodeId(1)]), { branch, focusOnly: true })
+  assert.ok(ready)
+  inCamera(placed, 1, ready)
+})
+
+test('a branch too long to read at once opens on its beginning at reading size', async () => {
+  const placed = await graph(214)
+  const work = Array.from({ length: 120 }, (_, index) => index + 50)
+  const branch = { headId: null, ids: new Set(work.map((number) => nodeId(number))) }
+  const camera = graphCameraView(placed, SIZE, new Set(), { branch })
+  assert.ok(camera)
+  assert.equal(camera.zoom, 0.75)
+  const first = firstRead(placed, work)
+  inCamera(placed, first.number, camera)
+  assert.equal(graphAnchor(placed, new Set(), { branch })?.work_item_id, first.work_item_id)
 })
