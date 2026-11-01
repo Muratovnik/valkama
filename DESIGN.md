@@ -674,6 +674,12 @@ the open target, stretched over the whole sheet, so the sheet opens wherever it
 is clicked and stays one Tab stop; the glyphs and chips lie above it as filter
 buttons out of the Tab order. On the board grouped by epic an empty cell draws
 no ground until a tile of its lane is dragged and could land there.
+The Done column, and a lane's Done cell, stand newest closed first, by the time
+of the item's latest transition; nothing there is planned, so the manual order
+of the other columns does not apply. A tile does not move within Done, by drag
+or by Alt+↑/↓, and its tiles do not advertise the reorder keys. A tile dropped
+on Done from another column still closes, wherever the drop lands, and stands
+on top.
 Graph nodes allocate separate rows for status, title, and relationship
 metadata so labels cannot collide.
 A list row, a graph node and a search result print a work item's facets only

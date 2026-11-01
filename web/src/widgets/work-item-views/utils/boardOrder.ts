@@ -9,7 +9,7 @@
  * from for the length of a round trip, so the board draws the same move itself
  * first, from the same two facts, and the next read replaces it.
  */
-import type { PlanningWorkflow, WorkItemBrief } from '@/shared/api/planningModel.ts'
+import type { PlanningWorkflow, WorkflowState, WorkItemBrief } from '@/shared/api/planningModel.ts'
 
 export interface BoardMove {
   reference: string
@@ -73,4 +73,36 @@ export function placeLocally(
   const destination = groups.get(target.state_id) ?? []
   destination.splice(landing(destination, move.rank), 0, { ...item, state })
   return states.flatMap((entry) => groups.get(entry.state_id) ?? [])
+}
+
+/**
+ * Whether a state's tiles stand in the order they closed rather than in an
+ * order of work: the completed state. Nothing there is still planned, and what
+ * a reader looks for in it is what just finished, so the newest close leads
+ * and no tile is placed by hand. A tile dropped there from another column is
+ * still moved there; it lands on top.
+ */
+export function ordersByClosing(state: Pick<WorkflowState, 'category'>): boolean {
+  return state.category === 'completed'
+}
+
+/** When an item closed, in ms; an item with no closing time yet has only just closed. */
+function closedAt(item: WorkItemBrief): number {
+  const at = item.closed_at ? Date.parse(item.closed_at) : Number.NaN
+  return Number.isNaN(at) ? Infinity : at
+}
+
+/**
+ * The items as the board draws them: those of the completed state newest
+ * closed first, ties to the higher number, and every other item where it was,
+ * in the order of work the server listed. A tile the board has just moved
+ * there itself carries no closing time yet, so it leads until the server's
+ * answer says when.
+ */
+export function newestClosedFirst(items: readonly WorkItemBrief[]): WorkItemBrief[] {
+  const closed = items
+    .filter((item) => ordersByClosing(item.state))
+    .sort((left, right) => closedAt(right) - closedAt(left) || right.number - left.number)
+  let next = 0
+  return items.map((item) => (ordersByClosing(item.state) ? closed[next++] : item))
 }

@@ -28,6 +28,7 @@ import { useColumnFit } from '@/widgets/work-item-views/composables/useColumnFit
 import { terminalLast } from '@/widgets/work-item-views/utils/boardColumns.ts'
 import { boardLanes } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import type { BoardGrouping } from '@/widgets/work-item-views/utils/boardLanes.ts'
+import { newestClosedFirst } from '@/widgets/work-item-views/utils/boardOrder.ts'
 import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
 
 import { waitingOn } from '@/entities/work-item/utils/waiting.ts'
@@ -76,7 +77,9 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const hintId = `${useId()}-reorder`
 
-const columns = computed(() => terminalLast(byState(props.workflow, props.items)))
+/** The items in the order the board draws them: Done newest closed first. */
+const ordered = computed(() => newestClosedFirst(props.items))
+const columns = computed(() => terminalLast(byState(props.workflow, ordered.value)))
 const states = computed(() => columns.value.map((column) => column.state))
 /** What each item waits on, judged against the whole space so a filtered-out blocker still counts. */
 const waiting = computed(() => waitingOn(props.links, props.spaceItems ?? props.items))
@@ -86,7 +89,7 @@ const lanes = computed(() =>
         filtered: props.filtered,
         scope: props.scopeItems ?? props.items,
         space: props.spaceItems ?? props.items,
-        visible: props.items,
+        visible: ordered.value,
       })
     : [],
 )

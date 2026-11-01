@@ -25,6 +25,11 @@
  *
  * A stack may draw only its first `limit` tiles. It still reads every item, so
  * a move from the keyboard names its true neighbour and its true end.
+ *
+ * The completed state's stack is ordered by when its items closed, not by
+ * hand, so it offers no reorder: a tile does not move within it by drag or by
+ * Alt+↑/↓, and a tile dropped on it from another stack is sent with no place,
+ * since the newest close leads whatever place the drop measured.
  */
 import { computed, ref, watch } from 'vue'
 
@@ -32,7 +37,7 @@ import { useSortable } from '@vueuse/integrations/useSortable'
 import type { SortableEvent } from 'sortablejs'
 
 import WorkItemTile from '@/widgets/work-item-views/components/WorkItemTile.vue'
-import { rankBeside } from '@/widgets/work-item-views/utils/boardOrder.ts'
+import { ordersByClosing, rankBeside } from '@/widgets/work-item-views/utils/boardOrder.ts'
 import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
 
 import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
@@ -72,6 +77,12 @@ const emit = defineEmits<{
 
 const list = ref<HTMLElement | null>(null)
 let droppedAt = 0
+/** Whether a tile may be placed by hand among this stack's tiles. */
+const reorderable = computed(() => !ordersByClosing(props.state))
+/** What the stack says of its order, which a drop into it reads. */
+const order = computed(() => (reorderable.value ? undefined : 'closing'))
+/** The reorder hint a tile is described by, only where it can be reordered. */
+const tileHint = computed(() => (reorderable.value ? props.hintId : undefined))
 
 const shown = computed(() =>
   props.limit === undefined ? props.items : props.items.slice(0, props.limit),
@@ -108,10 +119,11 @@ function dropped(event: SortableEvent) {
   const reference = item.dataset.reference
   const state = to.dataset.state
   const moved = from !== to || oldIndex !== event.newIndex
-  const rank = rankBeside(beside(item, 'previous'), beside(item, 'next'))
+  const closing = to.dataset.order === 'closing'
+  const rank = closing ? undefined : rankBeside(beside(item, 'previous'), beside(item, 'next'))
   const landing = {
     keyboard: false,
-    position: (event.newIndex ?? 0) + 1,
+    position: closing ? 1 : (event.newIndex ?? 0) + 1,
     total: to.children.length,
   }
   // Back where Vue put it; the move is drawn from the data that comes back.
@@ -124,6 +136,7 @@ const sortable = useSortable(list, [], {
   group: props.group,
   animation: 150,
   disabled: !props.writable,
+  sort: !ordersByClosing(props.state),
   // The pointer's own copy of the tile, drawn by the page rather than the
   // platform, so it looks the same in every engine and stays on top of a
   // column that clips its overflow.
@@ -144,6 +157,7 @@ watch(
   () => props.group,
   (group) => sortable.option('group', group),
 )
+watch(reorderable, (sort) => sortable.option('sort', sort))
 
 /** A click that lands within a quarter second of a drop was the drop. */
 function open(reference: string) {
@@ -227,7 +241,7 @@ function stepped(event: KeyboardEvent, index: number) {
     walked(event, index)
     return
   }
-  if (!props.writable || step === undefined) return
+  if (!props.writable || !reorderable.value || step === undefined) return
   if (event.ctrlKey || event.metaKey || event.shiftKey) return
   event.preventDefault()
   const item = props.items[index]
@@ -247,7 +261,7 @@ function stepped(event: KeyboardEvent, index: number) {
 /** What a tile says it answers to, only where it can answer. */
 const shortcuts = 'Alt+ArrowUp Alt+ArrowDown'
 function keyHint(): string | undefined {
-  return props.writable ? shortcuts : undefined
+  return props.writable && reorderable.value ? shortcuts : undefined
 }
 
 defineExpose({ focusAt, walkFrom })
@@ -258,6 +272,7 @@ defineExpose({ focusAt, walkFrom })
     ref="list"
     class="work-item-stack"
     :data-state="props.state.key"
+    :data-order="order"
   >
     <li
       v-for="(item, index) in shown"
@@ -271,7 +286,7 @@ defineExpose({ focusAt, walkFrom })
         :filter="props.filter"
         :tab-stop="tabStop(item)"
         :key-shortcuts="keyHint()"
-        :hint-id="props.hintId"
+        :hint-id="tileHint"
         @keydown="stepped($event, index)"
         @filter="emit('filter', $event)"
         @open="open"

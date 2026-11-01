@@ -4,7 +4,11 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { placeLocally, rankBeside } from '@/widgets/work-item-views/utils/boardOrder.ts'
+import {
+  newestClosedFirst,
+  placeLocally,
+  rankBeside,
+} from '@/widgets/work-item-views/utils/boardOrder.ts'
 
 import { boardItem, boardWorkflow, references } from './fixtures/board.ts'
 
@@ -76,5 +80,36 @@ describe('a move drawn on the board', () => {
     expect(rankBeside(undefined, 'MAIN-2')).toBe('before:MAIN-2')
     expect(rankBeside('MAIN-1')).toBe('after:MAIN-1')
     expect(rankBeside()).toBeUndefined()
+  })
+})
+
+describe('the order the board draws finished work in', () => {
+  const done = (n: number, closed_at: string | null) => boardItem(n, 'done', { closed_at })
+  const mixed = [
+    boardItem(1),
+    done(30, '2026-10-01T09:00:00Z'),
+    boardItem(2),
+    done(31, '2026-10-30T09:00:00Z'),
+    done(32, '2026-10-15T09:00:00Z'),
+    boardItem(10, 'todo'),
+  ]
+
+  it('stands Done newest closed first and leaves every other item where it was', () => {
+    expect(references(newestClosedFirst(mixed))).toEqual([
+      'MAIN-1',
+      'MAIN-31',
+      'MAIN-2',
+      'MAIN-32',
+      'MAIN-30',
+      'MAIN-10',
+    ])
+  })
+
+  it('puts an item the board has just closed itself on top, and breaks a tie by number', () => {
+    const moved = placeLocally(mixed, boardWorkflow, { reference: 'MAIN-2', state: 'done' })
+    const drawn = newestClosedFirst(moved).filter((item) => item.state.key === 'done')
+    expect(references(drawn)).toEqual(['MAIN-2', 'MAIN-31', 'MAIN-32', 'MAIN-30'])
+    const tied = [done(40, '2026-10-30T09:00:00Z'), done(41, '2026-10-30T09:00:00Z')]
+    expect(references(newestClosedFirst(tied))).toEqual(['MAIN-41', 'MAIN-40'])
   })
 })

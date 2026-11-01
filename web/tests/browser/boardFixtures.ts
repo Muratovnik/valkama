@@ -43,6 +43,13 @@ function brief(number: number, state: State, title: string, extra: Partial<WorkI
 export type Brief = ReturnType<typeof brief>
 
 const under = (epic: number) => ({ parent_id: identity(epic) })
+/**
+ * When finished work closed, a day of October 2026. The space lists it in the
+ * order of work, so the Done column's own order is not the list's.
+ */
+const closedOn = (day: number) => ({
+  closed_at: `2026-10-${String(day).padStart(2, '0')}T10:00:00Z`,
+})
 
 /** The space in the order of work: the order a read of it lists, state by state. */
 export function boardSpace(): Brief[] {
@@ -52,11 +59,16 @@ export function boardSpace(): Brief[] {
     brief(403, BACKLOG, 'Place new work at the end of its state', under(401)),
     brief(404, BACKLOG, 'Take the next ready item by its place', under(401)),
     brief(405, DEV, 'Move a tile from the keyboard', under(401)),
-    brief(406, DONE, 'Fold a lane with nothing open', under(401)),
+    brief(406, DONE, 'Fold a lane with nothing open', { ...under(401), ...closedOn(21) }),
     brief(410, BACKLOG, EMPTY_EPIC, { kind: 'epic', ready: false }),
-    brief(420, DONE, 'The first board', { kind: 'epic', container: true, ready: false }),
-    brief(421, DONE, 'Columns by workflow state', under(420)),
-    brief(422, DONE, 'Drag between columns', under(420)),
+    brief(420, DONE, 'The first board', {
+      kind: 'epic',
+      container: true,
+      ready: false,
+      ...closedOn(5),
+    }),
+    brief(421, DONE, 'Columns by workflow state', { ...under(420), ...closedOn(3) }),
+    brief(422, DONE, 'Drag between columns', { ...under(420), ...closedOn(25) }),
     // More labels than a column's line holds, so the line has a count to make room for.
     brief(430, BACKLOG, 'Loose work under no epic', {
       labels: ['agent-packets', 'coordinator', 'decision-review', 'ui'],

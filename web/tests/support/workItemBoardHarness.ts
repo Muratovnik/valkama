@@ -13,7 +13,7 @@ import { boardEpic, boardItem, boardWorkflow } from '../fixtures/board.ts'
 export const i18n = () => createI18n({ legacy: false, locale: 'en', messages })
 
 export const epic = boardEpic(1)
-const closedEpic = boardEpic(2, 'done')
+export const closedEpic = boardEpic(2, 'done')
 export const space: WorkItemBrief[] = [
   boardItem(10, 'backlog', { parent_id: epic.work_item_id }),
   boardItem(11, 'backlog', { parent_id: epic.work_item_id }),

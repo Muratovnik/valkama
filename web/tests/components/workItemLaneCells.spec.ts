@@ -206,7 +206,8 @@ describe('a terminal cell of the board grouped by epic', () => {
     await more.trigger('click')
     await flushPromises()
     expect(doneCell(wrapper).findAll('[data-reference]')).toHaveLength(4)
-    expect(document.activeElement).toBe(tile(wrapper, 'MAIN-40').element)
+    // Done stands newest closed first; with no closing time the higher number leads.
+    expect(document.activeElement).toBe(tile(wrapper, 'MAIN-43').element)
     await more.trigger('click')
     await flushPromises()
     expect(doneCell(wrapper).findAll('[data-reference]')).toHaveLength(0)
