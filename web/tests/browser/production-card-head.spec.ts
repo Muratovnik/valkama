@@ -189,3 +189,36 @@ test('a reference in a checklist step opens its card, and pressing the step text
   await expect(drawer.locator('.head-reference')).toHaveText('MAIN-265')
   expect(ticks).toHaveLength(1)
 })
+
+/** A card whose body is long enough to hold its description to a few lines. */
+async function openLongCard(page: Page, width: number) {
+  await page.addInitScript(() => localStorage.setItem('valkama-locale', 'ru'))
+  await page.setViewportSize({ width, height: 844 })
+  await installBackend(page, { longRead: true })
+  await page.goto(
+    serializePlatformRoute({
+      module_id: 'planning',
+      scope: projectScope,
+      entity: planningWorkItemEntity(workItemRef),
+    }),
+  )
+  const drawer = page.locator('.drawer')
+  await expect(drawer.locator('.card-facts')).toBeVisible()
+  return drawer
+}
+
+for (const width of [1440, 390]) {
+  test(`a long text's toggle starts where the text starts at ${width}px`, async ({ page }) => {
+    const drawer = await openLongCard(page, width)
+    const description = drawer.locator('.description-copy')
+    const toggle = description.locator('.collapsible-toggle')
+    await expect(toggle).toBeVisible()
+    // Read in one frame: the drawer may still be sliding in.
+    const offset = await description.evaluate((node) => {
+      const left = (selector: string) =>
+        node.querySelector(selector)?.getBoundingClientRect().left ?? Number.NaN
+      return left('.collapsible-toggle') - left('.collapsible-text')
+    })
+    expect(offset).toBeCloseTo(0, 0)
+  })
+}

@@ -177,9 +177,10 @@ const toggleLabel = computed(() =>
 }
 
 /* The toggle starts where the text starts, so it reads as the text's own end
-   rather than as an action of the section around it. */
+   rather than as an action of the section around it. Its edge is the column's:
+   a labelled ghost rests on its own fill now, and the margin that once pulled
+   a bare label into line with the text pulled that fill 8px out of it. */
 .collapsible-toggle {
   justify-self: start;
-  margin-inline-start: calc(-1 * var(--space-2));
 }
 </style>
