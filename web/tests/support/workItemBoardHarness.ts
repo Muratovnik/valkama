@@ -41,7 +41,7 @@ export function board(props: Partial<InstanceType<typeof WorkItemBoard>['$props'
 }
 
 export function tile(wrapper: ReturnType<typeof board>, reference: string) {
-  return wrapper.get(`[data-reference="${reference}"] .work-item-tile`)
+  return wrapper.get(`[data-reference="${reference}"] .tile-open`)
 }
 
 export function live(wrapper: ReturnType<typeof board>) {

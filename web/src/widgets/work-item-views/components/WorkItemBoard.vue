@@ -29,8 +29,12 @@ import { terminalLast } from '@/widgets/work-item-views/utils/boardColumns.ts'
 import { boardLanes } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import type { BoardGrouping } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
+import { waitingOn } from '@/widgets/work-item-views/utils/boardWaiting.ts'
 
-import { byState, readyIds } from '@/shared/api/planningModel.ts'
+import { EMPTY_WORK_FILTER } from '@/entities/work-item/utils/workFilter.ts'
+import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
+
+import { byState } from '@/shared/api/planningModel.ts'
 import type { PlanningEdge, PlanningWorkflow, WorkItemBrief } from '@/shared/api/planningModel.ts'
 
 const props = withDefaults(
@@ -38,6 +42,8 @@ const props = withDefaults(
     items: WorkItemBrief[]
     links: PlanningEdge[]
     workflow: PlanningWorkflow
+    /** The filter in force, so a label chip already in it offers to come out. */
+    filter?: WorkFilter
     /** A queue or search filter narrowed `items`. */
     filtered?: boolean
     grouping?: BoardGrouping
@@ -49,6 +55,7 @@ const props = withDefaults(
     writable?: boolean
   }>(),
   {
+    filter: () => EMPTY_WORK_FILTER,
     filtered: false,
     grouping: 'none',
     scopeItems: undefined,
@@ -60,6 +67,8 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   chain: [reference: string]
+  /** A tile's label, kind or priority was clicked: the token the filter gains or loses. */
+  filter: [token: WorkFilterToken]
   open: [reference: string]
   place: [move: BoardMove]
 }>()
@@ -69,19 +78,8 @@ const hintId = `${useId()}-reorder`
 
 const columns = computed(() => terminalLast(byState(props.workflow, props.items)))
 const states = computed(() => columns.value.map((column) => column.state))
-const ready = computed(() => readyIds(props.items))
-const blocked = computed(() => {
-  const open = new Set(
-    (props.spaceItems ?? props.items)
-      .filter((item) => !item.state.is_terminal)
-      .map((item) => item.work_item_id),
-  )
-  return new Set(
-    props.links
-      .filter((link) => link.kind === 'blocks' && open.has(link.from))
-      .map((link) => link.to),
-  )
-})
+/** What each item waits on, judged against the whole space so a filtered-out blocker still counts. */
+const waiting = computed(() => waitingOn(props.links, props.spaceItems ?? props.items))
 const lanes = computed(() =>
   props.grouping === 'epic'
     ? boardLanes({
@@ -161,7 +159,7 @@ watch(
     const tile = [...(root.value?.querySelectorAll<HTMLElement>('[data-reference]') ?? [])].find(
       (element) => element.dataset.reference === wanted,
     )
-    const button = tile?.querySelector<HTMLElement>('button')
+    const button = tile?.querySelector<HTMLElement>('.tile-open')
     // The tile keeps its element across the move, so it is often still focused
     // and focusing it again would scroll nothing; it is brought into view here.
     button?.focus({ preventScroll: true })
@@ -183,8 +181,8 @@ watch(
       v-if="grouped"
       :lanes="lanes"
       :states="states"
-      :ready-ids="ready"
-      :blocked-ids="blocked"
+      :waiting="waiting"
+      :filter="props.filter"
       :filtered="props.filtered"
       :hint-id="hint"
       :space-id="props.spaceId"
@@ -192,6 +190,7 @@ watch(
       @chain="emit('chain', $event)"
       @dragging="dragging = $event"
       @edge="edge"
+      @filter="emit('filter', $event)"
       @open="emit('open', $event)"
       @place="placed"
     />
@@ -201,13 +200,14 @@ watch(
         :key="column.state.state_id"
         :state="column.state"
         :items="column.items"
-        :ready-ids="ready"
-        :blocked-ids="blocked"
+        :waiting="waiting"
+        :filter="props.filter"
         :hint-id="hint"
         :writable="props.writable"
         :empty-label="t('workItem.columnEmpty')"
         @dragging="dragging = $event"
         @edge="edge"
+        @filter="emit('filter', $event)"
         @open="emit('open', $event)"
         @place="placed"
       />

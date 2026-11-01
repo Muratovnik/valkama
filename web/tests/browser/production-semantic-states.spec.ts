@@ -16,8 +16,8 @@ test('planning operational states use the shared semantic DOM contract', async (
   await expect(binding).toContainText('Unbound')
 
   await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
-  await expect(page.locator('[data-dimension="work-item-readiness"]')).toHaveAttribute(
-    'data-state',
-    'blocked',
-  )
+  // An open blocker is the tile's readiness exception, in the danger tone the state owner gives it.
+  const waiting = page.locator('.work-item-tile [data-facet="readiness"]')
+  await expect(waiting).toHaveAttribute('data-tone', 'danger')
+  await expect(waiting).toContainText('Waiting on')
 })

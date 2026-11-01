@@ -10,11 +10,15 @@
  * own output folder.
  */
 import { expect, test } from '@playwright/test'
+import type { Locator } from '@playwright/test'
+
+import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { LONG_EPIC } from './boardFixtures.ts'
 import { cell, drag, lane, openBoard, routeState, serve, shot, tiles } from './boardPage.ts'
 import { expectNoSilentClipping } from './overflow.ts'
+import { projectScope } from './planningFixtures.ts'
 
 /** The sum of an rgb(a) colour's first three channels: a lighter fill has the larger sum. */
 function brightness(color: string): number {
@@ -231,7 +235,7 @@ test('Alt+Arrow moves a focused tile one place and the move is announced', async
   await openBoard(page)
   const epic = lane(page, LONG_EPIC)
   const live = page.locator('.work-item-board [role="status"]')
-  const focused = epic.locator('li[data-reference="MAIN-402"] .work-item-tile')
+  const focused = epic.locator('li[data-reference="MAIN-402"] .tile-open')
   await expect(focused).toHaveAttribute('aria-keyshortcuts', 'Alt+ArrowUp Alt+ArrowDown')
   await focused.focus()
   await page.keyboard.press('Alt+ArrowDown')
@@ -255,6 +259,34 @@ test('Alt+Arrow moves a focused tile one place and the move is announced', async
   await page.keyboard.press('Alt+ArrowDown')
   await expect(live).toHaveText('MAIN-402 is already last')
   expect(writes).toHaveLength(2)
+})
+
+/** The middle of something on screen, where a hand picks it up. */
+async function centre(what: Locator) {
+  const box = await what.boundingBox()
+  if (!box) throw new Error('nothing to pick up on screen')
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+}
+
+test('a label chip on a tile filters instead of opening, and the rest of the sheet opens it', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await installBackend(page)
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  const sheet = page.locator('.work-item-column[data-state="dev"] .work-item-tile').first()
+  const chip = sheet.locator('.label-chip').first()
+  await expect(chip).toBeVisible()
+  // A chip lies over the open target stretched across the sheet, so the pointer reaches it.
+  await chip.click()
+  await expect(page.locator('.drawer')).toHaveCount(0)
+  // The sheet is still one Tab stop: the chip is reached by the pointer only.
+  await expect(chip).toHaveAttribute('tabindex', '-1')
+  // Anywhere else on the sheet — here its last line, the holder — lies under the open
+  // target and opens the card.
+  const facts = await centre(sheet.locator('.tile-facts'))
+  await page.mouse.click(facts.x, facts.y)
+  await expect(page.locator('.drawer')).toBeVisible()
 })
 
 test('a lane is as tall as its tiles: an empty cell stays a low ground', async ({ page }) => {
@@ -283,7 +315,7 @@ test('arrows walk the tiles, and a tile moved from the keyboard is brought into 
   await serve(page)
   await openBoard(page)
   const epic = lane(page, LONG_EPIC)
-  const tile = (reference: string) => epic.locator(`li[data-reference="${reference}"] > button`)
+  const tile = (reference: string) => epic.locator(`li[data-reference="${reference}"] .tile-open`)
   // One Tab stop per cell; a bare arrow moves focus and nothing else.
   await expect(cell(epic, 'backlog').locator('button[tabindex="0"]')).toHaveCount(1)
   await tile('MAIN-402').focus()

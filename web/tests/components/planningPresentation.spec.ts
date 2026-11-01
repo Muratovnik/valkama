@@ -88,13 +88,15 @@ describe('Planning semantic presentation', () => {
       global: { plugins: [i18n()] },
     })
     expect(wrapper.find('[data-dimension="claim-lease"]').exists()).toBe(false)
-    expect(wrapper.get('.tile-holder').text()).toBe('Responsible: codex')
+    // The holder is named, not introduced: «Responsible:» was a word on every held tile.
+    expect(wrapper.get('.tile-facts [data-facet="holder"]').text()).toBe('codex')
+    expect(wrapper.text()).not.toContain('Responsible')
 
     await wrapper.setProps({ item: workItem({ claim_ref: 'codex', claim_state: 'stale' }) })
-    const mark = wrapper.get('[data-dimension="claim-lease"]')
+    const mark = wrapper.get('.tile-line [data-dimension="claim-lease"]')
     expect(mark.attributes('data-state')).toBe('stale')
     expect(mark.text()).toBe('Stale claim')
-    expect(wrapper.get('.tile-holder').text()).toBe('Responsible: codex')
+    expect(wrapper.get('.tile-facts [data-facet="holder"]').text()).toBe('codex')
 
     await wrapper.setProps({
       item: workItem({
@@ -103,23 +105,61 @@ describe('Planning semantic presentation', () => {
         state: { ...workItem().state, is_terminal: true },
       }),
     })
+    // Finished work: the claim is history, so neither the mark nor the holder is printed.
     expect(wrapper.find('[data-dimension="claim-lease"]').exists()).toBe(false)
+    expect(wrapper.find('[data-facet="holder"]').exists()).toBe(false)
   })
 
-  it('keeps priority readable without colouring the whole card', async () => {
+  it('prints priority and kind as glyphs only when they differ from the norm', async () => {
     const wrapper = mount(WorkItemTile, {
-      props: { item: workItem({ priority: 'urgent' }) },
+      attachTo: document.body,
+      props: { item: workItem({ priority: 'urgent', kind: 'improvement' }) },
       global: { plugins: [i18n()] },
     })
-
-    expect(wrapper.get('.tile-priority').text()).toBe('Urgent')
+    const priority = wrapper.get('.tile-line [data-facet="priority"]')
+    expect(priority.attributes('data-tone')).toBe('danger')
+    expect(priority.find('svg').exists()).toBe(true)
+    // The word is the glyph's name, not text on the sheet.
+    expect(priority.get('.facet-word').classes()).toContain('facet-word-hidden')
+    expect(priority.get('.facet-word').text()).toBe('Urgent')
+    const kind = wrapper.get('.tile-line [data-facet="kind"]')
+    expect(kind.get('.facet-word').classes()).toContain('facet-word-hidden')
+    expect(kind.get('.facet-word').text()).toBe('Improvement')
     expect(wrapper.get('.work-item-tile').attributes('data-tone')).toBeUndefined()
 
     await wrapper.setProps({ item: workItem({ priority: 'high' }) })
-    expect(wrapper.get('.tile-priority').text()).toBe('High')
+    expect(wrapper.get('[data-facet="priority"]').attributes('data-tone')).toBe('warning')
+    expect(wrapper.find('[data-facet="kind"]').exists()).toBe(false)
 
+    // Medium and a plain task are the norm: nothing on the line but the reference.
     await wrapper.setProps({ item: workItem({ priority: 'medium' }) })
-    expect(wrapper.get('.tile-priority').text()).toBe('Medium')
+    expect(wrapper.find('.tile-lead').exists()).toBe(false)
+    expect(wrapper.get('.tile-line').text()).toBe('QA-340')
+    wrapper.unmount()
+  })
+
+  it('names an open blocker on the tile and never says the item is workable', async () => {
+    const wrapper = mount(WorkItemTile, {
+      props: {
+        item: workItem({ ready: true, state: { ...workItem().state, category: 'backlog' } }),
+      },
+      global: { plugins: [i18n()] },
+    })
+    expect(wrapper.text()).not.toMatch(/workable/iu)
+    expect(wrapper.find('[data-facet="readiness"]').exists()).toBe(false)
+
+    await wrapper.setProps({ waitingOn: 'QA-12' })
+    const waiting = wrapper.get('.tile-line [data-facet="readiness"]')
+    expect(waiting.text()).toBe('Waiting on QA-12')
+    expect(waiting.attributes('data-tone')).toBe('danger')
+    // Folded short of room, the glyph still tells the pointer what it stands for.
+    expect(waiting.attributes('title')).toBe('Waiting on QA-12')
+    // The open target names the item and is described by what stops it.
+    const open = wrapper.get('.tile-open')
+    const described = open.attributes('aria-describedby') ?? ''
+    expect(described.split(' ')).toContain(wrapper.get('.tile-exceptions').attributes('id'))
+    expect(open.text()).toContain('QA-340')
+    expect(open.attributes('title')).toBe('Centralize semantic presentation')
   })
 
   it('gives ready and active ownership precedence over the workflow marker', async () => {

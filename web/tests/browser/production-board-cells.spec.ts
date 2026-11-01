@@ -54,14 +54,14 @@ test('a closed Done cell is reached by Tab, and its button shows the cards it co
   await expect(more).toHaveText('Show all · 1')
   await expect(epic.locator('li[data-reference="MAIN-406"]')).toHaveCount(0)
   // Tab from the lane's open tile reaches the button within a few stops.
-  await epic.locator('li[data-reference="MAIN-402"] > button').focus()
+  await epic.locator('li[data-reference="MAIN-402"] .tile-open').focus()
   await expect(async () => {
     await page.keyboard.press('Tab')
     await expect(more).toBeFocused({ timeout: 200 })
   }).toPass({ intervals: [0], timeout: 5000 })
   await expect(more).toHaveAttribute('aria-expanded', 'false')
   await page.keyboard.press('Enter')
-  const revealed = epic.locator('li[data-reference="MAIN-406"] > button')
+  const revealed = epic.locator('li[data-reference="MAIN-406"] .tile-open')
   await expect(revealed).toBeVisible()
   // Focus goes to the card it revealed, and the toggle now closes the cell.
   await expect(revealed).toBeFocused()
@@ -75,5 +75,5 @@ test('a closed Done cell is reached by Tab, and its button shows the cards it co
   await expect(more).toHaveText('Show all · 1')
   // From the toggle the arrows lead back to the cards: no dead end.
   await page.keyboard.press('ArrowLeft')
-  await expect(page.locator(':focus')).toHaveAttribute('class', /work-item-tile/u)
+  await expect(page.locator(':focus')).toHaveAttribute('class', /tile-open/u)
 })

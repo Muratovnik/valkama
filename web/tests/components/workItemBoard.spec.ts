@@ -15,7 +15,7 @@ import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
-import { boardItem, boardWorkflow } from '../fixtures/board.ts'
+import { boardId, boardItem, boardWorkflow } from '../fixtures/board.ts'
 import { emptyChain } from '../fixtures/chain.ts'
 import { board, epic, i18n, live, space, tile } from '../support/workItemBoardHarness.ts'
 
@@ -206,7 +206,7 @@ describe('moving a tile from the keyboard', () => {
 
 const stops = (wrapper: ReturnType<typeof board>) =>
   wrapper
-    .findAll('li[data-reference] > button[tabindex="0"]')
+    .findAll('li[data-reference] .tile-open[tabindex="0"]')
     .map((button) => button.element.closest('li')?.dataset.reference)
 const focused = () => document.activeElement?.closest('li')?.dataset.reference
 
@@ -230,6 +230,50 @@ describe('the columns of the board', () => {
     }
     expect(order('none')).toEqual(['backlog', 'todo', 'dev', 'blocked', 'done'])
     expect(order('epic')).toEqual(['backlog', 'todo', 'dev', 'blocked', 'done'])
+  })
+})
+
+describe('a tile on the board', () => {
+  const labelled = space.map((item) =>
+    item.reference === 'MAIN-10'
+      ? { ...item, labels: ['agent-packets', 'coordinator'], priority: 'high' as const }
+      : item,
+  )
+
+  it('adds a label to the filter from its chip, without opening the card', async () => {
+    const wrapper = board({ items: labelled, spaceItems: labelled })
+    const chip = wrapper.get('[data-reference="MAIN-10"] .label-chip')
+    await chip.trigger('click')
+    expect(wrapper.emitted('filter')).toEqual([[{ facet: 'labels', value: 'agent-packets' }]])
+    expect(wrapper.emitted('open')).toBeUndefined()
+    // The priority glyph filters as well, also without opening anything.
+    await wrapper.get('[data-reference="MAIN-10"] [data-facet="priority"]').trigger('click')
+    expect(wrapper.emitted('filter')?.[1]).toEqual([{ facet: 'priority', value: 'high' }])
+    expect(wrapper.emitted('open')).toBeUndefined()
+    // The title opens it.
+    await tile(wrapper, 'MAIN-10').trigger('click')
+    expect(wrapper.emitted('open')).toEqual([['MAIN-10']])
+  })
+
+  it('stays one Tab stop however many marks filter', () => {
+    const wrapper = board({ items: labelled, spaceItems: labelled })
+    const focusable = wrapper
+      .get('[data-reference="MAIN-10"]')
+      .findAll('button, a, [tabindex]')
+      .filter((element) => (element.element as HTMLElement).tabIndex >= 0)
+    expect(focusable.map((element) => element.classes())).toEqual([['tile-open']])
+  })
+
+  it('names an open blocker, never a finished one, and never says workable', () => {
+    const open = board({ links: [{ from: boardId(13), to: boardId(10), kind: 'blocks' }] })
+    expect(open.get('[data-reference="MAIN-10"] [data-facet="readiness"]').text()).toBe(
+      'Waiting on MAIN-13',
+    )
+    const finished = board({ links: [{ from: boardId(20), to: boardId(11), kind: 'blocks' }] })
+    expect(finished.find('[data-reference="MAIN-11"] [data-facet="readiness"]').exists()).toBe(
+      false,
+    )
+    expect(finished.text()).not.toMatch(/workable/iu)
   })
 })
 

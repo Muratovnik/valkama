@@ -27,18 +27,20 @@ import type { StackLanding } from '@/widgets/work-item-views/components/WorkItem
 import { drawnInCell } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
 
+import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
+
 import type { WorkflowState, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import VButton from '@/shared/ui/VButton.vue'
 
 const props = defineProps<{
-  blockedIds: Set<string>
+  filter: WorkFilter
   /** The lane's drop group: a tile crosses between the cells of its lane only. */
   group: string
   items: WorkItemBrief[]
-  readyIds: Set<string>
   /** A move has landed in this cell while it was closed, so it is drawn whole. */
   revealed: boolean
   state: WorkflowState
+  waiting: Map<string, string>
   writable: boolean
   hintId?: string
 }>()
@@ -48,6 +50,7 @@ const emit = defineEmits<{
   collapse: []
   dragging: [active: boolean]
   edge: [reference: string, edge: 'first' | 'last']
+  filter: [token: WorkFilterToken]
   open: [reference: string]
   place: [move: BoardMove, landing: StackLanding]
 }>()
@@ -116,12 +119,13 @@ function walk(event: KeyboardEvent) {
       :state="props.state"
       :items="props.items"
       :limit="limit"
-      :ready-ids="props.readyIds"
-      :blocked-ids="props.blockedIds"
+      :waiting="props.waiting"
+      :filter="props.filter"
       :hint-id="props.hintId"
       :writable="props.writable"
       @dragging="emit('dragging', $event)"
       @edge="(reference, edge) => emit('edge', reference, edge)"
+      @filter="emit('filter', $event)"
       @open="emit('open', $event)"
       @place="(move, landing) => emit('place', move, landing)"
     />

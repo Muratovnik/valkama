@@ -1009,7 +1009,6 @@ export const en = {
     create: 'New work item',
     newTitle: 'New work',
     cancel: 'Cancel',
-    blocked: 'blocked',
     checklist: 'Checklist',
     checklistProgress: '{done}/{total} done',
     noChecklist: 'No checklist has been recorded.',

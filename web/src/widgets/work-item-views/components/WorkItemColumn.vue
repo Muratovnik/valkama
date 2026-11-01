@@ -24,16 +24,18 @@ import WorkItemStack from '@/widgets/work-item-views/components/WorkItemStack.vu
 import type { StackLanding } from '@/widgets/work-item-views/components/WorkItemStack.vue'
 import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
 
+import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
+
 import type { WorkflowState, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 
 const props = defineProps<{
-  blockedIds: Set<string>
   emptyLabel: string
+  filter: WorkFilter
   items: WorkItemBrief[]
-  readyIds: Set<string>
   state: WorkflowState
+  waiting: Map<string, string>
   writable: boolean
   hintId?: string
 }>()
@@ -41,6 +43,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   dragging: [active: boolean]
   edge: [reference: string, edge: 'first' | 'last']
+  filter: [token: WorkFilterToken]
   open: [reference: string]
   place: [move: BoardMove, landing: StackLanding]
 }>()
@@ -94,12 +97,13 @@ function placed(move: BoardMove, landing: StackLanding) {
         :state="props.state"
         :items="props.items"
         :limit="drawn"
-        :ready-ids="props.readyIds"
-        :blocked-ids="props.blockedIds"
+        :waiting="props.waiting"
+        :filter="props.filter"
         :hint-id="props.hintId"
         :writable="props.writable"
         @dragging="emit('dragging', $event)"
         @edge="(reference, edge) => emit('edge', reference, edge)"
+        @filter="emit('filter', $event)"
         @open="emit('open', $event)"
         @place="placed"
       />

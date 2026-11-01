@@ -40,18 +40,22 @@ import { outOfSight } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import type { BoardLane, HeldIn } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
 
+import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
+
 import type { WorkflowState, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 
 const props = defineProps<{
-  blockedIds: Set<string>
+  /** The filter in force, which a tile's chips read. */
+  filter: WorkFilter
   /** A queue or search filter is narrowing what the lanes draw. */
   filtered: boolean
   lanes: BoardLane[]
-  readyIds: Set<string>
   /** Whose folded lanes these are: the planning space. */
   spaceId: string
   states: WorkflowState[]
+  /** Each item's open blocker, by item id. */
+  waiting: Map<string, string>
   writable: boolean
   hintId?: string
 }>()
@@ -60,6 +64,7 @@ const emit = defineEmits<{
   chain: [reference: string]
   dragging: [active: boolean]
   edge: [reference: string, edge: 'first' | 'last']
+  filter: [token: WorkFilterToken]
   open: [reference: string]
   place: [move: BoardMove, landing: StackLanding]
 }>()
@@ -250,14 +255,15 @@ function laneGroup(lane: BoardLane): string {
               :group="laneGroup(lane)"
               :state="state"
               :items="inState(lane, state)"
-              :ready-ids="props.readyIds"
-              :blocked-ids="props.blockedIds"
+              :waiting="props.waiting"
+              :filter="props.filter"
               :hint-id="props.hintId"
               :revealed="isLanded(lane, state)"
               :writable="props.writable"
               @collapse="settle(lane, state)"
               @dragging="drag"
               @edge="(reference, edge) => emit('edge', reference, edge)"
+              @filter="emit('filter', $event)"
               @open="emit('open', $event)"
               @place="(move, landing) => (land(lane, move, landing), emit('place', move, landing))"
             />

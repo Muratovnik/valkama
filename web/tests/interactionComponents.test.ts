@@ -174,10 +174,11 @@ test('the inspector keeps item facts and work-item relations in one surface', ()
 })
 
 test('one place draws who holds an item, and the shell owns scope presentation', () => {
-  // Claim presentation belongs to the tile and graph node, not their column.
+  // Claim presentation belongs to the tile and graph node, not their column;
+  // the tile prints its holder through the facet registry's tile rule.
   // Rendered owner labels are covered in planningPresentation.spec.ts.
-  assert.match(card, /class="tile-holder"/)
-  assert.match(card, /claim_ref/)
+  assert.match(card, /const FACTS: readonly FacetId\[\] = \['holder', 'steps'\]/)
+  assert.match(card, /:facets="FACTS"/)
   assert.doesNotMatch(lane, /bundle-active|t\('work\.active'\)/)
   assert.match(graphNode, /class="flow-node-owner-state"/)
   assert.match(
@@ -248,13 +249,18 @@ test('info tips escape clipped ancestors and calculate a viewport-fixed position
 })
 
 test('a work-item tile is one control, not a card with an arrow footer', () => {
-  // The tile is the button. A card that carried its own open affordance reserved
-  // a footer row on every tile for one arrow, and a nested control inside a
-  // clickable card is two tab stops for one destination.
+  // The tile opens through one button, its title stretched over the sheet. A
+  // card that carried its own open affordance reserved a footer row on every
+  // tile for one arrow, and a second control in a tile is a second Tab stop for
+  // the same destination. The marks that filter are buttons beside the title,
+  // and every one of them is kept out of the Tab order.
   assert.doesNotMatch(card, /source-open|openSource|↗/)
-  assert.match(card, /<button\s+class="work-item-tile"/)
+  assert.match(card, /<button\s+class="tile-open"/)
   assert.match(card, /@click="emit\('open', props\.item\.reference\)"/)
-  assert.equal((card.match(/<button/g) ?? []).length, 1, 'one control per tile')
+  assert.equal((card.match(/<button/g) ?? []).length, 1, 'one open target per tile')
+  const filterRuns = (card.match(/^\s+filterable$/gmu) ?? []).length
+  assert.ok(filterRuns > 0)
+  assert.equal((card.match(/:tabbable="false"/g) ?? []).length, filterRuns)
 })
 
 test('Planning components carry presentation tones instead of remapping operational state', () => {

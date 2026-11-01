@@ -1008,7 +1008,6 @@ export const ru = {
     create: 'Новая работа',
     newTitle: 'Новая работа',
     cancel: 'Отмена',
-    blocked: 'заблокировано',
     checklist: 'Чек-лист',
     checklistProgress: '{done}/{total} готово',
     noChecklist: 'Чек-лист не заполнен.',

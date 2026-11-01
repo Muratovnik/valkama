@@ -622,7 +622,18 @@ with its root — and a view that draws fewer items says what it leaves out.
 Epic progress, lane state, and active work share the same semantic palette.
 Aggregate epic activity belongs only to the epic index, including its compact
 state; bundle headers on the board do not repeat a “working” label.
-Cards do not reserve empty tag or source regions. Graph nodes allocate separate
+Cards do not reserve empty tag or source regions.
+A board tile prints exceptions, not defaults. Its first line is a priority
+glyph when the priority is not medium, a kind glyph when the item is not a
+plain task, the reference, and at its end only what stops the work — the open
+blocker it waits on, a stale claim; the line never wraps, and an exception short
+of room keeps its glyph and says its words on hover. The title follows, at most
+three lines, then up to three label chips and a count of the rest, then the
+holder and the steps when there are any. Workable, medium and a plain task are
+never printed: they are the norm of the columns that hold them. The title is
+the open target, stretched over the whole sheet, so the sheet opens wherever it
+is clicked and stays one Tab stop; the glyphs and chips lie above it as filter
+buttons out of the Tab order. Graph nodes allocate separate
 rows for status, title, and relationship metadata so labels cannot collide.
 A card's chain section leads with a branch map: one lane per origin of work,
 one equal-width segment per member, finished work then current work then what

@@ -35,6 +35,8 @@ import WorkItemTile from '@/widgets/work-item-views/components/WorkItemTile.vue'
 import { rankBeside } from '@/widgets/work-item-views/utils/boardOrder.ts'
 import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
 
+import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
+
 import type { WorkflowState, WorkItemBrief } from '@/shared/api/planningModel.ts'
 
 /** Where a move left the tile, for the sentence that announces it. */
@@ -45,12 +47,14 @@ export interface StackLanding {
 }
 
 const props = defineProps<{
-  blockedIds: Set<string>
+  /** The filter in force, which a tile's chips read. */
+  filter: WorkFilter
   /** Stacks a tile may move between share this name. */
   group: string
   items: WorkItemBrief[]
-  readyIds: Set<string>
   state: WorkflowState
+  /** Each item's open blocker, by item id. */
+  waiting: Map<string, string>
   writable: boolean
   /** The element a keyboard hint is read from, or nothing when no move is possible. */
   hintId?: string
@@ -61,6 +65,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   dragging: [active: boolean]
   edge: [reference: string, edge: 'first' | 'last']
+  filter: [token: WorkFilterToken]
   open: [reference: string]
   place: [move: BoardMove, landing: StackLanding]
 }>()
@@ -82,8 +87,7 @@ const stop = computed(() => {
   return held ? active.value : (shown.value[0]?.work_item_id ?? null)
 })
 
-const isReady = (item: WorkItemBrief) => props.readyIds.has(item.work_item_id)
-const isBlocked = (item: WorkItemBrief) => props.blockedIds.has(item.work_item_id)
+const waitingOn = (item: WorkItemBrief) => props.waiting.get(item.work_item_id) ?? null
 
 /** The reference of the nearest tile beside `element` in one direction. */
 function beside(element: Element, direction: 'next' | 'previous'): string | undefined {
@@ -152,9 +156,9 @@ function tabStop(item: WorkItemBrief): 0 | -1 {
 
 const STEPS: Record<string, -1 | 1> = { ArrowDown: 1, ArrowUp: -1 }
 
-/** The tiles a stack draws, as the buttons focus lands on. */
+/** The tiles a stack draws, as the open targets focus lands on. */
 function tilesOf(stack: Element): HTMLElement[] {
-  return [...stack.querySelectorAll<HTMLElement>(':scope > li > button')]
+  return [...stack.querySelectorAll<HTMLElement>(':scope > li .tile-open')]
 }
 
 /**
@@ -263,12 +267,13 @@ defineExpose({ focusAt, walkFrom })
     >
       <WorkItemTile
         :item="item"
-        :ready="isReady(item)"
-        :blocked="isBlocked(item)"
-        :tabindex="tabStop(item)"
-        :aria-keyshortcuts="keyHint()"
-        :aria-describedby="props.hintId"
+        :waiting-on="waitingOn(item)"
+        :filter="props.filter"
+        :tab-stop="tabStop(item)"
+        :key-shortcuts="keyHint()"
+        :hint-id="props.hintId"
         @keydown="stepped($event, index)"
+        @filter="emit('filter', $event)"
         @open="open"
       />
     </li>

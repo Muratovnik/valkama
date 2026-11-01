@@ -24,7 +24,7 @@ for (const width of [1440, 390]) {
     await installBackend(page)
     await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
     const workspace = page.locator('.workspace')
-    const opener = page.locator('.work-item-column[data-state="dev"] .work-item-tile').first()
+    const opener = page.locator('.work-item-column[data-state="dev"] .tile-open').first()
     await expect(opener).toBeVisible()
     const before = await workspace.boundingBox()
     await opener.click()
