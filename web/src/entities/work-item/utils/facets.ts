@@ -91,6 +91,12 @@ interface FacetRule {
   openOnly?: boolean
   /** When this facet prints, it takes the place of `state`. */
   replacesState?: boolean
+  /**
+   * The form draws the mark's short words where it has them — a waiting mark
+   * the reference it waits on — and keeps the whole words as its name and
+   * hover text.
+   */
+  terse?: boolean
 }
 
 /**
@@ -130,7 +136,11 @@ const FACET_RULES: Readonly<Record<FacetId, Partial<Record<FacetSurface, FacetRu
   // says workable too, quietly, in place of the state word. The card says it
   // with «Взять».
   readiness: {
-    tile: { form: 'glyph-word', only: ['waiting'] },
+    // «Ждёт MAIN-12» does not fit a desktop tile's first line after its glyphs
+    // and its own reference, so it folded to the bare glyph and the reference
+    // was hover-only. The glyph already says "waiting"; the reference is what
+    // the line has to show.
+    tile: { form: 'glyph-word', only: ['waiting'], terse: true },
     list: { form: 'glyph-word', only: ['waiting'] },
     graph: { form: 'glyph-word', replacesState: true },
     card: { form: 'action' },
@@ -193,6 +203,11 @@ export interface FacetMark {
   tone: SemanticStatePair
   /** The facet's value: a kind, a priority, a category, `ready`/`waiting`, a label. */
   value: string
+  /**
+   * Shorter words the form draws in place of `text`, which stays the name and
+   * the hover text; absent, the form draws `text`.
+   */
+  short?: FacetText
 }
 
 /** A facet that carries no meaning colour, as the state owner says it. */
@@ -240,7 +255,7 @@ export function readinessMarks(
   if (!rule || rule.form === 'action') return []
   const value = readinessOf(item, context)
   const printed = value !== null && (!rule.only || rule.only.includes(value))
-  return printed ? [readinessMark(value, rule.form, context)] : []
+  return printed ? [readinessMark(value, rule, context)] : []
 }
 
 function steps(item: FacetSubject) {
@@ -332,8 +347,10 @@ function stateMark(item: FacetSubject, form: FacetForm): FacetMark {
   }
 }
 
-function readinessMark(value: string, form: FacetForm, context: FacetContext): FacetMark {
+function readinessMark(value: string, rule: FacetRule, context: FacetContext): FacetMark {
   const waiting = value === 'waiting'
+  const { form } = rule
+  const short = waiting && rule.terse ? { short: { literal: context.waitingOn ?? '' } } : {}
   return {
     facet: 'readiness',
     value,
@@ -345,6 +362,7 @@ function readinessMark(value: string, form: FacetForm, context: FacetContext): F
     tone: { dimension: 'work-item-readiness', state: waiting ? 'blocked' : 'ready' },
     filter: null,
     quiet: !waiting,
+    ...short,
   }
 }
 

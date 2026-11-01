@@ -15,6 +15,9 @@
  * A run that must stay on one line folds: when it runs out of room a mark
  * keeps its glyph and its word drops out of sight, still read out and still the
  * hover text. A tile's first line folds, so its marks never push it to two.
+ *
+ * A mark with short words draws them and keeps its whole words as the name and
+ * the hover text: a tile shows «⛔ MAIN-12» and says «Ждёт MAIN-12».
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -74,8 +77,11 @@ const marks = computed(() =>
     : surfaceMarks(props.surface, props.item, props.context, props.facets),
 )
 
-const word = (mark: FacetMark) =>
-  'literal' in mark.text ? mark.text.literal : t(mark.text.key, mark.text.params ?? {})
+const say = (text: FacetMark['text']) =>
+  'literal' in text ? text.literal : t(text.key, text.params ?? {})
+
+/** The mark's whole words: its name, and what it draws unless it has short ones. */
+const word = (mark: FacetMark) => say(mark.text)
 
 const filters = (mark: FacetMark) => props.filterable && mark.filter !== null
 
@@ -106,9 +112,9 @@ const glyphOnly = (mark: FacetMark) => mark.form === 'glyph' && mark.glyph !== n
 /** A glyph whose word may fold out of sight, so the pointer is told it. */
 const foldable = (mark: FacetMark) => props.fold && mark.glyph !== null
 
-/** What a pointer shows: what a click does, or the word a glyph stands for. */
+/** What a pointer shows: what a click does, or the words a glyph or short words stand for. */
 const hoverText = (mark: FacetMark) =>
-  filterName(mark) ?? (glyphOnly(mark) || foldable(mark) ? word(mark) : undefined)
+  filterName(mark) ?? (glyphOnly(mark) || foldable(mark) || mark.short ? word(mark) : undefined)
 
 /**
  * Out of the Tab order inside a container that is one Tab stop; the default
@@ -173,7 +179,16 @@ function pressLabel(label: string) {
           :size="14"
           :stroke-width="2"
         />
+        <template v-if="mark.short">
+          <span
+            class="facet-word"
+            aria-hidden="true"
+            >{{ say(mark.short) }}</span
+          >
+          <span class="facet-word-hidden">{{ word(mark) }}</span>
+        </template>
         <span
+          v-else
           class="facet-word"
           :class="{ 'facet-word-hidden': glyphOnly(mark) }"
           >{{ word(mark) }}</span

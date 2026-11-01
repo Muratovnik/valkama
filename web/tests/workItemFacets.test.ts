@@ -181,6 +181,22 @@ describe('readiness', () => {
     }
   })
 
+  test('the tile draws the reference it waits on and keeps the sentence as the name', () => {
+    // «Ждёт MAIN-12» beside two glyphs and a reference did not fit a tile's
+    // first line and folded to the bare glyph, so the reference was hover-only.
+    const tile = only(facetMarks('readiness', 'tile', waiting, blocker))
+    assert.deepEqual(tile.short, { literal: 'MAIN-7' })
+    assert.deepEqual(tile.text, { key: 'workItem.facet.waiting', params: { reference: 'MAIN-7' } })
+    // Every other surface draws its marks' whole words, as before.
+    const subject = item({ ready: false, kind: 'bug', priority: 'urgent', labels: ['a'] })
+    for (const surface of SURFACES.filter((name) => name !== 'tile')) {
+      const shortened = surfaceMarks(surface, subject, { ...blocker, width: 900 }).filter(
+        (mark) => mark.short !== undefined,
+      )
+      assert.deepEqual(shortened, [], surface)
+    }
+  })
+
   test('the graph says workable quietly, in place of the state word', () => {
     const mark = only(facetMarks('readiness', 'graph', workable))
     assert.deepEqual(mark.text, { key: 'workItem.facet.ready' })

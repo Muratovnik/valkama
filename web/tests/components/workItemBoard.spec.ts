@@ -266,9 +266,9 @@ describe('a tile on the board', () => {
 
   it('names an open blocker, never a finished one, and never says workable', () => {
     const open = board({ links: [{ from: boardId(13), to: boardId(10), kind: 'blocks' }] })
-    expect(open.get('[data-reference="MAIN-10"] [data-facet="readiness"]').text()).toBe(
-      'Waiting on MAIN-13',
-    )
+    expect(
+      open.get('[data-reference="MAIN-10"] [data-facet="readiness"] .facet-word-hidden').text(),
+    ).toBe('Waiting on MAIN-13')
     const finished = board({ links: [{ from: boardId(20), to: boardId(11), kind: 'blocks' }] })
     expect(finished.find('[data-reference="MAIN-11"] [data-facet="readiness"]').exists()).toBe(
       false,

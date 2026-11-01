@@ -67,21 +67,42 @@ describe('FacetMarks', () => {
   it('names what an item waits on, in both languages', () => {
     const item = boardItem(1, 'todo', { ready: false })
     const context = { waitingOn: 'MAIN-7' }
-    const en = marks({ item, context, facets: ['readiness'] })
+    const en = marks({ item, context, surface: 'list', facets: ['readiness'] })
     expect(en.get('[data-facet="readiness"]').text()).toBe('Waiting on MAIN-7')
     expect(en.get('[data-facet="readiness"]').attributes('data-tone')).toBe('danger')
-    const ru = marks({ item, context, facets: ['readiness'] }, 'ru')
+    const ru = marks({ item, context, surface: 'list', facets: ['readiness'] }, 'ru')
     expect(ru.get('[data-facet="readiness"]').text()).toBe('Ждёт MAIN-7')
+  })
+
+  it('draws the reference on a tile and still says the whole sentence', () => {
+    const item = boardItem(1, 'todo', { ready: false })
+    const context = { waitingOn: 'MAIN-7' }
+    for (const [locale, sentence] of [
+      ['en', 'Waiting on MAIN-7'],
+      ['ru', 'Ждёт MAIN-7'],
+    ] as const) {
+      const mark = marks({ item, context, facets: ['readiness'] }, locale).get(
+        '[data-facet="readiness"]',
+      )
+      // On screen: the glyph and the reference, which the reader cannot hear twice.
+      const drawn = mark.get('.facet-word')
+      expect(drawn.text()).toBe('MAIN-7')
+      expect(drawn.attributes('aria-hidden')).toBe('true')
+      expect(mark.find('svg').exists()).toBe(true)
+      // Heard and hovered: the sentence.
+      expect(mark.get('.facet-word-hidden').text()).toBe(sentence)
+      expect(mark.attributes('title')).toBe(sentence)
+    }
   })
 
   it('folds a run that must keep one line, keeping the word as name and hover text', () => {
     const item = boardItem(1, 'todo', { ready: false })
     const context = { waitingOn: 'MAIN-7' }
-    const loose = marks({ item, context, facets: ['readiness'] })
+    const loose = marks({ item, context, surface: 'list', facets: ['readiness'] })
     expect(loose.get('.facet-marks').classes()).not.toContain('fold')
     // Unfolded, a glyph shown with its word needs no hover text.
     expect(loose.get('[data-facet="readiness"]').attributes('title')).toBeUndefined()
-    const folded = marks({ item, context, facets: ['readiness'], fold: true })
+    const folded = marks({ item, context, surface: 'list', facets: ['readiness'], fold: true })
     expect(folded.get('.facet-marks').classes()).toContain('fold')
     const mark = folded.get('[data-facet="readiness"]')
     // The word stays in the mark, so a screen reader still reads it out.

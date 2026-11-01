@@ -150,7 +150,9 @@ describe('Planning semantic presentation', () => {
 
     await wrapper.setProps({ waitingOn: 'QA-12' })
     const waiting = wrapper.get('.tile-line [data-facet="readiness"]')
-    expect(waiting.text()).toBe('Waiting on QA-12')
+    // The line draws the glyph and the reference; the sentence is the name.
+    expect(waiting.get('.facet-word').text()).toBe('QA-12')
+    expect(waiting.get('.facet-word-hidden').text()).toBe('Waiting on QA-12')
     expect(waiting.attributes('data-tone')).toBe('danger')
     // Folded short of room, the glyph still tells the pointer what it stands for.
     expect(waiting.attributes('title')).toBe('Waiting on QA-12')
