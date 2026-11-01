@@ -44,6 +44,13 @@ const toggleLabel = computed(() =>
   t(props.open ? 'workItem.lanes.fold' : 'workItem.lanes.unfold', { lane: title.value }),
 )
 const away = computed(() => props.left !== '' || props.right !== '')
+
+// The spaces live in the strings: a template trims the space before a tag
+// closes, which ran «To the right:» into the count for a screen reader.
+const TO_LEFT = '← '
+const TO_RIGHT = ' →'
+const leftLead = computed(() => `${t('workItem.lanes.offLeft')} `)
+const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
 </script>
 
 <template>
@@ -82,14 +89,15 @@ const away = computed(() => props.left !== '' || props.right !== '')
     <span
       v-if="props.left"
       class="lane-elsewhere"
-      ><span aria-hidden="true">← </span
-      ><span class="visually-hidden">{{ t('workItem.lanes.offLeft') }} </span>{{ props.left }}</span
+      ><span aria-hidden="true">{{ TO_LEFT }}</span
+      ><span class="visually-hidden">{{ leftLead }}</span
+      >{{ props.left }}</span
     >
     <span
       v-if="props.right"
       class="lane-elsewhere"
-      ><span class="visually-hidden">{{ t('workItem.lanes.offRight') }} </span>{{ props.right
-      }}<span aria-hidden="true"> →</span></span
+      ><span class="visually-hidden">{{ rightLead }}</span
+      >{{ props.right }}<span aria-hidden="true">{{ TO_RIGHT }}</span></span
     >
     <span
       v-if="props.lane.epic"
