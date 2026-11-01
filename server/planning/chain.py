@@ -15,6 +15,13 @@ followed, they merge most of a space into one chain — and `blocks` says what
 must finish first, not where the work came from. R itself is never a member, and
 members stay in R's planning space.
 
+The chain's edges are its `discovered-from` links between R and the members,
+and every `blocks` link into one of them wherever its source lives: a member
+waits on its blocker whether or not that blocker belongs to the chain, or even
+to the space, and a reader of the chain must be able to say so. Each edge names
+its source the way a space view's link does — reference and state, unknown when
+the store cannot resolve that state (`read_model.end_state`), never open.
+
 Everything is read in one query per table and computed here, so a space of a
 thousand items answers in one pass rather than one read per member; only a held
 member costs one more, to read its lease. Readiness is the read model's own
@@ -37,7 +44,7 @@ SCOPES = ("chain", "epic")
 #: How many UTC days, today included, the `recent` window covers.
 RECENT_DAYS = 7
 #: The link kinds a chain answers as edges. `discovered-from` is also what
-#: extends the boundary; `blocks` only describes it.
+#: extends the boundary; `blocks` only describes it, and may come from outside.
 EDGE_KINDS = ("blocks", "discovered-from")
 
 
@@ -72,10 +79,12 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
         )
     }
     links = conn.execute(
-        "SELECT l.from_id, l.to_id, l.kind, fs.is_terminal AS from_terminal"
+        "SELECT l.from_id, l.to_id, l.kind, f.number, p.key AS space_key,"
+        " s.name AS state_name, s.category AS state_category, s.is_terminal"
         " FROM work_item_links l"
         " JOIN work_items f ON f.work_item_id = l.from_id"
-        " JOIN workflow_states fs ON fs.state_id = f.state_id"
+        " JOIN planning_spaces p ON p.planning_space_id = f.planning_space_id"
+        " LEFT JOIN workflow_states s ON s.state_id = f.state_id"
         " JOIN work_items t ON t.work_item_id = l.to_id"
         " WHERE f.planning_space_id = ? OR t.planning_space_id = ? ORDER BY l.id",
         (space_id, space_id),
@@ -97,11 +106,12 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
     members = _members(root_id, scope, rows, children, links)
     rank = ranking.ranks(rows.values())
 
-    # What an unfinished item blocks, wherever the blocker lives.
+    # What an unfinished item blocks, wherever the blocker lives. A blocker whose
+    # state the store cannot resolve is not unfinished, as `read_model.blocked` says.
     blocked = {
         str(link["to_id"])
         for link in links
-        if link["kind"] == "blocks" and not link["from_terminal"]
+        if link["kind"] == "blocks" and link["is_terminal"] == 0
     }
     found = []
     for identity in sorted(members, key=lambda item: int(rows[item]["number"])):
@@ -155,11 +165,17 @@ def chain(conn: sqlite3.Connection, reference: object, scope: str = "chain") -> 
             for member in found
         ],
         "edges": [
-            {"from": str(link["from_id"]), "to": str(link["to_id"]), "kind": str(link["kind"])}
+            {
+                "from": str(link["from_id"]),
+                "to": str(link["to_id"]),
+                "kind": str(link["kind"]),
+                "reference": model.human_id(str(link["space_key"]), int(link["number"])),
+                **read_model.end_state(link),
+            }
             for link in links
             if link["kind"] in EDGE_KINDS
-            and str(link["from_id"]) in ends
             and str(link["to_id"]) in ends
+            and (link["kind"] == "blocks" or str(link["from_id"]) in ends)
         ],
     }
 

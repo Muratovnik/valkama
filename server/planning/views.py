@@ -279,9 +279,10 @@ def _links(conn: sqlite3.Connection, planning_space_id: str) -> list[dict]:
     leaving the space used to be read, so a blocker in another space was
     missing from every view: an item was not workable and nothing said why, and
     a finished foreign blocker could not be told from an open one. Another
-    space's other links into this one stay that space's to show. The source's state comes the way the item read model's links name
-    their other end (`read_model.links`): null, with the reason beside it, when
-    the store cannot resolve it — which never means the source is open.
+    space's other links into this one stay that space's to show. The source's
+    state comes the way every link names an end (`read_model.end_state`): null,
+    with the reason beside it, when the store cannot resolve it — which never
+    means the source is open. A chain's edges name their source the same way.
     """
 
     found = []
@@ -297,17 +298,13 @@ def _links(conn: sqlite3.Connection, planning_space_id: str) -> list[dict]:
         "  OR (t.planning_space_id = ? AND l.kind = 'blocks') ORDER BY l.id",
         (planning_space_id, planning_space_id),
     ):
-        readable = row["state_category"] is not None
         found.append(
             {
                 "from": str(row["from_id"]),
                 "to": str(row["to_id"]),
                 "kind": str(row["kind"]),
                 "reference": model.human_id(str(row["space_key"]), int(row["number"])),
-                "state_name": row["state_name"] if readable else None,
-                "state_category": row["state_category"] if readable else None,
-                "is_terminal": bool(row["is_terminal"]) if readable else None,
-                "state_unavailable": None if readable else read_model.STATE_MISSING,
+                **read_model.end_state(row),
             }
         )
     return found

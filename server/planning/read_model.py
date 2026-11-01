@@ -77,6 +77,24 @@ def comment_count(conn: sqlite3.Connection, row: sqlite3.Row) -> int:
 STATE_MISSING = "state_missing"
 
 
+def end_state(row: sqlite3.Row) -> dict[str, object]:
+    """The state a link names for one of its ends, from that end's state columns.
+
+    Every read that names a link's end selects them as `state_name`,
+    `state_category` and `is_terminal`, through a LEFT JOIN, so a state the
+    store cannot resolve arrives as nulls; it is said as unknown here, with the
+    reason beside it, and never as open.
+    """
+
+    readable = row["state_category"] is not None
+    return {
+        "state_name": row["state_name"] if readable else None,
+        "state_category": row["state_category"] if readable else None,
+        "is_terminal": bool(row["is_terminal"]) if readable else None,
+        "state_unavailable": None if readable else STATE_MISSING,
+    }
+
+
 def links(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
     """Both directions of an item's links, each naming the state of its other end.
 
@@ -105,7 +123,6 @@ def links(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
     for row in rows:
         if row["work_item_id"] is None or row["space_key"] is None:
             raise model.PlanningError("work item disappeared mid-write")
-        readable = row["state_category"] is not None
         found.append(
             {
                 "kind": row["kind"],
@@ -113,10 +130,7 @@ def links(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
                 "work_item_id": row["work_item_id"],
                 "reference": model.human_id(str(row["space_key"]), int(row["number"])),
                 "title": row["title"],
-                "state_name": row["state_name"] if readable else None,
-                "state_category": row["state_category"] if readable else None,
-                "is_terminal": bool(row["is_terminal"]) if readable else None,
-                "state_unavailable": None if readable else STATE_MISSING,
+                **end_state(row),
             }
         )
     return found

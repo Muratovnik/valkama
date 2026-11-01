@@ -301,6 +301,11 @@ class ChainBoundaryTests(ChainFixture):
             {(by_id[e["from"]], by_id[e["to"]], e["kind"]) for e in found["edges"]},
         )
         self.assertEqual(len(found["edges"]), 7)
+        # Each names its source, as a space view's link does.
+        for edge in found["edges"]:
+            with self.subTest(source=by_id[edge["from"]]):
+                self.assertEqual(self.refs[by_id[edge["from"]]], edge["reference"])
+                self.assertIsNone(edge["state_unavailable"])
 
     def test_the_series_is_cumulative_over_the_days_anything_changed(self) -> None:
         self.assertEqual(
@@ -360,7 +365,20 @@ class ChainBoundaryTests(ChainFixture):
         self.assertEqual(
             {"day", "created", "closed", "total", "closed_total"}, set(found["series"][0])
         )
-        self.assertEqual({"from", "to", "kind"}, set(found["edges"][0]))
+        for edge in found["edges"]:
+            self.assertEqual(
+                {
+                    "from",
+                    "to",
+                    "kind",
+                    "reference",
+                    "state_name",
+                    "state_category",
+                    "is_terminal",
+                    "state_unavailable",
+                },
+                set(edge),
+            )
         self.assertEqual(
             {
                 "work_item_id",
@@ -412,6 +430,94 @@ class ChainBoundaryTests(ChainFixture):
         )
         assert answer is not None
         self.assertEqual(["C3"], self.names([i["reference"] for i in answer[1]["work_items"]]))
+
+
+class ChainBlockerSourceTests(ChainFixture):
+    """A member waits on its blocker wherever that blocker lives, and the chain says so.
+
+    The chain used to answer an edge only when both ends were in it, so a member
+    blocked from outside -- from another space, or from its own space but not the
+    chain -- had nothing to say what it waited on, while its readiness counted
+    the block. Expected values follow the link contract a space view keeps: a
+    `blocks` link names its source's reference and state, unknown when the store
+    cannot resolve it, never open.
+    """
+
+    def blockers_of(self, target: str) -> list[tuple]:
+        found = self.read(id=self.refs["R"])
+        return [
+            (
+                edge["reference"],
+                edge["state_name"],
+                edge["state_category"],
+                edge["is_terminal"],
+                edge["state_unavailable"],
+            )
+            for edge in found["edges"]
+            if edge["to"] == self.ids[target]
+            and edge["kind"] == "blocks"
+            # The fixture's own block from inside the chain is covered above.
+            and edge["from"] != self.ids["C1"]
+        ]
+
+    def ready(self, name: str) -> bool:
+        (member,) = [
+            member
+            for member in self.read(id=self.refs["R"])["members"]
+            if member["reference"] == self.refs[name]
+        ]
+        # Readiness and the edges must tell one story: the item record is the oracle.
+        self.assertEqual(
+            service.get_work_item(self.conn, self.refs[name])["ready"], member["ready"]
+        )
+        return bool(member["ready"])
+
+    def edge_kinds(self) -> set[tuple[str, str, str]]:
+        by_id = {identity: name for name, identity in self.ids.items()}
+        return {
+            (by_id[edge["from"]], by_id[edge["to"]], edge["kind"])
+            for edge in self.read(id=self.refs["R"])["edges"]
+        }
+
+    def test_a_member_blocked_from_another_space_names_its_blocker_open_or_finished(self) -> None:
+        service.link_work_items(self.conn, self.refs["Z"], self.refs["D0"], "blocks")
+        self.assertEqual("OTH-1", self.refs["Z"])
+        self.assertEqual([("OTH-1", "Backlog", "backlog", False, None)], self.blockers_of("D0"))
+        self.assertFalse(self.ready("D0"))
+        # Its discovery link into the chain still does not widen it.
+        self.assertNotIn(("Z", "C1", "discovered-from"), self.edge_kinds())
+
+        service.set_summary(self.conn, self.refs["Z"], {"done": "d", "next": "n"})
+        service.transition_work_item(self.conn, self.refs["Z"], "done", force=True)
+        self.assertEqual([("OTH-1", "Done", "completed", True, None)], self.blockers_of("D0"))
+        self.assertTrue(self.ready("D0"))
+
+    def test_a_member_blocked_by_an_item_of_its_space_outside_the_chain_names_it(self) -> None:
+        service.link_work_items(self.conn, self.refs["Blk"], self.refs["D0"], "blocks")
+        self.assertEqual(
+            [(self.refs["Blk"], "Backlog", "backlog", False, None)], self.blockers_of("D0")
+        )
+        self.assertFalse(self.ready("D0"))
+        # A member blocking work outside the chain is that work's to show.
+        self.assertNotIn(("C3", "Blk", "blocks"), self.edge_kinds())
+
+    def test_the_root_drawn_with_its_chain_names_its_blocker_too(self) -> None:
+        service.link_work_items(self.conn, self.refs["Z"], self.refs["R"], "blocks")
+        self.assertEqual([("OTH-1", "Backlog", "backlog", False, None)], self.blockers_of("R"))
+
+    def test_a_blocker_whose_state_cannot_be_read_is_unknown_and_blocks_nothing(self) -> None:
+        service.link_work_items(self.conn, self.refs["Blk"], self.refs["D0"], "blocks")
+        # The pragma is ignored inside a transaction.
+        self.conn.commit()
+        self.conn.execute("PRAGMA foreign_keys=OFF")
+        self.conn.execute(
+            "UPDATE work_items SET state_id = ? WHERE work_item_id = ?",
+            ("00000000-0000-4000-8000-000000000000", self.ids["Blk"]),
+        )
+        self.assertEqual(
+            [(self.refs["Blk"], None, None, None, "state_missing")], self.blockers_of("D0")
+        )
+        self.assertTrue(self.ready("D0"))
 
 
 if __name__ == "__main__":  # pragma: no cover - unittest discovery owns this
