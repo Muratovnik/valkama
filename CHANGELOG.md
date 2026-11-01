@@ -62,9 +62,10 @@ server lists the same 31 tools with the same schemas.
   The history records `released` (and `checklist_released`) after
   `transitioned`, and the answer names the holder it released as `released`, in
   `applied.transition` for a batch. Reopening restores no claim. A closed item
-  still says who held it: item records and the view's items add `closed_at` and
-  `last_claim_ref`, both `null` for open work, and the board, the list and the
-  card print that holder as the previous one. A release sent after the close,
+  still says who held it: item records, the view's items and the nodes of
+  `GET /api/planning/graph` add `closed_at` and `last_claim_ref`, both `null`
+  for open work, and the board, the list, the graph and the card print that
+  holder as the previous one. A release sent after the close,
   as agents used to send one, still succeeds and leaves that holder named.
   See [A close ends the claims](docs/connection-contract.md#a-close-ends-the-claims).
 - **A work item's links name the state of their other end.** Every link in the
@@ -221,8 +222,7 @@ server lists the same 31 tools with the same schemas.
   each state its lane has no work in; it keeps its place and draws its ground
   only while a tile of its lane is dragged.
 - A checklist step's «Discuss step» button is named by the step's words rather
-  than its markdown, so a screen reader no longer reads out its backticks.
-- On Windows a second server could bind a port another one was listening on,
+  than its markdown, so a screen reader no longer reads out its backticks.- On Windows a second server could bind a port another one was listening on,
   so two answered on one port and the desktop app or the tray took the other's
   identity for its own child's. A server that cannot own its port now exits,
   and a port whose listener closed can still be bound at once.
