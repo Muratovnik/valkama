@@ -166,8 +166,12 @@ test('a required boolean remains unanswered until No is submitted and confirmed'
   await page.keyboard.press('Enter')
   await expect(dialog.locator('.request-state')).toContainText('You answered')
   await expect(dialog.getByRole('definition')).toHaveText('No')
-  // Nothing is left to answer: focus stays in the dialog, on the line that says so.
-  await expect(dialog.getByText('No questions need your answer.')).toBeFocused()
+  // Nothing is left to answer: focus stays on the card just answered, on how it
+  // ended, with its ring showing, rather than on the count line at the top.
+  const outcome = dialog.locator('.request-state')
+  await expect(outcome).toBeFocused()
+  await expect(outcome).toHaveCSS('outline-style', 'solid')
+  await expect(dialog.getByText('No questions need your answer.')).toBeVisible()
   expect(requests.writes).toEqual([
     {
       project_id: projectId,
