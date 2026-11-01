@@ -560,6 +560,28 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   or the radius; `check:ui-system` rejects a new `<input>` or `<textarea>`
   outside the primitive, and lets a checkbox, a radio and the search box
   through as the different controls they are.
+- **Free text:** `RichText` owns every text an agent or a person wrote — a
+  description, a comment, a report section, a question, an attempt's result, a
+  ref's label. It reads markdown (paragraphs, lists, code, links, emphasis,
+  quotes, tables) into a tree that carries no markup: raw HTML is shown as the
+  text it was, an image is a link to it, and a link keeps only an `http`,
+  `https` or `mailto` address and opens outside the app. Nothing reaches
+  `v-html`. A single line break stays one, because these texts were `pre-wrap`
+  before and agents write one fact per line. A markdown heading is an emphasised
+  paragraph: the section the text stands in owns the outline. Code, hashes and
+  ids are set in the metadata font.
+- **References in free text** link only where they resolve, and each owner of
+  that knowledge answers for its own: the open space for its items, the card for
+  its own space (through its draft guard and Back) and for the commits and
+  memory ids it carries as refs, the shell for another known space and for
+  session ids the server knows. Whatever no layer claims — `SHA-256`, a number
+  missing from the space — is the text it was.
+- **Writing free text:** `MarkdownEditor` owns the field: a preview drawn by
+  `RichText`, `#` and a query to link a task, Ctrl+Enter to send. The field
+  stays a multi-line text box naming its list of completions, and the list
+  stands under the field rather than at the caret. A long text held by
+  `CollapsibleText` ends on its last whole line, and a link below the cut that
+  takes focus opens the text.
 
 A screen that needs a style no primitive provides has found a gap in this
 inventory, not a licence to write it locally. The remedy is a variant on the
