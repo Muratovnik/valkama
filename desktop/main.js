@@ -419,7 +419,12 @@ function createWindow() {
     backgroundColor: '#0e0f10', // --color-navigation
     autoHideMenuBar: true,
     title: 'Valkama',
-    icon: path.join(__dirname, '..', 'windows', 'valkama.ico'),
+    // Packaged, `__dirname` is inside app.asar and the repository's
+    // `windows/` is not shipped, so this path named nothing and the window
+    // fell back to the icon electron-builder embeds in Valkama.exe from the
+    // same file (`build.win.icon`). Only a run from source needs it: there
+    // the executable is electron.exe, which carries Electron's own icon.
+    icon: app.isPackaged ? undefined : path.join(__dirname, '..', 'windows', 'valkama.ico'),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
