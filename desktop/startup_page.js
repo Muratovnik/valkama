@@ -14,14 +14,14 @@ const ACTION_ORIGIN = 'https://valkama.invalid/'
 // Mirrors of tokens.css, written by web/scripts/sync-tokens.mjs from the map
 // below. A data URL resolves no custom property, so the values are literal.
 const PAGE_COLORS = {
-  background: '#0e0f10',
+  background: '#030405',
   raised: '#191a1b',
   text: '#ececec',
   muted: '#c4c4c4',
   rule: 'rgb(255 255 255 / 8%)',
   action: '#ececec',
   actionText: '#0d0d0d',
-  control: '#3b3b3b',
+  control: '#3d3d3d',
   focus: '#7cacf8',
   info: '#7cacf8',
   danger: '#f99a8f',

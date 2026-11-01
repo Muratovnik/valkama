@@ -225,6 +225,88 @@ test('the seam oracle rejects the ladder that blended, and the inverted one', ()
   assert.equal(seamsRead('#181818', '#252525', '#333333'), true, 'the ladder that replaced it')
 })
 
+/**
+ * Every pair of grounds an operator sees side by side, named for what lies on
+ * what: the upper token over the lower one.
+ *
+ * Hovered and pressed are one rung, `--color-surface-active`, for a control on
+ * the workspace — a button's hover, a chosen segment and a pressed toggle all
+ * paint it — so they make no seam with each other. The chrome runs the same
+ * grammar on its own ramp, and there a pointed-at row and the chosen row are
+ * two rungs that stand side by side in the rail.
+ */
+const ADJACENT_GROUNDS = [
+  ['the workspace on the chrome', '--color-canvas', '--color-navigation'],
+  ['a lane on the workspace', '--color-surface', '--color-canvas'],
+  ['a card on its lane', '--color-surface-sheet', '--color-surface'],
+  ['a pointed-at card over its rest', '--color-surface-hover', '--color-surface-sheet'],
+  ['a control on a card', '--color-control-surface', '--color-surface-sheet'],
+  ['a control on a drawer', '--color-control-surface', '--color-surface'],
+  [
+    'a hovered or pressed control over its rest',
+    '--color-surface-active',
+    '--color-control-surface',
+  ],
+  ['a lane over the well cut into it', '--color-surface', '--color-surface-recess'],
+  ['a rail row pointed at, on the chrome', '--color-navigation-raised', '--color-navigation'],
+  [
+    'the chosen rail row beside a pointed-at one',
+    '--color-navigation-active',
+    '--color-navigation-raised',
+  ],
+] as const
+
+/**
+ * The floor every adjacent pair owes, as a WCAG 2 ratio.
+ *
+ * The owner's word on a ladder whose grounds stood 1.08–1.14 apart at four of
+ * these seams was that everything merged. 1.15 is the floor they set, and the
+ * lane on the workspace — which they did not report — already stood at 1.16.
+ */
+const ADJACENT_FLOOR = 1.15
+
+/** The names of the adjacent pairs that blend, given each ground's colour. */
+function blendingSeams(ground: (name: string) => string): string[] {
+  return ADJACENT_GROUNDS.flatMap(([seam, upper, lower]) =>
+    lighter(ground(upper), ground(lower)) &&
+    contrast(ground(upper), ground(lower)) >= ADJACENT_FLOOR
+      ? []
+      : [`${seam}: ${contrast(ground(upper), ground(lower)).toFixed(3)}:1`],
+  )
+}
+
+test('every pair of grounds that stand side by side is 1.15:1 apart', () => {
+  assert.deepEqual(blendingSeams(token), [])
+  // And the oracle rejects the palette as it shipped in the first 2.2 build,
+  // which the owner read as one graphite mass, at exactly the seams that
+  // merged: the chrome under the workspace and under its own rows, and a card
+  // under its hover.
+  const merged: Record<string, string> = {
+    '--color-navigation': '#0e0f10',
+    '--color-navigation-raised': '#191a1b',
+    '--color-navigation-active': '#242526',
+    '--color-canvas': '#181818',
+    '--color-surface': '#252525',
+    '--color-surface-sheet': '#333333',
+    '--color-surface-hover': '#3b3b3b',
+    '--color-control-surface': '#3b3b3b',
+    '--color-surface-active': '#464646',
+    '--color-surface-recess': '#181818',
+  }
+  assert.deepEqual(
+    blendingSeams((name) => merged[name] ?? assert.fail(`${name} is not in the merged ladder`)).map(
+      (seam) => seam.split(':')[0],
+    ),
+    [
+      'the workspace on the chrome',
+      'a pointed-at card over its rest',
+      'a control on a card',
+      'a rail row pointed at, on the chrome',
+      'the chosen rail row beside a pointed-at one',
+    ],
+  )
+})
+
 test('secondary text holds 4.5:1 on every ground it is drawn on', () => {
   // Lifting the grounds lifts the text: the tertiary tone stood at 4.08:1 on
   // a hovered card before the ladder moved, under the AA floor already, and
@@ -384,18 +466,22 @@ test('a label chip stands above every ground it lies on, and lifts again when po
   // row and its hover, a card in an epic well. Its face was the resting
   // control's grey, which is the tone a hovered card lifts to, so the chips on
   // a pointed-at tile stood at 1.00:1 on it and vanished.
-  for (const ground of [
-    '--color-canvas',
-    '--color-surface',
-    '--color-surface-sheet',
-    '--color-surface-hover',
-  ]) {
+  //
+  // The floors are what each chip stood at before the grounds were respaced to
+  // 1.15:1, so moving a ground never makes a chip on it fainter than it was.
+  const chipFloor: Record<string, number> = {
+    '--color-canvas': 1.237,
+    '--color-surface': 1.268,
+    '--color-surface-sheet': 1.277,
+    '--color-surface-hover': 1.284,
+  }
+  for (const [ground, floor] of Object.entries(chipFloor)) {
     const below = token(ground)
     const rest = over(token('--color-chip-face'), below)
     const raised = over(token('--color-chip-face-raised'), below)
     assert.ok(
-      lighter(rest, below) && contrast(rest, below) >= 1.1,
-      `a chip on ${ground} stands at ${contrast(rest, below).toFixed(2)}:1`,
+      lighter(rest, below) && contrast(rest, below) >= floor,
+      `a chip on ${ground} stands at ${contrast(rest, below).toFixed(3)}:1, under ${floor}`,
     )
     assert.ok(
       lighter(raised, rest) && contrast(raised, rest) >= 1.1,

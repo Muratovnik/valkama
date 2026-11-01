@@ -2,13 +2,13 @@
 name: Valkama
 description: A dense, calm, dark operations console for planning, executing, and reviewing agent work.
 colors:
-  navigation: "#0e0f10"
+  navigation: "#030405"
   navigation-raised: "#191a1b"
-  navigation-active: "#242526"
+  navigation-active: "#262728"
   canvas: "#181818"
   surface: "#252525"
   surface-muted: "#333"
-  surface-hover: "#3b3b3b"
+  surface-hover: "#3d3d3d"
   surface-active: "#464646"
   text: "#ececec"
   text-muted: "#c4c4c4"
@@ -117,14 +117,18 @@ chrome.
   navigation rail and the context bar — is the dark backing of the whole
   window, and the workspace is a lighter panel lying on it. Two adjacent zones
   separated only by a sub-threshold delta collapse into one dark mass, which
-  this palette has now managed twice: `#0d0d0d`/`#121212` and, after the
-  direction was inverted the first time, `#181818` chrome against a `#121212`
-  canvas.
+  this palette has now managed three times: `#0d0d0d`/`#121212`, after the
+  direction was inverted the first time `#181818` chrome against a `#121212`
+  canvas, and then a `#0e0f10` graphite under the `#181818` panel — 1.08:1,
+  which the owner read as everything merging into the graphite.
 - The left and top chrome use near-neutral graphite with a subtle cold
   undertone; the workspace stays neutral. A neutral `#0d0d0d` under the rail
   read as absence rather than as a surface — the owner asked twice for a color
-  there — which led to a cool backing. The current graphite has a two-point
-  channel spread, much less blue than the earlier ramp. A violet chrome once
+  there — which led to a cool backing. The graphite has a two-point channel
+  spread, much less blue than the earlier ramp, and it now stands at
+  `#030405`, darker than that `#0d0d0d`: it is the one rung that can carry the
+  1.15 seam to the panel (the ladder below says why), so the cold lean is
+  what remains of the colour there. A violet chrome once
   tried to solve the same problem and tinted every panel in the shell instead,
   which is a color the product does not mean, so the panel's neutrality remains
   essential.
@@ -158,23 +162,34 @@ chrome.
 
   | Rung | Token | Value | Contrast to what it lies on | What stands there |
   | --- | --- | --- | --- | --- |
-  | chrome | `--color-navigation` | `#0e0f10` | — | the rail and the context bar |
-  | workspace panel | `--color-canvas` | `#181818` | 1.08 on the chrome | the module panel |
+  | chrome | `--color-navigation` | `#030405` | — | the rail and the context bar |
+  | workspace panel | `--color-canvas` | `#181818` | 1.16 on the chrome | the module panel |
   | ground | `--color-surface` | `#252525` | 1.16 on the panel | a lane, a list, a table, a drawer |
   | sheet | `--color-surface-sheet` | `#333333` | 1.21 on its lane | a card, a panel lying on a ground |
-  | control | `--color-control-surface` | `#3b3b3b` | 1.13 on a card | a resting control, a hovered card |
-  | pressed | `--color-surface-active` | `#464646` | 1.19 on a control | a hovered or chosen control |
+  | control | `--color-control-surface` | `#3d3d3d` | 1.16 on a card | a resting control, a hovered card |
+  | pressed | `--color-surface-active` | `#464646` | 1.15 on a control | a hovered or chosen control |
   | recess | `--color-surface-recess` | `#181818` | 1.41 under a card | an epic well, a strip cut into a card |
 
-  Separation without a line is a contrast, so it is measured as one. A lane
-  owes 1.15 to the panel and a card 1.20 to its lane — 1.20 is the smallest
-  seam the interface already showed as two surfaces, and the ladder it replaced
-  stood 1.08–1.10 at every seam and read as one grey mass. The ratio's `+0.05`
+  Separation without a line is a contrast, so it is measured as one. Every
+  pair of grounds that stand side by side owes 1.15 — the workspace on the
+  chrome, a lane on the panel, a pointed-at card over its rest, a control and
+  its hover, a rail row pointed at and the chosen row beside it — and a card
+  owes 1.20 to its lane, the smallest seam the interface already showed as two
+  surfaces. The ladder before stood 1.08–1.10 at every seam and read as one
+  grey mass, and the one after it still left the chrome at 1.08 under the
+  panel and a pointed-at card at 1.13 over its rest, which the owner read as
+  everything merging. Hovered and pressed are one rung, so a control has one
+  step to make, not two. The ratio's `+0.05`
   models glare on a real screen, which is why a channel difference cannot stand
   in for it: eight hex units at the dark end are a large ratio of two tiny
   luminances that a good panel in a dark room shows and an office monitor in
-  daylight does not. `designTokens.test.ts` holds the floors and keeps the
-  ladder that blended as a case it must reject.
+  daylight does not. It is also why the chrome carries the seam to the panel:
+  at the dark end 1.15 costs the most, and every rung above the chrome is at
+  its ceiling — the pressed step holds the danger action's red word at 4.52:1
+  and cannot lighten, and each step under it is the lightest that still owes
+  its floor to the next — so lifting the panel would have lifted the whole
+  workspace into that red word. `designTokens.test.ts` holds the floors by
+  name and keeps both ladders that blended as cases it must reject.
 
   `--color-surface-sheet` and `--color-surface-recess` are roles: a container
   standing on another rung may re-point one to stay a step above itself — the
@@ -196,7 +211,7 @@ chrome.
   as a hole with nothing in it. The direction keeps the work brightest: the
   window's under-colour is the darkest thing on screen and the content lies on
   it as a lighter rounded panel, so the eye starts where the work is. The
-  chrome uses a near-neutral graphite ramp (`#0e0f10`/`#191a1b`/`#242526`) with
+  chrome uses a near-neutral graphite ramp (`#030405`/`#191a1b`/`#262728`) with
   a two-point channel spread at each navigation step, keeping the shell subtly
   cool while the workspace remains neutral.
 - The canvas, lists, panels, fields, and inspectors use the neutral ladder

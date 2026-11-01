@@ -53,21 +53,30 @@
   /* The neutral ramp, chosen by contrast rather than copied. Higher is darker.
      The steps the workspace stands on are spaced so that each object reads
      against the container holding it without a line: a lane on the panel at
-     1.16:1 (WCAG), a card on its lane at 1.21:1, a control on a card at 1.13:1.
-     The ramp they replace stood 1.08–1.10:1 apart at every seam, which is a
+     1.16:1 (WCAG), a card on its lane at 1.21:1, a control on a card at 1.16:1
+     and its hover over it at 1.15:1. Every pair that stands side by side owes
+     1.15:1. The ramp before stood 1.08–1.10:1 apart at every seam, which is a
      difference a dark room on a good panel shows and an office monitor in
-     daylight does not — so the board read as one grey mass. 1.20:1 is the
-     smallest seam the old interface already showed as two surfaces (the
-     settings band on the panel); 1.10:1 is the one that blended.
+     daylight does not — so the board read as one grey mass; a control on a
+     card then stood at 1.13:1 and its pointed-at card merged into it.
+     1.20:1 is the smallest seam the old interface already showed as two
+     surfaces (the settings band on the panel), and a card owes it to its lane.
      Lifting the grounds lifts the text that stands on them, so the two
      secondary text tones moved up with them: the tertiary tone holds 4.5:1 on
-     the lightest ground it is drawn on, a hovered card. */
+     the lightest ground it is drawn on, a hovered card.
+
+     The rungs above the chrome are at their ceiling, read from the top down.
+     The pressed step (650) carries the danger action's red word at 4.52:1, so
+     it cannot lighten; the resting control (700) is the lightest grey 1.15
+     under it; the card (750) stands 1.15 under the control, the lane (850)
+     1.20 under the card, and the panel (900) 1.15 under the lane. Lifting the
+     panel would lift every step above it into that red word. */
   --color-gray-1000: #0d0d0d;
   --color-gray-900: #181818;
   --color-gray-850: #252525;
   --color-gray-800: #2b2b2b;
   --color-gray-750: #333;
-  --color-gray-700: #3b3b3b;
+  --color-gray-700: #3d3d3d;
   --color-gray-650: #464646;
   --color-gray-550: #5c5c5c;
   --color-gray-450: #767676;
@@ -97,12 +106,16 @@
   /* Near-neutral graphite for the left and top chrome. Each navigation step
      has a two-point channel spread, retaining a subtle cold undertone without
      the stronger blue cast of the previous ramp. The workspace remains on its
-     neutral gray ramp. A fully neutral chrome can point the three
-     `--color-navigation*` tokens below at `--color-gray-1000`/`-900`/`-800`;
-     nothing else needs to move because the semantic tier owns that choice. */
-  --color-slate-1000: #0e0f10;
+     neutral gray ramp. The semantic tier owns which ramp the three
+     `--color-navigation*` tokens below name.
+
+     The chrome is the one rung with room to move, so it carries the seam to
+     the workspace: with the panel at #181818 a chrome lighter than #030405
+     stands under 1.15:1 from it. #0e0f10 stood at 1.08, and the rail's rows
+     stepped 1.10 and 1.14 over it; the two row steps now stand 1.18 and 1.17. */
+  --color-slate-1000: #030405;
   --color-slate-900: #191a1b;
-  --color-slate-800: #242526;
+  --color-slate-800: #262728;
   --color-slate-450: #64737c;
 
   /* Rules are a percentage of white rather than a fixed grey, so one hairline
@@ -117,8 +130,10 @@
      `rgb(17 23 28 / 22%)`, `rgb(25 29 32 / 22%)`, `rgb(26 31 35 / 16%)` — each
      a different near-black at a different strength, and the guard never saw
      them because it read `#hex` and these are `rgb()`. The scrim was the
-     weakest of the four, which is why a dialog did not read as modal. */
-  --color-black-68: rgb(3 6 10 / 68%);
+     weakest of the four, which is why a dialog did not read as modal.
+     It stays darker than the chrome, so it dims every ground it covers; when
+     the chrome sank to #030405 it went with it, keeping the cold lean. */
+  --color-black-68: rgb(0 1 2 / 68%);
   --color-black-42: rgb(0 0 0 / 42%);
 
   /* The type ramp, as tokens rather than as a paragraph in DESIGN.md.

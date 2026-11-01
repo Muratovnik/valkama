@@ -416,7 +416,7 @@ function createWindow() {
     // The window is the chrome the workspace panel lies on, so this is
     // `--color-navigation` rather than `--color-canvas`: the frame paints before the shell
     // does, and the first thing drawn should be the ground it keeps.
-    backgroundColor: '#0e0f10', // --color-navigation
+    backgroundColor: '#030405', // --color-navigation
     autoHideMenuBar: true,
     title: 'Valkama',
     // Packaged, `__dirname` is inside app.asar and the repository's
