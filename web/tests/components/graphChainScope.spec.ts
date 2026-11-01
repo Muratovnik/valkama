@@ -293,6 +293,31 @@ describe('the graph scoped to one chain', () => {
     expect(named.map((entry) => entry.text())).toEqual(['To do'])
   })
 
+  it('orders its legend as the card’s map runs a lane: finished, under way with review first, then ahead', async () => {
+    const dev = { ...OPEN, state_id: 'dev', key: 'dev', name: 'Dev', category: 'active' }
+    const review = {
+      ...OPEN,
+      state_id: 'review',
+      key: 'review',
+      name: 'Review',
+      category: 'review',
+    }
+    const staged = items.map((entry) => {
+      if (entry.work_item_id === id(3)) return { ...entry, state: dev }
+      return entry.work_item_id === id(4) ? { ...entry, state: review } : entry
+    })
+    const graph = openGraph({
+      scopeKind: 'chain',
+      epicId: id(1),
+      chain,
+      edges: chainEdges,
+      items: staged,
+    })
+    await drawn(graph)
+    const named = graph.findAll('.graph-canvas .graph-legend-state:not(.held)')
+    expect(named.map((entry) => entry.text())).toEqual(['Review', 'Dev', 'To do'])
+  })
+
   it('draws each node as its colour and reference once the field is zoomed out past reading', async () => {
     const graph = openGraph({ scopeKind: 'chain', epicId: id(1), chain, edges: chainEdges })
     await drawn(graph)

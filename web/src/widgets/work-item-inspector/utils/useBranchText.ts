@@ -1,8 +1,8 @@
 import { useI18n } from 'vue-i18n'
 
-import { LANE_GROUP_ORDER } from '@/widgets/work-item-inspector/utils/chainBranchLayout.ts'
 import type { BranchLane } from '@/widgets/work-item-inspector/utils/chainBranchLayout.ts'
 
+import { CHAIN_PROGRESS_ORDER } from '@/shared/api/planningChainGroups.ts'
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 import { holderName } from '@/shared/lib/actor.ts'
 
@@ -48,7 +48,7 @@ export function useBranchText(groupName: (group: ChainGroup) => string) {
     const counts = new Map<ChainGroup, number>()
     for (const group of lanes.flatMap((lane) => lane.groups))
       counts.set(group, (counts.get(group) ?? 0) + 1)
-    return LANE_GROUP_ORDER.filter((group) => counts.has(group))
+    return CHAIN_PROGRESS_ORDER.filter((group) => counts.has(group))
       .map((group) =>
         t('workItem.chain.part', {
           group: groupName(group),
@@ -106,7 +106,7 @@ export function useBranchText(groupName: (group: ChainGroup) => string) {
    */
   function legend(lanes: readonly BranchLane[]) {
     const drawn = new Set(lanes.flatMap((lane) => lane.groups))
-    return LANE_GROUP_ORDER.filter((group) => drawn.has(group)).map((group) => ({
+    return CHAIN_PROGRESS_ORDER.filter((group) => drawn.has(group)).map((group) => ({
       state: group,
       label: groupName(group),
     }))

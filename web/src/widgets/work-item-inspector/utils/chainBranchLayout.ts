@@ -15,21 +15,11 @@
  */
 
 import type { ChainMember, WorkItemChain } from '@/shared/api/planningChainApi.ts'
-import { chainGroup } from '@/shared/api/planningChainGroups.ts'
+import { CHAIN_PROGRESS_ORDER, chainGroup } from '@/shared/api/planningChainGroups.ts'
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 
 /** The three things a reader asks of a lane: how much is finished, under way, ahead. */
 type LaneStage = 'ahead' | 'current' | 'done'
-
-/** Where along a lane each group stands: finished, then current, then ahead. */
-export const LANE_GROUP_ORDER: readonly ChainGroup[] = [
-  'done',
-  'review',
-  'active',
-  'blocked',
-  'queued',
-  'backlog',
-]
 
 const STAGE: Record<ChainGroup, LaneStage> = {
   done: 'done',
@@ -85,7 +75,8 @@ function byAge(left: ChainMember, right: ChainMember): number {
 /** Finished work by when it closed; open work ready first, then oldest first. */
 function laneOrder(left: ChainMember, right: ChainMember): number {
   const leftGroup = chainGroup(left)
-  const step = LANE_GROUP_ORDER.indexOf(leftGroup) - LANE_GROUP_ORDER.indexOf(chainGroup(right))
+  const step =
+    CHAIN_PROGRESS_ORDER.indexOf(leftGroup) - CHAIN_PROGRESS_ORDER.indexOf(chainGroup(right))
   if (step) return step
   if (leftGroup === 'done')
     return (left.closed_at ?? '').localeCompare(right.closed_at ?? '') || byAge(left, right)

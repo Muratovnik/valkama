@@ -13,6 +13,20 @@
 export const CHAIN_GROUPS = ['active', 'review', 'queued', 'backlog', 'blocked', 'done'] as const
 export type ChainGroup = (typeof CHAIN_GROUPS)[number]
 
+/**
+ * Where along a chain each group stands, as the card's map runs a lane and
+ * every key to a chain reads: finished, then under way — review nearest
+ * finished — then blocked and what is ahead.
+ */
+export const CHAIN_PROGRESS_ORDER: readonly ChainGroup[] = [
+  'done',
+  'review',
+  'active',
+  'blocked',
+  'queued',
+  'backlog',
+]
+
 /** The open groups, in the order the card lists them. */
 export const OPEN_CHAIN_GROUPS = CHAIN_GROUPS.filter(
   (group): group is Exclude<ChainGroup, 'done'> => group !== 'done',

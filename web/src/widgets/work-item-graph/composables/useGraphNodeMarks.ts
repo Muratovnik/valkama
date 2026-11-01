@@ -17,7 +17,12 @@ import type {
   neighborhood,
 } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 
-import { CHAIN_GROUPS, chainGroup, groupStateNames } from '@/shared/api/planningChainGroups.ts'
+import {
+  CHAIN_GROUPS,
+  CHAIN_PROGRESS_ORDER,
+  chainGroup,
+  groupStateNames,
+} from '@/shared/api/planningChainGroups.ts'
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 
@@ -68,11 +73,11 @@ export function useGraphNodeMarks(input: MarkInput) {
     return inChain.value ? chainGroup(node) : undefined
   }
 
-  /** The chain groups the field draws, which is what its legend names. */
+  /** The chain groups the field draws, which is what its legend names, in the card's map's order. */
   const chainLegend = computed(() => {
     if (!inChain.value || !input.placed.value) return []
     const present = new Set(input.placed.value.nodes.map((node) => chainGroup(node)))
-    return CHAIN_GROUPS.filter((group) => present.has(group))
+    return CHAIN_PROGRESS_ORDER.filter((group) => present.has(group))
   })
 
   /**
