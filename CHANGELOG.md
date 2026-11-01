@@ -205,6 +205,12 @@ server lists the same 31 tools with the same schemas.
   so two answered on one port and the desktop app or the tray took the other's
   identity for its own child's. A server that cannot own its port now exits,
   and a port whose listener closed can still be bound at once.
+- A number alone puts the item with that number first, as a whole reference
+  already did: `search_work_items` and `GET /api/planning/search` with a space
+  answer `12` with that space's item 12 ahead of every item that only mentions
+  it, and without a space each space's item 12 leads; the task finder and
+  `GET /api/search` lift them across sources. A page cut short no longer drops
+  the item named.
 
 ### Security
 
