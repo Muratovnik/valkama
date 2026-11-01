@@ -6,6 +6,7 @@ import InspectorDescription from '@/widgets/work-item-inspector/components/Inspe
 import InspectorDiscussion from '@/widgets/work-item-inspector/components/InspectorDiscussion.vue'
 import InspectorSummary from '@/widgets/work-item-inspector/components/InspectorSummary.vue'
 import { checklistProgress } from '@/widgets/work-item-inspector/utils/inspectorActivity.ts'
+import { openBlockers } from '@/widgets/work-item-inspector/utils/openBlockers.ts'
 
 import ItemInputRequests from '@/features/input-requests/components/ItemInputRequests.vue'
 
@@ -53,11 +54,7 @@ function revealChecklist() {
 
 // A closed item is neither blocked nor waiting on a next step: both read as
 // live instructions, and on a Done card they were stale ones.
-const blockers = computed(() =>
-  props.item.state.is_terminal
-    ? []
-    : props.item.links.filter((link) => link.kind === 'blocks' && link.direction === 'incoming'),
-)
+const blockers = computed(() => openBlockers(props.item))
 const nextStep = computed(() =>
   props.item.state.is_terminal ? undefined : props.item.checklist.find((step) => !step.done),
 )
