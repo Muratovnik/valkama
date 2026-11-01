@@ -14,7 +14,14 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installDiscussionBackend } from './discussionBackend.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { now, projectScope, spaceRef } from './planningFixtures.ts'
+import {
+  blockedWorkItem,
+  now,
+  planningSpace,
+  projectScope,
+  spaceRef,
+  workItem,
+} from './planningFixtures.ts'
 
 const steps = Array.from(
   { length: 18 },
@@ -141,4 +148,93 @@ test('a long markdown report holds on a whole line, opens, and links what resolv
   await expect(drawer.locator('.head-reference')).toHaveText('MAIN-265')
   await drawer.getByRole('button', { name: 'Back', exact: true }).click()
   await expect(drawer.locator('.head-reference')).toHaveText('MAIN-264')
+})
+
+test('a new task is described in the markdown editor, inside the dialog that owns Escape', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await installDiscussionBackend(page)
+  const searched: URLSearchParams[] = []
+  await page.route('**/api/planning/search?*', (route) => {
+    searched.push(new URL(route.request().url()).searchParams)
+    return route.fulfill({
+      json: {
+        interface_version: 'valkama-planning-api',
+        work_items: [
+          {
+            work_item_id: blockedWorkItem.work_item_id,
+            planning_space_id: planningSpace.planning_space_id,
+            reference: blockedWorkItem.reference,
+            title: blockedWorkItem.title,
+            state: { name: 'Doing' },
+            claim_ref: '',
+          },
+        ],
+      },
+    })
+  })
+  const created: Record<string, unknown>[] = []
+  await page.route('**/api/planning/work-items', (route) => {
+    created.push(route.request().postDataJSON() as Record<string, unknown>)
+    return route.fulfill({ json: workItem })
+  })
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  const opener = page.getByRole('button', { name: 'New work item' })
+  await opener.click()
+  const dialog = page.getByRole('dialog', { name: 'New work' })
+  await dialog.getByRole('textbox', { name: 'Title' }).fill('Ship the parser')
+  const description = dialog.getByRole('textbox', { name: 'Description' })
+  await description.click()
+  await page.keyboard.type('After #blo')
+  const list = dialog.getByRole('listbox', { name: 'Tasks' })
+  await expect(list).toContainText(blockedWorkItem.title)
+  expect(searched.at(-1)?.get('space')).toBe(planningSpace.planning_space_id)
+  await expectNoSilentClipping(page, 'New task with # suggestions at 390px')
+
+  // Escape closes the list and leaves the dialog and the text as they were.
+  await page.keyboard.press('Escape')
+  await expect(list).toHaveCount(0)
+  await expect(dialog).toBeVisible()
+  await expect(description).toHaveValue('After #blo')
+  await expect(description).toBeFocused()
+
+  // The list again, and Enter writes the chosen reference in place of the query.
+  await page.keyboard.type('c')
+  await expect(list).toBeVisible()
+  await page.keyboard.press('Enter')
+  await expect(description).toHaveValue(`After ${blockedWorkItem.reference} `)
+  await page.keyboard.type('**first**')
+
+  // The preview is the text as the card will draw it, and Write returns to it.
+  await dialog.getByRole('button', { name: 'Preview', exact: true }).click()
+  await expect(dialog.locator('.markdown-preview strong')).toHaveText('first')
+  await dialog.getByRole('button', { name: 'Write', exact: true }).click()
+
+  // Ctrl+Enter is the dialog's Create.
+  await description.focus()
+  await page.keyboard.press('Control+Enter')
+  await expect(dialog).toHaveCount(0)
+  expect(created).toEqual([
+    expect.objectContaining({
+      title: 'Ship the parser',
+      description: `After ${blockedWorkItem.reference} **first**`,
+    }),
+  ])
+})
+
+test('Escape closes the new-task dialog once no list is open, and focus goes back', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await installDiscussionBackend(page)
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  const opener = page.getByRole('button', { name: 'New work item' })
+  await opener.click()
+  const dialog = page.getByRole('dialog', { name: 'New work' })
+  await expect(dialog).toBeVisible()
+  await dialog.getByRole('textbox', { name: 'Description' }).fill('A draft')
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+  await expect(opener).toBeFocused()
 })

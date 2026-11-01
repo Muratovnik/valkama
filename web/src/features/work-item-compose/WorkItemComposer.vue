@@ -6,14 +6,23 @@
  * server puts a new item there; offering the choice here would let the interface
  * disagree with the workflow. Everything else a new item needs is either typed
  * or defaulted by the model.
+ *
+ * The description is written the way the card writes it: in the markdown
+ * editor, with a preview of what the card will show, `#` linking a task of the
+ * space the item is created in, and Ctrl+Enter as this dialog's Create. Escape
+ * closes an open `#` list first and the dialog only after.
  */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { createWorkItem } from '@/shared/api/planningApi.ts'
 import { PRIORITIES, WORK_ITEM_KINDS, WORK_ITEM_REFERENCE } from '@/shared/api/planningModel.ts'
+import { workItemSuggest } from '@/shared/lib/workItemSuggest.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
+import { useEditorView } from '@/shared/ui/editorView.ts'
+import MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
+import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VTextInput from '@/shared/ui/VTextInput.vue'
 
@@ -34,6 +43,8 @@ const labels = ref('')
 const parent = ref('')
 const busy = ref(false)
 const error = ref('')
+const { previewing, view, views } = useEditorView()
+const suggest = workItemSuggest(() => props.space)
 
 watch(
   () => props.open,
@@ -46,6 +57,7 @@ watch(
     labels.value = ''
     parent.value = ''
     error.value = ''
+    previewing.value = false
   },
 )
 
@@ -117,12 +129,26 @@ async function submit() {
           :options="priorityOptions"
         />
       </div>
-      <VTextInput
-        v-model="description"
-        :label="t('workItem.description')"
-        :rows="4"
-        :maxlength="20000"
-      />
+      <div class="composer-description">
+        <SegmentedControl
+          v-model="view"
+          class="composer-view"
+          size="compact"
+          :label="t('editor.view')"
+          :options="views"
+        />
+        <MarkdownEditor
+          v-model="description"
+          :label="t('workItem.description')"
+          :action="t('workItem.create')"
+          :preview="previewing"
+          :suggest="suggest"
+          :rows="4"
+          :maxlength="20000"
+          :disabled="busy"
+          @submit="submit"
+        />
+      </div>
       <div class="composer-pair">
         <VTextInput
           v-model="labels"
@@ -157,6 +183,16 @@ async function submit() {
 .composer {
   display: grid;
   gap: var(--space-3);
+}
+
+.composer-description {
+  display: grid;
+  gap: var(--space-heading-content);
+  min-width: 0;
+}
+
+.composer-view {
+  justify-self: start;
 }
 
 .composer-pair {
