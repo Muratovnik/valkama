@@ -351,6 +351,15 @@
      tests/designTokens.test.ts holds the relation. */
   --color-control-surface: var(--color-gray-700);
   --color-control-disabled-surface: var(--color-gray-800);
+
+  /* A label chip's face is a percentage of white, like a rule, because a chip
+     lies on more grounds than a control does: a card, a hovered card, a list
+     row. It was the resting control's grey, which is the very tone a hovered
+     card lifts to, so the chips on a pointed-at tile vanished into it. A lift
+     reads the same step above every ground, and pointed at or in the filter it
+     lifts further. tests/designTokens.test.ts holds both against every ground. */
+  --color-chip-face: var(--color-white-8);
+  --color-chip-face-raised: var(--color-white-18);
   --shadow-overlay: 0 20px 56px rgb(0 0 0 / 55%);
 
   /* What a modal drops on the window, and what a floating surface casts. The

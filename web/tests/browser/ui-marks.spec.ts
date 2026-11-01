@@ -61,17 +61,17 @@ test('a facet mark paints its glyph in the tone the state owner gave it, and a k
   expect(urgent.glyph).toBe(urgent.danger)
   const kind = await paint('[data-facet="kind"] .facet-glyph')
   expect(kind.glyph).toBe(kind.tertiary)
-  // A label chip stands on the control fill, not on a recess cut into the card.
+  // A label chip stands on its lifted face, not on a recess cut into the card.
   const chip = await card
     .locator('.label-chip .chip-face')
     .first()
     .evaluate((node) => {
       const probe = document.createElement('i')
       document.body.append(probe)
-      probe.style.background = 'var(--color-control-surface)'
-      const control = getComputedStyle(probe).backgroundColor
+      probe.style.background = 'var(--color-chip-face)'
+      const face = getComputedStyle(probe).backgroundColor
       probe.remove()
-      return { fill: getComputedStyle(node).backgroundColor, control }
+      return { fill: getComputedStyle(node).backgroundColor, face }
     })
-  expect(chip.fill).toBe(chip.control)
+  expect(chip.fill).toBe(chip.face)
 })

@@ -368,6 +368,51 @@ test('a control fill stands above every static ground, and its states run upward
   )
 })
 
+/** A translucent token laid over an opaque ground, mixed the way the screen mixes them. */
+function over(top: string, ground: string): string {
+  const lift = /^rgb\(\s*(\d+)\s+(\d+)\s+(\d+)\s*\/\s*(\d+)%\s*\)$/u.exec(top)
+  assert.ok(lift, `${top} is not an rgb() with a percentage alpha`)
+  const alpha = Number(lift[4]) / 100
+  const mixed = [0, 1, 2].map((index) =>
+    Math.round(Number(lift[index + 1]) * alpha + channel(ground, index) * (1 - alpha)),
+  )
+  return `#${mixed.map((value) => value.toString(16).padStart(2, '0')).join('')}`
+}
+
+test('a label chip stands above every ground it lies on, and lifts again when pointed at', () => {
+  // A chip lies on more grounds than a control: a card, a hovered card, a list
+  // row and its hover, a card in an epic well. Its face was the resting
+  // control's grey, which is the tone a hovered card lifts to, so the chips on
+  // a pointed-at tile stood at 1.00:1 on it and vanished.
+  for (const ground of [
+    '--color-canvas',
+    '--color-surface',
+    '--color-surface-sheet',
+    '--color-surface-hover',
+  ]) {
+    const below = token(ground)
+    const rest = over(token('--color-chip-face'), below)
+    const raised = over(token('--color-chip-face-raised'), below)
+    assert.ok(
+      lighter(rest, below) && contrast(rest, below) >= 1.1,
+      `a chip on ${ground} stands at ${contrast(rest, below).toFixed(2)}:1`,
+    )
+    assert.ok(
+      lighter(raised, rest) && contrast(raised, rest) >= 1.1,
+      `a pointed-at chip on ${ground} lifts ${contrast(raised, rest).toFixed(2)}:1 over its rest`,
+    )
+    // Rest carries muted ink, pointed at or in the filter the full one.
+    assert.ok(
+      contrast(token('--color-text-muted'), rest) >= 4.5,
+      `a chip's word on ${ground} is ${contrast(token('--color-text-muted'), rest).toFixed(2)}:1`,
+    )
+    assert.ok(
+      contrast(token('--color-text'), raised) >= 4.5,
+      `a raised chip's word on ${ground} is ${contrast(token('--color-text'), raised).toFixed(2)}:1`,
+    )
+  }
+})
+
 test('a modal scrim puts the window behind it out of reach', () => {
   // It was `rgb(21 24 27 / 42%)`, written into one component where no guard
   // could see it — the hex rule reads `#`, and this is `rgb()`. Over the canvas

@@ -1,8 +1,12 @@
 <script setup lang="ts">
 /**
- * One label as a chip: the control fill and muted ink, so it reads as a thing
+ * One label as a chip: a lifted face and muted ink, so it reads as a thing
  * that can be pressed rather than as a hole in the card. As a button it adds
  * its label to the filter, and takes it out again while it is in.
+ *
+ * The face is a lift over whatever the chip lies on rather than a grey of its
+ * own: a tile, a hovered tile and a list row are three grounds, and the
+ * control grey the face used to be is the hovered tile's own tone.
  *
  * `tabbable` is false where a container is one Tab stop — a board tile — and
  * the keyboard reaches the same filter through the card and the bar instead.
@@ -104,15 +108,16 @@ function press(event: MouseEvent) {
   max-width: 100%;
   padding: var(--space-hair) var(--space-2);
   white-space: nowrap;
-  background: var(--color-control-surface);
+  background: var(--color-chip-face);
   overflow: hidden;
   text-overflow: ellipsis;
   border-radius: var(--radius-status);
 
-  /* Pointed at, or in the filter: one step up, the way a control lifts. */
+  /* Pointed at, or in the filter: a further lift over the same ground, so it
+     rises on a hovered tile too, where a fixed grey would sink. */
   .label-chip.filters:hover &,
   .label-chip[data-active] & {
-    background: var(--color-surface-active);
+    background: var(--color-chip-face-raised);
   }
 }
 </style>
