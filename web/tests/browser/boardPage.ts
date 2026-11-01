@@ -110,16 +110,29 @@ export async function openBoard(page: Page, state: Record<string, string> = { gr
   await expect(page.locator('.work-item-board [data-reference]').first()).toBeVisible()
 }
 
+/** The same space as a list, once its rows are drawn. */
+export async function openList(page: Page) {
+  await page.goto(boardRoute({ view: 'list' }))
+  await expect(page.locator('.work-item-list tbody tr').first()).toBeVisible()
+}
+
 export interface Drag {
   from: Locator
   to: Locator
   where: 'bottom' | 'top'
+  /**
+   * Come in from the side at the drop's height rather than on a slant. A slant
+   * into another column first crosses the target's upper tiles, and the tile
+   * goes in above the one it crossed, which moves the place the drop was
+   * measured for; a hand corrects for that, a straight line does not.
+   */
+  level?: boolean
   /** Where the screenshot of the held tile goes, when one is wanted. */
   midway?: TestInfo
 }
 
 /** Drag `from` by the pointer to the top or bottom edge of `to`, a tile or a stack, as a hand does. */
-export async function drag(page: Page, { from, midway, to, where }: Drag) {
+export async function drag(page: Page, { from, level, midway, to, where }: Drag) {
   const start = await from.boundingBox()
   if (!start) throw new Error('a tile to drag is not on screen')
   await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2)
@@ -132,6 +145,7 @@ export async function drag(page: Page, { from, midway, to, where }: Drag) {
   const end = await to.boundingBox()
   if (!end) throw new Error('a place to drop on is not on screen')
   const y = where === 'top' ? end.y + 6 : end.y + end.height - 6
+  if (level) await page.mouse.move(start.x + start.width / 2 + 8, y, { steps: 8 })
   await page.mouse.move(end.x + end.width / 2, y, { steps: 16 })
   await page.mouse.move(end.x + end.width / 2, y + (where === 'top' ? 1 : -1), { steps: 2 })
   if (midway) {

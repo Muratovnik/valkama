@@ -7,7 +7,7 @@
 import { expect, test } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
-import { openBoard, serve, shot } from './boardPage.ts'
+import { openList, serve, shot } from './boardPage.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 
 for (const [width, headings, folded] of [
@@ -21,7 +21,7 @@ for (const [width, headings, folded] of [
     await page.setViewportSize({ width, height: 800 })
     await installBackend(page)
     await serve(page)
-    await openBoard(page, { view: 'list' })
+    await openList(page)
     const list = page.locator('.work-item-list')
     await expect(list.locator('tbody tr').first()).toBeVisible()
     // Each heading's own sort is its first button; a folded column's sort rides the title's.
@@ -58,7 +58,7 @@ test('the rows are one Tab stop, walked by the arrows, and a closed card gives f
   await page.setViewportSize({ width: 1440, height: 800 })
   await installBackend(page)
   await serve(page)
-  await openBoard(page, { view: 'list' })
+  await openList(page)
   const rows = page.locator('.work-item-list tbody .list-open')
   await expect(rows.first()).toBeVisible()
   const count = await rows.count()

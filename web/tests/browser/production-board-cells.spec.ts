@@ -21,10 +21,12 @@ test('a tile dropped past what an open cell draws stays in sight', async ({ page
   await expect
     .poll(() => tiles(cell(epic, 'backlog')))
     .toEqual(['MAIN-402', 'MAIN-403', 'MAIN-404'])
+  // Brought in level with the foot of the cell, below its last drawn tile.
   await drag(page, {
     from: epic.locator('li[data-reference="MAIN-405"]'),
     to: cell(epic, 'backlog'),
     where: 'bottom',
+    level: true,
   })
   await expect.poll(() => writes.length).toBe(1)
   expect(writes[0]).toEqual({
@@ -34,7 +36,10 @@ test('a tile dropped past what an open cell draws stays in sight', async ({ page
   await expect
     .poll(() => tiles(cell(epic, 'backlog')))
     .toEqual(['MAIN-402', 'MAIN-403', 'MAIN-404', 'MAIN-405'])
-  await expect(epic.locator('.lane-cell[data-state="backlog"] .lane-more')).toHaveCount(0)
+  // The cell is open now, so its toggle offers to close it again.
+  const toggle = epic.locator('.lane-cell[data-state="backlog"] .lane-more')
+  await expect(toggle).toHaveText('Show fewer')
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true')
 })
 
 test('a closed Done cell is reached by Tab, and its button shows the cards it counts', async ({
