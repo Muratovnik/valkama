@@ -88,6 +88,11 @@ describe('the work bar', () => {
     ['en', [5, 319, 2], '5 of 319 open · 2 more closed · Reset'],
     ['ru', [42, 319, 0], '42 из 319\u{A0}открытых · Сбросить'],
     ['ru', [1, 21, 1], '1 из 21\u{A0}открытой · ещё 1\u{A0}закрытая · Сбросить'],
+    // Nothing let through is a number too, not the open count it is out of.
+    ['en', [0, 319, 0], '0 of 319 open · Reset'],
+    ['ru', [0, 319, 0], '0 из 319\u{A0}открытых · Сбросить'],
+    // The word agrees with the open count it follows, not with what matched.
+    ['ru', [2, 21, 0], '2 из 21\u{A0}открытой · Сбросить'],
   ] as const)(
     'answers the filter (%s, %j: let through, open, closed let through)',
     (locale, [matchedOpen, open, matchedClosed], line) => {

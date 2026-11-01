@@ -98,7 +98,7 @@ function group(on: boolean) {
 const countsText = computed(() => {
   const { matchedOpen, open, total } = props.counts
   return props.filtered
-    ? t('workItem.filter.matched', { count: matchedOpen, open }, open)
+    ? t('workItem.filter.matched', { matched: matchedOpen, open }, open)
     : t('workItem.filter.open', { open, total }, open)
 })
 /** The closed items a filter let through, which the views draw as well. */

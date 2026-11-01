@@ -6,6 +6,11 @@
  * открытых из 1267» with nothing picked, «42 из 319 открытых» once something
  * is. The held count rides its preset, so the line does not carry a third
  * number.
+ *
+ * «Из 319 открытых» takes its form from the open count, so what matched is
+ * `{matched}`, never `{count}`: vue-i18n picks the form from a numeric named
+ * `count` before the plural argument, and prints the plural argument in place
+ * of a `count` of 0 — «319 из 319» for a filter that matched nothing.
  */
 export const workFilterMessages = {
   en: {
@@ -29,7 +34,7 @@ export const workFilterMessages = {
       chip: '{facet}: {value}',
       remove: 'Remove from filter: {name}',
       open: '{open} open of {total}',
-      matched: '{count} of {open} open',
+      matched: '{matched} of {open} open',
       closedToo: '{count} more closed',
       reset: 'Reset',
       incomplete: 'The filter is too long for the address: a reload keeps only part of it.',
@@ -60,7 +65,7 @@ export const workFilterMessages = {
       remove: 'Убрать из фильтра: {name}',
       open: '{open}\u{A0}открытая из {total} | {open}\u{A0}открытых из {total} | {open}\u{A0}открытых из {total}',
       matched:
-        '{count} из {open}\u{A0}открытой | {count} из {open}\u{A0}открытых | {count} из {open}\u{A0}открытых',
+        '{matched} из {open}\u{A0}открытой | {matched} из {open}\u{A0}открытых | {matched} из {open}\u{A0}открытых',
       closedToo:
         'ещё {count}\u{A0}закрытая | ещё {count}\u{A0}закрытые | ещё {count}\u{A0}закрытых',
       reset: 'Сбросить',
