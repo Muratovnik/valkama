@@ -819,8 +819,11 @@ worked by their former holders.
 Reopening a closed item -- a transition back to an open state -- restores no
 claim. Whoever takes the work again claims it.
 
-Who held the item is still on the record. Every item record, full or listed,
-carries two fields that are `null` for open work:
+Who held the item is still on the record. The full record (`get_work_item`, a
+`verbose` answer, `GET /api/planning/work-item`) and the briefs of the HTTP
+reads (`GET /api/planning`, `GET /api/planning/work-items`) carry two fields
+that are `null` for open work; the compact rows of `list_work_items` and
+`search_work_items` do not:
 
 | Field | For a closed item |
 | --- | --- |
