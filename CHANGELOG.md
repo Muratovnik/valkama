@@ -152,6 +152,12 @@ server lists the same 31 tools with the same schemas.
   stands there instead: «Waiting on MAIN-12», or «Epic — take a task from it».
   The labels follow as chips. Each relation row shows the other end's state as
   a dot and a name.
+- The card's head gives its room to the text at the first scroll of its body,
+  where it used to wait until the text had been read past the head's height,
+  and it comes back whole only at the very top. The text glides up into that
+  room, or moves at once with reduced motion, and a card that scrolls only a
+  little condenses too. This withdraws 2.1.0's rule that the text under the eye
+  moved only by the distance scrolled.
 - The graph's camera is the operator's. A refresh never moves it, and a filter
   change, a switch or a resize no longer reframes it, which withdraws 2.1.0's
   rule that a new queue or search framed the field afresh. It moves when
