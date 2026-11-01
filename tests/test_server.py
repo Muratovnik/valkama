@@ -520,7 +520,10 @@ class SearchAndRefTests(unittest.TestCase):
 
     def test_an_unknown_commit_is_reported_unresolved_not_raised(self) -> None:
         os.environ[documents.DOC_ROOTS_VAR] = self._dir.name
-        resolved = refs.resolve_ref("commit", "0" * 40)
+        # A commit lookup also asks every registered project; outside the gate
+        # the registry under LOCALAPPDATA would be the operator's own.
+        with mock.patch.dict(os.environ, {"LOCALAPPDATA": self._dir.name}):
+            resolved = refs.resolve_ref("commit", "0" * 40)
         self.assertFalse(resolved["resolved"])
 
     def test_a_url_ref_resolves_to_itself_and_garbage_is_refused(self) -> None:
