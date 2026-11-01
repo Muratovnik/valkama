@@ -5,7 +5,6 @@ export type ClosedStateDimension =
   | 'checklist-step'
   | 'claim-lease'
   | 'connection-lifecycle'
-  | 'control-selection'
   | 'platform-ui-state'
   | 'project-binding'
   | 'session-feed-result'
@@ -52,7 +51,12 @@ const SEMANTIC_TONE_COLORS: Record<SemanticTone, string> = {
   danger: '#f99a8f',
 }
 
-const STATE_PRESENTATION = {
+/**
+ * Every dimension's states and how each reads. Exported for the guard that
+ * holds a dimension to distinguishing its states: one whose states all read
+ * alike carries nothing, and is a dimension to retire rather than to bind.
+ */
+export const STATE_PRESENTATION = {
   /**
    * Whether the session behind a claim is still there. Stale is the one that
    * asks for a decision: the board says somebody holds the work and nobody
@@ -65,19 +69,11 @@ const STATE_PRESENTATION = {
     unconfirmed: { tone: 'neutral', emphasis: 'quiet' },
   },
   /**
-   * A control's chosen state is said by its shape and its ink — a thrown
-   * switch, a ticked box, a check beside an option — never by a meaning hue.
-   * Selected was success, so every switch that was on and every chosen option
-   * wore the green of finished work.
-   */
-  'control-selection': {
-    selected: { tone: 'neutral', emphasis: 'quiet' },
-    unselected: { tone: 'neutral', emphasis: 'quiet' },
-  },
-  /**
    * A step of a checklist, which is work and not a control: a done step is
-   * finished, so it takes the green of finished work. It used to borrow
-   * `control-selection`, which tied the checklist's colour to every switch.
+   * finished, so it takes the green of finished work. It used to borrow the
+   * switches' selection state, which tied the checklist's colour to every
+   * switch. A control has no entry here at all: its chosen state is said by
+   * its shape and its ink — a thrown switch, a ticked box — never by a hue.
    */
   'checklist-step': {
     done: { tone: 'success', emphasis: 'quiet' },
@@ -257,7 +253,6 @@ export type SemanticStatePair =
   | { dimension: 'checklist-step'; state: ChecklistStepState }
   | { dimension: 'claim-lease'; state: ClaimLeaseState }
   | { dimension: 'connection-lifecycle'; state: ConnectionLifecycleState }
-  | { dimension: 'control-selection'; state: 'selected' | 'unselected' }
   | { dimension: 'platform-ui-state'; state: PlatformUiState }
   | { dimension: 'project-binding'; state: ProjectBindingState }
   | { dimension: 'session-feed-result'; state: SessionFeedResultState }
@@ -272,7 +267,6 @@ const CLOSED_STATE_DIMENSIONS = {
   'checklist-step': true,
   'claim-lease': true,
   'connection-lifecycle': true,
-  'control-selection': true,
   'platform-ui-state': true,
   'project-binding': true,
   'session-feed-result': true,

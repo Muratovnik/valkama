@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import { statePresentation } from '@/shared/lib/uiSystem.ts'
-
 const props = withDefaults(
   defineProps<{
     label: string
@@ -23,7 +21,6 @@ const busyMark = computed(() => props.busy || undefined)
 
 /** The switch says which way it is thrown, in the caller's own words. */
 const stateLabel = computed(() => (props.modelValue ? props.onLabel : props.offLabel))
-const selectionState = computed(() => (props.modelValue ? 'selected' : 'unselected'))
 
 function toggle(current: boolean) {
   emit('update:modelValue', !current)
@@ -37,7 +34,6 @@ function toggle(current: boolean) {
     role="switch"
     :aria-label="label"
     :aria-checked="modelValue"
-    :data-tone="statePresentation('control-selection', selectionState).tone"
     :aria-busy="busyMark"
     :disabled="disabled || busy"
     @click="toggle(modelValue)"

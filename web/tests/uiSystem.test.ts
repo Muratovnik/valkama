@@ -5,6 +5,7 @@ import { test } from 'vitest'
 import {
   iconPolicy,
   selectionMode,
+  STATE_PRESENTATION,
   stateColor,
   statePresentation,
   surfacePolicy,
@@ -109,12 +110,27 @@ test('a hue on a work item means one thing, and ordinary work carries none', () 
   assert.equal(statePresentation('work-item-node-marker', 'claimed').tone, tone('active'))
 })
 
-test('a chosen control carries no meaning hue, and a done step keeps the green of finished work', () => {
-  // A switch that is on, a ticked box, a chosen option: shape and ink say it.
-  // Selected was success, so "on" read as "done".
-  for (const state of ['selected', 'unselected'] as const) {
-    assert.equal(statePresentation('control-selection', state).tone, 'neutral', state)
+test('a dimension with more than one state tells its states apart', () => {
+  // `control-selection` had two states that both read as neutral and quiet:
+  // a switch bound it and nothing could ever vary. A dimension of one state is
+  // the declared answer "no colour" for a facet; two alike say nothing twice.
+  // An open dimension also reads every state it does not list, as neutral.
+  for (const [dimension, states] of Object.entries(STATE_PRESENTATION)) {
+    const readings = Object.values(states as Record<string, unknown>).map((reading) =>
+      JSON.stringify(reading),
+    )
+    try {
+      readings.push(JSON.stringify(statePresentation(dimension as never, 'an-unlisted-state')))
+    } catch {
+      // A closed dimension refuses a state it does not list.
+    }
+    if (readings.length < 2) continue
+    assert.ok(new Set(readings).size > 1, `${dimension}: every state reads the same`)
   }
+  assert.equal('control-selection' in STATE_PRESENTATION, false)
+})
+
+test('a done step keeps the green of finished work', () => {
   // A checklist step is work rather than a control, so its own dimension says
   // finished — the same hue a completed item's state takes.
   assert.equal(
