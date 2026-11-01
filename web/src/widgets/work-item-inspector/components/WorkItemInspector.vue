@@ -226,6 +226,8 @@ const title = computed(() => item.value?.title || props.reference)
 const titleText = computed(() => titleRuns(title.value))
 const target = computed(() => inspectorTarget(props))
 /** The head holds what has to be answered or read before going on, and only while it does. */
+/** The head's own takeover question, which takes a row of its own while it is asked. */
+const factsAsking = ref(false)
 const headSlot = computed(() => Boolean(notice.value || writeError.value) || asking.value)
 
 /** The next step a guard asks for, taken where the inspector can take it. */
@@ -266,6 +268,7 @@ const close = () => void leave(() => emit('close'))
       ref="frame"
       class="inspector-frame"
       :title="title"
+      :facts-row="factsAsking"
       :close-label="t('drawer.close')"
       @close="close"
     >
@@ -313,6 +316,7 @@ const close = () => void leave(() => emit('close'))
         #facts="{ condensed }"
       >
         <InspectorFacts
+          v-model:asking="factsAsking"
           :item="item"
           :workflow="workflow"
           :busy="busy"

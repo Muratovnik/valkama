@@ -3,7 +3,13 @@ import { nextTick, ref } from 'vue'
 
 import VIcon from '@/shared/ui/VIcon.vue'
 
-defineProps<{ closeLabel: string; title: string; subtitle?: string }>()
+defineProps<{
+  closeLabel: string
+  title: string
+  /** The facts ask something and take a row of their own, condensed or not. */
+  factsRow?: boolean
+  subtitle?: string
+}>()
 const emit = defineEmits<{ close: [] }>()
 const body = ref<HTMLElement | null>(null)
 const head = ref<HTMLElement | null>(null)
@@ -86,7 +92,7 @@ defineExpose({ position, restore, scrollToTop })
     <header
       ref="head"
       class="drawer-frame-head"
-      :class="{ condensed }"
+      :class="{ condensed, 'facts-row': factsRow }"
     >
       <!-- The controls come first in the document and stand at the row's end:
            opening the drawer puts focus on Back or Close, as it did when the
@@ -267,11 +273,18 @@ defineExpose({ position, restore, scrollToTop })
   min-width: 0;
 }
 
+/* A question the facts ask is read in full: condensed, the head gives it the
+   row under the title, as the whole head does. */
+.drawer-frame-head.condensed.facts-row {
+  grid-template-areas: 'title close' 'facts facts' 'actions actions' 'tabs tabs';
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
 /* A phone-wide drawer has no title row to spare: Back and Close already share
    it, so the action ends the tabs' row instead, centred on the tabs above the
    strip's own foot, and the title keeps the width that says which item this is. */
 @container drawer (width < 520px) {
-  .drawer-frame-head.condensed {
+  .drawer-frame-head.condensed:not(.facts-row) {
     grid-template-areas: 'title close' 'actions actions' 'tabs facts';
     grid-template-columns: minmax(0, 1fr) auto;
 

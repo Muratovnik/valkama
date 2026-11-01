@@ -15,6 +15,10 @@
  *
  * A refusal of any of these is the host's to show, in the head that stays in
  * view while the body scrolls.
+ *
+ * Condensed, that head keeps an action in reach and lets a reason go with the
+ * facts: a reason is a fact about the item, and a sentence kept beside the
+ * sections in a phone-wide head squeezed them to one.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -32,6 +36,8 @@ const props = defineProps<{
   item: WorkItem
   /** The reference of an open item this one waits on, or null for none. */
   waitingOn: string | null
+  /** The head is condensed while the body is read: a reason steps out, an action stays. */
+  condensed?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -58,6 +64,12 @@ const action = computed<Action | null>(() => {
   return props.waitingOn ? 'waiting' : 'claim'
 })
 
+const shown = computed(
+  () =>
+    action.value !== null &&
+    !(props.condensed && (action.value === 'epic' || action.value === 'waiting')),
+)
+
 const takeoverQuestion = computed(() =>
   t('workItem.takeOverQuestion', { holder: holderName(props.item.claim_ref) }),
 )
@@ -83,7 +95,7 @@ const claimLabel = computed(() =>
 
 <template>
   <div
-    v-if="action"
+    v-if="shown"
     class="write-actions"
   >
     <p

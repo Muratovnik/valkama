@@ -6,7 +6,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { projectScope, workItemRef } from './planningFixtures.ts'
+import { projectScope, workItem, workItemRef } from './planningFixtures.ts'
 
 /**
  * The card's head reads as who the item is, what holds for it, and the one
@@ -199,10 +199,12 @@ test('a reference in a checklist step opens its card, and pressing the step text
  */
 const PINNED_AT_MOST: Readonly<Record<number, number>> = { 1440: 141, 1024: 141, 390: 175 }
 
-async function openLongCard(page: Page, width: number) {
+async function openLongCard(page: Page, width: number, answer?: (page: Page) => Promise<unknown>) {
   await page.addInitScript(() => localStorage.setItem('valkama-locale', 'ru'))
   await page.setViewportSize({ width, height: 844 })
   await installBackend(page, { longRead: true })
+  // A route added after the backend's answers before it.
+  await answer?.(page)
   await page.goto(
     serializePlatformRoute({
       module_id: 'planning',
@@ -272,5 +274,90 @@ for (const width of [1440, 390]) {
       return left('.collapsible-toggle') - left('.collapsible-text')
     })
     expect(offset).toBeCloseTo(0, 0)
+  })
+}
+
+/**
+ * Where the head would give a reason in place of the action — an epic, an item
+ * waiting on a blocker — the reason is a fact and goes with the facts: kept in
+ * the pinned row, a sentence beside the sections squeezed them to one.
+ */
+test('a read-down epic keeps the row for its sections at 390px', async ({ page }) => {
+  const epic = {
+    ...workItem,
+    container: true,
+    claim: null,
+    claim_ref: '',
+    description: Array.from({ length: 40 }, (_, index) => `Paragraph ${index + 1}.`).join(
+      String.fromCodePoint(10, 10),
+    ),
+  }
+  const drawer = await openLongCard(page, 390, (opened) =>
+    opened.route('**/api/modules/planning/work-item?*', (route) =>
+      route.fulfill({
+        json: {
+          interface_version: 'valkama-planning-work-item',
+          scope: projectScope,
+          work_item_ref: workItemRef,
+          state: {
+            interface_version: 'valkama-ui-state',
+            status: 'ready',
+            payload: { work_item: epic },
+          },
+        },
+      }),
+    ),
+  )
+  const reason = drawer.locator('.card-action')
+  await expect(reason).toContainText('Эпик')
+  await drawer
+    .locator('.drawer-frame-body')
+    .evaluate((node) => node.scrollTo({ top: node.scrollHeight }))
+  await expect(drawer.locator('.drawer-frame-head')).toHaveClass(/condensed/u)
+  await expect(reason).toBeHidden()
+  // The sections take the row up to the column Close stands in, read in one
+  // frame because the drawer may still be sliding in.
+  const reach = await drawer.locator('.drawer-frame-head').evaluate((head) => {
+    const edge = (selector: string) => head.querySelector(selector)?.getBoundingClientRect()
+    const strip = edge('.inspector-tabs')
+    const close = edge('.drawer-frame-close')
+    return (close?.left ?? 0) - (strip?.right ?? 0)
+  })
+  expect(reach).toBeLessThanOrEqual(16 + 1)
+})
+
+/**
+ * The takeover question asked from a read-down head is read in full: it takes
+ * the row under the title, as in the whole head, rather than the action's cell
+ * beside the title, where it pressed the title and the sections to nothing.
+ */
+for (const width of [1440, 390]) {
+  test(`a takeover asked from a read-down card keeps its title and sections at ${width}px`, async ({
+    page,
+  }) => {
+    const drawer = await openLongCard(page, width)
+    await drawer
+      .locator('.drawer-frame-body')
+      .evaluate((node) => node.scrollTo({ top: node.scrollHeight }))
+    const head = drawer.locator('.drawer-frame-head')
+    await expect(head).toHaveClass(/condensed/u)
+    await head.getByRole('button', { name: 'Забрать себе' }).click()
+    await expect(head.getByRole('button', { name: 'Забрать', exact: true })).toBeVisible()
+    const widths = await head.evaluate((node) => {
+      const width = (selector: string) =>
+        node.querySelector(selector)?.getBoundingClientRect().width ?? 0
+      return {
+        head: node.getBoundingClientRect().width,
+        title: width('h2'),
+        tabs: width('.inspector-tabs'),
+        question: width('.card-action'),
+      }
+    })
+    // The question and the sections take the head's width less its insets; the title its row.
+    expect(widths.question).toBeGreaterThanOrEqual(widths.head - 48 - 1)
+    expect(widths.tabs).toBeGreaterThanOrEqual(widths.head - 48 - 1)
+    expect(widths.title).toBeGreaterThan(widths.head / 2)
+    await head.getByRole('button', { name: 'Отмена' }).click()
+    await expect(head.getByRole('button', { name: 'Забрать себе' })).toBeVisible()
   })
 }

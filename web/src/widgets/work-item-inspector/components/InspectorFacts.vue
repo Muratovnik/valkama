@@ -22,7 +22,7 @@
  * with the rest of the head's detail, and the action alone stays, at its own
  * width, at the end of the title's row.
  */
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import InspectorWriteActions from '@/widgets/work-item-inspector/components/InspectorWriteActions.vue'
@@ -61,7 +61,8 @@ const emit = defineEmits<{
 }>()
 
 const { t, d } = useI18n()
-const asking = ref(false)
+/** Whether the takeover question is open; the host gives it the head's whole width. */
+const asking = defineModel<boolean>('asking', { default: false })
 
 /** The states this item may move to, which is the workflow's answer, not a list. */
 const moves = computed<ChoiceOption[]>(() => {
@@ -201,6 +202,7 @@ const filterLabel = (label: string) => emit('filter', { facet: 'labels', value: 
       class="card-action"
       :item="item"
       :busy="busy"
+      :condensed="condensed"
       :waiting-on="waitingOn"
       @claim="emit('claim')"
       @release="emit('release')"

@@ -741,12 +741,15 @@ labels on a narrow one: «Взять», «Отпустить» on this client's 
 there instead — «Ждёт MAIN-12» while an open blocker remains, «Эпик — возьмите
 задачу из него» on an epic. Labels follow as chips that add themselves to the
 filter, then the tabs. Reading down the body condenses the head to the title's
-one line with the action at its end, and the tabs on one row that scrolls,
-the one shown and the one focused brought into it; the facts and labels go
-with the body. Pinned no taller than the title and tabs of 2.1.0, it says which
-item this is and keeps the action and every section in reach: keeping the
-facts, a full-width action and two rows of tabs, it held 279px of a phone. The body names only blockers that
-are still open.
+one line and the tabs on one row that scrolls, the one shown and the one
+focused brought into it; the action ends the title's row on a wide drawer and
+the tabs' row on a narrow one, where Back and Close hold the title's. The facts
+and labels go with the body, and so does a reason standing where the action
+would; a takeover question takes the row under the title while it is asked.
+Pinned no taller than the title and tabs of 2.1.0, it says which item this is
+and keeps the action and every section in reach: keeping the facts, a
+full-width action and two rows of tabs, it held 279px of a phone. The body
+names only blockers that are still open.
 The related work/session/evidence context is one grouped relationship region,
 not a decorative sequence. Execution history and native session opening stay
 inside work-item context; Memory is a typed reference there.
