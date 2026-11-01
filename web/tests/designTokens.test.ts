@@ -289,15 +289,66 @@ test('every colour that carries meaning reads as text on a card and as a mark on
   )
 })
 
-test('two ladder roles never land on one tone', () => {
-  // What a role earns is a place to stand, so two roles resolving to the same
-  // value are one role wearing two names. `--surface-panel` and
-  // `--color-surface-sheet` were that pair: DESIGN.md described four steps while the
-  // palette shipped a panel and a sheet painted identically, and nothing could
-  // tell whether a rule meant the tone or the position.
+/**
+ * The grounds and control fills that each name a palette step of their own.
+ *
+ * A ladder token is a canvas, surface or control token. One that names another
+ * semantic token instead of a primitive is a role standing on that rung —
+ * `--color-surface-sheet: var(--color-surface-muted)` says so on its face — so
+ * it is left out: the rung it names is already counted.
+ */
+function ladderRungs(palette: typeof tokens): string[] {
+  const ladder = /^--color-(?:canvas|surface(?:-[a-z]+)*|control(?:-[a-z]+)+)$/u
+  return [...palette].flatMap(([name, { declared }]) => {
+    const named = /^var\(\s*(--[a-z][\w-]*)\s*\)$/u.exec(declared)?.[1]
+    const step = named === undefined ? undefined : palette.get(named)?.declared
+    return ladder.test(name) && step !== undefined && !step.startsWith('var(') ? [name] : []
+  })
+}
+
+test('two ladder rungs never land on one tone', () => {
+  // What a rung earns is a place to stand, so two rungs resolving to the same
+  // value are one rung wearing two names. `--surface-panel` and
+  // `--color-surface-sheet` were that pair once, and nothing could tell whether
+  // a rule meant the tone or the position.
+  //
+  // The rungs are read from the palette rather than listed here. A list of two
+  // roles is how `--color-surface-hover` and `--color-control-surface` came to
+  // name the same grey without failing anything: neither was on it, so a
+  // control resting on one and hovering to the other drew no hover at all.
+  const rungs = ladderRungs(tokens)
+  assert.ok(rungs.length >= 6, `the ladder reads as ${rungs.length} rungs; the pattern lost it`)
+  const byTone = new Map<string, string[]>()
+  for (const name of rungs) {
+    const tone = longHex(token(name).toLowerCase())
+    byTone.set(tone, [...(byTone.get(tone) ?? []), name])
+  }
+  assert.deepEqual(
+    [...byTone]
+      .filter(([, names]) => names.length > 1)
+      .map(([tone, names]) => `${names.join(' and ')} are both ${tone}`),
+    [],
+  )
+  // The two roles still stand on two different rungs.
   const roles = ['--color-surface-sheet', '--color-surface-recess']
   const tones = roles.map((role) => token(role).toLowerCase())
   assert.equal(new Set(tones).size, roles.length, `ladder roles collide: ${tones.join(' ')}`)
+})
+
+test('the rung reader counts two grounds naming one step, and not a role re-pointing to one', () => {
+  const palette = readTokens(`:root {
+  --color-gray-700: #3b3b3b;
+  --color-gray-750: #333;
+  --color-surface-muted: var(--color-gray-750);
+  --color-surface-hover: var(--color-gray-700);
+  --color-control-surface: var(--color-gray-700);
+  --color-surface-sheet: var(--color-surface-muted);
+}`) as typeof tokens
+  assert.deepEqual(ladderRungs(palette), [
+    '--color-surface-muted',
+    '--color-surface-hover',
+    '--color-control-surface',
+  ])
 })
 
 test('a control fill stands above every static ground, and its states run upward', () => {

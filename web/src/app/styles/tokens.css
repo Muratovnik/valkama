@@ -301,7 +301,14 @@
   --color-canvas: var(--color-gray-900);
   --color-surface: var(--color-gray-850);
   --color-surface-muted: var(--color-gray-750);
-  --color-surface-hover: var(--color-gray-700);
+
+  /* A card, a row or a bare icon lifts to the resting control's rung when it
+     is pointed at, so the hover of what is not a control is a role standing on
+     that rung, not a rung of its own. It named the same step as
+     `--color-control-surface` independently, which is how a control resting on
+     the one and hovering to the other drew no hover: a control's own hover is
+     `--color-surface-active`, one step further. */
+  --color-surface-hover: var(--color-control-surface);
   --color-surface-active: var(--color-gray-650);
   --color-text: var(--color-gray-100);
   --color-text-muted: var(--color-gray-250);

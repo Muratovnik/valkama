@@ -180,10 +180,14 @@ chrome.
   standing on another rung may re-point one to stay a step above itself — the
   drawer stands on `--color-surface`, the rung the default sheet already sits
   above, so it re-points nothing — and a rule that must be one exact tone
-  wherever it renders names the palette step instead. A role that
-  resolves to the same tone as another role is a duplicate and fails
-  `designTokens.test.ts`; the palette shipped `--surface-panel` and
-  `--color-surface-sheet` painted identically until it did. A group cut into
+  wherever it renders names the palette step instead. A rung that names the
+  same palette step as another rung is a duplicate and fails
+  `designTokens.test.ts`, which reads the rungs out of the palette; a role names
+  the rung it stands on (`--color-surface-hover` is the resting control's rung,
+  which is where a pointed-at card or row lifts to). The palette shipped
+  `--surface-panel` and `--color-surface-sheet` painted identically, and later
+  `--color-surface-hover` and `--color-control-surface` as two rungs of one
+  grey, while the check read a hand-written list of two. A group cut into
   a ground is the one move that goes the other way: an epic bundle is a well one
   step *down* from the lane, because a second outline around cards that already
   have one would be two frames deep. What lies in a well still counts its step
