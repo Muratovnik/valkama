@@ -191,6 +191,8 @@ describe('human input requests', () => {
       expect(checkedLabels(wrapper)).toEqual(['No'])
       expect(button(wrapper, 'Send answer').attributes('disabled')).toBeDefined()
       expect(wrapper.get('[role="alert"]').text()).toContain('draft is kept')
+      // The answer button that held focus is disabled now; focus is on why.
+      expect(document.activeElement).toBe(wrapper.get('[role="alert"]').element)
       await button(wrapper, 'Check status').trigger('click')
       await flushPromises()
       expect(checkedLabels(wrapper)).toEqual(['No'])
@@ -235,7 +237,8 @@ describe('human input requests', () => {
     expect(wrapper.text()).toContain('first 100')
     await button(wrapper, 'Refresh').trigger('click')
     await flushPromises()
-    expect(wrapper.emitted('count')?.at(-1)).toEqual([null])
+    // Unknown is said as unknown: a count withheld read as zero on the rail.
+    expect(wrapper.emitted('count')?.at(-1)).toEqual(['unknown'])
     expect(wrapper.text()).toContain('could not be refreshed')
     expect(wrapper.text()).not.toContain('No questions need')
   })
@@ -372,9 +375,12 @@ describe('human input requests', () => {
     await flushPromises()
     expect(titles()).toEqual(['Newer question', 'Older question'])
     expect(wrapper.emitted('count')?.at(-1)).toEqual([{ value: 0, incomplete: false }])
-    // With nothing left to answer, focus stays in the dialog, on the line that says so.
     expect(wrapper.get('.request-status').text()).toBe('No questions need your answer.')
-    expect(document.activeElement).toBe(wrapper.get('.request-status').element)
+    // With nothing left to answer, focus stays on the card just answered, on how
+    // it ended. The count line at the top took it once and scrolled the list away.
+    const outcome = present(wrapper.findAll('.request-card')[1], 'older card').get('.request-state')
+    expect(outcome.text()).toMatch(/^You answered · /)
+    expect(document.activeElement).toBe(outcome.element)
   })
 
   it('names the reader as the one who answered, without repeating the space key', () => {

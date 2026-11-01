@@ -10,15 +10,19 @@
  *
  * Answering or declining a question removes the buttons that were focused, and
  * focus used to fall to the page under the dialog. The list moves it on: to the
- * next open question, or, with none left, to the line at the top that says so.
- * A task's own section has no such line once read, so it keeps focus on the
- * question just answered.
+ * next open question, or, with none left, to how the one just answered ended.
+ * It went to the count line at the top once, which scrolled a long list away
+ * from the card the reader was in.
+ *
+ * A refresh the reader asked for that fails puts focus on the sentence saying
+ * so; one the poll started leaves focus where it is.
  */
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import RequestCard from '@/features/input-requests/components/RequestCard.vue'
 import { requestIdentity } from '@/features/input-requests/utils/requestIdentity.ts'
+import { hasDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
 import type {
   InputAnswers,
@@ -70,10 +74,16 @@ const waiting = computed(
 )
 /** The same condition the rail's count carries as its plus: a source or a page was not read. */
 const incomplete = computed(() => props.partial || Boolean(props.result?.has_more))
+/** Whether a question still open here has anything typed or chosen in it. */
+const drafted = computed(() =>
+  props.entries.some(
+    (entry) => entry.request.status === 'pending' && hasDraft(props.drafts[requestIdentity(entry)]),
+  ),
+)
 /** What the refresh beside it would change: the first read, its failure, or the count. */
 const statusText = computed(() => {
   if (props.loading && !props.result) return t('requests.loading')
-  if (props.failed) return t('requests.error')
+  if (props.failed) return t(drafted.value ? 'requests.error' : 'requests.errorBare')
   if (waiting.value)
     return t(incomplete.value ? 'requests.countIncomplete' : 'requests.count', {
       count: waiting.value,
@@ -104,8 +114,25 @@ const skipped = computed(() =>
       }
     }),
 )
-const cards: Record<string, { focus: () => void } | null> = {}
-const status = ref<HTMLElement | null>(null)
+type CardHandle = { focus: () => void; focusOutcome: () => void }
+const cards: Record<string, CardHandle | null> = {}
+const errorLine = ref<HTMLElement | null>(null)
+/** A refresh the reader pressed is still running; its failure is theirs to hear about. */
+const asked = ref(false)
+function askRefresh() {
+  asked.value = true
+  emit('refresh')
+}
+watch(
+  () => props.loading,
+  async (loading) => {
+    if (loading || !asked.value) return
+    asked.value = false
+    if (!props.failed) return
+    await nextTick()
+    errorLine.value?.focus()
+  },
+)
 function draftFor(entry: InputRequestEntry) {
   return props.drafts[requestIdentity(entry)] ?? {}
 }
@@ -119,8 +146,7 @@ async function updated(entry: InputRequestEntry) {
     (candidate) => candidate.request.status === 'pending',
   )
   if (next) cards[requestIdentity(next)]?.focus()
-  else if (status.value) status.value.focus()
-  else cards[key]?.focus()
+  else cards[key]?.focusOutcome()
 }
 </script>
 
@@ -135,24 +161,25 @@ async function updated(entry: InputRequestEntry) {
     >
       <p
         v-if="failed"
+        ref="errorLine"
         class="request-error"
         role="alert"
+        tabindex="-1"
       >
         {{ statusText }}
       </p>
       <p
         v-else
-        ref="status"
         class="request-status"
         role="status"
-        tabindex="-1"
       >
         {{ statusText }}
       </p>
+      <!-- Not disabled while a read runs: the focused button would drop focus to
+           the page, and a second press while one is running starts nothing. -->
       <VButton
         v-if="showRefresh"
-        :disabled="loading"
-        @click="emit('refresh')"
+        @click="askRefresh"
         >{{ t('requests.refresh') }}</VButton
       >
     </div>
@@ -184,7 +211,7 @@ async function updated(entry: InputRequestEntry) {
         compact
       >
         <template #action>
-          <VButton @click="emit('refresh')">{{ t('requests.refresh') }}</VButton>
+          <VButton @click="askRefresh">{{ t('requests.refresh') }}</VButton>
         </template>
       </DataEmptyState>
       <p
@@ -198,7 +225,7 @@ async function updated(entry: InputRequestEntry) {
     <RequestCard
       v-for="entry in entries"
       :key="requestIdentity(entry)"
-      :ref="(card) => (cards[requestIdentity(entry)] = card as { focus: () => void } | null)"
+      :ref="(card) => (cards[requestIdentity(entry)] = card as CardHandle | null)"
       :entry="entry"
       :draft="draftFor(entry)"
       :show-task-link="!item"
@@ -238,12 +265,9 @@ async function updated(entry: InputRequestEntry) {
   color: var(--color-danger);
 }
 
-/* Focus lands on the count line once the last question is answered. */
-.request-status:focus {
-  outline: none;
-}
-
-.request-status:focus-visible {
+/* Focus is moved here when a refresh the reader asked for fails; Tab never
+   stops here, so the ring shows whenever it holds focus. */
+.request-error:focus {
   border-radius: var(--radius-control);
   outline: 2px solid var(--color-focus-ring);
   outline-offset: var(--space-half);

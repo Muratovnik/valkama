@@ -3,8 +3,9 @@ import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import RequestField from '@/features/input-requests/components/RequestField.vue'
+import { displayAnswer } from '@/features/input-requests/utils/answerDisplay.ts'
 import { requestIdentity } from '@/features/input-requests/utils/requestIdentity.ts'
-import { checkAnswers } from '@/features/input-requests/utils/validateAnswers.ts'
+import { checkAnswers, hasDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
 import {
   answerInputRequest,
@@ -49,6 +50,7 @@ const error = ref('')
 /** The fields the last send refused, by id; each clears once it is edited. */
 const refused = ref<string[]>([])
 const card = ref<HTMLElement | null>(null)
+const errorLine = ref<HTMLElement | null>(null)
 const fieldControls: Record<string, { focus: () => void } | null> = {}
 const requiresRefresh = ref(false)
 const now = ref(Date.now())
@@ -101,6 +103,11 @@ const writable = computed(
     supported.value,
 )
 const busyMark = computed(() => busy.value || undefined)
+/** The error says the draft is kept only when there is one to keep. */
+const errorText = computed(() => {
+  const kept = hasDraft(props.draft) ? '' : 'Bare'
+  return error.value ? t(`requests.${error.value}${kept}`) : ''
+})
 const answerLabel = computed(() => t(busy.value ? 'requests.saving' : 'requests.answer'))
 const deadlineLabel = computed(() =>
   t(pastDue.value ? 'requests.deadline' : 'requests.expires', {
@@ -165,20 +172,15 @@ async function resolve(action: 'answer' | 'decline') {
       : declineInputRequest(entry))
     if (current !== generation || identity !== requestIdentity(local.value)) return
     if (requestIdentity(result) !== identity) {
-      error.value = 'mutationError'
-      requiresRefresh.value = true
+      await fail('mutationError', true)
       return
     }
     local.value = result
     emit('updated', result)
   } catch (error_) {
-    if (current === generation) {
-      error.value =
-        error_ instanceof InputRequestError && (error_.status === 409 || error_.status === 410)
-          ? 'conflict'
-          : 'mutationError'
-      requiresRefresh.value = true
-    }
+    const closed =
+      error_ instanceof InputRequestError && (error_.status === 409 || error_.status === 410)
+    if (current === generation) await fail(closed ? 'conflict' : 'mutationError', true)
   } finally {
     if (current === generation) busy.value = false
   }
@@ -193,15 +195,18 @@ async function refresh() {
     const result = await fetchInputRequest(entry.target, entry.request.request_id)
     if (current !== generation || identity !== requestIdentity(local.value)) return
     if (requestIdentity(result) !== identity) {
-      error.value = 'mutationError'
+      await fail('mutationError', false)
       return
     }
     local.value = result
     error.value = ''
     requiresRefresh.value = false
     emit('updated', result)
+    // «Check status» goes with the error it answered; the reader lands on what it found.
+    await nextTick()
+    focusOutcome()
   } catch {
-    if (current === generation) error.value = 'mutationError'
+    if (current === generation) await fail('mutationError', false)
   } finally {
     if (current === generation) busy.value = false
   }
@@ -210,16 +215,30 @@ async function refresh() {
 function focus() {
   card.value?.querySelector<HTMLElement>('.request-title')?.focus()
 }
-function display(field: InputRequestField): string {
-  const value = request.value.answers?.[field.id]
-  if (typeof value === 'boolean') return t(value ? 'requests.yes' : 'requests.no')
-  const label = (option: string) =>
-    field.options.find((item) => item.id === option)?.label ?? option
-  if (Array.isArray(value)) return value.map((option) => label(option)).join(', ')
-  if (typeof value !== 'string') return t('requests.noAnswer')
-  return field.type === 'choice' ? label(value) : value
+/**
+ * Moves focus to the line saying how this request stands — «You answered», the
+ * agent's own resolution — or to its heading while it still waits. The reader
+ * stays on the card they were working in rather than being sent to the top.
+ */
+function focusOutcome() {
+  const line = card.value?.querySelector<HTMLElement>('.request-state')
+  if (line) line.focus()
+  else focus()
 }
-defineExpose({ focus })
+/**
+ * Says why a write or a status check did not go through. A refused write
+ * (`blocking`) disables the buttons that were focused, and focus fell to the
+ * page under the dialog; it goes to the sentence that says what happened.
+ */
+async function fail(code: 'conflict' | 'mutationError', blocking: boolean) {
+  error.value = code
+  if (blocking) requiresRefresh.value = true
+  await nextTick()
+  errorLine.value?.focus()
+}
+const display = (field: InputRequestField) =>
+  displayAnswer(field, request.value.answers?.[field.id], t)
+defineExpose({ focus, focusOutcome })
 </script>
 
 <template>
@@ -258,6 +277,7 @@ defineExpose({ focus })
       v-if="outcome"
       class="request-state"
       role="status"
+      tabindex="-1"
     >
       {{ outcome
       }}<template v-if="request.resolved_at"> · {{ stamp(request.resolved_at) }}</template>
@@ -309,10 +329,12 @@ defineExpose({ focus })
     </dl>
     <p
       v-if="error"
+      ref="errorLine"
       class="request-error"
       role="alert"
+      tabindex="-1"
     >
-      {{ t(`requests.${error}`) }}
+      {{ errorText }}
     </p>
     <div
       v-if="hasActions"
@@ -321,19 +343,18 @@ defineExpose({ focus })
       <VButton
         v-if="request.status === 'pending'"
         variant="primary"
-        :disabled="!writable || busy || requiresRefresh"
+        :disabled="!writable || requiresRefresh"
         @click="resolve('answer')"
         >{{ answerLabel }}</VButton
       >
       <VButton
         v-if="request.status === 'pending'"
-        :disabled="!writable || busy || requiresRefresh"
+        :disabled="!writable || requiresRefresh"
         @click="resolve('decline')"
         >{{ t('requests.decline') }}</VButton
       >
       <VButton
         v-if="canRefresh"
-        :disabled="busy"
         @click="refresh"
         >{{ t('requests.checkStatus') }}</VButton
       >
@@ -361,13 +382,12 @@ defineExpose({ focus })
   gap: var(--space-1);
 }
 
-/* Focus arrives here from the request answered before it. The ring follows the
-   platform's keyboard rule rather than appearing on every pointer answer. */
-.request-title:focus {
-  outline: none;
-}
-
-.request-title:focus-visible {
+/* Only the app moves focus to these lines — to the next question, to how this
+   one ended, to why a write did not go through — and Tab never stops on them, so
+   the ring shows whenever they hold focus: it is the one sign of where the
+   reader was taken. Held to the keyboard rule it went missing whenever the
+   control that had focus was gone before the move. */
+:is(.request-title, .request-state, .request-error):focus {
   border-radius: var(--radius-control);
   outline: 2px solid var(--color-focus-ring);
   outline-offset: var(--space-half);

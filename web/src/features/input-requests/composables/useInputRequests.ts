@@ -9,8 +9,9 @@ import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 /**
  * The questions still waiting, and whether they are all of them: a source that
  * could not be read, or a list cut at its first page, makes `value` a floor.
+ * `unknown` is a read that failed outright, which says nothing about the count.
  */
-export type PendingCount = { incomplete: boolean; value: number }
+export type PendingCount = { incomplete: boolean; value: number } | 'unknown'
 
 export function useInputRequests(target: () => PlanningTarget | undefined) {
   const result = ref<InputRequestList | null>(null)
@@ -44,16 +45,17 @@ export function useInputRequests(target: () => PlanningTarget | undefined) {
         b.request.request_id.localeCompare(a.request.request_id),
     )
   })
-  // A failed read says nothing about the count, so it stays unknown; an
-  // incomplete one still knows how many it found.
-  const count = computed<PendingCount | null>(() =>
-    !result.value || failed.value
-      ? null
-      : {
-          value: entries.value.filter((entry) => entry.request.status === 'pending').length,
-          incomplete: partial.value || result.value.has_more,
-        },
-  )
+  // A failed read says nothing about the count, so it is unknown — said as
+  // such, since a count that vanished read as zero; an incomplete one still
+  // knows how many it found. Null is only the wait for the first answer.
+  const count = computed<PendingCount | null>(() => {
+    if (failed.value) return 'unknown'
+    if (!result.value) return null
+    return {
+      value: entries.value.filter((entry) => entry.request.status === 'pending').length,
+      incomplete: partial.value || result.value.has_more,
+    }
+  })
 
   async function refresh() {
     if (loading.value || document.visibilityState === 'hidden') return

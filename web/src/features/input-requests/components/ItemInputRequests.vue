@@ -36,7 +36,6 @@ function updated(entry: InputRequestEntry) {
         <VButton
           variant="ghost"
           size="inline"
-          :disabled="loading"
           :title="t('requests.refreshItem')"
           :aria-label="t('requests.refreshItem')"
           icon

@@ -12,6 +12,16 @@ function validField(field: InputRequestField, value: InputAnswers[string]): bool
         value.every((option) => options.has(option))
 }
 
+/** Whether a field's draft holds anything: an empty text or no ticks is not an answer begun. */
+function blank(value: InputAnswers[string] | undefined): boolean {
+  return value === undefined || value === '' || (Array.isArray(value) && value.length === 0)
+}
+
+/** Whether anything was typed or chosen in a draft, which is what "your draft is kept" promises. */
+export function hasDraft(draft: InputAnswers | undefined): boolean {
+  return Object.values(draft ?? {}).some((value) => !blank(value))
+}
+
 /**
  * The answers to send, and the fields that stop them, by id.
  *
@@ -27,9 +37,7 @@ export function checkAnswers(
   const refused: string[] = []
   for (const field of fields) {
     const value = draft[field.id]
-    const empty =
-      value === undefined || value === '' || (Array.isArray(value) && value.length === 0)
-    if (empty) {
+    if (blank(value)) {
       if (field.required) refused.push(field.id)
       continue
     }
