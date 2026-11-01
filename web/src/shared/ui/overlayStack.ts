@@ -5,6 +5,8 @@ export interface OverlayOwnership {
   readonly id: number
   readonly layer: 'drawer' | 'command'
   readonly previousFocus: HTMLElement | null
+  /** Closes the host; called with the Escape that asked for it. */
+  readonly dismiss: (event: KeyboardEvent) => void
   readonly surface: () => HTMLElement | null
 }
 
@@ -36,24 +38,47 @@ function scheduleRestore() {
     }
     const finished = session
     session = null
-    if (typeof document !== 'undefined' && finished)
+    if (typeof document !== 'undefined' && finished) {
       document.body.style.overflow = finished.overflow
+      document.removeEventListener('keydown', dismissTop)
+    }
     if (finished?.focus?.isConnected) finished.focus.focus()
   })
+}
+
+/**
+ * Escape belongs to the top overlay wherever the key lands.
+ *
+ * Each host heard it on its own root, so once the control holding focus was
+ * disabled or replaced — a refused answer, a failed refresh — focus fell to the
+ * page body, the key never reached the root, and the dialog could no longer be
+ * closed from the keyboard. The document hears it now, for whichever host is on
+ * top. A popup that consumed the key (a choice list closing) has prevented it,
+ * and a key pressed inside another host's surface is not the top one's to take.
+ */
+function dismissTop(event: KeyboardEvent) {
+  if (event.key !== 'Escape' || event.isComposing || event.defaultPrevented) return
+  const top = owners.value.at(-1)
+  const host = top?.surface()?.closest('.overlay-host')
+  const pressedIn = event.target instanceof Element ? event.target.closest('.overlay-host') : null
+  if (top && (!pressedIn || pressedIn === host)) top.dismiss(event)
 }
 
 /** Keep the page's original focus and scroll state until every live host closes. */
 export function claimOverlayOwnership(
   surface: () => HTMLElement | null,
   layer: OverlayOwnership['layer'],
+  dismiss: OverlayOwnership['dismiss'],
 ): OverlayOwnership {
   if (!session) {
     session = {
       focus: activeElement(),
       overflow: typeof document === 'undefined' ? '' : document.body.style.overflow,
     }
+    if (typeof document !== 'undefined') document.addEventListener('keydown', dismissTop)
   }
   const lease: OverlayOwnership = {
+    dismiss,
     id: ++nextOverlayOwnershipId,
     layer,
     previousFocus: owners.value.length ? activeElement() : session.focus,

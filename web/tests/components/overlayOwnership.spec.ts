@@ -121,6 +121,48 @@ describe('shared nested overlay ownership', () => {
     expect(drawer.value).toBe(true)
   })
 
+  it('closes only the top overlay on Escape after focus has fallen to the page body', async () => {
+    const { drawer, command } = start()
+    await flushPromises()
+    const trigger = button('.command-trigger')
+    trigger.focus()
+    trigger.click()
+    await flushPromises()
+    // A refused write disables the focused control, and the browser drops focus to BODY.
+    button('.command-first').blur()
+    expect(document.activeElement).toBe(document.body)
+    key(document.body, 'Escape')
+    await flushPromises()
+    expect(command.value).toBe(false)
+    expect(drawer.value).toBe(true)
+    expect(document.activeElement).toBe(trigger)
+    button('.drawer-first').blur()
+    key(document.body, 'Escape')
+    await flushPromises()
+    expect(drawer.value).toBe(false)
+    expect(document.activeElement).toBe(opener)
+  })
+
+  it('leaves Escape pressed in a covered overlay, or consumed on the way, to its owner', async () => {
+    const { drawer, command } = start()
+    await flushPromises()
+    button('.command-trigger').click()
+    await flushPromises()
+    key(button('.drawer-last'), 'Escape')
+    await flushPromises()
+    expect(command.value).toBe(true)
+    expect(drawer.value).toBe(true)
+    const consumed = new KeyboardEvent('keydown', {
+      key: 'Escape',
+      bubbles: true,
+      cancelable: true,
+    })
+    consumed.preventDefault()
+    document.body.dispatchEvent(consumed)
+    await flushPromises()
+    expect(command.value).toBe(true)
+  })
+
   it('keeps scroll locked and the original opener when the covered drawer unmounts first', async () => {
     const { drawer, command } = start()
     await flushPromises()

@@ -227,7 +227,7 @@ watch(
     if (open && interactive) {
       // Only the top surface claims focus and scroll. A mounted drawer can remain
       // visible under a command dialog without becoming a second dialog owner.
-      ownership.value = claimOverlayOwnership(() => surface.value, props.layer)
+      ownership.value = claimOverlayOwnership(() => surface.value, props.layer, closeOverlay)
       measureViewport()
       restoreDrawerWidth()
     } else {
@@ -253,14 +253,13 @@ onUnmounted(release)
       name="overlay"
       appear
     >
-      <!-- Escape on the overlay root, which is how a dialog closes from anywhere -->
-      <!-- inside it. The focusable surface is the section below. -->
-      <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -->
+      <!-- Escape reaches the top host through the overlay stack, which hears it
+           on the document: focus that fell out of the surface still closes it.
+           The focusable surface is the section below. -->
       <div
         v-if="open"
         class="overlay-host"
         :class="[`overlay-${variant}`, `overlay-layer-${layer}`, { 'is-passive': !interactive }]"
-        @keydown.esc="closeOverlay"
       >
         <!-- The scrim is a pointer affordance by definition: clicking outside a dialog -->
         <!-- dismisses it. The keyboard equivalent is Escape, handled one level up. -->
