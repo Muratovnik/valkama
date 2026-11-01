@@ -122,10 +122,11 @@ server lists the same 31 tools with the same schemas.
   medium as a quiet word in its Priority column and, from 900px, shows labels
   under the title. A graph node shows its state as a dot and a name. A finder
   result reads its glyphs, reference, title, state and project on one line, on
-  two on a phone. On the board and the list the glyphs and label chips are
-  filter buttons outside the Tab order, and a second press takes the value out
-  again; the card's label chips filter too. The graph's and the finder's marks
-  are read, not pressed.
+  two on a phone. The list's glyphs and the label chips of the board and the
+  list are filter buttons outside the Tab order, and a second press takes the
+  value out again; the card's label chips filter too. The glyphs of a board tile
+  and a graph node are read, and a press on them opens the card, as a press on
+  the rest of the tile or node does. The finder's marks are read, not pressed.
 - A board tile's first line holds those glyphs, the reference and, at its end,
   only what stops the work: the blocker it waits on, as the waiting glyph and
   that blocker's reference with «Waiting on MAIN-12» as its name and hover
@@ -195,6 +196,13 @@ server lists the same 31 tools with the same schemas.
   status` without loading the whole command line, and on Windows reads who
   listens on a port from the system instead of through PowerShell, so the tray
   and the app reach a window sooner. What the commands print is unchanged.
+- A long list shows its first screen at once and fills in the rest right after,
+  with its columns already at their final width; until the rest arrive, a scroll
+  stops at the last row drawn.
+- Board tiles and list rows draw far fewer components and elements, all of a
+  board's tile labels are fitted in one pass, and a tile out of sight is not laid
+  out until it is reached. Opening a list no longer lays out every row to measure
+  the filter's placeholder, and the filter menu builds its rows when it opens.
 - For contributors: `npm run typecheck`, and with it `npm run build`, now
   type-check every file under `web/tests/`, so a spec that calls a helper that
   does not exist, or builds a fixture of the wrong shape, fails the gate rather
@@ -228,7 +236,8 @@ server lists the same 31 tools with the same schemas.
   each state its lane has no work in; it keeps its place and draws its ground
   only while a tile of its lane is dragged.
 - A checklist step's «Discuss step» button is named by the step's words rather
-  than its markdown, so a screen reader no longer reads out its backticks.- On Windows a second server could bind a port another one was listening on,
+  than its markdown, so a screen reader no longer reads out its backticks.
+- On Windows a second server could bind a port another one was listening on,
   so two answered on one port and the desktop app or the tray took the other's
   identity for its own child's. A server that cannot own its port now exits,
   and a port whose listener closed can still be bound at once.
