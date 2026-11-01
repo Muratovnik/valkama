@@ -33,6 +33,16 @@ class ReportingObserver {
   disconnect() {}
 }
 
+/** A resize observer that has not been told anything yet. */
+class SilentObserver {
+  static readonly targets: Element[] = []
+  observe(target: Element) {
+    SilentObserver.targets.push(target)
+  }
+  unobserve() {}
+  disconnect() {}
+}
+
 beforeEach(() => {
   vi.stubGlobal('ResizeObserver', ReportingObserver)
 })
@@ -58,6 +68,48 @@ async function field(props: Record<string, unknown> = {}) {
   await flushPromises()
   return wrapper.get('input')
 }
+
+/** A field mounted where the fonts are long ready and no observer has said anything yet. */
+async function quietField() {
+  vi.stubGlobal('ResizeObserver', SilentObserver)
+  vi.stubGlobal('FontFaceSet', undefined)
+  Object.defineProperty(document, 'fonts', {
+    configurable: true,
+    value: { ready: Promise.resolve() },
+  })
+  const reads = vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(0)
+  const wrapper = mount(VTextInput, {
+    attachTo: document.body,
+    props: {
+      label: 'Filter work',
+      modelValue: '',
+      placeholder: 'Reference or title',
+      shortPlaceholder: 'Search',
+    },
+  })
+  await flushPromises()
+  return { reads, wrapper }
+}
+
+describe('when a field reads its boxes', () => {
+  afterEach(() => {
+    Reflect.deleteProperty(document, 'fonts')
+    SilentObserver.targets.length = 0
+  })
+
+  it('reads nothing on a schedule of its own, only when an observer reports', async () => {
+    // A reading right after mounting lands on whatever else that render drew:
+    // a thousand new rows of a list, all laid out for one placeholder.
+    const { reads } = await quietField()
+    expect(reads).not.toHaveBeenCalled()
+  })
+
+  it('watches the whole placeholder too, so words or fonts that change its width are read', async () => {
+    const { wrapper } = await quietField()
+    expect(SilentObserver.targets).toContain(wrapper.get('input').element)
+    expect(SilentObserver.targets).toContain(wrapper.get('.placeholder-ghost').element)
+  })
+})
 
 describe('a field with a short placeholder', () => {
   it('shows the whole placeholder where it fits', async () => {

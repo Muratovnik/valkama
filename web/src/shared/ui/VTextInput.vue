@@ -29,7 +29,7 @@
  * measures its whole placeholder against its own text box and shows the short
  * one where the whole one would be cut: «Номер или і» said less than «Поиск».
  */
-import { computed, nextTick, onMounted, ref, useTemplateRef, watch } from 'vue'
+import { computed, ref, useTemplateRef } from 'vue'
 
 import { useResizeObserver } from '@vueuse/core'
 
@@ -115,6 +115,12 @@ const combobox = computed(() =>
  * Whether the whole placeholder is wider than the text box it sits in. The
  * whole placeholder is drawn out of sight in the control's font and measured;
  * where nothing can be measured it fits, and the whole one shows.
+ *
+ * Its boxes are read when an observer says they changed, which covers other
+ * words, another language and the product's fonts arriving, and comes after a
+ * layout the browser did anyway. Read on a schedule of its own — once the fonts
+ * were ready, a promise that had already settled when the field mounted — the
+ * reading landed right after a thousand new list rows and laid them all out.
  */
 const ghost = useTemplateRef<HTMLElement>('ghost')
 const cut = ref(false)
@@ -130,10 +136,7 @@ function measure() {
     (Number.parseFloat(style.paddingInlineEnd) || 0)
   cut.value = ghost.value.offsetWidth > control.clientWidth - inset
 }
-useResizeObserver(element, measure)
-watch([() => props.placeholder, () => props.shortPlaceholder], () => nextTick(measure))
-// The words are measured again once the product's fonts have arrived.
-onMounted(() => void document.fonts?.ready.then(measure))
+useResizeObserver([element, ghost], measure)
 const shownPlaceholder = computed(() =>
   cut.value && props.shortPlaceholder ? props.shortPlaceholder : props.placeholder,
 )
@@ -257,7 +260,9 @@ textarea.control {
   visibility: hidden;
 }
 
+/* A box of its own: an observer reports nothing of an inline box. */
 .placeholder-ghost {
+  display: inline-block;
   font: var(--font-control);
   white-space: nowrap;
 }
