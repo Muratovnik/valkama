@@ -239,7 +239,6 @@ test('a chain whose read failed is read again on Retry', async ({ page }) => {
   await expect(page.locator('.flow-node-card')).toHaveCount(10)
 })
 
-/** How many drawn cards a box on the field covers. */
 /**
  * How many cards are drawn under the chrome `selector` names: each card's box
  * as the flow clips it, since what lies past the flow's edge is not drawn.

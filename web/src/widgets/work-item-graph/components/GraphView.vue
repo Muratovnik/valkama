@@ -1,11 +1,10 @@
 <script setup lang="ts">
 /** Shared planning data supplies the field; Vue Flow owns camera and interaction. */
-import { computed } from 'vue'
+import { computed, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { Background } from '@vue-flow/background'
-import { MarkerType, PanOnScrollMode, Position, VueFlow } from '@vue-flow/core'
-import type { Edge as FlowEdge, Node as FlowNode } from '@vue-flow/core'
+import { PanOnScrollMode, VueFlow } from '@vue-flow/core'
 
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
@@ -19,20 +18,13 @@ import GraphLayoutStatus from '@/widgets/work-item-graph/components/GraphLayoutS
 import GraphLegend from '@/widgets/work-item-graph/components/GraphLegend.vue'
 import GraphNodeCard from '@/widgets/work-item-graph/components/GraphNodeCard.vue'
 import { useGraphCamera } from '@/widgets/work-item-graph/composables/useGraphCamera.ts'
+import { useGraphFlowElements } from '@/widgets/work-item-graph/composables/useGraphFlowElements.ts'
+import { useGraphKeyboard } from '@/widgets/work-item-graph/composables/useGraphKeyboard.ts'
 import { useGraphNodeMarks } from '@/widgets/work-item-graph/composables/useGraphNodeMarks.ts'
 import { useGraphProjection } from '@/widgets/work-item-graph/composables/useGraphProjection.ts'
-import {
-  GRAPH_FLOW_ID,
-  NODE_HEIGHT,
-  NODE_WIDTH,
-} from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+import { GRAPH_FLOW_ID } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
-import {
-  edgeKey,
-  flowEdge,
-  GRAPH_ZOOM_MAX,
-  GRAPH_ZOOM_MIN,
-} from '@/widgets/work-item-graph/utils/graphLayout.ts'
+import { GRAPH_ZOOM_MAX, GRAPH_ZOOM_MIN } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import type { GraphScope } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 
 import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
@@ -94,12 +86,6 @@ const emptyKind = computed(() => {
 
 const readyIdSet = computed(() => new Set(ready.value.map((node) => node.work_item_id)))
 
-/** A lit edge takes the accent; an unlit discovery stays quieter than a block. */
-function edgeMarkerColor(lit: boolean, kind: PlanningEdge['kind']): string {
-  if (lit) return 'var(--color-action-primary)'
-  return kind === 'blocks' ? 'var(--color-graph-line)' : 'var(--color-graph-line-muted)'
-}
-
 /** Whether the space says this node is ready, asked per node it draws. */
 function isReady(node: PlacedNode): boolean {
   return readyIdSet.value.has(node.work_item_id)
@@ -123,14 +109,15 @@ const {
 
 // Vue Flow owns the camera and all viewport math. The store is keyed so the
 // controls in the strip below and this field share one camera instance.
-const { fitted, fitOptions, overview, onFlowInit, scheduleFitView } = useGraphCamera({
-  flowId: GRAPH_FLOW_ID,
-  placed,
-  readyIds: readyIdSet,
-  rootId: () => (inChain.value ? props.epicId : null),
-  selectedId: () => props.selectedId ?? null,
-  resets: [() => props.space, () => props.scopeKind, () => props.epicId, showDone, showUnlinked],
-})
+const { anchorId, fitted, fitOptions, overview, onFlowInit, reveal, scheduleFitView } =
+  useGraphCamera({
+    flowId: GRAPH_FLOW_ID,
+    placed,
+    readyIds: readyIdSet,
+    rootId: () => (inChain.value ? props.epicId : null),
+    selectedId: () => props.selectedId ?? null,
+    resets: [() => props.space, () => props.scopeKind, () => props.epicId, showDone, showUnlinked],
+  })
 
 /** The chain has closed members, so the key keeps the place «Done» comes and goes from. */
 const keepDone = computed(() => inChain.value && hiddenDone.value > 0)
@@ -142,46 +129,21 @@ const chainChip = computed(() =>
   props.chain ? { reference: props.chain.reference, total: props.chain.total } : null,
 )
 
-const flowNodes = computed<FlowNode<PlacedNode>[]>(() => {
-  if (!placed.value) return []
-  return placed.value.nodes.map((node) => ({
-    id: node.work_item_id,
-    type: 'card' as const,
-    position: { x: node.x, y: node.y },
-    width: NODE_WIDTH,
-    height: NODE_HEIGHT,
-    sourcePosition: Position.Right,
-    targetPosition: Position.Left,
-    draggable: false,
-    connectable: false,
-    selectable: false,
-    focusable: false,
-    ariaLabel: [
-      `${node.reference} ${node.title}`,
-      node.state.name,
-      ...(isChainRoot(node) ? [t('graph.rootLabel')] : []),
-    ].join(' · '),
-    class: 'graph-node',
-    data: node,
-  }))
+const { nodes: flowNodes, edges: flowEdges } = useGraphFlowElements({
+  focusSet,
+  placed,
+  isChainRoot,
 })
 
-const flowEdges = computed<FlowEdge[]>(() => {
-  if (!placed.value) return []
-  const focusedEdges = focusSet.value?.edges
-  return placed.value.edges.map((edge) => {
-    const key = edgeKey(edge)
-    const lit = focusedEdges?.has(key) ?? false
-    const recessed = focusedEdges != null && !lit
-    const markerColor = edgeMarkerColor(lit, edge.kind)
-    const descriptor = flowEdge(edge, { markerColor, lit, recessed })
-    return {
-      ...descriptor,
-      markerEnd: { ...descriptor.markerEnd, type: MarkerType.ArrowClosed },
-      sourcePosition: Position.Right,
-      targetPosition: Position.Left,
-    } as FlowEdge
-  })
+const {
+  isTabStop,
+  onFocus: keyboardFocus,
+  onKeydown,
+} = useGraphKeyboard({
+  anchorId,
+  canvas: useTemplateRef<HTMLElement>('canvas'),
+  placed,
+  reveal,
 })
 
 function onFlowNodeMouseEnter(event: { node: { id: string } }) {
@@ -199,6 +161,7 @@ function onFlowNodeClick(event: { node: { id: string } }) {
 }
 
 function onNodeFocus(id: string) {
+  keyboardFocus(id)
   applyFocus({ type: 'focus', id })
 }
 
@@ -258,9 +221,11 @@ function onFieldPointerLeave() {
     <!-- eslint-disable-next-line vuejs-accessibility/mouse-events-have-key-events, vuejs-accessibility/no-static-element-interactions -->
     <div
       v-show="!emptyKind"
+      ref="canvas"
       class="graph-canvas"
       :class="[{ settled: fitted }]"
       @mouseleave="onFieldPointerLeave"
+      @keydown="onKeydown"
     >
       <div class="graph-legend-place">
         <GraphFieldCorner
@@ -281,6 +246,7 @@ function onFieldPointerLeave() {
         :nodes-draggable="false"
         :nodes-connectable="false"
         :nodes-focusable="false"
+        :disable-keyboard-a11y="true"
         :elements-selectable="false"
         :select-nodes-on-drag="false"
         :selection-key-code="false"
@@ -316,6 +282,7 @@ function onFieldPointerLeave() {
             :parent-reference="parentReference(data)"
             :root="isChainRoot(data)"
             :overview="overview"
+            :tabbable="isTabStop(data)"
             @focus="onNodeFocus"
             @blur="onNodeBlur"
           />

@@ -18,6 +18,7 @@ const {
   chainGroup,
   overview = false,
   root = false,
+  tabbable = false,
 } = defineProps<{
   node: PlacedNode
   ready: boolean
@@ -29,6 +30,8 @@ const {
   parentReference?: string
   /** The item the chain the field is scoped to grew from. */
   root?: boolean
+  /** The field's one Tab stop; the arrows reach every other node. */
+  tabbable?: boolean
 }>()
 const emit = defineEmits<{ blur: [id: string]; focus: [id: string] }>()
 const { t } = useI18n()
@@ -59,6 +62,9 @@ const stateLabel = computed(() => (ready ? t('graph.readyMark') : node.state.nam
 const ownerLabel = computed(() =>
   t(node.state.is_terminal ? 'workItem.previousOwner' : 'graph.claimedBy'),
 )
+
+/** The field's one Tab stop takes Tab; the arrows reach the rest. */
+const tabIndex = computed(() => (tabbable ? 0 : -1))
 
 /** What a reader hears for the card: the same facts it shows, the root's mark included. */
 const accessibleName = computed(() =>
@@ -97,6 +103,7 @@ const accessibleName = computed(() =>
       overview,
     }"
     :aria-label="accessibleName"
+    :tabindex="tabIndex"
     @focus="emit('focus', node.work_item_id)"
     @blur="emit('blur', node.work_item_id)"
   >

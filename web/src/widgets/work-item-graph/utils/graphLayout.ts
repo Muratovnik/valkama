@@ -81,7 +81,7 @@ export interface GraphFitViewOptions {
  * stand in strips of their own above and below the flow, so a framing has no
  * chrome to keep clear: the whole flow is field.
  */
-const FRAME_GAP = 16
+export const FRAME_GAP = 16
 
 export function graphFitViewOptions(): GraphFitViewOptions {
   return {
