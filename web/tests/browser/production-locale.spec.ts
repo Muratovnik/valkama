@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import type { Page, Route } from '@playwright/test'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
@@ -143,3 +143,38 @@ test('the context bar names each module and adds no introductory copy', async ({
     await expect(title).toHaveText(name)
   }
 })
+
+/**
+ * A failed read says what failed, and a technical code only when there is one.
+ * The planning read and its stream failing together once left the panel
+ * reading «технический код: » with nothing after it.
+ */
+for (const [shape, fail] of [
+  ['an empty 500', (route: Route) => route.fulfill({ status: 500, body: '' })],
+  ['a dropped connection', (route: Route) => route.abort('connectionreset')],
+] as const) {
+  for (const width of [1440, 390]) {
+    test(`a failed Work read after ${shape} names no empty technical code at ${width}px`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 900 })
+      await installBackend(page)
+      await page.route('**/api/planning?*', fail)
+      await page.route('**/api/events?*', (route) => route.abort('failed'))
+      await page.goto(
+        serializePlatformRoute({
+          module_id: 'planning',
+          scope: projectScope,
+          state: { view: 'list' },
+        }),
+      )
+      const panel = page.locator('.platform-state-panel')
+      await expect(
+        panel.getByRole('heading', { name: 'Не удалось загрузить представление' }),
+      ).toBeVisible()
+      await expect(panel.getByRole('button', { name: 'Повторить' })).toBeVisible()
+      await expect(panel).not.toContainText(/код:\s*\)/u)
+      await expect(panel).not.toContainText('{code}')
+    })
+  }
+}
