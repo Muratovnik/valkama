@@ -23,7 +23,9 @@ server lists the same 31 tools with the same schemas.
   searches the «Filter» menu of facet values: state, kind, priority, label and
   holder. The «Workable» and «Assigned» quick filters stand beside it, and the
   picked values show as removable chips on the line beneath, beside counts
-  that answer the filter («12 of 42 open · Reset»). Facets combine with AND and
+  that answer the filter («12 of 42 open · Reset»), on the board by epic also
+  how many epics stand as rows, and closed matches only when no open work
+  matches. Facets combine with AND and
   the values of one facet with OR, except labels, which an item must all carry.
   `/` focuses the field; Escape closes the menu, then clears the text, then
   leaves, one step per press. It replaces the queue (All, Ready, Assigned, Blocked,
@@ -53,6 +55,18 @@ server lists the same 31 tools with the same schemas.
 
 ### Changed
 
+- **A close ends the claims on the item.** A transition into a completed or
+  cancelled state releases the item's claim and every step claim in the same
+  write, through `transition_work_item`, the `transition` of
+  `apply_work_item_changes`, the HTTP transition, the board and the card alike.
+  The history records `released` (and `checklist_released`) after
+  `transitioned`, and the answer names the holder it released as `released`, in
+  `applied.transition` for a batch. Reopening restores no claim. A closed item
+  still says who held it: item records and the view's items add `closed_at` and
+  `last_claim_ref`, both `null` for open work, and the board, the list and the
+  card print that holder as the previous one. A release sent after the close,
+  as agents used to send one, still succeeds and leaves that holder named.
+  See [A close ends the claims](docs/connection-contract.md#a-close-ends-the-claims).
 - **A work item's links name the state of their other end.** Every link in the
   full record (`get_work_item`, `GET /api/planning/work-item`) adds
   `state_name`, `state_category` and `is_terminal` of the item at its other
@@ -120,6 +134,10 @@ server lists the same 31 tools with the same schemas.
   to three, then «+N», which opens the card, and a chip stays visible on a
   hovered tile or list row. The holder and the steps print only when there are
   any.
+- The board's Done column stands the most recently closed work first. Its order
+  is no longer arranged by hand: a tile does not move within Done, by drag or
+  by Alt+arrow, and a tile dropped on Done from another column closes and
+  stands on top. The Cancelled column keeps its manual order.
 - The card's head reads who the item is, what holds for it, then what to do.
   Above the title, one line names the kind, the reference (pressing it copies
   it), when the item last changed and its plan anchor as an icon, whose full
@@ -140,9 +158,12 @@ server lists the same 31 tools with the same schemas.
   leaves no drawn node in sight, only across, at the zoom the operator chose.
   Leaving the graph and coming back to the same scope finds the camera where
   it was left.
-- The workspace's tones are measured as contrast: a lane stands 1.16:1 on the
-  panel and a card 1.21:1 on its lane, where every seam stood 1.08–1.10:1, and
-  the secondary text tones and the red hold 4.5:1 on a hovered card. Each hue
+- The workspace's tones are measured as contrast: every pair of grounds that
+  stand side by side is at least 1.15:1 apart, where seams stood at 1.08–1.13:1,
+  and the secondary text tones and the red hold 4.5:1 on a hovered card. The
+  frame around the workspace sinks to near-black so the panel reads as a panel;
+  a pointed-at card, a control and its hover, and the rail's pointed-at and
+  chosen rows each stand a visible step apart. Each hue
   on a work item means one thing on the board, the list, the graph and the
   chain map: in progress and held work are blue, where in progress was the
   green of done; done is green; the queue and workable carry no colour. A
@@ -214,7 +235,8 @@ server lists the same 31 tools with the same schemas.
 - Losing the local service no longer pushes the board, the list or the graph
   down with a notice above them. The rail's connection control says it
   instead, and that Valkama reconnects by itself and shows what it last
-  received meanwhile; a card or a view read while the service is down says
+  received meanwhile; on a narrow rail, where only its dot shows, pressing the
+  dot opens that sentence with «Refresh», and Escape closes it. A card or a view read while the service is down says
   there is no connection rather than that it could not be loaded.
 
 ### Security
