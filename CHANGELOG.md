@@ -10,6 +10,203 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+The bold entries at the top of **Changed** alter what existing MCP and HTTP
+calls return; an agent or integration written for 2.1.0 should read them first.
+The store is unchanged at schema 9, so the upgrade runs no migration, and the
+server lists the same 31 tools with the same schemas.
+
+### Added
+
+- **One Work filter** above the board, the list and the graph, in one row of
+  controls with the view switch, the board's «By epic» switch and «New work
+  item». One field matches a reference or a title and, as it is typed,
+  searches the «Filter» menu of facet values: state, kind, priority, label and
+  holder. The «Workable» and «Assigned» quick filters stand beside it, and the
+  picked values show as removable chips on the line beneath, beside counts
+  that answer the filter («12 of 42 open · Reset»). Facets combine with AND and
+  the values of one facet with OR, except labels, which an item must all carry.
+  `/` focuses the field; Escape closes the menu, then clears the text, then
+  leaves, one step per press. It replaces the queue (All, Ready, Assigned, Blocked,
+  Review) and the search field, neither of which reached the address. The
+  filter does, through the Planning route keys `ready`, `held`, `cat`, `kind`,
+  `pri`, `labels` and `holder` beside the text in `query`, which the Planning
+  manifest (`GET /api/modules`, `list_platform_modules`) now admits: a reload
+  or Back keeps it, an address too short for the whole filter says so, and
+  switching space clears it.
+- **Markdown in free text.** Descriptions, comments, work reports, summaries,
+  questions and their answers, attempt results, activity details, ref labels
+  and checklist steps are drawn as markdown — paragraphs, lists, code, links,
+  emphasis, quotes and tables — and a single line break stays one. Raw HTML
+  stays the text it was, an image becomes a link to it, and a link keeps only
+  an `http`, `https` or `mailto` address and opens outside the app. A reference
+  in the text links where it resolves: a task of the open space or of another
+  known space, a session the server knows, a commit or memory id the card
+  carries as a ref; anything else stays text. Pressing a checklist step's text
+  still ticks it, and pressing a reference in it opens that card instead. A long
+  text ends on its last whole line and opens when a link below the cut takes
+  focus.
+- **A markdown editor** writes a card's description, a comment or work report,
+  a new task's description and a text answer to a question: one Write | Preview
+  switch, `#` and a number or a word to link a task of the space, and
+  Ctrl+Enter to send. A question's answer offers no `#` suggestions; in the
+  new-task dialog Ctrl+Enter is Create, held back until there is a title.
+
+### Changed
+
+- **A work item's links name the state of their other end.** Every link in the
+  full record (`get_work_item`, `GET /api/planning/work-item`) adds
+  `state_name`, `state_category` and `is_terminal` of the item at its other
+  end, whichever space that item is in, so a finished blocker can be told from
+  an open one without another read. When the store cannot resolve that state,
+  the three are `null` and `state_unavailable` is `state_missing`: that end is
+  unknown, never open. A record's links are read in one query, where each link
+  cost two.
+- **A space's view carries the blocks into it from other spaces.** Beside the
+  links leaving the space, `links` in `GET /api/planning` and its live stream
+  (`/api/events?view=planning`), and `edges` in `GET /api/planning/graph`, now
+  hold every `blocks` link from another space into it, so a link's `from` can
+  name an item that the view's `work_items` or `nodes` do not hold. Every link
+  in the view, and every graph edge but `parent`, names its source: `reference`,
+  `state_name`, `state_category`, `is_terminal` and `state_unavailable`, read as
+  above. A reader that looked `from` up among the space's items reads these
+  instead. A graph node's `depth` counts an open blocker in another space, and
+  no blocker whose state is finished or unknown.
+- **A chain's edges include the blocks from outside the chain.** `edges` in
+  `GET /api/planning/work-item/chain` now hold every `blocks` link into the
+  root or a member wherever its source lives, in another space or in the same
+  space outside the chain, so `from` need not be a member; `discovered-from`
+  edges still join two members. Every edge names its source as a space view's
+  link does, and a source whose state cannot be read blocks nothing. See
+  [Reading a chain of work](docs/connection-contract.md#reading-a-chain-of-work).
+- **The cross-project search marks its results.** Each result's `item` in
+  `GET /api/modules/planning/search` adds `kind` and `priority`, and its
+  `state` adds `category` and `is_terminal`.
+- **`GET /api/ref` looks a commit up in every registered project.** It asks, in
+  order, the registered project a value names (`name@abc1234` or
+  `name abc1234`, the name matched against a project's id or directory name,
+  ignoring case), the project the registry binds the card's planning space to
+  (the new optional `space`, that space's exact identity; any other value is
+  refused with `400`), the configured document roots, then every other
+  registered project, and shows the commit from the first that has it. It used
+  to ask the document roots alone and hand a named value to git whole, so most
+  commits read as not found. Git's own `@{…}` stays part of the revision, a
+  linked worktree counts as a repository, and every directory still comes from
+  the owner's configuration. See also **Security**.
+- A work item's facts read one way on the board, the list, the graph, the card
+  and the task finder, and only the exceptions print: a priority glyph when the
+  priority is not medium (on the graph and in the finder, only high and
+  urgent), a kind glyph when the item is not a plain task, and of readiness
+  only the open blocker an item waits on, «Waiting on MAIN-12». The word
+  «workable» no longer stands on nearly every tile and chain member; the list's
+  Assignee column says «—» for nobody where it said workable, and the graph
+  says workable quietly in place of the state. The list leads each reference with
+  the priority and kind glyphs in two fixed slots, so references align, keeps
+  medium as a quiet word in its Priority column and, from 900px, shows labels
+  under the title. A graph node shows its state as a dot and a name. A finder
+  result reads its glyphs, reference, title, state and project on one line, on
+  two on a phone. On the board and the list the glyphs and label chips are
+  filter buttons outside the Tab order, and a second press takes the value out
+  again; the card's label chips filter too. The graph's and the finder's marks
+  are read, not pressed.
+- A board tile's first line holds those glyphs, the reference and, at its end,
+  only what stops the work: the blocker it waits on, as the waiting glyph and
+  that blocker's reference with «Waiting on MAIN-12» as its name and hover
+  text, or a stale claim. The line never wraps; a mark short of room keeps its
+  glyph and gives its words on hover. The title holds at most three lines, the
+  whole of it on hover. The labels keep one line, as many whole chips as fit up
+  to three, then «+N», which opens the card, and a chip stays visible on a
+  hovered tile or list row. The holder and the steps print only when there are
+  any.
+- The card's head reads who the item is, what holds for it, then what to do.
+  Above the title, one line names the kind, the reference (pressing it copies
+  it), when the item last changed and its plan anchor as an icon, whose full
+  path moves to Relations. Under the title, one line of facts: the state, whose
+  chip is the menu that moves the item, so the state is said once and a refused
+  move leaves it naming where the item is; the priority with its glyph; the
+  holder, with the lease on hover and a warning dot once it is stale; and the
+  epic. One action ends that line, or stands under the labels on a narrow
+  drawer — «Claim», «Release» on the browser's own claim, «Take over» on
+  another's — and where the facts argue against taking the item, the reason
+  stands there instead: «Waiting on MAIN-12», or «Epic — take a task from it».
+  The labels follow as chips. Each relation row shows the other end's state as
+  a dot and a name.
+- The graph's camera is the operator's. A refresh never moves it, and a filter
+  change, a switch or a resize no longer reframes it, which withdraws 2.1.0's
+  rule that a new queue or search framed the field afresh. It moves when
+  another scope opens, on «Fit whole graph», and, when a narrowing or a resize
+  leaves no drawn node in sight, only across, at the zoom the operator chose.
+  Leaving the graph and coming back to the same scope finds the camera where
+  it was left.
+- The workspace's tones are measured as contrast: a lane stands 1.16:1 on the
+  panel and a card 1.21:1 on its lane, where every seam stood 1.08–1.10:1, and
+  the secondary text tones and the red hold 4.5:1 on a hovered card. Each hue
+  on a work item means one thing on the board, the list, the graph and the
+  chain map: in progress and held work are blue, where in progress was the
+  green of done; done is green; the queue and workable carry no colour. A
+  switch that is on, a checked box and a chosen option are neutral rather than
+  green; a done checklist step keeps its green.
+- The context bar no longer prints a sentence describing each module under its
+  name, so the header is one row.
+- The desktop app opens its window at once, on a starting page in the
+  workspace's palette and language, and finds or starts the server behind it;
+  when it cannot, the same window says why, with the remedy and «Try again». A
+  managed server that is out of date is no longer restarted unasked: the window
+  says whether the front end or the server code changed and offers «Restart the
+  server». A listener the launcher cannot prove its own is never stopped. Each
+  step of opening the window is logged, with its time, to
+  `%TEMP%\valkama-desktop.log`.
+- With the desktop app installed, a click on the tray icon starts the app and
+  leaves every decision to it, so the tray no longer offers to restart the
+  server the app has just started. Without the app, the tray decides off the
+  icon's thread, takes a double click or a click queued behind a dialog as one
+  click, and logs each click to `%TEMP%\valkama-tray.log`.
+- The launcher answers `runtime`, `launcher status` and `launcher listener
+  status` without loading the whole command line, and on Windows reads who
+  listens on a port from the system instead of through PowerShell, so the tray
+  and the app reach a window sooner. What the commands print is unchanged.
+
+### Fixed
+
+- The card lists only blockers that are still open. An item whose blocker had
+  finished, in any space, read as blocked there while its tile said it could be
+  taken; a blocker whose state is unknown stays listed.
+- An item blocked by open work in another space, and a chain member blocked by
+  work outside its chain, now name that blocker on the board, the list, the
+  graph and the card's chain, where nothing said why the item was not
+  workable; a finished one makes nothing wait.
+- The graph no longer jumps when it is laid out again: its status took a line
+  above the drawing on every refresh. It now stands in the strip above the
+  field and, over a drawing, says nothing until a layout has run for 600ms. The
+  card's attempts and the project directory keep what they show while they
+  read it again, instead of a loading line.
+- A Work read that failed with no error envelope (an empty 500, a 502 page, a
+  body that is not JSON) reads «The local service did not complete the
+  request.» instead of printing `unavailable` as the technical code; an
+  `unavailable` answer with no UI state reads as a missing record on 404 and as
+  an unavailable dependency otherwise.
+- A hovered primary button no longer turns the base grey under its dark label,
+  the look of a disabled one: each variant keeps its own fill and label when
+  hovered, one step further from the ground, and every variant is disabled the
+  same way. Controls whose hover drew nothing now step up, and a hovered danger
+  label stays legible.
+- On the board grouped by epic, an empty cell no longer draws a grey box for
+  each state its lane has no work in; it keeps its place and draws its ground
+  only while a tile of its lane is dragged.
+- A checklist step's «Discuss step» button is named by the step's words rather
+  than its markdown, so a screen reader no longer reads out its backticks.
+- On Windows a second server could bind a port another one was listening on,
+  so two answered on one port and the desktop app or the tray took the other's
+  identity for its own child's. A server that cannot own its port now exits,
+  and a port whose listener closed can still be bound at once.
+
+### Security
+
+- `GET /api/ref` hands git a commit revision and nothing else. A value that
+  begins with `-` is answered `resolved: false` without running git — one such
+  as `--output=<path>` was read as an option and made git write a file — the
+  options end before the revision, and the lookup is held to commits, so
+  `rev:path` no longer prints a file out of a repository.
+
 ## [2.1.0](https://github.com/Muratovnik/valkama/compare/v2.0.0...v2.1.0) - 2026-11-01
 
 The bold entries at the top of **Changed** alter what existing MCP and HTTP
