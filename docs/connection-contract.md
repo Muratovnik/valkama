@@ -263,6 +263,35 @@ newest entries) and `sessions=true`. A count that is not a non-negative integer
 and a `sessions` other than `true` or `false` are refused with
 `invalid_request`; an unknown item is `not_found` (404).
 
+### What a link says about its other end
+
+A reader judges a link by the item at its far end: a `blocks` link holds only
+while its blocker is unfinished, and that blocker may live in another space,
+under another workflow. So a link names that end's state itself, and nobody has
+to read the other item to know.
+
+- In a work item's full record (`get_work_item`, `GET /api/planning/work-item`),
+  each link, in either direction, names its other end: `state_name`,
+  `state_category`, `is_terminal` and `state_unavailable`.
+- In a space's view (`links` in `GET /api/planning` and
+  `/api/events?view=planning`, `edges` in `GET /api/planning/graph`), the links
+  leaving the space come with every `blocks` link into it from another space,
+  so `from` can name an item the view does not hold. Each link names its source
+  end, `from`: its `reference` and the same four state fields. A graph's
+  `parent` edges carry none of them.
+- A chain's `edges` name their source the same way; see
+  [Reading a chain of work](#reading-a-chain-of-work).
+
+When the store cannot resolve that end's state, `state_name`, `state_category`
+and `is_terminal` are `null` and `state_unavailable` is `state_missing`;
+otherwise `state_unavailable` is `null`. An end whose state is unknown is not
+open, and as a blocker it blocks nothing. A reader of an older server finds no
+such fields and looks the end up among the items it holds.
+
+The cross-project search, `GET /api/modules/planning/search`, marks each result
+the same way: `item` carries `kind` and `priority`, and `item.state` carries
+`category` and `is_terminal` beside its name.
+
 ### Reading a chain of work
 
 An epic's children are the work that was planned. Work found while doing them is

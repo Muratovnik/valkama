@@ -60,7 +60,8 @@ server lists the same 31 tools with the same schemas.
   an open one without another read. When the store cannot resolve that state,
   the three are `null` and `state_unavailable` is `state_missing`: that end is
   unknown, never open. A record's links are read in one query, where each link
-  cost two.
+  cost two. See
+  [What a link says about its other end](docs/connection-contract.md#what-a-link-says-about-its-other-end).
 - **A space's view carries the blocks into it from other spaces.** Beside the
   links leaving the space, `links` in `GET /api/planning` and its live stream
   (`/api/events?view=planning`), and `edges` in `GET /api/planning/graph`, now
@@ -70,7 +71,8 @@ server lists the same 31 tools with the same schemas.
   `state_name`, `state_category`, `is_terminal` and `state_unavailable`, read as
   above. A reader that looked `from` up among the space's items reads these
   instead. A graph node's `depth` counts an open blocker in another space, and
-  no blocker whose state is finished or unknown.
+  no blocker whose state is finished or unknown. See
+  [What a link says about its other end](docs/connection-contract.md#what-a-link-says-about-its-other-end).
 - **A chain's edges include the blocks from outside the chain.** `edges` in
   `GET /api/planning/work-item/chain` now hold every `blocks` link into the
   root or a member wherever its source lives, in another space or in the same
@@ -80,7 +82,8 @@ server lists the same 31 tools with the same schemas.
   [Reading a chain of work](docs/connection-contract.md#reading-a-chain-of-work).
 - **The cross-project search marks its results.** Each result's `item` in
   `GET /api/modules/planning/search` adds `kind` and `priority`, and its
-  `state` adds `category` and `is_terminal`.
+  `state` adds `category` and `is_terminal`, as described in
+  [What a link says about its other end](docs/connection-contract.md#what-a-link-says-about-its-other-end).
 - **`GET /api/ref` looks a commit up in every registered project.** It asks, in
   order, the registered project a value names (`name@abc1234` or
   `name abc1234`, the name matched against a project's id or directory name,
