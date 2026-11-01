@@ -15,8 +15,9 @@
  *
  * A lane is as tall as what it holds, not as its fullest state: each cell is its
  * own height and draws only its first few tiles, and an empty one is a low
- * ground a tile can still be dropped on. A terminal cell draws none of its
- * tiles, so a lane of finished work is no taller than its open work.
+ * place a tile can still be dropped on, drawn as a ground only while a tile of
+ * its lane is dragged. A terminal cell draws none of its tiles, so a lane of
+ * finished work is no taller than its open work.
  *
  * A workflow wider than the board leaves some states off to the side, and a
  * lane whose work sits only there read as an empty lane with a blank gap — the
@@ -85,8 +86,13 @@ const { columnWidth, measured, visibleWidth } = useColumnFit(
 
 const inView = useColumnsInView(scroller, measured, () => props.states.length)
 
-/** A drag is under way, so every cell stands as tall as its lane to take the drop. */
-const dragging = ref(false)
+/**
+ * The lane a tile is being dragged in, if any. Every cell stands as tall as its
+ * lane while a drag is under way, and the cells of that lane — the only ones
+ * the tile can land in — draw their ground.
+ */
+const draggingLane = ref<string | null>(null)
+const dragging = computed(() => draggingLane.value !== null)
 
 /** Each lane's tiles by state, read once per change rather than once per cell. */
 const cells = computed(() => {
@@ -171,13 +177,18 @@ function away(lane: BoardLane, side: 'left' | 'right'): string {
 /** Some lane names work out of sight, so some heading may stand two rows tall. */
 const anyAway = computed(() => elsewhere.value.size > 0)
 
-function drag(active: boolean) {
-  dragging.value = active
+function drag(lane: BoardLane, active: boolean) {
+  draggingLane.value = active ? lane.id : null
   emit('dragging', active)
 }
 
 function isEmpty(lane: BoardLane): boolean {
   return lane.open + lane.closed === 0
+}
+
+/** A tile of this lane is being dragged, so its cells can take it. */
+function isLanding(lane: BoardLane): boolean {
+  return draggingLane.value === lane.id
 }
 
 function laneGroup(lane: BoardLane): string {
@@ -258,10 +269,11 @@ function laneGroup(lane: BoardLane): string {
               :waiting="props.waiting"
               :filter="props.filter"
               :hint-id="props.hintId"
+              :landable="isLanding(lane)"
               :revealed="isLanded(lane, state)"
               :writable="props.writable"
               @collapse="settle(lane, state)"
-              @dragging="drag"
+              @dragging="(active) => drag(lane, active)"
               @edge="(reference, edge) => emit('edge', reference, edge)"
               @filter="emit('filter', $event)"
               @open="emit('open', $event)"

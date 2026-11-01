@@ -37,6 +37,8 @@ const props = defineProps<{
   /** The lane's drop group: a tile crosses between the cells of its lane only. */
   group: string
   items: WorkItemBrief[]
+  /** A tile of this lane is being dragged, so this cell can take it. */
+  landable: boolean
   /** A move has landed in this cell while it was closed, so it is drawn whole. */
   revealed: boolean
   state: WorkflowState
@@ -109,6 +111,7 @@ function walk(event: KeyboardEvent) {
   <div
     ref="cell"
     class="lane-cell"
+    :class="{ empty: !props.items.length, landable: props.landable }"
     :data-state="props.state.key"
   >
     <WorkItemStack
@@ -144,8 +147,10 @@ function walk(event: KeyboardEvent) {
 </template>
 
 <style scoped>
-/* A ground like a column's; an empty one stays a low ground, so the column
-   still reads and a tile can still be dropped there. */
+/* A ground like a column's. An empty one keeps its place and its height, so a
+   tile can still be dropped there, but draws no ground until a tile of its lane
+   is dragged and could land in it: at rest a row of epics drew five grey boxes
+   for every lane, the loudest thing on a board of mostly empty cells. */
 .lane-cell {
   display: flex;
   flex-direction: column;
@@ -154,6 +159,10 @@ function walk(event: KeyboardEvent) {
   padding: var(--space-2);
   background: var(--color-surface);
   border-radius: var(--radius-card);
+
+  &.empty:not(.landable) {
+    background: none;
+  }
 }
 
 .lane-stack {

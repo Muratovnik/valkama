@@ -148,6 +148,46 @@ describe('a lane cell', () => {
   })
 })
 
+const laneCells = (wrapper: ReturnType<typeof board>, lane: string) =>
+  wrapper
+    .findAllComponents(WorkItemLaneCell)
+    .filter((cell) => cell.props('group') === `lane:${lane}`)
+
+describe('an empty lane cell', () => {
+  const twoLanes = [
+    epic,
+    boardItem(10, 'backlog', { parent_id: epic.work_item_id }),
+    boardItem(12, 'backlog'),
+  ]
+  const twoLaneBoard = () => board({ grouping: 'epic', items: twoLanes, spaceItems: twoLanes })
+
+  it('is marked empty, and only the cells a dragged tile could land in are marked landable', async () => {
+    const wrapper = twoLaneBoard()
+    const own = laneCells(wrapper, epic.work_item_id)
+    const lanes = new Set(
+      wrapper.findAllComponents(WorkItemLaneCell).map((cell) => cell.props('group')),
+    )
+    const other = [...lanes].find((group) => group !== `lane:${epic.work_item_id}`) ?? ''
+    const elsewhere = laneCells(wrapper, other.slice('lane:'.length))
+    const emptyTodo = own.find((cell) => cell.props('state').key === 'todo')
+    expect(emptyTodo?.classes()).toContain('empty')
+    expect(own.find((cell) => cell.props('state').key === 'backlog')?.classes()).not.toContain(
+      'empty',
+    )
+    expect(wrapper.findAll('.lane-cell.landable')).toHaveLength(0)
+
+    own.find((cell) => cell.props('state').key === 'backlog')?.vm.$emit('dragging', true)
+    await flushPromises()
+    expect(own.every((cell) => cell.classes().includes('landable'))).toBe(true)
+    expect(elsewhere.length).toBeGreaterThan(0)
+    expect(elsewhere.some((cell) => cell.classes().includes('landable'))).toBe(false)
+
+    own.find((cell) => cell.props('state').key === 'backlog')?.vm.$emit('dragging', false)
+    await flushPromises()
+    expect(wrapper.findAll('.lane-cell.landable')).toHaveLength(0)
+  })
+})
+
 describe('a terminal cell of the board grouped by epic', () => {
   const finished = [
     epic,

@@ -633,8 +633,10 @@ holder and the steps when there are any. Workable, medium and a plain task are
 never printed: they are the norm of the columns that hold them. The title is
 the open target, stretched over the whole sheet, so the sheet opens wherever it
 is clicked and stays one Tab stop; the glyphs and chips lie above it as filter
-buttons out of the Tab order. Graph nodes allocate separate
-rows for status, title, and relationship metadata so labels cannot collide.
+buttons out of the Tab order. On the board grouped by epic an empty cell draws
+no ground until a tile of its lane is dragged and could land there.
+Graph nodes allocate separate rows for status, title, and relationship
+metadata so labels cannot collide.
 A card's chain section leads with a branch map: one lane per origin of work,
 one equal-width segment per member, finished work then current work then what
 is ahead, so a lane's length is its volume. Chain views colour with the

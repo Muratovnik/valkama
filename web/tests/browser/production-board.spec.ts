@@ -261,6 +261,11 @@ test('Alt+Arrow moves a focused tile one place and the move is announced', async
   expect(writes).toHaveLength(2)
 })
 
+/** The ground a cell draws, as the page paints it. */
+const ground = (where: Locator) =>
+  where.evaluate((element) => getComputedStyle(element).backgroundColor)
+const clear = 'rgba(0, 0, 0, 0)'
+
 /** The middle of something on screen, where a hand picks it up. */
 async function centre(what: Locator) {
   const box = await what.boundingBox()
@@ -287,6 +292,46 @@ test('a label chip on a tile filters instead of opening, and the rest of the she
   const facts = await centre(sheet.locator('.tile-facts'))
   await page.mouse.click(facts.x, facts.y)
   await expect(page.locator('.drawer')).toBeVisible()
+})
+
+test('an empty cell draws no ground at rest, and its lane’s cells do while a tile can land', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await installBackend(page)
+  await serve(page)
+  await openBoard(page)
+  const epic = lane(page, LONG_EPIC)
+  const loose = lane(page, 'No epic')
+  await loose.scrollIntoViewIfNeeded()
+  const empty = loose.locator('.lane-cell.empty').first()
+  await expect(empty).toBeVisible()
+  expect(await ground(empty)).toBe(clear)
+  // A cell with tiles keeps its ground: the tiles lie on it.
+  expect(await ground(epic.locator('.lane-cell[data-state="backlog"]'))).not.toBe(clear)
+  const lanes = page.locator('.work-item-lanes')
+  /** Pick a tile up and hold it just off where it was, then check, then put it back. */
+  const holding = async (tile: Locator, check: () => Promise<void>) => {
+    await tile.scrollIntoViewIfNeeded()
+    const from = await centre(tile)
+    await page.mouse.move(from.x, from.y)
+    await page.mouse.down()
+    await page.mouse.move(from.x + 12, from.y + 12, { steps: 4 })
+    await expect(lanes).toHaveClass(/dragging/u)
+    await check()
+    await page.mouse.move(from.x, from.y, { steps: 4 })
+    await page.mouse.up()
+    await expect(lanes).not.toHaveClass(/dragging/u)
+  }
+  // A tile of another lane cannot land here, so the empty cell stays clear.
+  await holding(epic.locator('li[data-reference="MAIN-402"]'), async () => {
+    expect(await ground(empty)).toBe(clear)
+  })
+  // A tile of its own lane can, so the cell draws its ground for as long as it is held.
+  await holding(loose.locator('li[data-reference="MAIN-430"]'), async () => {
+    await expect.poll(() => ground(empty)).not.toBe(clear)
+  })
+  await expect.poll(() => ground(empty)).toBe(clear)
 })
 
 test('a lane is as tall as its tiles: an empty cell stays a low ground', async ({ page }) => {
