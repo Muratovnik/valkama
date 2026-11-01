@@ -227,7 +227,6 @@ useListKeys(root, {
               <!-- A dash says "nobody" under a heading; on a line of facts it says nothing. -->
               <FacetMarks
                 v-if="item.claim_ref"
-                class="list-fact-claim"
                 surface="list"
                 :item="item"
                 :facets="['holder']"
@@ -401,7 +400,9 @@ useListKeys(root, {
 }
 
 /* The columns folded under the title, as one muted line of facts that wraps
-   rather than running off the row. */
+   rather than running off the row. A fact does not wrap inside — a holder's
+   name, «Waiting on MAIN-12» — so the line takes the title's width rather than
+   lending the table its own, and a fact longer than that ends in an ellipsis. */
 .list-facts {
   display: flex;
   flex-wrap: wrap;
@@ -410,18 +411,11 @@ useListKeys(root, {
   padding-top: var(--space-1);
   color: var(--color-text-muted);
   font: var(--font-detail);
+  contain: inline-size;
 }
 
 .list-fact {
   min-width: 0;
-}
-
-/* A holder's name runs long and does not wrap: it takes what the line has left
-   and ends in an ellipsis, rather than widening the row past the list. */
-.list-fact-claim {
-  flex: 1 1 0;
-  min-inline-size: 4rem;
-  contain: inline-size;
 }
 
 /* The one column whose values run long stops at a measure; the whole name is
