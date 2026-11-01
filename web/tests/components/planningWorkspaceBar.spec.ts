@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import PlanningWorkspaceBar from '@/pages/planning/PlanningWorkspaceBar.vue'
 
-import { messages } from '@/shared/i18n/index.ts'
+import { messages, pluralRules } from '@/shared/i18n/index.ts'
 
 function bar(props: Partial<InstanceType<typeof PlanningWorkspaceBar>['$props']> = {}) {
   return mount(PlanningWorkspaceBar, {
@@ -77,6 +77,31 @@ describe('the work bar', () => {
     expect(wrapper.emitted('group')).toEqual([['none']])
     await wrapper.setProps({ grouping: null })
     expect(wrapper.find('[role="switch"]').exists()).toBe(false)
+  })
+
+  // The notes were lowercase fragments («эпики рядов не в колонках: 26»); each is
+  // a sentence now, in the form Russian gives each number.
+  it.each([
+    [1, '1\u{A0}эпик — заголовок ряда, а не карточка в колонке'],
+    [3, '3\u{A0}эпика — заголовки рядов, а не карточки в колонках'],
+    [26, '26\u{A0}эпиков — заголовки рядов, а не карточки в колонках'],
+  ])('says what the grouped board leaves out in Russian for %i', (count, sentence) => {
+    const wrapper = mount(PlanningWorkspaceBar, {
+      props: {
+        busy: false,
+        chain: null,
+        counts: { held: 0, open: 1, total: 30 },
+        exclusion: { kind: 'lane-heads', count },
+        grouping: 'epic',
+        matches: null,
+        view: 'kanban',
+        writable: true,
+        queue: 'all',
+        query: '',
+      },
+      global: { plugins: [createI18n({ legacy: false, locale: 'ru', messages, pluralRules })] },
+    })
+    expect(wrapper.get('.workspace-left-out').text()).toBe(sentence)
   })
 
   it('names the chain with the number the counts line gives, and leaves it on request', async () => {

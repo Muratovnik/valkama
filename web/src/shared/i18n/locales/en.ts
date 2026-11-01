@@ -883,8 +883,10 @@ export const en = {
     clearSearch: 'Clear search',
     matchCount: '{count} shown of {total}',
     countsExclude: {
-      laneHeads: 'lane epics outside the columns: {count}',
-      graphParents: 'parents not drawn on the graph: {count}, {open} of them open',
+      laneHeads:
+        '{count} epic is a row heading, not a card in a column | {count} epics are row headings, not cards in columns',
+      graphParents:
+        '{count} parent task is drawn as a group, not a node ({open} open) | {count} parent tasks are drawn as groups, not nodes ({open} open)',
     },
     searchEmpty: 'No work matches your search.',
     queueEmpty: 'No work in this queue.',

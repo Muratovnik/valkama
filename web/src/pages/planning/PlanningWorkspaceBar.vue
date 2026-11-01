@@ -98,12 +98,18 @@ function group(on: boolean) {
   emit('group', on ? 'epic' : 'none')
 }
 
+/**
+ * What the view leaves out of the counts, as a sentence of its own. It was a
+ * lowercase fragment run on after the counts («lane epics outside the columns:
+ * 26»), which read as a third count rather than as the reason the drawing holds
+ * fewer cards than the line above says.
+ */
 const exclusionText = computed(() => {
   const left = props.exclusion
   if (left === null) return ''
   return left.kind === 'lane-heads'
-    ? t('workItem.countsExclude.laneHeads', { count: left.count })
-    : t('workItem.countsExclude.graphParents', { count: left.count, open: left.open })
+    ? t('workItem.countsExclude.laneHeads', { count: left.count }, left.count)
+    : t('workItem.countsExclude.graphParents', { count: left.count, open: left.open }, left.count)
 })
 </script>
 
@@ -191,11 +197,12 @@ const exclusionText = computed(() => {
           role="status"
           >{{ t('workItem.matchCount', { count: matches, total: counts.total }) }}</span
         >
-        <span
-          v-if="exclusionText"
-          class="workspace-counts"
-          >{{ exclusionText }}</span
-        >
+      </p>
+      <p
+        v-if="exclusionText"
+        class="workspace-left-out"
+      >
+        {{ exclusionText }}
       </p>
       <VButton
         v-if="writable"
@@ -276,16 +283,20 @@ const exclusionText = computed(() => {
 }
 
 /* What is drawn and how much of it, then the action. The counts wrap inside
-   their own column, so the action never drops to a row of its own. */
+   their own column, so the action never drops to a row of its own; what the
+   view leaves out stands on the line under them, inside the action's height. */
 .workspace-status {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
+  row-gap: var(--space-half);
+  align-content: center;
   align-items: center;
   min-width: 0;
   min-height: var(--size-control-height);
 }
 
 .workspace-chip {
+  grid-row: 1 / span 2;
   grid-column: 1;
   max-width: 100%;
   margin-inline-end: var(--space-3);
@@ -294,13 +305,25 @@ const exclusionText = computed(() => {
 .workspace-figures {
   display: flex;
   flex-wrap: wrap;
+  grid-row: 1;
   grid-column: 2;
   gap: var(--space-1) var(--space-3);
   min-width: 0;
   margin: 0;
 }
 
+.workspace-left-out {
+  grid-row: 2;
+  grid-column: 2;
+  min-width: 0;
+  margin: 0;
+  color: var(--color-text-muted);
+  font: var(--font-count);
+  font-variant-numeric: tabular-nums;
+}
+
 .workspace-action {
+  grid-row: 1 / span 2;
   grid-column: 3;
   margin-inline-start: var(--space-3);
 }
@@ -329,8 +352,11 @@ const exclusionText = computed(() => {
 /* The chain chip takes a line of its own so the counts keep theirs beside the
    action. */
 @container workspace (width <= 556px) {
+  /* Dense, so the action still takes the row beside the counts while what the
+     view leaves out, written between them, takes the row under both. */
   .workspace-status {
     grid-template-columns: minmax(0, 1fr) auto;
+    grid-auto-flow: row dense;
     row-gap: var(--space-2);
   }
 
@@ -341,11 +367,20 @@ const exclusionText = computed(() => {
   }
 
   .workspace-figures {
+    grid-row: auto;
     grid-column: 1;
   }
 
   .workspace-action {
+    grid-row: auto;
     grid-column: 2;
+  }
+
+  /* Beside the action the column is a third of a phone's width, and the
+     sentence broke over three lines in it; under both it takes the full row. */
+  .workspace-left-out {
+    grid-row: auto;
+    grid-column: 1 / -1;
   }
 }
 </style>

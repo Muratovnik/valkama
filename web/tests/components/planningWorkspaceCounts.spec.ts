@@ -85,9 +85,9 @@ function workspace(props: Partial<InstanceType<typeof PlanningWorkspace>['$props
   })
 }
 
-/** The figures the bar shows beside the action, one entry each. */
+/** The figures the bar shows beside the action, one entry each, then what the view leaves out. */
 const figures = (wrapper: ReturnType<typeof workspace>) =>
-  wrapper.findAll('.workspace-figures > span').map((figure) => figure.text())
+  wrapper.findAll('.workspace-figures > span, .workspace-left-out').map((figure) => figure.text())
 const countsLine = (wrapper: ReturnType<typeof workspace>) => figures(wrapper).join(' · ')
 
 beforeEach(() => localStorage.clear())
@@ -119,7 +119,7 @@ describe('one population above the stage', () => {
   it('says how many epics head lanes instead of standing in the columns', () => {
     const wrapper = workspace({ grouping: 'epic' })
     expect(countsLine(wrapper)).toBe(
-      '5 open of 7 · 0 open claimed · lane epics outside the columns: 2',
+      '5 open of 7 · 0 open claimed · 2 epics are row headings, not cards in columns',
     )
     const columns = wrapper
       .findAll('.lanes-state-count')
@@ -134,14 +134,14 @@ describe('one population above the stage', () => {
     expect(figures(wrapper)).toEqual([
       '5 open of 7 · 0 open claimed',
       '5 shown of 7',
-      'lane epics outside the columns: 1',
+      '1 epic is a row heading, not a card in a column',
     ])
   })
 
   it('says how many parents the whole-space graph draws as groups rather than nodes', () => {
     const wrapper = workspace({ view: 'graph' })
     expect(countsLine(wrapper)).toBe(
-      '5 open of 7 · 0 open claimed · parents not drawn on the graph: 2, 1 of them open',
+      '5 open of 7 · 0 open claimed · 2 parent tasks are drawn as groups, not nodes (1 open)',
     )
   })
 
