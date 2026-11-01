@@ -103,7 +103,7 @@ export const en = {
       resource: { open: 'Open' },
     },
     route: {
-      unknown: 'The “{module}” module is not available. Choose a registered module.',
+      unknown: 'Section “{module}” not found. Choose a section in the navigation.',
       unavailable: 'The “{module}” module cannot open this address in the current scope.',
       invalid: 'That choice cannot be opened in this section.',
       notFound: 'Section not found: there is nothing at this address in Valkama.',
