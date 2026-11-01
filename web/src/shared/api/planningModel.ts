@@ -139,13 +139,33 @@ const summarySchema = strictObject({
   why: blankable(4000).optional(),
 })
 
+/**
+ * A link and the state of the item at its other end, which may live in another
+ * space and so another workflow. A finished blocker blocks nothing, and the
+ * item's own state cannot say so. The state is null, with the reason beside
+ * it, when the store cannot resolve it, and absent from a server that predates
+ * it: neither means the other end is open.
+ */
 const linkSchema = strictObject({
   kind: enumField(LINK_KINDS),
   direction: enumField(['incoming', 'outgoing'] as const),
   work_item_id: boundedText(UUID, 36),
   reference: boundedText(WORK_ITEM_REFERENCE, 20),
   title: boundedText(TITLE, 200),
-})
+  state_name: boundedText(TITLE, 200).nullable().optional(),
+  state_category: enumField(STATE_CATEGORIES).nullable().optional(),
+  is_terminal: z.boolean().nullable().optional(),
+  state_unavailable: enumField(['state_missing'] as const)
+    .nullable()
+    .optional(),
+}).refine(
+  (link) =>
+    link.state_category === undefined ||
+    (link.state_category === null
+      ? link.is_terminal === null && typeof link.state_unavailable === 'string'
+      : typeof link.is_terminal === 'boolean' && link.state_unavailable === null),
+  { message: 'Link state is neither known nor said to be unavailable' },
+)
 
 const refSchema = strictObject({
   kind: enumField(REF_KINDS),

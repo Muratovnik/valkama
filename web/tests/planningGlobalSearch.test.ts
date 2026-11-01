@@ -112,3 +112,39 @@ describe('global Planning search contract', () => {
     ).rejects.toThrow('HTTP 503')
   })
 })
+
+describe('global Planning search result marks', () => {
+  it('carries kind, priority and state category for the row marks', async () => {
+    serve(finderResponse())
+    const result = await searchGlobalPlanningWorkItems('needle', new AbortController().signal)
+    expect(result.items[0]?.item).toMatchObject({
+      kind: 'bug',
+      priority: 'urgent',
+      state: { name: 'In progress', category: 'active', is_terminal: false },
+    })
+  })
+
+  it('accepts a result from a server that predates the marks', async () => {
+    const payload = finderResponse()
+    const item = present(payload.items[0], 'search item').item
+    delete item.kind
+    delete item.priority
+    item.state = { name: 'In progress' }
+    serve(payload)
+    const result = await searchGlobalPlanningWorkItems('needle', new AbortController().signal)
+    expect(result.items[0]?.item.state).toEqual({ name: 'In progress' })
+  })
+
+  it.each([
+    ['an unknown kind', { kind: 'story' }],
+    ['an unknown priority', { priority: 'critical' }],
+    ['an unknown category', { state: { name: 'In progress', category: 'doing' } }],
+  ])('rejects a result with %s', async (_label, change) => {
+    const payload = finderResponse()
+    Object.assign(present(payload.items[0], 'search item').item, change)
+    serve(payload)
+    await expect(
+      searchGlobalPlanningWorkItems('needle', new AbortController().signal),
+    ).rejects.toThrow()
+  })
+})

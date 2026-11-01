@@ -153,3 +153,79 @@ test('accepts an imported report with unknown time and rejects extra fields', ()
   Object.assign(entry, { arbitrary: true })
   expect(() => validatePlanningWorkItemPayload(payload)).toThrow()
 })
+
+function withLink(link: Record<string, unknown>) {
+  const payload = planningWorkItemPayload()
+  Object.assign(payload.state.payload.work_item, {
+    links: [
+      {
+        kind: 'blocks',
+        direction: 'incoming',
+        work_item_id: '5f0c6f1e-6a43-4a8e-9a43-0b1f4c6f2a11',
+        reference: 'OTHER-12',
+        title: 'The blocker',
+        ...link,
+      },
+    ],
+  })
+  return payload
+}
+
+function firstLink(payload: unknown) {
+  const result = validatePlanningWorkItemPayload(payload)
+  if (result.state.status !== 'ready') throw new Error('Expected a ready payload')
+  return result.state.payload.work_item.links[0]
+}
+
+test.each([
+  [
+    'a finished blocker',
+    { state_name: 'Done', state_category: 'completed', is_terminal: true, state_unavailable: null },
+  ],
+  [
+    'an open blocker in another space',
+    { state_name: 'Review', state_category: 'review', is_terminal: false, state_unavailable: null },
+  ],
+  [
+    'a blocker whose state the store cannot resolve',
+    {
+      state_name: null,
+      state_category: null,
+      is_terminal: null,
+      state_unavailable: 'state_missing',
+    },
+  ],
+  ['a link from a server that predates the other end state', {}],
+])('a link carries the state of its other end: %s', (_label, state) => {
+  expect(firstLink(withLink(state))).toMatchObject({ reference: 'OTHER-12', ...state })
+})
+
+test.each([
+  [
+    'an unknown state with no reason, which a reader would take for open',
+    { state_name: null, state_category: null, is_terminal: null, state_unavailable: null },
+  ],
+  [
+    'a known state that also says it is unavailable',
+    {
+      state_name: 'Done',
+      state_category: 'completed',
+      is_terminal: true,
+      state_unavailable: 'state_missing',
+    },
+  ],
+  [
+    'a known state without whether it is terminal',
+    { state_name: 'Done', state_category: 'completed', is_terminal: null, state_unavailable: null },
+  ],
+  [
+    'a category the workflow vocabulary lacks',
+    { state_name: 'Done', state_category: 'finished', is_terminal: true, state_unavailable: null },
+  ],
+  [
+    'a reason the contract does not name',
+    { state_name: null, state_category: null, is_terminal: null, state_unavailable: 'gone' },
+  ],
+])('rejects a link with %s', (_label, state) => {
+  expect(() => validatePlanningWorkItemPayload(withLink(state))).toThrow()
+})

@@ -1,6 +1,12 @@
 import { boundedText, strictObject, z } from '@/shared/api/contract.ts'
-import { WORK_ITEM_REFERENCE } from '@/shared/api/planningModel.ts'
+import {
+  PRIORITIES,
+  STATE_CATEGORIES,
+  WORK_ITEM_KINDS,
+  WORK_ITEM_REFERENCE,
+} from '@/shared/api/planningModel.ts'
 import { planningCoverageSchema, planningTargetSchema } from '@/shared/api/planningTarget.ts'
+import { enumField } from '@/shared/api/platformApiGuards.ts'
 import { readJsonResponse } from '@/shared/api/readJsonResponse.ts'
 
 const resultSchema = strictObject({
@@ -10,7 +16,14 @@ const resultSchema = strictObject({
     planning_space_id: z.uuid(),
     reference: boundedText(WORK_ITEM_REFERENCE, 18),
     title: z.string().min(1).max(200),
-    state: strictObject({ name: z.string().min(1).max(200) }),
+    // The marks a result row draws; a server that predates them sends none.
+    kind: enumField(WORK_ITEM_KINDS).optional(),
+    priority: enumField(PRIORITIES).optional(),
+    state: strictObject({
+      name: z.string().min(1).max(200),
+      category: enumField(STATE_CATEGORIES).optional(),
+      is_terminal: z.boolean().optional(),
+    }),
     claim_ref: z.string().max(200),
   }),
 }).refine((result) => result.target.reference === result.item.reference, {
