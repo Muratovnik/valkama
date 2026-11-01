@@ -1,15 +1,19 @@
 /**
  * Every number above the stage counts one population: the space, or a chain
  * with its root. A view that draws fewer items says what it leaves out, so the
- * reader can add the numbers on screen up to the counts line.
+ * reader can add the numbers on screen up to the counts line; the grouped
+ * board's epics are said by its lanes, not by the bar. The filter is the
+ * workspace's: every view's `filter` event reaches it, and the address keeps it.
  */
-import { defineComponent, h, shallowRef } from 'vue'
+import { defineComponent, h, nextTick, shallowRef } from 'vue'
 import { createI18n } from 'vue-i18n'
 
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import PlanningWorkspace from '@/pages/planning/PlanningWorkspace.vue'
+
+import WorkItemList from '@/widgets/work-item-views/components/WorkItemList.vue'
 
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import type { PlanningReadModel, WorkItemBrief } from '@/shared/api/planningModel.ts'
@@ -78,16 +82,29 @@ const model: PlanningReadModel = {
 }
 
 function workspace(props: Partial<InstanceType<typeof PlanningWorkspace>['$props']>) {
-  return mount(PlanningWorkspace, {
+  const wrapper = mount(PlanningWorkspace, {
     attachTo: document.body,
-    props: { model, stale: false, version: 1, view: 'kanban', writable: true, ...props },
+    props: {
+      model,
+      routeState: undefined,
+      stale: false,
+      stateBytes: 2048,
+      version: 1,
+      view: 'kanban',
+      writable: true,
+      // The route answers a write with the state it was given, as the shell does.
+      onState: (state: Record<string, string | number | boolean>) =>
+        wrapper.setProps({ routeState: state }),
+      ...props,
+    },
     global: { plugins: [createI18n({ legacy: false, locale: 'en', messages })] },
   })
+  return wrapper
 }
 
-/** The figures the bar shows beside the action, one entry each, then what the view leaves out. */
+/** The line of state, then what the view leaves out. */
 const figures = (wrapper: ReturnType<typeof workspace>) =>
-  wrapper.findAll('.workspace-figures > span, .workspace-left-out').map((figure) => figure.text())
+  wrapper.findAll('.workspace-figures, .workspace-left-out').map((figure) => figure.text())
 const countsLine = (wrapper: ReturnType<typeof workspace>) => figures(wrapper).join(' · ')
 
 beforeEach(() => localStorage.clear())
@@ -101,55 +118,74 @@ describe('one population above the stage', () => {
     const tiles = wrapper.findAll('[data-reference]').length
     expect(tiles).toBe(3)
     expect(wrapper.get('.workspace-chip').text()).toBe(`Chain MAIN-1 · ${tiles}`)
-    expect(countsLine(wrapper)).toBe(`3 open of ${tiles} · 0 open claimed`)
+    expect(countsLine(wrapper)).toBe(`3 open of ${tiles}`)
   })
 
   it('counts the chain, not the space, while the graph draws the chain', () => {
     const wrapper = workspace({ chain: chain(), view: 'graph' })
-    expect(countsLine(wrapper)).toBe('3 open of 3 · 0 open claimed')
+    expect(countsLine(wrapper)).toBe('3 open of 3')
     expect(wrapper.get('.graph-double').text()).toBe('chip 3')
   })
 
   it('counts a search inside the chain while the graph draws the chain', async () => {
     const wrapper = workspace({ chain: chain(), view: 'graph' })
-    await wrapper.get('input').setValue('MAIN-1')
-    expect(wrapper.get('[role="status"]').text()).toBe('3 shown of 3')
+    await wrapper.get('input[role="combobox"]').setValue('MAIN-1')
+    expect(wrapper.get('.workspace-figures').text()).toBe('3 of 3 open · Reset')
   })
 
-  it('says how many epics head lanes instead of standing in the columns', () => {
+  it('leaves the epics heading lanes to the lanes, whose columns count the rest', () => {
     const wrapper = workspace({ grouping: 'epic' })
-    expect(countsLine(wrapper)).toBe(
-      '5 open of 7 · 0 open claimed · 2 epics are row headings, not cards in columns',
-    )
+    expect(countsLine(wrapper)).toBe('5 open of 7')
     const columns = wrapper
       .findAll('.lanes-state-count')
       .reduce((sum, count) => sum + Number(count.text()), 0)
+    // Two epics head lanes: the number the lanes' own head is to say.
     expect(columns + 2).toBe(7)
   })
 
-  it('says what a filter leaves of the lane epics', async () => {
+  it('answers a filter with what it lets through of the open work', async () => {
     const wrapper = workspace({ grouping: 'epic' })
-    await wrapper.get('input').setValue('item 1')
-    // MAIN-1 heads a lane; MAIN-10 to MAIN-13 are tiles.
-    expect(figures(wrapper)).toEqual([
-      '5 open of 7 · 0 open claimed',
-      '5 shown of 7',
-      '1 epic is a row heading, not a card in a column',
-    ])
+    await wrapper.get('input[role="combobox"]').setValue('item 1')
+    // MAIN-1 heads a lane; MAIN-10 to MAIN-13 are tiles; all five are open.
+    expect(figures(wrapper)).toEqual(['5 of 5 open · Reset'])
   })
 
   it('says how many parents the whole-space graph draws as groups rather than nodes', () => {
     const wrapper = workspace({ view: 'graph' })
     expect(countsLine(wrapper)).toBe(
-      '5 open of 7 · 0 open claimed · 2 parent tasks are drawn as groups, not nodes (1 open)',
+      '5 open of 7 · 2 parent tasks are drawn as groups, not nodes (1 open)',
     )
   })
 
   it('leaves nothing out of the flat board, the list or a chain graph', () => {
-    expect(countsLine(workspace({ view: 'kanban' }))).toBe('5 open of 7 · 0 open claimed')
-    expect(countsLine(workspace({ view: 'list' }))).toBe('5 open of 7 · 0 open claimed')
-    expect(countsLine(workspace({ view: 'graph', chain: chain() }))).toBe(
-      '3 open of 3 · 0 open claimed',
-    )
+    expect(countsLine(workspace({ view: 'kanban' }))).toBe('5 open of 7')
+    expect(countsLine(workspace({ view: 'list' }))).toBe('5 open of 7')
+    expect(countsLine(workspace({ view: 'graph', chain: chain() }))).toBe('3 open of 3')
+  })
+})
+
+describe('one filter for every view', () => {
+  it('takes a view’s filter event as a token, writes it to the address, and narrows', async () => {
+    const wrapper = workspace({ view: 'list', routeState: { view: 'list' } })
+    const list = wrapper.getComponent(WorkItemList)
+    list.vm.$emit('filter', { facet: 'kind', value: 'epic' })
+    await nextTick()
+    expect(wrapper.emitted('state')?.at(-1)).toEqual([{ view: 'list', kind: 'epic' }])
+    expect(list.props('items').map((item) => item.reference)).toEqual(['MAIN-1', 'MAIN-2'])
+    expect(wrapper.get('.workspace-chips').text()).toBe('Kind: Epic')
+    // The same mark clicked again takes it out.
+    list.vm.$emit('filter', { facet: 'kind', value: 'epic' })
+    await nextTick()
+    expect(list.props('items')).toHaveLength(space.length)
+  })
+
+  it('reads the filter the address holds, and drops it when the address does', async () => {
+    const wrapper = workspace({ view: 'list', routeState: { view: 'list', labels: 'missing' } })
+    expect(wrapper.find('.data-empty').exists()).toBe(true)
+    expect(wrapper.get('.data-empty').text()).toContain('No work matches this filter.')
+    // Back, or a space switch, to an address without a filter.
+    await wrapper.setProps({ routeState: { view: 'list' } })
+    expect(wrapper.find('.data-empty').exists()).toBe(false)
+    expect(wrapper.getComponent(WorkItemList).props('items')).toHaveLength(space.length)
   })
 })

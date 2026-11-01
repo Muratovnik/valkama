@@ -27,6 +27,8 @@ import InputRequestsHub from '@/features/input-requests/components/InputRequests
 import SessionContext from '@/features/session-open/SessionContext.vue'
 import { resolveSessionWorkItemRoute } from '@/features/session-open/sessionWorkItemRoute.ts'
 
+import { EMPTY_WORK_FILTER, writeWorkFilter } from '@/entities/work-item/utils/workFilter.ts'
+
 import { fetchSessionContext } from '@/shared/api/api.ts'
 import type { PlanningConnectionState } from '@/shared/api/planningApi.ts'
 import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
@@ -199,11 +201,18 @@ function selectResource(value: string) {
     selected && modulesAuthoritative.value
       ? resolveResourceSelection(activeManifest.value, route.value, selected)
       : null
-  if (proposed === null) {
+  if (proposed === null || activeManifest.value === undefined) {
     notice.value = t('platform.route.invalid')
     return
   }
-  writeRoute(proposed)
+  // The Work filter names labels and holders of the space being left, so it
+  // stays with that space's address; Back to it brings the filter back.
+  const { state } = writeWorkFilter(
+    proposed.state,
+    EMPTY_WORK_FILTER,
+    activeManifest.value.state_schema.max_bytes,
+  )
+  writeRoute({ ...proposed, state: Object.keys(state).length ? state : undefined })
 }
 
 function openEntity(entity?: EntityRef) {
@@ -327,6 +336,7 @@ usePlatformEntryRestore({
           :primary-write-scope-id="primaryWriteScopeId"
           :context="contextReady"
           :route="route"
+          :state-bytes="activeManifest.state_schema.max_bytes"
           :locale="locale"
           @connection="(state) => (planningConnection = state)"
           @entity="openEntity"

@@ -8,6 +8,7 @@ import { memoryProviderMessages } from '@/shared/i18n/memoryProviderMessages.ts'
 /* English copy; tests/i18n.test.ts enforces parity with Russian keys. */
 import { platformIntegrationMessages } from '@/shared/i18n/platformIntegrationMessages.ts'
 import { richTextMessages } from '@/shared/i18n/richTextMessages.ts'
+import { workFilterMessages } from '@/shared/i18n/workFilterMessages.ts'
 import { workItemFacetMessages } from '@/shared/i18n/workItemFacetMessages.ts'
 import { workItemHeadMessages } from '@/shared/i18n/workItemHeadMessages.ts'
 
@@ -851,8 +852,6 @@ export const en = {
       chartSummary:
         'Scope from {from} to {to}: {start} at the start, {total} now; {closed} done and {open} open on {day}.',
     },
-    queueLabel: 'Work queue',
-    queueMenuAll: 'All work',
     queue: {
       all: 'All',
       ready: 'Workable',
@@ -875,23 +874,12 @@ export const en = {
       graph: 'Graph',
     },
     viewLabel: 'View',
-    // Two facts, each kept on one line: a narrow bar breaks between them.
-    spaceOpen: '{open} open of {total}',
-    spaceHeld: '{held} open claimed',
-    searchLabel: 'Find work',
-    searchPlaceholder: 'Reference or title',
-    clearSearch: 'Clear search',
-    matchCount: '{count} shown of {total}',
     countsExclude: {
       laneHeads:
         '{count} epic is a row heading, not a card in a column | {count} epics are row headings, not cards in columns',
       graphParents:
         '{count} parent task is drawn as a group, not a node ({open} open) | {count} parent tasks are drawn as groups, not nodes ({open} open)',
     },
-    searchEmpty: 'No work matches your search.',
-    queueEmpty: 'No work in this queue.',
-    filterContext: 'Selected queue: {queue}. Reset filters to see all work.',
-    resetFilters: 'Reset filters',
     liveUnavailable: 'Live updates are unavailable. Refresh to load the latest work and reconnect.',
     columnEmpty: 'Nothing here',
     lanes: {
@@ -933,6 +921,7 @@ export const en = {
     },
     ...workItemFacetMessages.en,
     ...workItemHeadMessages.en,
+    filter: workFilterMessages.en.filter,
     kindLabel: 'Kind',
     state: 'State',
     priority: 'Priority',

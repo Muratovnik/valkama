@@ -12,11 +12,16 @@
  * the list draw its members and its root, with the same chip to leave it, and
  * switching views keeps it. The graph draws the scope itself, so it still gets
  * the whole space and the chain beside it.
+ *
+ * The filter is the workspace's too, and every view reads it: a mark clicked
+ * on any of them reaches it as one token, the bar edits it, and the address
+ * keeps it so a reload and Back come back to the same narrowing.
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { usePlanningCensus } from '@/pages/planning/composables/usePlanningCensus.ts'
+import { usePlanningFilter } from '@/pages/planning/composables/usePlanningFilter.ts'
 import PlanningChainFailure from '@/pages/planning/PlanningChainFailure.vue'
 import PlanningWorkspaceBar from '@/pages/planning/PlanningWorkspaceBar.vue'
 import { graphView } from '@/pages/planning/utils/graphView.ts'
@@ -26,15 +31,21 @@ import WorkItemList from '@/widgets/work-item-views/components/WorkItemList.vue'
 import type { BoardGrouping } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
 
+import { filterTokens } from '@/entities/work-item/utils/workFilter.ts'
+
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
-import type { PlanningReadModel, WorkQueue } from '@/shared/api/planningModel.ts'
+import type { PlanningReadModel } from '@/shared/api/planningModel.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import { LAZY_VIEW_LOADING_DELAY_MS } from '@/shared/ui/lazyView.ts'
 import VButton from '@/shared/ui/VButton.vue'
 
 const props = defineProps<{
   model: PlanningReadModel
+  /** The module's route state, where the filter is kept. */
+  routeState: Record<string, string | number | boolean> | undefined
   stale: boolean
+  /** The manifest's bound on that state. */
+  stateBytes: number
   version: number
   view: PlanningViewMode
   writable: boolean
@@ -52,7 +63,6 @@ const props = defineProps<{
   graphFocus?: number
   /** How the board is grouped: not at all, or into one lane per epic. */
   grouping?: BoardGrouping
-  scopeKey?: string
   selectedId?: string | null
   warning?: string
 }>()
@@ -67,6 +77,7 @@ const emit = defineEmits<{
   'place': [move: BoardMove]
   'retry-chain': []
   'show-chain': [reference: string]
+  'state': [state: Record<string, string | number | boolean>]
   'view': [mode: PlanningViewMode]
 }>()
 
@@ -106,21 +117,26 @@ onBeforeUnmount(() => clearTimeout(releaseTimer))
 
 const { t } = useI18n()
 
-const queue = ref<WorkQueue>('all')
-const query = ref('')
-const searchTerm = computed(() => query.value.trim().toLocaleLowerCase())
-watch(
-  () => props.scopeKey ?? props.model.planning_space?.planning_space_id,
-  () => {
-    query.value = ''
-  },
-)
+/**
+ * A space switch clears the filter where the switch is written, so it leaves
+ * the address with the old space; Back to that space brings it back.
+ */
+const {
+  filter,
+  reset: resetFilter,
+  set: setFilter,
+  stored: filterStored,
+  toggle: toggleFilter,
+} = usePlanningFilter({
+  state: () => props.routeState,
+  maxBytes: () => props.stateBytes,
+  write: (state) => emit('state', state),
+})
 const boardGrouping = computed(() => props.grouping ?? 'none')
 const census = usePlanningCensus(() => ({
   chain: props.chain ?? null,
+  filter: filter.value,
   grouping: boardGrouping.value,
-  queue: queue.value,
-  search: searchTerm.value,
   space: props.model.work_items,
   view: stageView.value,
 }))
@@ -132,13 +148,10 @@ const {
   scope: scopeItems,
   visible: visibleItems,
 } = census
-const emptyTitle = computed(() =>
-  t(searchTerm.value ? 'workItem.searchEmpty' : 'workItem.queueEmpty'),
-)
-function resetFilters() {
-  query.value = ''
-  queue.value = 'all'
-}
+/** The workflow's state categories in its own order: what the state facet offers. */
+const categories = computed(() => [
+  ...new Set((props.model.workflow?.states ?? []).map((state) => state.category)),
+])
 /** What the graph needs of a chain: who is in it, and what to call it. */
 const graphChain = computed(() =>
   props.chain
@@ -169,8 +182,10 @@ const graphBranch = computed(() => {
   return { reference: branch, members, head: head ?? null }
 })
 
-/** What the items are narrowed by: the graph frames a new narrowing afresh. */
-const graphFilter = computed(() => JSON.stringify([queue.value, searchTerm.value]))
+/** What the items are narrowed by: the graph frames a new narrowing afresh, and only then. */
+const graphFilter = computed(() =>
+  JSON.stringify([filterTokens(filter.value), filter.value.text.trim().toLocaleLowerCase()]),
+)
 
 /** The whole space, or exactly one chain with the links the chain endpoint named. */
 const graphScopeKind = computed(() => (props.chain ? 'chain' : 'all'))
@@ -182,8 +197,13 @@ const chipReference = computed(() =>
 )
 /** The board's grouping while the board is on the stage, which is when it can be grouped. */
 const barGrouping = computed(() => (stageView.value === 'kanban' ? boardGrouping.value : null))
-/** How many counted items the queue and the search let through, when either narrows. */
-const matchCount = computed(() => (filtered.value ? matchedItems.value.length : null))
+/**
+ * What the view leaves out of the counts, said in the bar only for the graph.
+ * The grouped board's epics head its lanes, so the lanes' own head says it.
+ */
+const barExclusion = computed(() =>
+  census.exclusion.value?.kind === 'graph-parents' ? census.exclusion.value : null,
+)
 </script>
 
 <template>
@@ -192,16 +212,19 @@ const matchCount = computed(() => (filtered.value ? matchedItems.value.length : 
     :aria-label="t('platform.modules.planning')"
   >
     <PlanningWorkspaceBar
-      v-model:queue="queue"
-      v-model:query="query"
       :busy="stale"
+      :categories="categories"
       :chain="chipReference"
       :counts="counts"
-      :exclusion="census.exclusion.value"
+      :exclusion="barExclusion"
+      :filter="filter"
+      :filtered="filtered"
       :grouping="barGrouping"
-      :matches="matchCount"
+      :items="countedItems"
+      :stored="filterStored"
       :view="view"
       :writable="writable"
+      @update:filter="setFilter"
       @create="emit('create')"
       @exit-chain="emit('exit-chain')"
       @group="(value) => emit('group', value)"
@@ -231,11 +254,11 @@ const matchCount = computed(() => (filtered.value ? matchedItems.value.length : 
       </p>
       <DataEmptyState
         v-else-if="!matchedItems.length && filtered"
-        :title="emptyTitle"
-        :description="t('workItem.filterContext', { queue: t(`workItem.queue.${queue}`) })"
+        :title="t('workItem.filter.empty')"
+        :description="t('workItem.filter.emptyHint')"
       >
         <template #action
-          ><VButton @click="resetFilters">{{ t('workItem.resetFilters') }}</VButton></template
+          ><VButton @click="resetFilter">{{ t('workItem.filter.resetAll') }}</VButton></template
         >
       </DataEmptyState>
       <WorkItemBoard
@@ -251,6 +274,7 @@ const matchCount = computed(() => (filtered.value ? matchedItems.value.length : 
         :grouping="boardGrouping"
         :writable="writable"
         @chain="(reference) => emit('show-chain', reference)"
+        @filter="toggleFilter"
         @open="(reference) => emit('open', reference)"
         @place="(move) => emit('place', move)"
       />
@@ -259,6 +283,7 @@ const matchCount = computed(() => (filtered.value ? matchedItems.value.length : 
         v-show="matchedItems.length || !filtered"
         :items="visibleItems"
         :links="model.links"
+        @filter="toggleFilter"
         @open="(reference) => emit('open', reference)"
       />
       <WorkItemGraph
@@ -279,6 +304,7 @@ const matchCount = computed(() => (filtered.value ? matchedItems.value.length : 
         :version="version"
         @exit-chain="emit('exit-chain')"
         @exit-branch="emit('exit-branch')"
+        @filter="toggleFilter"
         @open="(reference) => emit('open', reference)"
         @update:show-closed="(closed) => emit('chain-closed', closed)"
       />

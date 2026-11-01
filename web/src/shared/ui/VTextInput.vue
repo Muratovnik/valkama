@@ -16,6 +16,10 @@
  * text box may carry `aria-autocomplete` and an active descendant. The list
  * itself belongs to the host.
  *
+ * A single-line field with `completion` is a combobox, which is what a one-line
+ * text box that drives a list popup is (the Work filter): it says whether the
+ * list is open (`expanded`), and its keys reach the host the same way.
+ *
  * The value is always emitted as a string. A caller that needs a number
  * converts it, because a control that guesses its own type is how a numeric
  * field ends up holding `NaN` the moment the box is cleared.
@@ -34,8 +38,8 @@ const props = withDefaults(
      * which is the case the accessibility rule against autofocus excludes.
      */
     autofocus?: boolean
-    /** A textarea that offers a list of completions; see the note above. */
-    completion?: { controls: string; activeDescendant?: string }
+    /** A field that offers a list of completions; see the note above. */
+    completion?: { controls: string; activeDescendant?: string; expanded?: boolean }
     disabled?: boolean
     /** Why the value was refused; shown under the control and named by it. */
     error?: string
@@ -83,6 +87,19 @@ const emit = defineEmits<{
 const element = ref<HTMLInputElement | HTMLTextAreaElement | null>(null)
 /** Absent rather than false, because `aria-invalid="false"` is a claim and not a default. */
 const invalidMark = computed(() => (props.error ? 'true' : undefined))
+
+/** A one-line field driving a list is a combobox; without a list it is a text box. */
+const combobox = computed(() =>
+  props.completion
+    ? {
+        'role': 'combobox',
+        'aria-autocomplete': 'list' as const,
+        'aria-controls': props.completion.controls,
+        'aria-activedescendant': props.completion.activeDescendant,
+        'aria-expanded': props.completion.expanded ?? false,
+      }
+    : {},
+)
 
 function edited(event: Event) {
   emit('update:modelValue', (event.target as HTMLInputElement | HTMLTextAreaElement).value)
@@ -143,7 +160,9 @@ defineExpose({
       :aria-label="label"
       :aria-invalid="invalidMark"
       :aria-describedby="errorId"
+      v-bind="combobox"
       @input="edited"
+      @keydown="emit('keydown', $event)"
     />
   </VField>
 </template>

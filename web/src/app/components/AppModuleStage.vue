@@ -20,6 +20,8 @@ const props = defineProps<{
   primaryWriteScopeId: string | null
   route: PlatformRoute
   scope: OperatingScope
+  /** The active manifest's bound on the route state a module writes. */
+  stateBytes: number
 }>()
 const emit = defineEmits<{
   'connection': [state: 'connecting' | 'live' | 'reconnecting' | null]
@@ -48,6 +50,7 @@ defineExpose({ refresh })
     :route="route"
     :context="context"
     :primary-write-scope-id="primaryWriteScopeId"
+    :state-bytes="stateBytes"
     @connection="(state) => emit('connection', state)"
     @entity="(entity) => emit('entity', entity)"
     @state="(state) => emit('state', state)"

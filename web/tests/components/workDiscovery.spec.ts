@@ -45,10 +45,22 @@ function workspace(locale = 'en', large = false) {
       reference: `MAIN-${index + 1}`,
       title: index === 1200 ? 'Late delivery milestone' : `Earlier work ${index}`,
     }))
-  return mount(PlanningWorkspace, {
-    props: { model: data, stale: false, version: 1, view: 'list', writable: true },
+  const wrapper = mount(PlanningWorkspace, {
+    props: {
+      model: data,
+      routeState: undefined,
+      stale: false,
+      stateBytes: 2048,
+      version: 1,
+      view: 'list',
+      writable: true,
+      // The route answers a write with the state it was given, as the shell does.
+      onState: (state: Record<string, string | number | boolean>) =>
+        wrapper.setProps({ routeState: state }),
+    },
     global: { plugins: [i18n(locale)] },
   })
+  return wrapper
 }
 function button(wrapper: ReturnType<typeof workspace>, text: string) {
   const found = wrapper
@@ -61,27 +73,27 @@ function button(wrapper: ReturnType<typeof workspace>, text: string) {
 describe('work discovery', () => {
   it('finds late work by trimmed case-insensitive reference and title, then clears', async () => {
     const wrapper = workspace('en', true)
-    const input = wrapper.get('input[aria-label="Find work"]')
+    const input = wrapper.get('input[aria-label="Filter work"]')
     await input.setValue('  main-1201  ')
     expect(wrapper.findAll('tbody tr')).toHaveLength(1)
     expect(wrapper.get('tbody').text()).toContain('Late delivery milestone')
-    expect(wrapper.get('[role="status"]').text()).toBe('1 shown of 1201')
+    expect(wrapper.get('.workspace-figures').text()).toBe('1 of 1201 open · Reset')
     await input.setValue(' DELIVERY MILESTONE ')
     expect(wrapper.get('tbody').text()).toContain('MAIN-1201')
-    await button(wrapper, 'Clear search').trigger('click')
+    await button(wrapper, 'Clear the text').trigger('click')
     expect(wrapper.findAll('tbody tr')).toHaveLength(1201)
     expect(wrapper.emitted('view')).toBeUndefined()
   })
-  it('intersects search with the queue and resets a filtered empty result', async () => {
+  it('intersects the text with a preset and resets a filtered empty result', async () => {
     const wrapper = workspace()
     await button(wrapper, 'Workable').trigger('click')
-    expect(wrapper.get('.data-empty').text()).toContain('No work in this queue.')
-    expect(wrapper.get('.data-empty').text()).toContain('Workable')
+    expect(wrapper.get('.data-empty').text()).toContain('No work matches this filter.')
+    expect(wrapper.get('.workspace-chips').text()).toBe('Workable')
     await wrapper.get('input').setValue('MAIN-264')
-    expect(wrapper.get('.data-empty').text()).toContain('No work matches your search.')
-    await button(wrapper, 'Clear search').trigger('click')
-    expect(wrapper.get('.data-empty').text()).toContain('No work in this queue.')
-    await button(wrapper, 'Reset filters').trigger('click')
+    expect(wrapper.get('.data-empty').text()).toContain('No work matches this filter.')
+    await button(wrapper, 'Clear the text').trigger('click')
+    expect(wrapper.get('.data-empty').exists()).toBe(true)
+    await button(wrapper, 'Reset the filter').trigger('click')
     expect(wrapper.findAll('tbody tr')).toHaveLength(2)
     expect(wrapper.emitted('view')).toBeUndefined()
   })
@@ -103,21 +115,27 @@ describe('work discovery', () => {
         { ...item, work_item_id: 'active', claim_ref: '' },
       ]
       await wrapper.setProps({ model: data })
-      expect(wrapper.get('.workspace-head .workspace-counts').text()).toBe(
-        locale === 'en' ? '2 open of 3 · 1 open claimed' : 'Открыто: 2 из 3 · из них назначено: 1',
+      expect(wrapper.get('.workspace-figures').text()).toBe(
+        locale === 'en' ? '2 open of 3' : '2\u{A0}открытых из 3',
+      )
+      // The held count rides its preset.
+      expect(wrapper.findAll('.filter-preset').at(-1)?.text()).toBe(
+        locale === 'en' ? 'Assigned 1' : 'Назначено 1',
       )
     },
   )
-  it('preserves query during refresh and clears it for an exact scope change', async () => {
+  it('keeps the filter through a refresh and drops it with an address that has none', async () => {
     const wrapper = workspace()
-    await wrapper.setProps({ scopeKey: 'primary:MAIN' })
-    await button(wrapper, 'Assigned').trigger('click')
+    const assigned = () => wrapper.findAll('.filter-preset').at(-1)
+    await assigned()?.trigger('click')
     await wrapper.get('input').setValue('missing')
     await wrapper.setProps({ model: model(), version: 2 })
     expect((wrapper.get('input').element as HTMLInputElement).value).toBe('missing')
-    await wrapper.setProps({ scopeKey: 'attached:MAIN' })
+    expect(assigned()?.attributes('aria-pressed')).toBe('true')
+    // A space switch writes the new space's address without the filter.
+    await wrapper.setProps({ routeState: undefined })
     expect((wrapper.get('input').element as HTMLInputElement).value).toBe('')
-    expect(button(wrapper, 'Assigned').attributes('aria-pressed')).toBe('true')
+    expect(assigned()?.attributes('aria-pressed')).toBe('false')
     expect(wrapper.get('tbody').text()).toContain('MAIN-264')
   })
   it('keeps references, dates and long claims through sorting and opening', async () => {

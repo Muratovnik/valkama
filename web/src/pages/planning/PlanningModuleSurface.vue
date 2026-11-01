@@ -16,7 +16,8 @@
  * Each step of the trail also holds where its card was left, which the card
  * hands over as it opens another, so Back reopens it there and not at its top.
  * The route also holds how the space is looked at: the view, the chain every
- * view is narrowed to, and whether the board is grouped by epic.
+ * view is narrowed to, whether the board is grouped by epic, and the filter,
+ * which the workspace owns and writes back within the manifest's bound.
  */
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -62,6 +63,8 @@ const props = defineProps<{
   primaryWriteScopeId: string | null
   route: PlatformRoute
   scope: OperatingScope
+  /** The planning manifest's bound on the route state. */
+  stateBytes: number
 }>()
 
 const emit = defineEmits<{
@@ -379,6 +382,8 @@ defineExpose({ refresh })
   >
     <PlanningWorkspace
       :model="shownModel ?? model"
+      :route-state="route.state"
+      :state-bytes="stateBytes"
       :chain="chainScope"
       :chain-branch="chainBranch"
       :chain-pending="chainPending"
@@ -386,7 +391,6 @@ defineExpose({ refresh })
       :chain-failure="chainFailure"
       :graph-focus="chainShown"
       :grouping="grouping"
-      :scope-key="planningKey"
       :selected-id="selectedId"
       :warning="liveWarning"
       :stale="stale"
@@ -402,6 +406,7 @@ defineExpose({ refresh })
       @open="(reference) => openItem(reference)"
       @place="placeItem"
       @show-chain="(reference) => narrow({ reference, scope: 'chain' })"
+      @state="(state) => emit('state', state)"
       @view="setView"
     />
 

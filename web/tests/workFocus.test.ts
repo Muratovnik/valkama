@@ -1,7 +1,10 @@
 import { afterEach, expect, test, vi } from 'vitest'
 
+import { matchesWorkFilter } from '@/entities/work-item/utils/workFilter.ts'
+import type { WorkFilter } from '@/entities/work-item/utils/workFilter.ts'
+
 import { fetchSessionContext, resolveRef } from '@/shared/api/api.ts'
-import { inWorkQueue, validateReadModel } from '@/shared/api/planningModel.ts'
+import { validateReadModel } from '@/shared/api/planningModel.ts'
 import type { PlanningReadModel } from '@/shared/api/planningModel.ts'
 import { fetchPlatformPlanning } from '@/shared/api/platformPlanningApi.ts'
 import {
@@ -12,6 +15,10 @@ import {
 
 import { dataScopeId, planningReadModel, spaceRef } from './browser/planningFixtures.ts'
 import { planningReadFor } from './browser/planningReadFixture.ts'
+const READY: WorkFilter = { text: '', ready: true }
+const HELD: WorkFilter = { text: '', held: true }
+const REVIEW: WorkFilter = { text: '', category: ['review'] }
+
 afterEach(() => vi.unstubAllGlobals())
 test('retired deep routes recover into Work in the same operating scope', () => {
   const scope = { kind: 'project' as const, project_ref: { project_id: 'sample' } }
@@ -25,7 +32,7 @@ test('retired deep routes recover into Work in the same operating scope', () => 
   expect(recoverWorkRoute(unknown)).toBe(unknown)
   expect(() => parsePlatformRoute('/modules/skills/global?unknown=x')).toThrow()
 })
-test('queue slices use ready, claim, and workflow category facts independently', () => {
+test('the filter reads readiness, the claim and the workflow category as separate facts', () => {
   const item = validateReadModel(
     planningReadFor(
       new URLSearchParams({
@@ -36,33 +43,33 @@ test('queue slices use ready, claim, and workflow category facts independently',
     ).body,
   ).work_items[0]
   expect(item).toBeDefined()
-  expect(inWorkQueue({ ...item, ready: true }, 'ready')).toBe(true)
-  expect(inWorkQueue({ ...item, ready: false }, 'ready')).toBe(false)
+  expect(matchesWorkFilter({ ...item, ready: true }, READY)).toBe(true)
+  expect(matchesWorkFilter({ ...item, ready: false }, READY)).toBe(false)
   expect(
-    inWorkQueue(
+    matchesWorkFilter(
       { ...item, claim_ref: 'owner', state: { ...item.state, is_terminal: false } },
-      'assigned',
+      HELD,
     ),
   ).toBe(true)
   expect(
-    inWorkQueue(
+    matchesWorkFilter(
       { ...item, claim_ref: 'owner', state: { ...item.state, is_terminal: true } },
-      'assigned',
+      HELD,
     ),
   ).toBe(false)
   expect(
-    inWorkQueue(
+    matchesWorkFilter(
       { ...item, state: { ...item.state, key: 'renamed', category: 'blocked' } },
-      'blocked',
+      { text: '', category: ['blocked'] },
     ),
   ).toBe(true)
   expect(
-    inWorkQueue(
+    matchesWorkFilter(
       { ...item, state: { ...item.state, key: 'renamed', category: 'review' } },
-      'review',
+      REVIEW,
     ),
   ).toBe(true)
-  expect(inWorkQueue(item, 'all')).toBe(true)
+  expect(matchesWorkFilter(item, { text: '' })).toBe(true)
 })
 
 test('the Planning model retains review work beyond 2,000 items', () => {
@@ -107,7 +114,7 @@ test('the Planning model retains review work beyond 2,000 items', () => {
   expect(validated.work_items).toHaveLength(2001)
   expect(
     validated.work_items
-      .filter((item) => inWorkQueue(item, 'review'))
+      .filter((item) => matchesWorkFilter(item, REVIEW))
       .map((item) => item.reference),
   ).toEqual(['MAIN-2001'])
 })

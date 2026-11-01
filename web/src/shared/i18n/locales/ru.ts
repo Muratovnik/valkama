@@ -8,6 +8,7 @@ import { memoryProviderMessages } from '@/shared/i18n/memoryProviderMessages.ts'
 /* Русский каталог; tests/i18n.test.ts проверяет совпадение ключей. */
 import { platformIntegrationMessages } from '@/shared/i18n/platformIntegrationMessages.ts'
 import { richTextMessages } from '@/shared/i18n/richTextMessages.ts'
+import { workFilterMessages } from '@/shared/i18n/workFilterMessages.ts'
 import { workItemFacetMessages } from '@/shared/i18n/workItemFacetMessages.ts'
 import { workItemHeadMessages } from '@/shared/i18n/workItemHeadMessages.ts'
 
@@ -849,8 +850,6 @@ export const ru = {
       chartSummary:
         'Объём с {from} по {to}: в начале {start}, сейчас {total}; на {day} выполнено {closed}, открыто {open}.',
     },
-    queueLabel: 'Очередь работы',
-    queueMenuAll: 'Вся работа',
     queue: {
       all: 'Все',
       ready: 'Можно брать',
@@ -873,23 +872,12 @@ export const ru = {
       graph: 'Граф',
     },
     viewLabel: 'Представление',
-    // Two facts, each kept on one line: a narrow bar breaks between them.
-    spaceOpen: 'Открыто: {open} из {total}',
-    spaceHeld: 'из них назначено: {held}',
-    searchLabel: 'Найти работу',
-    searchPlaceholder: 'Номер или название',
-    clearSearch: 'Очистить поиск',
-    matchCount: 'Показано {count} из {total}',
     countsExclude: {
       laneHeads:
         '{count}\u{A0}эпик — заголовок ряда, а не карточка в колонке | {count}\u{A0}эпика — заголовки рядов, а не карточки в колонках | {count}\u{A0}эпиков — заголовки рядов, а не карточки в колонках',
       graphParents:
         '{count}\u{A0}родительская задача показана группой, а не узлом (открыто: {open}) | {count}\u{A0}родительские задачи показаны группами, а не узлами (открыто: {open}) | {count}\u{A0}родительских задач показаны группами, а не узлами (открыто: {open})',
     },
-    searchEmpty: 'По вашему запросу ничего не найдено.',
-    queueEmpty: 'В этой очереди нет работы.',
-    filterContext: 'Выбрана очередь «{queue}». Сбросьте фильтры, чтобы увидеть всю работу.',
-    resetFilters: 'Сбросить фильтры',
     liveUnavailable:
       'Обновления приостановлены. Обновите данные, чтобы увидеть актуальную работу и восстановить подключение.',
     columnEmpty: 'Пусто',
@@ -932,6 +920,7 @@ export const ru = {
     },
     ...workItemFacetMessages.ru,
     ...workItemHeadMessages.ru,
+    filter: workFilterMessages.ru.filter,
     kindLabel: 'Тип',
     state: 'Состояние',
     priority: 'Приоритет',

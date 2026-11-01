@@ -49,3 +49,6 @@ export function encodeChoiceValue(codec: ChoiceValueCodec, value: string): strin
 export function decodeChoiceValue(codec: ChoiceValueCodec, token: string): string | null {
   return codec.tokenToValue.get(token) ?? null
 }
+
+/** The id of an option in a grouped list (`OptionGroups`), by its place in reading order. */
+export const optionGroupItemId = (listId: string, place: number) => `${listId}-${place}`

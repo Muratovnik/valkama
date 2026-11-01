@@ -21,12 +21,24 @@ const dialogOwners = new Set(['shared/ui/OverlayHost.vue'])
 // CommandList owns keyboard navigation of search results; ChoiceSelect owns form values;
 // MarkdownEditor owns the completions a text field offers as it is typed in, whose
 // keys stay with the field (`aria-activedescendant`) rather than with a list.
+/**
+ * Files allowed to author selection semantics. `VTextInput` names a one-line
+ * field that drives a list a combobox; `OptionGroups` is the grouped
+ * multi-choice list such a field drives (the Work filter's menu).
+ */
 const selectionOwners = new Set([
   'shared/ui/ChoiceSelect.vue',
   'shared/ui/CommandList.vue',
   'shared/ui/MarkdownEditor.vue',
+  'shared/ui/OptionGroups.vue',
+  'shared/ui/VTextInput.vue',
 ])
-const segmentedOwners = new Set(['shared/ui/SegmentedControl.vue'])
+/**
+ * Files allowed to author `aria-pressed`. `ToggleChip` is one toggle on its own
+ * — a preset that is on or off beside others that are too — rather than one of
+ * a row of exclusive choices, which stays the segmented control's.
+ */
+const segmentedOwners = new Set(['shared/ui/SegmentedControl.vue', 'shared/ui/ToggleChip.vue'])
 /**
  * Files allowed to author a text control.
  *

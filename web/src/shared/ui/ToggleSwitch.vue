@@ -108,7 +108,10 @@ function toggle(current: boolean) {
   transform: translateX(16px);
 }
 
+/* A host short of room hides the word by declaring `--toggle-state-display:
+   none`; the switch keeps its label as the accessible name either way. */
 .toggle-state {
+  display: var(--toggle-state-display, inline);
   min-width: 92px;
   font: var(--font-label);
   text-align: left;

@@ -46,6 +46,7 @@ export const LINE_BUDGET = new Map([
   ['shared/ui/VTextInput.vue', 1],
   ['shared/ui/ChoiceSelect.vue', 2],
   ['shared/ui/CommandList.vue', 1], // Search field edge; results use tone and a focus outline.
+  ['shared/ui/OptionGroups.vue', 1], // Overlay edge of the list a field drives.
   ['shared/ui/CountBadge.vue', 1],
   ['shared/ui/DialogFrame.vue', 2],
   ['shared/ui/DrawerFrame.vue', 1],

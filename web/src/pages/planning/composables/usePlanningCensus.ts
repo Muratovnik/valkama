@@ -3,20 +3,23 @@ import { computed } from 'vue'
 import { boardLanes } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import type { BoardGrouping } from '@/widgets/work-item-views/utils/boardLanes.ts'
 
+import { isWorkFilterEmpty, matchesWorkFilter } from '@/entities/work-item/utils/workFilter.ts'
+import type { WorkFilter } from '@/entities/work-item/utils/workFilter.ts'
+
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
-import { inWorkQueue } from '@/shared/api/planningModel.ts'
-import type { WorkItemBrief, WorkQueue } from '@/shared/api/planningModel.ts'
+import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 
 /** What the workspace is showing, read fresh on every change. */
 type CensusInput = () => {
   chain: WorkItemChain | null
+  /** What the views are narrowed to: text and facet tokens, one model. */
+  filter: WorkFilter
   grouping: BoardGrouping
-  queue: WorkQueue
-  /** The search, trimmed and lower-cased; empty for none. */
-  search: string
   space: WorkItemBrief[]
   view: 'graph' | 'kanban' | 'list'
 }
+
+const isOpen = (item: WorkItemBrief) => !item.state.is_terminal
 
 /** Items the view on the stage leaves out of its own counts, and why. */
 export type CensusExclusion =
@@ -47,29 +50,31 @@ export function usePlanningCensus(input: CensusInput) {
    * blockers reach outside the chain.
    */
   const scope = computed(() => (input().view === 'graph' ? input().space : counted.value))
-  const filtered = computed(() => Boolean(input().search) || input().queue !== 'all')
+  const filtered = computed(() => !isWorkFilterEmpty(input().filter))
 
-  function matches(item: WorkItemBrief): boolean {
-    const { queue, search } = input()
-    return (
-      inWorkQueue(item, queue) &&
-      (!search ||
-        item.reference.toLocaleLowerCase().includes(search) ||
-        item.title.toLocaleLowerCase().includes(search))
-    )
-  }
+  const matches = (item: WorkItemBrief) => matchesWorkFilter(item, input().filter)
   const visible = computed(() => scope.value.filter((item) => matches(item)))
-  /** The counted items the queue and the search let through. */
+  /** The counted items the filter lets through. */
   const matched = computed(() =>
     scope.value === counted.value ? visible.value : counted.value.filter((item) => matches(item)),
   )
 
+  /**
+   * The numbers above the stage. Unfiltered they say how much of the work is
+   * open; filtered they answer the filter: how many open items it let through
+   * of the open ones, and how many closed ones came with them, since a view
+   * draws those too. The held count belongs to its preset.
+   */
   const counts = computed(() => {
     const items = counted.value
+    const shown = filtered.value ? matched.value : items
+    const shownOpen = shown.filter((item) => isOpen(item)).length
     return {
       total: items.length,
-      open: items.filter((item) => !item.state.is_terminal).length,
-      held: items.filter((item) => item.claim_ref !== '' && !item.state.is_terminal).length,
+      open: items.filter((item) => isOpen(item)).length,
+      held: items.filter((item) => item.claim_ref !== '' && isOpen(item)).length,
+      matchedOpen: shownOpen,
+      matchedClosed: shown.length - shownOpen,
     }
   })
 

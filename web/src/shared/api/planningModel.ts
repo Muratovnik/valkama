@@ -429,12 +429,3 @@ export function byState(
 export function readyIds(items: readonly WorkItemBrief[]): Set<string> {
   return new Set(items.filter((item) => item.ready).map((item) => item.work_item_id))
 }
-
-export type WorkQueue = 'all' | 'ready' | 'assigned' | 'blocked' | 'review'
-export function inWorkQueue(item: WorkItemBrief, queue: WorkQueue): boolean {
-  if (queue === 'all') return true
-  if (queue === 'ready') return item.ready
-  if (queue === 'assigned') return !item.state.is_terminal && item.claim_ref !== ''
-  if (queue === 'blocked') return item.state.category === 'blocked'
-  return item.state.category === 'review'
-}
