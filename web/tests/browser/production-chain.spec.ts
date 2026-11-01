@@ -200,6 +200,17 @@ test('the readout of the first lane stays inside a panel scrolled to the map', a
   // Hovering waits for the card to finish sliding in; then the pointer leaves.
   await lane.hover()
   await page.mouse.move(0, 0)
+  // A hover that had to try again may have scrolled the panel to reach the lane. A
+  // first scroll condenses the head and the text glides, and a place read during the
+  // glide is one the text is only passing. A scroll reports itself on the next frame.
+  await expect
+    .poll(() =>
+      section.evaluate(async (node) => {
+        await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))
+        return node.closest('.drawer-frame-body')?.getAnimations({ subtree: true }).length
+      }),
+    )
+    .toBe(0)
   // Scroll the card's panel until the map's first lane is the first thing shown.
   const panelTop = await section.locator('.branch-map-canvas').evaluate((canvas) => {
     let panel = canvas.parentElement
