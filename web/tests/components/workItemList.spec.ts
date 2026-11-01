@@ -86,7 +86,7 @@ describe('the list rows', () => {
     expect(stops.map((button) => button.text())).toEqual(['MAIN-3'])
   })
 
-  it('show the steps as a fraction under their heading, and a year only when it is not this one', () => {
+  it('show the steps as a fraction under their heading, and a year only when it is not this one', async () => {
     const year = new Date().getFullYear()
     const wrapper = mount(WorkItemList, {
       props: {
@@ -105,6 +105,7 @@ describe('the list rows', () => {
       // The application's own formats, which name the shortened date.
       global: { plugins: [appI18n] },
     })
+    await flushPromises()
     const [recent, older] = wrapper.findAll('tbody tr').map((row) => row.findAll('td'))
     expect(recent[5].text()).toBe('1/2')
     expect(recent[6].text()).toContain('Mar')

@@ -6,7 +6,7 @@
  * A drag is the browser suite's to prove, because the drop library needs real
  * pointer geometry; what a drop is handed up as is the same move tested here.
  */
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import PlanningWorkspace from '@/pages/planning/PlanningWorkspace.vue'
@@ -338,6 +338,8 @@ describe('a chain narrows the board and the list', () => {
     'draws only the chain and its root in the %s view, with the chip to leave it',
     async (view) => {
       const wrapper = workspace(view)
+      // The list draws its rows once it has measured its own width.
+      await flushPromises()
       const shown = new Set(
         wrapper
           .findAll('[data-reference], tbody tr')

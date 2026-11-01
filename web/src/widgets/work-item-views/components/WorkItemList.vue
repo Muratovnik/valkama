@@ -16,19 +16,14 @@
  * ↑ and ↓ walk the rows, Home and End go to the ends, Enter opens the card,
  * and closing the card brings focus back to the row it was opened from.
  */
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useEventListener, useResizeObserver } from '@vueuse/core'
 
 import { useListSort } from '@/widgets/work-item-views/composables/useListSort.ts'
 import { useListWords } from '@/widgets/work-item-views/composables/useListWords.ts'
-import {
-  fitFor,
-  isFolded,
-  LIST_COLUMNS,
-  stepsOf,
-} from '@/widgets/work-item-views/utils/listColumns.ts'
+import { fitFor, isFolded, LIST_COLUMNS } from '@/widgets/work-item-views/utils/listColumns.ts'
 import type { ListColumn, SortKey } from '@/widgets/work-item-views/utils/listColumns.ts'
 
 import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
@@ -52,6 +47,17 @@ const width = ref(0)
 useResizeObserver(root, ([entry]) => {
   width.value = entry.contentRect.width
 })
+/**
+ * The rows are drawn once the list knows its own width. Drawn before, a phone
+ * drew a thousand rows with every column and at once drew them all again with
+ * the columns folded, which doubled what opening the list cost there.
+ */
+const measured = ref(false)
+onMounted(() => {
+  width.value = root.value?.clientWidth ?? 0
+  measured.value = true
+})
+const drawnRows = computed(() => (measured.value ? rows.value : []))
 const fit = computed(() => fitFor(width.value))
 const wide = computed(() => fit.value === 'wide')
 
@@ -66,20 +72,9 @@ const { ready, wordsOf } = useListWords(() => props.items)
  */
 const numericMark = (column: { numeric?: boolean }) => (column.numeric ? 'true' : undefined)
 
-/** Checklist progress as a fraction under the «Steps» heading, or a dash for none. */
-function checklistLabel(item: WorkItemBrief): string {
-  const progress = stepsOf(item)
-  return progress.total ? t('workItem.list.steps', progress) : '—'
-}
-
 /** A dash says "nobody" under a heading; on a line of facts it says nothing, so it is left out. */
 function holdsClaimFact(item: WorkItemBrief): boolean {
   return wordsOf(item).claim !== '—'
-}
-
-/** The same progress as a fact under the title, where no heading names it. */
-function checklistFact(item: WorkItemBrief): string {
-  return t('workItem.checklistProgress', stepsOf(item))
 }
 
 const folded = (key: SortKey) => isFolded(fit.value, key)
@@ -202,7 +197,7 @@ useEventListener(root, 'click', (event: MouseEvent) => {
       </thead>
       <tbody>
         <tr
-          v-for="item in rows"
+          v-for="item in drawnRows"
           :key="item.work_item_id"
           v-memo="memo(item)"
           class="list-row"
@@ -247,7 +242,7 @@ useEventListener(root, 'click', (event: MouseEvent) => {
               <span
                 v-if="folded('checklist') && item.checklist.length"
                 class="list-fact"
-                >{{ checklistFact(item) }}</span
+                >{{ wordsOf(item).stepsFact }}</span
               >
               <span
                 v-if="folded('updated')"
@@ -287,7 +282,7 @@ useEventListener(root, 'click', (event: MouseEvent) => {
             class="list-cell"
             data-numeric="true"
           >
-            {{ checklistLabel(item) }}
+            {{ wordsOf(item).steps }}
           </td>
           <td
             v-if="!folded('updated')"

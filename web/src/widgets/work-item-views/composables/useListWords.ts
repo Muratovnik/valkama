@@ -9,12 +9,18 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { stepsOf } from '@/widgets/work-item-views/utils/listColumns.ts'
+
 import { readyIds } from '@/shared/api/planningModel.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { holderName } from '@/shared/lib/actor.ts'
 
 export interface RowWords {
   claim: string
+  /** Checklist progress under the «Steps» heading, or a dash for none. */
+  steps: string
+  /** The same progress as a fact under the title, where no heading names it. */
+  stepsFact: string
   updated: string
 }
 
@@ -38,12 +44,22 @@ export function useListWords(items: () => readonly WorkItemBrief[]) {
     return d(date, date.getFullYear() === thisYear ? 'day' : 'activity')
   }
 
+  function progress(item: WorkItemBrief, key: string): string {
+    const steps = stepsOf(item)
+    return steps.total ? t(key, steps) : '—'
+  }
+
   const words = computed(() => {
     void locale.value
     return new Map(
       items().map((item) => [
         item.work_item_id,
-        { claim: claimLabel(item), updated: when(item.updated_at) },
+        {
+          claim: claimLabel(item),
+          steps: progress(item, 'workItem.list.steps'),
+          stepsFact: progress(item, 'workItem.checklistProgress'),
+          updated: when(item.updated_at),
+        },
       ]),
     )
   })
@@ -51,6 +67,6 @@ export function useListWords(items: () => readonly WorkItemBrief[]) {
   return {
     ready,
     wordsOf: (item: WorkItemBrief): RowWords =>
-      words.value.get(item.work_item_id) ?? { claim: '', updated: '' },
+      words.value.get(item.work_item_id) ?? { claim: '', steps: '', stepsFact: '', updated: '' },
   }
 }

@@ -1,6 +1,6 @@
 import { createI18n } from 'vue-i18n'
 
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
 import GraphNodeCard from '@/widgets/work-item-graph/components/GraphNodeCard.vue'
@@ -74,6 +74,8 @@ describe('Planning semantic presentation', () => {
       props: { items: [item], links: [] },
       global: { plugins: [i18n()] },
     })
+    // The list draws its rows once it has measured its own width.
+    await flushPromises()
     expect(wrapper.get('.list-claim').text()).toBe('claude')
     await wrapper.setProps({ items: [{ ...item, state: { ...item.state, is_terminal: true } }] })
     expect(wrapper.get('.list-claim').text()).toBe('Previously responsible: claude')
