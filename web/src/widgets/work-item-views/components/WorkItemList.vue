@@ -72,6 +72,11 @@ function checklistLabel(item: WorkItemBrief): string {
   return progress.total ? t('workItem.list.steps', progress) : '—'
 }
 
+/** A dash says "nobody" under a heading; on a line of facts it says nothing, so it is left out. */
+function holdsClaimFact(item: WorkItemBrief): boolean {
+  return wordsOf(item).claim !== '—'
+}
+
 /** The same progress as a fact under the title, where no heading names it. */
 function checklistFact(item: WorkItemBrief): string {
   return t('workItem.checklistProgress', stepsOf(item))
@@ -234,7 +239,11 @@ useEventListener(root, 'click', (event: MouseEvent) => {
                 :label="item.state.name"
               />
               <span class="list-fact">{{ t(`priority.${item.priority}`) }}</span>
-              <span class="list-fact list-fact-claim">{{ wordsOf(item).claim }}</span>
+              <span
+                v-if="holdsClaimFact(item)"
+                class="list-fact list-fact-claim"
+                >{{ wordsOf(item).claim }}</span
+              >
               <span
                 v-if="folded('checklist') && item.checklist.length"
                 class="list-fact"
