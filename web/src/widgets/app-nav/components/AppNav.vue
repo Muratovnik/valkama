@@ -34,7 +34,8 @@ import BrandMark from '@/shared/ui/BrandMark.vue'
 
 const props = withDefaults(
   defineProps<{
-    active: ModuleId
+    /** The section showing; null when the address names none. */
+    active: ModuleId | null
     modules: readonly ModuleManifest[]
     badges?: Partial<Record<ModuleId, number>>
     connection?: 'connecting' | 'live' | 'reconnecting'

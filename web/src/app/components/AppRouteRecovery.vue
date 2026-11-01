@@ -10,7 +10,8 @@
  * naming them is what turns a dead link into a choice.
  *
  * The card stands at the top of the stage, where every other state card stands,
- * and its actions are the product's buttons at their own width.
+ * and its actions are the product's buttons at their own width. It is the page's
+ * main region, as a module's own frame is, so a landmark jump still lands on it.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -53,46 +54,43 @@ const unavailableMessage = computed(() => {
 </script>
 
 <template>
-  <section
-    v-if="pending"
+  <main
     class="route-recovery"
-  >
-    <PlatformStatePanel :state="uiLoading()" />
-  </section>
-  <section
-    v-else-if="failureReason"
-    class="route-recovery"
+    tabindex="-1"
   >
     <PlatformStatePanel
-      :state="uiUnavailable(failureReason)"
-      :retryable="false"
+      v-if="pending"
+      :state="uiLoading()"
     />
-    <div class="route-choices">
-      <VButton
-        class="recovery-home"
-        @click="emit('home')"
-        >{{ t('navigation.home') }}</VButton
-      >
-    </div>
-  </section>
-  <section
-    v-else-if="unavailable"
-    class="route-recovery"
-  >
-    <PlatformStatePanel
-      :state="uiUnavailable(unavailableMessage)"
-      :retryable="false"
-    />
-    <div class="route-choices">
-      <VButton
-        v-for="module in unavailable.recovery.available_modules"
-        :key="module"
-        class="recovery-choice"
-        @click="emit('choose', module)"
-        >{{ t(`platform.modules.${module}`) }}</VButton
-      >
-    </div>
-  </section>
+    <template v-else-if="failureReason">
+      <PlatformStatePanel
+        :state="uiUnavailable(failureReason)"
+        :retryable="false"
+      />
+      <div class="route-choices">
+        <VButton
+          class="recovery-home"
+          @click="emit('home')"
+          >{{ t('navigation.home') }}</VButton
+        >
+      </div>
+    </template>
+    <template v-else-if="unavailable">
+      <PlatformStatePanel
+        :state="uiUnavailable(unavailableMessage)"
+        :retryable="false"
+      />
+      <div class="route-choices">
+        <VButton
+          v-for="module in unavailable.recovery.available_modules"
+          :key="module"
+          class="recovery-choice"
+          @click="emit('choose', module)"
+          >{{ t(`platform.modules.${module}`) }}</VButton
+        >
+      </div>
+    </template>
+  </main>
 </template>
 
 <style scoped>
@@ -103,6 +101,7 @@ const unavailableMessage = computed(() => {
   width: min(var(--size-module-column), 100%);
   padding: var(--space-6) var(--size-page-gutter) var(--space-12);
   margin: 0 auto;
+  outline: none;
 }
 
 .route-choices {

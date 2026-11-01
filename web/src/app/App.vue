@@ -166,6 +166,21 @@ const selectedResourceRef = computed<EntityRef | undefined>(() => {
 const routeRecoveryFailure = computed(
   () => routeFailure.value || (modulesAuthoritative.value ? '' : modulesFailure.value),
 )
+/**
+ * The address names no section at all. The shell then says so in the context bar
+ * and marks no section current: the rail and the bar used to name «Work» over a
+ * page that said nothing was there.
+ */
+const routeLost = computed(
+  () => Boolean(routeFailure.value) || routeUnavailable.value?.reason === 'unknown-module',
+)
+const currentModule = computed(() => (routeLost.value ? null : activeModule.value))
+const contextTitle = computed(() =>
+  routeLost.value ? t('platform.route.lostTitle') : moduleTitle.value,
+)
+const contextDescription = computed(() =>
+  routeLost.value ? '' : t(`modules.description.${activeModule.value}`),
+)
 // A state the module's manifest does not admit is dropped, not shown as a
 // blocked module: the address keeps the module and scope, and says so once.
 watch(liveRouteFailure, (failure) => {
@@ -260,7 +275,7 @@ usePlatformEntryRestore({
   <div class="app-shell">
     <AppNav
       :modules="modules"
-      :active="activeModule"
+      :active="currentModule"
       :connection="displayedConnection"
       :refreshing="refreshing"
       :pending-request-count="pendingRequestCount"
@@ -274,8 +289,8 @@ usePlatformEntryRestore({
 
     <div class="app-main">
       <AppContextBar
-        :title="moduleTitle"
-        :description="t(`modules.description.${activeModule}`)"
+        :title="contextTitle"
+        :description="contextDescription"
         :scope="operatingScope"
         :resource-ref="selectedResourceRef"
         :resources="availableProjectResources"

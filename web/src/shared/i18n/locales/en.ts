@@ -106,6 +106,7 @@ export const en = {
       unavailable: 'The “{module}” module cannot open this address in the current scope.',
       invalid: 'That choice cannot be opened in this section.',
       notFound: 'Section not found: there is nothing at this address in Valkama.',
+      lostTitle: 'Section not found',
       stateDropped:
         'The view settings in the address could not be read and were reset; the section opened as usual.',
       queryDropped:

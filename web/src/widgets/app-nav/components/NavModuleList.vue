@@ -17,7 +17,8 @@ import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = withDefaults(
   defineProps<{
-    active: ModuleId
+    /** The section showing; null when the address names none. */
+    active: ModuleId | null
     modules: readonly ModuleManifest[]
     badges?: Partial<Record<ModuleId, number>>
     /** Shown above the entries, and hidden from sight — never from readers — on a narrow rail. */

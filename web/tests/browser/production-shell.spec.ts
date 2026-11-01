@@ -321,6 +321,22 @@ test('an attached same-key space stays readable but never reaches primary-only p
   expect(legacyRequests).toEqual([])
 })
 
+// The not-found page had no main landmark, and the rail and the context bar
+// both named «Work» as the section showing over a page that said nothing was here.
+test('an address that names no section is the main region and claims no section', async ({
+  page,
+}) => {
+  await installBackend(page)
+  for (const path of ['/modules/not-a-module/global', '/no/such/page']) {
+    await page.goto(path)
+    const main = page.getByRole('main')
+    await expect(main).toHaveCount(1)
+    await expect(main.locator('.route-choices button').first()).toBeVisible()
+    await expect(page.locator('nav [aria-current]')).toHaveCount(0)
+    await expect(page.locator('.context-bar .module-title')).toHaveText('Section not found')
+  }
+})
+
 const MODULE_SCOPES = PLATFORM_MODULE_IDS.map((moduleId) => ({
   moduleId,
   scope: projectScope,

@@ -21,6 +21,8 @@ describe('route recovery actions', () => {
     const wrapper = mountRecovery({ failure: 'Invalid route', pending: false, unavailable: null })
     expect(wrapper.text()).toContain('Go to Work')
     expect(wrapper.text()).not.toContain('Retry')
+    // The page has no other main region, so it is the one a landmark jump reaches.
+    expect(wrapper.element.tagName).toBe('MAIN')
   })
 
   it('localizes typed module failures without presenting raw diagnostic detail', () => {

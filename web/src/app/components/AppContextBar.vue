@@ -86,7 +86,11 @@ const selectedResourceValue = computed(() =>
   <header class="context-bar">
     <div class="context-title">
       <h1 class="module-title">{{ title }}</h1>
-      <small class="module-description">{{ description }}</small>
+      <small
+        v-if="description"
+        class="module-description"
+        >{{ description }}</small
+      >
     </div>
     <div class="context-controls">
       <div class="operating-scope">
