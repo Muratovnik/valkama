@@ -188,4 +188,9 @@ test('a phone-width list offers the folded orders as one choice that turns them 
   await head.getByRole('button', { name: 'Title', exact: true }).click()
   await expect(choice).toHaveText('Order')
   await expect(head.locator('th').nth(1)).toHaveAttribute('aria-sort', 'ascending')
+  // The facts folded under a title are read, not followed: a click there opens nothing.
+  const facts = page.locator('.work-item-list tbody .list-facts').first()
+  expect(await facts.evaluate((element) => getComputedStyle(element).cursor)).not.toBe('pointer')
+  await facts.click()
+  await expect(page.locator('.drawer')).toHaveCount(0)
 })
