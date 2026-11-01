@@ -2,6 +2,7 @@
 
 import { activityMessages } from '@/shared/i18n/activityMessages.ts'
 import { checklistCommentMessages } from '@/shared/i18n/checklistCommentMessages.ts'
+import { connectionMessages } from '@/shared/i18n/connectionMessages.ts'
 import { globalFinderMessages } from '@/shared/i18n/globalFinderMessages.ts'
 import { inputRequestMessages } from '@/shared/i18n/inputRequestMessages.ts'
 import { memoryProviderMessages } from '@/shared/i18n/memoryProviderMessages.ts'
@@ -19,6 +20,7 @@ export const en = {
   requests: inputRequestMessages.en.requests,
   editor: richTextMessages.en.editor,
   textLinks: richTextMessages.en.textLinks,
+  connection: connectionMessages.en.connection,
   app: {
     title: 'Valkama',
   },
@@ -873,7 +875,6 @@ export const en = {
       graphParents:
         '{count} parent task is drawn as a group, not a node ({open} open) | {count} parent tasks are drawn as groups, not nodes ({open} open)',
     },
-    liveUnavailable: 'Live updates are unavailable. Refresh to load the latest work and reconnect.',
     columnEmpty: 'Nothing here',
     lanes: {
       groupingLabel: 'Group the board by epic',

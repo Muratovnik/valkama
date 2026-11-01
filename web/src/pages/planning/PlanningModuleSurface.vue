@@ -216,9 +216,6 @@ const { connection: liveConnection, reconnect } = usePlanningSubscription(stream
   resource.value = resolveResource(resource.value, resource.value.generation, key, next)
   version.value += 1
 })
-const liveWarning = computed(() =>
-  liveConnection.value === 'reconnecting' ? t('workItem.liveUnavailable') : undefined,
-)
 watch(
   [liveConnection, streamTarget],
   ([state, target]) => emit('connection', target === null ? null : state),
@@ -407,7 +404,6 @@ defineExpose({ refresh })
       :graph-focus="chainShown"
       :grouping="grouping"
       :selected-id="selectedId"
-      :warning="liveWarning"
       :stale="stale"
       :version="version"
       :view="view"

@@ -94,6 +94,7 @@ export function typedFailure(error: unknown, fallbackCode = 'request_failed'): T
 }
 
 const KNOWN_FAILURE_KEYS: Readonly<Record<string, string>> = {
+  connection_lost: 'connection.readFailed',
   contract_invalid: 'platform.failures.contractInvalid',
   dependency_unavailable: 'platform.failures.dependencyUnavailable',
   mutation_failed: 'platform.failures.mutationFailed',

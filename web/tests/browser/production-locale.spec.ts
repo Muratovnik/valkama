@@ -135,12 +135,20 @@ test('the context bar names each module and adds no introductory copy', async ({
  * no error envelope once read «технический код: unavailable», a raw word for the
  * operator; it now reads the local service sentence.
  */
-for (const [shape, fail] of [
-  ['an empty 500', (route: Route) => route.fulfill({ status: 500, body: '' })],
-  ['a dropped connection', (route: Route) => route.abort('connectionreset')],
+for (const [shape, fail, reason] of [
+  [
+    'an empty 500',
+    (route: Route) => route.fulfill({ status: 500, body: '' }),
+    'Локальный сервис не завершил запрос.',
+  ],
+  [
+    'a dropped connection',
+    (route: Route) => route.abort('connectionreset'),
+    'Нет связи с локальным сервисом. Повторите, когда связь вернётся.',
+  ],
 ] as const) {
   for (const width of [1440, 390]) {
-    test(`a failed Work read after ${shape} names the local service failure and no technical code at ${width}px`, async ({
+    test(`a failed Work read after ${shape} names its cause and no technical code at ${width}px`, async ({
       page,
     }) => {
       await page.setViewportSize({ width, height: 900 })
@@ -159,7 +167,7 @@ for (const [shape, fail] of [
         panel.getByRole('heading', { name: 'Не удалось загрузить представление' }),
       ).toBeVisible()
       await expect(panel.getByRole('button', { name: 'Повторить' })).toBeVisible()
-      await expect(panel).toContainText('Локальный сервис не завершил запрос.')
+      await expect(panel).toContainText(reason)
       await expect(panel).not.toContainText(/код:\s*\)/u)
       await expect(panel).not.toContainText('unavailable')
       await expect(panel).not.toContainText('{code}')

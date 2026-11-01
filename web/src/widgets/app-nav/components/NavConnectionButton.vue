@@ -7,19 +7,34 @@
  * refresh action and says so by its icon and its tooltip; the word "Refresh"
  * printed under the state used to be a second line inside the control that does
  * it, and a centred dot beside a two-line block lines up with neither line.
+ *
+ * A lost connection is said here and nowhere else: the word and the dot change,
+ * the tooltip says what happens next and what the button does, and assistive
+ * technology hears it once. It used to be a paragraph put into the flow above
+ * the views, which moved the board and the graph down by its height for as long
+ * as the server was away and asked for a refresh the app does by itself.
  */
+import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { statePresentation } from '@/shared/lib/uiSystem.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{ connection?: 'connecting' | 'live' | 'reconnecting'; refreshing?: boolean }>(),
   { connection: 'connecting', refreshing: false },
 )
 
 const emit = defineEmits<{ refresh: [] }>()
 const { t } = useI18n()
+const noticeId = useId()
+const lost = computed(() => props.connection === 'reconnecting')
+/** What the tooltip and assistive technology are told while the connection is lost. */
+const notice = computed(() => (lost.value ? t('connection.lost') : ''))
+const describedBy = computed(() => (lost.value ? noticeId : undefined))
+const title = computed(() =>
+  lost.value ? `${notice.value} ${t('refresh.title')}` : t('refresh.title'),
+)
 </script>
 
 <template>
@@ -29,7 +44,8 @@ const { t } = useI18n()
     :class="{ refreshing }"
     :data-tone="statePresentation('connection-lifecycle', connection).tone"
     :disabled="refreshing"
-    :title="t('refresh.title')"
+    :title="title"
+    :aria-describedby="describedBy"
     @click="emit('refresh')"
   >
     <span
@@ -44,6 +60,13 @@ const { t } = useI18n()
       :stroke-width="1.7"
     />
   </button>
+  <p
+    :id="noticeId"
+    class="visually-hidden"
+    role="status"
+  >
+    {{ notice }}
+  </p>
 </template>
 
 <style scoped>

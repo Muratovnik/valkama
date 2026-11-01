@@ -2,6 +2,7 @@
 
 import { activityMessages } from '@/shared/i18n/activityMessages.ts'
 import { checklistCommentMessages } from '@/shared/i18n/checklistCommentMessages.ts'
+import { connectionMessages } from '@/shared/i18n/connectionMessages.ts'
 import { globalFinderMessages } from '@/shared/i18n/globalFinderMessages.ts'
 import { inputRequestMessages } from '@/shared/i18n/inputRequestMessages.ts'
 import { memoryProviderMessages } from '@/shared/i18n/memoryProviderMessages.ts'
@@ -19,6 +20,7 @@ export const ru = {
   requests: inputRequestMessages.ru.requests,
   editor: richTextMessages.ru.editor,
   textLinks: richTextMessages.ru.textLinks,
+  connection: connectionMessages.ru.connection,
   app: {
     title: 'Valkama',
   },
@@ -871,8 +873,6 @@ export const ru = {
       graphParents:
         '{count}\u{A0}родительская задача показана группой, а не узлом (открыто: {open}) | {count}\u{A0}родительские задачи показаны группами, а не узлами (открыто: {open}) | {count}\u{A0}родительских задач показаны группами, а не узлами (открыто: {open})',
     },
-    liveUnavailable:
-      'Обновления приостановлены. Обновите данные, чтобы увидеть актуальную работу и восстановить подключение.',
     columnEmpty: 'Пусто',
     lanes: {
       groupingLabel: 'Группировать доску по эпикам',

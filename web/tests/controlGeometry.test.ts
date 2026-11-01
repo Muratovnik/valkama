@@ -100,7 +100,9 @@ test('a control states its own subject, so nothing captions it twice', () => {
   // The connection strip is the refresh control; the word under the state was
   // the button's own name printed inside it, and it cost the dot its alignment.
   assert.doesNotMatch(navConnection, /refresh\.label/)
-  assert.match(navConnection, /:title="t\('refresh\.title'\)"/)
+  // Its tooltip names the refresh, after the lost connection when there is one.
+  assert.match(navConnection, /:title="title"/)
+  assert.match(navConnection, /t\('refresh\.title'\)/)
   assert.match(
     navConnection,
     /<span class="connection-copy">\{\{ t\(`status\.\$\{connection\}`\) \}\}<\/span>/,

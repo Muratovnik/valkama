@@ -12,6 +12,19 @@ async function consume(input: string, init?: RequestInit): Promise<JsonResponse>
   return { response, payload }
 }
 
+/**
+ * A read the network refused never reached the service, so what failed is the
+ * connection, and it says so: the browser's own `TypeError` carried no code,
+ * and a card opened while the server was away read as a record that could not
+ * be loaded.
+ */
+function connectionLost(error: unknown, signal: AbortSignal): unknown {
+  if (!(error instanceof TypeError) || signal.aborted) return error
+  return Object.assign(new Error('Connection to the local service lost', { cause: error }), {
+    code: 'connection_lost',
+  })
+}
+
 /** Bound the whole read, including a response body that stops arriving. */
 export async function readJsonResponse(input: string, init?: RequestInit): Promise<JsonResponse> {
   if ((init?.method ?? 'GET').toUpperCase() !== 'GET') return consume(input, init)
@@ -28,6 +41,8 @@ export async function readJsonResponse(input: string, init?: RequestInit): Promi
   })
   try {
     return await Promise.race([consume(input, { ...init, signal }), deadline])
+  } catch (error) {
+    throw connectionLost(error, signal)
   } finally {
     clearTimeout(timer)
   }

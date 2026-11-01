@@ -64,7 +64,6 @@ const props = defineProps<{
   /** How the board is grouped: not at all, or into one lane per epic. */
   grouping?: BoardGrouping
   selectedId?: string | null
-  warning?: string
 }>()
 
 const emit = defineEmits<{
@@ -234,13 +233,6 @@ defineExpose({ toggleFilter })
       @view="(mode) => emit('view', mode)"
     />
 
-    <p
-      v-if="warning"
-      class="workspace-note"
-      role="status"
-    >
-      {{ warning }}
-    </p>
     <PlanningChainFailure
       v-if="chainFailure"
       :failure="chainFailure"
@@ -336,7 +328,7 @@ defineExpose({ toggleFilter })
   min-height: 0;
 }
 
-/* A line of text about the stage: a warning, or the chain still being read. */
+/* A line of text about the stage: the chain still being read. */
 .workspace-note {
   max-width: 54ch;
   margin: 0;

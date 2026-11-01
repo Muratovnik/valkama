@@ -57,12 +57,12 @@ describe('a failed Planning read names its cause and never the raw word unavaila
     expect(message).toEqual({ key: 'platform.failures.requestFailed' })
   })
 
-  it('maps a dropped connection to the local service sentence', async () => {
+  it('names a dropped connection as the connection, not as a failed request', async () => {
     const { failure, message } = await failedRead(async () => {
       throw new TypeError('Failed to fetch')
     })
-    expect(failure.code).toBe('request_failed')
-    expect(message).toEqual({ key: 'platform.failures.requestFailed' })
+    expect(failure).toEqual({ code: 'connection_lost', status: null, retryable: true })
+    expect(message).toEqual({ key: 'connection.readFailed' })
   })
 
   it('keeps a 404 error envelope with the unavailable code as a missing record', async () => {
