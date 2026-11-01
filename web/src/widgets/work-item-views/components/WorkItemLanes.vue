@@ -298,12 +298,13 @@ function toggleLabel(lane: BoardLane): string {
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
-  scroll-snap-type: x proximity;
-  container: board-lanes / inline-size;
 
   /* A tile focused or brought into view stops below the sticky row of state
-     names (a state line and its inset, 32px) rather than under it. */
-  scroll-padding-block-start: calc(var(--size-control-height-compact) + var(--space-2));
+     names (a state line and its inset, 32px) rather than under it, and short
+     of the bottom edge by more than its focus ring reaches. */
+  scroll-padding-block: calc(var(--size-control-height-compact) + var(--space-2)) var(--space-2);
+  scroll-snap-type: x proximity;
+  container: board-lanes / inline-size;
 }
 
 /* Every row of the board lays itself on the same tracks, so a state stands at

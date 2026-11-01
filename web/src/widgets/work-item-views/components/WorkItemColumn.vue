@@ -159,6 +159,9 @@ function placed(move: BoardMove, landing: StackLanding) {
   }
 }
 
+/* A tile brought into view stops short of the edge by more than its focus ring
+   reaches (2px out, 2px wide), so the moved tile's ring is seen whole at the
+   top and at the bottom; flush with the edge, only one side of it was. */
 .column-scroll {
   position: relative;
   display: flex;
@@ -168,6 +171,7 @@ function placed(move: BoardMove, landing: StackLanding) {
   padding: var(--space-1) 0;
   overflow-y: auto;
   scrollbar-gutter: stable;
+  scroll-padding-block: var(--space-2);
 }
 
 /* The stack fills the column, so a tile dropped anywhere below the last one

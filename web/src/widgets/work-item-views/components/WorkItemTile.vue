@@ -137,6 +137,13 @@ const steps = computed(() => ({
   &:focus-visible {
     background: var(--color-surface-hover);
   }
+
+  /* The ring is drawn inside the sheet. A tile fills the width of a column that
+     clips its overflow, so a ring drawn outside lost both its sides there, and
+     its top or bottom too wherever a scroll left the tile against the edge. */
+  &:focus-visible {
+    outline-offset: -2px;
+  }
 }
 
 .tile-line {
