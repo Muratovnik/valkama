@@ -88,4 +88,12 @@ describe('a checklist step’s text', () => {
     expect(wrapper.findComponent(InspectorOverview).emitted('tick')?.at(-1)).toEqual([STEP, true])
     wrapper.unmount()
   })
+
+  it('names the discuss button by the step’s words, not its markdown', () => {
+    const wrapper = overview(true)
+    expect(wrapper.get('.step-discuss').attributes('aria-label')).toBe(
+      'Discuss step “Merge after MAIN-12 lands, then run npm test”',
+    )
+    wrapper.unmount()
+  })
 })

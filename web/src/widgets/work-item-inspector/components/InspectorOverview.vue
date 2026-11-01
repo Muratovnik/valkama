@@ -13,6 +13,7 @@ import ItemInputRequests from '@/features/input-requests/components/ItemInputReq
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { holderName } from '@/shared/lib/actor.ts'
+import { plainText } from '@/shared/lib/richText.ts'
 import { semanticStatePresentation, statePresentation } from '@/shared/lib/uiSystem.ts'
 import RichText from '@/shared/ui/RichText.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
@@ -187,7 +188,7 @@ defineExpose({ revealChecklist, startOutcomeReport })
             variant="ghost"
             size="inline"
             :title="t('checklistComment.discuss')"
-            :aria-label="t('checklistComment.discussStep', { step: step.text })"
+            :aria-label="t('checklistComment.discussStep', { step: plainText(step.text) })"
             icon
             @click="discussStep(step.id)"
           >

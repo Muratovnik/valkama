@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { parseRichInline, parseRichText, safeHref } from '@/shared/lib/richText.ts'
+import { parseRichInline, parseRichText, plainText, safeHref } from '@/shared/lib/richText.ts'
 
 /** Any node of the tree, as far as its words are concerned. */
 interface Node {
@@ -202,5 +202,28 @@ describe('references in the text', () => {
   it('does not look for references inside a link or a code block', () => {
     const [link, code] = parseRichText('[MAIN-12 notes](https://example.org)\n\n```\nMAIN-12\n```')
     expect(JSON.stringify([link, code])).not.toContain('"kind":"reference"')
+  })
+})
+
+describe('plain text', () => {
+  it('says a step’s words without its markup, so an accessible name reads as the step', () => {
+    expect(plainText('Wait for MAIN-265, then run `npm test`')).toBe(
+      'Wait for MAIN-265, then run npm test',
+    )
+    expect(plainText('**Check** the [notes](https://example.org/notes)')).toBe('Check the notes')
+  })
+
+  it('drops the address of an unsafe link and keeps its words', () => {
+    expect(plainText('[bad](javascript:alert(1))')).toBe('bad')
+  })
+
+  it('reads a heading, a list and a table as their words, one after another', () => {
+    expect(plainText('# Title\n- one\n- two')).toBe('Title one two')
+    expect(plainText('| a | b |\n|---|---|\n| 1 | 2 |')).toBe('a b 1 2')
+  })
+
+  it('reads a line break as a space and raw HTML as the text it was written as', () => {
+    expect(plainText('one\ntwo')).toBe('one two')
+    expect(plainText('<b>raw</b> text')).toBe('<b>raw</b> text')
   })
 })

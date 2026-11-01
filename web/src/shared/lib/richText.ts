@@ -224,3 +224,44 @@ export function parseRichText(source: string): RichBlock[] {
 export function parseRichInline(source: string): RichInline[] {
   return inlines(Lexer.lexInline(source, { gfm: true, breaks: true }))
 }
+
+/**
+ * The words a markdown text reads as, without its markup: what an accessible
+ * name or a tooltip says of it. The tree is the one the renderer draws, so
+ * what is said is what is shown, and a line break reads as a space.
+ */
+export function plainText(source: string): string {
+  return parseRichText(source)
+    .map((block) => blockWords(block))
+    .join(' ')
+    .trim()
+}
+
+function blockWords(block: RichBlock): string {
+  if (block.kind === 'code') return block.text
+  if (block.kind === 'heading' || block.kind === 'paragraph') return inlineWords(block.children)
+  if (block.kind === 'list')
+    return block.items
+      .map((item) => item.children.map((child) => blockWords(child)).join(' '))
+      .join(' ')
+  if (block.kind === 'quote') return block.children.map((child) => blockWords(child)).join(' ')
+  if (block.kind === 'table')
+    return [block.header, ...block.rows]
+      .flat()
+      .map((cell) => inlineWords(cell))
+      .join(' ')
+  return ''
+}
+
+function inlineWords(nodes: readonly RichInline[]): string {
+  return nodes.map((node) => nodeWords(node)).join('')
+}
+
+function nodeWords(node: RichInline): string {
+  if (node.kind === 'break') return ' '
+  if (node.kind === 'code' || node.kind === 'text') return node.text
+  if (node.kind === 'reference') return node.reference.value
+  if (node.kind === 'link' || node.kind === 'em' || node.kind === 'strong' || node.kind === 'del')
+    return inlineWords(node.children)
+  return ''
+}
