@@ -74,9 +74,9 @@ describe('work discovery', () => {
   })
   it('intersects search with the queue and resets a filtered empty result', async () => {
     const wrapper = workspace()
-    await button(wrapper, 'Ready').trigger('click')
+    await button(wrapper, 'Workable').trigger('click')
     expect(wrapper.get('.data-empty').text()).toContain('No work in this queue.')
-    expect(wrapper.get('.data-empty').text()).toContain('Ready')
+    expect(wrapper.get('.data-empty').text()).toContain('Workable')
     await wrapper.get('input').setValue('MAIN-264')
     expect(wrapper.get('.data-empty').text()).toContain('No work matches your search.')
     await button(wrapper, 'Clear search').trigger('click')

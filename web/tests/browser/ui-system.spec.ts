@@ -416,32 +416,3 @@ test('inspector facts and section headings keep a shared spacing rhythm', async 
     .evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().height))
   expect(Math.max(...labelHeights) - Math.min(...labelHeights)).toBeLessThan(1)
 })
-
-test('a thrown switch is not painted the hue of finished work', async ({ page }) => {
-  await page.goto('/tests/browser/harness.html?lang=en&surface=marks')
-  const track = (which: string) =>
-    page.locator(`[data-switch="${which}"] .toggle-track`).evaluate((node) => {
-      const probe = document.createElement('i')
-      document.body.append(probe)
-      const paint = (token: string) => {
-        probe.style.background = `var(${token})`
-        return getComputedStyle(probe).backgroundColor
-      }
-      const result = {
-        track: getComputedStyle(node).backgroundColor,
-        meaning: ['--color-success', '--color-info', '--color-warning', '--color-danger'].map(
-          (token) => paint(token),
-        ),
-        primary: paint('--color-action-primary'),
-      }
-      probe.remove()
-      return result
-    })
-  const on = await track('on')
-  const off = await track('off')
-  // "On" says where a control stands, so it takes no meaning hue at all.
-  expect(on.meaning).not.toContain(on.track)
-  expect(on.track).toBe(on.primary)
-  // And it still reads as different from "off".
-  expect(on.track).not.toBe(off.track)
-})

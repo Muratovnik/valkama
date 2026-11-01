@@ -82,7 +82,7 @@ test('English and Russian catalogs translate checklist actors, activity, source 
   // says so by its icon, so the word only exists as the control's own name.
   assert.equal(i18n.global.t('refresh.title'), 'Refresh boards, activity, and the current view now')
   assert.equal(i18n.global.t('workItem.view.kanban'), 'Kanban')
-  assert.equal(i18n.global.t('graph.frontier', { count: 2 }), 'Workable now · 2')
+  assert.equal(i18n.global.t('graph.frontier', { count: 2 }), 'Workable · 2')
   assert.equal(i18n.global.t('graph.openOnly', { count: 14 }), 'Open · 14')
   assert.equal(i18n.global.t('graph.showDone', { count: 105 }), 'Show done · 105')
   assert.equal(i18n.global.t('workItem.listEmpty'), 'This space has no work items yet.')
@@ -113,7 +113,7 @@ test('English and Russian catalogs translate checklist actors, activity, source 
   assert.equal(i18n.global.t('workItem.noClaim'), 'Никто не взял')
   assert.equal(i18n.global.t('refresh.title'), 'Обновить доски, активность и текущий вид сейчас')
   assert.equal(i18n.global.t('workItem.view.kanban'), 'Канбан')
-  assert.equal(i18n.global.t('graph.frontier', { count: 2 }), 'Можно брать сейчас · 2')
+  assert.equal(i18n.global.t('graph.frontier', { count: 2 }), 'Можно брать · 2')
   assert.equal(i18n.global.t('graph.openOnly', { count: 14 }), 'Открытые · 14')
   assert.equal(i18n.global.t('graph.showDone', { count: 105 }), 'Показать готовые · 105')
   assert.equal(i18n.global.t('workItem.listEmpty'), 'В этом пространстве ещё нет работы.')
@@ -171,4 +171,26 @@ test('a counted Russian message takes the form its number asks for, and English 
     [1, 2, 21].map((count) => days(count)),
     ['1 day', '2 days', '21 days'],
   )
+})
+
+test('readiness has one label in each language, wherever it is printed', () => {
+  // It had three: «Готово к работе» in the queue, which also reads as done,
+  // «можно брать» on a tile and «Можно брать сейчас» on the graph.
+  const values = (catalog: unknown): string[] =>
+    catalog && typeof catalog === 'object'
+      ? Object.values(catalog as Record<string, unknown>).flatMap((child) => values(child))
+      : [String(catalog)]
+  for (const locale of ['en', 'ru'] as const) {
+    const catalog = messages[locale]
+    const label = catalog.workItem.facet.ready
+    assert.equal(catalog.workItem.queue.ready, label, locale)
+    assert.equal(catalog.graph.frontier, `${label} · {count}`, locale)
+    for (const retired of [
+      'Готово к работе',
+      'Можно брать сейчас',
+      'Workable now',
+      'Ready to work',
+    ])
+      assert.ok(!values(catalog).some((value) => value.includes(retired)), `${locale}: ${retired}`)
+  }
 })

@@ -60,8 +60,8 @@ describe('the work bar', () => {
   it('offers the queue as segments and as a menu over one choice', async () => {
     const wrapper = bar({ queue: 'ready' })
     const segments = wrapper.get('[role="group"][aria-label="Work queue"]')
-    expect(segments.get('[aria-pressed="true"]').text()).toBe('Ready')
-    expect(wrapper.get('.workspace-queue-menu .choice-title').text()).toBe('Ready')
+    expect(segments.get('[aria-pressed="true"]').text()).toBe('Workable')
+    expect(wrapper.get('.workspace-queue-menu .choice-title').text()).toBe('Workable')
     await wrapper.setProps({ queue: 'all' })
     // On the trigger «All» alone would not say all of what.
     expect(wrapper.get('.workspace-queue-menu .choice-title').text()).toBe('All work')

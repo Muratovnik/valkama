@@ -34,7 +34,7 @@ export function useListWords(items: () => readonly WorkItemBrief[]) {
       return item.state.is_terminal
         ? t('workItem.previousHolder', { holder: holderName(item.claim_ref) })
         : holderName(item.claim_ref)
-    return ready.value.has(item.work_item_id) ? t('workItem.ready') : '—'
+    return ready.value.has(item.work_item_id) ? t('workItem.facet.ready') : '—'
   }
 
   /** When, to the minute; the year only when it is not this one, so nothing is left out. */

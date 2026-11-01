@@ -8,6 +8,7 @@ import { memoryProviderMessages } from '@/shared/i18n/memoryProviderMessages.ts'
 /* English copy; tests/i18n.test.ts enforces parity with Russian keys. */
 import { platformIntegrationMessages } from '@/shared/i18n/platformIntegrationMessages.ts'
 import { richTextMessages } from '@/shared/i18n/richTextMessages.ts'
+import { workItemFacetMessages } from '@/shared/i18n/workItemFacetMessages.ts'
 
 export const en = {
   history: activityMessages.en.history,
@@ -184,8 +185,7 @@ export const en = {
     title: 'Work graph',
     openOnly: 'Open · {count}',
     all: 'All · {count}',
-    frontier: 'Workable now · {count}',
-    readyMark: 'workable',
+    frontier: 'Workable · {count}',
     rootMark: 'root',
     rootLabel: 'chain root',
     empty: 'This space has no work to project.',
@@ -855,7 +855,7 @@ export const en = {
     queueMenuAll: 'All work',
     queue: {
       all: 'All',
-      ready: 'Ready',
+      ready: 'Workable',
       assigned: 'Assigned',
       blocked: 'Blocked',
       review: 'Review',
@@ -931,6 +931,7 @@ export const en = {
       epic: 'Epic',
       improvement: 'Improvement',
     },
+    ...workItemFacetMessages.en,
     kindLabel: 'Kind',
     state: 'State',
     priority: 'Priority',
@@ -1008,7 +1009,6 @@ export const en = {
     create: 'New work item',
     newTitle: 'New work',
     cancel: 'Cancel',
-    ready: 'workable',
     blocked: 'blocked',
     checklist: 'Checklist',
     checklistProgress: '{done}/{total} done',

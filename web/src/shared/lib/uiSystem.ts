@@ -10,6 +10,7 @@ export type ClosedStateDimension =
   | 'project-binding'
   | 'session-feed-result'
   | 'work-item-chain-group'
+  | 'work-item-facet'
   | 'work-item-node-marker'
   | 'work-item-priority'
   | 'work-item-readiness'
@@ -104,6 +105,16 @@ const STATE_PRESENTATION = {
     completed: { tone: 'success', emphasis: 'quiet' },
     blocked: { tone: 'danger', emphasis: 'strong' },
     cancelled: { tone: 'neutral', emphasis: 'quiet' },
+  },
+  /**
+   * The facets of a work item that carry no meaning colour at all: its kind,
+   * its labels, its parent, its steps and a holder whose claim is in order. A
+   * kind is a type, not a state, and coloured it would read as one more alarm;
+   * the glyph tells a bug from an epic. Said here so a facet's colour has one
+   * owner even when the answer is none.
+   */
+  'work-item-facet': {
+    plain: { tone: 'neutral', emphasis: 'quiet' },
   },
   'work-item-priority': {
     low: { tone: 'neutral', emphasis: 'quiet' },
@@ -232,6 +243,7 @@ type PlatformUiState = keyof (typeof STATE_PRESENTATION)['platform-ui-state']
 type ProjectBindingState = keyof (typeof STATE_PRESENTATION)['project-binding']
 type SessionFeedResultState = keyof (typeof STATE_PRESENTATION)['session-feed-result']
 type WorkItemChainGroupState = keyof (typeof STATE_PRESENTATION)['work-item-chain-group']
+type WorkItemFacetState = keyof (typeof STATE_PRESENTATION)['work-item-facet']
 type WorkItemNodeMarkerState = keyof (typeof STATE_PRESENTATION)['work-item-node-marker']
 type WorkItemPriorityState = keyof (typeof STATE_PRESENTATION)['work-item-priority']
 type WorkItemReadinessState = keyof (typeof STATE_PRESENTATION)['work-item-readiness']
@@ -250,6 +262,7 @@ export type SemanticStatePair =
   | { dimension: 'project-binding'; state: ProjectBindingState }
   | { dimension: 'session-feed-result'; state: SessionFeedResultState }
   | { dimension: 'work-item-chain-group'; state: WorkItemChainGroupState }
+  | { dimension: 'work-item-facet'; state: WorkItemFacetState }
   | { dimension: 'work-item-node-marker'; state: WorkItemNodeMarkerState }
   | { dimension: 'work-item-priority'; state: WorkItemPriorityState }
   | { dimension: 'work-item-readiness'; state: WorkItemReadinessState }
@@ -264,6 +277,7 @@ const CLOSED_STATE_DIMENSIONS = {
   'project-binding': true,
   'session-feed-result': true,
   'work-item-chain-group': true,
+  'work-item-facet': true,
   'work-item-node-marker': true,
   'work-item-priority': true,
   'work-item-readiness': true,
@@ -353,6 +367,18 @@ export type IconName =
   | 'terminal'
   | 'table'
   | 'client'
+  // A work item's facets, named for what they mean rather than what they draw.
+  | 'kind-bug'
+  | 'kind-epic'
+  | 'kind-improvement'
+  | 'priority-urgent'
+  | 'priority-high'
+  | 'priority-low'
+  | 'state-cancelled'
+  | 'waiting'
+  | 'holder'
+  | 'parent'
+  | 'steps'
 
 export function iconPolicy(_icon: IconName): 'lucide' {
   return 'lucide'

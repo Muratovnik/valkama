@@ -61,7 +61,7 @@ const markerState = computed<WorkItemNodeMarkerState>(() => {
  * A workable item announces that first: its state is the less useful half of
  * the sentence once the field has told you it can be picked up.
  */
-const stateLabel = computed(() => (ready ? t('graph.readyMark') : node.state.name))
+const stateLabel = computed(() => (ready ? t('workItem.facet.ready') : node.state.name))
 const ownerLabel = computed(() =>
   t(node.state.is_terminal ? 'workItem.previousOwner' : 'graph.claimedBy'),
 )

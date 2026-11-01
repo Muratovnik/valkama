@@ -8,6 +8,7 @@ import { memoryProviderMessages } from '@/shared/i18n/memoryProviderMessages.ts'
 /* Русский каталог; tests/i18n.test.ts проверяет совпадение ключей. */
 import { platformIntegrationMessages } from '@/shared/i18n/platformIntegrationMessages.ts'
 import { richTextMessages } from '@/shared/i18n/richTextMessages.ts'
+import { workItemFacetMessages } from '@/shared/i18n/workItemFacetMessages.ts'
 
 export const ru = {
   history: activityMessages.ru.history,
@@ -183,8 +184,7 @@ export const ru = {
     title: 'Граф работ',
     openOnly: 'Открытые · {count}',
     all: 'Все · {count}',
-    frontier: 'Можно брать сейчас · {count}',
-    readyMark: 'можно брать',
+    frontier: 'Можно брать · {count}',
     rootMark: 'корень',
     rootLabel: 'корень цепочки',
     empty: 'В этом пространстве нет работы для проекции.',
@@ -853,7 +853,7 @@ export const ru = {
     queueMenuAll: 'Вся работа',
     queue: {
       all: 'Все',
-      ready: 'Готово к работе',
+      ready: 'Можно брать',
       assigned: 'Назначено',
       blocked: 'Заблокировано',
       review: 'Проверка',
@@ -930,6 +930,7 @@ export const ru = {
       epic: 'Эпик',
       improvement: 'Улучшение',
     },
+    ...workItemFacetMessages.ru,
     kindLabel: 'Тип',
     state: 'Состояние',
     priority: 'Приоритет',
@@ -1007,7 +1008,6 @@ export const ru = {
     create: 'Новая работа',
     newTitle: 'Новая работа',
     cancel: 'Отмена',
-    ready: 'можно брать',
     blocked: 'заблокировано',
     checklist: 'Чек-лист',
     checklistProgress: '{done}/{total} готово',

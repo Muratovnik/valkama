@@ -78,7 +78,7 @@ const steps = computed(() => ({
         class="tile-mark"
         dimension="work-item-readiness"
         state="ready"
-        :label="t('workItem.ready')"
+        :label="t('workItem.facet.ready')"
       />
       <SemanticState
         v-if="staleClaim"
