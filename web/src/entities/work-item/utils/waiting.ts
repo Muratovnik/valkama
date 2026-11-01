@@ -9,7 +9,7 @@
  */
 import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
 
-/** A link as the rule reads it: its ends and kind, and the source's state when the view carries it. */
+/** A link as the rule reads it: its ends and kind, and the source's state when the read carries it. */
 export type WaitingLink = Pick<PlanningEdge, 'from' | 'to' | 'kind'> &
   Partial<Pick<PlanningEdge, 'reference' | 'is_terminal'>>
 
