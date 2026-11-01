@@ -152,3 +152,40 @@ test('the state chip moves the item from the keyboard and says why the server re
   await page.getByRole('option', { name: 'Done' }).click()
   await expect.poll(() => moves.length).toBe(2)
 })
+
+test('a reference in a checklist step opens its card, and pressing the step text ticks it', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await installBackend(page, { stepText: 'Wait for MAIN-265, then run `npm test`' })
+  const ticks: unknown[] = []
+  await page.route('**/api/planning/work-item/checklist/tick', async (route) => {
+    ticks.push(route.request().postDataJSON())
+    await route.abort()
+  })
+  await page.goto(
+    serializePlatformRoute({
+      module_id: 'planning',
+      scope: projectScope,
+      entity: planningWorkItemEntity(workItemRef),
+    }),
+  )
+  const drawer = page.locator('.drawer')
+  const step = drawer.locator('.step-row').first()
+  await expect(step.locator('.step-text code')).toHaveText('npm test')
+  // The box is named by its text, markdown and all (a reference is a button
+  // inside the label, which the browser reads with a space after it).
+  await expect(
+    drawer.getByRole('checkbox', { name: /^Wait for MAIN-265 ?, then run npm test$/u }),
+  ).toBeVisible()
+
+  // Pressing the text is pressing the box: a 28px box beside a sentence is not
+  // the only target.
+  await step.locator('.step-text').click({ position: { x: 4, y: 8 } })
+  await expect.poll(() => ticks.length).toBe(1)
+
+  // A reference in the text is a link of its own: it opens, and ticks nothing.
+  await step.locator('.step-text').getByRole('button', { name: 'MAIN-265' }).click()
+  await expect(drawer.locator('.head-reference')).toHaveText('MAIN-265')
+  expect(ticks).toHaveLength(1)
+})

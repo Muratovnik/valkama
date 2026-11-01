@@ -56,6 +56,8 @@ type BackendOptions = {
    * a scroll that condenses the head needs.
    */
   longRead?: boolean
+  /** The text of the card's first checklist step, where a test needs markdown in it. */
+  stepText?: string
   uiPrefs?: unknown
 }
 
@@ -298,7 +300,17 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
             requestedReference === blockedWorkItem.reference
               ? blockedFullWorkItem
               : { ...workItem, revision: 3 }
-          const answered = options.longRead ? { ...card, description: LONG_READ } : card
+          const read = options.longRead ? { ...card, description: LONG_READ } : card
+          const { stepText } = options
+          const answered =
+            stepText === undefined
+              ? read
+              : {
+                  ...read,
+                  checklist: read.checklist.map((step, index) =>
+                    index === 0 ? { ...step, text: stepText } : step,
+                  ),
+                }
           platformReads.push(`${path}?${url.searchParams.toString()}`)
           return fulfill({
             interface_version: 'valkama-planning-work-item',

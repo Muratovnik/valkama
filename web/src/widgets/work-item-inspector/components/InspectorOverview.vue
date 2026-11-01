@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import InspectorDescription from '@/widgets/work-item-inspector/components/InspectorDescription.vue'
@@ -61,6 +61,9 @@ const stepCount = computed(() =>
 function stepState(done: boolean) {
   return done ? 'done' : 'open'
 }
+/** The step's box, which its text labels; one card is open at a time, its ids its own. */
+const checklistId = useId()
+const stepBox = (stepId: string) => `${checklistId}-${stepId}`
 /** A blocker as the facet registry words a wait: «Ждёт MAIN-12», then what it is. */
 const blockerTone = semanticStatePresentation({
   dimension: 'work-item-readiness',
@@ -104,7 +107,12 @@ defineExpose({ revealChecklist, startOutcomeReport })
         level="panel"
         >{{ t('workItem.summaryNext') }}</SectionHeading
       >
-      <p>{{ nextStep?.text }}</p>
+      <p>
+        <RichText
+          :source="nextStep.text"
+          inline
+        />
+      </p>
     </section>
     <!-- What the item is made of, which its host reads and owns. -->
     <slot name="composition" />
@@ -138,8 +146,13 @@ defineExpose({ revealChecklist, startOutcomeReport })
           class="step-row"
         >
           <!-- A checkbox, not a toggle button: a step is done or not done, and
-               `aria-pressed` would announce it as a control that stays in. -->
+               `aria-pressed` would announce it as a control that stays in.
+               The step's text is its label rather than part of the button, so a
+               reference in it is a link of its own; a press on the text ticks
+               the step as a press on the box does, and a press on a link in it
+               follows the link. -->
           <button
+            :id="stepBox(step.id)"
             class="step"
             type="button"
             role="checkbox"
@@ -159,8 +172,15 @@ defineExpose({ revealChecklist, startOutcomeReport })
                 :size="13"
               />
             </span>
-            <span class="step-text">{{ step.text }}</span>
           </button>
+          <label
+            class="step-text"
+            :class="{ done: step.done, writable }"
+            :for="stepBox(step.id)"
+            ><RichText
+              :source="step.text"
+              inline
+          /></label>
           <VButton
             v-if="writable"
             class="step-discuss"
