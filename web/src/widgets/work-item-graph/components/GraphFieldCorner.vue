@@ -18,6 +18,8 @@ defineProps<{
   groups: readonly ChainGroup[]
   hasEdges: boolean
   keepDone: boolean
+  /** The one state a group's members share, which the key says in the group's place. */
+  names: Readonly<Record<ChainGroup, string | null>>
   readyCount: number
 }>()
 const { t } = useI18n()
@@ -28,6 +30,7 @@ const { t } = useI18n()
   <GraphLegend
     class="graph-legend-on-field"
     :groups="groups"
+    :names="names"
     :has-edges="hasEdges"
     :keep-done="keepDone"
   />

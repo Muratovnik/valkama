@@ -115,6 +115,7 @@ function isReady(node: PlacedNode): boolean {
 
 const {
   chainLegend,
+  chainLegendNames,
   inChain,
   isChainRoot,
   isRecessed,
@@ -125,6 +126,7 @@ const {
   epicId: () => props.epicId,
   focusSet,
   items: () => props.items,
+  members: () => props.chain?.members,
   placed,
   scopeKind: () => props.scopeKind,
 })
@@ -228,6 +230,7 @@ function onFieldPointerLeave() {
       <template #legend>
         <GraphLegend
           :groups="chainLegend"
+          :names="chainLegendNames"
           :has-edges="hasEdges"
           :keep-done="keepDone"
         />
@@ -263,6 +266,7 @@ function onFieldPointerLeave() {
       <div class="graph-legend-place">
         <GraphFieldCorner
           :groups="chainLegend"
+          :names="chainLegendNames"
           :has-edges="hasEdges"
           :keep-done="keepDone"
           :ready-count="ready.length"

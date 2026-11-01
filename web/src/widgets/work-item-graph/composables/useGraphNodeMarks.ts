@@ -17,7 +17,8 @@ import type {
   neighborhood,
 } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 
-import { CHAIN_GROUPS, chainGroup } from '@/shared/api/planningChainGroups.ts'
+import { CHAIN_GROUPS, chainGroup, groupStateNames } from '@/shared/api/planningChainGroups.ts'
+import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 
 interface MarkInput {
@@ -26,6 +27,8 @@ interface MarkInput {
   /** The chain's root in chain scope; otherwise whatever epic the scope names. */
   epicId: () => string | null
   items: () => readonly WorkItemBrief[]
+  /** The chain's members by id, closed ones included and the root not among them. */
+  members: () => readonly string[] | undefined
   scopeKind: () => GraphScope['kind']
 }
 
@@ -72,8 +75,27 @@ export function useGraphNodeMarks(input: MarkInput) {
     return CHAIN_GROUPS.filter((group) => present.has(group))
   })
 
+  /**
+   * What the key calls each group, by the rule the card's chain section uses:
+   * the one state its members share, else the group's own word. Read off the
+   * chain's members, as the card counts them: the root set aside, and closed work
+   * kept, so the closed switch never renames a word of the key.
+   */
+  const chainLegendNames = computed(() => {
+    const groups = Object.fromEntries(
+      CHAIN_GROUPS.map((group) => [group, [] as WorkItemBrief[]]),
+    ) as Record<ChainGroup, WorkItemBrief[]>
+    if (inChain.value) {
+      const members = new Set(input.members())
+      for (const item of input.items())
+        if (members.has(item.work_item_id)) groups[chainGroup(item)].push(item)
+    }
+    return groupStateNames(groups)
+  })
+
   return {
     chainLegend,
+    chainLegendNames,
     inChain,
     isChainRoot,
     isRecessed,

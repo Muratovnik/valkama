@@ -29,3 +29,24 @@ export function chainGroup(item: Classifiable): ChainGroup {
   if (item.state.is_terminal || category === 'completed' || category === 'cancelled') return 'done'
   return OPEN.has(category) ? (category as ChainGroup) : 'backlog'
 }
+
+interface Named {
+  state: { name: string }
+}
+
+/**
+ * The space's own name for each group, when every member in it is in one state:
+ * a workflow that calls its active state "Development" should read that wherever
+ * a chain is drawn, as the board's column reads it. Null for a group that spans
+ * several states, or holds none, which keeps the group's own word.
+ */
+export function groupStateNames(
+  groups: Readonly<Record<ChainGroup, readonly Named[]>>,
+): Record<ChainGroup, string | null> {
+  return Object.fromEntries(
+    CHAIN_GROUPS.map((group) => {
+      const names = new Set(groups[group].map((member) => member.state.name))
+      return [group, names.size === 1 ? [...names][0] : null]
+    }),
+  ) as Record<ChainGroup, string | null>
+}

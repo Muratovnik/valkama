@@ -26,6 +26,11 @@ const props = defineProps<{
   hasEdges: boolean
   /** The chain has closed members, so «Done» may come and go: its place is kept. */
   keepDone: boolean
+  /**
+   * The one state a group's members share, said in the group's place as the
+   * card's chain section and the board's column say it; null keeps the group's word.
+   */
+  names: Readonly<Record<ChainGroup, string | null>>
 }>()
 const { t } = useI18n()
 
@@ -54,7 +59,7 @@ const entries = computed(() => {
       dimension="work-item-chain-group"
       :class="{ held: !entry.shown }"
       :state="entry.group"
-      :label="t(`workItem.chain.group.${entry.group}`)"
+      :label="names[entry.group] ?? t(`workItem.chain.group.${entry.group}`)"
     />
     <template v-if="hasEdges">
       <span class="graph-legend-item"><i class="stroke solid" />{{ t('graph.edgeBlocks') }}</span>

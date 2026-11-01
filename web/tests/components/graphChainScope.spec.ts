@@ -256,15 +256,17 @@ describe('the graph scoped to one chain', () => {
     const key = '.graph-canvas .graph-legend-state'
     const named = () => graph.findAll(`${key}:not(.held)`).map((entry) => entry.text())
     const places = () => graph.findAll(key).map((entry) => entry.text())
-    expect(named()).toEqual(['To do'])
+    // Every open member is in the one queued state, so the key says its name,
+    // as the board's column and the card's chain section do.
+    expect(named()).toEqual(['Todo'])
     // «Done» is not drawn, so it is not named; its place is kept, unseen, so
     // throwing the switch moves no word of the key.
-    expect(places()).toEqual(['Done', 'To do'])
+    expect(places()).toEqual(['Done', 'Todo'])
     expect(graph.get(`${key}.held`).text()).toBe('Done')
     await graph.get('[role="switch"]').trigger('click')
     await drawn(graph)
-    expect(named()).toEqual(['Done', 'To do'])
-    expect(places()).toEqual(['Done', 'To do'])
+    expect(named()).toEqual(['Done', 'Todo'])
+    expect(places()).toEqual(['Done', 'Todo'])
     // The key lies on the field. The bar's options hold the same key for a
     // narrow workspace only, where the field's corner gives way to the count;
     // which one shows is the container's call (the browser spec at 390).
@@ -272,6 +274,23 @@ describe('the graph scoped to one chain', () => {
     expect(graph.get('.graph-bar .graph-options .graph-legend').text()).toBe(
       graph.get('.graph-canvas .graph-legend').text(),
     )
+  })
+
+  it('keeps the group’s own word in its legend where the members span several states', async () => {
+    const ready = { ...OPEN, state_id: 'ready', key: 'ready', name: 'Ready' }
+    const mixed = items.map((entry) =>
+      entry.work_item_id === id(4) ? { ...entry, state: ready } : entry,
+    )
+    const graph = openGraph({
+      scopeKind: 'chain',
+      epicId: id(1),
+      chain,
+      edges: chainEdges,
+      items: mixed,
+    })
+    await drawn(graph)
+    const named = graph.findAll('.graph-canvas .graph-legend-state:not(.held)')
+    expect(named.map((entry) => entry.text())).toEqual(['To do'])
   })
 
   it('draws each node as its colour and reference once the field is zoomed out past reading', async () => {

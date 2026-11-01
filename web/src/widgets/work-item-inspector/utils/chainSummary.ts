@@ -7,7 +7,7 @@
  */
 
 import type { ChainMember } from '@/shared/api/planningChainApi.ts'
-import { CHAIN_GROUPS, chainGroup } from '@/shared/api/planningChainGroups.ts'
+import { CHAIN_GROUPS, chainGroup, groupStateNames } from '@/shared/api/planningChainGroups.ts'
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 
 export type ChainGroups = Record<ChainGroup, ChainMember[]>
@@ -46,16 +46,6 @@ export function groupMembers(members: readonly ChainMember[]): ChainGroups {
   return groups
 }
 
-/**
- * The space's own name for a group, when every member in it is in one state:
- * a workflow that calls its active state "Development" should read that here.
- * A group spanning several states keeps the category's name.
- */
-function sharedStateName(members: readonly ChainMember[]): string | null {
-  const names = new Set(members.map((member) => member.state.name))
-  return names.size === 1 ? [...names][0] : null
-}
-
 /** What one group is called across a chain section, and whether that word is a state. */
 export interface GroupLabel {
   /** The text is the one state every member of the group is in. */
@@ -75,9 +65,10 @@ export type GroupLabels = Record<ChainGroup, GroupLabel>
  * lane does not rename a group either.
  */
 export function groupLabels(groups: ChainGroups, word: (group: ChainGroup) => string): GroupLabels {
+  const names = groupStateNames(groups)
   return Object.fromEntries(
     CHAIN_GROUPS.map((group) => {
-      const name = sharedStateName(groups[group])
+      const name = names[group]
       return [group, { text: name ?? word(group), state: name !== null }]
     }),
   ) as GroupLabels
