@@ -81,6 +81,8 @@ describe('the chain section’s characters', () => {
         dayFormat(locale).formatRange(november(26), new Date(Date.UTC(2026, 11, 3))),
       ]),
     ]
+    // A font carries code points, not graphemes, so the text is read one code point at a time.
+    // oxlint-disable-next-line typescript/no-misused-spread -- code points are the unit here
     const outside = new Set(texts.flatMap((text) => [...text].filter((ch) => !carried(ch))))
     expect([...outside]).toEqual([])
   })

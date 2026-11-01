@@ -1,0 +1,21 @@
+// Every spec, fixture and support file under tests/, checked by `vue-tsc --build`.
+//
+// One project serves both suites. Vitest and Playwright are imported by name, so
+// neither needs global types; both read the DOM (happy-dom, and the callbacks a
+// browser spec hands to `evaluate`) and both run on Node. ES2023 is what those
+// runtimes give a test; the app keeps its own lib.
+//
+// Not composite: a composite project must list every file it compiles, and the
+// specs reach into src/ through the `@/` alias. src/ cannot import a test back,
+// because the app project is composite and would refuse a file outside its list.
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "composite": false,
+    "incremental": true,
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.tests.tsbuildinfo"
+  },
+  "include": ["tests/**/*.ts", "env.d.ts"]
+}
