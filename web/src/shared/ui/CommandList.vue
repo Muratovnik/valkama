@@ -1,11 +1,24 @@
-<script setup lang="ts">
+<script
+  setup
+  lang="ts"
+  generic="Item extends { detail: string; key: string; title: string; reference?: string }"
+>
+/**
+ * A search field over a list of results that Enter, the arrows and a pointer
+ * choose from.
+ *
+ * A result reads as one line where the list is wide — its marks, its
+ * reference, its title, and its detail at the end — and as two on a phone,
+ * the title under the rest. The host may draw marks before the reference
+ * (`lead`) and draw the detail itself (`detail`), from the result it gave.
+ */
 import { computed, onMounted, useId, useTemplateRef, watch } from 'vue'
 
 import { ListboxContent, ListboxFilter, ListboxItem, ListboxRoot } from 'reka-ui'
 
 const props = withDefaults(
   defineProps<{
-    items: readonly { detail: string; key: string; title: string; reference?: string }[]
+    items: readonly Item[]
     label: string
     loading: boolean
     placeholder: string
@@ -98,13 +111,24 @@ function submit(event: KeyboardEvent) {
         :value="item.key"
         @select.prevent="emit('select', item.key)"
       >
+        <span class="command-head">
+          <slot
+            name="lead"
+            :item="item"
+          />
+          <span
+            v-if="item.reference"
+            class="command-reference"
+            >{{ item.reference }}</span
+          >
+        </span>
         <span class="command-title">{{ item.title }}</span>
         <span class="command-detail">
-          <template v-if="item.reference">
-            <span class="command-reference">{{ item.reference }}</span>
-            <span aria-hidden="true"> · </span>
-          </template>
-          {{ item.detail }}
+          <slot
+            name="detail"
+            :item="item"
+            >{{ item.detail }}</slot
+          >
         </span>
       </ListboxItem>
     </ListboxContent>
@@ -133,21 +157,30 @@ function submit(event: KeyboardEvent) {
   }
 }
 
+/* The results share their columns, so every reference and every title starts
+   where the one above it does, whatever marks a row leads with. */
 .command-results {
   display: grid;
-  gap: var(--space-1);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-1) var(--space-3);
   max-height: min(45dvh, 440px);
   overflow-y: auto;
   overscroll-behavior: contain;
+  container-type: inline-size;
 
   &:empty {
     display: none;
   }
 }
 
+/* One line: the marks and the reference, the title, the detail at the end. */
 .command-result {
   display: grid;
-  gap: var(--space-1);
+  grid-template-areas: 'head title detail';
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  gap: var(--space-1) var(--space-3);
+  align-items: baseline;
   min-width: 0;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-control);
@@ -160,10 +193,40 @@ function submit(event: KeyboardEvent) {
   }
 }
 
+/* Too narrow for one line, the detail rides beside the reference and the
+   title takes the line under them. */
+@container (width < 560px) {
+  .command-results {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .command-result {
+    grid-template-areas:
+      'head detail'
+      'title title';
+  }
+
+  .command-detail {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+.command-head {
+  display: inline-flex;
+  grid-area: head;
+  gap: var(--space-2);
+  align-items: center;
+  align-self: center;
+  white-space: nowrap;
+}
+
 /* Two lines, then an ellipsis: a long title is a row, not a paragraph, and the
    whole of it stays the option's accessible name. */
 .command-title {
   display: -webkit-box;
+  grid-area: title;
   font: var(--font-name);
   overflow-wrap: anywhere;
   overflow: hidden;
@@ -172,6 +235,8 @@ function submit(event: KeyboardEvent) {
 }
 
 .command-detail {
+  grid-area: detail;
+  min-width: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
   overflow-wrap: anywhere;

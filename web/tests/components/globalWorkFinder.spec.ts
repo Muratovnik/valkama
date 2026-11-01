@@ -9,6 +9,7 @@ import GlobalWorkFinder from '@/features/global-find/GlobalWorkFinder.vue'
 import { searchGlobalPlanningWorkItems } from '@/shared/api/planningGlobalSearchApi.ts'
 import type { GlobalPlanningSearch } from '@/shared/api/planningGlobalSearchApi.ts'
 import { globalFinderMessages } from '@/shared/i18n/globalFinderMessages.ts'
+import { messages } from '@/shared/i18n/index.ts'
 import OverlayHost from '@/shared/ui/OverlayHost.vue'
 
 import { finderResponse, finderTarget } from '../support/globalFinder.ts'
@@ -18,7 +19,7 @@ vi.mock('@/shared/api/planningGlobalSearchApi.ts', () => ({
   searchGlobalPlanningWorkItems: vi.fn(),
 }))
 const wrappers: ReturnType<typeof mount>[] = []
-const i18n = () => createI18n({ legacy: false, locale: 'en', messages: globalFinderMessages })
+const i18n = () => createI18n({ legacy: false, locale: 'en', messages })
 
 function finder(projects: { project_id: string; title: string }[] = []) {
   const wrapper = mount(GlobalWorkFinder, {
@@ -71,6 +72,13 @@ describe('global task finder', () => {
     expect(option.text()).toContain('TASK-7')
     expect(option.text()).toContain('In progress')
     expect(option.text()).toContain('Read only')
+    // Urgent and the kind lead the reference as glyphs, their words in the name;
+    // the state is its dot; nothing in the row is a control of its own.
+    const lead = option.findAll('.command-head [data-facet]')
+    expect(lead.map((mark) => mark.attributes('data-tone'))).toEqual(['danger', 'neutral'])
+    expect(option.get('.command-head').text()).toBe('UrgentBugTASK-7')
+    expect(option.get('.command-detail .semantic-state').attributes('data-tone')).toBe('info')
+    expect(option.findAll('button')).toHaveLength(0)
     const input = wrapper.get('[role="combobox"]')
     await input.trigger('keydown', { key: 'ArrowDown' })
     expect(input.attributes('aria-activedescendant')).toBe(option.attributes('id'))
@@ -333,6 +341,16 @@ describe('global task finder', () => {
 
   // A result said the project's slug, which is what the server routes by and
   // what nobody reads. The title the app already lists is what the rail shows.
+  it('reads a result from a server that sends no marks as before', async () => {
+    const plain = finderResponse()
+    plain.items[0].item = { ...plain.items[0].item, kind: undefined, state: { name: 'Dev' } }
+    vi.mocked(searchGlobalPlanningWorkItems).mockResolvedValue(plain)
+    const wrapper = finder()
+    await search(wrapper)
+    expect(wrapper.find('[role="option"] [data-facet]').exists()).toBe(false)
+    expect(wrapper.get('.command-detail').text()).toBe('attached-project · Dev · Read only')
+  })
+
   it('names a result and a skipped source by the project title, and falls back to the id', async () => {
     const response = finderResponse()
     response.coverage.push(away('unlisted-project', 'GONE', 'store_unreadable'))
@@ -340,7 +358,7 @@ describe('global task finder', () => {
     const wrapper = finder([{ project_id: 'attached-project', title: 'Attached title' }])
     await search(wrapper)
     const option = wrapper.get('[role="option"]').text()
-    expect(option).toContain('Attached title · In progress')
+    expect(option).toContain('In progress · Attached title')
     expect(option).not.toContain('attached-project')
     expect(wrapper.get('.finder-skipped-line').text()).toBe(
       'Store could not be opened: unlisted-project · GONE',

@@ -1,6 +1,18 @@
 <script setup lang="ts">
+/**
+ * Every mapped project's work, searched from anywhere, a result opened by Enter.
+ *
+ * A result row prints the facets the registry gives the finder: the priority
+ * when it asks for attention, the kind when it is not a plain task, the
+ * reference, the title, then the state's dot and name and the project. The
+ * marks are read, not pressed: a row opens its item, and the finder filters
+ * nothing. A result from a server that does not send them reads as before.
+ */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+
+import FacetMarks from '@/entities/work-item/components/FacetMarks.vue'
+import type { FacetSubject } from '@/entities/work-item/utils/facets.ts'
 
 import { searchGlobalPlanningWorkItems } from '@/shared/api/planningGlobalSearchApi.ts'
 import type { GlobalPlanningSearch } from '@/shared/api/planningGlobalSearchApi.ts'
@@ -32,6 +44,8 @@ const failure = ref<string | null>(null)
 /** Enter was pressed before the rows arrived: open the first one when they do. */
 const pendingOpen = ref(false)
 const result = ref<GlobalPlanningSearch | null>(null)
+/** The glyphs before a result's reference, one slot each, so references align. */
+const LEAD = ['priority', 'kind'] as const
 
 /** A reason line names this many sources and counts the rest. */
 const SOURCES_SHOWN = 3
@@ -107,18 +121,33 @@ const feedback = computed(() => {
 })
 const truncated = computed(() => !loading.value && Boolean(result.value?.has_more))
 const hasQuery = computed(() => Boolean(query.value.trim()))
+type Found = GlobalPlanningSearch['items'][number]
+
+/** What the registry can print for a result: its kind, priority and state, when the server sent them. */
+function subjectOf({ item }: Found): FacetSubject | null {
+  const { kind, priority, state } = item
+  return kind && priority && state.category
+    ? { kind, priority, state: { ...state, category: state.category } }
+    : null
+}
+
 const choices = computed(() =>
-  (result.value?.items ?? []).map((entry) => ({
-    key: `${entry.target.project_id}:${entry.target.space_ref.data_scope_id}:${entry.item.work_item_id}`,
-    title: entry.item.title,
-    reference: entry.item.reference,
-    detail: [
-      projectTitle(props.projects, entry.target.project_id),
-      entry.item.state.name,
-      ...(entry.target.writable ? [] : [t('finder.readonly')]),
-    ].join(' · '),
-  })),
+  (result.value?.items ?? []).map((entry) => {
+    const subject = subjectOf(entry)
+    const project = projectTitle(props.projects, entry.target.project_id)
+    const readonly = entry.target.writable ? [] : [t('finder.readonly')]
+    return {
+      key: `${entry.target.project_id}:${entry.target.space_ref.data_scope_id}:${entry.item.work_item_id}`,
+      title: entry.item.title,
+      reference: entry.item.reference,
+      subject,
+      // With its marks the state is drawn, so the words after it are the rest.
+      place: [project, ...readonly].join(' · '),
+      detail: [project, entry.item.state.name, ...readonly].join(' · '),
+    }
+  }),
 )
+
 function selectKey(key: string) {
   const index = choices.value.findIndex((entry) => entry.key === key)
   const entry = result.value?.items[index]
@@ -200,6 +229,29 @@ function select(target: PlanningTarget) {
       @select="selectKey"
       @submit="submit"
     >
+      <template #lead="{ item }">
+        <template v-if="item.subject">
+          <FacetMarks
+            v-for="facet in LEAD"
+            :key="facet"
+            class="finder-slot"
+            surface="finder"
+            :item="item.subject"
+            :facets="[facet]"
+            lead
+          />
+        </template>
+      </template>
+      <template #detail="{ item }">
+        <template v-if="item.subject"
+          ><FacetMarks
+            surface="finder"
+            :item="item.subject"
+            :facets="['state']"
+          /><span aria-hidden="true"> · </span>{{ item.place }}</template
+        >
+        <template v-else>{{ item.detail }}</template>
+      </template>
       <template #feedback>
         <div
           class="finder-feedback"
@@ -285,6 +337,12 @@ function select(target: PlanningTarget) {
 
 .finder-retry {
   justify-self: start;
+}
+
+/* A slot holds its glyph or nothing, and is as wide either way. */
+.finder-slot {
+  justify-content: center;
+  inline-size: var(--space-4);
 }
 
 .finder-keyboard {
