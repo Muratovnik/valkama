@@ -28,6 +28,7 @@ import type { ChainMember } from '@/shared/api/planningChainApi.ts'
 import { CHAIN_GROUPS } from '@/shared/api/planningChainGroups.ts'
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 import { holderName } from '@/shared/lib/actor.ts'
+import { semanticStatePresentation } from '@/shared/lib/uiSystem.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
@@ -224,14 +225,20 @@ defineExpose({ restoreView, reveal, view })
                 :title="member.title"
                 >{{ member.title }}</span
               >
-              <SemanticState
+              <span
                 v-for="mark in readinessFor(member)"
                 :key="mark.facet"
                 class="chain-row-waiting"
-                variant="inline"
-                v-bind="mark.tone"
-                :label="markWord(mark)"
-              />
+                :data-tone="semanticStatePresentation(mark.tone).tone"
+              >
+                <VIcon
+                  v-if="mark.glyph"
+                  class="chain-row-glyph"
+                  :name="mark.glyph"
+                  :size="14"
+                />
+                {{ markWord(mark) }}
+              </span>
               <span
                 v-if="holder(group, member)"
                 class="chain-row-detail chain-row-holder"
@@ -335,11 +342,20 @@ defineExpose({ restoreView, reveal, view })
 }
 
 /* Workable is the norm of its group, so a row prints nothing for it; a member
-   that waits on an open blocker says what it waits on. */
+   that waits on an open blocker says what it waits on, its glyph in the tone
+   the registry gives the mark. */
 .chain-row-waiting {
+  display: inline-flex;
   grid-column: 3;
+  gap: var(--space-1);
+  align-items: center;
+  color: var(--color-text-muted);
   font: var(--font-detail);
   white-space: nowrap;
+
+  &[data-tone='danger'] .chain-row-glyph {
+    color: var(--color-danger);
+  }
 }
 
 .chain-row-detail {
