@@ -211,6 +211,11 @@ server lists the same 31 tools with the same schemas.
   it, and without a space each space's item 12 leads; the task finder and
   `GET /api/search` lift them across sources. A page cut short no longer drops
   the item named.
+- Losing the local service no longer pushes the board, the list or the graph
+  down with a notice above them. The rail's connection control says it
+  instead, and that Valkama reconnects by itself and shows what it last
+  received meanwhile; a card or a view read while the service is down says
+  there is no connection rather than that it could not be loaded.
 
 ### Security
 
