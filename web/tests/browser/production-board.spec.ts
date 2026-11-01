@@ -197,7 +197,7 @@ test('a drag reorders a column and moves a tile across columns inside its lane',
   await expect.poll(() => tiles(cell(epic, 'backlog'))).toEqual(['MAIN-404', 'MAIN-402'])
   // A tile never crosses into another lane: the lanes do not share a list.
   const loose = page.locator('li[data-reference="MAIN-430"]')
-  await drag(page, { from: tile('MAIN-402'), to: loose, where: 'top' })
+  await drag(page, { from: tile('MAIN-402'), to: loose, where: 'top', refused: true })
   await expect(page.locator('.work-item-board')).not.toHaveClass(/dragging/u)
   expect(writes).toHaveLength(2)
   await expect.poll(() => tiles(cell(epic, 'backlog'))).toEqual(['MAIN-404', 'MAIN-402'])

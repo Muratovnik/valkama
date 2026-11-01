@@ -136,12 +136,28 @@ export interface Drag {
   level?: boolean
   /** Where the screenshot of the held tile goes, when one is wanted. */
   midway?: TestInfo
+  /** The tile is carried where it cannot go, so nothing there takes it. */
+  refused?: boolean
+}
+
+/** Whether the held tile stands where the drag is taking it: in another stack, or beside its target in its own. */
+function heldAt(
+  target: Element,
+  { home, reference, where }: { reference: string | null; where: string; home?: string },
+) {
+  const stack = target.closest('ul')
+  const held = stack?.querySelector(`:scope > li[data-reference="${reference}"]`)
+  if (!stack || !held) return false
+  if (target === stack || stack.dataset.state !== home) return true
+  return (where === 'top' ? held.nextElementSibling : held.previousElementSibling) === target
 }
 
 /** Drag `from` by the pointer to the top or bottom edge of `to`, a tile or a stack, as a hand does. */
-export async function drag(page: Page, { from, level, midway, to, where }: Drag) {
+export async function drag(page: Page, { from, level, midway, refused, to, where }: Drag) {
   const start = await from.boundingBox()
   if (!start) throw new Error('a tile to drag is not on screen')
+  const reference = await from.getAttribute('data-reference')
+  const home = await from.evaluate((node) => node.closest('ul')?.dataset.state)
   await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2)
   await page.mouse.down()
   // Once a drag is under way every cell of the lane stands as tall as the lane,
@@ -155,6 +171,11 @@ export async function drag(page: Page, { from, level, midway, to, where }: Drag)
   if (level) await page.mouse.move(start.x + start.width / 2 + 8, y, { steps: 8 })
   await page.mouse.move(end.x + end.width / 2, y, { steps: 16 })
   await page.mouse.move(end.x + end.width / 2, y + (where === 'top' ? 1 : -1), { steps: 2 })
+  // The board reads where the pointer is on its own beat, every 50ms, rather than at
+  // each move, and a release before the reading drops the tile where the last one left
+  // it: across columns, a column it only passed. The held tile stands in its place once
+  // the place is read, which is what a hand sees before letting go.
+  if (!refused) await expect.poll(() => to.evaluate(heldAt, { home, reference, where })).toBe(true)
   if (midway) {
     // The copy under the pointer is a list item outside its list: no marker.
     const copy = page.locator('body > .sortable-fallback')
