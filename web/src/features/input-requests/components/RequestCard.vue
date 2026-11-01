@@ -2,7 +2,7 @@
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import RequestField from '@/features/input-requests/components/RequestField.vue'
+import RequestAnswerFields from '@/features/input-requests/components/RequestAnswerFields.vue'
 import { displayAnswer } from '@/features/input-requests/utils/answerDisplay.ts'
 import { requestIdentity } from '@/features/input-requests/utils/requestIdentity.ts'
 import { checkAnswers, hasDraft } from '@/features/input-requests/utils/validateAnswers.ts'
@@ -52,7 +52,7 @@ const error = ref('')
 const refused = ref<string[]>([])
 const card = ref<HTMLElement | null>(null)
 const errorLine = ref<HTMLElement | null>(null)
-const fieldControls: Record<string, { focus: () => void } | null> = {}
+const answerFields = ref<InstanceType<typeof RequestAnswerFields> | null>(null)
 const requiresRefresh = ref(false)
 const now = ref(Date.now())
 let generation = 0
@@ -147,9 +147,6 @@ function edit(field: InputRequestField, value: string | boolean | string[]) {
   emit('update:draft', { ...props.draft, [field.id]: value })
   refused.value = refused.value.filter((id) => id !== field.id)
 }
-function fieldError(field: InputRequestField) {
-  return refused.value.includes(field.id) ? t(`requests.missing.${field.type}`) : ''
-}
 async function resolve(action: 'answer' | 'decline') {
   if (busy.value || !writable.value || requiresRefresh.value) return
   const checked = action === 'answer' ? checkAnswers(request.value.fields, props.draft) : null
@@ -157,8 +154,7 @@ async function resolve(action: 'answer' | 'decline') {
   const first = refused.value[0]
   if (first !== undefined) {
     // Taken to the first field to fix, the reader hears its message with it.
-    await nextTick()
-    fieldControls[first]?.focus()
+    await answerFields.value?.focusField(first)
     return
   }
   const values = checked?.values ?? {}
@@ -304,21 +300,17 @@ defineExpose({ focus, focusOutcome })
     >
       {{ t('requests.unsupported') }}
     </p>
-    <div
+    <RequestAnswerFields
       v-if="request.status === 'pending' && supported"
-      class="request-fields"
-    >
-      <RequestField
-        v-for="field in request.fields"
-        :key="field.id"
-        :ref="(control) => (fieldControls[field.id] = control as { focus: () => void } | null)"
-        :field="field"
-        :model-value="draft[field.id]"
-        :disabled="!writable || busy"
-        :error="fieldError(field)"
-        @update:model-value="edit(field, $event)"
-      />
-    </div>
+      ref="answerFields"
+      :fields="request.fields"
+      :draft="draft"
+      :refused="refused"
+      :action="t('requests.answer')"
+      :disabled="!writable || busy"
+      @edit="edit"
+      @submit="resolve('answer')"
+    />
     <dl
       v-if="request.status === 'answered'"
       class="request-outcome"
@@ -412,11 +404,6 @@ defineExpose({ focus, focusOutcome })
 .request-state {
   margin: 0;
   font-size: var(--font-size-interface);
-}
-
-.request-fields {
-  display: grid;
-  gap: var(--space-4);
 }
 
 .request-outcome {

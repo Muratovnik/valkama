@@ -37,6 +37,8 @@ const props = withDefaults(
     label: string
     modelValue: string
     disabled?: boolean
+    /** Why the text was refused; shown under the field and named by it. */
+    error?: string
     /** A hint of the host's own in place of the default one, or false for none. */
     hint?: string | false
     maxlength?: number
@@ -46,6 +48,7 @@ const props = withDefaults(
   }>(),
   {
     disabled: false,
+    error: '',
     maxlength: undefined,
     preview: false,
     rows: 3,
@@ -222,6 +225,7 @@ defineExpose({
       :rows="rows"
       :maxlength="maxlength"
       :disabled="disabled"
+      :error="error"
       :hint="shownHint"
       :completion="completion"
       @update:model-value="edited"

@@ -8,6 +8,10 @@
  * answer be "unset" again from the list. A longer choice keeps the dropdown,
  * with the placeholder only as its empty caption.
  *
+ * A text answer is written in the markdown editor, because the answered
+ * request draws it as markdown: the card's `preview` switch shows it as it will
+ * read, and Ctrl+Enter sends the answer (`submit`).
+ *
  * A refused field says why under itself, and its control carries
  * `aria-invalid` and names that message with `aria-describedby`. The group is a
  * `radiogroup` rather than a `group` because that is a role `aria-invalid` is
@@ -18,20 +22,27 @@ import { useI18n } from 'vue-i18n'
 
 import type { InputRequestField } from '@/shared/api/inputRequestModel.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
+import MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
 import VField from '@/shared/ui/VField.vue'
-import VTextInput from '@/shared/ui/VTextInput.vue'
 
 const props = withDefaults(
   defineProps<{
+    /** What Ctrl+Enter in a text answer does, as the card's own button says it. */
+    action: string
     disabled: boolean
     field: InputRequestField
     /** Why the value was refused; empty while it stands. */
     error?: string
     modelValue?: string | boolean | string[]
+    /** A text answer shows as it will read rather than as it is written. */
+    preview?: boolean
   }>(),
-  { modelValue: undefined, error: '' },
+  { modelValue: undefined, error: '', preview: false },
 )
-const emit = defineEmits<{ 'update:modelValue': [value: string | boolean | string[]] }>()
+const emit = defineEmits<{
+  'submit': []
+  'update:modelValue': [value: string | boolean | string[]]
+}>()
 /** Up to this many options stay visible as radio buttons; more open a list. */
 const VISIBLE_CHOICES = 4
 const { t } = useI18n()
@@ -99,16 +110,19 @@ defineExpose({ focus })
 </script>
 
 <template>
-  <VTextInput
+  <MarkdownEditor
     v-if="control === 'text'"
     ref="root"
     :label="label"
+    :action="action"
+    :preview="preview"
     :rows="2"
     :maxlength="8000"
     :model-value="textValue"
     :disabled="disabled"
     :error="error"
     @update:model-value="emit('update:modelValue', $event)"
+    @submit="emit('submit')"
   />
   <VField
     v-else-if="control === 'select'"
