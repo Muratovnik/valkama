@@ -5,7 +5,9 @@
  * grew into, which no projection of the space can say without walking every
  * discovery edge itself. The server walks them once and sends the members, the
  * edges between them and the scope's history, so the card and the graph read the
- * same answer rather than each reconstructing a different chain.
+ * same answer rather than each reconstructing a different chain. An edge into a
+ * member may come from outside the chain, and every edge names its source's
+ * reference and state the way a space view's link does.
  *
  * Strict like every planning contract: an unknown field is refused, every list
  * is bounded, and the counts must agree with the members they summarise, because
@@ -23,6 +25,8 @@ import {
 import {
   blankable,
   CLAIM_STATES,
+  linkEndState,
+  linkEndStateSaid,
   readRefusal,
   STATE_CATEGORIES,
   STATE_KEY,
@@ -84,6 +88,19 @@ const memberSchema = strictObject({
   rank: positiveInt(),
 })
 
+/**
+ * A discovery link between the root and a member, or a block into either from
+ * wherever its source lives — so its `from` need not be a member — naming that
+ * source: a member waits on it whether or not it belongs to the chain.
+ */
+const edgeSchema = strictObject({
+  from: boundedText(UUID, 36),
+  to: boundedText(UUID, 36),
+  kind: enumField(['blocks', 'discovered-from'] as const),
+  reference: reference().optional(),
+  ...linkEndState,
+}).refine(...linkEndStateSaid)
+
 const chainSchema = strictObject({
   root: rootSchema,
   scope: enumField(CHAIN_SCOPES),
@@ -104,14 +121,7 @@ const chainSchema = strictObject({
     trend: enumField(['growing', 'converging', 'steady'] as const),
   }),
   members: boundedList(memberSchema, 5000),
-  edges: boundedList(
-    strictObject({
-      from: boundedText(UUID, 36),
-      to: boundedText(UUID, 36),
-      kind: enumField(['blocks', 'discovered-from'] as const),
-    }),
-    20_000,
-  ),
+  edges: boundedList(edgeSchema, 20_000),
 })
   .refine((chain) => chain.open + chain.closed === chain.total, {
     message: 'open and closed add up to the total',

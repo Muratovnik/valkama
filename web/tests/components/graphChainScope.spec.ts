@@ -91,6 +91,14 @@ const spaceEdges: PlanningEdge[] = [
   { from: id(5), to: id(6), kind: 'blocks' },
 ]
 
+/** The state a link names for its source: open in review, or finished. */
+const known = (open: boolean) => ({
+  state_name: open ? 'Review' : 'Done',
+  state_category: open ? ('review' as const) : ('completed' as const),
+  is_terminal: !open,
+  state_unavailable: null,
+})
+
 /** Vue Flow, reduced to the cards it would draw. */
 const flowStub = {
   name: 'VueFlow',
@@ -248,6 +256,33 @@ describe('the graph scoped to one chain', () => {
     expect(chip.attributes('aria-label')).toBe('Leave chain MAIN-1 and show the whole space')
     await chip.trigger('click')
     expect(graph.emitted('exit-chain')).toHaveLength(1)
+  })
+
+  it('says what a member waits on outside the chain, and draws no link to work it does not draw', async () => {
+    // 3 is blocked by 5, of this space but not of the chain; 4 by an item of
+    // another space; the root by a finished item of another space.
+    const edges: PlanningEdge[] = [
+      ...chainEdges,
+      { from: id(5), to: id(3), kind: 'blocks', reference: 'MAIN-5', ...known(true) },
+      { from: id(9001), to: id(4), kind: 'blocks', reference: 'OTH-7', ...known(true) },
+      { from: id(9002), to: id(1), kind: 'blocks', reference: 'OTH-8', ...known(false) },
+    ]
+    const graph = openGraph({ scopeKind: 'chain', epicId: id(1), chain, edges, showClosed: true })
+    expect(await drawn(graph)).toEqual(['MAIN-1', 'MAIN-2', 'MAIN-3', 'MAIN-4'])
+    const cards = graph.findAllComponents(GraphNodeCard)
+    const waiting = (reference: string) =>
+      cards.find((entry) => entry.props('node').reference === reference)?.props('waitingOn')
+    expect([waiting('MAIN-3'), waiting('MAIN-4'), waiting('MAIN-1')]).toEqual([
+      'MAIN-5',
+      'OTH-7',
+      null,
+    ])
+    // Only the link between two drawn nodes is drawn.
+    const flowEdges = graph.findComponent({ name: 'VueFlow' }).props('edges') as {
+      source: string
+      target: string
+    }[]
+    expect(flowEdges.map((edge) => [edge.source, edge.target])).toEqual([[id(4), id(2)]])
   })
 
   it('names in its legend the groups it draws, and keeps the place of the one the switch adds', async () => {

@@ -145,7 +145,7 @@ const summarySchema = strictObject({
  * the store cannot resolve it, and absent from a server that predates it.
  * Neither means that end is open.
  */
-const linkEndState = {
+export const linkEndState = {
   state_name: boundedText(TITLE, 200).nullable().optional(),
   state_category: enumField(STATE_CATEGORIES).nullable().optional(),
   is_terminal: z.boolean().nullable().optional(),
@@ -155,7 +155,7 @@ const linkEndState = {
 }
 
 /** A state is either known or said to be unavailable, never neither. */
-const linkEndStateSaid = [
+export const linkEndStateSaid = [
   (link: {
     is_terminal?: boolean | null
     state_category?: string | null
@@ -311,7 +311,7 @@ const GRAPH_EDGE_KINDS = [...LINK_KINDS, 'parent'] as const
  * A link with an end in the space, and the state of its source — the end a
  * reader asks about, since a block holds while its source is open. The source
  * may live in another space, so its reference and state come with the link
- * rather than from the space's items. A chain's edges carry neither.
+ * rather than from the space's items. A chain's edges name their source the same way.
  */
 const edgeSchema = strictObject({
   from: boundedText(UUID, 36),

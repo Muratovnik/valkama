@@ -1,8 +1,9 @@
 /**
  * What an item waits on, read from the links a view carries. The expectations
- * follow the link contract: a block holds while its source is open; the
- * view's links name the source's state wherever it lives; a chain's edges do
- * not, so their source is looked up among the items; unknown is never open.
+ * follow the link contract: a block holds while its source is open; a view's
+ * links and a chain's edges name the source's state wherever it lives; a link
+ * from a server that predates that says nothing, so its source is looked up
+ * among the items; unknown is never open.
  */
 import assert from 'node:assert/strict'
 
@@ -69,7 +70,7 @@ test('a state the store could not resolve is not taken for an open blocker', () 
   assert.equal(waitingOn(links, items).size, 0)
 })
 
-test('a chain’s edges carry no state, so their source is looked up among the items', () => {
+test('a link that names no state has its source looked up among the items', () => {
   assert.deepEqual(
     [...waitingOn([block(openHere.work_item_id)], items)],
     [[blocked.work_item_id, 'MAIN-2']],

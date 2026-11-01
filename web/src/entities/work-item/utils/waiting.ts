@@ -22,11 +22,12 @@ export type WaitingItem = Pick<WorkItemBrief, 'work_item_id' | 'reference'> & {
  * The open blocker each blocked item waits on, by the blocked item's id; the
  * first open one in link order when several are.
  *
- * A link names its source's state when the view's read model carries it, and
- * that answer stands whichever space the source lives in. A chain's edges do
- * not carry it, so there the source is looked up among `items`. A state the
- * store could not resolve, or a source neither says anything about, is not
- * taken for an open blocker: unknown is not open.
+ * A link names its source's state — a space view's links and a chain's edges
+ * alike — and that answer stands whichever space the source lives in, inside
+ * the chain or not. Only a link from a server that predates it says nothing,
+ * and then the source is looked up among `items`. A state the store could not
+ * resolve, or a source neither says anything about, is not taken for an open
+ * blocker: unknown is not open.
  */
 export function waitingOn(
   links: readonly WaitingLink[],
