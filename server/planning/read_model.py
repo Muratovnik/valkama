@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 
 from . import calls, leases, model
 
@@ -176,6 +176,11 @@ def workable(
     return not container and not claim_ref and category in ("backlog", "queued") and not blocked()
 
 
+#: A closing fact: when the item's latest transition was written, and the
+#: detail of the newest named release after it; None for an item never moved.
+_Closed = tuple[str, str | None] | None
+
+
 def closing(
     conn: sqlite3.Connection, row: sqlite3.Row, terminal: bool
 ) -> tuple[str | None, str | None]:
@@ -186,8 +191,8 @@ def closing(
     claim still on it, for an item closed before a close ended its claim, or
     else the holder the newest release since that transition names: the one
     the close itself wrote, or the separate release that used to follow it.
-    No such release means it closed unheld. One query, and only for a closed
-    item, because a board reads every item of a space through here.
+    No such release means it closed unheld. A read of many items asks
+    `closings` once instead.
     """
 
     if not terminal:
@@ -201,10 +206,52 @@ def closing(
         "  AND action = 'transitioned' ORDER BY id DESC LIMIT 1) t",
         (identity, identity),
     ).fetchone()
-    closed_at = str(found[0]) if found is not None else str(row["updated_at"])
+    return _closed(row, (str(found[0]), found[1]) if found is not None else None)
+
+
+def closings(
+    conn: sqlite3.Connection, rows: Sequence[sqlite3.Row]
+) -> dict[str, tuple[str | None, str | None]]:
+    """`closing` for every finished item among `rows`, by item id, in one statement.
+
+    A board reads every item of a space, and a space is mostly finished work:
+    asking each closed item on its own cost a statement per row. Open items are
+    left out; `present` reads their absence as null.
+    """
+
+    terminal = {
+        str(state[0])
+        for state in conn.execute("SELECT state_id FROM workflow_states WHERE is_terminal = 1")
+    }
+    finished = [row for row in rows if str(row["state_id"]) in terminal]
+    found: dict[str, _Closed] = {}
+    # The ids travel as one JSON array, so the statement is the same text for
+    # any number of them and no build's limit on parameters applies.
+    for identity, closed_at, detail in conn.execute(
+        "SELECT t.work_item_id, c.created_at, (SELECT e.detail FROM work_item_events e"
+        "  WHERE e.work_item_id = t.work_item_id AND e.action = 'released'"
+        "  AND e.id > t.id AND e.detail != '' ORDER BY e.id DESC LIMIT 1)"
+        " FROM (SELECT work_item_id, MAX(id) AS id FROM work_item_events"
+        "  WHERE action = 'transitioned'"
+        "  AND work_item_id IN (SELECT value FROM json_each(?))"
+        "  GROUP BY work_item_id) t JOIN work_item_events c ON c.id = t.id",
+        (json.dumps([str(row["work_item_id"]) for row in finished]),),
+    ):
+        found[str(identity)] = (str(closed_at), detail)
+    return {
+        str(row["work_item_id"]): _closed(row, found.get(str(row["work_item_id"])))
+        for row in finished
+    }
+
+
+def _closed(row: sqlite3.Row, found: _Closed) -> tuple[str, str | None]:
+    """A finished item's closing time and last holder, from what its history says."""
+
+    closed_at = found[0] if found is not None else str(row["updated_at"])
     if row["claim_ref"]:
         return closed_at, str(row["claim_ref"])
-    holder = leases.released_holder(str(found[1])) if found is not None and found[1] else ""
+    detail = found[1] if found is not None else None
+    holder = leases.released_holder(str(detail)) if detail else ""
     return closed_at, holder or None
 
 
@@ -215,13 +262,15 @@ def present(
     full: bool = False,
     comments: int | None = None,
     events: int | None = None,
+    closed: Mapping[str, tuple[str | None, str | None]] | None = None,
 ) -> dict:
     """One item: a brief record, or the full one with its history.
 
     `comments` and `events` cut a full record's history to that many of the
     newest entries, still oldest first, and add the totals and whether anything
     was left out. Neither given is the whole history, which is what every write
-    answers with and what a screen draws from.
+    answers with and what a screen draws from. `closed` is what `closings`
+    loaded for a read of many items; absent, the item asks `closing` itself.
     """
 
     state = state_by_id(conn, str(row["state_id"]))
@@ -258,7 +307,12 @@ def present(
     # meets it, and the state says so rather than hiding it.
     lease = leases.lease(conn, row)
     record["claim_state"] = lease.state if lease is not None else None
-    record["closed_at"], record["last_claim_ref"] = closing(conn, row, bool(state["is_terminal"]))
+    # A read of many items hands over every closing it loaded at once.
+    record["closed_at"], record["last_claim_ref"] = (
+        closing(conn, row, bool(state["is_terminal"]))
+        if closed is None
+        else closed.get(identity, (None, None))
+    )
     record["container"] = is_container(conn, identity)
     record["ready"] = workable(
         container=record["container"],

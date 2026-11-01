@@ -257,6 +257,50 @@ class LastHolderTests(CloseTestCase):
         )
 
 
+class BulkClosingTests(CloseTestCase):
+    """A read of many items loads the closing facts at once and answers as one item does."""
+
+    def histories(self) -> list[str]:
+        closed = self.held_item()
+        service.transition_work_item(self.conn, closed, "done", author="agent")
+        older = self.held_item()
+        self.close_as_an_older_build(older)
+        two_calls = self.held_item()
+        self.close_as_an_older_build(two_calls)
+        service.claim_work_item(self.conn, two_calls, author="agent", release=True)
+        unheld = service.create_work_item(self.conn, space=self.key, title="Work")["reference"]
+        service.set_summary(self.conn, unheld, SUMMARY, author="owner")
+        service.transition_work_item(self.conn, unheld, "cancelled", author="owner")
+        return [closed, older, two_calls, unheld, self.held_item()]
+
+    def facts(self, item: dict) -> tuple[object, object]:
+        return item["closed_at"], item["last_claim_ref"]
+
+    def test_the_list_says_what_each_item_says_alone(self) -> None:
+        references = self.histories()
+
+        rows = service.list_work_items(self.conn, space=self.key, limit=None)
+
+        listed = {row["reference"]: self.facts(row) for row in rows}
+        alone = {reference: self.facts(self.item(reference)) for reference in references}
+        self.assertEqual(alone, {reference: listed[reference] for reference in references})
+        self.assertEqual(
+            ["agent", "agent", "agent", None, None],
+            [listed[reference][1] for reference in references],
+        )
+
+    def test_the_list_asks_for_the_closings_once_however_many_items_closed(self) -> None:
+        for _ in range(12):
+            service.transition_work_item(self.conn, self.held_item(), "done", author="agent")
+        statements: list[str] = []
+        self.conn.set_trace_callback(statements.append)
+        self.addCleanup(self.conn.set_trace_callback, None)
+
+        service.list_work_items(self.conn, space=self.key, limit=None)
+
+        self.assertEqual(1, sum("'released'" in statement for statement in statements))
+
+
 class SurfaceTests(CloseTestCase):
     def test_the_graph_names_who_held_a_closed_item(self) -> None:
         closed = self.held_item()

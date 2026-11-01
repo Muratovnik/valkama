@@ -145,7 +145,8 @@ def list_work_items(
         [-1 if limit is None else max(1, int(limit)), model.count_field(offset, "offset")]
     )
     rows = conn.execute(query, parameters).fetchall()
-    return [read_model.present(conn, row) for row in rows]
+    closed = read_model.closings(conn, rows)
+    return [read_model.present(conn, row, closed=closed) for row in rows]
 
 
 def list_work_items_page(
