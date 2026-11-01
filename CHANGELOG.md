@@ -34,23 +34,23 @@ store is unchanged at schema 9, so the upgrade runs no migration.
 - The work item card shows the item's chain. A branch map leads it: one lane
   per origin of the work (the root's own children, each other epic, the work
   under no epic), branching off the task it was discovered from, one segment
-  per member, coloured by progress (finished green, in progress blue, review
-  amber, queued and backlog grey, blocked red). A segment names and opens its
-  task, a lane label narrows the member list to that lane, and each lane is one
-  keyboard stop. Below it, one line counts the work under the root, and the
-  next turns the last seven days into a forecast: «At this pace the open work
-  closes in about 9 days (by Nov 9)», or how much must close a day to converge.
-  A chart of scope against done work and the members by state follow, the
-  finished ones folded under «Done».
-- A chain narrows every view. «Show on graph» closes the card and opens the
-  graph on the chain's open part (the root, marked «root», the open members and
-  every member that is the parent of another), with a «Closed · N» switch for
-  the rest; an epic lane's Chain action narrows Kanban and List to it. A chip
-  leaves the chain. The chain is in the address, as the Planning route keys
-  `chain`, `chain_scope` and `closed`, so a reload or a shared link comes back
-  to it. A link to a chain this space cannot show is answered with the whole
-  space and a notice; a chain whose read fails stays in the address and offers
-  Retry, unless the item does not exist.
+  per member, coloured by progress. A segment names and opens its task, a lane
+  label narrows the member list to that lane, and each lane is one keyboard
+  stop. Below it, one line counts the work under the root, and the next turns
+  the last seven days into a forecast: «At this pace the open work closes in
+  about 9 days (by Nov 9)», or how much must close a day to converge. A chart
+  of scope against done work and the members by state follow, the finished
+  ones folded. The key, the counts and the headings name a group alike: by the
+  state all its members share, as the board's column does, or by its own word.
+- A chain narrows every view. «Show on graph» closes the card and moves focus to
+  the graph, opened on the chain's open part (the root, marked «root», the open
+  members and every member that is the parent of another), framed on any branch
+  the map chose, with a «Closed · N» switch for the rest; an epic lane's Chain
+  action narrows Kanban and List to it. Chips leave the chain and the branch; a
+  reload or a shared link keeps both, through the Planning route keys `chain`,
+  `chain_scope`, `closed` and `branch`. A link to a chain this space cannot show
+  is answered with the whole space and a notice; a chain whose read fails stays
+  in the address and offers Retry, unless the item does not exist.
 - An order of work that agents and the board share. `update_work_item`,
   `transition_work_item`, the `transition` group of `apply_work_item_changes`
   and their HTTP writes take `rank`: `first`, `last`, `before:<item>` or
@@ -61,8 +61,11 @@ store is unchanged at schema 9, so the upgrade runs no migration.
   [The order of work](docs/connection-contract.md#the-order-of-work).
 - The board can be grouped by epic (route key `group`): one lane per epic, with
   its counts, a fold and actions to open its card or narrow the board to its
-  chain, and work under no epic last. A lane with nothing open starts folded,
-  and its Done and Cancelled cells show only a count until opened.
+  chain, and work under no epic last. A lane's heading stays in view while its
+  lane is, and names its open work in columns scrolled out of sight; a cell
+  shows three tiles and «Show all · N». A lane with nothing open starts folded,
+  and its Done and Cancelled cells show only a count until opened. A reorder in
+  a lane says for a moment that the order is the whole board's, one per state.
 - `merge_work_items` (`POST /api/planning/work-item/merge`) folds 1 to 20 items
   that are one change into the one that survives, all or nothing: their steps
   (with ids, ticks and step claims), discussion, refs and links move to it, and
@@ -159,21 +162,27 @@ store is unchanged at schema 9, so the upgrade runs no migration.
   [A release switch under a running session](docs/connection-contract.md#a-release-switch-under-a-running-session).
 - The desktop app is built on Electron 45 (Chromium 156), up from Electron 43.
 - The board: finished columns stand last, so Blocked reads before Done; the
-  columns that fit share the width; a cell shows three tiles and «Show all · N»;
-  a column is one Tab stop, walked with the arrow keys; a large space regroups
-  without stalling.
+  columns that fit share the width; a large space regroups without stalling.
+  The list gives titles the spare width and, on a narrow window, folds State,
+  Priority and Assignee, then Steps and Updated, under the title, whose heading
+  keeps their sort. A board column and the list's rows are each one Tab stop,
+  walked with the arrow keys, Home and End.
 - The bar above the board, list and graph is two compact rows, its queue
   folding into a menu when the row is full. Every count above the stage counts
   the same items, the chain with its root or the whole space, and a view that
-  leaves items out of its counts says so.
+  leaves items out of its counts says so on a line of its own.
 - The whole-space graph leaves out items no drawn link touches, with an
-  «Unlinked · N» switch. The graph's key lies on the field, so no switch moves
-  the bar; zoomed out, a node is a block of its state's colour; at phone width
-  the bar is one row.
+  «Unlinked · N» switch. The key and the camera controls stand in strips above
+  and below the drawing, never over a node, and on a chain the key names groups
+  as the card does. The nodes are one Tab stop, walked by the arrow keys with
+  the camera following. Zoomed out, a node is a block of its state's colour; at
+  phone width the bar and the camera controls are one row each.
 - The card's head pins only the title and the sections and condenses while the
-  body is read, with Back beside Close; the sections wrap on a phone.
-- The questions dialog keeps focus after an answer and counts only questions
-  still waiting, as the rail does («2+» when the count is incomplete). Yes/No
+  body is read, with Back beside Close; the sections wrap on a phone. Back
+  reopens the parent card where it was read, with focus on the entry opened.
+- The questions dialog keeps focus after an answer, a refused answer or a
+  failed refresh, and counts only questions still waiting, as the rail does
+  («2+» when the count is incomplete, «?» when it could not be read). Yes/No
   and short choices are radio buttons, a refused field says why at the field,
   and projects are named by title.
 - The graph and Settings download on demand, and the libraries ship as a
@@ -188,9 +197,10 @@ store is unchanged at schema 9, so the upgrade runs no migration.
   answers that item first in `search_work_items`, `GET /api/planning/search`,
   the task finder's search and `GET /api/search`. It used to come after every
   newer item that mentioned it, and a full page could leave it out.
-- The task finder opens the first result on Enter as soon as results show,
-  names each skipped project and space with the reason above the results, and
-  stays at the top of the window instead of moving as results arrive.
+- The task finder opens the first result on Enter as soon as results show, or
+  says a typed task reference was not found rather than open a task that
+  mentions it; it names each skipped project and space with the reason above
+  the results and stays at the top of the window as results arrive.
 - A board move the server refused no longer leaves the tile where it was
   dropped, and a move sends the revision it read, so one made after an agent
   changed the item is refused with `409` instead of overwriting it. A search on
@@ -199,9 +209,13 @@ store is unchanged at schema 9, so the upgrade runs no migration.
   module's count and the questions waiting. The finder shortcut prints as
   «Ctrl K»; its «⌘» made every first screen download a fallback font.
 - An address that names no page opens the app with «Section not found» and
-  status 404. Unreadable view settings in an address are reset with a notice,
-  a missing project lists the projects that exist, and a route a module cannot
-  open says so naming the module once.
+  status 404, marks no section current and is not reopened next time; a card
+  for an item that does not exist or was deleted says only that, with no Retry.
+  Unreadable view settings in an address are reset with a notice, a missing
+  project is named in the scope selector and lists the projects that exist, and
+  a route a module cannot open says so naming the module once.
+- Escape closes the top dialog, finder or card even after focus fell out of it.
+- An unexplained error no longer ends in «technical code: » with no code.
 - The fallback font, the licence notice and the licence text are sent with
   their own content types instead of `application/octet-stream`.
 - On POSIX, stopping a child process no longer kills the caller's process
