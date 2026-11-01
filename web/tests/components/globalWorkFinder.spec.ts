@@ -211,7 +211,7 @@ describe('global task finder', () => {
   })
 
   it('opens the first result on Enter with no arrow key, and shows its reference', async () => {
-    const response = finderResponse('main-12')
+    const response = finderResponse('task-7')
     const exact = present(response.items[0], 'exact item')
     response.items = [
       exact,
@@ -222,7 +222,7 @@ describe('global task finder', () => {
     ]
     vi.mocked(searchGlobalPlanningWorkItems).mockResolvedValue(response)
     const wrapper = finder()
-    await search(wrapper, 'main-12')
+    await search(wrapper, 'task-7')
     await flushPromises()
     const first = present(wrapper.findAll('[role="option"]')[0], 'first option')
     expect(first.get('.command-reference').text()).toBe('TASK-7')
@@ -230,6 +230,45 @@ describe('global task finder', () => {
     expect(input.attributes('aria-activedescendant')).toBe(first.attributes('id'))
     await input.trigger('keydown', { key: 'Enter' })
     expect(wrapper.emitted('select')).toEqual([[finderTarget()]])
+  })
+
+  // A typo in a number found only tasks that mention it, the first one was
+  // highlighted, and Enter opened a different task with nothing said.
+  it('says a typed reference was not found and opens none of the tasks that mention it', async () => {
+    vi.mocked(searchGlobalPlanningWorkItems).mockResolvedValue(finderResponse('main-99999'))
+    const wrapper = finder()
+    await search(wrapper, 'main-99999')
+    expect(wrapper.get('[role="status"]').text()).toContain(
+      'Task MAIN-99999 not found. Below are tasks that mention it.',
+    )
+    const input = wrapper.get('[role="combobox"]')
+    const mention = present(wrapper.findAll('[role="option"]')[0], 'mention')
+    expect(input.attributes('aria-activedescendant')).toBeUndefined()
+    await input.trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('select')).toBeUndefined()
+    // The mentions stay one arrow key away.
+    await input.trigger('keydown', { key: 'ArrowDown' })
+    expect(input.attributes('aria-activedescendant')).toBe(mention.attributes('id'))
+    await input.trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('select')).toEqual([[finderTarget()]])
+  })
+
+  it('does not open a mention when Enter came before the rows for a missing reference', async () => {
+    let resolve: (value: GlobalPlanningSearch) => void = vi.fn()
+    vi.mocked(searchGlobalPlanningWorkItems).mockReturnValue(
+      new Promise((done) => {
+        resolve = done
+      }),
+    )
+    const wrapper = finder()
+    const input = wrapper.get('[role="combobox"]')
+    await input.setValue('MAIN-99999')
+    await input.trigger('keydown', { key: 'Enter' })
+    await vi.advanceTimersByTimeAsync(251)
+    resolve({ ...finderResponse('MAIN-99999'), items: [] })
+    await flushPromises()
+    expect(wrapper.emitted('select')).toBeUndefined()
+    expect(wrapper.get('[role="status"]').text()).toContain('Task MAIN-99999 not found.')
   })
 
   it('opens the first result once it arrives when Enter came first', async () => {

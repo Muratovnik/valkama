@@ -3,14 +3,22 @@ import { computed, onMounted, useId, useTemplateRef, watch } from 'vue'
 
 import { ListboxContent, ListboxFilter, ListboxItem, ListboxRoot } from 'reka-ui'
 
-const props = defineProps<{
-  items: readonly { detail: string; key: string; title: string; reference?: string }[]
-  label: string
-  loading: boolean
-  placeholder: string
-  query: string
-  resultsLabel: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    items: readonly { detail: string; key: string; title: string; reference?: string }[]
+    label: string
+    loading: boolean
+    placeholder: string
+    query: string
+    resultsLabel: string
+    /**
+     * Start a new set of rows on its first one, so Enter opens it. False when
+     * the first row is not what was asked for and Enter must not take it.
+     */
+    highlightFirst?: boolean
+  }>(),
+  { highlightFirst: true },
+)
 const emit = defineEmits<{
   'select': [key: string]
   'submit': []
@@ -35,7 +43,7 @@ onMounted(() => {
 watch(
   () => props.items.map((item) => item.key).join('\n'),
   (keys) => {
-    if (keys) root.value?.highlightFirstItem()
+    if (keys && props.highlightFirst) root.value?.highlightFirstItem()
   },
   { flush: 'post' },
 )

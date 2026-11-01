@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 
 import { searchGlobalPlanningWorkItems } from '@/shared/api/planningGlobalSearchApi.ts'
 import type { GlobalPlanningSearch } from '@/shared/api/planningGlobalSearchApi.ts'
+import { WORK_ITEM_REFERENCE } from '@/shared/api/planningModel.ts'
 import { skippedSourceReason } from '@/shared/api/planningTarget.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { typedFailure } from '@/shared/api/typedFailure.ts'
@@ -70,6 +71,22 @@ const skipped = computed(() => {
         : '',
   }))
 })
+/**
+ * A query shaped like a task reference that names no task found here.
+ *
+ * Its rows are only text that mentions it, and Enter used to open the first of
+ * them: a typo in a number silently landed on another task. The finder says the
+ * number was not found, lists the mentions under that, and leaves Enter with
+ * nothing to open until the reader picks one.
+ */
+const missingReference = computed(() => {
+  const wanted = query.value.trim().toUpperCase()
+  if (!result.value || !WORK_ITEM_REFERENCE.test(wanted)) return null
+  return result.value.items.some((entry) => entry.item.reference === wanted) ? null : wanted
+})
+/** The row Enter opens with none highlighted: the first, unless a typed number was not found. */
+const opensOnEnter = (response: GlobalPlanningSearch | null) =>
+  missingReference.value ? undefined : response?.items[0]
 /** The one sentence that says where the search stands, or nothing once rows speak for it. */
 const feedback = computed(() => {
   if (loading.value) return t(pendingOpen.value ? 'finder.opening' : 'finder.loading')
@@ -78,6 +95,12 @@ const feedback = computed(() => {
     return t(`finder.failures.${known}`)
   }
   if (!hasQuery.value) return t('finder.prompt')
+  if (missingReference.value) {
+    const reference = missingReference.value
+    return result.value?.items.length
+      ? t('finder.missingWithMatches', { reference })
+      : t('finder.missing', { reference })
+  }
   if (result.value && !result.value.items.length)
     return t(skipped.value.length ? 'finder.partialEmpty' : 'finder.empty')
   return ''
@@ -108,7 +131,7 @@ function submit() {
     pendingOpen.value = true
     return
   }
-  const first = result.value?.items[0]
+  const first = opensOnEnter(result.value)
   if (first) select(first.target)
 }
 
@@ -129,7 +152,7 @@ watch(
           if (!current) return
           result.value = response
           loading.value = false
-          const first = response.items[0]
+          const first = opensOnEnter(response)
           if (pendingOpen.value && first) select(first.target)
         })
         .catch((error: unknown) => {
@@ -173,6 +196,7 @@ function select(target: PlanningTarget) {
       :results-label="t('finder.results')"
       :items="choices"
       :loading="loading"
+      :highlight-first="!missingReference"
       @select="selectKey"
       @submit="submit"
     >
