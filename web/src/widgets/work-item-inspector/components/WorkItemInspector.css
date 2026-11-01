@@ -19,22 +19,10 @@
   margin-top: var(--space-2);
 }
 
+/* Back is the shared ghost, labelled and on the fill; it stands as tall as the
+   Close target beside it, so the two share a top and a centre in the head's row. */
 .head-back {
-  display: inline-flex;
-  gap: var(--space-1);
-  align-items: center;
   min-height: var(--size-control-target);
-  padding: 0;
-  border: 0;
-  color: var(--color-text-muted);
-  font: var(--font-detail);
-  background: none;
-  cursor: pointer;
-
-  &:hover,
-  &:focus-visible {
-    color: var(--color-text);
-  }
 }
 
 /* A reference in the title is one word: a line breaks around it, never at its hyphen. */

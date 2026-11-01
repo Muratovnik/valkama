@@ -288,19 +288,18 @@ const close = () => void leave(() => emit('close'))
       </template>
 
       <template #controls>
-        <button
+        <VButton
           v-if="canGoBack"
           class="head-back"
-          type="button"
-          :title="t('workItem.back')"
+          variant="ghost"
           @click="void leave(() => emit('back'))"
         >
           <VIcon
             name="chevron-left"
             :size="16"
           />
-          <span>{{ t('workItem.back') }}</span>
-        </button>
+          {{ t('workItem.back') }}
+        </VButton>
       </template>
 
       <template #meta>

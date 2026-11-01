@@ -236,9 +236,18 @@ for (const width of [1440, 390]) {
     const drawer = await openRelatedCard(page, width)
     const back = drawer.locator('.head-back')
     const close = drawer.locator('.drawer-frame-close')
-    expect(
-      Math.abs(centreY(await back.boundingBox()) - centreY(await close.boundingBox())),
-    ).toBeLessThan(4)
+    const backBox = await back.boundingBox()
+    const closeBox = await close.boundingBox()
+    expect(Math.abs(centreY(backBox) - centreY(closeBox))).toBeLessThan(1)
+    // As tall as Close, and with the same top: one row, not two controls nearly aligned.
+    expect(backBox?.height).toBe(closeBox?.height)
+    expect(backBox?.y).toBe(closeBox?.y)
+    // The shared labelled ghost, resting on the control fill rather than a bare button.
+    await expect(back).toHaveClass(/\bbutton\b.*\bvariant-ghost\b/u)
+    expect(await back.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe(
+      'rgba(0, 0, 0, 0)',
+    )
+    await expect(back).toHaveText('Back')
 
     // Keyboard order in the head is Back, then Close.
     await back.focus()
