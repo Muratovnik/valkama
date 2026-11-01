@@ -810,6 +810,7 @@ export const en = {
       },
       groupCount: '{group} · {count}',
       showAll: 'Show all · {count}',
+      showFewer: 'Show fewer',
       forecast: {
         window: 'Last {days}\u{A0}days',
         first: 'First day | First {count}\u{A0}days',

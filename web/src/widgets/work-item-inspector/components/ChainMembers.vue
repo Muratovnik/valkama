@@ -7,8 +7,14 @@
  * first would bury the dozen a reader can act on. A long group stops after a
  * screenful and says how many more it holds, rather than scrolling the drawer
  * past everything below it.
+ *
+ * That stop is a disclosure that goes both ways, as a board lane's is: «Show
+ * all · N» opens the rest and puts focus on the first row it revealed, so the
+ * list grows below where the reader was; «Show fewer», at the end of the list,
+ * closes it again and returns focus to itself. The toggle stays mounted through
+ * both, which is what kept focus from falling to the page when it vanished.
  */
-import { computed, reactive, ref } from 'vue'
+import { computed, nextTick, reactive, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { rowStateName } from '@/widgets/work-item-inspector/utils/chainSummary.ts'
@@ -45,8 +51,39 @@ function shown(group: ChainGroup) {
   return expanded[group] ? members : members.slice(0, LIMIT)
 }
 
-function hidden(group: ChainGroup): number {
-  return expanded[group] ? 0 : Math.max(0, props.groups[group].length - LIMIT)
+/** A group longer than one screenful has a toggle, open or closed. */
+function long(group: ChainGroup): boolean {
+  return props.groups[group].length > LIMIT
+}
+
+/** What the toggle offers: the rest of the group, or the short list back. */
+function moreLabel(group: ChainGroup): string {
+  return expanded[group]
+    ? t('workItem.chain.showFewer')
+    : t('workItem.chain.showAll', { count: props.groups[group].length })
+}
+
+const root = ref<HTMLElement | null>(null)
+const listId = useId()
+const listOf = (group: ChainGroup) => `${listId}-${group}`
+
+function within(group: ChainGroup) {
+  return root.value?.querySelector<HTMLElement>(`[data-group="${group}"]`) ?? null
+}
+
+/**
+ * Open a long group past its first rows, or close it back to them. Opening
+ * puts focus on the first row it revealed; closing puts it back on the toggle.
+ */
+async function toggle(group: ChainGroup) {
+  const opening = !expanded[group]
+  expanded[group] = opening
+  await nextTick()
+  const target = opening
+    ? within(group)?.querySelectorAll<HTMLElement>('.chain-row')[LIMIT]
+    : within(group)?.querySelector<HTMLElement>('.chain-more')
+  target?.focus({ preventScroll: true })
+  target?.scrollIntoView({ block: 'nearest' })
 }
 
 /** The heading a group stands under: its name and how many it holds. */
@@ -81,11 +118,15 @@ function stateWord(group: ChainGroup, member: ChainMember): string | null {
 </script>
 
 <template>
-  <div class="chain-members">
+  <div
+    ref="root"
+    class="chain-members"
+  >
     <section
       v-for="group in visibleGroups"
       :key="group"
       class="chain-group"
+      :data-group="group"
       :aria-label="groupLabel(group)"
     >
       <button
@@ -115,7 +156,10 @@ function stateWord(group: ChainGroup, member: ChainMember): string | null {
         {{ groupHeading(group) }}
       </h4>
       <template v-if="group !== 'done' || doneOpen">
-        <ul class="chain-rows">
+        <ul
+          :id="listOf(group)"
+          class="chain-rows"
+        >
           <li
             v-for="member in shown(group)"
             :key="member.work_item_id"
@@ -151,13 +195,15 @@ function stateWord(group: ChainGroup, member: ChainMember): string | null {
           </li>
         </ul>
         <VButton
-          v-if="hidden(group)"
+          v-if="long(group)"
           class="chain-more"
           variant="ghost"
           size="inline"
-          @click="expanded[group] = true"
+          :aria-expanded="Boolean(expanded[group])"
+          :aria-controls="listOf(group)"
+          @click="toggle(group)"
         >
-          {{ t('workItem.chain.showAll', { count: groups[group].length }) }}
+          {{ moreLabel(group) }}
         </VButton>
       </template>
     </section>

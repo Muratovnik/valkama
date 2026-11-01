@@ -215,6 +215,38 @@ describe('the chain section of a card', () => {
     expect(section(wrapper).findAll('.chain-row.is-done')).toHaveLength(8)
   })
 
+  it('opens a long group and closes it again, and focus never falls out of the list', async () => {
+    serveChain(json(chainResponse(largeEpicChain())))
+    const wrapper = await open()
+    const backlog = () => group(wrapper, 'Backlog')
+    const toggle = () => backlog()?.get('.chain-more')
+    const list = backlog()?.get('ul')
+    // Closed: it says how many the group holds, and which list it opens.
+    expect(toggle()?.text()).toBe('Show all · 107')
+    expect(toggle()?.attributes('aria-expanded')).toBe('false')
+    expect(toggle()?.attributes('aria-controls')).toBe(list?.attributes('id'))
+    expect(list?.attributes('id')).toBeTruthy()
+
+    // Opened: the rest is shown, focus is on the first row it revealed, and the
+    // toggle stays at the end of the list to close it again.
+    await toggle()?.trigger('click')
+    await flushPromises()
+    const rows = backlog()?.findAll('.chain-row') ?? []
+    expect(rows).toHaveLength(107)
+    expect(document.activeElement).toBe(rows[8].element)
+    expect(toggle()?.text()).toBe('Show fewer')
+    expect(toggle()?.attributes('aria-expanded')).toBe('true')
+    expect(backlog()?.element.lastElementChild).toBe(toggle()?.element)
+
+    // Closed again: the short list, and focus back on the toggle.
+    await toggle()?.trigger('click')
+    await flushPromises()
+    expect(backlog()?.findAll('.chain-row')).toHaveLength(8)
+    expect(document.activeElement).toBe(toggle()?.element)
+    expect(toggle()?.text()).toBe('Show all · 107')
+    expect(toggle()?.attributes('aria-expanded')).toBe('false')
+  })
+
   it('asks again with scope=epic when the scope toggle says Epic', async () => {
     const epic = { ...largeEpicChain(), scope: 'epic' as const }
     const asked = serveChain(json(chainResponse(largeEpicChain())), json(chainResponse(epic)))

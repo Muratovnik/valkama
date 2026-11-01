@@ -809,6 +809,7 @@ export const ru = {
       },
       groupCount: '{group} · {count}',
       showAll: 'Показать все · {count}',
+      showFewer: 'Свернуть',
       forecast: {
         window: 'За {days}\u{A0}дней',
         first: 'Первый день | Первые {count}\u{A0}дня | Первые {count}\u{A0}дней',
