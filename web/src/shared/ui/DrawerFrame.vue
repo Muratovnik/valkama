@@ -35,45 +35,68 @@ const head = ref<HTMLElement | null>(null)
  * boundary is the top, which is why nothing flips at it: the head condenses on
  * any scroll past 0 and is whole again only at 0.
  *
- * Condensing gives the head's room to the body's height, and the body's scroll
- * range would shrink by as much, which a browser answers by clamping the reader
- * to the new end, the top of a short card. A spacer at the head of the body
- * takes the same room back: the range is unchanged, the position stays, and the
- * text under the reader's eye moves by the distance scrolled and no more. Where
- * the reader is nearer the top than the room, the spacer shows as a band under
- * the condensed head until the reader has scrolled past it.
+ * Condensing gives the head's room to the body, and the text takes it by a glide
+ * rather than a jump: the text is drawn where it was, then moves up into place
+ * on the surface motion duration, and reduced motion makes the move at once. The
+ * reader keeps the place they read to, so the text moves by the distance scrolled
+ * and the room the head gave up. Condensed, the text is at least a window tall,
+ * so a reader who has condensed the head can still
+ * scroll, and a short card cannot be clamped back to the top.
  */
 const condensed = ref(false)
-/** The room the condensed head gave back, held at the head of the body by the spacer. */
-const room = ref(0)
+const content = ref<HTMLElement | null>(null)
 
 async function follow() {
   const scroller = body.value
-  const whole = head.value
-  if (!scroller || !whole) return
+  if (!scroller || !head.value) return
   if (condensed.value) {
-    if (scroller.scrollTop <= 0) {
-      condensed.value = false
-      room.value = 0
-    }
+    if (scroller.scrollTop <= 0) await setCondensed(false)
     return
   }
-  if (scroller.scrollTop > 0) await condense(scroller, whole, scroller.scrollTop)
+  if (scroller.scrollTop > 0) await setCondensed(true)
 }
 
 /**
- * Condenses the head with the reader at `top`. The head's room is known only
- * once it is rendered condensed, and the browser clamps a position to a shrunken
- * range as soon as layout runs, so the position is set again from `top` once the
- * spacer is in place rather than read back.
+ * The glide's length and easing are the surface motion tokens; a reader who asked
+ * for less motion gets none, which is the move at once.
  */
-async function condense(scroller: HTMLElement, whole: HTMLElement, top: number) {
-  const full = whole.offsetHeight
-  condensed.value = true
+function glideOf(node: HTMLElement) {
+  const styles = getComputedStyle(node)
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  return {
+    duration: reduced ? 0 : Number.parseFloat(styles.getPropertyValue('--duration-surface')) * 1000,
+    easing: styles.getPropertyValue('--ease-out').trim(),
+  }
+}
+
+/**
+ * Condenses or restores the head, and glides the text from where it was to where
+ * the new layout puts it: the text is drawn at its old place and animated to the
+ * new one, so the room the head gave back is taken by motion rather than a jump.
+ */
+async function setCondensed(next: boolean) {
+  const text = content.value
+  const before = text?.getBoundingClientRect().top ?? 0
+  condensed.value = next
   await nextTick()
-  room.value = full - whole.offsetHeight
-  await nextTick()
-  scroller.scrollTop = top
+  if (!text) return
+  const offset = before - text.getBoundingClientRect().top
+  const glide = glideOf(text)
+  if (offset === 0 || glide.duration === 0) return
+  text.animate([{ transform: `translateY(${offset}px)` }, { transform: 'translateY(0)' }], {
+    duration: glide.duration,
+    easing: glide.easing,
+  })
+}
+
+/**
+ * A focus move inside the body places its control by the text's settled place.
+ * A glide in flight is a transform, and a scroll into view measures the transform,
+ * so the control would be brought in at the place the text was passing and sit
+ * out of view once the glide ends. The glide ends at once instead.
+ */
+function settleGlide() {
+  for (const animation of content.value?.getAnimations() ?? []) animation.finish()
 }
 
 /**
@@ -97,27 +120,17 @@ function position(): DrawerPosition {
 }
 
 /**
- * Back to a position read earlier, head and all. A condensed position is taken
- * the way a scroll condenses the head: the head is condensed and its spacer set
- * first, and the position is set once that is in place. Whole, the head is only
- * ever at the top.
+ * Back to a position read earlier, head and all. The head is set first and the
+ * position after it, so the position is taken in the geometry it was read in. A
+ * restored position is placed at once, without the glide: the text was already
+ * where the reader left it.
  */
 async function restore(at: DrawerPosition) {
   const scroller = body.value
-  const whole = head.value
-  if (!scroller || !whole) return
-  if (!at.condensed || at.top <= 0) {
-    condensed.value = false
-    room.value = 0
-    await nextTick()
-    scroller.scrollTop = at.top
-    return
-  }
-  if (condensed.value) {
-    scroller.scrollTop = at.top
-    return
-  }
-  await condense(scroller, whole, at.top)
+  if (!scroller) return
+  condensed.value = at.condensed && at.top > 0
+  await nextTick()
+  scroller.scrollTop = at.top
 }
 
 defineExpose({ position, restore, scrollToTop })
@@ -190,13 +203,15 @@ defineExpose({ position, restore, scrollToTop })
       ref="body"
       class="drawer-frame-body"
       @scroll.passive="follow"
+      @focusin="settleGlide"
     >
       <div
-        v-if="room"
-        class="drawer-frame-room"
-        :style="{ height: `${room}px` }"
-      />
-      <slot />
+        ref="content"
+        class="drawer-frame-content"
+        :class="{ condensed }"
+      >
+        <slot />
+      </div>
     </div>
   </div>
 </template>
@@ -351,5 +366,12 @@ defineExpose({ position, restore, scrollToTop })
   padding-inline-end: calc(var(--space-6) - var(--size-scrollbar));
   overflow-y: auto;
   scrollbar-gutter: stable;
+}
+
+/* Condensed, the text is at least a window tall, so the scroll range never falls
+   below the reader's place and a short card keeps its one-row head. The blank
+   under short text is the viewport area below it; a long text is its own length. */
+.drawer-frame-content.condensed {
+  min-height: 100vh;
 }
 </style>

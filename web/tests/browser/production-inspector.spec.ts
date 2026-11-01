@@ -230,20 +230,26 @@ for (const width of [1440, 390]) {
       expect(await rightOf(tab)).toBeLessThanOrEqual(edge + 0.5)
     await expect(tabs.getByRole('button', { name: 'Системные события', exact: true })).toBeVisible()
 
-    // Read down the body: the head condenses, and the text under the reader's
-    // eye moves by the distance scrolled and not by the height the head gave up.
+    // Read down the body: the head condenses, and the text glides up into the room
+    // it gave back. The first step moves the text by the distance scrolled and by
+    // that room; each step after moves it by the distance scrolled alone.
     const whole = await heightOf(head)
     const body = drawer.locator('.drawer-frame-body')
     await body.hover()
     const probe = drawer.locator('.drawer-frame-body .overview > :first-child')
     let before = await topOf(probe)
-    for (let step = 0; step < 6; step += 1) {
+    await page.mouse.wheel(0, 80)
+    await expect(head).toHaveClass(/condensed/u)
+    const freed = whole - (await heightOf(head))
+    expect(freed).toBeGreaterThan(20)
+    await expect.poll(() => topOf(probe)).toBeCloseTo(before - 80 - freed, 0)
+    before = await topOf(probe)
+    for (let step = 0; step < 5; step += 1) {
       await page.mouse.wheel(0, 80)
       await expect.poll(() => topOf(probe)).toBeCloseTo(before - 80, 0)
       before -= 80
     }
     await expect(head).toHaveClass(/condensed/u)
-    expect(await heightOf(head)).toBeLessThan(whole - 20)
     await expect(drawer.locator('.head-reference')).toBeHidden()
 
     // Back at the top the head is whole again.
@@ -317,6 +323,10 @@ for (const width of [1440, 390]) {
     const row = group.locator('.chain-row').nth(20)
     const reference = (await row.getAttribute('data-reference')) ?? ''
     await row.evaluate((element) => element.scrollIntoView({ block: 'center' }))
+    // The head condensed under the scroll glides its text into place; the row's place is read once it has settled.
+    await expect
+      .poll(() => body.evaluate((element) => element.getAnimations({ subtree: true }).length))
+      .toBe(0)
     const before = await body.evaluate((element) => element.scrollTop)
     const rowTop = () =>
       drawer
