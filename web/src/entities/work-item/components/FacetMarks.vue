@@ -20,12 +20,12 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import LabelChip from '@/entities/work-item/components/LabelChip.vue'
-import { FACET_ORDER, surfaceMarks } from '@/entities/work-item/utils/facets.ts'
+import { FACET_ORDER, leadMarks, surfaceMarks } from '@/entities/work-item/utils/facets.ts'
 import type {
   FacetContext,
   FacetId,
-  FacetItem,
   FacetMark,
+  FacetSubject,
   FacetSurface,
 } from '@/entities/work-item/utils/facets.ts'
 import { EMPTY_WORK_FILTER, hasToken } from '@/entities/work-item/utils/workFilter.ts'
@@ -37,7 +37,7 @@ import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = withDefaults(
   defineProps<{
-    item: FacetItem
+    item: FacetSubject
     surface: FacetSurface
     context?: FacetContext
     /** The facets this run prints, in order; the registry still decides each one. */
@@ -48,6 +48,8 @@ const props = withDefaults(
     filterable?: boolean
     /** The run stays on one line: short of room, a mark shows its glyph alone. */
     fold?: boolean
+    /** The glyphs that lead the reference, rather than the facets where the surface says them. */
+    lead?: boolean
     /** False inside a container that is one Tab stop. */
     tabbable?: boolean
   }>(),
@@ -58,6 +60,7 @@ const props = withDefaults(
     filterable: false,
     fold: false,
     tabbable: true,
+    lead: false,
   },
 )
 
@@ -65,7 +68,11 @@ const emit = defineEmits<{ filter: [token: WorkFilterToken] }>()
 
 const { t } = useI18n()
 
-const marks = computed(() => surfaceMarks(props.surface, props.item, props.context, props.facets))
+const marks = computed(() =>
+  props.lead
+    ? props.facets.flatMap((facet) => leadMarks(facet, props.surface, props.item, props.context))
+    : surfaceMarks(props.surface, props.item, props.context, props.facets),
+)
 
 const word = (mark: FacetMark) =>
   'literal' in mark.text ? mark.text.literal : t(mark.text.key, mark.text.params ?? {})
@@ -89,6 +96,9 @@ const buttonType = (mark: FacetMark) => (filters(mark) ? 'button' : undefined)
 
 /** Absent rather than false: the attribute is what the style reads. */
 const activeMark = (mark: FacetMark) => active(mark) || undefined
+
+/** A `word` is the word alone: a column's heading already names the fact. */
+const wordOnly = (mark: FacetMark) => mark.form === 'word'
 
 /** The glyph is drawn and its word is only read out. */
 const glyphOnly = (mark: FacetMark) => mark.form === 'glyph' && mark.glyph !== null
@@ -157,7 +167,7 @@ function pressLabel(label: string) {
         @click="press(mark, $event)"
       >
         <VIcon
-          v-if="mark.glyph"
+          v-if="mark.glyph && !wordOnly(mark)"
           class="facet-glyph"
           :name="mark.glyph"
           :size="14"
@@ -248,6 +258,16 @@ function pressLabel(label: string) {
     max-block-size: 1lh;
     overflow: hidden;
   }
+}
+
+/* A mark lines up with the text beside it on its first item, and the first
+   item was the glyph, whose lower edge stood in for a baseline: the word sat
+   two pixels above the row. A zero-width letter ahead of the glyph, centred as
+   the word is, gives the mark a letter's baseline; it takes no room, and it
+   says nothing to a screen reader. */
+.facet-mark::before {
+  content: '\200b' / '';
+  margin-inline-end: calc(-1 * var(--space-1));
 }
 
 /* The glyph alone on screen, its word still read out. */

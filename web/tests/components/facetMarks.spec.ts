@@ -169,3 +169,22 @@ describe('LabelChip', () => {
     expect(opened).toEqual(['ui'])
   })
 })
+
+describe('FacetMarks in a column', () => {
+  it('prints a word form as the word alone, and the lead run as glyphs alone', () => {
+    const held = boardItem(1, 'dev', {
+      claim_ref: 'codex',
+      priority: 'high',
+      checklist: [{ id: 'a', text: 'one', done: true, claimed_by: '', done_by: '' }],
+    })
+    // The holder and steps columns name their facet in the heading.
+    const column = marks({ item: held, surface: 'list', facets: ['holder', 'steps'] })
+    expect(column.findAll('svg')).toHaveLength(0)
+    expect(column.text()).toContain('codex')
+    const lead = marks({ item: held, surface: 'list', facets: ['priority', 'kind'], lead: true })
+    expect(lead.findAll('[data-facet]').map((mark) => mark.attributes('data-facet'))).toEqual([
+      'priority',
+    ])
+    expect(lead.get('.facet-word').classes()).toContain('facet-word-hidden')
+  })
+})

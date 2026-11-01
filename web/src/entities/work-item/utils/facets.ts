@@ -23,27 +23,24 @@ import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { holderName } from '@/shared/lib/actor.ts'
 import type { IconName, SemanticStatePair } from '@/shared/lib/uiSystem.ts'
 
-/**
- * What the registry reads of an item: the fields every facet comes from. A
- * board brief and a card's full record both carry them, and the registry does
- * not ask for the rest.
- */
-export type FacetItem = Pick<
-  WorkItemBrief,
-  | 'checklist'
-  | 'claim_ref'
-  | 'claim_state'
-  | 'kind'
-  | 'labels'
-  | 'parent_id'
-  | 'priority'
-  | 'ready'
-  | 'state'
->
-
 export type FacetSurface = 'tile' | 'list' | 'graph' | 'card' | 'finder'
 export type FacetId =
   'kind' | 'priority' | 'state' | 'readiness' | 'labels' | 'holder' | 'parent' | 'steps'
+
+/**
+ * What a surface knows of an item. A board, a list and a graph hold the whole
+ * brief; a search result holds its kind, its priority and its state, and
+ * nothing else. A fact the subject does not carry prints nothing rather than a
+ * default it would be mistaken for.
+ */
+export type FacetSubject = Pick<WorkItemBrief, 'kind' | 'priority'> & {
+  state: Pick<WorkItemBrief['state'], 'name' | 'category'> & { is_terminal?: boolean }
+} & Partial<
+    Pick<
+      WorkItemBrief,
+      'checklist' | 'claim_ref' | 'claim_state' | 'labels' | 'parent_id' | 'ready'
+    >
+  >
 
 /** What a surface knows about an item that the item itself does not carry. */
 export interface FacetContext {
@@ -76,6 +73,13 @@ interface FacetRule {
   always?: boolean
   /** Not on the grouped board, whose lane says it. */
   flatOnly?: boolean
+  /**
+   * These values also lead the reference as a glyph, apart from where the
+   * surface prints the facet itself: the list says the priority in its own
+   * column and marks it again before the reference, where the eye runs down
+   * the list.
+   */
+  lead?: readonly string[]
   /** Chips before the rest fold into «+N». */
   limit?: number
   /** Below this container width the facet does not print. */
@@ -105,10 +109,10 @@ const FACET_RULES: Readonly<Record<FacetId, Partial<Record<FacetSurface, FacetRu
   },
   // Medium is the default and is not news on a tile, a node or a finder row.
   // The list keeps it as a quiet word, because a blank cell in a sortable
-  // column reads as unknown.
+  // column reads as unknown, and leads the reference with the others' glyphs.
   priority: {
     tile: { form: 'glyph', only: ['low', 'high', 'urgent'] },
-    list: { form: 'glyph-word', always: true },
+    list: { form: 'glyph-word', always: true, lead: ['low', 'high', 'urgent'] },
     graph: { form: 'glyph', only: ['high', 'urgent'] },
     card: { form: 'glyph-word', always: true },
     finder: { form: 'glyph', only: ['high', 'urgent'] },
@@ -206,30 +210,31 @@ const PRIORITY_GLYPHS: Record<WorkItemBrief['priority'], IconName | null> = {
 }
 
 /** Readiness as a facet value: startable, waiting on an open blocker, or neither. */
-export function readinessOf(item: FacetItem, context: FacetContext = {}): string | null {
+export function readinessOf(item: FacetSubject, context: FacetContext = {}): string | null {
   if (item.state.is_terminal) return null
   if (context.waitingOn) return 'waiting'
   return item.ready ? 'ready' : null
 }
 
-function steps(item: FacetItem) {
+function steps(item: FacetSubject) {
+  const checklist = item.checklist ?? []
   return {
-    done: item.checklist.filter((step) => step.done).length,
-    total: item.checklist.length,
+    done: checklist.filter((step) => step.done).length,
+    total: checklist.length,
   }
 }
 
 /** The value one facet has on one item, or null when the item has none. */
-function valueOf(facet: FacetId, item: FacetItem, context: FacetContext): string | null {
+function valueOf(facet: FacetId, item: FacetSubject, context: FacetContext): string | null {
   if (facet === 'kind') return item.kind
   if (facet === 'priority') return item.priority
   if (facet === 'state') return item.state.category
   if (facet === 'readiness') return readinessOf(item, context)
-  if (facet === 'labels') return item.labels.length ? item.labels.join(',') : null
+  if (facet === 'labels') return item.labels?.length ? item.labels.join(',') : null
   if (facet === 'holder') return item.claim_ref || null
   if (facet === 'parent')
     return item.parent_id && context.parentReference ? context.parentReference : null
-  return item.checklist.length ? 'steps' : null
+  return item.checklist?.length ? 'steps' : null
 }
 
 /**
@@ -241,7 +246,7 @@ function valueOf(facet: FacetId, item: FacetItem, context: FacetContext): string
 export function printsFacet(
   facet: FacetId,
   surface: FacetSurface,
-  item: FacetItem,
+  item: FacetSubject,
   context: FacetContext = {},
 ): boolean {
   const rule = FACET_RULES[facet][surface]
@@ -259,7 +264,7 @@ export function printsFacet(
   return true
 }
 
-function kindMark(item: FacetItem, form: FacetForm): FacetMark {
+function kindMark(item: FacetSubject, form: FacetForm): FacetMark {
   return {
     facet: 'kind',
     value: item.kind,
@@ -272,7 +277,7 @@ function kindMark(item: FacetItem, form: FacetForm): FacetMark {
   }
 }
 
-function priorityMark(item: FacetItem, form: FacetForm): FacetMark {
+function priorityMark(item: FacetSubject, form: FacetForm): FacetMark {
   return {
     facet: 'priority',
     value: item.priority,
@@ -285,7 +290,7 @@ function priorityMark(item: FacetItem, form: FacetForm): FacetMark {
   }
 }
 
-function stateMark(item: FacetItem, form: FacetForm): FacetMark {
+function stateMark(item: FacetSubject, form: FacetForm): FacetMark {
   return {
     facet: 'state',
     value: item.state.category,
@@ -316,17 +321,23 @@ function readinessMark(value: string, form: FacetForm, context: FacetContext): F
   }
 }
 
-/** Nobody, in a column, is a dash; in a sentence of facts it is said. */
-function holderText(item: FacetItem, surface: FacetSurface): FacetText {
+/**
+ * Nobody, in a column, is a dash; in a sentence of facts it is said. Whoever
+ * held finished work held it before: said as a holder, the name read as
+ * somebody still on it.
+ */
+function holderText(item: FacetSubject, surface: FacetSurface): FacetText {
+  if (item.claim_ref && item.state.is_terminal)
+    return { key: 'workItem.previousHolder', params: { holder: holderName(item.claim_ref) } }
   if (item.claim_ref) return { literal: holderName(item.claim_ref) }
   return surface === 'list' ? { literal: '—' } : { key: 'workItem.noClaim' }
 }
 
-function holderMark(item: FacetItem, form: FacetForm, surface: FacetSurface): FacetMark {
+function holderMark(item: FacetSubject, form: FacetForm, surface: FacetSurface): FacetMark {
   const stale = item.claim_state === 'stale' && !item.state.is_terminal
   return {
     facet: 'holder',
-    value: item.claim_ref,
+    value: item.claim_ref ?? '',
     form,
     glyph: item.claim_ref ? 'holder' : null,
     text: holderText(item, surface),
@@ -341,9 +352,10 @@ function holderMark(item: FacetItem, form: FacetForm, surface: FacetSurface): Fa
  * A chip per label the surface has room for, then one quiet «+N» for the rest
  * (form `word`, no filter), which the surface's own open target explains.
  */
-function labelMarks(item: FacetItem, rule: FacetRule): FacetMark[] {
-  const shown = rule.limit === undefined ? item.labels : item.labels.slice(0, rule.limit)
-  const rest = item.labels.length - shown.length
+function labelMarks(item: FacetSubject, rule: FacetRule): FacetMark[] {
+  const labels = item.labels ?? []
+  const shown = rule.limit === undefined ? labels : labels.slice(0, rule.limit)
+  const rest = labels.length - shown.length
   const more: FacetMark[] = rest
     ? [
         {
@@ -380,7 +392,7 @@ function labelMarks(item: FacetItem, rule: FacetRule): FacetMark[] {
 export function facetMarks(
   facet: FacetId,
   surface: FacetSurface,
-  item: FacetItem,
+  item: FacetSubject,
   context: FacetContext = {},
 ): FacetMark[] {
   const rule = FACET_RULES[facet][surface]
@@ -423,10 +435,30 @@ export function facetMarks(
   ]
 }
 
+/**
+ * The glyph a facet leads the reference with on a surface: its own mark where
+ * the surface prints the facet as a glyph, else the glyph its `lead` rule names.
+ * A value with no glyph leads with nothing.
+ */
+export function leadMarks(
+  facet: FacetId,
+  surface: FacetSurface,
+  item: FacetSubject,
+  context: FacetContext = {},
+): FacetMark[] {
+  const rule = FACET_RULES[facet][surface]
+  if (!rule) return []
+  const marks = facetMarks(facet, surface, item, context)
+  if (!rule.lead) return rule.form === 'glyph' ? marks : []
+  return marks
+    .filter((mark) => rule.lead?.includes(mark.value))
+    .map((mark) => ({ ...mark, form: 'glyph' }))
+}
+
 /** Every mark a surface prints for an item, facet by facet in reading order. */
 export function surfaceMarks(
   surface: FacetSurface,
-  item: FacetItem,
+  item: FacetSubject,
   context: FacetContext = {},
   facets: readonly FacetId[] = FACET_ORDER,
 ): FacetMark[] {

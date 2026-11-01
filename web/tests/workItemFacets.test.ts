@@ -9,6 +9,7 @@ import { describe, test } from 'vitest'
 
 import {
   facetMarks,
+  leadMarks,
   printsFacet,
   readinessOf,
   surfaceMarks,
@@ -254,6 +255,18 @@ describe('holder', () => {
     assert.deepEqual(only(facetMarks('holder', 'card', item())).text, { key: 'workItem.noClaim' })
   })
 
+  test('whoever held finished work is said to have held it before, not to hold it', () => {
+    const done = { ...held, state: boardItem(1, 'done').state }
+    for (const surface of ['list', 'card'] as const)
+      assert.deepEqual(only(facetMarks('holder', surface, done)).text, {
+        key: 'workItem.previousHolder',
+        params: { holder: 'claude · 5937aa01-1234' },
+      })
+    assert.deepEqual(only(facetMarks('holder', 'list', held)).text, {
+      literal: 'claude · 5937aa01-1234',
+    })
+  })
+
   test('a holder is its short name, and only a stale claim has a tone', () => {
     const mark = only(facetMarks('holder', 'tile', held))
     assert.deepEqual(mark.text, { literal: 'claude · 5937aa01-1234' })
@@ -290,6 +303,70 @@ describe('parent and steps', () => {
     assert.deepEqual(printedOn('steps', item()), ['list'])
     assert.deepEqual(only(facetMarks('steps', 'list', item())).text, { literal: '—' })
   })
+})
+
+const lead = (surface: FacetSurface, subject: WorkItemBrief) =>
+  (['priority', 'kind'] as const).flatMap((facet) => leadMarks(facet, surface, subject))
+
+describe('the glyphs that lead a reference', () => {
+  test('the list leads with every priority but the default, as well as saying it in its column', () => {
+    for (const priority of PRIORITIES) {
+      const marks = lead('list', item({ priority }))
+      assert.deepEqual(
+        marks.map((mark) => [mark.form, mark.glyph]),
+        priority === 'medium' ? [] : [['glyph', `priority-${priority}`]],
+        priority,
+      )
+      // The column still says it, the default included.
+      assert.equal(printsFacet('priority', 'list', item({ priority })), true)
+      assert.equal(only(facetMarks('priority', 'list', item({ priority }))).form, 'glyph-word')
+    }
+  })
+
+  test('the list leads with the kind of anything but a plain task, and filters by both', () => {
+    const marks = lead('list', item({ kind: 'improvement', priority: 'urgent' }))
+    assert.deepEqual(
+      marks.map((mark) => [mark.facet, mark.glyph, mark.filter]),
+      [
+        ['priority', 'priority-urgent', { facet: 'priority', value: 'urgent' }],
+        ['kind', 'kind-improvement', { facet: 'kind', value: 'improvement' }],
+      ],
+    )
+    assert.deepEqual(lead('list', item({ kind: 'task' })), [])
+  })
+
+  test('a surface that prints a facet as a glyph leads with exactly that glyph; the card with none', () => {
+    const subject = item({ kind: 'bug', priority: 'high' })
+    for (const surface of ['tile', 'graph', 'finder'] as const)
+      assert.deepEqual(
+        lead(surface, subject),
+        surfaceMarks(surface, subject, {}, ['priority', 'kind']),
+        surface,
+      )
+    assert.deepEqual(lead('card', subject), [])
+  })
+})
+
+test('a subject that knows only its kind, priority and state prints those and nothing it lacks', () => {
+  // A search result: no labels, steps, holder or readiness to read.
+  const found = {
+    kind: 'bug' as const,
+    priority: 'urgent' as const,
+    state: { name: 'Review', category: 'review' as const },
+  }
+  assert.deepEqual(
+    surfaceMarks('finder', found).map((mark) => [mark.facet, mark.value]),
+    [
+      ['priority', 'urgent'],
+      ['kind', 'bug'],
+      ['state', 'review'],
+    ],
+  )
+  // Nothing it does not carry is guessed: no labels, no steps, no readiness.
+  assert.deepEqual(
+    surfaceMarks('tile', found).map((mark) => mark.facet),
+    ['priority', 'kind'],
+  )
 })
 
 test('a surface reads its marks out in one order, the lead marks first', () => {
