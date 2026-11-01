@@ -771,9 +771,9 @@ title's one line and the tabs on one row that scrolls, the one shown and the one
 focused brought into it; the action ends the title's row on a wide drawer and
 the tabs' row on a narrow one, where Back and Close hold the title's. The facts
 and labels go with the body, and so does a reason standing where the action
-would; a takeover question takes the row under the title while it is asked. The text
-keeps the place it had, so the first scroll leaves a band of blank body under the
-condensed head until the reader has scrolled past the room the head gave up.
+would; a takeover question takes the row under the title while it is asked. The
+text glides up into the room the head gives back on the surface motion duration,
+and reduced motion makes the move at once.
 Pinned no taller than the title and tabs of 2.1.0, it says which item this is
 and keeps the action and every section in reach: keeping the facts, a
 full-width action and two rows of tabs, it held 279px of a phone. The body
