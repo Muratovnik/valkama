@@ -9,11 +9,8 @@
  * the model: `/api/planning` returns the workflow, the items and the links, and
  * each view projects what it needs from that one answer.
  *
- * Which item is open is in the route, not here. That is what makes an item
- * linkable: a reload comes back to it, Back closes it, and a bookmark is a work
- * item rather than a space. It reads the item out of the same `work-item` entity
- * the Kernel encodes — `{space_ref, reference}` — so there is one spelling of the
- * identity and the route carries it.
+ * Which item is open is in the route, not here (`usePlanningRouteSelection`),
+ * which is what makes an item linkable.
  *
  * The local trail holds navigation depth; the route holds the item's identity.
  * Each step of the trail also holds where its card was left, which the card
@@ -29,6 +26,7 @@ import { usePlanningChainView } from '@/pages/planning/composables/usePlanningCh
 import { usePlanningMoves } from '@/pages/planning/composables/usePlanningMoves.ts'
 import { usePlanningPortfolio } from '@/pages/planning/composables/usePlanningPortfolio.ts'
 import { usePlanningReferenceLinks } from '@/pages/planning/composables/usePlanningReferenceLinks.ts'
+import { usePlanningRouteSelection } from '@/pages/planning/composables/usePlanningRouteSelection.ts'
 import { usePlanningSubscription } from '@/pages/planning/composables/usePlanningSubscription.ts'
 import PlanningPortfolioFrame from '@/pages/planning/PlanningPortfolioFrame.vue'
 import PlanningWorkspace from '@/pages/planning/PlanningWorkspace.vue'
@@ -45,12 +43,7 @@ import type { PlanningConnectionState } from '@/shared/api/planningApi.ts'
 import type { PlanningReadModel } from '@/shared/api/planningModel.ts'
 import type { PlatformContextReady } from '@/shared/api/platformApiTypes.ts'
 import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
-import {
-  planningSpaceEntity,
-  planningWorkItemEntity,
-  resolvePlanningRouteSelection,
-} from '@/shared/api/platformPlanningRefs.ts'
-import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
+import { planningSpaceEntity, planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import type { OperatingScope, PlatformRoute } from '@/shared/api/platformRoute.ts'
 import { uiError, uiLoading, uiUnavailable } from '@/shared/api/platformUiState.ts'
 import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
@@ -62,7 +55,6 @@ import {
   resolveResource,
 } from '@/shared/api/resourceState.ts'
 import { failureMessage, typedFailure } from '@/shared/api/typedFailure.ts'
-import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 
 const props = defineProps<{
@@ -84,42 +76,21 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const mappedResourceRefs = computed<EntityRef[]>(() => {
-  const scope = props.scope
-  if (scope.kind !== 'project') return []
-  const project = props.context?.projects.find(
-    (item) => item.project_id === scope.project_ref.project_id,
-  )
-  return (project?.resources ?? [])
-    .filter((resource) => resource.state === 'mapped')
-    .map((resource) => resource.resource_ref)
+const {
+  open,
+  openIdentity,
+  projectId,
+  selection: routeSelection,
+  space: boundSpace,
+  spaceResourceRef: boundSpaceResourceRef,
+} = usePlanningRouteSelection({
+  context: () => props.context,
+  route: () => props.route,
+  scope: () => props.scope,
 })
-
-const routeSelection = computed(() =>
-  resolvePlanningRouteSelection(
-    props.route.entity,
-    mappedResourceRefs.value,
-    props.scope.kind === 'project',
-  ),
-)
-
-/** The Kernel resource this project binds, which is what write ownership keys on. */
-const boundSpace = computed<PlanningSpaceRef | undefined>(() =>
-  routeSelection.value.status === 'ready' ? routeSelection.value.space_ref : undefined,
-)
-
-/** The canonical Kernel identity whose project binding owns local source access. */
-const boundSpaceResourceRef = computed<PlanningSpaceEntityRef | undefined>(() => {
-  const space = boundSpace.value
-  return space === undefined ? undefined : (planningSpaceEntity(space) as PlanningSpaceEntityRef)
-})
-
-const projectId = computed(() =>
-  props.scope.kind === 'project' ? props.scope.project_ref.project_id : undefined,
-)
 
 /**
- * The same answer as a string, for a child that takes one.
+ * The project as a string, for a child that takes one.
  *
  * The inspector's Memory section searches a project's own knowledge, and a
  * global scope has no project to search: an empty string is what it renders as
@@ -170,25 +141,6 @@ const planning = ref<PlatformUiState>(uiLoading())
 const planningRetryable = computed(() => routeSelection.value.status !== 'unavailable')
 const version = ref(0)
 
-/** Which item the route names, and how deep the operator went to get there. */
-const open = computed(() =>
-  routeSelection.value.status === 'ready'
-    ? (routeSelection.value.work_item_ref?.reference ?? null)
-    : null,
-)
-
-/**
- * A reference is unique only inside its planning space. Key the inspector by
- * the complete route identity so an equally named item in an attached store
- * cannot inherit the first item's selected panel, draft, error, or result.
- */
-const openIdentity = computed(() => {
-  const space = boundSpace.value
-  const reference = open.value
-  return space === undefined || reference === null
-    ? ''
-    : `${projectId.value}:${space.data_scope_id}:${space.space_key}:${reference}`
-})
 const trail = ref<{ left: InspectorReturn | null; reference: string }[]>([])
 /** Where the card Back is reopening was left; read by that card alone. */
 const returning = ref<InspectorReturn | null>(null)
