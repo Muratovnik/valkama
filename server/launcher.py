@@ -15,7 +15,6 @@ and how a relocated checkout is picked up.
 
 from __future__ import annotations
 
-import base64
 import contextlib
 import hashlib
 import importlib
@@ -33,7 +32,7 @@ import tempfile
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
-from . import processes
+from . import listener_owners, processes
 
 SCHEMA_VERSION = 1
 MANIFEST_NAME = "valkama-launcher.json"
@@ -47,37 +46,6 @@ LAUNCHER_ENV = "VALKAMA_LAUNCHER_DIR"
 _PROCESS_TERMINATE = 0x0001
 _SYNCHRONIZE = 0x00100000
 _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-
-_WINDOWS_LISTENER_QUERY = r"""& {
-param([int]$Port)
-$ErrorActionPreference = "Stop"
-# A listener is a socket on the port with no remote end. Some Windows builds report
-# a listening socket's State as Closed or as nothing at all, so State is not read.
-$connections = @(
-    Get-NetTCPConnection -ErrorAction Stop |
-        Where-Object { $_.LocalPort -eq $Port -and $_.RemotePort -eq 0 }
-)
-$owners = @()
-foreach ($processId in @($connections | Select-Object -ExpandProperty OwningProcess -Unique)) {
-    $process = Get-CimInstance Win32_Process -Filter "ProcessId = $processId" -ErrorAction SilentlyContinue
-    $commandLine = if ($null -eq $process) { "" } else { [string]$process.CommandLine }
-    $executablePath = if ($null -eq $process) { "" } else { [string]$process.ExecutablePath }
-    $identityToken = if ($null -eq $process) {
-        ""
-    } else {
-        $process.CreationDate.ToUniversalTime().ToString("o", [Globalization.CultureInfo]::InvariantCulture)
-    }
-    $encodedCommand = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($commandLine))
-    $encodedExecutable = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($executablePath))
-    $owners += [pscustomobject]@{
-        pid = [int]$processId
-        command_line_utf8 = $encodedCommand
-        executable_path_utf8 = $encodedExecutable
-        identity_token = $identityToken
-    }
-}
-ConvertTo-Json -InputObject @($owners) -Compress
-}"""
 
 
 class LauncherError(RuntimeError):
@@ -451,26 +419,14 @@ def _managed_status(
     return current
 
 
-def _windows_listener_processes(port: int, *, runner=None) -> list[dict[str, object]]:
-    run = runner or processes.run_text
-    result = run(
-        [
-            "powershell.exe",
-            "-NoLogo",
-            "-NoProfile",
-            "-NonInteractive",
-            "-Command",
-            _WINDOWS_LISTENER_QUERY,
-            str(port),
-        ]
-    )
-    if result.returncode != 0:
-        raise LauncherError(f"could not inspect the process listening on port {port}")
+def _windows_listener_processes(port: int, *, query=None) -> list[dict[str, object]]:
+    """The processes listening on `port`, as `listener_owners` reads them from Windows."""
+
+    read = query or listener_owners.listener_processes
     try:
-        document = json.loads(result.stdout or "[]")
-    except json.JSONDecodeError as error:
-        raise LauncherError("Windows returned malformed listener ownership data") from error
-    rows = document if isinstance(document, list) else [document]
+        rows = read(port)
+    except listener_owners.ListenerQueryError as error:
+        raise LauncherError(f"could not inspect the process listening on port {port}") from error
     owners: list[dict[str, object]] = []
     for row in rows:
         pid = row.get("pid") if isinstance(row, dict) else None
@@ -481,24 +437,15 @@ def _windows_listener_processes(port: int, *, runner=None) -> list[dict[str, obj
             or pid <= 0
         ):
             raise LauncherError("Windows returned malformed listener ownership data")
-        encoded_command = row.get("command_line_utf8")
-        encoded_executable = row.get("executable_path_utf8")
+        command_line = row.get("command_line")
+        executable_path = row.get("executable_path")
         identity_token = row.get("identity_token")
         if (
-            not isinstance(encoded_command, str)
-            or not isinstance(encoded_executable, str)
+            not isinstance(command_line, str)
+            or not isinstance(executable_path, str)
             or not isinstance(identity_token, str)
         ):
             raise LauncherError("Windows returned malformed listener ownership data")
-        try:
-            command_line = base64.b64decode(encoded_command, validate=True).decode(
-                "utf-8", errors="strict"
-            )
-            executable_path = base64.b64decode(encoded_executable, validate=True).decode(
-                "utf-8", errors="strict"
-            )
-        except (UnicodeDecodeError, ValueError) as error:
-            raise LauncherError("Windows returned malformed listener ownership data") from error
         owners.append(
             {
                 "pid": pid,

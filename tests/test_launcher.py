@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import contextlib
 import io
 import json
@@ -14,7 +13,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from server import cli, launcher, static_assets
+from server import cli, launcher, listener_owners, static_assets
 
 ENTRY = "import json, sys\nprint(json.dumps(sys.argv[1:]))\n"
 
@@ -433,64 +432,46 @@ class LauncherTests(unittest.TestCase):
             )
         )
 
-    def test_windows_listener_inventory_uses_ascii_json_around_utf8_command_lines(self) -> None:
-        command_line = 'python "C:\\Путь\\valkama-launcher.py" serve --port 8642'
-        executable_path = "C:\\Путь\\python.exe"
-        encoded_command = base64.b64encode(command_line.encode("utf-8")).decode("ascii")
-        encoded_executable = base64.b64encode(executable_path.encode("utf-8")).decode("ascii")
+    def test_windows_listener_inventory_passes_each_owner_through_unchanged(self) -> None:
+        owner = {
+            "pid": 2468,
+            "command_line": 'python "C:\\Путь\\valkama-launcher.py" serve --port 8642',
+            "executable_path": "C:\\Путь\\python.exe",
+            "identity_token": "creation-a",
+        }
+        # An unreadable owner arrives with blank fields; the inventory keeps the
+        # blanks for the classifier, which treats them as unverifiable.
+        unreadable = {"pid": 4, "command_line": "", "executable_path": "", "identity_token": ""}
 
-        def runner(argv):
-            self.assertEqual("powershell.exe", argv[0])
-            self.assertEqual("8642", argv[-1])
-            return mock.Mock(
-                returncode=0,
-                stdout=json.dumps(
-                    [
-                        {
-                            "pid": 2468,
-                            "command_line_utf8": encoded_command,
-                            "executable_path_utf8": encoded_executable,
-                            "identity_token": "creation-a",
-                        }
-                    ]
-                ),
-                stderr="",
-            )
+        def query(port):
+            self.assertEqual(8642, port)
+            return [owner, unreadable]
 
         self.assertEqual(
-            [
-                {
-                    "pid": 2468,
-                    "command_line": command_line,
-                    "executable_path": executable_path,
-                    "identity_token": "creation-a",
-                }
-            ],
-            launcher._windows_listener_processes(8642, runner=runner),
+            [owner, unreadable],
+            launcher._windows_listener_processes(8642, query=query),
         )
 
     def test_windows_listener_inventory_refuses_failed_or_malformed_queries(self) -> None:
-        cases = (
-            (mock.Mock(returncode=1, stdout="", stderr="failure"), "could not inspect"),
-            (mock.Mock(returncode=0, stdout="not json", stderr=""), "malformed"),
-            (mock.Mock(returncode=0, stdout='[{"pid": 1}]', stderr=""), "malformed"),
-            (
-                mock.Mock(
-                    returncode=0,
-                    stdout='[{"pid": true, "command_line_utf8": ""}]',
-                    stderr="",
-                ),
-                "malformed",
-            ),
-        )
-        for result, message in cases:
-            with self.subTest(message=message):
+        def failing(_port):
+            raise listener_owners.ListenerQueryError("GetExtendedTcpTable failed with error 5")
 
-                def runner(_argv, reading=result):
+        with self.assertRaisesRegex(launcher.LauncherError, "could not inspect"):
+            launcher._windows_listener_processes(8642, query=failing)
+        for rows in (
+            [{"pid": 1}],
+            [{"pid": True, "command_line": "", "executable_path": "", "identity_token": ""}],
+            [{"pid": 0, "command_line": "", "executable_path": "", "identity_token": ""}],
+            [{"pid": 7, "command_line": None, "executable_path": "", "identity_token": ""}],
+            ["not a row"],
+        ):
+            with self.subTest(rows=rows):
+
+                def query(_port, reading=rows):
                     return reading
 
-                with self.assertRaisesRegex(launcher.LauncherError, message):
-                    launcher._windows_listener_processes(8642, runner=runner)
+                with self.assertRaisesRegex(launcher.LauncherError, "malformed"):
+                    launcher._windows_listener_processes(8642, query=query)
 
     @unittest.skipUnless(os.name == "nt", "the listener inventory reads Windows' TCP table")
     def test_windows_listener_inventory_finds_a_real_listener(self) -> None:
@@ -502,6 +483,54 @@ class LauncherTests(unittest.TestCase):
             port = listener.getsockname()[1]
             owners = launcher._windows_listener_processes(port)
         self.assertEqual([os.getpid()], [owner["pid"] for owner in owners])
+
+    @unittest.skipUnless(os.name == "nt", "the listener inventory reads Windows' TCP table")
+    def test_a_real_shim_listener_is_managed_and_stops_only_through_its_proof(self) -> None:
+        # End to end on the live inventory: the managed shim really running, as
+        # the desktop app and the tray start it, is proven managed, and the stop
+        # that proof authorizes ends exactly that process. A virtual
+        # environment's python.exe is a redirector to the base interpreter, so
+        # the listener's image is the base one and the launcher must record it.
+        interpreter = getattr(sys, "_base_executable", sys.executable)
+        listening = (
+            "import socket, sys, time\n"
+            "s = socket.socket()\n"
+            "s.bind(('127.0.0.1', int(sys.argv[-1])))\n"
+            "s.listen()\n"
+            "print('ready', flush=True)\n"
+            "time.sleep(120)\n"
+        )
+        commit(self.checkout, listening, "listen")
+        installed = launcher.install(
+            self.directory,
+            platform_name="nt",
+            python=interpreter,
+            checkout=self.checkout,
+            releases=self.releases,
+        )
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+        child = subprocess.Popen(
+            [interpreter, str(installed["shim"]), "serve", "--port", str(port)],
+            stdout=subprocess.PIPE,
+        )
+        try:
+            assert child.stdout is not None
+            self.assertEqual(b"ready", child.stdout.readline().strip())
+            ownership = launcher.listener_status(self.directory, port=port, platform_name="nt")
+            self.assertEqual(("managed", child.pid), (ownership["state"], ownership["pid"]))
+            stopped = launcher.stop_listener(self.directory, port=port, platform_name="nt")
+            self.assertEqual(("stopped", child.pid), (stopped["state"], stopped["pid"]))
+            self.assertEqual(1, child.wait(timeout=30))
+            after = launcher.listener_status(self.directory, port=port, platform_name="nt")
+            self.assertEqual("free", after["state"])
+        finally:
+            if child.poll() is None:
+                child.kill()
+                child.wait(timeout=30)
+            if child.stdout is not None:
+                child.stdout.close()
 
     def test_listener_lifecycle_validates_platform_port_and_exit_races(self) -> None:
         self.install(platform_name="nt")
