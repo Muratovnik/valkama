@@ -47,21 +47,24 @@ function scheduleRestore() {
 }
 
 /**
- * Escape belongs to the top overlay wherever the key lands.
+ * Escape belongs to the top overlay, inside it or once focus has fallen out.
  *
  * Each host heard it on its own root, so once the control holding focus was
  * disabled or replaced — a refused answer, a failed refresh — focus fell to the
  * page body, the key never reached the root, and the dialog could no longer be
  * closed from the keyboard. The document hears it now, for whichever host is on
- * top. A popup that consumed the key (a choice list closing) has prevented it,
- * and a key pressed inside another host's surface is not the top one's to take.
+ * top: pressed inside its surface, or on the body focus fell to. A key pressed
+ * anywhere else belongs there — a choice list portalled out of the dialog
+ * closes itself and leaves the dialog open — and one already handled is
+ * prevented.
  */
 function dismissTop(event: KeyboardEvent) {
   if (event.key !== 'Escape' || event.isComposing || event.defaultPrevented) return
   const top = owners.value.at(-1)
   const host = top?.surface()?.closest('.overlay-host')
-  const pressedIn = event.target instanceof Element ? event.target.closest('.overlay-host') : null
-  if (top && (!pressedIn || pressedIn === host)) top.dismiss(event)
+  const target = event.target instanceof Element ? event.target : null
+  const fallen = !target || target === document.body || target === document.documentElement
+  if (top && (fallen || (host && target?.closest('.overlay-host') === host))) top.dismiss(event)
 }
 
 /** Keep the page's original focus and scroll state until every live host closes. */

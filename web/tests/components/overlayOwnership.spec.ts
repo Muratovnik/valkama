@@ -161,6 +161,14 @@ describe('shared nested overlay ownership', () => {
     document.body.dispatchEvent(consumed)
     await flushPromises()
     expect(command.value).toBe(true)
+    // A choice list portalled out of the dialog takes its own Escape and closes
+    // itself; the dialog under it stays.
+    const portal = document.createElement('button')
+    document.body.append(portal)
+    key(portal, 'Escape')
+    await flushPromises()
+    portal.remove()
+    expect(command.value).toBe(true)
   })
 
   it('keeps scroll locked and the original opener when the covered drawer unmounts first', async () => {
