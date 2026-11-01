@@ -106,9 +106,7 @@ function failureText(failure: TypedFailure, fallbackKey?: string): string {
     : t(message.key, message.params ?? {})
 }
 
-function readFailureReason(failure: TypedFailure): string {
-  return failureText(failure, 'workItem.loadFailed')
-}
+const readFailureReason = (failure: TypedFailure) => failureText(failure, 'workItem.loadFailed')
 
 const {
   item,
