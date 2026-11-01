@@ -217,8 +217,16 @@ test('the readout of the first lane stays inside a panel scrolled to the map', a
   await expect(section.locator('.branch-tip')).toBeVisible()
   const tip = await section.locator('.branch-tip').boundingBox()
   expect(tip).not.toBeNull()
-  // Above the lane it would rise past the panel's top edge and be cut off.
-  expect(tip?.y ?? 0).toBeGreaterThanOrEqual(panelTop)
+  // Above the lane it would rise past the panel's top edge and be cut off. The
+  // edge is read again: the scroll may have condensed the card's head since,
+  // which moves the panel's top up while the lane, held still, stays put.
+  const panelNow = await section.locator('.branch-map-canvas').evaluate((canvas) => {
+    let panel = canvas.parentElement
+    while (panel && !/auto|scroll/u.test(getComputedStyle(panel).overflowY))
+      panel = panel.parentElement
+    return panel?.getBoundingClientRect().top ?? 0
+  })
+  expect(tip?.y ?? 0).toBeGreaterThanOrEqual(panelNow)
 })
 
 test('the branch map gives a small chain a segment, a dot and a name per task', async ({
