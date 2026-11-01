@@ -8,6 +8,7 @@ const {
   listenerRuntimeReusable,
   parseRuntimeJson,
   runtimeMatches,
+  staleReasons,
   validateLauncherBootstrap,
 } = require('./runtime_contract')
 
@@ -136,4 +137,23 @@ test('a matching runtime is reusable only when the managed launcher owns its pro
   assert.equal(listenerLifecycleAction(CURRENT, observed, { state: 'managed' }).action, 'reuse')
   assert.equal(listenerLifecycleAction(CURRENT, observed, { state: 'foreign' }).action, 'refuse')
   assert.equal(listenerLifecycleAction(CURRENT, observed, { state: 'free' }).action, 'refuse')
+})
+
+test('a stale listener is described by the half that drifted', () => {
+  const expected = {
+    interface_version: 'runtime',
+    identity: 'a'.repeat(64),
+    static: { sha256: 's1' },
+    backend: { sha256: 'b1' },
+  }
+  const drifted = (part) => ({ ...expected, identity: 'b'.repeat(64), ...part })
+  assert.deepEqual(staleReasons(expected, drifted({ static: { sha256: 's2' } })), ['front-end'])
+  assert.deepEqual(staleReasons(expected, drifted({ backend: { sha256: 'b2' } })), ['server-code'])
+  assert.deepEqual(
+    staleReasons(expected, drifted({ static: { sha256: 's2' }, backend: { sha256: 'b2' } })),
+    ['front-end', 'server-code'],
+  )
+  assert.deepEqual(staleReasons(expected, drifted({})), ['identity'])
+  assert.deepEqual(staleReasons(expected, null), ['unreadable'])
+  assert.deepEqual(staleReasons(expected, { interface_version: '' }), ['unreadable'])
 })

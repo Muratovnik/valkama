@@ -3,31 +3,42 @@
 // Native window for Valkama. The product itself stays where it is: this process
 // only makes sure the local Python server is listening and shows its page in a
 // Chromium window, so nothing here duplicates what the page already does.
+//
+// The window comes first. It used to be created only after every check had
+// passed, so a click showed nothing for seconds and a failure arrived as the
+// first sign of life. Now it opens on app-ready with a starting page, the
+// server is found or started behind it, and the same window then shows
+// Valkama, or the failure and its remedy.
 
 const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron')
 const { spawn } = require('node:child_process')
 const { createHash } = require('node:crypto')
-const { readFileSync, statSync } = require('node:fs')
+const { readFileSync, statSync, writeFileSync } = require('node:fs')
 const { request: httpRequest } = require('node:http')
+const os = require('node:os')
 const path = require('node:path')
 const {
   LAUNCHER_COMMAND_NAME,
   LAUNCHER_MANIFEST_NAME,
   LAUNCHER_SHIM_NAME,
-  launcherStatusMatches,
-  listenerLifecycleAction,
   parseJsonObject,
   parseRuntimeJson,
-  runtimeMatches,
   validateLauncherBootstrap,
 } = require('./runtime_contract')
 const { discoverSupportedOpeners, resolveSupportedOpener } = require('./opener_catalog')
+const { establishServer, verifyStartedOwnership } = require('./server_startup')
 const { openSessionRequest } = require('./session_opener')
 const { openSourceRequest } = require('./source_opener')
+const { createStartupLog } = require('./startup_log')
+const { resolveLocale, startupAction, startupPageUrl } = require('./startup_page')
 
 const PORT = Number(process.env.VALKAMA_PORT || 8642)
 const HOST = '127.0.0.1'
 const URL = `http://${HOST}:${PORT}/`
+
+const exeStartedAt = process.getCreationTime?.() ?? Date.now() - process.uptime() * 1000
+const log = createStartupLog({ directory: os.tmpdir(), pid: process.pid, startedAt: exeStartedAt })
+log('main-start', { port: PORT, packaged: app.isPackaged })
 
 // The stable launcher is the desktop's only server identity. Its manifest is
 // verified before its Python/shim pair is invoked, and the launcher's own
@@ -80,7 +91,12 @@ const launcherCandidate = launcherBootstrap.launcher
 /** A process we started ourselves, and are therefore allowed to stop. */
 let serverProcess = null
 let mainWindow = null
-let serverFailureReason = ''
+/** What the starting page offers right now; a remedy link outside it is ignored. */
+let offeredActions = []
+/** The one startup in flight, so a second request joins it instead of racing it. */
+let starting = null
+let focusWhenCreated = false
+let uiLoadedOnce = false
 
 function isValkamaSender(event) {
   const senderUrl = event.senderFrame?.url || event.sender.getURL()
@@ -174,62 +190,7 @@ function runLauncherJson(launcher, args) {
   return runJsonProcess(launcher.python, [launcher.shim, ...args])
 }
 
-async function readManagedLauncher() {
-  if (!launcherBootstrap.ok || !launcherCandidate) {
-    return {
-      launcher: null,
-      detail: `${launcherBootstrap.detail}. Run "python valkama.py launcher install" from the current checkout.`,
-    }
-  }
-  const reading = await runLauncherJson(launcherCandidate, [
-    'launcher',
-    'status',
-    '--directory',
-    launcherCandidate.directory,
-  ])
-  if (!launcherStatusMatches(launcherCandidate, reading.payload)) {
-    return {
-      launcher: null,
-      detail: `${reading.detail || 'managed launcher status did not match its manifest'}. Run "python valkama.py launcher install" from the current checkout.`,
-    }
-  }
-  return { launcher: launcherCandidate, detail: '' }
-}
-
-async function readLocalRuntime(launcher) {
-  const reading = await runLauncherJson(launcher, ['runtime'])
-  const payload = reading.payload
-  return {
-    payload: runtimeMatches(payload, payload) ? payload : null,
-    detail: reading.detail || 'the managed launcher returned a malformed runtime identity',
-  }
-}
-
-function readListenerOwnership(launcher) {
-  return runLauncherJson(launcher, [
-    'launcher',
-    'listener',
-    'status',
-    '--directory',
-    launcher.directory,
-    '--port',
-    String(PORT),
-  ])
-}
-
-function stopManagedListener(launcher) {
-  return runLauncherJson(launcher, [
-    'launcher',
-    'listener',
-    'stop',
-    '--directory',
-    launcher.directory,
-    '--port',
-    String(PORT),
-  ])
-}
-
-function readListenerRuntime() {
+function readListenerRuntime(timeout) {
   return new Promise((resolve) => {
     let settled = false
     const finish = (value) => {
@@ -240,7 +201,7 @@ function readListenerRuntime() {
     let request
     try {
       request = httpRequest(
-        { host: HOST, port: PORT, path: '/api/runtime', timeout: 700 },
+        { host: HOST, port: PORT, path: '/api/runtime', timeout },
         (response) => {
           let output = ''
           response.setEncoding('utf8')
@@ -268,99 +229,185 @@ function readListenerRuntime() {
   })
 }
 
-async function ensureServer() {
-  serverFailureReason = ''
-  const managed = await readManagedLauncher()
-  if (!managed.launcher) {
-    serverFailureReason = managed.detail
-    console.error(serverFailureReason)
-    return false
-  }
-  const launcher = managed.launcher
-  const local = await readLocalRuntime(launcher)
-  if (!local.payload) {
-    serverFailureReason = `could not calculate the managed runtime identity: ${local.detail}`
-    console.error(serverFailureReason)
-    return false
-  }
-  const expected = local.payload
-  const [existing, ownershipReading] = await Promise.all([
-    readListenerRuntime(),
-    readListenerOwnership(launcher),
-  ])
-  if (!ownershipReading.payload) {
-    serverFailureReason =
-      ownershipReading.detail || `could not verify the process listening on port ${PORT}`
-    console.error(serverFailureReason)
-    return false
-  }
-  const plan = listenerLifecycleAction(expected, existing, ownershipReading.payload)
-  if (plan.action === 'refuse') {
-    serverFailureReason = plan.reason
-    console.error(serverFailureReason)
-    return false
-  }
-  if (plan.action === 'reuse') return true
-  if (plan.action === 'restart') {
-    const stopped = await stopManagedListener(launcher)
-    if (!stopped.payload || !['stopped', 'free'].includes(stopped.payload.state)) {
-      serverFailureReason =
-        stopped.payload?.detail ||
-        stopped.detail ||
-        'the managed listener could not be stopped safely'
-      console.error(serverFailureReason)
-      return false
-    }
-    for (let attempt = 0; attempt < 25; attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 200))
-      const ownership = await readListenerOwnership(launcher)
-      if (!ownership.payload) {
-        serverFailureReason =
-          ownership.detail || 'listener ownership could not be verified after stop'
-        console.error(serverFailureReason)
-        return false
-      }
-      if (ownership.payload.state === 'free') break
-      if (ownership.payload.state === 'foreign') {
-        serverFailureReason = ownership.payload.detail
-        console.error(serverFailureReason)
-        return false
-      }
-      if (attempt === 24) {
-        serverFailureReason = `managed listener process ${ownership.payload.pid || ''} did not release port ${PORT}`
-        console.error(serverFailureReason)
-        return false
-      }
-    }
-  }
-  serverProcess = spawn(launcher.python, [launcher.shim, 'serve', '--port', String(PORT)], {
+/**
+ * Start `serve` through the managed shim, as a child this app owns.
+ *
+ * Its stderr is kept (the tail only) for two reasons: the line the server
+ * prints once it is bound is the readiness signal, and the last lines before
+ * an early exit are the failure the owner needs to read. The pipe is drained
+ * for the server's whole life, so it can never fill and stall the server.
+ */
+function spawnServer(launcher) {
+  const child = spawn(launcher.python, [launcher.shim, 'serve', '--port', String(PORT)], {
     detached: false,
-    stdio: 'ignore',
+    stdio: ['ignore', 'ignore', 'pipe'],
     windowsHide: true,
   })
-  serverProcess.on('error', (error) => {
-    console.error(`cannot start the Valkama server: ${error.message}`)
+  serverProcess = child
+  const marker = `Valkama on ${URL}`
+  let tail = ''
+  let announce
+  const announced = new Promise((resolve) => {
+    announce = resolve
   })
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 300))
-    const [actual, ownership] = await Promise.all([
-      readListenerRuntime(),
-      readListenerOwnership(launcher),
-    ])
-    const current = listenerLifecycleAction(expected, actual, ownership.payload)
-    if (current.action === 'reuse') return true
-    if (current.action === 'refuse') {
-      serverFailureReason = ownership.payload ? current.reason : ownership.detail || current.reason
-      console.error(serverFailureReason)
-      return false
-    }
+  child.stderr.setEncoding('utf8')
+  child.stderr.on('data', (chunk) => {
+    tail = (tail + chunk).slice(-4000)
+    if (tail.includes(marker)) announce()
+  })
+  const exited = new Promise((resolve) => {
+    child.once('exit', (code, signal) => resolve({ code, signal }))
+    child.once('error', (error) => resolve({ code: null, error: error.message }))
+  })
+  void exited.then((exit) => {
+    log('server-exited', {
+      pid: child.pid,
+      code: exit.code,
+      signal: exit.signal,
+      error: exit.error,
+    })
+    if (serverProcess === child) serverProcess = null
+  })
+  return {
+    pid: child.pid,
+    announced,
+    exited,
+    isAlive: () => child.exitCode === null && child.signalCode === null,
+    tail: () => tail.trim(),
+    kill: () => child.kill(),
   }
-  serverFailureReason = 'the Valkama server did not expose the expected runtime identity'
-  console.error(serverFailureReason)
-  return false
 }
 
-function createWindow(reachable) {
+function startupDeps(launcher) {
+  return {
+    launcher,
+    bootstrapDetail: launcherBootstrap.detail,
+    readStatus: () =>
+      runLauncherJson(launcher, ['launcher', 'status', '--directory', launcher.directory]),
+    readRuntime: () => runLauncherJson(launcher, ['runtime']),
+    readOwnership: () =>
+      runLauncherJson(launcher, [
+        'launcher',
+        'listener',
+        'status',
+        '--directory',
+        launcher.directory,
+        '--port',
+        String(PORT),
+      ]),
+    stopListener: () =>
+      runLauncherJson(launcher, [
+        'launcher',
+        'listener',
+        'stop',
+        '--directory',
+        launcher.directory,
+        '--port',
+        String(PORT),
+      ]),
+    probe: readListenerRuntime,
+    spawnServer: () => spawnServer(launcher),
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    now: Date.now,
+    log,
+  }
+}
+
+// The workspace remembers its language in the page's own storage, which this
+// window cannot read before the page exists. The language the page last used
+// is kept here instead, so the starting page speaks it from the first frame.
+function preferencesFile() {
+  return path.join(app.getPath('userData'), 'valkama-desktop.json')
+}
+
+function startupLocale() {
+  let stored = null
+  try {
+    stored = parseJsonObject(readFileSync(preferencesFile(), 'utf8'))?.locale ?? null
+  } catch {
+    // First start, or unreadable: the system languages decide.
+  }
+  return resolveLocale(stored, app.getPreferredSystemLanguages())
+}
+
+function rememberLocale(webContents) {
+  webContents
+    .executeJavaScript("localStorage.getItem('valkama-locale')", true)
+    .then((locale) => {
+      if (locale !== 'en' && locale !== 'ru') return
+      writeFileSync(preferencesFile(), `${JSON.stringify({ locale })}\n`, 'utf8')
+    })
+    .catch(() => {})
+}
+
+function showStartupPage(state) {
+  if (!mainWindow) return
+  offeredActions = state.phase === 'stale' ? ['restart'] : state.phase === 'failed' ? ['retry'] : []
+  const shown = Date.now()
+  const pageUrl = startupPageUrl({ ...state, locale: startupLocale(), port: PORT })
+  void mainWindow.loadURL(pageUrl).then(
+    () => log('startup-page-shown', { phase: state.phase, ms: Date.now() - shown }),
+    () => {}, // replaced before it finished loading: nothing was shown
+  )
+}
+
+function launcherDetail(result) {
+  if (result.kind !== 'launcher') return result.detail
+  const attempted = launcherCandidate
+    ? `${launcherCandidate.python}\n${launcherCandidate.shim}`
+    : path.join(process.env.LOCALAPPDATA || '', 'Valkama', 'bin', LAUNCHER_MANIFEST_NAME)
+  return `${result.detail}\n\nManaged launcher:\n${attempted}`
+}
+
+function loadValkama() {
+  offeredActions = []
+  const loadStarted = Date.now()
+  void mainWindow.loadURL(URL).then(
+    () => {
+      log('ui-loaded', { ms: Date.now() - loadStarted, first: !uiLoadedOnce })
+      uiLoadedOnce = true
+    },
+    (error) => log('ui-load-failed', { ms: Date.now() - loadStarted, error: error?.message }),
+  )
+}
+
+/** Find or start the server, then show Valkama or say why it cannot be shown. */
+function startValkama({ allowRestart = false } = {}) {
+  if (starting) return starting
+  starting = (async () => {
+    showStartupPage({ phase: allowRestart ? 'restarting' : 'starting' })
+    if (!launcherCandidate) log('launcher-missing', { detail: launcherBootstrap.detail })
+    const begun = Date.now()
+    const result = launcherCandidate
+      ? await establishServer(startupDeps(launcherCandidate), { allowRestart })
+      : await establishServer({ launcher: null, bootstrapDetail: launcherBootstrap.detail })
+    if (!mainWindow) return
+    if (!result.ok) {
+      log('failure-shown', { phase: result.phase, kind: result.kind, ms: Date.now() - begun })
+      log('failure-detail', { detail: result.detail })
+      showStartupPage({ ...result, detail: launcherDetail(result) })
+      return
+    }
+    log('server-ready', { mode: result.mode, pid: result.pid, ms: Date.now() - begun })
+    loadValkama()
+    if (result.mode === 'started' && launcherCandidate) {
+      // The child was trusted because it is ours; the ownership proof is
+      // still taken, after the window has what it needs.
+      void verifyStartedOwnership(startupDeps(launcherCandidate), result.pid).then((proof) =>
+        log(proof.verified ? 'ownership-verified' : 'ownership-unverified', {
+          state: proof.state,
+          pid: proof.pid,
+          detail: proof.verified ? '' : proof.detail,
+        }),
+      )
+    }
+  })().finally(() => {
+    starting = null
+  })
+  return starting
+}
+
+function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1500,
     height: 950,
@@ -380,21 +427,9 @@ function createWindow(reachable) {
       preload: path.join(__dirname, 'preload.js'),
     },
   })
-
-  if (reachable) {
-    void mainWindow.loadURL(URL)
-  } else {
-    const attemptedLauncher = launcherCandidate
-      ? `${launcherCandidate.python}\n${launcherCandidate.shim}`
-      : path.join(process.env.LOCALAPPDATA || '', 'Valkama', 'bin', LAUNCHER_MANIFEST_NAME)
-    const message = `The Valkama server is not reusable.\n\n${serverFailureReason}\n\nManaged launcher:\n${attemptedLauncher}`
-    void mainWindow.loadURL(
-      `data:text/html;charset=utf-8,${encodeURIComponent(
-        `<body style="font:14px system-ui;background:#0e0f10;color:#ececec;padding:24px">
-         <h1 style="font-size:16px">Valkama</h1><pre>${message}</pre></body>`,
-      )}`,
-    )
-  }
+  log('window-created', { visible: mainWindow.isVisible() })
+  mainWindow.once('ready-to-show', () => log('window-painted'))
+  if (focusWhenCreated) mainWindow.focus()
 
   // Anything that is not Valkama opens in the real browser, never in here.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -402,10 +437,23 @@ function createWindow(reachable) {
     return { action: 'deny' }
   })
   mainWindow.webContents.on('will-navigate', (event, url) => {
+    const action = startupAction(url)
+    if (action) {
+      // A remedy link on the starting page: the main process acts, the page
+      // never navigates, and a link the page does not currently offer is inert.
+      event.preventDefault()
+      if (!offeredActions.includes(action)) return
+      log('remedy-chosen', { action })
+      void startValkama({ allowRestart: action === 'restart' })
+      return
+    }
     if (!url.startsWith(URL)) {
       event.preventDefault()
       void shell.openExternal(url)
     }
+  })
+  mainWindow.webContents.on('did-finish-load', () => {
+    if (mainWindow?.webContents.getURL().startsWith(URL)) rememberLocale(mainWindow.webContents)
   })
 
   mainWindow.on('closed', () => {
@@ -414,20 +462,32 @@ function createWindow(reachable) {
 }
 
 if (!app.requestSingleInstanceLock()) {
+  log('second-launch', { outcome: 'handed to the running window' })
   app.quit()
 } else {
   app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore()
-      mainWindow.focus()
+    // The window exists from app-ready on, so a click during startup lands
+    // here and brings the starting window forward instead of being lost.
+    log('second-instance', { window: Boolean(mainWindow) })
+    if (!mainWindow) {
+      focusWhenCreated = true
+      return
     }
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.show()
+    mainWindow.focus()
   })
 
-  app.whenReady().then(async () => {
+  app.whenReady().then(() => {
+    log('app-ready')
     Menu.setApplicationMenu(null)
-    createWindow(await ensureServer())
-    app.on('activate', async () => {
-      if (BrowserWindow.getAllWindows().length === 0) createWindow(await ensureServer())
+    createWindow()
+    void startValkama()
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow()
+        void startValkama()
+      }
     })
   })
 

@@ -160,6 +160,20 @@ function listenerLifecycleAction(expected, observed, ownership) {
   }
 }
 
+/**
+ * Which half of a managed listener drifted from the runtime a new server would
+ * have. A bare "identity differs" is what made the old refusal unreadable: the
+ * owner cannot tell a rebuilt front end from changed server code, and only one
+ * of those is usually theirs to expect.
+ */
+function staleReasons(expected, actual) {
+  if (!actual || actual.interface_version !== RUNTIME_INTERFACE_VERSION) return ['unreadable']
+  const reasons = []
+  if (expected?.static?.sha256 !== actual.static?.sha256) reasons.push('front-end')
+  if (expected?.backend?.sha256 !== actual.backend?.sha256) reasons.push('server-code')
+  return reasons.length ? reasons : ['identity']
+}
+
 module.exports = {
   LAUNCHER_COMMAND_NAME,
   LAUNCHER_MANIFEST_NAME,
@@ -172,5 +186,6 @@ module.exports = {
   parseJsonObject,
   parseRuntimeJson,
   runtimeMatches,
+  staleReasons,
   validateLauncherBootstrap,
 }

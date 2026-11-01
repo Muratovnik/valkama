@@ -131,7 +131,7 @@ class RuntimeAuthorityTests(unittest.TestCase):
             self.assertNotIn("VALKAMA_SCRIPT", source)
             self.assertNotIn("VALKAMA_PYTHON", source)
         self.assertIn("spawn(launcher.python, [launcher.shim, 'serve'", main)
-        self.assertIn("'launcher',\n    'listener',\n    'stop'", main)
+        self.assertRegex(main, r"'launcher',\s*'listener',\s*'stop'")
         self.assertNotIn("path.resolve(__dirname, '..', 'valkama.py')", main)
 
 

@@ -213,21 +213,24 @@ const MIRRORS = [
     ],
   },
   {
-    // Two sites, not one: the frame paints before the shell loads, and the
-    // page shown when the server does not come up paints without it entirely.
+    // The frame paints before any page does.
     file: 'desktop/main.js',
     sites: [
       {
         anchor: /backgroundColor: '([^']*)'/,
         replace: (tokens) => value(tokens, '--color-navigation', 'window background'),
       },
+    ],
+  },
+  {
+    // The page the window shows while the server starts, or when it cannot,
+    // paints without the shell's stylesheet entirely.
+    file: 'desktop/startup_page.js',
+    sites: [
       {
-        anchor: /<body style="[^"]*background:([^;"]*)/,
-        replace: (tokens) => value(tokens, '--color-navigation', 'fallback page background'),
-      },
-      {
-        anchor: /<body style="[^"]*color:([^;"]*)/,
-        replace: (tokens) => value(tokens, '--color-text', 'fallback page text'),
+        anchor: /const PAGE_COLORS = \{([^}]*)\}/,
+        replace: (tokens, source) =>
+          keyedLiterals(bodyOf(source, 'PAGE_COLORS'), tokenMap(source, 'PAGE_TOKENS'), tokens),
       },
     ],
   },
