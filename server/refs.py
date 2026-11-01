@@ -61,7 +61,9 @@ def _commit_roots(space: str | None, name: str | None) -> list[str]:
         mapping = project_registry.resolve_space_root(
             {"kind": "planning-space", "resource_id": space}
         )
-        if mapping["status"] == "malformed":
+        # The registry says "malformed" for a value that does not parse and for
+        # a registry file that does not; only the first is the request's fault.
+        if mapping["status"] == "malformed" and mapping["resource_ref"] is None:
             raise ValueError("space must be a planning space's exact identity")
         if mapping["status"] == "mapped":
             bound.append(str(mapping["canonical_root"]))

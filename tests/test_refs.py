@@ -140,6 +140,21 @@ class CommitRefRootTests(unittest.TestCase):
                 self.assertEqual(400, code, crafted)
         run.assert_not_called()
 
+    def test_a_malformed_registry_leaves_the_document_roots_to_answer(self) -> None:
+        # The registry reports a file it cannot parse as "malformed", as it
+        # does a space value that does not parse; the card's space is not at
+        # fault, so the lookup goes on without the registry's roots.
+        commit = self.git(self.docs, "rev-parse", "HEAD")
+        os.environ[documents.DOC_ROOTS_VAR] = self.docs
+        with mock.patch.object(
+            project_registry, "_read_registry_bytes", return_value=b"not = [a registry"
+        ):
+            code, body = self.get(f"kind=commit&value={commit[:7]}&space={self.space()}")
+        self.assertEqual(200, code, body)
+        answer = json.loads(body)
+        self.assertTrue(answer["resolved"], answer)
+        self.assertEqual(self.docs, answer["repository"])
+
     def test_an_unbound_space_adds_no_root_of_its_own(self) -> None:
         # Nothing is asked first for the space; the document roots come before
         # the registered repositories, as for a card with no space at all.
