@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import PlanningWorkspace from '@/pages/planning/PlanningWorkspace.vue'
 
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
-import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
+import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
 import { boardId, boardItem, boardWorkflow } from '../fixtures/board.ts'
@@ -22,6 +22,20 @@ import { board, epic, i18n, live, space, tile } from '../support/workItemBoardHa
 beforeEach(() => localStorage.clear())
 afterEach(() => {
   document.body.innerHTML = ''
+})
+
+/**
+ * A block from an item in another space, which the space's items do not hold:
+ * the view's link names its source's state instead.
+ */
+const foreignBlock = (finished: boolean): PlanningEdge => ({
+  from: '00000000-0000-4000-8000-00000000f001',
+  to: boardId(10),
+  kind: 'blocks',
+  reference: 'OTHER-5',
+  state_name: finished ? 'Done' : 'Dev',
+  state_category: finished ? 'completed' : 'active',
+  is_terminal: finished,
 })
 
 describe('the board grouped by epic', () => {
@@ -274,6 +288,21 @@ describe('a tile on the board', () => {
       false,
     )
     expect(finished.text()).not.toMatch(/workable/iu)
+  })
+
+  it('names an open blocker from another space, and not a finished one', () => {
+    // The view's link names its source's state; the source is not among the
+    // space's items, which is all the board used to look in.
+    expect(
+      board({ links: [foreignBlock(false)] })
+        .get('[data-reference="MAIN-10"] [data-facet="readiness"] .facet-word-hidden')
+        .text(),
+    ).toBe('Waiting on OTHER-5')
+    expect(
+      board({ links: [foreignBlock(true)] })
+        .find('[data-reference="MAIN-10"] [data-facet="readiness"]')
+        .exists(),
+    ).toBe(false)
   })
 })
 

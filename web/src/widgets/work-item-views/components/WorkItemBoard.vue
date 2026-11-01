@@ -29,8 +29,8 @@ import { terminalLast } from '@/widgets/work-item-views/utils/boardColumns.ts'
 import { boardLanes } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import type { BoardGrouping } from '@/widgets/work-item-views/utils/boardLanes.ts'
 import type { BoardMove } from '@/widgets/work-item-views/utils/boardOrder.ts'
-import { waitingOn } from '@/widgets/work-item-views/utils/boardWaiting.ts'
 
+import { waitingOn } from '@/entities/work-item/utils/waiting.ts'
 import { EMPTY_WORK_FILTER } from '@/entities/work-item/utils/workFilter.ts'
 import type { WorkFilter, WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
