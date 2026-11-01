@@ -9,6 +9,8 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import VButton from '@/shared/ui/VButton.vue'
+
 const props = defineProps<{
   /** How many items the reveal would bring back. */
   count: number
@@ -34,13 +36,12 @@ const action = computed(() => t('graph.showDone', { count: props.count }))
     class="graph-empty graph-empty-reveal"
   >
     <span>{{ message }}</span>
-    <button
-      class="graph-reveal"
-      type="button"
+    <VButton
+      size="inline"
       @click="emit('reveal')"
     >
       {{ action }}
-    </button>
+    </VButton>
   </div>
 </template>
 
@@ -56,19 +57,5 @@ const action = computed(() => t('graph.showDone', { count: props.count }))
   display: flex;
   gap: var(--space-4);
   align-items: center;
-}
-
-.graph-reveal {
-  min-height: var(--size-control-inline);
-  padding: 0 var(--space-3);
-  color: var(--color-action-primary);
-  font: var(--font-chip);
-  background: var(--color-control-surface);
-  border-radius: var(--radius-status);
-  cursor: pointer;
-
-  &:hover {
-    background: var(--color-surface-hover);
-  }
 }
 </style>

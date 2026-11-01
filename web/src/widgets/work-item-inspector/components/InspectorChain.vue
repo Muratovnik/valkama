@@ -388,8 +388,10 @@ defineExpose({ restore, reveal, view })
   border-radius: var(--radius-control);
   cursor: pointer;
 
+  /* One step above the rest fill. `--color-surface-hover` is the same tone as
+     the control fill, so a hover written with it drew nothing. */
   &:hover {
-    background: var(--color-surface-hover);
+    background: var(--color-surface-active);
   }
 
   &:focus-visible {

@@ -226,7 +226,7 @@ function updateOpen(value: boolean) {
   border: 0;
   color: var(--color-text);
   text-align: left;
-  background: var(--color-control-surface);
+  background: var(--color-choice-trigger-fill, var(--color-control-surface));
   border-radius: var(--radius-control);
   cursor: pointer;
 }
@@ -248,9 +248,14 @@ function updateOpen(value: boolean) {
   padding: 0 var(--space-2) 0 var(--space-3);
 }
 
+/* A host standing on another ramp — the chrome — names its two fills through
+   `--color-choice-trigger-fill` and `--color-choice-trigger-fill-hover` rather than
+   restyling this trigger's states from outside, which is how a disabled
+   trigger in the chrome came to light up on hover: the host's rule had no
+   `:not(:disabled)` in it, because the state belongs here. */
 .choice-trigger:hover:not(:disabled),
 .choice-trigger[data-state='open'] {
-  background: var(--color-surface-active);
+  background: var(--color-choice-trigger-fill-hover, var(--color-surface-active));
 }
 
 .choice-trigger:disabled {

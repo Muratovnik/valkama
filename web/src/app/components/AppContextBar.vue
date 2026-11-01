@@ -139,6 +139,11 @@ const selectedResourceValue = computed(() =>
 
 <style scoped>
 .context-bar {
+  /* A selector in the chrome runs the control grammar on the chrome's own ramp:
+     the bar names the two fills and the selector's own state rules read them. */
+  --color-choice-trigger-fill: var(--color-navigation-raised);
+  --color-choice-trigger-fill-hover: var(--color-navigation-active);
+
   position: relative;
   z-index: 20;
   display: grid;
@@ -154,10 +159,6 @@ const selectedResourceValue = computed(() =>
   :deep(.choice-trigger) {
     min-height: var(--size-control-height);
     padding: 0 var(--space-3);
-    border: 0;
-    color: var(--color-text);
-    background: var(--color-navigation-raised);
-    border-radius: var(--radius-control);
   }
 }
 
@@ -204,11 +205,6 @@ const selectedResourceValue = computed(() =>
   &:empty {
     display: none;
   }
-}
-
-.context-bar :deep(:is(.choice-trigger:hover, .choice-trigger[data-state='open'])) {
-  color: var(--color-text);
-  background: var(--color-navigation-active);
 }
 
 /* The bar measures the space it was given, not the window: the rail beside it

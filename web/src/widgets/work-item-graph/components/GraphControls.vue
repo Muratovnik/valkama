@@ -94,11 +94,18 @@ const atMin = computed(() => viewport.value.zoom <= minZoom.value)
     border-right: 0;
   }
 
-  &:hover:not(:disabled),
+  /* One step above the sheet the buttons rest on: `--color-surface-muted` is the
+     sheet's own tone, so a hover written with it drew nothing — and the keyboard's
+     focus, which had its ring taken away for that fill, drew nothing either. */
+  &:hover:not(:disabled) {
+    color: var(--color-text);
+    background: var(--color-surface-hover);
+  }
+
   &:focus-visible {
     color: var(--color-text);
-    background: var(--color-surface-muted);
-    outline: none;
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: -2px;
   }
 
   &:disabled {

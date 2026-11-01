@@ -261,8 +261,10 @@ chrome.
   Separate those with air and a ground of their own; `check:ui-system` rejects
   the pair.
 - A control is a fill, never an outline: rest one step above its ground
-  (`--color-control-surface`), hover one step further (`--color-surface-hover`); in the
-  chrome the same grammar runs on the chrome's own ramp. The primary action is
+  (`--color-control-surface`), hover one step further (`--color-surface-active`); in the
+  chrome the same grammar runs on the chrome's own ramp. The control fill and
+  `--color-surface-hover` are one tone, so a hover written with the second over
+  the first draws nothing, which two controls did. The primary action is
   the light fill; an outlined control reads as lower emphasis than a filled one
   everywhere the pattern is documented, which is the opposite of what an
   interface means by a button.
@@ -530,7 +532,13 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   (light on dark, one per surface), secondary, ghost, danger. A ghost with a label
   rests on the control fill and steps one further on hover, so a text action reads
   as a control; an icon-only ghost stays bare at rest. A screen does not restyle a
-  bare `<button>` for an ordinary action.
+  bare `<button>` for an ordinary action. A weight is a set of values, not a set
+  of rules: each variant declares its fill and label at rest, hovered and
+  disabled, and one rule per state reads them, so no state rule can outrank a
+  variant — the base hover once painted a hovered primary dark under its dark
+  label, which is how a disabled button looks. Hover is the same weight one step
+  further from the ground; disabled is one look for every weight, a step toward
+  the ground with a quieter label that still reads at 4.5:1.
 - **Segmented choice:** `SegmentedControl` owns "pick one of a few visible
   alternatives" — view switches, chart encodings, ledger filters. A row of
   `aria-pressed` buttons styled locally is the same control built again, and

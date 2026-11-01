@@ -16,6 +16,8 @@ import DialogFrame from '@/shared/ui/DialogFrame.vue'
 import InspectorFrame from '@/shared/ui/InspectorFrame.vue'
 import OverlayHost from '@/shared/ui/OverlayHost.vue'
 import SelectionControl from '@/shared/ui/SelectionControl.vue'
+import VButton from '@/shared/ui/VButton.vue'
+import VIcon from '@/shared/ui/VIcon.vue'
 import '@/app/styles/index.css'
 
 import { now } from './planningFixtures.ts'
@@ -104,11 +106,55 @@ function inspectorBody(openCommand: () => void) {
   }
 }
 
+/**
+ * Every weight `VButton` has, labelled and icon-only, enabled and disabled, on
+ * the workspace ground and on a ground — what a state test reads its drawn colours from.
+ */
+const BUTTON_VARIANTS = ['primary', 'secondary', 'ghost', 'danger'] as const
+
+function buttonMatrix() {
+  return h(
+    'div',
+    { class: 'harness-buttons' },
+    ['canvas', 'surface'].map((ground) =>
+      h(
+        'section',
+        { 'class': `harness-button-ground ground-${ground}`, 'data-ground': ground },
+        BUTTON_VARIANTS.flatMap((variant) =>
+          [false, true].flatMap((disabled) => [
+            h(
+              VButton,
+              {
+                variant,
+                disabled,
+                'data-case': `${ground}:${variant}:label:${disabled ? 'off' : 'on'}`,
+              },
+              () => 'Взять',
+            ),
+            h(
+              VButton,
+              {
+                variant,
+                disabled,
+                'icon': true,
+                'aria-label': 'Закрыть',
+                'data-case': `${ground}:${variant}:icon:${disabled ? 'off' : 'on'}`,
+              },
+              () => h(VIcon, { name: 'close', size: 16 }),
+            ),
+          ]),
+        ),
+      ),
+    ),
+  )
+}
+
 const Harness = defineComponent({
   setup() {
     const requestedSurface = new URLSearchParams(location.search).get('surface')
     const contextHarness = requestedSurface === 'context-bar'
     const itemHarness = requestedSurface === 'work-item'
+    if (requestedSurface === 'buttons') return () => buttonMatrix()
     const active = ref<ModuleId>('planning')
     const surfaceInspector = ref(false)
     const surfaceDialog = ref(false)

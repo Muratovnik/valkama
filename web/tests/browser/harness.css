@@ -53,3 +53,25 @@
   z-index: 80;
   width: 260px;
 }
+
+/* The button matrix: one row of every weight and state per ground. */
+.harness-buttons {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-6);
+}
+
+.harness-button-ground {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-4);
+
+  &.ground-canvas {
+    background: var(--color-canvas);
+  }
+
+  &.ground-surface {
+    background: var(--color-surface);
+  }
+}

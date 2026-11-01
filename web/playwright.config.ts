@@ -12,7 +12,7 @@ export default defineConfig({
   projects: [
     {
       name: 'harness',
-      testMatch: /ui-system\.spec\.ts/,
+      testMatch: /ui-[a-z-]+\.spec\.ts/,
       use: { ...devices['Desktop Chrome'], baseURL: 'http://127.0.0.1:4174' },
     },
     {

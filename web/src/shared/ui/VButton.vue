@@ -51,8 +51,29 @@ withDefaults(
 /* A control is a fill on the surface ladder, not an outlined box: rest one
    step above its ground, hover one step further. The outline-and-thicken-on-
    hover treatment this replaces is the reviewed-out tell — an interface where
-   every button is drawn instead of filled. */
+   every button is drawn instead of filled.
+
+   A weight is a set of values, never a set of rules. Each variant below only
+   declares what its fill and its label are at rest, hovered and disabled, and
+   the one rule per state reads them. It used to be the other way round: the
+   base hover rule painted every button the hover grey and outranked the
+   primary's light fill, so a hovered primary went dark under its dark label —
+   the look of a disabled button — and a disabled primary was the light fill at
+   half strength, a grey slab. A state rule that declares no colour of its own
+   has nothing to outrank a variant with. */
 .button {
+  --color-button-fill: var(--color-control-surface);
+  --color-button-ink: var(--color-text);
+  --color-button-fill-hover: var(--color-surface-active);
+  --color-button-ink-hover: var(--color-button-ink);
+
+  /* Unavailable is a look of its own rather than a faded copy of the weight:
+     it recedes a step toward the ground and its label quietens, and it is the
+     same for every weight, because a button that cannot be pressed has no
+     emphasis left to rank. The label keeps 4.5:1 so it can still be read. */
+  --color-button-fill-disabled: var(--color-control-disabled-surface);
+  --color-button-ink-disabled: var(--color-text-tertiary);
+
   display: inline-flex;
   flex: 0 0 auto;
   gap: var(--space-2);
@@ -65,15 +86,16 @@ withDefaults(
   min-height: var(--size-control-height);
   padding: 0 var(--space-4);
   border: 0;
-  color: var(--color-text);
+  color: var(--color-button-ink);
   font: var(--font-control);
   white-space: nowrap;
-  background: var(--color-control-surface);
+  background: var(--color-button-fill);
   border-radius: var(--radius-control);
   cursor: pointer;
 
   &:hover:not(:disabled) {
-    background: var(--color-surface-active);
+    color: var(--color-button-ink-hover);
+    background: var(--color-button-fill-hover);
   }
 
   &:focus-visible {
@@ -82,43 +104,37 @@ withDefaults(
   }
 
   &:disabled {
-    opacity: 0.5;
+    color: var(--color-button-ink-disabled);
+    background: var(--color-button-fill-disabled);
     cursor: not-allowed;
   }
 
+  /* The light fill, and on hover the same fill one step lighter still: stronger
+     on a dark ground means further from it. */
   &.variant-primary {
-    color: var(--color-text-on-action);
-    font-weight: 600;
-    background: var(--color-action-primary);
-  }
+    --color-button-fill: var(--color-action-primary);
+    --color-button-ink: var(--color-text-on-action);
+    --color-button-fill-hover: var(--color-action-primary-hover);
 
-  &.variant-primary:hover:not(:disabled) {
-    opacity: 0.9;
+    font-weight: 600;
   }
 
   /* A ghost with a label rests on the control fill, so an action in a line of text
-     reads as a control; an icon-only ghost has no label to read as one and stays bare.
-     A labelled ghost's hover steps one further than its fill, as every control's does. */
+     reads as a control; an icon-only ghost has no label to read as one and stays bare,
+     and bare when it is unavailable too. Either one's label brightens on hover. */
   &.variant-ghost {
-    color: var(--color-text-muted);
-    background: transparent;
+    --color-button-ink: var(--color-text-muted);
+    --color-button-ink-hover: var(--color-text);
   }
 
-  &.variant-ghost:not(.icon-only) {
-    background: var(--color-control-surface);
-  }
-
-  &.variant-ghost:hover:not(:disabled) {
-    color: var(--color-text);
-    background: var(--color-surface-hover);
-  }
-
-  &.variant-ghost:not(.icon-only):hover:not(:disabled) {
-    background: var(--color-surface-active);
+  &.variant-ghost.icon-only {
+    --color-button-fill: transparent;
+    --color-button-fill-hover: var(--color-surface-hover);
+    --color-button-fill-disabled: transparent;
   }
 
   &.variant-danger {
-    color: var(--color-action-danger);
+    --color-button-ink: var(--color-action-danger);
   }
 
   &.size-inline {

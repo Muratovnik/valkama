@@ -77,6 +77,7 @@
   --color-gray-250: #c4c4c4;
   --color-gray-100: #ececec;
   --color-gray-50: #f2f2f2;
+  --color-gray-0: #fff;
 
   /* The quiet blue that carries selection, focus and links, its light mid-stop
      for the brand ramp, and the near-black blue a selected row sits on. */
@@ -318,6 +319,11 @@
      exactly that. `uiSystem.ts` assigns these; nothing else does. */
   --color-accent: var(--color-blue-500);
   --color-action-primary: var(--color-gray-100);
+
+  /* The primary hovered: the same light fill one step further from the dark
+     ground. #f2f2f2 is two L* units from the rest fill, which nobody sees on a
+     button; white is seven. */
+  --color-action-primary-hover: var(--color-gray-0);
   --color-action-danger: var(--color-red-500);
   --color-danger: var(--color-red-500);
   --color-success: var(--color-green-500);

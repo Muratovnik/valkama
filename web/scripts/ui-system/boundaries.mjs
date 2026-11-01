@@ -20,12 +20,13 @@
 /**
  * Files allowed to style something they do not render.
  *
- * `AppContextBar` states one recipe for every control standing in the chrome, and
- * neither the selector's trigger nor the bell's is that component's root, so no
- * class handed down reaches it. The honest fix is a set of custom properties the
- * bar declares and each control reads, the way `--color-count-badge-ring`
- * already works two lines further down; until then the bar reaches the two
- * triggers by name and this entry is the record of it. `SkillCatalogue` reaches
+ * `AppContextBar` places the selectors standing in the chrome, and the
+ * selector's trigger is not that component's root, so no class handed down
+ * reaches it. The fills are already the honest kind: the bar declares
+ * `--color-choice-trigger-fill` and its hover, and the trigger's own state rules
+ * read them, the way `--color-count-badge-ring` works. What still reaches by
+ * name is geometry — the trigger's padding and the selector's width on a narrow
+ * bar — and this entry is the record of it. `SkillCatalogue` reaches
  * the same selector for the same reason. The entry names the bar rather than the
  * shell because the bar is its own component: `App.vue` renders nothing it does
  * not own.

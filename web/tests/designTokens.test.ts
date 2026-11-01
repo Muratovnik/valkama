@@ -395,6 +395,7 @@ test('destructive actions use an action role instead of an operational status ro
   )
   const dangerVariant = /&\.variant-danger\s*\{([^}]*)\}/.exec(button)
   assert.ok(dangerVariant, 'VButton no longer declares its destructive action variant')
-  assert.match(dangerVariant[1], /color:\s*var\(--color-action-danger\);/)
+  // The variant names its label colour as a value the state rules read.
+  assert.match(dangerVariant[1], /--color-button-ink:\s*var\(--color-action-danger\);/)
   assert.doesNotMatch(dangerVariant[1], /var\(--color-danger\)/)
 })
