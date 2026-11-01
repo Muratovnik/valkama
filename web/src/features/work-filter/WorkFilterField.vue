@@ -117,9 +117,14 @@ const groups = computed(() =>
 )
 /** The options in reading order, which is the order the arrows walk. */
 const options = computed(() => groups.value.flatMap((group) => group.options))
-/** The groups as the list draws them: each value's word and whether it is in. */
+/**
+ * The groups as the list draws them: each value's word and whether it is in.
+ * A closed menu draws none of them. A space's labels made it a list of some
+ * two thousand nodes that the board built, out of sight, before its first tile
+ * could show; it is built when it opens instead.
+ */
 const menuGroups = computed(() =>
-  groups.value.map((group) => ({
+  (open.value ? groups.value : []).map((group) => ({
     ...group,
     options: group.options.map((option) => ({
       key: option.key,
@@ -139,10 +144,14 @@ const completion = computed(() => ({
   expanded: open.value,
 }))
 
-// A narrower list keeps the highlight on a row that still exists.
-watch(options, (next) => {
-  if (highlight.value >= next.length) highlight.value = next.length - 1
-})
+// A narrower list keeps the highlight on a row that still exists. A closed
+// menu has no highlight, so its rows are not worked out to keep one.
+watch(
+  () => (open.value ? options.value.length : 0),
+  (length) => {
+    if (highlight.value >= length) highlight.value = length - 1
+  },
+)
 
 function openMenu(first: boolean) {
   open.value = true
