@@ -693,12 +693,16 @@ rules and the archive's retention are in
 
 ## The desktop app and the tray
 
-`desktop/` is a thin Electron shell. It verifies the managed launcher, checks
-that its Python server is listening, then shows Valkama in a real window with
-its own process, taskbar entry and icon. It runs `runtime` and `serve` through
-the stable shim, whose manifest selects the release pinned from this
-repository; there is no second
-desktop source record or checkout-path fallback.
+`desktop/` is a thin Electron shell. Its window opens at once, on a starting
+page in the workspace's palette and language; behind it the app verifies the
+managed launcher, reuses the managed server or starts one, and then shows
+Valkama in that window with its own process, taskbar entry and icon. When it
+cannot, the same window says why and offers the remedy: a stale managed server
+is offered a restart there, and only a listener the launcher proves its own is
+ever stopped. It runs `runtime` and `serve` through the stable shim, whose
+manifest selects the release pinned from this repository; there is no second
+desktop source record or checkout-path fallback. Each step of opening the
+window is logged, with its time, to `%TEMP%\valkama-desktop.log`.
 
 ```bash
 cd desktop
@@ -721,12 +725,15 @@ mode has no local-file authority and copies the source pointer instead.
 
 **The tray icon** appears while an agent holds an MCP session and disappears when
 the last one ends, so it answers "is anybody working here right now?". Clicking
-it always does something visible: it opens the app, opens a browser, starts the
-server, offers a restart, or explains the refusal in a dialog. When a listener
-owned by the managed shim is older than the launcher's current source, the
-dialog says which half drifted and offers to restart it. A listener whose
-managed process ownership cannot be verified is refused and left untouched —
-holding the port or returning Valkama-shaped JSON is not stop authority.
+it always does something visible. With the desktop app installed it starts the
+app and nothing else, and the app decides the rest in its own window. Without
+the app it opens a browser, starts the server, offers a restart, or explains the
+refusal in a dialog, deciding off the icon's thread. When a listener owned by
+the managed shim is older than the launcher's current source, the dialog says
+which half drifted and offers to restart it. A listener whose managed process
+ownership cannot be verified is refused and left untouched — holding the port
+or returning Valkama-shaped JSON is not stop authority. Clicks, the steps they
+took and how they ended are logged to `%TEMP%\valkama-tray.log`.
 
 Set `VALKAMA_NO_TRAY=1` to turn it off.
 

@@ -8,9 +8,11 @@ startup snapshot and the runtime identity check refused it. Both times the only
 trace was a line in `%TEMP%\\valkama-tray.log`, so the icon looked frozen.
 
 These tests hold the shape that makes that impossible. The decision is a pure
-function with five named actions, driven here through `-PrintPlan`, which
+function with six named actions, driven here through `-PrintPlan`, which
 touches no network and starts no process. The open path carries its outcome
-back as a value instead of logging it, so a refusal cannot end in silence. And
+back as a value instead of logging it, so a refusal cannot end in silence; with
+the app installed it starts the app and consults nothing, because the app owns
+the startup decision. And
 the installed path the tray reaches for is derived from the same
 `desktop/package.json` the installer reads, because "the strings were renamed
 and the runtime was not" is how this product has broken three times.
@@ -22,9 +24,11 @@ import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 
@@ -64,7 +68,10 @@ def tray_source() -> str:
 
 def function_body(source: str, name: str) -> str:
     """One PowerShell function, from its keyword to its matching closing brace."""
-    start = source.index(f"function {name}")
+    found = re.search(rf"function {re.escape(name)}\b(?!-)", source)
+    if found is None:
+        raise AssertionError(f"{name} is not defined")
+    start = found.start()
     depth = 0
     for index in range(start, len(source)):
         if source[index] == "{":
@@ -77,7 +84,7 @@ def function_body(source: str, name: str) -> str:
 
 
 class DecisionTableTests(unittest.TestCase):
-    """The five actions, driven through the script's own pure entry point."""
+    """The six actions, driven through the script's own pure entry point."""
 
     pwsh = ""
 
@@ -119,14 +126,28 @@ class DecisionTableTests(unittest.TestCase):
         # so a reason that is not must fail here rather than arrive as mojibake.
         return json.loads(done.stdout.decode("utf-8"))
 
-    def test_nothing_listening_opens_the_app_which_starts_the_server_itself(self) -> None:
-        self.assertEqual("open-app", self.plan(None, app_exists=True)["action"])
+    def test_with_the_app_installed_every_reading_opens_the_app(self) -> None:
+        # One owner for the startup decision: the app reads the port itself, at
+        # the moment it acts, and offers the restart in its own window. A tray
+        # deciding first is how a click during startup was offered a restart of
+        # the server the app had just started.
+        stranger = json.dumps({"interface_version": "", "identity": ""})
+        stale = listener(identity="b" * 64, static="s2")
+        for running, owner in (
+            (None, "free"),
+            (EXPECTED, "managed"),
+            (stale, "managed"),
+            (None, "managed"),
+            (EXPECTED, "free"),
+            (stranger, "foreign"),
+            (None, "unavailable"),
+        ):
+            with self.subTest(running=running, owner=owner):
+                plan = self.plan(running, app_exists=True, listener_owner=owner)
+                self.assertEqual("open-app", plan["action"])
 
     def test_nothing_listening_and_no_app_starts_the_server_here(self) -> None:
         self.assertEqual("start-server", self.plan(None, app_exists=False)["action"])
-
-    def test_a_matching_listener_opens_the_installed_app(self) -> None:
-        self.assertEqual("open-app", self.plan(EXPECTED, app_exists=True)["action"])
 
     def test_a_matching_listener_without_an_app_opens_a_browser(self) -> None:
         self.assertEqual("open-browser", self.plan(EXPECTED, app_exists=False)["action"])
@@ -134,27 +155,37 @@ class DecisionTableTests(unittest.TestCase):
     def test_a_rebuilt_front_end_asks_for_a_restart_and_says_which_half_drifted(self) -> None:
         # The exact case the owner hit: the server serves its startup snapshot of
         # web/dist, so a rebuild leaves it stale while the backend still matches.
-        plan = self.plan(listener(identity="b" * 64, static="s2"), app_exists=True)
+        plan = self.plan(listener(identity="b" * 64, static="s2"), app_exists=False)
         self.assertEqual("restart-required", plan["action"])
         self.assertIn("front end", plan["reason"])
 
     def test_changed_server_code_asks_for_a_restart_and_says_so(self) -> None:
-        plan = self.plan(listener(identity="c" * 64, backend="b2"), app_exists=True)
+        plan = self.plan(listener(identity="c" * 64, backend="b2"), app_exists=False)
         self.assertEqual("restart-required", plan["action"])
         self.assertIn("server code", plan["reason"])
+
+    def test_readings_that_disagree_are_a_transition_never_a_refusal_or_a_restart(self) -> None:
+        # Two reads a moment apart while a server starts or stops: it answered
+        # but the table already shows the port free, or the table shows it held
+        # but it has not answered yet. Neither is evidence of a stranger or of
+        # a stale server.
+        for running, owner in ((EXPECTED, "free"), (None, "managed")):
+            with self.subTest(running=running, owner=owner):
+                plan = self.plan(running, app_exists=False, listener_owner=owner)
+                self.assertEqual("in-transition", plan["action"])
 
     def test_a_listener_that_is_not_ours_is_refused_rather_than_restarted(self) -> None:
         # Holding the port is not proof of whose server it is, so this half of
         # the table must never reach the branch that stops a process.
         stranger = json.dumps({"interface_version": "", "identity": ""})
-        plan = self.plan(stranger, app_exists=True, listener_owner="foreign")
+        plan = self.plan(stranger, app_exists=False, listener_owner="foreign")
         self.assertEqual("refuse", plan["action"])
         self.assertNotIn("estart", plan["reason"], "a stranger's process is not ours to restart")
 
     def test_even_a_matching_runtime_is_refused_when_the_managed_launcher_is_not_owner(
         self,
     ) -> None:
-        plan = self.plan(EXPECTED, app_exists=True, listener_owner="foreign")
+        plan = self.plan(EXPECTED, app_exists=False, listener_owner="foreign")
         self.assertEqual("refuse", plan["action"])
         self.assertIn("left it untouched", plan["reason"])
 
@@ -168,10 +199,208 @@ class DecisionTableTests(unittest.TestCase):
     def test_the_table_above_covers_every_action_the_script_can_return(self) -> None:
         actions = set(re.findall(r'action = "([a-z-]+)"', tray_source()))
         self.assertEqual(
-            {"open-app", "open-browser", "start-server", "restart-required", "refuse"},
+            {
+                "open-app",
+                "open-browser",
+                "start-server",
+                "in-transition",
+                "restart-required",
+                "refuse",
+            },
             actions,
             "a new action must arrive with the row of this table that exercises it",
         )
+
+
+def run_tray_functions(body: str, *, app_path: str, launcher_directory: str) -> dict:
+    """Load every function of the tray script, then run `body`; its JSON answer.
+
+    The functions are parsed out of the file rather than dot-sourced, so the
+    icon-only half (the click handler and its helpers) is reachable too, and
+    nothing at the script's top level -- the icon, its message loop -- runs.
+    `body` may redefine a function first: a function shadows a cmdlet of the
+    same name, which is how these tests keep Start-Process from starting
+    anything.
+    """
+    pwsh = shutil.which("pwsh")
+    if pwsh is None:
+        raise unittest.SkipTest("pwsh is not installed")
+    escaped = TRAY.replace("'", "''")
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$ast = [System.Management.Automation.Language.Parser]::ParseFile('{escaped}', [ref]$null, [ref]$null)
+foreach ($definition in $ast.FindAll({{ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] }}, $false)) {{
+    . ([scriptblock]::Create($definition.Extent.Text))
+}}
+$AppPath = '{app_path.replace("'", "''")}'
+$LauncherDirectory = '{launcher_directory.replace("'", "''")}'
+$Port = 8642
+$LogPath = Join-Path ([IO.Path]::GetTempPath()) "valkama-tray-test-$PID.log"
+$ClickQuietMilliseconds = 1500
+$ConnectTimeoutMilliseconds = 300
+$script:Busy = $false
+$script:LastClickAt = [DateTime]::MinValue
+$script:Log = [System.Collections.Generic.List[string]]::new()
+$script:Started = [System.Collections.Generic.List[string]]::new()
+function Write-TrayLog([string]$Message) {{ $script:Log.Add($Message) }}
+function Start-Process {{ param($FilePath, $ArgumentList, $WindowStyle) $script:Started.Add([string]$FilePath) }}
+function Start-Sleep {{ param($Milliseconds) }}
+{body}
+"""
+    done = subprocess.run(
+        [pwsh, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script],
+        capture_output=True,
+        check=False,
+        timeout=120,
+    )
+    stderr = done.stderr.decode("utf-8", errors="replace")  # diagnostics for a human only
+    if done.returncode != 0:
+        raise AssertionError(stderr)
+    return json.loads(done.stdout.decode("utf-8", errors="strict").strip().splitlines()[-1])
+
+
+class OpenPathTests(unittest.TestCase):
+    """What a click does, run against the script's own functions with no network."""
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        root = Path(self.temporary.name)
+        self.app = root / "Valkama.exe"
+        self.app.write_bytes(b"")
+        self.missing_app = str(root / "no-app" / "Valkama.exe")
+        self.no_launcher = str(root / "no-launcher")
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def test_with_the_app_installed_a_click_starts_it_and_consults_nothing(self) -> None:
+        # The launcher directory does not even exist: had any check run, the
+        # outcome would be a failure naming the missing launcher.
+        answer = run_tray_functions(
+            """
+function Get-ManagedLauncher { throw 'the launcher was consulted' }
+function Get-ListenerRuntime { throw 'the port was probed' }
+$result = Open-Valkama
+[pscustomobject]@{ outcome = $result.outcome; steps = $result.steps; started = @($script:Started) } | ConvertTo-Json -Compress
+""",
+            app_path=str(self.app),
+            launcher_directory=self.no_launcher,
+        )
+        self.assertEqual("opened", answer["outcome"])
+        self.assertEqual([str(self.app)], answer["started"])
+        self.assertRegex(answer["steps"], r"^start-app=\d+ms$")
+
+    def test_a_second_click_during_an_open_is_ignored_and_says_why(self) -> None:
+        answer = run_tray_functions(
+            """
+function Open-App { New-TrayResult 'opened' 'opened the app' 'start-app=1ms' }
+Invoke-Open
+Invoke-Open
+$script:Busy = $true
+$script:LastClickAt = [DateTime]::MinValue
+Invoke-Open
+[pscustomobject]@{ log = @($script:Log); busy = $script:Busy } | ConvertTo-Json -Compress
+""",
+            app_path=str(self.app),
+            launcher_directory=self.no_launcher,
+        )
+        log = answer["log"]
+        self.assertEqual("click", log[0])
+        self.assertRegex(log[1], r"^opened after \d+ ms: opened the app \(start-app=1ms\)$")
+        self.assertRegex(log[2], r"^click ignored: \d+ ms after the last one$")
+        self.assertEqual("click ignored: an open is in flight", log[3])
+        self.assertEqual(4, len(log))
+
+    def test_without_the_app_a_transition_is_read_again_and_then_opened(self) -> None:
+        answer = run_tray_functions(
+            f"""
+$expected = '{EXPECTED}' | ConvertFrom-Json
+$script:Http = 0
+$script:Owner = 0
+function Get-ManagedLauncher {{ [pscustomobject]@{{ Python = 'python'; Shim = 'shim' }} }}
+function Get-ExpectedRuntime {{ $expected }}
+function Get-ListenerRuntime {{ $script:Http++; $expected }}
+function Get-ListenerOwnership {{ $script:Owner++; [pscustomobject]@{{ state = $(if ($script:Owner -eq 1) {{ 'free' }} else {{ 'managed' }}) }} }}
+function Stop-ManagedListener {{ throw 'a stop was attempted' }}
+$result = Open-ValkamaWithoutApp
+[pscustomobject]@{{ outcome = $result.outcome; steps = $result.steps; started = @($script:Started) }} | ConvertTo-Json -Compress
+""",
+            app_path=self.missing_app,
+            launcher_directory=self.no_launcher,
+        )
+        self.assertEqual("opened", answer["outcome"])
+        self.assertEqual(["http://127.0.0.1:8642/"], answer["started"])
+        self.assertIn("owner-again=", answer["steps"])
+        self.assertIn("plan=open-browser", answer["steps"])
+
+    def test_without_the_app_a_transition_that_persists_is_said_not_acted_on(self) -> None:
+        for owner, http in (("free", "$expected"), ("managed", "$null")):
+            with self.subTest(owner=owner):
+                answer = run_tray_functions(
+                    f"""
+$expected = '{EXPECTED}' | ConvertFrom-Json
+function Get-ManagedLauncher {{ [pscustomobject]@{{ Python = 'python'; Shim = 'shim' }} }}
+function Get-ExpectedRuntime {{ $expected }}
+function Get-ListenerRuntime {{ {http} }}
+function Get-ListenerOwnership {{ [pscustomobject]@{{ state = '{owner}' }} }}
+function Stop-ManagedListener {{ throw 'a stop was attempted' }}
+$result = Open-ValkamaWithoutApp
+[pscustomobject]@{{ outcome = $result.outcome; message = $result.message; started = @($script:Started) }} | ConvertTo-Json -Compress
+""",
+                    app_path=self.missing_app,
+                    launcher_directory=self.no_launcher,
+                )
+                self.assertEqual("starting", answer["outcome"])
+                self.assertEqual([], answer["started"])
+                self.assertNotIn("Restart it now", answer["message"])
+
+    def test_the_http_probe_gives_up_on_a_refused_connect_quickly(self) -> None:
+        # Nothing listens on a port this test just released. Windows reports a
+        # refused loopback connect only after about two seconds of retries,
+        # which the old two-second probe waited out on every click.
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+        answer = run_tray_functions(
+            f"""
+$Port = {port}
+$watch = [Diagnostics.Stopwatch]::StartNew()
+$reading = Get-ListenerRuntime
+[pscustomobject]@{{ none = ($null -eq $reading); ms = $watch.ElapsedMilliseconds }} | ConvertTo-Json -Compress
+""",
+            app_path=self.missing_app,
+            launcher_directory=self.no_launcher,
+        )
+        self.assertTrue(answer["none"])
+        self.assertLess(answer["ms"], 1500)
+
+    def test_an_http_error_still_proves_that_something_holds_the_port(self) -> None:
+        with socket.socket() as server:
+            server.bind(("127.0.0.1", 0))
+            server.listen()
+            port = server.getsockname()[1]
+
+            def answer_once() -> None:
+                connection, _ = server.accept()
+                with connection:
+                    connection.recv(4096)
+                    connection.sendall(
+                        b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                    )
+
+            thread = threading.Thread(target=answer_once, daemon=True)
+            thread.start()
+            answer = run_tray_functions(
+                f"""
+$Port = {port}
+$reading = Get-ListenerRuntime
+[pscustomobject]@{{ none = ($null -eq $reading); version = [string]$reading.interface_version }} | ConvertTo-Json -Compress
+""",
+                app_path=self.missing_app,
+                launcher_directory=self.no_launcher,
+            )
+            thread.join(timeout=10)
+        self.assertEqual({"none": False, "version": ""}, answer)
 
 
 class InstalledPathTests(unittest.TestCase):
@@ -297,18 +526,19 @@ class VisibleFailureTests(unittest.TestCase):
     """A click ends in a window or in a sentence, never in a log line alone."""
 
     def test_the_open_path_carries_failures_back_instead_of_logging_them(self) -> None:
-        body = function_body(tray_source(), "Open-Valkama")
-        self.assertNotIn(
-            "Write-TrayLog",
-            body,
-            "a refusal that only writes the log is a click that did nothing",
-        )
+        for name in ("Open-Valkama", "Open-App", "Open-ValkamaWithoutApp"):
+            with self.subTest(function=name):
+                self.assertNotIn(
+                    "Write-TrayLog",
+                    function_body(tray_source(), name),
+                    "a refusal that only writes the log is a click that did nothing",
+                )
 
     def test_every_outcome_the_open_path_mints_is_one_the_click_handler_answers(self) -> None:
         source = tray_source()
         minted = set(re.findall(r'New-TrayResult "(\w+)"', source))
         self.assertIn("opened", minted)
-        handler = function_body(source, "Invoke-Open")
+        handler = function_body(source, "Complete-Open")
         for outcome in sorted(minted - {"failed"}):
             self.assertIn(
                 f'"{outcome}"',

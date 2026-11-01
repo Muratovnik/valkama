@@ -23,6 +23,15 @@ a line in a log file nobody reads, so the icon looked frozen. The decision is
 therefore a pure function of runtime, ownership and app availability; the
 effect is separate, and anything that is not an opened window is said out loud.
 
+When the desktop app is installed, a click starts it and that is all: the app
+opens its window at once and owns every server decision, the stale-server
+question and its restart included. This script used to run the same checks
+first, synchronously on the icon's thread, which held the click for seconds,
+queued a second click behind it, and let two deciders read the port at
+different moments of one startup -- a click during startup was offered a
+restart of the server the app had just started. Only without the app does this
+script decide anything, and then off the icon's thread.
+
 -PrintPlan resolves that decision from supplied identities and prints it,
 touching no network and no process, which is what tests/test_tray_contract.py
 drives. -SelfTest performs a real open and prints the outcome.
@@ -52,7 +61,17 @@ param(
 $ErrorActionPreference = "Stop"
 $LogPath = Join-Path $env:TEMP "valkama-tray.log"
 $script:Busy = $false
+$script:LastClickAt = [DateTime]::MinValue
 $script:Notify = $null
+# A click this soon after the last one handled is the same click: a double
+# click, or one that queued while a dialog was up. The app focuses its window
+# on a second start anyway, so swallowing it loses nothing.
+$ClickQuietMilliseconds = 1500
+# A refused loopback connect costs Windows its whole SYN retry, about two
+# seconds; a live listener accepts in well under one millisecond.
+$ConnectTimeoutMilliseconds = 300
+# What the off-thread worker dot-sources to get these same functions.
+$TrayScriptPath = $PSCommandPath
 
 # VS Code exports this to every child process, and it makes an Electron
 # executable run as plain Node: the app would start and vanish without a
@@ -60,13 +79,28 @@ $script:Notify = $null
 Remove-Item Env:\ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
 
 function Write-TrayLog([string]$Message) {
-    "$([DateTime]::UtcNow.ToString('o')) $Message" | Add-Content -LiteralPath $LogPath
+    # Shared for writing: several trays and the desktop app can be writing the
+    # temp directory at once, and a line lost to a sharing violation is how a
+    # log ends up with an "icon up" and no "icon down".
+    $line = "$([DateTime]::UtcNow.ToString('o')) tray[$PID] $Message`n"
+    $bytes = [Text.Encoding]::UTF8.GetBytes($line)
+    for ($attempt = 0; $attempt -lt 5; $attempt++) {
+        try {
+            $stream = [IO.File]::Open($LogPath, [IO.FileMode]::Append, [IO.FileAccess]::Write, [IO.FileShare]::ReadWrite)
+            try { $stream.Write($bytes, 0, $bytes.Length) } finally { $stream.Dispose() }
+            return
+        }
+        catch [IO.IOException] {
+            Start-Sleep -Milliseconds 20
+        }
+    }
 }
 
-function New-TrayResult([string]$Outcome, [string]$Message) {
+function New-TrayResult([string]$Outcome, [string]$Message, [string]$Steps = "") {
     # `opened` is the only silent outcome. `stale` is a refusal a restart can
-    # lift; `failed` is everything else, and both are spoken.
-    return [pscustomobject]@{ outcome = $Outcome; message = $Message }
+    # lift; `starting` means the port is changing hands and a moment will
+    # settle it; `failed` is everything else, and all three are spoken.
+    return [pscustomobject]@{ outcome = $Outcome; message = $Message; steps = $Steps }
 }
 
 function Test-SamePath([string]$Left, [string]$Right) {
@@ -167,20 +201,29 @@ function Stop-ManagedListener($Launcher) {
 }
 
 function Get-ListenerRuntime {
+    # The connect is held to a short timeout of its own: nothing listening is
+    # the common case here, and Windows takes about two seconds to report a
+    # refused loopback connect.
+    $handler = [Net.Http.SocketsHttpHandler]::new()
+    $handler.ConnectTimeout = [TimeSpan]::FromMilliseconds($ConnectTimeoutMilliseconds)
+    $client = [Net.Http.HttpClient]::new($handler)
+    $client.Timeout = [TimeSpan]::FromSeconds(2)
     try {
-        $payload = Invoke-RestMethod "http://127.0.0.1:$Port/api/runtime" -Method Get -TimeoutSec 2
-        if ($null -eq $payload) {
-            return [pscustomobject]@{ interface_version = ""; identity = "" }
-        }
+        $response = $client.GetAsync("http://127.0.0.1:$Port/api/runtime").GetAwaiter().GetResult()
+        # An HTTP error proves that something owns the port; do not treat an
+        # older listener with no runtime endpoint as an unused port.
+        $unreadable = [pscustomobject]@{ interface_version = ""; identity = "" }
+        if (-not $response.IsSuccessStatusCode) { return $unreadable }
+        $text = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+        try { $payload = $text | ConvertFrom-Json } catch { return $unreadable }
+        if ($null -eq $payload -or $payload -isnot [pscustomobject]) { return $unreadable }
         return $payload
     }
     catch {
-        # An HTTP error proves that something owns the port; do not treat an
-        # older listener with no runtime endpoint as an unused port.
-        if ($null -ne $_.Exception.Response) {
-            return [pscustomobject]@{ interface_version = ""; identity = "" }
-        }
         return $null
+    }
+    finally {
+        $client.Dispose()
     }
 }
 
@@ -210,18 +253,25 @@ function Get-StaleReason($Expected, $Actual) {
 function Resolve-OpenPlan($Expected, $Listener, [string]$Ownership, [bool]$AppIsInstalled) {
     <#
     The whole decision, as a pure function of runtime, ownership and app
-    availability. Five actions:
+    availability. Six actions:
 
-      open-app          the app opens; it starts the server itself when needed
+      open-app          the app is installed; it decides everything else itself
       open-browser      no app is installed, so the page opens in a browser
       start-server      nothing is listening and there is no app to start one
+      in-transition     the two readings disagree: the port is changing hands
       restart-required  a managed server is stale and may be stopped safely
       refuse            managed launcher ownership could not be proven
 
     `restart-required` is separate from `refuse` on purpose: only one of them
     has a remedy this script may carry out, and stopping a stranger's process
-    is never that remedy.
+    is never that remedy. `in-transition` is separate from both: an answer
+    from a port the table calls free, or a managed owner that has not answered
+    yet, is what a server starting or stopping looks like between two reads,
+    and neither a refusal nor a restart is the right answer to it.
     #>
+    if ($AppIsInstalled) {
+        return [pscustomobject]@{ action = "open-app"; reason = "the app finds or starts the server itself" }
+    }
     if ($Ownership -eq "foreign") {
         return [pscustomobject]@{
             action = "refuse"
@@ -236,26 +286,20 @@ function Resolve-OpenPlan($Expected, $Listener, [string]$Ownership, [bool]$AppIs
     }
     if ($null -eq $Listener -and $Ownership -eq "managed") {
         return [pscustomobject]@{
-            action = "restart-required"
-            reason = "The managed Valkama listener is not exposing a readable runtime identity."
+            action = "in-transition"
+            reason = "the managed listener holds port $Port but has not answered yet"
         }
     }
     if ($null -eq $Listener) {
-        if ($AppIsInstalled) {
-            return [pscustomobject]@{ action = "open-app"; reason = "nothing is listening; the app starts the server itself" }
-        }
         return [pscustomobject]@{ action = "start-server"; reason = "nothing is listening and no app is installed" }
     }
-    if ($Ownership -ne "managed") {
+    if ($Ownership -eq "free") {
         return [pscustomobject]@{
-            action = "refuse"
-            reason = "A listener answered on port $Port, but managed launcher ownership could not be proven. Valkama left it untouched."
+            action = "in-transition"
+            reason = "a listener answered on port $Port but none holds it now"
         }
     }
     if (Test-RuntimeMatch $Expected $Listener) {
-        if ($AppIsInstalled) {
-            return [pscustomobject]@{ action = "open-app"; reason = "the managed server has the current runtime identity" }
-        }
         return [pscustomobject]@{ action = "open-browser"; reason = "the managed server has the current runtime identity; no app is installed" }
     }
     return [pscustomobject]@{
@@ -285,46 +329,91 @@ function Restart-Server($Launcher) {
     throw "the old server on port $Port did not stop"
 }
 
-function Open-Valkama {
+function Measure-Step([System.Collections.Generic.List[string]]$Steps, [string]$Name, [scriptblock]$Work) {
+    $watch = [Diagnostics.Stopwatch]::StartNew()
+    try { return & $Work }
+    finally { $Steps.Add("$Name=$($watch.ElapsedMilliseconds)ms") }
+}
+
+function Open-App {
+    $steps = [System.Collections.Generic.List[string]]::new()
     try {
-        $launcher = Get-ManagedLauncher
-        $expected = Get-ExpectedRuntime $launcher
-        $listener = Get-ListenerRuntime
-        $ownership = Get-ListenerOwnership $launcher
-        $plan = Resolve-OpenPlan $expected $listener $ownership.state (Test-Path -LiteralPath $AppPath)
+        Measure-Step $steps "start-app" { Start-Process -FilePath $AppPath } | Out-Null
+        return New-TrayResult "opened" "opened $AppPath" ($steps -join " ")
+    }
+    catch {
+        return New-TrayResult "failed" "Could not start $AppPath.`n`n$($_.Exception.Message)" ($steps -join " ")
+    }
+}
+
+function Open-ValkamaWithoutApp {
+    # The browser path: with no app to decide, this script decides, and it may
+    # start the server itself. Runs off the icon's thread.
+    $steps = [System.Collections.Generic.List[string]]::new()
+    try {
+        $launcher = Measure-Step $steps "launcher" { Get-ManagedLauncher }
+        $expected = Measure-Step $steps "runtime" { Get-ExpectedRuntime $launcher }
+        $listener = Measure-Step $steps "http" { Get-ListenerRuntime }
+        $ownership = Measure-Step $steps "owner" { Get-ListenerOwnership $launcher }
+        $plan = Resolve-OpenPlan $expected $listener $ownership.state $false
+        if ($plan.action -eq "in-transition") {
+            # Read both again, once. A start or stop in progress settles within
+            # a moment; a reading that still disagrees is said, not acted on.
+            Start-Sleep -Milliseconds 400
+            $listener = Measure-Step $steps "http-again" { Get-ListenerRuntime }
+            $ownership = Measure-Step $steps "owner-again" { Get-ListenerOwnership $launcher }
+            $plan = Resolve-OpenPlan $expected $listener $ownership.state $false
+        }
+        $trace = { "$($steps -join ' ') plan=$($plan.action)" }
         switch ($plan.action) {
-            "open-app" {
-                Start-Process -FilePath $AppPath
-                return New-TrayResult "opened" "opened $AppPath"
-            }
             "open-browser" {
                 Start-Process "http://127.0.0.1:$Port/"
-                return New-TrayResult "opened" "opened Valkama in a browser; no app at $AppPath"
+                return New-TrayResult "opened" "opened Valkama in a browser; no app at $AppPath" (& $trace)
             }
             "start-server" {
                 Start-Process -FilePath $launcher.Python -ArgumentList "`"$($launcher.Shim)`"", "serve", "--port", $Port -WindowStyle Hidden
-                for ($attempt = 0; $attempt -lt 10; $attempt++) {
+                for ($attempt = 0; $attempt -lt 20; $attempt++) {
                     Start-Sleep -Milliseconds 300
                     $listener = Get-ListenerRuntime
                     $ownership = Get-ListenerOwnership $launcher
                     if ($ownership.state -eq "managed" -and (Test-RuntimeMatch $expected $listener)) {
                         Start-Process "http://127.0.0.1:$Port/"
-                        return New-TrayResult "opened" "started the server and opened Valkama in a browser"
+                        return New-TrayResult "opened" "started the server and opened Valkama in a browser" (& $trace)
                     }
                     if ($ownership.state -eq "foreign") {
-                        return New-TrayResult "failed" $ownership.detail
+                        return New-TrayResult "failed" $ownership.detail (& $trace)
                     }
                 }
-                return New-TrayResult "failed" "The Valkama server did not start. Its log is $LogPath."
+                return New-TrayResult "failed" "The Valkama server did not start. Its log is $LogPath." (& $trace)
             }
-            "restart-required" { return New-TrayResult "stale" $plan.reason }
-            default { return New-TrayResult "failed" $plan.reason }
+            "in-transition" {
+                return New-TrayResult "starting" "Valkama is starting or stopping on port $Port right now. Click again in a moment. If this keeps happening, use Restart the server from this icon's menu." (& $trace)
+            }
+            "restart-required" { return New-TrayResult "stale" $plan.reason (& $trace) }
+            default { return New-TrayResult "failed" $plan.reason (& $trace) }
         }
     }
     catch {
         # A click must never kill the icon, and WinForms swallows handler
         # errors, so the failure is carried back as a value instead.
-        return New-TrayResult "failed" $_.Exception.Message
+        return New-TrayResult "failed" $_.Exception.Message ($steps -join " ")
+    }
+}
+
+function Open-Valkama {
+    if (Test-Path -LiteralPath $AppPath) { return Open-App }
+    return Open-ValkamaWithoutApp
+}
+
+function Invoke-RestartWork {
+    try {
+        $launcher = Get-ManagedLauncher
+        Restart-Server $launcher
+        $result = Open-Valkama
+        return New-TrayResult $result.outcome $result.message "after restart: $($result.steps)"
+    }
+    catch {
+        return New-TrayResult "failed" "Could not restart the Valkama server.`n`n$($_.Exception.Message)"
     }
 }
 
@@ -342,7 +431,7 @@ if ($PrintPlan) {
 
 if ($SelfTest) {
     $result = Open-Valkama
-    Write-TrayLog "self test: $($result.outcome): $($result.message)"
+    Write-TrayLog "self test: $($result.outcome): $($result.message) ($($result.steps))"
     $result | ConvertTo-Json -Compress
     return
 }
@@ -370,49 +459,133 @@ function Confirm-Restart([string]$Message) {
     return $answer -eq [System.Windows.Forms.DialogResult]::Yes
 }
 
-function Invoke-Restart {
+function Show-TrayNotice([string]$Message) {
+    # Not a problem, a moment: the port is changing hands.
+    [void][System.Windows.Forms.MessageBox]::Show(
+        $Message,
+        "Valkama",
+        [System.Windows.Forms.MessageBoxButtons]::OK,
+        [System.Windows.Forms.MessageBoxIcon]::Information)
+}
+
+# One worker at a time: the busy gate admits no second open while one runs.
+# Plain script-scope state and one timer, rather than closures, because a
+# closure is a module of its own and would not see this script's functions
+# or its $script: variables.
+$script:Work = $null
+$script:WorkTimer = New-Object System.Windows.Forms.Timer
+$script:WorkTimer.Interval = 50
+$script:WorkTimer.add_Tick({ Complete-TrayWork })
+
+function Start-TrayWork([string]$Name, [string]$Then, $Context) {
+    <#
+    Run one of this script's functions on a thread of its own and hand its
+    result to the function named $Then back on the icon's thread, where dialogs
+    belong. The worker dot-sources this same file in its side-effect-free
+    -PrintPlan mode, so it runs exactly the code the tests drive.
+    #>
+    $worker = [powershell]::Create()
+    $null = $worker.AddScript({
+            param($Script, $Directory, $ListenPort, $App, $Function)
+            . $Script -PrintPlan -LauncherDirectory $Directory -Port $ListenPort -AppPath $App | Out-Null
+            & $Function
+        }).AddArgument($TrayScriptPath).AddArgument($LauncherDirectory).AddArgument($Port).AddArgument($AppPath).AddArgument($Name)
+    $script:Work = [pscustomobject]@{
+        Worker = $worker
+        Pending = $worker.BeginInvoke()
+        Then = $Then
+        Context = $Context
+    }
+    $script:WorkTimer.Start()
+}
+
+function Complete-TrayWork {
+    $work = $script:Work
+    if ($null -eq $work -or -not $work.Pending.IsCompleted) { return }
+    $script:WorkTimer.Stop()
+    $script:Work = $null
     try {
-        $launcher = Get-ManagedLauncher
-        Restart-Server $launcher
-        $result = Open-Valkama
-        Write-TrayLog "after restart: $($result.outcome): $($result.message)"
-        if ($result.outcome -ne "opened") { Show-TrayProblem $result.message }
+        $result = @($work.Worker.EndInvoke($work.Pending))[-1]
+        if ($null -eq $result) {
+            # The worker's own error is the only account of what went wrong.
+            $why = @($work.Worker.Streams.Error | ForEach-Object { [string]$_ }) -join "`n"
+            $result = New-TrayResult "failed" "The Valkama check ended without an answer.`n`n$why"
+        }
     }
     catch {
-        Write-TrayLog "restart failed: $($_.Exception.Message)"
-        Show-TrayProblem "Could not restart the Valkama server.`n`n$($_.Exception.Message)"
+        $result = New-TrayResult "failed" $_.Exception.Message
+    }
+    finally {
+        $work.Worker.Dispose()
+    }
+    & $work.Then $result $work.Context
+}
+
+function Complete-Open($Result, [Diagnostics.Stopwatch]$Watch) {
+    # Every outcome of an open ends here, on the icon's thread, and every one
+    # but `opened` is said in a dialog. The icon stays busy until it is.
+    $restarting = $false
+    try {
+        Write-TrayLog "$($Result.outcome) after $($Watch.ElapsedMilliseconds) ms: $($Result.message) ($($Result.steps))"
+        if ($Result.outcome -eq "opened") { return }
+        if ($Result.outcome -eq "stale" -and (Confirm-Restart $Result.message)) {
+            Write-TrayLog "restart confirmed"
+            $restarting = $true
+            Start-TrayWork "Invoke-RestartWork" "Complete-Restart" $null
+            return
+        }
+        if ($Result.outcome -eq "starting") {
+            Show-TrayNotice $Result.message
+            return
+        }
+        Show-TrayProblem $Result.message
+    }
+    finally {
+        if (-not $restarting) { $script:Busy = $false }
+    }
+}
+
+function Complete-Restart($Result, $Context) {
+    try {
+        Write-TrayLog "after restart: $($Result.outcome): $($Result.message) ($($Result.steps))"
+        if ($Result.outcome -ne "opened") { Show-TrayProblem $Result.message }
+    }
+    finally {
+        $script:Busy = $false
     }
 }
 
 function Invoke-Open {
-    # A dialog pumps messages, so a second click during one would stack another
-    # dialog on top of it.
-    if ($script:Busy) { return }
+    # Clicks are gated by time as well as by the busy flag: a click queued
+    # while the icon's thread was occupied arrives after the flag has cleared,
+    # and used to start a second decision in the middle of the first one's
+    # startup.
+    $now = [DateTime]::UtcNow
+    $sinceLast = ($now - $script:LastClickAt).TotalMilliseconds
+    if ($script:Busy -or $sinceLast -lt $ClickQuietMilliseconds) {
+        $why = if ($script:Busy) { "an open is in flight" } else { "$([int]$sinceLast) ms after the last one" }
+        Write-TrayLog "click ignored: $why"
+        return
+    }
+    $script:LastClickAt = $now
     $script:Busy = $true
-    try {
-        $result = Open-Valkama
-        Write-TrayLog "$($result.outcome): $($result.message)"
-        if ($result.outcome -eq "opened") { return }
-        if ($result.outcome -eq "stale" -and (Confirm-Restart $result.message)) {
-            Invoke-Restart
-            return
-        }
-        Show-TrayProblem $result.message
+    $watch = [Diagnostics.Stopwatch]::StartNew()
+    Write-TrayLog "click"
+    if (Test-Path -LiteralPath $AppPath) {
+        Complete-Open (Open-App) $watch
+        return
     }
-    finally {
-        $script:Busy = $false
-    }
+    Start-TrayWork "Open-ValkamaWithoutApp" "Complete-Open" $watch
 }
 
 function Invoke-MenuRestart {
-    if ($script:Busy) { return }
+    if ($script:Busy) {
+        Write-TrayLog "restart ignored: an open is in flight"
+        return
+    }
     $script:Busy = $true
-    try {
-        Invoke-Restart
-    }
-    finally {
-        $script:Busy = $false
-    }
+    Write-TrayLog "restart chosen from the menu"
+    Start-TrayWork "Invoke-RestartWork" "Complete-Restart" $null
 }
 
 $script:Notify = New-Object System.Windows.Forms.NotifyIcon
@@ -441,6 +614,7 @@ $timer.add_Tick({
             $probe.Dispose()  # never keep the session's mutex alive ourselves
         }
         catch {
+            Write-TrayLog "session mutex gone"
             [System.Windows.Forms.Application]::Exit()
         }
     })
