@@ -43,11 +43,11 @@ export const SEMANTIC_TONE_TOKENS: Record<SemanticTone, string> = {
 }
 
 const SEMANTIC_TONE_COLORS: Record<SemanticTone, string> = {
-  neutral: '#8f8f8f',
+  neutral: '#a8a8a8',
   info: '#7cacf8',
   success: '#7bd6a1',
   warning: '#d9b06a',
-  danger: '#ef8479',
+  danger: '#f79186',
 }
 
 const STATE_PRESENTATION = {
@@ -73,11 +73,17 @@ const STATE_PRESENTATION = {
    * the six names one workflow happens to use, which is why renaming Dev lost
    * its colour. A category is shared vocabulary, so an installation that
    * renames a state or adds a second active one keeps the reading.
+   *
+   * Each category that asks something of a reader has a hue of its own, and
+   * the two that are simply where work waits stay neutral. Work under way was
+   * green — the same green as finished work, so a column of Dev and a column
+   * of Done said the same thing — and the queue was the blue of selection and
+   * focus. Moving is blue now, finished is green, and the queue says nothing.
    */
   'work-item-state': {
     backlog: { tone: 'neutral', emphasis: 'quiet' },
-    queued: { tone: 'info', emphasis: 'quiet' },
-    active: { tone: 'success', emphasis: 'quiet' },
+    queued: { tone: 'neutral', emphasis: 'quiet' },
+    active: { tone: 'info', emphasis: 'quiet' },
     review: { tone: 'warning', emphasis: 'quiet' },
     completed: { tone: 'success', emphasis: 'quiet' },
     blocked: { tone: 'danger', emphasis: 'strong' },
@@ -95,9 +101,9 @@ const STATE_PRESENTATION = {
    * finished work is the green of something achieved and work under way is
    * blue; review is the amber of a decision waiting, and everything still
    * ahead — queued or backlog — is the one grey of what remains, which is what
-   * makes a lane's tail read as its unfinished volume. These differ from the
-   * board's `work-item-state` tones on purpose: there a card's colour says what
-   * is happening to it now, here a lane's colours say how far it has come.
+   * makes a lane's tail read as its unfinished volume. These are the board's
+   * `work-item-state` tones for the same categories: a hue means one thing on
+   * every surface, so Dev is the same blue on a column head and on a lane.
    */
   'work-item-chain-group': {
     done: { tone: 'success', emphasis: 'quiet' },
@@ -107,9 +113,12 @@ const STATE_PRESENTATION = {
     backlog: { tone: 'neutral', emphasis: 'quiet' },
     blocked: { tone: 'danger', emphasis: 'strong' },
   },
+  // A held node is work moving, so it takes the hue of work under way. It was
+  // green, which on the zoomed-out graph painted held work the colour of
+  // finished work.
   'work-item-node-marker': {
     ready: { tone: 'neutral', emphasis: 'quiet' },
-    claimed: { tone: 'success', emphasis: 'quiet' },
+    claimed: { tone: 'info', emphasis: 'quiet' },
     backlog: { tone: 'neutral', emphasis: 'quiet' },
     queued: { tone: 'neutral', emphasis: 'quiet' },
     active: { tone: 'neutral', emphasis: 'quiet' },
@@ -188,8 +197,14 @@ const STATE_PRESENTATION = {
     unbound: { tone: 'neutral', emphasis: 'quiet' },
     unavailable: { tone: 'danger', emphasis: 'strong' },
   },
+  /**
+   * Workable is the ordinary condition of open backlog, so it is quiet: green
+   * on every second card of a backlog column was the loudest colour on the
+   * board and the one that meant least. Blocked is the exception it exists
+   * to show.
+   */
   'work-item-readiness': {
-    ready: { tone: 'success', emphasis: 'quiet' },
+    ready: { tone: 'neutral', emphasis: 'quiet' },
     blocked: { tone: 'danger', emphasis: 'strong' },
   },
 } satisfies Record<StateDimension, Record<string, StatePresentation>>

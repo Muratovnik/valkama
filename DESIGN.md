@@ -1,23 +1,23 @@
 ---
 name: Valkama
-description: A near-black, Codex-look operations console for planning, executing, and reviewing agent work.
+description: A dense, calm, dark operations console for planning, executing, and reviewing agent work.
 colors:
   navigation: "#0e0f10"
   navigation-raised: "#191a1b"
   navigation-active: "#242526"
   canvas: "#181818"
-  surface: "#212121"
-  surface-muted: "#282828"
-  surface-hover: "#303030"
-  surface-active: "#393939"
+  surface: "#252525"
+  surface-muted: "#333"
+  surface-hover: "#3b3b3b"
+  surface-active: "#464646"
   text: "#ececec"
-  text-muted: "#b3b3b3"
-  text-tertiary: "#8f8f8f"
+  text-muted: "#c4c4c4"
+  text-tertiary: "#a8a8a8"
   navigation-text-muted: "#8f8f8f"
   rule: "rgb(255 255 255 / 8%)"
   rule-strong: "rgb(255 255 255 / 18%)"
-  scrollbar-thumb: "#393939"
-  scrollbar-thumb-hover: "#4f4f4f"
+  scrollbar-thumb: "#464646"
+  scrollbar-thumb-hover: "#5c5c5c"
   accent: "#7cacf8"
   brand-gradient-from: "#ececec"
   brand-gradient-mid: "#b9cdf5"
@@ -25,7 +25,7 @@ colors:
   brand-spark-from: "#7cacf8"
   brand-spark-to: "#ececec"
   action-primary: "#ececec"
-  danger: "#ef8479"
+  danger: "#f79186"
   success: "#7bd6a1"
   warning: "#d9b06a"
 
@@ -77,20 +77,27 @@ spacing:
 
 ## Direction
 
-**Creative north star (owner decision 2026-08-14): the Codex app look.**
+Valkama is a desktop workspace for reading and moving a large amount of work,
+and every rule here serves one aim: a reader finds an item, what state it is
+in and how much it matters at a glance, without reading every word on the
+screen. The qualities the interface keeps — dense, calm, dark, low chrome,
+text first, detail beside the work — are kept because they serve that aim. A
+dark ground lets the few marks that carry meaning stand out; density keeps a
+whole column of work in one view; a state written as a word reads without a
+legend.
 
-Valkama is a dense, calm desktop workspace. Per the owner decision of
-2026-08-14 it follows the visual appearance of the Codex app — near-black
-low-chrome surfaces, list-first density, text-first statuses, detail beside the
-work — including its composition, while never using OpenAI brand assets
-(logos, proprietary typefaces, names). The former standalone "Project Console"
-identity is superseded. The tokens below are the revised Codex-look palette,
-adopted 2026-08-16, superseding package R7 of the 2026-08-14 recovery pass.
+A rule earns its place by legibility and hierarchy, measured where it can be —
+a contrast ratio, a count, a size — and never by resemblance to another
+product. The look was first pointed at with a reference application's mood;
+that reference was a direction for the mood, not a specification, and
+matching it is not a criterion anywhere in this document. No third-party brand
+assets (logos, proprietary typefaces, names) are used.
 
 This is an application, not a themed dashboard. The shell is dark throughout;
-hierarchy comes from tonal steps, one-pixel rules, typography, and a small set of
-semantic colors. There are no paper surfaces, textures, decorative diagrams,
-glass, gradients, glow, oversized marketing headings, or game-like chrome.
+hierarchy comes from tonal steps, typography, and a small set of colours that
+each mean one thing. There are no paper surfaces, textures, decorative
+diagrams, glass, gradients, glow, oversized marketing headings, or game-like
+chrome.
 
 ## System rules
 
@@ -100,8 +107,7 @@ glass, gradients, glow, oversized marketing headings, or game-like chrome.
   gaps are 12px, panel spacing is 16px, and section rhythm is 36px. A module
   keeps `--size-page-gutter` from the panel edge. Density comes from alignment
   and disclosure; taking it from the gaps instead is what made the shell read as
-  crowded against its own reference, which spends 275px on a rail and 16px
-  inside a row.
+  crowded — rows whose parts touch are read as one blur rather than scanned.
 - The context bar names the current module once. A module must not repeat the
   same title or introductory copy merely to fill space.
 - The shell has two zones and they must read as two. The chrome — the
@@ -145,15 +151,27 @@ glass, gradients, glow, oversized marketing headings, or game-like chrome.
   ground, sheet. An object lies one step above the container holding it — a card
   on a lane, a lane on the workspace — and never level with it. Each rung has
   exactly one token, and the two that are positions rather than tones are named
-  as such:
+  as such. The contrast is the WCAG 2 ratio to the rung the thing lies on:
 
-  | Rung | Token | What stands there |
-  | --- | --- | --- |
-  | chrome | `--color-navigation` | the rail and the context bar |
-  | workspace panel | `--color-canvas` | the module panel lying on the chrome |
-  | ground | `--color-surface` | a lane, a list, a table |
-  | sheet | `--color-surface-sheet` | a card, a row, a panel lying on a ground |
-  | recess | `--color-surface-recess` | an epic well, a strip cut into a card |
+  | Rung | Token | Value | Contrast to what it lies on | What stands there |
+  | --- | --- | --- | --- | --- |
+  | chrome | `--color-navigation` | `#0e0f10` | — | the rail and the context bar |
+  | workspace panel | `--color-canvas` | `#181818` | 1.08 on the chrome | the module panel |
+  | ground | `--color-surface` | `#252525` | 1.16 on the panel | a lane, a list, a table, a drawer |
+  | sheet | `--color-surface-sheet` | `#333333` | 1.21 on its lane | a card, a panel lying on a ground |
+  | control | `--color-control-surface` | `#3b3b3b` | 1.13 on a card | a resting control, a hovered card |
+  | pressed | `--color-surface-active` | `#464646` | 1.19 on a control | a hovered or chosen control |
+  | recess | `--color-surface-recess` | `#181818` | 1.41 under a card | an epic well, a strip cut into a card |
+
+  Separation without a line is a contrast, so it is measured as one. A lane
+  owes 1.15 to the panel and a card 1.20 to its lane — 1.20 is the smallest
+  seam the interface already showed as two surfaces, and the ladder it replaced
+  stood 1.08–1.10 at every seam and read as one grey mass. The ratio's `+0.05`
+  models glare on a real screen, which is why a channel difference cannot stand
+  in for it: eight hex units at the dark end are a large ratio of two tiny
+  luminances that a good panel in a dark room shows and an office monitor in
+  daylight does not. `designTokens.test.ts` holds the floors and keeps the
+  ladder that blended as a case it must reject.
 
   `--color-surface-sheet` and `--color-surface-recess` are roles: a container
   standing on another rung may re-point one to stay a step above itself — the
@@ -168,28 +186,58 @@ glass, gradients, glow, oversized marketing headings, or game-like chrome.
   have one would be two frames deep. What lies in a well still counts its step
   from the ground the well is cut into, not from the floor of the well, or the
   cards inside it would sink to the ground's own tone and the group would read
-  as a hole with nothing in it. The neutral ramp
-  is Codex's own (`#0d0d0d`/`#181818`/`#212121`/`#282828`/`#303030`/`#393939`),
-  read out of the installed desktop application rather than approximated by eye,
-  and so is the direction: it paints the window with an under-color and lays the
-  content on it as a lighter rounded panel. The chrome uses a near-neutral
-  graphite ramp (`#0e0f10`/`#191a1b`/`#242526`) with a two-point channel spread
-  at each navigation step, keeping the shell subtly cool while the workspace
-  remains neutral.
-- The canvas, lists, panels, fields, and inspectors use a near-black neutral
-  ladder (the Codex-look ground). Light tones are reserved for text and the
-  primary action button, never for large page surfaces.
-- The primary action is a light button on the dark ground; quiet accent blue
-  identifies selection, focus, and links. Green, amber, and red communicate
-  success, warning, and failure only, as a dot plus a text label.
+  as a hole with nothing in it. The direction keeps the work brightest: the
+  window's under-colour is the darkest thing on screen and the content lies on
+  it as a lighter rounded panel, so the eye starts where the work is. The
+  chrome uses a near-neutral graphite ramp (`#0e0f10`/`#191a1b`/`#242526`) with
+  a two-point channel spread at each navigation step, keeping the shell subtly
+  cool while the workspace remains neutral.
+- The canvas, lists, panels, fields, and inspectors use the neutral ladder
+  above. Light tones are reserved for text and the primary action button, never
+  for large page surfaces.
+- Three text tones carry rank inside a row — full, muted, tertiary — and each
+  holds 4.5:1 on every ground it is drawn on. The tertiary tone is drawn on a
+  hovered card, so that is the ground it is measured on; a control and its
+  pressed state carry only the full and muted tones. Lifting the grounds lifts
+  the text: the tertiary tone stood at 4.08:1 on a hovered card before the
+  ladder moved. The three stay three — full over muted at least 1.4, muted
+  over tertiary at least 1.3.
+- The primary action is a light button on the dark ground. The accent
+  identifies selection, focus, and links, always as a ring, an outline or the
+  text itself around what is chosen; a state never draws a ring.
+- A colour on a work item means one thing, everywhere it appears, and ordinary
+  work carries none. `uiSystem.ts` assigns them and nothing else does:
+
+  | Tone | Means | On a work item |
+  | --- | --- | --- |
+  | `info` (blue) | work moving | in progress, a held item on the graph |
+  | `success` (green) | finished, healthy | done |
+  | `warning` (amber) | a decision waiting, or high priority | review, a stale claim, high |
+  | `danger` (red) | stopped, or urgent | blocked, urgent |
+  | `neutral` | nothing to act on | backlog, the queue, low and medium priority, a plain task, workable |
+
+  Hue says how much it asks of the reader and shape says which fact it is, so a
+  state and a priority that share a hue never share a shape. Kind carries no
+  colour. A colour that appears on every card is a colour nobody reads: in
+  progress used to be the green of done, the queue the blue of focus, and
+  workable — the ordinary condition of open backlog — a green line on every
+  second card, which made it the loudest colour on the board and the one that
+  meant least. Each hue holds 4.5:1 as text on a hovered card and 3:1 as a mark
+  on a pressed control (WCAG 1.4.3 and 1.4.11); `designTokens.test.ts` holds
+  both, and `uiSystem.test.ts` holds the meanings.
 - Color is never the only state signal. Every status has a stable text label
   and uses the shared semantic-state component.
-- A status color may occupy a mark or an edge, never a surface. A dot, a glyph,
+- A meaning colour may occupy a mark or an edge, never a surface. A dot, a glyph,
   the text itself, or a 3px inline-start marker carries the state; a tinted
   panel spends a whole surface on what its own sentence already says, and a
   screen holding several of them reads as a screen full of alarms.
-  `check:ui-system` rejects a status color blended into a background or a
-  container border.
+  `check:ui-system` rejects a meaning colour blended into a background or a
+  container border. The family it guards is declared once
+  (`scripts/ui-system/semantic-colors.mjs`) and shared by the tint rule, the
+  line ledger and the state-ownership rule; a test holds it equal to the tones
+  `uiSystem.ts` paints with, so a new meaning colour cannot arrive unguarded.
+  The guard never decided which facts get a colour — the tone map does, and
+  `uiSystem.test.ts` is what holds it.
 - Separation is tone and air; a drawn line is an earned exception. The review
   that forced this law counted 151 one-pixel lines across 42 files — every
   control outlined, every panel boxed — and named the signature: a designer
@@ -521,10 +569,10 @@ Cards do not reserve empty tag or source regions. Graph nodes allocate separate
 rows for status, title, and relationship metadata so labels cannot collide.
 A card's chain section leads with a branch map: one lane per origin of work,
 one equal-width segment per member, finished work then current work then what
-is ahead, so a lane's length is its volume. Chain views colour by progress —
-finished green, in progress blue, review amber, ahead grey, blocked red — which
-differs from a board card's tones on purpose: a card says what is happening to
-it now, a lane says how far it has come. The lane is a 3px status edge; where a
+is ahead, so a lane's length is its volume. Chain views colour with the
+board's hues — finished green, in progress blue, review amber, ahead grey,
+blocked red — because a hue means one thing on every surface: Dev is the same
+blue on a column head, in a list row and on a lane. The lane is a 3px status edge; where a
 member is narrower than a few pixels, work under way rides it as a raised
 rounded mark, so it is still seen without spending a surface on it. No lane is
 drawn shorter than 16px: a lane of one or two tasks on a long chain is
@@ -612,5 +660,7 @@ the guard because it is a numeric range with an `@font-face` exception that no
 value list can state. `tests/styleRules.test.mjs` asks the real linter with the
 real config, because a configured rule that never runs reports the invariant as
 held. What the tests keep is what none of the three can decide: whether two
-zones are far enough apart to be two zones, whether a sheet still sits above its
-ground, and whether the drawing in three renderers is still one drawing.
+zones are far enough apart to be two zones, whether a card still reads on its
+lane and a lane on the panel, whether text and the meaning colours read on
+every ground they stand on, whether a hue still means one thing, and whether
+the drawing in three renderers is still one drawing.

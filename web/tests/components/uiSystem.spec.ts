@@ -147,9 +147,10 @@ describe('shared UI contracts', () => {
   })
 
   it('owns work-item readiness severity in the shared state table', () => {
+    // Workable is the ordinary state of open backlog, so it carries no hue.
     expect(statePresentation('work-item-readiness', 'ready')).toEqual({
       emphasis: 'quiet',
-      tone: 'success',
+      tone: 'neutral',
     })
     expect(statePresentation('work-item-readiness', 'blocked')).toEqual({
       emphasis: 'strong',
@@ -180,7 +181,7 @@ describe('shared UI contracts', () => {
     })
     expect(statePresentation('work-item-node-marker', 'claimed')).toEqual({
       emphasis: 'quiet',
-      tone: 'success',
+      tone: 'info',
     })
   })
 

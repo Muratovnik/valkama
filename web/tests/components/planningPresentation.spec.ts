@@ -130,8 +130,10 @@ describe('Planning semantic presentation', () => {
 
     expect(wrapper.get('.flow-node-card').attributes('data-tone')).toBe('danger')
 
+    // Held work is moving, so it takes the hue of work under way, not of
+    // finished work.
     await wrapper.setProps({ node: placedNode({ claim_ref: 'codex' }) })
-    expect(wrapper.get('.flow-node-card').attributes('data-tone')).toBe('success')
+    expect(wrapper.get('.flow-node-card').attributes('data-tone')).toBe('info')
     expect(wrapper.get('.flow-node-owner').text()).toContain('Assigned to')
 
     await wrapper.setProps({ ready: true })

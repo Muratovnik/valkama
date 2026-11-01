@@ -50,21 +50,31 @@
      Primitive: raw values. Nothing outside this file names one.
      ───────────────────────────────────────────────────────────────────── */
 
-  /* Codex's own gray ramp, read out of the installed desktop app rather than
-     approximated by eye. Higher is darker, which is how the reference numbers
-     its own steps. The ramp used to hold two entries one unit apart — #393939
-     and #3a3a3a — which is not a step, so the scrollbar thumb now sits on the
-     step it was already indistinguishable from. */
+  /* The neutral ramp, chosen by contrast rather than copied. Higher is darker.
+     The steps the workspace stands on are spaced so that each object reads
+     against the container holding it without a line: a lane on the panel at
+     1.16:1 (WCAG), a card on its lane at 1.21:1, a control on a card at 1.13:1.
+     The ramp they replace stood 1.08–1.10:1 apart at every seam, which is a
+     difference a dark room on a good panel shows and an office monitor in
+     daylight does not — so the board read as one grey mass. 1.20:1 is the
+     smallest seam the old interface already showed as two surfaces (the
+     settings band on the panel); 1.10:1 is the one that blended.
+     Lifting the grounds lifts the text that stands on them, so the two
+     secondary text tones moved up with them: the tertiary tone holds 4.5:1 on
+     the lightest ground it is drawn on, a hovered card. */
   --color-gray-1000: #0d0d0d;
   --color-gray-900: #181818;
-  --color-gray-800: #212121;
-  --color-gray-750: #282828;
-  --color-gray-700: #303030;
-  --color-gray-650: #393939;
-  --color-gray-550: #4f4f4f;
+  --color-gray-850: #252525;
+  --color-gray-800: #2b2b2b;
+  --color-gray-750: #333;
+  --color-gray-700: #3b3b3b;
+  --color-gray-650: #464646;
+  --color-gray-550: #5c5c5c;
   --color-gray-450: #767676;
   --color-gray-400: #8f8f8f;
+  --color-gray-350: #a8a8a8;
   --color-gray-300: #b3b3b3;
+  --color-gray-250: #c4c4c4;
   --color-gray-100: #ececec;
   --color-gray-50: #f2f2f2;
 
@@ -73,10 +83,12 @@
   --color-blue-500: #7cacf8;
   --color-blue-300: #b9cdf5;
 
-  /* One hue per state, and no more: green, amber, red. */
+  /* The hues that carry meaning. Each is light enough to hold 4.5:1 as text
+     on a hovered card and 3:1 as a mark on the lightest control. The red was
+     #ef8479 and fell to 4.4:1 there once the grounds rose, so it moved up. */
   --color-green-500: #7bd6a1;
   --color-amber-500: #d9b06a;
-  --color-red-500: #ef8479;
+  --color-red-500: #f79186;
 
   /* The categorical ramp for slices that mean a name rather than a state. */
   --color-cyan-400: #7fb4d3;
@@ -267,8 +279,9 @@
      (A violet cast was an earlier attempt at the same separation and tinted
      every panel instead, which is a color the product does not mean.)
 
-     The direction comes from the reference too: it paints the window with an
-     under-color and lays the content on it as a lighter rounded panel.
+     The direction is the one that keeps the work brightest: the window's
+     under-colour is the darkest thing on screen, and the content lies on it
+     as a lighter rounded panel, so the eye starts where the work is.
      tests/designTokens.test.ts asserts the relationship and the direction.
 
      The chosen graphite is in the neutral branch of the oracle: its two-point
@@ -282,18 +295,27 @@
   --color-navigation-raised: var(--color-slate-900);
   --color-navigation-active: var(--color-slate-800);
   --color-canvas: var(--color-gray-900);
-  --color-surface: var(--color-gray-800);
+  --color-surface: var(--color-gray-850);
   --color-surface-muted: var(--color-gray-750);
   --color-surface-hover: var(--color-gray-700);
   --color-surface-active: var(--color-gray-650);
   --color-text: var(--color-gray-100);
-  --color-text-muted: var(--color-gray-300);
-  --color-text-tertiary: var(--color-gray-400);
+  --color-text-muted: var(--color-gray-250);
+  --color-text-tertiary: var(--color-gray-350);
   --color-text-on-dark: var(--color-gray-50);
   --color-text-on-dark-muted: var(--color-gray-300);
   --color-navigation-text-muted: var(--color-gray-400);
   --color-rule: var(--color-white-8);
   --color-rule-strong: var(--color-white-18);
+
+  /* Meaning, one hue each. A colour on a work item says where it stands or how
+     much it matters, and nothing else: in progress and anything else moving is
+     `info`, finished and healthy is `success`, a decision waiting or a high
+     priority is `warning`, stopped or urgent is `danger`. Everything ordinary —
+     backlog, the queue, medium priority, a plain task, work that can simply be
+     taken — is neutral. A colour that appears on every card is a colour nobody
+     reads, and the green that used to mark ordinary backlog as workable was
+     exactly that. `uiSystem.ts` assigns these; nothing else does. */
   --color-accent: var(--color-blue-500);
   --color-action-primary: var(--color-gray-100);
   --color-action-danger: var(--color-red-500);
@@ -305,14 +327,14 @@
   --color-text-on-action: var(--color-gray-1000);
 
   /* Controls are fills, so the control tier lives above every static ground:
-     the grounds are 900/800/750 and a resting control is 700, hovered 650.
+     the grounds are 900/850/750 and a resting control is 700, hovered 650.
      It sat level with the muted ground once, which nobody saw while every
      control also wore an outline — remove the outlines and a filled button
-     standing on a sheet vanished into it. Disabled recedes a step toward the
-     ground instead of rising above the resting fill.
+     standing on a sheet vanished into it. Disabled recedes below the card it
+     stands on instead of rising above the resting fill.
      tests/designTokens.test.ts holds the relation. */
   --color-control-surface: var(--color-gray-700);
-  --color-control-disabled-surface: var(--color-gray-750);
+  --color-control-disabled-surface: var(--color-gray-800);
   --shadow-overlay: 0 20px 56px rgb(0 0 0 / 55%);
 
   /* What a modal drops on the window, and what a floating surface casts. The
@@ -324,8 +346,10 @@
   /* A tooltip floats above every ground in the ladder, so it is lighter than
      all of them rather than darker than one. It used to be #0a0a0a, which was
      a step below the darkest surface in the app; now that the chrome itself is
-     near-black, a tooltip over the rail would have been a shadow with text. */
-  --color-tooltip-surface: var(--color-gray-700);
+     near-black, a tooltip over the rail would have been a shadow with text.
+     It stands on the pressed step, which is lighter than any card or resting
+     control it can float over. */
+  --color-tooltip-surface: var(--color-gray-650);
   --color-tooltip-text: var(--color-gray-50);
   --color-tooltip-border: var(--color-gray-550);
   --color-scrollbar-thumb: var(--color-gray-650);

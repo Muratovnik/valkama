@@ -20,7 +20,7 @@ test('state presentation is dimension-aware instead of guessing from labels', ()
     emphasis: 'strong',
   })
   assert.deepEqual(statePresentation('work-item-state', 'active'), {
-    tone: 'success',
+    tone: 'info',
     emphasis: 'quiet',
   })
   assert.deepEqual(statePresentation('platform-ui-state', 'degraded'), {
@@ -60,12 +60,53 @@ test('state presentation is dimension-aware instead of guessing from labels', ()
 test('canvas visualizations use the same semantic colors as component states', () => {
   // Keyed by category, so a workflow that renames Dev keeps its colour and a
   // second active state gets the same one.
-  assert.equal(stateColor('work-item-state', 'backlog'), '#8f8f8f')
-  assert.equal(stateColor('work-item-state', 'queued'), '#7cacf8')
-  assert.equal(stateColor('work-item-state', 'active'), '#7bd6a1')
+  assert.equal(stateColor('work-item-state', 'backlog'), '#a8a8a8')
+  assert.equal(stateColor('work-item-state', 'queued'), '#a8a8a8')
+  assert.equal(stateColor('work-item-state', 'active'), '#7cacf8')
   assert.equal(stateColor('work-item-state', 'review'), '#d9b06a')
   assert.equal(stateColor('work-item-state', 'completed'), '#7bd6a1')
-  assert.equal(stateColor('work-item-state', 'blocked'), '#ef8479')
+  assert.equal(stateColor('work-item-state', 'blocked'), '#f79186')
+})
+
+/**
+ * What a hue means on a work item, as a set of facts a reader learns once.
+ *
+ * Before this held, green meant in progress, finished and workable at once,
+ * and blue meant the queue and the focus ring; a reader could not learn the
+ * colours because they did not mean anything, which is how a board with five
+ * hues on it still read as grey.
+ */
+test('a hue on a work item means one thing, and ordinary work carries none', () => {
+  const tone = (category: string) => statePresentation('work-item-state', category).tone
+  // The four categories that ask something of a reader each have their own.
+  const asking = ['active', 'review', 'blocked', 'completed'].map((category) => tone(category))
+  assert.equal(new Set(asking).size, asking.length, `state hues collide: ${asking.join(', ')}`)
+  assert.ok(!asking.includes('neutral'), 'a category that asks something is grey')
+  // Where work only waits, nothing is said.
+  for (const quiet of ['backlog', 'queued', 'cancelled']) assert.equal(tone(quiet), 'neutral')
+  // Priority speaks only above the default.
+  const priority = (level: 'low' | 'medium' | 'high' | 'urgent') =>
+    statePresentation('work-item-priority', level).tone
+  assert.equal(priority('medium'), 'neutral')
+  assert.equal(priority('low'), 'neutral')
+  assert.notEqual(priority('high'), 'neutral')
+  assert.notEqual(priority('urgent'), 'neutral')
+  assert.notEqual(priority('high'), priority('urgent'))
+  // Workable is the norm of open backlog; only its exception is coloured.
+  assert.equal(statePresentation('work-item-readiness', 'ready').tone, 'neutral')
+  assert.equal(statePresentation('work-item-readiness', 'blocked').tone, tone('blocked'))
+  // A chain and the graph use the board's hue for the same category.
+  for (const [group, category] of [
+    ['done', 'completed'],
+    ['active', 'active'],
+    ['review', 'review'],
+    ['blocked', 'blocked'],
+    ['queued', 'queued'],
+    ['backlog', 'backlog'],
+  ] as const) {
+    assert.equal(statePresentation('work-item-chain-group', group).tone, tone(category), group)
+  }
+  assert.equal(statePresentation('work-item-node-marker', 'claimed').tone, tone('active'))
 })
 
 test('selection policy uses one custom accessible implementation on every screen', () => {

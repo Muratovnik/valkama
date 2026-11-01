@@ -17,10 +17,10 @@ import { readTokens } from '../scripts/sync-tokens.mjs'
  * check:tokens` fails the gate when one drifts. One invariant, one owner.
  *
  * What is left is what a copy can be perfectly faithful to and still get wrong:
- * whether the two zones are far enough apart to be two zones, whether the
- * direction runs the way the reference runs it, and whether a sheet still sits
- * above the ground it lies on. Those are facts about the palette rather than
- * about its copies.
+ * whether the two zones are far enough apart to be two zones, whether a card
+ * still reads on its lane and a lane on the panel, and whether the text and
+ * the colours that carry meaning still read on every ground they stand on.
+ * Those are facts about the palette rather than about its copies.
  */
 const tokens = readTokens() as Map<string, { declared: string; value: string }>
 
@@ -31,8 +31,11 @@ function token(name: string): string {
   return found.value
 }
 
+/** `#333` is `#333333`: stylelint asks for the short form wherever one exists. */
+const longHex = (hex: string) => (hex.length === 4 ? hex.replaceAll(/[0-9a-f]/giu, '$&$&') : hex)
+
 const channel = (hex: string, index: number) =>
-  Number.parseInt(hex.slice(1 + index * 2, 3 + index * 2), 16)
+  Number.parseInt(longHex(hex).slice(1 + index * 2, 3 + index * 2), 16)
 
 const luminance = (hex: string) =>
   0.2126 * channel(hex, 0) + 0.7152 * channel(hex, 1) + 0.0722 * channel(hex, 2)
@@ -41,6 +44,58 @@ const luminance = (hex: string) =>
 const spread = (hex: string) =>
   Math.max(channel(hex, 0), channel(hex, 1), channel(hex, 2)) -
   Math.min(channel(hex, 0), channel(hex, 1), channel(hex, 2))
+
+/** WCAG 2 relative luminance: the measure a contrast ratio is taken in. */
+function relativeLuminance(hex: string): number {
+  const linear = (index: number) => {
+    const unit = channel(hex, index) / 255
+    return unit <= 0.04045 ? unit / 12.92 : ((unit + 0.055) / 1.055) ** 2.4
+  }
+  return 0.2126 * linear(0) + 0.7152 * linear(1) + 0.0722 * linear(2)
+}
+
+/**
+ * The WCAG 2 contrast ratio of two colours, lighter over darker.
+ *
+ * The `+ 0.05` in it is a model of the glare on a real screen, and it is why
+ * this is the measure for the surface ladder rather than a channel difference:
+ * at the dark end of the ramp a step of eight hex units is a large ratio of two
+ * tiny luminances, which a good panel in a dark room shows and an office
+ * monitor in daylight does not. The ladder that blended was eight units a step.
+ */
+function contrast(first: string, second: string): number {
+  const [light, dark] = [relativeLuminance(first), relativeLuminance(second)].sort(
+    (left, right) => right - left,
+  )
+  return (light + 0.05) / (dark + 0.05)
+}
+
+/** The contrast of two tokens, by name. */
+const between = (upper: string, lower: string) => contrast(token(upper), token(lower))
+
+const lighter = (upper: string, lower: string) =>
+  relativeLuminance(upper) > relativeLuminance(lower)
+
+/** One token stands visibly above another: lighter, and by a ratio a control can be told by. */
+const above = (upper: string, lower: string) =>
+  lighter(token(upper), token(lower)) && between(upper, lower) >= 1.1
+
+/**
+ * Whether a lane reads on the panel and a card on its lane, with no line drawn.
+ *
+ * 1.20 is the smallest seam the interface showed as two surfaces before this
+ * oracle existed — the settings band on the panel — and 1.10 is the one that
+ * blended on the board. A lane is a large area and is held to a little less
+ * than a card, which is the object a reader is looking for.
+ */
+function seamsRead(panel: string, ground: string, sheet: string): boolean {
+  return (
+    lighter(ground, panel) &&
+    lighter(sheet, ground) &&
+    contrast(ground, panel) >= 1.15 &&
+    contrast(sheet, ground) >= 1.2
+  )
+}
 
 /**
  * Whether a chrome and a workspace read as two zones.
@@ -56,9 +111,6 @@ const spread = (hex: string) =>
  * the violet failure, and it is the contrast between a tinted backing and a
  * neutral panel that says which of the two is the backing.
  */
-/** How far one ladder role stands above another, in the first channel. */
-const step = (lower: string, upper: string) => channel(token(upper), 0) - channel(token(lower), 0)
-
 function zonesRead(nav: string, canvas: string): boolean {
   if (spread(canvas) > 2) return false
   const ratio = luminance(canvas) / luminance(nav)
@@ -152,12 +204,82 @@ test('the chrome is one ground, so the rail and the context bar cannot drift', (
   assert.match(stage[1], /border-top-left-radius:\s*var\(--radius-shell\);/)
 })
 
-test('a sheet sits a step above the ground it lies on', () => {
+test('a card reads on its lane and a lane on the panel, without a line', () => {
   // A card lies on a lane, a lane on the canvas. When the sheet and the surface
   // under it were the same value, a column of cards had no column to be part
-  // of: the board read as one dark mass with text floating in it.
-  assert.ok(step('--color-canvas', '--color-surface') >= 4, 'the ground lost its step')
-  assert.ok(step('--color-surface', '--color-surface-sheet') >= 4, 'the sheet lost its step')
+  // of. Then they were a step apart in hex — #181818, #212121, #282828 — and
+  // the old oracle, a channel difference of four, passed it while the owner
+  // reported that everything blended: 1.10 and 1.09 in the measure below.
+  const [panel, ground, sheet] = ['--color-canvas', '--color-surface', '--color-surface-sheet'].map(
+    (name) => token(name),
+  )
+  assert.ok(
+    seamsRead(panel, ground, sheet),
+    `the workspace ladder blends: lane on panel ${contrast(ground, panel).toFixed(2)}, card on lane ${contrast(sheet, ground).toFixed(2)}`,
+  )
+})
+
+test('the seam oracle rejects the ladder that blended, and the inverted one', () => {
+  assert.equal(seamsRead('#181818', '#212121', '#282828'), false, 'the ladder the owner saw blend')
+  assert.equal(seamsRead('#181818', '#333333', '#252525'), false, 'a card darker than its lane')
+  assert.equal(seamsRead('#181818', '#252525', '#333333'), true, 'the ladder that replaced it')
+})
+
+test('secondary text holds 4.5:1 on every ground it is drawn on', () => {
+  // Lifting the grounds lifts the text: the tertiary tone stood at 4.08:1 on
+  // a hovered card before the ladder moved, under the AA floor already, and
+  // a lighter card would have taken it further down.
+  for (const ground of [
+    '--color-canvas',
+    '--color-surface',
+    '--color-surface-sheet',
+    '--color-surface-hover',
+  ]) {
+    for (const ink of ['--color-text', '--color-text-muted', '--color-text-tertiary']) {
+      assert.ok(
+        between(ink, ground) >= 4.5,
+        `${ink} on ${ground} is ${between(ink, ground).toFixed(2)}:1`,
+      )
+    }
+  }
+  // A control and its pressed state carry full and muted text, never tertiary.
+  for (const ground of ['--color-control-surface', '--color-surface-active']) {
+    for (const ink of ['--color-text', '--color-text-muted']) {
+      assert.ok(
+        between(ink, ground) >= 4.5,
+        `${ink} on ${ground} is ${between(ink, ground).toFixed(2)}:1`,
+      )
+    }
+  }
+  // And the three tones stay three: rank inside a row is carried by them.
+  assert.ok(between('--color-text', '--color-text-muted') >= 1.4, 'text and muted have merged')
+  assert.ok(
+    between('--color-text-muted', '--color-text-tertiary') >= 1.3,
+    'muted and tertiary have merged',
+  )
+})
+
+test('every colour that carries meaning reads as text on a card and as a mark on a control', () => {
+  // WCAG 1.4.3 for a state written in its colour, 1.4.11 for a dot, a glyph or
+  // an edge. The lightest ground a word in colour stands on is a hovered card;
+  // the lightest a mark stands on is a pressed control.
+  for (const tone of ['--color-info', '--color-success', '--color-warning', '--color-danger']) {
+    for (const ground of [
+      '--color-canvas',
+      '--color-surface',
+      '--color-surface-sheet',
+      '--color-surface-hover',
+    ]) {
+      assert.ok(
+        between(tone, ground) >= 4.5,
+        `${tone} on ${ground} is ${between(tone, ground).toFixed(2)}:1`,
+      )
+    }
+    assert.ok(
+      between(tone, '--color-surface-active') >= 3,
+      `${tone} as a mark on a pressed control is ${between(tone, '--color-surface-active').toFixed(2)}:1`,
+    )
+  }
 })
 
 test('two ladder roles never land on one tone', () => {
@@ -176,15 +298,14 @@ test('a control fill stands above every static ground, and its states run upward
   // The resting fill sat level with the muted ground once; nobody saw it while
   // every control also wore a border, and removing the borders left a filled
   // button standing on a sheet invisible at rest.
+  // A channel difference of four used to be the floor here, which is the
+  // measure that passed the blended board; these are contrast ratios.
   for (const ground of ['--color-canvas', '--color-surface', '--color-surface-muted']) {
-    assert.ok(
-      step(ground, '--color-control-surface') >= 4,
-      `a resting control melts into ${ground}`,
-    )
+    assert.ok(above('--color-control-surface', ground), `a resting control melts into ${ground}`)
   }
-  assert.ok(step('--color-control-surface', '--color-surface-active') >= 4, 'hover lost its lift')
+  assert.ok(above('--color-surface-active', '--color-control-surface'), 'hover lost its lift')
   assert.ok(
-    step('--color-control-disabled-surface', '--color-control-surface') >= 4,
+    above('--color-control-surface', '--color-control-disabled-surface'),
     'disabled must recede',
   )
 })
