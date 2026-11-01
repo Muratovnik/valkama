@@ -95,7 +95,9 @@ async function request(input: string, init?: RequestInit): Promise<unknown> {
       refusal.error,
     )
   }
-  throw new PlanningRefusedError('unavailable', `HTTP ${response.status}`, response.status)
+  // No envelope to read, so the status is the whole answer. It is not a refusal:
+  // the failure path names the cause from the status, and never a raw code.
+  throw Object.assign(new Error(`HTTP ${response.status}`), { status: response.status })
 }
 
 function query(parameters: Record<string, string | number | undefined>): string {

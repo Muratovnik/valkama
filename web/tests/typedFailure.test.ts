@@ -73,6 +73,18 @@ test('an exact read answered 404 is a missing record, not a dependency that is d
   })
 })
 
+test('a bare unavailable code without a ui state is typed, so the raw word never reaches the panel', () => {
+  const missing = typedFailure(
+    Object.assign(new Error('no space'), { status: 404, code: 'unavailable' }),
+  )
+  assert.deepEqual(missing, { code: 'not_found', status: 404, retryable: false })
+  const down = typedFailure(
+    Object.assign(new Error('binding'), { status: 409, code: 'unavailable' }),
+  )
+  assert.deepEqual(down, { code: 'dependency_unavailable', status: 409, retryable: false })
+  assert.equal(failureMessage(down).key, 'platform.failures.dependencyUnavailable')
+})
+
 test('a key alone never leads to the unknown sentence with its technical code left empty', () => {
   const unknown = { code: 'internal', status: 500, retryable: true }
   assert.equal(failureMessageKey(unknown), 'platform.failures.requestFailed')

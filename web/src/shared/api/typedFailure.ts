@@ -47,6 +47,16 @@ function isTypedFailure(value: unknown): value is TypedFailure {
   )
 }
 
+/**
+ * An error envelope that answers `unavailable` with no ui state behind it means
+ * what that state means: the record is not there (404), or what answers for it is down.
+ */
+function unavailableAnswer(status: number | null): TypedFailure {
+  return status === 404
+    ? { code: 'not_found', status, retryable: false }
+    : { code: 'dependency_unavailable', status, retryable: false }
+}
+
 export function typedFailure(error: unknown, fallbackCode = 'request_failed'): TypedFailure {
   if (isTypedFailure(error)) {
     return {
@@ -75,6 +85,7 @@ export function typedFailure(error: unknown, fallbackCode = 'request_failed'): T
     return { code: 'not_found', status, retryable: false }
   if (state?.status === 'unavailable' && state.retry_action === undefined)
     return { code: 'dependency_unavailable', status, retryable: false }
+  if (sourceCode === 'unavailable') return unavailableAnswer(status)
   // The service says the thing named is not there; asking again finds nothing new.
   if (sourceCode === 'not_found') return { code: 'not_found', status, retryable: false }
   if (sourceCode.endsWith('_contract_invalid') || sourceCode === 'contract_invalid')
