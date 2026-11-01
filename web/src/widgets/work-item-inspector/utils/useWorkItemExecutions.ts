@@ -45,17 +45,33 @@ export function useWorkItemExecutions(
   // A serial rather than a cancellation: a slow answer for the item that was
   // open a moment ago must not overwrite the one that is open now.
   let serial = 0
+  /** The item whose attempts are on screen, so a read of the same item is a refresh. */
+  let shown = ''
 
+  /**
+   * Read the attempts. The first read of an item says it is loading; every
+   * later one is a refresh and leaves the list drawn until its answer lands.
+   * It is re-read on every refresh of the card, and it used to replace the list
+   * with "Loading…" each time, so the section collapsed to one line and grew
+   * back under the operator. A refresh that fails keeps the last answer: the
+   * next refresh asks again, as a chain's does.
+   */
   async function load() {
     const mine = ++serial
-    loading.value = true
-    error.value = ''
+    const asked = reference()
+    const first = asked !== shown
+    if (first) {
+      loading.value = true
+      error.value = ''
+    }
     try {
-      const payload = await fetchExecutionHistory(reference())
+      const payload = await fetchExecutionHistory(asked)
       if (mine !== serial) return
       executions.value = payload.executions
+      error.value = ''
+      shown = asked
     } catch (error_) {
-      if (mine !== serial) return
+      if (mine !== serial || !first) return
       executions.value = []
       error.value = error_ instanceof Error ? error_.message : String(error_)
     } finally {

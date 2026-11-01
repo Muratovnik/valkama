@@ -88,6 +88,9 @@ const {
   () => branchFrame.value?.ids ?? null,
 )
 
+/** Whether a drawing is on the field: a layout over it runs in the background. */
+const drawn = computed(() => placed.value !== null)
+
 /** Which empty the field is in, if any; the first cause wins. */
 const emptyKind = computed(() => {
   if (emptySpace.value) return 'space'
@@ -238,11 +241,6 @@ function onFieldPointerLeave() {
       </template>
     </GraphBar>
 
-    <GraphLayoutStatus
-      :failed="failed"
-      :pending="pending"
-      @retry="retry"
-    />
     <GraphEmptyState
       v-if="emptyKind"
       :kind="emptyKind"
@@ -265,6 +263,12 @@ function onFieldPointerLeave() {
       @keydown="onKeydown"
     >
       <div class="graph-legend-place">
+        <GraphLayoutStatus
+          :drawn="drawn"
+          :failed="failed"
+          :pending="pending"
+          @retry="retry"
+        />
         <GraphFieldCorner
           :groups="chainLegend"
           :names="chainLegendNames"
@@ -377,7 +381,8 @@ function onFieldPointerLeave() {
   align-items: center;
 
   /* The key's row is one line tall whether or not it draws anything yet, so a
-     switch that brings the first link or state into it moves no node. */
+     switch that brings the first link or state into it moves no node — and
+     neither does the layout's own status, which stands at its start. */
   min-height: calc(24px + 2 * var(--space-2));
   padding: var(--space-2) var(--space-3);
 }

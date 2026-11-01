@@ -444,7 +444,13 @@ chrome.
   projection stays until its replacement is ready, and a stream frame is
   written only when the payload actually changed (`EventFrames` on the server,
   frame dedup in the planning view). The degraded banner and the endlessly
-  reloading graph were both this one invariant, violated in two places.
+  reloading graph were both this one invariant, violated in two places. It has
+  a geometric half too: background work takes no room while something is
+  drawn. It is announced to assistive technology, and said on screen only once
+  it has run long enough to be noticed (the graph's re-layout after 600ms), in
+  space the layout already holds — never as a line pushed into the flow, which
+  is how a status above the graph moved the field 43px on every refresh, and
+  never by putting "Loading…" in place of a list it is reading again.
 - Interface copy leads with the useful action, state, or cause. Do not append
   self-justifying capability disclaimers, restate the inverse state, or use
   vague quality claims. Name a concrete boundary only where it changes the
