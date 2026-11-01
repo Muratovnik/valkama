@@ -21,7 +21,6 @@ from .projects import project_registry
 from .sessions import session_context
 from .store import REF_KINDS, connect
 
-
 # A recorded commit value may name its repository before the revision, as
 # `repo@abc1234` or `repo abc1234`: a name that starts with a letter or digit,
 # then `@` or spaces, then one word that is not git's own `@{...}` syntax.
