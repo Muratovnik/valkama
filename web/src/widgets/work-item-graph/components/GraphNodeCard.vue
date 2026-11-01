@@ -1,11 +1,20 @@
 <script setup lang="ts">
-/** The card owns claim/state presentation; Vue Flow owns exactly-once activation. */
+/**
+ * The card owns claim/state presentation; Vue Flow owns exactly-once activation.
+ * Its facets are the registry's: workable is said quietly in the state's place
+ * (it was the boldest ink on half the cards), a node an open blocker holds
+ * names it wherever it lives, and the glyphs are read, not pressed — the card
+ * is one button, and a control inside a button is no control at all.
+ */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { Handle, Position } from '@vue-flow/core'
 
 import type { PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+
+import FacetMarks from '@/entities/work-item/components/FacetMarks.vue'
+import { printsFacet } from '@/entities/work-item/utils/facets.ts'
 
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 import { holderName } from '@/shared/lib/actor.ts'
@@ -20,6 +29,7 @@ const {
   overview = false,
   root = false,
   tabbable = false,
+  waitingOn = null,
 } = defineProps<{
   node: PlacedNode
   ready: boolean
@@ -35,6 +45,8 @@ const {
   root?: boolean
   /** The field's one Tab stop; the arrows reach every other node. */
   tabbable?: boolean
+  /** The reference of an open item that blocks this one, wherever it lives. */
+  waitingOn?: string | null
 }>()
 const emit = defineEmits<{ blur: [id: string]; focus: [id: string] }>()
 const { t } = useI18n()
@@ -55,16 +67,25 @@ const markerState = computed<WorkItemNodeMarkerState>(() => {
   return node.state.category
 })
 
-/**
- * What the node says about itself in one word.
- *
- * A workable item announces that first: its state is the less useful half of
- * the sentence once the field has told you it can be picked up.
- */
-const stateLabel = computed(() => (ready ? t('workItem.facet.ready') : node.state.name))
+/** What the registry needs beyond the node: what it waits on. */
+const facetContext = computed(() => ({ waitingOn }))
+
+/** Workable or waiting, said in words, or nothing when it is neither. */
+const readinessLabel = computed(() => {
+  if (node.state.is_terminal) return null
+  if (waitingOn) return t('workItem.facet.waiting', { reference: waitingOn })
+  return ready ? t('workItem.facet.ready') : null
+})
 const ownerLabel = computed(() =>
   t(node.state.is_terminal ? 'workItem.previousOwner' : 'graph.claimedBy'),
 )
+
+/** The kind leads; high or urgent waits at the foot, as a second glyph on line one cut the state short. */
+const KIND = ['kind'] as const
+const STATE = ['state', 'readiness'] as const
+const PRIORITY = ['priority'] as const
+const asksAttention = computed(() => printsFacet('priority', 'graph', node))
+const leadsKind = computed(() => printsFacet('kind', 'graph', node))
 
 /** The field's one Tab stop takes Tab; the arrows reach the rest. */
 const tabIndex = computed(() => (tabbable ? 0 : -1))
@@ -74,6 +95,7 @@ const accessibleName = computed(() =>
   [
     `${node.reference} ${node.title}`,
     node.state.name,
+    ...(readinessLabel.value ? [readinessLabel.value] : []),
     ...(root ? [t('graph.rootLabel')] : []),
   ].join(' · '),
 )
@@ -136,13 +158,26 @@ const accessibleName = computed(() =>
       />
       <span class="flow-node-line">
         <span class="flow-node-meta">
+          <FacetMarks
+            v-if="leadsKind"
+            surface="graph"
+            :item="node"
+            :facets="KIND"
+            lead
+          />
           <span class="flow-node-id">{{ node.reference }}</span>
           <span
             v-if="root"
             class="flow-node-root"
             >{{ t('graph.rootMark') }}</span
           >
-          <span class="flow-node-state">{{ stateLabel }}</span>
+          <FacetMarks
+            class="flow-node-state"
+            surface="graph"
+            :item="node"
+            :facets="STATE"
+            :context="facetContext"
+          />
         </span>
         <span
           v-if="parentReference"
@@ -157,11 +192,19 @@ const accessibleName = computed(() =>
         >{{ node.title }}</span
       >
       <span
-        v-if="node.claim_ref"
+        v-if="node.claim_ref || asksAttention"
         class="flow-node-owner"
       >
-        <span class="flow-node-owner-state">{{ ownerLabel }}</span>
-        <span class="flow-node-owner-name">{{ holderName(node.claim_ref) }}</span>
+        <template v-if="node.claim_ref">
+          <span class="flow-node-owner-state">{{ ownerLabel }}</span>
+          <span class="flow-node-owner-name">{{ holderName(node.claim_ref) }}</span>
+        </template>
+        <FacetMarks
+          class="flow-node-priority"
+          surface="graph"
+          :item="node"
+          :facets="PRIORITY"
+        />
       </span>
     </template>
   </button>
@@ -266,35 +309,30 @@ const accessibleName = computed(() =>
 .flow-node-meta {
   display: flex;
   gap: var(--space-1) var(--space-2);
-  align-items: baseline;
+  align-items: center;
   min-width: 0;
   overflow: hidden;
-}
-
-:is(.flow-node-id, .flow-node-state) {
-  min-width: 0;
-  max-width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-
-  /* Workable is the one state worth a weight change: it says work could start. */
-  .flow-node-card.ready & {
-    color: var(--color-action-primary);
-    font-weight: 700;
-  }
 }
 
 .flow-node-id {
+  flex: 0 0 auto;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-.flow-node-card[data-tone='danger']:not(.ready) .flow-node-state {
-  color: var(--color-danger);
+/* The state, or what stands in its place, gives way first when the line is full. */
+.flow-node-state {
+  overflow: hidden;
 }
 
 .flow-node-card.recessed .flow-node-title {
   color: var(--color-text-muted);
+}
+
+/* Who holds it, and at the far end a priority that asks for attention. */
+.flow-node-priority {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
 }
 
 .flow-node-owner {

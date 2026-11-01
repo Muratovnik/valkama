@@ -27,6 +27,8 @@ import type { PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.t
 import { GRAPH_ZOOM_MAX, GRAPH_ZOOM_MIN } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import type { GraphScope } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 
+import { waitingOn } from '@/entities/work-item/utils/waiting.ts'
+
 import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
 
 const props = defineProps<{
@@ -117,6 +119,10 @@ const branchChip = computed(() => (branchFrame.value ? (props.branch?.reference 
 function isReady(node: PlacedNode): boolean {
   return readyIdSet.value.has(node.work_item_id)
 }
+
+/** What each node waits on, read from the links the field was given. */
+const waiting = computed(() => waitingOn(props.edges, props.items))
+const waitingFor = (node: PlacedNode) => waiting.value.get(node.work_item_id) ?? null
 
 const {
   chainLegend,
@@ -324,6 +330,7 @@ function onFieldPointerLeave() {
             :root="isChainRoot(data)"
             :overview="overview"
             :tabbable="isTabStop(data)"
+            :waiting-on="waitingFor(data)"
             @focus="onNodeFocus"
             @blur="onNodeBlur"
           />
