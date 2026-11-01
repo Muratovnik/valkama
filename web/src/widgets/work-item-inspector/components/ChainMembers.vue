@@ -11,8 +11,8 @@
 import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { rowStateName, sharedStateName } from '@/widgets/work-item-inspector/utils/chainSummary.ts'
-import type { ChainGroups } from '@/widgets/work-item-inspector/utils/chainSummary.ts'
+import { rowStateName } from '@/widgets/work-item-inspector/utils/chainSummary.ts'
+import type { ChainGroups, GroupLabels } from '@/widgets/work-item-inspector/utils/chainSummary.ts'
 
 import type { ChainMember } from '@/shared/api/planningChainApi.ts'
 import { CHAIN_GROUPS } from '@/shared/api/planningChainGroups.ts'
@@ -22,7 +22,11 @@ import SemanticState from '@/shared/ui/SemanticState.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
-const props = defineProps<{ groups: ChainGroups }>()
+const props = defineProps<{
+  groups: ChainGroups
+  /** The section's word for each group, read off the whole chain. */
+  labels: GroupLabels
+}>()
 const emit = defineEmits<{ open: [reference: string] }>()
 const { t } = useI18n()
 
@@ -53,9 +57,9 @@ function groupHeading(group: ChainGroup): string {
   })
 }
 
-/** The space's name for the group's one state, or the category's name. */
+/** The space's name for the group's one state, or the group's own word. */
 function groupLabel(group: ChainGroup): string {
-  return sharedStateName(props.groups[group]) ?? t(`workItem.chain.group.${group}`)
+  return props.labels[group].text
 }
 
 function isDone(group: ChainGroup): boolean {
@@ -72,7 +76,7 @@ function holder(group: ChainGroup, member: ChainMember): string | null {
  * the whole group is in. A closed one says how it ended on the same terms.
  */
 function stateWord(group: ChainGroup, member: ChainMember): string | null {
-  return holder(group, member) ? null : rowStateName(props.groups[group], member)
+  return holder(group, member) ? null : rowStateName(props.labels[group], member)
 }
 </script>
 

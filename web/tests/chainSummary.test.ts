@@ -7,9 +7,9 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  groupLabels,
   groupMembers,
   rowStateName,
-  sharedStateName,
 } from '@/widgets/work-item-inspector/utils/chainSummary.ts'
 
 import { largeEpicChain } from './fixtures/chain.ts'
@@ -20,21 +20,25 @@ function inState(member: Member, key: string, name: string): Member {
   return { ...member, state: { ...member.state, key, name } } as Member
 }
 
-describe('the state a chain row names', () => {
+const word = (group: string) => `<${group}>`
+
+describe('the word a chain section gives a group, and the state a row names', () => {
   const [first, second, third] = largeEpicChain().members.filter(
     (member) => member.state.key === 'backlog',
   )
 
-  it('is nothing in a group whose members share one state', () => {
+  it('is the one state a group is in, and then its rows say nothing', () => {
     const group = [first, second, third]
-    expect(sharedStateName(group)).toBe('Backlog')
-    expect(group.map((member) => rowStateName(group, member))).toEqual([null, null, null])
+    const labels = groupLabels(groupMembers(group), word)
+    expect(labels.backlog).toEqual({ text: 'Backlog', state: true })
+    expect(group.map((member) => rowStateName(labels.backlog, member))).toEqual([null, null, null])
   })
 
-  it('is each row’s own in a group that mixes states', () => {
+  it('is the group’s own word where it mixes states, and then each row names its own', () => {
     const group = [first, inState(second, 'icebox', 'Icebox'), third]
-    expect(sharedStateName(group)).toBeNull()
-    expect(group.map((member) => rowStateName(group, member))).toEqual([
+    const labels = groupLabels(groupMembers(group), word)
+    expect(labels.backlog).toEqual({ text: '<backlog>', state: false })
+    expect(group.map((member) => rowStateName(labels.backlog, member))).toEqual([
       'Backlog',
       'Icebox',
       'Backlog',

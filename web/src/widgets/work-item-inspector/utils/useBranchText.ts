@@ -8,10 +8,12 @@ import { holderName } from '@/shared/lib/actor.ts'
 
 /*
  * The legend and every count name groups in the order a lane runs through
- * them, in the groups' own words — the ones the graph's legend and the member
- * list use. Queued and backlog work share the grey of what is ahead, as they
- * share the graph's neutral dot, and each keeps its own name, so no word on the
- * map stands for a set no other view names.
+ * them, by the word the card's section gives each one: the state the whole
+ * group is in, as the board's column names it, or the group's own word where it
+ * spans several. The totals line and the member headings read the same word, so
+ * the map never calls a group something the list under it does not. Queued and
+ * backlog work share the grey of what is ahead, as they share the graph's
+ * neutral dot, and each keeps its own name.
  */
 
 /**
@@ -21,7 +23,7 @@ import { holderName } from '@/shared/lib/actor.ts'
  * Colour is never the only signal there, so every state the drawing colours is
  * also named here, and the same words reach the eye and the screen reader.
  */
-export function useBranchText() {
+export function useBranchText(groupName: (group: ChainGroup) => string) {
   const { t } = useI18n()
 
   function laneName(lane: BranchLane): string {
@@ -41,7 +43,7 @@ export function useBranchText() {
     })
   }
 
-  /** Every group these lanes hold and how many, in lane order, in the groups' own words. */
+  /** Every group these lanes hold and how many, in lane order, by the section's word for each. */
   function groupParts(lanes: readonly BranchLane[]): string {
     const counts = new Map<ChainGroup, number>()
     for (const group of lanes.flatMap((lane) => lane.groups))
@@ -49,7 +51,7 @@ export function useBranchText() {
     return LANE_GROUP_ORDER.filter((group) => counts.has(group))
       .map((group) =>
         t('workItem.chain.part', {
-          group: t(`workItem.chain.group.${group}`),
+          group: groupName(group),
           count: counts.get(group),
         }),
       )
@@ -101,7 +103,7 @@ export function useBranchText() {
     const drawn = new Set(lanes.flatMap((lane) => lane.groups))
     return LANE_GROUP_ORDER.filter((group) => drawn.has(group)).map((group) => ({
       state: group,
-      label: t(`workItem.chain.group.${group}`),
+      label: groupName(group),
     }))
   }
 

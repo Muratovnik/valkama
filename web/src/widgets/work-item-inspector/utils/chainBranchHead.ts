@@ -20,6 +20,25 @@ export interface Box {
   width?: number
 }
 
+/** A length of the drawing as a style value; an absent one sets nothing. */
+function px(value: number | undefined): string | undefined {
+  return value === undefined ? undefined : `${value}px`
+}
+
+/** A box of the drawing as a style, in the logical properties the map is laid out by. */
+export function boxStyle(box: Box) {
+  return {
+    insetBlockStart: px(box.top),
+    insetBlockEnd: px(box.bottom),
+    insetInlineStart: px(box.left),
+    insetInlineEnd: px(box.right),
+    width: px(box.width),
+    height: px(box.height),
+    minWidth: px(box.minWidth),
+    maxWidth: px(box.maxWidth),
+  }
+}
+
 /** The two texts a lane's label line carries, as the component will set them. */
 export interface LaneTexts {
   counts: string

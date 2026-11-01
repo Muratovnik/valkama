@@ -20,7 +20,7 @@ import { useI18n } from 'vue-i18n'
 import ChainBranchMap from '@/widgets/work-item-inspector/components/ChainBranchMap.vue'
 import ChainMembers from '@/widgets/work-item-inspector/components/ChainMembers.vue'
 import ChainScopeChart from '@/widgets/work-item-inspector/components/ChainScopeChart.vue'
-import { groupMembers, sharedStateName } from '@/widgets/work-item-inspector/utils/chainSummary.ts'
+import { groupLabels, groupMembers } from '@/widgets/work-item-inspector/utils/chainSummary.ts'
 import { useChainForecast } from '@/widgets/work-item-inspector/utils/useChainForecast.ts'
 
 import type { ChainScope, WorkItemChain } from '@/shared/api/planningChainApi.ts'
@@ -69,6 +69,11 @@ const scopes = computed(() => [
 ])
 
 const groups = computed(() => (props.chain ? groupMembers(props.chain.members) : null))
+
+/** One word per group for the whole section: the map's legend, the line under it and the list. */
+const labels = computed(() =>
+  groups.value ? groupLabels(groups.value, (group) => t(`workItem.chain.group.${group}`)) : null,
+)
 
 /**
  * The lane the member list is narrowed to, chosen on the map. It is a reading
@@ -130,20 +135,21 @@ const KEEP = '\u{A0}'
  * The total is said as what it is — the work under the root, the root itself
  * not counted — because the board's chain chip counts the root too and reads
  * one more for the same chain; an unlabelled 306 beside a 307 read as a fault.
+ *
+ * Finished work is named like every other group, by the word its heading and
+ * the map's legend use, so «Done 179» here is the «Done · 179» below.
  */
 const summary = computed(() => {
   const chain = props.chain
   const current = groups.value
-  if (!chain || !current) return ''
-  const counts = { total: chain.total, closed: chain.closed, open: chain.open }
+  const words = labels.value
+  if (!chain || !current || !words) return ''
+  const part = (text: string, count: number) =>
+    t('workItem.chain.part', { group: text, count }).replaceAll(' ', KEEP)
+  const counts = { total: chain.total, done: part(words.done.text, chain.closed), open: chain.open }
   if (chain.open === 0) return t('workItem.chain.summaryNoneOpen', counts)
   const parts = OPEN_CHAIN_GROUPS.filter((group) => current[group].length > 0)
-    .map((group) =>
-      t('workItem.chain.part', {
-        group: sharedStateName(current[group]) ?? t(`workItem.chain.group.${group}`),
-        count: current[group].length,
-      }).replaceAll(' ', KEEP),
-    )
+    .map((group) => part(words[group].text, current[group].length))
     .join(`${KEEP}· `)
   const line = t('workItem.chain.summary', { ...counts, parts })
   return chain.ready ? `${line}; ${t('workItem.chain.workable', { count: chain.ready })}` : line
@@ -220,10 +226,11 @@ const charted = computed(() => (props.chain?.series.length ?? 0) > 1)
       </VButton>
     </div>
 
-    <template v-if="chain && groups && listed">
+    <template v-if="chain && groups && listed && labels">
       <ChainBranchMap
         :chain="chain"
         :filter="lane"
+        :labels="labels"
         @lane="chooseLane"
         @open="(reference) => emit('open', reference)"
       />
@@ -267,6 +274,7 @@ const charted = computed(() => (props.chain?.series.length ?? 0) > 1)
 
       <ChainMembers
         :groups="listed"
+        :labels="labels"
         @open="(reference) => emit('open', reference)"
       />
 

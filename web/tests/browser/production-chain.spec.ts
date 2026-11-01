@@ -60,7 +60,7 @@ for (const width of [1440, 390]) {
     const line = await section.locator('.chain-summary-line').boundingBox()
     expect((map?.y ?? Infinity) < (line?.y ?? 0)).toBe(true)
     await expect(section.locator('.chain-summary-line')).toHaveText(
-      'Under the root: 616 · 483 done · 133 open: Development 11 · Code review 1 · Todo 14 · Backlog 107; workable 115 (backlog included)',
+      'Under the root: 616 · Done 483 · 133 open: Development 11 · Code review 1 · Todo 14 · Backlog 107; workable 115 (backlog included)',
     )
     await expect(section.locator('.chain-forecast')).toHaveText(
       'Last 7 days: +53 added, −42 done. New work arrives faster than it closes: to converge, more than 7.6 a day must close',

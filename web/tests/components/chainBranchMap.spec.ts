@@ -14,6 +14,7 @@ import type { VueWrapper } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
 import ChainBranchMap from '@/widgets/work-item-inspector/components/ChainBranchMap.vue'
+import { groupLabels, groupMembers } from '@/widgets/work-item-inspector/utils/chainSummary.ts'
 
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import { messages } from '@/shared/i18n/index.ts'
@@ -29,10 +30,20 @@ import {
 const ROOT = { id: mapId(1), reference: 'MAP-1', title: 'Root' }
 const UNIT = 342 / 24
 
+const i18n = createI18n({ legacy: false, locale: 'en', messages })
+
+/** The words the card's section gives each group of this chain, as it hands them to the map. */
+function sectionLabels(chain: WorkItemChain) {
+  return groupLabels(groupMembers(chain.members), (group) =>
+    i18n.global.t(`workItem.chain.group.${group}`),
+  )
+}
+
 function mountMap(chain: unknown = smallBranchedChain(ROOT, 'MAP'), filter: string | null = null) {
+  const shown = chain as WorkItemChain
   return mount(ChainBranchMap, {
-    props: { chain: chain as WorkItemChain, filter },
-    global: { plugins: [createI18n({ legacy: false, locale: 'en', messages })] },
+    props: { chain: shown, filter, labels: sectionLabels(shown) },
+    global: { plugins: [i18n] },
     attachTo: document.body,
   })
 }
@@ -41,15 +52,16 @@ const lanes = (wrapper: VueWrapper) => wrapper.findAll('[role="slider"]')
 const at = (index: number) => ({ clientX: (index + 0.5) * UNIT })
 
 describe('the branch map', () => {
-  it('says in words what its colours draw, in the words the graph and the list use', () => {
+  it('says in words what its colours draw, in the words the totals and the member list use', () => {
     const wrapper = mountMap()
-    // Each group by the name the graph's legend and the member list give it,
-    // never a word of the map's own for several groups at once.
+    // Each group in one state is named by that state, as the board's column
+    // names it, and so is every count: the key once said «In progress» over a
+    // list headed «Development».
     expect(wrapper.get('figcaption').text()).toBe(
-      'Branch map: 2 lanes, 40 items; Done 18, Review 1, In progress 4, Blocked 1, To do 3, Backlog 13.',
+      'Branch map: 2 lanes, 40 items; Done 18, Code review 1, Development 4, Blocked 1, Todo 3, Backlog 13.',
     )
     expect(wrapper.findAll('.branch-map-legend .state-label').map((label) => label.text())).toEqual(
-      ['Done', 'Review', 'In progress', 'Blocked', 'To do', 'Backlog'],
+      ['Done', 'Code review', 'Development', 'Blocked', 'Todo', 'Backlog'],
     )
     expect(wrapper.findAll('.branch-map-label').map((label) => label.text())).toEqual([
       'MAP-1',
@@ -61,9 +73,24 @@ describe('the branch map', () => {
       '6 of 20 done',
     ])
     expect(lanes(wrapper).map((lane) => lane.attributes('aria-label'))).toEqual([
-      'Lane MAP-1 Root: 20 items; Done 12, Review 1, In progress 2, Backlog 5',
-      'Lane no epic: 20 items; Done 6, In progress 2, Blocked 1, To do 3, Backlog 8',
+      'Lane MAP-1 Root: 20 items; Done 12, Code review 1, Development 2, Backlog 5',
+      'Lane no epic: 20 items; Done 6, Development 2, Blocked 1, Todo 3, Backlog 8',
     ])
+    wrapper.unmount()
+  })
+
+  it('names a group that spans several states by the group’s own word', () => {
+    const chain = chainOf(ROOT, [
+      mapMember('MAP-10', 'active', 'MAP-1', { holder: 'codex' }),
+      mapMember('MAP-11', 'active', 'MAP-1'),
+      mapMember('MAP-12', 'backlog', 'MAP-1'),
+    ])
+    const [first] = chain.members
+    Object.assign(first.state, { key: 'pairing', name: 'Pairing' })
+    const wrapper = mountMap(chain)
+    expect(wrapper.findAll('.branch-map-legend .state-label').map((label) => label.text())).toEqual(
+      ['In progress', 'Backlog'],
+    )
     wrapper.unmount()
   })
 
@@ -78,7 +105,7 @@ describe('the branch map', () => {
     const legend = wrapper.get('.branch-map-legend')
     expect(legend.findAll('.state-label').map((label) => label.text())).toEqual([
       'Done',
-      'In progress',
+      'Development',
       'Backlog',
     ])
     // No key speaks for a state no member is in, the emphatic one least of all.
@@ -88,7 +115,7 @@ describe('the branch map', () => {
     // Queued work alone is keyed as queued work, though it shares the backlog's grey.
     const queued = mountMap(chainOf(ROOT, [mapMember('MAP-10', 'queued', 'MAP-1')]))
     expect(queued.findAll('.branch-map-legend .state-label').map((label) => label.text())).toEqual([
-      'To do',
+      'Todo',
     ])
     queued.unmount()
   })

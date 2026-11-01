@@ -51,19 +51,45 @@ export function groupMembers(members: readonly ChainMember[]): ChainGroups {
  * a workflow that calls its active state "Development" should read that here.
  * A group spanning several states keeps the category's name.
  */
-export function sharedStateName(members: readonly ChainMember[]): string | null {
+function sharedStateName(members: readonly ChainMember[]): string | null {
   const names = new Set(members.map((member) => member.state.name))
   return names.size === 1 ? [...names][0] : null
 }
 
+/** What one group is called across a chain section, and whether that word is a state. */
+export interface GroupLabel {
+  /** The text is the one state every member of the group is in. */
+  state: boolean
+  text: string
+}
+
+export type GroupLabels = Record<ChainGroup, GroupLabel>
+
 /**
- * The state a row in this group has to name itself. A group whose members all
- * share one state already says it in its heading, so its rows say nothing; a
- * group that mixes states heads itself with the category, so every row names
- * its own.
+ * The word for each group, decided once for the whole chain: the state every
+ * member shares, as the board's column names it, or the group's own word where
+ * the members span several states. The map's legend, the totals line and the
+ * member headings all read it, so one section never calls one group two
+ * things — the legend said «В работе» while the heading under it said «Dev».
+ * It is read off the whole chain rather than a narrowed list, so choosing a
+ * lane does not rename a group either.
  */
-export function rowStateName(group: readonly ChainMember[], member: ChainMember): string | null {
-  return sharedStateName(group) === null ? member.state.name : null
+export function groupLabels(groups: ChainGroups, word: (group: ChainGroup) => string): GroupLabels {
+  return Object.fromEntries(
+    CHAIN_GROUPS.map((group) => {
+      const name = sharedStateName(groups[group])
+      return [group, { text: name ?? word(group), state: name !== null }]
+    }),
+  ) as GroupLabels
+}
+
+/**
+ * The state a row has to name itself. A heading that names the one state its
+ * group is in already says it, so the row says nothing; a heading that names
+ * the group's own word leaves every row to name its own.
+ */
+export function rowStateName(label: GroupLabel, member: ChainMember): string | null {
+  return label.state ? null : member.state.name
 }
 
 /** The day a series point names, read as a calendar date wherever the reader is. */

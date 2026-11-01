@@ -103,7 +103,7 @@ describe('the chain section of a card', () => {
     // under the root, the root itself not included, which the board's chain
     // chip does include.
     expect(chain.get('.chain-summary-line').text()).toBe(
-      'Under the root: 616 · 483 done · 133 open: Development\u{A0}11\u{A0}· Code\u{A0}review\u{A0}1\u{A0}· Todo\u{A0}14\u{A0}· Backlog\u{A0}107; workable 115 (backlog included)',
+      'Under the root: 616 · Done\u{A0}483 · 133 open: Development\u{A0}11\u{A0}· Code\u{A0}review\u{A0}1\u{A0}· Todo\u{A0}14\u{A0}· Backlog\u{A0}107; workable 115 (backlog included)',
     )
     // 53 added against 42 done: the open part grows unless more than
     // 53 ÷ 7 ≈ 7.57 close a day, said to a tenth and rounded up.
@@ -137,6 +137,31 @@ describe('the chain section of a card', () => {
     // The holder, not the state, names who has the work in progress.
     expect(chain.findAll('.chain-row')[0].text()).toContain('codex')
     expect(chain.findAll('.chain-row-ready').length).toBeGreaterThan(0)
+  })
+
+  it('calls each group one thing in the legend, the totals line and the headings', async () => {
+    const mixed = largeEpicChain()
+    // The open items under MAIN-900 wait in a second backlog state, so the
+    // backlog spans two states and is named by the group's own word everywhere.
+    for (const member of mixed.members.filter(
+      (item) => item.parent_reference === 'MAIN-900' && !item.state.is_terminal,
+    ))
+      Object.assign(member.state, { key: 'icebox', name: 'Icebox' })
+    serveChain(json(chainResponse(mixed)))
+    const wrapper = await open()
+    const chain = section(wrapper)
+    const legend = chain.findAll('.branch-map-legend .state-label').map((label) => label.text())
+    const headings = chain
+      .findAll('.chain-group-title, .chain-done-toggle')
+      .map((heading) => heading.text().replace(/ · \d+$/u, ''))
+    const line = chain.get('.chain-summary-line').text().replaceAll('\u{A0}', ' ')
+    expect(legend).toEqual(['Done', 'Code review', 'Development', 'Todo', 'Backlog'])
+    expect(new Set(headings)).toEqual(new Set(legend))
+    for (const word of legend) expect(line).toContain(`${word} `)
+    // Narrowing the list to a lane in one backlog state keeps the chain's word.
+    await getButton(wrapper, 'MAIN-779').trigger('click')
+    expect(group(wrapper, 'Backlog')?.get('.chain-group-title').text()).toBe('Backlog · 74')
+    expect(new Set(details(wrapper, 'Backlog'))).toEqual(new Set(['Backlog']))
   })
 
   it('names a row state only where its group heading does not', async () => {
@@ -233,7 +258,7 @@ describe('the chain section of a card', () => {
     expect(asked).toHaveLength(2)
     expect(section(wrapper).find('[role="alert"]').exists()).toBe(false)
     expect(section(wrapper).get('.chain-summary-line').text()).toBe(
-      'Under the root: 616 · 483 done · 133 open: Development\u{A0}11\u{A0}· Code\u{A0}review\u{A0}1\u{A0}· Todo\u{A0}14\u{A0}· Backlog\u{A0}107; workable 115 (backlog included)',
+      'Under the root: 616 · Done\u{A0}483 · 133 open: Development\u{A0}11\u{A0}· Code\u{A0}review\u{A0}1\u{A0}· Todo\u{A0}14\u{A0}· Backlog\u{A0}107; workable 115 (backlog included)',
     )
   })
 
@@ -358,7 +383,7 @@ describe('the chain section of a card', () => {
     expect(asked).toHaveLength(2)
     // A refresh keeps the last answer on screen while it runs and after it.
     expect(section(wrapper).get('.chain-summary-line').text()).toBe(
-      'Under the root: 616 · 483 done · 133 open: Development\u{A0}11\u{A0}· Code\u{A0}review\u{A0}1\u{A0}· Todo\u{A0}14\u{A0}· Backlog\u{A0}107; workable 115 (backlog included)',
+      'Under the root: 616 · Done\u{A0}483 · 133 open: Development\u{A0}11\u{A0}· Code\u{A0}review\u{A0}1\u{A0}· Todo\u{A0}14\u{A0}· Backlog\u{A0}107; workable 115 (backlog included)',
     )
 
     vi.mocked(fetchWorkItem).mockResolvedValue(ROOT)
