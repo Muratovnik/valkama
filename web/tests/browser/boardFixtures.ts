@@ -60,7 +60,10 @@ export function boardSpace(): Brief[] {
     brief(420, DONE, 'The first board', { kind: 'epic', container: true, ready: false }),
     brief(421, DONE, 'Columns by workflow state', under(420)),
     brief(422, DONE, 'Drag between columns', under(420)),
-    brief(430, BACKLOG, 'Loose work under no epic'),
+    // More labels than a column's line holds, so the line has a count to make room for.
+    brief(430, BACKLOG, 'Loose work under no epic', {
+      labels: ['agent-packets', 'coordinator', 'decision-review', 'ui'],
+    }),
   ]
 }
 

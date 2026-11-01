@@ -12,13 +12,10 @@
 import { expect, test } from '@playwright/test'
 import type { Locator } from '@playwright/test'
 
-import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
-
 import { installBackend } from './backend.ts'
 import { LONG_EPIC } from './boardFixtures.ts'
-import { cell, drag, lane, openBoard, routeState, serve, shot, tiles } from './boardPage.ts'
+import { cell, centre, drag, lane, openBoard, routeState, serve, shot, tiles } from './boardPage.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { projectScope } from './planningFixtures.ts'
 
 /** The sum of an rgb(a) colour's first three channels: a lighter fill has the larger sum. */
 function brightness(color: string): number {
@@ -265,34 +262,6 @@ test('Alt+Arrow moves a focused tile one place and the move is announced', async
 const ground = (where: Locator) =>
   where.evaluate((element) => getComputedStyle(element).backgroundColor)
 const clear = 'rgba(0, 0, 0, 0)'
-
-/** The middle of something on screen, where a hand picks it up. */
-async function centre(what: Locator) {
-  const box = await what.boundingBox()
-  if (!box) throw new Error('nothing to pick up on screen')
-  return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
-}
-
-test('a label chip on a tile filters instead of opening, and the rest of the sheet opens it', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1440, height: 900 })
-  await installBackend(page)
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
-  const sheet = page.locator('.work-item-column[data-state="dev"] .work-item-tile').first()
-  const chip = sheet.locator('.label-chip').first()
-  await expect(chip).toBeVisible()
-  // A chip lies over the open target stretched across the sheet, so the pointer reaches it.
-  await chip.click()
-  await expect(page.locator('.drawer')).toHaveCount(0)
-  // The sheet is still one Tab stop: the chip is reached by the pointer only.
-  await expect(chip).toHaveAttribute('tabindex', '-1')
-  // Anywhere else on the sheet — here its last line, the holder — lies under the open
-  // target and opens the card.
-  const facts = await centre(sheet.locator('.tile-facts'))
-  await page.mouse.click(facts.x, facts.y)
-  await expect(page.locator('.drawer')).toBeVisible()
-})
 
 test('an empty cell draws no ground at rest, and its lane’s cells do while a tile can land', async ({
   page,

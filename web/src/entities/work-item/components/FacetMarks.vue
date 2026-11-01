@@ -18,12 +18,27 @@
  *
  * A mark with short words draws them and keeps its whole words as the name and
  * the hover text: a tile shows «⛔ MAIN-12» and says «Ждёт MAIN-12».
+ *
+ * A run of label chips that must keep one line fits: as many whole chips as
+ * the line has room for, then «+N». The room is measured against a copy of
+ * the chips drawn out of sight and handed to the registry, which still says
+ * which chips print and what the count says.
  */
-import { computed } from 'vue'
+import { computed, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import LabelChip from '@/entities/work-item/components/LabelChip.vue'
-import { FACET_ORDER, leadMarks, surfaceMarks } from '@/entities/work-item/utils/facets.ts'
+import {
+  GHOST_CHIP,
+  GHOST_MORE,
+  useLabelRoom,
+} from '@/entities/work-item/composables/useLabelRoom.ts'
+import {
+  FACET_ORDER,
+  facetMarks,
+  leadMarks,
+  surfaceMarks,
+} from '@/entities/work-item/utils/facets.ts'
 import type {
   FacetContext,
   FacetId,
@@ -49,6 +64,8 @@ const props = withDefaults(
     filter?: WorkFilter
     /** Kind, priority and label marks become buttons that filter. */
     filterable?: boolean
+    /** Label chips keep one line: the ones with no room fold into «+N». */
+    fit?: boolean
     /** The run stays on one line: short of room, a mark shows its glyph alone. */
     fold?: boolean
     /** The glyphs that lead the reference, rather than the facets where the surface says them. */
@@ -62,6 +79,7 @@ const props = withDefaults(
     filter: () => EMPTY_WORK_FILTER,
     filterable: false,
     fold: false,
+    fit: false,
     tabbable: true,
     lead: false,
   },
@@ -71,10 +89,40 @@ const emit = defineEmits<{ filter: [token: WorkFilterToken] }>()
 
 const { t } = useI18n()
 
+const fits = () => props.fit && props.facets.includes('labels')
+
+/** Every chip the registry would print with no line to fit, and the widest count. */
+const candidates = computed(() =>
+  fits()
+    ? facetMarks('labels', props.surface, props.item, props.context).filter(
+        (mark) => mark.form === 'chips',
+      )
+    : [],
+)
+const moreSample = computed(() =>
+  fits()
+    ? facetMarks('labels', props.surface, props.item, { ...props.context, labelRoom: 1 }).find(
+        (mark) => mark.form !== 'chips',
+      )
+    : undefined,
+)
+
+const room = useLabelRoom(
+  useTemplateRef<HTMLElement>('line'),
+  useTemplateRef<HTMLElement>('ghost'),
+  () => props.item.labels ?? [],
+  fits,
+)
+
+/** What the registry is asked with: the host's context, and the room the line measured. */
+const asked = computed(() =>
+  room.value === undefined ? props.context : { ...props.context, labelRoom: room.value },
+)
+
 const marks = computed(() =>
   props.lead
-    ? props.facets.flatMap((facet) => leadMarks(facet, props.surface, props.item, props.context))
-    : surfaceMarks(props.surface, props.item, props.context, props.facets),
+    ? props.facets.flatMap((facet) => leadMarks(facet, props.surface, props.item, asked.value))
+    : surfaceMarks(props.surface, props.item, asked.value, props.facets),
 )
 
 const say = (text: FacetMark['text']) =>
@@ -135,8 +183,9 @@ function pressLabel(label: string) {
 
 <template>
   <span
+    ref="line"
     class="facet-marks"
-    :class="{ fold: props.fold }"
+    :class="{ fold: props.fold, fit: props.fit }"
     :data-surface="props.surface"
   >
     <template
@@ -145,6 +194,7 @@ function pressLabel(label: string) {
     >
       <LabelChip
         v-if="mark.form === 'chips'"
+        class="facet-chip"
         :label="mark.value"
         :active="active(mark)"
         :filterable="props.filterable"
@@ -195,6 +245,27 @@ function pressLabel(label: string) {
         >
       </component>
     </template>
+    <span
+      v-if="candidates.length"
+      ref="ghost"
+      class="facet-ghost"
+      aria-hidden="true"
+      :data-total="props.item.labels?.length ?? 0"
+    >
+      <LabelChip
+        v-for="mark in candidates"
+        :key="mark.value"
+        :data-ghost="GHOST_CHIP"
+        :label="mark.value"
+        :filterable="false"
+      />
+      <span
+        v-if="moreSample"
+        class="facet-mark"
+        :data-ghost="GHOST_MORE"
+        >{{ word(moreSample) }}</span
+      >
+    </span>
   </span>
 </template>
 
@@ -283,6 +354,37 @@ function pressLabel(label: string) {
 .facet-mark::before {
   content: '\200b' / '';
   margin-inline-end: calc(-1 * var(--space-1));
+}
+
+/* One line of chips: a chip with no room is not drawn at all — the registry
+   counts it in «+N» — and the last one drawn may shorten rather than spill. The
+   chips' 28px pointer boxes are the line's height, once. */
+.facet-marks.fit {
+  flex-wrap: nowrap;
+  max-width: 100%;
+
+  .facet-chip {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  .facet-mark {
+    flex: none;
+  }
+}
+
+/* The chips drawn out of sight to be measured: no height, no pointer, nothing
+   for a reader, and nothing that can widen what holds them. */
+.facet-ghost {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  display: flex;
+  flex-wrap: wrap;
+  block-size: 0;
+  overflow: hidden;
+  pointer-events: none;
+  visibility: hidden;
 }
 
 /* The glyph alone on screen, its word still read out. */

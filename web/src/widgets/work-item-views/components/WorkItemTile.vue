@@ -8,8 +8,10 @@
  * plain task, the reference, and on the right only what stops the work — an
  * open blocker, «Ждёт MAIN-12», and a claim whose session is gone. It never
  * wraps; a mark short of room keeps its glyph. Below it the title, at most
- * three lines with the whole of it on hover; up to three labels; and who holds
- * the item and how far its steps are, only when there is something to say.
+ * three lines with the whole of it on hover; the labels on one line, up to
+ * three whole chips and «+N» for the rest, which opens the card like the rest
+ * of the sheet; and who holds the item and how far its steps are, only when
+ * there is something to say.
  *
  * The tile used to print every facet as a word, defaults included: «Средний»
  * on most tiles, the kind word beside it, and «можно брать» on nearly every
@@ -170,6 +172,7 @@ const describedBy = computed(() => {
       :filter="props.filter"
       :tabbable="false"
       filterable
+      fit
       @filter="emit('filter', $event)"
     />
     <FacetMarks
@@ -295,12 +298,6 @@ const describedBy = computed(() => {
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
-}
-
-/* A chip's button is taller than its face, so the buttons' boxes are the
-   rows' spacing and need no gap of their own between rows. */
-.work-item-tile > .tile-labels {
-  row-gap: 0;
 }
 
 /* Centre, not baseline: a flex box hands its baseline to its first item, and

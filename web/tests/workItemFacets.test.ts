@@ -249,6 +249,20 @@ describe('labels', () => {
     )
   })
 
+  test('a tile shows the chips its line has room for, never more than three, and at least one', () => {
+    // The tile measures its line; the registry still says what prints and counts the rest.
+    assert.deepEqual(values('tile', { labelRoom: 2 }), ['a', 'b', '+3'])
+    assert.deepEqual(values('tile', { labelRoom: 9 }), ['a', 'b', 'c', '+2'])
+    // A lone chip too wide for the line is shortened, not replaced by a bare count.
+    assert.deepEqual(values('tile', { labelRoom: 0 }), ['a', '+4'])
+    assert.deepEqual(
+      facetMarks('labels', 'tile', item({ labels: ['a', 'b'] }), { labelRoom: 2 }).map(
+        (mark) => mark.value,
+      ),
+      ['a', 'b'],
+    )
+  })
+
   test('a list row shows two chips from 900px of row, and none below', () => {
     assert.deepEqual(values('list', { width: 900 }), ['a', 'b', '+3'])
     assert.deepEqual(values('list', { width: 899 }), [])

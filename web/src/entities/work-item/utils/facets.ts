@@ -47,6 +47,12 @@ export type FacetSubject = Pick<WorkItemBrief, 'kind' | 'priority'> & {
 export interface FacetContext {
   /** The board is grouped by epic, so the lane already names the parent. */
   grouped?: boolean
+  /**
+   * How many label chips the surface measured room for on its one line. The
+   * rule's limit still caps it, and one chip always shows, shortened if it
+   * must be, rather than a count standing alone.
+   */
+  labelRoom?: number
   /** The parent's reference, which the brief carries only as an id. */
   parentReference?: string | null
   /**
@@ -397,9 +403,10 @@ function holderMark(item: FacetSubject, form: FacetForm, surface: FacetSurface):
  * A chip per label the surface has room for, then one quiet «+N» for the rest
  * (form `word`, no filter), which the surface's own open target explains.
  */
-function labelMarks(item: FacetSubject, rule: FacetRule): FacetMark[] {
+function labelMarks(item: FacetSubject, rule: FacetRule, context: FacetContext): FacetMark[] {
   const labels = item.labels ?? []
-  const shown = rule.limit === undefined ? labels : labels.slice(0, rule.limit)
+  const room = context.labelRoom === undefined ? Infinity : Math.max(1, context.labelRoom)
+  const shown = labels.slice(0, Math.min(rule.limit ?? Infinity, room))
   const rest = labels.length - shown.length
   const more: FacetMark[] = rest
     ? [
@@ -446,7 +453,7 @@ export function facetMarks(
   if (facet === 'kind') return [kindMark(item, form)]
   if (facet === 'priority') return [priorityMark(item, form)]
   if (facet === 'state') return [stateMark(item, form)]
-  if (facet === 'labels') return labelMarks(item, rule)
+  if (facet === 'labels') return labelMarks(item, rule, context)
   if (facet === 'holder') return [holderMark(item, form, surface)]
   if (facet === 'readiness') return readinessMarks(item, surface, context)
   if (facet === 'parent')

@@ -110,6 +110,13 @@ export async function openBoard(page: Page, state: Record<string, string> = { gr
   await expect(page.locator('.work-item-board [data-reference]').first()).toBeVisible()
 }
 
+/** The middle of something on screen, where a hand picks it up. */
+export async function centre(what: Locator) {
+  const box = await what.boundingBox()
+  if (!box) throw new Error('nothing to pick up on screen')
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+}
+
 /** The same space as a list, once its rows are drawn. */
 export async function openList(page: Page) {
   await page.goto(boardRoute({ view: 'list' }))
