@@ -33,6 +33,17 @@ if __name__ == "__main__":
         if status is not None:
             sys.exit(status)
 
+    # The tray and the desktop app ask the launcher three read-only questions
+    # on the way to a window: `runtime`, `launcher status` and `launcher
+    # listener status`. They are answered before the command line is imported,
+    # which loads every surface; anything else, or an error, falls through.
+    if sys.argv[1:2] in (["runtime"], ["launcher"]):
+        from server.launcher_queries import main as query_main
+
+        answered = query_main(sys.argv[1:])
+        if answered is not None:
+            sys.exit(answered)
+
     from server.cli import main
 
     main()

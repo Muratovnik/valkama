@@ -24,12 +24,11 @@ import json
 import os
 import shutil
 import sqlite3
-import sys
 import tempfile
 from pathlib import Path
 from typing import Any
 
-from . import documents, launcher, static_assets, store, transcripts
+from . import documents, launcher, launcher_queries, static_assets, store, transcripts
 from .federation import federated_spaces
 from .http_surface import serve_main
 from .mcp_surface import LEGACY_PROTOCOLS, MODERN_PROTOCOL, catalogue, mcp_main
@@ -152,7 +151,7 @@ def mock_environment(name: str, value: str):
 def runtime_main() -> None:
     """Print the canonical identity a new server process would expose."""
 
-    print(static_assets.canonical_json(static_assets.runtime_identity(SOURCE_ROOT, DIST_DIR)))
+    launcher_queries.print_runtime()
 
 
 def capabilities_main() -> None:
@@ -217,24 +216,6 @@ def status_main(launcher_directory: str | None) -> None:
         "launcher": launcher_status,
     }
     print(static_assets.canonical_json(payload))
-
-
-def _write_utf8() -> None:
-    """Say what this process writes instead of letting the console decide.
-
-    A planning space is full of Cyrillic titles and arrows. Redirect this output
-    on a CP1251 console and the encoder raises on the first character it has no
-    room for, which is what `summary` did from its first commit: the session
-    hooks that run it were one arrow in a title away from failing. Card #292.
-
-    The same statement this project makes for authored text and for protocol
-    bytes, applied to the one surface a console gets to re-encode.
-    """
-    for stream in (sys.stdout, sys.stderr):
-        reconfigure = getattr(stream, "reconfigure", None)
-        if reconfigure is not None:
-            with contextlib.suppress(OSError, ValueError):
-                reconfigure(encoding="utf-8", errors="strict")
 
 
 def _adapter_command(options) -> None:
@@ -364,7 +345,7 @@ def _launcher_main(parser: argparse.ArgumentParser, options: argparse.Namespace)
             result = {**result, "skills": skills.refresh(options.directory)}
         except (OSError, skills.SkillError) as error:
             result = {**result, "skills": [], "skills_error": str(error)}
-    print(json.dumps(result, ensure_ascii=False, indent=1, sort_keys=True))
+    launcher_queries.print_document(result)
 
 
 def _skill_parser(commands: argparse._SubParsersAction) -> None:
@@ -527,7 +508,7 @@ def main(argv: list[str] | None = None) -> None:
     subprocess and nothing else, which is why the module had no coverage at all
     while its behavior was assumed.
     """
-    _write_utf8()
+    launcher_queries.write_utf8()
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command")
     commands.add_parser("mcp")
