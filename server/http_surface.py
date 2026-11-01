@@ -490,6 +490,15 @@ class PlatformHTTPServer(ThreadingHTTPServer):
     runtime_snapshot: static_assets.RuntimeSnapshot
     security_context: http_security.SecurityContext
 
+    # `HTTPServer` sets SO_REUSEADDR, which on Windows does not mean "rebind
+    # over TIME_WAIT" as it does elsewhere: it lets a second socket bind a port
+    # another one is listening on. Two servers then answered on one port, and
+    # whoever started the second -- the desktop app, the tray -- read the other
+    # one's identity as its own child's. Without the option Windows refuses the
+    # second bind, so a server that cannot own the port exits instead of
+    # sharing it, and a listener that closed can still be rebound at once.
+    allow_reuse_address = os.name != "nt"
+
     def __init__(
         self,
         server_address: tuple[str, int],

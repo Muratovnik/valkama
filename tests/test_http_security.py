@@ -212,6 +212,36 @@ class HttpSecurityBoundaryTests(unittest.TestCase):
                 token_path=Path(self._temporary.name) / "unused",
             )
 
+    def test_a_second_server_cannot_bind_the_port_a_listener_holds(self) -> None:
+        # With SO_REUSEADDR, Windows let this second bind succeed, and two
+        # servers answered on one port: a starter that trusts its own child then
+        # read the other server's identity as the child's.
+        with self.assertRaises(OSError):
+            second = http_surface.PlatformHTTPServer(
+                ("127.0.0.1", self.server.server_port),
+                http_surface.Handler,
+                token_path=Path(self._temporary.name) / "second-token",
+            )
+            second.server_close()
+
+    def test_a_closed_listener_port_can_be_bound_again_at_once(self) -> None:
+        # The restart path stops one server and starts the next on the same
+        # port; refusing reuse must not make that wait out TIME_WAIT.
+        port = self.server.server_port
+        status, _, _ = self.request("GET", "/api/security/bootstrap", host=self.authority)
+        self.assertNotEqual(0, status)
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join(timeout=3)
+        self.server = http_surface.PlatformHTTPServer(
+            ("127.0.0.1", port),
+            http_surface.Handler,
+            token_path=Path(self._temporary.name) / "installation-token",
+        )
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+        self.assertEqual(port, self.server.server_port)
+
     def test_host_is_exact_for_reads_and_bootstrap(self) -> None:
         for host in (
             None,
