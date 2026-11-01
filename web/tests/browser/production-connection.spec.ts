@@ -77,3 +77,69 @@ for (const viewport of [
     await expect(panel.getByRole('button', { name: 'Retry' })).toBeVisible()
   })
 }
+
+/**
+ * On a narrow rail the word is hidden and the dot is all there is. A press on a
+ * lost connection says why, and the panel keeps the refresh; Escape closes it
+ * and gives focus back to the dot. The name stays complete for assistive
+ * technology, and the status region still says the sentence once.
+ */
+test('a press on a lost connection on a narrow rail says why, and Escape closes it', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await installBackend(page)
+  const stream = await installStreamDouble(page)
+  const read = page.waitForResponse((response) => response.url().includes('/api/planning?'))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  const response = await read
+  await stream.deliver(await response.text())
+  const rail = page.locator('.nav-refresh')
+  await expect(rail).toHaveAttribute('data-tone', 'success')
+
+  await stream.drop()
+  await expect(rail).toHaveAttribute('data-tone', 'warning')
+  await expect(page.locator('.connection-copy')).toBeHidden()
+  await expect(rail).toHaveAccessibleName(new RegExp(LOST.replaceAll('.', '\\.'), 'u'))
+
+  await rail.click()
+  const panel = page.getByRole('dialog').filter({ hasText: LOST })
+  await expect(panel).toBeVisible()
+  await expect(rail).toHaveAttribute('aria-expanded', 'true')
+  // The panel offers the refresh the press used to be.
+  await expect(panel.getByRole('button')).toBeFocused()
+
+  await page.keyboard.press('Escape')
+  await expect(panel).toHaveCount(0)
+  await expect(rail).toBeFocused()
+  await expect(rail).toHaveAttribute('aria-expanded', 'false')
+  await expect(page.getByRole('status').filter({ hasText: LOST })).toHaveCount(1)
+
+  // Enter opens the same panel from the keyboard, and Escape returns the focus.
+  await page.keyboard.press('Enter')
+  await expect(panel).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(panel).toHaveCount(0)
+  await expect(rail).toBeFocused()
+})
+
+/** Where the word is shown, the press is still the refresh: the panel is for the narrow rail only. */
+test('on a wide rail a press on a lost connection refreshes and opens nothing', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await installBackend(page)
+  const stream = await installStreamDouble(page)
+  const read = page.waitForResponse((response) => response.url().includes('/api/planning?'))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  const response = await read
+  await stream.deliver(await response.text())
+  const rail = page.locator('.nav-refresh')
+  await stream.drop()
+  await expect(rail).toHaveAttribute('data-tone', 'warning')
+
+  const refreshed = page.waitForResponse((response) => response.url().includes('/api/planning?'))
+  await rail.click()
+  await refreshed
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+})

@@ -13,11 +13,18 @@
  * technology hears it once. It used to be a paragraph put into the flow above
  * the views, which moved the board and the graph down by its height for as long
  * as the server was away and asked for a refresh the app does by itself.
+ *
+ * On a narrow rail the word is hidden and the dot is all there is, and a phone
+ * cannot hover. So there, pressing the dot while the connection is lost opens
+ * the sentence in a panel, and the panel keeps the refresh: the press used to be
+ * the refresh alone, and a lost connection could not be explained by the rail.
  */
-import { computed, useId } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, useId, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { statePresentation } from '@/shared/lib/uiSystem.ts'
+import InfoTip from '@/shared/ui/InfoTip.vue'
+import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = withDefaults(
@@ -35,31 +42,90 @@ const describedBy = computed(() => (lost.value ? noticeId : undefined))
 const title = computed(() =>
   lost.value ? `${notice.value} ${t('refresh.title')}` : t('refresh.title'),
 )
+
+/**
+ * Whether the rail hides the word, which is when the press opens the sentence.
+ * The rail's container query decides it and this asks the same question: the
+ * word's own display. The control's width changes with the rail, so a resize
+ * observer on the control is told every time the answer may change.
+ */
+const control = useTemplateRef<HTMLButtonElement>('control')
+const tip = useTemplateRef<{ close: () => void }>('tip')
+const compact = ref(false)
+function measure() {
+  const copy = control.value?.querySelector('.connection-copy') ?? null
+  compact.value = copy !== null && getComputedStyle(copy).display === 'none'
+}
+/** The press opens the sentence: lost on a narrow rail, where the word is not there to say it. */
+const opensSentence = computed(() => lost.value && compact.value)
+
+let observer: ResizeObserver | undefined
+onMounted(() => {
+  measure()
+  if (typeof ResizeObserver !== 'undefined' && control.value) {
+    observer = new ResizeObserver(measure)
+    observer.observe(control.value)
+  }
+})
+onBeforeUnmount(() => observer?.disconnect())
+
+// The sentence says the connection is lost; once it is back the panel has nothing to say.
+watch(lost, (now) => {
+  if (!now) tip.value?.close()
+})
+
+function press(toggle: (event?: Event) => void, event: MouseEvent) {
+  if (opensSentence.value) toggle(event)
+  else emit('refresh')
+}
 </script>
 
 <template>
-  <button
-    type="button"
-    class="nav-refresh"
-    :class="{ refreshing }"
-    :data-tone="statePresentation('connection-lifecycle', connection).tone"
-    :disabled="refreshing"
-    :title="title"
-    :aria-describedby="describedBy"
-    @click="emit('refresh')"
-  >
-    <span
-      class="connection-dot"
-      aria-hidden="true"
-    />
-    <span class="connection-copy">{{ t(`status.${connection}`) }}</span>
-    <VIcon
-      class="refresh-icon"
-      name="refresh"
-      :size="18"
-      :stroke-width="1.7"
-    />
-  </button>
+  <div class="nav-tip">
+    <InfoTip
+      ref="tip"
+      :label="notice"
+      :active="opensSentence"
+      interactive
+    >
+      <template #trigger="{ toggle, popup }">
+        <button
+          ref="control"
+          type="button"
+          class="nav-refresh"
+          :class="{ refreshing }"
+          :data-tone="statePresentation('connection-lifecycle', connection).tone"
+          :disabled="refreshing"
+          :title="title"
+          :aria-describedby="describedBy"
+          :aria-controls="popup.controls"
+          :aria-expanded="popup.expanded"
+          @click="press(toggle, $event)"
+        >
+          <span
+            class="connection-dot"
+            aria-hidden="true"
+          />
+          <span class="connection-copy">{{ t(`status.${connection}`) }}</span>
+          <VIcon
+            class="refresh-icon"
+            name="refresh"
+            :size="18"
+            :stroke-width="1.7"
+          />
+        </button>
+      </template>
+      <p class="nav-tip-text">{{ notice }}</p>
+      <VButton
+        class="nav-tip-action"
+        variant="secondary"
+        :disabled="refreshing"
+        @click="emit('refresh')"
+      >
+        {{ t('refresh.title') }}
+      </VButton>
+    </InfoTip>
+  </div>
   <p
     :id="noticeId"
     class="visually-hidden"
@@ -72,6 +138,7 @@ const title = computed(() =>
 <style scoped>
 .nav-refresh {
   display: grid;
+  flex: 1 1 auto;
   grid-template-columns: 8px minmax(0, 1fr) 20px;
   gap: var(--space-3);
   align-items: center;
@@ -149,6 +216,28 @@ const title = computed(() =>
   .refresh-icon {
     display: none;
   }
+}
+
+/* The help panel's anchor is the whole control: the cell takes the footer's
+   width, and the control fills the anchor, so the footer lays out as it did
+   before the panel. */
+.nav-tip {
+  display: grid;
+  min-width: 0;
+}
+
+.nav-tip-text {
+  margin: 0 0 var(--space-2);
+}
+
+/* The action's label is a sentence in a narrow panel: it wraps, and the control
+   grows to hold its lines instead of clipping them at the panel's edges. */
+.nav-tip-action {
+  inline-size: 100%;
+  min-block-size: var(--size-control-height);
+  padding-block: var(--space-2);
+  text-align: center;
+  white-space: normal;
 }
 
 @keyframes refresh-spin {

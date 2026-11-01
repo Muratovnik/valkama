@@ -518,8 +518,11 @@ stands under the last navigation group; the rail's footer holds the connection
 state and refresh and nothing you navigate to. A lost connection is said there
 and only there: the dot and the word change, the tooltip says that the app
 reconnects by itself and what the button does, and assistive technology hears
-it once. A paragraph about paused updates once stood in the flow over the
-views and moved the board and the graph 46px down for as long as the server
+it once. On a narrow rail the word is gone, so a press on the dot while the
+connection is lost opens the same sentence in a panel, which keeps the refresh
+as its one action; the wide rail refreshes on the press as it always did. A
+paragraph about paused updates once stood in the flow over the views and moved
+the board and the graph 46px down for as long as the server
 was away; a card read that never reached the server names the connection the
 same way, not a record that could not be loaded. The context bar keeps the
 selected Planning space or operating scope and global activity controls in
