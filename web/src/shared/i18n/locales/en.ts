@@ -852,13 +852,6 @@ export const en = {
       chartSummary:
         'Scope from {from} to {to}: {start} at the start, {total} now; {closed} done and {open} open on {day}.',
     },
-    queue: {
-      all: 'All',
-      ready: 'Workable',
-      assigned: 'Assigned',
-      blocked: 'Blocked',
-      review: 'Review',
-    },
     inspector: 'Work item',
     resize: 'Resize the work item',
     sections: 'Work item sections',
@@ -1072,7 +1065,6 @@ export const en = {
       priority: 'Priority',
       claim: 'Assignee',
       checklist: 'Steps',
-      steps: '{done}/{total}',
       updated: 'Updated',
       sortBy: 'Sort by',
       sortOther: 'Order',

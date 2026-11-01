@@ -183,7 +183,6 @@ test('readiness has one label in each language, wherever it is printed', () => {
   for (const locale of ['en', 'ru'] as const) {
     const catalog = messages[locale]
     const label = catalog.workItem.facet.ready
-    assert.equal(catalog.workItem.queue.ready, label, locale)
     assert.equal(catalog.graph.frontier, `${label} · {count}`, locale)
     for (const retired of [
       'Готово к работе',

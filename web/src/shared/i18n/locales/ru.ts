@@ -850,13 +850,6 @@ export const ru = {
       chartSummary:
         'Объём с {from} по {to}: в начале {start}, сейчас {total}; на {day} выполнено {closed}, открыто {open}.',
     },
-    queue: {
-      all: 'Все',
-      ready: 'Можно брать',
-      assigned: 'Назначено',
-      blocked: 'Заблокировано',
-      review: 'Проверка',
-    },
     inspector: 'Единица работы',
     resize: 'Изменить ширину панели',
     sections: 'Разделы единицы работы',
@@ -1071,7 +1064,6 @@ export const ru = {
       priority: 'Приоритет',
       claim: 'Исполнитель',
       checklist: 'Шаги',
-      steps: '{done}/{total}',
       updated: 'Обновлено',
       sortBy: 'Сортировать по',
       sortOther: 'Порядок',
