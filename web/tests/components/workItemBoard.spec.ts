@@ -95,6 +95,38 @@ describe('the order hint of the grouped board', () => {
     expect(messages.en.workItem.order.hint).toContain('one order per state, across all epics')
     expect(messages.ru.workItem.order.hint).toContain('один порядок на состояние, для всех эпиков')
   })
+
+  it('shows a reorder made in a lane that the order is the whole board’s, for a few seconds', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const wrapper = board({ grouping: 'epic' })
+      const note = wrapper.get('.board-order-note')
+      expect(note.classes()).not.toContain('shown')
+      // Seen, not read twice: the tiles' description already carries it.
+      expect(note.attributes('aria-hidden')).toBe('true')
+      expect(note.text()).toBe(messages.en.workItem.order.shared)
+      await tile(wrapper, 'MAIN-11').trigger('keydown', { key: 'ArrowUp', altKey: true })
+      expect(note.classes()).toContain('shown')
+      vi.advanceTimersByTime(5000)
+      // A second move inside the window keeps it up for its own few seconds. The
+      // harness keeps no order, so the tile is still second and moves up again.
+      await tile(wrapper, 'MAIN-11').trigger('keydown', { key: 'ArrowUp', altKey: true })
+      vi.advanceTimersByTime(5000)
+      await wrapper.vm.$nextTick()
+      expect(note.classes()).toContain('shown')
+      vi.advanceTimersByTime(1000)
+      await wrapper.vm.$nextTick()
+      expect(note.classes()).not.toContain('shown')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('says nothing of the kind on the flat board, where a column is the whole order', async () => {
+    const wrapper = board()
+    await tile(wrapper, 'MAIN-10').trigger('keydown', { key: 'ArrowDown', altKey: true })
+    expect(wrapper.find('.board-order-note').exists()).toBe(false)
+  })
 })
 
 describe('moving a tile from the keyboard', () => {

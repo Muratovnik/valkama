@@ -68,6 +68,8 @@ export const LINE_BUDGET = new Map([
   // The branch map's task readout floats over the lanes beside it (overlay).
   ['widgets/work-item-inspector/components/ChainBranchTip.vue', 1],
   ['widgets/work-item-views/components/WorkItemList.vue', 1],
+  // The line that says a reorder in a lane is the whole board's order (overlay).
+  ['widgets/work-item-views/components/WorkItemBoard.vue', 1],
   ['widgets/work-item-graph/components/GraphView.vue', 1],
   // Graph cards need a neutral boundary where dependency wires meet their edges.
   ['widgets/work-item-graph/components/GraphNodeCard.vue', 1],

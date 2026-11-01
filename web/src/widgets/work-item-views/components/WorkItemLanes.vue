@@ -400,9 +400,10 @@ function toggleLabel(lane: BoardLane): string {
 
   /* A tile focused or brought into view stops below the sticky row of state
      names and the lane heading held under it rather than under them, and
-     short of the bottom edge by more than its focus ring reaches. */
+     short of the bottom edge by more than its focus ring reaches — or, while
+     the board shows its shared-order line there, above that line. */
   scroll-padding-block: calc(var(--lanes-head-block) + var(--lane-head-block) + var(--space-2))
-    var(--space-2);
+    var(--board-note-reach, var(--space-2));
   scroll-snap-type: x proximity;
   container: board-lanes / inline-size;
 }

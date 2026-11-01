@@ -10,8 +10,15 @@
  * Alt+↑/↓ on a focused tile — is handed up as the state it goes to and where it
  * lands, for the page to send. What the move did is said aloud here, because a
  * reader who moved a tile without looking needs to hear where it went.
+ *
+ * Grouped by epic, a lane shows only its own tiles of a state, but the order
+ * it changes is the state's across the whole board: a tile moved above its
+ * lane neighbour moves past every other lane's tile between them too. So each
+ * reorder made in a lane, by drag or by Alt+↑/↓, shows that in a line at the
+ * foot of the board for a few seconds, then lets it go. A screen reader has it
+ * from the tiles' description already, so the line is not read twice.
  */
-import { computed, nextTick, ref, useId, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import WorkItemColumn from '@/widgets/work-item-views/components/WorkItemColumn.vue'
@@ -112,7 +119,22 @@ function announce(text: string) {
   })
 }
 
+/** How long the shared-order line stays after a reorder in a lane. */
+const NOTE_MS = 6000
+const sharedOrder = ref(false)
+let noteTimer: ReturnType<typeof setTimeout> | undefined
+
+function showSharedOrder() {
+  sharedOrder.value = true
+  clearTimeout(noteTimer)
+  noteTimer = setTimeout(() => {
+    sharedOrder.value = false
+  }, NOTE_MS)
+}
+onBeforeUnmount(() => clearTimeout(noteTimer))
+
 function placed(move: BoardMove, landing: StackLanding) {
+  if (grouped.value) showSharedOrder()
   if (landing.keyboard) refocus = move.reference
   announce(
     t('workItem.order.moved', {
@@ -153,7 +175,7 @@ watch(
   <div
     ref="root"
     class="work-item-board"
-    :class="{ dragging, grouped }"
+    :class="{ dragging, grouped, noting: sharedOrder }"
     :data-board-row="boardRow"
     :style="{ '--column-count': columns.length, '--column-width': columnWidth }"
   >
@@ -203,6 +225,14 @@ watch(
     >
       {{ announcement }}
     </p>
+    <p
+      v-if="grouped"
+      class="board-order-note"
+      aria-hidden="true"
+      :class="{ shown: sharedOrder }"
+    >
+      {{ t('workItem.order.shared') }}
+    </p>
   </div>
 </template>
 
@@ -217,6 +247,7 @@ watch(
   --column-count: 1;
   --column-width: minmax(208px, 1fr);
 
+  position: relative;
   display: grid;
   grid-template-columns: repeat(var(--column-count), var(--column-width));
   gap: var(--space-2);
@@ -238,6 +269,45 @@ watch(
 
   &.dragging {
     cursor: grabbing;
+  }
+
+  /* While the shared-order line is up, a tile moved to the foot of a lane is
+     brought into view above the line rather than under it. The lanes read this
+     as the bottom of their scroll padding. */
+  &.noting {
+    --board-note-reach: calc(var(--size-control-height) + var(--space-4) + var(--space-2));
+  }
+}
+
+/* A floating line over the foot of the board: the overlay hairline and shadow
+   keep it off the tiles it lies over, and it takes no pointer, so a drop or a
+   click below it lands on the board. */
+.board-order-note {
+  position: absolute;
+  right: 0;
+  bottom: var(--space-4);
+  left: 0;
+  z-index: 3;
+  width: fit-content;
+  max-width: calc(100% - 2 * var(--space-4));
+  padding: var(--space-2) var(--space-3);
+  margin: 0 auto;
+  border: 1px solid var(--color-rule-strong);
+  color: var(--color-text);
+  font: var(--font-detail);
+  background: var(--color-surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-overlay);
+  opacity: 0;
+  transition: opacity var(--duration-surface) var(--ease-out);
+  pointer-events: none;
+
+  &.shown {
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
   }
 }
 </style>
