@@ -7,6 +7,7 @@ import PlanningModuleSurface from '@/pages/planning/PlanningModuleSurface.vue'
 
 import { fetchWorkItemChain } from '@/shared/api/planningChainApi.ts'
 import type { PlatformContextReady } from '@/shared/api/platformApiTypes.ts'
+import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
 import { planningSpaceEntity, planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import { messages } from '@/shared/i18n/index.ts'
@@ -144,6 +145,7 @@ async function render(
     props: {
       context,
       primaryWriteScopeId,
+      stateBytes: 2048,
       route: {
         module_id: 'planning' as const,
         scope,
@@ -197,7 +199,7 @@ describe('planning write ownership', () => {
     // The shell owns the route, so the test plays the shell: whatever entity the
     // surface asks for comes back as the route it is rendered with.
     async function follow() {
-      const emitted = wrapper.emitted('entity') ?? []
+      const emitted = wrapper.emitted<[EntityRef]>('entity') ?? []
       const entity = emitted.at(-1)?.[0]
       await wrapper.setProps({
         route: {

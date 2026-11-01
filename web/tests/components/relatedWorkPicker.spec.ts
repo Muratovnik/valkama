@@ -10,10 +10,11 @@ import { createWorkItem, linkWorkItems } from '@/shared/api/planningApi.ts'
 import { validateWorkItemRecord } from '@/shared/api/planningModel.ts'
 import { searchPlanningWorkItems } from '@/shared/api/planningSearchApi.ts'
 import type { PlanningSearchResult } from '@/shared/api/planningSearchApi.ts'
+import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { messages } from '@/shared/i18n/index.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 
-import { workItem } from '../browser/planningFixtures.ts'
+import { spaceRef, workItem } from '../browser/planningFixtures.ts'
 
 vi.mock('@/shared/api/planningApi.ts', async (load) => ({
   ...(await load<typeof import('@/shared/api/planningApi.ts')>()),
@@ -194,7 +195,7 @@ describe('grouped related tasks', () => {
     const item = data()
     item.links.push({ ...item.links[0], direction: 'outgoing' })
     const wrapper = mount(InspectorRelations, {
-      props: { item, writable: true },
+      props: { item, resourceRef: planningSpaceEntity(spaceRef), writable: true },
       global: { plugins: [i18n()], stubs: { RelatedWorkPicker: true } },
     })
     expect(wrapper.findAll('.relation-group')).toHaveLength(2)
@@ -242,7 +243,7 @@ describe('grouped related tasks', () => {
       },
     ]
     const wrapper = mount(InspectorRelations, {
-      props: { item, writable: true },
+      props: { item, resourceRef: planningSpaceEntity(spaceRef), writable: true },
       global: { plugins: [i18n()], stubs: { RelatedWorkPicker: true } },
     })
     const groups = wrapper.findAll('.relation-group')

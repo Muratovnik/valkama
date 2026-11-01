@@ -13,7 +13,8 @@ import type { PlanningEdge } from '@/shared/api/planningModel.ts'
 
 import { workItem } from './browser/planningFixtures.ts'
 
-const base = validateWorkItemRecord(workItem)
+// A graph node is a brief, and a brief always carries its comment count.
+const base = { ...validateWorkItemRecord(workItem), comment_count: 0 }
 const engine = new ELK()
 const SIZE = { width: 1200, height: 680 }
 const nodeId = (number: number) => `work-${number}`

@@ -10,7 +10,8 @@ import { validateWorkItemRecord } from '@/shared/api/planningModel.ts'
 
 import { workItem } from './browser/planningFixtures.ts'
 
-const base = validateWorkItemRecord(workItem)
+// A graph node is a brief, and a brief always carries its comment count.
+const base = { ...validateWorkItemRecord(workItem), comment_count: 0 }
 const COLUMN = NODE_WIDTH + 64
 const ROW = NODE_HEIGHT + 36
 

@@ -31,11 +31,26 @@ function plugins() {
   ]
 }
 
+/** What an event carries when no call proved who wrote it. */
+const unproved = { state: 'unconfirmed', source: null, session_id: null, agent_id: null } as const
+
 function activityItem() {
   const item = workItemFixture('History task', 1)
   item.events = [
-    { action: 'created', author: 'A', at: '2026-10-22T10:00:00Z', detail: 'earlier' },
-    { action: 'claimed', author: 'B', at: '2026-10-23T10:00:00Z', detail: 'needle in detail' },
+    {
+      action: 'created',
+      author: 'A',
+      at: '2026-10-22T10:00:00Z',
+      detail: 'earlier',
+      identity: unproved,
+    },
+    {
+      action: 'claimed',
+      author: 'B',
+      at: '2026-10-23T10:00:00Z',
+      detail: 'needle in detail',
+      identity: unproved,
+    },
   ]
   item.refs = [
     {

@@ -99,6 +99,7 @@ function surface(open = false) {
     props: {
       context: context(),
       primaryWriteScopeId: dataScopeId,
+      stateBytes: 2048,
       route: route(spaceRef, open),
       scope: projectScope,
     },
@@ -265,6 +266,7 @@ describe('an address that names a project this workstation does not have', () =>
       props: {
         context: context(),
         primaryWriteScopeId: dataScopeId,
+        stateBytes: 2048,
         route: {
           module_id: 'planning',
           scope: { kind: 'project', project_ref: { project_id: 'nonexistent' } },

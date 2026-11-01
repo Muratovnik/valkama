@@ -17,7 +17,8 @@ import { workItem } from './browser/planningFixtures.ts'
  * places it when a scope opens, never on a refresh, and after a narrowing or a
  * resize only when nothing drawn is left in sight — across, at the same zoom.
  */
-const base = validateWorkItemRecord(workItem)
+// A graph node is a brief, and a brief always carries its comment count.
+const base = { ...validateWorkItemRecord(workItem), comment_count: 0 }
 const engine = new ELK()
 const dimensions = { width: 1200, height: 680 }
 
