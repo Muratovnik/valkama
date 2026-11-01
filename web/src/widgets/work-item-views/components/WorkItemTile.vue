@@ -248,9 +248,15 @@ const describedBy = computed(() => {
   column-gap: var(--space-1);
 }
 
+/* The reference is set in the line's own figures, as the blocker's reference
+   at its end is. Tabular figures line digits up in a column, and nothing here
+   is one: the glyphs before a reference vary from tile to tile, and what
+   follows it stands at the line's end. They cost a four-digit reference six
+   pixels, which is the difference in a desktop column between a blocker's
+   reference shown whole and folded to its glyph, where the key is three
+   letters; a longer key still folds, as any exception short of room does. */
 .tile-reference {
   flex: 0 0 auto;
-  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 

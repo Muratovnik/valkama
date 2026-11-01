@@ -675,8 +675,12 @@ is clicked and stays one Tab stop; the chips lie above it as filter buttons out
 of the Tab order. The priority and kind glyphs are read, not pressed, as on a
 graph node: each spends its 14px and no 28px pointer box, the two keep the
 line's own small gap, and the list, the card and the «Фильтр» menu filter by
-them. On the board grouped by epic an empty cell draws no ground until a tile
-of its lane is dragged and could land there.
+them. The reference is set in the line's own figures, not tabular ones: no
+column of digits lines up on a tile. So urgent, an improvement, a four-digit
+reference and «⛔» with another hold whole in a desktop column when the space's
+key is three letters; a longer key folds as any exception short of room does.
+On the board grouped by epic an empty cell draws no ground until a tile of its
+lane is dragged and could land there.
 The Done column, and a lane's Done cell, stand newest closed first, by the time
 of the item's latest transition; nothing there is planned, so the manual order
 of the other columns does not apply. A tile does not move within Done, by drag
