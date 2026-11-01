@@ -1,7 +1,8 @@
 /**
  * The list's rows as one composite: a single Tab stop that follows the row last
- * focused, arrows and Home/End that walk the rows, and Enter that opens a card;
- * and the head that offers a narrow list's folded orders as one choice.
+ * focused, arrows, Home/End and Page Up/Down that walk the rows, and Enter or a
+ * click anywhere in a row that opens a card; and the head that offers a narrow
+ * list's folded orders as one choice.
  */
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -80,6 +81,40 @@ describe('the list rows', () => {
     const wrapper = await list()
     await buttons(wrapper)[1].trigger('click')
     expect(wrapper.emitted('open')).toEqual([['MAIN-3']])
+  })
+
+  it('page down and up a screen of rows, and at least one', async () => {
+    const wrapper = await list()
+    buttons(wrapper)[0].element.focus()
+    // The test page lays nothing out, so a screen here is one row.
+    const event = new KeyboardEvent('keydown', { key: 'PageDown', bubbles: true, cancelable: true })
+    document.activeElement?.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(true)
+    expect(focusedReference()).toBe('MAIN-3')
+    press('PageUp')
+    expect(focusedReference()).toBe('MAIN-4')
+    press('PageUp')
+    expect(focusedReference()).toBe('MAIN-4')
+  })
+
+  it('open a card from a click anywhere in the row, from its reference', async () => {
+    const wrapper = await list()
+    await wrapper.findAll('tbody .list-name')[1].trigger('click')
+    expect(wrapper.emitted('open')).toEqual([['MAIN-3']])
+    // Focused, so that closing the card comes back to this row.
+    expect(focusedReference()).toBe('MAIN-3')
+  })
+
+  it('leave a click that ends a text selection, or one on a heading, alone', async () => {
+    const wrapper = await list()
+    const name = wrapper.findAll('tbody .list-name')[1]
+    const range = document.createRange()
+    range.selectNodeContents(name.element)
+    document.getSelection()?.addRange(range)
+    await name.trigger('click')
+    document.getSelection()?.removeAllRanges()
+    await wrapper.get('thead .list-sort').trigger('click')
+    expect(wrapper.emitted('open')).toBeUndefined()
   })
 
   it('keep the Tab stop on the row a new order moved', async () => {

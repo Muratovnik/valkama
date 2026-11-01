@@ -13,15 +13,16 @@
  * stated order rather than being pushed off the edge (`listColumns.ts`).
  *
  * The rows are one Tab stop, as the board's tiles are: the row last focused.
- * ↑ and ↓ walk the rows, Home and End go to the ends, Enter opens the card,
- * and closing the card brings focus back to the row it was opened from.
+ * Enter on it or a click anywhere in a row opens the card, and closing the
+ * card brings focus back to the row it was opened from (`useListKeys.ts`).
  */
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { useEventListener, useResizeObserver } from '@vueuse/core'
+import { useResizeObserver } from '@vueuse/core'
 
 import WorkItemListHead from '@/widgets/work-item-views/components/WorkItemListHead.vue'
+import { useListKeys } from '@/widgets/work-item-views/composables/useListKeys.ts'
 import { useListSort } from '@/widgets/work-item-views/composables/useListSort.ts'
 import { useListWords } from '@/widgets/work-item-views/composables/useListWords.ts'
 import { fitFor, isFolded, LIST_COLUMNS } from '@/widgets/work-item-views/utils/listColumns.ts'
@@ -92,39 +93,13 @@ function memo(item: WorkItemBrief): unknown[] {
   return [item, tabStop(item), ready.value.has(item.work_item_id), fit.value, locale.value]
 }
 
-/** The row button an event happened on, if it happened on one. */
-function rowButton(event: Event): HTMLElement | null {
-  const target = event.target as Partial<Element> | null
-  return target?.closest?.<HTMLElement>('.list-open') ?? null
-}
-
-/** A bare arrow, Home or End moves focus between rows and scrolls nothing else. */
-function walked(event: KeyboardEvent) {
-  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
-  const row = rowButton(event)?.closest('tr')
-  const body = row?.parentElement
-  if (!row || !body) return
-  const next = {
-    ArrowDown: row.nextElementSibling,
-    ArrowUp: row.previousElementSibling,
-    End: body.lastElementChild,
-    Home: body.firstElementChild,
-  }[event.key]
-  if (next === undefined) return
-  event.preventDefault()
-  next?.querySelector<HTMLElement>('.list-open')?.focus()
-}
-
 // One listener each for the whole list rather than three on every row: a
 // space of a thousand rows paid for three thousand of them on every opening.
-useEventListener(root, 'keydown', walked)
-useEventListener(root, 'focusin', (event: FocusEvent) => {
-  const id = rowButton(event)?.dataset.id
-  if (id !== undefined) active.value = id
-})
-useEventListener(root, 'click', (event: MouseEvent) => {
-  const reference = rowButton(event)?.dataset.reference
-  if (reference !== undefined) emit('open', reference)
+useListKeys(root, {
+  focus: (id) => {
+    active.value = id
+  },
+  open: (reference) => emit('open', reference),
 })
 </script>
 
@@ -277,9 +252,12 @@ useEventListener(root, 'click', (event: MouseEvent) => {
   text-align: end;
 }
 
-/* The row the keyboard is on is marked as the row the pointer is over. */
+/* The row the keyboard is on is marked as the row the pointer is over, and the
+   whole row says it opens: a click anywhere on it opens the card. The folded
+   facts are read, not followed, and keep the text cursor. */
 .list-row {
   border-top: 1px solid var(--color-rule);
+  cursor: pointer;
 
   &:hover,
   &:focus-within {
@@ -336,6 +314,7 @@ useEventListener(root, 'click', (event: MouseEvent) => {
   padding-top: var(--space-1);
   color: var(--color-text-muted);
   font: var(--font-detail);
+  cursor: auto;
 }
 
 .list-fact {

@@ -3,7 +3,7 @@
  * columns leave and nothing is pushed past the right edge at any width, the
  * columns that give way on a narrow list are folded under the title rather
  * than cut, the head stays one line at every width, and the rows are one Tab
- * stop walked with the arrows.
+ * stop walked with the arrows and the page keys and opened by a click anywhere.
  */
 import { expect, test } from '@playwright/test'
 
@@ -90,6 +90,75 @@ test('the rows are one Tab stop, walked by the arrows, and a closed card gives f
   await expect(drawer).toHaveCount(0)
   await expect(rows.nth(1)).toBeFocused()
   await expect(rows.nth(1)).toHaveAttribute('tabindex', '0')
+})
+
+test('the page keys move focus a screen of rows, and focus stays in sight', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 600 })
+  await installBackend(page)
+  await serve(page)
+  await openList(page)
+  const list = page.locator('.work-item-list')
+  const rows = list.locator('tbody .list-open')
+  await expect(rows.first()).toBeVisible()
+  expect(await list.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true)
+  await rows.first().focus()
+  const sight = () =>
+    list.evaluate((element) => {
+      const focused = document.activeElement?.closest('tr')
+      const head = element.querySelector('thead')?.getBoundingClientRect()
+      const box = element.getBoundingClientRect()
+      const row = focused?.getBoundingClientRect()
+      return {
+        index: focused ? [...(focused.parentElement?.children ?? [])].indexOf(focused) : -1,
+        inSight: Boolean(row && head && row.top >= head.bottom - 1 && row.bottom <= box.bottom + 1),
+      }
+    })
+  await page.keyboard.press('PageDown')
+  const down = await sight()
+  expect(down.index).toBeGreaterThan(1)
+  expect(down.inSight, 'the row focus moved to is in sight').toBe(true)
+  await page.keyboard.press('PageUp')
+  expect(await sight()).toEqual({ index: 0, inSight: true })
+})
+
+test('a click anywhere in a row opens its card, but not one that selects its text', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 800 })
+  await installBackend(page)
+  await serve(page)
+  await openList(page)
+  const row = page.locator('.work-item-list tbody tr').nth(1)
+  await expect(row).toBeVisible()
+  const text = await row.locator('.list-open').textContent()
+  const reference = text?.trim() ?? ''
+  const name = row.locator('.list-name')
+  expect(await name.evaluate((element) => getComputedStyle(element).cursor)).toBe('pointer')
+  await name.click()
+  const drawer = page.locator('.drawer')
+  await expect(drawer.locator('.head-reference')).toHaveText(reference)
+  await page.keyboard.press('Escape')
+  await expect(drawer).toHaveCount(0)
+  await expect(row.locator('.list-open')).toBeFocused()
+  // A drag across the title selects it and opens nothing.
+  const [left, top, span] = await name.evaluate((element) => {
+    const line = element.getClientRects()[0]
+    return [line.x, line.y, line.width]
+  })
+  await page.mouse.move(left + 3, top + 6)
+  await page.mouse.down()
+  await page.mouse.move(left + Math.min(span - 3, 150), top + 6, { steps: 10 })
+  await page.mouse.up()
+  expect(
+    await page.evaluate(() => document.getSelection()?.toString().length ?? 0),
+  ).toBeGreaterThan(0)
+  // A heading's sort orders the rows and opens nothing either.
+  await page.locator('.work-item-list thead .list-sort').nth(1).click()
+  await expect(page.locator('.work-item-list thead th').nth(1)).toHaveAttribute(
+    'aria-sort',
+    'ascending',
+  )
+  await expect(drawer).toHaveCount(0)
 })
 
 test('a phone-width list offers the folded orders as one choice that turns them over', async ({
