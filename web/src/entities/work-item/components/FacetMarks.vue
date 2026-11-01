@@ -105,16 +105,24 @@ const moreSample = computed(() =>
     : undefined,
 )
 
-const room = useLabelRoom(useTemplateRef<HTMLElement>('line'), {
-  candidates: () => candidates.value,
-  enabled: fits,
-  more: () => (moreSample.value ? word(moreSample.value) : undefined),
-  total: () => props.item.labels?.length ?? 0,
-})
+/**
+ * Only a run that fits its chips measures its line. Every other run — a list
+ * row draws seven — is spared the observer, its watcher and its room; `fit`
+ * says which run a host placed where, not a state that changes, so it is read
+ * once.
+ */
+const room = props.fit
+  ? useLabelRoom(useTemplateRef<HTMLElement>('line'), {
+      candidates: () => candidates.value,
+      enabled: fits,
+      more: () => (moreSample.value ? word(moreSample.value) : undefined),
+      total: () => props.item.labels?.length ?? 0,
+    })
+  : undefined
 
 /** What the registry is asked with: the host's context, and the room the line measured. */
 const asked = computed(() =>
-  room.value === undefined ? props.context : { ...props.context, labelRoom: room.value },
+  room?.value === undefined ? props.context : { ...props.context, labelRoom: room.value },
 )
 
 const marks = computed(() =>
@@ -129,44 +137,78 @@ const say = (text: FacetMark['text']) =>
 /** The mark's whole words: its name, and what it draws unless it has short ones. */
 const word = (mark: FacetMark) => say(mark.text)
 
-const filters = (mark: FacetMark) => props.filterable && mark.filter !== null
-
-const active = (mark: FacetMark) => mark.filter !== null && hasToken(props.filter, mark.filter)
+/**
+ * One mark as it is drawn. Its words are looked up once a render: the template
+ * asked for a filter mark's name twice and its word up to four times, in every
+ * cell of every row of a list.
+ */
+interface DrawnMark {
+  /** The mark is in the filter now. */
+  active: boolean
+  /** Absent rather than false: the attribute is what the style reads. */
+  activeMark: true | undefined
+  /** A pressed mark: a button that filters. */
+  filters: boolean
+  /** The glyph is drawn and its word is only read out. */
+  glyphOnly: boolean
+  key: string
+  mark: FacetMark
+  /** «Фильтр: тип Улучшение», or the way back out of it. */
+  name: string | undefined
+  /** Shorter words drawn in place of the whole ones. */
+  short: string | undefined
+  /** A mark that filters is a button; every other mark is text. */
+  tag: 'button' | 'span'
+  /** What a pointer shows: what a click does, or the words a glyph or short words stand for. */
+  title: string | undefined
+  type: 'button' | undefined
+  /** The mark's whole words. */
+  word: string
+  /** A `word` is the word alone: a column's heading already names the fact. */
+  wordOnly: boolean
+}
 
 /** «Фильтр: тип Улучшение», or the way back out of it. */
-function filterName(mark: FacetMark): string | undefined {
-  if (!filters(mark)) return undefined
-  return t(active(mark) ? 'workItem.facet.filterRemove' : 'workItem.facet.filterAdd', {
+function filterName(mark: FacetMark, active: boolean, whole: string) {
+  return t(active ? 'workItem.facet.filterRemove' : 'workItem.facet.filterAdd', {
     facet: t(`workItem.facet.name.${mark.facet}`),
-    value: word(mark),
+    value: whole,
   })
 }
 
-/** A mark that filters is a button; every other mark is text. */
-const tag = (mark: FacetMark) => (filters(mark) ? 'button' : 'span')
-const buttonType = (mark: FacetMark) => (filters(mark) ? 'button' : undefined)
+function present(mark: FacetMark): DrawnMark {
+  const whole = word(mark)
+  const filters = props.filterable && mark.filter !== null
+  const active = mark.filter !== null && hasToken(props.filter, mark.filter)
+  const name = filters ? filterName(mark, active, whole) : undefined
+  const glyphOnly = mark.form === 'glyph' && mark.glyph !== null
+  // A glyph whose word may fold out of sight tells the pointer its word.
+  const foldable = props.fold && mark.glyph !== null
+  return {
+    active,
+    activeMark: active || undefined,
+    filters,
+    glyphOnly,
+    key: `${mark.facet}:${mark.value}`,
+    mark,
+    name,
+    short: mark.short && say(mark.short),
+    tag: filters ? 'button' : 'span',
+    title: name ?? (glyphOnly || foldable || mark.short ? whole : undefined),
+    type: filters ? 'button' : undefined,
+    word: whole,
+    wordOnly: mark.form === 'word',
+  }
+}
 
-/** Absent rather than false: the attribute is what the style reads. */
-const activeMark = (mark: FacetMark) => active(mark) || undefined
-
-/** A `word` is the word alone: a column's heading already names the fact. */
-const wordOnly = (mark: FacetMark) => mark.form === 'word'
-
-/** The glyph is drawn and its word is only read out. */
-const glyphOnly = (mark: FacetMark) => mark.form === 'glyph' && mark.glyph !== null
-
-/** A glyph whose word may fold out of sight, so the pointer is told it. */
-const foldable = (mark: FacetMark) => props.fold && mark.glyph !== null
-
-/** What a pointer shows: what a click does, or the words a glyph or short words stand for. */
-const hoverText = (mark: FacetMark) =>
-  filterName(mark) ?? (glyphOnly(mark) || foldable(mark) || mark.short ? word(mark) : undefined)
+const drawn = computed(() => marks.value.map((mark) => present(mark)))
 
 /**
- * Out of the Tab order inside a container that is one Tab stop; the default
- * order everywhere else, which is the attribute being absent.
+ * A pressed mark is out of the Tab order inside a container that is one Tab
+ * stop; every other mark, and a pressed one anywhere else, has the default
+ * order, which is the attribute being absent.
  */
-const tabStop = (mark: FacetMark) => (filters(mark) && !props.tabbable ? -1 : undefined)
+const tabStop = (entry: DrawnMark) => (entry.filters && !props.tabbable ? -1 : undefined)
 
 function press(mark: FacetMark, event: MouseEvent) {
   if (!mark.filter) return
@@ -187,65 +229,65 @@ function pressLabel(label: string) {
     :data-surface="props.surface"
   >
     <template
-      v-for="mark in marks"
-      :key="`${mark.facet}:${mark.value}`"
+      v-for="entry in drawn"
+      :key="entry.key"
     >
       <LabelChip
-        v-if="mark.form === 'chips'"
+        v-if="entry.mark.form === 'chips'"
         class="facet-chip"
-        :label="mark.value"
-        :active="active(mark)"
+        :label="entry.mark.value"
+        :active="entry.active"
         :filterable="props.filterable"
         :tabbable="props.tabbable"
         @filter="pressLabel"
       />
       <SemanticState
-        v-else-if="mark.facet === 'state' && !mark.glyph"
+        v-else-if="entry.mark.facet === 'state' && !entry.mark.glyph"
         class="facet-state"
         dimension="work-item-state"
-        :state="mark.value"
-        :label="word(mark)"
+        :state="entry.mark.value"
+        :label="entry.word"
       />
       <component
-        :is="tag(mark)"
+        :is="entry.tag"
         v-else
         class="facet-mark"
-        :class="{ quiet: mark.quiet, filters: filters(mark) }"
-        :type="buttonType(mark)"
-        :data-facet="mark.facet"
-        :data-tone="semanticStatePresentation(mark.tone).tone"
-        :data-active="activeMark(mark)"
-        :aria-label="filterName(mark)"
-        :title="hoverText(mark)"
-        :tabindex="tabStop(mark)"
-        @click="press(mark, $event)"
+        :class="{ quiet: entry.mark.quiet, filters: entry.filters }"
+        :type="entry.type"
+        :data-facet="entry.mark.facet"
+        :data-tone="semanticStatePresentation(entry.mark.tone).tone"
+        :data-active="entry.activeMark"
+        :aria-label="entry.name"
+        :title="entry.title"
+        :tabindex="tabStop(entry)"
+        @click="press(entry.mark, $event)"
       >
         <VIcon
-          v-if="mark.glyph && !wordOnly(mark)"
+          v-if="entry.mark.glyph && !entry.wordOnly"
           class="facet-glyph"
-          :name="mark.glyph"
+          :name="entry.mark.glyph"
           :size="14"
           :stroke-width="2"
         />
-        <template v-if="mark.short">
+        <template v-if="entry.short !== undefined">
           <span
             class="facet-word"
             aria-hidden="true"
-            >{{ say(mark.short) }}</span
+            >{{ entry.short }}</span
           >
-          <span class="facet-word-hidden">{{ word(mark) }}</span>
+          <span class="facet-word-hidden">{{ entry.word }}</span>
         </template>
         <!-- A word alone is a word of its own, which takes the mark's tone. -->
         <span
-          v-else-if="wordOnly(mark)"
+          v-else-if="entry.wordOnly"
           class="facet-word facet-word-alone"
-          >{{ word(mark) }}</span
+          >{{ entry.word }}</span
         >
         <span
           v-else
           class="facet-word"
-          :class="{ 'facet-word-hidden': glyphOnly(mark) }"
-          >{{ word(mark) }}</span
+          :class="{ 'facet-word-hidden': entry.glyphOnly }"
+          >{{ entry.word }}</span
         >
       </component>
     </template>
