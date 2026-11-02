@@ -76,8 +76,8 @@ defineExpose({ position, restore, scrollToContent })
       class="drawer-frame-bar"
       :class="{ 'title-away': titleAway, 'action-away': actionAway }"
     >
-      <!-- The controls come first in the document and stand at the row's end:
-           opening the drawer puts focus on Back or Close, and not on a fact. -->
+      <!-- The controls come first in the document and stand at the row's end: focus
+           going in reaches Back or Close, and not a fact. -->
       <div class="drawer-frame-controls">
         <slot name="controls" />
         <button

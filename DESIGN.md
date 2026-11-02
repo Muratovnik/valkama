@@ -578,7 +578,9 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   panel lives while any item is open and only its content changes with the item:
   a link and Back stay in the same panel, so the slide belongs to the first open
   and to the close, and focus moves to the new content's first control as it
-  does on an open.
+  does on an open. A panel opened by no input, from an address or a reload, holds
+  focus on itself until the first key, so that no control stands ringed for
+  something nobody pressed.
 - **Empty and error states:** one shared state component explains what is
   absent, why it matters, and the next valid action when one exists.
 - **Icons and badges:** application glyphs come from the central icon owner;

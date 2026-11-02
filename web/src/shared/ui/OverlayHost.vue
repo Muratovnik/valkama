@@ -11,6 +11,7 @@ import {
 import {
   claimOverlayOwnership,
   ownsOverlay,
+  pageWasTouched,
   releaseOverlayOwnership,
 } from '@/shared/ui/overlayStack.ts'
 import type { OverlayOwnership } from '@/shared/ui/overlayStack.ts'
@@ -130,12 +131,25 @@ function focusable(): HTMLElement[] {
     : []
 }
 
+/** The first thing to act on: the grip that resizes a drawer is not what it was opened for. */
+function firstControl() {
+  return focusable().find((control) => control.dataset.overlayResizer === undefined)
+}
+
+/**
+ * A drawer can open on nobody's input: an address, a link from outside, a reload. A
+ * browser rings focus it cannot put down to a pointer, so its first control stood there
+ * ringed as if the reader had tabbed to it, on every such open. Focus waits on the
+ * surface instead, which has no ring and whose name a screen reader says, and the first
+ * key takes it on. After any input the first control takes it, and the browser decides
+ * from that input whether it rings, which is what shows a keyboard reader where it is.
+ */
 async function focusSurface() {
   await nextTick()
   resizing.value &&= active.value
   if (!active.value || surface.value?.contains(document.activeElement)) return
-  const preferred = focusable().find((control) => control.dataset.overlayResizer === undefined)
-  ;(preferred ?? surface.value)?.focus()
+  const unasked = props.variant === 'drawer' && !pageWasTouched()
+  ;((unasked ? undefined : firstControl()) ?? surface.value)?.focus()
 }
 
 function trapFocus(event: KeyboardEvent) {
@@ -151,7 +165,10 @@ function trapFocus(event: KeyboardEvent) {
     return
   }
   const focused = document.activeElement
-  if (event.shiftKey && (focused === first || !surface.value?.contains(focused))) {
+  if (focused === surface.value) {
+    event.preventDefault()
+    ;(event.shiftKey ? last : (firstControl() ?? first)).focus()
+  } else if (event.shiftKey && (focused === first || !surface.value?.contains(focused))) {
     event.preventDefault()
     last.focus()
   } else if (!event.shiftKey && (focused === last || !surface.value?.contains(focused))) {

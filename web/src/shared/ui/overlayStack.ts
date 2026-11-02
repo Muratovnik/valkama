@@ -46,6 +46,18 @@ function scheduleRestore() {
   })
 }
 
+let touched = false
+if (typeof document !== 'undefined') {
+  const touch = () => {
+    touched = true
+  }
+  document.addEventListener('keydown', touch, { capture: true, once: true })
+  document.addEventListener('pointerdown', touch, { capture: true, once: true })
+}
+
+/** Whether this page has had a key or a pointer yet, which it starts over from on a reload. */
+export const pageWasTouched = () => touched
+
 /**
  * Escape belongs to the top overlay, inside it or once focus has fallen out.
  *
