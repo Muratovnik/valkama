@@ -101,6 +101,9 @@ async function setCondensed(next: boolean) {
  * The text hears the press and the body does not: the body's scrollbar is a press
  * too, one that scrolls, and it would hold the glide its own scroll starts. Only the
  * button a click belongs to holds it: a menu's button may not report its release.
+ * A tap reports its release before its mouse events and the focus they give, so those
+ * hold it again. A window that loses focus may never hear the release, and the text
+ * does not stand displaced waiting for it.
  */
 let pressed = false
 
@@ -115,7 +118,7 @@ function hold(animation: Animation) {
   animation.currentTime = drawn
 }
 
-function holdGlide(event: PointerEvent) {
+function holdGlide(event: MouseEvent) {
   if (event.button !== 0) return
   pressed = true
   for (const animation of content.value?.getAnimations() ?? []) hold(animation)
@@ -127,8 +130,8 @@ function freeGlide() {
   for (const animation of content.value?.getAnimations() ?? []) animation.play()
 }
 
-useEventListener(window, 'pointerup', freeGlide)
-useEventListener(window, 'pointercancel', freeGlide)
+useEventListener(content, ['pointerdown', 'mousedown'], holdGlide, { capture: true })
+useEventListener(window, ['pointerup', 'pointercancel', 'mouseup', 'blur'], freeGlide)
 
 /**
  * A focus move inside the body places its control by the text's settled place.
@@ -252,7 +255,6 @@ defineExpose({ position, restore, scrollToTop })
         ref="content"
         class="drawer-frame-content"
         :class="{ condensed }"
-        @pointerdown.capture="holdGlide"
       >
         <slot />
       </div>

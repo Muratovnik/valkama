@@ -305,3 +305,62 @@ test('a press during the glide reaches its control, and the glide goes on after 
   )
   expect(heldStill).toBe(0)
 })
+
+/**
+ * Opens a long card and starts a glide long enough for whatever comes next to fall
+ * inside it. The first scroll is the mouse wheel's, whatever the test goes on with.
+ */
+async function glidingCard(page: Page) {
+  const drawer = await openReadCard(page, 390, 'long')
+  const body = drawer.locator('.drawer-frame-body')
+  const text = drawer.locator('.drawer-frame-content')
+  await text.evaluate((node) => node.style.setProperty('--duration-surface', '4s'))
+  const { x, y } = await box(body)
+  await page.mouse.move(x + 40, y + 40)
+  return { body, drawer, start: () => page.mouse.wheel(0, 100) }
+}
+
+const glides = (body: Locator) =>
+  body.evaluate((node) => node.getAnimations({ subtree: true }).map((glide) => glide.playState))
+
+test.describe('on a touch screen', () => {
+  test.use({ hasTouch: true })
+
+  /**
+   * A tap reports its release before its mouse events and the focus they give, and
+   * a glide ended by that focus took the control from under the tap's own mouseup.
+   */
+  test('a tap during the glide reaches its control', async ({ page }) => {
+    const { body, drawer, start } = await glidingCard(page)
+    await start()
+    await expect.poll(() => glides(body)).toEqual(['running'])
+    const edit = await box(drawer.getByRole('button', { name: 'Изменить описание', exact: true }))
+    await page.touchscreen.tap(edit.x + edit.width / 2, edit.y + edit.height / 2)
+    await expect(drawer.getByRole('textbox', { name: 'Описание', exact: true })).toBeVisible()
+  })
+})
+
+/** A focus move by the keyboard still ends the glide: the control is placed by where the text will rest. */
+test('a Tab during the glide ends it', async ({ page }) => {
+  const { body, drawer, start } = await glidingCard(page)
+  await drawer.getByRole('button', { name: 'Изменить описание', exact: true }).focus()
+  await start()
+  await expect.poll(() => glides(body)).toEqual(['running'])
+  await page.keyboard.press('Tab')
+  await expect.poll(() => glides(body)).toEqual([])
+  await expect(body.locator(':focus')).toHaveCount(1)
+})
+
+/** A window that loses focus may never hear the release: the text does not wait for it. */
+test('a held glide goes on when the window loses focus', async ({ page }) => {
+  const { body, drawer, start } = await glidingCard(page)
+  await start()
+  await expect.poll(() => glides(body)).toEqual(['running'])
+  const edit = await box(drawer.getByRole('button', { name: 'Изменить описание', exact: true }))
+  await page.mouse.move(edit.x + edit.width / 2, edit.y + edit.height / 2)
+  await page.mouse.down()
+  await expect.poll(() => glides(body)).toEqual(['paused'])
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')))
+  await expect.poll(() => glides(body)).toEqual(['running'])
+  await page.mouse.up()
+})
