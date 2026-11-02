@@ -10,6 +10,24 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+### Added
+
+- **A link to a work item opens in the desktop app.** On Windows with the app
+  installed, `GET /open/MAIN-12` followed from outside a browser page, such as a link
+  in an agent client's chat, starts the app on that card and answers a page that closes
+  its own tab where the browser allows it, with a link to open the item in the browser
+  instead (`?in=browser`). The app takes `--open-path=<card route>` at first start and
+  on a second launch, and ignores any other shape; a window already showing Valkama
+  moves without a reload, and asks first if a draft would be lost. Every other request keeps the
+  redirect: a request made by any page, a prerender, a machine without the app, a
+  listener on another port, a launch that fails. Reinstall the desktop app along with
+  the server: an older build opens without moving to the card.
+- **The editor's toolbar:** link a task, bold, italic, inline code, link and a
+  bulleted list, on the selection or at the caret. Ctrl+B and Ctrl+I work on any
+  keyboard layout, and Ctrl+Z takes back a toolbar action as it takes back typing.
+  The link button writes a `#`, which opens the same list a typed one does; a `#`
+  with nothing after it now offers what is being worked on in the space.
+
 ### Changed
 
 - **A card's head scrolls with its content.** A slim bar stays above it with the
@@ -23,24 +41,16 @@ checkouts are therefore distinguishable even at the same version.
 - The facts stand in rows of one height, with the action level with the first row
   however they wrap. A takeover asks in the band under the bar, where a refusal
   stands, wherever its button was pressed.
-
-### Fixed
-
-- A holder signed as `name session <id>` with no brackets is shortened as a holder
-  signed `name (session <id>)` is, on the card, the board and the chain, with the
-  whole value in the card's tooltip.
-### Added
-
-- **A link to a work item opens in the desktop app.** On Windows with the app
-  installed, `GET /open/MAIN-12` followed from outside a browser page, such as a link
-  in an agent client's chat, starts the app on that card and answers a page that closes
-  its own tab where the browser allows it, with a link to open the item in the browser
-  instead (`?in=browser`). The app takes `--open-path=<card route>` at first start and
-  on a second launch, and ignores any other shape; a window already showing Valkama
-  moves without a reload, and asks first if a draft would be lost. Every other request keeps the
-  redirect: a request made by any page, a prerender, a machine without the app, a
-  listener on another port, a launch that fails. Reinstall the desktop app along with
-  the server: an older build opens without moving to the card.
+- **The board reads by its titles.** A title on a tile or a list row no longer stands
+  in a heavier weight than everything around it, and a label is a quiet word instead
+  of a chip. Short titles no longer sit in a taller box than they need, and a closed
+  tile steps back.
+- **An epic's row is one line** on the board, with its state only once it has moved.
+- **«By epics» is a toggle like its neighbours,** beside the view switch, and keeps
+  its word at every width.
+- **A chain's section reaches its list sooner.** The groups are named once, the map's
+  key gives their counts, a forecast shows only with a verdict, and the chart and the
+  pace stand one action away.
 - **The editor is one object.** A comment, a description, a new task's description
   and a text answer are written in one frame holding a toolbar, the text and, where
   the host has its own action, a foot with the hint or the reason a write was
@@ -59,19 +69,16 @@ checkouts are therefore distinguishable even at the same version.
   the two fields the server needs and a way back to the comment. Saving it carries
   the refused move on.
 
-### Added
-
-- **The editor's toolbar:** link a task, bold, italic, inline code, link and a
-  bulleted list, on the selection or at the caret. Ctrl+B and Ctrl+I work on any
-  keyboard layout, and Ctrl+Z takes back a toolbar action as it takes back typing.
-  The link button writes a `#`, which opens the same list a typed one does; a `#`
-  with nothing after it now offers what is being worked on in the space.
-
 ### Fixed
 
 - A task whose description is longer than 8192 characters opens again. The service
   stores 20,000, and the web client refused to read anything over 8192, so such a
   task showed a message about this build instead of its card.
+- A task with a long discussion opens again, up to 1 MiB of card. The web client
+  refused any answer over 256 KiB, and the service does not limit a discussion.
+- A holder signed as `name session <id>` with no brackets is shortened as a holder
+  signed `name (session <id>)` is, on the card, the board and the chain, with the
+  whole value in the card's tooltip.
 - The list of tasks closes when focus leaves the field.
 - Choosing a task from the list no longer clears the field's undo history.
 - Editing a description now puts the caret in it, where focus used to fall to the
