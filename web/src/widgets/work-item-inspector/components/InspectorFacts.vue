@@ -29,7 +29,7 @@ import InspectorWriteActions from '@/widgets/work-item-inspector/components/Insp
 
 import FacetMarks from '@/entities/work-item/components/FacetMarks.vue'
 import LabelChip from '@/entities/work-item/components/LabelChip.vue'
-import { holderRef } from '@/entities/work-item/utils/facets.ts'
+import { holderRef, printsFacet } from '@/entities/work-item/utils/facets.ts'
 import type { WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
 import type { PlanningWorkflow, WorkItem } from '@/shared/api/planningModel.ts'
@@ -93,6 +93,8 @@ function move(stateKey: string) {
 }
 
 const context = computed(() => ({ parentReference: props.parentReference }))
+/** The one fact an item can lack; the others say their own word for having none. */
+const inEpic = computed(() => printsFacet('parent', 'card', props.item, context.value))
 
 /**
  * Whether anyone is still behind another holder's claim, and until when.
@@ -206,7 +208,10 @@ defineExpose({ actionCell })
           >{{ leaseText }}</span
         >
       </span>
-      <span class="card-fact">
+      <span
+        v-if="inEpic"
+        class="card-fact"
+      >
         <FacetMarks
           surface="card"
           :item="item"
@@ -270,17 +275,12 @@ defineExpose({ actionCell })
   max-width: 100%;
 }
 
-/* Each fact takes the chip's height, so a wrap adds a row of the same height. A fact
-   this item does not have is no fact at all, and takes no gap. */
+/* Each fact takes the chip's height, so a wrap adds a row of the same height. */
 .card-fact {
   display: inline-flex;
   align-items: center;
   min-width: 0;
   min-height: var(--size-control-height-compact);
-
-  &:empty {
-    display: none;
-  }
 }
 
 /* Short on the line, whole in its tooltip: the name and the start of the session, and

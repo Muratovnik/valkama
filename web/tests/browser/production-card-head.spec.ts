@@ -401,3 +401,18 @@ test('a takeover pressed among the facts asks in the same place, and goes throug
   await expect.poll(() => claims.length).toBe(1)
   await expect(notices.locator('.confirm-strip')).toHaveCount(0)
 })
+
+for (const width of [1440, 390]) {
+  test(`a fact the item does not have takes no place among the facts at ${width}px`, async ({
+    page,
+  }) => {
+    const drawer = await openLongCard(page, width)
+    // This item stands in no epic. An empty cell still takes a gap, and where the row is
+    // full it wraps to a row of its own, which reads as a blank line under the facts.
+    const widths = await drawer
+      .locator('.card-facts > *')
+      .evaluateAll((facts) => facts.map((fact) => fact.getBoundingClientRect().width))
+    expect(widths).toHaveLength(3)
+    expect(Math.min(...widths)).toBeGreaterThan(0)
+  })
+}
