@@ -29,6 +29,7 @@ from .executions import service as execution_service
 from .federation import federated_search, federated_spaces
 from .memory import api as memory_api
 from .ops import doctor
+from .planning import agents as planning_agents
 from .planning import api as planning_api
 from .planning import calls as planning_calls
 from .planning import exact_api as planning_exact_api
@@ -307,13 +308,19 @@ def _execution_read(call: _Call) -> _Answer | None:
     return execution_api.handle_get(call.store(), call.path, call.parameters)
 
 
+def _card_record(conn: sqlite3.Connection, reference: str) -> dict:
+    """What the card draws: the item and the agents on it, which no tool answer carries."""
+
+    return planning_service.get_work_item(conn, reference, agents=True)
+
+
 def _planning_exact_read(call: _Call) -> _Answer | None:
     return planning_exact_api.handle_get(
         call.store(),
         db_path(),
         call.path,
         call.parameters,
-        item_loader=planning_service.get_work_item,
+        item_loader=_card_record,
     )
 
 
@@ -925,6 +932,7 @@ class Handler(BaseHTTPRequestHandler):
             cleanup.callback(watchers.WATCHERS.unsubscribe, stream)
             frames = EventFrames()
             observed_version = source.execute("PRAGMA data_version").fetchone()[0]
+            agents_seen = planning_agents.signal(source)
 
             def push() -> None:
                 current: object
@@ -944,6 +952,16 @@ class Handler(BaseHTTPRequestHandler):
                 frame = frames.frame(json.dumps(current, ensure_ascii=False))
                 if frame is not None:
                     self.wfile.write(frame)
+                    self.wfile.flush()
+                if view != "planning":
+                    return
+                # Its own short event, not a field of the frame above: it reloads
+                # an open card and leaves the board and the graph as they are.
+                nonlocal agents_seen
+                seen = planning_agents.signal(source)
+                if seen != agents_seen:
+                    agents_seen = seen
+                    self.wfile.write(f"event: agents\ndata: {seen}\n\n".encode())
                     self.wfile.flush()
 
             try:

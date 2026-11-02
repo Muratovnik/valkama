@@ -288,9 +288,15 @@ def holder(author: str | None) -> str:
         or identity.session_id is None
     ):
         return model.actor(author)
-    if identity.agent_id is not None:
-        name += f" agent {_label_id(identity.agent_id)}"
-    return f"{name} (session {_label_id(identity.session_id)})"
+    return holder_label(name, identity.session_id, identity.agent_id)
+
+
+def holder_label(name: str, session_id: str, agent_id: str | None = None) -> str:
+    """The text a holder is recorded as, for a reader asking who holds what."""
+
+    if agent_id is not None:
+        name += f" agent {_label_id(agent_id)}"
+    return f"{name} (session {_label_id(session_id)})"
 
 
 def _label_id(value: str) -> str:

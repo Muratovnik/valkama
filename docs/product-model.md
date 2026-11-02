@@ -139,6 +139,34 @@ ambiguous bindings cannot supply an effective project root. Session refs, native
 opening, and execution launch, stop, resume, history, and typed results remain
 supported.
 
+A work item's card lists the agents on the item, and only Claude Code's for now. The
+list is `agents` in `GET /api/modules/planning/work-item`; no MCP tool answer carries
+it. Nothing records which item an agent serves, so the link is worked out on each
+read, and the row says which kind it is:
+
+- **Exact** (`link: "exact"`): the agent's own confirmed call wrote to this item or
+  holds one of its steps.
+- **By the coordinator's claim** (`link: "claim"`): the session that started the agent
+  held this item at that moment, by its own confirmed claim. A session holding several
+  items puts the agent on each of them, and `coordinator_items` says how many it held,
+  because nothing shows which of them the agent was started for.
+
+An agent that wrote nothing, whose parent session held nothing when it started, is on
+no card. Neither is an agent Claude Code ran for its own purposes, such as a prompt
+suggestion: those report a stop and no start.
+
+A row gives what was recorded and no more. `last_activity_at` is the last sign Valkama
+saw: the agent's start, a hook event inside it, or its write to Planning. An agent's
+other tool calls reach no hook here, so one working quietly shows the time of its
+start. `ended_at` is set only by a recorded end, and an agent cut off by a client
+restart leaves none, so a row with no end does not mean the agent is running. Valkama
+does not know how much work remains. `label` comes from
+[the hook contract](hook-contract.md#naming-an-agent), and an agent without one, as
+every agent recorded before that hook has, is shown by its type and short id.
+
+The planning event stream sends a short `agents` event when anything is recorded about
+an agent, so an open card reads its list again without a frame of the whole space.
+
 Memory reads through its own provider API. A work item keeps a typed `memory`
 pointer and its stored label, including when the provider is unavailable. Retiring
 the Skills catalogue does not alter installed skill files or client enablement.

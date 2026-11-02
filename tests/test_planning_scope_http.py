@@ -14,13 +14,15 @@ import os
 import sqlite3
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
 from urllib.parse import urlencode
 
 from server import http_surface, store
-from server.planning import requests, service
+from server.hooks import ingest, normalize
+from server.planning import calls, requests, service
 from server.planning.routing import PlanningRouting
 from server.projects import project_registry, scopes
 from server.store_identity.metadata import read_store_metadata
@@ -718,6 +720,95 @@ class PlanningScopeHttpTests(unittest.TestCase):
                 break
         else:
             self.fail("Stream stayed open after its exact binding was revoked")
+
+    def test_the_card_and_only_the_card_reads_the_agents_of_the_store_it_is_bound_to(self) -> None:
+        self.bind("attached")
+        with mock.patch.dict(os.environ, {"VALKAMA_DB": str(self.attached)}):
+            conn = store.connect()
+            try:
+                with calls.bind(
+                    calls.Identity(
+                        state=calls.CONFIRMED,
+                        source=calls.CLAUDE_HOOK,
+                        session_id="parent",
+                        tool_use_id="t",
+                        client="claude",
+                    ),
+                    "claim_work_item",
+                ):
+                    service.claim_work_item(conn, "SAME-1", move_state=False)
+                now = normalize.timestamp(time.time_ns())
+                for uid, event, payload in (
+                    (1, "subagent-start", {"agent_id": "agent-1", "agent_type": "Explore"}),
+                    (
+                        2,
+                        "post-tool-use",
+                        {
+                            "tool_name": "Agent",
+                            "tool_input": {"description": "named"},
+                            "tool_response": {"agentId": "agent-1"},
+                        },
+                    ),
+                ):
+                    record = normalize.lifecycle_event(
+                        "claude",
+                        event,
+                        {"session_id": "parent", **payload},
+                        event_uid=f"00000000-0000-4000-8000-{uid:012d}",
+                        occurred_at=now,
+                    )
+                    assert record is not None
+                    ingest.record(conn, record, delivery="direct")
+                conn.commit()
+            finally:
+                conn.close()
+        inspector = "/api/modules/planning/work-item?" + urlencode(
+            {
+                "scope_kind": "project",
+                "project_id": "example-project",
+                **self.refs["attached"],
+                "reference": "SAME-1",
+            }
+        )
+        status, answer = self.request(inspector)
+        self.assertEqual(200, status, answer)
+        (agent,) = answer["state"]["payload"]["work_item"]["agents"]
+        self.assertEqual(
+            ("named", "claim", 1), (agent["label"], agent["link"], agent["coordinator_items"])
+        )
+
+    def test_the_stream_says_when_an_agent_changed_without_resending_the_model(self) -> None:
+        self.bind("attached")
+        client = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=3)
+        self.addCleanup(client.close)
+        client.request("GET", self.stream_path("attached"))
+        response = client.getresponse()
+        self.addCleanup(response.close)
+        self.read_frame(response)
+        with contextlib.closing(sqlite3.connect(self.attached)) as changed:
+            record = normalize.lifecycle_event(
+                "claude",
+                "subagent-start",
+                {"session_id": "parent", "agent_id": "agent-1", "agent_type": "Explore"},
+                event_uid="00000000-0000-4000-8000-000000000001",
+                occurred_at=normalize.timestamp(time.time_ns()),
+            )
+            assert record is not None
+            ingest.record(changed, record, delivery="direct")
+            changed.commit()
+        for _ in range(20):
+            if response.readline() == b"event: agents\n":
+                break
+        else:
+            self.fail("The stream did not say that an agent changed")
+        line = response.readline()
+        self.assertTrue(line.startswith(b"data: "))
+        self.assertNotIn(b"work_items", line)
+        self.bind("primary")
+        http_surface.watchers.WATCHERS.publish("changed")
+        for _ in range(20):
+            if response.readline() == b"":
+                break
 
     def test_exact_stream_refuses_invalid_or_stale_scope_before_streaming(self) -> None:
         self.bind("attached")

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import sqlite3
 
+from . import agents as planning_agents
 from . import calls, leases, model, ranking, read_model, states, store, transitions
 
 _NOW = "strftime('%Y-%m-%dT%H:%M:%SZ','now')"
@@ -80,12 +81,14 @@ def get_work_item(
     comments_after: int = 0,
     events: int | None = None,
     sessions: bool = False,
+    agents: bool = False,
 ) -> dict:
     """One item in full; `comments` and `events` keep only the newest of each.
 
     `comments_after` keeps only the comments after that id. `sessions` adds the
-    agent sessions whose confirmed calls wrote to it. Without any of these the
-    answer is the complete record a screen draws from.
+    agent sessions whose confirmed calls wrote to it, and `agents` the agents
+    standing on it, which only the card asks for. Without any of these the answer
+    is the complete record a screen draws from.
     """
 
     record = read_model.present(
@@ -98,6 +101,10 @@ def get_work_item(
     )
     if sessions:
         record["sessions"] = read_model.sessions(conn, str(record["work_item_id"]))
+    if agents:
+        record["agents"] = planning_agents.on_item(
+            conn, str(record["work_item_id"]), record["checklist"]
+        )
     return record
 
 
