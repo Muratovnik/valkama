@@ -132,4 +132,12 @@ const unavailableState = computed(() =>
   flex-wrap: wrap;
   gap: var(--space-2);
 }
+
+/* The state panel drops its third column here, and a row of buttons left in the
+   first would widen it until the message had no room. */
+@container (width <= 560px) {
+  .route-choices {
+    grid-column: 1/-1;
+  }
+}
 </style>
