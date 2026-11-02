@@ -10,7 +10,7 @@ transaction:
 
 - deliver the hook spool: events a hook process could not write because the
   store was busy, missing or at another schema version;
-- release the Planning leases that went stale while no write met them.
+- release the Planning leases past their grace that no write met.
 
 The spool goes first, because a delivered event can move a session's
 heartbeat forward and keep its lease from lapsing. Both steps share one budget,
@@ -151,7 +151,7 @@ def drain_spool(conn: sqlite3.Connection, *, seconds: float | None = None) -> in
 
 
 def expire_leases(conn: sqlite3.Connection) -> int:
-    """Release every stale lease in the store, in one transaction; how many were released."""
+    """Release every stale lease past its grace, in one transaction; how many were released."""
 
     conn.execute("BEGIN IMMEDIATE")
     try:

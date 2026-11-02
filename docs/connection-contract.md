@@ -655,6 +655,14 @@ and never written by one:
 A claim made before calls were recorded, by a build that does not record them,
 or in the browser reads `unconfirmed`: none of them names a session.
 
+`stale` says nobody is working the item now, not that the claim is gone. A
+session that ended may come back: a client restart ends the session and resumes
+it under the same id seconds later, so a lease whose session is `ended` keeps its
+claim for 12 hours after `ended_at`, its grace. A `session_start` hook event or a
+confirmed call from that session within the grace makes the lease `live` again,
+with no write to the item. A session with no `ended_at` has no grace, and neither
+has a `failed` one, which only a session start reopens.
+
 `get_work_item`, a `verbose` write and the HTTP item read carry the lease as
 `claim`:
 
@@ -667,7 +675,10 @@ or in the browser reads `unconfirmed`: none of them names a session.
 `holder` is `claim_ref`. `acquired_at` is when the claiming call arrived and is
 `null` for a claim that names no call; `last_seen` is the session's, and
 `expires_at` is `last_seen` plus 14 days while the lease is `live`, `null`
-otherwise. `claim` is `null` when nobody holds the item. Every item record, full
+otherwise. It answers how long a session that shows no sign of life keeps a live
+lease, and promises nothing about a session that ends: from that moment the lease
+is `stale`, `expires_at` is `null`, and the grace above applies. `claim` is
+`null` when nobody holds the item. Every item record, full
 or listed, carries `claim_state`; `claim_ref` and `ready` mean what they meant.
 
 ### Who holds a claim or a step
@@ -724,25 +735,39 @@ Who may release or take over a claim follows the lease:
 - Any other call needs `force` against a `live` lease, including a call from
   another session that signs with the same `author`, and a call with no
   confirmed session at all.
-- A `stale` lease is released by the first write that meets it, before that
-  write does anything else: `claim_work_item` on that item, and
-  `claim_ready_work_item`, which first releases every stale lease in its space.
-  The release is a `released` event with the detail `lease-expired: <holder>`,
-  written by Valkama under its own call; an item it leaves unheld in an active
-  state is put back in the queue under the same call, as any release does (see
-  [A claim starts the work](#a-claim-starts-the-work)). Taking a stale claim
-  over therefore needs no `force`, and its history reads `released` and then
-  `claimed`.
+- `claim_work_item` on an item under a `stale` lease releases it before it does
+  anything else, in the grace or not: whoever asks for that item takes it now,
+  without `force`, and the session that comes back later finds it taken. Its
+  history reads `released` and then `claimed`.
   `claim_work_item` with `release` on a stale lease stops after that release.
+- `claim_ready_work_item` first releases every stale lease in its space that is
+  past its grace. It neither gives nor releases an item whose lease is in the
+  grace, because nobody asked for that item in particular.
+- The release is a `released` event with the detail `<reason>: <holder>`, written
+  by Valkama under its own call; an item it leaves unheld in an active state is
+  put back in the queue under the same call, as any release does (see
+  [A claim starts the work](#a-claim-starts-the-work)). The reason names what
+  happened to the session:
+
+  | Reason | The session |
+  | --- | --- |
+  | `session-ended` | ended or failed |
+  | `session-missing` | has no row |
+  | `lease-expired` | was last seen more than 14 days ago |
+
+  Releases written before the reasons were told apart say `lease-expired`,
+  whatever the cause, and stay as they were written.
 - An `unconfirmed` claim is compared by `author`, as every claim was before
   leases, and never expires by itself.
 
-An MCP server and `serve` also release every stale lease once when they start.
+An MCP server and `serve` also release every stale lease past its grace once
+when they start. A grace is over at exactly 12 hours after `ended_at`, so a start
+at that second releases the lease.
 
 The space's list of abandoned claims (`stale_claims` in the read model) holds
-every `stale` lease and every `unconfirmed` claim with no event for three days,
-except the owner's own claim made in the browser. A claim a launch took for its
-runner is listed like any other.
+every `stale` lease, in its grace or not, and every `unconfirmed` claim with no
+event for three days, except the owner's own claim made in the browser. A claim a
+launch took for its runner is listed like any other.
 
 A claim still counts as the executor that starting an item requires. Starting
 an item under an `unconfirmed` or a `stale` claim answers with a warning, not a
@@ -768,7 +793,7 @@ never its name. The rule holds for every write that claims: `claim_work_item`,
 
 A move is the transition its single tool makes: the workflow's guards judge it,
 it writes a `transitioned` event whose detail is the new key and the reason
-(`dev: claimed`, `todo: released`, `todo: lease-expired`, `dev: launched` for a
+(`dev: claimed`, `todo: released`, `todo: session-ended`, `dev: launched` for a
 launch), it bumps the revision once more, and the item goes last in its new
 state. A claim's move needs no further executor, because the claim is it. Its
 answer, full or acknowledged, adds `started: {"from": "backlog", "to": "dev"}`;

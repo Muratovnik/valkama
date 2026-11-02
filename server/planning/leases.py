@@ -22,8 +22,17 @@ session, and the parent's heartbeat is the one that counts. A confirmed Planning
 write call is a heartbeat as well as a hook event, so a session that writes here
 stays live even when its hooks are silent.
 
-Expiry is not done here. A stale lease is released by the first write that meets
-it, and that write lives with every other write in `service`.
+A session that ended may still come back: a client restart ends the session and
+resumes it under the same id seconds later. So a lease whose session is `ended`
+reads `stale` at once, because nobody is working it, but stays in its grace for
+`ENDED_GRACE` after `ended_at`. Within it Valkama does not release the lease on
+its own, and the session coming back makes it `live` again without a write. A
+session with no `ended_at` has no grace, and neither has a `failed` one, which
+only an explicit start reopens.
+
+Expiry is not done here, and it lives with every other write in `service`. A
+caller who asks for the item releases a stale lease at once, in its grace or
+not. The start-up sweep and the take-next queue release only a lease past it.
 """
 
 from __future__ import annotations
@@ -36,6 +45,8 @@ from . import calls
 
 #: How long a session may go without a sign of life before its leases lapse.
 LEASE_PERIOD = timedelta(days=14)
+#: How long an ended session may come back before Valkama releases its leases itself.
+ENDED_GRACE = timedelta(hours=12)
 
 LIVE = "live"
 STALE = "stale"
@@ -44,8 +55,13 @@ UNCONFIRMED = "unconfirmed"
 #: Who signs the release of an expired lease, and the call tool it is recorded under.
 EXPIRY_AUTHOR = "valkama"
 EXPIRY_TOOL = "lease-expiry"
-#: What the `released` event of an expired lease says before the holder's name.
-EXPIRY_REASON = "lease-expired"
+#: What the `released` event of an expired lease says before the holder's name, by
+#: cause: the session ended or failed, it has no row, or it went quiet. Everything
+#: released before the causes were told apart says `lease-expired`, whatever the cause.
+SESSION_ENDED = "session-ended"
+SESSION_MISSING = "session-missing"
+LEASE_EXPIRED = "lease-expired"
+_EXPIRY_REASONS = (SESSION_ENDED, SESSION_MISSING, LEASE_EXPIRED)
 
 _SECOND = "%Y-%m-%dT%H:%M:%S"
 _ENDED = ("ended", "failed")
@@ -59,7 +75,12 @@ def utc_now() -> datetime:
 
 @dataclass(frozen=True)
 class Lease:
-    """One claim as the read model reports it."""
+    """One claim as the read model reports it.
+
+    `reason` and `in_grace` are what the writes in `service` need of a `stale`
+    lease. They stay out of `as_dict`: that is the wire shape, which readers hold
+    strictly.
+    """
 
     holder: str
     state: str
@@ -69,6 +90,8 @@ class Lease:
     acquired_at: str | None
     last_seen: str | None
     expires_at: str | None
+    reason: str = ""
+    in_grace: bool = False
 
     def as_dict(self) -> dict:
         return {
@@ -98,6 +121,23 @@ def _stamp(moment: datetime) -> str:
     return moment.strftime(_SECOND) + "Z"
 
 
+def _stale_reason(call: sqlite3.Row, seen: datetime | None) -> str:
+    """Why nobody stands behind this claim any more; blank while its session does."""
+
+    if call["session_row"] is None:
+        return SESSION_MISSING
+    if call["status"] in _ENDED:
+        return SESSION_ENDED
+    return LEASE_EXPIRED if seen is None or seen < utc_now() - LEASE_PERIOD else ""
+
+
+def _in_grace(call: sqlite3.Row) -> bool:
+    """Whether this ended session may still come back before Valkama releases its leases."""
+
+    ended = _moment(call["ended_at"])
+    return call["status"] == "ended" and ended is not None and utc_now() < ended + ENDED_GRACE
+
+
 def lease(conn: sqlite3.Connection, row: sqlite3.Row) -> Lease | None:
     """The lease on this work item row, or None when nobody holds it."""
 
@@ -111,7 +151,7 @@ def lease(conn: sqlite3.Connection, row: sqlite3.Row) -> Lease | None:
     if "claim_call_id" in columns and row["claim_call_id"] is not None:
         call = conn.execute(
             "SELECT c.identity_state, c.identity_source, c.session_id, c.agent_id, c.received_at,"
-            " s.id AS session_row, s.status, s.last_seen"
+            " s.id AS session_row, s.status, s.last_seen, s.ended_at"
             " FROM execution_events c LEFT JOIN sessions s ON s.id = c.session_id"
             " WHERE c.id = ?",
             (int(row["claim_call_id"]),),
@@ -130,8 +170,16 @@ def lease(conn: sqlite3.Connection, row: sqlite3.Row) -> Lease | None:
         return Lease(state=UNCONFIRMED, last_seen=None, expires_at=None, **described)
     last_seen = call["last_seen"] if call["session_row"] is not None else None
     seen = _moment(last_seen)
-    if seen is None or call["status"] in _ENDED or seen < utc_now() - LEASE_PERIOD:
-        return Lease(state=STALE, last_seen=last_seen, expires_at=None, **described)
+    reason = _stale_reason(call, seen)
+    if seen is None or reason:
+        return Lease(
+            state=STALE,
+            last_seen=last_seen,
+            expires_at=None,
+            reason=reason,
+            in_grace=_in_grace(call),
+            **described,
+        )
     return Lease(
         state=LIVE, last_seen=last_seen, expires_at=_stamp(seen + LEASE_PERIOD), **described
     )
@@ -167,15 +215,20 @@ def held_by(found: Lease, caller: calls.Identity | None, actor: str) -> bool:
 def expiry_detail(found: Lease) -> str:
     """What the `released` event of an expired lease records."""
 
-    return f"{EXPIRY_REASON}: {found.holder}"
+    return f"{found.reason}: {found.holder}"
 
 
 def released_holder(detail: str) -> str:
     """The holder a `released` event names, whether a caller or an expiry released it.
 
     A caller's release records the holder as it was; an expiry records it after
-    `expiry_detail`'s prefix. Blank when the release named nobody.
+    `expiry_detail`'s prefix. Blank when the release named nobody. The prefixes
+    are spelled out rather than split on the first colon, because a holder that
+    no session proved is free text.
     """
 
-    prefix = f"{EXPIRY_REASON}: "
-    return detail[len(prefix) :] if detail.startswith(prefix) else detail
+    for reason in _EXPIRY_REASONS:
+        prefix = f"{reason}: "
+        if detail.startswith(prefix):
+            return detail[len(prefix) :]
+    return detail

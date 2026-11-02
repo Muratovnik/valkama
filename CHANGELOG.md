@@ -32,6 +32,24 @@ checkouts are therefore distinguishable even at the same version.
   start, the working icon stays, and an icon hidden from its menu stays hidden.
   This needs a session started on this release or later, so sessions already open
   keep their icon until they restart.
+### Changed
+
+- **A client restart no longer costs a session its claims.** A restart ends the
+  session and resumes it under the same id seconds later, and any server started
+  in between released all of its claims and put its work back in the queue. Now
+  an ended session keeps its claims for 12 hours after its end. A server start
+  and `claim_ready_work_item` leave them alone until then, and the session coming
+  back makes them `live` again with no write. The claim reads `stale` meanwhile,
+  so the board marks it and `claim_work_item` from anyone else still takes it at
+  once without `force`. A `failed` session, and an end with no time recorded, get
+  no such wait. The price is that work of a session that really is gone reaches
+  the take-next queue up to 12 hours later.
+- **The history says why a claim was released.** A release by Valkama now reads
+  `session-ended: <holder>`, `session-missing: <holder>` or, for a session quiet
+  for 14 days, `lease-expired: <holder>`, and the move back to the queue carries
+  the same reason (`todo: session-ended`). All three used to read
+  `lease-expired`, and the records already written stay as they are. See
+  [Claims are leases](docs/connection-contract.md#claims-are-leases).
 
 ## [2.2.0](https://github.com/Muratovnik/valkama/compare/v2.1.0...v2.2.0) - 2026-11-02
 

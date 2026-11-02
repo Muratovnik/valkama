@@ -723,11 +723,12 @@ def _claim_lost(conn: sqlite3.Connection, row: sqlite3.Row, actor: str) -> dict:
 
 
 def expire_leases(conn: sqlite3.Connection, *, space_id: str | None = None) -> int:
-    """Release every stale lease, in one space or in all of them; how many were released.
+    """Release every stale lease past its grace, in one space or all; how many were released.
 
     Only a lease a confirmed session holds can lapse: an unconfirmed claim has
-    no session to go quiet. A lease another writer changed in the meantime is
-    left to it.
+    no session to go quiet. A lease in its grace waits for its session to come
+    back, since nobody asked for that item in particular. A lease another writer
+    changed in the meantime is left to it.
     """
 
     clauses = [
@@ -745,7 +746,7 @@ def expire_leases(conn: sqlite3.Connection, *, space_id: str | None = None) -> i
     expired = 0
     for row in conn.execute(query + " ORDER BY i.number", parameters).fetchall():
         lease = leases.lease(conn, row)
-        if lease is None or lease.state != leases.STALE:
+        if lease is None or lease.state != leases.STALE or lease.in_grace:
             continue
         try:
             _expire(conn, row, lease)
@@ -759,14 +760,15 @@ def _expire(conn: sqlite3.Connection, row: sqlite3.Row, lease: leases.Lease) -> 
     """Release a stale lease as a write of Valkama's own, and return the row after it.
 
     The release is its own call, so the history says who released it and why
-    rather than charging the expiry to whichever caller happened to meet it.
+    rather than charging the expiry to whichever caller happened to meet it. The
+    why is the lease's own reason, in the release and in the move back to the queue.
     """
 
     identity = str(row["work_item_id"])
     with calls.bind(calls.valkama(), leases.EXPIRY_TOOL):
         _hold(conn, row, "")
         _log(conn, identity, "released", leases.expiry_detail(lease), leases.EXPIRY_AUTHOR)
-        _hand_back(conn, identity, leases.EXPIRY_AUTHOR, leases.EXPIRY_REASON)
+        _hand_back(conn, identity, leases.EXPIRY_AUTHOR, lease.reason)
     return read_model.item_by_id(conn, identity)
 
 
@@ -812,7 +814,8 @@ def claim_ready_work_item(
     query += " WHEN 'medium' THEN 2 ELSE 3 END, i.number LIMIT 1"
     label = calls.holder(author)
     # An expired lease is not a holder, so the queue sees through it: released
-    # first, the item then reads unheld to the filter above.
+    # first, the item then reads unheld to the filter above. A lease in its grace
+    # is still held, so the queue neither gives that item nor releases it.
     expire_leases(conn, space_id=space_id)
     lost: model.RevisionConflictError | None = None
     for _ in range(_READY_CLAIM_ATTEMPTS):

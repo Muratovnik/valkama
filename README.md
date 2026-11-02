@@ -18,7 +18,8 @@ directory, and the MCP server only exists while a client is talking to it.
 - **Planning with Kanban, list, and graph views.** Its MCP tools create, move,
   claim, comment, link, and summarise work; `claim_work_item` refuses a
   competing claim on the current Planning wire. A claim is a lease held by the
-  agent session that took it, so it lapses when that session is gone.
+  agent session that took it, so it lapses once that session is gone, 12 hours
+  after an ordinary end so that a resumed session keeps its work.
 - **Execution tracking on work items.** Launches carry an explicit delivery
   contract, and outcomes are typed results rather than exit codes.
 - **Task finder** with Ctrl/Cmd+K across mapped projects. Results retain their

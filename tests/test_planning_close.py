@@ -221,18 +221,30 @@ class LastHolderTests(CloseTestCase):
         self.assertEqual(("", "agent"), (brief["claim_ref"], brief["last_claim_ref"]))
 
     def test_an_expired_lease_on_a_closed_item_names_the_holder_not_the_expiry(self) -> None:
-        reference = self.held_item()
-        identity = self.close_as_an_older_build(reference)
-        self.conn.execute(
-            "UPDATE work_items SET claim_ref = '', claim_call_id = NULL WHERE work_item_id = ?",
-            (identity,),
-        )
-        self.conn.execute(
-            "INSERT INTO work_item_events(work_item_id,action,detail,author) VALUES(?,?,?,?)",
-            (identity, "released", f"{leases.EXPIRY_REASON}: agent", leases.EXPIRY_AUTHOR),
-        )
+        # `lease-expired` is also what every expiry wrote before the reasons were
+        # told apart, whatever the cause, and those rows stay as they were written.
+        for reason in ("lease-expired", "session-ended", "session-missing"):
+            with self.subTest(reason=reason):
+                reference = self.held_item()
+                identity = self.close_as_an_older_build(reference)
+                self.conn.execute(
+                    "UPDATE work_items SET claim_ref = '', claim_call_id = NULL"
+                    " WHERE work_item_id = ?",
+                    (identity,),
+                )
+                self.conn.execute(
+                    "INSERT INTO work_item_events(work_item_id,action,detail,author)"
+                    " VALUES(?,?,?,?)",
+                    (identity, "released", f"{reason}: agent", leases.EXPIRY_AUTHOR),
+                )
 
-        self.assertEqual("agent", self.brief(reference)["last_claim_ref"])
+                self.assertEqual("agent", self.brief(reference)["last_claim_ref"])
+                [event] = [
+                    event
+                    for event in service.get_work_item(self.conn, reference)["events"]
+                    if event["action"] == "released"
+                ]
+                self.assertEqual(f"{reason}: agent", event["detail"])
 
     def test_a_release_before_the_close_is_not_the_holder_at_the_close(self) -> None:
         reference = self.held_item()

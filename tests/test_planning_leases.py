@@ -9,6 +9,10 @@ the start-up sweep that releases it.
 The state rules under test, in order: no call or no confirmed session behind
 the claim reads `unconfirmed`; a missing, ended or failed session, or one
 quiet for longer than the lease period, reads `stale`; anything else is `live`.
+
+A stale lease is not always released yet. An ended session has twelve hours to
+come back, and until then only a caller who asks for that item takes it: the
+start-up sweep and the take-next queue leave it alone.
 """
 
 from __future__ import annotations
@@ -28,6 +32,7 @@ from pathlib import Path
 from unittest import mock
 
 from server import housekeeping, http_surface, mcp_surface, store
+from server.hooks import ingest, normalize
 from server.ops import tray
 from server.planning import leases, service, views
 
@@ -158,6 +163,21 @@ class LeaseTestCase(unittest.TestCase):
 
     # -- reading the store ---------------------------------------------------
 
+    def read_everywhere(self) -> dict[str, object]:
+        server = self.listener()
+        _, item = self.http(server, "GET", f"/api/planning/work-item?id={self.reference}", None)
+        _, listing = self.http(server, "GET", "/api/planning/work-items?space=LSE", None)
+        mcp_item = mcp_surface.call_tool(self.conn, "get_work_item", {"id": self.reference})
+        mcp_rows = mcp_surface.call_tool(self.conn, "list_work_items", {"space": "LSE"})
+        assert isinstance(mcp_item, dict) and isinstance(mcp_rows, dict)
+        return {
+            "http item": item["work_item"]["claim"]["state"],
+            "http list": item["work_item"]["claim_state"],
+            "http rows": [row["claim_state"] for row in listing["work_items"]],
+            "mcp item": mcp_item["claim"]["state"],
+            "mcp rows": [row["claim_state"] for row in mcp_rows["work_items"]],
+        }
+
     def item(self) -> dict:
         return service.get_work_item(self.conn, self.reference)
 
@@ -235,21 +255,6 @@ class LeaseStateTests(LeaseTestCase):
     def setUp(self) -> None:
         super().setUp()
         self.claim(codex(ONE), author="codex")
-
-    def read_everywhere(self) -> dict[str, object]:
-        server = self.listener()
-        _, item = self.http(server, "GET", f"/api/planning/work-item?id={self.reference}", None)
-        _, listing = self.http(server, "GET", "/api/planning/work-items?space=LSE", None)
-        mcp_item = mcp_surface.call_tool(self.conn, "get_work_item", {"id": self.reference})
-        mcp_rows = mcp_surface.call_tool(self.conn, "list_work_items", {"space": "LSE"})
-        assert isinstance(mcp_item, dict) and isinstance(mcp_rows, dict)
-        return {
-            "http item": item["work_item"]["claim"]["state"],
-            "http list": item["work_item"]["claim_state"],
-            "http rows": [row["claim_state"] for row in listing["work_items"]],
-            "mcp item": mcp_item["claim"]["state"],
-            "mcp rows": [row["claim_state"] for row in mcp_rows["work_items"]],
-        }
 
     def test_a_claim_by_a_confirmed_session_reads_live_with_its_expiry(self) -> None:
         lease = self.item()["claim"]
@@ -355,7 +360,7 @@ class ExpiryTests(LeaseTestCase):
     def assert_expired_by_valkama(self) -> None:
         released = [event for event in self.item()["events"] if event["action"] == "released"]
         self.assertEqual(1, len(released))
-        self.assertEqual(f"lease-expired: {held(ONE)}", released[0]["detail"])
+        self.assertEqual(f"session-ended: {held(ONE)}", released[0]["detail"])
         self.assertEqual("valkama", released[0]["author"])
         self.assertEqual(
             {"state": "confirmed", "source": "valkama", "session_id": None, "agent_id": None},
@@ -372,7 +377,7 @@ class ExpiryTests(LeaseTestCase):
         self.assertEqual(
             [
                 ("claimed", "", "codex", "codex-meta"),
-                ("released", f"lease-expired: {held(ONE)}", "valkama", "valkama"),
+                ("released", f"session-ended: {held(ONE)}", "valkama", "valkama"),
                 ("claimed", "", "codex", "codex-meta"),
             ],
             self.history(),
@@ -474,8 +479,6 @@ class ResumedSessionTests(LeaseTestCase):
         self.assertEqual("failed", self.session()["status"])
 
     def test_a_drained_event_after_the_end_never_revives_the_session(self) -> None:
-        from server.hooks import ingest, normalize
-
         later = (datetime.now(UTC) - timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
         record = normalize.lifecycle_event(
             "codex",
@@ -487,6 +490,298 @@ class ResumedSessionTests(LeaseTestCase):
         assert record is not None
         ingest.write(self.conn, [(record, later)], delivery="spooled")
         self.assertEqual("ended", self.session()["status"])
+
+
+class HookedLeaseTestCase(LeaseTestCase):
+    """A store whose sessions move through the hook path, at times the events carry."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.events = 0
+
+    def hook(self, event: str, at: datetime, **payload: str) -> None:
+        """Deliver one lifecycle event of session ONE, as its hook would."""
+
+        self.events += 1
+        record = normalize.lifecycle_event(
+            "codex",
+            event,
+            {"session_id": ONE, **payload},
+            event_uid=f"00000000-0000-4000-8000-{self.events:012d}",
+            occurred_at=at.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+        )
+        assert record is not None
+        ingest.write(self.conn, [(record, None)], delivery="direct")
+
+    def claimed_before(self, at: datetime, meta: dict) -> None:
+        """A claim taken before `at`: the hook path ignores an event older than `last_seen`."""
+
+        self.claim(meta, author="codex")
+        self.set_session(ONE, last_seen=(at - timedelta(minutes=1)).strftime(SECOND))
+
+    def clock(self, moment: datetime) -> mock._patch:
+        return mock.patch.object(leases, "utc_now", return_value=moment)
+
+    def start_server(self, moment: datetime) -> str:
+        """Start an MCP server at this moment; what its start-up reported."""
+
+        with self.clock(moment):
+            self.mcp("list_work_items", {"space": "LSE"})
+        return self.stderr.getvalue()
+
+    def state_key(self) -> str:
+        return str(self.item()["state"]["key"])
+
+    def expiry_events(self) -> list[tuple[str, str]]:
+        """What Valkama itself wrote: its releases and the moves they made."""
+
+        return [
+            (event["action"], event["detail"])
+            for event in self.item()["events"]
+            if event["author"] == "valkama"
+        ]
+
+    def abandoned(self, moment: datetime) -> list[str]:
+        with self.clock(moment):
+            return [claim["reference"] for claim in views.stale_claims(self.conn, space="LSE")]
+
+
+END = datetime(2026, 10, 1, 20, 2, 23, tzinfo=UTC)
+#: The contract's number, spelled out: this is what the tests hold the code to.
+GRACE = timedelta(hours=12)
+RELEASED = "valkama: released 1 expired Planning lease(s)\n"
+
+
+class EndedSessionGraceTests(HookedLeaseTestCase):
+    """A session that ended may come back for twelve hours, and its claim waits for it."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.claimed_before(END, codex(ONE))
+        self.hook("session-end", END, reason="other")
+        self.revision = self.item()["revision"]
+
+    def assert_untouched(self, moment: datetime) -> None:
+        with self.clock(moment):
+            item = self.item()
+        self.assertEqual(
+            (held(ONE), self.revision, "dev", []),
+            (item["claim_ref"], item["revision"], self.state_key(), self.expiry_events()),
+        )
+
+    def test_a_restart_with_a_resume_keeps_every_claim_without_one_write(self) -> None:
+        # The order a client restart takes: the end, a server's start, the new start.
+        self.assertEqual("", self.start_server(END + timedelta(seconds=4)))
+        self.assert_untouched(END + timedelta(seconds=4))
+        self.hook("session-start", END + timedelta(seconds=10), source="resume")
+        with self.clock(END + timedelta(seconds=11)):
+            self.assertEqual("live", self.item()["claim_state"])
+        self.assert_untouched(END + timedelta(seconds=11))
+
+    def test_a_confirmed_write_within_the_grace_brings_the_claim_back_too(self) -> None:
+        self.assertEqual("", self.start_server(END + timedelta(hours=11)))
+        with self.clock(END + timedelta(hours=11)):
+            self.mcp("comment_work_item", {"id": self.reference, "body": "back"}, codex(ONE))
+            self.assertEqual("live", self.item()["claim_state"])
+        self.assertEqual([], self.expiry_events())
+
+    def test_a_server_started_within_the_grace_leaves_the_claim_alone(self) -> None:
+        self.assertEqual("", self.start_server(END + GRACE - timedelta(seconds=1)))
+        self.assert_untouched(END + GRACE - timedelta(seconds=1))
+
+    def test_a_server_started_after_the_grace_releases_it_and_says_why(self) -> None:
+        self.assertEqual(RELEASED, self.start_server(END + GRACE + timedelta(hours=1)))
+        self.assertEqual("", self.item()["claim_ref"])
+        self.assertEqual("todo", self.state_key())
+        self.assertEqual(
+            [("released", f"session-ended: {held(ONE)}"), ("transitioned", "todo: session-ended")],
+            self.expiry_events(),
+        )
+
+    def test_the_grace_is_over_at_exactly_twelve_hours(self) -> None:
+        with self.clock(END + GRACE - timedelta(seconds=1)):
+            self.assertEqual(0, housekeeping.run(self.conn).expired_leases)
+        with self.clock(END + GRACE):
+            self.assertEqual(1, housekeeping.run(self.conn).expired_leases)
+
+    def test_an_end_with_no_time_on_it_has_no_grace(self) -> None:
+        self.conn.execute("UPDATE sessions SET ended_at = NULL WHERE id = ?", (ONE,))
+        self.conn.commit()
+        self.assertEqual(RELEASED, self.start_server(END + timedelta(seconds=1)))
+        self.assertEqual(
+            [("released", f"session-ended: {held(ONE)}"), ("transitioned", "todo: session-ended")],
+            self.expiry_events(),
+        )
+
+    def test_a_failed_session_has_no_grace(self) -> None:
+        # It cannot come back by a write, only by an explicit start.
+        self.set_session(ONE, status="failed")
+        self.assertEqual(RELEASED, self.start_server(END + timedelta(seconds=1)))
+        self.assertEqual(
+            ("released", f"session-ended: {held(ONE)}"),
+            self.expiry_events()[0],
+        )
+
+    def test_the_take_next_queue_neither_gives_nor_releases_it_within_the_grace(self) -> None:
+        other = service.create_work_item(self.conn, space="LSE", title="Unheld")["reference"]
+        self.conn.commit()
+        self.revision = self.item()["revision"]
+        with self.clock(END + timedelta(hours=1)):
+            picked = self.mcp(
+                "claim_ready_work_item",
+                {"space": "LSE", "author": "codex"},
+                codex(TWO),
+                started=True,
+            )
+        self.assertEqual(other, picked["work_item"]["reference"])
+        self.assert_untouched(END + timedelta(hours=1))
+
+    def test_the_take_next_queue_answers_nothing_when_only_a_grace_is_left(self) -> None:
+        with self.clock(END + timedelta(hours=1)):
+            picked = self.mcp(
+                "claim_ready_work_item",
+                {"space": "LSE", "author": "codex"},
+                codex(TWO),
+                started=True,
+            )
+        self.assertIsNone(picked["work_item"])
+        self.assert_untouched(END + timedelta(hours=1))
+
+    def test_the_take_next_queue_gives_it_after_the_grace(self) -> None:
+        with self.clock(END + GRACE):
+            picked = self.mcp(
+                "claim_ready_work_item",
+                {"space": "LSE", "author": "codex"},
+                codex(TWO),
+                started=True,
+            )
+        self.assertEqual(self.reference, picked["work_item"]["reference"])
+        self.assertEqual(held(TWO), picked["work_item"]["claim_ref"])
+        self.assertEqual(("released", f"session-ended: {held(ONE)}"), self.expiry_events()[0])
+
+    def test_another_session_takes_it_within_the_grace_without_force(self) -> None:
+        with self.clock(END + timedelta(seconds=30)):
+            taken = self.claim(codex(TWO), author="codex", started=True)
+        self.assertEqual((held(TWO), "live"), (taken["claim_ref"], taken["claim_state"]))
+        self.assertEqual(
+            [
+                ("claimed", "", "codex", "codex-meta"),
+                ("released", f"session-ended: {held(ONE)}", "valkama", "valkama"),
+                ("claimed", "", "codex", "codex-meta"),
+            ],
+            self.history(),
+        )
+
+    def test_the_owner_takes_it_from_the_browser_within_the_grace_without_force(self) -> None:
+        with self.clock(END + timedelta(seconds=30)):
+            status, taken = self.http(
+                self.listener(), "POST", "/api/planning/work-item/claim", {"id": self.reference}
+            )
+        self.assertEqual(200, status, taken)
+        self.assertEqual("user", taken["claim_ref"])
+        self.assertEqual(("released", f"session-ended: {held(ONE)}"), self.expiry_events()[0])
+
+    def test_the_marks_say_stale_within_the_grace_and_a_resume_clears_them(self) -> None:
+        moment = END + timedelta(minutes=5)
+        with self.clock(moment):
+            self.assertEqual(
+                {
+                    "http item": "stale",
+                    "http list": "stale",
+                    "http rows": ["stale"],
+                    "mcp item": "stale",
+                    "mcp rows": ["stale"],
+                },
+                self.read_everywhere(),
+            )
+        self.assertEqual([self.reference], self.abandoned(moment))
+
+        self.hook("session-start", moment, source="resume")
+
+        with self.clock(moment):
+            self.assertEqual(
+                {
+                    "http item": "live",
+                    "http list": "live",
+                    "http rows": ["live"],
+                    "mcp item": "live",
+                    "mcp rows": ["live"],
+                },
+                self.read_everywhere(),
+            )
+        self.assertEqual([], self.abandoned(moment))
+
+    def test_a_stale_lease_promises_no_release_time(self) -> None:
+        # `expires_at` is the silence deadline of a live lease; the contract says
+        # what an ended session gets instead.
+        with self.clock(END + timedelta(minutes=5)):
+            lease = self.item()["claim"]
+        self.assertEqual(("stale", None), (lease["state"], lease["expires_at"]))
+
+
+class ExpiryReasonTests(HookedLeaseTestCase):
+    """The history names what actually happened to the session."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.claim(codex(ONE), author="codex")
+
+    def test_fourteen_quiet_days_keep_the_reason_they_always_had(self) -> None:
+        self.age(ONE, 20)
+        self.mcp("list_work_items", {"space": "LSE"})
+        self.assertEqual("", self.item()["claim_ref"])
+        self.assertEqual(
+            [("released", f"lease-expired: {held(ONE)}"), ("transitioned", "todo: lease-expired")],
+            self.expiry_events(),
+        )
+
+    def test_a_session_with_no_row_is_named_as_missing(self) -> None:
+        self.conn.execute("DELETE FROM sessions WHERE id = ?", (ONE,))
+        self.conn.commit()
+        self.mcp("list_work_items", {"space": "LSE"})
+        self.assertEqual(
+            [
+                ("released", f"session-missing: {held(ONE)}"),
+                ("transitioned", "todo: session-missing"),
+            ],
+            self.expiry_events(),
+        )
+
+    def test_a_quiet_session_taken_over_is_still_named_as_quiet(self) -> None:
+        self.age(ONE, 20)
+        self.claim(codex(TWO), author="codex", started=True)
+        self.assertEqual(("released", f"lease-expired: {held(ONE)}"), self.expiry_events()[0])
+
+
+class SubagentHolderTests(HookedLeaseTestCase):
+    """A subagent's claim lives and falls with its parent's session, not with the subagent."""
+
+    HOLDER = f"codex agent {THREAD} (session {ONE})"
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.claimed_before(END, codex(ONE, THREAD))
+        self.hook("subagent-stop", END - timedelta(seconds=30), agent_id=THREAD)
+
+    def test_the_subagent_stopping_changes_nothing(self) -> None:
+        self.assertEqual("", self.start_server(END))
+        with self.clock(END):
+            self.assertEqual(
+                (self.HOLDER, "live"), (self.item()["claim_ref"], self.item()["claim_state"])
+            )
+
+    def test_it_waits_for_the_parent_within_the_grace_and_comes_back_with_it(self) -> None:
+        self.hook("session-end", END, reason="other")
+        self.assertEqual("", self.start_server(END + timedelta(seconds=4)))
+        self.assertEqual(self.HOLDER, self.item()["claim_ref"])
+        self.hook("session-start", END + timedelta(seconds=10), source="resume")
+        with self.clock(END + timedelta(seconds=11)):
+            self.assertEqual("live", self.item()["claim_state"])
+
+    def test_it_falls_with_the_parent_after_the_grace(self) -> None:
+        self.hook("session-end", END, reason="other")
+        self.assertEqual(RELEASED, self.start_server(END + GRACE))
+        self.assertEqual(("released", f"session-ended: {self.HOLDER}"), self.expiry_events()[0])
 
 
 class StartUpTests(unittest.TestCase):

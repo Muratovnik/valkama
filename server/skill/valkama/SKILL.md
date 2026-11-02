@@ -54,7 +54,9 @@ call with the same `author`.
 A claim is a lease. It reads `live` while its session is active, `stale` once
 the session ended or was quiet for 14 days, and `unconfirmed` when no session
 was proved. A stale claim is taken over without `force`; a live one is
-someone's work, so take it over only on an instruction that says so.
+someone's work, so take it over only on an instruction that says so. A session
+that ended keeps its claims for 12 hours: resuming it makes them `live` again,
+and `claim_ready_work_item` does not hand them out until then.
 `release: true` gives an item back and requeues it from the active state,
 unless a checklist step of it is still claimed. Closing an item releases it:
 send no release after the closing transition.

@@ -71,14 +71,19 @@ Prototypes run before this decision (Claude Code 2.1.304, Codex Desktop
 
 3. **A claim is a lease.** Claiming records the session that holds the item.
    The lease is `live` while that session's heartbeat (the last hook event)
-   is recent, `stale` after the lease period, and `unconfirmed` when the claim
-   was made without a confirmed session; claims recorded before this change
+   is recent and the session has not ended, `stale` once the session ended, has
+   no row or went past the lease period, and `unconfirmed` when the claim was
+   made without a confirmed session; claims recorded before this change
    become `unconfirmed` as they are, without rewriting history. A confirmed
    MCP write call also counts as that heartbeat, so a session that writes to
    Valkama stays live while its hooks are silent, and liveness follows the
-   top-level session, never a subagent's own row. An expired
-   lease is released with the reason `lease-expired`, recorded in the item's
-   history like every other release.
+   top-level session, never a subagent's own row. A client restart ends a
+   session and resumes it under the same id seconds later, so an ended session
+   has 12 hours to come back before Valkama releases its leases by itself; a
+   caller who asks for the item takes it at once. A released lease records its
+   reason in the item's history like every other release: `session-ended`,
+   `session-missing` or, for the lease period, `lease-expired`, which is also
+   what every release recorded before the reasons were told apart.
 
 4. **Two trees, linked at the moment of claiming.** The intent tree holds
    work items. The execution tree holds sessions, their subagents and turns;

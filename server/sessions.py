@@ -269,7 +269,7 @@ def resume(conn: sqlite3.Connection, session_id: str, *, at: str) -> bool:
     A client can resume an ended session without a new `SessionStart` and go
     on writing. Its confirmed write calls are the only evidence, and without
     this the session would read `ended` -- its claims `stale` -- while it works,
-    until the next start-up's lease expiry released them. Only a write the
+    until a lease expiry past their grace released them. Only a write the
     client proved, made now, may call this: a drained or replayed hook event is
     history and never brings a session back. A `failed` session stays failed
     until an explicit start, and an end not older than `at` stands. Runs inside
