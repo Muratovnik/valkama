@@ -33,7 +33,7 @@ import tempfile
 import time
 from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import NamedTuple
+from typing import NamedTuple, Protocol
 
 from . import listener_owners, processes
 from .ops import configuration
@@ -748,6 +748,16 @@ def stop_listener(
     }
 
 
+class AutostartStore(Protocol):
+    """Where the login command is kept; the suite stands a double in its place."""
+
+    def read(self) -> str | None: ...
+
+    def write(self, command: str) -> None: ...
+
+    def delete(self) -> None: ...
+
+
 class WindowsRunKey:
     """The one value this launcher keeps under the current user's Run key.
 
@@ -783,7 +793,7 @@ class WindowsRunKey:
 
 
 #: Where autostart is recorded. Read through this module: the tests swap it.
-AUTOSTART_STORE = WindowsRunKey()
+AUTOSTART_STORE: AutostartStore = WindowsRunKey()
 
 
 class ListenerEffects(NamedTuple):
