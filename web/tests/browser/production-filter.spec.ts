@@ -167,6 +167,56 @@ test('the bar’s keyboard: `/`, ↓ and Enter, Escape one step at a time, ← a
   await expect.poll(() => addressState(page)).toEqual({})
 })
 
+/**
+ * A filter of more values than one line holds keeps every chip on screen. The row
+ * used to run on under the workspace's clip, where no wheel or swipe reached it, and
+ * a chip taking focus there scrolled the whole workspace aside, board and all.
+ */
+for (const width of [1440, 1024, 390]) {
+  test(`every chip of a long filter stands on screen, and the keyboard walks them in place, at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 844 })
+    await installBackend(page)
+    await page.goto(
+      serializePlatformRoute({
+        module_id: 'planning',
+        scope: projectScope,
+        state: {
+          cat: 'backlog,queued,active,review,blocked,completed,cancelled',
+          kind: 'bug,task,epic,improvement',
+          pri: 'low,medium,high,urgent',
+        },
+      }),
+    )
+    await expect(chips(page)).toHaveCount(15)
+    const outside = () =>
+      chips(page).evaluateAll((list) =>
+        list
+          .filter((chip) => {
+            const { left, right } = chip.getBoundingClientRect()
+            return left < 0 || right > document.documentElement.clientWidth
+          })
+          .map((chip) => chip.textContent),
+      )
+    expect(await outside()).toHaveLength(0)
+    await expectNoSilentClipping(page, `Work bar with 15 chips at ${width}px`)
+
+    await field(page).focus()
+    await page.keyboard.press('ArrowLeft')
+    await expect(chips(page).last()).toBeFocused()
+    for (let step = 1; step < 15; step += 1) await page.keyboard.press('ArrowLeft')
+    await expect(chips(page).first()).toBeFocused()
+    const shell = page.locator('.planning-workspace-shell')
+    expect(await shell.evaluate((node) => [node.scrollLeft, node.scrollTop])).toEqual([0, 0])
+
+    // Each one takes itself out from where it stands.
+    await page.keyboard.press('Backspace')
+    await expect(chips(page)).toHaveCount(14)
+    expect(await outside()).toHaveLength(0)
+  })
+}
+
 test('on a phone the view, the filter and the action share the first line', async ({ page }) => {
   await open(page, 390, 844)
   const first = await page

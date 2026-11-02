@@ -136,6 +136,7 @@ defineExpose({ focusLast })
 .filter-chips {
   display: flex;
   flex: 0 1 auto;
+  flex-wrap: wrap;
   gap: var(--space-1);
   align-items: center;
   min-width: 0;
@@ -144,8 +145,8 @@ defineExpose({ focusLast })
   list-style: none;
 }
 
-/* A chip keeps its word; a row of them that runs out of room scrolls inside
-   its host rather than squeezing every chip to its cross. */
+/* A chip keeps its word; a row of them that runs out of room wraps rather than
+   squeezing every chip to its cross or leaving one where nothing reaches it. */
 .filter-chip-item {
   display: flex;
   flex: 0 0 auto;
