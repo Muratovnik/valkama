@@ -8,6 +8,7 @@ import InspectorDiscussion from '@/widgets/work-item-inspector/components/Inspec
 import InspectorSummary from '@/widgets/work-item-inspector/components/InspectorSummary.vue'
 import { checklistProgress } from '@/widgets/work-item-inspector/utils/inspectorActivity.ts'
 import { openBlockers } from '@/widgets/work-item-inspector/utils/openBlockers.ts'
+import type { StateMove } from '@/widgets/work-item-inspector/utils/useInspectorWrites.ts'
 
 import ItemInputRequests from '@/features/input-requests/components/ItemInputRequests.vue'
 
@@ -31,6 +32,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   changed: []
   refresh: []
+  /** The move the outcome was asked for, now that it has one. */
+  resume: [stateKey: string]
   tick: [itemId: string, done: boolean]
 }>()
 
@@ -41,9 +44,9 @@ function discussStep(stepId: string) {
   void discussion.value?.discussStep(stepId)
 }
 
-/** The report composer, opened as the item's outcome: what a closing guard asks for. */
-function startOutcomeReport() {
-  return discussion.value?.startReport()
+/** What a closing guard asks for: the item's outcome, before this move can go on. */
+function askOutcome(move: StateMove) {
+  return discussion.value?.askOutcome(move)
 }
 
 function revealChecklist() {
@@ -72,7 +75,7 @@ const blockerTone = semanticStatePresentation({
   state: 'blocked',
 }).tone
 
-defineExpose({ revealChecklist, startOutcomeReport })
+defineExpose({ askOutcome, revealChecklist })
 </script>
 
 <template>
@@ -243,6 +246,7 @@ defineExpose({ revealChecklist, startOutcomeReport })
       :writable="writable"
       @changed="emit('changed')"
       @refresh="emit('refresh')"
+      @resume="(stateKey) => emit('resume', stateKey)"
     />
   </div>
 </template>

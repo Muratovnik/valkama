@@ -23,6 +23,12 @@ import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { isWebAuthor } from '@/shared/api/webAuthor.ts'
 import { holderName } from '@/shared/lib/actor.ts'
 
+/** A move between states, by the key the server takes and the name a reader knows. */
+export interface StateMove {
+  key: string
+  name: string
+}
+
 /** A refused write as the card shows it: what was refused, why, and any override on offer. */
 export interface RefusalNotice {
   /** The server's reason, verbatim. */
@@ -31,6 +37,8 @@ export interface RefusalNotice {
   /** What overriding would do, asked before it is done; absent when no override exists. */
   force?: { label: string; question: string }
   guards?: readonly string[]
+  /** The move that was refused, for a guard whose answer carries it on. */
+  move?: StateMove
 }
 
 /** How a write is named if it is refused, and how it is carried through if overriding is allowed. */
@@ -38,6 +46,7 @@ interface WriteContext {
   title: string
   /** An override the server accepts for exactly one refusal code. */
   force?: { label: string; overrides: string; question: string; run: () => Promise<unknown> }
+  move?: StateMove
 }
 
 export function useInspectorWrites(options: {
@@ -86,6 +95,7 @@ export function useInspectorWrites(options: {
             : (context?.title ?? t('workItem.refusal.generic')),
         reason: refusal.message,
         guards: refusal.guards,
+        ...(context?.move ? { move: context.move } : {}),
         ...(override ? { force: { label: override.label, question: override.question } } : {}),
       }
       forced = override?.run ?? null
@@ -131,6 +141,7 @@ export function useInspectorWrites(options: {
     const state = options.stateName(stateKey)
     void write(() => transitionWorkItem({ id, state: stateKey }), {
       title: t('workItem.refusal.transition', { state }),
+      move: { key: stateKey, name: state },
       force: {
         label: t('workItem.refusal.force.transition'),
         overrides: 'workflow_guard',

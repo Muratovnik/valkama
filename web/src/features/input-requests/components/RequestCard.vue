@@ -306,7 +306,6 @@ defineExpose({ focus, focusOutcome })
       :fields="request.fields"
       :draft="draft"
       :refused="refused"
-      :action="t('requests.answer')"
       :disabled="!writable || busy"
       @edit="edit"
       @submit="resolve('answer')"

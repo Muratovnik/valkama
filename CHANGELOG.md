@@ -41,11 +41,46 @@ checkouts are therefore distinguishable even at the same version.
   redirect: a request made by any page, a prerender, a machine without the app, a
   listener on another port, a launch that fails. Reinstall the desktop app along with
   the server: an older build opens without moving to the card.
+- **The editor is one object.** A comment, a description, a new task's description
+  and a text answer are written in one frame holding a toolbar, the text and, where
+  the host has its own action, a foot with the hint or the reason a write was
+  refused at its start and that action at its end. The switch between writing and
+  preview moved into the toolbar, and a label a heading already says is gone from
+  the eye and stays for a screen reader.
+- **`rows` means something again.** A field starts at the lines it asks for (a
+  comment at five), grows with its text to 60% of the window or 30 lines, and then
+  scrolls inside. Fitting the box to its content had made the browser ignore
+  `rows`, so every field started at two lines. The preview keeps the field's height,
+  and coming back from it keeps the caret and the undo history.
+- **A person writes comments.** The composer no longer offers a work report as a
+  second kind of entry; reports are what agents publish, and they show in the
+  discussion as before, with their action to make one the outcome. Closing a task
+  with no outcome opens a form of its own, from the refusal that asks for it, with
+  the two fields the server needs and a way back to the comment. Saving it carries
+  the refused move on.
+
+### Added
+
+- **The editor's toolbar:** link a task, bold, italic, inline code, link and a
+  bulleted list, on the selection or at the caret. Ctrl+B and Ctrl+I work on any
+  keyboard layout, and Ctrl+Z takes back a toolbar action as it takes back typing.
+  The link button writes a `#`, which opens the same list a typed one does; a `#`
+  with nothing after it now offers what is being worked on in the space.
+
 ### Fixed
 
 - A task whose description is longer than 8192 characters opens again. The service
   stores 20,000, and the web client refused to read anything over 8192, so such a
   task showed a message about this build instead of its card.
+- The list of tasks closes when focus leaves the field.
+- Choosing a task from the list no longer clears the field's undo history.
+- Editing a description now puts the caret in it, where focus used to fall to the
+  page with the button that was pressed. A description longer than the field opens
+  at its beginning.
+- Sending from the keyboard leaves focus in the field, where the write's disabling
+  of it used to drop focus to the page.
+- A comment and a new task's description reach the server as they were typed; the
+  web client no longer trims them first.
 
 ## [2.3.0](https://github.com/Muratovnik/valkama/compare/v2.2.0...v2.3.0) - 2026-11-02
 

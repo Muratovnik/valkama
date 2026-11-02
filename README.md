@@ -495,11 +495,13 @@ next, and taking it over needs no `force`; the history shows the expiry as a
 shows the lease and when it expires. The exact rules are in
 [the connection contract](docs/connection-contract.md#claims-are-leases).
 
-The inspector keeps editable descriptions and a shared discussion. An ordinary
-comment can target a checklist step; a work report uses “What was done / Why /
-What comes next” and can be selected as the task outcome. System and execution
-history have filters, date groups and expandable details. Their search covers
-the records loaded for that task.
+The inspector keeps editable descriptions and a shared discussion. A comment can
+target a checklist step. Work reports are what agents publish with
+`report_work_item`; they show in the discussion with “What was done / Why / What
+comes next”, and any of them can be selected as the task outcome. Closing a task
+that has no outcome asks a person for one: what was done and what comes next. System
+and execution history have filters, date groups and expandable details. Their
+search covers the records loaded for that task.
 
 Use `create_work_item_request` for a question or decision that needs an explicit
 answer. Each request has 1–12 named fields: text, one choice, multiple choices or

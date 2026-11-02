@@ -157,20 +157,19 @@ describe('checklist-linked comments', () => {
     wrapper.unmount()
   })
 
-  it('keeps report fields while selecting a step and never anchors a report', async () => {
+  it('keeps the outcome draft while a step is discussed and never anchors an outcome', async () => {
     const item = itemFixture()
     const wrapper = mount(InspectorDiscussion, {
       props: { item, writable: true },
       global: global(),
     })
-    await getButton(wrapper, 'Work report').trigger('click')
+    await wrapper.vm.askOutcome({ key: 'done', name: 'Done' })
     await wrapper.get('textarea[aria-label="What was done"]').setValue('Report delivery')
     await wrapper.get('textarea[aria-label="What comes next"]').setValue('Report next')
     await wrapper.vm.discussStep(stepA)
-    expect(getButton(wrapper, 'Work report').attributes('disabled')).toBeDefined()
-    expect(wrapper.text()).toContain('Your report draft is retained')
-    await getButton(wrapper, 'Remove step link').trigger('click')
-    await getButton(wrapper, 'Work report').trigger('click')
+    expect(wrapper.get('.step-context').text()).toContain('First step')
+    expect(wrapper.find('textarea[aria-label="What was done"]').exists()).toBe(false)
+    await wrapper.vm.askOutcome({ key: 'done', name: 'Done' })
     expect(
       (wrapper.get('textarea[aria-label="What was done"]').element as HTMLTextAreaElement).value,
     ).toBe('Report delivery')
@@ -179,8 +178,9 @@ describe('checklist-linked comments', () => {
     await flushPromises()
     expect(publishWorkItemReport).toHaveBeenCalledExactlyOnceWith({
       id: item.work_item_id,
-      report: { done: 'Report delivery', next: 'Report next', why: '' },
-      make_current: false,
+      report: { done: 'Report delivery', next: 'Report next' },
+      make_current: true,
+      expected_revision: item.revision,
     })
     expect(commentWorkItem).not.toHaveBeenCalled()
     wrapper.unmount()

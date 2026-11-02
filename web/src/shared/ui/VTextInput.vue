@@ -45,8 +45,17 @@ const props = withDefaults(
      * which is the case the accessibility rule against autofocus excludes.
      */
     autofocus?: boolean
+    /**
+     * The text area alone, for a host that draws the frame around it: no fill,
+     * hairline, radius or focus ring of its own.
+     */
+    bare?: boolean
     /** A field that offers a list of completions; see the note above. */
     completion?: { controls: string; activeDescendant?: string; expanded?: boolean }
+    /** The control's id, for a label the host draws apart from it. */
+    controlId?: string
+    /** The id of a message the host draws apart from the field; see `invalid`. */
+    describedby?: string
     disabled?: boolean
     /** Why the value was refused; shown under the control and named by it. */
     error?: string
@@ -54,12 +63,17 @@ const props = withDefaults(
     hideLabel?: boolean
     hint?: string
     inputmode?: 'numeric'
+    /** Refused, with the reason drawn by the host rather than under the control. */
+    invalid?: boolean
     list?: string
     max?: string
     maxlength?: number
     min?: string
     placeholder?: string
-    /** Any positive value selects a textarea; content determines its height. */
+    /**
+     * Any positive value selects a textarea, and is how many lines it starts at.
+     * It grows with its text to `--size-text-area-max-height`, then scrolls inside.
+     */
     rows?: number
     /** A one-line field's placeholder where the whole one would be cut; see above. */
     shortPlaceholder?: string
@@ -87,6 +101,10 @@ const props = withDefaults(
     completion: undefined,
     hideLabel: false,
     size: 'default',
+    bare: false,
+    controlId: undefined,
+    describedby: undefined,
+    invalid: false,
   },
 )
 
@@ -96,7 +114,7 @@ const emit = defineEmits<{
 }>()
 const element = ref<HTMLInputElement | HTMLTextAreaElement | null>(null)
 /** Absent rather than false, because `aria-invalid="false"` is a claim and not a default. */
-const invalidMark = computed(() => (props.error ? 'true' : undefined))
+const invalidMark = computed(() => (props.error || props.invalid ? 'true' : undefined))
 
 /** A one-line field driving a list is a combobox; without a list it is a text box. */
 const combobox = computed(() =>
@@ -163,8 +181,11 @@ defineExpose({
   >
     <textarea
       v-if="rows"
+      :id="controlId"
       ref="element"
       class="control"
+      :class="{ bare }"
+      :style="{ '--text-area-rows': rows }"
       :aria-autocomplete="completion && 'list'"
       :aria-controls="completion?.controls"
       :aria-activedescendant="completion?.activeDescendant"
@@ -176,12 +197,13 @@ defineExpose({
       :autofocus="autofocus"
       :aria-label="label"
       :aria-invalid="invalidMark"
-      :aria-describedby="errorId"
+      :aria-describedby="errorId ?? describedby"
       @input="edited"
       @keydown="emit('keydown', $event)"
     />
     <input
       v-else
+      :id="controlId"
       ref="element"
       class="control"
       :class="`size-${size}`"
@@ -199,7 +221,7 @@ defineExpose({
       :autofocus="autofocus"
       :aria-label="label"
       :aria-invalid="invalidMark"
-      :aria-describedby="errorId"
+      :aria-describedby="errorId ?? describedby"
       v-bind="combobox"
       @input="edited"
       @keydown="emit('keydown', $event)"
@@ -241,15 +263,30 @@ defineExpose({
 }
 
 textarea.control {
-  /* How tall a note wants to be is the form's business, not the field's: a card
-     comment and a profile prompt are two different amounts of writing. Both used
-     to reach `:deep(textarea)` for it, which is this component's element rather
-     than its root, so no class could carry it. The host declares the property on
-     whatever it already puts a class on and inheritance does the rest. */
-  min-height: var(--size-text-area-min-height);
+  /* How tall a note starts is the form's business, and `rows` is how it says so.
+     Fitting the box to its content makes the browser ignore that attribute, so
+     the floor is written out here: a floor of two lines stood under every field,
+     and a comment asking for four was given two. The attribute stays for a
+     browser that cannot fit a box, where it does what it always did. */
+  --text-area-rows: 2;
+
+  min-height: calc(var(--text-area-rows) * 1lh + var(--space-4) + 2px);
+  max-height: var(--size-text-area-max-height);
   field-sizing: content;
   font: var(--font-editor);
   resize: none;
+}
+
+/* Inside a frame the host draws: that frame is the one edge and the one ring. */
+textarea.control.bare {
+  min-height: calc(var(--text-area-rows) * 1lh + var(--space-4));
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+
+  &:focus-visible {
+    outline: 0;
+  }
 }
 
 /* The whole placeholder, drawn to be measured: no room, no pointer, nothing
@@ -279,5 +316,9 @@ textarea.control {
   background: var(--color-control-disabled-surface);
   border-color: var(--color-rule);
   cursor: not-allowed;
+
+  &.bare {
+    background: transparent;
+  }
 }
 </style>

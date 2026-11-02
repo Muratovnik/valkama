@@ -1,0 +1,180 @@
+<script setup lang="ts">
+/**
+ * The list of work items a `#` in an editor offers.
+ *
+ * It floats on the window, placed by the engine that places the choice lists:
+ * under the field where the window has room, over it where it does not, never
+ * taller than the room it got, and scrolled to the active row. It stood in the
+ * flow under the field at its full height, so a comment field at the foot of a
+ * card showed two of its eight rows, or none. It stays inside the field's own
+ * dialog in the document, so the dialog still owns it.
+ *
+ * Focus stays in the field, which names the active row and keeps the keys; this
+ * only draws and answers a pointer.
+ */
+import { computed, ref, toRef } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+import { autoUpdate, flip, hide, offset, size, useFloating } from '@floating-ui/vue'
+
+import type { EditorSuggestion } from '@/shared/ui/MarkdownEditor.vue'
+
+const props = defineProps<{
+  active: number
+  /** The field the list belongs to. */
+  anchor: HTMLElement | null
+  choices: readonly EditorSuggestion[]
+  id: string
+  /** What was typed after the `#`; empty when nothing is yet. */
+  query: string
+}>()
+const emit = defineEmits<{ choose: [index: number]; point: [index: number] }>()
+const { t } = useI18n()
+
+/** The list's distance from the field, and the margin it keeps from the window's edge. */
+const LIST_GAP = 4
+const WINDOW_MARGIN = 8
+
+const list = ref<HTMLElement | null>(null)
+const { x, y, middlewareData } = useFloating(toRef(props, 'anchor'), list, {
+  placement: 'bottom-start',
+  strategy: 'fixed',
+  transform: false,
+  whileElementsMounted: autoUpdate,
+  middleware: [
+    offset(LIST_GAP),
+    flip({ padding: WINDOW_MARGIN }),
+    size({
+      padding: WINDOW_MARGIN,
+      apply({ availableHeight, elements, rects }) {
+        Object.assign(elements.floating.style, {
+          width: `${rects.reference.width}px`,
+          maxHeight: `${Math.max(0, availableHeight)}px`,
+        })
+      },
+    }),
+    hide(),
+  ],
+})
+/** A field scrolled out of its panel takes its list with it. */
+const detached = computed(() => middlewareData.value.hide?.referenceHidden === true)
+const isActive = (index: number) => index === props.active
+/** The list's one line when it has no rows: nothing matched, or nothing is typed yet. */
+const emptyLine = computed(() =>
+  props.query ? t('editor.noSuggestions', { query: props.query }) : t('editor.queryPrompt'),
+)
+
+defineExpose({
+  /** The list holds no more than the room it got, so the row walked to is brought into it. */
+  revealRow(index: number) {
+    const row = list.value?.querySelectorAll('[role="option"]')[index]
+    row?.scrollIntoView({ block: 'nearest', container: 'nearest' } as ScrollIntoViewOptions)
+  },
+})
+</script>
+
+<template>
+  <ul
+    :id="id"
+    ref="list"
+    class="markdown-suggestions"
+    role="listbox"
+    :class="{ detached }"
+    :style="{ left: `${x}px`, top: `${y}px` }"
+    :aria-label="t('editor.suggestions')"
+  >
+    <!-- Focus stays in the field, which names the active row; a row is pointed
+         at, never focused. -->
+    <!-- eslint-disable-next-line vuejs-accessibility/click-events-have-key-events, vuejs-accessibility/interactive-supports-focus -->
+    <li
+      v-for="(row, index) in choices"
+      :id="`${id}-${index}`"
+      :key="row.key"
+      class="markdown-suggestion"
+      role="option"
+      :class="{ active: isActive(index) }"
+      :aria-selected="isActive(index)"
+      @mousedown.prevent
+      @mousemove="emit('point', index)"
+      @click="emit('choose', index)"
+    >
+      <span class="markdown-suggestion-reference">{{ row.reference }}</span>
+      <span class="markdown-suggestion-title">{{ row.title }}</span>
+      <span class="markdown-suggestion-detail">{{ row.detail }}</span>
+    </li>
+    <li
+      v-if="!choices.length"
+      class="markdown-suggestion-empty"
+      role="presentation"
+    >
+      {{ emptyLine }}
+    </li>
+  </ul>
+</template>
+
+<style scoped>
+/* A sheet beside the field: the rows are the field's own continuation, so they
+   take the field's width. It floats over what follows instead of pushing it
+   down, and scrolls inside the room the window leaves it. */
+.markdown-suggestions {
+  position: fixed;
+  z-index: 120;
+  display: grid;
+  align-content: start;
+  padding: var(--space-1);
+  margin: 0;
+  border: 1px solid var(--color-rule-strong);
+  background: var(--color-surface-sheet);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: var(--radius-control);
+  box-shadow: 0 14px 34px var(--color-shadow);
+  list-style: none;
+}
+
+/* The field has scrolled out of its panel, under the head or past the foot. */
+.markdown-suggestions.detached {
+  visibility: hidden;
+}
+
+.markdown-suggestion {
+  display: grid;
+  grid-template-columns: minmax(8ch, max-content) minmax(0, 1fr);
+  gap: 0 var(--space-2);
+  align-items: baseline;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-status);
+  cursor: pointer;
+
+  &.active {
+    background: var(--color-surface-hover);
+  }
+}
+
+.markdown-suggestion-reference {
+  color: var(--color-text-muted);
+  font: var(--font-line);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.markdown-suggestion-title {
+  color: var(--color-text);
+  font: var(--font-note);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.markdown-suggestion-detail {
+  grid-column: 2;
+  color: var(--color-text-tertiary);
+  font: var(--font-detail);
+}
+
+.markdown-suggestion-empty {
+  padding: var(--space-1) var(--space-2);
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+}
+</style>

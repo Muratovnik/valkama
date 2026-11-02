@@ -80,7 +80,7 @@ describe('a text answer to a question', () => {
     // Asked while the answer is shown as a preview, the empty answer is
     // refused where it is written.
     await view('Preview').trigger('click')
-    expect(wrapper.find('textarea').exists()).toBe(false)
+    expect(wrapper.get('textarea').element.closest('[inert]')).not.toBeNull()
     await button(wrapper, 'Send answer').trigger('click')
     await flushPromises()
     expect(answerInputRequest).not.toHaveBeenCalled()

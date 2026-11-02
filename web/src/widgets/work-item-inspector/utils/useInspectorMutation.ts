@@ -1,9 +1,11 @@
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { planningRefusal } from '@/shared/api/planningApi.ts'
 import { typedFailure } from '@/shared/api/typedFailure.ts'
 
 export function useInspectorMutation(identity: () => string, changed: () => void) {
+  const { t } = useI18n()
   const pending = ref(false)
   const errorKey = ref('')
   /**
@@ -12,6 +14,10 @@ export function useInspectorMutation(identity: () => string, changed: () => void
    * not be saved" sentence used to stand in for.
    */
   const errorReason = ref('')
+  /** Why the last write did not go through, as one sentence; empty when it did. */
+  const error = computed(() =>
+    errorKey.value ? [t(errorKey.value), errorReason.value].filter(Boolean).join(' ') : '',
+  )
   let generation = 0
   watch(
     identity,
@@ -48,5 +54,5 @@ export function useInspectorMutation(identity: () => string, changed: () => void
       pending.value = false
     }
   }
-  return { pending, errorKey, errorReason, submit }
+  return { pending, error, submit }
 }

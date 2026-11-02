@@ -1,34 +1,37 @@
 <script setup lang="ts">
 /**
- * The field a person writes free text in: markdown, with a preview, links to
- * work items offered as they are typed, and Ctrl+Enter to send.
+ * The field a person writes free text in, drawn as one object: a toolbar, the
+ * text, and a foot with what the host does with it. One border goes around all
+ * three and the focus ring goes on that border. The form used to be assembled
+ * from pieces each with its own frame and gap, and read as a set of parts with a
+ * button left over at the end.
  *
  * Everything this text becomes is drawn by `RichText`, so the preview is the
  * same component the card will use — what it shows is what the card will show.
- * Typing `#` and a few characters asks the host's `suggest` for work items;
- * the list stands beside the field rather than at the caret, so it never covers
- * the line being written, and choosing one writes its reference in place of
- * the `#` query. The keys belong to the field while the list is open: the
- * arrows walk it, Enter or Tab takes the active row and Escape closes it
+ * It lies over the text rather than replacing it: the text keeps the height, so
+ * switching moves nothing, and the caret and the undo history are still there
+ * when the reader comes back.
+ *
+ * The toolbar's mention button writes a `#`, and a `#` is what opens the list of
+ * work items, whichever way it got there; choosing a row writes its reference in
+ * place of the `#` query. The keys belong to the field while the list is open:
+ * the arrows walk it, Enter or Tab takes the active row and Escape closes it
  * without closing the card around it.
  *
- * The list floats on the window, placed by the engine that places the choice
- * lists: under the field where the window has room, over it where it does not,
- * never taller than the room it got, and scrolled to the active row. It stood
- * in the flow under the field at its full height, so a comment field at the
- * foot of a card showed two of its eight rows, or none. It stays inside the
- * field's own dialog in the document, so the dialog still owns it.
- *
  * What a work item is and how to find one is the host's to say: the editor is a
- * text control and knows nothing about planning.
+ * text control and knows nothing about planning. So is what sending means: a
+ * host with an action of its own for this text puts it in the `actions` slot, the
+ * foot's end, and a host whose action stands elsewhere leaves the foot out.
  */
-import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
+import { computed, nextTick, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { autoUpdate, flip, hide, offset, size, useFloating } from '@floating-ui/vue'
-
+import { markdownEdit } from '@/shared/lib/markdownEdits.ts'
+import type { MarkdownTool, TextEdit } from '@/shared/lib/markdownEdits.ts'
+import MarkdownSuggestions from '@/shared/ui/MarkdownSuggestions.vue'
+import MarkdownToolbar from '@/shared/ui/MarkdownToolbar.vue'
 import RichText from '@/shared/ui/RichText.vue'
-import VField from '@/shared/ui/VField.vue'
+import { useEditorSuggestions } from '@/shared/ui/useEditorSuggestions.ts'
 import VTextInput from '@/shared/ui/VTextInput.vue'
 
 export interface EditorSuggestion {
@@ -41,80 +44,108 @@ export interface EditorSuggestion {
 
 const props = withDefaults(
   defineProps<{
-    /** What Ctrl+Enter does, as the host's own button says it. */
-    action: string
     label: string
     modelValue: string
     disabled?: boolean
-    /** Why the text was refused; shown under the field and named by it. */
+    /** Why the text was refused; shown in the foot and named by the field. */
     error?: string
-    /** A hint of the host's own in place of the default one, or false for none. */
-    hint?: string | false
+    /** The section around the editor already names it; the name stays for a reader. */
+    hideLabel?: boolean
     maxlength?: number
-    preview?: boolean
+    placeholder?: string
+    /**
+     * The host takes focus to this field with its error, and the field's
+     * description says it there: an alert as well would say it twice.
+     */
+    quietError?: boolean
+    /** How many lines the field starts at; it grows with its text from there. */
     rows?: number
     suggest?: (query: string, signal: AbortSignal) => Promise<readonly EditorSuggestion[]>
   }>(),
   {
     disabled: false,
     error: '',
+    hideLabel: false,
     maxlength: undefined,
-    preview: false,
+    placeholder: '',
+    quietError: false,
     rows: 3,
-    hint: '',
     suggest: undefined,
   },
 )
 const emit = defineEmits<{ 'submit': []; 'update:modelValue': [value: string] }>()
+/**
+ * The host binds this where one choice governs several fields — a question's
+ * text answers are one answer being written, and two switches apart would let
+ * them disagree — and to come back to writing once the text is sent.
+ */
+const preview = defineModel<boolean>('preview', { default: false })
 const { t } = useI18n()
 
-/** How long typing pauses before the host is asked, and how many rows are shown. */
-const SUGGEST_DELAY = 200
-const SUGGEST_LIMIT = 8
-/** The list's distance from the field, and the margin it keeps from the window's edge. */
-const LIST_GAP = 4
-const WINDOW_MARGIN = 8
-/** A `#` that starts a word, then the query up to the caret. */
-const TRIGGER = /(?:^|[\s([{])#([^\s#]{1,40})$/u
-
+/** What may stand right before a `#` for it to start a word. */
+const WORD_START = /(?:^|[\s([{])$/u
+const inputId = useId()
+const errorId = useId()
 const listId = useId()
-const field = ref<InstanceType<typeof VTextInput> | null>(null)
-/** Where the `#` stands while a query is being typed; null when none is. */
-const trigger = ref<{ query: string; start: number } | null>(null)
-const choices = ref<readonly EditorSuggestion[]>([])
-const searched = ref(false)
-const active = ref(0)
-let request: AbortController | null = null
-let timer: ReturnType<typeof setTimeout> | undefined
 
-const open = computed(() => trigger.value !== null && searched.value)
-const list = ref<HTMLElement | null>(null)
-const anchor = computed(() => (open.value ? (field.value?.control() ?? null) : null))
-const { x, y, middlewareData } = useFloating(anchor, list, {
-  open,
-  placement: 'bottom-start',
-  strategy: 'fixed',
-  transform: false,
-  whileElementsMounted: autoUpdate,
-  middleware: [
-    offset(LIST_GAP),
-    flip({ padding: WINDOW_MARGIN }),
-    size({
-      padding: WINDOW_MARGIN,
-      apply({ availableHeight, elements, rects }) {
-        Object.assign(elements.floating.style, {
-          width: `${rects.reference.width}px`,
-          maxHeight: `${Math.max(0, availableHeight)}px`,
-        })
-      },
-    }),
-    hide(),
-  ],
+/**
+ * The one place this file touches the control the text is typed in. Another
+ * engine replaces this block and the `VTextInput` in the template; the toolbar,
+ * the keys and the list go through it and read nothing else.
+ */
+const input = ref<InstanceType<typeof VTextInput> | null>(null)
+const field = {
+  element: () => input.value?.control() ?? null,
+  text: () => input.value?.control()?.value ?? '',
+  selection() {
+    const control = input.value?.control()
+    return { start: control?.selectionStart ?? 0, end: control?.selectionEnd ?? 0 }
+  },
+  focus: () => input.value?.control()?.focus(),
+  /**
+   * A text set from outside has its caret at the end, and the field scrolls there
+   * on focus. One longer than the field opens at its beginning instead, which is
+   * what the reader was looking at.
+   */
+  focusAtTop() {
+    const control = input.value?.control()
+    control?.focus()
+    if (!control || control.scrollHeight <= control.clientHeight) return
+    control.setSelectionRange(0, 0)
+    control.scrollTop = 0
+  },
+  /**
+   * Replace a range as typing would, which is what keeps Ctrl+Z working: the
+   * browser's undo history only records what its own editing did, so assigning
+   * `value` or calling `setRangeText` leaves a toolbar action nothing can take
+   * back. `execCommand` is deprecated and still the one door into that editing;
+   * `setRangeText` stands in where the door is gone, with the text still right.
+   * Either way the change arrives as an `input` event, the way typing does.
+   */
+  replace({ start, end, text, selection }: TextEdit) {
+    const control = input.value?.control()
+    if (!control) return
+    control.focus()
+    control.setSelectionRange(start, end)
+    const typed = document.execCommand?.(text ? 'insertText' : 'delete', false, text) ?? false
+    if (!typed) {
+      control.setRangeText(text, start, end)
+      control.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+    control.setSelectionRange(...selection)
+  },
+}
+
+const { active, choices, close, open, track, trigger } = useEditorSuggestions({
+  suggest: () => props.suggest,
+  read: () => (field.element() ? { caret: field.selection().start, text: field.text() } : null),
 })
-/** A field scrolled out of its panel takes its list with it. */
-const detached = computed(() => middlewareData.value.hide?.referenceHidden === true)
+const list = ref<InstanceType<typeof MarkdownSuggestions> | null>(null)
+const anchor = computed(() => field.element())
 const hasText = computed(() => props.modelValue.trim() !== '')
-const isActive = (index: number) => index === active.value
+const invalid = computed(() => Boolean(props.error))
+const describedBy = computed(() => (props.error ? errorId : undefined))
+const errorRole = computed(() => (props.quietError ? undefined : 'alert'))
 const activeId = computed(() =>
   open.value && choices.value.length ? `${listId}-${active.value}` : undefined,
 )
@@ -123,85 +154,69 @@ const completion = computed(() =>
 )
 /** What the list holds, said once it arrives, since focus stays in the field. */
 const announcement = computed(() => (open.value ? t('editor.found', choices.value.length) : ''))
-const shownHint = computed(() => {
-  if (props.hint === false) return ''
-  return (
-    props.hint || t(props.suggest ? 'editor.hintSuggest' : 'editor.hint', { action: props.action })
-  )
+
+/** Absent rather than false: `inert="false"` on an element is still inert to a stylesheet. */
+const inertMark = computed(() => (preview.value ? true : undefined))
+
+watch(preview, (showing) => {
+  if (showing) close()
 })
 
-function cancel() {
-  clearTimeout(timer)
-  request?.abort()
-  request = null
-}
-function close() {
-  cancel()
-  trigger.value = null
-  choices.value = []
-  searched.value = false
-}
-onBeforeUnmount(cancel)
+/**
+ * A field that is disabled loses its focus, so sending with Ctrl+Enter left the
+ * writer on the page, refused or not. Read before the render that disables it,
+ * and given back only if the writer has not gone somewhere else in the meantime.
+ */
+let hadFocus = false
 watch(
-  () => props.preview,
-  (preview) => {
-    if (preview) close()
+  () => props.disabled,
+  (disabled) => {
+    if (disabled) hadFocus = document.activeElement === field.element()
+    else if (hadFocus)
+      void nextTick(() => document.activeElement === document.body && field.focus())
   },
+  { flush: 'pre' },
 )
-
-/** Read the query at the caret, and ask for it once typing pauses. */
-function track() {
-  const control = field.value?.control()
-  if (!props.suggest || !control) return
-  const caret = control.selectionStart ?? 0
-  const match = TRIGGER.exec(control.value.slice(0, caret))
-  if (!match?.[1]) {
-    close()
-    return
-  }
-  const query = match[1]
-  if (trigger.value?.query === query) return
-  trigger.value = { query, start: caret - query.length - 1 }
-  cancel()
-  const suggest = props.suggest
-  timer = setTimeout(() => {
-    const controller = new AbortController()
-    request = controller
-    void suggest(query, controller.signal)
-      .then((found) => {
-        if (controller.signal.aborted || trigger.value?.query !== query) return
-        choices.value = found.slice(0, SUGGEST_LIMIT)
-        searched.value = true
-        active.value = 0
-      })
-      .catch(() => {
-        if (controller.signal.aborted) return
-        choices.value = []
-        searched.value = true
-      })
-  }, SUGGEST_DELAY)
-}
 
 function edited(value: string) {
   emit('update:modelValue', value)
-  void nextTick(track)
+  track()
+}
+
+/** Make an edit whole or not at all: a limit that cut it would leave half a mark behind. */
+function apply(edit: TextEdit) {
+  const length = field.text().length - (edit.end - edit.start) + edit.text.length
+  if (props.maxlength !== undefined && length > props.maxlength) return
+  field.replace(edit)
+}
+function format(tool: MarkdownTool) {
+  const { start, end } = field.selection()
+  apply(markdownEdit(tool, field.text(), start, end))
+}
+/** Write a `#` after what is selected, as a word of its own; `edited` takes it from there. */
+function mention() {
+  const at = field.selection().end
+  const text = WORD_START.test(field.text().slice(0, at)) ? '#' : ' #'
+  const caret = at + text.length
+  apply({ start: at, end: at, text, selection: [caret, caret] })
 }
 
 /** Write the chosen reference in place of the `#` query and put the caret after it. */
-async function choose(index: number) {
+function choose(index: number) {
   const row = choices.value[index]
   const at = trigger.value
-  const control = field.value?.control()
-  if (!row || !at || !control) return
-  const end = at.start + 1 + at.query.length
+  if (!row || !at) return
   const text = `${row.reference} `
-  const value = props.modelValue.slice(0, at.start) + text + props.modelValue.slice(end)
-  close()
-  emit('update:modelValue', value)
-  await nextTick()
   const caret = at.start + text.length
-  control.focus()
-  control.setSelectionRange(caret, caret)
+  close()
+  apply({ start: at.start, end: at.start + 1 + at.query.length, text, selection: [caret, caret] })
+}
+
+/** The toolbar's keys, by the key's place: `event.key` is «и» on a Russian layout. */
+function shortcut(event: KeyboardEvent): MarkdownTool | null {
+  if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey) return null
+  if (event.code === 'KeyB') return 'bold'
+  return event.code === 'KeyI' ? 'italic' : null
 }
 
 function keydown(event: KeyboardEvent) {
@@ -210,6 +225,12 @@ function keydown(event: KeyboardEvent) {
     event.preventDefault()
     close()
     emit('submit')
+    return
+  }
+  const tool = shortcut(event)
+  if (tool) {
+    event.preventDefault()
+    format(tool)
     return
   }
   if (!open.value) return
@@ -222,118 +243,201 @@ function keydown(event: KeyboardEvent) {
   } else if (count && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
     event.preventDefault()
     active.value = (active.value + (event.key === 'ArrowDown' ? 1 : count - 1)) % count
-    // The list holds no more than the room it got, so the row walked to is brought into it.
-    const row = list.value?.querySelectorAll('[role="option"]')[active.value]
-    row?.scrollIntoView({ block: 'nearest', container: 'nearest' } as ScrollIntoViewOptions)
+    list.value?.revealRow(active.value)
   } else if (count && (event.key === 'Enter' || event.key === 'Tab') && !event.shiftKey) {
     event.preventDefault()
-    void choose(active.value)
+    choose(active.value)
   }
 }
 
 defineExpose({
   /** Put the caret in the field, for a host that opens the editor on purpose. */
-  focus: () => field.value?.control()?.focus(),
+  focus: () => field.focus(),
+  /** The same for a host that opens it on a text the reader was just reading. */
+  focusAtTop: () => field.focusAtTop(),
 })
 </script>
 
 <template>
   <div class="markdown-editor">
-    <VField
-      v-if="preview"
-      as="div"
-      :label="label"
+    <!-- The field is named on itself, so this says it once to the eye and once to
+         a pointer, and a reader does not hear it twice. -->
+    <label
+      v-if="!hideLabel"
+      class="markdown-label"
+      aria-hidden="true"
+      :for="inputId"
+      >{{ label }}</label
     >
-      <div class="markdown-preview">
-        <RichText
-          v-if="hasText"
-          :source="modelValue"
-        />
-        <p
-          v-else
-          class="markdown-empty"
+    <div
+      class="markdown-surface"
+      :class="{ disabled }"
+    >
+      <MarkdownToolbar
+        v-model:preview="preview"
+        :disabled="disabled"
+        :mentions="Boolean(suggest)"
+        @format="format"
+        @mention="mention"
+      />
+      <div class="markdown-body">
+        <!-- A row is pressed without moving focus, so leaving this means leaving the field. -->
+        <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -->
+        <div
+          class="markdown-input"
+          :inert="inertMark"
+          @focusout="close"
         >
-          {{ t('editor.empty') }}
-        </p>
+          <VTextInput
+            ref="input"
+            :control-id="inputId"
+            :label="label"
+            :model-value="modelValue"
+            :rows="rows"
+            :maxlength="maxlength"
+            :placeholder="placeholder"
+            :disabled="disabled"
+            :invalid="invalid"
+            :describedby="describedBy"
+            :completion="completion"
+            bare
+            hide-label
+            @update:model-value="edited"
+            @keydown="keydown"
+            @click="track"
+            @keyup.left.right.home.end="track"
+          />
+        </div>
+        <!-- A long text scrolls here, and a keyboard has to be able to scroll it. -->
+        <!-- eslint-disable-next-line vuejs-accessibility/no-noninteractive-tabindex -->
+        <div
+          v-if="preview"
+          class="markdown-preview"
+          role="group"
+          tabindex="0"
+          :aria-label="label"
+        >
+          <RichText
+            v-if="hasText"
+            :source="modelValue"
+          />
+          <p
+            v-else
+            class="markdown-empty"
+          >
+            {{ t('editor.empty') }}
+          </p>
+        </div>
       </div>
-    </VField>
-    <VTextInput
-      v-else
-      ref="field"
-      :label="label"
-      :model-value="modelValue"
-      :rows="rows"
-      :maxlength="maxlength"
-      :disabled="disabled"
-      :error="error"
-      :hint="shownHint"
-      :completion="completion"
-      @update:model-value="edited"
-      @keydown="keydown"
-      @click="track"
-      @keyup.left.right.home.end="track"
-    />
+      <div
+        v-if="$slots.actions || error"
+        class="markdown-foot"
+      >
+        <small
+          v-if="error"
+          :id="errorId"
+          class="markdown-error"
+          :role="errorRole"
+          >{{ error }}</small
+        >
+        <small
+          v-else
+          class="markdown-hint"
+          >{{ t('editor.hint') }}</small
+        >
+        <div
+          v-if="$slots.actions"
+          class="markdown-actions"
+        >
+          <slot name="actions" />
+        </div>
+      </div>
+    </div>
     <p
       class="visually-hidden"
       role="status"
     >
       {{ announcement }}
     </p>
-    <ul
+    <MarkdownSuggestions
       v-if="open && !preview"
       :id="listId"
       ref="list"
-      class="markdown-suggestions"
-      role="listbox"
-      :class="{ detached }"
-      :style="{ left: `${x}px`, top: `${y}px` }"
-      :aria-label="t('editor.suggestions')"
-    >
-      <!-- Focus stays in the field, which names the active row; a row is pointed
-           at, never focused. -->
-      <!-- eslint-disable-next-line vuejs-accessibility/click-events-have-key-events, vuejs-accessibility/interactive-supports-focus -->
-      <li
-        v-for="(row, index) in choices"
-        :id="`${listId}-${index}`"
-        :key="row.key"
-        class="markdown-suggestion"
-        role="option"
-        :class="{ active: isActive(index) }"
-        :aria-selected="isActive(index)"
-        @mousedown.prevent
-        @mousemove="active = index"
-        @click="choose(index)"
-      >
-        <span class="markdown-suggestion-reference">{{ row.reference }}</span>
-        <span class="markdown-suggestion-title">{{ row.title }}</span>
-        <span class="markdown-suggestion-detail">{{ row.detail }}</span>
-      </li>
-      <li
-        v-if="!choices.length"
-        class="markdown-suggestion-empty"
-        role="presentation"
-      >
-        {{ t('editor.noSuggestions', { query: trigger?.query ?? '' }) }}
-      </li>
-    </ul>
+      :active="active"
+      :anchor="anchor"
+      :choices="choices"
+      :query="trigger?.query ?? ''"
+      @choose="choose"
+      @point="active = $event"
+    />
   </div>
 </template>
 
 <style scoped>
 .markdown-editor {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-label-value);
   min-width: 0;
 }
 
-/* The preview stands where the field stood, at least as tall, so switching to
-   it does not move the form under the reader. */
+.markdown-label {
+  color: var(--color-text-muted);
+  font: var(--font-field-label);
+}
+
+/* The one frame: the hairline and the radius a text field has, around all three
+   rows. The text is on the fill a field has, and the rows above and below it a
+   step toward the ground, where the fill of a button still shows; that step is
+   what parts them, with no rule. The ring answers the text alone, because a button
+   in a row has a ring of its own and two at once say focus is in two places. */
+.markdown-surface {
+  display: grid;
+  min-width: 0;
+  border: 1px solid var(--color-rule-strong);
+  background: var(--color-surface-sheet);
+  overflow: clip;
+  border-radius: var(--radius-control);
+
+  &:hover:not(.disabled) {
+    border-color: var(--color-action-primary);
+  }
+
+  &:has(.markdown-body:focus-within) {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+  }
+
+  &.disabled {
+    border-color: var(--color-rule);
+
+    .markdown-body {
+      background: var(--color-control-disabled-surface);
+    }
+  }
+}
+
+.markdown-body {
+  position: relative;
+  min-width: 0;
+  background: var(--color-control-surface);
+}
+
+.markdown-input[inert] {
+  visibility: hidden;
+}
+
+/* Over the text, which keeps the height whatever this one would have been. */
 .markdown-preview {
-  min-height: var(--size-text-area-min-height);
+  position: absolute;
+  inset: 0;
   padding: var(--space-2) var(--space-3);
   font: var(--font-editor);
-  background: var(--color-surface-recess);
-  border-radius: var(--radius-control);
+  overflow-y: auto;
+
+  /* The frame's ring is the one that answers focus here too. */
+  &:focus-visible {
+    outline: 0;
+  }
 }
 
 .markdown-empty {
@@ -341,68 +445,40 @@ defineExpose({
   color: var(--color-text-muted);
 }
 
-/* A sheet beside the field: the rows are the field's own continuation, so they
-   take the field's width. It floats over what follows instead of pushing it
-   down, and scrolls inside the room the window leaves it. */
-.markdown-suggestions {
-  position: fixed;
-  z-index: 120;
-  display: grid;
-  align-content: start;
-  padding: var(--space-1);
-  margin: 0;
-  border: 1px solid var(--color-rule-strong);
-  background: var(--color-surface-sheet);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  border-radius: var(--radius-control);
-  box-shadow: 0 14px 34px var(--color-shadow);
-  list-style: none;
+/* What is said about the text at the start, what is done with it at the end. The
+   actions take a line of their own only where the words need the room. */
+.markdown-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  align-items: center;
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
 }
 
-/* The field has scrolled out of its panel, under the head or past the foot. */
-.markdown-suggestions.detached {
-  visibility: hidden;
-}
-
-.markdown-suggestion {
-  display: grid;
-  grid-template-columns: minmax(8ch, max-content) minmax(0, 1fr);
-  gap: 0 var(--space-2);
-  align-items: baseline;
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-status);
-  cursor: pointer;
-
-  &.active {
-    background: var(--color-surface-hover);
-  }
-}
-
-.markdown-suggestion-reference {
-  color: var(--color-text-muted);
-  font: var(--font-line);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.markdown-suggestion-title {
-  color: var(--color-text);
-  font: var(--font-note);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.markdown-suggestion-detail {
-  grid-column: 2;
-  color: var(--color-text-tertiary);
+.markdown-hint,
+.markdown-error {
+  min-width: 0;
   font: var(--font-detail);
 }
 
-.markdown-suggestion-empty {
-  padding: var(--space-1) var(--space-2);
+/* One short line: what gives way next to a wide action is the row, not this. */
+.markdown-hint {
+  flex: 1 1 auto;
   color: var(--color-text-muted);
-  font: var(--font-detail);
+  white-space: nowrap;
+}
+
+.markdown-error {
+  flex: 1 1 8rem;
+  color: var(--color-danger);
+  overflow-wrap: anywhere;
+}
+
+.markdown-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+  margin-inline-start: auto;
 }
 </style>

@@ -3,7 +3,7 @@ import type { Page } from '@playwright/test'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 
 import { installBackend } from './backend.ts'
-import { now, projectScope, workItem, workItemRef } from './planningFixtures.ts'
+import { doneState, now, projectScope, workItem, workItemRef } from './planningFixtures.ts'
 
 function checklistQuote(item: WorkItem, id: unknown) {
   const step = typeof id === 'string' ? item.checklist.find((entry) => entry.id === id) : undefined
@@ -45,7 +45,20 @@ export async function installDiscussionBackend(page: Page) {
       return route.fulfill({ status: 409, json: {} })
     }
     const path = new URL(request.url()).pathname
-    if (path.endsWith('/update')) item.description = String(body.description)
+    if (path.endsWith('/transition')) {
+      if (!item.summary) {
+        return route.fulfill({
+          status: 409,
+          json: {
+            error: {
+              code: 'workflow_guard',
+              message: `[summary] ${item.reference} has no closing summary; record what was done and what comes next before closing it`,
+            },
+          },
+        })
+      }
+      item.state = { ...doneState }
+    } else if (path.endsWith('/update')) item.description = String(body.description)
     else if (path.endsWith('/summary/select')) {
       const entry = item.comments.find((entry) => entry.id === body.comment_id)
       if (!entry?.report) throw new Error('Expected a saved report')

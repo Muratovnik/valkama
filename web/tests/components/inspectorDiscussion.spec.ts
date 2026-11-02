@@ -124,53 +124,100 @@ describe('task description and discussion', () => {
     expect(wrapper.emitted('changed')).toHaveLength(1)
   })
 
-  it('publishes a typed report as the outcome atomically and keeps a failed report draft', async () => {
+  it('publishes the outcome a closing move asks for, keeps a failed draft and carries the move on', async () => {
     const item = record('Task', 4)
     const wrapper = mount(InspectorDiscussion, {
       props: { item, writable: true },
       global: editingPlugins(),
     })
-    await getButton(wrapper, 'Work report').trigger('click')
+    expect(wrapper.find('textarea[aria-label="What was done"]').exists()).toBe(false)
+    await wrapper.vm.askOutcome({ key: 'done', name: 'Done' })
+    expect(wrapper.text()).toContain('Moving this task to “Done” needs its outcome')
+    // Only what the server will not close an item without.
+    expect(wrapper.findAll('form textarea').map((field) => field.attributes('aria-label'))).toEqual(
+      ['What was done', 'What comes next'],
+    )
+    expect(wrapper.find('form input[type="checkbox"]').exists()).toBe(false)
     await wrapper.get('textarea[aria-label="What was done"]').setValue('Completed')
     await wrapper.get('textarea[aria-label="What comes next"]').setValue('Validate')
-    await wrapper.get('.discussion-option:last-of-type input').setValue(true)
     vi.mocked(publishWorkItemReport).mockRejectedValueOnce(new Error('offline'))
     await wrapper.get('form').trigger('submit')
     await flushPromises()
     expect(value(wrapper, 'What was done')).toBe('Completed')
-    expect(
-      (wrapper.get('.discussion-option:last-of-type input').element as HTMLInputElement).checked,
-    ).toBe(true)
+    expect(wrapper.get('[role="alert"]').text()).toContain('Changes could not be saved.')
+    expect(wrapper.emitted('resume')).toBeUndefined()
     vi.mocked(publishWorkItemReport).mockResolvedValueOnce(item)
     await wrapper.get('form').trigger('submit')
     await flushPromises()
     expect(publishWorkItemReport).toHaveBeenLastCalledWith({
       id: item.work_item_id,
-      report: { done: 'Completed', next: 'Validate', why: '' },
+      report: { done: 'Completed', next: 'Validate' },
       make_current: true,
       expected_revision: 4,
     })
-    expect(value(wrapper, 'What was done')).toBe('')
     expect(wrapper.emitted('changed')).toHaveLength(1)
+    expect(wrapper.emitted('resume')).toEqual([['done']])
+    // The form has answered its question, and the comment is back.
+    expect(wrapper.find('textarea[aria-label="What was done"]').exists()).toBe(false)
+    expect(wrapper.find('textarea[aria-label="Comment"]').exists()).toBe(true)
   })
 
-  it('publishes history-only reports without replacing the selected outcome', async () => {
+  it('does not save an outcome with half of it missing, from the button or Ctrl+Enter', async () => {
+    const wrapper = mount(InspectorDiscussion, {
+      props: { item: record('Task', 4), writable: true },
+      global: editingPlugins(),
+    })
+    await wrapper.vm.askOutcome({ key: 'done', name: 'Done' })
+    const done = wrapper.get('textarea[aria-label="What was done"]')
+    await done.setValue('Only this')
+    expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeDefined()
+    await done.trigger('keydown', { key: 'Enter', ctrlKey: true })
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(publishWorkItemReport).not.toHaveBeenCalled()
+  })
+
+  it('steps back to the comment with both drafts kept, and the move left where it stopped', async () => {
     const item = record('Task', 4)
     const wrapper = mount(InspectorDiscussion, {
       props: { item, writable: true },
       global: editingPlugins(),
     })
-    await getButton(wrapper, 'Work report').trigger('click')
-    await wrapper.get('textarea[aria-label="What was done"]').setValue('Investigation')
-    await wrapper.get('textarea[aria-label="What comes next"]').setValue('Review')
-    vi.mocked(publishWorkItemReport).mockResolvedValueOnce(item)
-    await wrapper.get('form').trigger('submit')
+    await wrapper.get('textarea[aria-label="Comment"]').setValue('A comment draft')
+    await wrapper.vm.askOutcome({ key: 'done', name: 'Done' })
+    await wrapper.get('textarea[aria-label="What was done"]').setValue('An outcome draft')
+    await getButton(wrapper, 'Back to comment').trigger('click')
     await flushPromises()
-    expect(publishWorkItemReport).toHaveBeenCalledWith({
-      id: item.work_item_id,
-      report: { done: 'Investigation', next: 'Review', why: '' },
-      make_current: false,
+    expect(value(wrapper, 'Comment')).toBe('A comment draft')
+    expect(wrapper.emitted('resume')).toBeUndefined()
+    await wrapper.vm.askOutcome({ key: 'done', name: 'Done' })
+    expect(value(wrapper, 'What was done')).toBe('An outcome draft')
+  })
+
+  it('takes a report made the outcome from the thread as the answer to the same question', async () => {
+    const item: WorkItem = {
+      ...record('Task', 5),
+      comments: [
+        {
+          id: 11,
+          kind: 'report',
+          author: 'codex',
+          body: '',
+          at: now,
+          report: { done: 'Written by an agent', next: 'Review' },
+        },
+      ],
+    }
+    const wrapper = mount(InspectorDiscussion, {
+      props: { item, writable: true },
+      global: editingPlugins(),
     })
+    await wrapper.vm.askOutcome({ key: 'done', name: 'Done' })
+    vi.mocked(selectWorkItemSummary).mockResolvedValueOnce(item)
+    await getButton(wrapper, 'Make task outcome').trigger('click')
+    await flushPromises()
+    expect(wrapper.emitted('resume')).toEqual([['done']])
+    expect(wrapper.find('textarea[aria-label="What was done"]').exists()).toBe(false)
   })
 
   it('selects a prior report and shows unknown historical time without unsafe HTML', async () => {

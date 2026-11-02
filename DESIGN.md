@@ -633,23 +633,32 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   missing from the space — is the text it was. A modal dialog that could only
   open a card behind itself — the new task's preview — claims every reference as
   text.
-- **Writing free text:** `MarkdownEditor` owns the field: a preview drawn by
-  `RichText`, `#` and a query to link a task, Ctrl+Enter to send. The field
-  stays a multi-line text box naming its list of completions, and the list
-  floats beside the field rather than at the caret: under it where the window
-  has room, over it where it does not, never taller than the room it got and
-  scrolled to the active row. It stood in the flow under the field, so a
-  comment field at the foot of a card showed two of its eight rows, or none.
-  Every multi-line field whose
-  text `RichText` will draw is one — a card's description, a comment, a report
-  section, a new task's description, a text answer to a question — and its host
-  sets one Write | Preview switch above all of its fields, says what Ctrl+Enter
-  does with its own button's words, and decides where `#` searches: the space
-  the text belongs to, or nowhere when the host cannot name that space in the
-  store the search reads. A launch prompt is not one: it goes to the agent's
-  command line as typed and nothing here draws it. A long text held by
-  `CollapsibleText` ends on its last whole line, and a link below the cut that
-  takes focus opens the text.
+- **Writing free text:** `MarkdownEditor` owns the field, and draws it as one
+  object: a slim toolbar, the text and a foot inside one hairline and one radius,
+  told apart by tone, with the focus ring on that hairline while the text has
+  focus. The toolbar links a task and marks the text up (bold, italic, code, a
+  link, a list; Ctrl+B and Ctrl+I by the key's place, so a Russian layout has them
+  too) and switches between writing and a preview drawn by `RichText`, which lies
+  over the text so that switching moves nothing. Its buttons go through the
+  browser's own editing, so Ctrl+Z takes them back like typing. The field starts
+  at the lines its host asks for with `rows`, grows with its text to
+  `--size-text-area-max-height`, and then scrolls inside. A `#` opens the list of
+  tasks, whether it was typed or written by the button; the field stays a
+  multi-line text box naming that list, and the list floats beside the field
+  rather than at the caret: under it where the window has room, over it where it
+  does not, never taller than the room it got and scrolled to the active row. It
+  stood in the flow under the field, so a comment field at the foot of a card
+  showed two of its eight rows, or none. Every multi-line field whose text
+  `RichText` will draw is one — a card's description, a comment, an outcome, a new
+  task's description, a text answer to a question. Its host says three things: its
+  own action for the text, in the foot's end, or nothing where that action stands
+  elsewhere and no foot is drawn; whether its label shows, which it does not where
+  a heading already names the field; and where `#` searches, the space the text
+  belongs to, or nowhere when the host cannot name that space in the store the
+  search reads. Hosts with several fields that are one answer bind them to one
+  view. A launch prompt is not one: it goes to the agent's command line as typed
+  and nothing here draws it. A long text held by `CollapsibleText` ends on its
+  last whole line, and a link below the cut that takes focus opens the text.
 
 A screen that needs a style no primitive provides has found a gap in this
 inventory, not a licence to write it locally. The remedy is a variant on the

@@ -1,7 +1,8 @@
 /**
- * The card's composer: a comment or a work report chosen up front, written in
- * the markdown editor, previewed as the thread will draw it, sent with
- * Ctrl+Enter. The report keeps the server's three-section model.
+ * The card's composer: a comment, written in the markdown editor, previewed as
+ * the thread will draw it, sent with Ctrl+Enter. There is no second kind of entry
+ * to choose: a work report is what agents write through their tools, and the one
+ * a person writes is the outcome a closing move asks for.
  */
 import { createI18n } from 'vue-i18n'
 
@@ -28,82 +29,73 @@ function mountComposer() {
   })
 }
 
+const labels = (wrapper: ReturnType<typeof mountComposer>) =>
+  wrapper.findAll('form textarea').map((field) => field.attributes('aria-label'))
+
 describe('the card composer', () => {
   beforeEach(() => {
     vi.mocked(commentWorkItem).mockReset().mockResolvedValue()
     vi.mocked(publishWorkItemReport).mockReset()
   })
 
-  it('offers a comment or a work report of three sections as one choice', async () => {
+  it('writes a comment and offers nothing else to write', () => {
     const wrapper = mountComposer()
-    expect(wrapper.findAll('form textarea').map((field) => field.attributes('aria-label'))).toEqual(
-      ['Comment'],
-    )
-    expect(getButton(wrapper, 'Comment').attributes('aria-pressed')).toBe('true')
-    await getButton(wrapper, 'Work report').trigger('click')
-    expect(getButton(wrapper, 'Work report').attributes('aria-pressed')).toBe('true')
-    expect(wrapper.findAll('form textarea').map((field) => field.attributes('aria-label'))).toEqual(
-      ['What was done', 'Why this way', 'What comes next'],
-    )
-    // The one checkbox left is the choice the report makes about the item.
-    expect(wrapper.findAll('form input[type="checkbox"]')).toHaveLength(1)
-    expect(wrapper.get('form .discussion-option').text()).toBe('Make task outcome')
-    expect(wrapper.get('button[type="submit"]').text()).toBe('Publish report')
+    expect(labels(wrapper)).toEqual(['Comment'])
+    expect(wrapper.text()).not.toContain('Work report')
+    expect(wrapper.find('form input[type="checkbox"]').exists()).toBe(false)
+    expect(wrapper.findAll('form [role="group"][aria-label="What to publish"]')).toHaveLength(0)
+    // The section's heading names the field, so the label is left to a reader.
+    expect(wrapper.find('form label[for]').exists()).toBe(false)
+    expect(wrapper.get('button[type="submit"]').text()).toBe('Add note')
   })
 
   it('previews the text as the thread will draw it and keeps the draft for writing on', async () => {
     const wrapper = mountComposer()
     await wrapper.get('textarea').setValue('**Done**, see <b>raw</b>')
     await getButton(wrapper, 'Preview').trigger('click')
-    expect(wrapper.find('form textarea').exists()).toBe(false)
+    expect(wrapper.get('textarea').element.closest('[inert]')).not.toBeNull()
     expect(wrapper.get('form strong').text()).toBe('Done')
     expect(wrapper.find('form b').exists()).toBe(false)
     await getButton(wrapper, 'Write').trigger('click')
+    expect(wrapper.get('textarea').element.closest('[inert]')).toBeNull()
     expect(value(wrapper, 'Comment')).toBe('**Done**, see <b>raw</b>')
   })
 
-  it('previews a report section by section, under the labels it will carry', async () => {
+  it('sends a comment with Ctrl+Enter from the field, exactly as it was written', async () => {
     const wrapper = mountComposer()
-    await getButton(wrapper, 'Work report').trigger('click')
-    await wrapper.get('textarea[aria-label="What was done"]').setValue('- one\n- two')
-    await getButton(wrapper, 'Preview').trigger('click')
-    expect(wrapper.findAll('form li').map((item) => item.text())).toEqual(['one', 'two'])
-    expect(wrapper.text()).toContain('What comes next')
-    expect(wrapper.text()).toContain('Nothing to preview yet.')
-  })
-
-  it('sends a comment and a report with Ctrl+Enter from the field being written', async () => {
-    const wrapper = mountComposer()
-    await wrapper.get('textarea').setValue('Looks right')
+    await wrapper.get('textarea').setValue('    indented\nLooks right\n')
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter', ctrlKey: true })
     await flushPromises()
     expect(commentWorkItem).toHaveBeenCalledExactlyOnceWith({
       id: '00000000-0000-4000-8000-000000000320',
-      body: 'Looks right',
+      body: '    indented\nLooks right\n',
     })
-    await getButton(wrapper, 'Work report').trigger('click')
-    await wrapper.get('textarea[aria-label="What was done"]').setValue('Shipped')
-    await wrapper.get('textarea[aria-label="What comes next"]').setValue('Watch')
-    vi.mocked(publishWorkItemReport).mockResolvedValueOnce(record('Task', 4))
-    await wrapper
-      .get('textarea[aria-label="Why this way"]')
-      .trigger('keydown', { key: 'Enter', ctrlKey: true })
-    await flushPromises()
-    expect(publishWorkItemReport).toHaveBeenCalledExactlyOnceWith({
-      id: '00000000-0000-4000-8000-000000000320',
-      report: { done: 'Shipped', next: 'Watch', why: '' },
-      make_current: false,
-    })
+    expect(publishWorkItemReport).not.toHaveBeenCalled()
   })
 
-  it('does not send an incomplete report on Ctrl+Enter', async () => {
+  it('does not send a comment of nothing but space', async () => {
     const wrapper = mountComposer()
-    await getButton(wrapper, 'Work report').trigger('click')
-    await wrapper.get('textarea[aria-label="What was done"]').setValue('Only this')
-    await wrapper
-      .get('textarea[aria-label="What was done"]')
-      .trigger('keydown', { key: 'Enter', ctrlKey: true })
+    await wrapper.get('textarea').setValue('  \n ')
+    await wrapper.get('textarea').trigger('keydown', { key: 'Enter', ctrlKey: true })
     await flushPromises()
-    expect(publishWorkItemReport).not.toHaveBeenCalled()
+    expect(commentWorkItem).not.toHaveBeenCalled()
+    expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('puts a refused comment’s reason and the way to recover in the editor’s foot', async () => {
+    const wrapper = mountComposer()
+    await wrapper.get('textarea').setValue('A draft')
+    vi.mocked(commentWorkItem).mockRejectedValueOnce(
+      Object.assign(new Error('conflict'), { status: 409 }),
+    )
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    const foot = wrapper.get('.markdown-foot')
+    expect(foot.get('[role="alert"]').text()).toContain('The task changed.')
+    expect(foot.text()).toContain('Refresh task')
+    expect(foot.text()).not.toContain('Ctrl+Enter')
+    expect(value(wrapper, 'Comment')).toBe('A draft')
+    await getButton(wrapper, 'Refresh task').trigger('click')
+    expect(wrapper.emitted('refresh')).toHaveLength(1)
   })
 })

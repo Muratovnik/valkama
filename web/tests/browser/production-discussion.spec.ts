@@ -4,11 +4,24 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installDiscussionBackend } from './discussionBackend.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { planningSpace, projectScope } from './planningFixtures.ts'
+import { now, planningSpace, projectScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 test('description, comments and selected reports survive a fresh item read', async ({ page }) => {
   const backend = await installDiscussionBackend(page)
+  // What agents wrote through their tools: the thread shows it, the form does not write it.
+  for (const [index, done] of ['First result', 'Second result'].entries()) {
+    backend.item.comments.push({
+      id: index + 1,
+      kind: 'report',
+      author: 'codex',
+      at: now,
+      body: '',
+      report: { done, next: 'Review' },
+      checklist_item_id: null,
+      checklist_item_text: null,
+    })
+  }
   await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
   const drawer = page.locator('.drawer')
@@ -20,24 +33,18 @@ test('description, comments and selected reports survive a fresh item read', asy
     .getByRole('textbox', { name: 'Comment', exact: true })
     .fill('Please check the result')
   await drawer.locator('.discussion-form button[type="submit"]').click()
-  await expect(drawer.locator('.thread-text')).toHaveText('Please check the result')
-  await expect(drawer.locator('.thread-text')).toHaveCSS('font-size', '15px')
-  await drawer.getByRole('button', { name: 'Work report', exact: true }).click()
-  for (const title of ['First result', 'Second result']) {
-    await drawer.getByRole('textbox', { name: 'What was done', exact: true }).fill(title)
-    await drawer.getByRole('textbox', { name: 'What comes next', exact: true }).fill('Review')
-    await drawer.getByRole('checkbox', { name: 'Make task outcome', exact: true }).check()
-    await drawer.getByRole('button', { name: 'Publish report', exact: true }).click()
-    await expect(drawer.locator('.thread-entry')).toHaveCount(title === 'First result' ? 2 : 3)
-  }
+  const written = drawer.locator('.thread-entry').filter({ hasText: 'Please check the result' })
+  await expect(written.locator('.thread-text')).toHaveText('Please check the result')
+  await expect(written.locator('.thread-text')).toHaveCSS('font-size', '15px')
   const first = drawer.locator('.thread-entry').filter({ hasText: 'First result' })
+  await expect(first.locator('.thread-label')).toHaveText('Work report')
   await first.getByRole('button', { name: 'Make task outcome', exact: true }).click()
   await expect(first.locator('.thread-label')).toHaveText('Work report · task outcome')
   expect(backend.writes.at(-1)).toEqual({
     author: 'user',
     id: backend.item.work_item_id,
-    comment_id: 2,
-    expected_revision: 7,
+    comment_id: 1,
+    expected_revision: 5,
   })
   await page.reload()
   await expect(drawer.locator('.description-copy')).toHaveText('An editable goal')
@@ -55,7 +62,7 @@ test('description, comments and selected reports survive a fresh item read', asy
   const beforeReport = page.url()
   await outcome.getByRole('button', { name: 'View report in discussion' }).click()
   await expect(page).toHaveURL(beforeReport)
-  const selected = drawer.locator('#work-report-2')
+  const selected = drawer.locator('#work-report-1')
   await expect(selected).toBeInViewport({ ratio: 0.5 })
   await expect(selected).toBeFocused()
   const reportBounds = await selected.boundingBox()

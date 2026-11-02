@@ -255,13 +255,14 @@ function followGuard(guard: string) {
     claim()
     return
   }
+  const move = notice.value?.move
   dismissNotice()
   if (guard === 'blocker') {
     section.value = 'relations'
     return
   }
   section.value = 'overview'
-  if (guard === 'summary') void overview.value?.startOutcomeReport()
+  if (guard === 'summary' && move) void overview.value?.askOutcome(move)
   else if (guard === 'checklist') overview.value?.revealChecklist()
 }
 
@@ -418,6 +419,7 @@ defineExpose({ close })
             :writable="writable && !busy"
             @changed="reloaded"
             @refresh="load"
+            @resume="moveTo"
             @tick="tick"
           >
             <template #composition>

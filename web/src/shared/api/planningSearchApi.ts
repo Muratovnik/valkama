@@ -31,3 +31,20 @@ export async function searchPlanningWorkItems(
   if (!response.ok) throw new Error(`HTTP ${response.status}`)
   return searchSchema.parse(payload).work_items
 }
+
+/**
+ * What is being worked on in a space: what a search offers before anything is
+ * typed, which the search itself refuses to answer. One more than the editor
+ * shows, because the card being written on is left out of its own list.
+ */
+export async function activePlanningWorkItems(
+  space: string,
+  signal: AbortSignal,
+): Promise<PlanningSearchResult[]> {
+  const parameters = new URLSearchParams({ space, category: 'active', limit: '9' })
+  const { response, payload } = await readJsonResponse(`/api/planning/work-items?${parameters}`, {
+    signal,
+  })
+  if (!response.ok) throw new Error(`HTTP ${response.status}`)
+  return searchSchema.parse(payload).work_items
+}

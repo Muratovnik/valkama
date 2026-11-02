@@ -786,7 +786,12 @@ export const en = {
     makeOutcome: 'Make task outcome',
     noDiscussion: 'No comments or reports yet.',
     comment: 'Comment',
-    publishReport: 'Publish report',
+    closing: {
+      title: 'Outcome before closing',
+      why: 'Moving this task to “{state}” needs its outcome: what was done and what comes next.',
+      send: 'Save and close',
+      back: 'Back to comment',
+    },
     unknownTime: 'Unknown time',
     unknownAuthor: 'Author not recorded',
     related: {
@@ -973,7 +978,7 @@ export const en = {
       keep: 'Keep editing',
       description: 'description',
       comment: 'comment',
-      report: 'work report',
+      outcome: 'task outcome',
     },
     refusal: {
       transition: 'Moving to “{state}” was refused',
@@ -987,7 +992,7 @@ export const en = {
       reason: 'The service said: {reason}',
       dismiss: 'Dismiss',
       guard: {
-        summary: 'There is no closing summary: publish a report and make it the outcome.',
+        summary: 'There is no closing summary: say what was done and what comes next.',
         checklist: 'The checklist has open steps.',
         executor: 'The work has no executor.',
         blocker: 'Blocking needs a blocking task or a reason.',
@@ -1030,7 +1035,6 @@ export const en = {
     summaryDone: 'What was done',
     summaryNext: 'What comes next',
     summaryWhy: 'Why this way',
-    summaryWhyHint: 'Only when the choice is not obvious.',
     summarySave: 'Save summary',
     summaryUpdate: 'Update summary',
     links: 'Related work',

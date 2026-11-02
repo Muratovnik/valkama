@@ -59,8 +59,7 @@ test('Russian relations keep one hierarchy, aligned controls, and narrow content
   // no fact grid that says it again (a step's own holder is the step's).
   await expect(drawer.locator('.card-holder')).toContainText(/Ответственный:\s*codex/u)
   await expect(drawer.locator('.drawer-frame-content')).not.toContainText('Ответственный')
-  await drawer.getByRole('button', { name: 'Отчёт о работе', exact: true }).click()
-  const result = drawer.getByRole('textbox', { name: 'Что сделано', exact: true })
+  const result = drawer.getByRole('textbox', { name: 'Комментарий', exact: true })
   const longDraft =
     'Проверены связи между задачами, история решений и подробное описание результата. '.repeat(8)
   await result.fill(longDraft)

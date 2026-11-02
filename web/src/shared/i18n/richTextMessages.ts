@@ -5,16 +5,24 @@
 export const richTextMessages = {
   en: {
     editor: {
-      kind: 'What to publish',
       write: 'Write',
       preview: 'Preview',
       view: 'Write or preview',
-      hint: 'Markdown · Ctrl+Enter: {action}',
-      hintSuggest: 'Markdown · # and a number or a word links a task · Ctrl+Enter: {action}',
+      hint: 'Markdown · Ctrl+Enter',
+      tools: 'Formatting',
+      tool: {
+        mention: 'Link a task',
+        bold: 'Bold',
+        italic: 'Italic',
+        code: 'Code',
+        link: 'Link',
+        list: 'Bulleted list',
+      },
       empty: 'Nothing to preview yet.',
       suggestions: 'Tasks',
       found: 'No tasks found | One task found | {count} tasks found',
       noSuggestions: 'No tasks match “{query}”.',
+      queryPrompt: 'Type a number or a word from the title.',
     },
     textLinks: {
       openItem: 'Open task {reference}',
@@ -32,16 +40,24 @@ export const richTextMessages = {
   },
   ru: {
     editor: {
-      kind: 'Что публикуется',
       write: 'Текст',
       preview: 'Просмотр',
       view: 'Текст или просмотр',
-      hint: 'Markdown · Ctrl+Enter — {action}',
-      hintSuggest: 'Markdown · # и номер или слово — ссылка на задачу · Ctrl+Enter — {action}',
+      hint: 'Markdown · Ctrl+Enter',
+      tools: 'Форматирование',
+      tool: {
+        mention: 'Сослаться на задачу',
+        bold: 'Жирный',
+        italic: 'Курсив',
+        code: 'Код',
+        link: 'Ссылка',
+        list: 'Маркированный список',
+      },
       empty: 'Пока нечего показать.',
       suggestions: 'Задачи',
       found: 'Найдена {count} задача | Найдено {count} задачи | Найдено {count} задач',
       noSuggestions: 'Задач по «{query}» нет.',
+      queryPrompt: 'Введите номер или слово из названия.',
     },
     textLinks: {
       openItem: 'Открыть задачу {reference}',

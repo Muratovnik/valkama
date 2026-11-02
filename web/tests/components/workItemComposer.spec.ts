@@ -105,7 +105,7 @@ describe('WorkItemComposer description', () => {
       .find((option) => option.text() === 'Просмотр')
     expect(preview).toBeDefined()
     await preview?.trigger('click')
-    expect(wrapper.find('textarea').exists()).toBe(false)
+    expect(wrapper.get('textarea').element.closest('[inert]')).not.toBeNull()
     expect(wrapper.get('.markdown-preview strong').text()).toBe('срочно')
     expect(wrapper.get('input').attributes('maxlength')).toBe('200')
   })

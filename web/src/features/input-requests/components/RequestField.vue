@@ -9,8 +9,8 @@
  * with the placeholder only as its empty caption.
  *
  * A text answer is written in the markdown editor, because the answered
- * request draws it as markdown: the card's `preview` switch shows it as it will
- * read, and Ctrl+Enter sends the answer (`submit`).
+ * request draws it as markdown: `preview` shows it as it will read, shared by the
+ * question's text answers, and Ctrl+Enter sends the answer (`submit`).
  *
  * A refused field says why under itself, and its control carries
  * `aria-invalid` and names that message with `aria-describedby`. The group is a
@@ -27,28 +27,27 @@ import VField from '@/shared/ui/VField.vue'
 
 const props = withDefaults(
   defineProps<{
-    /** What Ctrl+Enter in a text answer does, as the card's own button says it. */
-    action: string
     disabled: boolean
     field: InputRequestField
     /** Why the value was refused; empty while it stands. */
     error?: string
     modelValue?: string | boolean | string[]
-    /** A text answer shows as it will read rather than as it is written. */
-    preview?: boolean
   }>(),
-  { modelValue: undefined, error: '', preview: false },
+  { modelValue: undefined, error: '' },
 )
 const emit = defineEmits<{
   'submit': []
   'update:modelValue': [value: string | boolean | string[]]
 }>()
+/** A text answer shows as it will read rather than as it is written. */
+const preview = defineModel<boolean>('preview', { default: false })
 /** Up to this many options stay visible as radio buttons; more open a list. */
 const VISIBLE_CHOICES = 4
 const { t } = useI18n()
 const id = useId()
 const legendId = `${id}-legend`
 const root = ref<HTMLElement | { $el: HTMLElement } | null>(null)
+const editor = ref<InstanceType<typeof MarkdownEditor> | null>(null)
 const label = computed(
   () =>
     `${props.field.label} · ${t(props.field.required ? 'requests.required' : 'requests.optional')}`,
@@ -100,6 +99,10 @@ function toggle(option: string, event: Event) {
 }
 /** Moves focus to the field's control: the chosen radio, or the first one. */
 function focus() {
+  if (editor.value) {
+    editor.value.focus()
+    return
+  }
   const element = root.value instanceof HTMLElement ? root.value : root.value?.$el
   const target =
     element?.querySelector<HTMLElement>('input:checked') ??
@@ -112,15 +115,15 @@ defineExpose({ focus })
 <template>
   <MarkdownEditor
     v-if="control === 'text'"
-    ref="root"
+    ref="editor"
+    v-model:preview="preview"
     :label="label"
-    :action="action"
-    :preview="preview"
     :rows="2"
     :maxlength="8000"
     :model-value="textValue"
     :disabled="disabled"
     :error="error"
+    quiet-error
     @update:model-value="emit('update:modelValue', $event)"
     @submit="emit('submit')"
   />

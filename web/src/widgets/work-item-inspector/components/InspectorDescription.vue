@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useDraftSource } from '@/widgets/work-item-inspector/utils/useDraftGuard.ts'
@@ -9,17 +9,16 @@ import { updateWorkItemDescription } from '@/shared/api/planningApi.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { workItemSuggest } from '@/shared/lib/workItemSuggest.ts'
 import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
-import { useEditorView } from '@/shared/ui/editorView.ts'
 import MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
-import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import VButton from '@/shared/ui/VButton.vue'
 
 const props = defineProps<{ item: WorkItem; writable: boolean }>()
 const emit = defineEmits<{ changed: []; refresh: [] }>()
 const { t } = useI18n()
 const editing = ref(false)
-const { previewing, view, views } = useEditorView()
+const previewing = ref(false)
+const editor = ref<InstanceType<typeof MarkdownEditor> | null>(null)
 const draft = ref('')
 const suggest = workItemSuggest(
   () => props.item.planning_space_id,
@@ -43,7 +42,7 @@ watch(
     seeded = value
   },
 )
-const { pending, errorKey, errorReason, submit } = useInspectorMutation(
+const { pending, error, submit } = useInspectorMutation(
   () => props.item.work_item_id,
   () => emit('changed'),
 )
@@ -52,6 +51,12 @@ useDraftSource('description', () => editing.value && draft.value !== props.item.
 const editLabel = computed(() =>
   t(props.item.description ? 'workItem.editDescription' : 'workItem.addDescription'),
 )
+/** The button that opened the editor is gone with it, so focus goes where the writing is. */
+async function edit() {
+  editing.value = true
+  await nextTick()
+  editor.value?.focusAtTop()
+}
 function save() {
   if (!props.writable) return
   void submit(
@@ -88,7 +93,7 @@ function cancel() {
       >
         <VButton
           variant="ghost"
-          @click="editing = true"
+          @click="edit"
         >
           {{ editLabel }}
         </VButton>
@@ -99,55 +104,39 @@ function cancel() {
       class="description-form"
       @submit.prevent="save"
     >
-      <SegmentedControl
-        v-model="view"
-        class="description-view"
-        size="compact"
-        :label="t('editor.view')"
-        :options="views"
-      />
       <MarkdownEditor
+        ref="editor"
         v-model="draft"
+        v-model:preview="previewing"
         :label="t('workItem.description')"
-        :action="t('workItem.saveDescription')"
-        :preview="previewing"
         :suggest="suggest"
-        :rows="4"
+        :rows="6"
         :maxlength="20000"
         :disabled="pending"
+        :error="error"
+        hide-label
         @submit="save"
-      />
-      <p
-        v-if="errorKey"
-        class="description-error"
-        role="alert"
       >
-        {{ t(errorKey) }}
-        <span
-          v-if="errorReason"
-          class="description-reason"
-          >{{ errorReason }}</span
-        >
-      </p>
-      <div class="description-actions">
-        <VButton
-          type="submit"
-          variant="primary"
-          :disabled="pending"
-          >{{ t('workItem.saveDescription') }}</VButton
-        >
-        <VButton
-          :disabled="pending"
-          @click="cancel"
-          >{{ t('workItem.cancel') }}</VButton
-        >
-        <VButton
-          v-if="errorKey"
-          :disabled="pending"
-          @click="emit('refresh')"
-          >{{ t('workItem.refreshDraft') }}</VButton
-        >
-      </div>
+        <template #actions>
+          <VButton
+            v-if="error"
+            :disabled="pending"
+            @click="emit('refresh')"
+            >{{ t('workItem.refreshDraft') }}</VButton
+          >
+          <VButton
+            :disabled="pending"
+            @click="cancel"
+            >{{ t('workItem.cancel') }}</VButton
+          >
+          <VButton
+            type="submit"
+            variant="primary"
+            :disabled="pending"
+            >{{ t('workItem.saveDescription') }}</VButton
+          >
+        </template>
+      </MarkdownEditor>
     </form>
     <CollapsibleText
       v-else-if="item.description"
@@ -171,17 +160,6 @@ function cancel() {
   gap: var(--space-heading-content);
 }
 
-.description-view {
-  justify-self: start;
-}
-
-.description-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  align-items: center;
-}
-
 .description-copy {
   margin: 0;
   font: var(--font-editor);
@@ -190,17 +168,5 @@ function cancel() {
   &.empty {
     color: var(--color-text-muted);
   }
-}
-
-.description-error {
-  margin: 0;
-  color: var(--color-danger);
-  font: var(--font-detail);
-}
-
-.description-reason {
-  display: block;
-  margin-top: var(--space-1);
-  color: var(--color-text-muted);
 }
 </style>

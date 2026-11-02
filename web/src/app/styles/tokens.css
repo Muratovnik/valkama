@@ -39,7 +39,10 @@
 }
 
 :root {
-  --size-text-area-min-height: calc(2lh + var(--space-4) + 2px);
+  /* How tall a multi-line field grows before it scrolls inside: long text is
+     read in the window, and the page around it stays where it is. A floor is
+     not a token any more: `rows` is what a field starts at. */
+  --size-text-area-max-height: min(30lh, 60dvh);
   --space-label-value: var(--space-2);
   --space-heading-content: var(--space-3);
 

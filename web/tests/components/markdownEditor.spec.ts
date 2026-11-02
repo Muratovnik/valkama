@@ -1,11 +1,15 @@
 /**
- * The markdown editor's keys and its `#` completions.
+ * The markdown editor's frame, keys, toolbar and `#` completions.
  *
- * The contract: Ctrl+Enter (or Cmd+Enter) sends; `#` and a query asks the host
- * once typing pauses; the arrows walk the rows with focus kept in the field;
+ * The contract: Ctrl+Enter (or Cmd+Enter) sends; `#` asks the host once typing
+ * pauses, whoever wrote it; the arrows walk the rows with focus kept in the field;
  * Enter or Tab writes the chosen reference in place of the query; Escape closes
- * the list without letting the key reach the drawer around it; the preview is
- * the text as the card will draw it.
+ * the list without letting the key reach the drawer around it; the preview is the
+ * text as the card will draw it. The foot exists for a host's action or a refusal.
+ *
+ * What the toolbar does to text is `markdownEdits.test.ts`. Undo and the real
+ * editing path are a browser's to show, in `production-editor.spec.ts`: here the
+ * field has no `execCommand`, so these run the stand-in that keeps the text right.
  */
 import { createI18n } from 'vue-i18n'
 
@@ -21,7 +25,17 @@ const rows: EditorSuggestion[] = [
   { key: '2', reference: 'MAIN-13', title: 'Renderer', detail: 'Done' },
 ]
 
-function mountEditor(options: { preview?: boolean; suggest?: typeof rows | null } = {}) {
+interface EditorOptions {
+  error?: string
+  hideLabel?: boolean
+  locale?: 'en' | 'ru'
+  maxlength?: number
+  preview?: boolean
+  slots?: Record<string, string>
+  suggest?: typeof rows | null
+}
+
+function mountEditor(options: EditorOptions = {}) {
   const submitted = vi.fn()
   const suggest = vi.fn(async () => options.suggest ?? rows)
   const escapes = vi.fn()
@@ -35,14 +49,20 @@ function mountEditor(options: { preview?: boolean; suggest?: typeof rows | null 
     attachTo: drawer,
     props: {
       'label': 'Comment',
-      'action': 'Add note',
       'modelValue': '',
       'preview': options.preview ?? false,
+      'error': options.error ?? '',
+      'hideLabel': options.hideLabel ?? false,
+      ...(options.maxlength === undefined ? {} : { maxlength: options.maxlength }),
       'suggest': options.suggest === null ? undefined : suggest,
       'onUpdate:modelValue': (value: string) => void wrapper.setProps({ modelValue: value }),
+      'onUpdate:preview': (value: boolean) => void wrapper.setProps({ preview: value }),
       'onSubmit': submitted,
     },
-    global: { plugins: [createI18n({ legacy: false, locale: 'en', messages })] },
+    slots: options.slots ?? {},
+    global: {
+      plugins: [createI18n({ legacy: false, locale: options.locale ?? 'en', messages })],
+    },
   })
   const text = {
     get value() {
@@ -61,6 +81,9 @@ async function type(wrapper: ReturnType<typeof mountEditor>['wrapper'], value: s
   await field.trigger('input')
 }
 
+const tool = (wrapper: ReturnType<typeof mountEditor>['wrapper'], name: string) =>
+  wrapper.get(`button[aria-label="${name}"]`)
+
 describe('MarkdownEditor', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -78,7 +101,6 @@ describe('MarkdownEditor', () => {
     await field.trigger('keydown', { key: 'Enter', ctrlKey: true })
     await field.trigger('keydown', { key: 'Enter', metaKey: true })
     expect(submitted).toHaveBeenCalledTimes(2)
-    expect(wrapper.text()).toContain('Ctrl+Enter: Add note')
   })
 
   it('offers tasks for # and a query, walks them with the keys and writes the chosen one', async () => {
@@ -141,10 +163,21 @@ describe('MarkdownEditor', () => {
     expect(escapes).toHaveBeenCalledTimes(1)
   })
 
+  it('closes the list when focus leaves the field, which a press on a row does not do', async () => {
+    const { wrapper } = mountEditor()
+    await type(wrapper, '#par')
+    await vi.advanceTimersByTimeAsync(250)
+    await flushPromises()
+    expect(wrapper.find('[role="listbox"]').exists()).toBe(true)
+    await wrapper.get('textarea').trigger('focusout')
+    expect(wrapper.find('[role="listbox"]').exists()).toBe(false)
+  })
+
   it('does not ask for a # inside a word or a heading, and says when nothing matches', async () => {
     const { wrapper, suggest } = mountEditor({ suggest: [] })
     await type(wrapper, 'issue#12')
     await type(wrapper, '# Heading')
+    await type(wrapper, '## Heading')
     await vi.advanceTimersByTimeAsync(250)
     expect(suggest).not.toHaveBeenCalled()
     await type(wrapper, '#zzz')
@@ -154,14 +187,174 @@ describe('MarkdownEditor', () => {
     expect(wrapper.findAll('[role="option"]')).toHaveLength(0)
   })
 
-  it('previews the text as the card draws it, and says when there is nothing yet', async () => {
+  it('asks the host about a # with nothing after it yet, and says what to type if it has no rows', async () => {
+    const { wrapper, suggest } = mountEditor({ suggest: [] })
+    await type(wrapper, 'See #')
+    await vi.advanceTimersByTimeAsync(250)
+    await flushPromises()
+    expect(suggest).toHaveBeenCalledExactlyOnceWith('', expect.any(AbortSignal))
+    expect(wrapper.get('[role="listbox"]').text()).toBe('Type a number or a word from the title.')
+  })
+
+  it('previews the text as the card draws it, over the field, and says when there is nothing', async () => {
     const empty = mountEditor({ preview: true })
-    expect(empty.wrapper.find('textarea').exists()).toBe(false)
+    expect(empty.wrapper.get('textarea').element.closest('[inert]')).not.toBeNull()
     expect(empty.wrapper.text()).toContain('Nothing to preview yet.')
     const { wrapper } = mountEditor({ preview: true })
     await wrapper.setProps({ modelValue: '**bold** <b>raw</b>' })
     expect(wrapper.get('strong').text()).toBe('bold')
     expect(wrapper.find('b').exists()).toBe(false)
-    expect(wrapper.text()).toContain('Comment')
+    expect(wrapper.get('.markdown-preview').attributes('aria-label')).toBe('Comment')
+  })
+
+  it('switches between writing and preview from its own toolbar, which the host can bind', async () => {
+    const { wrapper } = mountEditor()
+    const switcher = wrapper.get('[role="group"][aria-label="Write or preview"]')
+    expect(switcher.get('[aria-pressed="true"]').text()).toBe('Write')
+    await switcher.findAll('button')[1]?.trigger('click')
+    expect(wrapper.emitted('update:preview')).toEqual([[true]])
+    expect(wrapper.find('.markdown-preview').exists()).toBe(true)
+    expect(switcher.get('[aria-pressed="true"]').text()).toBe('Preview')
+  })
+
+  it('has no foot without a host’s action or a refusal', () => {
+    expect(mountEditor().wrapper.find('.markdown-foot').exists()).toBe(false)
+  })
+
+  it('puts a host’s action at the end of the foot and the short hint at its start', () => {
+    const { wrapper } = mountEditor({ slots: { actions: '<button>Send</button>' } })
+    const foot = wrapper.get('.markdown-foot')
+    expect(foot.get('.markdown-hint').text()).toBe('Markdown · Ctrl+Enter')
+    expect(foot.get('.markdown-actions button').text()).toBe('Send')
+    expect(foot.element.lastElementChild?.classList.contains('markdown-actions')).toBe(true)
+  })
+
+  it('says a refusal in the foot in place of the hint, and the field names it', () => {
+    const { wrapper } = mountEditor({
+      error: 'Too long',
+      slots: { actions: '<button>Send</button>' },
+    })
+    expect(wrapper.find('.markdown-hint').exists()).toBe(false)
+    const message = wrapper.get('[role="alert"]')
+    expect(message.text()).toBe('Too long')
+    const field = wrapper.get('textarea')
+    expect(field.attributes('aria-invalid')).toBe('true')
+    expect(field.attributes('aria-describedby')).toBe(message.attributes('id'))
+  })
+
+  it('says a refusal in a foot of its own where the host’s action stands elsewhere', () => {
+    const { wrapper } = mountEditor({ error: 'Required' })
+    expect(wrapper.get('.markdown-foot').text()).toBe('Required')
+    expect(wrapper.find('.markdown-actions').exists()).toBe(false)
+  })
+
+  it('names the field on itself, with its label shown or left to a reader', () => {
+    const shown = mountEditor().wrapper
+    const label = shown.get('label.markdown-label')
+    expect(label.text()).toBe('Comment')
+    expect(label.attributes('for')).toBe(shown.get('textarea').attributes('id'))
+    const hidden = mountEditor({ hideLabel: true }).wrapper
+    expect(hidden.find('label.markdown-label').exists()).toBe(false)
+    expect(hidden.get('textarea').attributes('aria-label')).toBe('Comment')
+  })
+
+  it('draws real, named, titled buttons that cannot submit a form, in either language', () => {
+    const names = (locale: 'en' | 'ru') =>
+      mountEditor({ locale })
+        .wrapper.findAll('[role="group"] button[title]')
+        .map((button) => {
+          expect(button.attributes('type')).toBe('button')
+          return [button.attributes('aria-label'), button.attributes('title')]
+        })
+    expect(names('en')).toEqual([
+      ['Link a task', 'Link a task'],
+      ['Bold', 'Bold (Ctrl+B)'],
+      ['Italic', 'Italic (Ctrl+I)'],
+      ['Code', 'Code'],
+      ['Link', 'Link'],
+      ['Bulleted list', 'Bulleted list'],
+    ])
+    expect(names('ru')).toEqual([
+      ['Сослаться на задачу', 'Сослаться на задачу'],
+      ['Жирный', 'Жирный (Ctrl+B)'],
+      ['Курсив', 'Курсив (Ctrl+I)'],
+      ['Код', 'Код'],
+      ['Ссылка', 'Ссылка'],
+      ['Маркированный список', 'Маркированный список'],
+    ])
+  })
+
+  it('offers no mention where the host has no list to open', () => {
+    const { wrapper } = mountEditor({ suggest: null })
+    expect(wrapper.find('button[aria-label="Link a task"]').exists()).toBe(false)
+    expect(wrapper.find('button[aria-label="Bold"]').exists()).toBe(true)
+  })
+
+  it('turns the buttons off in preview and while the text is being sent', async () => {
+    const { wrapper } = mountEditor()
+    const buttons = () => wrapper.findAll('[role="group"] button[title]')
+    expect(buttons().every((button) => button.attributes('disabled') === undefined)).toBe(true)
+    await wrapper.setProps({ preview: true })
+    expect(buttons().every((button) => button.attributes('disabled') !== undefined)).toBe(true)
+    await wrapper.setProps({ preview: false, disabled: true })
+    expect(buttons().every((button) => button.attributes('disabled') !== undefined)).toBe(true)
+  })
+
+  it('applies a button to the selection and sends the change the way typing does', async () => {
+    const { wrapper, text } = mountEditor()
+    await type(wrapper, 'a word here')
+    const field = wrapper.get<HTMLTextAreaElement>('textarea')
+    field.element.setSelectionRange(2, 6)
+    await tool(wrapper, 'Bold').trigger('click')
+    await flushPromises()
+    expect(text.value).toBe('a **word** here')
+    expect([field.element.selectionStart, field.element.selectionEnd]).toEqual([4, 8])
+    expect(document.activeElement).toBe(field.element)
+  })
+
+  it('writes a # from the button and opens the same list a typed one does', async () => {
+    const { wrapper, text, suggest } = mountEditor()
+    await type(wrapper, 'See')
+    await tool(wrapper, 'Link a task').trigger('click')
+    await flushPromises()
+    // After a word it needs a space to start one of its own.
+    expect(text.value).toBe('See #')
+    await vi.advanceTimersByTimeAsync(250)
+    await flushPromises()
+    expect(suggest).toHaveBeenCalledExactlyOnceWith('', expect.any(AbortSignal))
+    await wrapper.findAll('[role="option"]')[0]?.trigger('click')
+    await flushPromises()
+    expect(text.value).toBe('See MAIN-12 ')
+  })
+
+  it('makes an edit whole or not at all at the length limit', async () => {
+    const { wrapper, text } = mountEditor({ maxlength: 6 })
+    await type(wrapper, 'abc')
+    const field = wrapper.get<HTMLTextAreaElement>('textarea')
+    field.element.setSelectionRange(0, 3)
+    await tool(wrapper, 'Bold').trigger('click')
+    await flushPromises()
+    expect(text.value).toBe('abc')
+    await tool(wrapper, 'Italic').trigger('click')
+    await flushPromises()
+    expect(text.value).toBe('*abc*')
+  })
+
+  it('takes Ctrl+B and Ctrl+I by the key’s place, whatever letter the layout gives it', async () => {
+    const { wrapper, text } = mountEditor()
+    await type(wrapper, 'word')
+    const field = wrapper.get<HTMLTextAreaElement>('textarea')
+    field.element.setSelectionRange(0, 4)
+    await field.trigger('keydown', { key: 'и', code: 'KeyB', ctrlKey: true })
+    await flushPromises()
+    expect(text.value).toBe('**word**')
+    await field.trigger('keydown', { key: 'ш', code: 'KeyI', metaKey: true })
+    await flushPromises()
+    expect(text.value).toBe('***word***')
+    // Another modifier makes it another shortcut, which belongs to someone else.
+    await field.trigger('keydown', { key: 'и', code: 'KeyB', ctrlKey: true, shiftKey: true })
+    await field.trigger('keydown', { key: 'и', code: 'KeyB' })
+    await flushPromises()
+    expect(text.value).toBe('***word***')
   })
 })

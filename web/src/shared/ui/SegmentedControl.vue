@@ -17,7 +17,8 @@ const props = withDefaults(
     label: string
     modelValue: T
     options: readonly { label: string; value: T; disabled?: boolean; title?: string }[]
-    size?: 'default' | 'compact'
+    /** `inline` rides a row of icon buttons: an editor's toolbar, at their 28px. */
+    size?: 'default' | 'compact' | 'inline'
   }>(),
   { size: 'default' },
 )
@@ -104,6 +105,16 @@ function select(option: { value: T; disabled?: boolean }) {
   .segmented-option {
     min-height: calc(var(--size-control-height-compact) - 2 * var(--space-half));
     padding: 0 var(--space-3);
+    font-size: var(--font-size-dense);
+  }
+}
+
+.segmented.size-inline {
+  min-height: var(--size-control-inline);
+
+  .segmented-option {
+    min-height: calc(var(--size-control-inline) - 2 * var(--space-half));
+    padding: 0 var(--space-2);
     font-size: var(--font-size-dense);
   }
 }

@@ -47,7 +47,7 @@ the same element `svg` used to reach and survives the icon becoming something
 other than an `svg`. Deeper than a root there are two more — the child placing
 its own slot with `:slotted()`, and a custom property the host declares and the
 child reads with a fallback, which is what `--color-count-badge-ring` and
-`--size-text-area-min-height` are.
+`--size-text-area-max-height` are.
 
 The failure this prevents is silent. `.registry-row > .semantic-state` once named
 two other components' classes to move one element: rename either and the rule

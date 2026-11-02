@@ -240,14 +240,17 @@ test('the note field spans its form and its action keeps a full pointer target',
   const formBox = await drawer.locator('.discussion-form').boundingBox()
   const fieldBox = await field.boundingBox()
   const submitBox = await submit.boundingBox()
-  // A note is several lines, so the form is a column: the field takes the width
-  // and the action stands at the start of its own row, on the control row height
-  // every other button in the product occupies. It used to be one line beside a
-  // button, and the shared baseline is what that geometry asserted.
-  expect(formBox && fieldBox && Math.abs(fieldBox.width - formBox.width) < 1).toBeTruthy()
-  expect(fieldBox && fieldBox.height >= 60 && fieldBox.height < 100).toBeTruthy()
+  // A note is several lines, so the form is a column inside one frame: the text
+  // takes the width and five lines of height, and the action stands at the end of
+  // the frame's foot, on the control row height every other button occupies.
+  expect(formBox && fieldBox && Math.abs(fieldBox.width - (formBox.width - 2)) < 1).toBeTruthy()
+  expect(fieldBox && fieldBox.height === 5 * 24 + 16).toBeTruthy()
   expect(submitBox && submitBox.height === 40).toBeTruthy()
+  expect(fieldBox && submitBox && submitBox.y >= fieldBox.y + fieldBox.height).toBeTruthy()
   expect(formBox && submitBox && submitBox.width < formBox.width).toBeTruthy()
+  expect(
+    formBox && submitBox && formBox.x + formBox.width - (submitBox.x + submitBox.width) <= 6,
+  ).toBeTruthy()
 })
 
 test('a command dialog layers over its inspector and Escape closes only the active choice', async ({
@@ -341,7 +344,7 @@ for (const surface of ['', 'work-item']) {
   })
 }
 
-test('inspector textareas fit loaded and edited content and shrink after deletion or widening', async ({
+test('inspector textareas fit their content from the lines they ask for up to a ceiling', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
@@ -352,7 +355,9 @@ test('inspector textareas fit loaded and edited content and shrink after deletio
   await expect(field).toHaveValue(/Sixth loaded line$/)
   const height = () => field.evaluate((element) => element.getBoundingClientRect().height)
   const fits = () => field.evaluate((element) => element.scrollHeight <= element.clientHeight + 1)
-  await expect.poll(height).toBeGreaterThan(140)
+  // Six lines loaded in a field that asks for six: the floor and the text agree.
+  const floor = 6 * 24 + 16
+  await expect.poll(height).toBe(floor)
   await expect.poll(fits).toBe(true)
   const loadedHeight = await height()
   await field.fill('Edited line 0')
@@ -364,11 +369,14 @@ test('inspector textareas fit loaded and edited content and shrink after deletio
   await expect.poll(height).toBeGreaterThan(loadedHeight)
   await expect.poll(fits).toBe(true)
   await field.fill('Short')
-  await expect.poll(height).toBeLessThan(100)
+  await expect.poll(height).toBe(floor)
   await expect(field).toHaveCSS('font-size', '15px')
-  const shortHeight = await height()
   await field.fill('')
-  await expect.poll(height).toBe(shortHeight)
+  await expect.poll(height).toBe(floor)
+  // Past the ceiling, 60% of this window, the text scrolls inside and the box stops.
+  await field.fill(Array.from({ length: 60 }, (_, index) => `Line ${index}`).join('\n'))
+  await expect.poll(height).toBe(600)
+  await expect.poll(fits).toBe(false)
   const splitter = drawer.getByRole('separator')
   await splitter.press('End')
   await field.fill(

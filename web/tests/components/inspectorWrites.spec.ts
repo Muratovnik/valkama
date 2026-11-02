@@ -92,11 +92,18 @@ describe('inspector writes and their refusals', () => {
     wrapper.unmount()
   })
 
-  it('takes the guard’s next step where the inspector can: the outcome report composer', async () => {
+  it('takes the guard’s next step to the outcome form, and saving it completes the close', async () => {
     const item = workItemFixture('Close me', 4)
-    serveWrites({
+    let summary: unknown = null
+    const writes = serveWrites({
       '/api/planning/work-item/transition': () =>
-        json({ error: { code: 'workflow_guard', message: SUMMARY_REFUSAL } }, 409),
+        summary
+          ? json({ ...item, state: DONE, revision: 6 })
+          : json({ error: { code: 'workflow_guard', message: SUMMARY_REFUSAL } }, 409),
+      '/api/planning/work-item/report': (body) => {
+        summary = body.report
+        return json({ ...item, revision: 5 })
+      },
     })
     const wrapper = mountInspector(item)
     await flushPromises()
@@ -104,10 +111,64 @@ describe('inspector writes and their refusals', () => {
     await getButton(wrapper, 'Write the outcome').trigger('click')
     await flushPromises()
     expect(wrapper.find('.refusal').exists()).toBe(false)
-    expect(wrapper.find('textarea[aria-label="What was done"]').exists()).toBe(true)
-    const outcome = wrapper.findAll('.discussion-option input').at(-1)?.element as
-      HTMLInputElement | undefined
-    expect(outcome?.checked).toBe(true)
+    expect(wrapper.text()).toContain('Moving this task to “Done” needs its outcome')
+    expect(wrapper.find('textarea[aria-label="Comment"]').exists()).toBe(false)
+    await wrapper.get('textarea[aria-label="What was done"]').setValue('Shipped')
+    await wrapper.get('textarea[aria-label="What comes next"]').setValue('Watch it')
+    await getButton(wrapper, 'Save and close').trigger('click')
+    await wrapper.get('.closing-form').trigger('submit')
+    await flushPromises()
+    expect(writes.at(-2)).toMatchObject({
+      path: '/api/planning/work-item/report',
+      body: {
+        report: { done: 'Shipped', next: 'Watch it' },
+        make_current: true,
+        expected_revision: 4,
+      },
+    })
+    expect(writes.at(-1)).toMatchObject({
+      path: '/api/planning/work-item/transition',
+      body: { id: 'QA-320', state: 'done' },
+    })
+    expect(transitions(writes).at(-1)?.body.force).toBeUndefined()
+    expect(wrapper.find('.closing-form').exists()).toBe(false)
+    expect(wrapper.find('.refusal').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('says what still holds the close once the outcome is saved, and keeps the outcome', async () => {
+    const item = workItemFixture('Close me', 4)
+    let reported = false
+    serveWrites({
+      '/api/planning/work-item/transition': () =>
+        json(
+          {
+            error: {
+              code: 'workflow_guard',
+              message: reported
+                ? '[checklist] QA-320 has 1 open checklist step(s)'
+                : SUMMARY_REFUSAL,
+            },
+          },
+          409,
+        ),
+      '/api/planning/work-item/report': () => {
+        reported = true
+        return json({ ...item, revision: 5 })
+      },
+    })
+    const wrapper = mountInspector(item)
+    await flushPromises()
+    await choose(wrapper, 'done')
+    await getButton(wrapper, 'Write the outcome').trigger('click')
+    await flushPromises()
+    await wrapper.get('textarea[aria-label="What was done"]').setValue('Shipped')
+    await wrapper.get('textarea[aria-label="What comes next"]').setValue('Watch it')
+    await wrapper.get('.closing-form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.find('.closing-form').exists()).toBe(false)
+    expect(wrapper.get('.refusal').text()).toContain('open checklist step')
+    expect(getButton(wrapper, 'Go to the checklist')).toBeDefined()
     wrapper.unmount()
   })
 
