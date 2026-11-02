@@ -33,15 +33,19 @@ function runLength(text: string, mark: string, fromEnd: boolean) {
 }
 
 /**
- * Whether the selection already stands inside this mark. Emphasis counts its
+ * Whether runs of the mark's character this long make that mark. Emphasis counts its
  * asterisks, because `**word**` holds `*` on both sides and is not italic.
  */
-function standsInside(before: string, after: string, mark: string) {
-  const left = runLength(before, mark.charAt(0), true)
-  const right = runLength(after, mark.charAt(0), false)
+function runsMake(mark: string, left: number, right: number) {
   return mark === '*'
     ? left % 2 === 1 && right % 2 === 1
     : left >= mark.length && right >= mark.length
+}
+
+/** Whether the selection already stands inside this mark. */
+function standsInside(before: string, after: string, mark: string) {
+  const char = mark.charAt(0)
+  return runsMake(mark, runLength(before, char, true), runLength(after, char, false))
 }
 
 /** A code span holds a backtick by being fenced with a longer run of them. */
@@ -59,26 +63,71 @@ function wordsOf(value: string, start: number, end: number) {
   return from === to ? { from: end, to: end } : { from, to }
 }
 
+/**
+ * These words without the mark around them, or null when they do not carry it. A code
+ * span counts by whichever fence it has, because the fence a press would write depends
+ * on the very backticks it is looking at.
+ */
+function withoutMark(words: string, mark: string) {
+  const char = mark.charAt(0)
+  const left = runLength(words, char, false)
+  const right = runLength(words, char, true)
+  if (left + right >= words.length) return null
+  if (char === '`') return left > 0 && left === right ? words.slice(left, -left) : null
+  return runsMake(mark, left, right) ? words.slice(mark.length, -mark.length) : null
+}
+
+/** A line with its words changed and the white space around them left outside the marks. */
+function onWords(line: string, change: (words: string) => string) {
+  const from = line.length - line.trimStart().length
+  const to = line.trimEnd().length
+  return from < to ? `${line.slice(0, from)}${change(line.slice(from, to))}${line.slice(to)}` : line
+}
+
+/** How far past a selection made by hand the marks of its first and last lines stand. */
+function outerMarks(before: string, after: string, mark: string) {
+  if (mark.charAt(0) !== '`') return standsInside(before, after, mark) ? mark.length : 0
+  const run = runLength(before, '`', true)
+  return run === runLength(after, '`', false) ? run : 0
+}
+
+/**
+ * Several lines. Emphasis cannot cross a blank line, so they are marked one by one and
+ * come off the same way: when every line with words carries the mark a press takes it
+ * off them all, and otherwise it goes on the lines still without it. One mark around
+ * them all, which a person can have typed, comes off as it does around one line.
+ */
+function wrapLines(value: string, from: number, to: number, mark: string): TextEdit {
+  const outer = outerMarks(value.slice(0, from), value.slice(to), mark)
+  const start = from - outer
+  const end = to + outer
+  const lines = value.slice(start, end).split('\n')
+  const carried = lines
+    .filter((line) => line.trim())
+    .every((line) => withoutMark(line.trim(), mark) !== null)
+  const bare = (words: string) => withoutMark(words, mark) ?? words
+  const marked = (words: string) =>
+    withoutMark(words, mark) === null ? `${mark}${words}${mark}` : words
+  const text =
+    !carried && outer
+      ? value.slice(from, to)
+      : lines.map((line) => onWords(line, carried ? bare : marked)).join('\n')
+  return { start, end, text, selection: [start, start + text.length] }
+}
+
 function wrap(value: string, start: number, end: number, mark: string): TextEdit {
   const { from, to } = wordsOf(value, start, end)
   const before = value.slice(0, from)
   const after = value.slice(to)
   const words = value.slice(from, to)
-  if (standsInside(before, after, mark) && !words.includes('\n')) {
+  if (words.includes('\n')) return wrapLines(value, from, to, mark)
+  if (standsInside(before, after, mark)) {
     return {
       start: from - mark.length,
       end: to + mark.length,
       text: words,
       selection: [from - mark.length, to - mark.length],
     }
-  }
-  // Emphasis cannot cross a blank line, so several lines are marked one by one.
-  if (words.includes('\n')) {
-    const text = words
-      .split('\n')
-      .map((line) => (line.trim() ? `${mark}${line}${mark}` : line))
-      .join('\n')
-    return { start: from, end: to, text, selection: [from, from + text.length] }
   }
   return {
     start: from,

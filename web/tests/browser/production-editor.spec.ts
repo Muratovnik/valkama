@@ -12,6 +12,27 @@ import { test } from './test.ts'
  * tool does to text in every case is `markdownEdits.test.ts`.
  */
 
+for (const [name, on] of [
+  ['Bold', '**один**\n**два**'],
+  ['Italic', '*один*\n*два*'],
+  ['Code', '`один`\n`два`'],
+] as const) {
+  test(`${name}, pressed twice on two selected lines, leaves them as they were`, async ({
+    page,
+  }) => {
+    const { drawer, comment } = await openCard(page)
+    await comment.click()
+    await page.keyboard.insertText('один\nдва')
+    await select(comment, 0, 'один\nдва'.length)
+    const button = drawer.locator('.discussion-form').getByRole('button', { name, exact: true })
+    await button.click()
+    await expect(comment).toHaveValue(on)
+    await button.click()
+    await expect(comment).toHaveValue('один\nдва')
+    expect(await selection(comment)).toEqual([0, 'один\nдва'.length])
+  })
+}
+
 for (const width of [1680, 1024, 390]) {
   test(`the comment form is one object, with a field five lines tall, at ${width}px`, async ({
     page,
