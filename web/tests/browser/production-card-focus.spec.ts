@@ -372,3 +372,49 @@ test('a press on plain text far down leaves Tab and Shift+Tab where they were', 
   expect(await placeOf(body)).toBeLessThan(end - 200)
   expect(await placeOf(body)).toBeLessThanOrEqual(place)
 })
+
+test('retrying a failed read keeps focus in the card while it waits, and whatever the answer', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 844 })
+  await installBackend(page, { longRead: true })
+  await page.goto(BOARD)
+  const answer = { failing: true }
+  await page.route('**/api/modules/planning/work-item?*', async (route) => {
+    await new Promise((done) => setTimeout(done, 300))
+    if (answer.failing)
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: '{"error":"boom"}',
+      })
+    else await route.fallback()
+  })
+  await page.locator('.work-item-column[data-state="dev"] .tile-open').first().click()
+  const drawer = page.locator('.drawer')
+  const retry = drawer.locator('.platform-state-retry')
+  await expect(retry).toBeVisible()
+  await expect(drawer).toHaveCSS('transform', 'none')
+
+  // Refused again: it waited, it failed, and focus never left.
+  await retry.focus()
+  const refused = await framesOfFocus(page, async () => {
+    await page.keyboard.press('Enter')
+    await expect(retry).toHaveCount(0)
+    await expect(retry).toBeVisible()
+  })
+  expect(refused.filter((inCard) => !inCard)).toHaveLength(0)
+  await page.keyboard.press('Tab')
+  expect(await page.evaluate(() => document.activeElement?.closest('.drawer') !== null)).toBe(true)
+
+  // Answered: the head arrives around it, and the next Tab goes on inside the card.
+  answer.failing = false
+  await retry.focus()
+  const answered = await framesOfFocus(page, async () => {
+    await page.keyboard.press('Enter')
+    await expect(drawer.locator('.card-facts')).toBeVisible()
+  })
+  expect(answered.filter((inCard) => !inCard)).toHaveLength(0)
+  await page.keyboard.press('Tab')
+  expect(await page.evaluate(() => document.activeElement?.closest('.drawer') !== null)).toBe(true)
+})

@@ -136,6 +136,12 @@ async function load() {
   await loadResource()
 }
 
+/** The Retry pressed goes with the failure it answers, and focus must not go with it. */
+function retryRead() {
+  frame.value?.holdFocus()
+  void load()
+}
+
 async function reloaded() {
   await load()
   emit('changed')
@@ -256,11 +262,7 @@ function followGuard(guard: string) {
   }
   const move = notice.value?.move
   dismissNotice()
-  if (guard === 'blocker') {
-    section.value = 'relations'
-    return
-  }
-  section.value = 'overview'
+  section.value = guard === 'blocker' ? 'relations' : 'overview'
   if (guard === 'summary' && move) void overview.value?.askOutcome(move)
   else if (guard === 'checklist') void overview.value?.revealChecklist()
 }
@@ -398,7 +400,7 @@ defineExpose({ close })
         v-else
         :state="state"
         :retryable="readRetryable"
-        @retry="load"
+        @retry="retryRead"
       >
         <template #default="{ payload }">
           <div
@@ -407,7 +409,7 @@ defineExpose({ close })
           >
             <VButton
               variant="ghost"
-              @click="load"
+              @click="retryRead"
             >
               {{ t('platform.actions.retry') }}
             </VButton>

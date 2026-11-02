@@ -100,6 +100,11 @@ useEventListener(bar, 'keydown', (event: KeyboardEvent) => {
   if (READING_KEYS.has(event.key)) body.value?.focus({ preventScroll: true })
 })
 
+/** For a host about to take away the control that has focus: it stays with the frame. */
+function holdFocus() {
+  body.value?.focus({ preventScroll: true })
+}
+
 /** Where the scroller is read to, for a host that will bring the reader back to it. */
 function position() {
   return body.value?.scrollTop ?? 0
@@ -109,7 +114,7 @@ function restore(top: number) {
   body.value?.scrollTo({ top })
 }
 
-defineExpose({ position, restore, scrollToContent })
+defineExpose({ holdFocus, position, restore, scrollToContent })
 </script>
 
 <template>
