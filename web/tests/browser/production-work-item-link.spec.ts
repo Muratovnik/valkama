@@ -112,7 +112,12 @@ test('a store that cannot answer offers another try rather than calling it missi
   // On a phone the buttons take their own row and the message keeps its width.
   await page.setViewportSize({ width: 390, height: 844 })
   const message = main.locator('.platform-state-reason')
-  await expect.poll(async () => (await message.boundingBox())?.width ?? 0).toBeGreaterThan(180)
+  await expect
+    .poll(async () => {
+      const box = await message.boundingBox()
+      return box?.width ?? 0
+    })
+    .toBeGreaterThan(180)
   await main.getByRole('button', { name: 'Go to Work' }).click()
   await expect(page.locator('.work-item-link')).toHaveCount(0)
 })

@@ -400,6 +400,7 @@ class MergeSurfaceTests(MergeTestCase):
         self.assertEqual(
             {
                 "reference",
+                "url",
                 "work_item_id",
                 "revision",
                 "state",
