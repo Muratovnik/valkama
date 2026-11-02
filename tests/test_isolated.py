@@ -538,6 +538,36 @@ class SupervisorTests(Workspace):
         self.assertEqual("failed", self.state()["state"])
         self.assertIn("still on disk", self.state()["error"])
 
+    def test_a_stop_is_judged_by_what_is_left_and_not_by_the_tools_answer(self) -> None:
+        real_stop = isolated.processes.stop_process_tree
+
+        def stopped_but_says_no(process) -> bool:
+            real_stop(process)
+            return False
+
+        thread = self.supervise()
+        self.wait_for_state("ready")
+        with mock.patch.object(
+            isolated.processes, "stop_process_tree", side_effect=stopped_but_says_no
+        ):
+            code, said = quietly(isolated.stop, self.out)
+            thread.join(30)
+
+        self.assertEqual(0, code, said)
+
+    def test_a_server_that_still_answers_is_reported_rather_than_called_stopped(self) -> None:
+        with (
+            mock.patch.object(isolated, "_answers", return_value=True),
+            mock.patch.object(isolated, "REMOVE_SECONDS", 0.2),
+        ):
+            thread = self.supervise()
+            self.wait_for_state("ready")
+            code, said = quietly(isolated.stop, self.out)
+            thread.join(30)
+
+        self.assertEqual(1, code)
+        self.assertIn("still answers", said)
+
     def test_stop_with_nothing_recorded_says_so_and_clears_a_leftover_profile(self) -> None:
         self.home.mkdir()
 

@@ -378,6 +378,33 @@ def _wait_for_port(server: subprocess.Popen, log: Path) -> int:
     raise ServeError(f"the server did not start listening in {START_SECONDS:.0f}s; see {log}")
 
 
+def _answers(port: int) -> bool:
+    try:
+        socket.create_connection(("127.0.0.1", port), timeout=1).close()
+    except OSError:
+        return False
+    return True
+
+
+def _stop_tree(process: object, port: int | None) -> list[str]:
+    """Stop a tree and judge the result by what is left of it.
+
+    `stop_process_tree` answering False says only that `taskkill` did not report
+    success, which happened on a loaded machine with the whole tree already gone.
+    What counts is whether the server still answers here and, right after this,
+    whether its profile can be removed: a process holding the store open prevents
+    that, so a server that survived cannot be reported as stopped.
+    """
+
+    processes.stop_process_tree(process)
+    deadline = time.monotonic() + REMOVE_SECONDS
+    while port is not None and _answers(port):
+        if time.monotonic() >= deadline:
+            return [f"port {port} still answers after stopping the server"]
+        time.sleep(POLL_SECONDS)
+    return []
+
+
 def supervise(out: Path, source: Path | None, command: Sequence[str] | None = None) -> None:
     """Own one server from start to cleanup; the last thing written says how it went."""
 
@@ -388,6 +415,7 @@ def supervise(out: Path, source: Path | None, command: Sequence[str] | None = No
     supervisor = os.getpid()
     _write_state(out, {"state": "starting", "supervisor": supervisor})
     server: subprocess.Popen | None = None
+    port: int | None = None
     problems = []
     try:
         prepare_home(home)
@@ -426,8 +454,7 @@ def supervise(out: Path, source: Path | None, command: Sequence[str] | None = No
         problems.append(str(error))
     finally:
         if server is not None and server.poll() is None:
-            if not processes.stop_process_tree(server):
-                problems.append(f"the process tree of {server.pid} was not confirmed stopped")
+            problems += _stop_tree(server, port)
         if not remove_tree(home):
             problems.append(f"{home} is still on disk; it may hold a store copy")
         if problems:
@@ -527,14 +554,6 @@ class _RecordedProcess:
         self.terminate()
 
 
-def _answers(port: int) -> bool:
-    try:
-        socket.create_connection(("127.0.0.1", port), timeout=1).close()
-    except OSError:
-        return False
-    return True
-
-
 def _stop_orphan(state: Mapping[str, object]) -> list[str]:
     """Stop a server whose supervisor died: the one case with only a number to go on.
 
@@ -546,9 +565,8 @@ def _stop_orphan(state: Mapping[str, object]) -> list[str]:
     if not isinstance(pid, int) or not isinstance(port, int):
         return ["the recorded server is unreadable"]
     if alive(pid) and _answers(port):
-        if not processes.stop_process_tree(_RecordedProcess(pid)):
-            return [f"the process tree of {pid} was not confirmed stopped"]
-    elif _answers(port):
+        return _stop_tree(_RecordedProcess(pid), port)
+    if _answers(port):
         return [f"port {port} still answers but process {pid} is gone; nothing was stopped"]
     return []
 
