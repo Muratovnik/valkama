@@ -299,6 +299,98 @@ test('a tile let go over another lane stays with what the board read of its own'
   expect(writes[0].body).toEqual(expect.objectContaining({ id: 'MAIN-402', state: 'dev' }))
 })
 
+const columnHead = (where: Locator, state: string) =>
+  where.locator(`.work-item-column[data-state="${state}"] .column-head`)
+
+test.describe('let go over a column’s head', () => {
+  test('a tile lands on top of that column after only passing another', async ({ page }) => {
+    const { writes } = await board(page, {})
+    const where = page.locator('.work-item-board')
+    const tile = (reference: string) => where.locator(`li[data-reference="${reference}"]`)
+    const [first] = await tiles(cell(where, 'backlog'))
+
+    await pickUp(page, tile('MAIN-405'))
+    await pass(page, cell(where, 'done'))
+    await letGo(page, columnHead(where, 'backlog'), 'upper')
+    await expect.poll(() => writes.length).toBe(1)
+    expect(writes[0].path).toBe(TRANSITION)
+    expect(writes[0].body).toEqual(
+      expect.objectContaining({ id: 'MAIN-405', state: 'backlog', rank: `before:${first}` }),
+    )
+    await expect
+      .poll(async () => {
+        const [top] = await tiles(cell(where, 'backlog'))
+        return top
+      })
+      .toBe('MAIN-405')
+  })
+
+  test('a column scrolled down still takes it on top, not at what is in sight', async ({
+    page,
+  }) => {
+    const { writes } = await board(page, {})
+    await page.setViewportSize({ width: 1440, height: 420 })
+    const where = page.locator('.work-item-board')
+    const tile = (reference: string) => where.locator(`li[data-reference="${reference}"]`)
+    const [first] = await tiles(cell(where, 'backlog'))
+    const scrolled = await where
+      .locator('.work-item-column[data-state="backlog"] .column-scroll')
+      .evaluate((scroller) => {
+        scroller.scrollTop = scroller.scrollHeight
+        return scroller.scrollTop
+      })
+    expect(scrolled, 'the column has somewhere to scroll at this height').toBeGreaterThan(0)
+
+    await tile('MAIN-405').scrollIntoViewIfNeeded()
+    await pickUp(page, tile('MAIN-405'))
+    await pass(page, cell(where, 'done'))
+    await letGo(page, columnHead(where, 'backlog'), 'upper')
+    await expect.poll(() => writes.length).toBe(1)
+    expect(writes[0].body).toEqual(
+      expect.objectContaining({ id: 'MAIN-405', state: 'backlog', rank: `before:${first}` }),
+    )
+  })
+
+  test('Done’s head closes the tile, with no place to name', async ({ page }) => {
+    const { writes } = await board(page, {})
+    const where = page.locator('.work-item-board')
+
+    await pickUp(page, where.locator('li[data-reference="MAIN-402"]'))
+    await pass(page, cell(where, 'dev'))
+    await letGo(page, columnHead(where, 'done'), 'upper')
+    await expect.poll(() => writes.length).toBe(1)
+    expect(writes[0].path).toBe(TRANSITION)
+    expect(writes[0].body).toEqual(expect.objectContaining({ id: 'MAIN-402', state: 'done' }))
+    expect(writes[0].body).not.toHaveProperty('rank')
+  })
+
+  test('the head of the column it stands in moves it nowhere the board did not draw', async ({
+    page,
+  }) => {
+    const { writes } = await board(page, {})
+    const where = page.locator('.work-item-board')
+    const backlog = await tiles(cell(where, 'backlog'))
+
+    await pickUp(page, where.locator('li[data-reference="MAIN-403"]'))
+    await letGo(page, columnHead(where, 'backlog'), 'upper')
+    await expect(where).not.toHaveClass(/dragging/u)
+    await expect(said(page)).toBeEmpty()
+    expect(writes).toHaveLength(0)
+    expect(await tiles(cell(where, 'backlog'))).toEqual(backlog)
+  })
+
+  test('the head above a board’s lanes answers nothing: every lane shares it', async ({ page }) => {
+    const { writes } = await board(page)
+    const epic = lane(page, LONG_EPIC)
+
+    await pickUp(page, epic.locator('li[data-reference="MAIN-402"]'))
+    await pass(page, cell(epic, 'dev'))
+    await letGo(page, page.locator('.lanes-state').last(), 'upper')
+    await expect.poll(() => writes.length).toBe(1)
+    expect(writes[0].body).toEqual(expect.objectContaining({ id: 'MAIN-402', state: 'dev' }))
+  })
+})
+
 test('a tile let go where no stack lies stays with what the board read', async ({ page }) => {
   const { writes } = await board(page, {})
   const where = page.locator('.work-item-board')
@@ -306,7 +398,7 @@ test('a tile let go where no stack lies stays with what the board read', async (
 
   await pickUp(page, tile('MAIN-402'))
   await pass(page, cell(where, 'dev'))
-  await letGo(page, page.locator('.work-item-column[data-state="done"] .column-head'), 'upper')
+  await letGo(page, page.locator('.app-main > :first-child'), 'upper')
   await expect.poll(() => writes.length).toBe(1)
   expect(writes[0].body).toEqual(expect.objectContaining({ id: 'MAIN-402', state: 'dev' }))
 })

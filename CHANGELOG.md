@@ -94,7 +94,8 @@ checkouts are therefore distinguishable even at the same version.
 
 - A tile dragged quickly and let go over a column or a lane's cell lands there.
   The drop library reads the pointer every 50ms, so a release between two
-  readings put the tile in the column the pointer had only passed.
+  readings put the tile in the column the pointer had only passed. Let go over a
+  column's header, it lands on top of that column.
 - `launcher install` reaches the tray icon too. It is a process of one release,
   and it stayed on the release its session started from, so a click ran the old
   script until the client restarted. The session now restarts it from the release
