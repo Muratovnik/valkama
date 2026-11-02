@@ -12,7 +12,8 @@
  * holding several items puts its agent on every one of them, and the row says so.
  *
  * A disclosure as the chain's lists are: the most recent first, the rest behind a
- * toggle that puts focus on the first row it revealed and takes it back on closing.
+ * toggle that puts focus on the first row it revealed and takes it back on closing,
+ * in view each time.
  */
 import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -115,8 +116,13 @@ async function toggle() {
   const opening = !expanded.value
   expanded.value = opening
   await nextTick()
-  if (opening) list.value?.querySelectorAll<HTMLElement>('.agent')[AGENTS_SHOWN]?.focus()
-  else (toggler.value?.$el as HTMLElement | undefined)?.focus()
+  const target = opening
+    ? list.value?.querySelectorAll<HTMLElement>('.agent')[AGENTS_SHOWN]
+    : (toggler.value?.$el as HTMLElement | undefined)
+  // The toggle keeps its element while the list shrinks above it, so focusing it
+  // again scrolls nothing; it is brought back into view here.
+  target?.focus({ preventScroll: true })
+  target?.scrollIntoView({ block: 'nearest' })
 }
 </script>
 
@@ -257,6 +263,9 @@ async function toggle() {
   gap: var(--space-1);
   min-width: 0;
 
+  /* Brought into view, a row stops short of the edge by more than its ring reaches. */
+  scroll-margin-block: var(--space-2);
+
   &:focus-visible {
     outline: 2px solid var(--color-accent);
     outline-offset: var(--space-1);
@@ -320,5 +329,6 @@ async function toggle() {
 
 .agents-more {
   justify-self: start;
+  scroll-margin-block: var(--space-2);
 }
 </style>

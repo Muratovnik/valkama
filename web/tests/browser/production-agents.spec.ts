@@ -5,11 +5,13 @@
  */
 import AxeBuilder from '@axe-core/playwright'
 import { expect } from '@playwright/test'
+import type { Locator } from '@playwright/test'
 
 import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
+import { shot } from './boardPage.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { projectScope, workItemRef } from './planningFixtures.ts'
 import { installStreamDouble } from './streamDouble.ts'
@@ -37,6 +39,15 @@ const CARD = serializePlatformRoute({
   scope: projectScope,
   entity: planningWorkItemEntity(workItemRef),
 })
+
+/** The two ways a reader presses a toggle. */
+const PRESSES = {
+  mouse: (toggle: Locator) => toggle.click(),
+  keyboard: async (toggle: Locator) => {
+    await toggle.focus()
+    await toggle.page().keyboard.press('Enter')
+  },
+}
 
 for (const width of [1440, 390]) {
   test(`a long list of agents stands folded and whole at ${width}px`, async ({ page }) => {
@@ -71,6 +82,40 @@ for (const width of [1440, 390]) {
     await expect(section.locator('.agent')).toHaveCount(3)
     await expect(toggle).toBeFocused()
   })
+
+  for (const [input, press] of Object.entries(PRESSES)) {
+    test(`closing a long list by ${input} at ${width}px keeps its toggle in sight`, async ({
+      page,
+    }, info) => {
+      await page.setViewportSize({ width, height: 900 })
+      const agents = Array.from({ length: 94 }, (_, index) => agent(index))
+      // A long body under the list, or the drawer's scroll runs out as the list
+      // shrinks and brings the toggle back by itself, which a real card does not do.
+      await installBackend(page, { agents: () => agents, longRead: true })
+      await page.goto(CARD)
+      const section = page.locator('.drawer .agents')
+      const toggle = section.locator('.agents-more')
+
+      await press(toggle)
+      await expect(section.locator('.agent')).toHaveCount(94)
+      await expect(section.locator('.agent').nth(3)).toBeFocused()
+      await expect(section.locator('.agent').nth(3)).toBeInViewport()
+
+      // The toggle stands at the end of the list, so a reader closing it is far down.
+      await toggle.scrollIntoViewIfNeeded()
+      await press(toggle)
+      await expect(section.locator('.agent')).toHaveCount(3)
+      await expect(toggle).toBeFocused()
+      // An observer of the viewport sees the drawer's own clip as well as the window's.
+      await expect(toggle).toBeInViewport({ ratio: 1 })
+      const uncovered = await toggle.evaluate((button) => {
+        const { height, width: wide, x, y } = button.getBoundingClientRect()
+        return button.contains(document.elementFromPoint(x + wide / 2, y + height / 2))
+      })
+      expect(uncovered).toBe(true)
+      await page.screenshot(shot(info, `agents-closed-by-${input}-${width}.png`))
+    })
+  }
 }
 
 test('a card with no agents has no section', async ({ page }) => {
