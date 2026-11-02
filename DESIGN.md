@@ -818,7 +818,11 @@ What those days added and closed, why there is no verdict yet, and the chart of
 the chain's history stand one action away, and the action's state comes back with
 the card's other reading on Back. The scope rides the heading's row.
 A card is a bar that never moves and one scroller under it, and no layout in it
-depends on where that scroller stands. The bar has one height: on its left the item
+depends on where that scroller stands. Its head waits for the record: going from a
+card to a card, what is shown until the read answers is Back, Close and the waiting
+mark, and on Back the scroller stays hidden until the card stands where it was left,
+so nothing appears in one place and then jumps to another. The bar has one height: on
+its left the item
 in one tertiary line — the kind (glyph and word), the reference (it copies itself),
 when it last changed and, where the item has one, its plan anchor as an icon, whose
 whole path stands in Relations with the item's other references — and on its right

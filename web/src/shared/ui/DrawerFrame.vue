@@ -11,6 +11,10 @@ const props = defineProps<{
   title: string
   /** What the `action` slot stands in for: it shows once this has scrolled away. */
   actionAnchor?: HTMLElement | null
+  /** The record has not been read, so there is no head yet: no title, no facts. */
+  headless?: boolean
+  /** The host is about to put the reader back at a place; the scroller shows after that. */
+  holding?: boolean
 }>()
 const emit = defineEmits<{ close: [] }>()
 
@@ -119,9 +123,13 @@ defineExpose({ position, restore, scrollToContent })
     <div
       ref="body"
       class="drawer-frame-body"
+      :class="{ 'is-holding': holding }"
       :style="scrollPadding"
     >
-      <div class="drawer-frame-lead">
+      <div
+        v-if="!headless"
+        class="drawer-frame-lead"
+      >
         <h2
           ref="name"
           class="drawer-frame-name"
@@ -279,6 +287,11 @@ defineExpose({ position, restore, scrollToContent })
   min-height: 0;
   overflow-y: auto;
   scrollbar-gutter: stable;
+
+  &.is-holding {
+    opacity: 0;
+    pointer-events: none;
+  }
 }
 
 .drawer-frame-lead,

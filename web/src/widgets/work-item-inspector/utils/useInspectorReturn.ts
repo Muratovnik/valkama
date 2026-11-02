@@ -1,4 +1,4 @@
-import { nextTick, watch } from 'vue'
+import { nextTick, ref, watch } from 'vue'
 import type { Ref } from 'vue'
 
 import type {
@@ -39,6 +39,9 @@ interface ReturnOptions {
  * puts all of it back once the card's answers are in, then focuses the row that
  * was opened. The parent used to reopen at its top, so walking a chain member
  * by member cost a scroll back down after every step.
+ *
+ * Until it has, `restoring` says so: the card has a place to go to, and whatever it
+ * would show before that stands somewhere else and jumps.
  */
 export function useInspectorReturn(options: ReturnOptions) {
   const point = options.returnTo?.reference === options.reference() ? options.returnTo : null
@@ -46,6 +49,8 @@ export function useInspectorReturn(options: ReturnOptions) {
     options.section.value = point.section
     if (point.chain) options.scope.value = point.chain.scope
   }
+
+  const restoring = ref((point?.scroll ?? 0) > 0)
 
   function capture(opened: string): InspectorReturn {
     const chain = options.chain.value
@@ -59,14 +64,18 @@ export function useInspectorReturn(options: ReturnOptions) {
   }
 
   async function apply(at: InspectorReturn) {
-    await nextTick()
-    const chain = options.chain.value
-    if (at.chain && chain) await chain.restore(at.chain)
-    const row = chain ? await chain.reveal(at.opened) : null
-    options.frame.value?.restore(at.scroll)
-    if (!row) return
-    row.focus({ preventScroll: true })
-    row.scrollIntoView({ block: 'nearest' })
+    try {
+      await nextTick()
+      const chain = options.chain.value
+      if (at.chain && chain) await chain.restore(at.chain)
+      const row = chain ? await chain.reveal(at.opened) : null
+      options.frame.value?.restore(at.scroll)
+      if (!row) return
+      row.focus({ preventScroll: true })
+      row.scrollIntoView({ block: 'nearest' })
+    } finally {
+      restoring.value = false
+    }
   }
 
   if (point) {
@@ -82,5 +91,5 @@ export function useInspectorReturn(options: ReturnOptions) {
     )
   }
 
-  return { capture }
+  return { capture, restoring }
 }

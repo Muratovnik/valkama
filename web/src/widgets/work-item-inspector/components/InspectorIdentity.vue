@@ -24,7 +24,7 @@ import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
-  /** Null while the record is read: the line holds the reference alone. */
+  /** Null when the record could not be read: the line holds the reference alone. */
   item: WorkItem | null
   reference: string
   resourceRef: PlanningSpaceEntityRef

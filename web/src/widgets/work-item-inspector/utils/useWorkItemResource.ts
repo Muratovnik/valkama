@@ -41,6 +41,8 @@ export function useWorkItemResource(
     !missing.value && 'payload' in state.value ? state.value.payload : null,
   )
   const retryable = computed(() => resource.value.failure?.retryable ?? false)
+  /** Nothing has answered yet: the first read, or a retry after a failed one. */
+  const pending = computed(() => state.value.status === 'loading')
 
   async function load() {
     const current = reference()
@@ -69,5 +71,5 @@ export function useWorkItemResource(
   onBeforeUnmount(() => {
     resource.value = cancelResource(resource.value)
   })
-  return { item, load, missing, retryable, state }
+  return { item, load, missing, pending, retryable, state }
 }

@@ -25,6 +25,11 @@
  * to retry and no section to open. The card says so once, under a title that
  * already is the reference, with no identity line, no facts, no tabs and no
  * writes, and Close is the way on.
+ *
+ * The head waits for the read. Everything in it is sized by the record, so a head
+ * drawn before the answer stood its title as a reference, with no facts and the tabs
+ * under it, and moved all of that when the answer came. The bar's controls and the
+ * waiting mark are all that stand until then, and a failed read gets the head back.
  */
 import { computed, ref, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -45,6 +50,7 @@ import InspectorWriteActions from '@/widgets/work-item-inspector/components/Insp
 import type { InspectorReturn } from '@/widgets/work-item-inspector/utils/inspectorReturn.ts'
 import { inspectorTarget } from '@/widgets/work-item-inspector/utils/inspectorTarget.ts'
 import { provideDraftGuard } from '@/widgets/work-item-inspector/utils/useDraftGuard.ts'
+import { useFailureText } from '@/widgets/work-item-inspector/utils/useFailureText.ts'
 import { useInspectorReturn } from '@/widgets/work-item-inspector/utils/useInspectorReturn.ts'
 import { useInspectorSections } from '@/widgets/work-item-inspector/utils/useInspectorSections.ts'
 import { useInspectorWrites } from '@/widgets/work-item-inspector/utils/useInspectorWrites.ts'
@@ -59,8 +65,7 @@ import type { WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import type { PlanningWorkflow } from '@/shared/api/planningModel.ts'
-import { failureMessage, typedFailure } from '@/shared/api/typedFailure.ts'
-import type { TypedFailure } from '@/shared/api/typedFailure.ts'
+import { typedFailure } from '@/shared/api/typedFailure.ts'
 import type { LaunchPacket } from '@/shared/types/launch.ts'
 import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
@@ -111,17 +116,13 @@ const { leaveUnreadable, section, sections, shownSection } = useInspectorSection
 const overview = ref<InstanceType<typeof InspectorOverview> | null>(null)
 const { asking, discard, keep: keepEditing, leave, unsaved } = provideDraftGuard()
 
-function failureText(failure: TypedFailure, fallbackKey?: string): string {
-  const message = failureMessage(failure)
-  return message.key === 'platform.failures.unknown' && fallbackKey !== undefined
-    ? t(fallbackKey)
-    : t(message.key, message.params ?? {})
-}
+const failureText = useFailureText()
 
 const {
   item,
   load: loadResource,
   missing,
+  pending,
   retryable: readRetryable,
   state,
 } = useWorkItemResource(
@@ -216,7 +217,7 @@ const chainRoot = computed(() => (props.writable ? (item.value?.work_item_id ?? 
 const chain = useWorkItemChain(chainRoot, toRef(props, 'refreshToken'))
 
 const chainSection = ref<InstanceType<typeof InspectorChain> | null>(null)
-const { capture } = useInspectorReturn({
+const { capture, restoring } = useInspectorReturn({
   chain: chainSection,
   frame,
   returnTo: props.returnTo ?? null,
@@ -228,6 +229,8 @@ const { capture } = useInspectorReturn({
     !chain.loading.value &&
     (chainRoot.value === '' || chain.chain.value !== null || chain.failed.value),
 })
+
+const holding = computed(() => restoring.value && item.value !== null)
 
 /** Open another card from this one, after the draft guard, saying where this one was left. */
 const openFrom = (to: string) => void leave(() => emit('open', to, capture(to)))
@@ -281,6 +284,8 @@ defineExpose({ close })
     :title="title"
     :action-anchor="facts?.actionCell"
     :close-label="t('drawer.close')"
+    :headless="pending"
+    :holding="holding"
     @close="close"
   >
     <template #title>
@@ -305,7 +310,7 @@ defineExpose({ close })
     </template>
 
     <template
-      v-if="!missing"
+      v-if="!missing && !pending"
       #identity
     >
       <InspectorIdentity
@@ -370,7 +375,7 @@ defineExpose({ close })
     </template>
 
     <template
-      v-if="!missing"
+      v-if="!missing && !pending"
       #tabs
     >
       <InspectorTabs
