@@ -666,8 +666,13 @@ export default ts.config(
           paths: [
             {
               name: '@playwright/test',
-              importNames: ['test'],
+              // The module's default export is the same `test`.
+              importNames: ['test', 'default'],
               message: "Import `test` from './test.ts'.",
+            },
+            {
+              name: 'playwright/test',
+              message: "Import from '@playwright/test', and `test` from './test.ts'.",
             },
           ],
         },
