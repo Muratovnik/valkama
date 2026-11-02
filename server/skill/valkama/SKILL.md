@@ -171,8 +171,8 @@ summary. `force: true` carries a refusal through and records it as
 `valkama released --space MAIN --repo <checkout> --range v1.0.0..v1.1.0`. It
 lists the open items whose commit refs went into that range, including a change
 that arrived under another hash, and it changes nothing. Check each one and close
-what is finished: partly released work shows as well, a `subject` match is weak,
-and an item with no commit ref cannot show.
+what is finished: partly released work shows as well, a `changed-patch` or
+`subject` match is weak, and an item with no commit ref cannot show.
 
 **Not done.** Work that is not needed, duplicated or superseded closes in the
 cancelled state. It needs the summary, which starts with why (`Not needed:`,

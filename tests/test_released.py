@@ -175,12 +175,43 @@ class StepTests(ReleasedTestCase):
 
     def test_two_different_legacy_texts_are_not_the_same_change(self) -> None:
         # Decoded lossily, both would read as the same replacement character and
-        # the same patch-id, and work nobody released would be on the list.
+        # the same patch-id, a strong match for work nobody released.
         self.commit(self.repo, "feat: legacy text", "первый\n".encode("cp1251"))
         self.git(self.repo, "switch", "-c", "elsewhere", "start")
         unreleased = self.commit(self.repo, "feat: legacy text", "другой\n".encode("cp1251"))
         self.git(self.repo, "switch", "main")
-        self.assertIsNone(self.found(self.item("different", (unreleased, ""))))
+        self.assertEqual("changed-patch", self.only_match(self.item("t", (unreleased, "")))["step"])
+
+    def test_a_carried_commit_with_a_changed_patch_is_found_and_called_weak(self) -> None:
+        # An integration that resolved a conflict: the subject stays, the patch does not.
+        self.git(self.repo, "switch", "-c", "topic", "start")
+        branch_commit = self.commit(self.repo, "feat: carried with a conflict", b"as written\n")
+        self.git(self.repo, "switch", "main")
+        integrated = self.commit(self.repo, "feat: carried with a conflict", b"as resolved\n")
+        match = self.only_match(self.item("rewritten", (branch_commit[:7], "")))
+        self.assertEqual("changed-patch", match["step"])
+        self.assertEqual(integrated, match["release_commit"])
+        self.assertTrue(match["weak"])
+        text = self.text()
+        self.assertIn(f"changed-patch: WEAK MATCH: {integrated[:7]}", text)
+
+    def test_a_commit_already_reachable_from_the_ranges_start_is_not_found(self) -> None:
+        # The same subject as a commit of the range, but it shipped in an earlier release.
+        earlier = self.commit(self.repo, "build(web): rebuild the bundled UI", b"old bundle\n")
+        self.git(self.repo, "tag", "second")
+        self.commit(self.repo, "build(web): rebuild the bundled UI", b"new bundle\n")
+        reference = self.item("rebuilt earlier", (earlier, ""))
+        self.assertIsNone(self.found(reference, self.report(revisions="second..main")))
+
+    def test_a_common_subject_elsewhere_shows_as_weak_for_a_person_to_judge(self) -> None:
+        # A false match this step accepts: unrelated work, the same words.
+        self.commit(self.repo, "build(web): rebuild the bundled UI", b"released bundle\n")
+        self.git(self.repo, "switch", "-c", "elsewhere", "start")
+        unreleased = self.commit(self.repo, "build(web): rebuild the bundled UI", b"other\n")
+        self.git(self.repo, "switch", "main")
+        match = self.only_match(self.item("rebuilt elsewhere", (unreleased, "")))
+        self.assertEqual("changed-patch", match["step"])
+        self.assertTrue(match["weak"])
 
     def test_a_deleted_branch_is_found_by_the_subject_in_the_label_and_called_weak(self) -> None:
         branch_commit, integrated = self.carried("fix: gone with its branch")

@@ -55,9 +55,10 @@ checkouts are therefore distinguishable even at the same version.
   can be found while it still reads as open. A ref holds the hash from the branch
   the work was done on, and integrating that branch rewrites it, so each ref is
   compared in steps and the answer names the step: `hash`, `patch-id` for the
-  same change under another hash, and `subject`, a weak match, for an object
-  that is gone but whose label has the subject of a commit in the range. Each
-  item says how many of its commit refs match, so partly released work reads as
+  same change under another hash, and two weak matches, `changed-patch` for a
+  commit outside the range whose subject a commit in the range has with another
+  patch, and `subject` for an object that is gone but whose label has the subject
+  of a commit in the range. Each item says how many of its commit refs match, so partly released work reads as
   such. It is a hint to check by hand: it opens the store read-only and changes
   no state, and an item with no commit ref cannot show. The server's tools are
   unchanged.

@@ -14,9 +14,13 @@ steps, and the answer names the step that found it:
 1. `hash`: the commit is in the range.
 2. `patch-id`: the commit is outside the range, and one in the range makes the
    same change.
-3. `subject`: the object is gone with its branch, and the subject of a commit in
-   the range appears in the ref's label. Only this one is a weak match: two
-   commits can share a subject.
+3. `changed-patch`: the commit is outside the range and not already in the
+   history the range starts from, its patch differs, and a commit in the range
+   has its subject. An integration that resolved a conflict looks like this, and
+   so does an unrelated commit with a common subject, which is why it is weak.
+4. `subject`: the object is gone with its branch, and the subject of a commit in
+   the range appears in the ref's label. Also weak: two commits can share a
+   subject.
 """
 
 from __future__ import annotations
@@ -41,6 +45,8 @@ _GIT_TIMEOUT = 120
 # other forms found on real items (a range, a url, `repo:hash`) are no commit
 # this could compare, so none of them reaches git.
 _HASH = re.compile(r"[0-9a-fA-F]{4,64}")
+# The steps that rest on a subject, which two commits can share.
+_WEAK_STEPS = frozenset({"changed-patch", "subject"})
 
 
 class ReleasedError(ValueError):
@@ -87,8 +93,8 @@ def _normalized(text: str) -> str:
     return " ".join(text.split()).casefold()
 
 
-def _range_subjects(repository: str, revisions: str) -> dict[str, str]:
-    """Each commit of the range, by full hash, with its normalized subject.
+def _range_start(repository: str, revisions: str) -> list[str]:
+    """What the range excludes, as hashes.
 
     The range must exclude something: a lone tag would read as the whole history
     and put every item that ever shipped on the list.
@@ -96,10 +102,18 @@ def _range_subjects(repository: str, revisions: str) -> dict[str, str]:
 
     if revisions.startswith("-"):
         raise ReleasedError("a range cannot begin with '-'")
-    if not any(line.startswith("^") for line in _git(repository, "rev-parse", revisions).split()):
+    parsed = _git(repository, "rev-parse", revisions).split()
+    start = [line[1:] for line in parsed if line.startswith("^")]
+    if not start:
         raise ReleasedError(f"{revisions!r} is not a range; name both ends, as in v1.0.0..v1.1.0")
+    return start
+
+
+def _subjects(repository: str, *selection: str, stdin: bytes | None = None) -> dict[str, str]:
+    """Each selected commit, by full hash, with its normalized subject."""
+
     listed = _git(
-        repository, "log", "--no-show-signature", "--format=%H%x00%s", "--end-of-options", revisions
+        repository, "log", "--no-show-signature", "--format=%H%x00%s", *selection, stdin=stdin
     )
     subjects: dict[str, str] = {}
     # Not `splitlines`: it also breaks on characters a subject may hold.
@@ -189,8 +203,11 @@ class _Release:
     in_range: set[str]
     # The full hash of each recorded hash whose object is here.
     existing: dict[str, str]
-    # The patch-id of each such commit that is outside the range.
+    # The patch-id and the subject of each such commit that is outside the range.
     patch_of: dict[str, str]
+    subject_of: dict[str, str]
+    # Everything reachable from the range's start: it shipped in an earlier release.
+    before_range: set[str]
 
     def compare(self, value: str, label: str) -> tuple[str, str] | None:
         """The step that finds this ref and the range's commit it finds, if any."""
@@ -203,7 +220,14 @@ class _Release:
             return "hash", str(commit)
         if commit is not None:
             twin = self.by_patch.get(self.patch_of.get(commit, ""))
-            return None if twin is None else ("patch-id", twin)
+            if twin is not None:
+                return "patch-id", twin
+            # The same words in an earlier release are not this release's change:
+            # a rebuild commit has the same subject every time.
+            if commit in self.before_range:
+                return None
+            twin = self.by_subject.get(self.subject_of.get(commit, ""))
+            return None if twin is None else ("changed-patch", twin)
         # The object is not here. A name that is not this repository's says the
         # commit lives elsewhere, so a label's subject here would be a coincidence.
         if name is not None and name.lower() not in self.own_names:
@@ -238,7 +262,8 @@ class _Release:
 def _read_release(
     conn: sqlite3.Connection, space_key: str, repository: str, revisions: str, values: list[str]
 ) -> _Release:
-    subjects = _range_subjects(repository, revisions)
+    start = _range_start(repository, revisions)
+    subjects = _subjects(repository, "--end-of-options", revisions)
     hashes = {split_commit_value(value)[1] for value in values}
     existing = _existing_commits(repository, {found for found in hashes if _HASH.fullmatch(found)})
     outside = sorted(set(existing.values()) - set(subjects))
@@ -246,12 +271,16 @@ def _read_release(
     # range or gone altogether does not need it.
     patch_of: dict[str, str] = {}
     by_patch: dict[str, str] = {}
+    subject_of: dict[str, str] = {}
+    before_range: set[str] = set()
     if outside:
-        patch_of = _patch_ids(
-            repository, "--no-walk=unsorted", "--stdin", stdin="\n".join(outside).encode("ascii")
-        )
+        chosen = ("--no-walk=unsorted", "--stdin")
+        listed = "\n".join(outside).encode("ascii")
+        patch_of = _patch_ids(repository, *chosen, stdin=listed)
+        subject_of = _subjects(repository, *chosen, stdin=listed)
         ranged = _patch_ids(repository, "--end-of-options", revisions)
         by_patch = {patch: commit for commit, patch in ranged.items()}
+        before_range = set(_git(repository, "rev-list", *start).split())
     identity = planning_space_entity(
         {"data_scope_id": read_store_metadata(conn)["data_scope_id"], "space_key": space_key}
     )
@@ -263,6 +292,8 @@ def _read_release(
         in_range=set(subjects),
         existing=existing,
         patch_of=patch_of,
+        subject_of=subject_of,
+        before_range=before_range,
     )
 
 
@@ -299,7 +330,7 @@ def released_items(
         else:
             step, commit = found
             item["matched"].append(
-                {"ref": value, "step": step, "weak": step == "subject", "release_commit": commit}
+                {"ref": value, "step": step, "weak": step in _WEAK_STEPS, "release_commit": commit}
             )
     shown = [item for item in items.values() if item["matched"]]
     return {
@@ -315,6 +346,7 @@ def released_items(
 _STEP_WORDS = {
     "hash": "in the range",
     "patch-id": "same change as {commit} in the range",
+    "changed-patch": "WEAK MATCH: {commit} in the range has its subject, with another patch",
     "subject": "WEAK MATCH: the object is gone; the ref's label has the subject of {commit}",
 }
 
