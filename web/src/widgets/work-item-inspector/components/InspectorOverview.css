@@ -40,12 +40,6 @@
   }
 }
 
-.quiet {
-  margin: 0;
-  color: var(--color-text-muted);
-  font: var(--font-detail);
-}
-
 .checklist {
   display: grid;
   gap: var(--space-1);

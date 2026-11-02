@@ -139,7 +139,10 @@ defineExpose({ askOutcome, revealChecklist })
       @refresh="emit('refresh')"
     />
 
+    <!-- Absent while there is no step: no action here adds one, so a heading and a
+         sentence saying so held the first screen for nothing. -->
     <section
+      v-if="item.checklist.length"
       ref="checklistSection"
       class="overview-section"
     >
@@ -147,10 +150,7 @@ defineExpose({ askOutcome, revealChecklist })
         :title="t('workItem.checklist')"
         :count="stepCount"
       />
-      <ul
-        v-if="item.checklist.length"
-        class="checklist"
-      >
+      <ul class="checklist">
         <!-- The step, its one action at the row's end, and who holds or closed
              it directly under the step's own text. The action used to be a full
              button on a row of its own, so each holder line sat closer to the
@@ -223,12 +223,6 @@ defineExpose({ askOutcome, revealChecklist })
           >
         </li>
       </ul>
-      <p
-        v-else
-        class="quiet"
-      >
-        {{ t('workItem.noChecklist') }}
-      </p>
     </section>
 
     <InspectorSummary :item="item" />

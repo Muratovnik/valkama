@@ -1029,7 +1029,6 @@ export const ru = {
     cancel: 'Отмена',
     checklist: 'Чек-лист',
     checklistProgress: '{done}/{total} готово',
-    noChecklist: 'Чек-лист не заполнен.',
     stepHeldBy: 'в работе · {agent}',
     stepDoneBy: 'завершил · {agent}',
     summary: 'Итоговая сводка',

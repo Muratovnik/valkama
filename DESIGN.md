@@ -860,9 +860,16 @@ a failed write, the question before a takeover or before a draft is lost — sta
 band between the bar and the scroller, at full width, however far down the write was made.
 Its height follows what it says and never the scroller. The body names only blockers
 that are still open.
+A section of a card that holds nothing and offers nothing is absent, rather than a
+heading and a sentence saying so on the first screen: «Agents», «Checklist» and
+«Questions and decisions» all stand only while they have something in them. What
+arrives while the card is open brings its section back with no reload: a step with
+the live stream's next frame, a question at the questions' own read, every half
+minute and whenever the window comes back. A read that failed or could not reach
+every source still stands, with the way to read again, because not knowing is not the
+same as there being none.
 A card's «Agents» section stands under the next step of an open item and under the
-outcome of a closed one, where the list is history with no next step above it, and it
-is absent while no agent is on the item. A row is one record held together by air: what the agent was
+outcome of a closed one, where the list is history with no next step above it. A row is one record held together by air: what the agent was
 started for (or, for an agent named before that was recorded, its type or its short
 id), the step it holds, its times, then its type, id and how it is known to be here.
 It says what the record shows and never that an agent is working, because a session

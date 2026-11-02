@@ -121,8 +121,9 @@ function logPresses(page: Page) {
     // This body is serialized and evaluated in the page, so a module-scope helper
     // would not be in scope here.
     // eslint-disable-next-line unicorn/consistent-function-scoping -- see above
+    // A disabled button is no control to reach: the platform gives it no click.
     const control = (target: EventTarget | null) =>
-      target instanceof Element ? target.closest('button') : null
+      target instanceof Element ? target.closest('button:not(:disabled)') : null
     const log: PressLog = { clicks: [], down: null, holding: true, presses: 0 }
     const keep = (event: Event) => {
       if (log.holding) event.stopPropagation()

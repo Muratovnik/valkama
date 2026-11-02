@@ -1029,7 +1029,6 @@ export const en = {
     cancel: 'Cancel',
     checklist: 'Checklist',
     checklistProgress: '{done}/{total} done',
-    noChecklist: 'No checklist has been recorded.',
     stepHeldBy: 'in work · {agent}',
     stepDoneBy: 'completed by · {agent}',
     summary: 'Closing summary',

@@ -62,8 +62,7 @@ const busyMark = computed(() => props.loading || undefined)
 // line blinks in and out of the layout on every poll; `aria-busy` says it.
 const empty = computed(() => Boolean(props.result) && !props.failed && !props.entries.length)
 const emptyLabel = computed(() => {
-  if (props.partial) return t('requests.partialEmpty')
-  return t(props.item ? 'requests.itemEmpty' : 'requests.empty')
+  return t(props.partial ? 'requests.partialEmpty' : 'requests.empty')
 })
 /**
  * The questions still waiting, which is what the rail counts. Answered ones stay
@@ -88,7 +87,7 @@ const statusText = computed(() => {
     return t(incomplete.value ? 'requests.countIncomplete' : 'requests.count', {
       count: waiting.value,
     })
-  if (props.entries.length) return t(props.item ? 'requests.itemEmpty' : 'requests.empty')
+  if (props.entries.length) return t('requests.empty')
   return ''
 })
 // A host that carries its own refresh still needs the first read and a failure said.

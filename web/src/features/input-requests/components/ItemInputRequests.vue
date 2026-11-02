@@ -1,5 +1,16 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+/**
+ * The questions on one card, in a section that is absent while there are none:
+ * nothing here asks one, so a heading and a sentence saying so held the first screen
+ * for nothing. The read goes on while it is absent, on its half-minute and on the
+ * window coming back, so a question arriving brings the section back by itself.
+ *
+ * A read that failed or could not reach every source stays, with the way to read
+ * again: not knowing is not the same as there being none. When that read, asked for
+ * from the section's own button, finds nothing, the button goes with the section;
+ * focus takes a sentence left in its place, or it would fall to the page's top.
+ */
+import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import RequestList from '@/features/input-requests/components/RequestList.vue'
@@ -18,6 +29,18 @@ const { result, loading, failed, partial, entries, refresh, changed } = useInput
   () => props.target,
 )
 const drafts = ref<Record<string, InputAnswers>>({})
+const shown = computed(() => entries.value.length > 0 || failed.value || partial.value)
+const section = useTemplateRef<HTMLElement>('section')
+const emptiedNote = useTemplateRef<HTMLElement>('emptied-note')
+const emptied = ref(false)
+watch(shown, async (now) => {
+  if (now) emptied.value = false
+  else if (section.value?.contains(document.activeElement)) {
+    emptied.value = true
+    await nextTick()
+    emptiedNote.value?.focus()
+  }
+})
 function updated(entry: InputRequestEntry) {
   changed(entry)
   emit('changed', entry)
@@ -26,6 +49,8 @@ function updated(entry: InputRequestEntry) {
 
 <template>
   <section
+    v-if="shown"
+    ref="section"
     class="item-input-requests"
     :aria-label="t('requests.itemTitle')"
   >
@@ -62,6 +87,15 @@ function updated(entry: InputRequestEntry) {
       @draft="(key, value) => (drafts[key] = value)"
     />
   </section>
+  <p
+    v-else-if="emptied"
+    ref="emptied-note"
+    class="visually-hidden"
+    role="status"
+    tabindex="-1"
+  >
+    {{ t('requests.itemEmpty') }}
+  </p>
 </template>
 
 <style scoped>

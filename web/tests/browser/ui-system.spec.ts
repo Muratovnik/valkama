@@ -406,7 +406,6 @@ test('inspector facts and section headings keep a shared spacing rhythm', async 
   const gaps = await drawer.evaluate((element) =>
     [
       ['.description-heading h3', '.description-copy'],
-      ['.overview-section .section-header h3', '.section-header + .quiet'],
       ['.discussion .section-header h3', '.discussion-form'],
     ].map(([heading, content]) => {
       const title = element.querySelector(heading)
@@ -415,7 +414,7 @@ test('inspector facts and section headings keep a shared spacing rhythm', async 
       return next.getBoundingClientRect().top - title.getBoundingClientRect().bottom
     }),
   )
-  expect(gaps).toEqual([12, 12, 12])
+  expect(gaps).toEqual([12, 12])
   for (const selector of ['.description-copy', '.discussion .report-value']) {
     const content = drawer.locator(selector).filter({ visible: true }).first()
     await expect(content).toHaveCSS('font-size', '15px')
