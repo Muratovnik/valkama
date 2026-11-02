@@ -266,6 +266,7 @@ async function framesOfHead(page: Page, act: () => Promise<unknown>) {
       name: string | null
       reference: number | null
       tabs: number | null
+      waiting: boolean
     }[] = []
     let running = true
     const sample = () => {
@@ -281,6 +282,7 @@ async function framesOfHead(page: Page, act: () => Promise<unknown>) {
         name: shown('.drawer-frame-name')?.textContent ?? null,
         reference: shown('.head-reference')?.getBoundingClientRect().x ?? null,
         tabs: shown('.drawer-frame-tabs')?.getBoundingClientRect().y ?? null,
+        waiting: shown('.work-dots') !== null,
       })
       requestAnimationFrame(sample)
     }
@@ -344,10 +346,22 @@ for (const readDelay of [0, 500]) {
   })
 }
 
+test('a read that answers at once never shows the waiting mark', async ({ page }) => {
+  // On a slower token, so that a busy machine's read still counts as answering at once.
+  await page.addInitScript(() => {
+    document.addEventListener('DOMContentLoaded', () => {
+      document.documentElement.style.setProperty('--duration-surface', '1s')
+    })
+  })
+  const frames = await framesOfLink(page, 0)
+  expect(frames.filter(({ waiting }) => waiting)).toEqual([])
+})
+
 test('a read that takes its time shows the panel waiting, and only that', async ({ page }) => {
   const waiting = page.locator('.drawer .work-dots')
-  const frames = await framesOfLink(page, 500, () => expect(waiting).toBeVisible())
+  const frames = await framesOfLink(page, 1000, () => expect(waiting).toBeVisible())
   await expect(waiting).toHaveCount(0)
+  expect(frames.some((frame) => frame.waiting)).toBe(true)
   const empty = frames.filter(({ name, tabs, reference }) => !name && !tabs && !reference)
   expect(empty.length).toBeGreaterThan(5)
 })
