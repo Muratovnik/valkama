@@ -83,7 +83,7 @@ def _option(raw: object) -> dict:
         raise model.PlanningError(
             "each option requires id and label and may add description and recommended"
         )
-    option = {
+    option: dict = {
         "id": key(raw["id"]),
         "label": model.text_field(raw["label"], "option.label", limit=200),
     }

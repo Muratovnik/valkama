@@ -961,8 +961,8 @@ def _work_item(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> obj
     answer = api.handle_get(conn, "/api/planning/work-item", parameters)
     if answer is None:  # pragma: no cover - the path table above is closed
         raise ValueError("no planning work item read")
-    item = _with_url(answer[1]["work_item"])
-    return {**item, "questions": requests.item_questions(conn, item["work_item_id"])}
+    item = answer[1]["work_item"]
+    return _with_url({**item, "questions": requests.item_questions(conn, item["work_item_id"])})
 
 
 def _search(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
