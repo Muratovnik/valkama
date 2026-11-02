@@ -22,6 +22,7 @@ import { agentFacts, AGENTS_SHOWN } from '@/widgets/work-item-inspector/utils/ag
 import type { TimeWords } from '@/widgets/work-item-inspector/utils/agentFacts.ts'
 
 import type { WorkItemAgent } from '@/shared/api/planningModel.ts'
+import { focusInView } from '@/shared/lib/focusInView.ts'
 import RichText from '@/shared/ui/RichText.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import VButton from '@/shared/ui/VButton.vue'
@@ -121,8 +122,7 @@ async function toggle() {
     : (toggler.value?.$el as HTMLElement | undefined)
   // The toggle keeps its element while the list shrinks above it, so focusing it
   // again scrolls nothing; it is brought back into view here.
-  target?.focus({ preventScroll: true })
-  target?.scrollIntoView({ block: 'nearest' })
+  if (target) focusInView(target)
 }
 </script>
 

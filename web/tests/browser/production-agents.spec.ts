@@ -124,6 +124,37 @@ for (const width of [1440, 390]) {
     })
   }
 
+  test(`closing a long list while the card's body still glides keeps its toggle in sight at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+    const agents = Array.from({ length: 94 }, (_, index) => agent(index))
+    await installBackend(page, { agents: () => agents, longRead: true })
+    await page.goto(CARD)
+    const section = page.locator('.drawer .agents')
+    const toggle = section.locator('.agents-more')
+    await PRESSES.keyboard(toggle)
+    await expect(section.locator('.agent')).toHaveCount(94)
+
+    // From the top, so the scroll a focus starts condenses the head and the body glides,
+    // after the focus move that would have ended a glide already running. A key does not
+    // wait for the page to hold still, as a pointer does, and this one is long enough.
+    const body = page.locator('.drawer-frame-body')
+    await body.evaluate((node) => node.scrollTo({ top: 0 }))
+    await expect(page.locator('.drawer-frame-head.condensed')).toHaveCount(0)
+    await page.addStyleTag({ content: ':root { --duration-surface: 4s }' })
+    await toggle.focus()
+    await expect
+      .poll(() => body.evaluate((node) => node.getAnimations({ subtree: true }).length))
+      .toBeGreaterThan(0)
+    await page.keyboard.press('Enter')
+    await expect(section.locator('.agent')).toHaveCount(3)
+    await page.evaluate(() =>
+      Promise.allSettled(document.getAnimations().map((animation) => animation.finished)),
+    )
+    await expect(toggle).toBeInViewport({ ratio: 1 })
+  })
+
   test(`on a closed item the agents stand under its outcome at ${width}px`, async ({
     page,
   }, info) => {

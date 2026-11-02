@@ -16,6 +16,9 @@ import { groupLabels, groupMembers } from '@/widgets/work-item-inspector/utils/c
 import type { ChainMember } from '@/shared/api/planningChainApi.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
+// happy-dom draws nothing, so nothing is under way.
+document.getAnimations = () => []
+
 function member(
   number: number,
   state: 'backlog' | 'done',

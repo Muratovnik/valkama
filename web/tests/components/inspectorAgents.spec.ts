@@ -19,6 +19,9 @@ import { messages, pluralRules } from '@/shared/i18n/index.ts'
 
 import { workItemFixture } from '../fixtures/workItem.ts'
 
+// happy-dom draws nothing, so nothing is under way.
+document.getAnimations = () => []
+
 const NOW = '2026-11-02T12:00:00Z'
 
 function agent(overrides: Partial<WorkItemAgent> = {}): WorkItemAgent {
