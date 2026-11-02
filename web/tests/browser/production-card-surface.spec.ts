@@ -2,7 +2,7 @@ import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
-import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
+import { parsePlatformRoute, serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { largeChainHere, serve } from './chainFixtures.ts'
@@ -220,21 +220,64 @@ test('under reduced motion the surface and the scrim are gone at once', async ({
   expect(frames.filter(({ x }) => x > openX + 1)).toHaveLength(0)
 })
 
-test('a tile pressed while the surface leaves opens the card again, on one surface', async ({
+test('a press while the surface leaves lands on nothing, and the first one after it reaches the page', async ({
   page,
 }) => {
   const { drawer, opener, openX } = await openFromBoard(page, 1440)
   await drawer.locator('.drawer-frame-close').click()
   await expect.poll(() => xOf(drawer)).toBeGreaterThan(openX + 20)
-  // Through what is leaving: it no longer takes a press, and the board has the next one.
-  const box = await opener.boundingBox()
-  await page.mouse.click((box?.x ?? 0) + 10, (box?.y ?? 0) + 10)
+
+  // On the scrim over the tile that opened it, and on what is still on screen of the panel.
+  const tile = await opener.boundingBox()
+  await page.mouse.click((tile?.x ?? 0) + 10, (tile?.y ?? 0) + 10)
+  const edge = await xOf(drawer)
+  await page.mouse.click(edge + 60, 400)
+  await expect(page.locator('.overlay-host')).toHaveCount(0)
+  await expect(drawer).toHaveCount(0)
+  await expect(opener).toBeFocused()
+
+  await page.mouse.click((tile?.x ?? 0) + 10, (tile?.y ?? 0) + 10)
+  await expect(drawer.locator('.card-facts')).toBeVisible()
+})
+
+test('a double click on Close opens nothing under it, and focus goes back', async ({ page }) => {
+  const { drawer, opener } = await openFromBoard(page, 1440)
+  const close = await drawer.locator('.drawer-frame-close').boundingBox()
+  const menus = page.locator('[role="listbox"], [role="menu"]')
+  const standing = await menus.count()
+  await page.mouse.dblclick(
+    (close?.x ?? 0) + (close?.width ?? 0) / 2,
+    (close?.y ?? 0) + (close?.height ?? 0) / 2,
+    { delay: 20 },
+  )
+  await expect(page.locator('.overlay-host')).toHaveCount(0)
+  await expect(menus).toHaveCount(standing)
+  await expect(opener).toBeFocused()
+})
+
+test('a double click on the scrim over a tile opens no card', async ({ page }) => {
+  const { drawer, opener } = await openFromBoard(page, 1440)
+  const tile = await opener.boundingBox()
+  await page.mouse.dblclick((tile?.x ?? 0) + 10, (tile?.y ?? 0) + 10, { delay: 20 })
+  await expect(page.locator('.overlay-host')).toHaveCount(0)
+  await expect(drawer).toHaveCount(0)
+  expect(parsePlatformRoute(page.url()).entity?.kind).toBe('planning-space')
+  await expect(opener).toBeFocused()
+})
+
+test('a card routed to while the surface leaves stands on one surface', async ({ page }) => {
+  const { drawer, opener, openX } = await openFromBoard(page, 1440)
+  await drawer.locator('.drawer-frame-close').click()
+  await expect.poll(() => xOf(drawer)).toBeGreaterThan(openX + 20)
+  await page.evaluate(
+    (route) => (window as unknown as { handOver(to: string): void }).handOver(route),
+    CARD,
+  )
   await expect(drawer.locator('.card-facts')).toBeVisible()
   await expect(drawer).toHaveCount(1)
   await expect(drawer).toHaveCSS('transform', 'none')
   expect(await xOf(drawer)).toBe(openX)
   await expect(page.locator('.overlay-scrim')).toHaveCount(1)
-  await expect(drawer.locator('.drawer-frame-close')).toBeFocused()
   await page.keyboard.press('Escape')
   await expect(page.locator('.overlay-host')).toHaveCount(0)
   await expect(opener).toBeFocused()
