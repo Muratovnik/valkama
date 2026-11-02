@@ -72,7 +72,12 @@ const UNSAFE_TEXT =
   // eslint-disable-next-line sonarjs/duplicates-in-character-class -- see above
   /<[^>]*>|\b(?:javascript|data|file)\s*:|(?:^|\s)(?:[A-Za-z]:[\\/]|\\\\)[^\s]+|(?:^|\s)\/[^\s/]+\/[^\s]+/iu
 const MAX_UI_STATE_REASON_LENGTH = 240
-export const MAX_UI_STATE_STRING_LENGTH = 8192
+/**
+ * The longest single string in a validated payload. It admits the longest text
+ * the service stores, a description: below that, a card the service accepted
+ * could not be read back at all.
+ */
+export const MAX_UI_STATE_STRING_LENGTH = 20_000
 /** Deterministic UTF-8 JSON ceiling for every validated ready/degraded payload. */
 export const MAX_UI_STATE_PAYLOAD_BYTES = 256 * 1024
 

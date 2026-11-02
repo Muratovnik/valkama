@@ -41,6 +41,11 @@ checkouts are therefore distinguishable even at the same version.
   redirect: a request made by any page, a prerender, a machine without the app, a
   listener on another port, a launch that fails. Reinstall the desktop app along with
   the server: an older build opens without moving to the card.
+### Fixed
+
+- A task whose description is longer than 8192 characters opens again. The service
+  stores 20,000, and the web client refused to read anything over 8192, so such a
+  task showed a message about this build instead of its card.
 
 ## [2.3.0](https://github.com/Muratovnik/valkama/compare/v2.2.0...v2.3.0) - 2026-11-02
 
