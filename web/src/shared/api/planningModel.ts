@@ -99,9 +99,10 @@ const workflowStateSchema = strictObject({ ...stateShape, position: positiveInt(
 export const CLAIM_STATES = ['live', 'stale', 'unconfirmed'] as const
 const claimStateField = () => enumField(CLAIM_STATES).nullable()
 
+const stepText = () => boundedText(/^[^\u{0}]{1,1000}$/u, 1000)
 const checklistStepSchema = strictObject({
   id: boundedText(UUID, 36),
-  text: boundedText(/^[^\u{0}]{1,1000}$/u, 1000),
+  text: stepText(),
   done: z.boolean(),
   claimed_by: actor(),
   done_by: actor(),
@@ -269,8 +270,23 @@ const stateMoveSchema = strictObject({
   to: boundedText(STATE_KEY, 32),
 })
 
+/** An agent on an item: only the card's read carries the list. */
+const workItemAgentSchema = strictObject({
+  agent_id: boundedText(/^[^\u{0}]{1,128}$/u, 128),
+  session_id: boundedText(/^[^\u{0}]{1,128}$/u, 128),
+  agent_type: blankable(128),
+  label: blankable(200),
+  started_at: boundedText(ISO, 96).nullable(),
+  last_activity_at: boundedText(ISO, 96).nullable(),
+  ended_at: boundedText(ISO, 96).nullable(),
+  steps: boundedList(strictObject({ id: boundedText(UUID, 36), text: stepText() }), 100),
+  link: enumField(['exact', 'claim'] as const),
+  coordinator_items: positiveInt().nullable(),
+})
+
 const workItemSchema = strictObject({
   ...workItemBriefShape,
+  agents: boundedList(workItemAgentSchema, 5000).optional(),
   claim: claimSchema.nullable(),
   comment_count: positiveInt(true).optional(),
   description: blankable(20_000),
@@ -397,6 +413,7 @@ const pendingSchema = strictObject({
 export type WorkflowState = z.infer<typeof workflowStateSchema>
 export type WorkItemBrief = z.infer<typeof workItemBriefSchema>
 export type WorkItem = z.infer<typeof workItemSchema>
+export type WorkItemAgent = z.infer<typeof workItemAgentSchema>
 export type PlanningWorkflow = z.infer<typeof workflowSchema>
 export type PlanningReadModel = z.infer<typeof readModelSchema>
 export type PlanningEdge = z.infer<typeof edgeSchema>

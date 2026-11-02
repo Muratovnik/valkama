@@ -10,6 +10,8 @@ import type { Page } from '@playwright/test'
 export async function installStreamDouble(page: Page): Promise<{
   deliver: (data: string) => Promise<void>
   drop: () => Promise<void>
+  /** A named event, the short kind that carries no model. */
+  signal: (name: string) => Promise<void>
 }> {
   await page.addInitScript(() => {
     type Listener = (event: Event) => void
@@ -56,5 +58,10 @@ export async function installStreamDouble(page: Page): Promise<{
         for (const stream of (window as unknown as { __streams: Driven[] }).__streams)
           stream.fire(new MessageEvent('message', { data: frame }))
       }, data),
+    signal: (name: string) =>
+      page.evaluate((type) => {
+        for (const stream of (window as unknown as { __streams: Driven[] }).__streams)
+          stream.fire(new MessageEvent(type, { data: '1' }))
+      }, name),
   }
 }

@@ -789,6 +789,22 @@ Pinned no taller than the title and tabs of 2.1.0, it says which item this is
 and keeps the action and every section in reach: keeping the facts, a
 full-width action and two rows of tabs, it held 279px of a phone. The body
 names only blockers that are still open.
+A card's «Agents» section stands under the next step and is absent while no agent
+is on the item. A row is one record held together by air: what the agent was
+started for (or, for an agent named before that was recorded, its type or its short
+id), the step it holds, its times, then its type, id and how it is known to be here.
+It says what the record shows and never that an agent is working, because a session
+row does not prove a process is alive: the last sign of activity, «ended» only with
+a recorded end, and «no sign of it since» for an agent that gave none since its
+start, instead of a span of no length. It offers no estimate of what remains, which
+Valkama does not know. An agent started while its coordinator held several items
+stands on each of them and its row says how many; the interface does not pick one.
+Past four rows the list folds to the three with the newest activity, behind the
+same toggle as a chain's lists, because a parent can leave dozens on one item; four
+stand whole, since a toggle for one row costs more than the row. An open card reads
+the list again on the stream's own `agents` event, which leaves the board and the
+graph as they are. A wrapped line of facts starts without a dot, because the dot
+stands in the room each fact's margin takes from the line, which the line clips.
 The related work/session/evidence context is one grouped relationship region,
 not a decorative sequence. Execution history and native session opening stay
 inside work-item context; Memory is a typed reference there.

@@ -145,6 +145,8 @@ const planning = ref<PlatformUiState>(uiLoading())
 /** A space the route cannot bind is not loaded by asking again. */
 const planningRetryable = computed(() => routeSelection.value.status !== 'unavailable')
 const version = ref(0)
+/** Moves when an agent changed: an open card reads again, and nothing else does. */
+const agentsVersion = ref(0)
 
 const trail = ref<{ left: InspectorReturn | null; reference: string }[]>([])
 /** Where the card Back is reopening was left; read by that card alone. */
@@ -210,12 +212,18 @@ const streamTarget = computed(() =>
     ? null
     : { project: projectId.value, ...boundSpace.value },
 )
-const { connection: liveConnection, reconnect } = usePlanningSubscription(streamTarget, (next) => {
-  const key = planningKey.value
-  resource.value = beginResource(resource.value, key)
-  resource.value = resolveResource(resource.value, resource.value.generation, key, next)
-  version.value += 1
-})
+const { connection: liveConnection, reconnect } = usePlanningSubscription(
+  streamTarget,
+  (next) => {
+    const key = planningKey.value
+    resource.value = beginResource(resource.value, key)
+    resource.value = resolveResource(resource.value, resource.value.generation, key, next)
+    version.value += 1
+  },
+  () => {
+    agentsVersion.value += 1
+  },
+)
 watch(
   [liveConnection, streamTarget],
   ([state, target]) => emit('connection', target === null ? null : state),
@@ -430,6 +438,7 @@ defineExpose({ refresh })
       :can-go-back="canGoBack"
       :return-to="returning"
       :refresh-token="version"
+      :agents-token="agentsVersion"
       :workflow="model.workflow"
       :writable="writable"
       :parent-reference="parentReference"

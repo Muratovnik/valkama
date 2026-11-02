@@ -75,6 +75,8 @@ const props = defineProps<{
   resourceRef: PlanningSpaceEntityRef
   workflow: PlanningWorkflow | null
   writable: boolean
+  /** Moves when an agent changed; only the record is read again, not the chain. */
+  agentsToken?: number
   /** The epic's reference, which the record names only by id; the host's model knows it. */
   parentReference?: string | null
   /** Where this card was left, when Back is what opened it again. */
@@ -195,6 +197,12 @@ watch(
     leaveUnreadable()
   },
   { immediate: true },
+)
+
+// Not `load`: news of an agent is no reason to take a refused write's reason away.
+watch(
+  () => props.agentsToken,
+  () => void loadResource(),
 )
 
 // The chain is keyed by the item's own id, which only the loaded record carries,

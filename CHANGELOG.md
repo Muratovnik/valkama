@@ -62,6 +62,21 @@ checkouts are therefore distinguishable even at the same version.
   such. It is a hint to check by hand: it opens the store read-only and changes
   no state, and an item with no commit ref cannot show. The server's tools are
   unchanged.
+- **Agents on the card.** The Overview of a work item lists the Claude Code agents
+  on it: what each was started for, the step it holds, when it started, its last
+  sign of activity and the time between, and how it is known to be there. An agent
+  is on the item when it wrote there or holds a step, or when the session that
+  started it held the item at that moment; a session holding several items puts it
+  on each, and the row says how many. An agent whose parent held nothing and that
+  wrote nothing is on no card. The list updates on its own through the existing
+  event stream. The section is absent while no agent is on the item, and a long list
+  folds to the three most recent.
+- **`valkama hook claude post-tool-use`** names an agent from the call that started
+  it, reading only the short description of that call and the agent's id from one
+  hook input, never its prompt. Register it for `PostToolUse` with the matcher
+  `^(Agent|Task)$`. Without it, and for every agent recorded earlier, a row shows the
+  agent's type and short id. The label stays out of the append-only history, the
+  installation export, `doctor` and logs, and MCP tool answers do not change.
 
 ## [2.2.0](https://github.com/Muratovnik/valkama/compare/v2.1.0...v2.2.0) - 2026-11-02
 

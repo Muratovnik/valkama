@@ -54,6 +54,10 @@ export const i18n = createI18n({
   pluralRules,
   datetimeFormats: {
     en: {
+      clock: {
+        hour: '2-digit',
+        minute: '2-digit',
+      },
       activity: {
         year: 'numeric',
         month: 'short',
@@ -69,6 +73,10 @@ export const i18n = createI18n({
       },
     },
     ru: {
+      clock: {
+        hour: '2-digit',
+        minute: '2-digit',
+      },
       activity: {
         year: 'numeric',
         month: 'short',

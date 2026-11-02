@@ -59,6 +59,8 @@ type BackendOptions = {
   /** The text of the card's first checklist step, where a test needs markdown in it. */
   stepText?: string
   uiPrefs?: unknown
+  /** The agents the card's read answers with, read again at each read. */
+  agents?: () => unknown[]
 }
 
 /** Paragraphs enough to scroll a drawer body well past any head. */
@@ -300,7 +302,8 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
             requestedReference === blockedWorkItem.reference
               ? blockedFullWorkItem
               : { ...workItem, revision: 3 }
-          const read = options.longRead ? { ...card, description: LONG_READ } : card
+          const described = options.longRead ? { ...card, description: LONG_READ } : card
+          const read = options.agents ? { ...described, agents: options.agents() } : described
           const { stepText } = options
           const answered =
             stepText === undefined

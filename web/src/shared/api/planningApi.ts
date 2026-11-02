@@ -133,6 +133,8 @@ export type PlanningConnectionState = 'connecting' | 'live' | 'reconnecting'
 export function subscribePlanning(
   target: { project: string } & PlanningSpaceRef,
   callbacks: {
+    /** Something was recorded about an agent, which no frame of the model says. */
+    agents?: () => void
     connection: (state: PlanningConnectionState) => void
     invalid?: (error: unknown) => void
     snapshot: (model: PlanningReadModel) => void
@@ -149,6 +151,7 @@ export function subscribePlanning(
     closed = true
     clearTimeout(firstSnapshotDeadline)
     source.removeEventListener('message', onMessage)
+    source.removeEventListener('agents', onAgents)
     source.removeEventListener('error', onError)
     source.close()
   }
@@ -167,11 +170,15 @@ export function subscribePlanning(
       callbacks.invalid?.(error)
     }
   }
+  function onAgents() {
+    if (!closed) callbacks.agents?.()
+  }
   function onError() {
     clearTimeout(firstSnapshotDeadline)
     if (!closed) callbacks.connection('reconnecting')
   }
   source.addEventListener('message', onMessage)
+  source.addEventListener('agents', onAgents)
   source.addEventListener('error', onError)
   return close
 }

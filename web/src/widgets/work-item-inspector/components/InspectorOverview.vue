@@ -2,6 +2,7 @@
 import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import InspectorAgents from '@/widgets/work-item-inspector/components/InspectorAgents.vue'
 import InspectorDescription from '@/widgets/work-item-inspector/components/InspectorDescription.vue'
 import InspectorDiscussion from '@/widgets/work-item-inspector/components/InspectorDiscussion.vue'
 import InspectorSummary from '@/widgets/work-item-inspector/components/InspectorSummary.vue'
@@ -115,6 +116,11 @@ defineExpose({ revealChecklist, startOutcomeReport })
         />
       </p>
     </section>
+    <InspectorAgents
+      v-if="item.agents?.length"
+      :agents="item.agents"
+      :identity="item.work_item_id"
+    />
     <!-- What the item is made of, which its host reads and owns. -->
     <slot name="composition" />
 

@@ -11,6 +11,7 @@ type Target = ({ project: string } & PlanningSpaceRef) | null
 export function usePlanningSubscription(
   target: Ref<Target>,
   snapshot: (model: PlanningReadModel) => void,
+  agents: () => void,
 ) {
   const connection = ref<PlanningConnectionState>('connecting')
   const attempt = ref(0)
@@ -23,6 +24,9 @@ export function usePlanningSubscription(
       const current = () => key === JSON.stringify(target.value)
       cleanup(
         subscribePlanning(selected, {
+          agents: () => {
+            if (current()) agents()
+          },
           connection: (state) => {
             if (current()) connection.value = state
           },

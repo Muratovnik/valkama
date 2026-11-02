@@ -159,6 +159,21 @@ describe('WorkItemInspector resource state', () => {
     wrapper.unmount()
   })
 
+  it('reads the record again when an agent changed, and nothing else', async () => {
+    vi.mocked(fetchWorkItem)
+      .mockResolvedValueOnce(record('Found', 1))
+      .mockResolvedValueOnce(record('Read again', 1))
+    const wrapper = mountInspector(true)
+    await flushPromises()
+    expect(fetchWorkItem).toHaveBeenCalledTimes(1)
+    expect(fetchExecutionHistory).toHaveBeenCalledTimes(1)
+    await wrapper.setProps({ agentsToken: 1 })
+    await flushPromises()
+    expect(fetchWorkItem).toHaveBeenCalledTimes(2)
+    expect(fetchExecutionHistory).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
   it('drops the card of an item deleted while it is open, rather than keep a stale one', async () => {
     vi.mocked(fetchWorkItem).mockResolvedValueOnce(record('Soon gone', 1))
     const wrapper = mountInspector()

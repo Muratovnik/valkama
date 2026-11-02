@@ -46,6 +46,24 @@ it('subscribes to the exact project and store and commits validated snapshots', 
   close()
 })
 
+it('says an agent changed apart from the model, and only while open', () => {
+  vi.stubGlobal('EventSource', Source)
+  const agents = vi.fn()
+  const snapshot = vi.fn()
+  const close = subscribePlanning(
+    { project: projectId, ...spaceRef },
+    { agents, snapshot, connection: vi.fn() },
+  )
+  const source = sources.at(-1)
+  if (!source) throw new Error('Expected an event source')
+  source.dispatchEvent(new MessageEvent('agents', { data: '41' }))
+  expect(agents).toHaveBeenCalledOnce()
+  expect(snapshot).not.toHaveBeenCalled()
+  close()
+  source.dispatchEvent(new MessageEvent('agents', { data: '42' }))
+  expect(agents).toHaveBeenCalledOnce()
+})
+
 it('rejects malformed or differently named spaces and closes the invalid source', () => {
   for (const value of [
     {},
