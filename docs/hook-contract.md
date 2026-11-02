@@ -171,6 +171,7 @@ reader uses, with the same lifecycle as events posted to `/api/ingest`:
 | `prompt` | attention cleared, only while active |
 | `compact` | heartbeat only |
 | `subagent_start`, `subagent_stop` | the subagent's own row becomes `active` or `ended` |
+| `agent_launch` | the started agent's row takes its label; see [Naming an agent](#naming-an-agent) |
 
 A missing row is created, and `started_at` and `last_seen` are set to the event's
 time.
@@ -231,8 +232,8 @@ row, and drawn on the work item's card. It is not in `execution_events`, which
 records the launch by the agent's id alone because that table can never be edited.
 It is not in the installation export, `doctor` or any log. Two copies follow from
 what a store is: a store snapshot holds the database, and a spool file holds the
-event until it is delivered, in the same directory and with the same owner as the
-paths a spool file already holds.
+event until it is delivered, or for good if it is set aside as `*.rejected`, in the
+same directory and with the same owner as the paths a spool file already holds.
 
 The event moves `last_seen` of the top-level session and creates the agent's row if
 its own events have not. It changes no time and no state of an agent's row that
