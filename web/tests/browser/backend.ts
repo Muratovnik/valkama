@@ -51,6 +51,8 @@ type BackendOptions = {
   activity?: 'bound' | 'unbound'
   /** The card's item stands in the terminal state, with this outcome. */
   closedWith?: string
+  /** The discussion the card's item has. */
+  comments?: unknown[]
   /** The history the card's read answers with. */
   events?: unknown[]
   includeAttachedDuplicate?: boolean
@@ -311,6 +313,7 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
             ...described,
             ...(options.agents ? { agents: options.agents() } : {}),
             ...(options.events ? { events: options.events } : {}),
+            ...(options.comments ? { comments: options.comments } : {}),
           }
           const { closedWith, stepText } = options
           const read =

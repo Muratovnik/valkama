@@ -1,7 +1,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import type { Ref } from 'vue'
 
-import { useTimeoutFn } from '@vueuse/core'
+import { useEventListener, useTimeoutFn } from '@vueuse/core'
 
 import type {
   ChainView,
@@ -94,14 +94,22 @@ export function useInspectorReturn(options: ReturnOptions) {
 
   if (point) {
     let applied = false
-    let shownEarly: { focus: Element | null; place: number } | null = null
+    let shownEarly = false
+    let movedOn = false
+    // What the reader did, and not where the card stands: a chain arriving above what is on
+    // screen moves the scroller by itself, because the browser keeps that in view.
+    useEventListener(
+      window,
+      ['keydown', 'pointerdown', 'wheel'],
+      () => {
+        movedOn = shownEarly
+      },
+      { capture: true, passive: true },
+    )
     const { start, stop } = useTimeoutFn(
       () => {
         options.frame.value?.restore(point.scroll)
-        shownEarly = {
-          focus: document.activeElement,
-          place: options.frame.value?.position() ?? 0,
-        }
+        shownEarly = true
         restoring.value = false
       },
       HOLD_MS,
@@ -120,11 +128,7 @@ export function useInspectorReturn(options: ReturnOptions) {
         if (!settled || applied) return
         applied = true
         stop()
-        const untouched =
-          shownEarly === null ||
-          (shownEarly.place === options.frame.value?.position() &&
-            shownEarly.focus === document.activeElement)
-        if (untouched) void apply(point)
+        if (!movedOn) void apply(point)
       },
       { flush: 'post', immediate: true },
     )

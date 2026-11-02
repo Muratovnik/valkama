@@ -7,7 +7,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { branchedChain } from '../fixtures/chainMap.ts'
 import { installBackend } from './backend.ts'
 import { largeChainHere, serve } from './chainFixtures.ts'
-import { projectScope, workItem, workItemRef } from './planningFixtures.ts'
+import { now, projectScope, workItem, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 const CARD = serializePlatformRoute({
@@ -34,9 +34,9 @@ async function topOf(locator: Locator) {
 }
 
 /** A card read far down its chain, left for a member of it: Back is what is tested. */
-async function leftFromDepth(page: Page) {
+async function leftFromDepth(page: Page, comments?: unknown[]) {
   await page.setViewportSize({ width: 1440, height: 900 })
-  await installBackend(page)
+  await installBackend(page, { comments })
   await serve(page, largeChainHere())
   await page.goto(CARD)
   const drawer = page.locator('.drawer')
@@ -117,6 +117,32 @@ test('Back on a slow chain read shows the card soon, and moves once to the place
   expect(painted[0]?.at ?? Infinity).toBeLessThan(800)
   // As far as it could at first, then the place: one move, and none after.
   expect(new Set(painted.map(({ top }) => Math.round(top))).size).toBeLessThanOrEqual(2)
+})
+
+test('Back on a slow chain moves to the place though the browser has moved the card first', async ({
+  page,
+}) => {
+  // A discussion stands below the chain, so the card shown early is tall enough to read in.
+  // The chain then arrives above what is on screen and the browser keeps that in view: the
+  // scroller moves with nobody at it, and it is no sign of a reader who has moved on.
+  const discussion = Array.from({ length: 30 }, (_, index) => ({
+    id: index + 1,
+    kind: 'comment',
+    author: 'codex',
+    at: now,
+    body: `Remark ${index + 1}.`,
+    report: null,
+    checklist_item_id: null,
+    checklist_item_text: null,
+  }))
+  const { back, body, drawer, place, reference } = await leftFromDepth(page, discussion)
+  await holdChain(page, 1000)
+  await pressWhereItStands(page, back)
+  await expect(drawer.locator('.drawer-frame-tabs')).toBeVisible()
+  await expect.poll(() => placeOf(body)).toBe(place)
+  const row = drawer.locator(`.chain-row[data-reference="${reference}"]`)
+  await expect(row).toBeFocused()
+  expect(Math.abs((await placeOf(body)) - place)).toBeLessThan(2)
 })
 
 test('Back when the chain never answers shows the card for good, as far down as it can', async ({
