@@ -78,8 +78,12 @@ const MAX_UI_STATE_REASON_LENGTH = 240
  * could not be read back at all.
  */
 export const MAX_UI_STATE_STRING_LENGTH = 20_000
-/** Deterministic UTF-8 JSON ceiling for every validated ready/degraded payload. */
-export const MAX_UI_STATE_PAYLOAD_BYTES = 256 * 1024
+/**
+ * Deterministic UTF-8 JSON ceiling for every validated ready/degraded payload, the
+ * service's own transport bound. A card carries its whole discussion, so below that a
+ * long one could not be read back at all.
+ */
+export const MAX_UI_STATE_PAYLOAD_BYTES = 1024 * 1024
 
 function reason(value: unknown, path: string): string {
   if (typeof value !== 'string' || value.length === 0 || value.length > MAX_UI_STATE_REASON_LENGTH)

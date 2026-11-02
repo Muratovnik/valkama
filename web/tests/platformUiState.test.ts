@@ -93,12 +93,16 @@ test('reasons reject executable/path text while bounded domain payload text stay
 })
 
 test('validated payloads clone safely and enforce deterministic UTF-8 bounds', () => {
-  assert.equal(MAX_UI_STATE_PAYLOAD_BYTES, 256 * 1024)
+  assert.equal(MAX_UI_STATE_PAYLOAD_BYTES, 1024 * 1024)
   assert.throws(() => uiReady('x'.repeat(MAX_UI_STATE_STRING_LENGTH + 1)), /string exceeds/)
   // The service stores a description this long, and the card holding it has to read.
   assert.doesNotThrow(() => uiReady({ description: 'x'.repeat(20_000) }))
+  // So too a long discussion: forty comments as long as the service takes them.
+  assert.doesNotThrow(() =>
+    uiReady({ comments: Array.from({ length: 40 }, () => ({ body: 'x'.repeat(8000) })) }),
+  )
   const oversized = {
-    rows: Array.from({ length: 33 }, () => ({ value: 'x'.repeat(MAX_UI_STATE_STRING_LENGTH) })),
+    rows: Array.from({ length: 54 }, () => ({ value: 'x'.repeat(MAX_UI_STATE_STRING_LENGTH) })),
   }
   assert.throws(() => uiReady(oversized), /deterministic UTF-8|bytes/)
   const input = { nested: { value: 'safe' } }
