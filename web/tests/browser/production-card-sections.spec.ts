@@ -119,3 +119,42 @@ for (const width of [1440, 390]) {
     }
   })
 }
+
+for (const width of [1440, 390]) {
+  test(`Shift+Tab from the content into the stuck sections leaves the place alone at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 700 })
+    await installBackend(page, { longRead: true })
+    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+    await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
+    const drawer = page.locator('.drawer')
+    await expect(drawer.locator('.card-facts')).toBeVisible()
+    await expect(drawer).toHaveCSS('transform', 'none')
+    const body = drawer.locator('.drawer-frame-body')
+    const tabs = drawer.locator('.drawer-frame-tabs')
+    const edge = Math.round(await topOf(body))
+    const atRest = Math.round(await topOf(tabs))
+
+    // The sections have just stuck, and the content's first control stands right under them.
+    const bodyBox = await body.boundingBox()
+    await page.mouse.move(
+      (bodyBox?.x ?? 0) + (bodyBox?.width ?? 0) / 2,
+      (bodyBox?.y ?? 0) + (bodyBox?.height ?? 0) / 2,
+    )
+    await page.mouse.wheel(0, atRest - edge + 8)
+    await expect.poll(() => topOf(tabs)).toBeCloseTo(edge, 0)
+    const place = await body.evaluate((node) => node.scrollTop)
+    const first = drawer.locator('.drawer-frame-content').locator('button, a[href]').first()
+    await first.focus()
+    await expect(first).toBeInViewport()
+    expect(await body.evaluate((node) => node.scrollTop)).toBe(place)
+
+    const frames = await framesOfTabs(tabs, async () => {
+      await page.keyboard.press('Shift+Tab')
+      await expect(tabs.getByRole('button').last()).toBeFocused()
+    })
+    expect([...new Set(frames)]).toEqual([edge])
+    expect(await body.evaluate((node) => node.scrollTop)).toBe(place)
+  })
+}

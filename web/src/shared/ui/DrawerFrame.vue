@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
-import { useResizeObserver } from '@vueuse/core'
+import { useEventListener, useResizeObserver } from '@vueuse/core'
 
 import { useScrolledPast } from '@/shared/lib/useScrolledPast.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
@@ -60,6 +60,29 @@ function scrollToContent() {
   const start = content.value?.offsetTop
   if (!scroller || start === undefined) return
   scroller.scrollTo({ top: Math.min(scroller.scrollTop, start - tabsHeight.value) })
+}
+
+/**
+ * Shift+Tab from the content into the stuck tabs. A browser scrolls to show what the
+ * keyboard reaches, and this one takes a stuck element for where it stands unstuck, so
+ * the place went to the top though the tab was in plain sight. Focus arrives after that
+ * scroll and before any paint, so what the key left is put back there.
+ */
+let placeAtTab = 0
+useEventListener(
+  body,
+  'keydown',
+  (event: KeyboardEvent) => {
+    if (event.key === 'Tab') placeAtTab = body.value?.scrollTop ?? 0
+  },
+  { capture: true },
+)
+
+function holdPlace({ relatedTarget, target }: FocusEvent) {
+  const fromContent = relatedTarget instanceof Node && content.value?.contains(relatedTarget)
+  // A press takes focus here too, with no key before it and no ring.
+  if (fromContent && target instanceof Element && target.matches(':focus-visible'))
+    body.value?.scrollTo({ top: placeAtTab })
 }
 
 /** Where the scroller is read to, for a host that will bring the reader back to it. */
@@ -147,6 +170,7 @@ defineExpose({ position, restore, scrollToContent })
         v-if="$slots.tabs"
         ref="tabs"
         class="drawer-frame-tabs"
+        @focusin="holdPlace"
       >
         <slot name="tabs" />
       </div>
