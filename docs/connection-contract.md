@@ -575,6 +575,8 @@ What moves to the survivor:
 - the checklist steps, after its own, with their `item_id`s, ticks and step
   claims, so a step's holder finds it by the same id;
 - the discussion comments, including those bound to a step;
+- the requests, so a pending one goes on standing on the survivor and can be
+  answered there;
 - the refs, except one the survivor already has, which stays where it was;
 - the links, each in its own direction: `MAIN-13 blocks MAIN-20` becomes
   `MAIN-12 blocks MAIN-20`. A link to the survivor or to another item of the
@@ -588,8 +590,7 @@ and 1 link.", `next` "Continue in MAIN-12.", `why` the reason), loses its claim
 and closes in the first `cancelled` state its workflow reaches from where it
 stands, with the reason `duplicate of MAIN-12`. The survivor gets a comment
 saying what came in. What describes the merged item itself stays with it: its
-history, its reports, its description, labels and parent, and its pending
-requests, which read as expired with `task_closed` once it is closed. The
+history, its reports, its description, labels and parent. The
 survivor keeps its own state, holder, fields and parent; nothing is reopened or
 claimed.
 
@@ -619,7 +620,7 @@ and `warnings` and `overridden` when there are any:
 ```
 
 A warning names a merged item that had another parent than the survivor, and one
-with pending requests. The HTTP write answers with the full survivor and the same
+whose pending requests now wait on the survivor. The HTTP write answers with the full survivor and the same
 `merged`, `warnings` and `overridden`; the tool answers with the acknowledgement
 unless `verbose` is true. Why it moves what it moves is
 [ADR 0013](decisions/0013-merging-work-items.md).
@@ -974,6 +975,66 @@ late answer. Reading effective expiry does not write to an attached store.
 Fields have stable IDs and one of four types: `text`, `choice`, `multi_choice`
 or `boolean`. A required boolean can be answered `false`; omission is different.
 There is no implicit permission grant or automatic execution resume.
+
+An option is `{id, label, description?, recommended?}` and takes no other key.
+`description` is markdown of 1 to 8000 characters and `recommended` a boolean, true
+on at most one option of a `choice` and on any number of a `multi_choice`. What an
+option was not given it does not say on the way back. The fields of one question
+fit in 64 KiB as stored, and a refusal names the limit.
+
+`answer_work_item_request` and `POST /api/modules/planning/request/answer` take
+`answers` and an optional `note` of at most 8000 characters. A non-empty note stands
+in for required fields, so `answers` may be `{}` and a person can answer in their
+own words; an answer that is given is still checked against its field. A read gives
+`answers` and `note` apart: `{}` and the note for such an answer, and `note: null`
+when there is none. An answer is final, a second one is refused, and a comment over
+an open question is not an answer.
+
+A question stays a request. It writes no comment and the store's schema does not
+change: a note is kept in `answers_json` under the key `_note`, which no field id
+can take. A reader that opens `answers_json` itself, or a build from before notes,
+sees that key among the answers.
+
+An agent reads a question three ways:
+
+- `get_work_item`, the tool, answers with `questions`:
+  `{"total": 6, "open": 2, "items": […], "truncated": true}`. At most 5 items, the
+  open ones first and then the newest closed. The HTTP read of a card has no such
+  key.
+- `list_work_item_requests` takes `space`, `id` (one item), `status`,
+  `answered_after` and `limit`, and answers in the compact form below, or whole with
+  `full: true`. `answered_after` keeps only answers given after that timestamp, so a
+  reader that keeps the last `answered_at` takes only what came since.
+- `get_work_item_request` answers with one question whole.
+
+The compact form carries no options and no descriptions:
+
+```json
+{"id": "…", "status": "answered", "question": "Which way?",
+ "answer": [{"field": "path", "value": "keep", "label": "Keep it"},
+            {"field": "areas", "value": ["api", "web"], "label": "The API, The web"},
+            {"field": "sure", "value": false, "label": null}],
+ "note": "And the docs.", "answered_by": "user", "by_person": true,
+ "answered_at": "2026-11-02T09:00:00.000000Z"}
+```
+
+`question` is the first 160 characters of the prompt, with `…` when it was cut.
+`status` is the effective one. `field` is the field's id and `value` the answer as
+stored; `label` is what was chosen in a `choice` or `multi_choice` and null for a
+`boolean` or `text`. A field left out or empty has no row. `answered_by`, `by_person`
+and `answered_at` are null with no answer, a declined or withdrawn question included.
+
+`by_person` is true when the call that wrote the answer was a browser write, as
+[above](#call-identity) defines it, and false for any other answer. It is read
+from that call's row, so nothing a caller sends sets it. It carries what `browser`
+carries and no more: it says the owner's interface sent the answer, not who was at
+the keyboard. A whole question in these tools carries it too; the HTTP reads a screen
+draws from do not.
+
+`search_work_items` also reads a question's prompt, the labels and descriptions of
+its fields and options, its answers and its note, and a row found that way carries
+`question_hit`, the prompt. An option that was offered and not chosen is found too.
+An export carries every question in `planning.requests`, whole.
 
 The browser's mapped search and request endpoints return exact project and
 Planning-space identities. Their list envelopes include source coverage and a

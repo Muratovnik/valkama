@@ -26,9 +26,11 @@ one blocked stopped waiting on anything open.
    run inside one savepoint, so a refusal later undoes all of them.
 2. **What was the work moves; what describes the item stays.** The survivor
    takes the steps (ids, ticks and step claims kept), the discussion comments,
-   the refs it does not already have, and the links, each in its own direction.
+   the refs it does not already have, the requests, and the links, each in its
+   own direction. A request was first left behind, where a pending one ended
+   with the item and an answer stayed on a closed one, away from the work.
    The merged item keeps its history, its reports — its selected summary must
-   be one of its own reports — its description, labels, parent and requests.
+   be one of its own reports — its description, labels and parent.
    A link to the survivor or to another merged item is not moved: it would tie
    the survivor to itself.
 3. **A merged item closes as a duplicate.** It is linked `duplicates` to the

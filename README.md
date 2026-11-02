@@ -248,7 +248,7 @@ python valkama.py <command> [options]
 | `adapter remove ADAPTER_ID` | stop declaring an installed adapter |
 | `adapter list` | the adapters this installation declares |
 | `doctor [--json] [--no-probe]` | check this installation in four levels — Installation, Projects, Capabilities, Connections — and say what to do about each problem |
-| `export [--section planning] [--space KEY]... [--output PATH]` | write every Planning space and every one of its work items as one JSON export; `planning` is the only section. `--space` (repeatable) narrows it to those spaces and records them as `space_filter`; an unknown space exits non-zero. `--output` writes the file whole through a temporary file beside it and prints one summary line instead of the JSON. A space whose items do not add up to its count stops the export |
+| `export [--section planning] [--space KEY]... [--output PATH]` | write every Planning space, every one of its work items and their questions as one JSON export; `planning` is the only section. `--space` (repeatable) narrows it to those spaces and records them as `space_filter`; an unknown space exits non-zero. `--output` writes the file whole through a temporary file beside it and prints one summary line instead of the JSON. A space whose items do not add up to its count stops the export |
 | `transcripts purge [--session ID]... [--before DATE] [--dry-run]` | delete archived transcripts now, on request, whatever retention says; prints counts only |
 | `migrate planning-model [--dry-run]` | explicitly convert a Board-era store to Planning once; dry run converts a copy |
 | `attach NAME PATH [--label TEXT]` | attach another database file as a scope |
@@ -510,8 +510,10 @@ a boolean. Optional execution and session bindings must belong to the task.
 `get_work_item_request` and `list_work_item_requests` expose the current status;
 `answer_work_item_request`, `decline_work_item_request` and
 `expire_work_item_request` require that request's `expected_revision`. A terminal
-task, ended execution or elapsed deadline closes the pending request. Answers
-are stored separately from comments and do not change the task's workflow.
+task, ended execution or elapsed deadline closes the pending request. An option
+can explain itself in a `description` and be `recommended`, and an answer can be
+chosen options, a note in the person's own words, or both. Answers are stored
+separately from comments and do not change the task's workflow.
 
 Work items relate to each other the way
 [beads](https://github.com/steveyegge/beads) proved useful for agents. A
@@ -566,6 +568,14 @@ The order of work needs no migration. A placement is written to the item's
 snapshot is taken for it, and an earlier schema-9 build opens the same store and
 lists its states in the placed order. Such a build still puts a moved item last
 in its new state, and a later placement works from there.
+
+Notes on answers and option descriptions need no migration either, and the store
+stays at 9. A build from before them opens the same store and its tools read and
+answer those questions, with the note among the `answers` as `_note`. Its web
+interface is strict about what it reads, so it reports that it could not update
+the questions: on the card of a question with a note or a described option, and for
+the whole "waiting for my answer" list while a pending question has a described
+option. Everything else in that build works.
 
 To go back to a build at schema 8, first stop every process that holds the
 store: the listener and every agent client, since each one runs its own server.
