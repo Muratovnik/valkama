@@ -315,7 +315,9 @@ card to the desktop app itself when all of these hold:
   `Sec-Fetch-Site: none`, `Sec-Fetch-Dest: document` and `Sec-Fetch-Mode: navigate`,
   and neither `Sec-Purpose` nor `Purpose`, which mark a prerender of an address still
   being typed. An address opened from another application, typed or bookmarked is
-  such a navigation. Nothing a page does is, so no other site can start the app;
+  such a navigation. Nothing a page does is. A redirect keeps those values, so a
+  foreign address opened from outside the browser and sent on here does start the app:
+  on the card it names, with nothing written and any draft asked about first;
 - the query does not say `in=browser`;
 - `%LOCALAPPDATA%\Programs\valkama-desktop\Valkama.exe` exists;
 - the listener is on the port `VALKAMA_PORT` names, or the default. A second

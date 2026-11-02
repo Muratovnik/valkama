@@ -172,7 +172,9 @@ def is_person_navigation(headers: Headers) -> bool:
     unlike in `_require_browser_fetch`, because what is decided is not whom to answer
     but whether something happens on the owner's screen, and a request a browser sends
     for any other reason must not get that far. A local process can forge them, and
-    could start the same application itself.
+    could start the same application itself. A redirect keeps the values, so another
+    site's address opened from outside the browser can send its navigation here: the
+    most that site gets is the app on a card it names, with nothing written.
 
     `Sec-Purpose` and the older `Purpose` mark a request nobody has navigated yet: a
     browser prerenders an address being typed with exactly these three values.
