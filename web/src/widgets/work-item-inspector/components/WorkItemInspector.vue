@@ -118,8 +118,6 @@ function failureText(failure: TypedFailure, fallbackKey?: string): string {
     : t(message.key, message.params ?? {})
 }
 
-const readFailureReason = (failure: TypedFailure) => failureText(failure, 'workItem.loadFailed')
-
 const {
   item,
   load: loadResource,
@@ -129,7 +127,7 @@ const {
 } = useWorkItemResource(
   () => props.reference,
   () => ({ project: props.projectId, resource: props.resourceRef }),
-  readFailureReason,
+  (failure) => failureText(failure, 'workItem.loadFailed'),
 )
 
 async function load() {
@@ -216,7 +214,6 @@ watch(
 // the primary store only, so an attached store's item asks it nothing.
 const chainRoot = computed(() => (props.writable ? (item.value?.work_item_id ?? '') : ''))
 const chain = useWorkItemChain(chainRoot, toRef(props, 'refreshToken'))
-const retryChain = () => void chain.load()
 
 const chainSection = ref<InstanceType<typeof InspectorChain> | null>(null)
 const { capture } = useInspectorReturn({
@@ -432,7 +429,7 @@ defineExpose({ close })
                 :readable="writable"
                 :scope="chain.scope.value"
                 @scope="chain.setScope"
-                @retry="retryChain"
+                @retry="chain.load"
                 @graph="(shown, branch) => emit('chain', shown, branch)"
                 @open="openFrom"
               />
