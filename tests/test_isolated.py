@@ -315,17 +315,26 @@ class GateTests(Workspace):
         self.assertEqual(["python .github/relkit.pyz audit --history --owner"], owned)
 
     def test_a_misspelled_step_is_refused_rather_than_skipped(self) -> None:
-        with self.assertRaises(SystemExit) as refused, contextlib.redirect_stderr(io.StringIO()):
-            isolated.main(["gates", "--out", str(self.out), "--only", "ruff", "mpy"])
+        with mock.patch.object(isolated, "gates", return_value=0):
+            with self.assertRaises(SystemExit) as refused:
+                with contextlib.redirect_stderr(io.StringIO()):
+                    isolated.main(["gates", "--out", str(self.out), "--only", "ruff", "mpy"])
         self.assertEqual(2, refused.exception.code)
 
     def test_the_result_directory_has_no_default(self) -> None:
-        for command in ("gates", "serve", "stop"):
-            with self.subTest(command=command):
-                with self.assertRaises(SystemExit) as refused:
-                    with contextlib.redirect_stderr(io.StringIO()):
-                        isolated.main([command])
-                self.assertEqual(2, refused.exception.code)
+        # Stand-ins, so a parser that stopped refusing fails here instead of
+        # running the whole gate list, this test included, inside this test.
+        with (
+            mock.patch.object(isolated, "gates", return_value=0),
+            mock.patch.object(isolated, "start", return_value=0),
+            mock.patch.object(isolated, "stop", return_value=0),
+        ):
+            for command in ("gates", "serve", "stop"):
+                with self.subTest(command=command):
+                    with self.assertRaises(SystemExit) as refused:
+                        with contextlib.redirect_stderr(io.StringIO()):
+                            isolated.main([command])
+                    self.assertEqual(2, refused.exception.code)
 
     def run_command_with_steps(self, *steps: isolated.Step) -> tuple[int, str]:
         with (
@@ -581,16 +590,23 @@ class ThroughTheCommandTests(Workspace):
             output, _ = process.communicate(timeout=120)
         except subprocess.TimeoutExpired:
             process.kill()
+            # The holder has to go before the pipe can close and this can return.
+            self.stop()
             process.communicate()
             self.fail(f"{arguments[0]} kept the caller's pipe open")
         return process.returncode, output.decode("utf-8", errors="replace")
 
-    def serve(self, *arguments: str) -> dict[str, int]:
-        code, said = self.command("serve", "--out", str(self.out), *arguments)
-        self.addCleanup(self.command, "stop", "--out", str(self.out))
+    def stop(self) -> tuple[int, str]:
+        return quietly(isolated.main, ["stop", "--out", str(self.out)])
+
+    def served(self, code: int, said: str) -> dict[str, int]:
+        self.addCleanup(self.stop)
         self.assertEqual(0, code, said)
         found = dict(re.findall(r"(\w+)=(\d+)", said))
         return {name: int(value) for name, value in found.items()}
+
+    def serve(self, *arguments: str) -> dict[str, int]:
+        return self.served(*quietly(isolated.main, ["serve", "--out", str(self.out), *arguments]))
 
     def get(self, port: int, path: str) -> int:
         connection = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
@@ -601,7 +617,7 @@ class ThroughTheCommandTests(Workspace):
             connection.close()
 
     def test_serve_answers_on_a_free_port_and_stop_ends_everything(self) -> None:
-        served = self.serve()
+        served = self.served(*self.command("serve", "--out", str(self.out)))
 
         self.assertNotEqual(8642, served["port"])
         self.assertEqual(200, self.get(served["port"], "/api/modules"))
@@ -610,7 +626,7 @@ class ThroughTheCommandTests(Workspace):
         self.assertTrue((self.out / isolated.LOGS / "serve.log").is_file())
         self.assertEqual([], files_under(self.real), "the server wrote into the real profile")
 
-        code, said = self.command("stop", "--out", str(self.out))
+        code, said = self.stop()
 
         self.assertEqual(0, code, said)
         self.assertFalse(alive(served["pid"]))
@@ -631,7 +647,7 @@ class ThroughTheCommandTests(Workspace):
             tables = {row[0] for row in held.execute("SELECT name FROM sqlite_master")}
         self.assertIn("planning_spaces", tables)
 
-        code, said = self.command("stop", "--out", str(self.out))
+        code, said = self.stop()
 
         self.assertEqual(0, code, said)
         self.assertFalse(self.home.exists())
@@ -639,8 +655,10 @@ class ThroughTheCommandTests(Workspace):
         self.assertEqual(before, source.read_bytes())
 
     def test_serve_reports_a_store_it_cannot_copy(self) -> None:
-        code, said = self.command(
-            "serve", "--out", str(self.out), "--store-copy", str(self.root / "missing.sqlite3")
+        self.addCleanup(self.stop)
+        code, said = quietly(
+            isolated.main,
+            ["serve", "--out", str(self.out), "--store-copy", str(self.root / "missing.sqlite3")],
         )
 
         self.assertEqual(1, code, said)
@@ -656,7 +674,7 @@ class ThroughTheCommandTests(Workspace):
         self.assertTrue(alive(served["pid"]), "the supervisor took the server with it")
         self.assertTrue(isolated.store_path(self.home).is_file())
 
-        code, said = self.command("stop", "--out", str(self.out))
+        code, said = self.stop()
 
         self.assertEqual(0, code, said)
         self.assertIn("had died", said)
