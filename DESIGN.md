@@ -339,7 +339,12 @@ chrome.
   the same toolbar: a control that sizes its inner element is structurally
   taller than the thing it wraps. A track takes the row and subtracts its own
   inset. `check:ui-system` keeps a ledger of literal heights in the 28-56px
-  band, exact in both directions like the line ledger.
+  band, exact in both directions like the line ledger. The base rule gives every
+  `button` the control's height, so a button that is a line of text and not a
+  control gives it back: a tile's title stood centred in 40px with up to 22px of
+  hole around it, and a list row's reference moved the row's shared baseline down
+  13px, for as long as nothing compared the two boxes. A compact field gives it
+  back too, or it stands 4px over the compact controls beside it.
 - Corners stay at 8px for controls, 10px for panels and 12px for the one shell
   corner; small status chips may round fully. Depth is primarily tonal; shadow
   is reserved for an overlay that must be distinguished from its owner surface.
@@ -458,6 +463,15 @@ chrome.
 - A scan surface — a board card, a table row — uses at most two type sizes: one
   for its title, one for everything else. Rank inside the row comes from tone
   and weight, never from a third size.
+- A screen decides what leads, and on a scan surface one thing does. The
+  `--font-row-title` role stands at 500, a step under a section's heading; what
+  stops the work and who holds it take the muted ink, and identity and labels the
+  tertiary one. The role stood at 600, which put 73% of a board's characters at a
+  heading's weight while the same title in a list row stood at 400: earlier work
+  settled how each fact is drawn and never which of them a reader meets first, so
+  everything was shown at once at one weight. A second question a screen can
+  answer goes behind one action rather than beside the first.
+  `production-density.spec.ts` holds this where it is drawn.
 - A KPI figure is the one step above the scale, at 28px, and every figure in a
   strip is the same size. Which one leads is said by order and column width; a
   second larger figure only adds a third size to a row of four numbers.
@@ -574,10 +588,13 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   own — a browser tab, the tray, an installer. A gradient in the chrome is the
   one exception this document would otherwise have to write into the rule above
   that forbids them.
-- **Buttons:** `VButton` owns the four weights the product uses — primary
-  (light on dark, one per surface), secondary, ghost, danger. A ghost with a label
-  rests on the control fill and steps one further on hover, so a text action reads
-  as a control; an icon-only ghost stays bare at rest. A screen does not restyle a
+- **Buttons:** `VButton` owns the five weights the product uses — primary
+  (light on dark, one per surface), secondary, ghost, text, danger. A ghost with a
+  label rests on the control fill and steps one further on hover, so a text action
+  reads as a control; an icon-only ghost stays bare at rest. `text` is an offer that
+  repeats down a surface, such as the rest of a group: it rests bare, because a fill
+  per cell stood level with the tiles it offered, and fills only under the pointer.
+  A screen does not restyle a
   bare `<button>` for an ordinary action. A weight is a set of values, not a set
   of rules: each variant declares its fill and label at rest, hovered and
   disabled, and one rule per state reads them, so no state rule can outrank a
@@ -645,14 +662,17 @@ the one-off cheaper than the shared thing.
 
 Work presents board, list, and graph views from the same Planning read model.
 It pairs a collapsible epic index with a horizontally scrollable board.
-The bar above the views is two rows and no more: the view, the queue, the
-search and, on the board, the grouping as compact controls on one row, then
-what is drawn and how much of it beside the one primary action. The queue
-folds into a menu where the row cannot hold its segments beside a usable
-search. The search's hint is whole where it fits and one word where it would
-be cut. On a phone the grouping switch shares the counts' line and says its
-word there, and gives the word up to the reset while a filter is on, so the
-work does not move as a filter turns on. Every number in the bar counts one population — the space, or a chain
+The bar above the views is two rows and no more: the view and, on the board,
+its grouping, then the filter, then the one primary action, every control of
+the row at one compact height, and under them what is drawn and how much of it.
+The grouping is a pressed control as the filter's presets are, with no switch
+among them, and it stands by the view because it arranges what is drawn;
+everything to the right of the field narrows it. The presets fold into the menu
+where the row cannot hold them beside a usable filter, and the grouping's word
+into its glyph. The filter's hint is whole where it fits and one word where it
+would be cut. On a phone the grouping shares the counts' line and says its word
+there, and gives the word up to the reset while a filter is on, so the work does
+not move as a filter turns on. Every number in the bar counts one population — the space, or a chain
 with its root — and a view that draws fewer items says what it leaves out: the
 grouped board says how many epics it draws as rows where the line has room, and
 a filter names the closed items it let through only when no open one matched.
@@ -666,13 +686,19 @@ plain task, the reference, and at its end only what stops the work — the open
 blocker it waits on, drawn as its glyph and its reference («⛔ MAIN-12», named
 «Ждёт MAIN-12»), a stale claim; the line never wraps, and an exception short
 of room keeps its glyph and says its words on hover. The title follows, at most
-three lines, then the labels on one line — as many whole chips as it holds, up
-to three, then «+N», which opens the card like the rest of the sheet; the
-chips' 28px pointer boxes are the line's height once, not a row per chip — then
-the holder and the steps when there are any. A chip's face is a percentage of
-white over whatever it lies on, so it stays a step above a resting tile, a
-hovered tile and a list row alike; the control grey it used to be is the
-hovered tile's own tone. Workable, medium and a plain task are
+three lines, then the labels on one line — as many whole ones as it holds, up
+to three, then «+N», which opens the card like the rest of the sheet — then
+the holder and the steps when there are any, the steps only while the item is
+open. Only the title takes the full ink and the row-title weight; a finished
+item's takes the muted ink, so a column of a thousand closed items does not stand
+level with the work still open. On a tile and a list row a label is its word, in
+the tertiary ink: a press filters, and its 28px pointer box reaches past the line
+into the air around it, so the line is a line of text tall. It takes a face under
+the pointer and while it is in the filter, and everywhere else it stands alone, a
+card's head, it is a chip with a face at rest. The face is a percentage of white
+over whatever it lies on, so it stays a step above a resting tile, a hovered tile
+and a list row alike; the control grey it used to be is the hovered tile's own
+tone. Workable, medium and a plain task are
 never printed: they are the norm of the columns that hold them. The title is
 the open target, stretched over the whole sheet, so the sheet opens wherever it
 is clicked and stays one Tab stop; the chips lie above it as filter buttons out
@@ -683,8 +709,14 @@ them. The reference is set in the line's own figures, not tabular ones: no
 column of digits lines up on a tile. So urgent, an improvement, a four-digit
 reference and «⛔» with another hold whole in a desktop column when the space's
 key is three letters; a longer key folds as any exception short of room does.
-On the board grouped by epic an empty cell draws no ground until a tile of its
-lane is dragged and could land there.
+On the board grouped by epic a cell with no tile drawn takes no ground until a
+tile of its lane is dragged and could land there, and a finished cell's offer of
+its tiles is a line of text. An epic's row is one line: its reference, its title
+and what it holds, and its state only once the epic has moved, since one not
+started is the norm of a board that holds a hundred of them and the word goes on
+being read out. Its card and its chain come up under the pointer and when the
+keyboard reaches them, in place, so the line does not shift; where nothing can
+hover they stay. A pointer's press on the row does not leave them up.
 The Done column, and a lane's Done cell, stand newest closed first, by the time
 of the item's latest transition; nothing there is planned, so the manual order
 of the other columns does not apply. A tile does not move within Done, by drag
@@ -729,7 +761,9 @@ its start — and never a row above it with only a stem to say whose it is. Wher
 a lane names some of its work under way and not all, a last label says how
 many it left out. A chain view's legend names only the states its drawing
 holds, on the map as on the graph, so no key — least of all the emphatic
-«Blocked» — stands for nothing. Chain views name a single state as the board's
+«Blocked» — stands for nothing; on the map each key has its figure, so it is where
+the section says what stands where and no sentence names the groups again. Chain
+views name a single state as the board's
 column does and a group of states by the group's own word, never by a
 workflow key. The graph's key stands in the field's own strip above the flow,
 not in the bar, and keeps the place of a state a switch can add, so no switch
@@ -754,8 +788,8 @@ and coming back to the same scope finds the camera where it was left. The
 2.1.0 rule that framed the field afresh on every new queue or search was
 withdrawn by the owner after use: each narrowing cost the operator their place
 and their zoom. The keys to the chain list its
-groups as a lane runs, finished first, while the card's totals line and member
-list run as work is taken, what is under way first. «Show on graph» from a card
+groups as a lane runs, finished first, while the card's member list runs as work
+is taken, what is under way first. «Show on graph» from a card
 whose map has a branch chosen opens the
 chain framed on that branch — the whole of its work where that reads, else its
 beginning at reading size — with its members edged in the selection accent, a
@@ -764,9 +798,13 @@ goes to the graph, never to the page. The field is one Tab stop: the arrows
 walk to the nearest node their way, Home and End to the first and last as the
 field is read, and the camera follows. Zoomed out past reading, the graph draws each node as a block of its
 state's colour with its reference, so the whole of a long chain reads as an
-overview. Under the map, one line gives the totals and a second answers
-whether and when the open part closes, from the last seven days, and says so
-as a range when those days disagree.
+overview. Under the map, one line gives the figures the key does not — the work under the
+root, how much is open, how much can be taken — and a second answers whether and
+when the open part closes, from the last seven days, and says so as a range when
+those days disagree. Where the pace can say nothing that second line is not there.
+What those days added and closed, why there is no verdict yet, and the chart of
+the chain's history stand one action away, and the action's state comes back with
+the card's other reading on Back. The scope rides the heading's row.
 A card is a bar that never moves and one scroller under it, and no layout in it
 depends on where that scroller stands. The bar has one height: on its left the item
 in one tertiary line — the kind (glyph and word), the reference (it copies itself),
