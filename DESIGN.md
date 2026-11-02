@@ -890,9 +890,17 @@ its description as leaves the labels scannable, so that the first screen still s
 is asked and what the choices are. A description of one line stands whole under its
 label; a longer one shows its first words on one quiet line, and past six described
 options even that goes; either opens on the row's own chevron, selects nothing by opening,
-and can stand open beside another. The radio is named by its label alone and described
-only by a line, or a screen reader would read paragraphs on every arrow press, and the
-chevron is a tab stop only on the row the keyboard stands on, so that Tab reaches Send.
+and can stand open beside another. What is chosen is never left folded: it stands whole
+under the options and above Send, because only what was shown in full may be sent as the
+person's answer, and an agent can put a condition in what a row folds away. It stands
+there rather than opening in the row so that choosing moves no row: a row closing above the
+next press would take that one from under the pointer, and near the top of a card there
+is no scroll to take that back. The arrows bring the chosen row into view by no more than
+it takes, not to the middle of the view as a browser's own do. The radio is named by its
+label alone and described only by a line, or a screen reader would read paragraphs on every
+arrow press; a description standing under the options is named as its details and read by
+going on to it. The chevron is a tab stop only on the row the keyboard stands on, so that
+Tab reaches Send.
 Words of one's own are always one quiet press away, in the shared editor under the options,
 and with text in them no field is required; declining is as quiet. A selection or a note
 held is a draft the guard asks about. A send that fails keeps all of it with the reason in

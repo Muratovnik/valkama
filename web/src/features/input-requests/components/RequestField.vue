@@ -10,10 +10,13 @@
  * radio is named by its label alone, or a screen reader would read the paragraphs under
  * it on every arrow press; a line of description is its description, a text is not.
  *
- * What is folded opens on its own press, stays open beside another, and neither opens
- * by selecting nor selects by opening. Its toggle is a tab stop only on the row the
- * keyboard stands on, and so is the row's radio while none is chosen, which the browser
- * would otherwise stop on each time: twelve toggles stood between the group and Send.
+ * What is folded opens on its own press, stays open beside another and selects nothing.
+ * What is chosen is never left folded: it stands whole under the options
+ * (`RequestChosen`) unless it is open in its row, so the toggle of a chosen row only moves
+ * it between the two and Send never sends what was not shown. Its toggle is a tab stop
+ * only on the row the keyboard stands on, and so is the row's radio while none is chosen,
+ * which the browser would otherwise stop on each time: twelve toggles stood between the
+ * group and Send.
  *
  * A text answer is written in the markdown editor, because the answered request draws
  * it as markdown: `preview` shows it as it will read, shared by the question's text
@@ -27,7 +30,9 @@
 import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import RequestChosen from '@/features/input-requests/components/RequestChosen.vue'
 import { descriptionViews } from '@/features/input-requests/utils/optionDescriptions.ts'
+import { moveRadioChoice } from '@/features/input-requests/utils/radioArrows.ts'
 
 import type { InputRequestField, InputRequestOption } from '@/shared/api/inputRequestModel.ts'
 import { plainText } from '@/shared/lib/richText.ts'
@@ -132,6 +137,18 @@ const toggleLabel = (option: string) =>
   t(isOpen(option) ? 'platform.actions.collapse' : 'platform.actions.expand')
 const toggleName = (option: InputRequestOption) => `${toggleLabel(option.id)}: ${option.label}`
 const showsExcerpt = (option: string) => viewOf(option) === 'excerpt' && !isOpen(option)
+/** What is chosen and still folded in its row, in the options' order. */
+const chosenFolded = computed(() =>
+  options.value.flatMap(({ id: option, label: name, description }) =>
+    description && opens(option) && isChosen(option) && !isOpen(option)
+      ? [{ id: detailsId(option), label: name, description }]
+      : [],
+  ),
+)
+const detailsId = (option: string) => `${id}-details-${option}`
+const detailsOf = (option: string) =>
+  chosenFolded.value.some((entry) => entry.id === detailsId(option)) ? detailsId(option) : undefined
+const moveChoice = (event: KeyboardEvent) => moveRadioChoice(event, '.request-option')
 
 /** The row the keyboard stands on, or where it would land. */
 const active = ref<string | null>(null)
@@ -204,6 +221,7 @@ defineExpose({ focus })
           :checked="isChosen(option.id)"
           :aria-labelledby="labelId(option.id)"
           :aria-describedby="describedBy(option)"
+          :aria-details="detailsOf(option.id)"
           :aria-invalid="invalidMark"
           @focus="active = option.id"
           @change="pick(option.id, $event)"
@@ -218,7 +236,9 @@ defineExpose({ focus })
           :tabindex="radioStop(option.id)"
           :aria-labelledby="labelId(option.id)"
           :aria-describedby="describedBy(option)"
+          :aria-details="detailsOf(option.id)"
           @focus="active = option.id"
+          @keydown="moveChoice"
           @change="pick(option.id, $event)"
         />
         <span class="request-option-text">
@@ -273,6 +293,7 @@ defineExpose({ focus })
         :source="option.description"
       />
     </div>
+    <RequestChosen :entries="chosenFolded" />
     <small
       v-if="error"
       :id="errorId"

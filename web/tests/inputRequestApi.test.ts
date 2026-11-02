@@ -141,7 +141,7 @@ describe('input request wire contract', () => {
     })
     const noted = {
       ...envelope,
-      request: { ...entry.request, status: 'answered', answers: null, note: 'Words' },
+      request: { ...entry.request, status: 'answered', answers: {}, note: 'Words' },
     }
     expect(validateInputRequestDetail(noted).request.note).toBe('Words')
   })
@@ -165,6 +165,12 @@ describe('input request wire contract', () => {
       validateInputRequestDetail({
         ...envelope,
         request: { ...entry.request, answers: { proceed: true } },
+      }),
+    ).toThrow()
+    expect(() =>
+      validateInputRequestDetail({
+        ...envelope,
+        request: { ...entry.request, status: 'answered', answers: null, note: 'Words' },
       }),
     ).toThrow()
     expect(() => validateInputRequestList({ ...requestList(), unknown: true })).toThrow()

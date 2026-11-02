@@ -59,9 +59,7 @@ const requestSchema = strictObject({
     'Duplicate field IDs',
   )
   .refine(
-    (request) =>
-      (request.status === 'answered') === (request.answers !== null) ||
-      (request.status === 'answered' && Boolean(request.note)),
+    (request) => (request.status === 'answered') === (request.answers !== null),
     'Invalid answer state',
   )
 
