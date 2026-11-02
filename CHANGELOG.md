@@ -67,8 +67,9 @@ checkouts are therefore distinguishable even at the same version.
   sign of activity and the time between, and how it is known to be there. An agent
   is on the item when it wrote there or holds a step, or when the session that
   started it held the item at that moment; a session holding several items puts it
-  on each, and the row says how many. An agent whose parent held nothing and that
-  wrote nothing is on no card. The list updates on its own through the existing
+  on each and the row says how many, unless the agent wrote to some item, which
+  places it there alone. An agent whose parent held nothing and that wrote nothing
+  is on no card. The list updates on its own through the existing
   event stream. The section is absent while no agent is on the item, and a long list
   folds to the three most recent.
 - **`valkama hook claude post-tool-use`** names an agent from the call that started

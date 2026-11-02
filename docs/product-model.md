@@ -149,7 +149,8 @@ read, and the row says which kind it is:
 - **By the coordinator's claim** (`link: "claim"`): the session that started the agent
   held this item at that moment, by its own confirmed claim. A session holding several
   items puts the agent on each of them, and `coordinator_items` says how many it held,
-  because nothing shows which of them the agent was started for.
+  because nothing shows which of them the agent was started for. An agent that wrote to
+  any item stands only where it wrote, since that does show it.
 
 An agent that wrote nothing, whose parent session held nothing when it started, is on
 no card. Neither is an agent Claude Code ran for its own purposes, such as a prompt

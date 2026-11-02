@@ -5,8 +5,9 @@ wrote nothing is linked to no work item by anything written down. So the link is
 read, never stored: `exact` when the agent wrote to the item or holds one of its
 steps, `claim` when its parent session held the item at the moment it started.
 A parent holding several items puts the agent on each and the row says how many,
-because a guess written into a column would read as a fact. An agent whose parent
-held nothing and that wrote nothing stands on no card.
+because a guess written into a column would read as a fact. The claim is only for
+an agent nothing else places: one that wrote to any item stands where it wrote. An
+agent whose parent held nothing and that wrote nothing stands on no card.
 
 Everything a row says is what the record shows. A session row does not prove a
 process is alive and a subagent cut off by a restart leaves no end, so a row gives
@@ -193,6 +194,20 @@ def _agents_of(conn: sqlite3.Connection, session_id: str) -> dict[str, _Agent]:
     return found
 
 
+def _writers(conn: sqlite3.Connection, session_id: str) -> set[str]:
+    """The agents of one session whose own confirmed call wrote to some item."""
+
+    return {
+        str(row[0])
+        for row in conn.execute(
+            "SELECT DISTINCT agent_id FROM execution_events"
+            " WHERE kind = ? AND session_id = ? AND identity_state = ?"
+            " AND work_item_id IS NOT NULL AND COALESCE(agent_id, '') != ''",
+            (calls.KIND, session_id, calls.CONFIRMED),
+        )
+    }
+
+
 def _steps_held(session_id: str, agent_id: str, checklist: Iterable[Mapping]) -> list[dict]:
     held = calls.holder_label(_HOLDER_NAME, session_id, agent_id)
     return [
@@ -249,9 +264,10 @@ def on_item(
         by_session.setdefault(hold.session_id, []).append(hold)
     for session_id, holds in by_session.items():
         everything: list[_Hold] | None = None
+        placed = _writers(conn, session_id)
         for agent in agents_of(session_id).values():
             key = (session_id, agent.agent_id)
-            if key in chosen or not agent.started:
+            if key in chosen or not agent.started or agent.agent_id in placed:
                 continue
             if not any(hold.covers(agent.started_at) for hold in holds):
                 continue

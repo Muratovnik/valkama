@@ -262,6 +262,23 @@ class ClaimLinkTests(AgentsCase):
                 found = self.one(reference)
                 self.assertEqual(("claim", 3), (found["link"], found["coordinator_items"]))
 
+    def test_an_agent_that_wrote_elsewhere_stands_only_where_it_wrote(self) -> None:
+        """The claim guesses for an agent nothing places; a write has placed this one."""
+
+        self.claim(self.item, 1)
+        self.claim(self.other, 2)
+        self.started(5)
+        self.started(6, agent_id=SIBLING, session_id=PARENT)
+        self.write_as(agent_call(), self.other)
+        self.assertEqual(
+            {AGENT: "exact", SIBLING: "claim"},
+            {row["agent_id"]: row["link"] for row in self.on_card(self.other)},
+        )
+        self.assertEqual(
+            [(SIBLING, 2)],
+            [(row["agent_id"], row["coordinator_items"]) for row in self.on_card()],
+        )
+
     def test_the_count_is_of_what_was_held_at_the_start_not_ever(self) -> None:
         released_before = self.new_item("Released before")
         taken_after = self.new_item("Taken after")
