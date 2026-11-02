@@ -21,6 +21,14 @@ from server import store, store_backups
 from tests import SUITE_STORE
 
 
+class WindowsRefusalError(PermissionError):
+    """What a rename raises on Windows, on any platform these tests run on."""
+
+    def __init__(self, winerror: int) -> None:
+        super().__init__(13, "Access is denied")
+        self.winerror = winerror
+
+
 def build_legacy_root(home: str, root_name: str = ".agent-hub", prefix: str = "hub") -> str:
     """A store shaped exactly like the one the rename has to pick up."""
 
@@ -189,6 +197,79 @@ class StoreAdoptionTests(unittest.TestCase):
                 store.adopt_legacy_store()
         self.assertTrue(os.path.isdir(legacy), "a refusal leaves the old store exactly as it was")
         self.assertFalse(os.path.exists(os.path.join(self.home.name, ".valkama")))
+
+    def test_a_holder_that_lets_go_by_itself_does_not_stop_the_adoption(self) -> None:
+        """A scanner reading freshly written files refused this rename on a release run."""
+
+        legacy = build_legacy_root(self.home.name)
+        real_rename = os.rename
+        refusals = [WindowsRefusalError(5), WindowsRefusalError(32)]
+
+        def rename(source: str, target: str) -> None:
+            if refusals:
+                raise refusals.pop(0)
+            real_rename(source, target)
+
+        with (
+            mock.patch("os.rename", side_effect=rename),
+            mock.patch("time.sleep") as sleep,
+        ):
+            adopted = store.adopt_legacy_store()
+
+        self.assertEqual(os.path.join(self.home.name, ".valkama"), adopted)
+        self.assertFalse(os.path.exists(legacy))
+        self.assertTrue(os.path.isfile(os.path.join(adopted, "valkama.sqlite3")))
+        self.assertEqual(2, sleep.call_count)
+
+    def test_a_holder_that_stays_is_refused_within_about_a_second(self) -> None:
+        legacy = build_legacy_root(self.home.name)
+        with (
+            mock.patch("os.rename", side_effect=WindowsRefusalError(5)),
+            mock.patch("time.sleep") as sleep,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "predates the rename"):
+                store.adopt_legacy_store()
+
+        self.assertLessEqual(sum(call.args[0] for call in sleep.call_args_list), 1.1)
+        self.assertTrue(os.path.isdir(legacy), "a refusal leaves the old store exactly as it was")
+        self.assertFalse(os.path.exists(os.path.join(self.home.name, ".valkama")))
+
+    def test_a_file_held_for_a_moment_after_the_move_still_gets_its_new_name(self) -> None:
+        """After the directory moved there is no way back: a file left under its
+        old name would look like an empty board at the next start."""
+
+        build_legacy_root(self.home.name)
+        real_rename = os.rename
+        calls: list[str] = []
+        refusals = [WindowsRefusalError(32)]
+
+        def rename(source: str, target: str) -> None:
+            calls.append(source)
+            if len(calls) > 1 and refusals:  # the first call moves the directory
+                raise refusals.pop(0)
+            real_rename(source, target)
+
+        with mock.patch("os.rename", side_effect=rename), mock.patch("time.sleep"):
+            adopted = store.adopt_legacy_store()
+
+        self.assertEqual([], refusals, "the refusal was never met, so this proved nothing")
+        self.assertTrue(os.path.isfile(os.path.join(adopted, "valkama.sqlite3")))
+        self.assertTrue(os.path.isdir(os.path.join(adopted, "valkama.modules")))
+        self.assertEqual([], [n for n in os.listdir(adopted) if n.startswith("hub")])
+
+    def test_a_failure_that_is_not_a_holder_is_refused_at_once(self) -> None:
+        """A path not found does not pass with time, so no time is spent on it."""
+
+        build_legacy_root(self.home.name)
+        with (
+            mock.patch("os.rename", side_effect=WindowsRefusalError(3)) as rename,
+            mock.patch("time.sleep") as sleep,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "predates the rename"):
+                store.adopt_legacy_store()
+
+        self.assertEqual(1, rename.call_count)
+        sleep.assert_not_called()
 
     def test_a_racing_adoption_loses_loudly_without_losing_or_half_moving_data(self) -> None:
         """`os.path.exists(current)` and `os.rename(legacy, current)` are not

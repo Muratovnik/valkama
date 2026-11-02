@@ -10,6 +10,15 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+### Fixed
+
+- Adopting a store written under an earlier product name waits about a second
+  when Windows refuses a rename with access denied or a sharing violation, which
+  is what it answers while a scanner or an indexer has just opened a file there.
+  It used to refuse at once and ask the operator to close something they had no
+  way to find. A holder that does not let go gets that refusal, and any other
+  failure gets it straight away.
+
 ## [2.2.0](https://github.com/Muratovnik/valkama/compare/v2.1.0...v2.2.0) - 2026-11-02
 
 The bold entries at the top of **Changed** alter what existing MCP and HTTP
