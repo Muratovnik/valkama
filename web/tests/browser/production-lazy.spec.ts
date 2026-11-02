@@ -64,9 +64,12 @@ test('the board downloads neither the graph nor Settings, and reaching for eithe
   await expect.poll(() => settings.length).toBe(1)
 
   const panelSeen = await watchStagePanels(page)
+  // Awaited below, and started here: a response that arrives before anyone is
+  // waiting for it is never reported, and the wait runs out the test's time.
+  const downloaded = page.waitForResponse(GRAPH_CHUNK)
   await page.getByRole('group', { name: 'View', exact: true }).hover()
   await expect.poll(() => graph.length).toBe(1)
-  await page.waitForResponse(GRAPH_CHUNK)
+  await downloaded
   await page.getByRole('button', { name: 'Graph', exact: true }).click()
   await expect(page.locator('.graph-canvas.settled')).toBeVisible()
   // Downloaded on intent, so the switch itself had nothing to wait for.
