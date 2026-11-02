@@ -79,7 +79,9 @@ compares runtime identities, so a stale listener makes it refuse every click,
 and the refusal used to be silent. When anything under `desktop/` changed, run
 `npm run dist` there as well; the installed app is a separate artifact that no
 web build touches, and reporting a desktop change as delivered without it hands
-the owner their previous binary.
+the owner their previous binary. A browser an agent drives against a real listener
+opens a card through its route or `/open/<number>?in=browser`, because `/open/<number>`
+alone starts the desktop app on the person's screen.
 
 Every tool above is a development dependency pinned in `requirements-dev.txt`,
 configured in `pyproject.toml`. The server itself imports nothing outside the
