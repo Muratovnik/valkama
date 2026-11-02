@@ -500,6 +500,11 @@ class RowFactsTests(AgentsCase):
             {row["agent_id"]: row["last_activity_at"] for row in self.on_card()},
         )
 
+    def test_a_session_id_that_is_not_a_plain_name_names_no_file(self) -> None:
+        parent = "/transcripts/parent.jsonl"
+        self.assertEqual("", agents._agent_transcript(parent, "../other", AGENT))
+        self.assertNotEqual("", agents._agent_transcript(parent, PARENT, AGENT))
+
     def test_an_agent_with_a_newer_transcript_ranks_first(self) -> None:
         self.known_transcript()
         self.started(1, agent="quiet")

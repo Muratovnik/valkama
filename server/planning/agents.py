@@ -49,8 +49,8 @@ _STARTED_KINDS = frozenset({"subagent_start", "agent_launch"})
 _NOT_ITS_ACTIVITY = frozenset({"transcript_archived", "transcript_purged", "agent_launch"})
 
 _SECOND = 19
-#: The agent ids that may name a file: letters, digits, `_` and `-`, nothing that could be a path part.
-_AGENT_FILE_ID = re.compile(r"[A-Za-z0-9_-]+")
+#: The ids that may name a file: letters, digits, `_` and `-`, nothing that could be a path part.
+_FILE_ID = re.compile(r"[A-Za-z0-9_-]+")
 
 
 def _moment(value: object) -> str:
@@ -70,7 +70,7 @@ def _agent_transcript(parent_transcript: str, session_id: str, agent_id: str) ->
     parent's own transcript: `<dir>/<sessionId>/subagents/agent-<agentId>.jsonl`.
     """
 
-    if not parent_transcript or not _AGENT_FILE_ID.fullmatch(agent_id):
+    if not (parent_transcript and _FILE_ID.fullmatch(session_id) and _FILE_ID.fullmatch(agent_id)):
         return ""
     return os.path.join(
         os.path.dirname(parent_transcript), session_id, "subagents", f"agent-{agent_id}.jsonl"
