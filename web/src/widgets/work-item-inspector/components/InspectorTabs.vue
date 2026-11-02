@@ -9,7 +9,7 @@
  * it changes, and so is each one the keyboard reaches, which the browser leaves where
  * it is while a sliver of it shows.
  */
-import { onMounted, ref, watch } from 'vue'
+import { nextTick, onMounted, ref, watch } from 'vue'
 
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
@@ -36,7 +36,11 @@ function revealShown() {
 }
 
 onMounted(revealShown)
-watch(shown, revealShown, { flush: 'post' })
+// Once the whole flush is over, and not in its post queue. Overview is `v-show`, which
+// shows it from that same queue and behind this watcher, so a section leaving had left
+// nothing to measure: asking for layout there collapsed the scroller to an empty body,
+// the browser clamped it to 0, and the strip left from under the pointer that pressed it.
+watch(shown, () => nextTick(revealShown))
 
 function focused(event: FocusEvent) {
   if (event.target instanceof Element) reveal(event.target)
