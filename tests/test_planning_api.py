@@ -500,8 +500,12 @@ class PlanningRouteDispatchTests(unittest.TestCase):
         assert boundary is not None
         self.assertIs(http_surface._planning_exact_read, boundary.handler)
         self.assertIn(
-            "item_loader=planning_service.get_work_item",
+            "item_loader=_card_record",
             inspect.getsource(http_surface._planning_exact_read),
+        )
+        self.assertIn(
+            "planning_service.get_work_item(",
+            inspect.getsource(http_surface._card_record),
         )
         # And the handler really does demand one, which is what makes passing it
         # the fix rather than a decoration.

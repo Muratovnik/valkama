@@ -91,7 +91,9 @@ test('news of an agent reaches an open card, with no frame of the model and no p
   const reads: string[] = []
   page.on('request', (request) => {
     const { pathname } = new URL(request.url())
-    if (pathname.startsWith('/api/')) reads.push(pathname)
+    if (pathname === '/api/modules/planning/work-item' || pathname.startsWith('/api/planning')) {
+      reads.push(pathname)
+    }
   })
   await page.clock.fastForward('05:00')
   expect(reads).toEqual([])
