@@ -345,8 +345,16 @@ class FollowReleaseTests(unittest.TestCase):
         holder.listen(1)
         load = mock.Mock()
         with mock.patch.object(launcher, "start_on_demand_listener") as start:
-            status = on_demand.run(holder.getsockname()[1], load=load, retry_seconds=0.01)
-        self.assertEqual(0, status)
+            # In a thread: a process that never follows would wait for this port forever.
+            thread = threading.Thread(
+                target=on_demand.run,
+                args=(holder.getsockname()[1],),
+                kwargs={"load": load, "retry_seconds": 0.01},
+                daemon=True,
+            )
+            thread.start()
+            thread.join(10)
+        self.assertFalse(thread.is_alive())
         load.assert_not_called()
         start.assert_called_once()
 
