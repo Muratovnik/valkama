@@ -10,6 +10,8 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+## [2.2.0](https://github.com/Muratovnik/valkama/compare/v2.1.0...v2.2.0) - 2026-11-02
+
 The bold entries at the top of **Changed** alter what existing MCP and HTTP
 calls return; an agent or integration written for 2.1.0 should read them first.
 The store is unchanged at schema 9, so the upgrade runs no migration, and the
