@@ -808,18 +808,7 @@ class ListenerEffects(NamedTuple):
 
 
 def _spawn_detached(arguments: list[str], directory: Path) -> int:
-    """Start a process that outlives this one, with no window and no inherited pipes."""
-
-    process = subprocess.Popen(
-        arguments,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        close_fds=True,
-        cwd=directory,
-        creationflags=getattr(subprocess, "DETACHED_PROCESS", 0),
-    )
-    return process.pid
+    return processes.start_detached(arguments, cwd=directory)
 
 
 def _on_demand_arguments(current: dict[str, object], port: int) -> list[str]:

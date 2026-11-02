@@ -288,7 +288,8 @@ as every other, and it answers:
 
 | The address | Answer |
 | --- | --- |
-| names an item in a space a project binds | `302` to `/modules/planning/project/<project>?entity=<entity>`, the route the card has when it is opened any other way, with `Cache-Control: no-store` |
+| names an item in a space a project binds, followed by a person, with the desktop app installed | `200` and a small page, after starting the app on the card; see below |
+| names an item in a space a project binds, in any other case | `302` to `/modules/planning/project/<project>?entity=<entity>`, the route the card has when it is opened any other way, with `Cache-Control: no-store` |
 | names anything else | the app page with `404`, which says what is wrong and offers the next step |
 | reaches a store or a project registry that cannot be read | the app page with `503`, which offers another try |
 
@@ -304,6 +305,35 @@ The page reads why from `GET /api/modules/planning/search`, whose coverage names
 each source it read and each it could not: a number nobody filed, a key no project
 binds, and a store that did not answer read differently, and an item is never
 called missing while a store that may hold it stayed silent.
+
+An agent client's chat keeps a link only for ordinary schemes and opens it in the
+default browser, so a link always arrives through a browser tab, and a scheme of the
+product's own would not survive the chat. On Windows the listener therefore hands the
+card to the desktop app itself when all of these hold:
+
+- the request is a navigation started outside any page: exactly one each of
+  `Sec-Fetch-Site: none`, `Sec-Fetch-Dest: document` and `Sec-Fetch-Mode: navigate`,
+  and neither `Sec-Purpose` nor `Purpose`, which mark a prerender of an address still
+  being typed. An address opened from another application, typed or bookmarked is
+  such a navigation. Nothing a page does is, so no other site can start the app;
+- the query does not say `in=browser`;
+- `%LOCALAPPDATA%\Programs\valkama-desktop\Valkama.exe` exists;
+- the listener is on the port `VALKAMA_PORT` names, or the default. A second
+  `serve --port` keeps its links to itself, because an open window belongs to the
+  expected listener and would look the card up in the wrong store.
+
+The app starts detached, with `--open-path=<card route>`, its own directory as working
+directory, `VALKAMA_PORT` set to this listener's port and no `ELECTRON_RUN_AS_NODE`. It
+takes the argument at first start and on a second launch, ignores any other shape, and
+raises its window. The page it answers is `no-store`, says the item opened in the app,
+links to `/open/<reference>?in=browser` and closes its own tab. A browser lets a script
+close only a tab with a single history entry, and some let it close none; such a tab
+stays open on that page. Its address has already been replaced by the link, so a
+reload or a restored session shows the card instead of starting the app again.
+
+If the app cannot be started the answer is the `302`. A child that starts and then
+fails is not seen, and a Desktop build older than the listener opens without moving to
+the card.
 
 A work item's full record in an MCP answer (`get_work_item`, a `verbose` write,
 `claim_ready_work_item`) and every write acknowledgement carry the address as

@@ -24,6 +24,8 @@ import os
 import signal
 import subprocess
 import sys
+import threading
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -72,6 +74,33 @@ def run_text(
         stdout=completed.stdout.decode(encoding, errors),
         stderr=completed.stderr.decode(encoding, errors),
     )
+
+
+def start_detached(
+    argv: list[str],
+    *,
+    cwd: str | os.PathLike[str],
+    env: Mapping[str, str] | None = None,
+) -> int:
+    """Start a process that outlives this one, with no window and no inherited pipes.
+
+    A thread stays with the handle until the child ends, so a long-lived caller keeps
+    no finished child behind and nothing here ever makes that caller wait.
+    """
+
+    process = subprocess.Popen(
+        argv,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        close_fds=True,
+        shell=False,
+        cwd=cwd,
+        env=env,
+        creationflags=getattr(subprocess, "DETACHED_PROCESS", 0),
+    )
+    threading.Thread(target=process.wait, daemon=True).start()
+    return process.pid
 
 
 def stop_process_tree(process: Any, *, wait_timeout: float = 2.0) -> bool:
@@ -129,4 +158,4 @@ def stop_process_tree(process: Any, *, wait_timeout: float = 2.0) -> bool:
     return False
 
 
-__all__ = ["TextResult", "run_text", "stop_process_tree"]
+__all__ = ["TextResult", "run_text", "start_detached", "stop_process_tree"]

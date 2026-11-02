@@ -29,6 +29,17 @@ checkouts are therefore distinguishable even at the same version.
 - A holder signed as `name session <id>` with no brackets is shortened as a holder
   signed `name (session <id>)` is, on the card, the board and the chain, with the
   whole value in the card's tooltip.
+### Added
+
+- **A link to a work item opens in the desktop app.** On Windows with the app
+  installed, `GET /open/MAIN-12` followed from outside a browser page, such as a link
+  in an agent client's chat, starts the app on that card and answers a page that closes
+  its own tab where the browser allows it, with a link to open the item in the browser
+  instead (`?in=browser`). The app takes `--open-path=<card route>` at first start and
+  on a second launch, and ignores any other shape. Every other request keeps the
+  redirect: a request made by any page, a prerender, a machine without the app, a
+  listener on another port, a launch that fails. Reinstall the desktop app along with
+  the server: an older build opens without moving to the card.
 
 ## [2.3.0](https://github.com/Muratovnik/valkama/compare/v2.2.0...v2.3.0) - 2026-11-02
 

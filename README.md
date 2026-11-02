@@ -710,6 +710,13 @@ manifest selects the release pinned from this repository; there is no second
 desktop source record or checkout-path fallback. Each step of opening the
 window is logged, with its time, to `%TEMP%\valkama-desktop.log`.
 
+With the app installed on Windows, a link to a work item followed from outside a
+browser page opens the card in this window, at first start or on top of a running
+window, and the browser tab closes itself where the browser allows it. The page in
+that tab offers to open the item in the browser instead;
+[the address of a work item](docs/connection-contract.md#the-address-of-a-work-item)
+states when this happens.
+
 ```bash
 cd desktop
 npm ci

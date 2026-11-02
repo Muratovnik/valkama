@@ -29,7 +29,7 @@ from .executions import lifecycle as execution_lifecycle
 from .executions import service as execution_service
 from .federation import federated_search, federated_spaces
 from .memory import api as memory_api
-from .ops import doctor
+from .ops import desktop_app, doctor
 from .planning import agents as planning_agents
 from .planning import api as planning_api
 from .planning import calls as planning_calls
@@ -789,7 +789,26 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._send_asset("index.html", status)
 
-    def _follow_work_item_link(self, path: str) -> None:
+    def _opened_in_app(self, text: str, location: str, query: str) -> bool:
+        """Answer from the desktop app when this is a person's click and the app can take it."""
+
+        if "browser" in parse_qs(query).get("in", []):
+            return False
+        reference = planning_model.exact_reference(text)
+        if reference is None or not http_security.is_person_navigation(self.headers):
+            return False
+        if not desktop_app.open_card(location, port=self.server.server_port):
+            return False
+        page, policy = desktop_app.opened_page(reference, self.headers.get("Accept-Language"))
+        self._send(
+            200,
+            page,
+            CONTENT_TYPES[".html"],
+            headers={"Content-Security-Policy": policy, "Cache-Control": "no-store"},
+        )
+        return True
+
+    def _follow_work_item_link(self, path: str, query: str) -> None:
         """Redirect to the card a link names, or let the app say why it cannot.
 
         The address is one a person follows, so every failure is answered by the
@@ -798,6 +817,9 @@ class Handler(BaseHTTPRequestHandler):
         cannot open is such a failure too, which is why this does not go through
         `_open_store`. The answer is never cached, because an item that is missing
         now may be filed a minute later and a binding can move.
+
+        An address that leads to a card goes to the desktop app first when it is
+        installed and this is a person's click; nothing else starts it.
         """
 
         text = unquote(path[len(_WORK_ITEM_LINK) + 1 :])
@@ -815,6 +837,8 @@ class Handler(BaseHTTPRequestHandler):
         if location is None or _CARD_ROUTE.fullmatch(location) is None:
             self._send_index(404)
             return
+        if self._opened_in_app(text, location, query):
+            return
         self._send(
             302,
             b"",
@@ -827,7 +851,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self._require_validated_host():
             return
         if url.path == _WORK_ITEM_LINK or url.path.startswith(f"{_WORK_ITEM_LINK}/"):
-            self._follow_work_item_link(url.path)
+            self._follow_work_item_link(url.path, url.query)
             return
         if url.path == "/api/security/bootstrap":
             try:

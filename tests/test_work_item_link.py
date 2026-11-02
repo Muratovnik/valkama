@@ -3,18 +3,25 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import http.client
 import json
 import os
+import re
+import sys
 import tempfile
 import threading
+import time
 import unittest
+from collections.abc import Sequence
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
 from unittest import mock
 from urllib.parse import parse_qs, urlsplit
 
-from server import http_surface, mcp_surface, store
-from server.ops import configuration
+from server import http_surface, mcp_surface, processes, store
+from server.ops import configuration, desktop_app
 from server.planning import api as planning_api
 from server.planning import service
 from server.projects import project_registry, scopes
@@ -26,9 +33,15 @@ from server.store_identity.refs import (
 )
 from tests.registry_fixtures import project_entry, registry_bytes
 
+if sys.platform == "win32":
+    import _winapi
+
+ROOT = Path(__file__).resolve().parents[1]
+
 #: Worked out by hand from the route grammar, with nothing from the module under
 #: test. `web/tests/platformRoute.test.ts` holds the same literal and reads it with
-#: the parser the browser runs: the two languages share this route and no code.
+#: the parser the browser runs, and `desktop/open_path.test.js` holds it too: the
+#: languages share this route and no code.
 TWIN_ROUTE = (
     "/modules/planning/project/example-project?entity="
     "eyJraW5kIjoid29yay1pdGVtIiwicmVzb3VyY2VfaWQiOiJleUp5WldabGNtVnVZMlVpT2lKTlFVbE9MVEV5SWl3aWMz"
@@ -58,7 +71,9 @@ class RouteSpellingTests(unittest.TestCase):
         )
 
 
-class WorkItemLinkTests(unittest.TestCase):
+class LinkedStoreCase(unittest.TestCase):
+    """A real listener over two stores, whose projects bind the spaces a link names."""
+
     def setUp(self) -> None:
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
@@ -114,16 +129,32 @@ class WorkItemLinkTests(unittest.TestCase):
             entries.append(entry)
         self.registry.write_bytes(registry_bytes(entries))
 
-    def get(self, path: str, *, host: str | None = None) -> http.client.HTTPResponse:
+    def get(
+        self,
+        path: str,
+        *,
+        host: str | None = None,
+        headers: Sequence[tuple[str, str]] = (),
+    ) -> http.client.HTTPResponse:
         client = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=5)
         self.addCleanup(client.close)
         client.putrequest("GET", path, skip_host=True, skip_accept_encoding=True)
         client.putheader("Host", host or f"127.0.0.1:{self.server.server_port}")
+        for name, value in headers:
+            client.putheader(name, value)
         client.endheaders()
         return client.getresponse()
 
-    def assert_leads_to(self, path: str, project_id: str, space_ref: dict, reference: str) -> None:
-        response = self.get(path)
+    def assert_leads_to(
+        self,
+        path: str,
+        project_id: str,
+        space_ref: dict,
+        reference: str,
+        *,
+        headers: Sequence[tuple[str, str]] = (),
+    ) -> None:
+        response = self.get(path, headers=headers)
         response.read()
         self.assertEqual(302, response.status, path)
         location = urlsplit(response.getheader("Location") or "")
@@ -135,16 +166,20 @@ class WorkItemLinkTests(unittest.TestCase):
             {"reference": reference, "space_ref": space_ref}, _decoded(entity["resource_id"])
         )
 
-    def assert_shell_says_why(self, path: str, status: int = 404) -> None:
+    def assert_shell_says_why(
+        self, path: str, status: int = 404, *, headers: Sequence[tuple[str, str]] = ()
+    ) -> None:
         """The app page, so a person reads the reason; never JSON, never empty."""
 
-        response = self.get(path)
+        response = self.get(path, headers=headers)
         body = response.read()
         self.assertEqual(status, response.status, path)
         self.assertIsNone(response.getheader("Location"), path)
         self.assertIn("text/html", response.getheader("Content-Type") or "", path)
         self.assertIn(b'<div id="app"', body, path)
 
+
+class WorkItemLinkTests(LinkedStoreCase):
     def test_a_reference_redirects_to_the_card_in_any_case_and_any_space(self) -> None:
         self.assert_leads_to("/open/MAIN-1", "example-project", self.main, "MAIN-1")
         self.assert_leads_to("/open/main-1", "example-project", self.main, "MAIN-1")
@@ -244,6 +279,282 @@ class WorkItemLinkTests(unittest.TestCase):
     def test_an_unreadable_project_registry_is_explained_by_the_app_too(self) -> None:
         self.registry.write_bytes(b"not a registry")
         self.assert_shell_says_why("/open/MAIN-1", 503)
+
+
+#: What a browser sends for an address it was handed by another application.
+PERSON = (
+    ("Sec-Fetch-Site", "none"),
+    ("Sec-Fetch-Dest", "document"),
+    ("Sec-Fetch-Mode", "navigate"),
+)
+
+
+def _with(name: str, value: str) -> list[tuple[str, str]]:
+    return [(key, value if key == name else other) for key, other in PERSON]
+
+
+def _without(name: str) -> list[tuple[str, str]]:
+    return [header for header in PERSON if header[0] != name]
+
+
+class WorkItemLinkInAppTests(LinkedStoreCase):
+    """A person's click goes to the desktop app; every other request stays a redirect.
+
+    The app is an empty file where the installer would put it and `start_detached` is
+    the seam, so everything before starting a process runs as it does on a machine with
+    the app installed. No test here can reach an app that is really installed.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(directory.cleanup)
+        self.local = Path(directory.name)
+        self.app = self.local / "Programs" / "valkama-desktop" / "Valkama.exe"
+        self.app.parent.mkdir(parents=True)
+        self.app.write_bytes(b"")
+        environment = mock.patch.dict(
+            os.environ,
+            {
+                "LOCALAPPDATA": str(self.local),
+                "VALKAMA_PORT": str(self.server.server_port),
+                "ELECTRON_RUN_AS_NODE": "1",
+            },
+        )
+        environment.start()
+        self.addCleanup(environment.stop)
+        self.started: list[tuple[list[str], dict]] = []
+        spawn = mock.patch.object(desktop_app.processes, "start_detached", self.record_start)
+        spawn.start()
+        self.addCleanup(spawn.stop)
+
+    def record_start(self, argv: list[str], **options: object) -> int:
+        self.started.append((argv, options))
+        return 4242
+
+    def card_route(self, path: str) -> str:
+        response = self.get(path)
+        response.read()
+        return response.getheader("Location") or ""
+
+    def assert_stays_a_redirect(self, path: str, headers: Sequence[tuple[str, str]]) -> None:
+        self.assert_leads_to(path, "example-project", self.main, "MAIN-1", headers=headers)
+        self.assertEqual([], self.started, headers)
+
+    @unittest.skipUnless(sys.platform == "win32", "the app is looked for only on Windows")
+    def test_a_person_s_click_starts_the_app_on_the_card_and_answers_the_page(self) -> None:
+        route = self.card_route("/open/MAIN-1")
+        response = self.get("/open/main-1?from=chat", headers=PERSON)
+        body = response.read().decode("utf-8")
+        self.assertEqual(200, response.status)
+        self.assertIsNone(response.getheader("Location"))
+        self.assertEqual("no-store", response.getheader("Cache-Control"))
+        self.assertIn("text/html", response.getheader("Content-Type") or "")
+        self.assertIn("MAIN-1", body)
+        self.assertIn('href="/open/MAIN-1?in=browser"', body)
+        self.assertIn("window.close()", body)
+
+        [(argv, options)] = self.started
+        self.assertEqual([str(self.app), f"--open-path={route}"], argv)
+        self.assertEqual(str(self.app.parent), options["cwd"])
+        environment = options["env"]
+        assert isinstance(environment, dict)
+        self.assertNotIn("ELECTRON_RUN_AS_NODE", environment)
+        self.assertEqual(str(self.server.server_port), environment["VALKAMA_PORT"])
+
+    @unittest.skipUnless(sys.platform == "win32", "the app is looked for only on Windows")
+    def test_the_page_may_run_the_one_script_it_carries_and_nothing_else(self) -> None:
+        # A hash that does not match stops the tab closing and raises no error anywhere.
+        response = self.get("/open/MAIN-1", headers=PERSON)
+        body = response.read().decode("utf-8")
+        policy = response.getheader("Content-Security-Policy") or ""
+        [script] = re.findall(r"<script>(.*?)</script>", body, flags=re.DOTALL)
+        digest = base64.b64encode(hashlib.sha256(script.encode("utf-8")).digest()).decode("ascii")
+        self.assertIn(f"script-src 'sha256-{digest}'", policy)
+        self.assertIn("default-src 'none'", policy)
+
+    @unittest.skipUnless(sys.platform == "win32", "the app is looked for only on Windows")
+    def test_the_page_speaks_the_language_the_app_falls_back_on(self) -> None:
+        for accept, expected in (
+            ("ru-RU,ru;q=0.9,en;q=0.8", 'lang="ru"'),
+            ("en-US,en;q=0.9,ru;q=0.8", 'lang="ru"'),
+            ("en-US,en;q=0.9", 'lang="en"'),
+            ("de", 'lang="en"'),
+        ):
+            with self.subTest(accept=accept):
+                response = self.get("/open/MAIN-1", headers=[*PERSON, ("Accept-Language", accept)])
+                self.assertIn(expected, response.read().decode("utf-8"))
+        response = self.get("/open/MAIN-1", headers=PERSON)
+        self.assertIn('lang="en"', response.read().decode("utf-8"))
+
+    def test_only_a_navigation_started_outside_any_page_starts_the_app(self) -> None:
+        for headers in (
+            [],
+            _with("Sec-Fetch-Site", "cross-site"),
+            _with("Sec-Fetch-Site", "same-site"),
+            _with("Sec-Fetch-Site", "same-origin"),
+            _with("Sec-Fetch-Dest", "image"),
+            _with("Sec-Fetch-Dest", "iframe"),
+            _with("Sec-Fetch-Dest", "empty"),
+            _with("Sec-Fetch-Mode", "no-cors"),
+            _with("Sec-Fetch-Mode", "cors"),
+            _without("Sec-Fetch-Site"),
+            _without("Sec-Fetch-Dest"),
+            _without("Sec-Fetch-Mode"),
+            [*PERSON, ("Sec-Fetch-Site", "none")],
+            _with("Sec-Fetch-Site", "NONE"),
+            [*PERSON, ("Sec-Purpose", "prefetch;prerender")],
+            [*PERSON, ("Purpose", "prefetch")],
+        ):
+            with self.subTest(headers=headers):
+                self.assert_stays_a_redirect("/open/MAIN-1", headers)
+
+    def test_asking_for_the_browser_keeps_the_redirect(self) -> None:
+        self.assert_stays_a_redirect("/open/MAIN-1?in=browser", PERSON)
+
+    def test_a_launch_that_fails_falls_back_on_the_redirect(self) -> None:
+        for failure in (FileNotFoundError("gone"), PermissionError("refused"), OSError("bad")):
+            with (
+                self.subTest(failure=failure),
+                mock.patch.object(desktop_app.processes, "start_detached", side_effect=failure),
+            ):
+                self.assert_stays_a_redirect("/open/MAIN-1", PERSON)
+
+    def test_an_address_that_leads_nowhere_is_explained_by_the_app_page_and_starts_nothing(
+        self,
+    ) -> None:
+        for path in ("/open/MAIN-99", "/open/NOPE-1", "/open/LOOSE-1", "/open/not-a-number"):
+            with self.subTest(path=path):
+                self.assert_shell_says_why(path, headers=PERSON)
+        self.assertEqual([], self.started)
+
+    def test_a_store_that_cannot_open_starts_nothing(self) -> None:
+        with mock.patch.object(http_surface, "connect", side_effect=ValueError("too new")):
+            self.assert_shell_says_why("/open/MAIN-1", 503, headers=PERSON)
+        self.assertEqual([], self.started)
+
+    def test_a_foreign_host_starts_nothing(self) -> None:
+        response = self.get("/open/MAIN-1", host="evil.example", headers=PERSON)
+        response.read()
+        self.assertEqual(400, response.status)
+        self.assertEqual([], self.started)
+
+    def test_without_the_app_the_click_is_a_redirect(self) -> None:
+        self.app.unlink()
+        self.assert_stays_a_redirect("/open/MAIN-1", PERSON)
+
+    def test_without_a_local_application_data_folder_the_click_is_a_redirect(self) -> None:
+        del os.environ["LOCALAPPDATA"]
+        self.assert_stays_a_redirect("/open/MAIN-1", PERSON)
+
+    def test_outside_windows_the_app_is_not_looked_for(self) -> None:
+        with mock.patch.object(desktop_app, "sys", SimpleNamespace(platform="linux")):
+            self.assert_stays_a_redirect("/open/MAIN-1", PERSON)
+
+    def test_a_listener_on_another_port_keeps_its_links_to_itself(self) -> None:
+        # An open window belongs to the expected port and would look in another store.
+        os.environ["VALKAMA_PORT"] = str(self.server.server_port + 1)
+        self.assert_stays_a_redirect("/open/MAIN-1", PERSON)
+
+
+#: The right to wait for a process and nothing else.
+SYNCHRONIZE = 0x00100000
+
+
+@unittest.skipUnless(sys.platform == "win32", "the app is looked for only on Windows")
+class DesktopAppProcessTests(LinkedStoreCase):
+    """The same click with a real child, standing in for the app at the last moment."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(directory.cleanup)
+        self.local = Path(directory.name)
+        self.app = self.local / "Programs" / "valkama-desktop" / "Valkama.exe"
+        self.app.parent.mkdir(parents=True)
+        self.app.write_bytes(b"")
+        self.report = self.local / "report.json"
+        self.release = self.local / "release"
+        self.child = self.local / "child.py"
+        self.child.write_text(
+            "import json, os, sys, time\n"
+            "report, release = sys.argv[1:3]\n"
+            "with open(report + '.tmp', 'w', encoding='utf-8') as out:\n"
+            "    json.dump({'argv': sys.argv[3:], 'cwd': os.getcwd(),\n"
+            "               'run_as_node': os.environ.get('ELECTRON_RUN_AS_NODE'),\n"
+            "               'port': os.environ.get('VALKAMA_PORT')}, out)\n"
+            "os.replace(report + '.tmp', report)\n"
+            "deadline = time.monotonic() + 30\n"
+            "while time.monotonic() < deadline and not os.path.exists(release):\n"
+            "    time.sleep(0.05)\n",
+            encoding="utf-8",
+        )
+        environment = mock.patch.dict(
+            os.environ,
+            {
+                "LOCALAPPDATA": str(self.local),
+                "VALKAMA_PORT": str(self.server.server_port),
+                "ELECTRON_RUN_AS_NODE": "1",
+            },
+        )
+        environment.start()
+        self.addCleanup(environment.stop)
+        real_start = processes.start_detached
+
+        def start_child_instead(argv: list[str], **options: Any) -> int:
+            command = [sys.executable, str(self.child), str(self.report), str(self.release)]
+            pid = real_start([*command, *argv[1:]], **options)
+            self.addCleanup(self.let_child_finish, _winapi.OpenProcess(SYNCHRONIZE, False, pid))
+            return pid
+
+        spawn = mock.patch.object(desktop_app.processes, "start_detached", start_child_instead)
+        spawn.start()
+        self.addCleanup(spawn.stop)
+
+    def let_child_finish(self, handle: int) -> None:
+        """It holds its working directory, which goes with this test's folder."""
+
+        self.release.write_bytes(b"")
+        _winapi.WaitForSingleObject(handle, 20_000)
+        _winapi.CloseHandle(handle)
+
+    def test_the_child_gets_the_route_and_a_clean_environment_and_nobody_waits_for_it(self) -> None:
+        route = self.get("/open/MAIN-1")
+        route.read()
+        response = self.get("/open/MAIN-1", headers=PERSON)
+        response.read()
+        # The answer is here while the child is still waiting for `release`.
+        self.assertEqual(200, response.status)
+        self.assertFalse(self.release.exists())
+        deadline = time.monotonic() + 20
+        while not self.report.exists() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        seen = json.loads(self.report.read_text(encoding="utf-8"))
+        self.assertEqual([f"--open-path={route.getheader('Location')}"], seen["argv"])
+        self.assertIsNone(seen["run_as_node"])
+        self.assertEqual(str(self.server.server_port), seen["port"])
+        self.assertEqual(
+            os.path.normcase(os.path.realpath(self.app.parent)),
+            os.path.normcase(os.path.realpath(seen["cwd"])),
+        )
+
+
+class DesktopContractTests(unittest.TestCase):
+    """What the server and the other copies of the same fact must agree on."""
+
+    def test_the_app_is_where_the_tray_starts_it(self) -> None:
+        # install-desktop.ps1 compares its target with this same default.
+        tray = (ROOT / "windows" / "tray.ps1").read_text(encoding="utf-8")
+        found = re.search(r'\$AppPath = "\$env:LOCALAPPDATA\\([^"]+)"', tray)
+        assert found is not None
+        self.assertEqual(found.group(1).split("\\"), list(desktop_app._INSTALLED_APP))
+
+    def test_the_app_accepts_the_one_route_this_surface_lets_through(self) -> None:
+        source = (ROOT / "desktop" / "open_path.js").read_text(encoding="utf-8")
+        self.assertIn(f"const OPEN_PATH_SWITCH = '{desktop_app._OPEN_PATH_SWITCH}'", source)
+        found = re.search(r"const CARD_ROUTE = /\^(.*)\$/\n", source)
+        assert found is not None
+        self.assertEqual(http_surface._CARD_ROUTE.pattern, found.group(1).replace(r"\/", "/"))
 
 
 class WorkItemUrlTests(unittest.TestCase):

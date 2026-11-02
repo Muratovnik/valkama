@@ -163,6 +163,31 @@ def _require_browser_fetch(headers: Headers, *, close: bool = False) -> None:
         )
 
 
+def is_person_navigation(headers: Headers) -> bool:
+    """Whether this is a top-level navigation started outside any page.
+
+    A link clicked in another application, an address typed or a bookmark arrives as
+    `none`, `document`, `navigate`, and no page can produce `none`: whatever a page
+    loads, frames or opens carries that page's own site. All three are read here,
+    unlike in `_require_browser_fetch`, because what is decided is not whom to answer
+    but whether something happens on the owner's screen, and a request a browser sends
+    for any other reason must not get that far. A local process can forge them, and
+    could start the same application itself.
+
+    `Sec-Purpose` and the older `Purpose` mark a request nobody has navigated yet: a
+    browser prerenders an address being typed with exactly these three values.
+    """
+
+    expected = (
+        ("Sec-Fetch-Site", "none"),
+        ("Sec-Fetch-Dest", "document"),
+        ("Sec-Fetch-Mode", "navigate"),
+    )
+    if any(_header_values(headers, name) != [value] for name, value in expected):
+        return False
+    return not (_header_values(headers, "Sec-Purpose") or _header_values(headers, "Purpose"))
+
+
 def require_bootstrap_origin(headers: Headers, context: SecurityContext) -> None:
     """The browser session token goes only to the web client's own same-origin fetch.
 

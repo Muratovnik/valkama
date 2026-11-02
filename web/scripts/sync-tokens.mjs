@@ -235,6 +235,20 @@ const MIRRORS = [
     ],
   },
   {
+    // The page a listener answers when the desktop app took a link loads nothing
+    // of the app, so it resolves no custom property either.
+    file: 'server/ops/desktop_app.py',
+    sites: [
+      ['--ground', '--color-navigation'],
+      ['--text', '--color-text'],
+      ['--muted', '--color-text-muted'],
+      ['--link', '--color-info'],
+    ].map(([name, token]) => ({
+      anchor: new RegExp(`${name}: ([^;]*);`),
+      replace: (tokens) => value(tokens, token, `the opened page's ${name}`),
+    })),
+  },
+  {
     // The document states the palette, and which part of it to state is an
     // editorial choice: the key list stays where a reader can see it and only
     // the values are generated. A key with no token is a loud failure.
