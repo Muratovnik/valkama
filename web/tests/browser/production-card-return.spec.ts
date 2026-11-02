@@ -116,7 +116,7 @@ test('Back on a slow chain read shows the card soon, and moves once to the place
   // Blank for about as long as a normal read takes, long before the chain has answered.
   expect(painted[0]?.at ?? Infinity).toBeLessThan(800)
   // As far as it could at first, then the place: one move, and none after.
-  expect([...new Set(painted.map(({ top }) => Math.round(top)))].length).toBeLessThanOrEqual(2)
+  expect(new Set(painted.map(({ top }) => Math.round(top))).size).toBeLessThanOrEqual(2)
 })
 
 test('Back when the chain never answers shows the card for good, as far down as it can', async ({

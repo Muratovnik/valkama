@@ -45,6 +45,7 @@ const drawerFrame = {
   template:
     '<div><div class="frame-head"><slot name="identity" /><slot name="title" /><slot name="controls" /><slot name="facts" /><slot name="notices" /><slot name="tabs" /></div><slot /></div>',
   methods: {
+    holdFocus() {},
     position: () => 0,
     restore() {},
     scrollToContent() {},

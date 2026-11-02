@@ -75,6 +75,7 @@ export const drawerFrameStub = {
   template:
     '<div><slot name="identity" /><slot name="controls" /><slot name="facts" /><slot name="notices" /><slot name="tabs" /><slot /></div>',
   methods: {
+    holdFocus() {},
     position: () => 0,
     restore() {},
     scrollToContent() {},
