@@ -611,7 +611,10 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   `check:ui-system` rejects one.
 - **Fields:** `VField` owns the frame around a labelled control — label,
   control, optional hint — and `VTextInput` owns the control itself for one
-  line or several. A date keeps the platform picker inside that field, because
+  line or several. A button beside a field lines up with its control, so that
+  field's hint stands under the row and is named by `describedby`; inside the
+  frame it put the button level with the hint, under what the button acts on. A
+  date keeps the platform picker inside that field, because
   the native control is already localized and keyboard-complete. Six screens
   had written their own text field and no two agreed on the fill, the hairline
   or the radius; `check:ui-system` rejects a new `<input>` or `<textarea>`

@@ -3,6 +3,9 @@
  * what arrives while the card is open brings its section back with no reload, each
  * by the road it really takes: a frame of the live stream for a step, and the
  * questions' own read for a question.
+ *
+ * The memory tab stands here too, because its form is a section's one action: the
+ * button stood under the field it acts on, level with the hint below it.
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -182,3 +185,32 @@ test.describe('a section with nothing in it', () => {
     expect(held).toBe(true)
   })
 })
+
+for (const width of [390, 1440]) {
+  test(`the memory search stands level with its field at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await installBackend(page)
+    await openCard(page)
+    const drawer = page.locator('.drawer')
+    await drawer
+      .locator('.drawer-frame-tabs')
+      .getByRole('button', { name: /Memory/iu })
+      .click()
+    const form = drawer.locator('.memory-form')
+    const input = form.getByRole('textbox')
+    const find = form.getByRole('button')
+    const field = await input.boundingBox()
+    const button = await find.boundingBox()
+    expect(button?.y).toBeCloseTo(field?.y ?? Number.NaN, 0)
+    expect((button?.y ?? 0) + (button?.height ?? 0)).toBeCloseTo(
+      (field?.y ?? 0) + (field?.height ?? 0),
+      0,
+    )
+    // The hint belongs to the field and is still announced with it, under the row.
+    const hint = await input.getAttribute('aria-describedby')
+    const said = drawer.locator(`[id="${hint}"]`)
+    await expect(said).toHaveText(/./u)
+    const hintBox = await said.boundingBox()
+    expect(hintBox?.y ?? 0).toBeGreaterThanOrEqual((field?.y ?? 0) + (field?.height ?? 0))
+  })
+}

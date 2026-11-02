@@ -14,7 +14,7 @@
  * product that keeps a second copy of somebody's knowledge holds a stale one,
  * and the moment the two disagree the copy is the one nobody distrusts.
  */
-import { computed, ref, watch } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { fetchMemoryProviders, searchMemory } from '@/shared/api/memoryApi.ts'
@@ -103,6 +103,7 @@ const searchable = computed(() => Boolean(props.projectId) && query.value.trim()
 const searchHint = computed(() =>
   props.projectId ? t('memory.searchHint') : t('memory.noProject'),
 )
+const searchHintId = useId()
 
 /** The provider's own capability list, as one readable line. */
 const capabilityList = computed(() => capabilities.value.join(', '))
@@ -224,7 +225,7 @@ function when(value: string): string {
         <VTextInput
           v-model="query"
           :label="t('memory.search')"
-          :hint="searchHint"
+          :describedby="searchHintId"
           :maxlength="120"
           :disabled="!projectId || busy"
         />
@@ -234,6 +235,11 @@ function when(value: string): string {
         >
           {{ t('memory.searchAction') }}
         </VButton>
+        <small
+          :id="searchHintId"
+          class="memory-hint"
+          >{{ searchHint }}</small
+        >
       </form>
 
       <p
@@ -358,11 +364,19 @@ function when(value: string): string {
   font: var(--font-detail);
 }
 
+/* The button lines up with the field's control. Inside the field the hint came
+   after the control, so the button stood level with the hint, under what it acts on. */
 .memory-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-2);
+  gap: var(--space-label-value) var(--space-2);
   align-items: end;
   margin-top: var(--space-heading-content);
+}
+
+.memory-hint {
+  grid-column: 1 / -1;
+  color: var(--color-text-muted);
+  font: var(--font-detail);
 }
 </style>
