@@ -22,7 +22,7 @@ from tests.planning_fixtures import bulk_items, item_ids
 
 class ExportSectionTests(unittest.TestCase):
     def setUp(self) -> None:
-        directory = tempfile.TemporaryDirectory()
+        directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.addCleanup(directory.cleanup)
         patch = mock.patch.dict(
             os.environ, {"VALKAMA_DB": os.path.join(directory.name, "valkama.sqlite3")}
@@ -147,7 +147,7 @@ class CompleteExportTests(unittest.TestCase):
     SMALL = "SML"
 
     def setUp(self) -> None:
-        directory = tempfile.TemporaryDirectory()
+        directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.addCleanup(directory.cleanup)
         patch = mock.patch.dict(
             os.environ, {"VALKAMA_DB": os.path.join(directory.name, "valkama.sqlite3")}
@@ -220,7 +220,7 @@ class CompleteExportTests(unittest.TestCase):
 
 class ExportFileTests(unittest.TestCase):
     def setUp(self) -> None:
-        directory = tempfile.TemporaryDirectory()
+        directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.addCleanup(directory.cleanup)
         self.directory = directory.name
         self.target = os.path.join(directory.name, "export.json")
