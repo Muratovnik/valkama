@@ -25,6 +25,7 @@ const {
   parseRuntimeJson,
   validateLauncherBootstrap,
 } = require('./runtime_contract')
+const { openPathFromArgv, openPathUrl } = require('./open_path')
 const { discoverSupportedOpeners, resolveSupportedOpener } = require('./opener_catalog')
 const { establishServer, verifyStartedOwnership } = require('./server_startup')
 const { openSessionRequest } = require('./session_opener')
@@ -97,6 +98,10 @@ let offeredActions = []
 let starting = null
 let focusWhenCreated = false
 let uiLoadedOnce = false
+/** The card a launch asked for, until Valkama can be shown; the newest launch wins. */
+let requestedPath = openPathFromArgv(process.argv)
+/** Whether the window holds Valkama rather than the starting page. */
+let showingValkama = false
 
 function isValkamaSender(event) {
   const senderUrl = event.senderFrame?.url || event.sender.getURL()
@@ -342,6 +347,7 @@ function rememberLocale(webContents) {
 
 function showStartupPage(state) {
   if (!mainWindow) return
+  showingValkama = false
   offeredActions = state.phase === 'stale' ? ['restart'] : state.phase === 'failed' ? ['retry'] : []
   const shown = Date.now()
   const pageUrl = startupPageUrl({ ...state, locale: startupLocale(), port: PORT })
@@ -361,8 +367,11 @@ function launcherDetail(result) {
 
 function loadValkama() {
   offeredActions = []
+  showingValkama = true
+  const address = requestedPath ? openPathUrl(URL, requestedPath) : URL
+  requestedPath = null
   const loadStarted = Date.now()
-  void mainWindow.loadURL(URL).then(
+  void mainWindow.loadURL(address).then(
     () => {
       log('ui-loaded', { ms: Date.now() - loadStarted, first: !uiLoadedOnce })
       uiLoadedOnce = true
@@ -470,10 +479,12 @@ if (!app.requestSingleInstanceLock()) {
   log('second-launch', { outcome: 'handed to the running window' })
   app.quit()
 } else {
-  app.on('second-instance', () => {
+  app.on('second-instance', (_event, argv) => {
     // The window exists from app-ready on, so a click during startup lands
     // here and brings the starting window forward instead of being lost.
-    log('second-instance', { window: Boolean(mainWindow) })
+    const requested = openPathFromArgv(argv)
+    log('second-instance', { window: Boolean(mainWindow), path: requested })
+    if (requested) requestedPath = requested
     if (!mainWindow) {
       focusWhenCreated = true
       return
@@ -481,10 +492,12 @@ if (!app.requestSingleInstanceLock()) {
     if (mainWindow.isMinimized()) mainWindow.restore()
     mainWindow.show()
     mainWindow.focus()
+    // Otherwise the starting page is up, and the address waits for what follows it.
+    if (requested && showingValkama) loadValkama()
   })
 
   app.whenReady().then(() => {
-    log('app-ready')
+    log('app-ready', { path: requestedPath })
     Menu.setApplicationMenu(null)
     createWindow()
     void startValkama()
