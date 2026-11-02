@@ -869,13 +869,38 @@ band between the bar and the scroller, at full width, however far down the write
 Its height follows what it says and never the scroller. The body names only blockers
 that are still open.
 A section of a card that holds nothing and offers nothing is absent, rather than a
-heading and a sentence saying so on the first screen: «Agents», «Checklist» and
-«Questions and decisions» all stand only while they have something in them. What
-arrives while the card is open brings its section back with no reload: a step with
-the live stream's next frame, a question at the questions' own read, every half
-minute and whenever the window comes back. A read that failed or could not reach
-every source still stands, with the way to read again, because not knowing is not the
-same as there being none.
+heading and a sentence saying so on the first screen: «Agents» and «Checklist» stand
+only while they have something in them, and a step arriving with the live stream's next
+frame brings its section back with no reload.
+A question has no section of its own: it stands in the discussion and reads as a
+comment does, its author, its time and its prompt as markdown, with its fields under
+them. One still waiting stands right under the comment form, however old it is, and a
+question that has ended takes its place among the comments by time; one answered while
+the card is open stays where it stood until the card is opened again, rather than moving
+from under the person who has just answered it. The discussion takes the questions as a
+list of entries and does not know where they are stored. They are read at their own
+half-minute, whenever the window comes back and whenever the card's record is read again,
+and a read that failed or could not reach every source is said over the thread with the
+way to read again, because not knowing is not the same as there being none.
+One form answers every kind of field, here and in «Needs my answer», which adds whose
+task it is and the way there. Selecting does nothing but select, nothing is chosen for
+the person, recommended or not, and Send is what sends. Every choice is a full-width row
+whatever their number: its label, a quiet word on the recommended one, and as much of
+its description as leaves the labels scannable, so that the first screen still says what
+is asked and what the choices are. A description of one line stands whole under its
+label; a longer one shows its first words on one quiet line, and past six described
+options even that goes; either opens on the row's own chevron, selects nothing by opening,
+and can stand open beside another. The radio is named by its label alone and described
+only by a line, or a screen reader would read paragraphs on every arrow press, and the
+chevron is a tab stop only on the row the keyboard stands on, so that Tab reaches Send.
+Words of one's own are always one quiet press away, in the shared editor under the options,
+and with text in them no field is required; declining is as quiet. A selection or a note
+held is a draft the guard asks about. A send that fails keeps all of it with the reason in
+the foot, and does not look sent. Answered, the question folds to its prompt with the reply
+under it, its author and its time; declined or closed, to its prompt and a quiet line. An
+answer arriving from elsewhere folds it the same way, and a note still in the form stays in
+view, saying it was not sent, until the person leaves. While a question waits, the card's
+facts carry a mark that brings it into view under the tabs from any section.
 A card's «Agents» section stands under the next step of an open item and under the
 outcome of a closed one, where the list is history with no next step above it. A row is one record held together by air: what the agent was
 started for (or, for an agent named before that was recorded, its type or its short

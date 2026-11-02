@@ -24,8 +24,9 @@ directory, and the MCP server only exists while a client is talking to it.
   contract, and outcomes are typed results rather than exit codes.
 - **Task finder** with Ctrl/Cmd+K across mapped projects. Results retain their
   exact store and space; unavailable sources and truncated results stay visible.
-- **Questions and decisions** in a shared inbox. Agents create typed requests;
-  the owner answers or declines the exact request. Expired requests stop accepting
+- **Questions and decisions** in the task's discussion and a shared inbox. Agents
+  create typed requests; the owner answers, in their own words if they prefer, or
+  declines the exact request. Expired requests stop accepting
   answers, and sending an answer does not automatically resume an execution.
 - **Memory that points rather than copies.** Each project's knowledge is
   searched through whichever provider answers for it, and what is attached to
