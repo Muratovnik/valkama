@@ -29,6 +29,15 @@ unpinned semgrep and mcp 2.x there broke the gate, because semgrep imports
 the venv present, since the `semgrep` launcher finds `pysemgrep` through it
 and otherwise runs the shared copy.
 
+`python tests/isolated.py gates --out DIR` runs the `AGENTS.md` list from that
+venv in one call: only the child sees the redirected `HOME`, `USERPROFILE`,
+`LOCALAPPDATA`, `APPDATA` and `VALKAMA_DB`, and every step's exit code counts.
+`--only python` is the Python half; `--owner` is the audit with the owner policy.
+Use it instead of a wrapper of your own, and `serve --out DIR` with
+`stop --out DIR` for a live check; a test compares its steps with `AGENTS.md`.
+It does not move `TEMP`, which is what keeps the suite's renames from failing
+with `PermissionError`. `tests/isolated.py` states the rest of its reasons.
+
 `lint-imports` is the one-way import rule `AGENTS.md` states in prose, stated
 as configuration so a tool refuses a breach instead of a reviewer noticing one.
 mypy checks the modules that are already clean and names the rest in

@@ -176,8 +176,8 @@ quote-style = "double"
 # whether a process is the front.
 # Its cache is the one that cannot be set here: import-linter reads `cache_dir`
 # from the command line only, and silently ignores it in this file. Both callers
-# pass `--cache-dir .cache/import-linter` instead — `tools/quality.py` and the
-# command list in the repository instructions.
+# pass `--cache-dir .cache/import-linter` instead — `windows/release.py`,
+# `tests/isolated.py` and the command list in the repository instructions.
 [tool.importlinter]
 root_package = "server"
 
@@ -237,7 +237,7 @@ forbidden_modules = [
 [tool.mypy]
 python_version = "3.11"
 cache_dir = ".cache/mypy"
-files = ["server", "valkama.py"]
+files = ["server", "valkama.py", "tests/isolated.py"]
 check_untyped_defs = true
 strict_equality = true
 warn_redundant_casts = true
@@ -269,7 +269,9 @@ warn_unused_configs = true
 # measured figure rises; never lower it to make a run green.
 [tool.coverage.run]
 branch = true
-source = ["server"]
+# `tests.isolated` is a tool that happens to live beside the tests rather than a
+# test, so it is measured like the code it runs beside.
+source = ["server", "tests.isolated"]
 data_file = ".cache/coverage/data"
 
 [tool.coverage.report]

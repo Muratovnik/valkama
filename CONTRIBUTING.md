@@ -59,6 +59,32 @@ npm test
 The toolchain is pinned in `requirements-dev.txt` and configured in
 `pyproject.toml`. Do not loosen a pin to make a gate pass.
 
+`tests/isolated.py` runs that list in one call, in a throwaway profile, so a run
+cannot write test projects or a store into your own. Run it with the virtual
+environment built from `requirements-dev.txt`, and give it a result directory
+outside the tracked tree; it has no default:
+
+```powershell
+# Every gate above; add --only python, or any step name, for part of the list.
+.venv/Scripts/python tests/isolated.py gates --out tmp/gates
+
+# A server of this checkout on a free port. It returns once the server listens,
+# and prints the address, the port and the process id.
+.venv/Scripts/python tests/isolated.py serve --out tmp/serve
+
+# The same, serving a read-only copy of the store you run on, or of SOURCE.
+.venv/Scripts/python tests/isolated.py serve --out tmp/serve --store-copy [SOURCE]
+
+# Stops the server with everything it started and removes the profile.
+.venv/Scripts/python tests/isolated.py stop --out tmp/serve
+```
+
+The gates write one log per step under `logs/` and `gates.txt` in the result
+directory; the exit code is non-zero if any step failed or none ran. The server
+writes to `logs/serve.log`. A store copy holds your real data, so it goes with
+the profile when the server stops or dies. It stays on disk while the server is
+running, however long that is: run `stop` when you are done.
+
 ## Rules that will send a pull request back
 
 These are not style preferences. Each one is here because breaking it cost
