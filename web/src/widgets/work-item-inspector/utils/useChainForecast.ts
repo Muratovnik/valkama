@@ -22,14 +22,19 @@ function signed(count: number, sign: '+' | '−'): string {
   return count === 0 ? '0' : `${sign}${count}`
 }
 
+/** Whether anything moved in the window: a chain that stood still has no forecast at all. */
+const moved = (current: WorkItemChain) => current.recent.created + current.recent.closed > 0
+
 /**
- * The chain's last seven days in one line: what was added and closed, and what
- * that pace says about when the open part closes.
+ * The chain's last seven days, as two answers. The `verdict` is what that pace says
+ * about when the open part closes, and it is empty where the pace says nothing, so
+ * the first screen holds a forecast only when there is one. The `pace` is what was
+ * added and closed, the evidence behind it: a chain younger than the window also
+ * says there why it has no verdict, and a window in which nothing moved says that
+ * and nothing more.
  *
- * The facts come first because the forecast is only as good as they are; the
- * forecast replaces a bare "growing" or "converging" with the question the
- * reader has — whether, and when. A chain younger than the window says so
- * instead, and a window in which nothing moved says that and nothing more.
+ * The verdict replaces a bare "growing" or "converging" with the question the
+ * reader has — whether, and when.
  *
  * Both scopes count the same thing — members created inside the window, and
  * members closed inside it — so both say it in the same words. The chain scope
@@ -76,7 +81,7 @@ export function useChainForecast(chain: () => WorkItemChain | null) {
     })
   }
 
-  function verdict(forecast: ChainForecast, today: string, days: number): string | null {
+  function said(forecast: ChainForecast, today: string): string {
     switch (forecast.kind) {
       case 'converging': {
         return converging(forecast, today)
@@ -85,21 +90,25 @@ export function useChainForecast(chain: () => WorkItemChain | null) {
       case 'steady': {
         return t(`workItem.chain.forecast.${forecast.kind}`, { rate: rate(forecast.needed) })
       }
-      case 'young': {
-        return t('workItem.chain.forecast.young', { days })
-      }
       default: {
-        return null
+        return ''
       }
     }
   }
 
-  return computed(() => {
+  const verdict = computed(() => {
+    const current = chain()
+    if (!current || !moved(current)) return ''
+    const today = utcToday()
+    return said(forecastChain(current, today), today)
+  })
+
+  const pace = computed(() => {
     const current = chain()
     if (!current) return ''
     const today = utcToday()
     const { days, created, closed } = current.recent
-    if (created === 0 && closed === 0) return t('workItem.chain.forecast.quiet', { days })
+    if (!moved(current)) return t('workItem.chain.forecast.quiet', { days })
     const history = historyDays(current.series, today) ?? days
     const period =
       history < days
@@ -110,7 +119,13 @@ export function useChainForecast(chain: () => WorkItemChain | null) {
       created: signed(created, '+'),
       closed: signed(closed, '−'),
     })
-    const said = verdict(forecastChain(current, today), today, days)
-    return said ? t('workItem.chain.forecast.line', { facts, verdict: said }) : facts
+    return forecastChain(current, today).kind === 'young'
+      ? t('workItem.chain.forecast.line', {
+          facts,
+          verdict: t('workItem.chain.forecast.young', { days }),
+        })
+      : facts
   })
+
+  return { pace, verdict }
 }

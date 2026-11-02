@@ -55,6 +55,13 @@ function section(wrapper: VueWrapper) {
   return wrapper.find('section.chain')
 }
 
+/** The figures of the line under the map. */
+function stats(wrapper: VueWrapper) {
+  return section(wrapper)
+    .findAll('.chain-stat-value')
+    .map((value) => value.text())
+}
+
 /** The group of members headed by this label. */
 function group(wrapper: VueWrapper, label: string) {
   return section(wrapper)
@@ -75,7 +82,7 @@ const eight = <T>(value: T) => Array.from({ length: 8 }, () => value)
 describe('the chain section of a card', () => {
   useInspectorHarness()
 
-  it('reads a MAIN-384-shaped chain as a map first, then one line, the trend and the groups', async () => {
+  it('reads a MAIN-384-shaped chain as a map first, then one line, its verdict and the groups', async () => {
     const asked = serveChain(json(chainResponse(largeEpicChain())))
     const wrapper = await open()
     const chain = section(wrapper)
@@ -84,37 +91,48 @@ describe('the chain section of a card', () => {
     expect(asked[0].get('id')).toBe(ROOT.work_item_id)
     expect(asked[0].get('scope')).toBe('chain')
 
-    // The section leads with its map; the totals follow it in one line.
+    // The section leads with its map; the totals follow it in one line, and the
+    // chain's history is one action away.
     const parts = chain.element.querySelectorAll(
-      '.branch-map, .chain-summary, .chain-chart, .chain-members',
+      '.branch-map, .chain-summary, .chain-details, .chain-members',
     )
     expect([...parts].map((part) => part.classList[0])).toEqual([
       'branch-map',
       'chain-summary',
-      'chain-chart',
+      'chain-details',
       'chain-members',
     ])
     expect(chain.findAll('.chain-summary p')).toHaveLength(2)
     // The heading carries no bare count of its own: the totals line is the
-    // section's one number for the chain, and it says what it counts.
-    expect(chain.get('.section-header').text()).toBe('Chain Show on graph')
+    // section's one number for the chain, and it says what it counts. The scope
+    // rides the heading's row, and the action its short word under its whole name.
+    expect(chain.get('.section-header').text()).toBe('Chain EpicChainOn graph')
+    expect(getButton(wrapper, 'On graph').attributes('aria-label')).toBe('Show on graph')
     expect(chain.find('.section-header-count').exists()).toBe(false)
-    // Done and open, the open work by group in the board's own state names —
-    // never lowercased keys — and the workable count beside it rather than as a
-    // group of its own. It counts the backlog too, so it outnumbers the 14 to
-    // do, and it says so. A name keeps its count, and a separator the part
-    // before it, when the line wraps. The total says what it counts: the work
-    // under the root, the root itself not included, which the board's chain
-    // chip does include.
-    expect(chain.get('.chain-summary-line').text()).toBe(
-      'Under the root: 616 · Done\u{A0}483 · 133 open: Development\u{A0}11\u{A0}· Code\u{A0}review\u{A0}1\u{A0}· Todo\u{A0}14\u{A0}· Backlog\u{A0}107; workable 115 (backlog included)',
-    )
+    // The map's key says what stands where, in the board's own state names —
+    // never lowercased keys — each with its figure.
+    expect(
+      chain.findAll('.branch-key-entry').map((entry) => entry.get('.branch-key-count').text()),
+    ).toEqual(['483', '1', '11', '14', '107'])
+    // The line under the map says the rest and names no group a second time. The
+    // total says what it counts: the work under the root, the root itself not
+    // included, which the board's chain chip does include. Workable counts the
+    // backlog too, so it outnumbers the 14 to do, and it says so.
+    const line = chain.get('.chain-summary-line').text()
+    for (const word of ['Under the root', 'Open', 'Workable', 'backlog included'])
+      expect(line).toContain(word)
+    expect(stats(wrapper)).toEqual(['616', '133', '115'])
     // 53 added against 42 done: the open part grows unless more than
     // 53 ÷ 7 ≈ 7.57 close a day, said to a tenth and rounded up.
     expect(chain.get('.chain-forecast').text().replaceAll('\u{A0}', ' ')).toBe(
-      'Last 7 days: +53 added, −42 done. New work arrives faster than it closes: to converge, more than 7.6 a day must close',
+      'New work arrives faster than it closes: to converge, more than 7.6 a day must close',
     )
-    expect(chain.get('.chain-chart').attributes('aria-label')).toContain('616 now')
+    // The pace behind that verdict and the chart wait behind one action.
+    expect(chain.find('.chain-chart').exists()).toBe(false)
+    await getButton(wrapper, 'Chart and pace').trigger('click')
+    expect(chain.get('.chain-pace').text().replaceAll('\u{A0}', ' ')).toBe(
+      'Last 7 days: +53 added, −42 done',
+    )
     expect(chain.get('.chain-chart').attributes('aria-label')).toContain('483 done and 133 open')
 
     // Each origin is a lane of the map, its counts at its end; the textual
@@ -141,10 +159,10 @@ describe('the chain section of a card', () => {
     // The holder, not the state, names who has the work in progress.
     expect(chain.findAll('.chain-row')[0].text()).toContain('codex')
     // Workable is the norm of an open group, so no row prints it.
-    expect(chain.text()).not.toContain('Workable')
+    expect(chain.get('.chain-members').text()).not.toContain('Workable')
   })
 
-  it('calls each group one thing in the legend, the totals line and the headings', async () => {
+  it('calls each group one thing in the key and the headings, and says each figure once', async () => {
     const mixed = largeEpicChain()
     // The open items under MAIN-900 wait in a second backlog state, so the
     // backlog spans two states and is named by the group's own word everywhere.
@@ -155,14 +173,15 @@ describe('the chain section of a card', () => {
     serveChain(json(chainResponse(mixed)))
     const wrapper = await open()
     const chain = section(wrapper)
-    const legend = chain.findAll('.branch-map-legend .state-label').map((label) => label.text())
+    const legend = chain.findAll('.branch-key .state-label').map((label) => label.text())
     const headings = chain
       .findAll('.chain-group-title, .chain-done-toggle')
       .map((heading) => heading.text().replace(/ · \d+$/u, ''))
     const line = chain.get('.chain-summary-line').text().replaceAll('\u{A0}', ' ')
     expect(legend).toEqual(['Done', 'Code review', 'Development', 'Todo', 'Backlog'])
     expect(new Set(headings)).toEqual(new Set(legend))
-    for (const word of legend) expect(line).toContain(`${word} `)
+    // The line under the map is what the key does not say.
+    for (const word of legend) expect(line).not.toContain(word)
     // Narrowing the list to a lane in one backlog state keeps the chain's word.
     await getButton(wrapper, 'MAIN-779').trigger('click')
     expect(group(wrapper, 'Backlog')?.get('.chain-group-title').text()).toBe('Backlog · 74')
@@ -255,7 +274,8 @@ describe('the chain section of a card', () => {
     await getButton(wrapper, 'Epic').trigger('click')
     await flushPromises()
     expect(asked.map((query) => query.get('scope'))).toEqual(['chain', 'epic'])
-    expect(section(wrapper).get('.chain-forecast').text()).toContain('+53 added, −42 done')
+    await getButton(wrapper, 'Chart and pace').trigger('click')
+    expect(section(wrapper).get('.chain-pace').text()).toContain('+53 added, −42 done')
   })
 
   it('holds the place with a loading line only for an item known to have children', async () => {
@@ -294,9 +314,7 @@ describe('the chain section of a card', () => {
     await flushPromises()
     expect(asked).toHaveLength(2)
     expect(section(wrapper).find('[role="alert"]').exists()).toBe(false)
-    expect(section(wrapper).get('.chain-summary-line').text()).toBe(
-      'Under the root: 616 · Done\u{A0}483 · 133 open: Development\u{A0}11\u{A0}· Code\u{A0}review\u{A0}1\u{A0}· Todo\u{A0}14\u{A0}· Backlog\u{A0}107; workable 115 (backlog included)',
-    )
+    expect(stats(wrapper)).toEqual(['616', '133', '115'])
   })
 
   it('refuses a payload whose counts disagree with its members', async () => {
@@ -339,11 +357,12 @@ describe('the chain section of a card', () => {
     expect(getButton(wrapper, 'Done · 142').exists()).toBe(true)
     // The narrowed list follows the map and its line directly; the whole
     // chain's history moves below it, so the rows the choice narrowed are not
-    // a chart's height away from the label that narrowed them.
+    // a chart's height away from the label that narrowed them. Opened before the
+    // choice, it stays open down there.
     const order = () =>
       [
         ...section(wrapper).element.querySelectorAll(
-          '.branch-map, .chain-summary, .chain-lane-filter, .chain-members, .chain-chart',
+          '.branch-map, .chain-summary, .chain-lane-filter, .chain-members, .chain-details',
         ),
       ].map((part) => part.classList[0])
     expect(order()).toEqual([
@@ -351,8 +370,11 @@ describe('the chain section of a card', () => {
       'chain-summary',
       'chain-lane-filter',
       'chain-members',
-      'chain-chart',
+      'chain-details',
     ])
+    expect(section(wrapper).find('.chain-chart').exists()).toBe(false)
+    await getButton(wrapper, 'Chart and pace').trigger('click')
+    expect(section(wrapper).find('.chain-chart').exists()).toBe(true)
 
     // Another lane takes its place; the lane of no epic has no epic to open.
     await getButton(wrapper, 'no epic').trigger('click')
@@ -408,7 +430,7 @@ describe('the chain section of a card', () => {
   it('hands the chain it shows to the graph', async () => {
     serveChain(json(chainResponse(largeEpicChain())))
     const wrapper = await open()
-    await getButton(wrapper, 'Show on graph').trigger('click')
+    await getButton(wrapper, 'On graph').trigger('click')
     const [[shown, branch]] = wrapper.emitted('chain') as [
       [{ root: { reference: string }; total: number }, string | null],
     ]
@@ -422,9 +444,9 @@ describe('the chain section of a card', () => {
     serveChain(json(chainResponse(largeEpicChain())))
     const wrapper = await open()
     await getButton(wrapper, 'MAIN-900').trigger('click')
-    await getButton(wrapper, 'Show on graph').trigger('click')
+    await getButton(wrapper, 'On graph').trigger('click')
     await getButton(wrapper, 'MAIN-900').trigger('click')
-    await getButton(wrapper, 'Show on graph').trigger('click')
+    await getButton(wrapper, 'On graph').trigger('click')
     expect((wrapper.emitted('chain') ?? []).map(([, branch]) => branch)).toEqual(['MAIN-900', null])
   })
 
@@ -436,9 +458,7 @@ describe('the chain section of a card', () => {
     await flushPromises()
     expect(asked).toHaveLength(2)
     // A refresh keeps the last answer on screen while it runs and after it.
-    expect(section(wrapper).get('.chain-summary-line').text()).toBe(
-      'Under the root: 616 · Done\u{A0}483 · 133 open: Development\u{A0}11\u{A0}· Code\u{A0}review\u{A0}1\u{A0}· Todo\u{A0}14\u{A0}· Backlog\u{A0}107; workable 115 (backlog included)',
-    )
+    expect(stats(wrapper)).toEqual(['616', '133', '115'])
 
     vi.mocked(fetchWorkItem).mockResolvedValue(ROOT)
     const attached = await open(ROOT, { writable: false })

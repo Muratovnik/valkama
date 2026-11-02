@@ -255,7 +255,7 @@ defineExpose({ restoreView, reveal, view })
         <VButton
           v-if="long(group)"
           class="chain-more"
-          variant="ghost"
+          variant="text"
           size="inline"
           :aria-expanded="Boolean(expanded[group])"
           :aria-controls="listOf(group)"

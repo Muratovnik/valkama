@@ -16,6 +16,14 @@ import { holderName } from '@/shared/lib/actor.ts'
  * neutral dot, and each keeps its own name.
  */
 
+/** How many members these lanes hold of each group. */
+function groupCounts(lanes: readonly BranchLane[]) {
+  const counts = new Map<ChainGroup, number>()
+  for (const group of lanes.flatMap((lane) => lane.groups))
+    counts.set(group, (counts.get(group) ?? 0) + 1)
+  return counts
+}
+
 /**
  * What the branch map says in words: a lane's name and counts, the task a
  * cursor reaches, the whole map's summary and the legend.
@@ -45,9 +53,7 @@ export function useBranchText(groupName: (group: ChainGroup) => string) {
 
   /** Every group these lanes hold and how many, in lane order, by the section's word for each. */
   function groupParts(lanes: readonly BranchLane[]): string {
-    const counts = new Map<ChainGroup, number>()
-    for (const group of lanes.flatMap((lane) => lane.groups))
-      counts.set(group, (counts.get(group) ?? 0) + 1)
+    const counts = groupCounts(lanes)
     return CHAIN_PROGRESS_ORDER.filter((group) => counts.has(group))
       .map((group) =>
         t('workItem.chain.part', {
@@ -99,16 +105,18 @@ export function useBranchText(groupName: (group: ChainGroup) => string) {
   }
 
   /**
-   * The groups this map draws, in the order a lane runs through them. A legend
-   * names what is on the drawing, as the graph's does: a key for a state no
-   * member is in reads as a claim that one is, and the blocked one would say so
-   * in bold.
+   * The groups this map draws and how many it draws of each, in the order a lane
+   * runs through them. A legend names what is on the drawing, as the graph's does:
+   * a key for a state no member is in reads as a claim that one is, and the blocked
+   * one would say so in bold. It is where the section says what stands where, so a
+   * sentence under the map does not name the groups a second time.
    */
   function legend(lanes: readonly BranchLane[]) {
-    const drawn = new Set(lanes.flatMap((lane) => lane.groups))
-    return CHAIN_PROGRESS_ORDER.filter((group) => drawn.has(group)).map((group) => ({
+    const counts = groupCounts(lanes)
+    return CHAIN_PROGRESS_ORDER.filter((group) => counts.has(group)).map((group) => ({
       state: group,
       label: groupName(group),
+      count: counts.get(group) ?? 0,
     }))
   }
 

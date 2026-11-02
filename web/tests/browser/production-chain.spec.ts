@@ -56,20 +56,24 @@ for (const width of [1440, 390]) {
     await installBackend(page)
     await serve(page, largeChainHere())
     const section = await openCard(page)
-    // The map leads; one line of totals and the forecast follow it.
+    // The map leads; one line of totals and the verdict follow it, and what the
+    // verdict rests on is one action away.
     const map = await section.locator('.branch-map').boundingBox()
     const line = await section.locator('.chain-summary-line').boundingBox()
     expect((map?.y ?? Infinity) < (line?.y ?? 0)).toBe(true)
-    await expect(section.locator('.chain-summary-line')).toHaveText(
-      'Under the root: 616 · Done 483 · 133 open: Development 11 · Code review 1 · Todo 14 · Backlog 107; workable 115 (backlog included)',
-    )
+    await expect(section.locator('.branch-key-entry').first()).toHaveText(/Done\s*483/u)
+    await expect(section.locator('.chain-summary-line')).toContainText('Under the root')
     await expect(section.locator('.chain-forecast')).toHaveText(
-      'Last 7 days: +53 added, −42 done. New work arrives faster than it closes: to converge, more than 7.6 a day must close',
+      'New work arrives faster than it closes: to converge, more than 7.6 a day must close',
     )
+    await expect(section.locator('.chain-chart')).toHaveCount(0)
+    const details = section.getByRole('button', { name: 'Chart and pace' })
+    await details.click()
+    await expect(section.locator('.chain-pace')).toHaveText('Last 7 days: +53 added, −42 done')
     await expect(section.getByRole('img')).toHaveAttribute('aria-label', /616 now/u)
     // Workable is the norm of its group, so no row prints it. A member that
     // waits on an open blocker names what it waits on, in the danger tone.
-    await expect(section.getByText('Workable', { exact: true })).toHaveCount(0)
+    await expect(section.locator('.chain-members').getByText('Workable')).toHaveCount(0)
     await expect(section.locator('.chain-row-waiting').first()).toContainText('Waiting on')
     const tone = (selector: string) =>
       section

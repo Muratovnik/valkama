@@ -9,6 +9,8 @@ export interface MembersView {
 
 /** How a card's chain section was being read: its scope, the lane chosen on the map, its open groups. */
 export interface ChainView extends MembersView {
+  /** The pace and the chart are open. */
+  details: boolean
   lane: string | null
   scope: ChainScope
 }

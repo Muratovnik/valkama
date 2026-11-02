@@ -18,8 +18,8 @@ import { computed, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import ChainBranchMap from '@/widgets/work-item-inspector/components/ChainBranchMap.vue'
+import ChainDetails from '@/widgets/work-item-inspector/components/ChainDetails.vue'
 import ChainMembers from '@/widgets/work-item-inspector/components/ChainMembers.vue'
-import ChainScopeChart from '@/widgets/work-item-inspector/components/ChainScopeChart.vue'
 import { groupLabels, groupMembers } from '@/widgets/work-item-inspector/utils/chainSummary.ts'
 import type { ChainView } from '@/widgets/work-item-inspector/utils/inspectorReturn.ts'
 import { useChainForecast } from '@/widgets/work-item-inspector/utils/useChainForecast.ts'
@@ -27,7 +27,6 @@ import { useChainForecast } from '@/widgets/work-item-inspector/utils/useChainFo
 import { waitingOn } from '@/entities/work-item/utils/waiting.ts'
 
 import type { ChainScope, WorkItemChain } from '@/shared/api/planningChainApi.ts'
-import { OPEN_CHAIN_GROUPS } from '@/shared/api/planningChainGroups.ts'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import VButton from '@/shared/ui/VButton.vue'
@@ -125,58 +124,59 @@ async function chooseLane(key: string) {
 }
 
 /**
- * The space a part of the breakdown is joined with, and joined to its
- * separator: a line wraps between parts — «Code review 2 ·» stays whole — and a
- * separator ends the line it closes rather than starting the next.
- */
-const KEEP = '\u{A0}'
-
-/**
- * The chain in one line: how much grew from this item, how much of it is done
- * and how much is open, the open work
- * by group — named as the board names its column where the whole group is in
- * one state, and by the group's own word where it spans several — and how much
- * of it the space would let someone take now. That figure is the read model's
- * rule — unheld, unblocked, in any state work can start from, the backlog
- * included — so it may exceed the to-do group, and the wording says why rather
- * than reading as one more category.
+ * The chain's main figures, each with its word: how much grew from this item, how
+ * much of it is open, and how much of that the space would let someone take now.
+ * How much is finished and where the open work stands, group by group, are the
+ * map's key above it, so no group is named twice on one screen.
+ *
+ * The workable figure is the read model's rule — unheld, unblocked, in any state
+ * work can start from, the backlog included — so it may exceed the to-do group, and
+ * its note says why rather than reading as one more category.
  *
  * The total is said as what it is — the work under the root, the root itself
  * not counted — because the board's chain chip counts the root too and reads
  * one more for the same chain; an unlabelled 306 beside a 307 read as a fault.
  * It is the section's only count, so it is never one of two numbers for "the chain".
- *
- * Finished work is named like every other group, by the word its heading and
- * the map's legend use, so «Done 179» here is the «Done · 179» below.
  */
-const summary = computed(() => {
-  const chain = props.chain
-  const current = groups.value
-  const words = labels.value
-  if (!chain || !current || !words) return ''
-  const part = (text: string, count: number) =>
-    t('workItem.chain.part', { group: text, count }).replaceAll(' ', KEEP)
-  const counts = { total: chain.total, done: part(words.done.text, chain.closed), open: chain.open }
-  if (chain.open === 0) return t('workItem.chain.summaryNoneOpen', counts)
-  const parts = OPEN_CHAIN_GROUPS.filter((group) => current[group].length > 0)
-    .map((group) => part(words[group].text, current[group].length))
-    .join(`${KEEP}· `)
-  const line = t('workItem.chain.summary', { ...counts, parts })
-  return chain.ready ? `${line}; ${t('workItem.chain.workable', { count: chain.ready })}` : line
-})
+const stats = computed<{ key: string; label: string; value: number | null; note?: string }[]>(
+  () => {
+    const chain = props.chain
+    if (!chain) return []
+    const total = { key: 'total', label: t('workItem.chain.stat.total'), value: chain.total }
+    if (chain.open === 0)
+      return [total, { key: 'none', label: t('workItem.chain.stat.noneOpen'), value: null }]
+    const open = { key: 'open', label: t('workItem.chain.stat.open'), value: chain.open }
+    if (!chain.ready) return [total, open]
+    return [
+      total,
+      open,
+      {
+        key: 'workable',
+        label: t('workItem.chain.stat.workable'),
+        value: chain.ready,
+        note: t('workItem.chain.stat.workableNote'),
+      },
+    ]
+  },
+)
 
 const members = ref<InstanceType<typeof ChainMembers> | null>(null)
+
+/** The pace and the chart, one action away. */
+const detailsOpen = ref(false)
 
 /** How this section is being read, apart from the scope, which the card holds. */
 function view(): Omit<ChainView, 'scope'> {
   return {
+    details: detailsOpen.value,
     lane: lane.value,
     ...(members.value?.view() ?? { doneOpen: false, expanded: [] }),
   }
 }
 
-/** Read the section the same way again: the lane chosen on the map, and the open groups. */
+/** Read the section the same way again: its details, the lane chosen on the map, the open groups. */
 async function restore(next: Omit<ChainView, 'scope'>) {
+  detailsOpen.value = next.details
   chosenLane.value = next.lane
   await nextTick()
   members.value?.restoreView(next)
@@ -187,10 +187,8 @@ async function reveal(reference: string) {
   return (await members.value?.reveal(reference)) ?? null
 }
 
-const forecast = useChainForecast(() => props.chain)
+const { pace, verdict } = useChainForecast(() => props.chain)
 
-/** The chart is the whole chain's history; under a narrowed list it follows the list. */
-const charted = computed(() => (props.chain?.series.length ?? 0) > 1)
 defineExpose({ restore, reveal, view })
 </script>
 
@@ -210,12 +208,23 @@ defineExpose({ restore, reveal, view })
         v-if="chain"
         #actions
       >
+        <SegmentedControl
+          v-if="chain.root.has_children"
+          class="chain-scope"
+          size="compact"
+          :label="t('workItem.chain.scopeLabel')"
+          :model-value="scope"
+          :options="scopes"
+          @update:model-value="(next) => emit('scope', next)"
+        />
         <VButton
           variant="ghost"
           size="inline"
+          :aria-label="t('workItem.chain.showOnGraph')"
+          :title="t('workItem.chain.showOnGraph')"
           @click="emit('graph', chain, lane)"
         >
-          {{ t('workItem.chain.showOnGraph') }}
+          {{ t('workItem.chain.onGraph') }}
         </VButton>
       </template>
     </SectionHeader>
@@ -226,16 +235,6 @@ defineExpose({ restore, reveal, view })
     >
       {{ t('workItem.chain.primaryOnly') }}
     </p>
-
-    <SegmentedControl
-      v-if="chain?.root.has_children"
-      class="chain-scope"
-      size="compact"
-      :label="t('workItem.chain.scopeLabel')"
-      :model-value="scope"
-      :options="scopes"
-      @update:model-value="(next) => emit('scope', next)"
-    />
 
     <p
       v-if="!chain && loading"
@@ -270,12 +269,36 @@ defineExpose({ restore, reveal, view })
       />
 
       <div class="chain-summary">
-        <p class="chain-summary-line">{{ summary }}</p>
-        <p class="chain-forecast">{{ forecast }}</p>
+        <p class="chain-summary-line">
+          <span
+            v-for="stat in stats"
+            :key="stat.key"
+            class="chain-stat"
+            >{{ stat.label }}
+            <span
+              v-if="stat.value !== null"
+              class="chain-stat-value"
+              >{{ stat.value }}</span
+            >
+            <span
+              v-if="stat.note"
+              class="chain-stat-note"
+              >{{ stat.note }}</span
+            ></span
+          >
+        </p>
+        <p
+          v-if="verdict"
+          class="chain-forecast"
+        >
+          {{ verdict }}
+        </p>
       </div>
 
-      <ChainScopeChart
-        v-if="charted && lane === null"
+      <ChainDetails
+        v-if="lane === null"
+        v-model:open="detailsOpen"
+        :pace="pace"
         :series="chain.series"
       />
 
@@ -314,8 +337,11 @@ defineExpose({ restore, reveal, view })
         @open="(reference) => emit('open', reference)"
       />
 
-      <ChainScopeChart
-        v-if="charted && lane !== null"
+      <!-- The history is the whole chain's; under a narrowed list it follows the list. -->
+      <ChainDetails
+        v-if="lane !== null"
+        v-model:open="detailsOpen"
+        :pace="pace"
         :series="chain.series"
       />
     </template>
@@ -329,20 +355,36 @@ defineExpose({ restore, reveal, view })
   min-width: 0;
 }
 
-.chain-scope {
-  justify-self: start;
-}
-
 .chain-summary {
   display: grid;
   gap: var(--space-1);
 }
 
+/* Figures with their words, a row that wraps between them and never inside one.
+   The figure is what the row is read for, so it takes the ink and the word does not. */
 .chain-summary-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
   margin: 0;
-  color: var(--color-text);
-  font: var(--font-strong);
+  color: var(--color-text-muted);
+  font: var(--font-detail);
   font-variant-numeric: tabular-nums;
+}
+
+.chain-stat {
+  display: inline-flex;
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+
+.chain-stat-value {
+  color: var(--color-text);
+  font-weight: 500;
+}
+
+.chain-stat-note {
+  color: var(--color-text-tertiary);
 }
 
 /* Whether and when the open part closes is what the line above it is read

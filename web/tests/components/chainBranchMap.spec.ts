@@ -60,9 +60,14 @@ describe('the branch map', () => {
     expect(wrapper.get('figcaption').text()).toBe(
       'Branch map: 2 lanes, 40 items; Done 18, Code review 1, Development 4, Blocked 1, Todo 3, Backlog 13.',
     )
-    expect(wrapper.findAll('.branch-map-legend .state-label').map((label) => label.text())).toEqual(
-      ['Done', 'Code review', 'Development', 'Blocked', 'Todo', 'Backlog'],
-    )
+    // The key is where the section says what stands where, so each word has its figure.
+    expect(
+      wrapper
+        .findAll('.branch-key-entry')
+        .map(
+          (entry) => `${entry.get('.state-label').text()} ${entry.get('.branch-key-count').text()}`,
+        ),
+    ).toEqual(['Done 18', 'Code review 1', 'Development 4', 'Blocked 1', 'Todo 3', 'Backlog 13'])
     expect(wrapper.findAll('.branch-map-label').map((label) => label.text())).toEqual([
       'MAP-1',
       'no epic',
@@ -88,9 +93,10 @@ describe('the branch map', () => {
     const [first] = chain.members
     Object.assign(first.state, { key: 'pairing', name: 'Pairing' })
     const wrapper = mountMap(chain)
-    expect(wrapper.findAll('.branch-map-legend .state-label').map((label) => label.text())).toEqual(
-      ['In progress', 'Backlog'],
-    )
+    expect(wrapper.findAll('.branch-key .state-label').map((label) => label.text())).toEqual([
+      'In progress',
+      'Backlog',
+    ])
     wrapper.unmount()
   })
 
@@ -102,7 +108,7 @@ describe('the branch map', () => {
       mapMember('MAP-12', 'backlog', 'MAP-1'),
     ])
     const wrapper = mountMap(plain)
-    const legend = wrapper.get('.branch-map-legend')
+    const legend = wrapper.get('.branch-key')
     expect(legend.findAll('.state-label').map((label) => label.text())).toEqual([
       'Done',
       'Development',
@@ -114,7 +120,7 @@ describe('the branch map', () => {
 
     // Queued work alone is keyed as queued work, though it shares the backlog's grey.
     const queued = mountMap(chainOf(ROOT, [mapMember('MAP-10', 'queued', 'MAP-1')]))
-    expect(queued.findAll('.branch-map-legend .state-label').map((label) => label.text())).toEqual([
+    expect(queued.findAll('.branch-key .state-label').map((label) => label.text())).toEqual([
       'Todo',
     ])
     queued.unmount()

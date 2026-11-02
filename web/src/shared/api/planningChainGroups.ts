@@ -28,7 +28,7 @@ export const CHAIN_PROGRESS_ORDER: readonly ChainGroup[] = [
 ]
 
 /** The open groups, in the order the card lists them. */
-export const OPEN_CHAIN_GROUPS = CHAIN_GROUPS.filter(
+const OPEN_CHAIN_GROUPS = CHAIN_GROUPS.filter(
   (group): group is Exclude<ChainGroup, 'done'> => group !== 'done',
 )
 

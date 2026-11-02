@@ -18,6 +18,7 @@ import { computed, ref, useId } from 'vue'
 
 import { useElementSize } from '@vueuse/core'
 
+import ChainBranchKey from '@/widgets/work-item-inspector/components/ChainBranchKey.vue'
 import ChainBranchTip from '@/widgets/work-item-inspector/components/ChainBranchTip.vue'
 import {
   drawBranches,
@@ -33,7 +34,6 @@ import { useBranchText } from '@/widgets/work-item-inspector/utils/useBranchText
 
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import { statePresentation } from '@/shared/lib/uiSystem.ts'
-import SemanticState from '@/shared/ui/SemanticState.vue'
 
 const props = defineProps<{
   chain: WorkItemChain
@@ -136,18 +136,7 @@ function countId(lane: LaneDrawing): string {
 <template>
   <figure class="branch-map">
     <figcaption class="visually-hidden">{{ caption }}</figcaption>
-    <div
-      class="branch-map-legend"
-      aria-hidden="true"
-    >
-      <SemanticState
-        v-for="entry in keys"
-        :key="entry.state"
-        dimension="work-item-chain-group"
-        :state="entry.state"
-        :label="entry.label"
-      />
-    </div>
+    <ChainBranchKey :entries="keys" />
     <div
       ref="canvas"
       class="branch-map-canvas"
@@ -294,13 +283,6 @@ function countId(lane: LaneDrawing): string {
   gap: var(--space-3);
   min-width: 0;
   margin: 0;
-}
-
-.branch-map-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0 var(--space-4);
-  align-items: center;
 }
 
 .branch-map-canvas {

@@ -70,7 +70,7 @@ describe('a card reopened by Back', () => {
     first.unmount()
 
     const wrapper = await open({
-      chain: { doneOpen: true, expanded: ['backlog'], lane: null, scope: 'epic' },
+      chain: { details: true, doneOpen: true, expanded: ['backlog'], lane: null, scope: 'epic' },
       opened: reference,
       reference: ROOT.reference,
       scroll: 900,
@@ -80,6 +80,8 @@ describe('a card reopened by Back', () => {
     expect(scopes.at(-1)).toBe('epic')
     expect(rows(wrapper, 'Backlog')).toHaveLength(107)
     expect(wrapper.findAll('.chain-row.is-done')).toHaveLength(8)
+    // So is the chart it was reading, which starts folded on a card opened afresh.
+    expect(wrapper.find('.chain-chart').exists()).toBe(true)
     // Focus is on the row of the card Back came from, not at the top of the card.
     expect(focusedReference()).toBe(reference)
   })
@@ -88,7 +90,7 @@ describe('a card reopened by Back', () => {
     serveChain()
     const done = largeEpicChain().members.find((member) => member.state.is_terminal)
     await open({
-      chain: { doneOpen: false, expanded: [], lane: null, scope: 'chain' },
+      chain: { details: false, doneOpen: false, expanded: [], lane: null, scope: 'chain' },
       opened: done?.reference ?? '',
       reference: ROOT.reference,
       scroll: 0,
@@ -100,7 +102,7 @@ describe('a card reopened by Back', () => {
   it('takes no return point meant for another card', async () => {
     const scopes = serveChain()
     await open({
-      chain: { doneOpen: true, expanded: ['backlog'], lane: null, scope: 'epic' },
+      chain: { details: true, doneOpen: true, expanded: ['backlog'], lane: null, scope: 'epic' },
       opened: 'MAIN-1',
       reference: 'MAIN-2',
       scroll: 0,
