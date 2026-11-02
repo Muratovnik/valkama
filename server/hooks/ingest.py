@@ -21,7 +21,7 @@ from urllib.parse import quote
 
 from .. import sessions, transcripts
 from . import spool
-from .normalize import HookEvent
+from .normalize import AGENT_LAUNCH, HookEvent
 
 #: A hook event is the client's own report about its own session.
 IDENTITY_STATE = "confirmed"
@@ -154,6 +154,19 @@ def _apply_to_sessions(conn: sqlite3.Connection, event: HookEvent) -> None:
         cwd=event.cwd or "",
         transcript_path=event.transcript_path or "",
     )
+    if event.kind == AGENT_LAUNCH:
+        # The event's agent is the one it started, not the one it came from. The
+        # label reaches this row only: `execution_events` can never be edited, and
+        # a label may hold what its owner later wants gone.
+        sessions.name_agent(
+            conn,
+            top,
+            str(event.agent_id),
+            client=event.client,
+            at=event.occurred_at,
+            label=event.label,
+        )
+        return
     target = top
     if event.agent_id and event.kind not in _SESSION_KINDS:
         target = sessions.subagent_session_id(top, event.agent_id)

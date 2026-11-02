@@ -14,7 +14,7 @@ from unittest import mock
 
 from server import store, transcripts
 from server.hooks import ingest, normalize
-from server.ops import export
+from server.ops import doctor, export
 from server.planning import model as planning_model
 from server.planning import service as planning_service
 from tests.planning_fixtures import bulk_items, item_ids
@@ -97,6 +97,39 @@ class ExportSectionTests(unittest.TestCase):
         ):
             with self.subTest(leaked=leaked):
                 self.assertNotIn(leaked, rendered)
+
+    def test_an_agents_label_never_reaches_the_export_or_doctor(self) -> None:
+        """A label can hold private data; only the card it was written for may draw it."""
+
+        record = normalize.lifecycle_event(
+            "claude",
+            "post-tool-use",
+            {
+                "session_id": "6f1c2a8e-0000-4000-8000-0000000000cc",
+                "tool_name": "Agent",
+                "tool_input": {"description": "needle-7d2e"},
+                "tool_response": {"status": "async_launched", "agentId": "a4d2"},
+            },
+            event_uid="00000000-0000-4000-8000-0000000000cc",
+            occurred_at=normalize.timestamp(time.time_ns()),
+        )
+        assert record is not None
+        ingest.deliver(
+            record,
+            store_path=self.store_path,
+            schema_version=store.STORE_SCHEMA_VERSION,
+            occurred_ns=time.time_ns(),
+            now=normalize.timestamp(time.time_ns()),
+        )
+        stored = self.conn.execute("SELECT label FROM sessions WHERE label != ''").fetchall()
+        self.assertEqual(["needle-7d2e"], [row["label"] for row in stored])
+        self.assertNotIn("needle-7d2e", export.render(export.export_installation(self.conn)))
+        with mock.patch.dict(
+            os.environ,
+            {"HOME": self.directory, "USERPROFILE": self.directory, "LOCALAPPDATA": self.directory},
+        ):
+            report = doctor.diagnose(probe=False)
+        self.assertNotIn("needle-7d2e", json.dumps(report, default=str))
 
     def test_a_retired_or_unknown_section_is_refused(self) -> None:
         for section in ("relations", "settings", "modules"):

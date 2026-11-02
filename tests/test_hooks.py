@@ -804,5 +804,339 @@ class EntryProcessTests(unittest.TestCase):
             self.assertNotIn(surface, lifecycle_modules)
 
 
+def agent_launch(**overrides: object) -> dict:
+    """A `PostToolUse` input for the Agent tool, as the hook reference documents it.
+
+    The background shape: the tool answers at launch with `async_launched`, and
+    both the prompt and the description are in the input twice.
+    """
+
+    payload: dict = {
+        "session_id": "S",
+        "prompt_id": "550e8400-e29b-41d4-a716-446655440000",
+        "transcript_path": "D:/transcripts/S.jsonl",
+        "cwd": "C:/work",
+        "permission_mode": "default",
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Agent",
+        "tool_use_id": "toolu_01ABC",
+        "tool_input": {
+            "description": "Проверить экспорт",
+            "prompt": "prompt-needle",
+            "subagent_type": "Explore",
+        },
+        "tool_response": {
+            "status": "async_launched",
+            "agentId": "a4d2c8f1e0b3a297",
+            "description": "description-from-the-answer",
+            "prompt": "prompt-needle",
+            "outputFile": "D:/output-needle",
+        },
+    }
+    payload.update(overrides)
+    return payload
+
+
+def launch_event(uid: str = UID_A, at: str = "2026-10-31T10:00:00.000Z", **overrides: object):
+    return normalize.lifecycle_event(
+        "claude", "post-tool-use", agent_launch(**overrides), event_uid=uid, occurred_at=at
+    )
+
+
+class AgentLaunchNormalizeTests(unittest.TestCase):
+    """What the launch of an agent keeps: its short description and its id, in one input."""
+
+    def test_the_description_and_the_agent_id_come_from_one_input(self) -> None:
+        record = launch_event()
+        assert record is not None
+        self.assertEqual("agent_launch", record.kind)
+        self.assertEqual("PostToolUse", record.hook_event)
+        self.assertEqual("a4d2c8f1e0b3a297", record.agent_id)
+        self.assertEqual("Проверить экспорт", record.label)
+        self.assertEqual("Explore", record.agent_type)
+
+    def test_the_prompt_and_the_answer_are_never_kept(self) -> None:
+        record = launch_event()
+        assert record is not None
+        line = normalize.spool_line(record, spooled_at="2026-10-31T11:00:00.000Z", reason="busy")
+        self.assertNotIn(b"needle", line)
+        self.assertNotIn(b"description-from-the-answer", line)
+
+    def test_a_nested_launch_names_the_child_not_the_agent_that_spawned_it(self) -> None:
+        record = launch_event(agent_id="the-spawner", agent_type="the-spawner-type")
+        assert record is not None
+        self.assertEqual("a4d2c8f1e0b3a297", record.agent_id)
+        self.assertEqual("Explore", record.agent_type)
+
+    def test_a_foreground_answer_binds_the_same_way(self) -> None:
+        record = launch_event(tool_response={"status": "completed", "agentId": "fore"})
+        assert record is not None
+        self.assertEqual(("fore", "Проверить экспорт"), (record.agent_id, record.label))
+
+    def test_the_former_tool_name_is_the_same_tool(self) -> None:
+        record = launch_event(tool_name="Task")
+        assert record is not None
+        self.assertEqual("a4d2c8f1e0b3a297", record.agent_id)
+
+    def test_an_input_that_does_not_name_an_agent_records_nothing(self) -> None:
+        cases: dict[str, dict] = {
+            "another tool": {"tool_name": "Bash"},
+            "no response": {"tool_response": None},
+            "a text response": {"tool_response": "done"},
+            "no id": {"tool_response": {"status": "async_launched"}},
+            "an id that is not text": {"tool_response": {"agentId": 7}},
+            "another hook": {"hook_event_name": "PreToolUse"},
+            "no session": {"session_id": None},
+        }
+        for name, overrides in cases.items():
+            with self.subTest(name):
+                self.assertIsNone(launch_event(**overrides))
+
+    def test_a_launch_with_no_usable_description_still_names_the_agent(self) -> None:
+        for name, tool_input in {
+            "no input": None,
+            "not text": {"description": 7},
+            "only space": {"description": " \n\t "},
+        }.items():
+            with self.subTest(name):
+                record = launch_event(tool_input=tool_input)
+                assert record is not None
+                self.assertEqual("a4d2c8f1e0b3a297", record.agent_id)
+                self.assertIsNone(record.label)
+
+    def test_codex_has_no_such_event(self) -> None:
+        self.assertIsNone(
+            normalize.lifecycle_event(
+                "codex",
+                "post-tool-use",
+                agent_launch(),
+                event_uid=UID_A,
+                occurred_at="2026-10-31T10:00:00.000Z",
+            )
+        )
+
+
+class AgentLabelTextTests(unittest.TestCase):
+    """A label is one short line whatever the description held."""
+
+    def test_line_breaks_become_one_space_and_controls_disappear(self) -> None:
+        self.assertEqual("one two three", normalize.agent_label("  one\r\ntwo\t\x07three\n"))
+
+    def test_line_separators_and_invisible_format_marks_are_gone(self) -> None:
+        self.assertEqual("a b c", normalize.agent_label("a\u2028b\u2029c"))
+        self.assertEqual("abc", normalize.agent_label("a\u202eb\u200dc"))
+
+    def test_a_lone_surrogate_cannot_reach_the_store(self) -> None:
+        self.assertEqual("ab", normalize.agent_label("a\ud800b"))
+
+    def test_a_long_description_is_cut_and_says_so(self) -> None:
+        label = normalize.agent_label("x" * 300)
+        assert label is not None
+        self.assertEqual(normalize.LIMITS["label"], len(label))
+        self.assertEqual("x" * (normalize.LIMITS["label"] - 1) + "…", label)
+
+    def test_a_description_at_the_limit_is_whole(self) -> None:
+        whole = "x" * normalize.LIMITS["label"]
+        self.assertEqual(whole, normalize.agent_label(whole))
+
+    def test_nothing_readable_is_no_label(self) -> None:
+        for value in ("", " \n ", "\x07", None, 7, ["a"]):
+            with self.subTest(repr(value)):
+                self.assertIsNone(normalize.agent_label(value))
+
+
+class AgentLaunchIngestTests(StoreCase):
+    """What a launch does to the rows: a label on the agent's row and nothing else."""
+
+    def write(self, *records: normalize.HookEvent | None) -> None:
+        events = [(record, None) for record in records if record is not None]
+        ingest.write(self.light(), events, delivery="direct")
+        self.conn.commit()
+
+    def start(
+        self, uid: str = UID_B, at: str = "2026-10-31T10:00:01.000Z", agent: str = ""
+    ) -> None:
+        self.write(
+            lifecycle(
+                event="subagent-start",
+                uid=uid,
+                at=at,
+                agent_id=agent or "a4d2c8f1e0b3a297",
+                agent_type="Explore",
+            )
+        )
+
+    def row(self, agent: str = "a4d2c8f1e0b3a297") -> sqlite3.Row | None:
+        return self.session(sessions.subagent_session_id("S", agent))
+
+    def test_the_label_lands_on_the_agents_row(self) -> None:
+        self.start()
+        self.write(launch_event())
+        row = self.row()
+        assert row is not None
+        self.assertEqual("Проверить экспорт", row["label"])
+        self.assertEqual(("active", "S"), (row["status"], row["parent_session_id"]))
+
+    def test_parallel_launches_each_keep_their_own_label(self) -> None:
+        self.start(UID_B, agent="one")
+        self.start(UID_C, agent="two")
+        # The answers arrive the other way round: nothing here depends on order.
+        self.write(
+            launch_event(
+                "00000000-0000-4000-8000-0000000000d1",
+                tool_input={"description": "second"},
+                tool_response={"status": "async_launched", "agentId": "two"},
+            ),
+            launch_event(
+                "00000000-0000-4000-8000-0000000000d2",
+                tool_input={"description": "first"},
+                tool_response={"status": "async_launched", "agentId": "one"},
+            ),
+        )
+        one, two = self.row("one"), self.row("two")
+        assert one is not None and two is not None
+        self.assertEqual(("first", "second"), (one["label"], two["label"]))
+
+    def test_a_label_arriving_first_makes_the_row_the_start_then_finds(self) -> None:
+        self.write(launch_event())
+        row = self.row()
+        assert row is not None
+        self.assertEqual(("Проверить экспорт", "a4d2c8f1e0b3a297"), (row["label"], row["agent_id"]))
+        self.assertEqual(("S", "active"), (row["parent_session_id"], row["status"]))
+        self.start()
+        row = self.row()
+        assert row is not None
+        self.assertEqual("Проверить экспорт", row["label"])
+
+    def test_a_late_label_is_kept_and_moves_no_time(self) -> None:
+        """The launch is the parent's act: a spooled one drained later still names the agent."""
+
+        self.start(at="2026-10-31T10:05:00.000Z")
+        self.write(launch_event(at="2026-10-31T10:00:00.000Z"))
+        row = self.row()
+        assert row is not None
+        self.assertEqual("Проверить экспорт", row["label"])
+        self.assertEqual("2026-10-31T10:05:00Z", row["last_seen"])
+
+    def test_a_label_after_the_agent_ended_keeps_it_ended_at_its_own_time(self) -> None:
+        """A foreground agent's answer comes after its stop and is not a sign of its life."""
+
+        self.start(at="2026-10-31T10:00:00.000Z")
+        self.write(
+            lifecycle(
+                event="subagent-stop",
+                uid=UID_C,
+                at="2026-10-31T10:04:00.000Z",
+                agent_id="a4d2c8f1e0b3a297",
+            )
+        )
+        self.write(launch_event(at="2026-10-31T10:04:02.000Z"))
+        row = self.row()
+        assert row is not None
+        self.assertEqual("Проверить экспорт", row["label"])
+        self.assertEqual("ended", row["status"])
+        self.assertEqual("2026-10-31T10:04:00Z", row["ended_at"])
+        self.assertEqual("2026-10-31T10:04:00Z", row["last_seen"])
+
+    def test_a_launch_is_a_sign_of_life_of_the_parent(self) -> None:
+        self.write(launch_event())
+        parent = self.session("S")
+        assert parent is not None
+        self.assertEqual("2026-10-31T10:00:00Z", parent["last_seen"])
+
+    def test_no_label_leaves_the_row_alone(self) -> None:
+        self.start()
+        self.write(launch_event(tool_input={"description": "named"}))
+        self.write(launch_event(UID_C, tool_input=None))
+        row = self.row()
+        assert row is not None
+        self.assertEqual("named", row["label"])
+
+    def test_the_append_only_history_never_holds_the_label(self) -> None:
+        """A label may carry private data, and `execution_events` can never be edited."""
+
+        self.write(launch_event())
+        for event in self.events():
+            self.assertNotIn("Проверить экспорт", [str(value) for value in tuple(event)])
+        launched = [event for event in self.events() if event["kind"] == "agent_launch"]
+        self.assertEqual(["a4d2c8f1e0b3a297"], [event["agent_id"] for event in launched])
+
+    def test_a_replay_changes_nothing(self) -> None:
+        self.start()
+        self.write(launch_event())
+        self.conn.execute(
+            "UPDATE sessions SET label = 'kept' WHERE id = ?",
+            (sessions.subagent_session_id("S", "a4d2c8f1e0b3a297"),),
+        )
+        self.conn.commit()
+        self.write(launch_event())
+        row = self.row()
+        assert row is not None
+        self.assertEqual("kept", row["label"])
+
+    def test_a_spooled_launch_is_delivered_with_its_label(self) -> None:
+        record = launch_event()
+        assert record is not None
+        self.spool_event(record)
+        result = ingest.drain(self.light(), self.spool)
+        self.conn.commit()
+        self.assertEqual((1, 0), (result.inserted, result.rejected))
+        row = self.row()
+        assert row is not None
+        self.assertEqual("Проверить экспорт", row["label"])
+
+    def test_a_spool_line_without_a_label_still_reads(self) -> None:
+        record = lifecycle(event="subagent-start", agent_id="a4d2c8f1e0b3a297")
+        line = json.loads(
+            normalize.spool_line(record, spooled_at="2026-10-31T11:00:00.000Z", reason="busy")
+        )
+        line.pop("label", None)
+        self.assertIsNotNone(normalize.read_spool_line(line))
+
+    def test_a_label_that_could_not_have_been_written_is_set_aside(self) -> None:
+        record = launch_event()
+        assert record is not None
+        line = json.loads(
+            normalize.spool_line(record, spooled_at="2026-10-31T11:00:00.000Z", reason="busy")
+        )
+        for name, value in {
+            "two lines": "one\ntwo",
+            "too long": "x" * (normalize.LIMITS["label"] + 1),
+            "not text": ["x"],
+        }.items():
+            with self.subTest(name):
+                self.assertIsNone(normalize.read_spool_line({**line, "label": value}))
+
+
+class AgentLaunchEntryTests(StoreCase):
+    def test_the_hook_prints_nothing_and_says_nothing_of_the_label(self) -> None:
+        out, err = io.BytesIO(), io.StringIO()
+        with mock.patch.object(sys, "stderr", err):
+            code = entry.main(
+                ["claude", "post-tool-use"],
+                io.BytesIO(json.dumps(agent_launch()).encode("utf-8")),
+                out,
+            )
+        self.assertEqual((0, b"", ""), (code, out.getvalue(), err.getvalue()))
+        self.conn.commit()
+        row = self.session(sessions.subagent_session_id("S", "a4d2c8f1e0b3a297"))
+        assert row is not None
+        self.assertEqual("Проверить экспорт", row["label"])
+
+    def test_a_failure_while_recording_does_not_repeat_the_label(self) -> None:
+        err = io.StringIO()
+        with (
+            mock.patch.object(sys, "stderr", err),
+            mock.patch.object(ingest, "deliver", side_effect=OSError("disk full")),
+        ):
+            entry.main(
+                ["claude", "post-tool-use"],
+                io.BytesIO(json.dumps(agent_launch()).encode("utf-8")),
+                io.BytesIO(),
+            )
+        self.assertIn("disk full", err.getvalue())
+        self.assertNotIn("Проверить экспорт", err.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -263,6 +263,43 @@ def touch(
     return current
 
 
+def name_agent(
+    conn: sqlite3.Connection,
+    parent_session_id: str,
+    agent_id: str,
+    *,
+    client: str,
+    at: str,
+    label: str | None,
+) -> None:
+    """Say what an agent was started for, inside the caller's transaction.
+
+    The parent reports this, not the agent, so it moves none of the agent's
+    times: a foreground agent's call answers after its stop, and that answer is
+    not a sign of its life. It holds whatever the order, because a label says
+    the same thing however late it arrives: a spooled launch delivered after the
+    agent's own events still names it. A row the agent's own events have not made
+    yet is made here, and the first of them finds it.
+    """
+
+    second = _second(at)
+    conn.execute(
+        "INSERT INTO sessions(id, client, started_at, last_seen, label, parent_session_id,"
+        " agent_id) VALUES (?,?,?,?,?,?,?)"
+        " ON CONFLICT(id) DO UPDATE SET label = CASE WHEN excluded.label != ''"
+        " THEN excluded.label ELSE label END",
+        (
+            subagent_session_id(parent_session_id, agent_id),
+            client,
+            second,
+            second,
+            label or "",
+            parent_session_id,
+            agent_id,
+        ),
+    )
+
+
 def resume(conn: sqlite3.Connection, session_id: str, *, at: str) -> bool:
     """Make an `ended` session `active` again because it acted after its end.
 

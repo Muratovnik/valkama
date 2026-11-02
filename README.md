@@ -655,11 +655,13 @@ valkama hook claude pre-tool-use    < hook-input.json
 
 The events are `session-start`, `session-end`, `subagent-start`,
 `subagent-stop`, `stop`, `user-prompt-submit` and `pre-compact` for both
-clients, plus `notification` for Claude Code. Each one updates the session row
-that `GET /api/session` and work-item context read. `claude pre-tool-use` adds
-the session identity to a Valkama tool call and is the only case that prints
-anything. Only an allowlisted set of fields is kept: never the prompt, tool
-arguments or assistant text.
+clients, plus `notification` and `post-tool-use` for Claude Code. Each one updates
+the session row that `GET /api/session` and work-item context read.
+`claude post-tool-use`, registered for the Agent tool, names the agent that call
+started. `claude pre-tool-use` adds the session identity to a Valkama tool call and
+is the only case that prints anything. Only an allowlisted set of fields is kept:
+never the prompt, tool arguments other than an Agent call's short description, or
+assistant text.
 
 When a session ends, the hook also copies the session's transcript, and a
 subagent's own transcript when the client reports one, into `transcripts/`

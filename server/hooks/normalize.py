@@ -6,7 +6,8 @@ moment it happened, so a direct write and a spooled line carry the same values.
 What is kept is an allowlist. A hook input can hold the user's prompt, a tool's
 arguments, the last assistant message, or Codex turn metadata that names
 workspaces and remote URLs; none of those is ever read here, so none of them
-can reach the store or the spool.
+can reach the store or the spool. The one exception is named: the launch of an
+agent keeps the short description of that call, and never its prompt.
 
 The module also builds the Claude `PreToolUse` identity output, which runs on
 every Valkama tool call and must stay this cheap.
@@ -17,6 +18,7 @@ from __future__ import annotations
 import json
 import re
 import time
+import unicodedata
 from dataclasses import asdict, dataclass
 
 #: The command's two arguments, `valkama hook <client> <event>`, mapped to the
@@ -31,13 +33,19 @@ LIFECYCLE_EVENTS: dict[str, tuple[str, str]] = {
     "user-prompt-submit": ("UserPromptSubmit", "prompt"),
     "pre-compact": ("PreCompact", "compact"),
     "notification": ("Notification", "attention"),
+    "post-tool-use": ("PostToolUse", "agent_launch"),
 }
 
-#: Which lifecycle events each client has. Codex has no `Notification`.
+#: Which lifecycle events each client has. Codex has no `Notification`, and its
+#: agents are not named this way: the launch event reads Claude Code's Agent tool.
 CLIENT_EVENTS: dict[str, frozenset[str]] = {
     "claude": frozenset(LIFECYCLE_EVENTS),
-    "codex": frozenset(LIFECYCLE_EVENTS) - {"notification"},
+    "codex": frozenset(LIFECYCLE_EVENTS) - {"notification", "post-tool-use"},
 }
+
+#: The tool that starts an agent. `Task` is the name it had before Claude Code 2.1.63.
+AGENT_TOOLS = frozenset({"Agent", "Task"})
+AGENT_LAUNCH = "agent_launch"
 
 #: The identity transform's event, and the clients it is for. Codex carries the
 #: same identity in every call's `_meta`, so it needs no transform.
@@ -61,6 +69,7 @@ LIMITS = {
     "cwd": 4096,
     "transcript_path": 4096,
     "agent_transcript_path": 4096,
+    "label": 120,
 }
 
 #: Fields read from every lifecycle input; `turn_id` is filled from Codex
@@ -109,6 +118,7 @@ class HookEvent:
     cwd: str | None = None
     transcript_path: str | None = None
     agent_transcript_path: str | None = None
+    label: str | None = None
 
 
 _FIELDS = frozenset(HookEvent.__dataclass_fields__)
@@ -141,6 +151,32 @@ def _text(value: object, field: str) -> str | None:
     if not cleaned or len(cleaned) > LIMITS[field]:
         return None
     return cleaned
+
+
+def agent_label(value: object) -> str | None:
+    """One short line from the description of an Agent call, or nothing readable.
+
+    A line break or a control separates words, so it becomes a space; a format
+    mark (a bidirectional override, a zero-width joiner) and a lone surrogate
+    SQLite could not encode separate nothing, so they go. A long description is
+    cut and says so, unlike an id or a path: part of an id names something else,
+    and part of a description is still most of what it said.
+    """
+
+    if not isinstance(value, str):
+        return None
+    kept: list[str] = []
+    for ch in value:
+        category = unicodedata.category(ch)
+        if category in ("Cc", "Zl", "Zp"):
+            kept.append(" ")
+        elif category not in ("Cf", "Cs"):
+            kept.append(ch)
+    cleaned = " ".join("".join(kept).split())
+    limit = LIMITS["label"]
+    if len(cleaned) > limit:
+        cleaned = cleaned[: limit - 1].rstrip() + "…"
+    return cleaned or None
 
 
 def normalize_path(path: str) -> str:
@@ -181,6 +217,11 @@ def lifecycle_event(
     fields["turn_id"] = _text(
         payload.get("turn_id" if client == "codex" else "prompt_id"), "turn_id"
     )
+    if kind == AGENT_LAUNCH:
+        launched = _launched_agent(payload)
+        if launched is None:
+            return None
+        fields.update(launched)
     return HookEvent(
         event_uid=event_uid,
         occurred_at=occurred_at,
@@ -190,6 +231,34 @@ def lifecycle_event(
         session_id=session_id,
         **fields,
     )
+
+
+def _launched_agent(payload: dict) -> dict[str, str | None] | None:
+    """The agent an Agent call started, read from the one input that names both.
+
+    `SubagentStart` has the agent's id and not the description, `PreToolUse` the
+    description and no id yet. Only the answer has both, so nothing here matches
+    one call to another and parallel launches cannot cross. The common
+    `agent_id` and `agent_type` of this input are whoever made the call, and for
+    a nested launch that is another agent.
+    """
+
+    if payload.get("tool_name") not in AGENT_TOOLS:
+        return None
+    answer = payload.get("tool_response")
+    if not isinstance(answer, dict):
+        return None
+    agent_id = _text(answer.get("agentId"), "agent_id")
+    if agent_id is None:
+        return None
+    arguments = payload.get("tool_input")
+    if not isinstance(arguments, dict):
+        arguments = {}
+    return {
+        "agent_id": agent_id,
+        "agent_type": _text(arguments.get("subagent_type"), "agent_type"),
+        "label": agent_label(arguments.get("description")),
+    }
 
 
 def spool_line(record: HookEvent, *, spooled_at: str, reason: str) -> bytes:
@@ -237,6 +306,8 @@ def read_spool_line(line: dict) -> tuple[HookEvent, str] | None:
             continue
         if not isinstance(value, str) or not value or len(value) > limit:
             return None
+    if record.label is not None and record.label != agent_label(record.label):
+        return None
     if not _UID.fullmatch(record.event_uid) or not _TIMESTAMP.fullmatch(record.occurred_at):
         return None
     if record.client not in CLIENT_EVENTS or _KIND_OF_HOOK.get(record.hook_event) != record.kind:

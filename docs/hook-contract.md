@@ -43,6 +43,7 @@ store, and an internal error:
 | `user-prompt-submit` | `UserPromptSubmit` | `prompt` | yes | yes |
 | `pre-compact` | `PreCompact` | `compact` | yes | yes |
 | `notification` | `Notification` | `attention` | yes | no such hook |
+| `post-tool-use` | `PostToolUse` on the Agent tool | `agent_launch` | yes | not read |
 | `pre-tool-use` | `PreToolUse` | nothing: the identity transform | yes | not needed |
 
 An event a client does not have, an unknown client, or input whose
@@ -68,13 +69,15 @@ something else.
 | `source` | `SessionStart` only (`startup`, `resume`, `clear`, …) | 32 |
 | `reason` | `SessionEnd` only | 64 |
 | `agent_transcript_path` | `SubagentStop` only | 4096 |
+| `agent_id`, `agent_type`, `label` | `PostToolUse` of the Agent tool only; see [Naming an agent](#naming-an-agent) | 128, 128, 120 |
 
 Paths lose the Windows extended-length prefix: `\\?\C:\x` is kept as `C:\x`, and
 `\\?\UNC\host\share` as `\\host\share`.
 
-Nothing else is read. That rules out the user's prompt, tool arguments, the last
-assistant message, notification text, and Codex turn metadata, which lists
-workspaces and remote URLs. None of these reaches the store or the spool.
+Nothing else is read. That rules out the user's prompt, tool arguments other than
+the description of an Agent call, an agent's prompt, the last assistant message,
+notification text, and Codex turn metadata, which lists workspaces and remote
+URLs. None of these reaches the store or the spool.
 
 Each event also gets an `event_uid` (a random UUID) and `occurred_at` (UTC with
 milliseconds, from the hook process's clock) once the hook has read its input.
@@ -195,6 +198,47 @@ only), then the subagent's own row, `<session_id>:<agent_id>`, with
 subagent row. `SubagentStop` ends that row and records the subagent's
 transcript path. `session_start` and `session_end` always apply to the
 top-level session.
+
+### Naming an agent
+
+Register `valkama hook claude post-tool-use` for `PostToolUse` with the matcher
+`^(Agent|Task)$` (`Task` is the Agent tool's name before Claude Code 2.1.63).
+Without it nothing else changes: an agent is shown by its type and short id.
+
+`SubagentStart` carries the agent's id and no description, and `PreToolUse` of the
+Agent tool carries the description and no id yet. The answer carries both: the
+input of `PostToolUse` has `tool_input.description` and `tool_response.agentId`.
+So a label is read from one input and never matched between events, and parallel
+launches cannot exchange labels. The cost is when it arrives: at the launch for a
+background agent, which is what Claude Code starts from a main conversation unless
+told otherwise, and at the end for an agent the session waits for. Until then the
+agent has no label.
+
+The input is read for these three things and nothing else: `tool_input.description`,
+`tool_input.subagent_type` and `tool_response.agentId`. The prompt is in the same
+input twice and is never read, and neither is the rest of the answer. An input over
+the hook's 1 MiB limit, which a foreground agent's long answer can reach, is not
+read at all and leaves the agent without a label.
+
+The description becomes one line: a line break or a control becomes a space, a
+format mark goes, repeated space collapses. Past 120 characters it is cut and ends
+in `…`, unlike the fields above, because part of a description is still most of
+what it said.
+
+The label is the description the coordinating model wrote, so it can hold personal
+data or data under NDA. It is stored in one place, `sessions.label` of the agent's
+row, and drawn on the work item's card. It is not in `execution_events`, which
+records the launch by the agent's id alone because that table can never be edited.
+It is not in the installation export, `doctor` or any log. Two copies follow from
+what a store is: a store snapshot holds the database, and a spool file holds the
+event until it is delivered, in the same directory and with the same owner as the
+paths a spool file already holds.
+
+The event moves `last_seen` of the top-level session and creates the agent's row if
+its own events have not. It changes no time and no state of an agent's row that
+exists: a foreground agent's answer comes after its stop, and that answer is not a
+sign of its life. A label is written whatever the event's time, because it says the
+same thing however late it is delivered.
 
 ## The identity transform
 
