@@ -34,6 +34,7 @@ const emit = defineEmits<{ close: [] }>()
  * repair. A tall pinned head ate the drawer, which is what the flip was for; a bar and
  * one row of tabs pin less than it did.
  */
+const frame = ref<HTMLElement | null>(null)
 const bar = ref<HTMLElement | null>(null)
 const body = ref<HTMLElement | null>(null)
 const name = ref<HTMLElement | null>(null)
@@ -50,6 +51,11 @@ useResizeObserver(tabs, (entries) => {
 })
 const scrollPadding = computed(() => ({ scrollPaddingBlockStart: `${tabsHeight.value}px` }))
 
+/** Where the tabs stick: from here down they stand at the scroller's top. */
+function stuckFrom() {
+  return (content.value?.offsetTop ?? 0) - tabsHeight.value
+}
+
 /**
  * To the start of the content, for a host that swaps what it shows. One position shared
  * by every tab opened the next tab wherever the last one had been read to — the
@@ -58,20 +64,20 @@ const scrollPadding = computed(() => ({ scrollPaddingBlockStart: `${tabsHeight.v
  */
 function scrollToContent() {
   const scroller = body.value
-  const start = content.value?.offsetTop
-  if (!scroller || start === undefined) return
-  scroller.scrollTo({ top: Math.min(scroller.scrollTop, start - tabsHeight.value) })
+  scroller?.scrollTo({ top: Math.min(scroller.scrollTop, stuckFrom()) })
 }
 
 /**
- * Shift+Tab from the content into the stuck tabs. A browser scrolls to show what the
- * keyboard reaches, and this one takes a stuck element for where it stands unstuck, so
- * the place went to the top though the tab was in plain sight. Focus arrives after that
- * scroll and before any paint, so what the key left is put back there.
+ * The keyboard reaching a stuck tab, from anywhere: the content, the head or the tab
+ * beside it. A browser scrolls to show what the keyboard reaches, and this one takes a
+ * stuck element for where it stands unstuck, so each step along the tabs took the place
+ * up by half a window, and four steps unfolded the head. Focus arrives after that scroll
+ * and before any paint, so what the key left is put back there. Tabs that were not stuck
+ * may be below the fold, and those the browser is right to bring into view.
  */
 let placeAtTab = 0
 useEventListener(
-  body,
+  frame,
   'keydown',
   (event: KeyboardEvent) => {
     if (event.key === 'Tab') placeAtTab = body.value?.scrollTop ?? 0
@@ -79,10 +85,9 @@ useEventListener(
   { capture: true },
 )
 
-function holdPlace({ relatedTarget, target }: FocusEvent) {
-  const fromContent = relatedTarget instanceof Node && content.value?.contains(relatedTarget)
+function holdPlace({ target }: FocusEvent) {
   // A press takes focus here too, with no key before it and no ring.
-  if (fromContent && target instanceof Element && target.matches(':focus-visible'))
+  if (placeAtTab >= stuckFrom() && target instanceof Element && target.matches(':focus-visible'))
     body.value?.scrollTo({ top: placeAtTab })
 }
 
@@ -108,7 +113,10 @@ defineExpose({ position, restore, scrollToContent })
 </script>
 
 <template>
-  <div class="drawer-frame">
+  <div
+    ref="frame"
+    class="drawer-frame"
+  >
     <header
       ref="bar"
       class="drawer-frame-bar"

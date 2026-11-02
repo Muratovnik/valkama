@@ -188,3 +188,117 @@ test('a refused move answered from another section brings the checklist into vie
   await expect(drawer.locator('.overview')).toBeVisible()
   await expect(drawer.getByRole('heading', { name: /^Checklist/u }).first()).toBeInViewport()
 })
+
+/** The card from its tile, read down with the wheel until the sections stick. */
+async function cardReadDown(page: Page, width: number, height: number) {
+  await page.setViewportSize({ width, height })
+  await installBackend(page, { longRead: true })
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
+  const drawer = page.locator('.drawer')
+  await expect(drawer.locator('.card-facts')).toBeVisible()
+  await expect(drawer).toHaveCSS('transform', 'none')
+  const body = drawer.locator('.drawer-frame-body')
+  const tabs = drawer.locator('.drawer-frame-tabs')
+  const edge = Math.round(await topOf(body))
+  const box = await body.boundingBox()
+  await page.mouse.move(
+    (box?.x ?? 0) + (box?.width ?? 0) / 2,
+    (box?.y ?? 0) + (box?.height ?? 0) / 2,
+  )
+  await page.mouse.wheel(0, 1500)
+  await expect.poll(() => topOf(tabs)).toBeCloseTo(edge, 0)
+  const place = await body.evaluate((node) => node.scrollTop)
+  return { body, drawer, edge, place, sections: tabs.getByRole('button'), tabs }
+}
+
+const placeOf = (body: Locator) => body.evaluate((node) => node.scrollTop)
+
+for (const [width, height] of [
+  [1680, 700],
+  [390, 700],
+]) {
+  test(`walking the sections from the keyboard leaves the place alone, both ways, at ${width}px`, async ({
+    page,
+  }) => {
+    const { body, drawer, edge, place, sections, tabs } = await cardReadDown(page, width, height)
+    await pressWhereItStands(page, sections.first())
+    await expect(sections.first()).toBeFocused()
+    expect(await placeOf(body)).toBe(place)
+
+    const along = await framesOfTabs(tabs, async () => {
+      for (const reached of [1, 2, 3, 4]) {
+        await page.keyboard.press('Tab')
+        await expect(sections.nth(reached)).toBeFocused()
+        expect(await placeOf(body)).toBe(place)
+      }
+      for (const reached of [3, 2, 1, 0]) {
+        await page.keyboard.press('Shift+Tab')
+        await expect(sections.nth(reached)).toBeFocused()
+        expect(await placeOf(body)).toBe(place)
+      }
+    })
+    expect([...new Set(along)]).toEqual([edge])
+
+    // In from the content, all the way along. The control is off above the fold, as one
+    // is that kept focus while the wheel read on.
+    const first = drawer.locator('.drawer-frame-content').locator('button, a[href]').first()
+    await first.evaluate((node) => (node as HTMLElement).focus({ preventScroll: true }))
+    const coming = await framesOfTabs(tabs, async () => {
+      for (const reached of [4, 3, 2, 1, 0]) {
+        await page.keyboard.press('Shift+Tab')
+        await expect(sections.nth(reached)).toBeFocused()
+        expect(await placeOf(body)).toBe(place)
+      }
+    })
+    expect([...new Set(coming)]).toEqual([edge])
+
+    // A Shift+Tab past the first one goes up to the head, which comes back into view for it.
+    await page.keyboard.press('Shift+Tab')
+    const focusedInHead = drawer.locator('.drawer-frame-lead :focus')
+    await expect(focusedInHead).toHaveCount(1)
+    await expect(focusedInHead).toBeInViewport()
+
+    // A Tab past the last one is an ordinary Tab: it goes to the content's first control.
+    await sections.last().focus()
+    await page.keyboard.press('Tab')
+    await expect(first).toBeFocused()
+    await expect(first).toBeInViewport()
+  })
+}
+
+test('from the head, a Tab into the stuck sections leaves the place alone', async ({ page }) => {
+  const { body, drawer, edge, place, sections } = await cardReadDown(page, 1680, 700)
+  // Focus left behind in the head, which the wheel has read past.
+  await drawer
+    .locator('.drawer-frame-lead')
+    .locator('button')
+    .last()
+    .evaluate((node) => node.focus({ preventScroll: true }))
+  await page.keyboard.press('Tab')
+  await expect(sections.first()).toBeFocused()
+  expect(await placeOf(body)).toBe(place)
+  expect(Math.round(await topOf(sections.first()))).toBeLessThanOrEqual(edge + 20)
+})
+
+test('sections below the fold of a short window are still brought into view for the keyboard', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 240 })
+  await installBackend(page, { longRead: true })
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
+  const drawer = page.locator('.drawer')
+  await expect(drawer.locator('.card-facts')).toBeAttached()
+  await expect(drawer).toHaveCSS('transform', 'none')
+  const sections = drawer.locator('.drawer-frame-tabs').getByRole('button')
+  await drawer
+    .locator('.drawer-frame-lead')
+    .locator('button')
+    .last()
+    .evaluate((node) => node.focus({ preventScroll: true }))
+  await expect(sections.first()).not.toBeInViewport()
+  await page.keyboard.press('Tab')
+  await expect(sections.first()).toBeFocused()
+  await expect(sections.first()).toBeInViewport()
+})
