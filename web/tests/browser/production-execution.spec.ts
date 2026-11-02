@@ -5,7 +5,7 @@
  * beside it, and because the shell spec had reached the line ceiling: a file
  * that keeps growing by unrelated cases is one nobody reads to the end.
  */
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 
 import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
@@ -13,6 +13,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { installBackend } from './backend.ts'
 import { launchedSessionId } from './executionFixtures.ts'
 import { globalScope, projectScope, spaceRef, workItemRef } from './planningFixtures.ts'
+import { test } from './test.ts'
 
 test('the execution section shows the attempt and the launch form is built per client', async ({
   page,

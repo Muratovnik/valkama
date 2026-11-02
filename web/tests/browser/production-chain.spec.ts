@@ -10,7 +10,7 @@
 import { writeFile } from 'node:fs/promises'
 
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 import type { Page, TestInfo } from '@playwright/test'
 
 import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
@@ -30,6 +30,7 @@ import {
 import { drawnColours } from './contrast.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { attachedWorkItemRef, projectScope, workItem, workItemRef } from './planningFixtures.ts'
+import { test } from './test.ts'
 
 async function openCard(page: Page, view?: 'graph') {
   await page.goto(

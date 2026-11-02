@@ -8,11 +8,12 @@
  * told, so the drawn order is the board's reading of the closing times and not
  * the order the read listed.
  */
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 import type { Locator } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
 import { cell, drag, openBoard, serve, shot, tiles } from './boardPage.ts'
+import { test } from './test.ts'
 
 /** Where something is on screen; a tile that is not on screen fails the test here. */
 async function box(what: Locator) {

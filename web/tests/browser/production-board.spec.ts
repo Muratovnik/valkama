@@ -9,13 +9,14 @@
  * the board drew before it asked. Each test saves what it looked at under its
  * own output folder.
  */
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 import type { Locator } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
 import { LONG_EPIC } from './boardFixtures.ts'
 import { cell, centre, drag, lane, openBoard, routeState, serve, shot, tiles } from './boardPage.ts'
 import { expectNoSilentClipping } from './overflow.ts'
+import { test } from './test.ts'
 
 /** The sum of an rgb(a) colour's first three channels: a lighter fill has the larger sum. */
 function brightness(color: string): number {

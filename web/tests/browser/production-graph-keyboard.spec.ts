@@ -3,11 +3,12 @@
  * End walk its nodes with the camera following, Enter opens the card and Esc
  * from the card comes back to the node.
  */
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
 import { graphRoute, longChainHere, serve } from './chainFixtures.ts'
+import { test } from './test.ts'
 
 /** The focused card's reference, and whether all of it is drawn inside the flow. */
 async function focusedCard(page: Page) {

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
@@ -15,6 +15,7 @@ import {
   workItem,
   workItemRef,
 } from './planningFixtures.ts'
+import { test } from './test.ts'
 
 for (const width of [1440, 390]) {
   test(`inspector overlays the unchanged board and Escape returns focus at ${width}px`, async ({

@@ -1,10 +1,11 @@
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 import type { Route } from '@playwright/test'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { projectScope } from './planningFixtures.ts'
+import { test } from './test.ts'
 
 const planningRead = (url: URL) => url.pathname === '/api/planning'
 

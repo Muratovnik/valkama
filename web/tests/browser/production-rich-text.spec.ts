@@ -7,7 +7,7 @@
  * headings stay out of the card's outline, and that a reference opens the card
  * or the record it names in the real application.
  */
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 
 import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
@@ -22,6 +22,7 @@ import {
   spaceRef,
   workItem,
 } from './planningFixtures.ts'
+import { test } from './test.ts'
 
 const steps = Array.from(
   { length: 18 },

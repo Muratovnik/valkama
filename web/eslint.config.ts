@@ -657,6 +657,24 @@ export default ts.config(
     },
   },
   {
+    files: ['tests/browser/**/*.spec.ts'],
+    rules: {
+      // A spec on Playwright's own `test` loses what the suite's adds, and silently.
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@playwright/test',
+              importNames: ['test'],
+              message: "Import `test` from './test.ts'.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // The one component whose styles cannot be scoped. `SelectPortal` renders
     // the popup at the end of `<body>`, outside this component's subtree, so
     // the data attribute `scoped` adds never reaches ten of the fifteen classes

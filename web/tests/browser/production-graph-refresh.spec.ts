@@ -1,9 +1,10 @@
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { projectScope } from './planningFixtures.ts'
+import { test } from './test.ts'
 
 /**
  * A refresh lays the graph out again in the background, and work in the

@@ -5,11 +5,12 @@
  *
  * The server is the board's double, which keeps the order it is told.
  */
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
 import { LONG_EPIC } from './boardFixtures.ts'
 import { cell, drag, lane, openBoard, serve, tiles } from './boardPage.ts'
+import { test } from './test.ts'
 
 test('a tile dropped past what an open cell draws stays in sight', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })

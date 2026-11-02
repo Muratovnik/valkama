@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 import { PLATFORM_MODULE_IDS } from '@/shared/api/platformModuleContract.ts'
@@ -19,6 +19,7 @@ import {
   workItem,
   workItemRef,
 } from './planningFixtures.ts'
+import { test } from './test.ts'
 
 test('cold start at "/" restores a canonical route with no error states', async ({ page }) => {
   const errors: string[] = []

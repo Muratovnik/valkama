@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 
 import { planningSpaceEntity, planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
@@ -14,6 +14,7 @@ import {
   workItem,
   workItemRef,
 } from './planningFixtures.ts'
+import { test } from './test.ts'
 
 type Row = { project: string; reference: string; title: string; writable: boolean }
 

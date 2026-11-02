@@ -9,13 +9,14 @@
  * guards here hold the number of layouts to what a board without labels needs,
  * the nodes of a tile to what it draws, and a closed filter menu to nothing.
  */
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
 import { openBoard, openList } from './boardPage.ts'
 import { planningReadModel } from './planningFixtures.ts'
 import { planningReadFor } from './planningReadFixture.ts'
+import { test } from './test.ts'
 
 /**
  * No trace here: this file counts the page's own layouts, and tracing adds some

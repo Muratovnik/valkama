@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
@@ -6,6 +6,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { installBackend } from './backend.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { projectScope } from './planningFixtures.ts'
+import { test } from './test.ts'
 
 async function openSettingsSection(page: Page, name: 'Diagnostics' | 'General') {
   await page.getByRole('group', { name: 'Settings section' }).getByRole('button', { name }).click()

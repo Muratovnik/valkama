@@ -8,13 +8,14 @@
  * again when it came back. Its words asked the operator to refresh to
  * reconnect, while the app reconnects by itself.
  */
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { projectScope } from './planningFixtures.ts'
 import { installStreamDouble } from './streamDouble.ts'
+import { test } from './test.ts'
 
 const LOST = 'No connection to the local service.'
 

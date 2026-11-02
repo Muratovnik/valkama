@@ -3,7 +3,7 @@
  * the chain, framed on that branch and lit, the address keeps the branch, and
  * focus lands on the graph rather than falling to the page as the card closes.
  */
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
@@ -12,6 +12,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { installBackend } from './backend.ts'
 import { rootFramed, routeState, serve, smallChain } from './chainFixtures.ts'
 import { projectScope, workItemRef } from './planningFixtures.ts'
+import { test } from './test.ts'
 
 const CHAIN = { view: 'graph', chain: 'MAIN-264', chain_scope: 'chain' }
 /** Where a card writes its reference, read or, zoomed out past reading, as a block. */

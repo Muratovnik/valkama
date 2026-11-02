@@ -3,7 +3,7 @@
  * chips and a count of the rest, a face that stays distinct on a pointed-at
  * sheet, and a chip that filters while the rest of the sheet opens the card.
  */
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 import type { Locator } from '@playwright/test'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
@@ -12,6 +12,7 @@ import { installBackend } from './backend.ts'
 import { centre, openBoard, serve } from './boardPage.ts'
 import { drawnColours } from './contrast.ts'
 import { projectScope } from './planningFixtures.ts'
+import { test } from './test.ts'
 
 /** How far a chip's drawn face stands above the sheet it lies on, as a WCAG 2 ratio. */
 async function lift(chip: Locator, sheet: Locator) {

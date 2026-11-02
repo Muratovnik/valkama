@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
@@ -6,6 +6,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { projectScope, workItemRef } from './planningFixtures.ts'
+import { test } from './test.ts'
 
 /** The card head condenses at the body's first scroll: its glide, its hold and its room. */
 async function box(locator: Locator) {

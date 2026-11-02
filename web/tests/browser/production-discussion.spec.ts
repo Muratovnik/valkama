@@ -1,10 +1,11 @@
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installDiscussionBackend } from './discussionBackend.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { planningSpace, projectScope } from './planningFixtures.ts'
+import { test } from './test.ts'
 
 test('description, comments and selected reports survive a fresh item read', async ({ page }) => {
   const backend = await installDiscussionBackend(page)

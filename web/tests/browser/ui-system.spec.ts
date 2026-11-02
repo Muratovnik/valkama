@@ -1,7 +1,8 @@
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 
 import { expectNoSilentClipping } from './overflow.ts'
+import { test } from './test.ts'
 
 test.beforeEach(async ({ page }) => {
   await page.route('**/api/agent-sessions/**', async (route) =>

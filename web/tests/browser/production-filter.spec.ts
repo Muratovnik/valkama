@@ -5,7 +5,7 @@
  * and the keyboard of the bar — `/`, ↓, Enter, Escape one step at a time, ←
  * to the chips and Backspace out of them.
  */
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 import { parsePlatformRoute, serializePlatformRoute } from '@/shared/api/platformRoute.ts'
@@ -14,6 +14,7 @@ import { installBackend } from './backend.ts'
 import { openBoard, serve } from './boardPage.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { projectScope } from './planningFixtures.ts'
+import { test } from './test.ts'
 
 const board = serializePlatformRoute({ module_id: 'planning', scope: projectScope })
 

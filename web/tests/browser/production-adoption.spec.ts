@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 
 import { planningSpaceEntity, planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
@@ -17,6 +17,7 @@ import {
   spaceRef,
   workItem,
 } from './planningFixtures.ts'
+import { test } from './test.ts'
 
 test('root keyboard finder opens the exact attached result with partial coverage', async ({
   page,

@@ -5,11 +5,12 @@
  * than cut, the head stays one line at every width, and the rows are one Tab
  * stop walked with the arrows and the page keys and opened by a click anywhere.
  */
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
 import { openList, serve, shot } from './boardPage.ts'
 import { expectNoSilentClipping } from './overflow.ts'
+import { test } from './test.ts'
 
 // A phone's width folds five columns, and their sorts as a run of buttons took
 // three lines of it; there they are one choice instead.

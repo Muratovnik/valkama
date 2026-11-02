@@ -2,7 +2,9 @@
  * Marks and control states in the browser: what a colour rule says, read back
  * as the colour the page actually paints.
  */
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
+
+import { test } from './test.ts'
 
 test('a thrown switch is not painted the hue of finished work', async ({ page }) => {
   await page.goto('/tests/browser/harness.html?lang=en&surface=marks')

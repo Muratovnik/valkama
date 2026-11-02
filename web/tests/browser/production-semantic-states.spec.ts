@@ -1,9 +1,10 @@
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { globalScope, projectScope } from './planningFixtures.ts'
+import { test } from './test.ts'
 
 test('planning operational states use the shared semantic DOM contract', async ({ page }) => {
   await installBackend(page, { includeUnboundPlanningProject: true })

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
@@ -7,6 +7,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { installBackend } from './backend.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { projectScope, workItem, workItemRef } from './planningFixtures.ts'
+import { test } from './test.ts'
 
 /**
  * The card's head reads as who the item is, what holds for it, and the one

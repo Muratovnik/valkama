@@ -1,8 +1,9 @@
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 
 import { buttonStateFailures } from './buttonStates.ts'
 import type { ButtonLooks } from './buttonStates.ts'
 import { drawnColours } from './contrast.ts'
+import { test } from './test.ts'
 
 /**
  * A button's states read as one weight: hover is the same variant one step

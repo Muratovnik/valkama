@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 import type { Page, Route } from '@playwright/test'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
@@ -6,6 +6,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { installBackend } from './backend.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { globalScope, projectScope } from './planningFixtures.ts'
+import { test } from './test.ts'
 
 test('Russian production shell localizes Settings without runtime failures', async ({ page }) => {
   const failures: string[] = []

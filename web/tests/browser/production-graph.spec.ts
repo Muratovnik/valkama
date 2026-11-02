@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
@@ -7,6 +7,7 @@ import { installBackend } from './backend.ts'
 import { graphRoute, longChainHere, routeState, serve, smallChain } from './chainFixtures.ts'
 import { blockedWorkItem, projectScope } from './planningFixtures.ts'
 import { planningReadFor } from './planningReadFixture.ts'
+import { test } from './test.ts'
 
 for (const width of [1440, 390]) {
   test(`graph worker renders aligned geometry and preserves its camera under the inspector at ${width}px`, async ({
