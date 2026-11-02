@@ -50,6 +50,17 @@ checkouts are therefore distinguishable even at the same version.
   the same reason (`todo: session-ended`). All three used to read
   `lease-expired`, and the records already written stay as they are. See
   [Claims are leases](docs/connection-contract.md#claims-are-leases).
+- **`valkama released --space KEY --repo PATH --range A..B`** lists the open
+  work items whose commit refs went into a release range, so work that shipped
+  can be found while it still reads as open. A ref holds the hash from the branch
+  the work was done on, and integrating that branch rewrites it, so each ref is
+  compared in steps and the answer names the step: `hash`, `patch-id` for the
+  same change under another hash, and `subject`, a weak match, for an object
+  that is gone but whose label has the subject of a commit in the range. Each
+  item says how many of its commit refs match, so partly released work reads as
+  such. It is a hint to check by hand: it opens the store read-only and changes
+  no state, and an item with no commit ref cannot show. The server's tools are
+  unchanged.
 
 ## [2.2.0](https://github.com/Muratovnik/valkama/compare/v2.1.0...v2.2.0) - 2026-11-02
 

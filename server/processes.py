@@ -47,9 +47,15 @@ def run_text(
     encoding: str = "utf-8",
     errors: str = "strict",
     timeout: float | None = None,
+    stdin: bytes | None = None,
 ) -> TextResult:
-    """Capture both streams as bytes and decode them with a named codec."""
-    completed = subprocess.run(argv, capture_output=True, shell=False, check=False, timeout=timeout)
+    """Capture both streams as bytes and decode them with a named codec.
+
+    `stdin`, when given, is written to the child as bytes and then closed.
+    """
+    completed = subprocess.run(
+        argv, input=stdin, capture_output=True, shell=False, check=False, timeout=timeout
+    )
     return TextResult(
         returncode=completed.returncode,
         stdout=completed.stdout.decode(encoding, errors),

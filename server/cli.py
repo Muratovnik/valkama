@@ -8,6 +8,8 @@
   skill ...                install, inspect or remove the Valkama skill for each client
   runtime                  canonical backend/static identity for this checkout
   summary [--space KEY]    short planning-space report for session hooks
+  released --space --repo --range
+                           open work items whose commits a release range took in
   scopes | attach | detach attachable database files, federated at read time
   migrate planning-model   one-way Board -> Planning conversion, once, on request
                            (--dry-run converts a copy and reports)
@@ -28,7 +30,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from . import documents, launcher, launcher_queries, static_assets, store, transcripts
+from . import documents, launcher, launcher_queries, released, static_assets, store, transcripts
 from .federation import federated_spaces
 from .http_surface import serve_main
 from .mcp_surface import LEGACY_PROTOCOLS, MODERN_PROTOCOL, catalogue, mcp_main
@@ -500,6 +502,23 @@ def _projects_main(options: argparse.Namespace) -> None:
         raise SystemExit(f"projects: {error}") from error
 
 
+def _released_main(options: argparse.Namespace) -> None:
+    """Print the open items a release range took commits from; a refusal exits non-zero."""
+
+    try:
+        with contextlib.closing(released.open_store()) as conn:
+            report = released.released_items(
+                conn, space=options.space, repository=options.repo, revisions=options.revisions
+            )
+    except (ValueError, store.StoreTooNewError, sqlite3.Error) as error:
+        raise SystemExit(f"released: {error}") from error
+    print(
+        json.dumps(report, ensure_ascii=False, indent=1)
+        if options.json
+        else released.render(report)
+    )
+
+
 def main(argv: list[str] | None = None) -> None:
     """Route one command line. `argv` defaults to this process's, as usual.
 
@@ -554,6 +573,16 @@ def main(argv: list[str] | None = None) -> None:
     import_cmd.add_argument("--source", required=True)
     summary = commands.add_parser("summary")
     summary.add_argument("--space", default=None)
+    released_cmd = commands.add_parser(
+        "released",
+        help="list open work items whose commits a release range took in; changes nothing",
+    )
+    released_cmd.add_argument("--space", required=True, metavar="KEY")
+    released_cmd.add_argument("--repo", required=True, metavar="PATH", help="the release checkout")
+    released_cmd.add_argument(
+        "--range", required=True, dest="revisions", metavar="A..B", help="such as v1.0.0..v1.1.0"
+    )
+    released_cmd.add_argument("--json", action="store_true")
     scopes_cmd = commands.add_parser(
         "scopes", help="list attached database scopes and their planning spaces"
     )
@@ -740,6 +769,8 @@ def main(argv: list[str] | None = None) -> None:
         migrate_main(options.target, dry_run=options.dry_run)
     elif options.command == "summary":
         summary_main(options.space)
+    elif options.command == "released":
+        _released_main(options)
     elif options.command == "scopes":
         listing = federated_spaces()
         if options.json:

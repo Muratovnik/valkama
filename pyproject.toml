@@ -187,7 +187,7 @@ type = "layers"
 layers = [
   "cli",
   "http_surface | mcp_surface | mcp_front",
-  "app_shell : documents : executions : federation : hooks : housekeeping : memory : ops : planning : platform : processes : projects : refs : runner : sessions : static_assets : store : store_identity : telemetry : transcripts : ui_state : watchers",
+  "app_shell : documents : executions : federation : hooks : housekeeping : memory : ops : planning : platform : processes : projects : refs : released : runner : sessions : static_assets : store : store_identity : telemetry : transcripts : ui_state : watchers",
 ]
 containers = ["server"]
 

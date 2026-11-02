@@ -167,6 +167,13 @@ to work it. A terminal state is refused while a step is open or without a
 summary. `force: true` carries a refusal through and records it as
 `overridden`: use it only when the record would still be true.
 
+**Closing a release.** Before closing the release's epic, run
+`valkama released --space MAIN --repo <checkout> --range v1.0.0..v1.1.0`. It
+lists the open items whose commit refs went into that range, including a change
+that arrived under another hash, and it changes nothing. Check each one and close
+what is finished: partly released work shows as well, a `subject` match is weak,
+and an item with no commit ref cannot show.
+
 **Not done.** Work that is not needed, duplicated or superseded closes in the
 cancelled state. It needs the summary, which starts with why (`Not needed:`,
 `Duplicate of MAIN-12`, `Superseded by MAIN-12`), and leaves undone steps open,

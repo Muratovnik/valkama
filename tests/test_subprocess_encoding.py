@@ -257,6 +257,16 @@ class ChildOutputDecodingTests(unittest.TestCase):
                 timeout=0.05,
             )
 
+    def test_run_text_writes_the_callers_bytes_to_the_child(self) -> None:
+        program = "import sys; sys.stdout.buffer.write(sys.stdin.buffer.read())"
+        done = processes.run_text(
+            [sys.executable, "-c", program],
+            encoding="utf-8",
+            errors="surrogateescape",
+            stdin=OEM_BYTES,
+        )
+        self.assertEqual(OEM_BYTES, done.stdout.encode("utf-8", "surrogateescape"))
+
     def test_a_strict_text_capture_loses_the_stream_without_raising(self) -> None:
         # The reason the three call sites take bytes. The exit code survives, so
         # a caller reading only that keeps working while the output disappears;
