@@ -10,6 +10,13 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+### Added
+
+- `get_work_item` takes `comments_after`, and the HTTP read the same parameter:
+  every comment after that id and none before it. An item with a long history
+  offered only the newest five comments or everything at once, and everything
+  could be too long for a tool answer to carry.
+
 ### Fixed
 
 - Adopting a store written under an earlier product name waits about a second

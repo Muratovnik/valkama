@@ -77,17 +77,24 @@ def get_work_item(
     reference: str,
     *,
     comments: int | None = None,
+    comments_after: int = 0,
     events: int | None = None,
     sessions: bool = False,
 ) -> dict:
     """One item in full; `comments` and `events` keep only the newest of each.
 
-    `sessions` adds the agent sessions whose confirmed calls wrote to it.
-    Without any of these the answer is the complete record a screen draws from.
+    `comments_after` keeps only the comments after that id. `sessions` adds the
+    agent sessions whose confirmed calls wrote to it. Without any of these the
+    answer is the complete record a screen draws from.
     """
 
     record = read_model.present(
-        conn, read_model.item_row(conn, reference), full=True, comments=comments, events=events
+        conn,
+        read_model.item_row(conn, reference),
+        full=True,
+        comments=comments,
+        comments_after=comments_after,
+        events=events,
     )
     if sessions:
         record["sessions"] = read_model.sessions(conn, str(record["work_item_id"]))

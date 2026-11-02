@@ -261,6 +261,7 @@ def present(
     *,
     full: bool = False,
     comments: int | None = None,
+    comments_after: int = 0,
     events: int | None = None,
     closed: Mapping[str, tuple[str | None, str | None]] | None = None,
 ) -> dict:
@@ -268,9 +269,11 @@ def present(
 
     `comments` and `events` cut a full record's history to that many of the
     newest entries, still oldest first, and add the totals and whether anything
-    was left out. Neither given is the whole history, which is what every write
-    answers with and what a screen draws from. `closed` is what `closings`
-    loaded for a read of many items; absent, the item asks `closing` itself.
+    was left out; `comments_after` does the same with the comments up to that
+    id, so a reader takes only what came since. None given is the whole history,
+    which is what every write answers with and what a screen draws from. `closed`
+    is what `closings` loaded for a read of many items; absent, the item asks
+    `closing` itself.
     """
 
     state = state_by_id(conn, str(row["state_id"]))
@@ -357,9 +360,9 @@ def present(
         }
         for item in _newest(
             conn,
-            "SELECT * FROM work_item_comments WHERE work_item_id = ?",
+            "SELECT * FROM work_item_comments WHERE work_item_id = ? AND id > ?",
             "id",
-            identity,
+            (identity, comments_after),
             comments,
         )
     ]
@@ -378,11 +381,11 @@ def present(
             " FROM work_item_events e LEFT JOIN execution_events c ON c.id = e.call_id"
             " WHERE e.work_item_id = ?",
             "e.id",
-            identity,
+            (identity,),
             events,
         )
     ]
-    if comments is not None or events is not None:
+    if comments is not None or comments_after or events is not None:
         comments_total = comment_count(conn, row)
         events_total = int(
             conn.execute(
@@ -398,14 +401,18 @@ def present(
 
 
 def _newest(
-    conn: sqlite3.Connection, query: str, order: str, work_item_id: str, limit: int | None
+    conn: sqlite3.Connection,
+    query: str,
+    order: str,
+    bound: tuple[str | int, ...],
+    limit: int | None,
 ) -> list[sqlite3.Row]:
     """Every row of one item's history oldest first, or only the newest `limit` of them."""
 
     if limit is None:
-        return conn.execute(query + " ORDER BY " + order, (work_item_id,)).fetchall()
+        return conn.execute(query + " ORDER BY " + order, bound).fetchall()
     newest = conn.execute(
-        query + " ORDER BY " + order + " DESC LIMIT ?", (work_item_id, limit)
+        query + " ORDER BY " + order + " DESC LIMIT ?", (*bound, limit)
     ).fetchall()
     return newest[::-1]
 

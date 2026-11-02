@@ -2007,6 +2007,58 @@ class CompactWorkItemReadTests(WireCallTestCase):
         self.assertNotIn("history_truncated", answer)
         self.assertEqual([], answer["sessions"])
 
+    def test_comments_after_answers_with_all_that_came_since_and_nothing_before(self) -> None:
+        """More than the newest five, because a reader catching up must not lose the rest."""
+
+        comments = self.complete["comments"]
+        answer = self.answer(
+            "get_work_item", {"id": self.reference, "comments_after": comments[0]["id"]}
+        )
+        self.assertEqual(comments[1:], answer["comments"])
+        self.assertLess(5, len(answer["comments"]))
+        self.assertEqual(self.complete["events"][-10:], answer["events"])
+        self.assertEqual(
+            (len(comments), 25, True),
+            (answer["comments_total"], answer["events_total"], answer["history_truncated"]),
+        )
+
+    def test_comments_after_the_last_one_read_is_empty_and_keeps_the_totals(self) -> None:
+        comments = self.complete["comments"]
+        answer = self.answer(
+            "get_work_item", {"id": self.reference, "comments_after": comments[-1]["id"]}
+        )
+        self.assertEqual(
+            ([], len(comments), True),
+            (answer["comments"], answer["comments_total"], answer["history_truncated"]),
+        )
+
+    def test_comments_after_zero_is_every_comment(self) -> None:
+        answer = self.answer("get_work_item", {"id": self.reference, "comments_after": 0})
+        self.assertEqual(self.complete["comments"], answer["comments"])
+        self.assertEqual(self.complete["events"][-10:], answer["events"])
+
+    def test_comments_after_an_id_of_another_item_is_a_point_in_the_same_sequence(self) -> None:
+        """Comment ids run across items, so the point need not belong to this one."""
+
+        other = planning_service.create_work_item(self.conn, space=SPACE_KEY, title="Other")
+        planning_service.comment_work_item(self.conn, other["reference"], "elsewhere")
+        planning_service.comment_work_item(self.conn, self.reference, "later")
+        self.conn.commit()
+        (noted,) = planning_service.get_work_item(self.conn, other["reference"])["comments"]
+        answer = self.answer("get_work_item", {"id": self.reference, "comments_after": noted["id"]})
+        self.assertEqual(["later"], [comment["body"] for comment in answer["comments"]])
+
+    def test_comments_after_is_refused_with_full_and_when_it_is_no_id(self) -> None:
+        for extra, wanted in (
+            ({"comments_after": 1, "full": True}, "full and comments_after exclude each other"),
+            ({"comments_after": -1}, "comments_after must be a non-negative integer"),
+            ({"comments_after": "12"}, "comments_after must be a non-negative integer"),
+            ({"comments_after": True}, "comments_after must be a non-negative integer"),
+        ):
+            with self.subTest(extra=extra):
+                error = self.refusal("get_work_item", {"id": self.reference, **extra})
+                self.assertEqual(("invalid_request", wanted), (error["code"], error["message"]))
+
     def test_a_short_history_is_whole_and_says_so(self) -> None:
         reference = planning_service.create_work_item(self.conn, space=SPACE_KEY, title="Short")[
             "reference"
@@ -2064,6 +2116,12 @@ class CompactWorkItemReadTests(WireCallTestCase):
                         "type": "boolean",
                         "description": "Answer with every comment and history event instead"
                         " of the newest ones.",
+                    },
+                    "comments_after": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "A comment id: answer with every comment after it,"
+                        " oldest first, instead of the newest ones. Not together with full.",
                     },
                 },
                 "required": ["id"],
@@ -2140,6 +2198,7 @@ class CompactWorkItemReadTests(WireCallTestCase):
         )
         for parameters, wanted in (
             ({"comments": ["-1"]}, "comments must be a non-negative integer"),
+            ({"comments_after": ["many"]}, "comments_after must be a non-negative integer"),
             ({"events": ["many"]}, "events must be a non-negative integer"),
             ({"sessions": ["yes"]}, "sessions must be true or false"),
         ):
@@ -2150,6 +2209,28 @@ class CompactWorkItemReadTests(WireCallTestCase):
                         "/api/planning/work-item",
                         {"id": [self.reference], **parameters},
                     )
+
+    def test_the_http_read_takes_comments_after_alone_and_within_a_count(self) -> None:
+        comments = self.complete["comments"]
+        for parameters, wanted in (
+            ({"comments_after": [str(comments[1]["id"])]}, comments[2:]),
+            ({"comments_after": [str(comments[1]["id"])], "comments": ["2"]}, comments[-2:]),
+        ):
+            with self.subTest(parameters=parameters):
+                handled = planning_api.handle_get(
+                    self.conn, "/api/planning/work-item", {"id": [self.reference], **parameters}
+                )
+                assert handled is not None
+                item = handled[1]["work_item"]
+                self.assertEqual(wanted, item["comments"])
+                self.assertEqual(
+                    (len(comments), True), (item["comments_total"], item["history_truncated"])
+                )
+        handled = planning_api.handle_get(
+            self.conn, "/api/planning/work-item", {"id": [self.reference], "comments_after": ["0"]}
+        )
+        assert handled is not None
+        self.assertEqual(self.complete, handled[1]["work_item"])
 
 
 class ChainToolTests(WireCallTestCase):

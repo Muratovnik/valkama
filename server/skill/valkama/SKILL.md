@@ -108,8 +108,10 @@ what makes it next; priority only breaks a tie.
 
 **Reading.** `get_work_item` returns the item with its newest comments and
 events and the sessions that wrote to it; `full: true` returns all of its
-history. `get_work_item_chain` shows what an item's work grew into and whether
-it converges. Read the history before assuming who did what.
+history, and `comments_after: <id>` only the comments after one you have read,
+which is the way through an item too long to read whole.
+`get_work_item_chain` shows what an item's work grew into and whether it
+converges. Read the history before assuming who did what.
 
 ## Blocked work
 

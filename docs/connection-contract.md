@@ -243,6 +243,13 @@ oldest first. Beside them it carries `comments_total`, `events_total` and
 the optional boolean `full: true` it answers with every comment and every
 event, and without the three counting fields.
 
+With the optional integer `comments_after` it answers with every comment whose
+id is greater than that one, oldest first, however many there are, and the
+events and the three counting fields as usual; `history_truncated` stays true
+when older comments were left out. This is how a reader that keeps the id of the
+last comment it read takes only what came since. Comment ids run across items,
+so the id need not belong to this item. With `full: true` it is refused.
+
 Both forms carry `sessions`: the agent sessions whose confirmed calls wrote to
 the item, in the order each first wrote there.
 
@@ -261,7 +268,9 @@ caller does not attach its own session id as a ref.
 The HTTP read `GET /api/planning/work-item` answers with the complete record and
 no `sessions`, as before. It takes the same cut as opt-in parameters:
 `comments` and `events` (non-negative integers, each keeping that many of the
-newest entries) and `sessions=true`. A count that is not a non-negative integer
+newest entries), `comments_after` and `sessions=true`. With both `comments` and
+`comments_after` it keeps that many of the newest comments after the id. A count
+that is not a non-negative integer
 and a `sessions` other than `true` or `false` are refused with
 `invalid_request`; an unknown item is `not_found` (404).
 

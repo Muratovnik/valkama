@@ -246,7 +246,7 @@ def _work_items(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -
 
 
 def _work_item(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
-    """One item. `comments`, `events` and `sessions` are opt-in; without them, the full record."""
+    """One item. Every cut of its history is opt-in; without them, the full record."""
 
     return {
         "interface_version": PLANNING_API_INTERFACE,
@@ -254,6 +254,7 @@ def _work_item(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) ->
             conn,
             _required(parameters, "id"),
             comments=_count(parameters, "comments"),
+            comments_after=_count(parameters, "comments_after") or 0,
             events=_count(parameters, "events"),
             sessions=_switch(parameters, "sessions"),
         ),

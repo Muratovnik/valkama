@@ -229,7 +229,8 @@ TOOLS = [
         f" {RECENT_COMMENTS} comments and {RECENT_EVENTS} history events with"
         " comments_total, events_total and history_truncated, and sessions: the"
         " agent sessions whose confirmed calls wrote to it. full=true returns every"
-        " comment and event.",
+        " comment and event; comments_after returns only the comments that came after"
+        " one you have read.",
         READ_ONLY,
         {
             "id": _REFERENCE,
@@ -237,6 +238,12 @@ TOOLS = [
                 "type": "boolean",
                 "description": "Answer with every comment and history event instead of"
                 " the newest ones.",
+            },
+            "comments_after": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "A comment id: answer with every comment after it, oldest"
+                " first, instead of the newest ones. Not together with full.",
             },
         },
         ["id"],
@@ -875,8 +882,15 @@ def _work_item(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> obj
     """
 
     parameters = {"id": [str(arguments["id"])], "sessions": ["true"]}
-    if not _is_verbose(arguments, "full"):
+    full = _is_verbose(arguments, "full")
+    after = arguments.get("comments_after")
+    if after is not None:
+        if full:
+            raise model.PlanningError("full and comments_after exclude each other")
+        parameters["comments_after"] = [str(model.count_field(after, "comments_after"))]
+    elif not full:
         parameters["comments"] = [str(RECENT_COMMENTS)]
+    if not full:
         parameters["events"] = [str(RECENT_EVENTS)]
     answer = api.handle_get(conn, "/api/planning/work-item", parameters)
     if answer is None:  # pragma: no cover - the path table above is closed
