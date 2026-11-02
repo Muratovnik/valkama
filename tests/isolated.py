@@ -59,6 +59,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from server import processes, store
+from server.projects import project_registry, registry_owner
 from windows import release
 
 HOME = "home"
@@ -405,6 +406,22 @@ def _stop_tree(process: object, port: int | None) -> list[str]:
     return []
 
 
+def copy_registry(home: Path) -> None:
+    """Bring the caller's project registry along with a store copy.
+
+    Every page of the app is reached through a project bound to a space. A copy
+    without the registry said the project list could not be read and answered 503
+    on `/open/<number>`, so nothing in it could be looked at. The files are read
+    here, in the caller's own environment, and nothing is written back.
+    """
+
+    target = home / "AppData" / "Local" / "Valkama"
+    target.mkdir(parents=True, exist_ok=True)
+    for found in (Path(project_registry.registry_path()), registry_owner.inventory_path()):
+        if found.is_file():
+            shutil.copy2(found, target / found.name)
+
+
 def supervise(out: Path, source: Path | None, command: Sequence[str] | None = None) -> None:
     """Own one server from start to cleanup; the last thing written says how it went."""
 
@@ -421,6 +438,7 @@ def supervise(out: Path, source: Path | None, command: Sequence[str] | None = No
         prepare_home(home)
         if source is not None:
             copy_store(source, store_path(home))
+            copy_registry(home)
         argv = command or [sys.executable, "valkama.py", "serve", "--port", "0"]
         with log.open("wb") as output:
             server = subprocess.Popen(

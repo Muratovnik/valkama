@@ -684,6 +684,28 @@ class ThroughTheCommandTests(Workspace):
         self.assertEqual([], [p for p in files_under(self.out) if "sqlite3" in p.name])
         self.assertEqual(before, source.read_bytes())
 
+    def test_a_store_copy_brings_the_callers_project_registry_and_leaves_it_alone(self) -> None:
+        caller = self.root / "caller"
+        registry = caller / "Valkama"
+        registry.mkdir(parents=True)
+        files = {"projects.json": b'{"projects": []}', "project-registry.toml": b"# inventory"}
+        for name, content in files.items():
+            (registry / name).write_bytes(content)
+
+        with mock.patch.dict(os.environ, {"LOCALAPPDATA": str(caller)}):
+            self.serve("--store-copy", str(self.source_store()))
+
+        copied = self.home / "AppData" / "Local" / "Valkama"
+        for name, content in files.items():
+            self.assertEqual(content, (copied / name).read_bytes(), name)
+
+        code, said = self.stop()
+
+        self.assertEqual(0, code, said)
+        self.assertFalse(self.home.exists())
+        for name, content in files.items():
+            self.assertEqual(content, (registry / name).read_bytes(), name)
+
     def test_serve_reports_a_store_it_cannot_copy(self) -> None:
         self.addCleanup(self.stop)
         code, said = quietly(
