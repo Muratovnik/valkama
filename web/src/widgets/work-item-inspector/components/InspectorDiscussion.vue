@@ -53,6 +53,19 @@ const closing = ref<StateMove | null>(null)
 /** The move an unsent outcome was written for, once the form has made way for the comment. */
 const held = ref<StateMove | null>(null)
 const outcome = reactive({ done: '', next: '' })
+/**
+ * The form's move, while it still waits on an outcome. This reads the item as it stands
+ * and not the way the form came to be open: a report made the outcome here, or an agent
+ * elsewhere, may have closed the item or given it an outcome, and then the move is over
+ * or no longer needs this form, which has nothing left to promise. A write reads it when
+ * it is pressed, because that is what the button said it would do, and a read landing
+ * before the write's answer already shows the outcome the write just saved.
+ */
+const waitingMove = computed(() => {
+  const move = closing.value
+  const { state, summary } = props.item
+  return !move || move.key === state.key || state.is_terminal || summary ? null : move
+})
 const outcomeForm = ref<InstanceType<typeof InspectorOutcomeForm> | null>(null)
 
 const suggest = workItemSuggest(
@@ -163,27 +176,23 @@ function oweFocus() {
   focusOwed = true
   void nextTick(payFocus)
 }
-/**
- * The text is sent, so it is done with, and the move it was written for goes on. A
- * report made the outcome meanwhile may have carried that move already.
- */
-function outcomeSent() {
-  const move = closing.value
+/** The text is sent, so it is done with, and the move it was written for goes on. */
+function outcomeSent(move: StateMove | null) {
   closing.value = null
   held.value = null
   Object.assign(outcome, { done: '', next: '' })
   oweFocus()
-  if (move && move.key !== props.item.state.key) emit('resume', move.key)
+  if (move) emit('resume', move.key)
 }
 /** A report made the outcome answers the form's question and leaves what is written in it. */
-function reportSelected() {
-  const move = closing.value
+function reportSelected(move: StateMove | null) {
   stepAside()
   oweFocus()
   if (move) emit('resume', move.key)
 }
 function publishOutcome() {
   if (!props.writable) return
+  const move = waitingMove.value
   void submit(
     () =>
       publishWorkItemReport({
@@ -192,11 +201,12 @@ function publishOutcome() {
         make_current: true,
         expected_revision: props.item.revision,
       }),
-    outcomeSent,
+    () => outcomeSent(move),
   )
 }
 function select(commentId: number) {
   if (!props.writable) return
+  const move = waitingMove.value
   void submit(
     () =>
       selectWorkItemSummary({
@@ -204,7 +214,7 @@ function select(commentId: number) {
         comment_id: commentId,
         expected_revision: props.item.revision,
       }),
-    reportSelected,
+    () => reportSelected(move),
   )
 }
 defineExpose({ askOutcome, discussStep })
@@ -221,7 +231,7 @@ defineExpose({ askOutcome, discussStep })
       ref="outcomeForm"
       v-model:done="outcome.done"
       v-model:next="outcome.next"
-      :closing="closing.name"
+      :closing="waitingMove?.name ?? null"
       :error="error"
       :pending="pending"
       :suggest="suggest"

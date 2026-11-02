@@ -8,7 +8,9 @@
  * is asking, because whoever stands here pressed Done and was handed a form.
  * Saving carries that move on, so answering the question finishes what was
  * started. The host owns the text and the write, so a draft outlives a step back
- * to the comment, and the host answers for it from there.
+ * to the comment, and the host answers for it from there. So it can outlive the
+ * move too, and then this is only an outcome being written: no reason, and a button
+ * that says what it does.
  */
 import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -19,8 +21,8 @@ import SectionHeading from '@/shared/ui/SectionHeading.vue'
 import VButton from '@/shared/ui/VButton.vue'
 
 const props = defineProps<{
-  /** The state the refused move was going to, as a reader knows it. */
-  closing: string
+  /** The state a refused move is still waiting to go to, as a reader knows it. */
+  closing: string | null
   /** Why the last save did not go through; empty when it did. */
   error: string
   pending: boolean
@@ -37,6 +39,8 @@ const first = ref<InstanceType<typeof MarkdownEditor> | null>(null)
 /** Both fields show one view: they are one answer, and read together in the card. */
 const previewing = ref(false)
 const ready = computed(() => Boolean(done.value.trim() && next.value.trim()))
+const title = computed(() => t(props.closing ? 'workItem.closing.title' : 'workItem.outcome'))
+const action = computed(() => t(props.closing ? 'workItem.closing.send' : 'workItem.closing.save'))
 
 /** Ctrl+Enter comes from either field, so the button's rule is checked here for both. */
 function send() {
@@ -63,7 +67,7 @@ defineExpose({
         :id="titleId"
         as="h4"
         level="panel"
-        >{{ t('workItem.closing.title') }}</SectionHeading
+        >{{ title }}</SectionHeading
       >
       <VButton
         variant="ghost"
@@ -72,7 +76,12 @@ defineExpose({
         @click="emit('back')"
         >{{ t('workItem.closing.back') }}</VButton
       >
-      <p class="closing-why">{{ t('workItem.closing.why', { state: closing }) }}</p>
+      <p
+        v-if="closing"
+        class="closing-why"
+      >
+        {{ t('workItem.closing.why', { state: closing }) }}
+      </p>
     </div>
     <MarkdownEditor
       ref="first"
@@ -107,7 +116,7 @@ defineExpose({
           type="submit"
           variant="primary"
           :disabled="pending || !ready"
-          >{{ t('workItem.closing.send') }}</VButton
+          >{{ action }}</VButton
         >
       </template>
     </MarkdownEditor>

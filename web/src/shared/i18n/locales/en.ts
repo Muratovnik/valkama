@@ -790,6 +790,7 @@ export const en = {
       title: 'Outcome before closing',
       why: 'Moving this task to “{state}” needs its outcome: what was done and what comes next.',
       send: 'Save and close',
+      save: 'Save outcome',
       back: 'Back to comment',
       resume: 'Back to the unsent outcome',
     },

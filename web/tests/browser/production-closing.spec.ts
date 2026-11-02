@@ -1,10 +1,11 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
+import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installDiscussionBackend } from './discussionBackend.ts'
-import { now, projectScope } from './planningFixtures.ts'
+import { doneState, now, projectScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 /**
@@ -36,6 +37,32 @@ async function expectState(drawer: Locator, state: string) {
 
 const transitions = (writes: readonly Record<string, unknown>[]) =>
   writes.filter((write) => write.state !== undefined)
+
+/** An agent's report on the item, ready to be made its outcome. */
+const withAgentReport = seed((item) => {
+  item.comments.push({
+    id: 1,
+    kind: 'report',
+    author: 'codex',
+    at: now,
+    body: '',
+    report: { done: 'Agent shipped it', next: 'Agent watches it' },
+    checklist_item_id: null,
+    checklist_item_text: null,
+  })
+})
+
+/**
+ * The form with no move left to promise: named for what it holds, giving no reason,
+ * and offering only what its button does. Answers with that button.
+ */
+async function expectOnlySaves(drawer: Locator) {
+  const form = drawer.getByRole('form', { name: 'Task outcome', exact: true })
+  await expect(form).toBeVisible()
+  await expect(form).not.toContainText('Moving this task')
+  await expect(form.getByRole('button', { name: 'Save and close', exact: true })).toHaveCount(0)
+  return form.getByRole('button', { name: 'Save outcome', exact: true })
+}
 
 for (const width of [1680, 390]) {
   test(`closing with no outcome leads to its form, and saving it completes the close, at ${width}px`, async ({
@@ -163,18 +190,7 @@ test('an empty outcome stepped back from holds nothing, and asks nothing', async
 test('an outcome being written outlives a report made the outcome, and is still asked about', async ({
   page,
 }) => {
-  const { backend, drawer } = await refusedClose(page, (item) => {
-    item.comments.push({
-      id: 1,
-      kind: 'report',
-      author: 'codex',
-      at: now,
-      body: '',
-      report: { done: 'Agent shipped it', next: 'Agent watches it' },
-      checklist_item_id: null,
-      checklist_item_text: null,
-    })
-  })
+  const { backend, drawer } = await refusedClose(page, withAgentReport)
   await drawer.getByRole('button', { name: 'Write the outcome', exact: true }).click()
   const form = drawer.getByRole('form', { name: 'Outcome before closing' })
   await form.getByRole('textbox', { name: 'What was done', exact: true }).fill('My own words')
@@ -195,6 +211,89 @@ const SENDS = {
     form.getByRole('button', { name: 'Save and close', exact: true }).click(),
   'Ctrl+Enter': (form: Locator) =>
     form.getByRole('textbox', { name: 'What comes next', exact: true }).press('Control+Enter'),
+}
+
+test('an outcome held past its move says nothing of the move, and saving it only saves', async ({
+  page,
+}) => {
+  const { backend, drawer } = await refusedClose(page, withAgentReport)
+  await drawer.getByRole('button', { name: 'Write the outcome', exact: true }).click()
+  const opened = drawer.getByRole('form', { name: 'Outcome before closing' })
+  await opened.getByRole('textbox', { name: 'What was done', exact: true }).fill('My own words')
+  await opened.getByRole('textbox', { name: 'What comes next', exact: true }).fill('My own next')
+  await drawer
+    .locator('.thread-entry')
+    .filter({ hasText: 'Agent shipped it' })
+    .getByRole('button', { name: 'Make task outcome', exact: true })
+    .click()
+  await expect(opened).toHaveCount(0)
+  await expectState(drawer, 'Done')
+  const moves = transitions(backend.writes).length
+
+  await drawer.getByRole('button', { name: 'Back to the unsent outcome', exact: true }).click()
+  const save = await expectOnlySaves(drawer)
+  await save.click()
+  await expect(drawer.locator('.closing-form')).toHaveCount(0)
+  // The person replaces the agent's outcome by that press, and nothing moves.
+  expect(backend.item.summary).toEqual({ done: 'My own words', next: 'My own next' })
+  expect(transitions(backend.writes)).toHaveLength(moves)
+  await expectState(drawer, 'Done')
+})
+
+/**
+ * What another hand did while the form stood, which the card learns by reading again: the
+ * write is refused because the item changed, and the form's own button reads it.
+ */
+for (const [what, change, state] of [
+  [
+    'closed the item',
+    (item: WorkItem) => {
+      item.state = { ...doneState }
+      item.summary = { done: 'Agent shipped it', next: 'Agent watches it' }
+    },
+    'Done',
+  ],
+  [
+    'gave it an outcome',
+    (item: WorkItem) => {
+      item.summary = { done: 'Agent shipped it', next: 'Agent watches it' }
+    },
+    'Dev',
+  ],
+  [
+    'moved it past the need for this move',
+    (item: WorkItem) => {
+      item.state = { ...doneState, key: 'cancelled', name: 'Cancelled' }
+    },
+    'Cancelled',
+  ],
+] as const) {
+  test(`once read again after an agent ${what}, the form says nothing of the move and only saves`, async ({
+    page,
+  }) => {
+    const { backend, drawer } = await refusedClose(page)
+    await drawer.getByRole('button', { name: 'Write the outcome', exact: true }).click()
+    const opened = drawer.getByRole('form', { name: 'Outcome before closing' })
+    const done = opened.getByRole('textbox', { name: 'What was done', exact: true })
+    await done.fill('My own words')
+    await opened.getByRole('textbox', { name: 'What comes next', exact: true }).fill('My own next')
+    backend.failNextWrite()
+    await opened.getByRole('button', { name: 'Save and close', exact: true }).click()
+    await expect(opened.getByRole('alert')).toContainText('The task changed.')
+    const moves = transitions(backend.writes).length
+
+    change(backend.item)
+    await opened.getByRole('button', { name: 'Refresh task', exact: true }).click()
+    const save = await expectOnlySaves(drawer)
+    await expect(drawer.getByRole('textbox', { name: 'What was done', exact: true })).toHaveValue(
+      'My own words',
+    )
+    await save.click()
+    await expect(drawer.locator('.closing-form')).toHaveCount(0)
+    expect(backend.item.summary).toEqual({ done: 'My own words', next: 'My own next' })
+    expect(transitions(backend.writes)).toHaveLength(moves)
+    await expectState(drawer, state)
+  })
 }
 
 for (const [how, send] of Object.entries(SENDS)) {
@@ -229,18 +328,7 @@ test('a refused outcome sent with the button keeps focus in its form', async ({ 
 test('an agent’s report still shows, and making it the outcome answers the same question', async ({
   page,
 }) => {
-  const { backend, drawer } = await refusedClose(page, (item) => {
-    item.comments.push({
-      id: 1,
-      kind: 'report',
-      author: 'codex',
-      at: now,
-      body: '',
-      report: { done: 'Agent shipped it', next: 'Agent watches it' },
-      checklist_item_id: null,
-      checklist_item_text: null,
-    })
-  })
+  const { backend, drawer } = await refusedClose(page, withAgentReport)
   const entry = drawer.locator('.thread-entry').filter({ hasText: 'Agent shipped it' })
   await expect(entry.locator('.thread-label')).toHaveText('Work report')
   await drawer.getByRole('button', { name: 'Write the outcome', exact: true }).click()
