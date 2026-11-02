@@ -315,7 +315,8 @@ chrome.
   two, which is the right size for one product on one platform.
 - `tokens.css` is the source and every other copy of a token is generated from
   it by `scripts/sync-tokens.mjs` — the semantic tone map, the favicon,
-  the Windows ICO, the Electron window and its offline page, and this document's
+  the Windows ICO, the Electron window and its offline page, the page a listener
+  answers when the app takes a link, and this document's
   own frontmatter. Copies exist because a browser tab, an ICO and a
   window frame resolve no custom property, and every one of them had drifted at
   least once; tests caught that drift but could not fix it, so a palette change
