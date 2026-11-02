@@ -1058,9 +1058,15 @@ def install(
     # listener unprovable, and an unprovable listener is one nobody may stop.
     stopped = _stop_on_demand(root, platform, port, used) if holding else None
 
-    _atomic_write(paths["shim"], shim, stat.S_IREAD | stat.S_IWRITE)
-    _atomic_write(paths["command"], command, command_mode)
-    _atomic_write(paths["manifest"], manifest_bytes, stat.S_IREAD | stat.S_IWRITE)
+    try:
+        _atomic_write(paths["shim"], shim, stat.S_IREAD | stat.S_IWRITE)
+        _atomic_write(paths["command"], command, command_mode)
+        _atomic_write(paths["manifest"], manifest_bytes, stat.S_IREAD | stat.S_IWRITE)
+    except OSError:
+        # The install failed, and that is what the caller hears, but the address of a
+        # work item has to go on working from whatever the pin still says.
+        _settle_on_demand(root, platform, port, stopped, autostart_on, used)
+        raise
     result = status(root, platform_name=platform)
     if result["state"] != "installed":
         raise LauncherError(f"installed launcher failed verification: {result.get('detail')}")

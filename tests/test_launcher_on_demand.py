@@ -412,6 +412,20 @@ class InstallTests(OnDemandCase):
         self.assertEqual("refused", result["on_demand_listener"]["state"])
         self.assertEqual([], self.spawned)
 
+    def test_an_install_that_cannot_write_still_brings_the_listener_back(self) -> None:
+        """It stopped the listener before the write, and the address has to go on working."""
+
+        installed = self.install()
+        self.enable()
+        self.spawned.clear()
+        self.listener(installed, "--on-demand", "--port", str(PORT))
+        self.new_release()
+        with mock.patch.object(launcher, "_atomic_write", side_effect=PermissionError("held")):
+            with self.assertRaises(PermissionError):
+                self.install()
+        self.assertEqual(1, len(self.stopped))
+        self.assertEqual(1, len(self.spawned))
+
     def test_a_listener_that_cannot_start_does_not_fail_the_install(self) -> None:
         self.install()
         self.enable()
