@@ -1,7 +1,10 @@
 <script setup lang="ts">
 /**
- * A lane's heading: which epic the row is, its state and counts, where its
- * work out of sight is, and the epic's card and chain one click away.
+ * A lane's heading: which epic the row is and how much it holds, on one calm
+ * line. Its state is said only once the epic has moved; an epic not started
+ * keeps the word for a screen reader. The epic's card and chain are one click
+ * away and come up under the pointer or the keyboard, so a board of a hundred
+ * epics does not stand two buttons per row; where nothing can hover they stay.
  *
  * It is held at the left edge of what the board shows, and at the top while its
  * lane passes under the row of state names, so a lane in view always says whose
@@ -11,6 +14,8 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { BoardLane } from '@/widgets/work-item-views/utils/boardLanes.ts'
+
+import { printsFacet } from '@/entities/work-item/utils/facets.ts'
 
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import VButton from '@/shared/ui/VButton.vue'
@@ -44,6 +49,7 @@ const toggleLabel = computed(() =>
   t(props.open ? 'workItem.lanes.fold' : 'workItem.lanes.unfold', { lane: title.value }),
 )
 const away = computed(() => props.left !== '' || props.right !== '')
+const stateShown = computed(() => props.lane.epic && printsFacet('state', 'lane', props.lane.epic))
 
 // The spaces live in the strings: a template trims the space before a tag
 // closes, which ran «To the right:» into the count for a screen reader.
@@ -82,6 +88,7 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
       v-if="props.lane.epic"
       class="lane-state"
       dimension="work-item-state"
+      :class="{ 'visually-hidden': !stateShown }"
       :state="props.lane.epic.state.category"
       :label="props.lane.epic.state.name"
     />
@@ -177,7 +184,7 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
 
 .lane-reference {
   flex: 0 0 auto;
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
   font: var(--font-detail);
   font-variant-numeric: tabular-nums;
 }
@@ -198,7 +205,7 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
 
 .lane-counts {
   flex: 0 0 auto;
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
   font: var(--font-count);
   font-variant-numeric: tabular-nums;
 }
@@ -214,10 +221,24 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
   font-variant-numeric: tabular-nums;
 }
 
+/* Out of sight at rest and in place all the same, so the line does not shift when
+   they come up. They stay in the Tab order, and arriving there is what shows them;
+   a press with the pointer leaves focus behind without leaving them up. */
 .lane-actions {
   display: inline-flex;
   flex: 0 0 auto;
   gap: var(--space-1);
+  opacity: 0;
+  transition: opacity var(--duration-quick) var(--ease-out);
+
+  .lane-head:is(:hover, :has(:focus-visible)) & {
+    opacity: 1;
+  }
+
+  /* Nothing can hover here, so they stand. */
+  @media (hover: none) {
+    opacity: 1;
+  }
 }
 
 /* A heading that also says where its work out of sight is would squeeze its
@@ -229,6 +250,17 @@ const rightLead = computed(() => `${t('workItem.lanes.offRight')} `)
 @container board-lanes (width <= 560px) {
   .lane-head {
     flex-wrap: wrap;
+  }
+
+  /* A row of their own would be a blank one at rest, so a pointer brings them up
+     over the end of the last row; where nothing can hover they keep their row. */
+  @media (hover: hover) {
+    .lane-actions {
+      position: absolute;
+      inset-block-end: 0;
+      inset-inline-end: 0;
+      background: var(--color-canvas);
+    }
   }
 }
 </style>

@@ -10,8 +10,10 @@
  * opens the cell, so the tile is drawn where it went and keeps its focus.
  *
  * A terminal cell (Done, Cancelled) draws none of its tiles: that work is
- * finished, so the cell says how much there is and offers it. A lane of finished
- * work therefore stands no taller than its open work does.
+ * finished, so the cell says how much there is and offers it as a line of text,
+ * with no ground under it. A ground holding only that offer stood as tall as a
+ * tile in every lane of the board, and a lane of finished work now stands no
+ * taller than its open work does.
  *
  * The offer is a disclosure, and it closes as it opens. Opened, the cell grows
  * below where the reader was and focus goes to the first tile it revealed;
@@ -75,6 +77,8 @@ const showWhole = computed(() => whole.value || props.revealed)
 const limit = computed(() => (showWhole.value ? undefined : drawn.value))
 /** The cell holds more than it draws, so it offers the rest, or offers to put it away again. */
 const offered = computed(() => props.items.length > drawn.value)
+/** Nothing of the cell is drawn yet, so at rest it has no ground to lay anything on. */
+const bare = computed(() => !props.items.length || limit.value === 0)
 const toggleLabel = computed(() =>
   showWhole.value
     ? t('workItem.lanes.showFewer')
@@ -111,7 +115,7 @@ function walk(event: KeyboardEvent) {
   <div
     ref="cell"
     class="lane-cell"
-    :class="{ empty: !props.items.length, landable: props.landable }"
+    :class="{ empty: !props.items.length, bare, landable: props.landable }"
     :data-state="props.state.key"
   >
     <WorkItemStack
@@ -135,7 +139,7 @@ function walk(event: KeyboardEvent) {
     <VButton
       v-if="offered"
       class="lane-more"
-      variant="ghost"
+      variant="text"
       size="inline"
       :aria-expanded="showWhole"
       :aria-controls="stackId"
@@ -147,10 +151,10 @@ function walk(event: KeyboardEvent) {
 </template>
 
 <style scoped>
-/* A ground like a column's. An empty one keeps its place and its height, so a
-   tile can still be dropped there, but draws no ground until a tile of its lane
-   is dragged and could land in it: at rest a row of epics drew five grey boxes
-   for every lane, the loudest thing on a board of mostly empty cells. */
+/* A ground like a column's. A cell with no tile drawn keeps its place, so a tile
+   can still be dropped there, but takes no ground and no floor until a tile of its
+   lane is dragged and could land in it: at rest a row of epics drew five grey
+   boxes for every lane, the loudest thing on a board of mostly empty cells. */
 .lane-cell {
   display: flex;
   flex-direction: column;
@@ -160,8 +164,13 @@ function walk(event: KeyboardEvent) {
   background: var(--color-surface);
   border-radius: var(--radius-card);
 
-  &.empty:not(.landable) {
+  &.bare:not(.landable) {
+    gap: 0;
     background: none;
+
+    .lane-stack {
+      min-height: 0;
+    }
   }
 }
 

@@ -378,7 +378,10 @@ function laneGroup(lane: BoardLane): string {
   contain-intrinsic-size: auto calc(var(--size-control-height-compact) + var(--space-3));
   content-visibility: auto;
 
+  /* An open lane is a block of tiles, and only more air above its heading than
+     under it says whose they are. Folded ones are lines of one list. */
   &.open {
+    padding-top: var(--space-6);
     contain-intrinsic-size: auto 480px;
   }
 }
