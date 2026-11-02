@@ -12,26 +12,59 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Added
 
-- `get_work_item` takes `comments_after`, and the HTTP read the same parameter:
+- **Agents on the card.** The Overview of a work item lists the Claude Code agents
+  on it: what each was started for, the step it holds, when it started, its last
+  sign of activity and the time between, and how it is known to be there. An agent
+  is on the item when it wrote there or holds a step, or when the session that
+  started it held the item at that moment; a session holding several items puts it
+  on each and the row says how many, unless the agent wrote to some item, which
+  places it there alone. An agent whose parent held nothing and that wrote nothing
+  is on no card. The list updates on its own through the existing event stream.
+  While an agent has no recorded end, its last activity also takes the time its
+  transcript file was last written, read when the card is read; the file's content
+  is never read. The section is absent while no agent is on the item, and a long
+  list folds to the three most recent.
+- **`valkama hook claude post-tool-use`** names an agent from the call that started
+  it, reading only the short description of that call and the agent's id from one
+  hook input, never its prompt. Register it for `PostToolUse` with the matcher
+  `^(Agent|Task)$`. Without it, and for every agent recorded earlier, a row shows the
+  agent's type and short id. The label stays out of the append-only history, the
+  installation export, `doctor` and logs, and MCP tool answers do not change.
+- **A work item has a short address**: `GET /open/MAIN-12` opens its card in the
+  web UI, in any case and from any space a project binds, by redirecting to the
+  card's own route, so the address bar, Reload and Back behave as usual. A number
+  nobody filed, a key no project binds, an address that names no number and a store
+  that cannot answer each get a page saying so in the interface's language, with
+  the next step. The route obeys the loopback rules of every other, and only ever
+  redirects to a card on this origin.
+- **`url` in MCP answers.** A work item's full record and every write
+  acknowledgement carry the address as `url`. This is an addition: list and search
+  rows, tool schemas and the HTTP records are unchanged.
+- **`serve --on-demand` and `launcher autostart`.** A listener can hold the port from
+  login with no part of the server loaded, which costs about 15 MB instead of about
+  40 MB, and become the server on the first connection, in the same process and on
+  the same socket, so the address of a work item works without starting anything. On
+  Windows `launcher autostart enable|disable|status` keeps it in the current user's
+  Run key; it is off until enabled and `doctor` shows it. A busy port is retried
+  every 30 seconds, a server that cannot load answers with a page and logs why, and
+  `launcher install` restarts such a listener from the new release.
+- **`valkama released --space KEY --repo PATH --range A..B`** lists the open
+  work items whose commit refs went into a release range, so work that shipped
+  can be found while it still reads as open. A ref holds the hash from the branch
+  the work was done on, and integrating that branch rewrites it, so each ref is
+  compared in steps and the answer names the step: `hash`, `patch-id` for the
+  same change under another hash, and two weak matches, `changed-patch` for a
+  commit outside the range whose subject a commit in the range has with another
+  patch, and `subject` for an object that is gone but whose label has the subject
+  of a commit in the range. Each item says how many of its commit refs match, so
+  partly released work reads as such. It is a hint to check by hand: it opens the
+  store read-only and changes no state, and an item with no commit ref cannot show.
+  The server's tools are unchanged.
+- **`get_work_item` takes `comments_after`**, and the HTTP read the same parameter:
   every comment after that id and none before it. An item with a long history
   offered only the newest five comments or everything at once, and everything
   could be too long for a tool answer to carry.
 
-### Fixed
-
-- Adopting a store written under an earlier product name waits about a second
-  when Windows refuses a rename with access denied or a sharing violation, which
-  is what it answers while a scanner or an indexer has just opened a file there.
-  It used to refuse at once and ask the operator to close something they had no
-  way to find. A holder that does not let go gets that refusal, and any other
-  failure gets it straight away.
-- `launcher install` reaches the tray icon too. It is a process of one release,
-  and it stayed on the release its session started from, so a click ran the old
-  script until the client restarted. The session now restarts it from the release
-  it has switched to, once the switch has succeeded; if the new tray will not
-  start, the working icon stays, and an icon hidden from its menu stays hidden.
-  This needs a session started on this release or later, so sessions already open
-  keep their icon until they restart.
 ### Changed
 
 - **A client restart no longer costs a session its claims.** A restart ends the
@@ -50,71 +83,34 @@ checkouts are therefore distinguishable even at the same version.
   the same reason (`todo: session-ended`). All three used to read
   `lease-expired`, and the records already written stay as they are. See
   [Claims are leases](docs/connection-contract.md#claims-are-leases).
-- **`valkama released --space KEY --repo PATH --range A..B`** lists the open
-  work items whose commit refs went into a release range, so work that shipped
-  can be found while it still reads as open. A ref holds the hash from the branch
-  the work was done on, and integrating that branch rewrites it, so each ref is
-  compared in steps and the answer names the step: `hash`, `patch-id` for the
-  same change under another hash, and two weak matches, `changed-patch` for a
-  commit outside the range whose subject a commit in the range has with another
-  patch, and `subject` for an object that is gone but whose label has the subject
-  of a commit in the range. Each item says how many of its commit refs match, so partly released work reads as
-  such. It is a hint to check by hand: it opens the store read-only and changes
-  no state, and an item with no commit ref cannot show. The server's tools are
-  unchanged.
-- **Agents on the card.** The Overview of a work item lists the Claude Code agents
-  on it: what each was started for, the step it holds, when it started, its last
-  sign of activity and the time between, and how it is known to be there. An agent
-  is on the item when it wrote there or holds a step, or when the session that
-  started it held the item at that moment; a session holding several items puts it
-  on each and the row says how many, unless the agent wrote to some item, which
-  places it there alone. An agent whose parent held nothing and that wrote nothing
-  is on no card. The list updates on its own through the existing
-  event stream. While an agent has no recorded end, its last activity also takes the time its transcript file was last written, read when the card is read; the file's content is never read. The section is absent while no agent is on the item, and a long list
-  folds to the three most recent.
-- **`valkama hook claude post-tool-use`** names an agent from the call that started
-  it, reading only the short description of that call and the agent's id from one
-  hook input, never its prompt. Register it for `PostToolUse` with the matcher
-  `^(Agent|Task)$`. Without it, and for every agent recorded earlier, a row shows the
-  agent's type and short id. The label stays out of the append-only history, the
-  installation export, `doctor` and logs, and MCP tool answers do not change.
-- **A work item has a short address**: `GET /open/MAIN-12` opens its card in the
-  web UI, in any case and from any space a project binds, by redirecting to the
-  card's own route, so the address bar, Reload and Back behave as usual. A number
-  nobody filed, a key no project binds, an address that names no number and a store
-  that cannot answer each get a page saying so in the interface's language, with
-  the next step. The route obeys the loopback rules of every other, and only ever
-  redirects to a card on this origin.
-- **`url` in MCP answers.** A work item's full record and every write
-  acknowledgement carry the address as `url`. This is an addition: list and search
-  rows, tool schemas and the HTTP records are unchanged.
 - **Agents link the numbers they write to the owner.** The skill and the server's
   instructions say to write a number as a markdown link in a message to the owner,
   and not in a Valkama comment or description, where the UI links numbers itself.
-- **`serve --on-demand` and `launcher autostart`.** A listener can hold the port from
-  login with no part of the server loaded, which costs about 15 MB instead of about
-  40 MB, and become the server on the first connection, in the same process and on
-  the same socket, so the address of a work item works without starting anything. On
-  Windows `launcher autostart enable|disable|status` keeps it in the current user's
-  Run key; it is off until enabled and `doctor` shows it. A busy port is retried
-  every 30 seconds, a server that cannot load answers with a page and logs why, and
-  `launcher install` restarts such a listener from the new release.
-
-### Changed
-
 - The server's instructions are tightened from 4397 to about 4040 characters
   without dropping a rule. Claude Code 2.1.314 cuts them at 4096, so their last
   rules were not reaching its sessions; a test now holds them under that limit.
 
 ### Fixed
 
-- A state panel with its buttons in a narrow column no longer squeezes its message
-  into a few letters wide: on a phone the buttons take their own row.
-### Fixed
-
 - A tile dragged quickly and let go over a column or a lane's cell lands there.
   The drop library reads the pointer every 50ms, so a release between two
   readings put the tile in the column the pointer had only passed.
+- `launcher install` reaches the tray icon too. It is a process of one release,
+  and it stayed on the release its session started from, so a click ran the old
+  script until the client restarted. The session now restarts it from the release
+  it has switched to, once the switch has succeeded; if the new tray will not
+  start, the working icon stays, and an icon hidden from its menu stays hidden.
+  This needs a session started on this release or later, so sessions already open
+  keep their icon until they restart.
+- Adopting a store written under an earlier product name, and `launcher install`
+  pinning a release, wait about a second when Windows refuses a rename with access
+  denied or a sharing violation, which is what it answers while a scanner or an
+  indexer has just opened a file there. Adoption used to refuse at once and ask the
+  operator to close something they had no way to find, and about one install in ten
+  failed and had to be repeated. A holder that does not let go gets that refusal,
+  and any other failure gets it straight away.
+- A state panel with its buttons in a narrow column no longer squeezes its message
+  into a few letters wide: on a phone the buttons take their own row.
 
 ## [2.2.0](https://github.com/Muratovnik/valkama/compare/v2.1.0...v2.2.0) - 2026-11-02
 
