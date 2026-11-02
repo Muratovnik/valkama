@@ -358,13 +358,4 @@ defineExpose({ focusAt, walkFrom })
   margin: 0;
   list-style: none;
 }
-
-/* A sheet scrolled out of its column's sight is not laid out until it is
-   reached, as a lane of the grouped board is not: a column draws thirty tiles
-   and a screen shows six or seven. It keeps the height it last had, and before
-   it has had one, a tile's usual height. */
-.stack-item {
-  contain-intrinsic-size: auto 120px;
-  content-visibility: auto;
-}
 </style>

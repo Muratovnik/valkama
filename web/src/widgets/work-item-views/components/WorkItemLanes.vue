@@ -228,10 +228,13 @@ function laneGroup(lane: BoardLane): string {
           <span class="lanes-state-count">{{ stateCount(state) }}</span>
         </span>
       </div>
+      <!-- A press inside keeps focus inside: see `.board-lane`. -->
+      <!-- eslint-disable-next-line vuejs-accessibility/no-noninteractive-tabindex -->
       <section
         v-for="lane in props.lanes"
         :key="lane.id"
         class="board-lane"
+        tabindex="-1"
         :class="{ open: isOpen(lane) }"
         :aria-label="title(lane)"
         :data-lane="lane.id"
@@ -375,7 +378,16 @@ function laneGroup(lane: BoardLane): string {
   grid-column: 1 / -1;
   gap: var(--space-2);
   padding-top: var(--space-3);
+  outline: none;
   contain-intrinsic-size: auto calc(var(--size-control-height-compact) + var(--space-3));
+
+  /* A lane that holds focus is laid out wherever it stands, and the moment focus leaves it
+     one out of sight stops being. A press inside took focus out to the page, and a lane just
+     back in view, which the browser would have learnt only from its next frame, stopped being
+     laid out under that press: the tab crashed (Chromium 156, in Chrome and the desktop app).
+     So a press inside leaves focus inside, on the lane if nothing nearer takes it. A tile has
+     no such rule because it is not skipped: it saved about 20ms of a board's first layout, and
+     a press on a tile just back in view reached nothing. */
   content-visibility: auto;
 
   /* An open lane is a block of tiles, and only more air above its heading than
