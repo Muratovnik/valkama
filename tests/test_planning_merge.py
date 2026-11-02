@@ -427,7 +427,7 @@ class MergeSurfaceTests(MergeTestCase):
         self.assertEqual(service.MAX_MERGE_ITEMS, schema["properties"]["items"]["maxItems"])
         self.assertFalse(tool["annotations"]["destructiveHint"])
 
-    def test_the_answer_warns_of_what_the_merge_leaves_behind(self) -> None:
+    def test_the_answer_warns_of_what_the_merge_left_or_carried_elsewhere(self) -> None:
         epic = self.item("Elsewhere", kind="epic")
         child = self.item("Under another epic", parent=epic)
         requests.create(
@@ -443,7 +443,7 @@ class MergeSurfaceTests(MergeTestCase):
         self.assertEqual(
             [
                 f"{child} stays under {epic}; {self.survivor} keeps its own parent",
-                f"{child} has 1 pending request(s); they close with it",
+                f"{child}'s 1 pending request(s) now wait on {self.survivor}",
             ],
             answer["warnings"],
         )

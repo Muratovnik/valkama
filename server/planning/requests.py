@@ -9,6 +9,9 @@ from collections.abc import Iterator
 
 from . import calls, model, read_model, request_model, service
 
+#: How many questions a read of one item carries; `questions.total` says the rest.
+ITEM_QUESTIONS = 5
+
 
 @contextlib.contextmanager
 def _transaction(conn: sqlite3.Connection) -> Iterator[None]:
@@ -58,6 +61,9 @@ def _expired(conn: sqlite3.Connection, row: sqlite3.Row, at: str) -> str | None:
 def _present(conn: sqlite3.Connection, row: sqlite3.Row, at: str) -> dict:
     item = read_model.item_by_id(conn, row["work_item_id"])
     reason = _expired(conn, row, at)
+    given, note = request_model.split_answers(
+        json.loads(row["answers_json"]) if row["answers_json"] is not None else None
+    )
     return {
         "request_id": row["request_id"],
         "work_item_id": row["work_item_id"],
@@ -66,7 +72,8 @@ def _present(conn: sqlite3.Connection, row: sqlite3.Row, at: str) -> dict:
         "kind": row["kind"],
         "prompt": row["prompt"],
         "fields": json.loads(row["fields_json"]),
-        "answers": json.loads(row["answers_json"]) if row["answers_json"] is not None else None,
+        "answers": given,
+        "note": note,
         "status": "expired" if reason else row["status"],
         "author": row["author"],
         "answered_by": row["answered_by"],
@@ -84,6 +91,79 @@ def get(conn: sqlite3.Connection, identity: object) -> dict:
     return _present(conn, _row(conn, identity), request_model.now())
 
 
+def with_by_person(conn: sqlite3.Connection, records: list[dict]) -> list[dict]:
+    """Requests with whether a person gave each answer, as the call that wrote it proved.
+
+    True when the `request_answered` event's call came through the browser
+    credential, the owner's own UI; false for any other answer; null with no answer
+    to speak of. Nothing a caller sends reaches this, and the fact stays once, on
+    the call row. A separate step rather than part of `_present`, because the web's
+    schema is strict and this key is for an agent's reads.
+    """
+
+    answered = [record["request_id"] for record in records if record["status"] == "answered"]
+    sources: dict[str, object] = {}
+    if answered:
+        # By the request rather than its item: a merge moves a request and leaves
+        # its history where it was written.
+        sources = {
+            str(row["detail"]): row["identity_source"]
+            for row in conn.execute(
+                "SELECT e.detail, c.identity_source FROM work_item_events e"
+                " LEFT JOIN execution_events c ON c.id = e.call_id"
+                " WHERE e.action = 'request_answered'"
+                " AND e.detail IN (SELECT value FROM json_each(?))",
+                (json.dumps(answered),),
+            )
+        }
+    return [
+        {
+            **record,
+            "by_person": sources.get(record["request_id"]) == calls.BROWSER
+            if record["status"] == "answered"
+            else None,
+        }
+        for record in records
+    ]
+
+
+def of_item(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
+    """Every request on one item, newest first and with no page limit."""
+
+    at = request_model.now()
+    return [
+        _present(conn, row, at)
+        for row in conn.execute(
+            "SELECT * FROM work_item_requests WHERE work_item_id=?"
+            " ORDER BY created_at DESC,request_id",
+            (work_item_id,),
+        ).fetchall()
+    ]
+
+
+def item_questions(conn: sqlite3.Connection, work_item_id: str) -> dict:
+    """What an agent reading an item learns of its questions without another call.
+
+    Open ones first, because they are what is waiting, then the newest closed;
+    how many there are in all and whether this is all of them.
+    """
+
+    found = of_item(conn, work_item_id)
+    waiting = [record for record in found if record["status"] == "pending"]
+    closed = sorted(
+        (record for record in found if record["status"] != "pending"),
+        key=lambda record: record["resolved_at"] or record["created_at"],
+        reverse=True,
+    )
+    shown = (waiting + closed)[:ITEM_QUESTIONS]
+    return {
+        "total": len(found),
+        "open": len(waiting),
+        "items": [request_model.compact(record) for record in with_by_person(conn, shown)],
+        "truncated": len(shown) < len(found),
+    }
+
+
 def list_requests(
     conn: sqlite3.Connection,
     *,
@@ -91,6 +171,7 @@ def list_requests(
     status: str | None = None,
     limit: int = 100,
     reference: str | None = None,
+    answered_after: object = None,
 ) -> list[dict]:
     if status is not None:
         model.enum_field(status, request_model.STATUSES, "status")
@@ -105,6 +186,11 @@ def list_requests(
             raise model.PlanningError("work item is outside the exact planning space")
         clauses.append("r.work_item_id=?")
         parameters.append(item["work_item_id"])
+    after = request_model.timestamp(answered_after, "answered_after")
+    if after is not None:
+        # An answered row is final and its time has the one format `now` writes.
+        clauses.append("r.status='answered' AND r.resolved_at>?")
+        parameters.append(after)
     # Effective expiry depends on item/execution state. Filter after projection,
     # fetching in pages so terminal history cannot hide a pending request.
     query = service.with_clauses(
@@ -226,10 +312,16 @@ def resolve(
     status: str,
     expected_revision: object,
     answers: object = None,
+    note: object = None,
     author: str | None = None,
 ) -> dict:
     expected_revision = model.count_field(expected_revision, "expected_revision")
     model.enum_field(status, frozenset({"answered", "declined", "expired"}), "status")
+    said = (
+        model.multiline_field(note, "note", limit=request_model.MAX_NOTE)
+        if note is not None
+        else ""
+    )
     with _transaction(conn):
         row = _row(conn, identity)
         if row["revision"] != expected_revision:
@@ -238,7 +330,9 @@ def resolve(
         if row["status"] != "pending" or _expired(conn, row, at):
             raise model.WorkflowGuardError("request is no longer pending")
         parsed = (
-            request_model.answers(answers, json.loads(row["fields_json"]))
+            request_model.stored_answers(
+                request_model.answers(answers, json.loads(row["fields_json"]), note=said), said
+            )
             if status == "answered"
             else None
         )

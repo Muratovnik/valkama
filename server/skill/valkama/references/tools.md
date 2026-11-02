@@ -134,16 +134,52 @@ lists that holder's items.
 `create_work_item_request` takes `id`, `kind` (`question` or `decision`),
 `prompt` and `fields`, each field
 `{"id": "…", "label": "…", "type": "text" | "choice" | "multi_choice" | "boolean", "required": true, "options": [{"id": "…", "label": "…"}]}`.
+An option also takes `description` (markdown, 1 to 8000 characters) and
+`recommended` (a boolean, true on at most one option of a `choice`). The fields of
+one question fit in 64 KiB as stored.
+
+`answer_work_item_request` takes `id`, `answers` (field id to answer, `{}` when
+the note says it all), `expected_revision` and optionally `note` (at most 8000
+characters) and `author`. A non-empty note stands in for required fields; an
+answer that is given is still checked against its field. An answer is final: a
+second one is refused.
+
 A request is `pending` until it is answered, declined or expires; it expires
-when its item closes or its deadline (`expires_at`) passes.
+when its item closes or its deadline (`expires_at`) passes. A comment over an
+open question changes nothing about it.
+
+`get_work_item` answers with `questions`:
+`{"total": 6, "open": 2, "items": […], "truncated": true}`, at most 5 items, the
+open ones first and then the newest closed. `list_work_item_requests` takes
+`space`, `id` (one item), `status`, `answered_after` (an ISO timestamp with a
+timezone), `limit` and `full`. Both give a compact form unless `full` is true:
+
+```json
+{"id": "…", "status": "answered", "question": "Which way?",
+ "answer": [{"field": "path", "value": "keep", "label": "Keep it"},
+            {"field": "sure", "value": false, "label": null}],
+ "note": "And the docs.", "answered_by": "user", "by_person": true,
+ "answered_at": "2026-11-02T09:00:00.000000Z"}
+```
+
+`question` is the first 160 characters of the prompt, with `…` when it was cut.
+`label` names what was chosen in a `choice` or `multi_choice` and is null for a
+`boolean` or `text`, whose `value` reads as itself. A field left out or empty has
+no row. `answered_by`, `by_person` and `answered_at` are null with no answer.
+`by_person` is true when the answer came through Valkama's interface and false
+when it came through a tool; a caller cannot set it.
+
+`get_work_item_request`, and the list with `full: true`, give the whole question:
+`prompt`, `fields` with their options and descriptions, `answers`, `note`,
+`by_person` and the rest of the record.
 
 ## Merging
 
 `merge_work_items` takes `id` (the survivor), `items` (1 to 20), and optionally
 `reason`, `force`, `expected_revision` (the survivor's) and `author`. What
-moves: steps, discussion comments, refs the survivor lacks, and links in their
-own direction. What stays on a merged item: its history, reports, description,
-labels, parent and requests. Each merged item is linked `duplicates` to the
+moves: steps, discussion comments, questions, refs the survivor lacks, and links
+in their own direction. What stays on a merged item: its history, reports,
+description, labels and parent. Each merged item is linked `duplicates` to the
 survivor, summarised, released and closed in its cancelled state. Refused,
 writing nothing: the survivor in `items`, an item named twice, another space,
 a closed item, a merged item with children, more than 100 steps in all, a

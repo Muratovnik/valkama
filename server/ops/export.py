@@ -35,6 +35,7 @@ import sqlite3
 import tempfile
 from pathlib import Path
 
+from ..planning import requests as planning_requests
 from ..planning import service as planning_service
 
 #: What one export may carry, so a caller asks for what it wants rather than
@@ -116,13 +117,16 @@ def _planning(conn: sqlite3.Connection, chosen: tuple[str, ...] | None) -> dict:
             }
             spaces = [space for space in spaces if str(space["planning_space_id"]) in wanted]
         items: list[dict] = []
+        questions: list[dict] = []
         for space in spaces:
             identities = _every_item(conn, space)
             items.extend(planning_service.get_work_item(conn, identity) for identity in identities)
+            for identity in identities:
+                questions.extend(planning_requests.of_item(conn, identity))
     finally:
         if began:
             conn.rollback()
-    return {"planning_spaces": spaces, "work_items": items}
+    return {"planning_spaces": spaces, "work_items": items, "requests": questions}
 
 
 def _every_item(conn: sqlite3.Connection, space: dict) -> list[str]:

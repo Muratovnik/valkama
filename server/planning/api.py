@@ -295,7 +295,9 @@ def _requests(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> 
         "requests": requests.list_requests(
             conn,
             space=_first(parameters, "space"),
+            reference=_first(parameters, "id"),
             status=_first(parameters, "status"),
+            answered_after=_first(parameters, "answered_after"),
             limit=_int(_first(parameters, "limit"), "limit", 100),
         ),
     }
@@ -542,13 +544,14 @@ def _create_request(conn: sqlite3.Connection, payload: Mapping[str, object]) -> 
 
 
 def _answer_request(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
-    _request_fields(payload, {"id", "answers", "expected_revision", "author"})
+    _request_fields(payload, {"id", "answers", "note", "expected_revision", "author"})
     return requests.resolve(
         conn,
         _text(payload, "id"),
         status="answered",
         expected_revision=_field(payload, "expected_revision"),
         answers=_field(payload, "answers"),
+        note=payload.get("note"),
         author=_author(payload),
     )
 

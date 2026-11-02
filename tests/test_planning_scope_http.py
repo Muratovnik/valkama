@@ -22,7 +22,7 @@ from urllib.parse import urlencode
 
 from server import http_surface, store
 from server.hooks import ingest, normalize
-from server.planning import calls, requests, service
+from server.planning import calls, requests, service, tools
 from server.planning.routing import PlanningRouting
 from server.projects import project_registry, scopes
 from server.store_identity.metadata import read_store_metadata
@@ -345,6 +345,91 @@ class PlanningScopeHttpTests(unittest.TestCase):
         conn = store.connect()
         self.addCleanup(conn.close)
         self.assertEqual(0, conn.execute("SELECT COUNT(*) FROM work_item_requests").fetchone()[0])
+
+    def test_an_answer_through_the_browser_is_a_persons_and_its_read_stays_strict(self) -> None:
+        conn = store.connect()
+        self.addCleanup(conn.close)
+        field = {
+            "id": "path",
+            "label": "Which path",
+            "type": "choice",
+            "required": True,
+            "options": [
+                {
+                    "id": "keep",
+                    "label": "Keep it",
+                    "description": "Costs nothing.",
+                    "recommended": True,
+                }
+            ],
+        }
+        created = requests.create(
+            conn, "SAME-1", kind="question", prompt="Which way?", fields=[field], author="agent"
+        )
+        conn.commit()
+        status, answered = self.request(
+            "/api/modules/planning/request/answer",
+            {
+                "project_id": "example-project",
+                **self.refs["primary"],
+                "id": created["request_id"],
+                "expected_revision": 0,
+                "answers": {},
+                "note": "In my own words",
+            },
+        )
+        self.assertEqual(200, status, answered)
+        self.assertEqual(
+            ({}, "In my own words", "user"),
+            (
+                answered["request"]["answers"],
+                answered["request"]["note"],
+                answered["request"]["answered_by"],
+            ),
+        )
+        # The web's schema is strict: a key it does not name refuses the whole list.
+        self.assertNotIn("by_person", answered["request"])
+        status, listed = self.request(
+            "/api/modules/planning/requests?scope_kind=global&status=answered"
+        )
+        self.assertEqual(200, status, listed)
+        self.assertNotIn("by_person", listed["items"][0]["request"])
+        self.assertEqual([field], listed["items"][0]["request"]["fields"])
+        # What an agent reads afterwards says who answered, from the call itself.
+        self.assertIs(
+            True,
+            tools.OPS["get_work_item_request"](conn, {"id": created["request_id"]})["by_person"],
+        )
+        [row] = tools.OPS["get_work_item"](conn, {"id": "SAME-1"})["questions"]["items"]
+        self.assertEqual(
+            (True, [], "In my own words"), (row["by_person"], row["answer"], row["note"])
+        )
+
+    def test_a_person_cannot_be_named_by_the_write_itself(self) -> None:
+        conn = store.connect()
+        self.addCleanup(conn.close)
+        created = requests.create(
+            conn,
+            "SAME-1",
+            kind="question",
+            prompt="Which way?",
+            fields=[
+                {"id": "why", "label": "Why", "type": "text", "required": False, "options": []}
+            ],
+        )
+        conn.commit()
+        status, refused = self.request(
+            "/api/modules/planning/request/answer",
+            {
+                "project_id": "example-project",
+                **self.refs["primary"],
+                "id": created["request_id"],
+                "expected_revision": 0,
+                "answers": {},
+                "by_person": False,
+            },
+        )
+        self.assertEqual(400, status, refused)
 
     def test_global_search_reports_unavailable_and_extra_matches_honestly(self) -> None:
         conn = store.connect()

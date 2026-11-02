@@ -17,7 +17,7 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Callable, Mapping
 
-from . import acknowledgements, api, model, read_model, service
+from . import acknowledgements, api, model, read_model, request_model, requests, service
 
 READ_ONLY = {"readOnlyHint": True, "idempotentHint": True, "openWorldHint": False}
 WRITES = {"readOnlyHint": False, "destructiveHint": False, "openWorldHint": False}
@@ -230,7 +230,9 @@ TOOLS = [
         " comments_total, events_total and history_truncated, and sessions: the"
         " agent sessions whose confirmed calls wrote to it. full=true returns every"
         " comment and event; comments_after returns only the comments that came after"
-        " one you have read.",
+        " one you have read. questions gives its questions in compact form: total, open, at most"
+        f" {requests.ITEM_QUESTIONS} items with the open ones first and then the newest closed,"
+        " and truncated when there are more.",
         READ_ONLY,
         {
             "id": _REFERENCE,
@@ -311,8 +313,10 @@ TOOLS = [
         "Match a phrase against titles, descriptions and closing summaries. A query that"
         " is exactly a reference, such as MAIN-12 in any case, answers that item first;"
         " a number alone, such as 12, answers the item of that number first in each space."
-        " One compact row per item, with the matching comment line when that is what"
-        " matched."
+        " Comments and questions count too, a question's prompt, field and option text and"
+        " its answer and note."
+        " One compact row per item, with the matching comment line or question when that is"
+        " what matched."
         f" A page holds at most {service.MAX_SEARCH_PAGE} items." + _PAGING,
         READ_ONLY,
         {
@@ -727,7 +731,21 @@ _REQUEST_FIELD = {
             "maxItems": 20,
             "items": {
                 "type": "object",
-                "properties": {"id": _STR, "label": _STR},
+                "properties": {
+                    "id": _STR,
+                    "label": _STR,
+                    "description": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": request_model.MAX_OPTION_DESCRIPTION,
+                        "description": "Markdown: what choosing this option means or costs.",
+                    },
+                    "recommended": {
+                        "type": "boolean",
+                        "description": "The option the asker recommends. At most one in a"
+                        " choice field; any number in a multi_choice field.",
+                    },
+                },
                 "required": ["id", "label"],
             },
         },
@@ -739,7 +757,8 @@ TOOLS.extend(
         _tool(
             "create_work_item_request",
             "Ask for a human answer",
-            "Create a typed question or decision on an item. Does not change workflow or execution lifecycle.",
+            "Create a typed question or decision on an item. The fields of one question fit in"
+            " 64 KiB as stored. Does not change workflow or execution lifecycle.",
             WRITES,
             {
                 "id": _REFERENCE,
@@ -756,7 +775,9 @@ TOOLS.extend(
         _tool(
             "get_work_item_request",
             "Read a human request",
-            "Read an exact request including effective expiry.",
+            "Read one whole question: its prompt, fields with option descriptions, answers,"
+            " note, effective expiry, and by_person: true when a person answered in Valkama's"
+            " interface, false when the answer came through a tool, null with no answer.",
             READ_ONLY,
             {"id": _STR},
             ["id"],
@@ -764,25 +785,49 @@ TOOLS.extend(
         _tool(
             "list_work_item_requests",
             "List human requests",
-            "List requests in the primary store, optionally narrowed to a space and effective status.",
+            "List questions in the primary store, in compact form: id, status, question (the"
+            f" first {request_model.QUESTION_PREVIEW} characters of the prompt), answer as rows of"
+            " field, value and label, note, answered_by, by_person and answered_at. full=true gives"
+            " each whole, as get_work_item_request does.",
             READ_ONLY,
             {
                 "space": _SPACE,
+                "id": _REFERENCE,
                 "status": {
                     "type": "string",
                     "enum": ["pending", "answered", "declined", "expired"],
                 },
+                "answered_after": {
+                    "type": "string",
+                    "description": "An ISO timestamp with a timezone: only answers given after it,"
+                    " so a reader that keeps the last answered_at it read takes what came since.",
+                },
                 "limit": _INT,
+                "full": {
+                    "type": "boolean",
+                    "description": "Answer with each whole question instead of the compact form.",
+                },
             },
         ),
         _tool(
             "answer_work_item_request",
             "Answer a human request",
-            "Answer once using the request revision. Does not resume an execution.",
+            "Answer once using the request revision; an answer cannot be changed afterwards. Does"
+            " not resume an execution.",
             WRITES,
             {
                 "id": _STR,
-                "answers": {"type": "object"},
+                "answers": {
+                    "type": "object",
+                    "description": "Field id to answer. May be empty when a note is given:"
+                    " a note stands in for required fields, and a given answer is still checked"
+                    " against its field.",
+                },
+                "note": {
+                    "type": "string",
+                    "maxLength": request_model.MAX_NOTE,
+                    "description": "The answer in the person's own words.",
+                },
                 "expected_revision": _EXPECTED_REVISION,
                 "author": _AUTHOR,
             },
@@ -916,7 +961,8 @@ def _work_item(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> obj
     answer = api.handle_get(conn, "/api/planning/work-item", parameters)
     if answer is None:  # pragma: no cover - the path table above is closed
         raise ValueError("no planning work item read")
-    return _with_url(answer[1]["work_item"])
+    item = _with_url(answer[1]["work_item"])
+    return {**item, "questions": requests.item_questions(conn, item["work_item_id"])}
 
 
 def _search(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
@@ -949,7 +995,8 @@ def _compact_row(conn: sqlite3.Connection, item: dict) -> dict:
         "claim_state": item["claim_state"],
     }
     # Why a search returned the item; a row without it cannot be told from noise.
-    return row | {name: item[name] for name in ("comment_hit", "summary_hit") if name in item}
+    hits = ("comment_hit", "question_hit", "summary_hit")
+    return row | {name: item[name] for name in hits if name in item}
 
 
 def _listing(
@@ -1040,6 +1087,29 @@ def _chain(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
     return found
 
 
+def _request(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
+    """One whole question, with who answered it: an agent's read, not the screen's."""
+
+    return requests.with_by_person(conn, [requests.get(conn, arguments["id"])])[0]
+
+
+def _request_list(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
+    """Questions as an agent scans them; the HTTP list a screen draws from stays whole."""
+
+    parameters = {
+        name: [str(arguments[name])]
+        for name in ("space", "id", "status", "answered_after", "limit")
+        if arguments.get(name) is not None
+    }
+    read = api.handle_get(conn, "/api/planning/requests", parameters)
+    if read is None:  # pragma: no cover - the path table above is closed
+        raise ValueError("no planning requests read")
+    answer = read[1]
+    records = requests.with_by_person(conn, answer["requests"])
+    full = _is_verbose(arguments, "full")
+    return {**answer, "requests": records if full else [request_model.compact(r) for r in records]}
+
+
 def _space(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
     return service.get_planning_space(conn, str(arguments["space"]))
 
@@ -1096,8 +1166,8 @@ OPS: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], object]] = {
     ),
     "delete_work_item": _post("/api/planning/work-item/delete"),
     "create_work_item_request": _post("/api/planning/work-item/request"),
-    "get_work_item_request": _get("/api/planning/request", "id", unwrap="request"),
-    "list_work_item_requests": _get("/api/planning/requests", "space", "status", "limit"),
+    "get_work_item_request": _request,
+    "list_work_item_requests": _request_list,
     "answer_work_item_request": _post("/api/planning/request/answer"),
     "decline_work_item_request": _post("/api/planning/request/decline"),
     "expire_work_item_request": _post("/api/planning/request/expire"),

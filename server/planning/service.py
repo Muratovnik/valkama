@@ -14,6 +14,7 @@ this module reads from there, and nothing there writes.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 
 from . import agents as planning_agents
@@ -192,6 +193,40 @@ def list_work_items_page(
     return _page(found, size, offset)
 
 
+#: The items whose questions carry a phrase, each with the newest such prompt last.
+#: A search reads the prompt, the words of the fields and options, and what came back,
+#: through the JSON rather than across it, so the names of the stored keys match
+#: nothing and text that is not ASCII is read as written. Malformed JSON reads as
+#: empty: a search is no place to refuse a stored row.
+_QUESTION_HITS = (
+    "SELECT q.work_item_id, q.prompt FROM work_item_requests q"
+    " WHERE q.prompt LIKE ?"
+    " OR EXISTS (SELECT 1 FROM json_tree("
+    "CASE WHEN json_valid(q.fields_json) THEN q.fields_json END) f"
+    " WHERE f.key IN ('label','description') AND f.atom LIKE ?)"
+    " OR EXISTS (SELECT 1 FROM json_tree("
+    "CASE WHEN json_valid(q.answers_json) THEN q.answers_json END) a"
+    " WHERE a.type = 'text' AND a.atom LIKE ?)"
+    " ORDER BY q.created_at"
+)
+
+
+def _question_hits(conn: sqlite3.Connection, like: str) -> dict[str, str]:
+    """Which items a phrase finds through their questions, and the prompt that says why.
+
+    An attached store is read as it is, and an old one has no requests to ask.
+    """
+
+    if (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='work_item_requests'"
+        ).fetchone()
+        is None
+    ):
+        return {}
+    return {str(row[0]): str(row[1]) for row in conn.execute(_QUESTION_HITS, (like, like, like))}
+
+
 def search_work_items(
     conn: sqlite3.Connection,
     query: str,
@@ -200,7 +235,7 @@ def search_work_items(
     limit: int = 50,
     offset: int = 0,
 ) -> list[dict]:
-    """Items whose text, labels, source, summary or comments carry the query.
+    """Items whose text, labels, source, summary, comments or questions carry the query.
 
     A comment counts: an item is often findable only by what somebody wrote
     under it, and a hit there is reported as the matching line rather than as a
@@ -217,15 +252,18 @@ def search_work_items(
 
     text = model.text_field(query, "query", limit=200)
     like = f"%{text}%"
+    questions = _question_hits(conn, like)
     parameters: list[object] = [like, like]
     clauses = [
         "(i.title LIKE ? OR i.description LIKE ? OR i.labels LIKE ? OR i.source LIKE ?"
         " OR i.summary LIKE ?"
         " OR (p.key || '-' || CAST(i.number AS TEXT)) LIKE ?"
         " OR EXISTS (SELECT 1 FROM work_item_comments m"
-        "  WHERE m.work_item_id = i.work_item_id AND (m.body LIKE ? OR m.report LIKE ?)))"
+        "  WHERE m.work_item_id = i.work_item_id AND (m.body LIKE ? OR m.report LIKE ?))"
+        " OR i.work_item_id IN (SELECT value FROM json_each(?)))"
     ]
     parameters.extend([like] * 8)
+    parameters.append(json.dumps(list(questions)))
     if space is not None:
         clauses.append("i.planning_space_id = ?")
         parameters.append(str(_space_row(conn, space)["planning_space_id"]))
@@ -259,6 +297,9 @@ def search_work_items(
         item = read_model.present(conn, row)
         if row["comment_hit"]:
             item["comment_hit"] = str(row["comment_hit"])[:240]
+        question = questions.get(str(row["work_item_id"]))
+        if question:
+            item["question_hit"] = question[:240]
         if text.lower() in str(row["summary"] or "").lower():
             item["summary_hit"] = True
         found.append(item)
@@ -1228,6 +1269,16 @@ def _fold(
     for row, found, target in merging:
         identity = str(row["work_item_id"])
         reference = read_model.reference(conn, row)
+        pending = conn.execute(
+            "SELECT COUNT(*) FROM work_item_requests WHERE work_item_id = ? AND status = 'pending'",
+            (identity,),
+        ).fetchone()[0]
+        # The question was about the work, and the work moves. Left here a pending
+        # one would end with this item, and its answer would stay on a closed one.
+        conn.execute(
+            "UPDATE work_item_requests SET work_item_id = ? WHERE work_item_id = ?",
+            (survivor_id, identity),
+        )
         moved = {
             "steps": len(found),
             "comments": conn.execute(
@@ -1276,12 +1327,10 @@ def _fold(
                 f" {read_model.reference(conn, read_model.item_by_id(conn, str(parent)))};"
                 f" {survivor_ref} keeps its own parent"
             )
-        pending = conn.execute(
-            "SELECT COUNT(*) FROM work_item_requests WHERE work_item_id = ? AND status = 'pending'",
-            (identity,),
-        ).fetchone()[0]
         if pending:
-            warnings.append(f"{reference} has {pending} pending request(s); they close with it")
+            warnings.append(
+                f"{reference}'s {pending} pending request(s) now wait on {survivor_ref}"
+            )
         report.append(
             {
                 "reference": reference,

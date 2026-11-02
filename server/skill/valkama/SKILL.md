@@ -136,11 +136,31 @@ refused without a linked blocker or a reason.
 
 `create_work_item_request` puts a typed `question` or `decision` on the item,
 with a `prompt` and up to 12 `fields` (`text`, `choice`, `multi_choice` or
-`boolean`). The owner answers it in Valkama; read the answer with
-`get_work_item_request`, or `list_work_item_requests` by space and status. A
-pending request expires when its item closes. Whether to ask through a
-request, the client or a message is the owner's rule; this tool is how the
-question is kept on the item.
+`boolean`). An option may add a markdown `description` of what choosing it means,
+and `recommended`: at most one in a `choice`, any number in a `multi_choice`.
+
+The owner answers it in Valkama by choosing options, by writing a note, or both;
+a note can stand in for required fields. An answer cannot be changed afterwards,
+and a comment over an open question is not an answer. There are three ways to
+read one:
+
+- `get_work_item` carries `questions`: `total`, how many are `open`, and up to 5
+  `items` with the open ones first and then the newest closed, and `truncated`
+  when there are more. Read this when you come back to an item.
+- `list_work_item_requests` finds them on an item (`id`) or in a space, by
+  `status` and `answered_after`. Keep the last `answered_at` you read and pass it
+  to take only what came since.
+- `get_work_item_request` gives one question whole, with its options and their
+  descriptions, and `list_work_item_requests` does so for each with `full: true`.
+
+The first two answer in a compact form: `id`, `status`, `question` (the start of
+the prompt), `answer` as rows of `field`, `value` and `label`, `note`,
+`answered_by`, `answered_at`, and `by_person`, which is true when the answer came
+through Valkama's interface and false when it came through a tool.
+
+A pending request expires when its item closes. Whether to ask through a request,
+the client or a message is the owner's rule; this tool is how the question is
+kept on the item.
 
 ## Merging items that are one change
 
@@ -148,7 +168,7 @@ When two items turn out to be one change — the same finding filed twice, one
 cause found from two places — `merge_work_items` folds them into the item that
 survives (`id`), with `items` the ones that fold in and a `reason`. The
 survivor takes their steps (ids, ticks and step claims kept), discussion,
-refs and links; each merged item is linked `duplicates` to it, gets a summary
+questions, refs and links; each merged item is linked `duplicates` to it, gets a summary
 naming it and closes in its cancelled state. It is refused, writing nothing,
 for an item another session holds (unless `force`), a closed item, an item in
 another space or a merged item with children. Merge before handing the work to

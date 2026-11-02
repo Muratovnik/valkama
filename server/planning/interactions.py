@@ -331,7 +331,7 @@ def request_command(routing: PlanningRouting, path: str, payload: dict) -> dict:
         else {"id", "expected_revision", "author"}
     )
     if path.endswith("/answer"):
-        operation_fields.add("answers")
+        operation_fields |= {"answers", "note"}
     required = scope_fields | (
         {"id", "kind", "prompt", "fields"} if base else {"id", "expected_revision"}
     )

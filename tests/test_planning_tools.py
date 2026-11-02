@@ -411,7 +411,10 @@ class PlanningAcknowledgementTests(unittest.TestCase):
         for tool in ACKNOWLEDGED:
             with self.subTest(tool):
                 answer = self.call(tool, verbose=True, **self.arguments_for(tool))
-                stored = self.full(answer["reference"])
+                # `questions` is what the read tool adds; a write's answer has none.
+                stored = {
+                    k: v for k, v in self.full(answer["reference"]).items() if k != "questions"
+                }
                 # A transition also reports what the guards said about it, a
                 # claim the state it started the item in, and a batch what each
                 # of its groups changed.
@@ -549,9 +552,13 @@ class PlanningAcknowledgementTests(unittest.TestCase):
                 assert handled is not None
                 status, body = handled
                 self.assertEqual(200, status)
-                # `url` is what the tools add for an agent; the boundary has none.
+                # `url` and `questions` are what the tools add for an agent; the
+                # boundary has neither.
                 self.assertNotIn("url", body)
-                stored = {k: v for k, v in self.full(self.ref).items() if k != "url"}
+                self.assertNotIn("questions", body)
+                stored = {
+                    k: v for k, v in self.full(self.ref).items() if k not in ("url", "questions")
+                }
                 self.assertEqual(
                     stored,
                     {k: v for k, v in body.items() if k not in ("warnings", "started")},

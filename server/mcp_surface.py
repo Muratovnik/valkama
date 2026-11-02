@@ -102,7 +102,7 @@ PLANNING_INSTRUCTIONS = (
     " needed, duplicated or superseded closes in the cancelled state: it needs the"
     " summary but leaves undone steps open."
     " Items that are one change are merged with merge_work_items: the survivor"
-    " takes their steps, comments, refs and links, and each closes as its"
+    " takes their steps, comments, requests, refs and links, and each closes as its"
     " duplicate. A refusal names its guard; force=true carries the transition"
     " through and is recorded as an overridden event."
     " Blocking is a link, not a note: add a blocks link when the blocker is another"
