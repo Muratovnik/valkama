@@ -9,6 +9,8 @@ const mounted: ReturnType<typeof mount>[] = []
 let opener: HTMLButtonElement | null = null
 
 function start() {
+  // A reader's key opens these, which is what gives the first control focus.
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
   document.body.style.overflow = 'auto'
   opener = document.createElement('button')
   document.body.append(opener)
