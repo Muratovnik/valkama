@@ -165,6 +165,11 @@ function release() {
   ownership.value = null
 }
 
+/** What is on its way out takes nothing more: the next press and Tab are the page's. */
+function outOfReach(host: Element) {
+  ;(host as HTMLElement).inert = true
+}
+
 watch(
   [() => props.open, () => props.interactive],
   ([open, interactive]) => {
@@ -196,6 +201,7 @@ onUnmounted(release)
     <Transition
       name="overlay"
       appear
+      @before-leave="outOfReach"
     >
       <!-- Escape reaches the top host through the overlay stack, which hears it
            on the document: focus that fell out of the surface still closes it.
@@ -283,6 +289,15 @@ onUnmounted(release)
   position: absolute;
   inset: 0;
   background: var(--color-overlay-scrim);
+}
+
+/* The host holds still for as long as what it holds is moving. The Transition reads the
+   duration off this element and nothing here moves, so with none of its own it removed
+   the host a frame into its leave, before the surface had gone anywhere. An enter got
+   away with it only because a browser does not stop a transition it has begun. */
+.overlay-enter-active,
+.overlay-leave-active {
+  transition: opacity var(--duration-surface) var(--ease-out);
 }
 
 /* The scrim fades; the surface arrives under its own power. A drawer comes in

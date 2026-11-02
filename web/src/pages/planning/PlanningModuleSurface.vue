@@ -434,16 +434,16 @@ defineExpose({ refresh })
     />
 
     <ResizableInspector
-      v-if="open && boundSpaceResourceRef"
       surface-class="drawer"
       :content-key="openIdentity"
-      :open="true"
-      :label="openRecord?.title || open"
+      :open="Boolean(open && boundSpaceResourceRef)"
+      :label="openRecord?.title || open || ''"
       :resize-label="t('workItem.resize')"
       :storage-key="INSPECTOR_DRAWER_STORAGE_KEY"
       @close="closePanel"
     >
       <WorkItemInspector
+        v-if="open && boundSpaceResourceRef"
         ref="card"
         :key="openIdentity"
         :reference="open"

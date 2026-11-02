@@ -1,4 +1,5 @@
 import { expect } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
@@ -12,6 +13,7 @@ const CARD = serializePlatformRoute({
   scope: projectScope,
   entity: planningWorkItemEntity(workItemRef),
 })
+const BOARD = serializePlatformRoute({ module_id: 'planning', scope: projectScope })
 
 /**
  * Going from a card to a card the panel does not close, so it does not open either:
@@ -107,4 +109,150 @@ test('every way out of a card with a draft asks first, and the panel stays while
   await expect(drawer.locator('.head-back')).toBeVisible()
   await expect(page.locator('.drawer[data-first-surface]')).toHaveCount(1)
   await expect(comment).toHaveValue('')
+})
+
+async function xOf(locator: Locator) {
+  const box = await locator.boundingBox()
+  return box?.x ?? 0
+}
+
+/** The card opened from its tile, standing still, and long enough on the token to be seen. */
+async function openFromBoard(page: Page, width: number) {
+  await page.setViewportSize({ width, height: 900 })
+  await installBackend(page)
+  await page.addInitScript(() => {
+    const heard: ((route: string) => void)[] = []
+    Object.assign(window, {
+      handOver: (route: string) => {
+        for (const listener of heard) listener(route)
+      },
+      valkamaDesktop: { onOpenRoute: (listener: (route: string) => void) => heard.push(listener) },
+    })
+  })
+  await page.goto(BOARD)
+  const opener = page.locator('.work-item-column[data-state="dev"] .tile-open').first()
+  await opener.click()
+  const drawer = page.locator('.drawer')
+  await expect(drawer.locator('.card-facts')).toBeVisible()
+  await expect(drawer).toHaveCSS('transform', 'none')
+  await page.evaluate(() => {
+    document.documentElement.style.setProperty('--duration-surface', '0.6s')
+  })
+  return { drawer, opener, openX: await xOf(drawer) }
+}
+
+/** Where the surface stood and how far the scrim had faded, on each frame `act` took. */
+async function framesOfLeaving(page: Page, drawer: Locator, act: () => Promise<unknown>) {
+  const sampler = await page.evaluateHandle(() => {
+    const frames: { held: boolean; scrim: number; x: number }[] = []
+    let running = true
+    const sample = () => {
+      if (!running) return
+      const surface = document.querySelector('.drawer')
+      const scrim = document.querySelector('.overlay-scrim')
+      if (surface && scrim)
+        frames.push({
+          held: surface.querySelector('.card-facts') !== null,
+          x: surface.getBoundingClientRect().x,
+          scrim: Number(getComputedStyle(scrim).opacity),
+        })
+      requestAnimationFrame(sample)
+    }
+    requestAnimationFrame(sample)
+    return {
+      stop: () => {
+        running = false
+        return frames
+      },
+    }
+  })
+  await act()
+  await expect(drawer).toHaveCount(0)
+  return sampler.evaluate((running) => running.stop())
+}
+
+const WAYS_OUT = [
+  {
+    way: 'Close',
+    narrow: true,
+    leave: (page: Page) => page.locator('.drawer-frame-close').click(),
+  },
+  { way: 'Escape', narrow: true, leave: (page: Page) => page.keyboard.press('Escape') },
+  { way: 'the scrim', narrow: false, leave: (page: Page) => page.mouse.click(8, 8) },
+  { way: 'browser Back', narrow: true, leave: (page: Page) => page.goBack() },
+  {
+    way: 'a route to the board',
+    narrow: true,
+    leave: (page: Page) =>
+      page.evaluate(
+        (route) => (window as unknown as { handOver(to: string): void }).handOver(route),
+        BOARD,
+      ),
+  },
+]
+
+for (const width of [1440, 390]) {
+  for (const { way, leave } of WAYS_OUT.filter(({ narrow }) => narrow || width > 620)) {
+    test(`${way} slides the surface out, fades the scrim and gives focus back at ${width}px`, async ({
+      page,
+    }) => {
+      const { drawer, opener, openX } = await openFromBoard(page, width)
+      const frames = await framesOfLeaving(page, drawer, () => leave(page))
+      // Frames on the way, not just a start and an end: it left by moving.
+      expect(frames.filter(({ x }) => x > openX + 1 && x < width - 1).length).toBeGreaterThan(5)
+      expect(frames.filter(({ scrim }) => scrim > 0.02 && scrim < 0.98).length).toBeGreaterThan(5)
+      expect(frames.every(({ x }, index) => x >= (frames[index - 1]?.x ?? 0))).toBe(true)
+      // What leaves is the card that was there, not an empty panel.
+      expect(frames.every(({ held }) => held)).toBe(true)
+      await expect(page.locator('.overlay-host')).toHaveCount(0)
+      await expect(opener).toBeFocused()
+    })
+  }
+}
+
+test('under reduced motion the surface and the scrim are gone at once', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  const { drawer, openX } = await openFromBoard(page, 1440)
+  const frames = await framesOfLeaving(page, drawer, () =>
+    drawer.locator('.drawer-frame-close').click(),
+  )
+  expect(frames.filter(({ x }) => x > openX + 1)).toHaveLength(0)
+})
+
+test('a tile pressed while the surface leaves opens the card again, on one surface', async ({
+  page,
+}) => {
+  const { drawer, opener, openX } = await openFromBoard(page, 1440)
+  await drawer.locator('.drawer-frame-close').click()
+  await expect.poll(() => xOf(drawer)).toBeGreaterThan(openX + 20)
+  // Through what is leaving: it no longer takes a press, and the board has the next one.
+  const box = await opener.boundingBox()
+  await page.mouse.click((box?.x ?? 0) + 10, (box?.y ?? 0) + 10)
+  await expect(drawer.locator('.card-facts')).toBeVisible()
+  await expect(drawer).toHaveCount(1)
+  await expect(drawer).toHaveCSS('transform', 'none')
+  expect(await xOf(drawer)).toBe(openX)
+  await expect(page.locator('.overlay-scrim')).toHaveCount(1)
+  await expect(drawer.locator('.drawer-frame-close')).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.overlay-host')).toHaveCount(0)
+  await expect(opener).toBeFocused()
+})
+
+/**
+ * Leaving the module replaces the whole page under the panel in one frame, and the panel
+ * goes with the page that held it: there is nothing to slide out over, and nothing stays.
+ */
+test('a route out of the module takes the panel with the page, and leaves nothing behind', async ({
+  page,
+}) => {
+  const { drawer } = await openFromBoard(page, 1440)
+  await page.evaluate(
+    (route) => (window as unknown as { handOver(to: string): void }).handOver(route),
+    serializePlatformRoute({ module_id: 'settings', scope: projectScope }),
+  )
+  await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible()
+  await expect(drawer).toHaveCount(0)
+  await expect(page.locator('.overlay-host')).toHaveCount(0)
+  expect(await page.evaluate(() => document.body.style.overflow)).not.toBe('hidden')
 })
