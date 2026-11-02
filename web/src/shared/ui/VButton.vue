@@ -97,7 +97,7 @@ withDefaults(
   border-radius: var(--radius-control);
   cursor: pointer;
 
-  &:hover:not(:disabled) {
+  &:hover:not(:disabled, [aria-disabled='true']) {
     color: var(--color-button-ink-hover);
     background: var(--color-button-fill-hover);
   }
@@ -107,7 +107,8 @@ withDefaults(
     outline-offset: 2px;
   }
 
-  &:disabled {
+  /* `aria-disabled` is a control that keeps focus through what it waits for. */
+  &:is(:disabled, [aria-disabled='true']) {
     color: var(--color-button-ink-disabled);
     background: var(--color-button-fill-disabled);
     cursor: not-allowed;

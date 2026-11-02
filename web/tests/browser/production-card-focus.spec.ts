@@ -20,6 +20,11 @@ const OTHER_CARD = serializePlatformRoute({
 })
 const BOARD = serializePlatformRoute({ module_id: 'planning', scope: projectScope })
 
+/** Paragraphs enough to scroll the facts out of the card. */
+const LONG_READ = Array.from({ length: 40 }, (_, index) => `Paragraph ${index + 1}.`).join(
+  String.fromCodePoint(10, 10),
+)
+
 const ringed = (control: Locator) => control.evaluate((node) => node.matches(':focus-visible'))
 
 /** A page that hears routes from outside as the desktop app hands them over, from no input. */
@@ -166,4 +171,125 @@ test('a route handed over to a card read from the keyboard shows where focus wen
   const close = drawer.locator('.drawer-frame-close')
   await expect(close).toBeFocused()
   expect(await ringed(close)).toBe(true)
+})
+
+/**
+ * A card whose holder is whatever the last write left, with each write taking long enough
+ * to be in flight while it is looked at. `claims` hears them as they are sent.
+ */
+async function cardWithSlowClaims(page: Page, holder: string) {
+  await page.setViewportSize({ width: 1440, height: 844 })
+  await installBackend(page, { longRead: true })
+  const held = { by: holder }
+  const claims: unknown[] = []
+  const record = () => ({
+    ...workItem,
+    claim: null,
+    claim_ref: held.by,
+    description: LONG_READ,
+    links: [],
+  })
+  await page.route('**/api/modules/planning/work-item?*', (route) =>
+    route.fulfill({
+      json: {
+        interface_version: 'valkama-planning-work-item',
+        scope: projectScope,
+        work_item_ref: workItemRef,
+        state: {
+          interface_version: 'valkama-ui-state',
+          status: 'ready',
+          payload: { work_item: record() },
+        },
+      },
+    }),
+  )
+  await page.route('**/api/planning/work-item/claim', async (route) => {
+    const body = route.request().postDataJSON() as { release?: boolean }
+    claims.push(body)
+    await new Promise((done) => setTimeout(done, 300))
+    held.by = body.release === true ? '' : 'user'
+    await route.fulfill({ json: record() })
+  })
+  await page.goto(CARD)
+  return { claims, drawer: await cardBeingRead(page) }
+}
+
+/** Whether focus was in the card on each frame `act` took. */
+async function framesOfFocus(page: Page, act: () => Promise<unknown>) {
+  const sampler = await page.evaluateHandle(() => {
+    const frames: boolean[] = []
+    let running = true
+    const sample = () => {
+      if (!running) return
+      frames.push(document.activeElement?.closest('.drawer') !== null)
+      requestAnimationFrame(sample)
+    }
+    requestAnimationFrame(sample)
+    return {
+      stop: () => {
+        running = false
+        return frames
+      },
+    }
+  })
+  await act()
+  return sampler.evaluate((running) => running.stop())
+}
+
+for (const where of ['.card-action', '.drawer-frame-action']) {
+  test(`a takeover confirmed from ${where} keeps focus in the card, through the write and after`, async ({
+    page,
+  }) => {
+    const { claims, drawer } = await cardWithSlowClaims(page, 'codex')
+    const body = drawer.locator('.drawer-frame-body')
+    await body.evaluate(
+      (node, far) => node.scrollTo({ top: far }),
+      where === '.card-action' ? 0 : 900,
+    )
+    const action = drawer.locator(where).getByRole('button')
+    await expect(action).toBeVisible()
+    await action.click()
+    const strip = drawer.locator('.confirm-strip')
+    await expect(strip.locator('.confirm-cancel')).toBeFocused()
+
+    // Cancelled, focus goes back to what asked.
+    await strip.locator('.confirm-cancel').click()
+    await expect(action).toBeFocused()
+
+    await action.click()
+    const frames = await framesOfFocus(page, async () => {
+      await strip.locator('.confirm-go').click()
+      await expect(strip).toHaveCount(0)
+      await expect(action).toBeFocused()
+      await expect(action).toHaveAttribute('aria-disabled', 'true')
+      // A press during the write is not another write and not another question.
+      await page.keyboard.press('Enter')
+      await expect(strip).toHaveCount(0)
+      await expect(action).toHaveText('Release')
+    })
+    expect(frames.filter((inCard) => !inCard)).toEqual([])
+    await expect(action).toBeFocused()
+    await expect(action).not.toHaveAttribute('aria-disabled')
+    expect(claims).toHaveLength(1)
+  })
+}
+
+test('taking and releasing keep focus on the action, whatever it comes to offer', async ({
+  page,
+}) => {
+  const { claims, drawer } = await cardWithSlowClaims(page, '')
+  const action = drawer.locator('.card-action').getByRole('button')
+  await expect(action).toHaveText('Claim')
+  await action.focus()
+  const frames = await framesOfFocus(page, async () => {
+    await page.keyboard.press('Enter')
+    await expect(action).toHaveAttribute('aria-disabled', 'true')
+    await expect(action).toHaveText('Release')
+    await expect(action).not.toHaveAttribute('aria-disabled')
+    await page.keyboard.press('Enter')
+    await expect(action).toHaveText('Claim')
+  })
+  expect(frames.filter((inCard) => !inCard)).toEqual([])
+  await expect(action).toBeFocused()
+  expect(claims).toHaveLength(2)
 })

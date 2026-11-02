@@ -19,6 +19,11 @@
  * It stands twice on a card, with the facts and in the bar once the facts have
  * scrolled away. The bar holds an action and no reason: a reason is a fact about
  * the item, and it goes with the facts.
+ *
+ * Whatever it offers it is one button, and it stays enabled through a write that says
+ * so without doing anything. Focus lives on this button when the write is sent and
+ * after it comes back: disabling it, or swapping it for the next offer's, dropped focus
+ * to the page, and the keyboard reader started the card over.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -83,6 +88,22 @@ const waitingText = computed(() =>
 const claimLabel = computed(() =>
   action.value === 'stale' ? t('workItem.lease.takeOver') : t('workItem.claim'),
 )
+const label = computed(() => {
+  if (action.value === 'takeover') return t('workItem.takeOver')
+  return action.value === 'release' ? t('workItem.release') : claimLabel.value
+})
+const weight = computed(() =>
+  action.value === 'takeover' || action.value === 'release' ? 'secondary' : 'primary',
+)
+/** Absent rather than false, because `aria-disabled="false"` is a claim and not a default. */
+const held = computed(() => props.busy || undefined)
+
+function press() {
+  if (props.busy) return
+  if (action.value === 'takeover') emit('take-over')
+  else if (action.value === 'release') emit('release')
+  else emit('claim')
+}
 </script>
 
 <template>
@@ -116,33 +137,14 @@ const claimLabel = computed(() =>
       {{ t('workItem.head.epic') }}
     </p>
     <VButton
-      v-else-if="action === 'takeover'"
-      class="write-action"
-      size="compact"
-      :disabled="busy"
-      @click="emit('take-over')"
-    >
-      {{ t('workItem.takeOver') }}
-    </VButton>
-    <VButton
-      v-else-if="action === 'release'"
-      class="write-action"
-      size="compact"
-      variant="secondary"
-      :disabled="busy"
-      @click="emit('release')"
-    >
-      {{ t('workItem.release') }}
-    </VButton>
-    <VButton
       v-else
       class="write-action"
       size="compact"
-      variant="primary"
-      :disabled="busy"
-      @click="emit('claim')"
+      :variant="weight"
+      :aria-disabled="held"
+      @click="press"
     >
-      {{ claimLabel }}
+      {{ label }}
     </VButton>
   </div>
 </template>
