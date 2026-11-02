@@ -32,7 +32,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from urllib import error, request
 
-from .. import runner, static_assets, store, transcripts
+from .. import launcher, runner, static_assets, store, transcripts
 from ..executions import drivers as execution_drivers
 from ..hooks import ingest, spool
 from ..memory import service as memory_service
@@ -49,6 +49,8 @@ STATUSES = ("ok", "warn", "fail", "unknown")
 #: How long the runtime probe waits. A listener that cannot answer in this is
 #: not one an operator is about to use.
 PROBE_TIMEOUT = 0.5
+#: How long a listener holding the port on demand gets to become the server.
+ON_DEMAND_LOAD_TIMEOUT = 15.0
 
 
 def _check(
@@ -688,10 +690,72 @@ def _runtime_checks(port: int, *, probe: bool) -> list[dict]:
             parameters={"path": static_assets.DIST_DIR},
         )
     ]
+    checks.extend(_autostart_check())
     if not probe:
         return checks
     checks.append(_listener_check(port, snapshot.identity))
     return checks
+
+
+def _autostart_check() -> list[dict]:
+    """One line: whether login starts the listener that keeps work item links working."""
+
+    try:
+        reading = launcher.autostart_status()
+    except launcher.LauncherError:
+        return []
+    state, port = reading["state"], reading["port"]
+    if state == "unsupported":
+        return []
+    if state == "disabled":
+        return [
+            _check(
+                "autostart",
+                "Listener at login",
+                "ok",
+                "off: a work item link opens only while a server is running",
+                presentation_code="autostart-off",
+            )
+        ]
+    if state == "enabled":
+        return [
+            _check(
+                "autostart",
+                "Listener at login",
+                "ok",
+                f"on: login holds port {port} until a link is followed",
+                presentation_code="autostart-on",
+                parameters={"port": str(port)},
+            )
+        ]
+    return [
+        _check(
+            "autostart",
+            "Listener at login",
+            "warn",
+            "the autostart value runs another command than this launcher would write",
+            "Run `valkama launcher autostart enable` to replace it"
+            if state == "stale"
+            else "It is not this launcher's: `valkama launcher autostart enable --force` replaces it.",
+            presentation_code=f"autostart-{state}",
+        )
+    ]
+
+
+def _read_listener_identity(port: int, timeout: float) -> dict:
+    url = f"http://127.0.0.1:{int(port)}/api/runtime"
+    # A loopback URL built from an integer port. No caller supplies a scheme.
+    # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
+    with request.urlopen(url, timeout=timeout) as response:
+        return json.loads(response.read(64 * 1024).decode("utf-8"))
+
+
+def _holds_port_on_demand(port: int) -> bool:
+    try:
+        reading = launcher.listener_status(port=port)
+    except launcher.LauncherError:
+        return False
+    return reading["state"] == "managed" and bool(reading.get("on_demand"))
 
 
 def _listener_check(port: int, identity: Mapping[str, object]) -> dict:
@@ -702,15 +766,21 @@ def _listener_check(port: int, identity: Mapping[str, object]) -> dict:
     inspects the bundle that build replaced. The tray compares runtime
     identities and refuses every click when they differ, and that refusal used
     to be silent.
+
+    A listener holding the port on demand loads the server when this asks, which
+    takes longer than the probe waits, and it is given that time rather than being
+    reported as nothing at all.
     """
 
-    url = f"http://127.0.0.1:{int(port)}/api/runtime"
+    offline = (error.URLError, TimeoutError, OSError, ValueError)
     try:
-        # A loopback URL built from an integer port. No caller supplies a scheme.
-        # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
-        with request.urlopen(url, timeout=PROBE_TIMEOUT) as response:
-            served = json.loads(response.read(64 * 1024).decode("utf-8"))
-    except (error.URLError, TimeoutError, OSError, ValueError):
+        try:
+            served = _read_listener_identity(port, PROBE_TIMEOUT)
+        except offline:
+            if not _holds_port_on_demand(port):
+                raise
+            served = _read_listener_identity(port, ON_DEMAND_LOAD_TIMEOUT)
+    except offline:
         return _check(
             "listener",
             "Listener identity",

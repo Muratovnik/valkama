@@ -12,6 +12,7 @@ import json
 import os
 import queue
 import re
+import socket
 import sqlite3
 import sys
 import threading
@@ -522,10 +523,20 @@ class PlatformHTTPServer(ThreadingHTTPServer):
         *,
         token_path: Path = http_security.INSTALLATION_TOKEN_PATH,
         development_origin: str | None = None,
+        adopted: socket.socket | None = None,
     ) -> None:
+        """`adopted` is a socket already bound and listening, which stays its caller's
+        until this returns: a failure here leaves it open for the caller to answer on."""
+
         if server_address[0] != "127.0.0.1":
             raise ValueError("Valkama HTTP must bind exactly 127.0.0.1")
-        super().__init__(server_address, request_handler)
+        super().__init__(server_address, request_handler, bind_and_activate=adopted is None)
+        if adopted is not None:
+            self.socket.close()
+            self.socket = adopted
+            host, bound_port = adopted.getsockname()[:2]
+            self.server_address = (host, bound_port)
+            self.server_name, self.server_port = host, bound_port
         try:
             self.security_context = http_security.SecurityContext.create(
                 self.server_port,
@@ -533,7 +544,8 @@ class PlatformHTTPServer(ThreadingHTTPServer):
                 development_origin=development_origin,
             )
         except Exception:
-            self.server_close()
+            if adopted is None:
+                self.server_close()
             raise
 
 
@@ -1086,7 +1098,12 @@ class Handler(BaseHTTPRequestHandler):
         self._send(405, b"method not allowed", "text/plain", headers={"Allow": "GET, POST, PUT"})
 
 
-def serve_main(port: int, *, development_origin: str | None = None) -> None:
+def serve_main(
+    port: int,
+    *,
+    development_origin: str | None = None,
+    adopted: socket.socket | None = None,
+) -> None:
     runtime_snapshot = static_assets.capture_runtime_snapshot(SOURCE_ROOT, DIST_DIR)
     if "index.html" not in runtime_snapshot.assets:
         # This process has no logger and no caller to return to: it is the
@@ -1116,7 +1133,9 @@ def serve_main(port: int, *, development_origin: str | None = None) -> None:
         print(  # noqa: T201
             f"closed {closed} execution(s) left open by a previous process", file=sys.stderr
         )
-    server = PlatformHTTPServer(("127.0.0.1", port), Handler, development_origin=development_origin)
+    server = PlatformHTTPServer(
+        ("127.0.0.1", port), Handler, development_origin=development_origin, adopted=adopted
+    )
     threading.Thread(target=watchers.WATCHERS.run, daemon=True).start()
     # Handler reads only this immutable startup capture. The mutable dist tree
     # can be rebuilt for the next process without changing this listener.

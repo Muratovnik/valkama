@@ -42,3 +42,30 @@ os.environ["VALKAMA_PROTECTED_STORE"] = os.path.join(
 )
 # A test must never put an icon in the tray or reach a real user runtime root.
 os.environ.setdefault("VALKAMA_NO_TRAY", "1")
+
+
+class RunKeyDouble:
+    """Stands where the owner's Run key would, for the whole suite.
+
+    No redirected home directory isolates a registry value, and `launcher install`
+    and `uninstall` read and rewrite this one. A test that means to exercise the real
+    key's calls gives `WindowsRunKey` a stand-in `winreg` instead.
+    """
+
+    def __init__(self) -> None:
+        self.command: str | None = None
+
+    def read(self) -> str | None:
+        return self.command
+
+    def write(self, command: str) -> None:
+        self.command = command
+
+    def delete(self) -> None:
+        self.command = None
+
+
+# Imported here, after the variables above, so nothing can reach the real key first.
+from server import launcher
+
+launcher.AUTOSTART_STORE = RunKeyDouble()

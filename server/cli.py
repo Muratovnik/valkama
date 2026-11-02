@@ -2,6 +2,8 @@
 
   mcp                      MCP stdio server (what the stable launcher runs)
   serve [--port 8642]      JSON API plus the built web UI and session ingest
+                           (--on-demand holds the port and loads all that on the
+                           first connection)
   capabilities             machine-readable public interfaces and protocol versions
   status                   read-only source, data and launcher status
   launcher ...             install, inspect and supervise the stable service command
@@ -26,11 +28,21 @@ import json
 import os
 import shutil
 import sqlite3
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any
 
-from . import documents, launcher, launcher_queries, released, static_assets, store, transcripts
+from . import (
+    documents,
+    launcher,
+    launcher_queries,
+    on_demand,
+    released,
+    static_assets,
+    store,
+    transcripts,
+)
 from .federation import federated_spaces
 from .http_surface import serve_main
 from .mcp_surface import LEGACY_PROTOCOLS, MODERN_PROTOCOL, catalogue, mcp_main
@@ -317,11 +329,33 @@ def _launcher_parser(commands: argparse._SubParsersAction) -> None:
         action = listener_actions.add_parser(name)
         action.add_argument("--directory", default=None)
         action.add_argument("--port", type=int, default=8642)
+    autostart = actions.add_parser(
+        "autostart",
+        help="start the on-demand listener at Windows login; off unless you turn it on",
+    )
+    autostart_actions = autostart.add_subparsers(dest="autostart_action", required=True)
+    for name in ("enable", "disable", "status"):
+        action = autostart_actions.add_parser(name)
+        action.add_argument("--directory", default=None)
+        if name == "enable":
+            action.add_argument("--port", type=int, default=None)
+        if name != "status":
+            action.add_argument("--force", action="store_true")
+
+
+def _autostart_main(options: argparse.Namespace) -> dict[str, object]:
+    if options.autostart_action == "enable":
+        return launcher.enable_autostart(options.directory, port=options.port, force=options.force)
+    if options.autostart_action == "disable":
+        return launcher.disable_autostart(options.directory, force=options.force)
+    return launcher.autostart_status(options.directory)
 
 
 def _launcher_main(parser: argparse.ArgumentParser, options: argparse.Namespace) -> None:
     try:
-        if options.launcher_action == "install":
+        if options.launcher_action == "autostart":
+            result = _autostart_main(options)
+        elif options.launcher_action == "install":
             result = launcher.install(
                 options.directory,
                 force=options.force,
@@ -534,6 +568,11 @@ def main(argv: list[str] | None = None) -> None:
     serve = commands.add_parser("serve")
     serve.add_argument("--port", type=int, default=8642)
     serve.add_argument(
+        "--on-demand",
+        action="store_true",
+        help="hold the port and load the server on the first connection",
+    )
+    serve.add_argument(
         "--development-origin",
         choices=("http://127.0.0.1:5173",),
         help="allow the fixed Vite development origin",
@@ -705,7 +744,10 @@ def main(argv: list[str] | None = None) -> None:
     purge_cmd.add_argument("--before", type=transcripts.before_argument, metavar="DATE")
     purge_cmd.add_argument("--dry-run", action="store_true")
     options = parser.parse_args(argv)
-    if options.command == "serve":
+    if options.command == "serve" and options.on_demand:
+        # `valkama.py` answers the plain spelling before it imports this module.
+        sys.exit(on_demand.run(options.port, development_origin=options.development_origin))
+    elif options.command == "serve":
         serve_main(options.port, development_origin=options.development_origin)
     elif options.command == "capabilities":
         capabilities_main()

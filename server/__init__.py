@@ -37,13 +37,16 @@ And below it the surfaces, which own no domain rule of their own:
     mcp_front.py    the stdio front a launcher session runs: it holds the
                     client's pipe and runs the pinned release's server behind it
     http_surface.py the JSON API, event streams and the built web UI
+    on_demand.py    the port held from login: it becomes the HTTP surface on the
+                    first connection, on the same socket
     cli.py          the subcommands
 
 Imports run one way: a surface may import domain, domain may not import a
 surface, and no surface imports another. `cli.py` is the single exception by
-construction — it is what chooses between the MCP and HTTP surfaces. The front
-imports neither of those: it runs the server as a child process, and
-`valkama.py` decides whether a process is the front.
+construction — it is what chooses between the MCP and HTTP surfaces — and
+`on_demand.py` sits above the HTTP surface it becomes. The front imports neither
+of those: it runs the server as a child process, and `valkama.py` decides whether a
+process is the front.
 
 `valkama.py` next to this package remains the source entry point. Agent clients
 register the service-owned launcher created by `valkama.py launcher install`;

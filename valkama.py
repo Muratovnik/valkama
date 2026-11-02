@@ -33,6 +33,16 @@ if __name__ == "__main__":
         if status is not None:
             sys.exit(status)
 
+    # `serve --on-demand` holds the port at login until someone connects. Whatever
+    # is imported before that is what it costs all day, so this comes before the
+    # command line, which loads every surface.
+    if sys.argv[1:2] == ["serve"] and "--on-demand" in sys.argv[2:]:
+        from server.on_demand import main as on_demand_main
+
+        status = on_demand_main(sys.argv[2:])
+        if status is not None:
+            sys.exit(status)
+
     # The tray and the desktop app ask the launcher three read-only questions
     # on the way to a window: `runtime`, `launcher status` and `launcher
     # listener status`. They are answered before the command line is imported,

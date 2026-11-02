@@ -19,6 +19,7 @@ import contextlib
 import hashlib
 import importlib
 import io
+import itertools
 import json
 import ntpath
 import os
@@ -29,10 +30,13 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 from collections.abc import Callable, Iterator
 from pathlib import Path
+from typing import NamedTuple
 
 from . import listener_owners, processes
+from .ops import configuration
 
 SCHEMA_VERSION = 1
 MANIFEST_NAME = "valkama-launcher.json"
@@ -42,6 +46,13 @@ RELEASE_SCHEMA_VERSION = 1
 #: Set by the shim for the process it starts, so that process can tell when the
 #: launcher has since been pinned to another release.
 LAUNCHER_ENV = "VALKAMA_LAUNCHER_DIR"
+#: The command-line word that makes a `serve` an on-demand listener (`on_demand.py`).
+ON_DEMAND_FLAG = "--on-demand"
+#: The interpreter beside `python.exe` that opens no console window.
+WINDOWED_PYTHON = "pythonw.exe"
+#: The name autostart keeps its command under, in the current user's Run key.
+AUTOSTART_VALUE = "Valkama"
+_RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 
 _PROCESS_TERMINATE = 0x0001
 _SYNCHRONIZE = 0x00100000
@@ -487,6 +498,15 @@ def _command_line_names_shim(command_line: str, shim: str | os.PathLike[str]) ->
     return _same_windows_path(script, shim)
 
 
+def _names_on_demand(command_line: str) -> bool:
+    """Whether this listener was started to hold the port until someone connects."""
+
+    try:
+        return ON_DEMAND_FLAG in shlex.split(command_line, posix=False)[2:]
+    except ValueError:
+        return False
+
+
 def _classify_listener_processes(
     port: int,
     python: str | os.PathLike[str],
@@ -542,10 +562,13 @@ def _classify_listener_processes(
             "process_identity": None,
             "detail": None,
         }
+    # Autostart runs the windowed interpreter that sits beside the recorded one, so
+    # a listener started at login has no console window. That is the same Python.
+    interpreters = (python, ntpath.join(ntpath.dirname(os.fspath(python)), WINDOWED_PYTHON))
     managed = [
         pid
         for pid, owner in unique.items()
-        if _same_windows_path(str(owner["executable_path"]), python)
+        if any(_same_windows_path(str(owner["executable_path"]), path) for path in interpreters)
         and _command_line_names_shim(str(owner["command_line"]), shim)
     ]
     if len(unique) == 1 and len(managed) == 1:
@@ -558,6 +581,7 @@ def _classify_listener_processes(
             "executable_path": owner["executable_path"],
             "process_identity": owner["identity_token"],
             "detail": f"port {port} is owned by managed launcher process {pid}",
+            **({"on_demand": True} if _names_on_demand(str(owner["command_line"])) else {}),
         }
     listed = ", ".join(str(pid) for pid in sorted(unique))
     return {
@@ -722,6 +746,241 @@ def stop_listener(
     }
 
 
+class WindowsRunKey:
+    """The one value this launcher keeps under the current user's Run key.
+
+    Real machine state, and no redirected home directory isolates it, so the test
+    suite replaces `AUTOSTART_STORE` as it imports (`tests/__init__.py`).
+    """
+
+    @staticmethod
+    def _winreg():
+        return importlib.import_module("winreg")
+
+    def read(self) -> str | None:
+        winreg = self._winreg()
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _RUN_KEY) as key:
+                value, _kind = winreg.QueryValueEx(key, AUTOSTART_VALUE)
+        except FileNotFoundError:
+            return None
+        return str(value)
+
+    def write(self, command: str) -> None:
+        winreg = self._winreg()
+        with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, _RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
+            winreg.SetValueEx(key, AUTOSTART_VALUE, 0, winreg.REG_SZ, command)
+
+    def delete(self) -> None:
+        winreg = self._winreg()
+        with (
+            contextlib.suppress(FileNotFoundError),
+            winreg.OpenKey(winreg.HKEY_CURRENT_USER, _RUN_KEY, 0, winreg.KEY_SET_VALUE) as key,
+        ):
+            winreg.DeleteValue(key, AUTOSTART_VALUE)
+
+
+#: Where autostart is recorded. Read through this module: the tests swap it.
+AUTOSTART_STORE = WindowsRunKey()
+
+
+class ListenerEffects(NamedTuple):
+    """What touching the machine means to the listener steps; a test passes its own."""
+
+    process_reader: Callable[[int], list[dict[str, object]]] | None = None
+    process_guard: Callable[[int], contextlib.AbstractContextManager] | None = None
+    stopper: Callable[[int], None] | None = None
+    spawner: Callable[[list[str], Path], int] | None = None
+    #: How long a stopped listener gets to release the port, in checks 200 ms apart.
+    release_checks: int = 25
+
+
+def _spawn_detached(arguments: list[str], directory: Path) -> int:
+    """Start a process that outlives this one, with no window and no inherited pipes."""
+
+    process = subprocess.Popen(
+        arguments,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        close_fds=True,
+        cwd=directory,
+        creationflags=getattr(subprocess, "DETACHED_PROCESS", 0),
+    )
+    return process.pid
+
+
+def _on_demand_arguments(current: dict[str, object], port: int) -> list[str]:
+    python = current.get("python")
+    if not isinstance(python, str) or not ntpath.isabs(python):
+        raise LauncherError("managed launcher manifest has no absolute Python identity")
+    windowed = ntpath.join(ntpath.dirname(python), WINDOWED_PYTHON)
+    if not Path(windowed).is_file():
+        raise LauncherError(f"{WINDOWED_PYTHON} is missing beside {python}")
+    return [windowed, str(current["shim"]), "serve", ON_DEMAND_FLAG, "--port", str(port)]
+
+
+def start_on_demand_listener(
+    directory: str | os.PathLike[str] | None,
+    port: int,
+    *,
+    platform_name: str | None = None,
+    effects: ListenerEffects | None = None,
+) -> int:
+    """Start the listener that holds `port` through the managed shim; its process id."""
+
+    current = _managed_status(directory, platform_name or os.name)
+    spawn = (effects or ListenerEffects()).spawner or _spawn_detached
+    return spawn(_on_demand_arguments(current, port), Path(str(current["directory"])))
+
+
+def _value_port(command: str) -> int | None:
+    """The port an autostart command names, when it names one."""
+
+    try:
+        arguments = shlex.split(command, posix=False)
+    except ValueError:
+        return None
+    for name, value in itertools.pairwise(arguments):
+        if name == "--port" and value.isdecimal():
+            return int(value)
+    return None
+
+
+def autostart_status(
+    directory: str | os.PathLike[str] | None = None,
+    *,
+    platform_name: str | None = None,
+) -> dict[str, object]:
+    """Whether login starts the listener: `disabled` unless the owner turned it on.
+
+    `enabled` is the exact command this launcher would write, `stale` a command of
+    this launcher that differs from it, `foreign` a value under this name that
+    names another command, which is not this launcher's to change.
+    """
+
+    platform = platform_name or os.name
+    base: dict[str, object] = {"value": AUTOSTART_VALUE, "command": None, "port": None}
+    if platform != "nt":
+        return {**base, "state": "unsupported"}
+    root = Path(directory).expanduser().resolve() if directory else default_directory(platform)
+    command = AUTOSTART_STORE.read()
+    if command is None:
+        return {**base, "state": "disabled"}
+    base = {**base, "command": command, "port": _value_port(command)}
+    if not _command_line_names_shim(command, _paths(root, platform)["shim"]):
+        return {**base, "state": "foreign"}
+    current = status(root, platform_name=platform)
+    if current["state"] != "installed" or not isinstance(base["port"], int):
+        return {**base, "state": "stale"}
+    try:
+        expected = subprocess.list2cmdline(_on_demand_arguments(current, base["port"]))
+    except LauncherError:
+        return {**base, "state": "stale"}
+    return {**base, "state": "enabled" if command == expected else "stale"}
+
+
+def _refuse_foreign_autostart(found: dict[str, object], force: bool) -> None:
+    if found["state"] == "foreign" and not force:
+        raise LauncherError(
+            f"refusing to replace the {AUTOSTART_VALUE} autostart value, which runs"
+            f" another command: {found['command']}"
+        )
+
+
+def enable_autostart(
+    directory: str | os.PathLike[str] | None = None,
+    *,
+    port: int | None = None,
+    force: bool = False,
+    platform_name: str | None = None,
+    effects: ListenerEffects | None = None,
+) -> dict[str, object]:
+    """Start the listener at every login, and now, so a link works before the next one."""
+
+    platform = platform_name or os.name
+    if platform != "nt":
+        raise LauncherError("autostart is currently available only on Windows")
+    chosen = configuration.listener_port() if port is None else port
+    if not 1 <= chosen <= 65535:
+        raise LauncherError(f"invalid listener port {chosen}")
+    current = _managed_status(directory, platform)
+    _refuse_foreign_autostart(autostart_status(directory, platform_name=platform), force)
+    AUTOSTART_STORE.write(subprocess.list2cmdline(_on_demand_arguments(current, chosen)))
+    used = effects or ListenerEffects()
+    reading = listener_status(
+        directory, port=chosen, platform_name=platform, process_reader=used.process_reader
+    )
+    listener: dict[str, object] = {"state": str(reading["state"]), "pid": reading.get("pid")}
+    if reading["state"] == "free":
+        listener = {
+            "state": "started",
+            "pid": start_on_demand_listener(
+                directory, chosen, platform_name=platform, effects=used
+            ),
+        }
+    return {**autostart_status(directory, platform_name=platform), "listener": listener}
+
+
+def disable_autostart(
+    directory: str | os.PathLike[str] | None = None,
+    *,
+    force: bool = False,
+    platform_name: str | None = None,
+) -> dict[str, object]:
+    """Stop starting the listener at login. One already running ends with the session."""
+
+    platform = platform_name or os.name
+    if platform != "nt":
+        raise LauncherError("autostart is currently available only on Windows")
+    found = autostart_status(directory, platform_name=platform)
+    _refuse_foreign_autostart(found, force)
+    if found["state"] != "disabled":
+        AUTOSTART_STORE.delete()
+    return autostart_status(directory, platform_name=platform)
+
+
+def _on_demand_reading(
+    root: Path, platform: str, port: int, used: ListenerEffects
+) -> dict[str, object] | None:
+    """The listener on `port` when this launcher can prove it is an on-demand one."""
+
+    if used.process_reader is None and (platform != "nt" or os.name != "nt"):
+        return None
+    try:
+        reading = listener_status(
+            root, port=port, platform_name=platform, process_reader=used.process_reader
+        )
+    except LauncherError:
+        return None
+    return reading if reading["state"] == "managed" and reading.get("on_demand") else None
+
+
+def _stop_on_demand(
+    root: Path, platform: str, port: int, used: ListenerEffects
+) -> dict[str, object]:
+    """Stop it through `stop_listener`'s proof of ownership, and wait for the port."""
+
+    stopped = stop_listener(
+        root,
+        port=port,
+        platform_name=platform,
+        process_reader=used.process_reader,
+        process_guard=used.process_guard,
+        stopper=used.stopper,
+    )
+    if stopped["state"] != "stopped":
+        return stopped
+    for _check in range(used.release_checks):
+        reading = listener_status(
+            root, port=port, platform_name=platform, process_reader=used.process_reader
+        )
+        if reading["state"] == "free":
+            break
+        time.sleep(0.2)
+    return stopped
+
+
 def install(
     directory: str | os.PathLike[str] | None = None,
     *,
@@ -731,13 +990,27 @@ def install(
     checkout: str | os.PathLike[str] | None = None,
     revision: str = "HEAD",
     releases: str | os.PathLike[str] | None = None,
+    effects: ListenerEffects | None = None,
 ) -> dict[str, object]:
-    """Pin one commit of a checkout and point the stable command at it."""
+    """Pin one commit of a checkout and point the stable command at it.
+
+    A listener holding the port on demand has code of the release it started from,
+    and would load it on the next connection. So it stops before the pin moves and
+    starts again after, proved by `stop_listener` as any stop is. A plain `serve` and
+    a foreign listener are left alone, and nothing starts where nothing was running,
+    unless the owner turned autostart on.
+    """
 
     platform = platform_name or os.name
     root = Path(directory).expanduser().resolve() if directory else default_directory(platform)
     paths = _paths(root, platform)
     current = status(root, platform_name=platform)
+    used = effects or ListenerEffects()
+    autostart = autostart_status(root, platform_name=platform)
+    autostart_on = autostart["state"] in {"enabled", "stale"}
+    port = autostart["port"] if autostart_on and isinstance(autostart["port"], int) else None
+    port = configuration.listener_port() if port is None else port
+    holding = _on_demand_reading(root, platform, port, used)
     if current["state"] in {"unmanaged", "drifted"} and not force:
         raise LauncherError(
             f"refusing to replace {current['state']} launcher at {root}: {current.get('detail')}"
@@ -769,13 +1042,55 @@ def install(
         json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     ).encode("utf-8")
 
+    # Before the pin moves: a new interpreter in the manifest would make the running
+    # listener unprovable, and an unprovable listener is one nobody may stop.
+    stopped = _stop_on_demand(root, platform, port, used) if holding else None
+
     _atomic_write(paths["shim"], shim, stat.S_IREAD | stat.S_IWRITE)
     _atomic_write(paths["command"], command, command_mode)
     _atomic_write(paths["manifest"], manifest_bytes, stat.S_IREAD | stat.S_IWRITE)
     result = status(root, platform_name=platform)
     if result["state"] != "installed":
         raise LauncherError(f"installed launcher failed verification: {result.get('detail')}")
-    return result
+    return {
+        **result,
+        "on_demand_listener": _settle_on_demand(root, platform, port, stopped, autostart_on, used),
+    }
+
+
+def _settle_on_demand(
+    root: Path,
+    platform: str,
+    port: int,
+    stopped: dict[str, object] | None,
+    autostart_on: bool,
+    used: ListenerEffects,
+) -> dict[str, object]:
+    """What the new pin means for the listener: never a reason to fail the install."""
+
+    try:
+        if autostart_on:
+            # The interpreter may have moved, and login runs what this value says.
+            AUTOSTART_STORE.write(
+                subprocess.list2cmdline(
+                    _on_demand_arguments(status(root, platform_name=platform), port)
+                )
+            )
+        if stopped is not None and stopped["state"] == "refused":
+            return {"state": "refused", "port": port, "detail": stopped.get("detail")}
+        was_running = stopped is not None
+        if not was_running:
+            if not autostart_on:
+                return {"state": "none", "port": port}
+            reading = listener_status(
+                root, port=port, platform_name=platform, process_reader=used.process_reader
+            )
+            if reading["state"] != "free":
+                return {"state": "none", "port": port, "detail": reading.get("detail")}
+        pid = start_on_demand_listener(root, port, platform_name=platform, effects=used)
+    except (OSError, LauncherError) as error:
+        return {"state": "failed", "port": port, "detail": str(error)}
+    return {"state": "restarted" if was_running else "started", "port": port, "pid": pid}
 
 
 def uninstall(
@@ -783,6 +1098,7 @@ def uninstall(
     *,
     force: bool = False,
     platform_name: str | None = None,
+    effects: ListenerEffects | None = None,
 ) -> dict[str, object]:
     platform = platform_name or os.name
     root = Path(directory).expanduser().resolve() if directory else default_directory(platform)
@@ -794,6 +1110,16 @@ def uninstall(
         raise LauncherError(
             f"refusing to remove {current['state']} launcher at {root}: {current.get('detail')}"
         )
+    # Only a value naming this launcher's shim is this launcher's to remove, and a
+    # listener holding the port on demand cannot be proved once the manifest is gone.
+    used = effects or ListenerEffects()
+    autostart = autostart_status(root, platform_name=platform)
+    if autostart["state"] in {"enabled", "stale"}:
+        AUTOSTART_STORE.delete()
+    port = autostart["port"] if isinstance(autostart["port"], int) else None
+    port = configuration.listener_port() if port is None else port
+    if current["state"] == "installed" and _on_demand_reading(root, platform, port, used):
+        _stop_on_demand(root, platform, port, used)
     for name in ("command", "shim", "manifest"):
         with contextlib.suppress(FileNotFoundError):
             paths[name].unlink()
