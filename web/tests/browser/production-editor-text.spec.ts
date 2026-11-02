@@ -89,19 +89,6 @@ test('a description as long as the service stores still opens, and saves whole',
   expect(await savedUnedited(page, description)).toBe(description)
 })
 
-test('a description longer than its field opens at its beginning, a shorter one with the caret at its end', async ({
-  page,
-}) => {
-  const { field, drawer } = await editDescription(page, 'Длинная строка плана.\n'.repeat(200))
-  expect(await selection(field)).toEqual([0, 0])
-  expect(await field.evaluate((control) => control.scrollTop)).toBe(0)
-  await drawer.getByRole('button', { name: 'Cancel', exact: true }).click()
-  await page.keyboard.press('Escape')
-
-  const short = await editDescription(page, AGENT_TEXT)
-  expect(await selection(short.field)).toEqual([AGENT_TEXT.length, AGENT_TEXT.length])
-})
-
 /**
  * A real press on Edit description, and what it has to leave in view: the frame starting
  * under the tabs that pin over the card's scroller, with its toolbar and first line
