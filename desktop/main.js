@@ -416,6 +416,22 @@ function startValkama({ allowRestart = false } = {}) {
   return starting
 }
 
+/**
+ * Bring the window up for someone who asked for it from elsewhere.
+ *
+ * Windows gives the foreground only to the process that got the last input, and
+ * a link is clicked in another application, so `show`, `focus` and `moveTop`
+ * alone leave this window behind the one in use. Passing through the topmost band
+ * lifts it above that window; the keyboard stays where it was until a click here.
+ */
+function raiseWindow() {
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.setAlwaysOnTop(true)
+  mainWindow.show()
+  mainWindow.focus()
+  mainWindow.setAlwaysOnTop(false)
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1500,
@@ -443,7 +459,7 @@ function createWindow() {
   })
   log('window-created', { visible: mainWindow.isVisible() })
   mainWindow.once('ready-to-show', () => log('window-painted'))
-  if (focusWhenCreated) mainWindow.focus()
+  if (focusWhenCreated || requestedPath) raiseWindow()
 
   // Anything that is not Valkama opens in the real browser, never in here.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -489,9 +505,7 @@ if (!app.requestSingleInstanceLock()) {
       focusWhenCreated = true
       return
     }
-    if (mainWindow.isMinimized()) mainWindow.restore()
-    mainWindow.show()
-    mainWindow.focus()
+    raiseWindow()
     // Otherwise the starting page is up, and the address waits for what follows it.
     if (requested && showingValkama) loadValkama()
   })
