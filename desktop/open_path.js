@@ -31,4 +31,21 @@ function openPathUrl(appUrl, route) {
   return `${appUrl}${route.slice(1)}`
 }
 
-module.exports = { openPathFromArgv, openPathUrl }
+/**
+ * How a window that was asked for a route gets there.
+ *
+ * Until it holds Valkama the address waits for the load that follows the starting
+ * page. A page that said it listens gets the route and moves with its own router,
+ * so nothing reloads and its leave check asks before a draft goes.
+ *
+ * A page that did not say so is a bundle older than this app, or a renderer that
+ * is gone, and only a load can move it. That costs nothing it could keep: an older
+ * bundle holds `beforeunload` while it has a draft, which refuses the load and
+ * leaves the window where it was, and a renderer that is gone has nothing left.
+ */
+function howToOpen({ showingValkama, pageListens }) {
+  if (!showingValkama) return 'wait'
+  return pageListens ? 'hand-over' : 'load'
+}
+
+module.exports = { howToOpen, openPathFromArgv, openPathUrl }

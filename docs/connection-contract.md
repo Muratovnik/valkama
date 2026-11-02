@@ -325,7 +325,10 @@ card to the desktop app itself when all of these hold:
 The app starts detached, with `--open-path=<card route>`, its own directory as working
 directory, `VALKAMA_PORT` set to this listener's port and no `ELECTRON_RUN_AS_NODE`. It
 takes the argument at first start and on a second launch, ignores any other shape, and
-raises its window. The page it answers is `no-store`, says the item opened in the app,
+raises its window. A window already showing a current page hands the route to it over
+the preload bridge and its router moves, so nothing reloads and a draft is asked about
+as on any other departure; a page older than the app gets a load, which its own
+`beforeunload` refuses while it holds a draft. The page the listener answers is `no-store`, says the item opened in the app,
 links to `/open/<reference>?in=browser` and closes its own tab. A browser lets a script
 close only a tab with a single history entry, and some let it close none; such a tab
 stays open on that page. Its address has already been replaced by the link, so a

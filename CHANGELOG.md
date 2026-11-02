@@ -36,7 +36,8 @@ checkouts are therefore distinguishable even at the same version.
   in an agent client's chat, starts the app on that card and answers a page that closes
   its own tab where the browser allows it, with a link to open the item in the browser
   instead (`?in=browser`). The app takes `--open-path=<card route>` at first start and
-  on a second launch, and ignores any other shape. Every other request keeps the
+  on a second launch, and ignores any other shape; a window already showing Valkama
+  moves without a reload, and asks first if a draft would be lost. Every other request keeps the
   redirect: a request made by any page, a prerender, a machine without the app, a
   listener on another port, a launch that fails. Reinstall the desktop app along with
   the server: an older build opens without moving to the card.

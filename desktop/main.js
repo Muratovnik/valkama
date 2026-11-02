@@ -25,7 +25,7 @@ const {
   parseRuntimeJson,
   validateLauncherBootstrap,
 } = require('./runtime_contract')
-const { openPathFromArgv, openPathUrl } = require('./open_path')
+const { howToOpen, openPathFromArgv, openPathUrl } = require('./open_path')
 const { discoverSupportedOpeners, resolveSupportedOpener } = require('./opener_catalog')
 const { establishServer, verifyStartedOwnership } = require('./server_startup')
 const { openSessionRequest } = require('./session_opener')
@@ -102,6 +102,8 @@ let uiLoadedOnce = false
 let requestedPath = openPathFromArgv(process.argv)
 /** Whether the window holds Valkama rather than the starting page. */
 let showingValkama = false
+/** Whether the page now in the window said it takes routes over the bridge. */
+let pageListens = false
 
 function isValkamaSender(event) {
   const senderUrl = event.senderFrame?.url || event.sender.getURL()
@@ -111,6 +113,10 @@ function isValkamaSender(event) {
 ipcMain.handle('valkama:open-source', async (event, request) => {
   const senderUrl = event.senderFrame?.url || event.sender.getURL()
   return openSourceRequest({ senderUrl, appUrl: URL, request, shell })
+})
+
+ipcMain.on('valkama:open-route-ready', (event) => {
+  if (isValkamaSender(event)) pageListens = true
 })
 
 function directoryExists(dir) {
@@ -380,6 +386,18 @@ function loadValkama() {
   )
 }
 
+/** Take the window to the route a launch asked for, in the way the page can bear. */
+function openRequestedPath() {
+  const how = howToOpen({ showingValkama, pageListens })
+  log('open-path', { how })
+  if (how === 'load') {
+    loadValkama()
+  } else if (how === 'hand-over') {
+    mainWindow.webContents.send('valkama:open-route', requestedPath)
+    requestedPath = null
+  }
+}
+
 /** Find or start the server, then show Valkama or say why it cannot be shown. */
 function startValkama({ allowRestart = false } = {}) {
   if (starting) return starting
@@ -482,6 +500,12 @@ function createWindow() {
       void shell.openExternal(url)
     }
   })
+  mainWindow.webContents.on('did-start-navigation', (details) => {
+    if (details.isMainFrame && !details.isSameDocument) pageListens = false
+  })
+  mainWindow.webContents.on('render-process-gone', () => {
+    pageListens = false
+  })
   mainWindow.webContents.on('did-finish-load', () => {
     if (mainWindow?.webContents.getURL().startsWith(URL)) rememberLocale(mainWindow.webContents)
   })
@@ -506,8 +530,7 @@ if (!app.requestSingleInstanceLock()) {
       return
     }
     raiseWindow()
-    // Otherwise the starting page is up, and the address waits for what follows it.
-    if (requested && showingValkama) loadValkama()
+    if (requested) openRequestedPath()
   })
 
   app.whenReady().then(() => {

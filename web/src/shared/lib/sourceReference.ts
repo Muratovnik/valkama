@@ -32,6 +32,8 @@ interface ValkamaDesktopBridge {
     source?: Record<string, unknown>
   }>
   openSource(request: SourceOpenRequest): Promise<SourceOpenResult>
+  /** Absent in a desktop app older than this page. */
+  onOpenRoute?(listener: (route: string) => void): void
 }
 
 declare global {

@@ -199,6 +199,21 @@ export function usePlatformNavigation(
     writeRoute({ ...route.value, state: Object.keys(state).length ? state : undefined }, 'replace')
   }
 
+  /**
+   * A card the desktop app was asked for from outside while this page is up. It is
+   * a navigation like any other here, so the leave check asks before a draft goes
+   * and the page never reloads. The app checks the route's shape first; one this
+   * page cannot read leaves it where it is.
+   */
+  window.valkamaDesktop?.onOpenRoute?.((href) => {
+    try {
+      const resolved = resolvePlatformRoute(new URL(href, location.origin))
+      if (!isPlatformRouteUnavailable(resolved)) writeRoute(resolved)
+    } catch {
+      // Nothing to show for an address nobody here asked for.
+    }
+  })
+
   // Back, forward and any navigation the shell did not initiate land here.
   watch(() => router.currentRoute.value.fullPath, applyLocation)
 

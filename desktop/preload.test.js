@@ -8,6 +8,8 @@ const vm = require('node:vm')
 
 function loadBridge() {
   const calls = []
+  const handlers = new Map()
+  const sent = []
   let bridge = null
   const source = readFileSync(path.join(__dirname, 'preload.js'), 'utf8')
   vm.runInNewContext(source, {
@@ -26,13 +28,20 @@ function loadBridge() {
             calls.push({ channel, request })
             return Promise.resolve({ ok: true, mode: 'opened' })
           },
-          on() {},
-          send() {},
+          on(channel, handler) {
+            handlers.set(channel, handler)
+          },
+          removeAllListeners(channel) {
+            handlers.delete(channel)
+          },
+          send(channel) {
+            sent.push(channel)
+          },
         },
       }
     },
   })
-  return { bridge, calls }
+  return { bridge, calls, handlers, sent }
 }
 
 test('preload forwards only the exact source request object', async () => {
@@ -65,4 +74,29 @@ test('preload rejects legacy strings and objects carrying path authority', async
     assert.equal(result.error, 'invalid-source-request')
   }
   assert.equal(calls.length, 0)
+})
+
+test('a page that listens for routes gets the route alone, and says so only once it listens', () => {
+  const { bridge, handlers, sent } = loadBridge()
+  assert.deepEqual(sent, [])
+  const routes = []
+  bridge.onOpenRoute((...received) => routes.push(received))
+  assert.deepEqual(sent, ['valkama:open-route-ready'])
+
+  handlers.get('valkama:open-route')({ sender: 'the event' }, '/a')
+  assert.deepEqual(routes, [['/a']])
+})
+
+test('a second listener replaces the first, and something else is no listener', () => {
+  const { bridge, handlers, sent } = loadBridge()
+  const first = []
+  const second = []
+  bridge.onOpenRoute((route) => first.push(route))
+  bridge.onOpenRoute((route) => second.push(route))
+  handlers.get('valkama:open-route')({}, '/a')
+  assert.deepEqual([first, second], [[], ['/a']])
+
+  sent.length = 0
+  bridge.onOpenRoute('not a function')
+  assert.deepEqual(sent, [])
 })

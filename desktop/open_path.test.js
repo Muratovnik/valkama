@@ -5,7 +5,7 @@ const { readFileSync } = require('node:fs')
 const path = require('node:path')
 const test = require('node:test')
 
-const { openPathFromArgv, openPathUrl } = require('./open_path')
+const { howToOpen, openPathFromArgv, openPathUrl } = require('./open_path')
 
 // A route worked out by hand from the grammar; tests/test_work_item_link.py holds
 // the same literal and web/tests/platformRoute.test.ts reads it with the browser's
@@ -69,6 +69,25 @@ test('a route stays on the origin the window already serves', () => {
   const url = new globalThis.URL(openPathUrl('http://127.0.0.1:8642/', ROUTE))
   assert.equal(url.origin, 'http://127.0.0.1:8642')
   assert.equal(`${url.pathname}${url.search}`, ROUTE)
+})
+
+test('a route waits for the page, goes to a page that listens, and loads otherwise', () => {
+  // The starting page has no router and no draft; Valkama will load the address.
+  assert.equal(howToOpen({ showingValkama: false, pageListens: false }), 'wait')
+  assert.equal(howToOpen({ showingValkama: false, pageListens: true }), 'wait')
+  // A reload here is what loses a comment being written.
+  assert.equal(howToOpen({ showingValkama: true, pageListens: true }), 'hand-over')
+  // An older bundle or a renderer that is gone cannot take it.
+  assert.equal(howToOpen({ showingValkama: true, pageListens: false }), 'load')
+})
+
+test('the window hands a route over only to the page that said it listens', () => {
+  const main = readFileSync(path.join(__dirname, 'main.js'), 'utf8')
+  assert.match(main, /ipcMain\.on\('valkama:open-route-ready'/)
+  // A page that navigated away or died no longer listens, whatever it said.
+  assert.match(main, /'did-start-navigation'/)
+  assert.match(main, /'render-process-gone'/)
+  assert.match(main, /webContents\.send\('valkama:open-route', requestedPath\)/)
 })
 
 test('the window reads the address at first start and on a second launch', () => {
