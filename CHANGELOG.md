@@ -12,6 +12,33 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Added
 
+- **A question is answered in the task's discussion.** It reads as a comment: one still
+  waiting stands right under the comment form however old it is, and one that has ended
+  takes its place by time, folded to its prompt with the reply under it. Selecting only
+  selects and Send sends, the same for every kind of field; nothing is chosen for you,
+  and a recommended option only says so. "Your own answer" is always there and stands in
+  for what is required.
+- **Options with long descriptions keep the choices in sight.** A description of one line
+  stands under its label, a longer one shows its first words, past six described options
+  only the labels stand, and each opens on its own press without selecting anything. What
+  is chosen stands whole under the options and above Send, so nothing folded is sent
+  unread, and choosing moves no row.
+- **A mark in the card's facts** says a question is waiting and brings it into view from
+  any section.
+- **An agent reads an answer without reading the discussion.** `get_work_item` carries
+  `questions`: `total`, `open`, up to 5 items with the open ones first and the newest
+  closed after them, and `truncated`. An item names the question's start, its status and
+  the answer with the labels chosen, with no options or descriptions.
+  `list_work_item_requests` filters by item (`id`) and `answered_after`, and takes `full`.
+- A question's options can carry a markdown `description` and be `recommended`. The fields
+  of one question fit in 64 KiB.
+- `answer_work_item_request` and the HTTP answer take a `note` of up to 8000 characters,
+  which stands in for required fields, so a person can answer in their own words.
+- `by_person` says whether an answer came through Valkama's interface. It is read from the
+  call that wrote the answer, so no caller can set it.
+- `search_work_items` finds an item by a question's text, answers and note, and a row found
+  that way carries `question_hit`.
+- An export carries every question in `planning.requests`.
 - **A link to a work item opens in the desktop app.** On Windows with the app
   installed, `GET /open/MAIN-12` followed from outside a browser page, such as a link
   in an agent client's chat, starts the app on that card and answers a page that closes
@@ -46,8 +73,20 @@ checkouts are therefore distinguishable even at the same version.
   however they wrap. A takeover asks in the band under the bar, where a refusal
   stands, wherever its button was pressed.
 - **A section with nothing in it is absent.** A card with no steps has no Checklist
-  section and one with no questions no Questions section, until something arrives. A
-  failed read of the questions still shows, because not knowing is not having none.
+  section until a step arrives. A failed read of the questions shows as a line over the
+  discussion, because not knowing is not having none.
+- "Needs my answer" shows the same form as the card, with "Send" and "Don't answer", and an
+  answer given in a card lowers the count in the navigation at once.
+- `list_work_item_requests` answers in a compact form by default; pass `full: true` for
+  whole records. `get_work_item_request` adds `note` and `by_person`. The HTTP request reads
+  add only `note`, and `answers` no longer shows a note among them.
+- `merge_work_items` moves a merged item's questions to the survivor, where a pending one
+  stays open, instead of closing them with the merged item. The warning now says they wait
+  on the survivor.
+- The store stays at schema 9. An earlier build opens it and its tools work, but its web
+  interface reports it could not update the questions on a card holding a note or a
+  described option, and for the waiting list while a pending question has a described
+  option. Install the server and the web interface of this release together.
 - **The board reads by its titles.** A title on a tile or a list row no longer stands
   in a heavier weight than everything around it, and a label is a quiet word instead
   of a chip. Short titles no longer sit in a taller box than they need, and a closed
@@ -79,8 +118,41 @@ checkouts are therefore distinguishable even at the same version.
   the two fields the server needs and a way back to the comment. Saving it carries
   the refused move on, and once that move is over the form only saves.
 
+### Removed
+
+- The card's "Questions and decisions" section. A question stands in the discussion.
+
 ### Fixed
 
+- **A press on the board no longer crashes the tab.** Chromium 156 crashes the renderer on
+  a press that takes focus out of a `content-visibility: auto` element just back in view,
+  in Chrome and in the desktop app. A tile out of sight is now laid out like any other, and
+  a press on one just back in view reaches it. A lane still skips its layout, which a space
+  of many lanes needs, and keeps the focus of a press inside it.
+- **A double click on a tile leaves its card open.** The second press reached the scrim that
+  had just appeared, and closed the card as it arrived.
+- **The keys that read work as soon as a card opens.** PageDown, PageUp, Home, End and the
+  arrows scroll a card just opened, by address or from the board, and from its top bar; they
+  did nothing until focus reached a control inside it. No ring appears on Close, and the
+  dialog's name is still read.
+- **Walking a card's stuck sections from the keyboard keeps the place.** Tab and Shift+Tab
+  along the sections moved the card up half a window at each step, and four steps unfolded
+  the head again.
+- **Back does not wait long for a slow chain.** A chain that was slow or never answered left
+  an empty panel with no sign of waiting. The card now shows after about what a normal read
+  takes, as far down as it can go, and a chain that answers later moves it once to its place,
+  unless the reader has scrolled, pressed or typed by then.
+- **Back lands once.** The place landed and then moved 20 px, because the chain's map first
+  laid out at a guessed width.
+- **A press while a drawer or dialog leaves lands on nothing.** A double click on Close opened
+  whatever stood under it, and one on the scrim over a tile opened that tile's card. The first
+  press after the leave reaches the page.
+- Retrying a failed read keeps focus in the card, while it waits and whatever the answer. It
+  fell to the page, and Tab then left the card.
+- A pressed chip is plain in forced colors, in light and dark palettes. Its bar kept the
+  theme's ink, nearly invisible in a light palette; the chip now takes the palette's highlight
+  pair.
+- Escape from a card opened by a press on a tile's mark leaves no ring around the whole board.
 - A task whose description is longer than 8192 characters opens again. The service
   stores 20,000, and the web client refused to read anything over 8192, so such a
   task showed a message about this build instead of its card.
@@ -100,8 +172,9 @@ checkouts are therefore distinguishable even at the same version.
 - Choosing a task from the list no longer clears the field's undo history.
 - Editing a long description opens with the toolbar and the start of the text in
   view, where the card's own scroller used to run to the end of the text.
-- A second press of bold, italic or code takes the mark off a selection of several
-  lines, where it used to add a second pair.
+- The editor's marks go after a list item's marker, so the line stays a list. A mark around
+  a whole selection, on one line or several, comes off as one, and a mark over words that
+  already carry it replaces it.
 - An outcome stepped back from is kept and asked about before it goes, where closing
   the card dropped it with no question.
 - Focus stays in the card after a takeover, after an outcome is sent and after sending
