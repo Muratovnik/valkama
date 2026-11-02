@@ -37,6 +37,7 @@ from typing import NamedTuple
 
 from . import listener_owners, processes
 from .ops import configuration
+from .store_adoption import rename_when_free
 
 SCHEMA_VERSION = 1
 MANIFEST_NAME = "valkama-launcher.json"
@@ -272,7 +273,7 @@ def pin_release(checkout: Path, revision: str, releases: Path) -> Path:
                 "utf-8"
             )
         )
-        os.rename(staging, target)
+        rename_when_free(str(staging), str(target))
     finally:
         if staging.exists():
             shutil.rmtree(staging)

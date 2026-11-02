@@ -33,7 +33,7 @@ _PASSING_WINERRORS = frozenset({5, 32})
 _RENAME_WAITS = (0.05, 0.1, 0.2, 0.25, 0.4)
 
 
-def _rename(source: str, target: str) -> None:
+def rename_when_free(source: str, target: str) -> None:
     """Rename, waiting out a holder that lets go by itself; any other failure is at once."""
     for wait in _RENAME_WAITS:
         try:
@@ -60,7 +60,7 @@ def _rename_legacy_names(root: str, legacy_prefix: str, current_prefix: str) -> 
         for name in sorted(os.listdir(directory)):
             if not name.startswith(legacy_prefix):
                 continue
-            _rename(
+            rename_when_free(
                 os.path.join(directory, name),
                 os.path.join(directory, current_prefix + name[len(legacy_prefix) :]),
             )
@@ -101,7 +101,7 @@ def adopt(
         if os.path.isfile(legacy_db):
             refuse_a_store_from_the_future(legacy_db)
         try:
-            _rename(legacy, current_root)
+            rename_when_free(legacy, current_root)
         except OSError as error:
             raise RuntimeError(
                 f"the store at {legacy} predates the rename and could not be adopted: {error}."

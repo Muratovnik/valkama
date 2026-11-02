@@ -15,6 +15,15 @@ from unittest import mock
 
 from server import cli, launcher, listener_owners, static_assets
 
+
+def _refusal(winerror: int) -> PermissionError:
+    """What a rename raises on Windows, on any platform these tests run on."""
+
+    error = PermissionError(13, "Access is denied")
+    error.winerror = winerror  # type: ignore[attr-defined]
+    return error
+
+
 ENTRY = "import json, sys\nprint(json.dumps(sys.argv[1:]))\n"
 
 
@@ -195,6 +204,28 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(first, rolled_back["revision"])
         self.assertEqual(str(self.releases / first / "valkama.py"), rolled_back["source_script"])
         self.assertTrue((self.releases / second / "valkama.py").is_file())
+
+    def test_a_holder_that_lets_go_of_the_unpacked_release_does_not_stop_it(self) -> None:
+        """A scanner reading a tree just unpacked refused this rename about one install in ten."""
+
+        real_rename = os.rename
+        refusals = [_refusal(5), _refusal(32)]
+
+        def rename(source: str, target: str) -> None:
+            if refusals:
+                raise refusals.pop(0)
+            real_rename(source, target)
+
+        with mock.patch("os.rename", rename), mock.patch("time.sleep"):
+            installed = self.install()
+        self.assertTrue(Path(str(installed["source_script"])).is_file())
+        self.assertEqual([], refusals)
+
+    def test_a_holder_that_stays_refuses_the_release_and_leaves_no_staging(self) -> None:
+        with mock.patch("os.rename", side_effect=_refusal(5)), mock.patch("time.sleep"):
+            with self.assertRaises(PermissionError):
+                self.install()
+        self.assertEqual([], list(self.releases.glob(".*")))
 
     def test_an_existing_release_is_reused_only_after_it_verifies(self) -> None:
         installed = self.install()
