@@ -72,7 +72,7 @@ test('the grouped board says its epics as rows on the counts line, where a phone
   await installBackend(page)
   await serve(page)
   await openBoard(page, {})
-  const grouping = page.getByRole('switch', { name: 'Group the board by epic' })
+  const grouping = page.getByRole('button', { name: 'Group the board by epic' })
   const rows = page.locator('.workspace-rows')
   await expect(rows).toBeHidden()
   await grouping.click()
@@ -262,10 +262,10 @@ test('on a phone the field’s hint fits it, and the grouping says its word unti
     }
   })
   expect(hint.text, JSON.stringify(hint)).toBeLessThanOrEqual(hint.room)
-  // The switch says what it does beside the counts, on the bar's second line.
-  const grouping = page.getByRole('switch', { name: 'Group the board by epic' })
-  await expect(grouping.locator('.toggle-state')).toHaveText('By epic')
-  await expect(grouping.locator('.toggle-state')).toBeVisible()
+  // The grouping says what it does beside the counts, on the bar's second line.
+  const grouping = page.getByRole('button', { name: 'Group the board by epic' })
+  await expect(grouping.locator('.grouping-word')).toHaveText('By epic')
+  await expect(grouping.locator('.grouping-word')).toBeVisible()
   const line = async () =>
     page.locator('.workspace-head').evaluate((head) => {
       const box = (selector: string) =>
@@ -280,10 +280,12 @@ test('on a phone the field’s hint fits it, and the grouping says its word unti
   expect(resting.height).toBeLessThanOrEqual(100)
   expect(resting.figuresTop).toBeLessThan(resting.switchBottom)
   // A filter's reset takes the word's room rather than a third line, so the
-  // work does not move as a filter turns on; the switch keeps its name.
+  // work does not move as a filter turns on; the control keeps its name and shows
+  // its glyph.
   await field(page).fill('MAIN')
   await expect(page.locator('.workspace-figures')).toContainText('Reset')
-  await expect(grouping.locator('.toggle-state')).toBeHidden()
+  await expect(grouping.locator('.grouping-word')).toBeHidden()
+  await expect(grouping.locator('.grouping-glyph')).toBeVisible()
   await expect(grouping).toHaveAccessibleName('Group the board by epic')
   const filtered = await line()
   expect(filtered.height).toBe(resting.height)

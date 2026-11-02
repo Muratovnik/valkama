@@ -85,7 +85,7 @@ test('Russian Work bar keeps its controls on one row and folds the presets at na
     [1024, 768],
   ]) {
     await page.setViewportSize({ width, height })
-    await expect(page.getByRole('switch', { name: 'Группировать доску по эпикам' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Группировать доску по эпикам' })).toBeVisible()
     expect(oneLine(await toolBoxes(page)), `one row at ${width}px`).toBe(true)
     // One row of controls, one line of state.
     const head = await page.locator('.workspace-head').boundingBox()

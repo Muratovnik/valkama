@@ -2,8 +2,11 @@
 /**
  * The bar above the work: one row of controls, one line of state.
  *
- * The row is the view, the filter and, on the board, the grouping, with the one
- * primary action at its end, where every module puts it. The filter is one
+ * The row is the view and, on the board, how it is grouped, then the filter, with
+ * the one primary action at its end, where every module puts it. Grouping stands
+ * by the view because it arranges what is drawn; everything to the right of the
+ * field narrows it, so the two are not read as one set of filters. It is the same
+ * pressed control as its neighbours. The filter is one
  * field — text and facet chips — with its two presets and its menu, because
  * the five queue segments that stood beside a search were two controls for one
  * population, and two of them repeated columns the board already draws.
@@ -17,6 +20,7 @@ import { computed, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { CensusExclusion } from '@/pages/planning/composables/usePlanningCensus.ts'
+import PlanningGrouping from '@/pages/planning/PlanningGrouping.vue'
 import type { PlanningViewMode } from '@/pages/planning/PlanningWorkspace.vue'
 import { graphView } from '@/pages/planning/utils/graphView.ts'
 
@@ -36,7 +40,6 @@ import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import ScopeChip from '@/shared/ui/ScopeChip.vue'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
-import ToggleSwitch from '@/shared/ui/ToggleSwitch.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -89,15 +92,9 @@ function pickView(mode: string) {
  */
 const countsBusy = computed(() => (props.busy ? true : undefined))
 
-/**
- * Present while a filter is on, and absent otherwise: the attribute is what
- * the phone's line reads to give the switch's word up to the reset.
- */
-const filteredMark = computed(() => (props.filtered ? true : undefined))
-
 const grouped = computed(() => props.grouping === 'epic')
-function group(on: boolean) {
-  emit('group', on ? 'epic' : 'none')
+function toggleGrouping() {
+  emit('group', grouped.value ? 'none' : 'epic')
 }
 
 /** «319 открытых из 1267», or what the filter let through of the open work. */
@@ -158,10 +155,7 @@ const exclusionText = computed(() => {
 </script>
 
 <template>
-  <header
-    class="workspace-head"
-    :data-filtered="filteredMark"
-  >
+  <header class="workspace-head">
     <div class="workspace-tools">
       <!-- Reaching for the switch is the intent to use it: the board and the
            list are already here, so the graph is what it would download. -->
@@ -184,6 +178,13 @@ const exclusionText = computed(() => {
         @focusin="graphView.prefetch"
         @update:model-value="pickView"
       />
+      <PlanningGrouping
+        v-if="grouping !== null"
+        class="workspace-grouping"
+        :filtered="filtered"
+        :pressed="grouped"
+        @toggle="toggleGrouping"
+      />
       <WorkFilterField
         ref="field"
         v-model:filter="filter"
@@ -192,20 +193,6 @@ const exclusionText = computed(() => {
         :held="counts.held"
         :items="items"
         @chips="focusChips"
-      />
-      <!-- Grouping is on or off, so it is a switch; where the row is short its
-           name stays the switch's accessible name and its hover text. On a
-           phone it shares the counts' line, says its word there, and gives the
-           word up to the reset while a filter is on. -->
-      <ToggleSwitch
-        v-if="grouping !== null"
-        class="workspace-grouping"
-        :label="t('workItem.lanes.groupingLabel')"
-        :title="t('workItem.lanes.groupingLabel')"
-        :model-value="grouped"
-        :on-label="t('workItem.lanes.grouping.epic')"
-        :off-label="t('workItem.lanes.grouping.epic')"
-        @update:model-value="group"
       />
       <VButton
         v-if="writable"
@@ -300,15 +287,14 @@ const exclusionText = computed(() => {
   min-width: 0;
 }
 
-/* One row that never wraps where it has room: the filter field gives up width
-   before anything else does. As tall as the grouping switch's pointer target
-   in every view, so the work does not move when the switch comes and goes. */
+/* One row of one height that never wraps where it has room: the filter field
+   gives up width before anything else does. */
 .workspace-tools {
   display: flex;
   gap: var(--space-2);
   align-items: center;
   min-width: 0;
-  min-height: var(--size-control-target);
+  min-height: var(--size-control-height-compact);
 }
 
 .workspace-view-menu {
@@ -317,6 +303,7 @@ const exclusionText = computed(() => {
 }
 
 .workspace-action {
+  min-height: var(--size-control-height-compact);
   margin-inline-start: auto;
 }
 
@@ -385,15 +372,6 @@ const exclusionText = computed(() => {
   }
 }
 
-/* Where the row cannot hold the switch's word, the switch keeps its name as
-   its accessible name and hover text. On a phone the switch moves to the
-   second line, beside the counts, where its word has room again. */
-@container workspace (width < 1000px) {
-  .workspace-grouping {
-    --toggle-state-display: none;
-  }
-}
-
 /* A phone: the view becomes a menu and the action its sign, so the view, the
    filter and the action hold the first line. The two rows give up their own
    boxes and wrap as one: the picked facets, the counts and the grouping
@@ -439,24 +417,11 @@ const exclusionText = computed(() => {
     clip-path: inset(50%);
   }
 
-  /* The second line: the switch, then what the filter lets through. The
+  /* The second line: the grouping, then what the filter lets through. The
      closed items it lets through are a fact the wide bar has room for. */
   .workspace-grouping,
   .workspace-figures {
     order: 2;
-  }
-
-  /* The switch's word, as long as it is: «По эпикам» beside the counts. A
-     filter's reset needs that room, and the line holds the two only without
-     the word, so the word yields to it rather than the counts taking a third
-     line and the work moving down as a filter turns on. */
-  .workspace-grouping {
-    --toggle-state-display: inline;
-    --toggle-state-min-width: 0;
-
-    .workspace-head[data-filtered] & {
-      --toggle-state-display: none;
-    }
   }
 
   .workspace-figures {
@@ -464,7 +429,7 @@ const exclusionText = computed(() => {
   }
 
   /* The closed items and the epics drawn as rows are facts the wide bar has room
-     for: on a phone the line keeps the counts and the switch's word, and a third
+     for: on a phone the line keeps the counts and the grouping's word, and a third
      fact would make the bar taller while a filter turns on. */
   .workspace-closed,
   .workspace-rows {

@@ -16,6 +16,7 @@ import type { WorkFilter } from '@/entities/work-item/utils/workFilter.ts'
 import { messages, pluralRules } from '@/shared/i18n/index.ts'
 
 const COUNTS = { held: 1, matchedClosed: 0, matchedOpen: 2, open: 2, total: 3 }
+const GROUPING = 'button[aria-label="Group the board by epic"]'
 
 function bar(
   props: Partial<InstanceType<typeof PlanningWorkspaceBar>['$props']> = {},
@@ -49,12 +50,18 @@ afterEach(() => {
 })
 
 describe('the work bar', () => {
-  it('holds the view, one filter field, the grouping and the action in one row', () => {
+  it('holds the view, the grouping, one filter field and the action in one row', () => {
     const wrapper = bar()
     const row = wrapper.get('.workspace-tools')
     expect(row.find('[role="group"][aria-label="View"]').exists()).toBe(true)
     expect(row.get('input[role="combobox"]').attributes('aria-label')).toBe('Filter work')
-    expect(row.find('[role="switch"]').exists()).toBe(true)
+    // The grouping arranges the view, so it stands by the view and ahead of the
+    // field, whose neighbours narrow the work instead.
+    const grouping = row.get(GROUPING).element
+    const field = row.get('input[role="combobox"]').element
+    const view = row.get('[role="group"][aria-label="View"]').element
+    expect(view.compareDocumentPosition(grouping)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(grouping.compareDocumentPosition(field)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
     // The one primary action ends the row, not the line of state under it.
     expect(row.get('.workspace-action').text()).toBe('+New work item')
     expect(wrapper.get('.workspace-status').find('.workspace-action').exists()).toBe(false)
@@ -62,15 +69,23 @@ describe('the work bar', () => {
     expect(wrapper.find('[aria-label="Work queue"]').exists()).toBe(false)
   })
 
-  it('offers the grouping only while the board is on the stage, as one switch', async () => {
+  it('offers the grouping only while the board is on the stage, as a pressed control', async () => {
     const wrapper = bar({ grouping: 'epic' })
-    const grouping = wrapper.get('[role="switch"]')
-    expect(grouping.attributes('aria-label')).toBe('Group the board by epic')
-    expect(grouping.attributes('aria-checked')).toBe('true')
+    const grouping = wrapper.get(GROUPING)
+    // The same control as the presets beside the field, and no switch among them.
+    expect(grouping.classes()).toContain('toggle-chip')
+    expect(wrapper.find('[role="switch"]').exists()).toBe(false)
+    expect(grouping.attributes('aria-pressed')).toBe('true')
+    expect(grouping.attributes('title')).toBe('Group the board by epic')
+    expect(grouping.text()).toBe('By epic')
     await grouping.trigger('click')
     expect(wrapper.emitted('group')).toEqual([['none']])
+    await wrapper.setProps({ grouping: 'none' })
+    expect(wrapper.get(GROUPING).attributes('aria-pressed')).toBe('false')
+    await wrapper.get(GROUPING).trigger('click')
+    expect(wrapper.emitted('group')).toEqual([['none'], ['epic']])
     await wrapper.setProps({ grouping: null })
-    expect(wrapper.find('[role="switch"]').exists()).toBe(false)
+    expect(wrapper.find(GROUPING).exists()).toBe(false)
   })
 
   it.each([

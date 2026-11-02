@@ -232,8 +232,11 @@ defineExpose({
     block-size: var(--size-control-height);
   }
 
+  /* The floor too: the base rule's control height outranks a height, so a compact
+     field stood 4px taller than the compact controls beside it. */
   &.size-compact {
     block-size: var(--size-control-height-compact);
+    min-block-size: var(--size-control-height-compact);
   }
 }
 

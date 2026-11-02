@@ -108,14 +108,11 @@ function toggle(current: boolean) {
   transform: translateX(16px);
 }
 
-/* A host short of room hides the word by declaring `--toggle-state-display:
-   none`; the switch keeps its label as the accessible name either way. The
-   word keeps one width as it changes, which a host whose two words are one
-   word gives back with `--toggle-state-min-width: 0`. */
+/* The word keeps one width as it changes. It says what a control says, at a
+   control's weight rather than a heading's. */
 .toggle-state {
-  display: var(--toggle-state-display, inline);
-  min-width: var(--toggle-state-min-width, 92px);
-  font: var(--font-label);
+  min-width: 92px;
+  font: var(--font-field-label);
   text-align: left;
 }
 
