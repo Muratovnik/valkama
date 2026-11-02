@@ -418,9 +418,14 @@ test('Back to a card read far down shows it at that place and at no other first'
   await page.goto(CARD)
   const drawer = page.locator('.drawer')
   const group = drawer.locator('section.chain-group[aria-label="Backlog"]')
+  await expect(drawer).toHaveCSS('transform', 'none')
   await group.locator('.chain-more').click()
   const row = group.locator('.chain-row').nth(20)
   await row.evaluate((element) => element.scrollIntoView({ block: 'center' }))
+  // Past a frame, for a stuck element's place is worked out as the frame is drawn.
+  await drawer.evaluate(
+    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+  )
   const stuck = await drawer.locator('.drawer-frame-tabs').boundingBox()
   await row.focus()
   await page.keyboard.press('Enter')

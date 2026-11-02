@@ -831,7 +831,9 @@ A card is a bar that never moves and one scroller under it, and no layout in it
 depends on where that scroller stands. Its head waits for the record: going from a
 card to a card, what is shown until the read answers is Back, Close and the waiting
 mark, and on Back the scroller stays hidden until the card stands where it was left,
-so nothing appears in one place and then jumps to another. The bar has one height: on
+for about as long as a normal read and no more: a chain that answers later moves the
+card once to its place, unless the reader has moved on. So nothing appears in one place
+and then jumps to another without a reason to. The bar has one height: on
 its left the item
 in one tertiary line — the kind (glyph and word), the reference (it copies itself),
 when it last changed and, where the item has one, its plan anchor as an icon, whose

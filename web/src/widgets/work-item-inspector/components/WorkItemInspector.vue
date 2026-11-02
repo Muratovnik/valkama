@@ -217,9 +217,10 @@ const chainRoot = computed(() => (props.writable ? (item.value?.work_item_id ?? 
 const chain = useWorkItemChain(chainRoot, toRef(props, 'refreshToken'))
 
 const chainSection = ref<InstanceType<typeof InspectorChain> | null>(null)
-const { capture, restoring } = useInspectorReturn({
+const { capture, holding } = useInspectorReturn({
   chain: chainSection,
   frame,
+  read: () => item.value !== null,
   returnTo: props.returnTo ?? null,
   reference: () => props.reference,
   scope: chain.scope,
@@ -229,8 +230,6 @@ const { capture, restoring } = useInspectorReturn({
     !chain.loading.value &&
     (chainRoot.value === '' || chain.chain.value !== null || chain.failed.value),
 })
-
-const holding = computed(() => restoring.value && item.value !== null)
 
 /** Open another card from this one, after the draft guard, saying where this one was left. */
 const openFrom = (to: string) => void leave(() => emit('open', to, capture(to)))
