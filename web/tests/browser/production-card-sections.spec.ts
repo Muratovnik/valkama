@@ -158,3 +158,33 @@ for (const width of [1440, 390]) {
     expect(await body.evaluate((node) => node.scrollTop)).toBe(place)
   })
 }
+
+test('a refused move answered from another section brings the checklist into view', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 700 })
+  await installBackend(page, { longRead: true })
+  await page.route('**/api/planning/work-item/transition', (route) =>
+    route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        error: { code: 'workflow_guard', message: '[checklist] MAIN-264 has open steps' },
+      }),
+    }),
+  )
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
+  const drawer = page.locator('.drawer')
+  await expect(drawer.locator('.card-facts')).toBeVisible()
+  await expect(drawer).toHaveCSS('transform', 'none')
+  await drawer
+    .locator('.drawer-frame-tabs')
+    .getByRole('button', { name: 'Relations', exact: true })
+    .click()
+  await drawer.locator('.card-state').first().click()
+  await page.locator('[role="option"]').last().click()
+  await drawer.getByRole('button', { name: 'Go to the checklist', exact: true }).click()
+  await expect(drawer.locator('.overview')).toBeVisible()
+  await expect(drawer.getByRole('heading', { name: /^Checklist/u }).first()).toBeInViewport()
+})

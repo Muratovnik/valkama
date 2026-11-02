@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, useId } from 'vue'
+import { computed, nextTick, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import InspectorAgents from '@/widgets/work-item-inspector/components/InspectorAgents.vue'
@@ -49,7 +49,9 @@ function askOutcome(move: StateMove) {
   return discussion.value?.askOutcome(move)
 }
 
-function revealChecklist() {
+/** After the flush: pressed from another section, Overview has not been shown yet. */
+async function revealChecklist() {
+  await nextTick()
   checklistSection.value?.scrollIntoView({ block: 'start' })
 }
 

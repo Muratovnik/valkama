@@ -263,7 +263,7 @@ function followGuard(guard: string) {
   }
   section.value = 'overview'
   if (guard === 'summary' && move) void overview.value?.askOutcome(move)
-  else if (guard === 'checklist') overview.value?.revealChecklist()
+  else if (guard === 'checklist') void overview.value?.revealChecklist()
 }
 
 /**
