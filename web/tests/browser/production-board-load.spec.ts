@@ -21,9 +21,8 @@ import { test } from './test.ts'
 /**
  * No trace here: this file counts the page's own layouts, and tracing adds some
  * of its own. The trace's snapshot of the DOM reads every element's scroll
- * offsets, and a read inside a lane left out of sight (`content-visibility`)
- * lays that one lane out: one layout a lane, with nothing of the application on
- * its stack, in whichever runs a snapshot fell after the lanes were drawn.
+ * offsets, with nothing of the application on its stack, in whichever runs a
+ * snapshot fell after the board was drawn.
  */
 test.use({ trace: 'off' })
 

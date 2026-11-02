@@ -386,8 +386,8 @@ function laneGroup(lane: BoardLane): string {
      back in view, which the browser would have learnt only from its next frame, stopped being
      laid out under that press: the tab crashed (Chromium 156, in Chrome and the desktop app).
      So a press inside leaves focus inside, on the lane if nothing nearer takes it. A tile has
-     no such rule because it is not skipped: it saved about 20ms of a board's first layout, and
-     a press on a tile just back in view reached nothing. */
+     no such rule because it is not skipped: it saved 20ms of a board's first layout at most,
+     and a press on a tile just back in view reached nothing. */
   content-visibility: auto;
 
   /* An open lane is a block of tiles, and only more air above its heading than
