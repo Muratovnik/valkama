@@ -306,7 +306,7 @@ async function toggle() {
   overflow-wrap: anywhere;
 
   &::before {
-    content: '·';
+    content: '·' / '';
     position: absolute;
     inset-inline-start: 0;
     width: var(--space-4);

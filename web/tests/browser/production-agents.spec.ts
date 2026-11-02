@@ -51,6 +51,8 @@ for (const width of [1440, 390]) {
       'ambiguous: the coordinator held 19 items',
     )
     await expectNoSilentClipping(page, `agents at ${width}px`)
+    // The dot between two facts is drawing: a screen reader says the facts, not it.
+    expect(await section.locator('.agent').first().ariaSnapshot()).not.toContain('·')
 
     const toggle = section.locator('.agents-more')
     await toggle.focus()
