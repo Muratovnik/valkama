@@ -91,6 +91,8 @@ checkouts are therefore distinguishable even at the same version.
 - A card opened by its address draws no focus ring on Close: the dialog holds focus
   until the first input, and the first Tab reaches its first control.
 - A card with no epic no longer keeps an empty row for it among the facts.
+- A checklist step's text stands level with its box and the line naming who holds or
+  closed it right under that text. The box stayed 40 px tall in a row of 28.
 - A holder signed as `name session <id>` with no brackets is shortened as a holder
   signed `name (session <id>)` is, on the card, the board and the chain, with the
   whole value in the card's tooltip.

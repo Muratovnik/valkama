@@ -62,12 +62,14 @@
    use — while a reference in the text stays a link of its own. Both stand at
    the inline height of the action beside them rather than a form control's: at
    the 40px every button inherits, a one-line step pushed the line naming its
-   holder as far from it as the next step was. */
+   holder as far from it as the next step was, and its text stood above the box.
+   That floor beats a stated height, so the height alone does not lift it. */
 .step {
   display: grid;
   place-items: center;
   width: var(--size-control-inline);
   height: var(--size-control-inline);
+  min-block-size: 0;
   padding: 0;
   border: 0;
   background: none;
@@ -104,10 +106,12 @@
   }
 }
 
+/* Its padding and this line height add up to the box's height, which centres the first
+   line on the box however the text then wraps; the tighter line stood above it. */
 .step-text {
   padding-block: var(--space-1);
   color: var(--color-text);
-  font: var(--font-line);
+  font: var(--font-note);
   overflow-wrap: anywhere;
 
   &.writable {
