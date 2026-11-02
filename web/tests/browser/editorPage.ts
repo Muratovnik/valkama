@@ -6,14 +6,18 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { installDiscussionBackend } from './discussionBackend.ts'
 import { projectScope } from './planningFixtures.ts'
 
-/** A card open with its comment field in reach, and how to read what a field is doing. */
-export async function openCard(page: Page) {
+/**
+ * A card open with its comment field in reach, and how to read what a field is doing.
+ * `prepare` installs what a test adds to the backend, which must come after it.
+ */
+export async function openCard(page: Page, prepare?: () => Promise<unknown>) {
   const backend = await installDiscussionBackend(page)
+  await prepare?.()
   await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
   const drawer = page.locator('.drawer')
   await expect(drawer).toHaveCSS('transform', 'none')
-  const comment = drawer.getByRole('textbox', { name: 'Comment', exact: true })
+  const comment = drawer.locator('.discussion-form').getByRole('textbox')
   await expect(comment).toBeVisible()
   return { backend, drawer, comment }
 }

@@ -1,115 +1,108 @@
 <script setup lang="ts">
-import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
+/**
+ * One question, the same wherever it is answered: in a card's discussion, where it
+ * reads as a comment, and in the list of everything waiting (`standalone`), which adds
+ * whose task it is and the way to it.
+ *
+ * Selecting does nothing but select, and nothing is chosen for the person: Send is what
+ * sends, every kind of field goes through it, and a send that fails keeps all of it with
+ * the reason in the foot. Once the question is no longer waiting it folds (`RequestFold`).
+ *
+ * Folding takes the controls that had focus away, whoever answered, so focus goes to how
+ * it ended: the person stays on the question they were in. What is held belongs to the
+ * host, which outlives this while a dialog closes and opens and which the draft guard asks.
+ */
+import { computed, nextTick, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import RequestAnswerFields from '@/features/input-requests/components/RequestAnswerFields.vue'
-import { displayAnswer } from '@/features/input-requests/utils/answerDisplay.ts'
-import { requestIdentity } from '@/features/input-requests/utils/requestIdentity.ts'
-import { checkAnswers, hasDraft } from '@/features/input-requests/utils/validateAnswers.ts'
+import RequestFold from '@/features/input-requests/components/RequestFold.vue'
+import { useRequestWrites } from '@/features/input-requests/composables/useRequestWrites.ts'
+import { EMPTY_DRAFT, hasDraft } from '@/features/input-requests/utils/validateAnswers.ts'
+import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
-import {
-  answerInputRequest,
-  declineInputRequest,
-  fetchInputRequest,
-  InputRequestError,
-} from '@/shared/api/inputRequestApi.ts'
-import type {
-  InputAnswers,
-  InputRequestEntry,
-  InputRequestField,
-} from '@/shared/api/inputRequestModel.ts'
+import type { InputRequestEntry, InputRequestField } from '@/shared/api/inputRequestModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { isWebAuthor } from '@/shared/api/webAuthor.ts'
+import { actorName, actorSession } from '@/shared/lib/actor.ts'
 import { projectTitle, useProjectTitles } from '@/shared/lib/projectTitles.ts'
+import { revealFrame } from '@/shared/lib/revealFrame.ts'
+import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
+import type MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
 import RichText from '@/shared/ui/RichText.vue'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
 import VButton from '@/shared/ui/VButton.vue'
 
 const props = withDefaults(
   defineProps<{
-    draft: InputAnswers
+    draft: RequestDraft
     entry: InputRequestEntry
-    /**
-     * Say "waiting for your answer" on a pending request. A list that holds only
-     * those, in a dialog titled with the same words, leaves the line out rather
-     * than repeating its own title on every card.
-     */
-    announcePending?: boolean
-    showTaskLink?: boolean
+    standalone?: boolean
+    suggest?: InstanceType<typeof MarkdownEditor>['$props']['suggest']
   }>(),
-  { showTaskLink: true, announcePending: true },
+  { standalone: false, suggest: undefined },
 )
 const emit = defineEmits<{
   'select': [target: PlanningTarget]
-  'update:draft': [answers: InputAnswers]
+  'update:draft': [draft: RequestDraft]
   'updated': [entry: InputRequestEntry]
 }>()
 const { t, d } = useI18n()
-const local = ref(props.entry)
-const busy = ref(false)
-const error = ref('')
-/** The fields the last send refused, by id; each clears once it is edited. */
-const refused = ref<string[]>([])
+const promptId = useId()
 const card = ref<HTMLElement | null>(null)
 const errorLine = ref<HTMLElement | null>(null)
 const answerFields = ref<InstanceType<typeof RequestAnswerFields> | null>(null)
-const requiresRefresh = ref(false)
-const now = ref(Date.now())
-let generation = 0
-const timer = setInterval(() => {
-  now.value = Date.now()
-}, 1000)
-onUnmounted(() => {
-  generation++
-  clearInterval(timer)
-})
-watch(
-  () => props.entry,
-  (entry) => {
-    if (requestIdentity(entry) !== requestIdentity(local.value)) {
-      generation++
-      busy.value = false
-      error.value = ''
-      refused.value = []
-      requiresRefresh.value = false
-    }
-    local.value = entry
+
+const {
+  busy,
+  canRefresh,
+  error,
+  pastDue,
+  refresh,
+  refused,
+  request,
+  requiresRefresh,
+  resolve,
+  supported,
+  writable,
+} = useRequestWrites({
+  draft: () => props.draft,
+  entry: () => props.entry,
+  failed: async () => {
+    await nextTick()
+    errorLine.value?.focus()
   },
-)
-const request = computed(() => local.value.request)
-/**
- * Only a write the server refused or could not confirm, or a deadline that has
- * passed here, needs the request read again. A field left empty does not: it
- * once brought a second «Refresh» into a dialog that already had one.
- */
-const canRefresh = computed(() => error.value !== '' || pastDue.value)
-const hasActions = computed(
-  () => request.value.status === 'pending' || canRefresh.value || props.showTaskLink,
-)
-const pastDue = computed(() => {
-  const expires = request.value.expires_at
-  return expires !== null && Date.parse(expires) <= now.value
+  refuse: async (field) => {
+    await answerFields.value?.focusField(field)
+  },
+  settled: async (result, action) => {
+    if (action === 'answer') emit('update:draft', EMPTY_DRAFT)
+    await nextTick()
+    focusOutcome()
+    emit('updated', result)
+  },
 })
-const supported = computed(() =>
-  request.value.fields.every((field) =>
-    ['boolean', 'choice', 'multi_choice', 'text'].includes(field.type),
-  ),
-)
-const writable = computed(
-  () =>
-    props.entry.target.writable &&
-    local.value.target.writable &&
-    request.value.status === 'pending' &&
-    !pastDue.value &&
-    supported.value,
+
+const waiting = computed(() => request.value.status === 'pending')
+watch(waiting, async (now) => {
+  if (now || !card.value?.contains(document.activeElement)) return
+  await nextTick()
+  focusOutcome()
+})
+const hasFoot = computed(
+  () => waiting.value || canRefresh.value || props.standalone || Boolean(error.value),
 )
 const busyMark = computed(() => busy.value || undefined)
+const fieldsDisabled = computed(() => !writable.value || busy.value)
+const sendDisabled = computed(() => !writable.value || requiresRefresh.value)
 /** The error says the draft is kept only when there is one to keep. */
 const errorText = computed(() => {
   const kept = hasDraft(props.draft) ? '' : 'Bare'
   return error.value ? t(`requests.${error.value}${kept}`) : ''
 })
-const answerLabel = computed(() => t(busy.value ? 'requests.saving' : 'requests.answer'))
+/** What the form still held when the question closed some other way. */
+const unsent = computed(() => (waiting.value ? '' : props.draft.note.trim()))
+const stamp = (value: string) => d(new Date(value), 'activity')
 const deadlineLabel = computed(() =>
   t(pastDue.value ? 'requests.deadline' : 'requests.expires', {
     time: request.value.expires_at ? stamp(request.value.expires_at) : '',
@@ -125,126 +118,61 @@ const context = computed(() => {
     ? `${project} · ${reference}`
     : `${project} · ${space.space_key} · ${reference}`
 })
-/**
- * What happened, and who did it. This app signs its writes with one technical
- * name, and the person reading is the one who wrote them, so that name reads
- * as "you". Display only: the stored author is left as it is.
- */
-const outcome = computed(() => {
-  const { status, answered_by: by } = request.value
-  if (status === 'pending') return props.announcePending ? t('requests.pending') : ''
-  if (isWebAuthor(by) && status !== 'expired')
-    return t(status === 'answered' ? 'requests.youAnswered' : 'requests.youDeclined')
-  const state = t(`requests.${status}`)
-  return by ? `${state} · ${t('requests.resolvedBy', { actor: by })}` : state
-})
-const author = computed(() =>
-  isWebAuthor(request.value.author) ? t('requests.you') : request.value.author,
+/** This app signs its writes with one technical name, and the person reading wrote them. */
+const authorName = computed(() =>
+  isWebAuthor(request.value.author) ? t('requests.you') : actorName(request.value.author),
 )
-const stamp = (value: string) => d(new Date(value), { dateStyle: 'medium', timeStyle: 'short' })
+const authorSession = computed(() => actorSession(request.value.author))
 
 function edit(field: InputRequestField, value: string | boolean | string[]) {
-  emit('update:draft', { ...props.draft, [field.id]: value })
+  emit('update:draft', {
+    ...props.draft,
+    answers: { ...props.draft.answers, [field.id]: value },
+  })
   refused.value = refused.value.filter((id) => id !== field.id)
 }
-async function resolve(action: 'answer' | 'decline') {
-  if (busy.value || !writable.value || requiresRefresh.value) return
-  const checked = action === 'answer' ? checkAnswers(request.value.fields, props.draft) : null
-  refused.value = checked?.refused ?? []
-  const first = refused.value[0]
-  if (first !== undefined) {
-    // Taken to the first field to fix, the reader hears its message with it.
-    await answerFields.value?.focusField(first)
-    return
-  }
-  const values = checked?.values ?? {}
-  const entry = local.value
-  const identity = requestIdentity(entry)
-  const current = ++generation
-  busy.value = true
-  error.value = ''
-  try {
-    const result = await (action === 'answer'
-      ? answerInputRequest(entry, values)
-      : declineInputRequest(entry))
-    if (current !== generation || identity !== requestIdentity(local.value)) return
-    if (requestIdentity(result) !== identity) {
-      await fail('mutationError', true)
-      return
-    }
-    local.value = result
-    emit('updated', result)
-  } catch (error_) {
-    const closed =
-      error_ instanceof InputRequestError && (error_.status === 409 || error_.status === 410)
-    if (current === generation) await fail(closed ? 'conflict' : 'mutationError', true)
-  } finally {
-    if (current === generation) busy.value = false
-  }
+function writeNote(note: string) {
+  emit('update:draft', { ...props.draft, note })
+  // Words of one's own stand in for whatever was refused for being empty.
+  if (note.trim()) refused.value = []
 }
-async function refresh() {
-  if (busy.value) return
-  const entry = local.value
-  const identity = requestIdentity(entry)
-  const current = ++generation
-  busy.value = true
-  try {
-    const result = await fetchInputRequest(entry.target, entry.request.request_id)
-    if (current !== generation || identity !== requestIdentity(local.value)) return
-    if (requestIdentity(result) !== identity) {
-      await fail('mutationError', false)
-      return
-    }
-    local.value = result
-    error.value = ''
-    requiresRefresh.value = false
-    emit('updated', result)
-    // «Check status» goes with the error it answered; the reader lands on what it found.
-    await nextTick()
-    focusOutcome()
-  } catch {
-    if (current === generation) await fail('mutationError', false)
-  } finally {
-    if (current === generation) busy.value = false
-  }
-}
-/** Moves focus to this request's heading, which names it. */
+/** Moves focus to this question's heading, or to the question where it has none. */
 function focus() {
-  card.value?.querySelector<HTMLElement>('.request-title')?.focus()
+  ;(card.value?.querySelector<HTMLElement>('.request-title') ?? card.value)?.focus()
 }
-/**
- * Moves focus to the line saying how this request stands — «You answered», the
- * agent's own resolution — or to its heading while it still waits. The reader
- * stays on the card they were working in rather than being sent to the top.
- */
+/** Moves focus to how this question ended, or to the question while it still waits. */
 function focusOutcome() {
   const line = card.value?.querySelector<HTMLElement>('.request-state')
   if (line) line.focus()
   else focus()
 }
 /**
- * Says why a write or a status check did not go through. A refused write
- * (`blocking`) disables the buttons that were focused, and focus fell to the
- * page under the dialog; it goes to the sentence that says what happened.
+ * Brings the question into view, at its first line under what the scroller keeps over
+ * its top, with the keyboard at its first control. Focus alone would scroll the control
+ * to the far edge and leave the prompt out of sight.
  */
-async function fail(code: 'conflict' | 'mutationError', blocking: boolean) {
-  error.value = code
-  if (blocking) requiresRefresh.value = true
-  await nextTick()
-  errorLine.value?.focus()
+function reveal() {
+  const root = card.value
+  const control =
+    root?.querySelector<HTMLElement>('input:checked:not(:disabled)') ??
+    root?.querySelector<HTMLElement>('input:not(:disabled), textarea:not(:disabled)')
+  ;(control ?? root)?.focus({ preventScroll: true })
+  revealFrame(root)
 }
-const display = (field: InputRequestField) =>
-  displayAnswer(field, request.value.answers?.[field.id], t)
-defineExpose({ focus, focusOutcome })
+defineExpose({ focus, focusOutcome, reveal })
 </script>
 
 <template>
   <article
     ref="card"
     class="request-card"
+    tabindex="-1"
     :aria-busy="busyMark"
   >
-    <header class="request-header">
+    <header
+      v-if="standalone"
+      class="request-header"
+    >
       <p class="request-context">{{ context }}</p>
       <SectionHeading
         class="request-title"
@@ -253,123 +181,128 @@ defineExpose({ focus, focusOutcome })
         tabindex="-1"
         >{{ request.title }}</SectionHeading
       >
-      <p class="request-meta">
-        {{ t('requests.author', { actor: author }) }} · {{ stamp(request.created_at) }}
-      </p>
       <p
         v-if="request.execution_id"
-        class="request-meta"
+        class="request-fact"
       >
         {{ t('requests.execution', { id: request.execution_id }) }}
       </p>
       <p
         v-if="request.session_id"
-        class="request-meta"
+        class="request-fact"
       >
         {{ t('requests.session', { id: request.session_id }) }}
       </p>
     </header>
-    <RichText
-      class="request-prompt"
-      :source="request.prompt"
-    />
-    <p
-      v-if="outcome"
-      class="request-state"
-      role="status"
-      tabindex="-1"
-    >
-      {{ outcome
-      }}<template v-if="request.resolved_at"> · {{ stamp(request.resolved_at) }}</template>
-    </p>
-    <p
-      v-if="request.expires_at && request.status === 'pending'"
-      class="request-meta"
-    >
-      {{ deadlineLabel }}
-    </p>
-    <p
-      v-if="!entry.target.writable"
-      class="request-meta"
-    >
-      {{ t('requests.readonly') }}
-    </p>
-    <p
-      v-if="!supported"
-      role="alert"
-    >
-      {{ t('requests.unsupported') }}
-    </p>
-    <RequestAnswerFields
-      v-if="request.status === 'pending' && supported"
-      ref="answerFields"
-      :fields="request.fields"
-      :draft="draft"
-      :refused="refused"
-      :disabled="!writable || busy"
-      @edit="edit"
-      @submit="resolve('answer')"
-    />
-    <dl
-      v-if="request.status === 'answered'"
-      class="request-outcome"
-      :aria-label="t('requests.outcome')"
-    >
-      <template
-        v-for="field in request.fields"
-        :key="field.id"
-        ><dt>{{ field.label }}</dt>
-        <dd class="request-value"><RichText :source="display(field)" /></dd
-      ></template>
-    </dl>
-    <p
-      v-if="error"
-      ref="errorLine"
-      class="request-error"
-      role="alert"
-      tabindex="-1"
-    >
-      {{ errorText }}
-    </p>
-    <div
-      v-if="hasActions"
-      class="request-actions"
-    >
-      <VButton
-        v-if="request.status === 'pending'"
-        variant="primary"
-        :disabled="!writable || requiresRefresh"
-        @click="resolve('answer')"
-        >{{ answerLabel }}</VButton
+    <div class="request-meta">
+      <span
+        >{{ authorName }} <span v-if="authorSession">{{ authorSession }}</span></span
       >
-      <VButton
-        v-if="request.status === 'pending'"
-        :disabled="!writable || requiresRefresh"
-        @click="resolve('decline')"
-        >{{ t('requests.decline') }}</VButton
-      >
-      <VButton
-        v-if="canRefresh"
-        @click="refresh"
-        >{{ t('requests.checkStatus') }}</VButton
-      >
-      <VButton
-        v-if="showTaskLink"
-        variant="ghost"
-        @click="emit('select', entry.target)"
-        >{{ t('requests.openTask') }}</VButton
-      >
+      <span>{{ stamp(request.created_at) }}</span>
     </div>
+    <template v-if="waiting">
+      <CollapsibleText
+        class="request-prompt"
+        :reset-key="request.request_id"
+      >
+        <RichText
+          :id="promptId"
+          :source="request.prompt"
+        />
+      </CollapsibleText>
+      <p
+        v-if="request.expires_at"
+        class="request-fact"
+      >
+        {{ deadlineLabel }}
+      </p>
+      <p
+        v-if="!entry.target.writable"
+        class="request-fact"
+      >
+        {{ t('requests.readonly') }}
+      </p>
+      <p
+        v-if="!supported"
+        role="alert"
+      >
+        {{ t('requests.unsupported') }}
+      </p>
+      <RequestAnswerFields
+        v-else
+        ref="answerFields"
+        :fields="request.fields"
+        :draft="draft.answers"
+        :note="draft.note"
+        :prompt-id="promptId"
+        :refused="refused"
+        :disabled="fieldsDisabled"
+        :suggest="suggest"
+        @edit="edit"
+        @note="writeNote"
+        @submit="resolve('answer')"
+      />
+    </template>
+    <RequestFold
+      v-else
+      :request="request"
+      :unsent="unsent"
+    />
+    <footer
+      v-if="hasFoot"
+      class="request-foot"
+    >
+      <p
+        v-if="error"
+        ref="errorLine"
+        class="request-error"
+        role="alert"
+        tabindex="-1"
+      >
+        {{ errorText }}
+      </p>
+      <div class="request-actions">
+        <VButton
+          v-if="standalone"
+          variant="ghost"
+          @click="emit('select', entry.target)"
+          >{{ t('requests.openTask') }}</VButton
+        >
+        <VButton
+          v-if="canRefresh"
+          @click="refresh"
+          >{{ t('requests.checkStatus') }}</VButton
+        >
+        <VButton
+          v-if="waiting"
+          variant="ghost"
+          :disabled="sendDisabled"
+          @click="resolve('decline')"
+          >{{ t('requests.decline') }}</VButton
+        >
+        <VButton
+          v-if="waiting"
+          variant="primary"
+          :disabled="sendDisabled"
+          @click="resolve('answer')"
+          >{{ t('requests.answer') }}</VButton
+        >
+      </div>
+    </footer>
   </article>
 </template>
 
 <style scoped>
+/* A sheet on its ground, as a comment is, in the discussion and in the list alike. */
 .request-card {
   display: grid;
-  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
   min-width: 0;
-  padding-block: var(--space-5);
-  border-bottom: 1px solid var(--color-rule);
+  padding: var(--space-3);
+  background: var(--color-surface-sheet);
+  border-radius: var(--radius-card);
+  scroll-margin-top: var(--space-4);
 }
 
 .request-header {
@@ -377,22 +310,37 @@ defineExpose({ focus, focusOutcome })
   gap: var(--space-1);
 }
 
-/* Only the app moves focus to these lines — to the next question, to how this
-   one ended, to why a write did not go through — and Tab never stops on them, so
-   the ring shows whenever they hold focus: it is the one sign of where the
-   reader was taken. Held to the keyboard rule it went missing whenever the
-   control that had focus was gone before the move. */
-:is(.request-title, .request-state, .request-error):focus {
+.request-title {
+  overflow-wrap: anywhere;
+}
+
+/* Only the app moves focus to these, to the next question and to why a write did not
+   go through, and Tab never stops on them, so the ring shows whenever they hold focus:
+   it is the one sign of where the reader was taken. */
+:is(.request-card, .request-title, .request-error):focus {
   border-radius: var(--radius-control);
   outline: 2px solid var(--color-focus-ring);
   outline-offset: var(--space-half);
 }
 
-.request-context,
+.request-card:focus {
+  border-radius: var(--radius-card);
+}
+
 .request-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: space-between;
+  color: var(--color-text-tertiary);
+  font: var(--font-detail);
+}
+
+.request-context,
+.request-fact {
   margin: 0;
   color: var(--color-text-muted);
-  font-size: var(--font-size-dense);
+  font: var(--font-detail);
   overflow-wrap: anywhere;
 }
 
@@ -400,32 +348,27 @@ defineExpose({ focus, focusOutcome })
   font: var(--font-editor);
 }
 
-.request-state {
-  margin: 0;
-  font-size: var(--font-size-interface);
-}
-
-.request-outcome {
-  display: grid;
-  gap: var(--space-2);
-  margin: 0;
-  font-size: var(--font-size-interface);
-}
-
-.request-value {
-  margin: 0 0 var(--space-2);
-  overflow-wrap: anywhere;
+.request-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  align-items: center;
+  min-width: 0;
 }
 
 .request-error {
+  flex: 1 1 16rem;
+  min-width: 0;
   margin: 0;
   color: var(--color-danger);
-  font-size: var(--font-size-dense);
+  font: var(--font-detail);
 }
 
 .request-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+  justify-content: flex-end;
+  margin-inline-start: auto;
 }
 </style>

@@ -95,6 +95,57 @@ describe('input request wire contract', () => {
     expect(writes[0]?.[0]).toBe('/api/modules/planning/request/decline')
   })
 
+  it('sends a note only when there is one, with answers that may be empty', async () => {
+    const entry = requestEntry()
+    const answered = {
+      interface_version: 'valkama-planning-requests',
+      target: entry.target,
+      request: {
+        ...entry.request,
+        status: 'answered',
+        answers: {},
+        note: 'In my own words',
+        answered_by: 'user',
+        resolved_at: '2026-10-24T12:00:00Z',
+        revision: 2,
+      },
+    }
+    const fetchMock = serve(answered)
+    await answerInputRequest(entry, {}, '  In my own words ')
+    await answerInputRequest(entry, { proceed: true }, '   ')
+    const bodies = fetchMock.mock.calls
+      .filter(([url]) => requestUrl(url).endsWith('/request/answer'))
+      .map(([, init]) => JSON.parse(requestBody(init?.body)) as Record<string, unknown>)
+    expect(bodies[0]).toMatchObject({ answers: {}, note: 'In my own words' })
+    expect(bodies[1]?.answers).toEqual({ proceed: true })
+    expect(bodies[1]).not.toHaveProperty('note')
+  })
+
+  it('reads an option’s description and recommendation, and an answer that is only a note', () => {
+    const entry = requestEntry()
+    entry.request.fields = [
+      {
+        id: 'route',
+        label: 'Route',
+        type: 'choice',
+        required: true,
+        options: [{ id: 'keep', label: 'Keep', description: 'A *long* text', recommended: true }],
+      },
+    ]
+    const envelope = { interface_version: 'valkama-planning-requests', ...entry }
+    expect(validateInputRequestDetail(envelope).request.fields[0]?.options[0]).toEqual({
+      id: 'keep',
+      label: 'Keep',
+      description: 'A *long* text',
+      recommended: true,
+    })
+    const noted = {
+      ...envelope,
+      request: { ...entry.request, status: 'answered', answers: null, note: 'Words' },
+    }
+    expect(validateInputRequestDetail(noted).request.note).toBe('Words')
+  })
+
   it('refuses malformed targets, duplicate field IDs and contradictory answer states', () => {
     const entry = requestEntry()
     const envelope = { interface_version: 'valkama-planning-requests', ...entry }

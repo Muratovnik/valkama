@@ -59,7 +59,6 @@ function overview(links: Link[]) {
         InspectorDescription: true,
         InspectorDiscussion: true,
         InspectorSummary: true,
-        ItemInputRequests: true,
       },
     },
   })

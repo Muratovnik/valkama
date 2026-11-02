@@ -229,6 +229,8 @@ export const STATE_PRESENTATION = {
   'work-item-readiness': {
     ready: { tone: 'neutral', emphasis: 'quiet' },
     blocked: { tone: 'danger', emphasis: 'strong' },
+    // A question waits for a person, the same call the session list makes.
+    asking: { tone: 'warning', emphasis: 'strong' },
   },
 } satisfies Record<StateDimension, Record<string, StatePresentation>>
 

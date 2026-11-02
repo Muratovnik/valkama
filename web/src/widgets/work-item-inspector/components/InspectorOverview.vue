@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, useId } from 'vue'
+import { computed, nextTick, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import InspectorAgents from '@/widgets/work-item-inspector/components/InspectorAgents.vue'
@@ -10,8 +10,9 @@ import { checklistProgress } from '@/widgets/work-item-inspector/utils/inspector
 import { openBlockers } from '@/widgets/work-item-inspector/utils/openBlockers.ts'
 import type { StateMove } from '@/widgets/work-item-inspector/utils/useInspectorWrites.ts'
 
-import ItemInputRequests from '@/features/input-requests/components/ItemInputRequests.vue'
+import { useItemQuestions } from '@/features/input-requests/composables/useItemQuestions.ts'
 
+import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { holderName } from '@/shared/lib/actor.ts'
@@ -38,6 +39,22 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+/**
+ * The card's questions, read again whenever its record is: the stream's news of a
+ * change reaches them the way it reaches a comment.
+ */
+const questions = useItemQuestions(
+  () => props.target,
+  () => props.item,
+)
+const asking = defineModel<boolean>('asking', { default: false })
+watch(questions.waiting, (now) => (asking.value = now), { immediate: true })
+const questionEntries = questions.entries
+const questionsUnread = questions.unread
+function answered(entry: InputRequestEntry) {
+  questions.changed(entry)
+  emit('changed')
+}
 const discussion = ref<InstanceType<typeof InspectorDiscussion> | null>(null)
 const checklistSection = ref<HTMLElement | null>(null)
 function discussStep(stepId: string) {
@@ -77,7 +94,13 @@ const blockerTone = semanticStatePresentation({
   state: 'blocked',
 }).tone
 
-defineExpose({ askOutcome, revealChecklist })
+/** After the flush: pressed from another section, Overview has not been shown yet. */
+async function revealQuestion() {
+  await nextTick()
+  discussion.value?.revealQuestion()
+}
+
+defineExpose({ askOutcome, revealChecklist, revealQuestion })
 </script>
 
 <template>
@@ -231,15 +254,14 @@ defineExpose({ askOutcome, revealChecklist })
       :agents="item.agents"
       :identity="item.work_item_id"
     />
-    <ItemInputRequests
-      v-if="target"
-      :target="target"
-      @changed="emit('changed')"
-    />
     <InspectorDiscussion
       ref="discussion"
       :item="item"
+      :questions="questionEntries"
+      :questions-unread="questionsUnread"
       :writable="writable"
+      @answered="answered"
+      @read-questions="questions.refresh"
       @changed="emit('changed')"
       @refresh="emit('refresh')"
       @resume="(stateKey) => emit('resume', stateKey)"

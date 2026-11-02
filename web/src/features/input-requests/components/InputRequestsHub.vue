@@ -5,8 +5,8 @@ import { useI18n } from 'vue-i18n'
 import RequestList from '@/features/input-requests/components/RequestList.vue'
 import { useInputRequests } from '@/features/input-requests/composables/useInputRequests.ts'
 import type { PendingCount } from '@/features/input-requests/composables/useInputRequests.ts'
+import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
-import type { InputAnswers } from '@/shared/api/inputRequestModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
 
@@ -18,9 +18,9 @@ const emit = defineEmits<{
 }>()
 const { t } = useI18n()
 const { result, loading, failed, partial, entries, count, refresh, changed } = useInputRequests(
-  (): undefined => {},
+  () => 'all',
 )
-const drafts = ref<Record<string, InputAnswers>>({})
+const drafts = ref<Record<string, RequestDraft>>({})
 watch(count, (value) => emit('count', value), { immediate: true })
 watch(
   () => props.open,

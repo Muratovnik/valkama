@@ -6,7 +6,13 @@ import { ISO, UUID } from '@/shared/api/platformApiGuards.ts'
 const FIELD_ID = /^[a-z][a-z0-9_-]{0,63}$/u
 const text = (max: number) => z.string().max(max)
 const identifier = boundedText(FIELD_ID, 64)
-const optionSchema = strictObject({ id: identifier, label: z.string().min(1).max(200) })
+const optionSchema = strictObject({
+  id: identifier,
+  label: z.string().min(1).max(200),
+  /** Markdown, and it may run to several paragraphs: the widget folds what would crowd the labels. */
+  description: z.string().min(1).max(8000).optional(),
+  recommended: z.boolean().optional(),
+})
 const fieldSchema = strictObject({
   id: identifier,
   label: z.string().min(1).max(200),
@@ -35,6 +41,8 @@ const requestSchema = strictObject({
   prompt: z.string().min(1).max(8000),
   fields: boundedList(fieldSchema, 12).min(1),
   answers: answersSchema.nullable(),
+  /** What the person wrote in their own words, which may stand in for the required fields. */
+  note: text(8000).nullable().optional(),
   status: z.enum(['pending', 'answered', 'declined', 'expired']),
   author: text(200),
   answered_by: text(200),
@@ -51,7 +59,9 @@ const requestSchema = strictObject({
     'Duplicate field IDs',
   )
   .refine(
-    (request) => (request.status === 'answered') === (request.answers !== null),
+    (request) =>
+      (request.status === 'answered') === (request.answers !== null) ||
+      (request.status === 'answered' && Boolean(request.note)),
     'Invalid answer state',
   )
 
@@ -77,6 +87,7 @@ const listSchema = strictObject({
   has_more: z.boolean(),
 })
 
+export type InputRequestOption = z.infer<typeof optionSchema>
 export type InputRequestField = z.infer<typeof fieldSchema>
 export type InputAnswers = z.infer<typeof answersSchema>
 export type InputRequestEntry = z.infer<typeof entrySchema>

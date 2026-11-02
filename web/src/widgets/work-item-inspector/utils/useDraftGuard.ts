@@ -18,7 +18,7 @@ import type { InjectionKey } from 'vue'
 
 import { registerLeaveCheck } from '@/shared/lib/leaveGuard.ts'
 
-export type DraftKind = 'comment' | 'description' | 'outcome'
+export type DraftKind = 'answer' | 'comment' | 'description' | 'outcome'
 
 interface DraftSource {
   kind: DraftKind
@@ -50,7 +50,7 @@ export function provideDraftGuard() {
     unregister: (id) => sources.delete(id),
   })
   const unsaved = computed(() =>
-    (['description', 'comment', 'outcome'] as const).filter((kind) =>
+    (['description', 'comment', 'outcome', 'answer'] as const).filter((kind) =>
       [...sources.values()].some((source) => source.kind === kind && source.dirty()),
     ),
   )

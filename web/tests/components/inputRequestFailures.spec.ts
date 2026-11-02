@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import InputRequestsHub from '@/features/input-requests/components/InputRequestsHub.vue'
 import RequestCard from '@/features/input-requests/components/RequestCard.vue'
+import { EMPTY_DRAFT } from '@/features/input-requests/utils/validateAnswers.ts'
 
 import {
   declineInputRequest,
@@ -45,7 +46,7 @@ const hub = () =>
 const card = () =>
   mounted(
     mount(RequestCard, {
-      props: { entry: requestEntry(), draft: {} },
+      props: { entry: requestEntry(), draft: EMPTY_DRAFT },
       attachTo: document.body,
       global,
     }),
@@ -93,7 +94,7 @@ describe('a question that could not be read or sent', () => {
   it('does not promise a kept draft after a refused decline with nothing typed', async () => {
     vi.mocked(declineInputRequest).mockRejectedValue(new InputRequestError('rejected', 409))
     const wrapper = card()
-    await button(wrapper, 'Decline').trigger('click')
+    await button(wrapper, "Don't answer").trigger('click')
     await flushPromises()
     const reason = wrapper.get('[role="alert"]')
     expect(reason.text()).toBe('This request changed or closed. Check its status.')

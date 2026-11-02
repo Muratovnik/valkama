@@ -2,6 +2,7 @@
 /**
  * What holds for an item, under its title: its state, priority, holder and
  * epic on one line, its labels under them, and the one thing to do about it.
+ * A question waiting for its answer is a fact too, and pressing it goes there.
  *
  * The state is said once, by the control that moves it: the chip is the
  * transition menu. It used to be a fact in a five-cell grid of equal-weight
@@ -37,6 +38,7 @@ import { isWebAuthor } from '@/shared/api/webAuthor.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
+import VButton from '@/shared/ui/VButton.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -44,16 +46,19 @@ const props = withDefaults(
     item: WorkItem
     workflow: PlanningWorkflow | null
     writable: boolean
+    /** Whether a question on it waits for an answer. */
+    asking?: boolean
     /** The epic's reference; the record carries only its id. */
     parentReference?: string | null
   }>(),
-  { parentReference: null },
+  { asking: false, parentReference: null },
 )
 
 const emit = defineEmits<{
   'claim': []
   'filter': [token: WorkFilterToken]
   'move': [stateKey: string]
+  'question': []
   'release': []
   'take-over': []
 }>()
@@ -173,6 +178,19 @@ defineExpose({ actionCell })
           :label="item.state.name"
         />
       </span>
+      <VButton
+        v-if="asking"
+        class="card-question"
+        variant="ghost"
+        size="compact"
+        @click="emit('question')"
+      >
+        <SemanticState
+          dimension="work-item-readiness"
+          state="asking"
+          :label="t('requests.pending')"
+        />
+      </VButton>
       <span class="card-fact">
         <FacetMarks
           surface="card"

@@ -108,7 +108,6 @@ export function mountInspector(
         DrawerFrame: drawerFrameStub,
         InspectorExecution: true,
         InspectorMemory: true,
-        ItemInputRequests: true,
         LaunchDialog: true,
         ResizableInspector: { template: '<div><slot /></div>' },
         VIcon: true,

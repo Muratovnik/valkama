@@ -28,6 +28,7 @@ import { useI18n } from 'vue-i18n'
 
 import { markdownEdit } from '@/shared/lib/markdownEdits.ts'
 import type { MarkdownTool, TextEdit } from '@/shared/lib/markdownEdits.ts'
+import { revealFrame } from '@/shared/lib/revealFrame.ts'
 import MarkdownSuggestions from '@/shared/ui/MarkdownSuggestions.vue'
 import MarkdownToolbar from '@/shared/ui/MarkdownToolbar.vue'
 import RichText from '@/shared/ui/RichText.vue'
@@ -264,8 +265,7 @@ defineExpose({
    */
   focusAtTop() {
     field.focusAtTop()
-    surface.value?.scrollIntoView?.({ block: 'nearest' })
-    surface.value?.firstElementChild?.scrollIntoView?.({ block: 'nearest' })
+    revealFrame(surface.value)
   },
 })
 </script>

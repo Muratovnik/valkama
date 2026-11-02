@@ -13,7 +13,15 @@ import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
  */
 export type PendingCount = { incomplete: boolean; value: number } | 'unknown'
 
-export function useInputRequests(target: () => PlanningTarget | undefined) {
+/**
+ * Moves with every answer or decline confirmed in this window. The rail's count and a
+ * card's discussion read separately and either can be the one written from, so each
+ * reads again when the other wrote: a count left standing beside an answered question.
+ */
+const confirmedWrites = ref(0)
+
+/** What to read: one card's questions, those waiting everywhere, or nothing at all. */
+export function useInputRequests(source: () => PlanningTarget | 'all' | null) {
   const result = ref<InputRequestList | null>(null)
   const loading = ref(false)
   const failed = ref(false)
@@ -21,6 +29,7 @@ export function useInputRequests(target: () => PlanningTarget | undefined) {
   let controller: AbortController | undefined
   let generation = 0
   let timer: ReturnType<typeof setInterval> | undefined
+  let seenWrites = confirmedWrites.value
   const partial = computed(
     () => result.value?.coverage.some((source) => source.status === 'unavailable') ?? false,
   )
@@ -59,10 +68,12 @@ export function useInputRequests(target: () => PlanningTarget | undefined) {
 
   async function refresh() {
     if (loading.value || document.visibilityState === 'hidden') return
+    const chosen = source()
+    if (chosen === null) return
+    const selected = chosen === 'all' ? undefined : chosen
     const current = ++generation
     controller = new AbortController()
     loading.value = true
-    const selected = target()
     try {
       const response = await fetchInputRequests({
         target: selected,
@@ -86,19 +97,31 @@ export function useInputRequests(target: () => PlanningTarget | undefined) {
     }
   }
 
-  function changed(entry: InputRequestEntry) {
-    resolved.value[requestIdentity(entry)] = entry
-    // A response started before the write must not replace the confirmed outcome.
+  /** A response started before a write must not replace what the write confirmed. */
+  function readAgain() {
     generation++
     controller?.abort()
     loading.value = false
     void refresh()
   }
 
+  function changed(entry: InputRequestEntry) {
+    resolved.value[requestIdentity(entry)] = entry
+    seenWrites = ++confirmedWrites.value
+    readAgain()
+  }
+
+  watch(confirmedWrites, (writes) => {
+    if (writes === seenWrites) return
+    seenWrites = writes
+    readAgain()
+  })
   watch(
     () => {
-      const selected = target()
-      return selected ? `${targetIdentity(selected)}:${selected.writable}` : ''
+      const selected = source()
+      return selected === null || selected === 'all'
+        ? String(selected)
+        : `${targetIdentity(selected)}:${selected.writable}`
     },
     () => {
       generation++

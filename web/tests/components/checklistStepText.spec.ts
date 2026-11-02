@@ -48,7 +48,6 @@ function overview(writable: boolean, open = vi.fn()) {
         InspectorDescription: true,
         InspectorDiscussion: true,
         InspectorSummary: true,
-        ItemInputRequests: true,
       },
     },
   })

@@ -114,6 +114,8 @@ const { leaveUnreadable, section, sections, shownSection } = useInspectorSection
   () => frame.value?.scrollToContent(),
 )
 const overview = ref<InstanceType<typeof InspectorOverview> | null>(null)
+/** Whether a question on the card waits for its answer; the discussion knows. */
+const questionWaits = ref(false)
 const { asking, discard, keep: keepEditing, leave, unsaved } = provideDraftGuard()
 
 const failureText = useFailureText()
@@ -169,19 +171,9 @@ const {
   writable: () => props.writable,
 })
 
-const {
-  capabilities,
-  error: executionError,
-  executions,
-  launchError,
-  launchOpen,
-  loading: executionsLoading,
-  openLaunch,
-  start: startLaunch,
-  stop: stopExecution,
-  // Read for an item the read found, again on every refresh. Execution endpoints
-  // name primary-store items by reference only, so an attached one asks nothing.
-} = useWorkItemExecutions(
+// Read for an item the read found, again on every refresh. Execution endpoints
+// name primary-store items by reference only, so an attached one asks nothing.
+const running = useWorkItemExecutions(
   () => props.reference,
   busy,
   reloaded,
@@ -191,7 +183,7 @@ const {
 /** The refusal is worded here, where the catalog is, not inside the composable. */
 function submitLaunch(packet: LaunchPacket) {
   if (!props.writable) return
-  void startLaunch(packet, (message) => t('execution.launchFailed', { message }))
+  void running.start(packet, (message) => t('execution.launchFailed', { message }))
 }
 
 // A string key, because a getter that returns a fresh array compares two new
@@ -265,6 +257,11 @@ function followGuard(guard: string) {
   section.value = guard === 'blocker' ? 'relations' : 'overview'
   if (guard === 'summary' && move) void overview.value?.askOutcome(move)
   else if (guard === 'checklist') void overview.value?.revealChecklist()
+}
+
+function revealQuestion() {
+  section.value = 'overview'
+  void overview.value?.revealQuestion()
 }
 
 /**
@@ -346,6 +343,8 @@ defineExpose({ close })
         :busy="busy"
         :writable="writable"
         :parent-reference="parentReference"
+        :asking="questionWaits"
+        @question="revealQuestion"
         @claim="claim"
         @release="release"
         @take-over="askTakeover"
@@ -417,6 +416,7 @@ defineExpose({ close })
           <InspectorOverview
             v-show="section === 'overview'"
             ref="overview"
+            v-model:asking="questionWaits"
             :item="payload"
             :target="target"
             :writable="writable && !busy"
@@ -453,13 +453,13 @@ defineExpose({ close })
           <InspectorExecution
             v-else-if="section === 'execution'"
             :busy="busy"
-            :error="executionError"
-            :executions="executions"
+            :error="running.error.value"
+            :executions="running.executions.value"
             :identity="`${projectId}:${resourceRef.resource_id}:${reference}`"
-            :loading="executionsLoading"
+            :loading="running.loading.value"
             :writable="writable"
-            @launch="openLaunch"
-            @stop="stopExecution"
+            @launch="running.openLaunch"
+            @stop="running.stop"
             @session="(id, family) => emit('session', id, family)"
           />
           <InspectorMemory
@@ -479,14 +479,14 @@ defineExpose({ close })
   </DrawerFrame>
 
   <LaunchDialog
-    :open="launchOpen"
+    :open="running.launchOpen.value"
     :busy="busy"
-    :error="launchError"
-    :capabilities="capabilities"
+    :error="running.launchError.value"
+    :capabilities="running.capabilities.value"
     :reference="reference"
-    :repo="capabilities?.repository ?? ''"
+    :repo="running.capabilities.value?.repository ?? ''"
     :title="title"
-    @close="launchOpen = false"
+    @close="running.launchOpen.value = false"
     @submit="submitLaunch"
   />
 </template>

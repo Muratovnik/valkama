@@ -44,7 +44,9 @@ const { t } = useI18n()
 
 const discardQuestion = computed(() =>
   t('workItem.discard.question', {
-    drafts: props.unsaved.map((kind) => t(`workItem.discard.${kind}`)).join(', '),
+    drafts: props.unsaved
+      .map((kind) => t(kind === 'answer' ? 'requests.answerDraft' : `workItem.discard.${kind}`))
+      .join(', '),
   }),
 )
 </script>

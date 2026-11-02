@@ -5,8 +5,7 @@
  * Refresh stands on the same line as the sentence that says what it would
  * refresh — the count, the failure, or that there is nothing — or inside the
  * empty state when there is nothing at all. It used to stand alone on a row of
- * its own above that sentence, a button with nothing beside it to act on. A
- * host that already has a heading row puts the refresh there instead.
+ * its own above that sentence, a button with nothing beside it to act on.
  *
  * Answering or declining a question removes the buttons that were focused, and
  * focus used to fall to the page under the dialog. The list moves it on: to the
@@ -22,35 +21,26 @@ import { useI18n } from 'vue-i18n'
 
 import RequestCard from '@/features/input-requests/components/RequestCard.vue'
 import { requestIdentity } from '@/features/input-requests/utils/requestIdentity.ts'
-import { hasDraft } from '@/features/input-requests/utils/validateAnswers.ts'
+import { EMPTY_DRAFT, hasDraft } from '@/features/input-requests/utils/validateAnswers.ts'
+import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
-import type {
-  InputAnswers,
-  InputRequestEntry,
-  InputRequestList,
-} from '@/shared/api/inputRequestModel.ts'
+import type { InputRequestEntry, InputRequestList } from '@/shared/api/inputRequestModel.ts'
 import { skippedSourceReason } from '@/shared/api/planningTarget.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { projectTitle, useProjectTitles } from '@/shared/lib/projectTitles.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import VButton from '@/shared/ui/VButton.vue'
 
-const props = withDefaults(
-  defineProps<{
-    drafts: Record<string, InputAnswers>
-    entries: InputRequestEntry[]
-    failed: boolean
-    loading: boolean
-    partial: boolean
-    result: InputRequestList | null
-    item?: boolean
-    /** False when the host carries the refresh in its own heading row. */
-    showRefresh?: boolean
-  }>(),
-  { item: false, showRefresh: true },
-)
+const props = defineProps<{
+  drafts: Record<string, RequestDraft>
+  entries: InputRequestEntry[]
+  failed: boolean
+  loading: boolean
+  partial: boolean
+  result: InputRequestList | null
+}>()
 const emit = defineEmits<{
-  draft: [key: string, value: InputAnswers]
+  draft: [key: string, value: RequestDraft]
   refresh: []
   select: [target: PlanningTarget]
   updated: [entry: InputRequestEntry]
@@ -90,10 +80,6 @@ const statusText = computed(() => {
   if (props.entries.length) return t('requests.empty')
   return ''
 })
-// A host that carries its own refresh still needs the first read and a failure said.
-const showToolbar = computed(
-  () => Boolean(statusText.value) && (props.showRefresh || !props.result || props.failed),
-)
 const projects = useProjectTitles()
 /** The sources not read, each with the reason the finder names it by. */
 const skipped = computed(() =>
@@ -133,7 +119,7 @@ watch(
   },
 )
 function draftFor(entry: InputRequestEntry) {
-  return props.drafts[requestIdentity(entry)] ?? {}
+  return props.drafts[requestIdentity(entry)] ?? EMPTY_DRAFT
 }
 async function updated(entry: InputRequestEntry) {
   emit('updated', entry)
@@ -155,7 +141,7 @@ async function updated(entry: InputRequestEntry) {
     :aria-busy="busyMark"
   >
     <div
-      v-if="showToolbar"
+      v-if="statusText"
       class="request-toolbar"
     >
       <p
@@ -176,11 +162,7 @@ async function updated(entry: InputRequestEntry) {
       </p>
       <!-- Not disabled while a read runs: the focused button would drop focus to
            the page, and a second press while one is running starts nothing. -->
-      <VButton
-        v-if="showRefresh"
-        @click="askRefresh"
-        >{{ t('requests.refresh') }}</VButton
-      >
+      <VButton @click="askRefresh">{{ t('requests.refresh') }}</VButton>
     </div>
     <p
       v-if="partial"
@@ -203,32 +185,22 @@ async function updated(entry: InputRequestEntry) {
     >
       {{ source.text }}
     </p>
-    <template v-if="empty">
-      <DataEmptyState
-        v-if="showRefresh"
-        :title="emptyLabel"
-        compact
-      >
-        <template #action>
-          <VButton @click="askRefresh">{{ t('requests.refresh') }}</VButton>
-        </template>
-      </DataEmptyState>
-      <p
-        v-else
-        class="request-empty"
-        role="status"
-      >
-        {{ emptyLabel }}
-      </p>
-    </template>
+    <DataEmptyState
+      v-if="empty"
+      :title="emptyLabel"
+      compact
+    >
+      <template #action>
+        <VButton @click="askRefresh">{{ t('requests.refresh') }}</VButton>
+      </template>
+    </DataEmptyState>
     <RequestCard
       v-for="entry in entries"
       :key="requestIdentity(entry)"
       :ref="(card) => (cards[requestIdentity(entry)] = card as CardHandle | null)"
       :entry="entry"
       :draft="draftFor(entry)"
-      :show-task-link="!item"
-      :announce-pending="item"
+      standalone
       @update:draft="emit('draft', requestIdentity(entry), $event)"
       @updated="updated"
       @select="emit('select', $event)"
@@ -237,8 +209,10 @@ async function updated(entry: InputRequestEntry) {
 </template>
 
 <style scoped>
+/* The column is the list's width, whatever a card holds that will not break. */
 .request-list {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
   min-width: 0;
 }
@@ -272,8 +246,7 @@ async function updated(entry: InputRequestEntry) {
   outline-offset: var(--space-half);
 }
 
-.request-note,
-.request-empty {
+.request-note {
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-note);

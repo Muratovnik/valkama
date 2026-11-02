@@ -1,11 +1,14 @@
+import { defineComponent } from 'vue'
+import type { PropType } from 'vue'
 import { createI18n } from 'vue-i18n'
 
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import InputRequestsHub from '@/features/input-requests/components/InputRequestsHub.vue'
-import ItemInputRequests from '@/features/input-requests/components/ItemInputRequests.vue'
 import RequestCard from '@/features/input-requests/components/RequestCard.vue'
+import { useInputRequests } from '@/features/input-requests/composables/useInputRequests.ts'
+import { EMPTY_DRAFT } from '@/features/input-requests/utils/validateAnswers.ts'
 
 import {
   answerInputRequest,
@@ -15,8 +18,8 @@ import {
   InputRequestError,
 } from '@/shared/api/inputRequestApi.ts'
 import type { InputRequestList } from '@/shared/api/inputRequestModel.ts'
+import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { messages } from '@/shared/i18n/index.ts'
-import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 
 import {
   answered,
@@ -41,12 +44,6 @@ const plugins = (locale: 'en' | 'ru' = 'en') => [createI18n({ legacy: false, loc
 const buttons = (wrapper: Wrapper, name: string) =>
   wrapper.findAll('button').filter((control) => control.text() === name)
 const button = (wrapper: Wrapper, name: string) => present(buttons(wrapper, name)[0], name)
-const choice = (wrapper: Wrapper, index = 0) =>
-  present(wrapper.findAllComponents(ChoiceSelect)[index], `choice ${index + 1}`)
-const updateChoice = async (wrapper: Wrapper, value: string, index = 0) => {
-  choice(wrapper, index).vm.$emit('update:modelValue', value)
-  await flushPromises()
-}
 const describedMessage = (wrapper: Wrapper, control: { attributes: (name: string) => unknown }) =>
   wrapper.get(`#${String(present(control.attributes('aria-describedby'), 'aria-describedby'))}`)
 function hub(locale: 'en' | 'ru' = 'en') {
@@ -58,11 +55,12 @@ function hub(locale: 'en' | 'ru' = 'en') {
   wrappers.push(wrapper)
   return wrapper
 }
-function card(entry = requestEntry()) {
+function card(entry = requestEntry(), standalone = false) {
   const wrapper = mount(RequestCard, {
     props: {
       entry,
-      'draft': {},
+      standalone,
+      'draft': EMPTY_DRAFT,
       'onUpdate:draft': (draft) => {
         void wrapper.setProps({ draft })
       },
@@ -87,12 +85,7 @@ afterEach(async () => {
 
 describe('human input requests', () => {
   it('shows task navigation in the inbox and omits the dead link inside the task itself', async () => {
-    const wrapper = mount(ItemInputRequests, {
-      props: { target: requestEntry().target },
-      global: { plugins: plugins() },
-    })
-    wrappers.push(wrapper)
-    await flushPromises()
+    const wrapper = card()
     expect(buttons(wrapper, 'Open task')).toHaveLength(0)
     const inbox = hub()
     await flushPromises()
@@ -109,18 +102,17 @@ describe('human input requests', () => {
       request: { ...entry.request, status: 'answered', answers: { proceed: false }, revision: 2 },
     })
     const wrapper = card(entry)
-    expect(wrapper.findComponent(ChoiceSelect).exists()).toBe(false)
     expect(radios(wrapper).map((input) => radioLabel(input))).toEqual(['Yes', 'No'])
     expect(checkedLabels(wrapper)).toEqual([])
-    await button(wrapper, 'Send answer').trigger('click')
+    await button(wrapper, 'Send').trigger('click')
     expect(answerInputRequest).not.toHaveBeenCalled()
     await answer(wrapper, 'No')
     expect(checkedLabels(wrapper)).toEqual(['No'])
-    await button(wrapper, 'Send answer').trigger('click')
+    await button(wrapper, 'Send').trigger('click')
     await flushPromises()
-    expect(answerInputRequest).toHaveBeenCalledExactlyOnceWith(entry, { proceed: false })
+    expect(answerInputRequest).toHaveBeenCalledExactlyOnceWith(entry, { proceed: false }, '')
     expect(wrapper.text()).toContain('Answer received')
-    expect(wrapper.get('dl').text()).toContain('No')
+    expect(wrapper.get('.request-state').text()).toContain('No')
     expect(declineInputRequest).not.toHaveBeenCalled()
   })
 
@@ -137,7 +129,7 @@ describe('human input requests', () => {
     const note = wrapper.get('textarea')
     expect(group.attributes('aria-invalid')).toBeUndefined()
     expect(note.attributes('aria-invalid')).toBeUndefined()
-    await button(wrapper, 'Send answer').trigger('click')
+    await button(wrapper, 'Send').trigger('click')
     await flushPromises()
     expect(answerInputRequest).not.toHaveBeenCalled()
     expect(group.attributes('aria-invalid')).toBe('true')
@@ -154,9 +146,11 @@ describe('human input requests', () => {
     expect(note.attributes('aria-invalid')).toBe('true')
   })
 
-  it('keeps a long choice in a list whose caption is not one of its answers', async () => {
+  // One path for every kind of field: a long choice used to turn into a dropdown, and
+  // every other one to answer differently from it.
+  it('draws a long choice as rows like a short one, none of them chosen', async () => {
     const entry = requestEntry()
-    const ids = ['one', 'two', 'three', 'four', 'five']
+    const ids = ['one', 'two', 'three', 'four', 'five', 'six', 'seven']
     entry.request.fields = [
       {
         id: 'module',
@@ -167,16 +161,13 @@ describe('human input requests', () => {
       },
     ]
     const wrapper = card(entry)
-    expect(wrapper.find('[role="radiogroup"]').exists()).toBe(false)
-    const options = choice(wrapper).props('options')
-    expect(options.map((option) => option.value)).toEqual(ids)
-    expect(choice(wrapper).props('placeholder')).toBe('Choose an answer')
-    await button(wrapper, 'Send answer').trigger('click')
+    expect(radios(wrapper).map((input) => radioLabel(input))).toEqual(ids)
+    expect(checkedLabels(wrapper)).toEqual([])
+    await button(wrapper, 'Send').trigger('click')
     await flushPromises()
-    expect(choice(wrapper).props('invalid')).toBe(true)
-    expect(choice(wrapper).props('describedby')).toBeTruthy()
-    await updateChoice(wrapper, 'five')
-    expect(choice(wrapper).props('invalid')).toBe(false)
+    expect(wrapper.get('[role="radiogroup"]').attributes('aria-invalid')).toBe('true')
+    await answer(wrapper, 'five')
+    expect(wrapper.get('[role="radiogroup"]').attributes('aria-invalid')).toBeUndefined()
   })
 
   it.each([409, 503])(
@@ -186,17 +177,17 @@ describe('human input requests', () => {
       vi.mocked(fetchInputRequest).mockResolvedValue(requestEntry())
       const wrapper = card()
       await answer(wrapper, 'No')
-      await button(wrapper, 'Send answer').trigger('click')
+      await button(wrapper, 'Send').trigger('click')
       await flushPromises()
       expect(checkedLabels(wrapper)).toEqual(['No'])
-      expect(button(wrapper, 'Send answer').attributes('disabled')).toBeDefined()
+      expect(button(wrapper, 'Send').attributes('disabled')).toBeDefined()
       expect(wrapper.get('[role="alert"]').text()).toContain('draft is kept')
       // The answer button that held focus is disabled now; focus is on why.
       expect(document.activeElement).toBe(wrapper.get('[role="alert"]').element)
       await button(wrapper, 'Check status').trigger('click')
       await flushPromises()
       expect(checkedLabels(wrapper)).toEqual(['No'])
-      expect(button(wrapper, 'Send answer').attributes('disabled')).toBeUndefined()
+      expect(button(wrapper, 'Send').attributes('disabled')).toBeUndefined()
     },
   )
 
@@ -221,8 +212,8 @@ describe('human input requests', () => {
     else entry.request.expires_at = '2020-01-01T00:00:00Z'
     const wrapper = card(entry)
     expect(wrapper.get('fieldset').attributes('disabled')).toBeDefined()
-    await button(wrapper, 'Send answer').trigger('click')
-    await button(wrapper, 'Decline').trigger('click')
+    await button(wrapper, 'Send').trigger('click')
+    await button(wrapper, "Don't answer").trigger('click')
     expect(answerInputRequest).not.toHaveBeenCalled()
     expect(declineInputRequest).not.toHaveBeenCalled()
   })
@@ -255,10 +246,16 @@ describe('human input requests', () => {
         }),
       )
       .mockResolvedValueOnce(requestList([second]))
-    const wrapper = mount(ItemInputRequests, {
-      props: { target: requestEntry().target },
-      global: { plugins: plugins() },
-    })
+    const wrapper = mount(
+      defineComponent({
+        props: { target: { type: Object as PropType<PlanningTarget>, required: true } },
+        setup(props) {
+          const { entries } = useInputRequests(() => props.target)
+          return () => entries.value.map((entry) => entry.request.title).join(', ')
+        },
+      }),
+      { props: { target: requestEntry().target }, global: { plugins: plugins() } },
+    )
     wrappers.push(wrapper)
     const signal = present(vi.mocked(fetchInputRequests).mock.calls[0], 'first read')[0]?.signal
     await wrapper.setProps({ target: second.target })
@@ -294,7 +291,7 @@ describe('human input requests', () => {
       request: { ...entry.request, status: 'declined', revision: 2 },
     })
     const wrapper = card(entry)
-    await button(wrapper, 'Decline').trigger('click')
+    await button(wrapper, "Don't answer").trigger('click')
     await flushPromises()
     expect(declineInputRequest).toHaveBeenCalledExactlyOnceWith(entry)
     expect(answerInputRequest).not.toHaveBeenCalled()
@@ -338,9 +335,9 @@ describe('human input requests', () => {
     await answer(wrapper, 'Beta')
     expect(checkedLabels(wrapper)).toEqual(['Beta'])
     await wrapper.get('input[type="checkbox"][value="alpha"]').setValue(true)
-    await button(wrapper, 'Send answer').trigger('click')
+    await button(wrapper, 'Send').trigger('click')
     await flushPromises()
-    expect(answerInputRequest).toHaveBeenCalledExactlyOnceWith(entry, answers)
+    expect(answerInputRequest).toHaveBeenCalledExactlyOnceWith(entry, answers, '')
     expect(wrapper.get('dl').text()).toContain('A useful reason')
     expect(wrapper.get('dl').text()).toContain('Beta')
   })
@@ -360,7 +357,7 @@ describe('human input requests', () => {
     expect(titles()).toEqual(['Newer question', 'Older question'])
     expect(wrapper.get('.request-status').text()).toBe('Waiting for an answer: 2')
     await answer(wrapper, 'Yes', 0)
-    await button(wrapper, 'Send answer').trigger('click')
+    await button(wrapper, 'Send').trigger('click')
     await flushPromises()
     expect(titles()).toEqual(['Newer question', 'Older question'])
     expect(wrapper.emitted('count')?.at(-1)).toEqual([{ value: 1, incomplete: false }])
@@ -371,7 +368,7 @@ describe('human input requests', () => {
     vi.mocked(answerInputRequest).mockResolvedValueOnce(answered(older))
     vi.mocked(fetchInputRequests).mockResolvedValue(requestList([]))
     await answer(wrapper, 'Yes', 0)
-    await button(wrapper, 'Send answer').trigger('click')
+    await button(wrapper, 'Send').trigger('click')
     await flushPromises()
     expect(titles()).toEqual(['Newer question', 'Older question'])
     expect(wrapper.emitted('count')?.at(-1)).toEqual([{ value: 0, incomplete: false }])
@@ -379,32 +376,17 @@ describe('human input requests', () => {
     // With nothing left to answer, focus stays on the card just answered, on how
     // it ended. The count line at the top took it once and scrolled the list away.
     const outcome = present(wrapper.findAll('.request-card')[1], 'older card').get('.request-state')
-    expect(outcome.text()).toMatch(/^You answered · /)
+    expect(outcome.text()).toMatch(/^You answered/u)
     expect(document.activeElement).toBe(outcome.element)
   })
 
   it('names the reader as the one who answered, without repeating the space key', () => {
-    const own = card(answered(requestEntry()))
+    const own = card(answered(requestEntry()), true)
     expect(own.get('.request-context').text()).toBe('requests-project · TASK-7')
-    expect(own.get('.request-state').text()).toMatch(/^You answered · /)
+    expect(own.get('.request-state').text()).toMatch(/^You answered/u)
     expect(own.text()).not.toContain('user')
     const byAgent = card(answered(requestEntry(), 'codex-session-1'))
-    expect(byAgent.get('.request-state').text()).toMatch(
-      /^Answer received · Resolved by codex-session-1 · /,
-    )
-  })
-
-  it('says "waiting for your answer" in a task, not under a dialog titled with it', async () => {
-    const inbox = hub()
-    await flushPromises()
-    expect(inbox.find('.request-state').exists()).toBe(false)
-    const item = mount(ItemInputRequests, {
-      props: { target: requestEntry().target },
-      global: { plugins: plugins() },
-    })
-    wrappers.push(item)
-    await flushPromises()
-    expect(item.get('.request-state').text()).toBe('Waiting for your answer')
+    expect(byAgent.get('.request-state').text()).toMatch(/^codex-session-1/u)
   })
 
   it('names why each skipped source was not read, as the task finder does', async () => {

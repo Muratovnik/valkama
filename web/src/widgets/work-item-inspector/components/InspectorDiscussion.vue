@@ -1,12 +1,14 @@
 <script setup lang="ts">
 /**
- * Comments and work reports on one item, and the composer for the next comment.
+ * Comments, work reports and questions on one item, and the composer for the next
+ * comment.
  *
  * The composer comes first and the newest entry right under it. It used to sit
  * after every entry ever written, oldest first, so writing a comment on a busy
  * item began with scrolling past all of them, and the latest report — the one a
  * reader came for — was the last thing on the page. The thread itself is
- * `InspectorThread`.
+ * `InspectorThread`, which takes the questions as a list and stands them among the
+ * comments, so a read of them that failed is said here: not knowing is not none.
  *
  * A person writes comments here, in the shared markdown editor. Work reports are
  * how agents write, through their tools, and the thread shows them. The form
@@ -30,6 +32,7 @@ import { useDraftSource } from '@/widgets/work-item-inspector/utils/useDraftGuar
 import { useInspectorMutation } from '@/widgets/work-item-inspector/utils/useInspectorMutation.ts'
 import type { StateMove } from '@/widgets/work-item-inspector/utils/useInspectorWrites.ts'
 
+import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import {
   commentWorkItem,
   publishWorkItemReport,
@@ -41,8 +44,23 @@ import MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import VButton from '@/shared/ui/VButton.vue'
 
-const props = defineProps<{ item: WorkItem; writable: boolean }>()
-const emit = defineEmits<{ changed: []; refresh: []; resume: [stateKey: string] }>()
+const props = withDefaults(
+  defineProps<{
+    item: WorkItem
+    writable: boolean
+    questions?: readonly InputRequestEntry[]
+    /** The questions could not be read, or not all of them. */
+    questionsUnread?: boolean
+  }>(),
+  { questions: () => [], questionsUnread: false },
+)
+const emit = defineEmits<{
+  'answered': [entry: InputRequestEntry]
+  'changed': []
+  'read-questions': []
+  'refresh': []
+  'resume': [stateKey: string]
+}>()
 const { t } = useI18n()
 const note = ref('')
 const previewing = ref(false)
@@ -67,6 +85,8 @@ const waitingMove = computed(() => {
   return !move || move.key === state.key || state.is_terminal || summary ? null : move
 })
 const outcomeForm = ref<InstanceType<typeof InspectorOutcomeForm> | null>(null)
+const thread = ref<InstanceType<typeof InspectorThread> | null>(null)
+const entryCount = computed(() => props.item.comments.length + props.questions.length || '')
 
 const suggest = workItemSuggest(
   () => props.item.planning_space_id,
@@ -217,14 +237,17 @@ function select(commentId: number) {
     () => reportSelected(move),
   )
 }
-defineExpose({ askOutcome, discussStep })
+function revealQuestion() {
+  thread.value?.revealQuestion()
+}
+defineExpose({ askOutcome, discussStep, revealQuestion })
 </script>
 
 <template>
   <section class="discussion">
     <SectionHeader
       :title="t('workItem.discussion')"
-      :count="item.comments.length || ''"
+      :count="entryCount"
     />
     <InspectorOutcomeForm
       v-if="writable && closing"
@@ -309,10 +332,27 @@ defineExpose({ askOutcome, discussStep })
         </template>
       </MarkdownEditor>
     </form>
+    <p
+      v-if="questionsUnread"
+      class="questions-unread"
+      role="status"
+    >
+      {{ t('requests.errorBare') }}
+      <VButton
+        variant="ghost"
+        size="inline"
+        @click="emit('read-questions')"
+        >{{ t('requests.refresh') }}</VButton
+      >
+    </p>
     <InspectorThread
+      ref="thread"
       :item="item"
       :pending="pending"
+      :questions="questions"
+      :suggest="suggest"
       :writable="writable"
+      @answered="emit('answered', $event)"
       @select="select"
     />
   </section>
@@ -340,6 +380,16 @@ defineExpose({ askOutcome, discussStep })
 .discussion-form {
   display: grid;
   gap: var(--space-3);
+}
+
+.questions-unread {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  margin: 0;
+  color: var(--color-text-muted);
+  font: var(--font-detail);
 }
 
 .held-outcome {

@@ -9,6 +9,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import RequestCard from '@/features/input-requests/components/RequestCard.vue'
+import { EMPTY_DRAFT } from '@/features/input-requests/utils/validateAnswers.ts'
 
 import { answerInputRequest } from '@/shared/api/inputRequestApi.ts'
 import { messages } from '@/shared/i18n/index.ts'
@@ -32,7 +33,7 @@ function card(entry = requestEntry()) {
   const wrapper = mount(RequestCard, {
     props: {
       entry,
-      'draft': {},
+      'draft': EMPTY_DRAFT,
       'onUpdate:draft': (draft) => {
         void wrapper.setProps({ draft })
       },
@@ -81,7 +82,7 @@ describe('a text answer to a question', () => {
     // refused where it is written.
     await view('Preview').trigger('click')
     expect(wrapper.get('textarea').element.closest('[inert]')).not.toBeNull()
-    await button(wrapper, 'Send answer').trigger('click')
+    await button(wrapper, 'Send').trigger('click')
     await flushPromises()
     expect(answerInputRequest).not.toHaveBeenCalled()
     expect(document.activeElement).toBe(wrapper.get('textarea').element)
@@ -92,8 +93,8 @@ describe('a text answer to a question', () => {
     await view('Write').trigger('click')
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter', ctrlKey: true })
     await flushPromises()
-    expect(answerInputRequest).toHaveBeenCalledExactlyOnceWith(entry, { note: 'Use **v2**' })
-    expect(wrapper.get('dl strong').text()).toBe('v2')
+    expect(answerInputRequest).toHaveBeenCalledExactlyOnceWith(entry, { note: 'Use **v2**' }, '')
+    expect(wrapper.get('.request-state strong').text()).toBe('v2')
   })
 
   it('offers no write-or-preview switch for a question without a text answer', () => {

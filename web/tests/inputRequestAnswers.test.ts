@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 
-import { checkAnswers } from '@/features/input-requests/utils/validateAnswers.ts'
+import { checkAnswers, hasDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
 import type { InputRequestField } from '@/shared/api/inputRequestModel.ts'
 
@@ -35,4 +35,20 @@ test('sends false, leaves out an empty optional field and refuses nothing', () =
   expect(checkAnswers(fields, { proceed: false, branch: 'merge', extra: [], note: 'why' })).toEqual(
     { refused: [], values: { proceed: false, branch: 'merge', note: 'why' } },
   )
+})
+
+test('with words of one’s own nothing is required, and what was given still goes', () => {
+  expect(checkAnswers(fields, {}, 'My own words')).toEqual({ refused: [], values: {} })
+  expect(checkAnswers(fields, { proceed: true }, 'My own words')).toEqual({
+    refused: [],
+    values: { proceed: true },
+  })
+  expect(checkAnswers(fields, {}, '   ').refused).toContain('proceed')
+})
+
+test('a draft holds a choice or a note, and neither an empty note nor no ticks count', () => {
+  expect(hasDraft(undefined)).toBe(false)
+  expect(hasDraft({ answers: { extra: [] }, note: '  ' })).toBe(false)
+  expect(hasDraft({ answers: { proceed: false }, note: '' })).toBe(true)
+  expect(hasDraft({ answers: {}, note: 'Words' })).toBe(true)
 })

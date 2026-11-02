@@ -72,7 +72,7 @@ export async function fetchInputRequest(
 async function resolve(
   entry: InputRequestEntry,
   action: 'answer' | 'decline',
-  answers?: InputAnswers,
+  answer: { answers?: InputAnswers; note?: string } = {},
 ): Promise<InputRequestEntry> {
   const payload = await request(`/api/modules/planning/request/${action}`, {
     method: 'POST',
@@ -83,17 +83,20 @@ async function resolve(
       id: entry.request.request_id,
       expected_revision: entry.request.revision,
       author: WEB_AUTHOR,
-      ...(answers === undefined ? {} : { answers }),
+      ...answer,
     }),
   })
   return validateInputRequestDetail(payload)
 }
 
+/** A note, when there is one, may stand in for the required fields, so `answers` may be empty. */
 export function answerInputRequest(
   entry: InputRequestEntry,
   answers: InputAnswers,
+  note = '',
 ): Promise<InputRequestEntry> {
-  return resolve(entry, 'answer', answers)
+  const written = note.trim()
+  return resolve(entry, 'answer', { answers, ...(written ? { note: written } : {}) })
 }
 
 export function declineInputRequest(entry: InputRequestEntry): Promise<InputRequestEntry> {

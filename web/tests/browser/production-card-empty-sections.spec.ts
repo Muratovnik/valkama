@@ -149,21 +149,21 @@ test.describe('a section with nothing in it', () => {
     expect((steps?.y ?? 0) - (heading?.y ?? 0) - (heading?.height ?? 0)).toBe(12)
   })
 
-  test('is absent, and a question brings it back at the questions’ next read', async ({ page }) => {
+  test('holds no question until the next read brings one into the discussion', async ({ page }) => {
     const held = await serveCard(page)
     const read = page.waitForResponse('**/api/modules/planning/requests?*')
     await openCard(page)
     await read
     const overview = page.locator('.drawer .overview')
     await expect(overview).toBeVisible()
-    const questions = page.getByRole('region', { name: 'Questions and decisions', exact: true })
-    await expect(questions).toHaveCount(0)
+    const question = overview.locator('.request-card')
+    await expect(question).toHaveCount(0)
     await expect(overview.getByText('No questions', { exact: false })).toHaveCount(0)
 
     held.questions = [aQuestion()]
     await page.evaluate(() => window.dispatchEvent(new Event('focus')))
-    await expect(questions).toBeVisible()
-    await expect(questions).toContainText('Confirm deployment')
+    await expect(question).toBeVisible()
+    await expect(question).toContainText('Should deployment proceed?')
   })
 
   test('still says a read that failed, with the way to read again', async ({ page }) => {
@@ -172,17 +172,13 @@ test.describe('a section with nothing in it', () => {
     const read = page.waitForResponse('**/api/modules/planning/requests?*')
     await openCard(page)
     await read
-    const questions = page.getByRole('region', { name: 'Questions and decisions', exact: true })
+    const discussion = page.locator('.drawer .discussion')
     // Not knowing is not the same as there being none.
-    await expect(questions).toBeVisible()
-    await expect(questions.getByRole('alert')).toBeVisible()
+    const unread = discussion.locator('.questions-unread')
+    await expect(unread).toContainText('could not be refreshed')
     card.failing = false
-    await questions.getByRole('button', { name: /refresh/iu }).focus()
-    await page.keyboard.press('Enter')
-    await expect(questions).toHaveCount(0)
-    // The button that said it is gone, and the keyboard is not left at the page's top.
-    const held = await page.evaluate(() => document.activeElement?.closest('.drawer') !== null)
-    expect(held).toBe(true)
+    await unread.getByRole('button', { name: 'Refresh', exact: true }).click()
+    await expect(unread).toHaveCount(0)
   })
 })
 
