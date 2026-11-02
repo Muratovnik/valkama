@@ -559,7 +559,11 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   lock, and restoration. A command dialog layers above an open drawer instead
   of unmounting it.
 - **Inspectors:** persistent right-side detail uses the shared resizable
-  inspector. Width is bounded by the actual workspace, not the viewport.
+  inspector. Width is bounded by the actual workspace, not the viewport. The
+  panel lives while any item is open and only its content changes with the item:
+  a link and Back stay in the same panel, so the slide belongs to the first open
+  and to the close, and focus moves to the new content's first control as it
+  does on an open.
 - **Empty and error states:** one shared state component explains what is
   absent, why it matters, and the next valid action when one exists.
 - **Icons and badges:** application glyphs come from the central icon owner;

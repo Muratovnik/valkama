@@ -23,6 +23,11 @@ const props = withDefaults(
   defineProps<{
     open: boolean
     ariaLabel?: string
+    /**
+     * What the surface holds, for one that outlives its content: when this changes
+     * focus has gone with the old content, and moves in again as it does on an open.
+     */
+    contentKey?: string
     drawerDefaultWidth?: number
     drawerMaxWidth?: number
     drawerMinWidth?: number
@@ -237,7 +242,7 @@ watch(
   { immediate: true, flush: 'post' },
 )
 
-watch(active, focusSurface, { flush: 'post', immediate: true })
+watch([active, () => props.contentKey], focusSurface, { flush: 'post', immediate: true })
 
 onUnmounted(release)
 </script>

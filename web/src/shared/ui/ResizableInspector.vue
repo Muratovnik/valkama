@@ -10,6 +10,7 @@ withDefaults(
   defineProps<{
     label: string
     open: boolean
+    contentKey?: string
     resizeLabel?: string
     storageKey?: string
     surfaceClass?: string
@@ -30,6 +31,7 @@ const emit = defineEmits<{ close: [] }>()
     layer="drawer"
     :open="open"
     :aria-label="label"
+    :content-key="contentKey"
     :surface-class="surfaceClass"
     :resize-label="resizeLabel || label"
     :width-storage-key="storageKey"

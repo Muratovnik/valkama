@@ -15,6 +15,9 @@
  * The local trail holds navigation depth; the route holds the item's identity.
  * Each step of the trail also holds where its card was left, which the card
  * hands over as it opens another, so Back reopens it there and not at its top.
+ * The panel lives as long as any item is open and only the card inside it is
+ * keyed by the item: going from a card to a card closes nothing, so it opens
+ * nothing either.
  * The route also holds how the space is looked at: the view, the chain every
  * view is narrowed to, whether the board is grouped by epic, and the filter,
  * which the workspace owns and writes back within the manifest's bound.
@@ -58,7 +61,9 @@ import {
   resolveResource,
 } from '@/shared/api/resourceState.ts'
 import { failureMessage, typedFailure } from '@/shared/api/typedFailure.ts'
+import { INSPECTOR_DRAWER_STORAGE_KEY } from '@/shared/lib/shellLayout.ts'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
+import ResizableInspector from '@/shared/ui/ResizableInspector.vue'
 
 const props = defineProps<{
   context: PlatformContextReady | null
@@ -191,21 +196,22 @@ const {
   write: (state) => emit('state', state),
 })
 
+const openRecord = computed(() =>
+  model.value?.work_items.find((item) => item.reference === open.value),
+)
 /** The open item's epic, by reference: the card's facts line names it. */
 const parentReference = computed(() => {
-  const items = model.value?.work_items ?? []
-  const parent = items.find((item) => item.reference === open.value)?.parent_id
-  return parent ? (items.find((item) => item.work_item_id === parent)?.reference ?? null) : null
+  const parent = openRecord.value?.parent_id
+  return model.value?.work_items.find((item) => item.work_item_id === parent)?.reference ?? null
 })
+/** The card on show: every way of closing the panel asks it about its drafts first. */
+const card = useTemplateRef<InstanceType<typeof WorkItemInspector>>('card')
+const closePanel = () => card.value?.close()
 /** The workspace owns the filter; the card's label chips reach it here. */
 const workspace = useTemplateRef<{ toggleFilter: (token: WorkFilterToken) => void }>('workspace')
-function filterFromCard(token: WorkFilterToken) {
-  workspace.value?.toggleFilter(token)
-}
+const filterFromCard = (token: WorkFilterToken) => workspace.value?.toggleFilter(token)
 
-const selectedId = computed(
-  () => model.value?.work_items.find((item) => item.reference === open.value)?.work_item_id ?? null,
-)
+const selectedId = computed(() => openRecord.value?.work_item_id ?? null)
 
 const streamTarget = computed(() =>
   projectId.value === undefined || boundSpace.value === undefined
@@ -345,9 +351,7 @@ function goBack() {
 }
 
 /** Another view of the same field: a chain the route names narrows that one too. */
-function setView(mode: PlanningViewMode) {
-  emit('state', { ...props.route.state, view: mode })
-}
+const setView = (mode: PlanningViewMode) => emit('state', { ...props.route.state, view: mode })
 
 /**
  * A move on the board: a transition when the tile changed state, a placement
@@ -429,27 +433,38 @@ defineExpose({ refresh })
       @view="setView"
     />
 
-    <WorkItemInspector
+    <ResizableInspector
       v-if="open && boundSpaceResourceRef"
-      :key="openIdentity"
-      :reference="open"
-      :resource-ref="boundSpaceResourceRef"
-      :project-id="inspectorProjectId"
-      :can-go-back="canGoBack"
-      :return-to="returning"
-      :refresh-token="version"
-      :agents-token="agentsVersion"
-      :workflow="model.workflow"
-      :writable="writable"
-      :parent-reference="parentReference"
-      @back="goBack"
-      @changed="loadPlanning"
-      @chain="showChain"
-      @close="closeItem"
-      @filter="filterFromCard"
-      @open="(reference, left) => openItem(reference, true, left)"
-      @session="(id, family) => emit('open-session', id, family)"
-    />
+      surface-class="drawer"
+      :content-key="openIdentity"
+      :open="true"
+      :label="openRecord?.title || open"
+      :resize-label="t('workItem.resize')"
+      :storage-key="INSPECTOR_DRAWER_STORAGE_KEY"
+      @close="closePanel"
+    >
+      <WorkItemInspector
+        ref="card"
+        :key="openIdentity"
+        :reference="open"
+        :resource-ref="boundSpaceResourceRef"
+        :project-id="inspectorProjectId"
+        :can-go-back="canGoBack"
+        :return-to="returning"
+        :refresh-token="version"
+        :agents-token="agentsVersion"
+        :workflow="model.workflow"
+        :writable="writable"
+        :parent-reference="parentReference"
+        @back="goBack"
+        @changed="loadPlanning"
+        @chain="showChain"
+        @close="closeItem"
+        @filter="filterFromCard"
+        @open="(reference, left) => openItem(reference, true, left)"
+        @session="(id, family) => emit('open-session', id, family)"
+      />
+    </ResizableInspector>
   </div>
   <main
     v-else

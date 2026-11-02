@@ -15,6 +15,7 @@ import { i18n } from '@/shared/i18n/index.ts'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
 import InspectorFrame from '@/shared/ui/InspectorFrame.vue'
 import OverlayHost from '@/shared/ui/OverlayHost.vue'
+import ResizableInspector from '@/shared/ui/ResizableInspector.vue'
 import SelectionControl from '@/shared/ui/SelectionControl.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
@@ -231,15 +232,22 @@ const Harness = defineComponent({
             }),
           ]),
           itemHarness
-            ? h(WorkItemInspector, {
-                projectId: 'example-project',
-                reference: testItem.reference,
-                resourceRef: sessionResourceRef,
-                canGoBack: false,
-                refreshToken: 0,
-                workflow: testWorkflow,
-                writable: true,
-              })
+            ? h(
+                ResizableInspector,
+                { label: testItem.title, open: true, surfaceClass: 'drawer' },
+                {
+                  default: () =>
+                    h(WorkItemInspector, {
+                      projectId: 'example-project',
+                      reference: testItem.reference,
+                      resourceRef: sessionResourceRef,
+                      canGoBack: false,
+                      refreshToken: 0,
+                      workflow: testWorkflow,
+                      writable: true,
+                    }),
+                },
+              )
             : null,
         ]),
         h(
