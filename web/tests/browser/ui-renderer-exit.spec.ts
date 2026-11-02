@@ -8,8 +8,8 @@ test('a renderer that dies is named by the browser', async ({ page, rendererExit
   test.setTimeout(60_000)
   await page.goto('/tests/browser/harness.html?surface=context-bar')
   await page.goto('chrome://crash').catch(() => {})
-  // The browser hears of a death when the process is gone, and Windows Error Reporting
-  // holds a crashed process first: its two log entries stood up to 14 s apart here.
+  // The event came 0.2 to 18.5 s after the crash over four full runs, loaded or not: the
+  // browser hears when the process is gone, and the system's crash reporter may hold it.
   await expect
     .poll(() => rendererExits.map((exit) => exit.status), { timeout: 45_000 })
     .toEqual(['crashed'])
