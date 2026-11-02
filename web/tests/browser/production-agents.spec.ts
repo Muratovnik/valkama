@@ -4,7 +4,7 @@
  * stream it already has.
  */
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 
 import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
@@ -13,6 +13,7 @@ import { installBackend } from './backend.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { projectScope, workItemRef } from './planningFixtures.ts'
 import { installStreamDouble } from './streamDouble.ts'
+import { test } from './test.ts'
 
 const LONG_LABEL =
   'Проверить экспорт и журналы на утечку метки при параллельных запусках субагентов'

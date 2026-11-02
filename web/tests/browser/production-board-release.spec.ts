@@ -11,12 +11,13 @@
  *
  * The server is the board suite's double, which keeps the order it is told.
  */
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
 import { LONG_EPIC } from './boardFixtures.ts'
 import { cell, lane, openBoard, serve, tiles } from './boardPage.ts'
+import { test } from './test.ts'
 
 interface Beat {
   /** Run the library's reading once, and say how many beats have been started. */

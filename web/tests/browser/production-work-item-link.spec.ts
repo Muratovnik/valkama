@@ -1,9 +1,10 @@
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { dataScopeId, projectId, spaceRef, workItem, workItemRef } from './planningFixtures.ts'
+import { test } from './test.ts'
 
 type Coverage = { reason: string | null; status: 'searched' | 'unavailable' }
 
