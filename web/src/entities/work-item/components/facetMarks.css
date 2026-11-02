@@ -187,6 +187,32 @@
   clip-path: inset(50%);
 }
 
+/* On a surface that repeats a hundred times a label's word is the label. A face
+   per chip was the second loudest thing on the board, after the titles. It keeps
+   what makes it a chip: a press filters, and the face comes up where it is pointed
+   at or in the filter. The line is one line of text tall. */
+.facet-marks:is([data-surface='tile'], [data-surface='list']) {
+  .label-chip {
+    color: var(--color-text-tertiary);
+
+    &.filters {
+      min-block-size: 1lh;
+    }
+  }
+
+  /* The face stands out from the word without moving it: chips measure their
+     room from the padding, and a word here has none. */
+  .chip-face {
+    padding: 0;
+    background: none;
+
+    :is(.label-chip.filters:hover, .label-chip[data-active]) & {
+      background: var(--color-chip-face-raised);
+      box-shadow: 0 0 0 var(--space-half) var(--color-chip-face-raised);
+    }
+  }
+}
+
 /* A glyph is tertiary ink unless its tone says more. Kind never does: a type
    is not a state, and a coloured kind would read as one more alarm. */
 .facet-glyph {
@@ -228,6 +254,15 @@
   &.filters {
     min-block-size: var(--size-control-inline);
     cursor: pointer;
+
+    /* The 28px a pointer hits, whatever the line the chip lies on spends: on a
+       line shorter than that it reaches into the air around the line. */
+    &::after {
+      content: '';
+      position: absolute;
+      inset-block: calc((100% - var(--size-control-inline)) / 2);
+      inset-inline: 0;
+    }
 
     &:hover,
     &[data-active] {

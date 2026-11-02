@@ -259,7 +259,10 @@
     var(--font-family-interface);
   --font-drawer-title: 400 var(--font-size-module)/var(--line-height-snug)
     var(--font-family-interface);
-  --font-row-title: 600 var(--font-size-interface)/var(--line-height-snug)
+
+  /* What leads a scan row, and a board is hundreds of them: at 600 it put 73% of
+     the board's characters at the weight of a section's heading, so nothing led. */
+  --font-row-title: 500 var(--font-size-interface)/var(--line-height-snug)
     var(--font-family-interface);
   --font-name: 500 var(--font-size-interface)/var(--line-height-normal) var(--font-family-interface);
   --font-label: 600 var(--font-size-dense)/var(--line-height-normal) var(--font-family-interface);
@@ -277,7 +280,7 @@
   --font-line: 400 var(--font-size-dense)/var(--line-height-tight) var(--font-family-interface);
   --font-strong: 600 var(--font-size-dense)/var(--line-height-snug) var(--font-family-interface);
   --font-context: 600 var(--font-size-dense)/var(--line-height-tight) var(--font-family-interface);
-  --font-chip: 600 var(--font-size-dense)/var(--line-height-flat) var(--font-family-interface);
+  --font-chip: 500 var(--font-size-dense)/var(--line-height-flat) var(--font-family-interface);
   --font-count: 400 var(--font-size-dense)/var(--line-height-flat) var(--font-family-interface);
 
   /* Code a person reads as a block: a code sample in a text, a command's output. */

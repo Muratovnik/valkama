@@ -205,10 +205,10 @@ test('a tile draws what it shows and nothing to measure it by', async ({ page })
       }),
     ).length,
   }))
-  // Two glyphs, the reference, the title, two or three chips and a count, the
-  // holder and the steps, every glyph an svg of its strokes: 47 nodes for the
-  // fullest tile here. A copy of the chips drawn out of sight to be measured
-  // was eight more a tile, and a box around the glyphs one more.
+  // Two glyphs, the reference, the title, three labels and a count, the holder and
+  // the steps, every glyph an svg of its strokes: 48 nodes for the fullest tile
+  // here. A copy of the chips drawn out of sight to be measured was eight more a
+  // tile, and a box around the glyphs one more.
   expect(Math.max(...drawn.nodes)).toBeLessThanOrEqual(48)
   await expect(page.locator('[data-ghost], .facet-ghost')).toHaveCount(0)
   // Whole chips only: a chip counted as fitting is never shortened.

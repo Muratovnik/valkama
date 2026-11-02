@@ -112,7 +112,7 @@ function inspectorBody(openCommand: () => void) {
  * Every weight `VButton` has, labelled and icon-only, enabled and disabled, on
  * the workspace ground and on a ground — what a state test reads its drawn colours from.
  */
-const BUTTON_VARIANTS = ['primary', 'secondary', 'ghost', 'danger'] as const
+const BUTTON_VARIANTS = ['primary', 'secondary', 'ghost', 'text', 'danger'] as const
 
 function buttonMatrix() {
   return h(

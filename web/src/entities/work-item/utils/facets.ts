@@ -23,8 +23,11 @@ import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import { holderName } from '@/shared/lib/actor.ts'
 import type { IconName, SemanticStatePair } from '@/shared/lib/uiSystem.ts'
 
-/** `chain` is a member row of a card's chain: a list of items that holds no facets but readiness. */
-export type FacetSurface = 'tile' | 'list' | 'graph' | 'card' | 'finder' | 'chain'
+/**
+ * `chain` is a member row of a card's chain: a list of items that holds no facets
+ * but readiness. `lane` is the head of an epic's row on the grouped board.
+ */
+export type FacetSurface = 'tile' | 'list' | 'graph' | 'card' | 'finder' | 'chain' | 'lane'
 export type FacetId =
   'kind' | 'priority' | 'state' | 'readiness' | 'labels' | 'holder' | 'parent' | 'steps'
 
@@ -145,8 +148,11 @@ const FACET_RULES: Readonly<Record<FacetId, Partial<Record<FacetSurface, FacetRu
     card: { form: 'glyph-word', always: true },
     finder: { form: 'glyph', only: ['high', 'urgent'] },
   },
-  // The board's column already says the state.
+  // The board's column already says the state. An epic is no tile, so its row's
+  // head says it, but only once it has moved: an epic not started is the norm of
+  // a board that holds a hundred of them, and a word per row said nothing.
   state: {
+    lane: { form: 'glyph-word', only: ['active', 'review', 'blocked', 'completed', 'cancelled'] },
     list: { form: 'glyph-word', always: true },
     graph: { form: 'glyph-word', always: true },
     card: { form: 'glyph-word', always: true },
@@ -184,8 +190,10 @@ const FACET_RULES: Readonly<Record<FacetId, Partial<Record<FacetSurface, FacetRu
     graph: { form: 'glyph-word' },
     card: { form: 'glyph-word' },
   },
+  // A closed item's steps are all done, as the guard on closing asks: on a tile of
+  // Done that was a line saying what the column already says.
   steps: {
-    tile: { form: 'glyph-word' },
+    tile: { form: 'glyph-word', openOnly: true },
     list: { form: 'word', always: true },
     card: { form: 'word' },
   },

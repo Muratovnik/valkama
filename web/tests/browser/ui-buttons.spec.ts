@@ -17,7 +17,7 @@ test('every button weight keeps its label legible at rest, hovered and disabled,
 }) => {
   await page.goto('/tests/browser/harness.html?lang=ru&surface=buttons')
   const buttons = page.locator('[data-case]')
-  await expect(buttons).toHaveCount(32)
+  await expect(buttons).toHaveCount(40)
   const looks: ButtonLooks[] = []
   for (const button of await buttons.all()) {
     await page.mouse.move(0, 0)

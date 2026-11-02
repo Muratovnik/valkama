@@ -1,7 +1,8 @@
 /**
- * Label chips on a board tile in the built application: one line of whole
- * chips and a count of the rest, a face that stays distinct on a pointed-at
- * sheet, and a chip that filters while the rest of the sheet opens the card.
+ * Labels on a board tile in the built application: one line of whole words and a
+ * count of the rest, a word that stays legible on a pointed-at sheet and a face
+ * that comes up when it is pointed at, and a label that filters while the rest of
+ * the sheet opens the card.
  */
 import { expect } from '@playwright/test'
 import type { Locator } from '@playwright/test'
@@ -14,19 +15,9 @@ import { drawnColours } from './contrast.ts'
 import { projectScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
-/** How far a chip's drawn face stands above the sheet it lies on, as a WCAG 2 ratio. */
-async function lift(chip: Locator, sheet: Locator) {
-  const face = await chip.locator('.chip-face').evaluate(drawnColours, 'own' as const)
-  const ground = await sheet.evaluate(drawnColours, 'own' as const)
-  const [light = 0, dark = 0] = [face.fillLuminance, ground.fillLuminance].toSorted(
-    (left, right) => right - left,
-  )
-  return {
-    fill: face.fillLuminance,
-    lighter: face.fillLuminance > ground.fillLuminance,
-    ratio: (light + 0.05) / (dark + 0.05),
-  }
-}
+/** The fill drawn behind a chip's word, or nothing where it has none of its own. */
+const faceOf = (chip: Locator) =>
+  chip.locator('.chip-face').evaluate((node) => getComputedStyle(node).backgroundColor)
 
 test('a label chip on a tile filters instead of opening, and the rest of the sheet opens it', async ({
   page,
@@ -37,16 +28,15 @@ test('a label chip on a tile filters instead of opening, and the rest of the she
   const sheet = page.locator('.work-item-column[data-state="dev"] .work-item-tile').first()
   const chip = sheet.locator('.label-chip').first()
   await expect(chip).toBeVisible()
-  // A pointed-at sheet lifts to the tone the chip's face used to be, and its
-  // chips vanished into it; the face is a lift over its ground now.
+  // A pointed-at sheet lifts to the control grey, and chips drawn in it vanished. At
+  // rest a label is its word, which holds its contrast on that ground too.
   await sheet.locator('.tile-title').hover()
-  const rest = await lift(chip, sheet)
-  expect(rest.lighter).toBe(true)
-  expect(rest.ratio).toBeGreaterThanOrEqual(1.1)
-  // And pointed at itself it rises again, rather than sinking to a fixed grey.
+  expect(await faceOf(chip)).toBe('rgba(0, 0, 0, 0)')
+  const word = await chip.locator('.chip-face').evaluate(drawnColours, 'own' as const)
+  expect(word.contrast).toBeGreaterThanOrEqual(4.5)
+  // Pointed at itself it gets its face, which says it can be pressed.
   await chip.hover()
-  const raised = await lift(chip, sheet)
-  expect(raised.fill).toBeGreaterThan(rest.fill)
+  await expect.poll(() => faceOf(chip)).not.toBe('rgba(0, 0, 0, 0)')
   // A chip lies over the open target stretched across the sheet, so the pointer reaches it.
   await chip.click()
   await expect(page.locator('.drawer')).toHaveCount(0)
@@ -84,9 +74,14 @@ for (const width of [1440, 1024, 390] as const)
     expect(drawn.length).toBeGreaterThanOrEqual(1)
     expect(drawn.length).toBeLessThanOrEqual(3)
     for (const chip of drawn) expect(chip.right).toBeLessThanOrEqual(edge + 0.5)
-    // The 28px pointer box is the line's height, once.
+    // The line is a line of text tall, and the pointer still has its 28px: the box
+    // reaches past the line into the air around it.
     const box = await line.boundingBox()
-    expect(Math.round(box?.height ?? 0)).toBe(28)
+    expect(box?.height).toBeLessThan(24)
+    const target = await chips
+      .first()
+      .evaluate((chip) => Number.parseFloat(getComputedStyle(chip, '::after').height))
+    expect(Math.round(target)).toBe(28)
     // Whole chips and the count of the rest add up to the item's four labels.
     await expect(count).toHaveText(`+${4 - drawn.length}`)
     // The sheet is still one Tab stop, the copy measured out of sight included.

@@ -13,6 +13,12 @@
  * of the sheet; and who holds the item and how far its steps are, only when
  * there is something to say.
  *
+ * Three tones rank what is on it, and only one thing leads: the title in the
+ * full ink at the row-title weight; the holder and what stops the work in the
+ * muted ink; the reference and the labels in the tertiary one. A finished tile's
+ * title takes the muted ink too, so a column of a thousand closed items does not
+ * stand level with the work still open.
+ *
  * The tile used to print every facet as a word, defaults included: «Средний»
  * on most tiles, the kind word beside it, and «можно брать» on nearly every
  * tile of the two columns where it can be true at all, which is the norm
@@ -145,7 +151,10 @@ const describedBy = computed(() => {
 </script>
 
 <template>
-  <div class="work-item-tile">
+  <div
+    class="work-item-tile"
+    :class="{ finished: props.item.state.is_terminal }"
+  >
     <span class="tile-line">
       <component
         :is="drawMarks(leadRun, { surface: 'tile', words })"
@@ -233,7 +242,7 @@ const describedBy = computed(() => {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-1);
-  padding: var(--space-2);
+  padding: var(--space-3);
   background: var(--color-surface-sheet);
   border-radius: var(--radius-card);
 
@@ -250,6 +259,10 @@ const describedBy = computed(() => {
     outline: 2px solid var(--color-focus-ring);
     outline-offset: -2px;
   }
+
+  &.finished .tile-open {
+    color: var(--color-text-muted);
+  }
 }
 
 /* Identity and exceptions on one line that never wraps: the reference keeps
@@ -261,7 +274,7 @@ const describedBy = computed(() => {
   gap: var(--space-1);
   align-items: center;
   min-width: 0;
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
   font: var(--font-detail);
 }
 
@@ -311,9 +324,12 @@ const describedBy = computed(() => {
 
 /* The title is the open target, and its box is stretched over the whole sheet,
    so the sheet opens wherever it is clicked; the filter buttons beside it lie
-   above that box. */
+   above that box. The box says how far the pointer reaches, not how tall the
+   title stands: with a control's height from the base rule, a title of one line
+   stood in the middle of two. */
 .tile-open {
   display: block;
+  min-block-size: 0;
   padding: 0;
   border: 0;
   color: var(--color-text);

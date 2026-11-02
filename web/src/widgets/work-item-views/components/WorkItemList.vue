@@ -396,7 +396,11 @@ useListKeys(root, {
   white-space: nowrap;
 }
 
+/* A line of the row, not a control standing in it: at the base rule's height it
+   pushed the row's shared baseline down, and every title with it. The whole row
+   is what a pointer presses, so this box only has to hold the keyboard's focus. */
 .list-open {
+  min-block-size: 0;
   padding: 0;
   border: 0;
   color: var(--color-text);

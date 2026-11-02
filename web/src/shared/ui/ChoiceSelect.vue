@@ -314,7 +314,6 @@ function updateOpen(value: boolean) {
 
   &.placeholder {
     color: var(--color-text-muted);
-    font-weight: 500;
   }
 }
 

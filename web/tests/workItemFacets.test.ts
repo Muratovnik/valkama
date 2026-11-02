@@ -335,6 +335,14 @@ describe('parent and steps', () => {
     assert.deepEqual(printedOn('parent', item(), context), [])
   })
 
+  test('a closed tile prints no steps: all of them done is what its column says', () => {
+    const checklist = [{ id: 'a', text: 'a', done: true, claimed_by: '', done_by: '' }]
+    assert.equal(printsFacet('steps', 'tile', item({ checklist })), true)
+    assert.equal(printsFacet('steps', 'tile', item({ checklist }, 'done')), false)
+    // The list keeps its column.
+    assert.equal(printsFacet('steps', 'list', item({ checklist }, 'done')), true)
+  })
+
   test('steps print as done/total on the tile only when there are some, and always in the list', () => {
     const steps = [true, true, false].map((done, index) => ({
       id: `00000000-0000-4000-8000-00000000030${index}`,

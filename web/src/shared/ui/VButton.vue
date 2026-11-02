@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * The product's button, in the four weights it actually uses.
+ * The product's button, in the five weights it actually uses.
  *
  * Fifty-odd places styled their own before this existed, which is why the same
  * action could be a bordered control on one screen and bare text on the next.
@@ -8,7 +8,9 @@
  * `primary` is the light-on-dark button of the Codex ground: the product has
  * one primary action per surface and it is achromatic, so the accent stays
  * free to mean selection and focus. `danger` is reserved for an action that
- * destroys something; a merely important action is `primary`.
+ * destroys something; a merely important action is `primary`. `text` is an offer
+ * that repeats down a surface, such as the rest of a group, where a fill per row
+ * would be louder than the rows.
  */
 withDefaults(
   defineProps<{
@@ -24,7 +26,7 @@ withDefaults(
     size?: 'default' | 'compact' | 'inline'
     title?: string
     type?: 'button' | 'submit'
-    variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
+    variant?: 'primary' | 'secondary' | 'ghost' | 'text' | 'danger'
   }>(),
   {
     variant: 'secondary',
@@ -131,6 +133,16 @@ withDefaults(
 
   &.variant-ghost.icon-only {
     --color-button-fill: transparent;
+    --color-button-fill-hover: var(--color-surface-hover);
+    --color-button-fill-disabled: transparent;
+  }
+
+  /* Bare at rest and a fill only under the pointer: a ghost's fill on every cell
+     of a board stood level with the tiles it offered. */
+  &.variant-text {
+    --color-button-fill: transparent;
+    --color-button-ink: var(--color-text-muted);
+    --color-button-ink-hover: var(--color-text);
     --color-button-fill-hover: var(--color-surface-hover);
     --color-button-fill-disabled: transparent;
   }

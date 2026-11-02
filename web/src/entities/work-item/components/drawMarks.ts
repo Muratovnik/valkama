@@ -172,6 +172,27 @@ function drawMark(mark: FacetMark, run: MarkRun): VNode {
   )
 }
 
+/**
+ * One word alone in a table cell, a column's priority or holder: the mark is the
+ * word, with no box inside the cell. A table works out a column's width from
+ * every cell in it, and a box of flex items in a cell made that the dearest thing
+ * a list did. The «+N» after a run of labels is the same word: a tile draws it a
+ * hundred times, and the box around it held nothing else.
+ */
+export function drawWordCell([mark]: readonly FacetMark[], run: MarkRun): VNode {
+  if (!mark) return createCommentVNode()
+  const whole = run.words.say(mark.text)
+  const filters = run.filterable === true && mark.filter !== null
+  return h(
+    filters ? 'button' : 'span',
+    {
+      ...markProps(mark, run, whole, filters),
+      class: `${markShape(mark, filters)} facet-word-alone`,
+    },
+    whole,
+  )
+}
+
 function drawEntry(mark: FacetMark, run: MarkRun): VNode {
   const key = `${mark.facet}:${mark.value}`
   if (mark.form === 'chips')
@@ -189,6 +210,7 @@ function drawEntry(mark: FacetMark, run: MarkRun): VNode {
       ),
       { key },
     )
+  if (mark.facet === 'labels') return drawWordCell([mark], run)
   if (mark.facet === 'state' && !mark.glyph)
     return h(SemanticState, {
       key,
@@ -198,26 +220,6 @@ function drawEntry(mark: FacetMark, run: MarkRun): VNode {
       label: run.words.say(mark.text),
     })
   return drawMark(mark, run)
-}
-
-/**
- * One word alone in a table cell, a column's priority or holder: the mark is the
- * word, with no box inside the cell. A table works out a column's width from
- * every cell in it, and a box of flex items in a cell made that the dearest thing
- * a list did.
- */
-export function drawWordCell([mark]: readonly FacetMark[], run: MarkRun): VNode {
-  if (!mark) return createCommentVNode()
-  const whole = run.words.say(mark.text)
-  const filters = run.filterable === true && mark.filter !== null
-  return h(
-    filters ? 'button' : 'span',
-    {
-      ...markProps(mark, run, whole, filters),
-      class: `${markShape(mark, filters)} facet-word-alone`,
-    },
-    whole,
-  )
 }
 
 /** The run: its marks on a line of their own, for a host to place. */
