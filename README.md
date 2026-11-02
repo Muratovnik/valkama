@@ -804,7 +804,7 @@ files and process memory.
 
 | Path | Owns |
 | --- | --- |
-| `valkama.py` | the source entry point — it prepares `sys.path` and hands off to `server/cli.py`, or for `hook` to `server/hooks/entry.py` before the command line is imported |
+| `valkama.py` | the source entry point — it prepares `sys.path` and hands off to `server/cli.py`, or for `hook` to `server/hooks/entry.py` and for `serve --on-demand` to `server/on_demand.py` before the command line is imported |
 | `server/` | the Python server, managed launcher, domain modules, and CLI/HTTP/MCP surfaces |
 | `web/` | the Vue application, its build and its tests |
 | `desktop/` | the Electron window — its own npm package, tests and release output |
