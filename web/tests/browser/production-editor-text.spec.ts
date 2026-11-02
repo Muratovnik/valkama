@@ -4,7 +4,7 @@ import type { Page } from '@playwright/test'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installDiscussionBackend } from './discussionBackend.ts'
-import { linesTall, openCard, selection } from './editorPage.ts'
+import { box, linesTall, openCard, selection, settledBox } from './editorPage.ts'
 import { projectScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
@@ -90,6 +90,80 @@ test('a description longer than its field opens at its beginning, a shorter one 
   const short = await editDescription(page, AGENT_TEXT)
   expect(await selection(short.field)).toEqual([AGENT_TEXT.length, AGENT_TEXT.length])
 })
+
+/**
+ * A real press on Edit description, and what it has to leave in view: the frame starting
+ * under the tabs that pin over the card's scroller, with its toolbar and first line
+ * showing. Where the card stood must not matter, so it is pressed from where the card
+ * opens and with the button scrolled up to just under the tabs.
+ */
+async function pressEdit(
+  page: Page,
+  [width, height]: readonly [number, number],
+  text: string,
+  scrolled: boolean,
+) {
+  await page.setViewportSize({ width, height })
+  const backend = await installDiscussionBackend(page)
+  backend.item.description = text
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
+  const drawer = page.locator('.drawer')
+  await expect(drawer).toHaveCSS('transform', 'none')
+  const edit = drawer.getByRole('button', { name: 'Edit description', exact: true })
+  await expect(edit).toBeVisible()
+  const scroller = await box(drawer.locator('.drawer-frame-body'))
+  const tabs = drawer.locator('.drawer-frame-tabs')
+  if (scrolled) {
+    const button = await box(edit)
+    const pinned = await box(tabs)
+    await page.mouse.move(scroller.x + scroller.width / 2, scroller.y + scroller.height / 2)
+    await page.mouse.wheel(0, button.y - pinned.y - pinned.height - 4)
+    await settledBox(edit)
+  }
+
+  await edit.click()
+  const field = drawer.getByRole('textbox', { name: 'Description', exact: true })
+  await expect(field).toBeFocused()
+  const surface = drawer.locator('.description-form .markdown-surface')
+  const frame = await settledBox(surface)
+  const pinned = await box(tabs)
+  expect(frame.y).toBeGreaterThanOrEqual(pinned.y + pinned.height)
+  await expect(surface.getByRole('button', { name: 'Bold', exact: true })).toBeInViewport({
+    ratio: 1,
+  })
+  // A line of the text, under the toolbar, is inside the scroller too.
+  const { y: textTop } = await box(field)
+  expect(textTop + 40).toBeLessThanOrEqual(scroller.y + scroller.height)
+  return { field, frame, scroller }
+}
+
+for (const size of [
+  [1024, 800],
+  [390, 844],
+  [1024, 600],
+] as const) {
+  for (const scrolled of [false, true]) {
+    const from = scrolled ? 'with the button under the tabs' : 'from where the card opens'
+
+    test(`a long description opens at its start, ${from}, at ${size.join('x')}`, async ({
+      page,
+    }) => {
+      const long = 'Длинная строка плана.\n'.repeat(200)
+      const { field } = await pressEdit(page, size, long, scrolled)
+      expect(await selection(field)).toEqual([0, 0])
+      expect(await field.evaluate((control) => control.scrollTop)).toBe(0)
+    })
+
+    test(`a short description keeps its caret at the end and all of it in view, ${from}, at ${size.join('x')}`, async ({
+      page,
+    }) => {
+      const { field, frame, scroller } = await pressEdit(page, size, AGENT_TEXT, scrolled)
+      expect(await selection(field)).toEqual([AGENT_TEXT.length, AGENT_TEXT.length])
+      expect(frame.y + frame.height).toBeLessThanOrEqual(scroller.y + scroller.height + 1)
+    })
+  }
+}
 
 test('the description and the new task’s dialog ask for their own height, and the dialog has no foot', async ({
   page,

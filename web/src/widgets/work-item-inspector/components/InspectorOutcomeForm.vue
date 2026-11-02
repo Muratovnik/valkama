@@ -46,7 +46,7 @@ defineExpose({
   /** Bring the form to the top of the card with the caret in its first field. */
   reveal() {
     form.value?.scrollIntoView?.({ block: 'start' })
-    first.value?.focus()
+    first.value?.focusAtTop()
   },
 })
 </script>

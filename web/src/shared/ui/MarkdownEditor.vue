@@ -94,6 +94,7 @@ const listId = useId()
  * the keys and the list go through it and read nothing else.
  */
 const input = ref<InstanceType<typeof VTextInput> | null>(null)
+const surface = ref<HTMLElement | null>(null)
 const field = {
   element: () => input.value?.control() ?? null,
   text: () => input.value?.control()?.value ?? '',
@@ -103,13 +104,14 @@ const field = {
   },
   focus: () => input.value?.control()?.focus(),
   /**
-   * A text set from outside has its caret at the end, and the field scrolls there
-   * on focus. One longer than the field opens at its beginning instead, which is
-   * what the reader was looking at.
+   * A text set from outside has its caret at the end, and plain focus scrolls the
+   * field and everything around it to show that caret. So this focus moves nothing,
+   * and a text longer than the field starts at its beginning, which is what the
+   * reader was looking at; a shorter one keeps the caret, ready to be added to.
    */
   focusAtTop() {
     const control = input.value?.control()
-    control?.focus()
+    control?.focus({ preventScroll: true })
     if (!control || control.scrollHeight <= control.clientHeight) return
     control.setSelectionRange(0, 0)
     control.scrollTop = 0
@@ -253,8 +255,17 @@ function keydown(event: KeyboardEvent) {
 defineExpose({
   /** Put the caret in the field, for a host that opens the editor on purpose. */
   focus: () => field.focus(),
-  /** The same for a host that opens it on a text the reader was just reading. */
-  focusAtTop: () => field.focusAtTop(),
+  /**
+   * The same for a host that opens it on a text the reader was just reading, with
+   * the frame brought into view: all of it where it fits, and otherwise its start.
+   * The second call is for a frame taller than the scroller, whose start the first
+   * may just have sent away to show its end.
+   */
+  focusAtTop() {
+    field.focusAtTop()
+    surface.value?.scrollIntoView?.({ block: 'nearest' })
+    surface.value?.firstElementChild?.scrollIntoView?.({ block: 'nearest' })
+  },
 })
 </script>
 
@@ -270,6 +281,7 @@ defineExpose({
       >{{ label }}</label
     >
     <div
+      ref="surface"
       class="markdown-surface"
       :class="{ disabled }"
     >
