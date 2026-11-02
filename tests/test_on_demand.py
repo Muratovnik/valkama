@@ -7,6 +7,7 @@ import http.client
 import json
 import os
 import socket
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -16,8 +17,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from server import launcher, on_demand, processes
+from server import launcher, on_demand, processes, store
 from server.ops import configuration, doctor
+from server.planning import service
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -38,10 +40,18 @@ def _get(port: int, path: str = "/api/runtime", timeout: float = 60.0) -> tuple[
         client.close()
 
 
+def _log_file(home: Path) -> Path:
+    """Where the log of a process with this home and `LOCALAPPDATA` beneath it is."""
+
+    if os.name == "nt":
+        return home / "local" / "Valkama" / "on-demand.log"
+    return home / ".local" / "share" / "valkama" / "on-demand.log"
+
+
 def _wait_for_log(home: Path, text: str, *, seconds: float = 30.0) -> str:
     """Until the process has said `text`. A probe of the port would race its bind."""
 
-    log = home / ".valkama" / "on-demand.log"
+    log = _log_file(home)
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
         if log.exists():
@@ -77,6 +87,52 @@ class AgreementTests(unittest.TestCase):
             ):
                 self.assertIsNone(on_demand.main(refused), refused)
             run.assert_not_called()
+
+
+class LogTests(unittest.TestCase):
+    """The file is the only witness at login, so losing a line to tidiness is the worst outcome."""
+
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(directory.cleanup)
+        self.home = Path(directory.name)
+        environment = mock.patch.dict(
+            os.environ,
+            {
+                "USERPROFILE": directory.name,
+                "HOME": directory.name,
+                "LOCALAPPDATA": str(self.home / "local"),
+            },
+        )
+        environment.start()
+        self.addCleanup(environment.stop)
+        os.environ.pop("XDG_DATA_HOME", None)
+
+    def test_it_stays_out_of_the_stores_home_and_beside_the_launchers_files(self) -> None:
+        on_demand._log("said")
+        self.assertIn("said", _log_file(self.home).read_text(encoding="utf-8"))
+        self.assertFalse((self.home / ".valkama").exists())
+        self.assertEqual(launcher.default_releases().parent, Path(on_demand.log_path()).parent)
+
+    def test_a_long_log_moves_aside(self) -> None:
+        log = _log_file(self.home)
+        log.parent.mkdir(parents=True)
+        log.write_bytes(b"x" * (on_demand._MAX_LOG_BYTES + 1))
+        on_demand._log("after")
+        self.assertEqual(
+            on_demand._MAX_LOG_BYTES + 1, log.with_name(f"{log.name}.1").stat().st_size
+        )
+        self.assertIn("after", log.read_text(encoding="utf-8"))
+
+    def test_a_log_that_cannot_move_still_takes_the_line(self) -> None:
+        """Under `pythonw.exe` the server's stderr holds it open, and Windows refuses the move."""
+
+        log = _log_file(self.home)
+        log.parent.mkdir(parents=True)
+        log.write_bytes(b"x" * (on_demand._MAX_LOG_BYTES + 1))
+        with mock.patch("os.replace", side_effect=PermissionError("held")):
+            on_demand._log("kept")
+        self.assertIn("kept", log.read_text(encoding="utf-8"))
 
 
 class RealProcessTests(unittest.TestCase):
@@ -124,6 +180,33 @@ class RealProcessTests(unittest.TestCase):
 
     def loaded(self) -> str:
         return self.imports.read_text(encoding="utf-8", errors="replace")
+
+    def test_a_store_under_an_earlier_name_is_adopted_with_this_process_first(self) -> None:
+        """A home made for this process would read as a store already adopted: an empty board."""
+
+        with mock.patch.dict(os.environ, {"VALKAMA_DB": str(self.home / "seed" / "hub.sqlite3")}):
+            (self.home / "seed").mkdir()
+            conn = store.connect()
+            service.create_planning_space(conn, project_id="old", name="Old", key="OLD")
+            service.create_work_item(conn, space="OLD", title="A card from before the rename")
+            conn.commit()
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            conn.close()
+        (self.home / "seed").rename(self.home / ".agent-hub")
+        del self.environment["VALKAMA_DB"]
+
+        process = self.start()
+        _wait_for_log(self.home, f"holding port {self.port}")
+        self.assertFalse((self.home / ".valkama").exists())
+        self.assertEqual(200, _get(self.port)[0])
+
+        self.assertFalse((self.home / ".agent-hub").exists())
+        adopted = self.home / ".valkama" / "valkama.sqlite3"
+        reader = sqlite3.connect(f"file:{adopted.as_posix()}?mode=ro", uri=True)
+        self.addCleanup(reader.close)
+        titles = [row[0] for row in reader.execute("SELECT title FROM work_items")]
+        self.assertEqual(["A card from before the rename"], titles)
+        process.kill()
 
     def test_nothing_of_the_server_loads_until_the_first_connection(self) -> None:
         self.start()
@@ -180,11 +263,17 @@ class LoadFailureTests(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         self.home = Path(directory.name)
         environment = mock.patch.dict(
-            os.environ, {"USERPROFILE": directory.name, "HOME": directory.name}
+            os.environ,
+            {
+                "USERPROFILE": directory.name,
+                "HOME": directory.name,
+                "LOCALAPPDATA": str(self.home / "local"),
+            },
         )
         environment.start()
         self.addCleanup(environment.stop)
         os.environ.pop(launcher.LAUNCHER_ENV, None)
+        os.environ.pop("XDG_DATA_HOME", None)
         self.port = _free_port()
 
     def run_with(self, load: on_demand.Load) -> threading.Thread:
@@ -294,6 +383,7 @@ class FollowReleaseTests(unittest.TestCase):
                 launcher.LAUNCHER_ENV: str(self.directory),
                 "USERPROFILE": str(self.directory),
                 "HOME": str(self.directory),
+                "LOCALAPPDATA": str(self.directory / "local"),
             },
         )
         environment.start()

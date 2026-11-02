@@ -39,6 +39,13 @@ _MAX_LOG_BYTES = 1024 * 1024
 _LAUNCHER_ENV = "VALKAMA_LAUNCHER_DIR"
 _MANIFEST_NAME = "valkama-launcher.json"
 _OWN_ENTRY = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "valkama.py")
+#: Where `log_path` is, as a person looks for it: the answer to a failed load names no
+#: path of this machine, for the reason it names no failure.
+_LOG_HINT = (
+    "%LOCALAPPDATA%\\Valkama\\on-demand.log"
+    if os.name == "nt"
+    else "~/.local/share/valkama/on-demand.log"
+)
 
 #: The answer to a connection the server could not be loaded for. It names no reason:
 #: this socket has no `Host` check yet, and the reason can hold a path. The log has it.
@@ -47,10 +54,10 @@ _LOAD_FAILED_BODY = (
     '<body style="margin:0;padding:48px 24px;background:#030405;color:#e8e8e8;'
     'font:15px/1.5 system-ui,sans-serif">'
     '<h1 style="font-size:20px">Valkama не запустилась · Valkama did not start</h1>'
-    "<p>Сервер не загрузился, причина записана в журнал .valkama/on-demand.log в домашней"
-    " папке. Обновите страницу, чтобы попробовать снова.</p>"
-    "<p>The server could not be loaded, and the reason is in the log"
-    " .valkama/on-demand.log in your home folder. Reload this page to try again.</p>"
+    f"<p>Сервер не загрузился, причина записана в журнал {_LOG_HINT}."
+    " Обновите страницу, чтобы попробовать снова.</p>"
+    f"<p>The server could not be loaded, and the reason is in the log {_LOG_HINT}."
+    " Reload this page to try again.</p>"
     "</body></html>"
 ).encode()
 _LOAD_FAILED = (
@@ -66,7 +73,32 @@ Load = Callable[[socket.socket, int, str | None], None]
 
 
 def log_path() -> str:
-    return os.path.join(os.path.expanduser("~"), ".valkama", "on-demand.log")
+    """Beside the launcher's own files, and never in the store's home.
+
+    `store_adoption` reads an existing `~/.valkama` as a store already adopted, so a
+    directory made here before the first connection would leave a store under an
+    earlier name behind and open an empty board. `launcher.default_releases` spells
+    the same folder; `test_on_demand` holds the two to one place.
+    """
+
+    local = os.environ.get("LOCALAPPDATA") if os.name == "nt" else None
+    if local:
+        return os.path.join(local, "Valkama", "on-demand.log")
+    data = os.environ.get("XDG_DATA_HOME") or os.path.join(
+        os.path.expanduser("~"), ".local", "share"
+    )
+    return os.path.join(data, "valkama", "on-demand.log")
+
+
+def _rotate(path: str) -> None:
+    """Move a long log aside. The server's stderr can hold the file open, and on Windows
+    that refuses the move, so it then grows until the next login rather than lose a line."""
+
+    try:
+        if os.path.exists(path) and os.path.getsize(path) > _MAX_LOG_BYTES:
+            os.replace(path, f"{path}.1")
+    except OSError:
+        pass
 
 
 def _log(line: str) -> None:
@@ -76,10 +108,9 @@ def _log(line: str) -> None:
     """
 
     path = log_path()
+    _rotate(path)
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        if os.path.exists(path) and os.path.getsize(path) > _MAX_LOG_BYTES:
-            os.replace(path, f"{path}.1")
         with open(path, "a", encoding="utf-8") as stream:
             stream.write(f"{time.strftime('%Y-%m-%dT%H:%M:%S')} pid {os.getpid()} {line}\n")
     except OSError:
@@ -91,6 +122,7 @@ def _give_output_a_home() -> None:
 
     if sys.stderr is not None and sys.stdout is not None:
         return
+    _rotate(log_path())
     try:
         os.makedirs(os.path.dirname(log_path()), exist_ok=True)
         stream = open(log_path(), "a", encoding="utf-8", buffering=1)

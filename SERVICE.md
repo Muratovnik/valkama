@@ -51,6 +51,9 @@ previous one is the rollback:
 python valkama.py launcher install --revision <previous commit>
 ```
 
+Run `launcher autostart disable` first when the previous release has no
+`serve --on-demand`: it would exit at login with nothing on the port.
+
 A release from before `valkama hook` does not know that command, and its
 argument parser exits 2, which Claude Code reads from a prompt or tool hook as
 blocking the prompt or the call. The shim therefore answers `valkama hook`
@@ -176,8 +179,10 @@ the tray and `listener status` or `stop` it is an ordinary managed listener;
   seconds, so it takes the port within 30 seconds of the desktop app closing the
   server it started.
 - **The server cannot be loaded.** The connection gets a 503 page, the traceback goes
-  to `.valkama/on-demand.log` in the home directory, and a later connection tries
-  again, no sooner than 5 seconds after the failure.
+  to `on-demand.log` beside the launcher's files (`%LOCALAPPDATA%\Valkama` on Windows,
+  `~/.local/share/valkama` elsewhere), and a later connection tries again, no sooner
+  than 5 seconds after the failure. The log stays out of `~/.valkama`, because an
+  existing directory there would read as a store already adopted.
 - **`launcher install`.** A listener held on demand would load the old release on
   the next connection, so `install` stops it through the check above and starts it
   from the new release. It rewrites the autostart value when autostart is on, and
