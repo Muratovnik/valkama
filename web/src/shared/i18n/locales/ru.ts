@@ -10,6 +10,7 @@ import { memoryProviderMessages } from '@/shared/i18n/memoryProviderMessages.ts'
 import { platformIntegrationMessages } from '@/shared/i18n/platformIntegrationMessages.ts'
 import { richTextMessages } from '@/shared/i18n/richTextMessages.ts'
 import { workFilterMessages } from '@/shared/i18n/workFilterMessages.ts'
+import { workItemAgentMessages } from '@/shared/i18n/workItemAgentMessages.ts'
 import { workItemFacetMessages } from '@/shared/i18n/workItemFacetMessages.ts'
 import { workItemHeadMessages } from '@/shared/i18n/workItemHeadMessages.ts'
 import { workItemLinkMessages } from '@/shared/i18n/workItemLinkMessages.ts'
@@ -766,27 +767,7 @@ export const ru = {
     close: 'Закрыть',
   },
   workItem: {
-    agents: {
-      heading: 'Агенты',
-      holdsStep: 'Держит шаг:',
-      started: 'Запущен',
-      ended: 'завершён',
-      lastActivity: 'последняя активность',
-      noSignal: 'с тех пор сигналов нет',
-      fromStart: '{time} от начала',
-      linkExact: 'писал в эту задачу',
-      linkClaim: 'по захвату координатора',
-      linkAmbiguous:
-        'неоднозначно: координатор держал {count}\u{A0}задачу | неоднозначно: координатор держал {count}\u{A0}задачи | неоднозначно: координатор держал {count}\u{A0}задач',
-      showAll: 'Показать все · {count}',
-      showFewer: 'Свернуть',
-      lessThanMinute: 'меньше минуты',
-      minutes: '{count}\u{A0}мин',
-      hours: '{count}\u{A0}ч',
-      days: '{count}\u{A0}д',
-      ago: '{time} назад',
-      justNow: 'только что',
-    },
+    agents: workItemAgentMessages.ru.agents,
     addDescription: 'Добавить описание',
     editDescription: 'Изменить описание',
     saveDescription: 'Сохранить описание',

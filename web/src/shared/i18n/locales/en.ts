@@ -10,6 +10,7 @@ import { memoryProviderMessages } from '@/shared/i18n/memoryProviderMessages.ts'
 import { platformIntegrationMessages } from '@/shared/i18n/platformIntegrationMessages.ts'
 import { richTextMessages } from '@/shared/i18n/richTextMessages.ts'
 import { workFilterMessages } from '@/shared/i18n/workFilterMessages.ts'
+import { workItemAgentMessages } from '@/shared/i18n/workItemAgentMessages.ts'
 import { workItemFacetMessages } from '@/shared/i18n/workItemFacetMessages.ts'
 import { workItemHeadMessages } from '@/shared/i18n/workItemHeadMessages.ts'
 import { workItemLinkMessages } from '@/shared/i18n/workItemLinkMessages.ts'
@@ -767,27 +768,7 @@ export const en = {
     close: 'Close',
   },
   workItem: {
-    agents: {
-      heading: 'Agents',
-      holdsStep: 'Holds step:',
-      started: 'Started',
-      ended: 'ended',
-      lastActivity: 'last activity',
-      noSignal: 'no sign of it since',
-      fromStart: '{time} from the start',
-      linkExact: 'wrote to this item',
-      linkClaim: "by the coordinator's claim",
-      linkAmbiguous:
-        'ambiguous: the coordinator held {count} item | ambiguous: the coordinator held {count} items',
-      showAll: 'Show all · {count}',
-      showFewer: 'Show fewer',
-      lessThanMinute: 'under a minute',
-      minutes: '{count}\u{A0}min',
-      hours: '{count}\u{A0}h',
-      days: '{count}\u{A0}d',
-      ago: '{time} ago',
-      justNow: 'just now',
-    },
+    agents: workItemAgentMessages.en.agents,
     addDescription: 'Add description',
     editDescription: 'Edit description',
     saveDescription: 'Save description',
