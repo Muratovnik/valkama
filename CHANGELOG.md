@@ -37,17 +37,27 @@ checkouts are therefore distinguishable even at the same version.
   no longer moves anything but the text: the head had two layouts, flipped at the
   first scrolled pixel, and elements left and came back at once.
 - **Going from a card to a card keeps the panel.** A link and Back change what the
-  panel shows; the slide belongs to the first open and to the close.
+  panel shows; the slide belongs to the first open and to the close. The new card's
+  head waits for its read, so no half of it shows and then moves.
+- **Closing plays.** A card slides out and its scrim fades, whichever way it closes,
+  and a dialog toggled by its host closes the same way. Under reduced motion it goes
+  at once.
 - The facts stand in rows of one height, with the action level with the first row
   however they wrap. A takeover asks in the band under the bar, where a refusal
   stands, wherever its button was pressed.
+- **A section with nothing in it is absent.** A card with no steps has no Checklist
+  section and one with no questions no Questions section, until something arrives. A
+  failed read of the questions still shows, because not knowing is not having none.
 - **The board reads by its titles.** A title on a tile or a list row no longer stands
   in a heavier weight than everything around it, and a label is a quiet word instead
   of a chip. Short titles no longer sit in a taller box than they need, and a closed
   tile steps back.
 - **An epic's row is one line** on the board, with its state only once it has moved.
-- **«By epics» is a toggle like its neighbours,** beside the view switch, and keeps
-  its word at every width.
+- **«By epics» is a toggle like its neighbours,** beside the view switch. It keeps its
+  word down to a phone, and pressing a toggle moves nothing beside it: the pressed
+  state is a fill and a bar under the word, where a check used to widen the chip.
+- **The work bar takes the phone's form earlier,** and a form between the two below
+  a window of 996 px with the sidebar, so the search field stays wide enough to use.
 - **A chain's section reaches its list sooner.** The groups are named once, the map's
   key gives their counts, a forecast shows only with a verdict, and the chart and the
   pace stand one action away.
@@ -67,7 +77,7 @@ checkouts are therefore distinguishable even at the same version.
   discussion as before, with their action to make one the outcome. Closing a task
   with no outcome opens a form of its own, from the refusal that asks for it, with
   the two fields the server needs and a way back to the comment. Saving it carries
-  the refused move on.
+  the refused move on, and once that move is over the form only saves.
 
 ### Fixed
 
@@ -76,18 +86,29 @@ checkouts are therefore distinguishable even at the same version.
   task showed a message about this build instead of its card.
 - A task with a long discussion opens again, up to 1 MiB of card. The web client
   refused any answer over 256 KiB, and the service does not limit a discussion.
+- Going back to Overview from another section, and Shift+Tab into the tabs, keep the
+  reader's place. A section went to the top with the tabs leaving from under the pointer.
+- A card opened by its address draws no focus ring on Close: the dialog holds focus
+  until the first input, and the first Tab reaches its first control.
+- A card with no epic no longer keeps an empty row for it among the facts.
 - A holder signed as `name session <id>` with no brackets is shortened as a holder
   signed `name (session <id>)` is, on the card, the board and the chain, with the
   whole value in the card's tooltip.
 - The list of tasks closes when focus leaves the field.
 - Choosing a task from the list no longer clears the field's undo history.
-- Editing a description now puts the caret in it, where focus used to fall to the
-  page with the button that was pressed. A description longer than the field opens
-  at its beginning.
-- Sending from the keyboard leaves focus in the field, where the write's disabling
-  of it used to drop focus to the page.
+- Editing a long description opens with the toolbar and the start of the text in
+  view, where the card's own scroller used to run to the end of the text.
+- A second press of bold, italic or code takes the mark off a selection of several
+  lines, where it used to add a second pair.
+- An outcome stepped back from is kept and asked about before it goes, where closing
+  the card dropped it with no question.
+- Focus stays in the card after a takeover, after an outcome is sent and after sending
+  or saving from the editor by its button, where it used to fall to the page.
 - A comment and a new task's description reach the server as they were typed; the
   web client no longer trims them first.
+- «Go to the checklist» from another section brings the checklist into view.
+- On a phone the list's sort choice shows its whole name, and the Memory section's
+  search button stands level with its field.
 
 ## [2.3.0](https://github.com/Muratovnik/valkama/compare/v2.2.0...v2.3.0) - 2026-11-02
 
