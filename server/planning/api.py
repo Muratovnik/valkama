@@ -54,9 +54,12 @@ def _int(value: object, name: str, default: int) -> int:
     if value is None:
         return default
     try:
-        return int(str(value), 10)
+        number = int(str(value), 10)
     except ValueError as error:
         raise PlanningHttpError(400, "invalid_request", f"{name} must be an integer") from error
+    if abs(number) > model.MAX_COUNT:
+        raise PlanningHttpError(400, "invalid_request", f"{name} must be an integer")
+    return number
 
 
 def _field(payload: Mapping[str, object], name: str) -> object:
@@ -206,7 +209,7 @@ def _count(parameters: Mapping[str, list[str]], name: str) -> int | None:
         count = int(value, 10)
     except ValueError:
         count = -1
-    if count < 0:
+    if not 0 <= count <= model.MAX_COUNT:
         raise model.PlanningError(f"{name} must be a non-negative integer")
     return count
 

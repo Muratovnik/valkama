@@ -150,6 +150,10 @@ def multiline_field(value: object, field: str, *, limit: int = MAX_DESCRIPTION) 
     return value.strip()
 
 
+#: The largest integer SQLite binds; a larger one is an error it cannot answer.
+MAX_COUNT = 2**63 - 1
+
+
 def count_field(value: object, field: str) -> int:
     """A count of things, such as where a page starts: an integer, never negative.
 
@@ -157,7 +161,7 @@ def count_field(value: object, field: str) -> int:
     sent as an offset is a caller's mistake, not the number one.
     """
 
-    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+    if not isinstance(value, int) or isinstance(value, bool) or not 0 <= value <= MAX_COUNT:
         raise PlanningError(f"{field} must be a non-negative integer")
     return value
 

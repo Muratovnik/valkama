@@ -2076,6 +2076,7 @@ class CompactWorkItemReadTests(WireCallTestCase):
             ({"comments_after": -1}, "comments_after must be a non-negative integer"),
             ({"comments_after": "12"}, "comments_after must be a non-negative integer"),
             ({"comments_after": True}, "comments_after must be a non-negative integer"),
+            ({"comments_after": 2**70}, "comments_after must be a non-negative integer"),
         ):
             with self.subTest(extra=extra):
                 error = self.refusal("get_work_item", {"id": self.reference, **extra})
@@ -2221,6 +2222,8 @@ class CompactWorkItemReadTests(WireCallTestCase):
         for parameters, wanted in (
             ({"comments": ["-1"]}, "comments must be a non-negative integer"),
             ({"comments_after": ["many"]}, "comments_after must be a non-negative integer"),
+            ({"comments_after": [str(2**70)]}, "comments_after must be a non-negative integer"),
+            ({"comments": [str(2**70)]}, "comments must be a non-negative integer"),
             ({"events": ["many"]}, "events must be a non-negative integer"),
             ({"sessions": ["yes"]}, "sessions must be true or false"),
         ):
