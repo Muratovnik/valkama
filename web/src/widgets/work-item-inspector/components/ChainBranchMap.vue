@@ -14,9 +14,9 @@
  * draw, each lane's counts are text, and the task under the pointer or the
  * keyboard cursor is named in full.
  */
-import { computed, ref, useId } from 'vue'
+import { computed, onMounted, ref, useId } from 'vue'
 
-import { useElementSize } from '@vueuse/core'
+import { useResizeObserver } from '@vueuse/core'
 
 import ChainBranchKey from '@/widgets/work-item-inspector/components/ChainBranchKey.vue'
 import ChainBranchTip from '@/widgets/work-item-inspector/components/ChainBranchTip.vue'
@@ -52,7 +52,15 @@ const { describe, laneCounts, laneLabel, laneName, laneTexts, legend, position, 
   useBranchText((group) => props.labels[group].text)
 
 const canvas = ref<HTMLElement | null>(null)
-const { width: measured } = useElementSize(canvas)
+const measured = ref(0)
+useResizeObserver(canvas, (entries) => {
+  measured.value = entries[0]?.contentRect.width ?? 0
+})
+// Before the first paint. An observer answers only after a first layout, and that layout
+// held the guess's height, so a place restored to it landed off by the difference.
+onMounted(() => {
+  measured.value = canvas.value?.clientWidth ?? 0
+})
 /**
  * Until the element has been measured — and in a test DOM, which never measures —
  * a phone's width. A drawing laid out at that guess is never shown: the canvas
