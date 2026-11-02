@@ -286,6 +286,26 @@ test('every arrow goes on round the ends, and a modified one is left to the brow
   await expect(radio('With a line')).toBeChecked()
 })
 
+test('the list of everything waiting shows it the same way, and again when reopened', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const { drawer } = await openQuestion(page, [asked({ fields: [crowdedField] })])
+  await drawer.getByRole('button', { name: 'Close', exact: true }).click()
+  const opener = page.getByRole('button', { name: /^Needs my answer/ })
+  await opener.click()
+  const dialog = page.getByRole('dialog', { name: 'Needs my answer', exact: true })
+  const chosen = dialog.locator('.request-chosen')
+  await dialog.getByRole('radio', { name: 'Option 3', exact: true }).check()
+  await expect(chosen).toContainText(opening(3))
+  await expect(chosen).toContainText('second paragraph')
+  await expectNoSilentClipping(page, 'A chosen description in the list at 390px')
+  await dialog.getByRole('button', { name: 'Close questions', exact: true }).click()
+  await opener.click()
+  await expect(dialog.getByRole('radio', { name: 'Option 3', exact: true })).toBeChecked()
+  await expect(chosen).toContainText(opening(3))
+})
+
 test('a screen reader hears the label on each arrow, and the description is there to reach', async ({
   page,
 }) => {
