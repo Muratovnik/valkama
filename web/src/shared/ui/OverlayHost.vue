@@ -1,16 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, onUnmounted, ref, shallowRef, useId, watch } from 'vue'
 
-import { useEventListener } from '@vueuse/core'
-
 import {
   DRAWER_DEFAULT_WIDTH,
   DRAWER_MAX_WIDTH,
   DRAWER_MIN_WIDTH,
   DRAWER_NARROW_BREAKPOINT,
-  DRAWER_VIEWPORT_GUTTER,
   INSPECTOR_DRAWER_STORAGE_KEY,
-  INSPECTOR_KEYBOARD_STEP,
 } from '@/shared/lib/shellLayout.ts'
 import {
   claimOverlayOwnership,
@@ -18,6 +14,7 @@ import {
   releaseOverlayOwnership,
 } from '@/shared/ui/overlayStack.ts'
 import type { OverlayOwnership } from '@/shared/ui/overlayStack.ts'
+import { useDrawerWidth } from '@/shared/ui/useDrawerWidth.ts'
 
 const props = withDefaults(
   defineProps<{
@@ -67,25 +64,25 @@ const surface = ref<HTMLElement | null>(null)
 const titleId = `overlay-title-${useId()}`
 const ownership = shallowRef<OverlayOwnership | null>(null)
 const active = computed(() => props.open && props.interactive && ownsOverlay(ownership.value))
-const preferredDrawerWidth = ref(props.drawerDefaultWidth)
-const viewportWidth = ref(typeof window === 'undefined' ? 1440 : window.innerWidth)
-const resizing = ref(false)
-let resizeStartX = 0
-let resizeStartWidth = props.drawerDefaultWidth
-
 const isResizableDrawer = computed(() => props.resizable && props.variant === 'drawer')
-const drawerMaximum = computed(() =>
-  viewportWidth.value <= DRAWER_NARROW_BREAKPOINT
-    ? viewportWidth.value
-    : Math.min(props.drawerMaxWidth, viewportWidth.value - DRAWER_VIEWPORT_GUTTER),
-)
-const drawerMinimum = computed(() => Math.min(props.drawerMinWidth, drawerMaximum.value))
-const drawerWidth = computed(() =>
-  Math.min(
-    drawerMaximum.value,
-    Math.max(drawerMinimum.value, Math.round(preferredDrawerWidth.value)),
-  ),
-)
+const {
+  beginResize,
+  drawerMaximum,
+  drawerMinimum,
+  drawerWidth,
+  measureViewport,
+  resizeFromKeyboard,
+  resizing,
+  restoreDrawerWidth,
+  viewportWidth,
+} = useDrawerWidth({
+  active: () => active.value,
+  defaultWidth: () => props.drawerDefaultWidth,
+  maxWidth: () => props.drawerMaxWidth,
+  minWidth: () => props.drawerMinWidth,
+  resizable: () => isResizableDrawer.value,
+  storageKey: () => props.widthStorageKey,
+})
 // 4px under the window's top edge, above the first chrome label at every width
 // (9px at 390), so the edge crosses no label; the dialog padding above is cancelled.
 const TOP_EDGE = 'calc(4px - var(--space-5))'
@@ -139,64 +136,6 @@ async function focusSurface() {
   if (!active.value || surface.value?.contains(document.activeElement)) return
   const preferred = focusable().find((control) => control.dataset.overlayResizer === undefined)
   ;(preferred ?? surface.value)?.focus()
-}
-
-function measureViewport() {
-  viewportWidth.value = window.innerWidth
-}
-
-function restoreDrawerWidth() {
-  if (!isResizableDrawer.value || typeof localStorage === 'undefined') return
-  const stored = Number(localStorage.getItem(props.widthStorageKey))
-  const requested = Number.isFinite(stored) && stored > 0 ? stored : props.drawerDefaultWidth
-  preferredDrawerWidth.value = Math.round(requested)
-}
-
-function storeDrawerWidth() {
-  if (!isResizableDrawer.value || typeof localStorage === 'undefined') return
-  localStorage.setItem(props.widthStorageKey, String(preferredDrawerWidth.value))
-}
-
-function beginResize(event: PointerEvent) {
-  if (!active.value || !isResizableDrawer.value || event.button !== 0) return
-  event.preventDefault()
-  resizeStartX = event.clientX
-  resizeStartWidth = drawerWidth.value
-  resizing.value = true
-}
-
-function resizeFromPointer(event: PointerEvent) {
-  preferredDrawerWidth.value = Math.min(
-    drawerMaximum.value,
-    Math.max(drawerMinimum.value, resizeStartWidth + resizeStartX - event.clientX),
-  )
-}
-
-function endResize() {
-  resizing.value = false
-  storeDrawerWidth()
-}
-
-useEventListener(window, 'resize', measureViewport)
-useEventListener(window, 'pointermove', (event: PointerEvent) => {
-  if (resizing.value) resizeFromPointer(event)
-})
-useEventListener(window, 'pointerup', () => {
-  if (resizing.value) endResize()
-})
-
-function resizeFromKeyboard(event: KeyboardEvent) {
-  const requested = new Map([
-    ['Home', drawerMinimum.value],
-    ['End', drawerMaximum.value],
-    ['ArrowLeft', drawerWidth.value + INSPECTOR_KEYBOARD_STEP],
-    ['ArrowRight', drawerWidth.value - INSPECTOR_KEYBOARD_STEP],
-  ])
-  const target = requested.get(event.key)
-  if (!active.value || target === undefined) return
-  event.preventDefault()
-  preferredDrawerWidth.value = Math.min(drawerMaximum.value, Math.max(drawerMinimum.value, target))
-  storeDrawerWidth()
 }
 
 function trapFocus(event: KeyboardEvent) {
