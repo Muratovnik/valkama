@@ -311,7 +311,9 @@ onUnmounted(release)
 /* The host holds still for as long as what it holds is moving. The Transition reads the
    duration off this element and nothing here moves, so with none of its own it removed
    the host a frame into its leave, before the surface had gone anywhere. An enter got
-   away with it only because a browser does not stop a transition it has begun. */
+   away with it only because a browser does not stop a transition it has begun. Opacity
+   never changes here and no end event comes: the Transition ends on its own timer, set
+   from this duration. Without this rule, unused as it looks, a close does not play. */
 .overlay-enter-active,
 .overlay-leave-active {
   transition: opacity var(--duration-surface) var(--ease-out);
