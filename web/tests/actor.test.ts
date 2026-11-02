@@ -19,6 +19,24 @@ test('a session baked into an actor name is split into name and session', () => 
   })
 })
 
+test('a session signed with no brackets splits the same way', () => {
+  assert.deepEqual(splitActor('claude-code session 0f1e2d3c-4b5a-4968-8778-695a4b3c2d1e'), {
+    name: 'claude-code',
+    session: '0f1e2d3c-4b5a-4968-8778-695a4b3c2d1e',
+  })
+  assert.equal(
+    holderName('claude-code session 0f1e2d3c-4b5a-4968-8778-695a4b3c2d1e'),
+    'claude-code · 0f1e2d3c-4b5a',
+  )
+  // A name that only ends in the word, or a word with no id after it, is a name.
+  assert.equal(actorName('night-session'), 'night-session')
+  assert.equal(actorName('my session'), 'my session')
+  assert.equal(actorSession('my session ab'), '')
+  // The word alone keeps the original string, as a bracketed one does.
+  assert.equal(actorName('session 1baa03d7'), 'session 1baa03d7')
+  assert.equal(actorSession('session 1baa03d7'), '1baa03d7')
+})
+
 test('plain names and odd shapes pass through untouched', () => {
   assert.deepEqual(splitActor('user'), { name: 'user', session: '' })
   assert.deepEqual(splitActor(''), { name: '', session: '' })

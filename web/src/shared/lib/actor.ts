@@ -1,8 +1,9 @@
 /**
- * Agents sign claims and events as "name (session 1baa03d7)". That habit is
- * useful provenance but wrong typography: the name column must show a name,
- * and the session belongs in the session slot. This is the one parser every
- * surface uses, so the split cannot drift between components.
+ * Agents sign claims and events as "name (session 1baa03d7)", and some of them
+ * as "name session 1baa03d7" with no brackets. That habit is useful provenance
+ * but wrong typography: the name column must show a name, and the session belongs
+ * in the session slot. This is the one parser every surface uses, so the split
+ * cannot drift between components.
  */
 
 export interface ActorParts {
@@ -12,16 +13,17 @@ export interface ActorParts {
 }
 
 const ACTOR_SESSION =
-  /^(.*?)[\s·—-]*[([]\s*(?:session|сессия)[:#\s]*([0-9a-f][0-9a-f-]{5,})\s*[)\]]$/i
+  /^(.*?)[\s·—-]*(?:[([]\s*(?:session|сессия)[:#\s]*([0-9a-f][0-9a-f-]{5,})\s*[)\]]|(?:^|\s)(?:session|сессия)[:#\s]+([0-9a-f][0-9a-f-]{5,}))$/i
 
 export function splitActor(raw: string): ActorParts {
   const value = typeof raw === 'string' ? raw.trim() : ''
   const match = ACTOR_SESSION.exec(value)
   if (!match) return { name: value, session: '' }
   const name = match[1].trim()
+  const session = match[2] ?? match[3]
   // "(session x)" with no name before it stays as it was written: an empty
   // executor column would claim nobody holds the work.
-  return name ? { name, session: match[2] } : { name: value, session: match[2] }
+  return name ? { name, session } : { name: value, session }
 }
 
 export function actorName(raw: string): string {
