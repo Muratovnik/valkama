@@ -8,7 +8,7 @@
  * is asking, because whoever stands here pressed Done and was handed a form.
  * Saving carries that move on, so answering the question finishes what was
  * started. The host owns the text and the write, so a draft outlives a step back
- * to the comment and is there when the same question comes again.
+ * to the comment, and the host answers for it from there.
  */
 import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'

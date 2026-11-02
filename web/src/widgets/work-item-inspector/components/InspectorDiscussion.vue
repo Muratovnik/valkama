@@ -14,6 +14,11 @@
  * wanted one: the one report a person writes is the outcome a closing move asks
  * for, so `askOutcome`, which only that refusal reaches, puts
  * `InspectorOutcomeForm` where the composer stands until it is answered.
+ *
+ * What is written in that form is text nobody has anywhere else, so only sending it
+ * or answering the question before leaving lets it go. A step back to the comment
+ * keeps it, and the comment then offers the way back to it, so that the question
+ * never asks about something the reader cannot find.
  */
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -45,6 +50,8 @@ const anchor = ref<{ id: string; text: string } | null>(null)
 const composer = ref<HTMLFormElement | null>(null)
 /** The move waiting on an outcome, while the outcome form stands in the composer's place. */
 const closing = ref<StateMove | null>(null)
+/** The move an unsent outcome was written for, once the form has made way for the comment. */
+const held = ref<StateMove | null>(null)
 const outcome = reactive({ done: '', next: '' })
 const outcomeForm = ref<InstanceType<typeof InspectorOutcomeForm> | null>(null)
 
@@ -54,7 +61,7 @@ const suggest = workItemSuggest(
 )
 
 useDraftSource('comment', () => Boolean(note.value.trim()))
-useDraftSource('outcome', () => closing.value !== null && Boolean(outcome.done || outcome.next))
+useDraftSource('outcome', () => Boolean(outcome.done || outcome.next))
 
 async function revealComposer(identity: string) {
   await nextTick()
@@ -67,20 +74,29 @@ async function discussStep(stepId: string) {
   const step = props.item.checklist.find((entry) => entry.id === stepId)
   if (!step) return
   anchor.value = { id: step.id, text: step.text }
-  closing.value = null
+  stepAside()
   await revealComposer(props.item.work_item_id)
 }
 /** The outcome a refused closing move needs, written here and then carried on. */
 async function askOutcome(move: StateMove) {
   if (!props.writable || pending.value) return
   closing.value = move
+  held.value = null
   const identity = props.item.work_item_id
   await nextTick()
   if (props.item.work_item_id === identity) outcomeForm.value?.reveal()
 }
-function backToComment() {
+/** The form makes way for the comment, and what is written in it stays, if anything is. */
+function stepAside() {
+  if (outcome.done || outcome.next) held.value = closing.value ?? held.value
   closing.value = null
+}
+function backToComment() {
+  stepAside()
   void revealComposer(props.item.work_item_id)
+}
+function resumeOutcome() {
+  if (held.value) void askOutcome(held.value)
 }
 function removeAnchor() {
   anchor.value = null
@@ -104,6 +120,7 @@ watch(
     previewing.value = false
     anchor.value = null
     closing.value = null
+    held.value = null
     Object.assign(outcome, { done: '', next: '' })
   },
 )
@@ -130,13 +147,22 @@ function publish() {
     },
   )
 }
-/** The question is answered, so the form goes and the move it interrupted goes on. */
-function outcomeSettled() {
+/**
+ * The text is sent, so it is done with, and the move it was written for goes on. A
+ * report made the outcome meanwhile may have carried that move already.
+ */
+function outcomeSent() {
   const move = closing.value
-  if (!move) return
   closing.value = null
+  held.value = null
   Object.assign(outcome, { done: '', next: '' })
-  emit('resume', move.key)
+  if (move && move.key !== props.item.state.key) emit('resume', move.key)
+}
+/** A report made the outcome answers the form's question and leaves what is written in it. */
+function reportSelected() {
+  const move = closing.value
+  stepAside()
+  if (move) emit('resume', move.key)
 }
 function publishOutcome() {
   if (!props.writable) return
@@ -148,10 +174,9 @@ function publishOutcome() {
         make_current: true,
         expected_revision: props.item.revision,
       }),
-    outcomeSettled,
+    outcomeSent,
   )
 }
-/** A report made the outcome from the thread answers the same question the form asks. */
 function select(commentId: number) {
   if (!props.writable) return
   void submit(
@@ -161,7 +186,7 @@ function select(commentId: number) {
         comment_id: commentId,
         expected_revision: props.item.revision,
       }),
-    outcomeSettled,
+    reportSelected,
   )
 }
 defineExpose({ askOutcome, discussStep })
@@ -194,6 +219,15 @@ defineExpose({ askOutcome, discussStep })
       :aria-label="t('checklistComment.composer')"
       @submit.prevent="publish"
     >
+      <VButton
+        v-if="held"
+        class="held-outcome"
+        variant="ghost"
+        size="inline"
+        :disabled="pending"
+        @click="resumeOutcome"
+        >{{ t('workItem.closing.resume') }}</VButton
+      >
       <div
         v-if="anchor"
         class="step-context"
@@ -278,6 +312,10 @@ defineExpose({ askOutcome, discussStep })
 .discussion-form {
   display: grid;
   gap: var(--space-3);
+}
+
+.held-outcome {
+  justify-self: start;
 }
 
 .step-context {

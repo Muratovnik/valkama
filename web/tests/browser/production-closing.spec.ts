@@ -117,6 +117,79 @@ test('the way out goes back to the comment with its draft, and the item stays wh
   expect(backend.item.summary).toBeNull()
 })
 
+test('an outcome written and stepped back from is not lost without a question', async ({
+  page,
+}) => {
+  const { drawer } = await refusedClose(page)
+  await drawer.getByRole('button', { name: 'Write the outcome', exact: true }).click()
+  const form = drawer.getByRole('form', { name: 'Outcome before closing' })
+  await expect(form.getByRole('textbox', { name: 'What was done', exact: true })).toBeFocused()
+  await page.keyboard.type('Half an outcome')
+  await form.getByRole('button', { name: 'Back to comment', exact: true }).click()
+  await expect(form).toHaveCount(0)
+
+  // Leaving now would lose it, so the way out asks, and it names what would go.
+  await drawer.getByRole('button', { name: 'Close', exact: true }).click()
+  const question = drawer.locator('.drawer-frame-notices')
+  await expect(question).toContainText('Unsaved changes will be lost: task outcome')
+  await expect(drawer).toBeVisible()
+
+  // Keeping it has to lead somewhere: the comment says it is there and goes back to it.
+  await question.getByRole('button', { name: 'Keep editing', exact: true }).click()
+  await drawer.getByRole('button', { name: 'Back to the unsent outcome', exact: true }).click()
+  await expect(form.getByRole('textbox', { name: 'What was done', exact: true })).toHaveValue(
+    'Half an outcome',
+  )
+  await expect(form.getByRole('textbox', { name: 'What was done', exact: true })).toBeFocused()
+
+  // And answering the question is what lets it go.
+  await form.getByRole('button', { name: 'Back to comment', exact: true }).click()
+  await drawer.getByRole('button', { name: 'Close', exact: true }).click()
+  await question.getByRole('button', { name: 'Discard', exact: true }).click()
+  await expect(drawer).toHaveCount(0)
+})
+
+test('an empty outcome stepped back from holds nothing, and asks nothing', async ({ page }) => {
+  const { drawer } = await refusedClose(page)
+  await drawer.getByRole('button', { name: 'Write the outcome', exact: true }).click()
+  const form = drawer.getByRole('form', { name: 'Outcome before closing' })
+  await form.getByRole('button', { name: 'Back to comment', exact: true }).click()
+  await expect(form).toHaveCount(0)
+  await expect(drawer.getByRole('button', { name: 'Back to the unsent outcome' })).toHaveCount(0)
+  await drawer.getByRole('button', { name: 'Close', exact: true }).click()
+  await expect(drawer).toHaveCount(0)
+})
+
+test('an outcome being written outlives a report made the outcome, and is still asked about', async ({
+  page,
+}) => {
+  const { backend, drawer } = await refusedClose(page, (item) => {
+    item.comments.push({
+      id: 1,
+      kind: 'report',
+      author: 'codex',
+      at: now,
+      body: '',
+      report: { done: 'Agent shipped it', next: 'Agent watches it' },
+      checklist_item_id: null,
+      checklist_item_text: null,
+    })
+  })
+  await drawer.getByRole('button', { name: 'Write the outcome', exact: true }).click()
+  const form = drawer.getByRole('form', { name: 'Outcome before closing' })
+  await form.getByRole('textbox', { name: 'What was done', exact: true }).fill('My own words')
+  await drawer
+    .locator('.thread-entry')
+    .filter({ hasText: 'Agent shipped it' })
+    .getByRole('button', { name: 'Make task outcome', exact: true })
+    .click()
+  await expect(form).toHaveCount(0)
+  await expectState(drawer, 'Done')
+  expect(backend.item.summary_comment_id).toBe(1)
+  await drawer.getByRole('button', { name: 'Close', exact: true }).click()
+  await expect(drawer.locator('.drawer-frame-notices')).toContainText('task outcome')
+})
+
 test('an agent’s report still shows, and making it the outcome answers the same question', async ({
   page,
 }) => {

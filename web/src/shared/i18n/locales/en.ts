@@ -791,6 +791,7 @@ export const en = {
       why: 'Moving this task to “{state}” needs its outcome: what was done and what comes next.',
       send: 'Save and close',
       back: 'Back to comment',
+      resume: 'Back to the unsent outcome',
     },
     unknownTime: 'Unknown time',
     unknownAuthor: 'Author not recorded',
