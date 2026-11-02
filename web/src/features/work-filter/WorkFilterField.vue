@@ -432,7 +432,7 @@ defineExpose({ focus: focusText })
 
 /* A phone: the trigger is its icon and its count, and the root steps aside so
    the menu spans the bar under the row. */
-@container workspace (width <= 556px) {
+@container workspace (width <= 624px) {
   .work-filter {
     position: static;
   }

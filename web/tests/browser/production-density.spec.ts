@@ -311,17 +311,19 @@ test('a press on a preset does not change its size, and is more than a tone', as
   expect(await pressMark(preset)).toBe('2px')
 })
 
-test('where the row is short the grouping is its glyph and keeps its name', async ({ page }) => {
+test('a window of 1024px keeps the grouping’s word on the row, and its name', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 768 })
   await installBackend(page)
   await serve(page)
   await openBoard(page, {})
   const grouping = page.getByRole('button', { name: GROUPING })
-  await expect(grouping.locator('.grouping-glyph')).toBeVisible()
-  await expect(grouping.locator('.grouping-word')).toBeHidden()
+  await expect(grouping.locator('.grouping-word')).toBeVisible()
+  await expect(grouping.locator('.grouping-glyph')).toBeHidden()
   await expect(grouping).toHaveAttribute('title', GROUPING)
   const box = await grouping.boundingBox()
   expect(box?.height).toBe(36)
+  const field = await page.locator('.filter-box').boundingBox()
+  expect(box?.y).toBe(field?.y)
 })
 
 test('a chain’s section reaches its list with no chart in the way', async ({ page }) => {

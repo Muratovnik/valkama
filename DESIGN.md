@@ -679,12 +679,16 @@ its grouping, then the filter, then the one primary action, every control of
 the row at one compact height, and under them what is drawn and how much of it.
 The grouping is a pressed control as the filter's presets are, with no switch
 among them, and it stands by the view because it arranges what is drawn;
-everything to the right of the field narrows it. The presets fold into the menu
-where the row cannot hold them beside a usable filter, and the grouping's word
-into its glyph. The filter's hint is whole where it fits and one word where it
-would be cut. On a phone the grouping shares the counts' line and says its word
-there, and gives the word up to the reset while a filter is on, so the work does
-not move as a filter turns on. Every number in the bar counts one population — the space, or a chain
+everything to the right of the field narrows it. A press on it or on a preset
+changes no box: pressed is the ground, the full ink and a bar under what it says,
+with no check to make room for. The presets fold into the menu where the row cannot
+hold them beside a usable filter. A usable filter is as wide as a phone's, 108px
+with the longest words: where the row cannot hold the grouping's word beside that,
+the word rides the counts' line instead of becoming a glyph, and where the view's
+segments and the words of the menu and the action cannot either, the bar takes its
+phone form. The filter's hint is whole where it fits and one word where it would be
+cut. On a phone the grouping gives its word up to the reset while a filter is on, so
+the work does not move as a filter turns on. Every number in the bar counts one population — the space, or a chain
 with its root — and a view that draws fewer items says what it leaves out: the
 grouped board says how many epics it draws as rows where the line has room, and
 a filter names the closed items it let through only when no open one matched.

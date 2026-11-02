@@ -334,7 +334,7 @@ defineExpose({ toggleFilter })
   font: var(--font-detail);
 }
 
-@container workspace (width <= 556px) {
+@container workspace (width <= 624px) {
   .workspace {
     padding-inline: var(--space-3);
   }

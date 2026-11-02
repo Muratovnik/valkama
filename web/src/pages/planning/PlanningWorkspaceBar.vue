@@ -6,7 +6,8 @@
  * the one primary action at its end, where every module puts it. Grouping stands
  * by the view because it arranges what is drawn; everything to the right of the
  * field narrows it, so the two are not read as one set of filters. It is the same
- * pressed control as its neighbours. The filter is one
+ * pressed control as its neighbours, and where the row cannot hold its word beside
+ * a field the phone's 108px wide, the word rides the line under it. The filter is one
  * field — text and facet chips — with its two presets and its menu, because
  * the five queue segments that stood beside a search were two controls for one
  * population, and two of them repeated columns the board already draws.
@@ -372,11 +373,49 @@ const exclusionText = computed(() => {
   }
 }
 
+/* The board, where the row cannot hold the grouping's word beside a field as wide
+   as a phone's (207 + 98 + 108 + 96 + 145 and four gaps, with the longest words):
+   the word rides the counts' line, and the field takes what it left. */
+@container workspace (width > 624px) and (width < 736px) {
+  .workspace-head:has(.workspace-grouping) {
+    flex-flow: row wrap;
+    align-items: center;
+
+    &::before {
+      content: '';
+      flex-basis: 100%;
+      order: 1;
+      margin-top: calc(-1 * var(--space-2));
+    }
+
+    .workspace-tools,
+    .workspace-status {
+      display: contents;
+    }
+
+    .workspace-grouping,
+    .workspace-chip,
+    .workspace-chips,
+    .workspace-figures {
+      order: 2;
+    }
+
+    .workspace-left-out,
+    .workspace-note {
+      flex: 1 1 100%;
+      order: 3;
+    }
+  }
+}
+
 /* A phone: the view becomes a menu and the action its sign, so the view, the
-   filter and the action hold the first line. The two rows give up their own
+   filter and the action hold the first line. It starts where the view's segments,
+   the words of the filter's menu and the action would leave the field less than it
+   holds here (207 + 96 + 145 and three gaps, with the longest words). The two rows
+   give up their own
    boxes and wrap as one: the picked facets, the counts and the grouping
    switch share the second line instead of each taking one. */
-@container workspace (width <= 556px) {
+@container workspace (width <= 624px) {
   .workspace-head {
     flex-flow: row wrap;
     align-items: center;

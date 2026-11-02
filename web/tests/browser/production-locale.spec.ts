@@ -71,6 +71,54 @@ function oneLine(boxes: { bottom: number; top: number }[]) {
   return Math.max(...boxes.map((box) => box.top)) < Math.min(...boxes.map((box) => box.bottom))
 }
 
+/** The room the filter's text has, and what stands where in the bar. */
+async function barAt(page: Page) {
+  return page.evaluate(() => {
+    const box = (selector: string) => document.querySelector(selector)?.getBoundingClientRect()
+    const word = document.querySelector('.grouping-word')
+    return {
+      field: box('.filter-box')?.width ?? 0,
+      fieldTop: box('.filter-box')?.top ?? 0,
+      groupingTop: box('.workspace-grouping')?.top ?? 0,
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      word: word !== null && getComputedStyle(word).display !== 'none',
+    }
+  })
+}
+
+// The field never holds less than a phone gives it, which is what its short hint
+// is sized for, and the grouping keeps its word on the row or on the line under it.
+for (const [width, onRow] of [
+  [1440, true],
+  [1260, true],
+  [1024, true],
+  [996, true],
+  [990, false],
+  [900, false],
+  [888, false],
+  [880, false],
+  [820, false],
+  [760, false],
+  [700, false],
+  [690, false],
+  [680, false],
+  [390, false],
+] as const) {
+  test(`the Russian grouping keeps its word beside a field that works at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 800 })
+    await installBackend(page)
+    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+    await expect(page.locator('.work-item-tile').first()).toBeVisible()
+    const bar = await barAt(page)
+    expect(bar.word, 'the word is drawn').toBe(true)
+    expect(bar.field, 'the field is usable').toBeGreaterThanOrEqual(100)
+    expect(bar.overflow, 'the page does not scroll sideways').toBe(0)
+    expect(bar.groupingTop === bar.fieldTop, 'the word rides the row where it fits').toBe(onRow)
+  })
+}
+
 test('Russian Work bar keeps its controls on one row and folds the presets at narrow widths', async ({
   page,
 }) => {

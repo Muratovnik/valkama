@@ -2,10 +2,11 @@
 /**
  * How the board is grouped, as the pressed control its neighbours in the bar are.
  *
- * It says its word where the row has room and is its glyph where it has not, never
- * both; the name stays its accessible name and its hover text either way. On a
- * phone it shares the counts' line, says its word there, and gives the word up to
- * the reset while a filter is on, so the work does not move as a filter turns on.
+ * It says its word, on the bar's row where a usable field still fits beside it and
+ * on the counts' line where one does not. Only on a phone, and only while a filter
+ * is on, does it give the word up to the reset for its glyph, so the work does not
+ * move as a filter turns on; the name stays its accessible name and its hover text
+ * either way.
  */
 import { useI18n } from 'vue-i18n'
 
@@ -46,30 +47,15 @@ const { t } = useI18n()
   display: none;
 }
 
-@container workspace (width < 1000px) {
-  .grouping-glyph {
-    display: block;
-  }
-
-  .grouping-word {
-    display: none;
-  }
-}
-
-/* A phone: the second line has the room again, until a filter's reset needs it. */
-@container workspace (width <= 556px) {
-  .grouping-glyph {
-    display: none;
-
-    .grouping.filtered & {
+/* A phone: the line it shares with the counts has the room, until a filter's reset
+   needs it. */
+@container workspace (width <= 624px) {
+  .grouping.filtered {
+    .grouping-glyph {
       display: block;
     }
-  }
 
-  .grouping-word {
-    display: inline;
-
-    .grouping.filtered & {
+    .grouping-word {
       display: none;
     }
   }
