@@ -5,11 +5,12 @@
  * Not a segment. A segmented control is one choice among exclusive options;
  * these are independent switches a reader presses in any combination, such as
  * the Work filter's presets. Pressed is the chosen segment's ground, the full
- * ink and a check, so it reads as on without a colour that means something
- * else.
+ * ink and a bar under what it says, so it reads as on without a colour that
+ * means something else and with more than a change of tone.
+ *
+ * A press changes no box. A check set beside the words made the chip 18px wider,
+ * and everything along the row moved to make that room, and back.
  */
-import VIcon from '@/shared/ui/VIcon.vue'
-
 defineProps<{ pressed: boolean }>()
 
 const emit = defineEmits<{ toggle: [] }>()
@@ -22,11 +23,6 @@ const emit = defineEmits<{ toggle: [] }>()
     :aria-pressed="pressed"
     @click="emit('toggle')"
   >
-    <VIcon
-      v-if="pressed"
-      name="check"
-      :size="14"
-    />
     <slot />
   </button>
 </template>
@@ -34,6 +30,7 @@ const emit = defineEmits<{ toggle: [] }>()
 <style scoped>
 /* A compact control, the height of the segmented control beside it. */
 .toggle-chip {
+  position: relative;
   display: inline-flex;
   flex: 0 0 auto;
   gap: var(--space-1);
@@ -55,6 +52,17 @@ const emit = defineEmits<{ toggle: [] }>()
 
   &[aria-pressed='true'] {
     background: var(--color-surface-active);
+
+    /* In the chip's own ink, in a forced palette too, which would clear a fill. */
+    &::after {
+      content: '';
+      position: absolute;
+      inset-block-end: var(--space-1);
+      inset-inline: var(--space-3);
+      block-size: var(--space-half);
+      background: currentcolor;
+      forced-color-adjust: none;
+    }
   }
 
   &:focus-visible {

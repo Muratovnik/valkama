@@ -252,6 +252,65 @@ test('the grouping is the control its neighbours are, and reads as how the view 
   expect(await look(grouping)).toEqual(await look(preset))
 })
 
+/** Every control of the bar as it is drawn: a press may not move one of them. */
+const barControls = (page: Page) =>
+  page
+    .locator(
+      '.workspace-view-segments, .workspace-view-menu, .workspace-grouping, .filter-box, .filter-preset, .filter-trigger, .workspace-action',
+    )
+    .evaluateAll((controls) =>
+      controls
+        .filter((control) => getComputedStyle(control).display !== 'none')
+        .map((control) => {
+          const box = control.getBoundingClientRect()
+          return [control.className, box.left, box.top, box.width, box.height].join(' ')
+        }),
+    )
+
+/** What marks a press beside the tones: drawn where a colour is not all that says so. */
+const pressMark = (chip: Locator) =>
+  chip.evaluate((node) => {
+    const mark = getComputedStyle(node, '::after')
+    return mark.content === 'none' ? 'none' : mark.blockSize
+  })
+
+for (const width of [1680, 1440, 1260, 1024, 996, 960, 900, 760, 700, 390]) {
+  test(`a press on the grouping moves nothing around it at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 })
+    await installBackend(page)
+    await serve(page)
+    await openBoard(page, {})
+    const grouping = page.getByRole('button', { name: GROUPING })
+    await expect(grouping).toBeVisible()
+    const resting = await barControls(page)
+    expect(await pressMark(grouping)).toBe('none')
+    await grouping.click()
+    await expect(grouping).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.locator('.board-lane').first()).toBeVisible()
+    expect(await barControls(page)).toEqual(resting)
+    expect(await pressMark(grouping)).toBe('2px')
+    await grouping.click()
+    await expect(grouping).toHaveAttribute('aria-pressed', 'false')
+    expect(await barControls(page)).toEqual(resting)
+  })
+}
+
+// What a preset's press itself does. The filter turning on still gives «Filter» its
+// count, as any way of turning it on does.
+test('a press on a preset does not change its size, and is more than a tone', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await installBackend(page)
+  await serve(page)
+  await openBoard(page, {})
+  const preset = page.locator('.filter-preset').first()
+  const resting = await preset.boundingBox()
+  await preset.click()
+  await expect(preset).toHaveAttribute('aria-pressed', 'true')
+  const pressed = await preset.boundingBox()
+  expect(pressed?.width).toBe(resting?.width)
+  expect(await pressMark(preset)).toBe('2px')
+})
+
 test('where the row is short the grouping is its glyph and keeps its name', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 768 })
   await installBackend(page)
