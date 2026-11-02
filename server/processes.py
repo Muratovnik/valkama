@@ -27,7 +27,6 @@ import sys
 from dataclasses import dataclass
 from typing import Any
 
-
 #: What every child of the server is started with. A listener started at login runs
 #: under `pythonw.exe`, which has no console for a child to share, so Windows would open
 #: one on the owner's screen for each `git` this module runs. Elsewhere it changes nothing.

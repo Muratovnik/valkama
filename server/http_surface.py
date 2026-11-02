@@ -536,7 +536,7 @@ class PlatformHTTPServer(ThreadingHTTPServer):
             self.socket = adopted
             host, bound_port = adopted.getsockname()[:2]
             self.server_address = (host, bound_port)
-            self.server_name, self.server_port = host, bound_port
+            self.server_port = bound_port
         try:
             self.security_context = http_security.SecurityContext.create(
                 self.server_port,
