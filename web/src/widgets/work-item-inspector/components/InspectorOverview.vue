@@ -116,8 +116,11 @@ defineExpose({ revealChecklist, startOutcomeReport })
         />
       </p>
     </section>
+    <!-- Who is on the work leads an open item. On a closed one the list is history
+         and stands under the outcome, or it would stand over everything the card
+         is opened for, with no next step above it. -->
     <InspectorAgents
-      v-if="item.agents?.length"
+      v-if="item.agents?.length && !item.state.is_terminal"
       :agents="item.agents"
       :identity="item.work_item_id"
     />
@@ -224,6 +227,11 @@ defineExpose({ revealChecklist, startOutcomeReport })
     </section>
 
     <InspectorSummary :item="item" />
+    <InspectorAgents
+      v-if="item.agents?.length && item.state.is_terminal"
+      :agents="item.agents"
+      :identity="item.work_item_id"
+    />
     <ItemInputRequests
       v-if="target"
       :target="target"

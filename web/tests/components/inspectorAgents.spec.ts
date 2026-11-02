@@ -249,12 +249,23 @@ describe('a long list', () => {
   })
 })
 
-function overview(agents: WorkItemAgent[] | undefined) {
+function overview(agents: WorkItemAgent[] | undefined, closed = false) {
   const i18n = createI18n({ legacy: false, locale: 'en', messages, pluralRules })
+  const item = workItemFixture('Item', 1)
+  const finished = {
+    state: { ...item.state, is_terminal: true },
+    summary: { done: 'Shipped', next: '' },
+  }
   return mount(InspectorOverview, {
     global: { plugins: [i18n], stubs: { InspectorChain: true } },
-    props: { item: { ...workItemFixture('Item', 1), agents }, writable: false },
+    props: { item: { ...item, agents, ...(closed ? finished : {}) }, writable: false },
   })
+}
+
+/** Whether the first thing stands before the second in the card's reading order. */
+function standsBefore(wrapper: ReturnType<typeof overview>, first: string, second: string) {
+  const position = wrapper.get(first).element.compareDocumentPosition(wrapper.get(second).element)
+  return Boolean(position & Node.DOCUMENT_POSITION_FOLLOWING)
 }
 
 describe('on the card', () => {
@@ -266,5 +277,16 @@ describe('on the card', () => {
 
   it('has the section with one', () => {
     expect(overview([agent()]).get('.agents').text()).toContain('Agents')
+  })
+
+  it('stands over the description of an open item', () => {
+    expect(standsBefore(overview([agent()]), '.agents', '.description-section')).toBe(true)
+  })
+
+  it('stands once, under the outcome, on a closed item', () => {
+    const wrapper = overview([agent()], true)
+    expect(wrapper.findAll('.agents')).toHaveLength(1)
+    expect(standsBefore(wrapper, '.description-section', '.outcome')).toBe(true)
+    expect(standsBefore(wrapper, '.outcome', '.agents')).toBe(true)
   })
 })

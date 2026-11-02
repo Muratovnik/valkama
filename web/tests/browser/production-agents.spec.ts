@@ -5,7 +5,7 @@
  */
 import AxeBuilder from '@axe-core/playwright'
 import { expect } from '@playwright/test'
-import type { Locator } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
@@ -47,6 +47,13 @@ const PRESSES = {
     await toggle.focus()
     await toggle.page().keyboard.press('Enter')
   },
+}
+
+/** How far down the page a section of the card stands, as a reader sees the order. */
+async function top(page: Page, section: string) {
+  const box = await page.locator(`.drawer ${section}`).boundingBox()
+  if (!box) throw new Error(`${section} is not on the card`)
+  return box.y
 }
 
 for (const width of [1440, 390]) {
@@ -116,6 +123,33 @@ for (const width of [1440, 390]) {
       await page.screenshot(shot(info, `agents-closed-by-${input}-${width}.png`))
     })
   }
+
+  test(`on a closed item the agents stand under its outcome at ${width}px`, async ({
+    page,
+  }, info) => {
+    await page.setViewportSize({ width, height: 900 })
+    const agents = Array.from({ length: 27 }, (_, index) =>
+      agent(index, { ended_at: '2026-08-13T08:29:00Z' }),
+    )
+    await installBackend(page, { agents: () => agents, closedWith: 'The export carries no label.' })
+    await page.goto(CARD)
+    await expect(page.locator('.drawer .agents .agent')).toHaveCount(3)
+    expect(await top(page, '.description-section')).toBeLessThan(await top(page, '.outcome'))
+    expect(await top(page, '.outcome')).toBeLessThan(await top(page, '.agents'))
+    await page.screenshot(shot(info, `agents-on-closed-${width}.png`))
+  })
+
+  test(`on an open item the agents stand above its description at ${width}px`, async ({
+    page,
+  }, info) => {
+    await page.setViewportSize({ width, height: 900 })
+    const agents = Array.from({ length: 27 }, (_, index) => agent(index))
+    await installBackend(page, { agents: () => agents })
+    await page.goto(CARD)
+    await expect(page.locator('.drawer .agents .agent')).toHaveCount(3)
+    expect(await top(page, '.agents')).toBeLessThan(await top(page, '.description-section'))
+    await page.screenshot(shot(info, `agents-on-open-${width}.png`))
+  })
 }
 
 test('a card with no agents has no section', async ({ page }) => {

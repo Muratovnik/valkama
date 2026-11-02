@@ -33,6 +33,7 @@ import {
   blockedFullWorkItem,
   blockedWorkItem,
   dataScopeId,
+  doneState,
   globalScope,
   now,
   planningReadyFor,
@@ -48,6 +49,8 @@ import { skillMatrixPayload, skillsPayload } from './skillsFixtures.ts'
 
 type BackendOptions = {
   activity?: 'bound' | 'unbound'
+  /** The card's item stands in the terminal state, with this outcome. */
+  closedWith?: string
   includeAttachedDuplicate?: boolean
   includeUnboundPlanningProject?: boolean
   /**
@@ -303,8 +306,12 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
               ? blockedFullWorkItem
               : { ...workItem, revision: 3 }
           const described = options.longRead ? { ...card, description: LONG_READ } : card
-          const read = options.agents ? { ...described, agents: options.agents() } : described
-          const { stepText } = options
+          const told = options.agents ? { ...described, agents: options.agents() } : described
+          const { closedWith, stepText } = options
+          const read =
+            closedWith === undefined
+              ? told
+              : { ...told, state: doneState, summary: { done: closedWith, next: '' } }
           const answered =
             stepText === undefined
               ? read

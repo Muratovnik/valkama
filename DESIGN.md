@@ -789,8 +789,9 @@ Pinned no taller than the title and tabs of 2.1.0, it says which item this is
 and keeps the action and every section in reach: keeping the facts, a
 full-width action and two rows of tabs, it held 279px of a phone. The body
 names only blockers that are still open.
-A card's «Agents» section stands under the next step and is absent while no agent
-is on the item. A row is one record held together by air: what the agent was
+A card's «Agents» section stands under the next step of an open item and under the
+outcome of a closed one, where the list is history with no next step above it, and it
+is absent while no agent is on the item. A row is one record held together by air: what the agent was
 started for (or, for an agent named before that was recorded, its type or its short
 id), the step it holds, its times, then its type, id and how it is known to be here.
 It says what the record shows and never that an agent is working, because a session

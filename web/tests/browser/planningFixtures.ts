@@ -60,6 +60,8 @@ const workflow = {
 // An item names its state without the workflow's ordering: `position` belongs to
 // the workflow's declaration of the state, not to an item sitting in it.
 const { position: _devPosition, ...DEV_STATE } = workflow.states[1]
+const { position: _donePosition, ...doneState } = workflow.states[2]
+export { doneState }
 
 export const planningSpace = {
   planning_space_id: identity(800),
