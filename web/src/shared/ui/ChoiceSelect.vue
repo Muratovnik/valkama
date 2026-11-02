@@ -30,8 +30,11 @@ const props = withDefaults(
     placeholder?: string
     searchable?: boolean
     searchLabel?: string
-    /** `compact` rides a toolbar of compact controls, as `SegmentedControl` does. */
-    size?: 'default' | 'compact'
+    /**
+     * `compact` rides a toolbar of compact controls, as `SegmentedControl` does;
+     * `heading` rides a table's heading row, in the heading's font.
+     */
+    size?: 'default' | 'compact' | 'heading'
   }>(),
   {
     size: 'default',
@@ -253,6 +256,25 @@ function updateOpen(value: boolean) {
   gap: var(--space-2);
   min-height: var(--size-control-height-compact);
   padding: 0 var(--space-2) 0 var(--space-3);
+}
+
+/* In a table's heading the trigger says what its neighbours say, in their font and
+   with the least around it, because the name is what has to fit: at a phone's width
+   a compact trigger's 46px left «Обновлено» 56 of the 77 it needs. */
+.choice-select.size-heading .choice-trigger {
+  grid-template-columns: minmax(0, 1fr) 14px;
+  gap: var(--space-1);
+  min-height: var(--size-control-height-compact);
+  padding: 0 var(--space-1) 0 var(--space-2);
+
+  .choice-title {
+    font: var(--font-column-head);
+  }
+
+  .choice-chevron {
+    width: 14px;
+    height: 14px;
+  }
 }
 
 /* A host standing on another ramp — the chrome — names its two fills through

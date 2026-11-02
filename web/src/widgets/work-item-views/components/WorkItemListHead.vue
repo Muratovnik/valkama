@@ -9,7 +9,8 @@
  * compact choice beside the title's sort. A chosen order is turned over from the
  * same choice, as a second click on a heading turns its order over: a button of
  * its own cost the width the order's name needed, and the name came out cut.
- * Every order the wide list offers stays one choice away.
+ * Every order the wide list offers stays one choice away. A name never ends in an
+ * ellipsis while a line of its own would hold it whole.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -113,7 +114,7 @@ function choose(value: string) {
           <ChoiceSelect
             v-if="narrow && holdsTitle(column) && folded.length"
             class="list-sort-choice"
-            size="compact"
+            size="heading"
             :label="t('workItem.list.sortBy')"
             :placeholder="t('workItem.list.sortOther')"
             :model-value="chosen"
@@ -151,6 +152,12 @@ function choose(value: string) {
   white-space: normal;
 }
 
+/* The longest order may take a line of its own under the title's sort, and the
+   other sorts stay on the first line. */
+.narrow .list-head {
+  vertical-align: top;
+}
+
 /* A heading's sorts: one, or on the title's heading the title's and those of
    the columns folded under it, side by side. */
 .list-sorts {
@@ -160,12 +167,6 @@ function choose(value: string) {
 
   .list-head[data-numeric='true'] & {
     justify-content: flex-end;
-  }
-
-  /* The choice gives up its width before anything wraps: a long order name
-     ends in an ellipsis rather than starting a second line. */
-  &:has(.list-sort-choice) {
-    flex-wrap: nowrap;
   }
 }
 
@@ -205,7 +206,7 @@ function choose(value: string) {
   /* The choice beside the title's sort is a filled control with an inset of
      its own, so the sort's inset on that side is spent twice. */
   .list-sorts:has(.list-sort-choice) > & {
-    padding-inline-end: var(--space-1);
+    padding-inline-end: var(--space-half);
   }
 
   /* The sorts of the folded columns follow the title's own as one run, in the

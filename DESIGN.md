@@ -695,6 +695,9 @@ a filter names the closed items it let through only when no open one matched.
 Epic progress, lane state, and active work share the same semantic palette.
 Aggregate epic activity belongs only to the epic index, including its compact
 state; bundle headers on the board do not repeat a “working” label.
+On a phone the list's folded orders are one choice in the title's heading, in the
+heading's font and with the least around it, and an order's name is never cut: the
+longest takes a line of its own under the title's sort.
 Cards do not reserve empty tag or source regions.
 A board tile prints exceptions, not defaults. Its first line is a priority
 glyph when the priority is not medium, a kind glyph when the item is not a

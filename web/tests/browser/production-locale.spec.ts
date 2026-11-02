@@ -1,11 +1,12 @@
 import { expect } from '@playwright/test'
 import type { Page, Route } from '@playwright/test'
 
+import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { expectNoSilentClipping } from './overflow.ts'
-import { globalScope, projectScope } from './planningFixtures.ts'
+import { globalScope, projectScope, spaceRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 test('Russian production shell localizes Settings without runtime failures', async ({ page }) => {
@@ -118,6 +119,36 @@ for (const [width, onRow] of [
     expect(bar.groupingTop === bar.fieldTop, 'the word rides the row where it fits').toBe(onRow)
   })
 }
+
+test('every order of the Russian phone list has its whole name', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await installBackend(page)
+  await page.goto(
+    serializePlatformRoute({
+      module_id: 'planning',
+      scope: projectScope,
+      entity: planningSpaceEntity(spaceRef),
+      state: { view: 'list' },
+    }),
+  )
+  const head = page.locator('.work-item-list thead')
+  const choice = head.getByRole('combobox', { name: 'Сортировать по' })
+  await expect(choice).toHaveText('Обновлено')
+  const cut = () =>
+    choice.locator('.choice-title').evaluate((title) => title.scrollWidth - title.clientWidth)
+  expect(await cut(), 'the order the list opens on is whole').toBeLessThanOrEqual(0)
+  for (const order of ['Состояние', 'Приоритет', 'Исполнитель', 'Шаги', 'Обновлено']) {
+    await choice.click()
+    await page.getByRole('option', { name: order, exact: true }).click()
+    await expect(choice).toHaveText(order)
+    expect(await cut(), `${order} is whole`).toBeLessThanOrEqual(0)
+  }
+  // Where the head has the room it stays on one line with the title's sort.
+  await page.setViewportSize({ width: 430, height: 844 })
+  const sort = await head.getByRole('button', { name: 'Название', exact: true }).boundingBox()
+  const box = await choice.boundingBox()
+  expect(box?.y ?? Infinity).toBeLessThan((sort?.y ?? 0) + (sort?.height ?? 0))
+})
 
 test('Russian Work bar keeps its controls on one row and folds the presets at narrow widths', async ({
   page,
