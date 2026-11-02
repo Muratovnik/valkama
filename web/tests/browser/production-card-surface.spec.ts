@@ -16,22 +16,32 @@ const CARD = serializePlatformRoute({
 /**
  * Going from a card to a card the panel does not close, so it does not open either:
  * the surface is one element across a link and Back, and only the first open slides.
- * The motion is lengthened so that a replay cannot end before it is read.
+ * The starts are counted as they happen: on a busy machine the first open can end
+ * before anything reads it, and a replay could too.
  */
 for (const width of [1440, 390]) {
   test(`a link and Back keep the panel, and only the first open animates, at ${width}px`, async ({
     page,
   }) => {
-    await page.addInitScript(() =>
-      document.documentElement.style.setProperty('--duration-surface', '1.5s'),
-    )
+    await page.addInitScript(() => {
+      const count = (event: Event) => {
+        if (!(event.target instanceof Element && event.target.matches('.drawer'))) return
+        const root = document.documentElement
+        root.dataset.surfaceStarts = String(Number(root.dataset.surfaceStarts ?? 0) + 1)
+      }
+      document.addEventListener('animationstart', count, true)
+      document.addEventListener('transitionrun', count, true)
+    })
     await page.setViewportSize({ width, height: 900 })
     await installBackend(page)
     await page.goto(CARD)
     const drawer = page.locator('.drawer')
     const moving = () => drawer.evaluate((node) => node.getAnimations().length)
-    await expect.poll(moving).toBeGreaterThan(0)
+    const starts = () =>
+      page.evaluate(() => Number(document.documentElement.dataset.surfaceStarts ?? 0))
+    await expect.poll(starts).toBeGreaterThan(0)
     await expect.poll(moving).toBe(0)
+    const opened = await starts()
     await drawer.evaluate((node) => {
       node.dataset.firstSurface = ''
     })
@@ -42,6 +52,7 @@ for (const width of [1440, 390]) {
     await expect(back).toBeVisible()
     await expect(page.locator('.drawer[data-first-surface]')).toHaveCount(1)
     expect(await moving()).toBe(0)
+    expect(await starts()).toBe(opened)
     // Focus went with the card, to its first control, as it does on any open.
     await expect(back).toBeFocused()
 
@@ -49,6 +60,7 @@ for (const width of [1440, 390]) {
     await expect(back).toHaveCount(0)
     await expect(page.locator('.drawer[data-first-surface]')).toHaveCount(1)
     expect(await moving()).toBe(0)
+    expect(await starts()).toBe(opened)
     await expect(drawer.locator('.drawer-frame-close')).toBeFocused()
 
     // Closing leaves through the guard's door and the surface goes with it.
