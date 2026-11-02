@@ -53,7 +53,23 @@ const emit = defineEmits<{ toggle: [] }>()
   &[aria-pressed='true'] {
     background: var(--color-surface-active);
 
-    /* In the chip's own ink, in a forced palette too, which would clear a fill. */
+    /*
+     * A forced palette clears that ground and repaints the word, and it would clear the bar
+     * too. Kept out of its reach the bar held the ink the chip was given, as light as the
+     * palette's page in a light one. So the chip takes the palette's own pair and all of it
+     * stays out of reach, or a plate in the page's colour goes behind the word as well, the
+     * colour of the word. What is out of reach chooses its own ring.
+     */
+    @media (forced-colors: active) {
+      color: HighlightText;
+      background: Highlight;
+      forced-color-adjust: none;
+
+      &:focus-visible {
+        outline-color: Highlight;
+      }
+    }
+
     &::after {
       content: '';
       position: absolute;
@@ -61,7 +77,6 @@ const emit = defineEmits<{ toggle: [] }>()
       inset-inline: var(--space-3);
       block-size: var(--space-half);
       background: currentcolor;
-      forced-color-adjust: none;
     }
   }
 
