@@ -95,6 +95,56 @@ describe('markdownEdit', () => {
     expect(applied('bold', '[**one**\n  **two**  \n**three**]')).toBe('[one\n  two  \nthree]')
   })
 
+  it('recognises a selection already wrapped as a whole, on one line or several', () => {
+    expect(applied('bold', '[**один\nдва**]')).toBe('[один\nдва]')
+    expect(applied('italic', '[*один\nдва*]')).toBe('[один\nдва]')
+    expect(applied('code', '[`один\nдва`]')).toBe('[один\nдва]')
+    expect(applied('bold', '[**word**]')).toBe('[word]')
+    expect(applied('italic', '[***word***]')).toBe('[**word**]')
+    expect(applied('bold', '[***word***]')).toBe('[*word*]')
+    expect(applied('code', '[``a`b``]')).toBe('[a`b]')
+  })
+
+  it('takes two marks for two, and a mark over them all replaces them', () => {
+    expect(applied('bold', '[**a** и\nб **в**]')).toBe('[**a и**\n**б в**]')
+    expect(applied('bold', '[**a** и **в**]')).toBe('**[a и в]**')
+    expect(applied('italic', '[*a* и *в*]')).toBe('*[a и в]*')
+  })
+
+  it.each<[MarkdownTool, string, string]>([
+    ['bold', '[- один]', '- **[один]**'],
+    ['italic', '[- один]', '- *[один]*'],
+    ['code', '[- один]', '- `[один]`'],
+    ['bold', '[* один]', '* **[один]**'],
+    ['italic', '[* один]', '* *[один]*'],
+    ['bold', '[1. один]', '1. **[один]**'],
+    ['bold', '  [- один]', '  - **[один]**'],
+  ])('%s goes inside a list item’s marker: %s', (tool, before, after) => {
+    expect(applied(tool, before)).toBe(after)
+  })
+
+  it('goes inside a task’s box as it does a marker', () => {
+    expect(markdownEdit('bold', '- [ ] один', 0, 10)).toMatchObject({
+      start: 6,
+      end: 10,
+      text: '**один**',
+    })
+  })
+
+  it('goes inside the marker on every line, and comes off them the same way', () => {
+    expect(applied('bold', '[- один\n- два]')).toBe('- [**один**\n- **два**]')
+    expect(applied('bold', '- [**один**\n- **два**]')).toBe('- [один\n- два]')
+    expect(applied('bold', '[- один\n* два\n3. три]')).toBe('- [**один**\n* **два**\n3. **три**]')
+  })
+
+  it('leaves a list item a list item for the list button after a mark', () => {
+    expect(applied('list', '- [**один**]')).toBe('[**один**]')
+  })
+
+  it('puts a selected list item’s words in a link, and not its marker', () => {
+    expect(applied('link', '[- один]')).toBe('- [один](|)')
+  })
+
   it('fences a code span with more backticks than the selection holds', () => {
     expect(applied('code', '[a`b]')).toBe('``[a`b]``')
   })

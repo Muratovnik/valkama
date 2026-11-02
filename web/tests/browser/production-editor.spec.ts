@@ -33,6 +33,31 @@ for (const [name, on] of [
   })
 }
 
+test('marks over a typed bold selection and over a list item leave what they should', async ({
+  page,
+}) => {
+  const { drawer, comment } = await openCard(page)
+  const bold = drawer.locator('.discussion-form').getByRole('button', { name: 'Bold', exact: true })
+  const list = drawer
+    .locator('.discussion-form')
+    .getByRole('button', { name: 'Bulleted list', exact: true })
+
+  // Marks typed around two lines and selected with them come off as one.
+  await comment.click()
+  await page.keyboard.insertText('**один\nдва**')
+  await select(comment, 0, '**один\nдва**'.length)
+  await bold.click()
+  await expect(comment).toHaveValue('один\nдва')
+
+  // A list item stays one: the marks go after its marker, and the list button still reads it.
+  await comment.fill('- один')
+  await select(comment, 0, '- один'.length)
+  await bold.click()
+  await expect(comment).toHaveValue('- **один**')
+  await list.click()
+  await expect(comment).toHaveValue('**один**')
+})
+
 test('a comment sent with its button leaves focus in the field, for the next one', async ({
   page,
 }) => {

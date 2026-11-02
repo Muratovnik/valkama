@@ -5,7 +5,8 @@
  * An edit names the range it replaces, not the whole new text, so the field can
  * hand it to the browser as one typed change and Ctrl+Z takes it back. The marks
  * go around the words rather than the selection: a double click on Windows takes
- * the space after a word too, and `**word **` is not emphasis, it is asterisks.
+ * the space after a word too, and `**word **` is not emphasis, it is asterisks. A
+ * list item's marker is not one of its words either: `**- один**` is no longer a list.
  */
 export interface TextEdit {
   end: number
@@ -20,6 +21,13 @@ export type MarkdownTool = 'bold' | 'code' | 'italic' | 'link' | 'list'
 const URL_ONLY = /^(?:https?:\/\/|mailto:)\S+$/iu
 const LIST_MARK = /^(\s*)[-*+] /u
 const LEADING_SPACE = /^\s*/u
+/** A list item's marker with its task box, if it has one. */
+const ITEM_MARK = /^(?:[-*+]|\d{1,9}[.)]) (?:\[[ xX]\] )?/u
+/** A part of the words already carrying the mark: the mark over them all would break it. */
+const MARKED_PARTS = new Map([
+  ['**', /\*\*(?=\S)(.+?)(?<=\S)\*\*/gu],
+  ['*', /(?<!\*)\*(?=[^\s*])([^*]*?)(?<=[^\s*])\*(?!\*)/gu],
+])
 
 /** How many times `mark` stands right at the end of `before`, or at the start of `after`. */
 function runLength(text: string, mark: string, fromEnd: boolean) {
@@ -54,34 +62,70 @@ function codeFence(selected: string) {
   return '`'.repeat(Math.max(0, ...runs) + 1)
 }
 
-/** The selection without the white space at its ends, which marks must stay outside of. */
+/** How long a list item's marker is where one begins the line at `from`. */
+function itemMark(value: string, from: number, to: number) {
+  const lineStart = value.slice(0, from).lastIndexOf('\n') + 1
+  const mark = value.slice(lineStart, from).trim() ? null : ITEM_MARK.exec(value.slice(from, to))
+  return mark?.[0].length ?? 0
+}
+
+/** The selection without what marks must stay outside of: white space, and an item's marker. */
 function wordsOf(value: string, start: number, end: number) {
   const selected = value.slice(start, end)
   const from = start + selected.length - selected.trimStart().length
   const to = Math.max(from, end - (selected.length - selected.trimEnd().length))
   // Only white space selected: the marks go at its end, as they would at a caret.
-  return from === to ? { from: end, to: end } : { from, to }
+  return from === to ? { from: end, to: end } : { from: from + itemMark(value, from, to), to }
+}
+
+/** Whether the mark stands again inside what it would wrap, so that it wraps only a part. */
+function holdsMark(inner: string, mark: string, width: number) {
+  const fenced = mark.charAt(0) === '`'
+  return (inner.match(fenced ? /`+/gu : /\*+/gu) ?? []).some(({ length }) =>
+    fenced ? length === width : runsMake(mark, length, length),
+  )
 }
 
 /**
- * These words without the mark around them, or null when they do not carry it. A code
- * span counts by whichever fence it has, because the fence a press would write depends
- * on the very backticks it is looking at.
+ * These words without the mark around them all, or null when they do not carry it: the
+ * marks at the ends of `**a** и **b**` are two. A code span counts by whichever fence it
+ * has, because the fence a press would write depends on the very backticks it looks at.
  */
 function withoutMark(words: string, mark: string) {
   const char = mark.charAt(0)
   const left = runLength(words, char, false)
   const right = runLength(words, char, true)
   if (left + right >= words.length) return null
-  if (char === '`') return left > 0 && left === right ? words.slice(left, -left) : null
-  return runsMake(mark, left, right) ? words.slice(mark.length, -mark.length) : null
+  const fenced = char === '`'
+  if (!(fenced ? left > 0 && left === right : runsMake(mark, left, right))) return null
+  const width = fenced ? left : mark.length
+  const inner = words.slice(width, -width)
+  return holdsMark(inner, mark, width) ? null : inner
 }
 
-/** A line with its words changed and the white space around them left outside the marks. */
-function onWords(line: string, change: (words: string) => string) {
+/** The mark around all of these words, taking it off any part of them that had it already. */
+function withMark(words: string, mark: string) {
+  const parts = MARKED_PARTS.get(mark)
+  return `${mark}${parts ? words.replace(parts, '$1') : words}${mark}`
+}
+
+/** Where a line's words stand, inside its white space and after an item's marker. */
+function lineWords(line: string) {
   const from = line.length - line.trimStart().length
   const to = line.trimEnd().length
+  return { from: from + (ITEM_MARK.exec(line.slice(from))?.[0].length ?? 0), to }
+}
+
+/** A line with its words changed and what marks stay outside of left where it is. */
+function onWords(line: string, change: (words: string) => string) {
+  const { from, to } = lineWords(line)
   return from < to ? `${line.slice(0, from)}${change(line.slice(from, to))}${line.slice(to)}` : line
+}
+
+/** The words of a line, empty when it has only white space or a marker. */
+function wordsOfLine(line: string) {
+  const { from, to } = lineWords(line)
+  return line.slice(from, Math.max(from, to))
 }
 
 /** How far past a selection made by hand the marks of its first and last lines stand. */
@@ -103,11 +147,12 @@ function wrapLines(value: string, from: number, to: number, mark: string): TextE
   const end = to + outer
   const lines = value.slice(start, end).split('\n')
   const carried = lines
-    .filter((line) => line.trim())
-    .every((line) => withoutMark(line.trim(), mark) !== null)
+    .map((line) => wordsOfLine(line))
+    .filter(Boolean)
+    .every((words) => withoutMark(words, mark) !== null)
   const bare = (words: string) => withoutMark(words, mark) ?? words
   const marked = (words: string) =>
-    withoutMark(words, mark) === null ? `${mark}${words}${mark}` : words
+    withoutMark(words, mark) === null ? withMark(words, mark) : words
   const text =
     !carried && outer
       ? value.slice(from, to)
@@ -120,6 +165,10 @@ function wrap(value: string, start: number, end: number, mark: string): TextEdit
   const before = value.slice(0, from)
   const after = value.slice(to)
   const words = value.slice(from, to)
+  // The marks selected with the words, one around them all whether that is a line or several.
+  const inner = withoutMark(words, mark)
+  if (inner !== null)
+    return { start: from, end: to, text: inner, selection: [from, from + inner.length] }
   if (words.includes('\n')) return wrapLines(value, from, to, mark)
   if (standsInside(before, after, mark)) {
     return {
@@ -129,11 +178,13 @@ function wrap(value: string, start: number, end: number, mark: string): TextEdit
       selection: [from - mark.length, to - mark.length],
     }
   }
+  const text = withMark(words, mark)
+  const opening = from + mark.length
   return {
     start: from,
     end: to,
-    text: `${mark}${words}${mark}`,
-    selection: [from + mark.length, to + mark.length],
+    text,
+    selection: [opening, opening + text.length - 2 * mark.length],
   }
 }
 
