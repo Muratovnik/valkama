@@ -40,7 +40,7 @@ export const workItemAgentMessages = {
       lessThanMinute: 'меньше минуты',
       minutes: '{count}\u{A0}мин',
       hours: '{count}\u{A0}ч',
-      days: '{count}\u{A0}д',
+      days: '{count}\u{A0}дн.',
       ago: '{time} назад',
       justNow: 'только что',
     },

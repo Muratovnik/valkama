@@ -173,6 +173,15 @@ describe('a row', () => {
     expect(text).not.toContain('ambiguous')
   })
 
+  it('shortens a day as the rest of the catalog does, in both languages', () => {
+    const shape = agent({
+      started_at: '2026-10-31T12:00:00Z',
+      last_activity_at: '2026-11-01T12:00:00Z',
+    })
+    expect(row(mountAgents([shape], 'ru'))).toContain('1\u{A0}дн. назад')
+    expect(row(mountAgents([shape], 'en'))).toContain('1\u{A0}d ago')
+  })
+
   it('its age moves with the clock while the row has no end, and fetches nothing', async () => {
     const fetching = vi.spyOn(globalThis, 'fetch')
     const wrapper = mountAgents([agent()])
