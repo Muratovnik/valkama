@@ -25,6 +25,8 @@ const LONG_READ = Array.from({ length: 40 }, (_, index) => `Paragraph ${index + 
   String.fromCodePoint(10, 10),
 )
 
+const reader = (drawer: Locator) => drawer.locator('.drawer-frame-body')
+const ringedControls = (page: Page) => page.locator('.drawer :is(button, a[href]):focus-visible')
 const ringed = (control: Locator) => control.evaluate((node) => node.matches(':focus-visible'))
 
 /** A page that hears routes from outside as the desktop app hands them over, from no input. */
@@ -59,13 +61,13 @@ for (const width of [1440, 390]) {
     await page.goto(CARD)
     const drawer = await cardBeingRead(page)
 
-    // Nobody pressed anything yet, so nothing answers a press: focus is on the dialog,
-    // where a screen reader hears its name, and no control wears a ring.
-    await expect(drawer).toBeFocused()
+    // Nobody pressed anything yet, so nothing answers a press: focus is on what the card
+    // is read with, inside a dialog a screen reader names, and no control wears a ring.
+    await expect(reader(drawer)).toBeFocused()
     await expect(drawer).toHaveRole('dialog')
     await expect(drawer).toHaveAccessibleName(workItem.title)
-    await expect(drawer).toHaveCSS('outline-style', 'none')
-    await expect(page.locator('.drawer :focus-visible')).toHaveCount(0)
+    await expect(reader(drawer)).toHaveCSS('outline-style', 'none')
+    await expect(ringedControls(page)).toHaveCount(0)
 
     const close = drawer.locator('.drawer-frame-close')
     await page.keyboard.press('Tab')
@@ -81,11 +83,11 @@ test('Shift+Tab from a card opened by its address stays in it, at its last contr
   await installBackend(page)
   await page.goto(CARD)
   const drawer = await cardBeingRead(page)
-  await expect(drawer).toBeFocused()
+  await expect(reader(drawer)).toBeFocused()
   await page.keyboard.press('Shift+Tab')
   const inside = await page.evaluate(() => {
     const focused = document.activeElement
-    return focused?.closest('.drawer') !== null && focused !== document.querySelector('.drawer')
+    return focused?.closest('.drawer') !== null && !focused?.matches('.drawer, .drawer-frame-body')
   })
   expect(inside).toBe(true)
 })
@@ -95,7 +97,7 @@ test('Escape closes a card opened by its address', async ({ page }) => {
   await installBackend(page)
   await page.goto(CARD)
   const drawer = await cardBeingRead(page)
-  await expect(drawer).toBeFocused()
+  await expect(reader(drawer)).toBeFocused()
   await page.keyboard.press('Escape')
   await expect(drawer).toHaveCount(0)
 })
@@ -135,8 +137,8 @@ test('a reload forgets the input before it: the card it opens rings nothing', as
   await expect(before.locator('.drawer-frame-close')).toBeFocused()
   await page.reload()
   const drawer = await cardBeingRead(page)
-  await expect(drawer).toBeFocused()
-  await expect(page.locator('.drawer :focus-visible')).toHaveCount(0)
+  await expect(reader(drawer)).toBeFocused()
+  await expect(ringedControls(page)).toHaveCount(0)
 })
 
 test('a route handed over to a card nobody has touched moves focus nowhere and rings nothing', async ({
@@ -147,11 +149,11 @@ test('a route handed over to a card nobody has touched moves focus nowhere and r
   await installBackend(page)
   await page.goto(CARD)
   const drawer = await cardBeingRead(page)
-  await expect(drawer).toBeFocused()
+  await expect(reader(drawer)).toBeFocused()
   await handOver(page, OTHER_CARD)
   await expect(drawer.locator('.head-reference')).toHaveText(blockedWorkItem.reference)
-  await expect(drawer).toBeFocused()
-  await expect(page.locator('.drawer :focus-visible')).toHaveCount(0)
+  await expect(reader(drawer)).toBeFocused()
+  await expect(ringedControls(page)).toHaveCount(0)
   await page.keyboard.press('Tab')
   await expect(drawer.locator('.drawer-frame-close')).toBeFocused()
 })
@@ -292,4 +294,81 @@ test('taking and releasing keep focus on the action, whatever it comes to offer'
   expect(frames.filter((inCard) => !inCard)).toEqual([])
   await expect(action).toBeFocused()
   expect(claims).toHaveLength(2)
+})
+
+const placeOf = (body: Locator) => body.evaluate((node) => node.scrollTop)
+const bottomOf = (body: Locator) => body.evaluate((node) => node.scrollHeight - node.clientHeight)
+
+/** Every key that reads, one after another, each moving the scroller the way it says. */
+async function readWithTheKeys(page: Page, body: Locator) {
+  await page.keyboard.press('PageDown')
+  await expect.poll(() => placeOf(body)).toBeGreaterThan(100)
+  await page.keyboard.press('End')
+  const bottom = await bottomOf(body)
+  await expect.poll(() => placeOf(body)).toBeGreaterThanOrEqual(bottom - 1)
+  await page.keyboard.press('PageUp')
+  await expect.poll(() => placeOf(body)).toBeLessThan(bottom - 100)
+  await page.keyboard.press('Home')
+  await expect.poll(() => placeOf(body)).toBe(0)
+  await page.keyboard.press('ArrowDown')
+  await expect.poll(() => placeOf(body)).toBeGreaterThan(0)
+  await page.keyboard.press('ArrowUp')
+  await expect.poll(() => placeOf(body)).toBe(0)
+}
+
+for (const width of [1440, 390]) {
+  test(`a card opened by its address reads from the keyboard at once, with no ring, at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 700 })
+    await installBackend(page, { longRead: true })
+    await page.goto(CARD)
+    const drawer = await cardBeingRead(page)
+    const body = drawer.locator('.drawer-frame-body')
+    await readWithTheKeys(page, body)
+    await expect(drawer.locator('.drawer-frame-close:focus-visible')).toHaveCount(0)
+    await expect(body).toHaveCSS('outline-style', 'none')
+    await expect(drawer).toHaveRole('dialog')
+    await expect(drawer).toHaveAccessibleName(workItem.title)
+  })
+}
+
+test('a card opened with the pointer reads from the keyboard too, from its bar', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 700 })
+  await installBackend(page, { longRead: true })
+  await page.goto(BOARD)
+  await page.locator('.work-item-column[data-state="dev"] .tile-open').first().click()
+  const drawer = await cardBeingRead(page)
+  await expect(drawer.locator('.drawer-frame-close')).toBeFocused()
+  await readWithTheKeys(page, drawer.locator('.drawer-frame-body'))
+})
+
+test('a press on plain text far down leaves Tab and Shift+Tab where they were', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 700 })
+  await installBackend(page, { longRead: true })
+  await page.goto(CARD)
+  const drawer = await cardBeingRead(page)
+  const body = drawer.locator('.drawer-frame-body')
+  const box = await body.boundingBox()
+  await page.mouse.move((box?.x ?? 0) + 200, (box?.y ?? 0) + 300)
+  await page.mouse.wheel(0, 400)
+  await expect.poll(() => placeOf(body)).toBe(400)
+  const text = drawer.getByText('Paragraph 12 of a description').first()
+  const line = await text.boundingBox()
+  await page.mouse.click((line?.x ?? 0) + 20, (line?.y ?? 0) + 6)
+  await page.keyboard.press('PageDown')
+  await expect.poll(() => placeOf(body)).toBeGreaterThan(400)
+  const read = await placeOf(body)
+  await page.keyboard.press('PageUp')
+  await expect.poll(() => placeOf(body)).toBeLessThan(read)
+  const place = await placeOf(body)
+  await page.keyboard.press('Shift+Tab')
+  // Nowhere near the end of the card, where the trap's last control is.
+  const end = await bottomOf(body)
+  expect(await placeOf(body)).toBeLessThan(end - 200)
+  expect(await placeOf(body)).toBeLessThanOrEqual(place)
 })

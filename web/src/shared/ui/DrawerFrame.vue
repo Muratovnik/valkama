@@ -34,6 +34,7 @@ const emit = defineEmits<{ close: [] }>()
  * repair. A tall pinned head ate the drawer, which is what the flip was for; a bar and
  * one row of tabs pin less than it did.
  */
+const bar = ref<HTMLElement | null>(null)
 const body = ref<HTMLElement | null>(null)
 const name = ref<HTMLElement | null>(null)
 const tabs = ref<HTMLElement | null>(null)
@@ -85,6 +86,15 @@ function holdPlace({ relatedTarget, target }: FocusEvent) {
     body.value?.scrollTo({ top: placeAtTab })
 }
 
+/**
+ * The keys that read scroll what holds focus. From the bar, where a card opened from the
+ * board starts, that was nothing, so they go to the scroller, as a press on its text does.
+ */
+const READING_KEYS = new Set(['ArrowDown', 'ArrowUp', 'End', 'Home', 'PageDown', 'PageUp'])
+useEventListener(bar, 'keydown', (event: KeyboardEvent) => {
+  if (READING_KEYS.has(event.key)) body.value?.focus({ preventScroll: true })
+})
+
 /** Where the scroller is read to, for a host that will bring the reader back to it. */
 function position() {
   return body.value?.scrollTop ?? 0
@@ -100,6 +110,7 @@ defineExpose({ position, restore, scrollToContent })
 <template>
   <div class="drawer-frame">
     <header
+      ref="bar"
       class="drawer-frame-bar"
       :class="{ 'title-away': titleAway, 'action-away': actionAway }"
     >
@@ -146,8 +157,10 @@ defineExpose({ position, restore, scrollToContent })
     <div
       ref="body"
       class="drawer-frame-body"
+      tabindex="-1"
       :class="{ 'is-holding': holding }"
       :style="scrollPadding"
+      data-overlay-scroller
     >
       <div
         v-if="!headless"
@@ -310,6 +323,7 @@ defineExpose({ position, restore, scrollToContent })
   position: relative;
   min-height: 0;
   overflow-y: auto;
+  outline: none;
   scrollbar-gutter: stable;
 
   &.is-holding {

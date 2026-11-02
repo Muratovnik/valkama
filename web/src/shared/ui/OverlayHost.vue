@@ -136,20 +136,29 @@ function firstControl() {
   return focusable().find((control) => control.dataset.overlayResizer === undefined)
 }
 
+/** Where focus waits on an open nobody asked for, until a Tab or a press takes it on. */
+let waitingOn: HTMLElement | null = null
+
 /**
  * A drawer can open on nobody's input: an address, a link from outside, a reload. A
  * browser rings focus it cannot put down to a pointer, so its first control stood there
- * ringed as if the reader had tabbed to it, on every such open. Focus waits on the
- * surface instead, which has no ring and whose name a screen reader says, and the first
- * key takes it on. After any input the first control takes it, and the browser decides
- * from that input whether it rings, which is what shows a keyboard reader where it is.
+ * ringed as if the reader had tabbed to it, on every such open. Focus waits instead on
+ * what the drawer is read with, which has no ring, answers the keys that scroll, and
+ * stands inside a dialog a screen reader names. A Tab goes on to the first control from
+ * there. After any input the first control takes it, and the browser decides from that
+ * input whether it rings, which is what shows a keyboard reader where it is.
  */
 async function focusSurface() {
   await nextTick()
   resizing.value &&= active.value
   if (!active.value || surface.value?.contains(document.activeElement)) return
-  const unasked = props.variant === 'drawer' && !pageWasTouched()
-  ;((unasked ? undefined : firstControl()) ?? surface.value)?.focus()
+  if (props.variant === 'drawer' && !pageWasTouched()) {
+    waitingOn =
+      surface.value?.querySelector<HTMLElement>('[data-overlay-scroller]') ?? surface.value
+    waitingOn?.focus()
+    return
+  }
+  ;(firstControl() ?? surface.value)?.focus()
 }
 
 function trapFocus(event: KeyboardEvent) {
@@ -165,8 +174,9 @@ function trapFocus(event: KeyboardEvent) {
     return
   }
   const focused = document.activeElement
-  if (focused === surface.value) {
+  if (focused === surface.value || focused === waitingOn) {
     event.preventDefault()
+    waitingOn = null
     ;(event.shiftKey ? last : (firstControl() ?? first)).focus()
   } else if (event.shiftKey && (focused === first || !surface.value?.contains(focused))) {
     event.preventDefault()
@@ -250,6 +260,7 @@ onUnmounted(release)
           :style="surfaceStyle"
           v-bind="modality"
           @keydown="trapFocus"
+          @pointerdown="waitingOn = null"
         >
           <!-- A window splitter, built the way ARIA asks: role, orientation, value -->
           <!-- range, tabindex and its own key handler. The rule does not count -->
