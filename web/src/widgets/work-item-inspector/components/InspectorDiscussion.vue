@@ -148,6 +148,22 @@ function publish() {
   )
 }
 /**
+ * A write that takes away the control holding focus leaves focus on the page. It comes
+ * to the comment standing there now, once that stands: a move carried on keeps the card
+ * unwritable, and the comment away, until it is through.
+ */
+let focusOwed = false
+function payFocus() {
+  if (!focusOwed || !composer.value) return
+  focusOwed = false
+  if (document.activeElement === document.body) composer.value.focus({ preventScroll: true })
+}
+watch(composer, payFocus, { flush: 'post' })
+function oweFocus() {
+  focusOwed = true
+  void nextTick(payFocus)
+}
+/**
  * The text is sent, so it is done with, and the move it was written for goes on. A
  * report made the outcome meanwhile may have carried that move already.
  */
@@ -156,12 +172,14 @@ function outcomeSent() {
   closing.value = null
   held.value = null
   Object.assign(outcome, { done: '', next: '' })
+  oweFocus()
   if (move && move.key !== props.item.state.key) emit('resume', move.key)
 }
 /** A report made the outcome answers the form's question and leaves what is written in it. */
 function reportSelected() {
   const move = closing.value
   stepAside()
+  oweFocus()
   if (move) emit('resume', move.key)
 }
 function publishOutcome() {

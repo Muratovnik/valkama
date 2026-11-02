@@ -165,15 +165,16 @@ watch(preview, (showing) => {
 })
 
 /**
- * A field that is disabled loses its focus, so sending with Ctrl+Enter left the
- * writer on the page, refused or not. Read before the render that disables it,
- * and given back only if the writer has not gone somewhere else in the meantime.
+ * A control that is disabled loses its focus, so sending left the writer on the page,
+ * refused or not, whether from the field or a button in the foot. Read before the
+ * render that disables them, and given back to the field only if the writer has not
+ * gone somewhere else in the meantime.
  */
 let hadFocus = false
 watch(
   () => props.disabled,
   (disabled) => {
-    if (disabled) hadFocus = document.activeElement === field.element()
+    if (disabled) hadFocus = surface.value?.contains(document.activeElement) ?? false
     else if (hadFocus)
       void nextTick(() => document.activeElement === document.body && field.focus())
   },

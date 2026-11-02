@@ -33,6 +33,19 @@ for (const [name, on] of [
   })
 }
 
+test('a comment sent with its button leaves focus in the field, for the next one', async ({
+  page,
+}) => {
+  const { drawer, comment } = await openCard(page)
+  await comment.fill('A note')
+  await drawer
+    .locator('.discussion-form')
+    .getByRole('button', { name: 'Add note', exact: true })
+    .click()
+  await expect(comment).toHaveValue('')
+  await expect(comment).toBeFocused()
+})
+
 for (const width of [1680, 1024, 390]) {
   test(`the comment form is one object, with a field five lines tall, at ${width}px`, async ({
     page,

@@ -19,6 +19,7 @@ const { t } = useI18n()
 const editing = ref(false)
 const previewing = ref(false)
 const editor = ref<InstanceType<typeof MarkdownEditor> | null>(null)
+const opener = ref<InstanceType<typeof VButton> | null>(null)
 const draft = ref('')
 const suggest = workItemSuggest(
   () => props.item.planning_space_id,
@@ -57,6 +58,15 @@ async function edit() {
   await nextTick()
   editor.value?.focusAtTop()
 }
+/** The editor goes with focus inside it, and the button that opened it is back to take that. */
+function closeEditor() {
+  editing.value = false
+  previewing.value = false
+  void nextTick(() => {
+    const button = opener.value?.$el as HTMLElement | undefined
+    if (document.activeElement === document.body) button?.focus({ preventScroll: true })
+  })
+}
 function save() {
   if (!props.writable) return
   void submit(
@@ -68,16 +78,14 @@ function save() {
       }),
     () => {
       seeded = draft.value
-      editing.value = false
-      previewing.value = false
+      closeEditor()
     },
   )
 }
 function cancel() {
   draft.value = props.item.description
   seeded = props.item.description
-  editing.value = false
-  previewing.value = false
+  closeEditor()
 }
 </script>
 
@@ -92,6 +100,7 @@ function cancel() {
         #actions
       >
         <VButton
+          ref="opener"
           variant="ghost"
           @click="edit"
         >

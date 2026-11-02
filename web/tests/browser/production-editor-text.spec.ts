@@ -61,6 +61,17 @@ async function savedUnedited(page: Page, description: string): Promise<unknown> 
   return backend.writes.at(-1)?.description
 }
 
+for (const press of ['Save description', 'Cancel']) {
+  test(`${press} hands focus back to the button that opened the editor`, async ({ page }) => {
+    const { drawer } = await editDescription(page, AGENT_TEXT)
+    await drawer.getByRole('button', { name: press, exact: true }).click()
+    await expect(drawer.locator('.description-form')).toHaveCount(0)
+    await expect(
+      drawer.getByRole('button', { name: 'Edit description', exact: true }),
+    ).toBeFocused()
+  })
+}
+
 for (const description of [AGENT_TEXT, AGENT_TEXT.replaceAll('\n', '\r\n')]) {
   test(`a description saved with no edit keeps every byte, ${description.includes('\r') ? 'CRLF' : 'LF'} line ends included`, async ({
     page,

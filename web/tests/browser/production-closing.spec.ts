@@ -190,6 +190,42 @@ test('an outcome being written outlives a report made the outcome, and is still 
   await expect(drawer.locator('.drawer-frame-notices')).toContainText('task outcome')
 })
 
+const SENDS = {
+  'the button': (form: Locator) =>
+    form.getByRole('button', { name: 'Save and close', exact: true }).click(),
+  'Ctrl+Enter': (form: Locator) =>
+    form.getByRole('textbox', { name: 'What comes next', exact: true }).press('Control+Enter'),
+}
+
+for (const [how, send] of Object.entries(SENDS)) {
+  test(`sending the outcome with ${how} keeps focus in the card, on the comment that stands there now`, async ({
+    page,
+  }) => {
+    const { drawer } = await refusedClose(page)
+    await drawer.getByRole('button', { name: 'Write the outcome', exact: true }).click()
+    const form = drawer.getByRole('form', { name: 'Outcome before closing' })
+    await form.getByRole('textbox', { name: 'What was done', exact: true }).fill('Shipped')
+    await form.getByRole('textbox', { name: 'What comes next', exact: true }).fill('Watch')
+    await send(form)
+    await expect(form).toHaveCount(0)
+    await expectState(drawer, 'Done')
+    await expect(drawer.locator('.discussion-form')).toBeFocused()
+  })
+}
+
+test('a refused outcome sent with the button keeps focus in its form', async ({ page }) => {
+  const { backend, drawer } = await refusedClose(page)
+  await drawer.getByRole('button', { name: 'Write the outcome', exact: true }).click()
+  const form = drawer.getByRole('form', { name: 'Outcome before closing' })
+  await form.getByRole('textbox', { name: 'What was done', exact: true }).fill('Shipped')
+  const next = form.getByRole('textbox', { name: 'What comes next', exact: true })
+  await next.fill('Watch')
+  backend.failNextWrite()
+  await form.getByRole('button', { name: 'Save and close', exact: true }).click()
+  await expect(form.getByRole('alert')).toContainText('The task changed.')
+  await expect(next).toBeFocused()
+})
+
 test('an agent’s report still shows, and making it the outcome answers the same question', async ({
   page,
 }) => {
@@ -215,4 +251,5 @@ test('an agent’s report still shows, and making it the outcome answers the sam
   await expectState(drawer, 'Done')
   expect(backend.item.summary_comment_id).toBe(1)
   expect(backend.writes.at(-1)).toMatchObject({ state: 'done' })
+  await expect(drawer.locator('.discussion-form')).toBeFocused()
 })
