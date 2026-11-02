@@ -187,9 +187,11 @@ the tray and `listener status` or `stop` it is an ordinary managed listener;
 - **`launcher uninstall`.** It removes a value naming this shim and stops a listener
   held on demand. Another program's value stays.
 
-The desktop app gives a managed listener that has not answered about 2.5 seconds
-before it offers a restart. A first load has to fit in that to go unnoticed there; a
-slower one costs a click, not the session.
+The log records how long each load took, as `serving after N s`. The desktop app
+gives a managed listener about 2.5 seconds to answer. If the first load takes longer
+it reports the server as out of date and offers a restart, which replaces the listener
+with a server of its own, so links stop working once the app closes, until the next
+login or `autostart enable`.
 
 ## Register clients
 

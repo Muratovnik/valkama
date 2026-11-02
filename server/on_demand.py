@@ -187,9 +187,15 @@ def _refuse_waiting(listener: socket.socket) -> None:
 
 
 def _load_server(listener: socket.socket, port: int, development_origin: str | None) -> None:
+    begun = time.monotonic()
     from .http_surface import serve_main
 
-    serve_main(port, development_origin=development_origin, adopted=listener)
+    serve_main(
+        port,
+        development_origin=development_origin,
+        adopted=listener,
+        ready=lambda: _log(f"serving after {time.monotonic() - begun:.2f} s"),
+    )
 
 
 def run(

@@ -138,8 +138,9 @@ class RealProcessTests(unittest.TestCase):
         self.assertIn("application/json", kind)
         self.assertIn("identity", json.loads(body))
         self.assertIn("server.http_surface", self.loaded())
-        # It is now an ordinary server on the same socket.
+        # It is now an ordinary server on the same socket, and the log says how long that took.
         self.assertEqual(200, _get(self.port)[0])
+        _wait_for_log(self.home, "serving after")
 
     def test_every_connection_that_arrives_while_it_loads_is_answered(self) -> None:
         self.start()

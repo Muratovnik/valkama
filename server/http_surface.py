@@ -1103,6 +1103,7 @@ def serve_main(
     *,
     development_origin: str | None = None,
     adopted: socket.socket | None = None,
+    ready: Callable[[], None] | None = None,
 ) -> None:
     runtime_snapshot = static_assets.capture_runtime_snapshot(SOURCE_ROOT, DIST_DIR)
     if "index.html" not in runtime_snapshot.assets:
@@ -1143,6 +1144,8 @@ def serve_main(
     print(  # noqa: T201
         f"Valkama on http://127.0.0.1:{server.server_port}/", file=sys.stderr
     )
+    if ready is not None:
+        ready()
     try:
         server.serve_forever()
     finally:
