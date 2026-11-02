@@ -74,6 +74,7 @@ class FrontTestCase(unittest.TestCase):
         self.read = 0
         self.stderr: list[bytes] = []
         self.reports: list[str] = []
+        self.moved: list[Pin] = []
         self.ids = 0
 
     def release(self, name: str, **config: object) -> Pin:
@@ -93,6 +94,7 @@ class FrontTestCase(unittest.TestCase):
             stop_timeout=1.0,
             echo=self.stderr.append,
             report=self.reports.append,
+            on_switch=self.moved.append,
         )
         self.addCleanup(front.close)
         front.start(pin)
@@ -411,6 +413,20 @@ class FailureTests(FrontTestCase):
         self.assertIn("refused to start", answer["result"]["content"][1]["text"])
         order = [(record["event"], record["release"]) for record in self.events("start")]
         self.assertEqual([("start", "good"), ("start", "crashing"), ("start", "good")], order)
+
+    def test_the_icon_follows_only_a_switch_that_succeeded(self) -> None:
+        front = self.front(self.release("good"))
+
+        self.switch(front, self.release("crashing", exit_on_start=True))
+        self.switch(front, self.release("broken", capabilities_exit=1))
+        self.assertEqual([], self.moved, "a release that did not start took the icon")
+
+        next_release = self.release("next")
+        self.switch(front, next_release)
+        self.assertEqual([next_release], self.moved)
+
+        self.switch(front, next_release)
+        self.assertEqual([next_release], self.moved, "the same release moved the icon again")
 
     def test_a_session_whose_first_release_does_not_start_never_opens(self) -> None:
         with self.assertRaisesRegex(mcp_front.BackendFailedError, "refused to start"):

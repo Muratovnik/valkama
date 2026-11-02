@@ -147,6 +147,12 @@ def _encode(message: Mapping[str, object]) -> bytes:
     return (json.dumps(message, ensure_ascii=False) + "\n").encode("utf-8")
 
 
+def _move_icon(pin: Pin) -> None:
+    """The tray is a process of one release, so a session's icon follows its switch."""
+
+    tray.follow(str(Path(pin.script).parent))
+
+
 def _canonical(tools: list) -> str:
     """A tool list as one string two equal lists share, whatever their key order."""
 
@@ -165,7 +171,8 @@ def backend_environment(base: Mapping[str, str]) -> dict[str, str]:
     Without `VALKAMA_LAUNCHER_DIR` a backend is not the pinned release as far as
     it can tell, so it serves instead of becoming a front of its own, and it does
     not warn about a pin the front is following for it. With `VALKAMA_NO_TRAY`
-    the icon stays with the front, so a switch does not make it flicker.
+    the icon stays with the front, which moves it once a switch has succeeded, so
+    a release that fails to start does not make it flicker.
     """
 
     environment = {name: value for name, value in base.items() if name != launcher.LAUNCHER_ENV}
@@ -371,6 +378,7 @@ class Front:
         stop_timeout: float = STOP_TIMEOUT,
         echo: Callable[[bytes], None] = _echo,
         report: Callable[[str], None] = _report,
+        on_switch: Callable[[Pin], None] = _move_icon,
     ) -> None:
         self._out = out
         self._read_pin = read_pin
@@ -378,6 +386,7 @@ class Front:
         self._stop_timeout = stop_timeout
         self._echo = echo
         self._report = report
+        self._on_switch = on_switch
         # One lock for a request's round trip and for a switch: holding it is
         # what "between requests" means.
         self._lock = threading.Lock()
@@ -693,6 +702,7 @@ class Front:
         self._refused = self._warning = None
         self._report(f"this session now runs release {pin.label}")
         self._announce()
+        self._on_switch(pin)
 
     @staticmethod
     def _label(pin: Pin | None) -> str:

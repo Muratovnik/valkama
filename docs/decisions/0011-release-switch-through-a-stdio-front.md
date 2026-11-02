@@ -118,8 +118,9 @@ predates the front is simply a server.
   the client's restart logic does the rest, as it would for any server.
 - **Windows.** Every pipe is bytes, and stdout carries only the frames the
   front checked: a backend line that is not a JSON-RPC frame is reported on
-  stderr and dropped. A backend gets `VALKAMA_NO_TRAY`, so the tray icon the
-  front holds does not flicker on a switch, and loses `VALKAMA_LAUNCHER_DIR`,
+  stderr and dropped. A backend gets `VALKAMA_NO_TRAY`, so the tray icon stays
+  with the front, which restarts it from the new release once a switch has
+  succeeded, and loses `VALKAMA_LAUNCHER_DIR`,
   so it cannot become a front of its own or warn about a pin the front
   follows. It is started without a console window and stopped through
   `processes.stop_process_tree`. The `capabilities` run gets no stdin: on

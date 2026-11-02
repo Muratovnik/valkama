@@ -735,6 +735,10 @@ ownership cannot be verified is refused and left untouched — holding the port
 or returning Valkama-shaped JSON is not stop authority. Clicks, the steps they
 took and how they ended are logged to `%TEMP%\valkama-tray.log`.
 
+`launcher install` moves the icon along with the session that holds it: its script
+restarts from the new release, so two icons can stand side by side for up to two
+seconds. An icon hidden from its menu stays hidden.
+
 Set `VALKAMA_NO_TRAY=1` to turn it off.
 
 > Running `electron` from a VS Code terminal fails with `app is undefined`,

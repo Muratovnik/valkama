@@ -18,6 +18,13 @@ checkouts are therefore distinguishable even at the same version.
   It used to refuse at once and ask the operator to close something they had no
   way to find. A holder that does not let go gets that refusal, and any other
   failure gets it straight away.
+- `launcher install` reaches the tray icon too. It is a process of one release,
+  and it stayed on the release its session started from, so a click ran the old
+  script until the client restarted. The session now restarts it from the release
+  it has switched to, once the switch has succeeded; if the new tray will not
+  start, the working icon stays, and an icon hidden from its menu stays hidden.
+  This needs a session started on this release or later, so sessions already open
+  keep their icon until they restart.
 
 ## [2.2.0](https://github.com/Muratovnik/valkama/compare/v2.1.0...v2.2.0) - 2026-11-02
 
