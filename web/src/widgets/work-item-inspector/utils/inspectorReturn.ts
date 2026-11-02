@@ -28,8 +28,8 @@ export interface InspectorReturn {
   opened: string
   /** The card to come back to. */
   reference: string
-  /** How far the body was read, and whether the head had condensed. */
-  scroll: { condensed: boolean; top: number }
+  /** How far the card was read. */
+  scroll: number
   /** The section that was shown. */
   section: string
 }

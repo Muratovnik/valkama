@@ -23,7 +23,7 @@ import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { isWebAuthor } from '@/shared/api/webAuthor.ts'
 import { holderName } from '@/shared/lib/actor.ts'
 
-/** A refused write as the head shows it: what was refused, why, and any override on offer. */
+/** A refused write as the card shows it: what was refused, why, and any override on offer. */
 export interface RefusalNotice {
   /** The server's reason, verbatim. */
   reason: string

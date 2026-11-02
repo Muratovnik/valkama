@@ -10,7 +10,7 @@ import type { ChainScope } from '@/shared/api/planningChainApi.ts'
 
 interface Scroller {
   position(): InspectorReturn['scroll']
-  restore(at: InspectorReturn['scroll']): Promise<void>
+  restore(at: InspectorReturn['scroll']): void
 }
 
 interface ChainReading {
@@ -52,7 +52,7 @@ export function useInspectorReturn(options: ReturnOptions) {
     return {
       reference: options.reference(),
       section: options.section.value,
-      scroll: options.frame.value?.position() ?? { condensed: false, top: 0 },
+      scroll: options.frame.value?.position() ?? 0,
       opened,
       chain: chain ? { ...chain.view(), scope: options.scope.value } : null,
     }
@@ -63,7 +63,7 @@ export function useInspectorReturn(options: ReturnOptions) {
     const chain = options.chain.value
     if (at.chain && chain) await chain.restore(at.chain)
     const row = chain ? await chain.reveal(at.opened) : null
-    await options.frame.value?.restore(at.scroll)
+    options.frame.value?.restore(at.scroll)
     if (!row) return
     row.focus({ preventScroll: true })
     row.scrollIntoView({ block: 'nearest' })

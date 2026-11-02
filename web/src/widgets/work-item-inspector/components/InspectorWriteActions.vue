@@ -5,40 +5,41 @@
  * Who holds the item decides it. Nobody: «Взять», unless the item is an epic,
  * whose work is its tasks, or waits on an open blocker — then the reason stands
  * where the action would, so the head never offers a take its own facts argue
- * against. This client: «Отпустить». Another holder: a takeover, asked once in
- * place before the override is sent; release on someone else's claim was a
- * button the server refused on every press.
+ * against. This client: «Отпустить». Another holder: a takeover, and the host asks
+ * once before the override is sent; release on someone else's claim was a button
+ * the server refused on every press.
  *
  * A stale claim has nobody behind it, and the server releases it before it
  * takes the claim, so taking it over is an ordinary claim with no override to
  * confirm. A finished item offers nothing.
  *
- * A refusal of any of these is the host's to show, in the head that stays in
- * view while the body scrolls.
+ * A refusal of any of these is the host's to show, in the band that stays in
+ * view while the card scrolls.
  *
- * Condensed, that head keeps an action in reach and lets a reason go with the
- * facts: a reason is a fact about the item, and a sentence kept beside the
- * sections in a phone-wide head squeezed them to one.
+ * It stands twice on a card, with the facts and in the bar once the facts have
+ * scrolled away. The bar holds an action and no reason: a reason is a fact about
+ * the item, and it goes with the facts.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { openBlockers } from '@/widgets/work-item-inspector/utils/openBlockers.ts'
+
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { isWebAuthor } from '@/shared/api/webAuthor.ts'
-import { holderName } from '@/shared/lib/actor.ts'
 import { semanticStatePresentation } from '@/shared/lib/uiSystem.ts'
-import ConfirmStrip from '@/shared/ui/ConfirmStrip.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
-const props = defineProps<{
-  busy: boolean
-  item: WorkItem
-  /** The reference of an open item this one waits on, or null for none. */
-  waitingOn: string | null
-  /** The head is condensed while the body is read: a reason steps out, an action stays. */
-  condensed?: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    busy: boolean
+    item: WorkItem
+    /** Whether a reason stands where there is no action to offer. */
+    reasons?: boolean
+  }>(),
+  { reasons: true },
+)
 
 const emit = defineEmits<{
   'claim': []
@@ -46,12 +47,12 @@ const emit = defineEmits<{
   'take-over': []
 }>()
 
-/** Whether the takeover question is open, so the host can give it the width. */
-const asking = defineModel<boolean>('asking', { default: false })
-
 const { t } = useI18n()
 
 type Action = 'claim' | 'release' | 'takeover' | 'stale' | 'epic' | 'waiting'
+
+/** The reference of an open item this one waits on, or null for none. */
+const waitingOn = computed(() => openBlockers(props.item)[0]?.reference ?? null)
 
 const action = computed<Action | null>(() => {
   const { item } = props
@@ -61,23 +62,14 @@ const action = computed<Action | null>(() => {
     return item.claim_state === 'stale' ? 'stale' : 'takeover'
   }
   if (item.container) return 'epic'
-  return props.waitingOn ? 'waiting' : 'claim'
+  return waitingOn.value ? 'waiting' : 'claim'
 })
 
 const shown = computed(
   () =>
     action.value !== null &&
-    !(props.condensed && (action.value === 'epic' || action.value === 'waiting')),
+    (props.reasons || (action.value !== 'epic' && action.value !== 'waiting')),
 )
-
-const takeoverQuestion = computed(() =>
-  t('workItem.takeOverQuestion', { holder: holderName(props.item.claim_ref) }),
-)
-
-function takeOver() {
-  asking.value = false
-  emit('take-over')
-}
 
 /** A wait on a blocker carries the readiness facet's tone; an epic carries none. */
 const WAITING_TONE = semanticStatePresentation({
@@ -85,7 +77,7 @@ const WAITING_TONE = semanticStatePresentation({
   state: 'blocked',
 }).tone
 const waitingText = computed(() =>
-  t('workItem.facet.waiting', { reference: props.waitingOn ?? '' }),
+  t('workItem.facet.waiting', { reference: waitingOn.value ?? '' }),
 )
 /** A stale claim is taken as a plain claim, but it is still a takeover to the reader. */
 const claimLabel = computed(() =>
@@ -123,25 +115,19 @@ const claimLabel = computed(() =>
       />
       {{ t('workItem.head.epic') }}
     </p>
-    <ConfirmStrip
-      v-else-if="asking"
-      :message="takeoverQuestion"
-      :confirm-label="t('workItem.takeOverConfirm')"
-      :cancel-label="t('workItem.cancel')"
-      @confirm="takeOver"
-      @cancel="asking = false"
-    />
     <VButton
       v-else-if="action === 'takeover'"
       class="write-action"
+      size="compact"
       :disabled="busy"
-      @click="asking = true"
+      @click="emit('take-over')"
     >
       {{ t('workItem.takeOver') }}
     </VButton>
     <VButton
       v-else-if="action === 'release'"
       class="write-action"
+      size="compact"
       variant="secondary"
       :disabled="busy"
       @click="emit('release')"
@@ -151,6 +137,7 @@ const claimLabel = computed(() =>
     <VButton
       v-else
       class="write-action"
+      size="compact"
       variant="primary"
       :disabled="busy"
       @click="emit('claim')"
@@ -167,16 +154,17 @@ const claimLabel = computed(() =>
 }
 
 /* Full width where the head stacks it under the labels; its own label's width
-   where it ends the facts line. */
+   where it ends the facts line or stands in the bar. */
 .write-action {
   width: 100%;
 }
 
+/* As tall as the action it stands in for, so it lines up with the facts' first row. */
 .write-reason {
   display: inline-flex;
   gap: var(--space-1);
   align-items: center;
-  min-height: var(--size-control-inline);
+  min-height: var(--size-control-height-compact);
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);

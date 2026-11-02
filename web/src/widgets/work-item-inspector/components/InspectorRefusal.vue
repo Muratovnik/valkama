@@ -9,7 +9,7 @@
  * the server accepts an override, and only after a second, explicit answer.
  *
  * The server's sentence is held to three lines. It names every refused guard at
- * once, so it grows with each of them, and the head it stands in is pinned:
+ * once, so it grows with each of them, and the band it stands in is pinned:
  * every line it took came out of the body on a phone. Three keep a usual reason
  * whole on a desktop width, where a two-line hold added a toggle row instead of
  * saving one. The hints and actions above it say the same in the reader's

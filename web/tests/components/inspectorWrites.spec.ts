@@ -169,12 +169,12 @@ describe('inspector writes and their refusals', () => {
     await flushPromises()
 
     // A lease nobody is behind any more is a warning dot on the holder, and
-    // the holder's tooltip says why.
+    // the holder's tooltip names it whole and says why.
     const lease = wrapper.get('.card-holder [data-dimension="claim-lease"]')
     expect(lease.attributes('data-state')).toBe('stale')
     expect(lease.attributes('data-tone')).toBe('warning')
     expect(wrapper.get('.card-holder').attributes('title')).toBe(
-      'Claim: Stale — the session behind it is gone',
+      'codex\nClaim: Stale — the session behind it is gone',
     )
     expect(wrapper.findAll('.write-actions button').map((button) => button.text())).toEqual([
       'Take over',
@@ -233,7 +233,7 @@ describe('inspector writes and their refusals', () => {
     const holder = wrapper.get('.card-holder')
     // The date is the activity format, which this harness's i18n leaves blank.
     expect(holder.attributes('title')).toMatch(
-      /^Claim: Live — until .*, unless the session shows a sign of life$/u,
+      /^codex\nClaim: Live — until .*, unless the session shows a sign of life$/u,
     )
     expect(holder.text()).toContain('unless the session shows a sign of life')
     await getButton(wrapper, 'Take over').trigger('click')

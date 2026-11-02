@@ -28,7 +28,6 @@ import type { ChainMember } from '@/shared/api/planningChainApi.ts'
 import { CHAIN_GROUPS } from '@/shared/api/planningChainGroups.ts'
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 import { holderName } from '@/shared/lib/actor.ts'
-import { focusInView } from '@/shared/lib/focusInView.ts'
 import { semanticStatePresentation } from '@/shared/lib/uiSystem.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import VButton from '@/shared/ui/VButton.vue'
@@ -90,7 +89,8 @@ async function toggle(group: ChainGroup) {
   const target = opening
     ? within(group)?.querySelectorAll<HTMLElement>('.chain-row')[LIMIT]
     : within(group)?.querySelector<HTMLElement>('.chain-more')
-  if (target) focusInView(target)
+  target?.focus({ preventScroll: true })
+  target?.scrollIntoView({ block: 'nearest' })
 }
 
 /** Which groups are open, so a card left for another can be read again the same way. */

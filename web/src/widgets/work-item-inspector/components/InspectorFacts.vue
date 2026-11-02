@@ -15,21 +15,21 @@
  * nobody is behind it any more, a warning dot: it is a detail of the holder,
  * not a fact of its own.
  *
- * The action ends the facts line where the drawer is wide and stands at full
- * width under the labels where it is not; a question about it takes the whole
- * width wherever it is asked. Labels are buttons that add themselves to the
- * Work filter. When the head condenses the facts line and the labels step out
- * with the rest of the head's detail, and the action alone stays, at its own
- * width, at the end of the title's row.
+ * Every fact stands in a row of one height, the height of the state's own chip,
+ * so a line of them reads as one line whichever are present and however they wrap.
+ * The action stands at the end of the first row where the drawer is wide, never
+ * centred across a wrap, and at full width under the labels where it is not. The
+ * host shows it again in the bar once this one has scrolled away. Labels are
+ * buttons that add themselves to the Work filter.
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import InspectorWriteActions from '@/widgets/work-item-inspector/components/InspectorWriteActions.vue'
-import { openBlockers } from '@/widgets/work-item-inspector/utils/openBlockers.ts'
 
 import FacetMarks from '@/entities/work-item/components/FacetMarks.vue'
 import LabelChip from '@/entities/work-item/components/LabelChip.vue'
+import { holderRef } from '@/entities/work-item/utils/facets.ts'
 import type { WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
 import type { PlanningWorkflow, WorkItem } from '@/shared/api/planningModel.ts'
@@ -44,12 +44,10 @@ const props = withDefaults(
     item: WorkItem
     workflow: PlanningWorkflow | null
     writable: boolean
-    /** The head is condensed while the body is read: only the action stays. */
-    condensed?: boolean
     /** The epic's reference; the record carries only its id. */
     parentReference?: string | null
   }>(),
-  { condensed: false, parentReference: null },
+  { parentReference: null },
 )
 
 const emit = defineEmits<{
@@ -61,8 +59,8 @@ const emit = defineEmits<{
 }>()
 
 const { t, d } = useI18n()
-/** Whether the takeover question is open; the host gives it the head's whole width. */
-const asking = defineModel<boolean>('asking', { default: false })
+/** The action's place on the card, which the bar takes over from once it has scrolled away. */
+const actionCell = ref<HTMLElement | null>(null)
 
 /** The states this item may move to, which is the workflow's answer, not a list. */
 const moves = computed<ChoiceOption[]>(() => {
@@ -94,7 +92,6 @@ function move(stateKey: string) {
   if (!props.busy && stateKey !== props.item.state.key) emit('move', stateKey)
 }
 
-const waitingOn = computed(() => openBlockers(props.item)[0]?.reference ?? null)
 const context = computed(() => ({ parentReference: props.parentReference }))
 
 /**
@@ -120,8 +117,13 @@ const leaseText = computed(() => {
 const ownerLabel = computed(() =>
   t(props.item.state.is_terminal ? 'workItem.previousOwner' : 'workItem.owner'),
 )
-/** The lease where one stands behind the claim; otherwise what the name is. */
-const holderTitle = computed(() => leaseText.value || ownerLabel.value)
+/**
+ * The holder as it was written, which the line shortens, and over it what the name is
+ * to the item: the lease where one stands behind the claim, otherwise the name's role.
+ */
+const holderTitle = computed(() =>
+  [holderRef(props.item), leaseText.value || ownerLabel.value].filter(Boolean).join('\n'),
+)
 /**
  * What a screen reader hears before the holder mark. On finished work the mark
  * already says «Ранее отвечал: X», so the label would say it twice.
@@ -134,13 +136,12 @@ function when(value: string): string {
 }
 
 const filterLabel = (label: string) => emit('filter', { facet: 'labels', value: label })
+
+defineExpose({ actionCell })
 </script>
 
 <template>
-  <div
-    class="card-facts-block"
-    :class="{ asking, condensed }"
-  >
+  <div class="card-facts-block">
     <div class="card-facts">
       <ChoiceSelect
         v-if="movable"
@@ -159,20 +160,26 @@ const filterLabel = (label: string) => emit('filter', { facet: 'labels', value: 
           />
         </template>
       </ChoiceSelect>
-      <SemanticState
-        v-else
-        class="card-state"
-        dimension="work-item-state"
-        :state="item.state.category"
-        :label="item.state.name"
-      />
-      <FacetMarks
-        surface="card"
-        :item="item"
-        :facets="['priority']"
-      />
       <span
-        class="card-holder"
+        v-else
+        class="card-fact"
+      >
+        <SemanticState
+          class="card-state"
+          dimension="work-item-state"
+          :state="item.state.category"
+          :label="item.state.name"
+        />
+      </span>
+      <span class="card-fact">
+        <FacetMarks
+          surface="card"
+          :item="item"
+          :facets="['priority']"
+        />
+      </span>
+      <span
+        class="card-fact card-holder"
         :title="holderTitle"
       >
         <span
@@ -187,6 +194,7 @@ const filterLabel = (label: string) => emit('filter', { facet: 'labels', value: 
         />
         <SemanticState
           v-if="lease?.state === 'stale'"
+          class="card-holder-stale"
           dimension="claim-lease"
           state="stale"
           variant="dot"
@@ -198,27 +206,30 @@ const filterLabel = (label: string) => emit('filter', { facet: 'labels', value: 
           >{{ leaseText }}</span
         >
       </span>
-      <FacetMarks
-        surface="card"
+      <span class="card-fact">
+        <FacetMarks
+          surface="card"
+          :item="item"
+          :facets="['parent']"
+          :context="context"
+        />
+      </span>
+    </div>
+    <div
+      v-if="writable"
+      ref="actionCell"
+      class="card-action"
+    >
+      <InspectorWriteActions
         :item="item"
-        :facets="['parent']"
-        :context="context"
+        :busy="busy"
+        @claim="emit('claim')"
+        @release="emit('release')"
+        @take-over="emit('take-over')"
       />
     </div>
-    <InspectorWriteActions
-      v-if="writable"
-      v-model:asking="asking"
-      class="card-action"
-      :item="item"
-      :busy="busy"
-      :condensed="condensed"
-      :waiting-on="waitingOn"
-      @claim="emit('claim')"
-      @release="emit('release')"
-      @take-over="emit('take-over')"
-    />
     <ul
-      v-if="item.labels.length && !condensed"
+      v-if="item.labels.length"
       class="card-labels"
     >
       <li
@@ -239,21 +250,16 @@ const filterLabel = (label: string) => emit('filter', { facet: 'labels', value: 
   display: grid;
   grid-template-areas: 'facts action' 'labels labels';
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-2) var(--space-4);
-  align-items: center;
+  gap: var(--space-1) var(--space-4);
+  align-items: start;
   min-width: 0;
-
-  /* A question about the action takes the width it needs to be read. */
-  &.asking {
-    grid-template-areas: 'facts facts' 'labels labels' 'action action';
-  }
 }
 
 .card-facts {
   display: flex;
   flex-wrap: wrap;
   grid-area: facts;
-  gap: var(--space-1) var(--space-4);
+  gap: 0 var(--space-3);
   align-items: center;
   min-width: 0;
 }
@@ -264,22 +270,42 @@ const filterLabel = (label: string) => emit('filter', { facet: 'labels', value: 
   max-width: 100%;
 }
 
-.card-holder {
+/* Each fact takes the chip's height, so a wrap adds a row of the same height. A fact
+   this item does not have is no fact at all, and takes no gap. */
+.card-fact {
   display: inline-flex;
-  gap: var(--space-1);
   align-items: center;
   min-width: 0;
+  min-height: var(--size-control-height-compact);
+
+  &:empty {
+    display: none;
+  }
+}
+
+/* Short on the line, whole in its tooltip: the name and the start of the session, and
+   an ellipsis before a name long enough to push the row's other facts away. */
+.card-holder {
+  gap: var(--space-1);
+}
+
+.card-holder-stale {
+  flex: none;
 }
 
 .card-action {
   grid-area: action;
+
+  &:empty {
+    display: none;
+  }
 }
 
 .card-labels {
   display: flex;
   flex-wrap: wrap;
   grid-area: labels;
-  gap: 0 var(--space-2);
+  gap: 0 var(--space-1);
   min-width: 0;
   padding: 0;
   margin: 0;
@@ -289,21 +315,10 @@ const filterLabel = (label: string) => emit('filter', { facet: 'labels', value: 
 /* A phone-wide drawer: the facts wrap, the labels follow them, and the one
    action stands under both at the full width a thumb reaches. */
 @container drawer (width < 520px) {
-  .card-facts-block,
-  .card-facts-block.asking {
+  .card-facts-block {
     grid-template-areas: 'facts' 'labels' 'action';
     grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-/* Read down the body, the head keeps the action in reach and lets the facts
-   go with the labels; it stands beside the title, as wide as its own label. */
-.card-facts-block.condensed {
-  grid-template-areas: 'action';
-  grid-template-columns: auto;
-
-  .card-facts {
-    display: none;
+    row-gap: var(--space-2);
   }
 }
 </style>

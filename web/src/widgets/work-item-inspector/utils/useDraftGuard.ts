@@ -55,7 +55,7 @@ export function provideDraftGuard() {
     ),
   )
 
-  /** True while the question stands in the head. */
+  /** True while the question stands under the bar. */
   const asking = ref(false)
   let answer: ((discard: boolean) => void) | null = null
 

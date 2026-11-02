@@ -211,18 +211,14 @@ async function openRelatedCard(page: Page, width: number) {
 }
 
 for (const width of [1440, 390]) {
-  test(`Back stays visible in the condensed head of a related card at ${width}px`, async ({
-    page,
-  }) => {
+  test(`Back stays in the bar of a related card read down at ${width}px`, async ({ page }) => {
     const drawer = await openRelatedCard(page, width)
-    const head = drawer.locator('.drawer-frame-head')
     const back = drawer.locator('.head-back')
     await expect(back).toBeVisible()
 
-    // Read down the body until the head condenses: the reference steps out, Back stays.
+    // Read down until the big title has gone: the reference makes way, Back stays.
     await drawer.locator('.drawer-frame-body').hover()
     for (let step = 0; step < 6; step += 1) await page.mouse.wheel(0, 80)
-    await expect(head).toHaveClass(/condensed/u)
     await expect(drawer.locator('.head-reference')).toBeHidden()
     await expect(back).toBeVisible()
 
@@ -231,24 +227,20 @@ for (const width of [1440, 390]) {
     await expect(back).toHaveCount(0)
   })
 
-  test(`Back sits beside Close in the head's top row at ${width}px, and comes before it`, async ({
-    page,
-  }) => {
+  test(`Back sits beside Close in the bar at ${width}px, and comes before it`, async ({ page }) => {
     const drawer = await openRelatedCard(page, width)
     const back = drawer.locator('.head-back')
     const close = drawer.locator('.drawer-frame-close')
     const backBox = await back.boundingBox()
     const closeBox = await close.boundingBox()
+    // One row, not two controls nearly aligned.
     expect(Math.abs(centreY(backBox) - centreY(closeBox))).toBeLessThan(1)
-    // As tall as Close, and with the same top: one row, not two controls nearly aligned.
-    expect(backBox?.height).toBe(closeBox?.height)
-    expect(backBox?.y).toBe(closeBox?.y)
     // The shared labelled ghost, resting on the control fill rather than a bare button.
     await expect(back).toHaveClass(/\bbutton\b.*\bvariant-ghost\b/u)
     expect(await back.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe(
       'rgba(0, 0, 0, 0)',
     )
-    await expect(back).toHaveText('Back')
+    await expect(back).toHaveAccessibleName('Back')
 
     // Keyboard order in the head is Back, then Close.
     await back.focus()

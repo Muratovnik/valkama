@@ -12,13 +12,13 @@ export type InspectorSection = 'activity' | 'execution' | 'memory' | 'overview' 
  * Execution exists only for an item of the primary store, so the strip offers it
  * only there, and a card that stops being writable steps off it.
  */
-export function useInspectorSections(writable: () => boolean, scrollToTop: () => void) {
+export function useInspectorSections(writable: () => boolean, scrollToStart: () => void) {
   const { t } = useI18n()
   const section = ref<InspectorSection>('overview')
 
   // Every tab starts at its own top. The body is one scroller, so a tab opened
   // after reading far down another used to open at that same depth.
-  watch(section, scrollToTop)
+  watch(section, scrollToStart)
 
   const sections = computed<ChoiceOption[]>(() => [
     { value: 'overview' as const, label: t('workItem.overview') },

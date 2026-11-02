@@ -1,10 +1,11 @@
 <script setup lang="ts">
 /**
- * What the card's head asks or reports before the reader goes on: a refused
- * write in the server's words, a write that failed for another reason, and the
- * question before a draft is lost. Each stands under the title at full width
- * and stays in view while the body scrolls, because a refusal of a tick far
- * down the card has to be seen however far down it was made.
+ * What the card asks or reports before the reader goes on: a refused write in the
+ * server's words, a write that failed for another reason, and the questions before a
+ * takeover or a lost draft. Each stands under the bar at full width and stays in view
+ * while the card scrolls, because a refusal of a tick far down the card has to be seen
+ * however far down it was made, and the action a question is about may have been
+ * pressed in the bar, which has no room for it.
  *
  * The host owns every answer; this only words and places them.
  */
@@ -23,16 +24,20 @@ const props = defineProps<{
   /** A write that failed without a refusal behind it; empty for none. */
   error: string
   notice: RefusalNotice | null
+  /** The takeover question while it is asked; empty otherwise. */
+  takeover: string
   /** The kinds of draft that would be lost, as the draft guard names them. */
   unsaved: readonly string[]
 }>()
 
 const emit = defineEmits<{
-  discard: []
-  dismiss: []
-  force: []
-  guard: [guard: string]
-  keep: []
+  'discard': []
+  'dismiss': []
+  'force': []
+  'guard': [guard: string]
+  'keep': []
+  'keep-holder': []
+  'take-over': []
 }>()
 
 const { t } = useI18n()
@@ -61,6 +66,14 @@ const discardQuestion = computed(() =>
     >
       {{ error }}
     </p>
+    <ConfirmStrip
+      v-if="takeover"
+      :message="takeover"
+      :confirm-label="t('workItem.takeOverConfirm')"
+      :cancel-label="t('workItem.cancel')"
+      @confirm="emit('take-over')"
+      @cancel="emit('keep-holder')"
+    />
     <ConfirmStrip
       v-if="asking"
       tone="danger"

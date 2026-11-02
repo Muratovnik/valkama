@@ -13,10 +13,6 @@ const drawer = readFileSync(
   new URL('../src/widgets/work-item-inspector/components/WorkItemInspector.vue', import.meta.url),
   'utf8',
 )
-const drawerCss = readFileSync(
-  new URL('../src/widgets/work-item-inspector/components/WorkItemInspector.css', import.meta.url),
-  'utf8',
-)
 const card = readFileSync(
   new URL('../src/widgets/work-item-views/components/WorkItemTile.vue', import.meta.url),
   'utf8',
@@ -121,9 +117,6 @@ test('the inspector exposes its emits, related navigation, and shared focus owne
   assert.match(drawer, /<DrawerFrame/)
   assert.match(drawer, /<InspectorTabs/)
   assert.doesNotMatch(drawer, /<InspectorDrawer|<InspectorHead/)
-  // The header's controls and the tabs name `--size-control-target` rather than
-  // writing 44, which is the token for exactly that number.
-  assert.match(compactCss(drawerCss), /min-height:var\(--size-control-target\)/)
   // Writability is a prop the shell decides, and every write is gated on it
   // together with the in-flight guard rather than each button deciding again.
   assert.match(drawer, /:writable="writable && !busy"/)

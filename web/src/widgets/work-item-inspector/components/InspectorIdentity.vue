@@ -116,23 +116,32 @@ const sourceLabel = computed(() => `${t('source.open')}: ${props.item?.source ??
 </template>
 
 <style scoped>
-/* One line of small facts. The middle dot between two of them belongs to the
-   second one's box and not to a control inside it, so a focus ring holds only
-   the reference, and a fact that is absent leaves no stray dot behind. */
+/* One line of small facts, in a bar that has one height: what does not fit shortens,
+   and the kind and the reference are the last to go. The middle dot between two of them
+   belongs to the second one's box and not to a control inside it, so a focus ring holds
+   only the reference, and a fact that is absent leaves no stray dot behind. */
 .card-identity {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0 var(--space-2);
+  gap: var(--space-2);
   align-items: center;
   min-width: 0;
   color: var(--color-text-tertiary);
   font: var(--font-detail);
+  white-space: nowrap;
 }
 
 .identity-fact {
   display: inline-flex;
+  flex: none;
   align-items: center;
+}
+
+.identity-updated {
+  display: block;
+  flex: 0 1 auto;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .identity-fact + .identity-fact::before {
@@ -169,12 +178,13 @@ const sourceLabel = computed(() => `${t('source.open')}: ${props.item?.source ??
 }
 
 .identity-source {
+  flex: none;
   justify-content: center;
   min-inline-size: var(--size-control-inline);
 }
 
 /* A phone-wide drawer keeps who the item is and leaves when it changed to the
-   record's history: on a second line it read as a fact of its own. */
+   record's history. */
 @container drawer (width < 520px) {
   .identity-updated {
     display: none;
@@ -182,7 +192,10 @@ const sourceLabel = computed(() => `${t('source.open')}: ${props.item?.source ??
 }
 
 .identity-note {
+  min-width: 0;
   color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
 
   &:empty {
     display: none;

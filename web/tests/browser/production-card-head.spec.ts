@@ -63,45 +63,47 @@ for (const width of [1440, 1024, 390]) {
     page,
   }) => {
     const { drawer } = await openCard(page, width)
-    const head = drawer.locator('.drawer-frame-head')
+    const lead = drawer.locator('.drawer-frame-lead')
     const top = await topOf(drawer)
     const stacked = width < STACKED_BELOW
 
     // Who it is, over the title; when it changed only where the line has room.
-    const identity = head.locator('.card-identity')
+    const identity = drawer.locator('.card-identity')
     await expect(identity.locator('.head-reference')).toHaveText(workItemRef.reference)
-    expect(await topOf(identity)).toBeLessThan(await topOf(head.locator('h2')))
+    expect(await topOf(identity)).toBeLessThan(await topOf(lead.locator('h2')))
     await expect(identity.locator('.identity-updated')).toBeVisible({ visible: !stacked })
 
     // The facts start high in the drawer and say the state once, as its menu.
-    expect((await topOf(head.locator('.card-facts'))) - top).toBeLessThanOrEqual(180)
+    expect((await topOf(lead.locator('.card-facts'))) - top).toBeLessThanOrEqual(180)
     await expect(drawer.getByText('Перевести в', { exact: true })).toHaveCount(0)
     await expect(
-      head.getByRole('combobox', { name: 'Состояние: Dev. Перевести в другое' }),
+      lead.getByRole('combobox', { name: 'Состояние: Dev. Перевести в другое' }),
     ).toHaveText('Dev')
     await expect(drawer.locator('.facts, .fact-term')).toHaveCount(0)
 
     // One action, and where it stands is the drawer's width to decide.
-    const actions = head.locator('.write-actions button')
+    const actions = lead.locator('.write-actions button')
     await expect(actions).toHaveText(['Забрать себе'])
     const action = await box(actions)
-    const facts = await box(head.locator('.card-facts'))
-    const labels = await box(head.locator('.card-labels'))
-    // Wide: at the end of the facts line, above the labels. Narrow: under the
-    // labels, as wide as the facts.
+    const facts = await box(lead.locator('.card-facts'))
+    const labels = await box(lead.locator('.card-labels'))
+    // Wide: at the end of the facts' first row, above the labels, its top and height
+    // the row's. Narrow: under the labels, as wide as the facts.
     expect(action.y < labels.y).toBe(!stacked)
     expect(action.x >= facts.x + facts.width - 1).toBe(!stacked)
     expect(Math.abs(action.width - facts.width) < 1).toBe(stacked)
+    expect(Math.abs(action.y - facts.y) < 1).toBe(!stacked)
+    expect(action.height).toBe(36)
 
     // Labels are buttons that filter, each its own Tab stop.
-    const chips = head.locator('.card-labels button')
+    const chips = lead.locator('.card-labels button')
     await expect(chips).toHaveCount(2)
     await expect(chips.first()).toHaveAttribute('aria-label', 'Фильтр: метка platform')
 
     // Updated and the source left the body; the path stands in Relations.
-    await expect(drawer.locator('.drawer-frame-body').getByText('Обновлено')).toHaveCount(0)
-    await expect(drawer.locator('.drawer-frame-body .source-anchor')).toHaveCount(0)
-    await expect(head.locator('.identity-source')).toHaveAttribute(
+    await expect(drawer.locator('.drawer-frame-content').getByText('Обновлено')).toHaveCount(0)
+    await expect(drawer.locator('.drawer-frame-content .source-anchor')).toHaveCount(0)
+    await expect(drawer.locator('.identity-source')).toHaveAttribute(
       'aria-label',
       /docs\/plans\/platform\.md#kb:arch-plan$/u,
     )
@@ -141,7 +143,7 @@ test('the state chip moves the item from the keyboard and says why the server re
   await expect
     .poll(() => moves)
     .toEqual([{ author: 'user', id: workItemRef.reference, state: 'done' }])
-  const refusal = drawer.locator('.drawer-frame-head .refusal')
+  const refusal = drawer.locator('.drawer-frame-notices .refusal')
   await expect(refusal).toContainText('Перевод в «Done» не выполнен')
   await expect(refusal).toContainText('has no closing summary')
   // The chip still names where the item is, and keeps the focus it had.
@@ -192,11 +194,10 @@ test('a reference in a checklist step opens its card, and pressing the step text
 })
 
 /**
- * Read down a long card and the part of the head that stays is the item's
- * title on one line, its one action and the sections on one row: no taller
- * than the head 2.1.0 pinned, which held the title and the sections. The 2.2
- * head kept the facts, a full-width action on a phone and two rows of
- * sections, and pinned 279px of an 844px phone.
+ * What stays pinned of a card read down is the bar and one row of sections: no taller
+ * than the head 2.1.0 pinned, which held the title and the sections. The 2.2 head kept
+ * the facts, a full-width action on a phone and two rows of sections, and pinned 279px
+ * of an 844px phone.
  */
 const PINNED_AT_MOST: Readonly<Record<number, number>> = { 1440: 141, 1024: 141, 390: 175 }
 
@@ -215,36 +216,53 @@ async function openLongCard(page: Page, width: number, answer?: (page: Page) => 
   )
   const drawer = page.locator('.drawer')
   await expect(drawer.locator('.card-facts')).toBeVisible()
+  // The drawer has stopped sliding in, so that places read below are its own.
+  await expect(drawer).toHaveCSS('transform', 'none')
   return drawer
 }
+
+const toEnd = (drawer: Locator) =>
+  drawer.locator('.drawer-frame-body').evaluate((node) => node.scrollTo({ top: node.scrollHeight }))
+
+/** Whether anything still fades: the bar's answers are read when they have landed. */
+const settled = (drawer: Locator) =>
+  expect
+    .poll(() =>
+      drawer
+        .locator('.drawer-frame-bar')
+        .evaluate((bar) => bar.getAnimations({ subtree: true }).length),
+    )
+    .toBe(0)
 
 for (const width of [1440, 1024, 390]) {
   test(`a card read down keeps its title, its action and one row of sections at ${width}px`, async ({
     page,
   }) => {
     const drawer = await openLongCard(page, width)
-    const head = drawer.locator('.drawer-frame-head')
-    const action = drawer.locator('.card-action').getByRole('button')
-    await expect(action).toBeVisible()
-    await drawer
-      .locator('.drawer-frame-body')
-      .evaluate((node) => node.scrollTo({ top: node.scrollHeight }))
-    await expect(head).toHaveClass(/condensed/u)
+    const bar = drawer.locator('.drawer-frame-bar')
+    const pinnedAction = bar.locator('.drawer-frame-action').getByRole('button')
+    await expect(pinnedAction).toBeHidden()
+    await toEnd(drawer)
+    await settled(drawer)
 
-    const pinned = await box(head)
-    expect(pinned.height).toBeLessThanOrEqual(PINNED_AT_MOST[width] ?? 0)
-    // Which item this is: its title, on one line.
-    const title = head.locator('h2')
+    const tabsBox = await box(drawer.locator('.drawer-frame-tabs'))
+    const barBox = await box(bar)
+    expect(tabsBox.y).toBeCloseTo(barBox.y + barBox.height, 0)
+    expect(barBox.height + tabsBox.height).toBeLessThanOrEqual(PINNED_AT_MOST[width] ?? 0)
+
+    // Which item this is: its title, on one line, in place of the identity.
+    const title = bar.locator('.drawer-frame-pinned-title')
+    await expect(title).toBeVisible()
+    await expect(bar.locator('.card-identity')).toBeHidden()
     const line = await title.evaluate((node) =>
       Number.parseFloat(getComputedStyle(node).lineHeight),
     )
-    const named = await box(title)
-    expect(named.height).toBeLessThanOrEqual(line + 1)
-    // The one action, inside what stays.
-    const button = await box(action)
-    expect(button.y).toBeGreaterThanOrEqual(pinned.y)
-    expect(button.y + button.height).toBeLessThanOrEqual(pinned.y + pinned.height)
-    await expect(drawer.locator('.card-facts')).toBeHidden()
+    const titleBox = await box(title)
+    expect(titleBox.height).toBeLessThanOrEqual(line + 1)
+    // The one action, in reach, and Close beside it.
+    await expect(pinnedAction).toBeVisible()
+    await expect(pinnedAction).toHaveText('Забрать себе')
+    await expect(drawer.locator('.card-facts')).not.toBeInViewport()
 
     // The sections keep one row, and each one the keyboard reaches is brought into view.
     const tabs = drawer.locator('.inspector-tabs').getByRole('button')
@@ -280,10 +298,12 @@ for (const width of [1440, 390]) {
 
 /**
  * Where the head would give a reason in place of the action — an epic, an item
- * waiting on a blocker — the reason is a fact and goes with the facts: kept in
- * the pinned row, a sentence beside the sections squeezed them to one.
+ * waiting on a blocker — the reason is a fact and goes with the facts: the bar has
+ * nothing to press, and the title keeps its room.
  */
-test('a read-down epic keeps the row for its sections at 390px', async ({ page }) => {
+test('a read-down epic has no action in its bar and its reason goes with the facts', async ({
+  page,
+}) => {
   const epic = {
     ...workItem,
     container: true,
@@ -311,54 +331,73 @@ test('a read-down epic keeps the row for its sections at 390px', async ({ page }
   )
   const reason = drawer.locator('.card-action')
   await expect(reason).toContainText('Эпик')
-  await drawer
-    .locator('.drawer-frame-body')
-    .evaluate((node) => node.scrollTo({ top: node.scrollHeight }))
-  await expect(drawer.locator('.drawer-frame-head')).toHaveClass(/condensed/u)
-  await expect(reason).toBeHidden()
-  // The sections take the row up to the column Close stands in, read in one
-  // frame because the drawer may still be sliding in.
-  const reach = await drawer.locator('.drawer-frame-head').evaluate((head) => {
-    const edge = (selector: string) => head.querySelector(selector)?.getBoundingClientRect()
-    const strip = edge('.inspector-tabs')
-    const close = edge('.drawer-frame-close')
-    return (close?.left ?? 0) - (strip?.right ?? 0)
+  await toEnd(drawer)
+  await settled(drawer)
+  await expect(reason).not.toBeInViewport()
+  await expect(drawer.locator('.drawer-frame-action').getByRole('button')).toHaveCount(0)
+  await expect(drawer.locator('.drawer-frame-action')).toHaveText('')
+  // The title takes what the empty cell leaves: most of the row up to Close.
+  const reach = await drawer.locator('.drawer-frame-bar').evaluate((bar) => {
+    const edge = (selector: string) => bar.querySelector(selector)?.getBoundingClientRect()
+    return (
+      (edge('.drawer-frame-close')?.left ?? 0) - (edge('.drawer-frame-pinned-title')?.right ?? 0)
+    )
   })
   expect(reach).toBeLessThanOrEqual(16 + 1)
 })
 
 /**
- * The takeover question asked from a read-down head is read in full: it takes
- * the row under the title, as in the whole head, rather than the action's cell
- * beside the title, where it pressed the title and the sections to nothing.
+ * A takeover is asked once wherever its button was pressed, in the band under the bar
+ * that stays in view: the bar has no room for a sentence, and the facts may be out of
+ * sight. The question takes the band's width, and what stands around it stays put.
  */
 for (const width of [1440, 390]) {
   test(`a takeover asked from a read-down card keeps its title and sections at ${width}px`, async ({
     page,
   }) => {
     const drawer = await openLongCard(page, width)
-    await drawer
-      .locator('.drawer-frame-body')
-      .evaluate((node) => node.scrollTo({ top: node.scrollHeight }))
-    const head = drawer.locator('.drawer-frame-head')
-    await expect(head).toHaveClass(/condensed/u)
-    await head.getByRole('button', { name: 'Забрать себе' }).click()
-    await expect(head.getByRole('button', { name: 'Забрать', exact: true })).toBeVisible()
-    const widths = await head.evaluate((node) => {
-      const width = (selector: string) =>
+    await toEnd(drawer)
+    await settled(drawer)
+    const bar = drawer.locator('.drawer-frame-bar')
+    const barBefore = await box(bar)
+    await bar.getByRole('button', { name: 'Забрать себе' }).click()
+    const notices = drawer.locator('.drawer-frame-notices')
+    await expect(notices.getByRole('button', { name: 'Забрать', exact: true })).toBeVisible()
+    expect(await box(bar)).toEqual(barBefore)
+    const widths = await drawer.evaluate((node) => {
+      const measure = (selector: string) =>
         node.querySelector(selector)?.getBoundingClientRect().width ?? 0
       return {
-        head: node.getBoundingClientRect().width,
-        title: width('h2'),
-        tabs: width('.inspector-tabs'),
-        question: width('.card-action'),
+        drawer: node.getBoundingClientRect().width,
+        title: measure('.drawer-frame-pinned-title'),
+        tabs: measure('.inspector-tabs'),
+        question: measure('.drawer-frame-notices .confirm-strip'),
       }
     })
-    // The question and the sections take the head's width less its insets; the title its row.
-    expect(widths.question).toBeGreaterThanOrEqual(widths.head - 48 - 1)
-    expect(widths.tabs).toBeGreaterThanOrEqual(widths.head - 48 - 1)
-    expect(widths.title).toBeGreaterThan(widths.head / 2)
-    await head.getByRole('button', { name: 'Отмена' }).click()
-    await expect(head.getByRole('button', { name: 'Забрать себе' })).toBeVisible()
+    // The question and the sections take the drawer's width less its insets.
+    expect(widths.question).toBeGreaterThanOrEqual(widths.drawer - 48 - 1)
+    expect(widths.tabs).toBeGreaterThanOrEqual(widths.drawer - 48 - 12)
+    expect(widths.title).toBeGreaterThan(0)
+    await notices.getByRole('button', { name: 'Отмена' }).click()
+    await expect(notices).toHaveCount(0)
+    await expect(bar.getByRole('button', { name: 'Забрать себе' })).toBeVisible()
   })
 }
+
+test('a takeover pressed among the facts asks in the same place, and goes through', async ({
+  page,
+}) => {
+  const drawer = await openLongCard(page, 1440)
+  const claims: unknown[] = []
+  await page.route('**/api/planning/work-item/claim', async (route) => {
+    claims.push(route.request().postDataJSON())
+    await route.abort()
+  })
+  await drawer.locator('.card-action').getByRole('button', { name: 'Забрать себе' }).click()
+  const notices = drawer.locator('.drawer-frame-notices')
+  await expect(notices.locator('.confirm-strip')).toBeVisible()
+  expect(claims).toHaveLength(0)
+  await notices.getByRole('button', { name: 'Забрать', exact: true }).click()
+  await expect.poll(() => claims.length).toBe(1)
+  await expect(notices.locator('.confirm-strip')).toHaveCount(0)
+})

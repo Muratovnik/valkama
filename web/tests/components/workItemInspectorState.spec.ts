@@ -41,13 +41,13 @@ import {
 
 const passThrough = { template: '<div><slot /></div>' }
 const drawerFrame = {
-  // The frame's head and body, as the real one lays them out.
+  // The frame's head apart from its content.
   template:
-    '<div><header class="drawer-frame-head"><slot name="identity" /><slot name="title" /><slot name="controls" /><slot name="facts" :condensed="false" /><slot name="actions" /><slot name="tabs" /></header><slot /></div>',
+    '<div><div class="frame-head"><slot name="identity" /><slot name="title" /><slot name="controls" /><slot name="facts" /><slot name="notices" /><slot name="tabs" /></div><slot /></div>',
   methods: {
-    position: () => ({ condensed: false, top: 0 }),
-    restore: async () => {},
-    scrollToTop() {},
+    position: () => 0,
+    restore() {},
+    scrollToContent() {},
   },
 }
 const overview = {
@@ -134,7 +134,7 @@ describe('WorkItemInspector resource state', () => {
     const wrapper = mountInspector(true)
     await flushPromises()
 
-    const head = wrapper.get('.drawer-frame-head')
+    const head = wrapper.get('.frame-head')
     // The title is the reference, and nothing over or under it says it again.
     expect(head.text()).toBe('QA-320')
     expect(wrapper.text().match(/QA-320/gu)).toHaveLength(1)
@@ -201,7 +201,7 @@ describe('WorkItemInspector resource state', () => {
     )
     const wrapper = mountInspector()
     await flushPromises()
-    const head = wrapper.get('.drawer-frame-head')
+    const head = wrapper.get('.frame-head')
     // The reference is one run the head keeps from breaking at its hyphen.
     expect(head.findAll('.head-title-reference').map((run) => run.text())).toEqual(['MAIN-384'])
     expect(head.text()).toContain('Findings after the review (follow-up to MAIN-384)')
@@ -299,7 +299,7 @@ describe('WorkItemInspector resource state', () => {
 
       // The holder is named once, among the facts in the head that stays in
       // view, as responsible while the item is open and as history once it is done.
-      const head = wrapper.get('.drawer-frame-head')
+      const head = wrapper.get('.frame-head')
       const holderFact = head.get('.card-holder')
       expect(holderFact.text()).toContain(claimed ? holder : 'No active claim')
       // Finished work's mark already says «Previously responsible: …», so no

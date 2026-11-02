@@ -18,10 +18,8 @@ const props = withDefaults(
     modelValue: T
     options: readonly { label: string; value: T; disabled?: boolean; title?: string }[]
     size?: 'default' | 'compact'
-    /** Take a second row where one cannot hold every option, rather than overflow. */
-    wrap?: boolean
   }>(),
-  { size: 'default', wrap: false },
+  { size: 'default' },
 )
 
 const emit = defineEmits<{ 'update:modelValue': [value: T] }>()
@@ -41,7 +39,7 @@ function select(option: { value: T; disabled?: boolean }) {
   <div
     class="segmented"
     role="group"
-    :class="[`size-${size}`, { wrap }]"
+    :class="`size-${size}`"
     :aria-label="label"
   >
     <button
@@ -108,13 +106,6 @@ function select(option: { value: T; disabled?: boolean }) {
     padding: 0 var(--space-3);
     font-size: var(--font-size-dense);
   }
-}
-
-/* A strip of sections on a phone: every option stays whole and in view, on as
-   many rows as it takes. */
-.segmented.wrap {
-  flex-wrap: wrap;
-  max-width: 100%;
 }
 
 .segmented-option:hover:not(:disabled, .active) {

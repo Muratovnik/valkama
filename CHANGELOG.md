@@ -10,6 +10,26 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+### Changed
+
+- **A card's head scrolls with its content.** A slim bar stays above it with the
+  item's identity, Back and Close, and the tabs stick to the top of the content.
+  Once the big title has passed under the bar the bar shows the title in one line,
+  and once the facts have gone the card's action stands beside Close. Reading down
+  no longer moves anything but the text: the head had two layouts, flipped at the
+  first scrolled pixel, and elements left and came back at once.
+- **Going from a card to a card keeps the panel.** A link and Back change what the
+  panel shows; the slide belongs to the first open and to the close.
+- The facts stand in rows of one height, with the action level with the first row
+  however they wrap. A takeover asks in the band under the bar, where a refusal
+  stands, wherever its button was pressed.
+
+### Fixed
+
+- A holder signed as `name session <id>` with no brackets is shortened as a holder
+  signed `name (session <id>)` is, on the card, the board and the chain, with the
+  whole value in the card's tooltip.
+
 ## [2.3.0](https://github.com/Muratovnik/valkama/compare/v2.2.0...v2.3.0) - 2026-11-02
 
 ### Added

@@ -59,7 +59,7 @@ test('description, comments and selected reports survive a fresh item read', asy
   await expect(selected).toBeInViewport({ ratio: 0.5 })
   await expect(selected).toBeFocused()
   const reportBounds = await selected.boundingBox()
-  const headerBounds = await drawer.locator('.drawer-frame-head').boundingBox()
+  const headerBounds = await drawer.locator('.drawer-frame-tabs').boundingBox()
   expect(
     reportBounds && headerBounds && reportBounds.y >= headerBounds.y + headerBounds.height,
   ).toBe(true)

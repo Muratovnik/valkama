@@ -3,15 +3,12 @@
   min-height: 0;
 }
 
-/* Back is the shared ghost, labelled and on the fill; it stands as tall as the
-   Close target beside it, so the two share a top and a centre in the head's row. */
-.head-back {
-  min-height: var(--size-control-target);
-}
-
-/* A reference in the title is one word: a line breaks around it, never at its hyphen. */
-.head-title-reference {
-  white-space: nowrap;
+/* Back rides the bar at the height of the action beside it. A phone-wide bar keeps
+   its room for the title: the glyph says it, and the button keeps its name. */
+@container drawer (width < 520px) {
+  .head-back-word {
+    display: none;
+  }
 }
 
 .inspector-read-recovery {

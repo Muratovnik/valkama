@@ -16,10 +16,12 @@ withDefaults(
     /** A square button holding one icon; its name comes from `aria-label`. */
     icon?: boolean
     /**
-     * `inline` rides a line of content — a checklist step, a link row — where a
-     * control-height button would make the line two rows tall.
+     * `compact` rides a dense header beside the compact controls, as
+     * `SegmentedControl` and `ChoiceSelect` do. `inline` rides a line of content — a
+     * checklist step, a link row — where a control-height button would make the line
+     * two rows tall.
      */
-    size?: 'default' | 'inline'
+    size?: 'default' | 'compact' | 'inline'
     title?: string
     type?: 'button' | 'submit'
     variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
@@ -137,6 +139,11 @@ withDefaults(
     --color-button-ink: var(--color-action-danger);
   }
 
+  &.size-compact {
+    min-height: var(--size-control-height-compact);
+    padding: 0 var(--space-3);
+  }
+
   &.size-inline {
     gap: var(--space-1);
     min-height: var(--size-control-inline);
@@ -149,6 +156,10 @@ withDefaults(
   &.icon-only {
     min-width: var(--size-control-height);
     padding: 0;
+  }
+
+  &.icon-only.size-compact {
+    min-width: var(--size-control-height-compact);
   }
 
   &.icon-only.size-inline {

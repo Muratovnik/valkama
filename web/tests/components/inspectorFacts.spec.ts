@@ -175,7 +175,7 @@ describe('the marks beside the state', () => {
     expect(wrapper.get('[data-facet="parent"]').text()).toBe('MAIN-9')
   })
 
-  it('adds a pressed label to the filter, and lets the labels go when the head condenses', async () => {
+  it('adds a pressed label to the filter', async () => {
     const wrapper = facts(item({ labels: ['platform', 'phase-1'] }))
     const chips = wrapper.findAll('.card-labels button')
     expect(chips.map((chip) => chip.attributes('aria-label'))).toEqual([
@@ -185,8 +185,5 @@ describe('the marks beside the state', () => {
     expect(chips.every((chip) => chip.attributes('tabindex') === undefined)).toBe(true)
     await chips[1].trigger('click')
     expect(wrapper.emitted('filter')).toEqual([[{ facet: 'labels', value: 'phase-1' }]])
-
-    await wrapper.setProps({ condensed: true })
-    expect(wrapper.find('.card-labels').exists()).toBe(false)
   })
 })

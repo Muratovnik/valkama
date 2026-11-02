@@ -12,15 +12,14 @@
  * The panel asks `close` before it closes, so its Escape and its scrim pass the
  * draft guard as the card's own Close does.
  *
- * The head stays outside the body's scroll and reads as who the item is, then
- * what holds for it, then what to do: the identity line over the title, the
- * facts under it — the state as the menu that moves it, the priority, the
- * holder, the epic — with the one action at their end, the labels, and the
- * sections. It used to put a full-width write row and a section before the
- * facts, which started half way down the drawer. The writes refuse rather than
- * force: a refusal shows the server's reason in the head, where it is seen
- * however far down the write was made, and overriding is a second, explicit
- * answer rather than a default.
+ * The head scrolls with the content and reads as who the item is, then what holds
+ * for it, then what to do: the identity line in the bar, the title under it, the
+ * facts under that — the state as the menu that moves it, the priority, the holder,
+ * the epic — with the one action at their end, the labels, and the sections. It used
+ * to put a full-width write row and a section before the facts, which started half
+ * way down the drawer. The writes refuse rather than force: a refusal shows the
+ * server's reason in the band under the bar, where it is seen however far down the
+ * write was made, and overriding is a second, explicit answer rather than a default.
  *
  * A reference the service says names nothing is not a failure: there is nothing
  * to retry and no section to open. The card says so once, under a title that
@@ -41,13 +40,15 @@ import InspectorOverview from '@/widgets/work-item-inspector/components/Inspecto
 import InspectorReferenceScope from '@/widgets/work-item-inspector/components/InspectorReferenceScope.vue'
 import InspectorRelations from '@/widgets/work-item-inspector/components/InspectorRelations.vue'
 import InspectorTabs from '@/widgets/work-item-inspector/components/InspectorTabs.vue'
+import InspectorTitle from '@/widgets/work-item-inspector/components/InspectorTitle.vue'
+import InspectorWriteActions from '@/widgets/work-item-inspector/components/InspectorWriteActions.vue'
 import type { InspectorReturn } from '@/widgets/work-item-inspector/utils/inspectorReturn.ts'
 import { inspectorTarget } from '@/widgets/work-item-inspector/utils/inspectorTarget.ts'
-import { titleRuns } from '@/widgets/work-item-inspector/utils/titleRuns.ts'
 import { provideDraftGuard } from '@/widgets/work-item-inspector/utils/useDraftGuard.ts'
 import { useInspectorReturn } from '@/widgets/work-item-inspector/utils/useInspectorReturn.ts'
 import { useInspectorSections } from '@/widgets/work-item-inspector/utils/useInspectorSections.ts'
 import { useInspectorWrites } from '@/widgets/work-item-inspector/utils/useInspectorWrites.ts'
+import { useTakeoverQuestion } from '@/widgets/work-item-inspector/utils/useTakeoverQuestion.ts'
 import { useWorkItemChain } from '@/widgets/work-item-inspector/utils/useWorkItemChain.ts'
 import { useWorkItemExecutions } from '@/widgets/work-item-inspector/utils/useWorkItemExecutions.ts'
 import { useWorkItemResource } from '@/widgets/work-item-inspector/utils/useWorkItemResource.ts'
@@ -102,9 +103,10 @@ const { t } = useI18n()
 
 const busy = ref(false)
 const frame = ref<InstanceType<typeof DrawerFrame> | null>(null)
+const facts = ref<InstanceType<typeof InspectorFacts> | null>(null)
 const { leaveUnreadable, section, sections, shownSection } = useInspectorSections(
   () => props.writable,
-  () => frame.value?.scrollToTop(),
+  () => frame.value?.scrollToContent(),
 )
 const overview = ref<InstanceType<typeof InspectorOverview> | null>(null)
 const { asking, discard, keep: keepEditing, leave, unsaved } = provideDraftGuard()
@@ -234,12 +236,18 @@ const { capture } = useInspectorReturn({
 const openFrom = (to: string) => void leave(() => emit('open', to, capture(to)))
 
 const title = computed(() => item.value?.title || props.reference)
-const titleText = computed(() => titleRuns(title.value))
 const target = computed(() => inspectorTarget(props))
-/** The head holds what has to be answered or read before going on, and only while it does. */
-/** The head's own takeover question, which takes a row of its own while it is asked. */
-const factsAsking = ref(false)
-const headSlot = computed(() => Boolean(notice.value || writeError.value) || asking.value)
+const {
+  ask: askTakeover,
+  confirm: confirmTakeover,
+  keep: keepHolder,
+  question: takeoverQuestion,
+} = useTakeoverQuestion(() => item.value?.claim_ref ?? '', takeOver)
+
+/** The band under the bar holds what has to be answered or read, and only while it does. */
+const notices = computed(
+  () => Boolean(notice.value || writeError.value || takeoverQuestion.value) || asking.value,
+)
 
 /** The next step a guard asks for, taken where the inspector can take it. */
 function followGuard(guard: string) {
@@ -259,7 +267,7 @@ function followGuard(guard: string) {
 
 /**
  * Leave this item — close it, step back, or open another — after asking when
- * that would drop a draft. The question stands in the head; the drawer stays
+ * that would drop a draft. The question stands under the bar; the drawer stays
  * usable underneath it, and the draft stays until the answer is to discard it.
  * The guard asks the same question for a departure the inspector did not start.
  */
@@ -273,35 +281,28 @@ defineExpose({ close })
     ref="frame"
     class="inspector-frame"
     :title="title"
-    :facts-row="factsAsking"
+    :action-anchor="facts?.actionCell"
     :close-label="t('drawer.close')"
     @close="close"
   >
     <template #title>
-      <template
-        v-for="(run, index) in titleText"
-        :key="index"
-      >
-        <span
-          v-if="run.whole"
-          class="head-title-reference"
-          >{{ run.text }}</span
-        ><template v-else>{{ run.text }}</template>
-      </template>
+      <InspectorTitle :title="title" />
     </template>
 
     <template #controls>
       <VButton
         v-if="canGoBack"
         class="head-back"
+        size="compact"
         variant="ghost"
+        :aria-label="t('workItem.back')"
         @click="void leave(() => emit('back'))"
       >
         <VIcon
           name="chevron-left"
           :size="16"
         />
-        {{ t('workItem.back') }}
+        <span class="head-back-word">{{ t('workItem.back') }}</span>
       </VButton>
     </template>
 
@@ -317,50 +318,65 @@ defineExpose({ close })
     </template>
 
     <template
+      v-if="item && !missing && writable"
+      #action
+    >
+      <InspectorWriteActions
+        :item="item"
+        :busy="busy"
+        :reasons="false"
+        @claim="claim"
+        @release="release"
+        @take-over="askTakeover"
+      />
+    </template>
+
+    <template
       v-if="item && !missing"
-      #facts="{ condensed }"
+      #facts
     >
       <InspectorFacts
-        v-model:asking="factsAsking"
+        ref="facts"
         :item="item"
         :workflow="workflow"
         :busy="busy"
         :writable="writable"
-        :condensed="condensed"
         :parent-reference="parentReference"
         @claim="claim"
         @release="release"
-        @take-over="takeOver"
+        @take-over="askTakeover"
         @move="moveTo"
         @filter="(token) => emit('filter', token)"
       />
     </template>
 
     <template
-      v-if="headSlot"
-      #actions
+      v-if="notices"
+      #notices
     >
       <InspectorNotices
         :asking="asking"
         :busy="busy"
         :error="writeError"
         :notice="notice"
+        :takeover="takeoverQuestion"
         :unsaved="unsaved"
         @discard="discard"
         @dismiss="dismissNotice"
         @force="force"
         @guard="followGuard"
         @keep="keepEditing"
+        @keep-holder="keepHolder"
+        @take-over="confirmTakeover"
       />
     </template>
 
     <template
       v-if="!missing"
-      #tabs="{ condensed }"
+      #tabs
     >
       <InspectorTabs
         v-model="shownSection"
-        :condensed="condensed"
         :label="t('workItem.sections')"
         :sections="sections"
       />

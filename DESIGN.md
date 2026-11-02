@@ -767,32 +767,41 @@ state's colour with its reference, so the whole of a long chain reads as an
 overview. Under the map, one line gives the totals and a second answers
 whether and when the open part closes, from the last seven days, and says so
 as a range when those days disagree.
-A card's head stands outside the body's scroll and reads as who the item is,
-what holds for it, then what to do. Over the title one tertiary line names the
-kind (glyph and word), the reference (it copies itself), when it last changed
-and, where the item has one, its plan anchor as an icon; the anchor's whole path
-stands in Relations with the item's other references. Under the title one line
-of facts in the registry's marks: the state, which is its own transition menu —
-the state is said once, and a move the server refuses leaves the chip naming
-where the item is — then the priority glyph and word, the holder with its lease
-as a tooltip and a warning dot once nobody is behind it, and the epic. One
-action ends that line on a wide drawer and stands at full width under the
-labels on a narrow one: «Взять», «Отпустить» on this client's claim, «Забрать
-себе» on another's; where the facts argue against taking it the reason stands
-there instead — «Ждёт MAIN-12» while an open blocker remains, «Эпик — возьмите
-задачу из него» on an epic. Labels follow as chips that add themselves to the
-filter, then the tabs. The first scroll of the body condenses the head to the
-title's one line and the tabs on one row that scrolls, the one shown and the one
-focused brought into it; the action ends the title's row on a wide drawer and
-the tabs' row on a narrow one, where Back and Close hold the title's. The facts
-and labels go with the body, and so does a reason standing where the action
-would; a takeover question takes the row under the title while it is asked. The
-text glides up into the room the head gives back on the surface motion duration,
-and reduced motion makes the move at once.
-Pinned no taller than the title and tabs of 2.1.0, it says which item this is
-and keeps the action and every section in reach: keeping the facts, a
-full-width action and two rows of tabs, it held 279px of a phone. The body
-names only blockers that are still open.
+A card is a bar that never moves and one scroller under it, and no layout in it
+depends on where that scroller stands. The bar has one height: on its left the item
+in one tertiary line — the kind (glyph and word), the reference (it copies itself),
+when it last changed and, where the item has one, its plan anchor as an icon, whose
+whole path stands in Relations with the item's other references — and on its right
+Back and Close. The scroller holds the rest and moves it 1:1: the title, one line of
+facts in the registry's marks, the labels, the tabs, the content. The state is its
+own transition menu: said once, and a move the server refuses leaves the chip naming
+where the item is. Then the priority glyph and word, the holder, shortened to its name
+and the start of its session with the whole value and its lease in a tooltip and a
+warning dot once nobody is behind it, and the epic. Every fact stands in a row of one
+height, the state chip's, so a wrap adds a row of that height and never a half step.
+One action ends the first row on a wide drawer, level with it however the facts wrap,
+and stands at full width under the labels on a narrow one: «Взять», «Отпустить» on this
+client's claim, «Забрать себе» on another's. Where the facts argue against taking it
+the reason stands there instead — «Ждёт MAIN-12» while an open blocker remains, «Эпик —
+возьмите задачу из него» on an epic.
+Reading down, the tabs stick to the top of the scroller, on one row that scrolls inside
+itself where it has to, the one shown and the one focused brought into it, and whatever
+is scrolled into view comes to rest under them. The bar answers with two fades on the
+surface motion tokens, at once under reduced motion, and moves nothing: the title takes
+the identity's place once the big title has passed under the bar, and the action fades
+in beside Close once its own place has. Each has its room from the start, so its arrival
+cuts no word and shifts no neighbour; a reason goes with the facts and leaves the title
+its room. A control the keyboard holds in the bar stays until the keyboard moves on.
+Pinned, the bar and the tabs are no taller than the title and tabs of 2.1.0, and they say
+which item this is and keep the action and every section in reach: keeping the facts, a
+full-width action and two rows of tabs, an earlier head held 279px of a phone. A section
+pressed read far down starts at its own top with the tabs where they were; a section too
+short to scroll that far lets the head back in, with no blank to scroll into.
+What has to be answered or read wherever the reader is — a refusal in the server's words,
+a failed write, the question before a takeover or before a draft is lost — stands in a
+band between the bar and the scroller, at full width, however far down the write was made.
+Its height follows what it says and never the scroller. The body names only blockers
+that are still open.
 A card's «Agents» section stands under the next step of an open item and under the
 outcome of a closed one, where the list is history with no next step above it, and it
 is absent while no agent is on the item. A row is one record held together by air: what the agent was

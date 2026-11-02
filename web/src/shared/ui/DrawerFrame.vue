@@ -1,197 +1,83 @@
 <script setup lang="ts">
-import { nextTick, ref } from 'vue'
+import { computed, ref } from 'vue'
 
-import { useEventListener } from '@vueuse/core'
+import { useResizeObserver } from '@vueuse/core'
 
+import { useScrolledPast } from '@/shared/lib/useScrolledPast.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
-defineProps<{
+const props = defineProps<{
   closeLabel: string
   title: string
-  /** The facts ask something and take a row of their own, condensed or not. */
-  factsRow?: boolean
-  subtitle?: string
+  /** What the `action` slot stands in for: it shows once this has scrolled away. */
+  actionAnchor?: HTMLElement | null
 }>()
 const emit = defineEmits<{ close: [] }>()
-const body = ref<HTMLElement | null>(null)
-const head = ref<HTMLElement | null>(null)
 
 /**
- * The head reads top down as what the record is, then what holds for it: the
- * identity line over the title, the facts under it, then whatever the head asks
- * or reports, then the tabs. All of it stands outside the body's scroll.
+ * Three parts, and only one of them moves. The bar never moves and has one height:
+ * who the record is on its left, the controls on its right. Under it stands whatever
+ * has to be answered or read wherever the reader is. Everything else is one scroller,
+ * natively, 1:1: the title, the facts, the tabs, the content.
  *
- * The head gives its room back to the body as soon as the body moves: the
- * title keeps one line and the identity line and subtitle step out, while the
- * controls — Back and Close — the actions slot, a refusal or a question, and
- * the tabs stay. The facts slot moves up beside the title and is told it is
- * condensed, so it keeps only what has to stay in reach — the card's one
- * action — and lets the rest scroll away with the body; the tabs slot is told
- * too, so it can keep to one row. Whole, the head of a long title took a
- * quarter of a desktop drawer and more of a phone's; keeping the facts line,
- * a full-width action and two rows of tabs, it still pinned a third of a phone.
- *
- * It is whole exactly at the top of the body and condensed at every position
- * below it, so a read-down reader has the compact head from the first step, and
- * a card too short to scroll a head's height condenses as well. The only
- * boundary is the top, which is why nothing flips at it: the head condenses on
- * any scroll past 0 and is whole again only at 0.
- *
- * Condensing gives the head's room to the body, and the text takes it by a glide
- * rather than a jump: the text is drawn where it was, then moves up into place
- * on the surface motion duration, and reduced motion makes the move at once. The
- * reader keeps the place they read to, so the text moves by the distance scrolled
- * and the room the head gave up. Condensed, the text is at least a window tall,
- * so a reader who has condensed the head can still
- * scroll, and a short card cannot be clamped back to the top.
+ * No layout here depends on where the scroller stands. The tabs stick to its top, and
+ * the bar answers the head leaving with two fades and no reflow: the title takes the
+ * identity's place once the big title has passed under the bar, and the action fades
+ * in beside the controls once its anchor has too. Both have their room from the start,
+ * so that nothing around them moves when they arrive. It used to be one head outside
+ * the scroller with two layouts flipped at the first scrolled pixel, and each thing
+ * that flip took from under a reader — a press, a focus, a position — had its own
+ * repair. A tall pinned head ate the drawer, which is what the flip was for; a bar and
+ * one row of tabs pin less than it did.
  */
-const condensed = ref(false)
+const body = ref<HTMLElement | null>(null)
+const name = ref<HTMLElement | null>(null)
+const tabs = ref<HTMLElement | null>(null)
 const content = ref<HTMLElement | null>(null)
 
-async function follow() {
+const titleAway = useScrolledPast(name, body)
+const actionAway = useScrolledPast(() => props.actionAnchor, body)
+
+/** Whatever is scrolled into view comes to rest under the tabs, not behind them. */
+const tabsHeight = ref(0)
+useResizeObserver(tabs, (entries) => {
+  tabsHeight.value = entries[0]?.borderBoxSize[0]?.blockSize ?? 0
+})
+const scrollPadding = computed(() => ({ scrollPaddingBlockStart: `${tabsHeight.value}px` }))
+
+/**
+ * To the start of the content, for a host that swaps what it shows. One position shared
+ * by every tab opened the next tab wherever the last one had been read to — the
+ * Relations heading above the fold, the newest event below it. The tabs hold their
+ * place under the pointer that pressed them: a reader above them has nothing to skip.
+ */
+function scrollToContent() {
   const scroller = body.value
-  if (!scroller || !head.value) return
-  if (condensed.value) {
-    if (scroller.scrollTop <= 0) await setCondensed(false)
-    return
-  }
-  if (scroller.scrollTop > 0) await setCondensed(true)
+  const start = content.value?.offsetTop
+  if (!scroller || start === undefined) return
+  scroller.scrollTo({ top: Math.min(scroller.scrollTop, start - tabsHeight.value) })
 }
 
-/**
- * The glide's length and easing are the surface motion tokens; a reader who asked
- * for less motion gets none, which is the move at once.
- */
-function glideOf(node: HTMLElement) {
-  const styles = getComputedStyle(node)
-  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  return {
-    duration: reduced ? 0 : Number.parseFloat(styles.getPropertyValue('--duration-surface')) * 1000,
-    easing: styles.getPropertyValue('--ease-out').trim(),
-  }
+/** Where the scroller is read to, for a host that will bring the reader back to it. */
+function position() {
+  return body.value?.scrollTop ?? 0
 }
 
-/**
- * Condenses or restores the head, and glides the text from where it was to where
- * the new layout puts it: the text is drawn at its old place and animated to the
- * new one, so the room the head gave back is taken by motion rather than a jump.
- */
-async function setCondensed(next: boolean) {
-  const text = content.value
-  const before = text?.getBoundingClientRect().top ?? 0
-  condensed.value = next
-  await nextTick()
-  if (!text) return
-  const offset = before - text.getBoundingClientRect().top
-  const glide = glideOf(text)
-  if (offset === 0 || glide.duration === 0) return
-  const animation = text.animate(
-    [{ transform: `translateY(${offset}px)` }, { transform: 'translateY(0)' }],
-    { duration: glide.duration, easing: glide.easing },
-  )
-  if (pressed) hold(animation)
+function restore(top: number) {
+  body.value?.scrollTo({ top })
 }
 
-/**
- * A press belongs to what was under the pointer when it went down, and a click
- * reaches a control only if the release lands on it too. So the glide stands still
- * from the press to the release and goes on after. Moving under a held pointer, or
- * ending at once because the press focused the control, took the control from under
- * the release, and the click went to whatever held both points: the press did nothing.
- * The text hears the press and the body does not: the body's scrollbar is a press
- * too, one that scrolls, and it would hold the glide its own scroll starts. Only the
- * button a click belongs to holds it: a menu's button may not report its release.
- * A tap reports its release before its mouse events and the focus they give, so those
- * hold it again. A window that loses focus may never hear the release, and the text
- * does not stand displaced waiting for it.
- */
-let pressed = false
-
-/**
- * Pausing alone takes effect on the next frame, one step further on, which at the
- * glide's quickest is enough to leave a pointer on a control's edge behind. Setting
- * the time holds it where it is drawn now.
- */
-function hold(animation: Animation) {
-  const drawn = animation.currentTime
-  animation.pause()
-  animation.currentTime = drawn
-}
-
-function holdGlide(event: MouseEvent) {
-  if (event.button !== 0) return
-  pressed = true
-  for (const animation of content.value?.getAnimations() ?? []) hold(animation)
-}
-
-function freeGlide() {
-  if (!pressed) return
-  pressed = false
-  for (const animation of content.value?.getAnimations() ?? []) animation.play()
-}
-
-useEventListener(content, ['pointerdown', 'mousedown'], holdGlide, { capture: true })
-useEventListener(window, ['pointerup', 'pointercancel', 'mouseup', 'blur'], freeGlide)
-
-/**
- * A focus move inside the body places its control by the text's settled place.
- * A glide in flight is a transform, and a scroll into view measures the transform,
- * so the control would be brought in at the place the text was passing and sit
- * out of view once the glide ends. The glide ends at once instead. The focus a
- * press gives its control places nothing: that control is under the pointer.
- */
-function settleGlide() {
-  if (pressed) return
-  for (const animation of content.value?.getAnimations() ?? []) animation.finish()
-}
-
-/**
- * Back to the top of the body, for a host that swaps what the body shows. One
- * scroll position shared by every tab opened the next tab wherever the last one
- * had been read to — the Relations heading above the fold, the newest event
- * below it.
- */
-function scrollToTop() {
-  body.value?.scrollTo({ top: 0 })
-}
-
-/** Where the body is read to, for a host that will bring the reader back to it. */
-interface DrawerPosition {
-  condensed: boolean
-  top: number
-}
-
-function position(): DrawerPosition {
-  return { condensed: condensed.value, top: body.value?.scrollTop ?? 0 }
-}
-
-/**
- * Back to a position read earlier, head and all. The head is set first and the
- * position after it, so the position is taken in the geometry it was read in. A
- * restored position is placed at once, without the glide: the text was already
- * where the reader left it.
- */
-async function restore(at: DrawerPosition) {
-  const scroller = body.value
-  if (!scroller) return
-  condensed.value = at.condensed && at.top > 0
-  await nextTick()
-  scroller.scrollTop = at.top
-}
-
-defineExpose({ position, restore, scrollToTop })
+defineExpose({ position, restore, scrollToContent })
 </script>
 
 <template>
   <div class="drawer-frame">
     <header
-      ref="head"
-      class="drawer-frame-head"
-      :class="{ condensed, 'facts-row': factsRow }"
+      class="drawer-frame-bar"
+      :class="{ 'title-away': titleAway, 'action-away': actionAway }"
     >
       <!-- The controls come first in the document and stand at the row's end:
-           opening the drawer puts focus on Back or Close, as it did when the
-           head started with the title, and not on the first fact over it. -->
+           opening the drawer puts focus on Back or Close, and not on a fact. -->
       <div class="drawer-frame-controls">
         <slot name="controls" />
         <button
@@ -203,58 +89,62 @@ defineExpose({ position, restore, scrollToTop })
           <VIcon name="close" />
         </button>
       </div>
-      <div class="drawer-frame-title">
-        <div
-          v-if="$slots.identity"
-          class="drawer-frame-identity"
-        >
-          <slot name="identity" />
-        </div>
-        <h2 class="drawer-frame-name">
-          <slot name="title">{{ title }}</slot>
-        </h2>
-        <p
-          v-if="subtitle"
-          class="drawer-frame-subtitle"
-        >
-          {{ subtitle }}
-        </p>
-      </div>
       <div
-        v-if="$slots.facts"
-        class="drawer-frame-facts"
+        v-if="$slots.identity"
+        class="drawer-frame-identity"
       >
-        <slot
-          name="facts"
-          :condensed="condensed"
-        />
+        <slot name="identity" />
       </div>
-      <div
-        v-if="$slots.actions"
-        class="drawer-frame-actions"
+      <!-- The heading is the one in the scroller; this is the same words kept in sight. -->
+      <p
+        class="drawer-frame-pinned-title"
+        aria-hidden="true"
+        :title="title"
       >
-        <slot name="actions" />
-      </div>
+        {{ title }}
+      </p>
       <div
-        v-if="$slots.tabs"
-        class="drawer-frame-tabs"
+        v-if="$slots.action"
+        class="drawer-frame-action"
       >
-        <slot
-          name="tabs"
-          :condensed="condensed"
-        />
+        <slot name="action" />
       </div>
     </header>
     <div
+      v-if="$slots.notices"
+      class="drawer-frame-notices"
+    >
+      <slot name="notices" />
+    </div>
+    <div
       ref="body"
       class="drawer-frame-body"
-      @scroll.passive="follow"
-      @focusin="settleGlide"
+      :style="scrollPadding"
     >
+      <div class="drawer-frame-lead">
+        <h2
+          ref="name"
+          class="drawer-frame-name"
+        >
+          <slot name="title">{{ title }}</slot>
+        </h2>
+        <div
+          v-if="$slots.facts"
+          class="drawer-frame-facts"
+        >
+          <slot name="facts" />
+        </div>
+      </div>
+      <div
+        v-if="$slots.tabs"
+        ref="tabs"
+        class="drawer-frame-tabs"
+      >
+        <slot name="tabs" />
+      </div>
       <div
         ref="content"
         class="drawer-frame-content"
-        :class="{ condensed }"
       >
         <slot />
       </div>
@@ -267,81 +157,84 @@ defineExpose({ position, restore, scrollToTop })
    viewport's, so what it holds lays itself out against the drawer. */
 .drawer-frame {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   min-height: 100%;
   background: var(--color-surface);
   container: drawer / inline-size;
 }
 
-.drawer-frame-head {
-  position: sticky;
-  top: 0;
-  z-index: 2;
+/* One height whatever it shows. The identity may run under the action's cell, which
+   stands empty while the identity is in sight: the title stops short of that cell
+   from the start, so the action arrives without cutting a word it had already shown. */
+.drawer-frame-bar {
   display: grid;
-  flex: 0 0 auto;
-  grid-template-areas: 'title close' 'facts facts' 'actions actions' 'tabs tabs';
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-3) var(--space-4);
-  padding: var(--space-6) var(--space-6) 0;
-  border-bottom: 1px solid var(--color-rule);
-  background: var(--color-surface);
-}
-
-.drawer-frame-title {
-  grid-area: title;
-  min-width: 0;
-}
-
-.drawer-frame-name {
-  margin: 0;
-  font: var(--font-drawer-title);
-  letter-spacing: -0.02em;
-  overflow-wrap: anywhere;
-}
-
-/* Condensed, the title is one line and the lines under it step out; what is
-   left of the facts stands at the end of the title's row, before the controls. */
-.drawer-frame-head.condensed {
-  grid-template-areas: 'title facts close' 'actions actions actions' 'tabs tabs tabs';
+  grid-template-areas: 'lead action controls';
   grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: var(--space-2);
   align-items: center;
-
-  .drawer-frame-name {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .drawer-frame-subtitle,
-  .drawer-frame-identity {
-    display: none;
-  }
+  height: calc(var(--size-control-target) + 2 * var(--space-1));
+  padding-inline: var(--space-6);
 }
 
-/* The identity line is a line of small facts over the title, so it sits
-   closer to the title than the title does to anything else. */
 .drawer-frame-identity {
-  margin-bottom: var(--space-1);
-}
-
-.drawer-frame-facts {
-  grid-area: facts;
+  grid-row: 1;
+  grid-column: lead-start / action-end;
   min-width: 0;
 }
 
-.drawer-frame-subtitle {
-  margin: var(--space-2) 0 0;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-dense);
+.drawer-frame-pinned-title {
+  grid-area: lead;
+  min-width: 0;
+  margin: 0;
+  font: var(--font-name);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* The controls stay in the head's top row, beside the title, whether the head is
-   whole or condensed; their own top edge is the row's, as the close button's was. */
+.drawer-frame-action {
+  grid-area: action;
+}
+
 .drawer-frame-controls {
   display: flex;
-  grid-area: close;
+  grid-area: controls;
   gap: var(--space-2);
-  align-items: flex-start;
+  align-items: center;
+}
+
+/* The fades, and the only things the scroller's position decides. What is out of sight
+   is out of reach too. A control the keyboard holds stays where it is until the keyboard
+   moves on, and what would stand over it waits. */
+.drawer-frame-identity,
+.drawer-frame-pinned-title,
+.drawer-frame-action {
+  transition:
+    opacity var(--duration-surface) var(--ease-out),
+    visibility var(--duration-surface) var(--ease-out);
+}
+
+.drawer-frame-pinned-title,
+.drawer-frame-action,
+.title-away .drawer-frame-identity {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.title-away .drawer-frame-pinned-title,
+.action-away .drawer-frame-action,
+.drawer-frame-identity:has(:focus-visible),
+.drawer-frame-action:has(:focus-visible) {
+  opacity: 1;
+  visibility: visible;
+}
+
+.drawer-frame-bar:has(.drawer-frame-identity :focus-visible) {
+  .drawer-frame-pinned-title,
+  .drawer-frame-action {
+    opacity: 0;
+    visibility: hidden;
+  }
 }
 
 .drawer-frame-close {
@@ -362,45 +255,21 @@ defineExpose({ position, restore, scrollToTop })
   }
 }
 
-.drawer-frame-actions {
+/* A refusal of a write far down has to be seen however far down it was made, and a
+   question is asked of the reader wherever they stand, so these stay out of the
+   scroller. Their height follows what they say, never where the scroller is. */
+.drawer-frame-notices {
   display: flex;
   flex-wrap: wrap;
-  grid-area: actions;
   gap: var(--space-2);
-  padding-bottom: var(--space-3);
+  padding: var(--space-1) var(--space-6) var(--space-3);
 }
 
-.drawer-frame-tabs {
-  grid-area: tabs;
-  min-width: 0;
-}
+/* The scrollbar is paid for out of the end inset, so the scroller's content ends
+   where the bar's does. Drawn inside a full inset it pushed every row 10px short
+   of the close button above it, and the column read as shifted.
 
-/* A question the facts ask is read in full: condensed, the head gives it the
-   row under the title, as the whole head does. */
-.drawer-frame-head.condensed.facts-row {
-  grid-template-areas: 'title close' 'facts facts' 'actions actions' 'tabs tabs';
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-
-/* A phone-wide drawer has no title row to spare: Back and Close already share
-   it, so the action ends the tabs' row instead, centred on the tabs above the
-   strip's own foot, and the title keeps the width that says which item this is. */
-@container drawer (width < 520px) {
-  .drawer-frame-head.condensed:not(.facts-row) {
-    grid-template-areas: 'title close' 'actions actions' 'tabs facts';
-    grid-template-columns: minmax(0, 1fr) auto;
-
-    .drawer-frame-facts {
-      padding-bottom: var(--space-3);
-    }
-  }
-}
-
-/* The scrollbar is paid for out of the end inset, so the body's content ends
-   where the head's does. Drawn inside a full inset it pushed every row 10px
-   short of the close button above it, and the column read as shifted.
-
-   The body is the containing block of what is positioned inside it. Without
+   The scroller is the containing block of what is positioned inside it. Without
    that, a visually hidden label far down a long section was placed against the
    drawer instead, stretched the drawer's own scroll area to twice its height,
    and the first `scrollIntoView` scrolled the drawer and left a blank band
@@ -408,18 +277,44 @@ defineExpose({ position, restore, scrollToTop })
 .drawer-frame-body {
   position: relative;
   min-height: 0;
-  padding: var(--space-6);
-  padding-inline-end: calc(var(--space-6) - var(--size-scrollbar));
   overflow-y: auto;
   scrollbar-gutter: stable;
 }
 
-/* Condensed, the text is at least the body's own height plus a pixel, so the scroll
-   range never falls to zero and a short card keeps its one-row head. The percentage
-   resolves against the body's content box, so the range the guard adds is 1px and
-   the reader is never scrolled into blank below a short text. A long text is its
-   own length. */
-.drawer-frame-content.condensed {
-  min-height: calc(100% + 1px);
+.drawer-frame-lead,
+.drawer-frame-tabs,
+.drawer-frame-content {
+  padding-inline: var(--space-6) calc(var(--space-6) - var(--size-scrollbar));
+}
+
+.drawer-frame-lead {
+  display: grid;
+  gap: var(--space-3);
+  padding-block: var(--space-1) var(--space-4);
+}
+
+.drawer-frame-name {
+  margin: 0;
+  font: var(--font-drawer-title);
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.drawer-frame-facts {
+  min-width: 0;
+}
+
+/* The content scrolls away behind these and they cover it edge to edge. */
+.drawer-frame-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding-block-end: var(--space-3);
+  border-bottom: 1px solid var(--color-rule);
+  background: var(--color-surface);
+}
+
+.drawer-frame-content {
+  padding-block: var(--space-6);
 }
 </style>

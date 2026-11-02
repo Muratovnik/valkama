@@ -201,17 +201,6 @@ test('the readout of the first lane stays inside a panel scrolled to the map', a
   // Hovering waits for the card to finish sliding in; then the pointer leaves.
   await lane.hover()
   await page.mouse.move(0, 0)
-  // A hover that had to try again may have scrolled the panel to reach the lane. A
-  // first scroll condenses the head and the text glides, and a place read during the
-  // glide is one the text is only passing. A scroll reports itself on the next frame.
-  await expect
-    .poll(() =>
-      section.evaluate(async (node) => {
-        await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))
-        return node.closest('.drawer-frame-body')?.getAnimations({ subtree: true }).length
-      }),
-    )
-    .toBe(0)
   // Scroll the card's panel until the map's first lane is the first thing shown.
   const panelTop = await section.locator('.branch-map-canvas').evaluate((canvas) => {
     let panel = canvas.parentElement
@@ -229,16 +218,8 @@ test('the readout of the first lane stays inside a panel scrolled to the map', a
   await expect(section.locator('.branch-tip')).toBeVisible()
   const tip = await section.locator('.branch-tip').boundingBox()
   expect(tip).not.toBeNull()
-  // Above the lane it would rise past the panel's top edge and be cut off. The
-  // edge is read again: the scroll may have condensed the card's head since,
-  // which moves the panel's top up while the lane, held still, stays put.
-  const panelNow = await section.locator('.branch-map-canvas').evaluate((canvas) => {
-    let panel = canvas.parentElement
-    while (panel && !/auto|scroll/u.test(getComputedStyle(panel).overflowY))
-      panel = panel.parentElement
-    return panel?.getBoundingClientRect().top ?? 0
-  })
-  expect(tip?.y ?? 0).toBeGreaterThanOrEqual(panelNow)
+  // Above the lane it would rise past the panel's top edge and be cut off.
+  expect(tip?.y ?? 0).toBeGreaterThanOrEqual(panelTop)
 })
 
 test('the branch map gives a small chain a segment, a dot and a name per task', async ({

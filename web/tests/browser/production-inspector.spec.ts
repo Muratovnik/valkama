@@ -57,10 +57,8 @@ test('Russian relations keep one hierarchy, aligned controls, and narrow content
   const drawer = page.locator('.drawer')
   // The holder is named once, among the facts in the head, and the body holds
   // no fact grid that says it again (a step's own holder is the step's).
-  await expect(drawer.locator('.drawer-frame-head .card-holder')).toContainText(
-    /Ответственный:\s*codex/u,
-  )
-  await expect(drawer.locator('.drawer-frame-body')).not.toContainText('Ответственный')
+  await expect(drawer.locator('.card-holder')).toContainText(/Ответственный:\s*codex/u)
+  await expect(drawer.locator('.drawer-frame-content')).not.toContainText('Ответственный')
   await drawer.getByRole('button', { name: 'Отчёт о работе', exact: true }).click()
   const result = drawer.getByRole('textbox', { name: 'Что сделано', exact: true })
   const longDraft =
@@ -201,13 +199,8 @@ async function heightOf(locator: Locator): Promise<number> {
   return box?.height ?? 0
 }
 
-async function rightOf(locator: Locator): Promise<number> {
-  const box = await locator.boundingBox()
-  return (box?.x ?? 0) + (box?.width ?? 0)
-}
-
 for (const width of [1440, 390]) {
-  test(`the card's head names every section and gives its room back while the body is read at ${width}px`, async ({
+  test(`the card's head goes with the text, 1:1, and the sections stay in reach at ${width}px`, async ({
     page,
   }) => {
     await page.addInitScript(() => localStorage.setItem('valkama-locale', 'ru'))
@@ -216,50 +209,94 @@ for (const width of [1440, 390]) {
     await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
     await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
     const drawer = page.locator('.drawer')
-    const head = drawer.locator('.drawer-frame-head')
     await expect(drawer.locator('.head-reference')).toHaveText(workItemRef.reference)
+    await expect(drawer).toHaveCSS('transform', 'none')
 
-    // Every section is named whole on the strip: no scrollbar, nothing cut off.
+    // Every section is on the one row, or a scroll of that row away.
     const tabs = drawer.locator('.inspector-tabs')
-    const strip = await tabs.evaluate((node) => ({
-      overflow: node.scrollWidth - node.clientWidth,
-      bar: getComputedStyle(node).overflowX,
-    }))
-    expect(strip).toEqual({ overflow: 0, bar: 'visible' })
-    const edge = await rightOf(tabs)
-    for (const tab of await tabs.getByRole('button').all())
-      expect(await rightOf(tab)).toBeLessThanOrEqual(edge + 0.5)
-    await expect(tabs.getByRole('button', { name: 'Системные события', exact: true })).toBeVisible()
+    const sections = tabs.getByRole('button')
+    await expect(sections).toHaveCount(5)
+    const tops = await sections.evaluateAll((nodes) =>
+      nodes.map((node) => Math.round(node.getBoundingClientRect().top)),
+    )
+    expect(new Set(tops).size).toBe(1)
+    await tabs.getByRole('button', { name: 'Системные события', exact: true }).focus()
+    await expect(
+      tabs.getByRole('button', { name: 'Системные события', exact: true }),
+    ).toBeInViewport({ ratio: 0.99 })
 
-    // Read down the body: the head condenses, and the text glides up into the room
-    // it gave back. The first step moves the text by the distance scrolled and by
-    // that room; each step after moves it by the distance scrolled alone.
-    const whole = await heightOf(head)
+    // Read down: the title, the facts and the text all move by the distance scrolled.
     const body = drawer.locator('.drawer-frame-body')
     await body.hover()
-    const probe = drawer.locator('.drawer-frame-body .overview > :first-child')
-    let before = await topOf(probe)
-    await page.mouse.wheel(0, 80)
-    await expect(head).toHaveClass(/condensed/u)
-    // The head is read with the text: the frame after the class lands, the sections'
-    // row takes its last 4px.
-    await expect
-      .poll(async () => (await topOf(probe)) - (before - 80 - (whole - (await heightOf(head)))))
-      .toBeCloseTo(0, 0)
-    expect(whole - (await heightOf(head))).toBeGreaterThan(20)
-    before = await topOf(probe)
-    for (let step = 0; step < 5; step += 1) {
-      await page.mouse.wheel(0, 80)
-      await expect.poll(() => topOf(probe)).toBeCloseTo(before - 80, 0)
-      before -= 80
-    }
-    await expect(head).toHaveClass(/condensed/u)
-    await expect(drawer.locator('.head-reference')).toBeHidden()
+    const moved = [drawer.locator('h2').first(), drawer.locator('.card-facts')]
+    const probe = drawer.locator('.drawer-frame-content .overview > :first-child')
+    const before = await Promise.all([...moved, probe].map((part) => topOf(part)))
+    await page.mouse.wheel(0, 30)
+    await expect.poll(() => body.evaluate((node) => node.scrollTop)).toBe(30)
+    const after = await Promise.all([...moved, probe].map((part) => topOf(part)))
+    expect(after.map((top, index) => Math.round(before[index] - top))).toEqual([30, 30, 30])
 
-    // Back at the top the head is whole again.
+    // Further down the sections hold the top of the scroller and the text goes under them.
+    const edge = await topOf(body)
+    await page.mouse.wheel(0, 400)
+    await expect.poll(() => topOf(drawer.locator('.drawer-frame-tabs'))).toBeCloseTo(edge, 0)
+
+    // Back at the top the head is where it was.
     await body.evaluate((node) => node.scrollTo({ top: 0 }))
-    await expect(head).not.toHaveClass(/condensed/u)
-    await expect.poll(() => heightOf(head)).toBeCloseTo(whole, 0)
+    expect(await topOf(moved[0])).toBeCloseTo(before[0], 0)
+  })
+
+  test(`a section pressed read far down starts at its own top, the sections where they were, at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 500 })
+    // A long Activity as well as a long Overview: nothing to clamp the scroll between them.
+    const events = Array.from({ length: 60 }, (_, index) => ({
+      action: 'claimed',
+      author: `agent-${index}`,
+      at: `2026-08-13T08:${String(index).padStart(2, '0')}:00Z`,
+      detail: '',
+      identity: { agent_id: null, session_id: null, source: null, state: 'unconfirmed' },
+    }))
+    await installBackend(page, { events, longRead: true })
+    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+    await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
+    const drawer = page.locator('.drawer')
+    const body = drawer.locator('.drawer-frame-body')
+    const tabs = drawer.locator('.drawer-frame-tabs')
+    await expect(drawer.locator('.card-facts')).toBeVisible()
+    const edge = await topOf(body)
+    await body.evaluate((node) => node.scrollTo({ top: node.scrollHeight }))
+    await expect.poll(() => topOf(tabs)).toBeCloseTo(edge, 0)
+
+    await tabs.getByRole('button', { name: 'System events', exact: true }).click()
+    await expect(drawer.locator('.overview')).toBeHidden()
+    expect(await topOf(tabs)).toBeCloseTo(edge, 0)
+    const start = await topOf(drawer.locator('.drawer-frame-content'))
+    expect(start).toBeCloseTo(edge + (await heightOf(tabs)), 0)
+  })
+
+  test(`a short section read from far down lets the scroller come back, and starts in sight, at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 700 })
+    await installBackend(page, { longRead: true })
+    await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+    await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
+    const drawer = page.locator('.drawer')
+    const body = drawer.locator('.drawer-frame-body')
+    const tabs = drawer.locator('.drawer-frame-tabs')
+    await expect(drawer.locator('.card-facts')).toBeVisible()
+    await body.evaluate((node) => node.scrollTo({ top: node.scrollHeight }))
+
+    await tabs.getByRole('button', { name: /Memory/iu }).click()
+    await expect(drawer.locator('.overview')).toBeHidden()
+    const start = await topOf(drawer.locator('.drawer-frame-content'))
+    expect(start).toBeCloseTo((await topOf(tabs)) + (await heightOf(tabs)), 0)
+    // No blank to scroll into below a short section.
+    expect(
+      await body.evaluate((node) => node.scrollHeight - node.clientHeight - node.scrollTop),
+    ).toBeLessThanOrEqual(1)
   })
 }
 
@@ -327,10 +364,6 @@ for (const width of [1440, 390]) {
     const row = group.locator('.chain-row').nth(20)
     const reference = (await row.getAttribute('data-reference')) ?? ''
     await row.evaluate((element) => element.scrollIntoView({ block: 'center' }))
-    // The head condensed under the scroll glides its text into place; the row's place is read once it has settled.
-    await expect
-      .poll(() => body.evaluate((element) => element.getAnimations({ subtree: true }).length))
-      .toBe(0)
     const before = await body.evaluate((element) => element.scrollTop)
     const rowTop = () =>
       drawer

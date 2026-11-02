@@ -73,7 +73,7 @@ describe('a card reopened by Back', () => {
       chain: { doneOpen: true, expanded: ['backlog'], lane: null, scope: 'epic' },
       opened: reference,
       reference: ROOT.reference,
-      scroll: { condensed: true, top: 900 },
+      scroll: 900,
       section: 'overview',
     })
     // The scope it was read in is the one asked for, and the groups open as they were.
@@ -91,7 +91,7 @@ describe('a card reopened by Back', () => {
       chain: { doneOpen: false, expanded: [], lane: null, scope: 'chain' },
       opened: done?.reference ?? '',
       reference: ROOT.reference,
-      scroll: { condensed: false, top: 0 },
+      scroll: 0,
       section: 'overview',
     })
     expect(focusedReference()).toBe(done?.reference)
@@ -103,7 +103,7 @@ describe('a card reopened by Back', () => {
       chain: { doneOpen: true, expanded: ['backlog'], lane: null, scope: 'epic' },
       opened: 'MAIN-1',
       reference: 'MAIN-2',
-      scroll: { condensed: false, top: 0 },
+      scroll: 0,
       section: 'overview',
     })
     expect(scopes).toEqual(['chain'])

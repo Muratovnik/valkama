@@ -51,12 +51,13 @@ type BackendOptions = {
   activity?: 'bound' | 'unbound'
   /** The card's item stands in the terminal state, with this outcome. */
   closedWith?: string
+  /** The history the card's read answers with. */
+  events?: unknown[]
   includeAttachedDuplicate?: boolean
   includeUnboundPlanningProject?: boolean
   /**
-   * A card's body long enough to be read past its head. The head holds the
-   * item's facts and its action, so a fixture card's own body is shorter than
-   * a scroll that condenses the head needs.
+   * A card's body long enough to read well past its head, which a fixture card's
+   * own body is not.
    */
   longRead?: boolean
   /** The text of the card's first checklist step, where a test needs markdown in it. */
@@ -306,7 +307,11 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
               ? blockedFullWorkItem
               : { ...workItem, revision: 3 }
           const described = options.longRead ? { ...card, description: LONG_READ } : card
-          const told = options.agents ? { ...described, agents: options.agents() } : described
+          const told = {
+            ...described,
+            ...(options.agents ? { agents: options.agents() } : {}),
+            ...(options.events ? { events: options.events } : {}),
+          }
           const { closedWith, stepText } = options
           const read =
             closedWith === undefined

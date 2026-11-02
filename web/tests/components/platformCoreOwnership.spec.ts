@@ -228,7 +228,7 @@ describe('planning write ownership', () => {
       chain: null,
       opened: 'MAIN-265',
       reference: 'MAIN-264',
-      scroll: { condensed: true, top: 640 },
+      scroll: 640,
       section: 'overview',
     }
     inspector().vm.$emit('open', 'MAIN-265', left)
