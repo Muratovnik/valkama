@@ -206,7 +206,7 @@ class LauncherTests(unittest.TestCase):
         self.assertTrue((self.releases / second / "valkama.py").is_file())
 
     def test_a_holder_that_lets_go_of_the_unpacked_release_does_not_stop_it(self) -> None:
-        """A scanner reading a tree just unpacked refused this rename about one install in ten."""
+        """A scanner reading a tree just unpacked refused this rename on a real install."""
 
         real_rename = os.rename
         refusals = [_refusal(5), _refusal(32)]

@@ -106,9 +106,9 @@ checkouts are therefore distinguishable even at the same version.
   pinning a release, wait about a second when Windows refuses a rename with access
   denied or a sharing violation, which is what it answers while a scanner or an
   indexer has just opened a file there. Adoption used to refuse at once and ask the
-  operator to close something they had no way to find, and about one install in ten
-  failed and had to be repeated. A holder that does not let go gets that refusal,
-  and any other failure gets it straight away.
+  operator to close something they had no way to find, and an install could fail
+  and have to be repeated. A holder that does not let go gets that refusal, and any
+  other failure gets it straight away.
 - A state panel with its buttons in a narrow column no longer squeezes its message
   into a few letters wide: on a phone the buttons take their own row.
 
