@@ -213,7 +213,8 @@ async function pressWhileScrolling(page: Page, body: Locator, count: number) {
       await page.mouse.down()
       await page.mouse.up()
     }
-    done = (await pressesSoFar(page)).length
+    const presses = await pressesSoFar(page)
+    done = presses.length
   }
 }
 
