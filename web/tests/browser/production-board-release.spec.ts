@@ -238,15 +238,22 @@ test('a tile let go over its own glide lands in the stack beneath it', async ({ 
   const { writes } = await board(page)
   const epic = lane(page, LONG_EPIC)
   const held = epic.locator('li[data-reference="MAIN-402"]')
+  const left = await point(held, 'lower')
 
   await pickUp(page, held)
   const { x, y } = await point(cell(epic, 'dev'), 'upper')
   await page.mouse.move(x, y)
-  await read(page)
-  // Just read, the element glides from the cell it left and, a lane's cells clipping
-  // nothing, lies over it, under a pointer come back there. Its glide ends on its own
-  // clock; a release after that has the same answer, so being late cannot fail this.
-  await letGo(page, held, 'lower')
+  // Just read, the element starts its glide from the cell it left and, a lane's cells
+  // clipping nothing, lies over it, under a pointer come back there. Read and released
+  // in one task, because the glide runs on its own clock: on a busy machine it ended
+  // before a separate release, which then named the cell the tile had reached.
+  await page.evaluate((at) => {
+    ;(window as unknown as { beat: Beat }).beat.strike()
+    document.dispatchEvent(
+      new PointerEvent('pointerup', { bubbles: true, clientX: at.x, clientY: at.y }),
+    )
+  }, left)
+  await page.mouse.up()
   await expect(page.locator('.work-item-board')).not.toHaveClass(/dragging/u)
   await expect(said(page)).not.toContainText('in Dev')
   expect(writes.filter((write) => write.body.state === 'dev')).toHaveLength(0)
