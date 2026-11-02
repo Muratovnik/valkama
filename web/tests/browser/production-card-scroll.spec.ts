@@ -51,11 +51,18 @@ interface Shift {
   value: number
 }
 
+interface Press {
+  at: number
+  clicked: boolean
+  /** Where the click landed, when that was not the control it went down on. */
+  missedOn: string
+  on: string
+}
+
 interface PressLog {
-  clicks: boolean[]
   down: Element | null
   holding: boolean
-  presses: number
+  presses: Press[]
 }
 
 /** Every layout shift from here on, with the elements the browser says moved. */
@@ -124,7 +131,7 @@ function logPresses(page: Page) {
     // eslint-disable-next-line unicorn/consistent-function-scoping -- see above
     const control = (target: EventTarget | null) =>
       target instanceof Element ? target.closest('button:not(:disabled)') : null
-    const log: PressLog = { clicks: [], down: null, holding: true, presses: 0 }
+    const log: PressLog = { down: null, holding: true, presses: [] }
     const keep = (event: Event) => {
       if (log.holding) event.stopPropagation()
     }
@@ -132,7 +139,13 @@ function logPresses(page: Page) {
       'pointerdown',
       (event) => {
         log.down = control(event.target)
-        if (log.down) log.presses += 1
+        if (log.down)
+          log.presses.push({
+            at: document.querySelector('.drawer-frame-body')?.scrollTop ?? -1,
+            clicked: false,
+            missedOn: '',
+            on: `${log.down.className} ${log.down.textContent?.trim().slice(0, 24) ?? ''}`,
+          })
         keep(event)
       },
       { capture: true },
@@ -142,7 +155,12 @@ function logPresses(page: Page) {
     window.addEventListener(
       'click',
       (event) => {
-        if (log.down) log.clicks.push(control(event.target) === log.down)
+        const press = log.presses.at(-1)
+        if (log.down && press) {
+          press.clicked = control(event.target) === log.down
+          if (!press.clicked && event.target instanceof Element)
+            press.missedOn = event.target.className.toString()
+        }
         keep(event)
       },
       { capture: true },
@@ -152,10 +170,7 @@ function logPresses(page: Page) {
 }
 
 const pressesSoFar = (page: Page) =>
-  page.evaluate(() => {
-    const { pressLog } = window as unknown as { pressLog: PressLog }
-    return { clicks: pressLog.clicks, presses: pressLog.presses }
-  })
+  page.evaluate(() => (window as unknown as { pressLog: PressLog }).pressLog.presses)
 
 /** A control the pointer can reach right now, chosen by turn from what is on screen. */
 const aim = (page: Page, turn: number) =>
@@ -198,8 +213,7 @@ async function pressWhileScrolling(page: Page, body: Locator, count: number) {
       await page.mouse.down()
       await page.mouse.up()
     }
-    const { presses } = await pressesSoFar(page)
-    done = presses
+    done = (await pressesSoFar(page)).length
   }
 }
 
@@ -220,8 +234,13 @@ for (const width of [1680, 1024, 390]) {
 
     await pressWhileScrolling(page, body, 40)
 
-    const { clicks, presses } = await pressesSoFar(page)
-    expect(clicks.filter(Boolean), `of ${presses} presses`).toHaveLength(presses)
+    // A press that lost its click is named: where it went down, what was there, where
+    // the click landed instead. This is rare enough to be read once, from the report.
+    const presses = await pressesSoFar(page)
+    expect(
+      presses.filter((press) => !press.clicked),
+      `of ${presses.length} presses`,
+    ).toEqual([])
 
     await page.evaluate(() => {
       ;(window as unknown as { pressLog: PressLog }).pressLog.holding = false
