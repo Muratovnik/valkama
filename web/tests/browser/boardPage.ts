@@ -172,9 +172,10 @@ export async function drag(page: Page, { from, level, midway, refused, to, where
   await page.mouse.move(end.x + end.width / 2, y, { steps: 16 })
   await page.mouse.move(end.x + end.width / 2, y + (where === 'top' ? 1 : -1), { steps: 2 })
   // The board reads where the pointer is on its own beat, every 50ms, rather than at
-  // each move, and a release before the reading drops the tile where the last one left
-  // it: across columns, a column it only passed. The held tile stands in its place once
-  // the place is read, which is what a hand sees before letting go.
+  // each move. A release between readings still lands in the stack under the pointer
+  // (production-board-release holds that), but its place among that stack's tiles is
+  // the last one read, and these drags name a place. The held tile stands in its
+  // place once the place is read, which is what a hand sees before letting go.
   if (!refused) await expect.poll(() => to.evaluate(heldAt, { home, reference, where })).toBe(true)
   if (midway) {
     // The copy under the pointer is a list item outside its list: no marker.

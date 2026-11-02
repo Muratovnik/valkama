@@ -110,6 +110,11 @@ checkouts are therefore distinguishable even at the same version.
 
 - A state panel with its buttons in a narrow column no longer squeezes its message
   into a few letters wide: on a phone the buttons take their own row.
+### Fixed
+
+- A tile dragged quickly and let go over a column or a lane's cell lands there.
+  The drop library reads the pointer every 50ms, so a release between two
+  readings put the tile in the column the pointer had only passed.
 
 ## [2.2.0](https://github.com/Muratovnik/valkama/compare/v2.1.0...v2.2.0) - 2026-11-02
 

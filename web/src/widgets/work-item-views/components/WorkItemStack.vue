@@ -111,19 +111,59 @@ function beside(element: Element, direction: 'next' | 'previous'): string | unde
   return undefined
 }
 
+/**
+ * The stack a drop ended in, with the dragged element standing in its place there.
+ *
+ * The library reads the pointer on its own 50ms beat rather than at each move,
+ * and has no way to read it once more at a release, so a quick hand lets go over
+ * a stack it has not read and the element still stands in the last one it did:
+ * a column the pointer only passed. So a release over another stack this tile may
+ * go to wins, and it takes the place above the first tile whose middle is below
+ * the pointer, which is the place the library gives a tile coming in from another
+ * stack. Over the stack it already stands in, the place the library drew stands:
+ * its neighbours may still be gliding, so the pointer's height there is no reading.
+ * Over anything else, or in a press the browser took back, a release says nothing
+ * about where the hand meant.
+ *
+ * The event that ended the drag is not in the library's documented event or its
+ * types, though every event it dispatches carries it; production-board-release
+ * fails if it goes away.
+ */
+function landedIn(event: SortableEvent): HTMLElement {
+  const { item, to } = event
+  const release = (event as SortableEvent & { originalEvent?: Event }).originalEvent
+  if (!(release instanceof MouseEvent) || release.type === 'pointercancel') return to
+  // The element itself is no answer: just read, it is still gliding to its place
+  // and can be passing under the pointer on the way.
+  const under = document
+    .elementsFromPoint(release.clientX, release.clientY)
+    .find((element) => !item.contains(element))
+    ?.closest<HTMLElement>('.work-item-stack')
+  if (!under || under === to || under.dataset.group !== props.group) return to
+  const next = [...under.children].find((tile) => {
+    const { height, top } = tile.getBoundingClientRect()
+    return release.clientY < top + height / 2
+  })
+  under.insertBefore(item, next ?? null)
+  return under
+}
+
 function dropped(event: SortableEvent) {
   emit('dragging', false)
   droppedAt = Date.now()
-  const { from, item, to } = event
+  const { from, item } = event
+  const to = landedIn(event)
   const oldIndex = event.oldIndex ?? 0
+  const newIndex = [...to.children].indexOf(item)
   const reference = item.dataset.reference
   const state = to.dataset.state
-  const moved = from !== to || oldIndex !== event.newIndex
+  // A stack that orders itself takes a tile back at no place of the hand's.
+  const moved = from !== to || (reorderable.value && oldIndex !== newIndex)
   const closing = to.dataset.order === 'closing'
   const rank = closing ? undefined : rankBeside(beside(item, 'previous'), beside(item, 'next'))
   const landing = {
     keyboard: false,
-    position: closing ? 1 : (event.newIndex ?? 0) + 1,
+    position: closing ? 1 : newIndex + 1,
     total: to.children.length,
   }
   // Back where Vue put it; the move is drawn from the data that comes back.
@@ -273,6 +313,7 @@ defineExpose({ focusAt, walkFrom })
     class="work-item-stack"
     :data-state="props.state.key"
     :data-order="order"
+    :data-group="props.group"
   >
     <li
       v-for="(item, index) in shown"
