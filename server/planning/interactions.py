@@ -10,7 +10,12 @@ import sqlite3
 from collections.abc import Mapping
 
 from ..store_identity.primitives import ContractError
-from ..store_identity.refs import planning_space_ref, validate_planning_space_ref
+from ..store_identity.refs import (
+    planning_space_ref,
+    planning_work_item_entity,
+    route_entity_parameter,
+    validate_planning_space_ref,
+)
 from . import api, model, read_model, requests, service
 from .routing import PlanningRouting
 
@@ -159,6 +164,38 @@ def _exact_first(query: str, items: list[dict]) -> list[dict]:
         return 0 if entry["target"]["writable"] else 1
 
     return sorted(items, key=rank)
+
+
+def work_item_location(routing: PlanningRouting, text: str) -> str | None:
+    """The card route of the item a text names, or None when it names no such item.
+
+    The space is the reference's own prefix, read through the project that binds
+    it, and the primary store answers before an attached store with the same key,
+    as a search ranks them. Nothing the text says reaches the route but a
+    reference the grammar accepted and a store confirmed; the route's other parts
+    come from the registry. Why a text led nowhere is the page's to say: it asks
+    the mapped search, which names every source it read and every one it could not.
+    """
+
+    reference = model.exact_reference(text)
+    if reference is None:
+        return None
+    key = reference.rsplit("-", 1)[0]
+    primary = routing.metadata["data_scope_id"]
+    sources = [source for source in _resources(routing) if source[1]["space_key"] == key]
+    for project_id, space_ref in sorted(
+        sources, key=lambda source: source[1]["data_scope_id"] != primary
+    ):
+        if routing.unavailable_reason(project_id, space_ref) is not None:
+            continue
+        with routing.planning_store(_store_parameters(project_id, space_ref)) as (conn, _key):
+            try:
+                service.get_work_item(conn, reference)
+            except (ValueError, KeyError):
+                continue
+        entity = planning_work_item_entity({"space_ref": space_ref, "reference": reference})
+        return f"/modules/planning/project/{project_id}?entity={route_entity_parameter(entity)}"
+    return None
 
 
 def _exact_parameters(parameters: Mapping[str, list[str]], extras: set[str]) -> tuple[str, dict]:

@@ -121,6 +121,16 @@ def planning_work_item_entity(work_item_ref):
     return {"kind": "work-item", "resource_id": _planning_resource_id(item)}
 
 
+def route_entity_parameter(entity_ref):
+    """The `entity` value of a Platform route: the whole entity, canonical and base64url.
+
+    `serializePlatformRoute` in the web app writes the same bytes, and a route
+    that spelled them differently would be refused as non-canonical on arrival.
+    """
+
+    return _planning_resource_id(validate_entity_ref(entity_ref))
+
+
 def validate_session_ref(value):
     obj = _object(value, ("client_family", "session_id"), where="session_ref")
     return {

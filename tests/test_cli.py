@@ -24,6 +24,7 @@ from unittest import mock
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from server import cli, store
+from server.ops import configuration
 from server.planning import service
 from server.projects import scopes
 
@@ -235,6 +236,11 @@ class RoutingTests(CliTestCase):
         with mock.patch.object(cli, "serve_main") as served:
             self.invoke("serve", "--port", "9999")
         served.assert_called_once_with(9999, development_origin=None)
+
+    def test_serve_listens_where_a_work_item_address_points_by_default(self) -> None:
+        with mock.patch.object(cli, "serve_main") as served:
+            self.invoke("serve")
+        served.assert_called_once_with(configuration.DEFAULT_LISTENER_PORT, development_origin=None)
 
 
 if __name__ == "__main__":

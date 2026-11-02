@@ -33,7 +33,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from server import housekeeping, mcp_surface, store, transcripts
 from server.hooks import normalize, spool
-from server.ops import tray
+from server.ops import configuration, tray
 from server.planning import api as planning_api
 from server.planning import calls as planning_calls
 from server.planning import chain as planning_chain
@@ -1873,6 +1873,7 @@ class CreateWorkItemWithLinksTests(WireCallTestCase):
                 self.assertEqual(
                     {
                         "reference",
+                        "url",
                         "work_item_id",
                         "revision",
                         "state",
@@ -1905,6 +1906,25 @@ class CreateWorkItemWithLinksTests(WireCallTestCase):
             sorted(planning_model.LINK_KINDS), links["items"]["properties"]["kind"]["enum"]
         )
         self.assertIn("create_work_item", mcp_surface.PLANNING_INSTRUCTIONS)
+
+
+class ServerInstructionTests(unittest.TestCase):
+    def test_a_client_keeps_the_whole_text(self) -> None:
+        # Claude Code 2.1.314 cuts server instructions at 4096 characters. The
+        # text once ran 301 past it and lost its closing rules without a word.
+        self.assertLessEqual(len(mcp_surface.PLANNING_INSTRUCTIONS), 4096)
+        self.assertTrue(
+            mcp_surface.PLANNING_INSTRUCTIONS.endswith(
+                "only for an item that should never have existed."
+            )
+        )
+
+    def test_the_address_rule_names_a_link_for_the_owner_and_none_for_valkama(self) -> None:
+        text = mcp_surface.PLANNING_INSTRUCTIONS
+        self.assertIn(
+            f"[MAIN-12](http://127.0.0.1:{configuration.listener_port()}/open/MAIN-12)", text
+        )
+        self.assertIn("never in a Valkama comment or description", text)
 
 
 class RankToolTests(WireCallTestCase):
@@ -2003,7 +2023,9 @@ class CompactWorkItemReadTests(WireCallTestCase):
 
     def test_full_answers_with_the_complete_record(self) -> None:
         answer = self.answer("get_work_item", {"id": self.reference, "full": True})
-        self.assertEqual(self.complete, {k: v for k, v in answer.items() if k != "sessions"})
+        self.assertEqual(
+            self.complete, {k: v for k, v in answer.items() if k not in ("sessions", "url")}
+        )
         self.assertNotIn("history_truncated", answer)
         self.assertEqual([], answer["sessions"])
 

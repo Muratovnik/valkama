@@ -17,10 +17,11 @@ says what they mean together.
 
 ## Writes and their answers
 
-Every write answers with an acknowledgement: `reference`, `work_item_id`,
-`revision`, `state` (`key`, `name`, `is_terminal`), `claim_ref` (the holder)
-and `claim_state` (`live`, `stale`, `unconfirmed` or null), plus what the call
-changed. Pass `verbose: true` for the full item instead.
+Every write answers with an acknowledgement: `reference`, `url` (the address that
+opens the item), `work_item_id`, `revision`, `state` (`key`, `name`,
+`is_terminal`), `claim_ref` (the holder) and `claim_state` (`live`, `stale`,
+`unconfirmed` or null), plus what the call changed. Pass `verbose: true` for the
+full item instead; it carries `url` too.
 
 | Tool | Also answers |
 | --- | --- |

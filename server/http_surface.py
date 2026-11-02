@@ -20,7 +20,7 @@ from collections.abc import Callable, Mapping
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import NamedTuple
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from . import app_shell, housekeeping, http_security, runner, static_assets, ui_state, watchers
 from .executions import api as execution_api
@@ -33,6 +33,7 @@ from .planning import agents as planning_agents
 from .planning import api as planning_api
 from .planning import calls as planning_calls
 from .planning import exact_api as planning_exact_api
+from .planning import interactions as planning_interactions
 from .planning import model as planning_model
 from .planning import service as planning_service
 from .planning import views as planning_views
@@ -245,6 +246,14 @@ _SPA_ROUTE = re.compile(r"^/modules/[a-z][a-z0-9-]{0,63}/(?:global|project/[a-z]
 
 def _is_spa_route(path: str) -> bool:
     return isinstance(path, str) and _SPA_ROUTE.fullmatch(path) is not None
+
+
+#: The short address of one work item, as an agent writes it to the owner.
+_WORK_ITEM_LINK = "/open"
+#: All a work item link may redirect to: one card, on this origin. Spelled whole
+#: rather than parsed, because a URL parser quietly drops the line breaks a
+#: response header must never carry.
+_CARD_ROUTE = re.compile(r"/modules/planning/project/[a-z][a-z0-9-]{0,159}\?entity=[A-Za-z0-9_-]+")
 
 
 def _is_page_path(path: str) -> bool:
@@ -768,9 +777,45 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._send_asset("index.html", status)
 
+    def _follow_work_item_link(self, path: str) -> None:
+        """Redirect to the card a link names, or let the app say why it cannot.
+
+        The address is one a person follows, so every failure is answered by the
+        app shell rather than by a JSON envelope: the shell reads the same address
+        and explains it in the operator's language, with a next step. A store that
+        cannot open is such a failure too, which is why this does not go through
+        `_open_store`. The answer is never cached, because an item that is missing
+        now may be filed a minute later and a binding can move.
+        """
+
+        text = unquote(path[len(_WORK_ITEM_LINK) + 1 :])
+        try:
+            conn = connect()
+            try:
+                location = planning_interactions.work_item_location(
+                    PlanningRouting(conn, db_path()), text
+                )
+            finally:
+                conn.close()
+        except Exception:  # the shell's own read reports what went wrong
+            self._send_index(503)
+            return
+        if location is None or _CARD_ROUTE.fullmatch(location) is None:
+            self._send_index(404)
+            return
+        self._send(
+            302,
+            b"",
+            "text/plain",
+            headers={"Location": location, "Cache-Control": "no-store"},
+        )
+
     def do_GET(self) -> None:
         url = urlparse(self.path)
         if not self._require_validated_host():
+            return
+        if url.path == _WORK_ITEM_LINK or url.path.startswith(f"{_WORK_ITEM_LINK}/"):
+            self._follow_work_item_link(url.path)
             return
         if url.path == "/api/security/bootstrap":
             try:

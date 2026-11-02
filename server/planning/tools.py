@@ -827,14 +827,26 @@ def _is_verbose(arguments: Mapping[str, object], name: str = "verbose") -> bool:
     return verbose
 
 
+def _with_url(answer: object) -> object:
+    """A full work item record with its address, which only an agent needs.
+
+    The HTTP boundary answers without it: a browser is already on the origin and
+    routes by the item's identity.
+    """
+
+    if isinstance(answer, dict) and isinstance(answer.get("reference"), str):
+        return {**answer, "url": acknowledgements.work_item_url(answer["reference"])}
+    return answer
+
+
 def _acknowledged(
     path: str, acknowledge: acknowledgements.Acknowledge
 ) -> Callable[[sqlite3.Connection, Mapping[str, object]], object]:
     """A write that answers briefly unless the caller asks for the whole item.
 
     The full record is what the HTTP boundary returns and what `verbose` still
-    returns here; the short form is cut from it afterwards, so the write itself
-    is the same either way.
+    returns here, with its address; the short form is cut from it afterwards, so
+    the write itself is the same either way.
     """
 
     write = _post(path)
@@ -843,10 +855,19 @@ def _acknowledged(
         verbose = _is_verbose(arguments)
         item = write(conn, {name: value for name, value in arguments.items() if name != "verbose"})
         if verbose or not isinstance(item, dict):
-            return item
+            return _with_url(item)
         return acknowledge(item, arguments)
 
     return run
+
+
+def _claim_ready(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
+    """The item the queue handed over, whole: the agent needs the item it just took."""
+
+    answer = _post("/api/planning/work-item/claim-ready")(conn, arguments)
+    if isinstance(answer, dict) and answer.get("work_item") is not None:
+        return {**answer, "work_item": _with_url(answer["work_item"])}
+    return answer
 
 
 def _get(
@@ -895,7 +916,7 @@ def _work_item(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> obj
     answer = api.handle_get(conn, "/api/planning/work-item", parameters)
     if answer is None:  # pragma: no cover - the path table above is closed
         raise ValueError("no planning work item read")
-    return answer[1]["work_item"]
+    return _with_url(answer[1]["work_item"])
 
 
 def _search(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
@@ -1049,7 +1070,7 @@ OPS: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], object]] = {
         "/api/planning/work-item/transition", acknowledgements.transitioned
     ),
     "claim_work_item": _acknowledged("/api/planning/work-item/claim", acknowledgements.claimed),
-    "claim_ready_work_item": _post("/api/planning/work-item/claim-ready"),
+    "claim_ready_work_item": _claim_ready,
     "set_work_item_checklist": _acknowledged(
         "/api/planning/work-item/checklist", acknowledgements.checklist_replaced
     ),

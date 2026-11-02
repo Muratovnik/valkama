@@ -391,6 +391,7 @@ class PlanningAcknowledgementTests(unittest.TestCase):
                 for key in ("reference", "work_item_id", "revision", "state", "claim_ref"):
                     self.assertIn(key, answer)
                 self.assertEqual(stored["revision"], answer["revision"])
+                self.assertEqual(stored["url"], answer["url"])
                 self.assertEqual(stored["work_item_id"], answer["work_item_id"])
                 self.assertEqual(stored["claim_ref"], answer["claim_ref"])
                 self.assertEqual(
@@ -548,7 +549,9 @@ class PlanningAcknowledgementTests(unittest.TestCase):
                 assert handled is not None
                 status, body = handled
                 self.assertEqual(200, status)
-                stored = self.full(self.ref)
+                # `url` is what the tools add for an agent; the boundary has none.
+                self.assertNotIn("url", body)
+                stored = {k: v for k, v in self.full(self.ref).items() if k != "url"}
                 self.assertEqual(
                     stored,
                     {k: v for k, v in body.items() if k not in ("warnings", "started")},

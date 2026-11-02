@@ -101,6 +101,27 @@ SETTINGS: tuple[dict[str, str], ...] = (
 
 SETTING_KEYS = tuple(item["key"] for item in SETTINGS)
 
+#: The port `serve` listens on unless `--port` says otherwise.
+DEFAULT_LISTENER_PORT = 8642
+
+
+def listener_port(environ: Mapping[str, str] | None = None) -> int:
+    """The port this installation's listener is expected on.
+
+    Only what the process running `serve` was told can name the port for certain,
+    and that process publishes it nowhere, so an address built elsewhere reads the
+    same expectation the desktop app does: `VALKAMA_PORT`, then the default. It is
+    not one of `SETTINGS` on purpose. A value in the file would move every link
+    while the listener stayed where it was, which is a second answer to the one
+    question this function exists to answer once.
+    """
+
+    source = os.environ if environ is None else environ
+    raw = source.get("VALKAMA_PORT", "")
+    if raw.isascii() and raw.isdigit() and len(raw) <= 5 and 1 <= int(raw) <= 65535:
+        return int(raw)
+    return DEFAULT_LISTENER_PORT
+
 
 def config_path() -> str:
     return os.path.join(os.path.expanduser("~"), CONFIG_DIRECTORY, CONFIG_FILE)
@@ -281,6 +302,7 @@ def render(reading: dict) -> str:
 
 __all__ = [
     "CONFIG_FILE",
+    "DEFAULT_LISTENER_PORT",
     "MAX_CONFIG_BYTES",
     "SECRET_SCHEMES",
     "SETTINGS",
@@ -288,6 +310,7 @@ __all__ = [
     "ConfigurationError",
     "config_path",
     "configured",
+    "listener_port",
     "read_file",
     "render",
     "report",

@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 
+from ..ops import configuration
+
 #: The arguments of `update_work_item` that edit the record, in the order the
 #: tool declares them. An argument that is absent or null changes nothing.
 UPDATABLE_FIELDS = (
@@ -31,6 +33,16 @@ UPDATABLE_FIELDS = (
 Acknowledge = Callable[[dict, Mapping[str, object]], dict]
 
 
+def work_item_url(reference: str) -> str:
+    """The address that opens this item in the web UI, for an agent to hand a person.
+
+    The one place this address is built. The HTTP surface's `/open` route answers
+    it, and only over loopback, so it names 127.0.0.1 rather than a host name.
+    """
+
+    return f"http://127.0.0.1:{configuration.listener_port()}/open/{reference}"
+
+
 def _base(item: dict) -> dict:
     """Identity, the revision the next write must name, and who holds the item.
 
@@ -41,6 +53,7 @@ def _base(item: dict) -> dict:
     state = item["state"]
     return {
         "reference": item["reference"],
+        "url": work_item_url(item["reference"]),
         "work_item_id": item["work_item_id"],
         "revision": item["revision"],
         "state": {

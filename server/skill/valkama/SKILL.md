@@ -115,6 +115,15 @@ which is the way through an item too long to read whole.
 `get_work_item_chain` shows what an item's work grew into and whether it
 converges. Read the history before assuming who did what.
 
+**Naming an item to the owner.** In a message to the owner, write a work item
+number as a markdown link: `[MAIN-12](http://127.0.0.1:8642/open/MAIN-12)`. A
+client does not turn a bare number into a link. `get_work_item` and every write
+answer with the address as `url`; a list or a search row has none, so for an item
+you only saw there, take the port from any `url` or from the server's
+instructions and put the number after `/open/`. Do not do this in a Valkama
+comment, description or summary: Valkama links the numbers it shows by itself, and
+an address there is one more thing to go stale.
+
 ## Blocked work
 
 When another item blocks the work, link it: `blocks` from the blocking item to
