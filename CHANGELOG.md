@@ -35,8 +35,9 @@ checkouts are therefore distinguishable even at the same version.
   card's own route, so the address bar, Reload and Back behave as usual. A number
   nobody filed, a key no project binds, an address that names no number and a store
   that cannot answer each get a page saying so in the interface's language, with
-  the next step. The route obeys the loopback rules of every other, and only ever
-  redirects to a card on this origin.
+  the next step; a retry that fails again leaves keyboard focus on Retry. The route
+  obeys the loopback rules of every other, and only ever redirects to a card on this
+  origin.
 - **`url` in MCP answers.** A work item's full record and every write
   acknowledgement carry the address as `url`. This is an addition: list and search
   rows, tool schemas and the HTTP records are unchanged.

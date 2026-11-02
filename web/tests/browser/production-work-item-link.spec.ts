@@ -1,5 +1,5 @@
 import { expect } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import type { Page, Route } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
 import { expectNoSilentClipping } from './overflow.ts'
@@ -121,4 +121,92 @@ test('a store that cannot answer offers another try rather than calling it missi
     .toBeGreaterThan(180)
   await main.getByRole('button', { name: 'Go to Work' }).click()
   await expect(page.locator('.work-item-link')).toHaveCount(0)
+})
+
+const SEARCH_FAILED = {
+  status: 500,
+  json: { error: { code: 'request_failed', message: 'Search failed' } },
+}
+
+/** The page after a failed search, and the search: it fails until told what to answer. */
+async function failedPage(page: Page) {
+  await installBackend(page)
+  const search = { reads: 0, answer: null as ((route: Route) => Promise<void>) | null }
+  await page.route('**/api/modules/planning/search?*', (route) => {
+    search.reads += 1
+    return search.answer?.(route) ?? route.fulfill(SEARCH_FAILED)
+  })
+  await page.goto(`/open/${spaceRef.space_key}-7`)
+  const main = page.locator('.work-item-link')
+  await expect(main).toContainText('could not check this link')
+  return { main, retry: main.getByRole('button', { name: 'Retry', exact: true }), search }
+}
+
+test.describe('another try', () => {
+  test('that fails again puts focus back on Retry, as often as it is pressed', async ({ page }) => {
+    const { main, retry, search } = await failedPage(page)
+    await retry.focus()
+    const asked = search.reads
+    await page.keyboard.press('Enter')
+    await expect.poll(() => search.reads).toBe(asked + 1)
+    await expect(main).toContainText('could not check this link')
+    await expect(retry).toBeFocused()
+    await page.keyboard.press('Enter')
+    await expect.poll(() => search.reads).toBe(asked + 2)
+    await expect(main).toContainText('could not check this link')
+    await expect(retry).toBeFocused()
+  })
+
+  test('pressed with the mouse puts focus back on Retry too', async ({ page }) => {
+    const { main, retry, search } = await failedPage(page)
+    const asked = search.reads
+    await retry.click()
+    await expect.poll(() => search.reads).toBe(asked + 1)
+    await expect(main).toContainText('could not check this link')
+    await expect(retry).toBeFocused()
+  })
+
+  test('answered with a missing number leaves focus on the page’s region', async ({ page }) => {
+    const { main, retry, search } = await failedPage(page)
+    search.answer = (route) =>
+      route.fulfill({
+        json: {
+          interface_version: 'valkama-planning-search',
+          query: `${spaceRef.space_key}-7`,
+          limit: 50,
+          has_more: false,
+          items: [],
+          coverage: [
+            {
+              project_id: projectId,
+              space_ref: { data_scope_id: dataScopeId, space_key: spaceRef.space_key },
+              status: 'searched',
+              reason: null,
+            },
+          ],
+        },
+      })
+    await retry.focus()
+    await page.keyboard.press('Enter')
+    await expect(main).toContainText(`There is no task ${spaceRef.space_key}-7`)
+    await expect(main).toBeFocused()
+  })
+
+  test('leaves alone a reader who moved on while it ran', async ({ page }) => {
+    const { main, retry, search } = await failedPage(page)
+    let held: Route | undefined
+    search.answer = (route) => {
+      held = route
+      return Promise.resolve()
+    }
+    await retry.focus()
+    await page.keyboard.press('Enter')
+    await expect.poll(() => held).toBeDefined()
+    await expect(retry).toHaveCount(0)
+    const elsewhere = page.getByRole('link').first()
+    await elsewhere.focus()
+    await held?.fulfill(SEARCH_FAILED)
+    await expect(main).toContainText('could not check this link')
+    await expect(elsewhere).toBeFocused()
+  })
 })

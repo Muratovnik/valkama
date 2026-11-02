@@ -8,7 +8,7 @@
  * followed, so it stays as written and Reload asks again, which is how a number
  * filed a minute later opens.
  */
-import { computed, onBeforeUnmount, shallowRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { readWorkItemLink } from '@/features/work-item-link/workItemLink.ts'
@@ -52,6 +52,23 @@ async function read() {
 
 watch(() => props.text, read, { immediate: true })
 onBeforeUnmount(() => reading?.abort())
+
+const region = ref<HTMLElement | null>(null)
+const retryButton = ref<InstanceType<typeof VButton> | null>(null)
+
+/**
+ * The read takes the failure panel down with this button in it, so focus falls to the
+ * page. As a refresh pressed in the questions dialog does, the answer hands it back: to
+ * Retry when the read failed again, to the region when it said something else. A reader
+ * who moved on while it ran has focus somewhere else, and keeps it.
+ */
+async function retry() {
+  await read()
+  await nextTick()
+  if (document.activeElement !== document.body) return
+  const button = retryButton.value?.$el as HTMLElement | undefined
+  ;(button ?? region.value)?.focus()
+}
 
 const absence = computed(() => {
   const value = answer.value
@@ -98,6 +115,7 @@ const findVariant = computed(() => (missedIn.value ? 'secondary' : 'primary'))
 
 <template>
   <main
+    ref="region"
     class="work-item-link"
     tabindex="-1"
   >
@@ -109,8 +127,9 @@ const findVariant = computed(() => (missedIn.value ? 'secondary' : 'primary'))
       <template #action>
         <div class="work-item-link-actions">
           <VButton
+            ref="retryButton"
             variant="primary"
-            @click="read"
+            @click="retry"
             >{{ t('platform.actions.retry') }}</VButton
           >
           <VButton @click="emit('home')">{{ t('navigation.home') }}</VButton>
