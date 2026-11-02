@@ -131,8 +131,8 @@ $launcher = (python .\valkama.py launcher status | ConvertFrom-Json).command
 ```
 
 Listener ownership requires both the exact normalized interpreter path from the
-launcher manifest and the exact managed shim path as that process's script
-argument. Comparison is Win32-style ordinal case-insensitive; Unicode folding
+launcher manifest, or the `pythonw.exe` beside it, and the exact managed shim path
+as that process's script argument. Comparison is Win32-style ordinal case-insensitive; Unicode folding
 cannot turn a different path into the managed path. A Valkama-shaped HTTP
 response or runtime JSON is never stop authority.
 
@@ -144,6 +144,52 @@ can therefore be replaced after a checkout move, while a truly foreign listener
 is reported with its PID and accompanied by the choice to stop it yourself or
 use another port. Listener process inspection is currently Windows-only,
 matching the tray and desktop platforms.
+
+### Holding the port from login
+
+A work item's address works only while something listens on the port. On Windows
+the launcher can keep something there from login without the cost of a server
+nobody is using yet:
+
+```powershell
+& $launcher launcher autostart enable --port 8642
+& $launcher launcher autostart status
+& $launcher launcher autostart disable
+```
+
+`enable` writes one value, `Valkama`, under
+`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`. It runs
+`serve --on-demand` through the managed shim with the `pythonw.exe` beside the
+recorded interpreter, so no console window opens, and it starts that listener now
+when the port is free. Autostart is off until you enable it. A value under this name
+that runs another command is reported as `foreign` and left alone unless you pass
+`--force`. `doctor` shows the state in one line. `disable` removes the value and
+leaves a running listener until logout or `listener stop`.
+
+`serve --on-demand` binds the port with no part of the server loaded. On the first
+connection it loads the server into the same process and serves the same socket, so
+that connection is answered rather than redirected or dropped. To the desktop app,
+the tray and `listener status` or `stop` it is an ordinary managed listener;
+`listener status` adds `"on_demand": true`.
+
+- **The port is taken.** It touches nothing and tries the bind again every 30
+  seconds, so it takes the port within 30 seconds of the desktop app closing the
+  server it started.
+- **The server cannot be loaded.** The connection gets a 503 page, the traceback goes
+  to `.valkama/on-demand.log` in the home directory, and a later connection tries
+  again, no sooner than 5 seconds after the failure.
+- **`launcher install`.** A listener held on demand would load the old release on
+  the next connection, so `install` stops it through the check above and starts it
+  from the new release. It rewrites the autostart value when autostart is on, and
+  starts a listener only if one was running or autostart is on. A plain `serve` and
+  a foreign listener are left alone. A waiting listener that `install` could not
+  reach hands over to the pinned release at its next bind attempt or connection.
+- **`launcher uninstall`.** It removes a value naming this shim and stops a listener
+  held on demand. Another program's value stays.
+
+The desktop app gives a managed listener that has not answered about 2.5 seconds
+before it offers a restart. A first load has to fit in that to go unnoticed there; a
+slower one costs a click, not the session.
 
 ## Register clients
 

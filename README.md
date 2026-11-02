@@ -227,13 +227,14 @@ python valkama.py <command> [options]
 | Command | What it does |
 | --- | --- |
 | `mcp` | speak MCP over stdio — what the installed launcher runs for agent clients |
-| `serve [--port 8642]` | serve the JSON API and Valkama UI |
+| `serve [--port 8642] [--on-demand]` | serve the JSON API and Valkama UI; with `--on-demand`, hold the port and load the server on the first connection |
 | `capabilities` | report public interfaces, MCP revisions and tool count as JSON without reading user data |
 | `status [--launcher-directory DIR]` | report source, database, runtime and launcher state without opening the database |
 | `launcher install [--revision REV] [--checkout DIR] [--releases DIR] [--directory DIR] [--force]` | pin a commit as a release and atomically install or repair the stable client command that runs it |
 | `launcher status [--directory DIR]` | verify launcher ownership and hashes |
 | `launcher listener status\|stop [--port 8642]` | inspect or stop only the Windows listener proven to run through the managed shim |
-| `launcher uninstall [--directory DIR] [--force]` | remove only the managed launcher files |
+| `launcher autostart enable\|disable\|status [--port 8642] [--force]` | on Windows, keep an on-demand listener on the port from login; off until enabled, see [`SERVICE.md`](SERVICE.md#holding-the-port-from-login) |
+| `launcher uninstall [--directory DIR] [--force]` | remove only the managed launcher files and this launcher's autostart value |
 | `summary [--space KEY]` | a short Planning-space report, meant for session hooks |
 | `released --space KEY --repo PATH --range A..B [--json]` | list the open work items whose commit refs went into a release range, and how each was found: `hash` (the commit is in the range), `patch-id` (the same change arrived under another hash), or one of two weak matches: `changed-patch` (the commit is outside the range and not in the history before it, and a commit in the range has its subject with another patch) and `subject` (the object is gone and the ref's label has the subject of a commit in the range). A hint to check by hand when closing a release: partly released work shows too, an item with no commit ref cannot, and it changes neither the store nor the repository |
 | `hook CLIENT EVENT` | record one client hook event from stdin without a running server; see [Client hooks](#client-hooks) |

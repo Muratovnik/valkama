@@ -325,7 +325,9 @@ description, where the UI links numbers by itself. Those instructions stay under
 4096 characters, the point where Claude Code 2.1.314 cuts them.
 
 The address needs a listener. While nothing listens on the port, following it ends
-in the browser's own connection error.
+in the browser's own connection error. On Windows `launcher autostart enable` keeps
+a listener on the port from login, which loads the server when the first address is
+followed ([`SERVICE.md`](../SERVICE.md#holding-the-port-from-login)).
 
 ### What a link says about its other end
 

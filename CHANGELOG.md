@@ -91,6 +91,14 @@ checkouts are therefore distinguishable even at the same version.
 - **Agents link the numbers they write to the owner.** The skill and the server's
   instructions say to write a number as a markdown link in a message to the owner,
   and not in a Valkama comment or description, where the UI links numbers itself.
+- **`serve --on-demand` and `launcher autostart`.** A listener can hold the port from
+  login with no part of the server loaded, which costs about 15 MB instead of about
+  40 MB, and become the server on the first connection, in the same process and on
+  the same socket, so the address of a work item works without starting anything. On
+  Windows `launcher autostart enable|disable|status` keeps it in the current user's
+  Run key; it is off until enabled and `doctor` shows it. A busy port is retried
+  every 30 seconds, a server that cannot load answers with a page and logs why, and
+  `launcher install` restarts such a listener from the new release.
 
 ### Changed
 
