@@ -21,6 +21,7 @@ import {
   recoverWorkRoute,
   resolvePlatformRoute,
   serializePlatformRoute,
+  workItemLinkText,
 } from '@/shared/api/platformRoute.ts'
 import type {
   OperatingScope,
@@ -86,11 +87,20 @@ export function usePlatformNavigation(
   const route = ref<PlatformRoute>(DEFAULT_ROUTE)
   const routeUnavailable = ref<PlatformRouteUnavailable | null>(null)
   const routeFailure = ref('')
+  /** The text of a work item address the server did not redirect, or null on any other. */
+  const workItemLink = ref<string | null>(null)
   const entryRestorePending = ref(false)
   const pendingSession = ref('')
 
   function applyLocation() {
     routeFailure.value = ''
+    workItemLink.value = workItemLinkText(router.currentRoute.value.path)
+    if (workItemLink.value !== null) {
+      entryRestorePending.value = false
+      routeUnavailable.value = null
+      route.value = DEFAULT_ROUTE
+      return
+    }
     if (isCleanEntry()) {
       // Desktop and browser entries land on "/": restore the last server-side
       // route once the context read model arrives instead of failing the URL.
@@ -135,7 +145,9 @@ export function usePlatformNavigation(
 
   const activeModule = computed(() => route.value.module_id)
   const operatingScope = computed(() => route.value.scope)
-  const routeBlocked = computed(() => Boolean(routeFailure.value || routeUnavailable.value))
+  const routeBlocked = computed(
+    () => workItemLink.value !== null || Boolean(routeFailure.value || routeUnavailable.value),
+  )
 
   /**
    * The route moves once the router has agreed to move. Writing it first
@@ -152,6 +164,7 @@ export function usePlatformNavigation(
       return
     routeFailure.value = ''
     routeUnavailable.value = null
+    workItemLink.value = null
     route.value = next
   }
 
@@ -203,6 +216,7 @@ export function usePlatformNavigation(
     switchModule,
     switchScope,
     updateModuleState,
+    workItemLink,
     writeRoute,
   }
 }

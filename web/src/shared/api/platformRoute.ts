@@ -392,6 +392,22 @@ export function isPlatformRouteUnavailable(value: unknown): value is PlatformRou
   )
 }
 
+/**
+ * The text after `/open` when a path is a work item address, else null.
+ *
+ * The server redirects an address that names a card, so this reads the rest: what
+ * follows may be anything at all, and is decoded only to be shown and looked up.
+ */
+export function workItemLinkText(path: string): string | null {
+  const raw = /^\/open(?:\/(.*))?$/su.exec(path)
+  if (raw === null) return null
+  try {
+    return decodeURIComponent(raw[1] ?? '')
+  } catch {
+    return raw[1] ?? ''
+  }
+}
+
 function validateRoute(value: unknown): PlatformRoute {
   const object = plainObject(value, 'route')
   exactKeys(object, ['module_id', 'scope', 'entity', 'state'], 'route')

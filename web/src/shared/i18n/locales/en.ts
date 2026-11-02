@@ -12,8 +12,10 @@ import { richTextMessages } from '@/shared/i18n/richTextMessages.ts'
 import { workFilterMessages } from '@/shared/i18n/workFilterMessages.ts'
 import { workItemFacetMessages } from '@/shared/i18n/workItemFacetMessages.ts'
 import { workItemHeadMessages } from '@/shared/i18n/workItemHeadMessages.ts'
+import { workItemLinkMessages } from '@/shared/i18n/workItemLinkMessages.ts'
 
 export const en = {
+  workItemLink: workItemLinkMessages.en.workItemLink,
   history: activityMessages.en.history,
   checklistComment: checklistCommentMessages.en.checklistComment,
   finder: globalFinderMessages.en.finder,

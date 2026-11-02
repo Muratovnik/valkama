@@ -2,8 +2,8 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 
 import type { PendingCount } from '@/features/input-requests/composables/useInputRequests.ts'
 
+import { planningTargetRoute } from '@/shared/api/planningTarget.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
-import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 
 export function useGlobalWorkActions(writeRoute: (route: PlatformRoute) => void) {
@@ -12,11 +12,7 @@ export function useGlobalWorkActions(writeRoute: (route: PlatformRoute) => void)
   const pendingRequestCount = ref<PendingCount | null>(null)
 
   function openTarget(target: PlanningTarget) {
-    writeRoute({
-      module_id: 'planning',
-      scope: { kind: 'project', project_ref: { project_id: target.project_id } },
-      entity: planningWorkItemEntity({ space_ref: target.space_ref, reference: target.reference }),
-    })
+    writeRoute(planningTargetRoute(target))
     finderOpen.value = false
     requestsOpen.value = false
   }

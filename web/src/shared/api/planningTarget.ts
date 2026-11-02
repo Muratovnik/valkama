@@ -1,9 +1,12 @@
 import { boundedText, fromValidator, strictObject, z } from '@/shared/api/contract.ts'
 import { PROJECT_ID } from '@/shared/api/platformApiGuards.ts'
 import {
+  planningSpaceEntity,
   planningWorkItemEntity,
   validatePlanningSpaceRef,
 } from '@/shared/api/platformPlanningRefs.ts'
+import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
+import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 
 const spaceRefSchema = fromValidator(validatePlanningSpaceRef)
 
@@ -51,6 +54,24 @@ const SKIPPED_SOURCE_REASONS = new Set([
 
 export function skippedSourceReason(reason: string | null): string {
   return reason !== null && SKIPPED_SOURCE_REASONS.has(reason) ? reason : 'other'
+}
+
+/** The route of one card, in the project that binds its space. */
+export function planningTargetRoute(target: PlanningTarget): PlatformRoute {
+  return {
+    module_id: 'planning',
+    scope: { kind: 'project', project_ref: { project_id: target.project_id } },
+    entity: planningWorkItemEntity({ space_ref: target.space_ref, reference: target.reference }),
+  }
+}
+
+/** The route of one space, in the project that binds it. */
+export function planningSpaceRoute(projectId: string, spaceRef: PlanningSpaceRef): PlatformRoute {
+  return {
+    module_id: 'planning',
+    scope: { kind: 'project', project_ref: { project_id: projectId } },
+    entity: planningSpaceEntity(spaceRef),
+  }
 }
 
 export function serializePlanningTarget(target: PlanningTarget) {

@@ -26,6 +26,7 @@ import GlobalWorkFinder from '@/features/global-find/GlobalWorkFinder.vue'
 import InputRequestsHub from '@/features/input-requests/components/InputRequestsHub.vue'
 import SessionContext from '@/features/session-open/SessionContext.vue'
 import { resolveSessionWorkItemRoute } from '@/features/session-open/sessionWorkItemRoute.ts'
+import WorkItemLinkPanel from '@/features/work-item-link/WorkItemLinkPanel.vue'
 
 import { EMPTY_WORK_FILTER, writeWorkFilter } from '@/entities/work-item/utils/workFilter.ts'
 
@@ -65,6 +66,7 @@ const {
   switchModule,
   switchScope,
   updateModuleState,
+  workItemLink,
   writeRoute,
 } = usePlatformNavigation(
   () => t('platform.route.notFound'),
@@ -177,10 +179,13 @@ const routeRecoveryFailure = computed(
 const routeLost = computed(
   () => Boolean(routeFailure.value) || routeUnavailable.value?.reason === 'unknown-module',
 )
-const currentModule = computed(() => (routeLost.value ? null : activeModule.value))
-const contextTitle = computed(() =>
-  routeLost.value ? t('platform.route.lostTitle') : moduleTitle.value,
+const currentModule = computed(() =>
+  routeLost.value || workItemLink.value !== null ? null : activeModule.value,
 )
+const contextTitle = computed(() => {
+  if (workItemLink.value !== null) return t('workItemLink.contextTitle')
+  return routeLost.value ? t('platform.route.lostTitle') : moduleTitle.value
+})
 // A state the module's manifest does not admit is dropped, not shown as a
 // blocked module: the address keeps the module and scope, and says so once.
 watch(liveRouteFailure, (failure) => {
@@ -318,8 +323,18 @@ usePlatformEntryRestore({
         class="module-stage"
         tabindex="-1"
       >
+        <WorkItemLinkPanel
+          v-if="workItemLink !== null"
+          :text="workItemLink"
+          @find="finderOpen = true"
+          @found="(next) => writeRoute(next, 'replace')"
+          @go="writeRoute"
+          @home="goHome"
+        />
         <AppRouteRecovery
-          v-if="entryRestorePending || !modulesSettled || routeRecoveryFailure || routeUnavailable"
+          v-else-if="
+            entryRestorePending || !modulesSettled || routeRecoveryFailure || routeUnavailable
+          "
           :pending="entryRestorePending || !modulesSettled"
           :failure="routeRecoveryFailure"
           :unavailable="routeUnavailable"
