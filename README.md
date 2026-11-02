@@ -411,11 +411,12 @@ belongs to a process rather than to an installation:
 | Variable | Default | What it changes |
 | --- | --- | --- |
 | `VALKAMA_NO_TRAY` | unset | set to anything to suppress the tray icon |
-| `VALKAMA_PORT` | `8642` | the port the desktop app expects the server on |
+| `VALKAMA_PORT` | `8642` | the port the desktop app expects the server on, and the one a work item's `url` names |
 | `VALKAMA_TRAY_MUTEX` | `Local\ValkamaTrayIcon` | the mutex tray sessions coordinate through |
 
 `--port` on `serve` overrides the port for that process. `VALKAMA_PORT` tells the
-*desktop app* where to look; set both if you move the port.
+*desktop app* where to look and an MCP session which address to hand out; set both
+if you move the port.
 
 ## Setting it up again, or checking that it is right
 

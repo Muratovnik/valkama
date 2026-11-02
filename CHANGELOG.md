@@ -78,6 +78,30 @@ checkouts are therefore distinguishable even at the same version.
   `^(Agent|Task)$`. Without it, and for every agent recorded earlier, a row shows the
   agent's type and short id. The label stays out of the append-only history, the
   installation export, `doctor` and logs, and MCP tool answers do not change.
+- **A work item has a short address**: `GET /open/MAIN-12` opens its card in the
+  web UI, in any case and from any space a project binds, by redirecting to the
+  card's own route, so the address bar, Reload and Back behave as usual. A number
+  nobody filed, a key no project binds, an address that names no number and a store
+  that cannot answer each get a page saying so in the interface's language, with
+  the next step. The route obeys the loopback rules of every other, and only ever
+  redirects to a card on this origin.
+- **`url` in MCP answers.** A work item's full record and every write
+  acknowledgement carry the address as `url`. This is an addition: list and search
+  rows, tool schemas and the HTTP records are unchanged.
+- **Agents link the numbers they write to the owner.** The skill and the server's
+  instructions say to write a number as a markdown link in a message to the owner,
+  and not in a Valkama comment or description, where the UI links numbers itself.
+
+### Changed
+
+- The server's instructions are tightened from 4397 to about 4040 characters
+  without dropping a rule. Claude Code 2.1.314 cuts them at 4096, so their last
+  rules were not reaching its sessions; a test now holds them under that limit.
+
+### Fixed
+
+- A state panel with its buttons in a narrow column no longer squeezes its message
+  into a few letters wide: on a phone the buttons take their own row.
 
 ## [2.2.0](https://github.com/Muratovnik/valkama/compare/v2.1.0...v2.2.0) - 2026-11-02
 

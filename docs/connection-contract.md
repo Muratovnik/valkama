@@ -79,8 +79,9 @@ Every tool carries a `title`, a description, a JSON Schema, and MCP behaviour
 A tool result is one line of JSON text, without indentation.
 
 A write to a work item answers with a short acknowledgement instead of the whole
-item: `reference`, `work_item_id`, `revision`, `state` (`key`, `name`,
-`is_terminal`), `claim_ref` and `claim_state`, plus what that call changed.
+item: `reference`, `url`, `work_item_id`, `revision`, `state` (`key`, `name`,
+`is_terminal`), `claim_ref` and `claim_state`, plus what that call changed. `url`
+is described in [The address of a work item](#the-address-of-a-work-item).
 `revision` is the value to pass as `expected_revision` on the next write.
 `claim_state` is the holder's lease, described in
 [Claims are leases](#claims-are-leases).
@@ -273,6 +274,58 @@ newest entries), `comments_after` and `sessions=true`. With both `comments` and
 that is not a non-negative integer
 and a `sessions` other than `true` or `false` are refused with
 `invalid_request`; an unknown item is `not_found` (404).
+
+### The address of a work item
+
+`GET /open/<reference>` opens one work item in the web UI, so that an agent can
+hand a person a link built from nothing but a number. A client does not turn a
+bare number into a link, and the address of a card itself cannot be written from a
+number: it names the project and the store.
+
+The reference is read as a search reads one, so `main-12` is `MAIN-12`, and its
+prefix names the space. The route is a loopback address under the same `Host` rule
+as every other, and it answers:
+
+| The address | Answer |
+| --- | --- |
+| names an item in a space a project binds | `302` to `/modules/planning/project/<project>?entity=<entity>`, the route the card has when it is opened any other way, with `Cache-Control: no-store` |
+| names anything else | the app page with `404`, which says what is wrong and offers the next step |
+| reaches a store or a project registry that cannot be read | the app page with `503`, which offers another try |
+
+The redirect is the card's own route, so the address bar, Reload and Back behave
+as they do after any other navigation. Nothing the address says reaches the
+redirect but a reference the grammar accepted and a store confirmed, and the
+surface checks the result against the one shape a card route has: `/open//evil`,
+`/open/https:%2F%2Fevil` and the like get the app page, never a `Location`. Primary
+and attached stores can each keep a space with one key; the primary answers first.
+A space no project binds has no card route, so the page says there is no such space.
+
+The page reads why from `GET /api/modules/planning/search`, whose coverage names
+each source it read and each it could not: a number nobody filed, a key no project
+binds, and a store that did not answer read differently, and an item is never
+called missing while a store that may hold it stayed silent.
+
+A work item's full record in an MCP answer (`get_work_item`, a `verbose` write,
+`claim_ready_work_item`) and every write acknowledgement carry the address as
+`url`:
+
+```json
+{"reference": "MAIN-12", "url": "http://127.0.0.1:8642/open/MAIN-12", "revision": 3}
+```
+
+It is an addition: the rows of `list_work_items` and `search_work_items`, the tool
+schemas and the HTTP records have no `url`. The port is `VALKAMA_PORT`, the variable
+the desktop app already reads, and otherwise the default `serve` listens on, and it
+is built in one place. An MCP process cannot ask a listener, so a `serve --port`
+started by hand on another port is not seen unless `VALKAMA_PORT` says so too.
+
+The server's instructions tell an agent to write a number as a markdown link to
+this address in a message to the owner, and not in a Valkama comment or
+description, where the UI links numbers by itself. Those instructions stay under
+4096 characters, the point where Claude Code 2.1.314 cuts them.
+
+The address needs a listener. While nothing listens on the port, following it ends
+in the browser's own connection error.
 
 ### What a link says about its other end
 
