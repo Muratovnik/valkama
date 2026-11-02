@@ -15,6 +15,7 @@ import os
 import sqlite3
 import tempfile
 import unittest
+from datetime import UTC, datetime
 from unittest import mock
 
 from server import mcp_surface, store
@@ -344,6 +345,37 @@ class RowFactsTests(AgentsCase):
     def setUp(self) -> None:
         super().setUp()
         self.claim(self.item, 0)
+        root = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(root.cleanup)
+        self.root = root.name
+
+    def known_transcript(self) -> None:
+        """Record where the parent's transcript is, through its own session start.
+
+        The claim in setUp stamped the parent with the real clock, and a hook only
+        advances a row it is not older than, so the parent's last sign is moved onto
+        the case's timeline first. The path itself still arrives through the hook.
+        """
+
+        self.conn.execute(
+            "UPDATE sessions SET last_seen = ? WHERE id = ?", ("2026-10-31T10:00:00Z", PARENT)
+        )
+        self.hook(
+            "session-start",
+            at(0),
+            agent="",
+            transcript_path=os.path.join(self.root, "projects", f"{PARENT}.jsonl"),
+        )
+
+    def agent_file(self, minute: int, agent: str = AGENT, second: int = 0) -> None:
+        """Write one subagent's transcript, which nothing reads, last changed at the time given."""
+
+        path = os.path.join(self.root, "projects", PARENT, "subagents", f"agent-{agent}.jsonl")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write('{"type": "user", "message": "not read by Valkama"}\n')
+        when = datetime(2026, 10, 31, 10, minute, second, tzinfo=UTC).timestamp()
+        os.utime(path, (when, when))
 
     def test_a_row_with_no_label_gives_its_type_and_id_to_stand_in(self) -> None:
         self.started(5)
@@ -418,6 +450,77 @@ class RowFactsTests(AgentsCase):
         self.assertEqual(
             ["moved", "newest", "oldest"], [entry["agent_id"] for entry in self.on_card()]
         )
+
+    def test_a_newer_transcript_file_sets_the_activity_when_read(self) -> None:
+        self.known_transcript()
+        self.started(5)
+        self.agent_file(30, second=15)
+        found = self.one()
+        self.assertEqual("2026-10-31T10:30:15Z", found["last_activity_at"])
+        self.assertEqual("2026-10-31T10:05:00Z", found["started_at"])
+
+    def test_an_older_transcript_file_does_not_move_the_activity_back(self) -> None:
+        self.known_transcript()
+        self.started(5)
+        self.hook("notification", at(9))
+        self.agent_file(7)
+        self.assertEqual("2026-10-31T10:09:00Z", self.one()["last_activity_at"])
+
+    def test_an_agent_with_a_recorded_end_has_its_file_ignored(self) -> None:
+        self.known_transcript()
+        self.started(5)
+        self.stopped(9)
+        self.agent_file(30)
+        found = self.one()
+        self.assertEqual(
+            ("2026-10-31T10:09:00Z", "2026-10-31T10:09:00Z"),
+            (found["last_activity_at"], found["ended_at"]),
+        )
+
+    def test_a_missing_transcript_file_leaves_the_value(self) -> None:
+        self.known_transcript()
+        self.started(5)
+        self.assertEqual("2026-10-31T10:05:00Z", self.one()["last_activity_at"])
+
+    def test_a_parent_with_no_transcript_path_leaves_the_value(self) -> None:
+        self.started(5)
+        self.agent_file(30)
+        self.assertEqual("2026-10-31T10:05:00Z", self.one()["last_activity_at"])
+
+    def test_an_agent_id_that_is_not_a_plain_name_names_no_file(self) -> None:
+        """A separator or a dot could reach a file outside the agent's own name."""
+
+        self.known_transcript()
+        self.started(5, agent="x/y")
+        self.started(5, agent="x.y")
+        self.agent_file(30, agent="x/y")
+        self.agent_file(30, agent="x.y")
+        self.assertEqual(
+            {"x/y": "2026-10-31T10:05:00Z", "x.y": "2026-10-31T10:05:00Z"},
+            {row["agent_id"]: row["last_activity_at"] for row in self.on_card()},
+        )
+
+    def test_an_agent_with_a_newer_transcript_ranks_first(self) -> None:
+        self.known_transcript()
+        self.started(1, agent="quiet")
+        self.started(3, agent="busy")
+        self.agent_file(40, agent="quiet")
+        self.assertEqual(["quiet", "busy"], [entry["agent_id"] for entry in self.on_card()])
+
+    def test_reading_the_card_writes_nothing(self) -> None:
+        self.known_transcript()
+        self.started(5)
+        self.agent_file(30)
+        before = (
+            service.get_work_item(self.conn, self.item)["revision"],
+            self.conn.execute("SELECT COUNT(*) FROM execution_events").fetchone()[0],
+        )
+        self.one()
+        after = (
+            service.get_work_item(self.conn, self.item)["revision"],
+            self.conn.execute("SELECT COUNT(*) FROM execution_events").fetchone()[0],
+        )
+        self.assertEqual(before, after)
 
 
 class ScopeTests(AgentsCase):

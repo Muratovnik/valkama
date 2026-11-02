@@ -70,7 +70,7 @@ checkouts are therefore distinguishable even at the same version.
   on each and the row says how many, unless the agent wrote to some item, which
   places it there alone. An agent whose parent held nothing and that wrote nothing
   is on no card. The list updates on its own through the existing
-  event stream. The section is absent while no agent is on the item, and a long list
+  event stream. While an agent has no recorded end, its last activity also takes the time its transcript file was last written, read when the card is read; the file's content is never read. The section is absent while no agent is on the item, and a long list
   folds to the three most recent.
 - **`valkama hook claude post-tool-use`** names an agent from the call that started
   it, reading only the short description of that call and the agent's id from one

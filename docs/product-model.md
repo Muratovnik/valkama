@@ -157,9 +157,12 @@ no card. Neither is an agent Claude Code ran for its own purposes, such as a pro
 suggestion: those report a stop and no start.
 
 A row gives what was recorded and no more. `last_activity_at` is the last sign Valkama
-saw: the agent's start, a hook event inside it, or its write to Planning. An agent's
-other tool calls reach no hook here, so one working quietly shows the time of its
-start. `ended_at` is set only by a recorded end, and an agent cut off by a client
+saw: the agent's start, a hook event inside it, or its write to Planning. While an agent
+has no recorded end, it also takes the time its transcript file was last written, read
+each time the card is read. Only the file's time is read, never its content, and a file
+that is not there adds nothing. An agent's other tool calls reach no hook here, so an
+agent whose transcript Valkama cannot find shows the last of those signs. `ended_at` is
+set only by a recorded end, and an agent cut off by a client
 restart leaves none, so a row with no end does not mean the agent is running. Valkama
 does not know how much work remains. `label` comes from
 [the hook contract](hook-contract.md#naming-an-agent), and an agent without one, as

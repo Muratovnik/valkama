@@ -13,16 +13,21 @@ Everything a row says is what the record shows. A session row does not prove a
 process is alive and a subagent cut off by a restart leaves no end, so a row gives
 the last sign of activity Valkama saw, and an end only when one was recorded. A
 running agent's own tool calls reach no hook here, so between its start and its
-end only its writes to Planning move that sign.
+end its writes to Planning move that sign, and so does the time its transcript
+file was last written, read when the card is read. Only that file's time is read:
+its content is never opened, and a missing or unreadable file counts for nothing.
 
 Claude Code only for now: `_LISTED_FAMILY` is where that is decided.
 """
 
 from __future__ import annotations
 
+import os
+import re
 import sqlite3
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
 from .. import sessions
 from . import calls
@@ -44,6 +49,8 @@ _STARTED_KINDS = frozenset({"subagent_start", "agent_launch"})
 _NOT_ITS_ACTIVITY = frozenset({"transcript_archived", "transcript_purged", "agent_launch"})
 
 _SECOND = 19
+#: The agent ids that may name a file: letters, digits, `_` and `-`, nothing that could be a path part.
+_AGENT_FILE_ID = re.compile(r"[A-Za-z0-9_-]+")
 
 
 def _moment(value: object) -> str:
@@ -54,6 +61,35 @@ def _moment(value: object) -> str:
 
 def _stamp(moment: str) -> str | None:
     return f"{moment}Z" if moment else None
+
+
+def _agent_transcript(parent_transcript: str, session_id: str, agent_id: str) -> str:
+    """Where Claude Code keeps one subagent's transcript; empty when there is none to name.
+
+    The subagent's file sits in a folder named for the parent session, beside the
+    parent's own transcript: `<dir>/<sessionId>/subagents/agent-<agentId>.jsonl`.
+    """
+
+    if not parent_transcript or not _AGENT_FILE_ID.fullmatch(agent_id):
+        return ""
+    return os.path.join(
+        os.path.dirname(parent_transcript), session_id, "subagents", f"agent-{agent_id}.jsonl"
+    )
+
+
+def _file_moment(path: str) -> str:
+    """When a file was last written, as `_moment` reads a stored time; empty when it cannot be read.
+
+    Only the file's status is asked for. Its content is never opened.
+    """
+
+    if not path:
+        return ""
+    try:
+        written = os.stat(path).st_mtime
+    except OSError:
+        return ""
+    return datetime.fromtimestamp(int(written), UTC).strftime("%Y-%m-%dT%H:%M:%S")
 
 
 def _holds_activity(conn: sqlite3.Connection) -> bool:
@@ -241,11 +277,20 @@ def on_item(
         return []
     steps = list(checklist)
     known: dict[str, dict[str, _Agent]] = {}
+    transcripts: dict[str, str] = {}
 
     def agents_of(session_id: str) -> dict[str, _Agent]:
         if session_id not in known:
             known[session_id] = _agents_of(conn, session_id)
         return known[session_id]
+
+    def transcript_of(session_id: str) -> str:
+        if session_id not in transcripts:
+            row = conn.execute(
+                "SELECT transcript_path FROM sessions WHERE id = ?", (session_id,)
+            ).fetchone()
+            transcripts[session_id] = str(row[0] or "") if row is not None else ""
+        return transcripts[session_id]
 
     chosen: dict[tuple[str, str], _Agent] = {}
     for row in conn.execute(
@@ -280,6 +325,12 @@ def on_item(
     listed = [
         agent for agent in chosen.values() if sessions.client_family(agent.client) == _LISTED_FAMILY
     ]
+    for agent in listed:
+        if not agent.ended_at:
+            path = _agent_transcript(
+                transcript_of(agent.session_id), agent.session_id, agent.agent_id
+            )
+            agent.last_activity = max(agent.last_activity, _file_moment(path))
     listed.sort(key=lambda agent: (agent.last_activity, agent.agent_id), reverse=True)
     return [_present(agent, steps) for agent in listed]
 
