@@ -96,3 +96,31 @@ test('a press on what a lane says keeps focus in that lane, with no ring', async
   await page.keyboard.press('Tab')
   expect(await epic.evaluate((node) => node.contains(document.activeElement))).toBe(true)
 })
+
+test('a double click on a tile leaves its card open', async ({ page }) => {
+  await board(page, {})
+  const title = tileIn(page.locator('.work-item-column').first()).locator('.tile-open')
+  await title.scrollIntoViewIfNeeded()
+  const { x, y } = await centre(title)
+  await page.mouse.dblclick(x, y)
+  await expect(page.locator('.drawer')).toBeVisible()
+  // The second press reached the scrim that had just appeared, and closed what it opened.
+  await expect(page.locator('.overlay-surface-drawer')).toHaveCSS('transform', 'none')
+  await expect(page.locator('.drawer')).toBeVisible()
+  await page.mouse.click(5, 5)
+  await expect(page.locator('.drawer')).toHaveCount(0)
+})
+
+test('a card closed by Escape leaves no ring around the whole board', async ({ page }) => {
+  await board(page, {})
+  const mark = markOf(tileIn(page.locator('.work-item-column').first()))
+  await mark.scrollIntoViewIfNeeded()
+  const { x, y } = await centre(mark)
+  await page.mouse.click(x, y)
+  await expect(page.locator('.drawer')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.drawer')).toHaveCount(0)
+  // A press on a mark names no control to go back to, so focus lands on the stage.
+  await expect(page.locator('.module-stage')).toBeFocused()
+  await expect(page.locator('.module-stage')).toHaveCSS('outline-style', 'none')
+})

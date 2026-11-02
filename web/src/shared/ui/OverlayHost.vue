@@ -121,6 +121,14 @@ function closeOverlay(event: Event) {
   emit('close')
 }
 
+/**
+ * The second press of a double click that opened this lands on the scrim that has just
+ * appeared. It is not a wish to close, and it took the card away as it arrived.
+ */
+function pressOnScrim(event: MouseEvent) {
+  if (event.detail < 2) closeOverlay(event)
+}
+
 function focusable(): HTMLElement[] {
   return surface.value
     ? Array.from(
@@ -251,7 +259,7 @@ onUnmounted(release)
         <div
           v-if="active"
           class="overlay-scrim"
-          @click="closeOverlay"
+          @click="pressOnScrim"
         />
         <!-- The role is inside `modality`, which the a11y rule cannot look into: it
              reads the attributes written on the element and this one carries a
