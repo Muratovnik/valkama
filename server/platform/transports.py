@@ -391,6 +391,7 @@ class CliTransport:
                 cwd=directory,
                 env=environment,
                 shell=False,
+                creationflags=processes.NO_WINDOW,
                 # Its own session on POSIX, so the tree a timeout stops is the
                 # adapter's and everything it started; Windows ignores it.
                 start_new_session=sys.platform != "win32",

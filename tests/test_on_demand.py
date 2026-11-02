@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import http.client
 import json
 import os
@@ -15,7 +16,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from server import launcher, on_demand
+from server import launcher, on_demand, processes
 from server.ops import configuration, doctor
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -348,6 +349,34 @@ class FollowReleaseTests(unittest.TestCase):
         self.assertEqual(0, status)
         load.assert_not_called()
         start.assert_called_once()
+
+
+class ChildWindowTests(unittest.TestCase):
+    """Under `pythonw.exe` a console child opens a window on the owner's screen unless told."""
+
+    def test_every_child_the_server_starts_is_told_not_to_open_a_window(self) -> None:
+        unguarded = []
+        for path in sorted((ROOT / "server").rglob("*.py")):
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr in {"run", "Popen", "check_output", "check_call", "call"}
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id == "subprocess"
+                    and not any(keyword.arg == "creationflags" for keyword in node.keywords)
+                ):
+                    unguarded.append(f"{path.relative_to(ROOT)}:{node.lineno}")
+        self.assertEqual([], unguarded)
+
+    def test_the_flag_is_the_one_windows_reads(self) -> None:
+        self.assertEqual(0x08000000 if os.name == "nt" else 0, processes.NO_WINDOW)
+
+    def test_a_captured_command_reaches_windows_with_it(self) -> None:
+        with mock.patch.object(processes.subprocess, "run") as run:
+            run.return_value = mock.Mock(returncode=0, stdout=b"", stderr=b"")
+            processes.run_text(["git", "status"])
+        self.assertEqual(processes.NO_WINDOW, run.call_args.kwargs["creationflags"])
 
 
 class DoctorTests(unittest.TestCase):

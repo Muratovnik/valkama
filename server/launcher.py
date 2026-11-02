@@ -245,6 +245,7 @@ def pin_release(checkout: Path, revision: str, releases: Path) -> Path:
             capture_output=True,
             check=False,
             timeout=120,
+            creationflags=processes.NO_WINDOW,
         )
     except (OSError, subprocess.TimeoutExpired) as error:
         raise LauncherError(f"git could not archive {revision}: {error}") from error

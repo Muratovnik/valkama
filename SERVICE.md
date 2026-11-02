@@ -189,9 +189,10 @@ the tray and `listener status` or `stop` it is an ordinary managed listener;
 
 The log records how long each load took, as `serving after N s`. The desktop app
 gives a managed listener about 2.5 seconds to answer. If the first load takes longer
-it reports the server as out of date and offers a restart, which replaces the listener
-with a server of its own, so links stop working once the app closes, until the next
-login or `autostart enable`.
+it reports the server as out of date and offers a restart. That restart looks again
+first and keeps the listener if the load has finished by then. If it has to stop the
+listener, the app runs a server of its own, and links stop working once the app
+closes, until the next login or `autostart enable`.
 
 ## Register clients
 

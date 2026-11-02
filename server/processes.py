@@ -28,6 +28,12 @@ from dataclasses import dataclass
 from typing import Any
 
 
+#: What every child of the server is started with. A listener started at login runs
+#: under `pythonw.exe`, which has no console for a child to share, so Windows would open
+#: one on the owner's screen for each `git` this module runs. Elsewhere it changes nothing.
+NO_WINDOW: int = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+
 @dataclass(frozen=True)
 class TextResult:
     """A finished child process whose streams were decoded, not guessed.
@@ -54,7 +60,13 @@ def run_text(
     `stdin`, when given, is written to the child as bytes and then closed.
     """
     completed = subprocess.run(
-        argv, input=stdin, capture_output=True, shell=False, check=False, timeout=timeout
+        argv,
+        input=stdin,
+        capture_output=True,
+        shell=False,
+        check=False,
+        timeout=timeout,
+        creationflags=NO_WINDOW,
     )
     return TextResult(
         returncode=completed.returncode,
@@ -91,6 +103,7 @@ def stop_process_tree(process: Any, *, wait_timeout: float = 2.0) -> bool:
                 shell=False,
                 timeout=5,
                 check=False,
+                creationflags=NO_WINDOW,
             )
             if killed.returncode == 0:
                 with contextlib.suppress(OSError, subprocess.TimeoutExpired):

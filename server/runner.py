@@ -570,7 +570,7 @@ class Runner:
             # Its own group, so stopping a launch stops the tree it started and
             # not this platform process with it. On POSIX the same is a session
             # of its own, below.
-            creation = subprocess.CREATE_NEW_PROCESS_GROUP
+            creation = subprocess.CREATE_NEW_PROCESS_GROUP | processes.NO_WINDOW
         return subprocess.Popen(
             argv,
             cwd=cwd,
