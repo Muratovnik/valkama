@@ -84,6 +84,13 @@ _JETBRAINS = frozenset(
 )
 _TERMINALS = frozenset({"windowsterminal.exe", "openconsole.exe"})
 _CODEX_APP = "chatgpt.exe"
+_EDITOR_HOSTS = ("vscode", "vscode-insiders", "cursor", "windsurf", "jetbrains")
+#: What each window kind can be open in; a kind not named here has no product.
+_HOSTS_OF_KIND = {
+    "ide": _EDITOR_HOSTS,
+    "ide-terminal": _EDITOR_HOSTS,
+    "app": ("claude-desktop", "codex-app"),
+}
 
 
 @dataclass(frozen=True)
@@ -114,6 +121,17 @@ def classify(client: str, environment: Mapping[str, str], ancestors: Sequence[st
     if client == "codex":
         return _codex(environment, names)
     return Place()
+
+
+def agreeing_host(opened_in: str, opened_host: str) -> str:
+    """A recorded host when it goes with the recorded window kind, otherwise empty.
+
+    A confirmed call can move `opened_in` alone, because it does not name a
+    product, so a session resumed in a terminal may read `terminal` beside the
+    `claude-desktop` of its last start. The window kind is the newer word.
+    """
+
+    return opened_host if opened_host in _HOSTS_OF_KIND.get(opened_in, ()) else ""
 
 
 def _claude(environment: Mapping[str, str], ancestors: tuple[str, ...]) -> Place:

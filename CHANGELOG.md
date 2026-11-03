@@ -23,6 +23,11 @@ checkouts are therefore distinguishable even at the same version.
   `asyncRewake`, wakes an orchestrator that is idle, for example while it waits for a
   background subagent. Codex is told at its next prompt or tool call. The `notify`
   setting (`VALKAMA_NOTIFY=off`) switches this off.
+- **A card's read says who each holder is.** `GET /api/modules/planning/work-item` gives
+  the claim, each step and each agent an `executor`: the session a click would open, the
+  agent inside it, where that session was last opened, and whether it is live, ended,
+  gone, headless or none. It costs the read one more statement, however many holders the
+  card has, and no MCP answer carries it.
 - **A card copies the link to its item.** The link button beside the reference in the
   card's head puts the item's short address, `/open/<number>` on the address Valkama is
   served from, on the clipboard and says in the same line whether the copy happened. The address

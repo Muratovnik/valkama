@@ -30,7 +30,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from .. import sessions
-from . import calls
+from . import calls, executors
 
 EXACT = "exact"
 CLAIM = "claim"
@@ -268,13 +268,25 @@ def _present(agent: _Agent, checklist: Iterable[Mapping]) -> dict:
     }
 
 
-def on_item(
+def on_card(conn: sqlite3.Connection, record: dict) -> None:
+    """Add what only the card reads to an item's full record: its agents and executors.
+
+    A store that records no agents names no session to open either, so the one
+    question about the store's age is asked here, once, for both.
+    """
+
+    recorded = _holds_activity(conn)
+    record["agents"] = (
+        _on_item(conn, str(record["work_item_id"]), record["checklist"]) if recorded else []
+    )
+    executors.attach(conn, record, recorded=recorded)
+
+
+def _on_item(
     conn: sqlite3.Connection, work_item_id: str, checklist: Iterable[Mapping]
 ) -> list[dict]:
     """The agents on one item, the most recent activity first; see the module's rule."""
 
-    if not _holds_activity(conn):
-        return []
     steps = list(checklist)
     known: dict[str, dict[str, _Agent]] = {}
     transcripts: dict[str, str] = {}

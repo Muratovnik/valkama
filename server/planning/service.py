@@ -91,9 +91,10 @@ def get_work_item(
     `comments_after` keeps only the comments after that id. `threads` keeps the
     threads with the newest activity and `thread` one thread whole, as
     `read_model.present` says. `sessions` adds the agent sessions whose
-    confirmed calls wrote to it, and `agents` the agents standing on it, which
-    only the card asks for. Without any of these the answer is the complete
-    record a screen draws from.
+    confirmed calls wrote to it, and `agents` the agents standing on it and an
+    `executor` at the claim, each step and each agent, which only the card asks
+    for. Without any of these the answer is the complete record a screen draws
+    from.
     """
 
     record = read_model.present(
@@ -109,9 +110,7 @@ def get_work_item(
     if sessions:
         record["sessions"] = read_model.sessions(conn, str(record["work_item_id"]))
     if agents:
-        record["agents"] = planning_agents.on_item(
-            conn, str(record["work_item_id"]), record["checklist"]
-        )
+        planning_agents.on_card(conn, record)
     return record
 
 

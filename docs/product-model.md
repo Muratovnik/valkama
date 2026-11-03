@@ -171,6 +171,21 @@ every agent recorded before that hook has, is shown by its type and short id.
 The planning event stream sends a short `agents` event when anything is recorded about
 an agent, so an open card reads its list again without a frame of the whole space.
 
+The same read gives the claim, each step and each agent an `executor`: `session`, the
+session a click on that holder would open, which for an agent is its parent because a
+subagent cannot be opened from outside; `agent`; `opened_in` and `opened_host`, where
+that session was last opened, empty when unknown; and `state`. No MCP tool answer
+carries it either. The state is what the record shows:
+
+- `none`: no session to open. A person or the browser holds it, nobody does, or the
+  holder's label replaced a long session id with its digest. Every other field is empty.
+- `live` and `headless`: the session's row says active, and `headless` has no window to
+  go to. A session Valkama itself launched counts as headless until a client places it.
+  A client that crashed leaves its row active, so `live` does not prove a process.
+- `ended`: the row says ended or failed.
+- `gone`: ended, and the transcript file the client named is no longer there. Only the
+  file's status is read, and a live session whose file is not written yet stays `live`.
+
 Memory reads through its own provider API. A work item keeps a typed `memory`
 pointer and its stored label, including when the provider is unavailable. Retiring
 the Skills catalogue does not alter installed skill files or client enablement.

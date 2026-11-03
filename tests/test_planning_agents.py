@@ -533,7 +533,9 @@ class ScopeTests(AgentsCase):
         old = sqlite3.connect(":memory:")
         self.addCleanup(old.close)
         old.execute("CREATE TABLE sessions(id TEXT PRIMARY KEY)")
-        self.assertEqual([], agents.on_item(old, "any", []))
+        record = {"work_item_id": "any", "checklist": [], "claim": None}
+        agents.on_card(old, record)
+        self.assertEqual([], record["agents"])
         self.assertIsNone(agents.signal(old))
 
     def test_only_the_card_asks_for_agents(self) -> None:

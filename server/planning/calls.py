@@ -276,8 +276,13 @@ def from_agent() -> bool:
 #: after the channel rather than the handshake's `clientInfo`, so one client
 #: reads the same whether or not it opened with `initialize`.
 _CHANNEL_NAMES = {CODEX_META: "codex", CLAUDE_HOOK: "claude"}
+_PLAIN_TEXT = r"[A-Za-z0-9._:-]{1,40}"
 #: An identifier a holder carries as it is: what both clients send today.
-_PLAIN_ID = re.compile(r"^[A-Za-z0-9._:-]{1,40}$")
+_PLAIN_ID = re.compile(f"^{_PLAIN_TEXT}$")
+_HOLDER_LABEL = re.compile(
+    f"(?:{'|'.join(_CHANNEL_NAMES.values())})"
+    f"(?: agent ({_PLAIN_TEXT}))? \\(session ({_PLAIN_TEXT})\\)"
+)
 
 
 def holder(author: str | None) -> str:
@@ -314,6 +319,18 @@ def holder_label(name: str, session_id: str, agent_id: str | None = None) -> str
     if agent_id is not None:
         name += f" agent {_label_id(agent_id)}"
     return f"{name} (session {_label_id(session_id)})"
+
+
+def holder_ids(label: str) -> tuple[str, str | None] | None:
+    """The session and agent a `holder_label` carries; None for any other holder.
+
+    Each comes back as the label spells it, so an id `_label_id` replaced comes
+    back as its digest, which names no session. A person's or a runner's holder
+    is free text and has no such form.
+    """
+
+    found = _HOLDER_LABEL.fullmatch(label)
+    return (found.group(2), found.group(1)) if found is not None else None
 
 
 def _label_id(value: str) -> str:
