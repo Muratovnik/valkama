@@ -5,26 +5,44 @@
  * the same eight lines of markup and twenty of layout in two files, already
  * drifting — one drew a border around its close button and the other did not.
  */
+import { computed, ref } from 'vue'
+
 import VIcon from '@/shared/ui/VIcon.vue'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     closeLabel: string
     title: string
     /** Which record the overlay is about: an identifier and its title. */
     context?: string
+    /** The title can hold focus, for a host whose content takes it only once it arrives. */
+    focusableTitle?: boolean
+    /** A title that may run long stays on its line, and the whole of it is elsewhere. */
+    singleLine?: boolean
     subtitle?: string
   }>(),
-  { subtitle: '', context: '' },
+  { subtitle: '', context: '', focusableTitle: false, singleLine: false },
 )
 
 const emit = defineEmits<{ close: [] }>()
+
+const name = ref<HTMLElement | null>(null)
+const nameFocus = computed(() => (props.focusableTitle ? -1 : undefined))
+defineExpose({ focusTitle: () => name.value?.focus({ preventScroll: true }) })
 </script>
 
 <template>
   <header class="overlay-header">
+    <slot name="start" />
     <div class="overlay-header-title">
-      <h2 class="overlay-header-name">{{ title }}</h2>
+      <h2
+        ref="name"
+        class="overlay-header-name"
+        :class="{ 'single-line': singleLine }"
+        :tabindex="nameFocus"
+      >
+        {{ title }}
+      </h2>
       <p
         v-if="subtitle"
         class="overlay-header-subtitle"
@@ -38,6 +56,7 @@ const emit = defineEmits<{ close: [] }>()
       >
       <slot name="meta" />
     </div>
+    <slot name="actions" />
     <button
       class="overlay-header-close"
       type="button"
@@ -60,6 +79,7 @@ const emit = defineEmits<{ close: [] }>()
 }
 
 .overlay-header-title {
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -73,6 +93,18 @@ const emit = defineEmits<{ close: [] }>()
   font-weight: 700;
   letter-spacing: -0.02em;
   overflow-wrap: anywhere;
+  outline: none;
+
+  &:focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+  }
+
+  &.single-line {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 
 .overlay-header-subtitle {

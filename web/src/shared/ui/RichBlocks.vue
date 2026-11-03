@@ -5,6 +5,10 @@
  * One container and one gap between its blocks, so a list inside a quote keeps
  * the rhythm of the text around it. A heading is a paragraph in the strong
  * weight: the section this text stands in owns the outline (see `richText.ts`).
+ *
+ * `document` is a whole Markdown file read on its own, which owns its outline: a
+ * heading is a heading there, at the level `parseRichDocument` gave it. A card never
+ * passes it, and nothing it draws changes.
  */
 import { useId } from 'vue'
 
@@ -13,7 +17,9 @@ import RichInlines from '@/shared/ui/RichInlines.vue'
 
 type List = Extract<RichBlock, { kind: 'list' }>
 
-defineProps<{ blocks: readonly RichBlock[] }>()
+withDefaults(defineProps<{ blocks: readonly RichBlock[]; document?: boolean }>(), {
+  document: false,
+})
 defineOptions({ name: 'RichBlocks' })
 
 const id = useId()
@@ -25,6 +31,8 @@ const isDone = (item: RichListItem) => item.checked === true
 /** The words of a task item, which name its checkbox. */
 const itemId = (block: number, item: number) => `${id}-${block}-${item}`
 const alignClass = (align: RichAlign) => ({ center: align === 'center', end: align === 'right' })
+type Heading = Extract<RichBlock, { kind: 'heading' }>
+const headingTag = (heading: Heading) => `h${heading.level ?? 2}`
 </script>
 
 <template>
@@ -39,6 +47,14 @@ const alignClass = (align: RichAlign) => ({ center: align === 'center', end: ali
       >
         <RichInlines :nodes="block.children" />
       </p>
+      <component
+        :is="headingTag(block)"
+        v-else-if="block.kind === 'heading' && document"
+        class="rich-document-heading"
+        :class="`level-${block.level ?? 2}`"
+      >
+        <RichInlines :nodes="block.children" />
+      </component>
       <p
         v-else-if="block.kind === 'heading'"
         class="rich-paragraph rich-heading"
@@ -53,7 +69,10 @@ const alignClass = (align: RichAlign) => ({ center: align === 'center', end: ali
         v-else-if="block.kind === 'quote'"
         class="rich-quote"
       >
-        <RichBlocks :blocks="block.children" />
+        <RichBlocks
+          :blocks="block.children"
+          :document="document"
+        />
       </blockquote>
       <component
         :is="listTag(block)"
@@ -79,6 +98,7 @@ const alignClass = (align: RichAlign) => ({ center: align === 'center', end: ali
           <RichBlocks
             :id="itemId(index, position)"
             :blocks="item.children"
+            :document="document"
           />
         </li>
       </component>
@@ -89,6 +109,7 @@ const alignClass = (align: RichAlign) => ({ center: align === 'center', end: ali
       <div
         v-else-if="block.kind === 'table'"
         class="rich-table-frame"
+        :class="{ 'keeps-words': document }"
       >
         <table class="rich-table">
           <thead>
@@ -138,6 +159,35 @@ const alignClass = (align: RichAlign) => ({ center: align === 'center', end: ali
 
 .rich-heading {
   font-weight: 600;
+}
+
+/* A file's own outline, a step apart per level and all under the viewer's title. */
+.rich-document-heading {
+  margin: 0;
+  line-height: var(--line-height-snug);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+
+  &.level-2 {
+    font-size: var(--font-size-module);
+  }
+
+  &.level-3 {
+    font-size: var(--font-size-section);
+  }
+
+  &.level-4 {
+    font-size: var(--font-size-emphasis);
+  }
+
+  &.level-5,
+  &.level-6 {
+    font-size: var(--font-size-interface);
+  }
+
+  &.level-6 {
+    color: var(--color-text-muted);
+  }
 }
 
 .rich-pre {
@@ -196,10 +246,19 @@ const alignClass = (align: RichAlign) => ({ center: align === 'center', end: ali
   border-top: 1px solid var(--color-rule);
 }
 
-/* A wide table scrolls inside its own frame rather than widening the card. */
+/* A wide table scrolls inside its own frame rather than widening the card. A document's
+   holds its words whole and scrolls sooner: a table squeezed to fit broke them mid-word. */
 .rich-table-frame {
   max-width: 100%;
   overflow-x: auto;
+
+  &.keeps-words {
+    overflow-wrap: normal;
+
+    & .rich-cell {
+      min-width: 16ch;
+    }
+  }
 }
 
 .rich-table {

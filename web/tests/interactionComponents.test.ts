@@ -135,7 +135,7 @@ test('the work-item inspector uses the persisted overlay drawer without consumin
   assert.match(planningSurface, /INSPECTOR_DRAWER_STORAGE_KEY/)
   assert.match(inspector, /<OverlayHost/)
   assert.match(inspector, /variant="drawer"/)
-  assert.match(inspector, /layer="drawer"/)
+  assert.match(inspector, /layer: 'drawer'/)
   assert.match(inspector, /resizable/)
   assert.match(inspector, /:width-storage-key="storageKey"/)
   assert.doesNotMatch(inspector, /position: relative|flex: none|parentElement/)

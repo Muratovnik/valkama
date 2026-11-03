@@ -7,6 +7,7 @@ import AppModuleStage from '@/app/components/AppModuleStage.vue'
 import AppNotice from '@/app/components/AppNotice.vue'
 import AppRouteRecovery from '@/app/components/AppRouteRecovery.vue'
 import { useAlertPresence } from '@/app/composables/useAlertPresence.ts'
+import { useAppDocuments } from '@/app/composables/useAppDocuments.ts'
 import { useAppReferenceLinks } from '@/app/composables/useAppReferenceLinks.ts'
 import { useDocumentOpening } from '@/app/composables/useDocumentOpening.ts'
 import { useGlobalWorkActions } from '@/app/composables/useGlobalWorkActions.ts'
@@ -23,6 +24,7 @@ import { useShellNotice } from '@/app/composables/useShellNotice.ts'
 import { prefetchModule } from '@/app/moduleViews.ts'
 
 import AppNav from '@/widgets/app-nav/components/AppNav.vue'
+import DocumentViewer from '@/widgets/document-viewer/components/DocumentViewer.vue'
 
 import GlobalWorkFinder from '@/features/global-find/GlobalWorkFinder.vue'
 import InputRequestsHub from '@/features/input-requests/components/InputRequestsHub.vue'
@@ -261,6 +263,10 @@ async function openSession(sessionId: string, _clientFamily: string, navigate = 
   }
 }
 const sessionContext = ref<ResolvedRef | null>(null)
+const documentView = useAppDocuments({
+  say,
+  openedFrom: [activeModule, () => JSON.stringify(route.value.entity), requestsOpen],
+})
 // What a path written in free text can do from here: see the composable.
 useDocumentOpening(say)
 // References written in free text, anywhere in the shell: see the composable.
@@ -395,6 +401,7 @@ usePlatformEntryRestore({
     @select="openTarget"
     @count="(count) => (pendingRequestCount = count)"
   />
+  <DocumentViewer :view="documentView" />
   <!-- Beside the overlays rather than in the workspace, whose containment would hold it under
        them: a press inside a card or a dialog says what it did here. -->
   <AppNotice

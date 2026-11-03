@@ -49,7 +49,8 @@ export function provideDocumentOpener(opener: DocumentOpener): void {
   provide(OPENER, opener)
 }
 
-function useDocumentOpener(): DocumentOpener {
+/** The opener in force here, for a host that opens documents itself and passes the rest on. */
+export function useDocumentOpener(): DocumentOpener {
   return inject(OPENER, { say: () => {} })
 }
 

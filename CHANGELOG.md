@@ -12,6 +12,11 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Added
 
+- **A Markdown file named in a text opens in Valkama.** A press on a path to a `.md` file in
+  a card or a question opens the document over them, read-only: headings, lists, tables and
+  code drawn, at the `#kb:…`, heading or `:42` the path names, with a link to another document
+  opening in the same place and Back returning to where it was read. Escape comes back to the
+  link, and a draft under it stays. The file is read again when the window returns.
 - **A question's answer can be changed and its options stay in view.** An answered question
   shows every option of every field with the chosen one set apart, and while its task is open
   it offers «Change answer»: the same form on the answer in force, Save off until it differs,
