@@ -98,6 +98,12 @@ is described in [The address of a work item](#the-address-of-a-work-item).
 | `apply_work_item_changes` | `applied`, what each group changed, with `released` in `applied.transition` when a close released a claim; `started` from its claim, `overridden` from its transition, and the `warnings` of both, when there are any |
 | `merge_work_items` | `merged`, what each item moved (see [Merging items that are one change](#merging-items-that-are-one-change)); `warnings` and `overridden` when there are any |
 
+**Since 2.5.** `comment_work_item` answers with `work_item`, `comment_count`,
+`comment_id`, and the `reply_to` and `reply_to_request` of the root a reply
+landed under; `resolve_work_item_comment` answers with `work_item`,
+`comment_id` and `resolution`. Both are described in
+[Threads and the resolved mark](#threads-and-the-resolved-mark).
+
 Every tool that writes to a work item and leaves it standing -- all of the above,
 `claim_ready_work_item`, `link_work_items`, `attach_work_item_ref`,
 `comment_work_item`, `report_work_item`, `select_work_item_summary` and the
@@ -260,6 +266,39 @@ when older comments were left out. This is how a reader that keeps the id of the
 last comment it read takes only what came since. Comment ids run across items,
 so the id need not belong to this item. With `full: true` it is refused.
 
+**Since 2.5.** Comments form threads (see
+[Threads and the resolved mark](#threads-and-the-resolved-mark)), and the read
+takes one of five modes:
+
+| Mode | `comments` holds |
+| --- | --- |
+| default | the 5 threads with the latest activity -- a thread's activity is the greatest id in it -- oldest first; each root carries `replies` and `last_reply` |
+| `thread: <id>` | that thread: its root and every reply, oldest first. The id of a reply reads the thread of its root. The replies under a question are read with `get_work_item_request` |
+| `unresolved: true` | the unresolved roots, oldest first, at most 20, each with `replies` and `last_reply`; `truncated` says more remain, and the next page is read with `comments_after` set to the id of the last root read |
+| `comments_after: <id>` | every row with a greater id, roots and replies alike, including replies under questions, flat and oldest first |
+| `full: true` | every row, flat and oldest first |
+
+`full`, `comments_after` and `thread` exclude one another, and `unresolved`
+combines only with `comments_after`; any other pair is refused with
+`invalid_request`. A reply to an old thread moves that thread up in the default
+read, so news is not lost behind five newer roots.
+
+`replies` counts the thread's replies. `last_reply` is the newest of them, or
+`null` with none:
+
+```json
+{"id": 57, "author": "user", "by_person": true, "at": "2026-11-03T10:12:00.000000Z",
+ "body": "Agreed, take the second option."}
+```
+
+Its `body` is cut at 500 characters, and a cut one carries `clipped: true`.
+
+Every mode carries `comments_total` (every row, as before), `threads_total`
+(the roots), `unresolved_total` (the roots without the resolved mark) and
+`events_total`, except `full: true`, which carries none of them.
+`history_truncated` is true when fewer threads, rows or events are shown than
+exist.
+
 Both forms carry `sessions`: the agent sessions whose confirmed calls wrote to
 the item, in the order each first wrote there.
 
@@ -283,6 +322,105 @@ newest entries), `comments_after` and `sessions=true`. With both `comments` and
 that is not a non-negative integer
 and a `sessions` other than `true` or `false` are refused with
 `invalid_request`; an unknown item is `not_found` (404).
+
+**Since 2.5.** The HTTP read stays flat: comments are rows in id order, each
+with its `reply_to` and `reply_to_request`, and a reader groups them into
+threads itself. Neither it nor the card's read through the exact project scope
+(`GET /api/modules/planning/work-item`) caps how many comments or events it
+returns: a card is drawn from the whole record, however long its discussion and
+history are, and a client must not refuse a record for its length.
+
+### Threads and the resolved mark
+
+**Since 2.5.** A comment is either a root or a reply. A root has no parent; a
+reply has exactly one, the comment or the question it answers. Comments,
+reports and questions can be roots. A thread is one level deep: a reply to a
+reply is not refused, it is placed under the root of the reply it named, and the
+answer says which root that was. A reply lives on the same item as its root,
+carries no `checklist_item_id` (the root carries the step), and a report is
+never a reply. The store enforces the same shape, so no writer can break it.
+
+Every comment, in every read, carries four keys beside the ones it had:
+
+| Key | Meaning |
+| --- | --- |
+| `reply_to` | the id of the comment this one replies to, or `null` |
+| `reply_to_request` | the `request_id` of the question this one replies to, or `null` |
+| `by_person` | `true` when the call that wrote it came through the interface, `false` for any other call, `null` when the row has no call: one older than call identity, or written by a launch |
+| `resolution` | the resolved mark, `{at, by, by_person, text}`, or `null`; always `null` on a reply |
+
+A resolved root:
+
+```json
+{"id": 41, "kind": "comment", "author": "codex", "by_person": false,
+ "body": "The export leaves out step claims.", "at": "2026-11-03T09:00:00.000000Z",
+ "report": null, "checklist_item_id": null, "checklist_item_text": null,
+ "reply_to": null, "reply_to_request": null,
+ "resolution": {"at": "2026-11-03T11:30:00.000000Z", "by": "user", "by_person": true,
+                "text": "Moved to MAIN-14"}}
+```
+
+A reply to it, and a reply under a question:
+
+```json
+{"id": 44, "kind": "comment", "author": "user", "by_person": true,
+ "body": "Only the claims, the steps are there.", "at": "2026-11-03T09:20:00.000000Z",
+ "report": null, "checklist_item_id": null, "checklist_item_text": null,
+ "reply_to": 41, "reply_to_request": null, "resolution": null}
+{"id": 45, "kind": "comment", "author": "codex", "by_person": false,
+ "body": "Does the second option include the docs?", "at": "2026-11-03T09:25:00.000000Z",
+ "report": null, "checklist_item_id": null, "checklist_item_text": null,
+ "reply_to": null, "reply_to_request": "7d1c2a9e-3f4b-4c5d-8e6f-0a1b2c3d4e5f",
+ "resolution": null}
+```
+
+**Writing a reply.** `comment_work_item`, its HTTP write
+`POST /api/planning/work-item/comment` and the `comment` group of
+`apply_work_item_changes` take two optional fields, `reply_to` (a comment id)
+and `reply_to_request` (a question's `request_id`); naming both is refused with
+`invalid_request`, and so is a parent on another item. The answer adds the root
+the reply landed under, and both keys are `null` for a new root:
+
+```json
+{"work_item": "MAIN-12", "comment_count": 9, "comment_id": 46,
+ "reply_to": 41, "reply_to_request": null}
+```
+
+`report_work_item` takes no parent. A reply, like a comment, writes no history
+event and changes no revision. A reply in a resolved thread leaves the mark in
+place; to reopen the discussion of a resolved root, write a new root that names
+it.
+
+**The resolved mark.** A root comment or report can be marked resolved, with a
+short decision of one line and at most 280 characters, which may be empty. A
+reply cannot, and a question's thread has none: a question has its own status.
+`resolve_work_item_comment` and `POST /api/planning/work-item/comment/resolve`
+take:
+
+```json
+{"id": "MAIN-12", "comment_id": 41, "resolution": "Moved to MAIN-14", "author": "codex"}
+```
+
+`reopen: true` in place of `resolution` removes the mark. The answer names the
+root and its mark as it now stands, `null` after a reopen:
+
+```json
+{"work_item": "MAIN-12", "comment_id": 41,
+ "resolution": {"at": "2026-11-03T11:30:00.000000Z", "by": "codex", "by_person": false,
+                "text": "Moved to MAIN-14"}}
+```
+
+Marking a resolved root again replaces its decision and is recorded as a new
+mark; reopening a root that has no mark writes nothing. A reply, a comment of
+another item and a comment that does not exist are refused (`invalid_request`,
+`not_found`). The mark is not a field of the item: it changes no revision and
+takes no `expected_revision`. It writes a history event, `comment_resolved`
+with the detail `<comment id>: <decision>`, cut to 512 characters, or
+`comment_reopened` with the detail `<comment id>`, so the history says who set
+and removed it and when. The tool is a write like any other, and its answer
+carries `from_person`. A mark set in the interface is a person's act and is told
+to the agent working the item (see
+[What a person did reaches the agent](#what-a-person-did-reaches-the-agent)).
 
 ### The address of a work item
 
@@ -481,7 +619,8 @@ these groups, and applies them in this order:
 | `checklist_ticks` | list of `{item_id, done?}`, `done` true by default | `tick_work_item_checklist_item` |
 | `refs` | list of `{kind, value, label?}` | `attach_work_item_ref` |
 | `links` | list of `{other, kind, remove?}`, linking from this item | `link_work_items` |
-| `comment` | `{body, checklist_item_id?}` | `comment_work_item` |
+| `comment` | `{body, checklist_item_id?, reply_to?, reply_to_request?}` | `comment_work_item` |
+| `resolutions` | list of `{comment_id, resolution?, reopen?}` | `resolve_work_item_comment` |
 | `summary` | `{done, next, why?}` | `set_work_item_summary` |
 | `transition` | `{state, reason?, force?, rank?}` | `transition_work_item` |
 
@@ -541,6 +680,21 @@ The single tools stay as they are. The batch is also the HTTP write
 `POST /api/planning/work-item/apply`, which takes the same body and answers with
 the full item and `applied`.
 
+**Since 2.5.** The `comment` group takes a parent as `comment_work_item` does,
+and `applied.comment` then carries `reply_to` and `reply_to_request` beside
+`comment_id`. The `resolutions` group, applied after `comment` and before
+`summary`, sets or removes the resolved mark on up to 100 roots of the item in
+one call, which is how a digest is reviewed in one write; one refused entry
+writes none of them. `applied.resolutions` lists each root's mark as it now
+stands:
+
+```json
+{"comment": {"comment_id": 61, "reply_to": null, "reply_to_request": null},
+ "resolutions": [{"comment_id": 41, "resolution": {"at": "2026-11-03T11:30:00.000000Z",
+   "by": "codex", "by_person": false, "text": "Review 2026-11-03"}},
+  {"comment_id": 43, "resolution": null}]}
+```
+
 ### Creating an item with its claim, steps and links
 
 `create_work_item` (`POST /api/planning/work-items`) also takes three optional
@@ -589,6 +743,10 @@ What moves to the survivor:
 - the discussion comments, including those bound to a step;
 - the requests, so a pending one goes on standing on the survivor and can be
   answered there;
+- **since 2.5**, comments move by thread: a comment root moves with its replies
+  and its resolved mark, a report's thread stays with the report on the merged
+  item, and the replies under a question move with the question. `moved.comments`
+  counts the rows that moved;
 - the refs, except one the survivor already has, which stays where it was;
 - the links, each in its own direction: `MAIN-13 blocks MAIN-20` becomes
   `MAIN-12 blocks MAIN-20`. A link to the survivor or to another item of the
@@ -1021,6 +1179,26 @@ does not move this item's window. Order is the call rows' ids.
 | `fields` | for `edited`: the fields it changed |
 | `text` | what it said, at most 300 characters, the last one `…` when cut: a comment's body, a report's `done`, an answer as `label: choice` pairs and its note, the prompt of a question asked, declined or withdrawn, an edit's fields as they read now, a step's or a link's detail; absent when there is nothing to quote |
 
+**Since 2.5**, four more kinds:
+
+| `kind` | When | Also carries |
+| --- | --- | --- |
+| `reply` | a person replied in a thread; a new root is still told as `comment` | `comment_id`; `reply_to` or `reply_to_request`, the root; `text`, the reply |
+| `thread_resolved` | a person marked a root resolved | `comment_id`; `text`, the decision |
+| `thread_reopened` | a person removed the mark | `comment_id` |
+| `question_changed` | a person changed a given answer | `request_id`; `text`, the new answer and `was: …` the one it replaced, within the 300 characters |
+
+```json
+{"kind": "reply", "via": "interface", "at": "2026-11-03T10:12:00.000000Z",
+ "comment_id": 57, "reply_to": 41, "text": "Agreed, take the second option."}
+{"kind": "question_changed", "via": "interface", "at": "2026-11-03T12:00:00.000000Z",
+ "request_id": "7d1c2a9e-3f4b-4c5d-8e6f-0a1b2c3d4e5f",
+ "text": "route: Threads; was: route: Flat"}
+```
+
+All four count in the window and in the `person_spoke` guard as any act of a
+person does.
+
 The whole text is in `get_work_item` and `get_work_item_request`. Filing an item,
 attaching a session and a recorded override are never told. A drag within a
 state, or an edit that changed nothing, says nothing.
@@ -1070,17 +1248,66 @@ option was not given it does not say on the way back. The fields of one question
 fit in 64 KiB as stored, and a refusal names the limit.
 
 `answer_work_item_request` and `POST /api/modules/planning/request/answer` take
-`answers` and an optional `note` of at most 8000 characters. A non-empty note stands
-in for required fields, so `answers` may be `{}` and a person can answer in their
-own words; an answer that is given is still checked against its field. A read gives
-`answers` and `note` apart: `{}` and the note for such an answer, and `note: null`
-when there is none. An answer is final, a second one is refused, and a comment over
-an open question is not an answer.
+`answers` and an optional `note` of at most 8000 characters. A comment over an open
+question is not an answer, and neither is a reply in its thread.
 
-A question stays a request. It writes no comment and the store's schema does not
-change: a note is kept in `answers_json` under the key `_note`, which no field id
-can take. A reader that opens `answers_json` itself, or a build from before notes,
-sees that key among the answers.
+**Since 2.5**, an answer has four parts, each optional where the field allows it:
+
+| Part | Shape | Meaning |
+| --- | --- | --- |
+| `answers` | `{field: value}` | the chosen option, options or text of a field |
+| `own` | `{field: text}`, at most 8000 characters each | the person's own variant of a `choice`, `multi_choice` or `boolean` field. It replaces the choice of a `choice` or `boolean` field, so that field takes one or the other, and stands beside the chosen options of a `multi_choice`. A `text` field has none: its text is already free |
+| `field_notes` | `{field: text}`, at most 2000 characters each | a comment on a field with options; refused on a `text` field, whose text is its own comment |
+| `note` | text, at most 8000 characters | a comment on the whole question |
+
+A required field is answered when it has a value or an own variant. **The note no
+longer stands in for required fields**: an answer that leaves one out is refused,
+naming it, with `answer <field> is required; give an option or your own variant in
+own; a note no longer stands in for a field`. An answer given before 2.5 with a note
+in place of a field stays as it was written and reads as that field unanswered and
+a comment on the question.
+
+A question stays a request and writes no comment. The answer in force is kept in
+`answers_json` as one flat object, with three keys no field id can take: `_own`,
+`_notes` and `_note`.
+
+```json
+{"route": "threads", "areas": ["ui", "mcp"],
+ "_own": {"release": "In a week, after acceptance"},
+ "_notes": {"route": "Threads serve the digest too"},
+ "_note": "A comment on the whole question"}
+```
+
+Every read gives the parts apart, as `answers`, `own`, `field_notes` and `note`. A
+reader that opens `answers_json` itself, or a build from before 2.5, sees those
+keys among the answers.
+
+**Changing an answer**, since 2.5. A given answer can be changed while its item is
+open, by a person or by an agent: `answer_work_item_request` with `change: true`,
+or `POST /api/modules/planning/request/change` (`/api/planning/request/change` on
+the neutral boundary). The body is the answer's, with the request's
+`expected_revision` required:
+
+```json
+{"project_id": "example-project", "data_scope_id": "…", "space_key": "MAIN",
+ "id": "7d1c2a9e-3f4b-4c5d-8e6f-0a1b2c3d4e5f", "expected_revision": 2,
+ "author": "user", "answers": {"route": "threads"}, "own": {},
+ "field_notes": {"route": "Threads serve the digest too"}, "note": ""}
+```
+
+A change keeps the replaced answer as a version, writes the new one in its place,
+raises `answer_version` and the request's `revision`, moves `resolved_at` to the
+time of the change and writes the history event `request_changed` with the
+request's id as its detail. A reader that asks with `answered_after` therefore
+gets a changed answer as a new one. Refused, with nothing written:
+
+- an answer equal to the one in force, with `invalid_request` (`unchanged`);
+- a request that is not answered, an item that is closed, and a request with 50
+  versions, with `workflow_guard`;
+- a stale `expected_revision`, with `revision_conflict`.
+
+An answer without `change` is still given once: a second one is refused with
+`workflow_guard`. Who changed it is in `by_person` of each version.
 
 An agent reads a question three ways:
 
@@ -1123,6 +1350,59 @@ that it keeps its first fields and leaves out the rest. An item that lost anythi
 this way carries `clipped: true`, and one that lost nothing has no such key. The
 whole text is in `get_work_item_request` and in the list with `full: true`.
 
+**Since 2.5**, a row of `answer` carries `own` and `note` (the field's comment) when
+there are any, and a field answered only with its own variant has a row with
+`value: null`. A question carries `answer_version`, `replies` (how many replies
+its thread has) and `last_reply` (as a thread root carries it, or `null`), and from
+version 2 on `previous`, the version the answer in force replaced:
+
+```json
+{"id": "…", "status": "answered", "question": "Which way?",
+ "answer": [{"field": "route", "value": "threads", "label": "Threads",
+             "note": "Threads serve the digest too"},
+            {"field": "release", "value": null, "label": null,
+             "own": "In a week, after acceptance"}],
+ "note": "A comment on the whole question", "answered_by": "user", "by_person": true,
+ "answered_at": "2026-11-03T12:00:00.000000Z", "answer_version": 2,
+ "previous": {"answer": [{"field": "route", "value": "flat", "label": "Flat"}],
+              "note": null, "answered_at": "2026-11-03T09:00:00.000000Z"},
+ "replies": 1, "last_reply": {"id": 45, "author": "codex", "by_person": false,
+   "at": "2026-11-03T09:25:00.000000Z", "body": "Does the second option include the docs?"}}
+```
+
+`answered_at` is when the answer in force was given; the first answer's time is that
+of version 1. `previous` is the first thing left out when a question runs past 2000
+characters, and its loss is marked with `clipped` as any other.
+
+The whole form -- `get_work_item_request`, the list with `full: true`, an export and
+the interface's reads (`GET /api/modules/planning/request` and
+`GET /api/modules/planning/requests`) -- carries, since 2.5, `own`, `field_notes`,
+`answer_version` and `history`. `own` and `field_notes` are `null` while `answers`
+is, and `{}` for an answer without them. `answer_version` is 0 with no answer, 1 for
+the first one and one more for each change. `history` holds the replaced versions,
+oldest first, `[]` when there is none:
+
+```json
+{"request_id": "7d1c2a9e-3f4b-4c5d-8e6f-0a1b2c3d4e5f", "status": "answered",
+ "answers": {"route": "threads"}, "own": {"release": "In a week, after acceptance"},
+ "field_notes": {"route": "Threads serve the digest too"},
+ "note": "A comment on the whole question", "answer_version": 2,
+ "answered_by": "user", "by_person": true, "resolved_at": "2026-11-03T12:00:00.000000Z",
+ "revision": 3,
+ "history": [{"version": 1, "answers": {"route": "flat"}, "own": {}, "field_notes": {},
+              "note": null, "answered_by": "codex", "by_person": false,
+              "answered_at": "2026-11-03T09:00:00.000000Z"}]}
+```
+
+(The request's other keys are as before and left out here.) A version's
+`by_person` is read from the call that gave it, and the answer in force takes its
+`by_person` from the latest `request_answered` or `request_changed` event.
+`get_work_item_request`, and its HTTP read `GET /api/planning/request`, also carry
+`replies`: the question's whole thread, as comments in the flat form. No other read
+of a question carries it: the interface and an export read those replies among the
+item's comments, where they are not duplicated. `answer_text`, the one line a notice
+and a refusal quote, includes own variants and comments.
+
 `by_person` says whether the call that closed the question was a browser write, as
 [above](#call-identity) defines it: true for one, false for any other call that
 answered, declined or withdrew it, and null while no call has, which covers a question
@@ -1137,7 +1417,9 @@ That is the boundary of local credentials, not a proof of who was at the keyboar
 `search_work_items` also reads a question's prompt, the labels and descriptions of
 its fields and options, its answers and its note, and a row found that way carries
 `question_hit`, the prompt. An option that was offered and not chosen is found too.
-An export carries every question in `planning.requests`, whole.
+An export carries every question in `planning.requests`, whole. Since 2.5 a search
+also reads own variants and field comments, and the decision of a resolved mark
+with the comments.
 
 The browser's mapped search and request endpoints return exact project and
 Planning-space identities. Their list envelopes include source coverage and a

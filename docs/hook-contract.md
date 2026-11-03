@@ -316,12 +316,32 @@ Codex proves its session in every call.
 - **The orchestrator**, a hook input without `agent_id`, is told about every
   item its session holds, its subagents' steps included. It keeps the whole and
   hands work out, so the notice asks it to pass the news on with `SendMessage`
-  to a subagent that is waiting or finished.
-- **A subagent**, a hook input with `agent_id`, is told only about the items
-  where it holds the claim or a step itself. A subagent that holds nothing is
-  told nothing: give the work you hand out a step it claims.
+  to a subagent that is waiting or finished. Since 2.5 it is also told about
+  replies in threads its subagents started and answers to their questions.
+- **A subagent**, a hook input with `agent_id`, is told about the items where it
+  holds the claim or a step itself and, since 2.5, about replies in threads it
+  started and answers to questions it asked, wherever it holds nothing. A
+  subagent that holds nothing and started nothing is told nothing: give the
+  work you hand out a step it claims.
 - **An item that stopped being held** by the last write, a person cancelling it
   or taking the claim, is told once more and then dropped.
+
+**Since 2.5**, the author of a thread's root and the agent that asked a question
+are told too, beside the holders. The author is read from the call that wrote
+the root, or the call that wrote the question's `request_created` event:
+
+| Event | The item's holders | The author of the root or question | The author's orchestrator |
+| --- | --- | --- | --- |
+| `reply` in a comment's thread | yes | yes | yes |
+| `reply` in a question's thread | yes | yes | yes |
+| `question_answered`, `question_changed`, `question_declined` | yes | yes | yes |
+| `thread_resolved`, `thread_reopened` | yes | no: a decision on a line is not addressed to its author | -- |
+| any other kind | yes | -- | -- |
+
+An orchestrator and its subagent that are both addressed are told once each. When
+the author's session has ended, the holders are still told, and the next agent
+write still answers with `from_person`. For an item it does not hold, a recipient
+reads only the events addressed to it there.
 
 Every recipient is told each event once. Where an item's news starts the first
 time is the recipient's own last write on it, which is where the answer to that
@@ -361,6 +381,20 @@ instruction to the agent or permission for an irreversible action. The text
 calls itself a Valkama notice and is not written as a system message: a model
 rightly refuses text that poses as one. A notice keeps the newest 8 events that
 fit in 2400 characters and counts the rest.
+
+**Since 2.5**, a notice's head says it is about "work this session holds or
+threads it started", and a reply's line says whose thread it is: to the author of
+the root, and to the orchestrator of another agent's thread, which passes it on
+with `SendMessage`:
+
+```text
+- reply at 2026-11-03T10:12:00Z in your thread #41: «Agreed, take the second option.»
+- reply at 2026-11-03T10:12:00Z in thread #41 of agent reviewer-2: «Agreed, take the second option.»
+```
+
+The other new kinds read as the earlier ones do: `thread_resolved` quotes the
+decision, `thread_reopened` names the root, and `question_changed` quotes the new
+answer and the one it replaced.
 
 ### The watcher
 
