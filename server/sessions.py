@@ -263,6 +263,48 @@ def touch(
     return current
 
 
+def record_place(
+    conn: sqlite3.Connection,
+    session_id: str,
+    *,
+    opened_in: str,
+    opened_host: str,
+    opened_folder: str,
+    host_session_id: str,
+    current: bool,
+) -> None:
+    """Say where a session start found its session open, inside the caller's transaction.
+
+    A start is the one event that says where a session now is, so a current
+    one replaces all four columns, the empty ones too: an id Desktop gave the
+    session, left behind after it moved to VS Code, would send it back to
+    Desktop. A start that is history (`current` is `touch`'s answer for it)
+    places only a row that has no place yet: it waited in the spool while a
+    later event went in directly, and nothing newer says where the session is.
+    """
+
+    conn.execute(
+        "UPDATE sessions SET opened_in = ?, opened_host = ?, opened_folder = ?,"
+        " host_session_id = ? WHERE id = ? AND (? OR (opened_in = '' AND opened_host = ''"
+        " AND opened_folder = '' AND host_session_id = ''))",
+        (opened_in, opened_host, opened_folder, host_session_id, session_id, current),
+    )
+
+
+def note_opened_in(conn: sqlite3.Connection, session_id: str, opened_in: str) -> None:
+    """Move how a session is open after a confirmed call reported it, inside the caller's transaction.
+
+    A client can resume a session without a session start, so the call is then
+    the only report. It names how the session is open and not in what, so the
+    other place columns stay as the last start left them.
+    """
+
+    conn.execute(
+        "UPDATE sessions SET opened_in = ? WHERE id = ? AND opened_in != ?",
+        (opened_in, session_id, opened_in),
+    )
+
+
 def name_agent(
     conn: sqlite3.Connection,
     parent_session_id: str,

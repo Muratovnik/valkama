@@ -154,6 +154,16 @@ def _apply_to_sessions(conn: sqlite3.Connection, event: HookEvent) -> None:
         cwd=event.cwd or "",
         transcript_path=event.transcript_path or "",
     )
+    if event.kind == "session_start" and event.opened_in is not None:
+        sessions.record_place(
+            conn,
+            top,
+            opened_in=event.opened_in,
+            opened_host=event.opened_host or "",
+            opened_folder=event.cwd or "",
+            host_session_id=event.host_session_id or "",
+            current=current,
+        )
     if event.kind == AGENT_LAUNCH:
         # The event's agent is the one it started, not the one it came from. The
         # label reaches this row only: `execution_events` can never be edited, and

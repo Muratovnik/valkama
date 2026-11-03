@@ -251,6 +251,64 @@ exists: a foreground agent's answer comes after its stop, and that answer is not
 sign of its life. A label is written whatever the event's time, because it says the
 same thing however late it is delivered.
 
+## Where a session is open
+
+No hook input says where its session runs. The hook process inherits the
+environment of the client that started it, so `session-start` reads where the
+session is open from these variables and keeps only what they select:
+
+| Variable | Client | What it tells |
+| --- | --- | --- |
+| `CLAUDE_CODE_ENTRYPOINT` | Claude Code | `claude-vscode`, `claude-desktop…`, `cli`, `sdk-…`; any other value places nothing |
+| `CLAUDE_CODE_SESSION_KIND` | Claude Code | `bg` or `daemon-worker`: a background session |
+| `CLAUDE_CODE_HOST_SESSION_ID` | Claude Code | the id Claude Desktop knows the session by |
+| `TERM_PROGRAM` | both | `vscode`: the integrated terminal of VS Code or a fork |
+| `TERMINAL_EMULATOR` | both | `JetBrains…`: a JetBrains IDE's terminal |
+| `CODEX_INTERNAL_ORIGINATOR_OVERRIDE` | Codex | `codex_vscode`: the Codex extension for VS Code |
+
+Nothing else is read from the environment. On Windows a session start also
+reads the executable names of at most eight processes above the hook, from one
+process snapshot: `Code.exe`, `Code - Insiders.exe`, `Cursor.exe` and
+`Windsurf.exe` name the VS Code product, a JetBrains IDE's `…64.exe` names
+JetBrains, `WindowsTerminal.exe` and `OpenConsole.exe` a terminal, and
+`ChatGPT.exe` the Codex app. The nearest of them counts. Names only: no path,
+argument or process id is read. No other event reads them, and a snapshot that
+fails costs the product name and never the event.
+
+What is kept is three values:
+
+| Field | Values |
+| --- | --- |
+| `opened_in` | `ide` (an extension's panel), `ide-terminal` (a CLI in an IDE's terminal), `terminal`, `background`, `app` (Claude Desktop or the Codex app), `headless` (`claude -p` and the SDKs), or empty when unknown |
+| `opened_host` | `vscode`, `vscode-insiders`, `cursor`, `windsurf`, `jetbrains`, `claude-desktop`, `codex-app`, or empty |
+| `host_session_id` | for a Claude Desktop session only, the id when it is `local_` followed by 1 to 64 letters, digits or hyphens; otherwise empty |
+
+The value of a variable is never stored, only the member it selects, and a
+Desktop id of another form is dropped. A Codex session that runs as a Valkama
+execution attempt is told apart by its attempt, not by the hook.
+
+**The session row.** A session start writes the place into `sessions` with the
+folder it started in (`opened_folder`, its `cwd`). A current start replaces all
+four columns, the empty ones too, so a session resumed in another client is
+open there from then on. A start older than the row's `last_seen` places the
+session only when the row has no place yet: it waited in the spool while a
+later event was written directly. The place never goes into
+`execution_events`.
+
+**Tool calls.** A client can resume a session without `SessionStart`. For
+Claude Code, the identity transform reads the same variables, never the process
+snapshot, and adds `"place": "<opened_in>"` to `_identity` when it is known. A
+confirmed call whose `place` differs from the row's changes `opened_in` and
+nothing else: the variables tell how a session is open, not in which product. A
+`place` outside the values above is ignored, and the call stays confirmed. A
+server that predates places ignores the key. Codex has no transform, and its
+sessions are placed by `SessionStart` alone.
+
+**The spool.** A line that carries a place is version 2 and has the three
+fields; only a session start has them. Every other line is version 1, the shape
+a build that predates places reads, and this build reads both. Such a build
+sets a version 2 line aside as `*.rejected`.
+
 ## The identity transform
 
 `valkama hook claude pre-tool-use` is a pure stdin-to-stdout transform for

@@ -19,6 +19,7 @@ import io
 import json
 import os
 import sys
+import tempfile
 import unittest
 from typing import ClassVar
 from unittest import mock
@@ -26,7 +27,8 @@ from unittest import mock
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from server.hooks import entry, normalize, place
+from server import store
+from server.hooks import entry, ingest, normalize, place, spool
 
 UID_A = "00000000-0000-4000-8000-0000000000a1"
 UID_B = "00000000-0000-4000-8000-0000000000b2"
@@ -441,6 +443,159 @@ class IdentityPlaceTests(unittest.TestCase):
         self.assertEqual(0, status)
         identity = json.loads(out.getvalue())["hookSpecificOutput"]["updatedInput"]["_identity"]
         self.assertEqual("ide", identity["place"])
+
+
+class PlaceStoreCase(unittest.TestCase):
+    """A throwaway store at the current schema, and the spool beside it."""
+
+    def setUp(self) -> None:
+        self.home = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(self.home.cleanup)
+        self.path = os.path.join(self.home.name, "store", "valkama.sqlite3")
+        patch = mock.patch.dict(
+            os.environ,
+            {"VALKAMA_DB": self.path, "HOME": self.home.name, "USERPROFILE": self.home.name},
+        )
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.conn = store.connect()
+        self.addCleanup(self.conn.close)
+        self.spool = spool.directory(self.path)
+
+    def write(self, *records: normalize.HookEvent) -> None:
+        conn = ingest.open_light(self.path, store.STORE_SCHEMA_VERSION)
+        self.addCleanup(conn.close)
+        ingest.write(conn, [(record, None) for record in records], delivery="direct")
+
+    def drain(self) -> ingest.DrainResult:
+        conn = ingest.open_light(self.path, store.STORE_SCHEMA_VERSION)
+        self.addCleanup(conn.close)
+        return ingest.drain(conn, self.spool)
+
+    def spool_event(self, record: normalize.HookEvent) -> None:
+        spool.write(
+            self.spool,
+            record,
+            occurred_ns=int(record.occurred_at[14:16]) * 10**10 + 1,
+            spooled_at="2026-10-31T11:00:00.000Z",
+            reason="busy",
+        )
+
+    def where(self, session_id: str = "S") -> tuple[str, str, str, str]:
+        row = self.conn.execute(
+            "SELECT opened_in, opened_host, opened_folder, host_session_id FROM sessions"
+            " WHERE id = ?",
+            (session_id,),
+        ).fetchone()
+        assert row is not None
+        return tuple(row)  # type: ignore[return-value]
+
+
+class PlaceStoreTests(PlaceStoreCase):
+    def test_a_session_start_records_where_and_in_which_folder(self) -> None:
+        self.write(session_start("2026-10-31T10:00:00.000Z", cwd="C:/demo/app", where=DESKTOP))
+        self.assertEqual(("app", "claude-desktop", "C:/demo/app", DESKTOP_ID), self.where())
+
+    def test_resume_in_another_client_changes_the_place(self) -> None:
+        self.write(session_start("2026-10-31T10:00:00.000Z", cwd="C:/demo", where=DESKTOP))
+        self.write(
+            session_start(
+                "2026-10-31T10:30:00.000Z",
+                uid=UID_B,
+                cwd="C:/demo/wt",
+                where=VSCODE,
+                source="resume",
+            )
+        )
+        # Every column is replaced, the empty ones too: a Desktop id left behind
+        # would send the session back to Desktop.
+        self.assertEqual(("ide", "vscode", "C:/demo/wt", ""), self.where())
+        self.write(
+            session_start(
+                "2026-10-31T11:00:00.000Z", uid=UID_C, where=place.Place(), source="resume"
+            )
+        )
+        self.assertEqual(("", "", "C:/demo", ""), self.where())
+
+    def test_an_old_spooled_start_does_not_overwrite_a_newer_place(self) -> None:
+        self.spool_event(session_start("2026-10-31T10:00:00.000Z", cwd="C:/old", where=VSCODE))
+        self.write(
+            session_start("2026-10-31T10:30:00.000Z", uid=UID_B, cwd="C:/new", where=DESKTOP)
+        )
+        self.assertEqual(1, self.drain().files)
+        self.assertEqual(("app", "claude-desktop", "C:/new", DESKTOP_ID), self.where())
+
+    def test_a_late_start_still_places_a_session_that_has_no_place(self) -> None:
+        # The start waited in the spool while a later event went in directly:
+        # it is history, but nothing newer says where the session is.
+        self.spool_event(session_start("2026-10-31T10:00:00.000Z", cwd="C:/demo", where=VSCODE))
+        stop = normalize.lifecycle_event(
+            "claude",
+            "stop",
+            {"session_id": "S", "cwd": "C:/demo/sub"},
+            event_uid=UID_B,
+            occurred_at="2026-10-31T10:05:00.000Z",
+        )
+        assert stop is not None
+        self.write(stop)
+        self.assertEqual(1, self.drain().files)
+        self.assertEqual(("ide", "vscode", "C:/demo", ""), self.where())
+
+    def test_a_start_without_a_place_leaves_the_place_alone(self) -> None:
+        self.write(session_start("2026-10-31T10:00:00.000Z", where=DESKTOP))
+        os.makedirs(self.spool, exist_ok=True)
+        name = os.path.join(self.spool, f"{10**18:020d}-{UID_B}.jsonl")
+        with open(name, "wb") as handle:
+            line = json.loads(PRE_PLACE_LINE) | {
+                "event_uid": UID_B,
+                "occurred_at": "2026-10-31T10:30:00.000Z",
+                "cwd": "C:/other",
+            }
+            handle.write(json.dumps(line).encode() + b"\n")
+        self.assertEqual(1, self.drain().files)
+        self.assertEqual(("app", "claude-desktop", "C:/demo", DESKTOP_ID), self.where())
+
+    def test_the_place_is_not_written_into_the_event_log(self) -> None:
+        self.write(session_start("2026-10-31T10:00:00.000Z", where=DESKTOP))
+        row = self.conn.execute("SELECT * FROM execution_events").fetchone()
+        self.assertNotIn(DESKTOP_ID, [value for value in tuple(row) if isinstance(value, str)])
+
+
+class EntryPlaceTests(PlaceStoreCase):
+    def run_hook(self, event: str, payload: dict, variables: dict[str, str]) -> None:
+        cleared = dict.fromkeys(place.VARIABLES, "")
+        with mock.patch.dict(os.environ, {**cleared, **variables}):
+            status = entry.main(
+                ["claude", event], io.BytesIO(json.dumps(payload).encode()), io.BytesIO()
+            )
+        self.assertEqual(0, status)
+
+    def test_a_session_start_reads_the_variables_and_the_ancestors(self) -> None:
+        with mock.patch.object(place, "ancestors", return_value=("claude.exe", "Cursor.exe")):
+            self.run_hook(
+                "session-start",
+                {"session_id": "S", "cwd": "C:/demo", "hook_event_name": "SessionStart"},
+                {"CLAUDE_CODE_ENTRYPOINT": "claude-vscode"},
+            )
+        self.assertEqual(("ide", "cursor", "C:/demo", ""), self.where())
+
+    def test_other_events_read_no_ancestors_and_record_no_place(self) -> None:
+        with mock.patch.object(place, "ancestors", side_effect=AssertionError("start only")):
+            self.run_hook(
+                "stop",
+                {"session_id": "S", "cwd": "C:/demo", "hook_event_name": "Stop"},
+                {"CLAUDE_CODE_ENTRYPOINT": "claude-desktop"},
+            )
+        self.assertEqual(("", "", "", ""), self.where())
+
+    def test_ancestors_that_cannot_be_read_cost_only_the_host(self) -> None:
+        with mock.patch.object(place, "ancestors", side_effect=OSError("snapshot refused")):
+            self.run_hook(
+                "session-start",
+                {"session_id": "S", "cwd": "C:/demo", "hook_event_name": "SessionStart"},
+                {"CLAUDE_CODE_ENTRYPOINT": "claude-vscode"},
+            )
+        self.assertEqual(("ide", "vscode", "C:/demo", ""), self.where())
 
 
 if __name__ == "__main__":

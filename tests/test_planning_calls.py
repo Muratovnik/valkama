@@ -222,5 +222,88 @@ class BrowserWriteTests(unittest.TestCase):
         self.assertEqual(answer["work_item_id"], row["work_item_id"])
 
 
+class PlaceArgumentTests(unittest.TestCase):
+    """`place` in `_identity`: how a Claude session is open, as its hook read it."""
+
+    def test_a_known_place_is_kept_and_anything_else_is_dropped_not_refused(self) -> None:
+        self.assertEqual(
+            {**HOOK, "place": "terminal"}, calls.identity_argument({**HOOK, "place": "terminal"})
+        )
+        for odd in ("", "browser", 7, None, ["ide"], "ide " * 3):
+            with self.subTest(place=odd):
+                self.assertEqual(HOOK, calls.identity_argument({**HOOK, "place": odd}))
+        identity = calls.verify_mcp(
+            {"claudecode/toolUseId": TOOL_USE}, {**HOOK, "place": "nowhere"}
+        )
+        self.assertEqual(("confirmed", None), (identity.state, identity.opened_in))
+
+    def test_only_a_claude_hook_names_the_place(self) -> None:
+        claude = calls.verify_mcp({"claudecode/toolUseId": TOOL_USE}, {**HOOK, "place": "ide"})
+        self.assertEqual("ide", claude.opened_in)
+        codex = calls.verify_mcp(
+            {"sessionId": SESSION, "callId": TOOL_USE}, {**HOOK, "place": "ide"}
+        )
+        self.assertIsNone(codex.opened_in)
+
+
+class HeartbeatPlaceTests(unittest.TestCase):
+    """A confirmed call whose place differs moves `opened_in` and nothing else."""
+
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(directory.cleanup)
+        root = Path(directory.name)
+        environment = mock.patch.dict(
+            os.environ,
+            {
+                "VALKAMA_DB": str(root / "valkama.sqlite3"),
+                "HOME": str(root),
+                "USERPROFILE": str(root),
+            },
+        )
+        environment.start()
+        self.addCleanup(environment.stop)
+        self.conn = store.connect()
+        self.addCleanup(self.conn.close)
+        self.conn.execute(
+            "INSERT INTO sessions(id, client, started_at, last_seen, opened_in, opened_host,"
+            " opened_folder, host_session_id) VALUES (?, 'claude', ?, ?, 'app',"
+            " 'claude-desktop', 'C:/demo', 'local_0000-demo')",
+            (SESSION, "2026-10-31T10:00:00Z", "2026-10-31T10:00:00Z"),
+        )
+        self.conn.commit()
+
+    def call(self, argument: dict, meta: dict | None = None) -> None:
+        identity = calls.verify_mcp(
+            meta if meta is not None else {"claudecode/toolUseId": TOOL_USE}, argument
+        )
+        with calls.bind(identity, "comment_work_item"):
+            calls.call_id(self.conn, None)
+        self.conn.commit()
+
+    def where(self) -> tuple:
+        return tuple(
+            self.conn.execute(
+                "SELECT opened_in, opened_host, opened_folder, host_session_id FROM sessions"
+                " WHERE id = ?",
+                (SESSION,),
+            ).fetchone()
+        )
+
+    def test_a_confirmed_call_from_another_place_changes_only_opened_in(self) -> None:
+        self.call({**HOOK, "place": "terminal"})
+        self.assertEqual(("terminal", "claude-desktop", "C:/demo", "local_0000-demo"), self.where())
+
+    def test_a_call_that_names_no_place_or_the_same_one_changes_nothing(self) -> None:
+        self.call(HOOK)
+        self.call({**HOOK, "place": "app"})
+        self.assertEqual(("app", "claude-desktop", "C:/demo", "local_0000-demo"), self.where())
+
+    def test_an_unconfirmed_call_moves_no_place(self) -> None:
+        self.call({**HOOK, "place": "terminal"}, meta={"claudecode/toolUseId": "toolu_other"})
+        self.call({**HOOK, "place": "terminal"}, meta={})
+        self.assertEqual("app", self.where()[0])
+
+
 if __name__ == "__main__":
     unittest.main()

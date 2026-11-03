@@ -41,6 +41,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from .. import sessions
+from ..hooks import place as places
 from . import model
 
 KIND = "planning_write"
@@ -104,6 +105,9 @@ class Identity:
     tool_use_id: str | None = None
     client: str | None = None
     client_version: str | None = None
+    #: How the session is open, as the Claude hook read it for this call; never
+    #: part of what was proved.
+    opened_in: str | None = None
 
 
 @dataclass
@@ -131,9 +135,11 @@ def _text(value: object) -> str | None:
 def identity_argument(value: object) -> dict[str, str] | None:
     """The hook's `_identity` object, or None when it is malformed.
 
-    The contract is `{"session_id", "tool_use_id", "agent_id"?, "agent_type"?}`,
-    each a string. Anything else in it is ignored. A malformed one is dropped,
-    never refused: the call is still the caller's work, only unconfirmed.
+    The contract is `{"session_id", "tool_use_id", "agent_id"?, "agent_type"?,
+    "place"?}`, each a string. Anything else in it is ignored. A malformed one is
+    dropped, never refused: the call is still the caller's work, only
+    unconfirmed. `place` is a hint rather than identity: one outside the closed
+    values is left out and costs the call nothing.
     """
 
     if not isinstance(value, Mapping):
@@ -149,6 +155,9 @@ def identity_argument(value: object) -> dict[str, str] | None:
             if text is None:
                 return None
             found[optional] = text
+    opened_in = value.get("place")
+    if isinstance(opened_in, str) and opened_in in places.OPENED_IN:
+        found["place"] = opened_in
     return found
 
 
@@ -204,6 +213,7 @@ def verify_mcp(
             tool_use_id=tool_use if tool_use is not None else claimed["tool_use_id"],
             client=client or "claude",
             client_version=client_version,
+            opened_in=claimed.get("place"),
         )
     return Identity(
         state=UNCONFIRMED,
@@ -382,7 +392,8 @@ def _heartbeat(conn: sqlite3.Connection, identity: Identity) -> None:
     would watch its own lease lapse while it writes. The call names the
     top-level session even inside a subagent, and that row is the one a lease
     follows. A missing row is created, as a hook event would. A session that
-    ended before this call was resumed by its client, so it is active again.
+    ended before this call was resumed by its client, so it is active again,
+    and when the call says it is open another way, that is where it is now.
     """
 
     if identity.state != CONFIRMED or identity.session_id is None:
@@ -391,6 +402,8 @@ def _heartbeat(conn: sqlite3.Connection, identity: Identity) -> None:
     if sessions.touch(conn, identity.session_id, client=identity.client or "", at=at):
         # A call made now, after the session's end, is that session resumed.
         sessions.resume(conn, identity.session_id, at=at)
+        if identity.opened_in:
+            sessions.note_opened_in(conn, identity.session_id, identity.opened_in)
 
 
 def acted_on(result: object) -> str | None:
