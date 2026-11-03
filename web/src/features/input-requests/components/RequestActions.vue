@@ -124,6 +124,18 @@ defineExpose({ focusWayOut })
   border-radius: var(--radius-control);
 }
 
+/* Where it cannot stand clear of Your own answer it covers that whole, rather than half a word. */
+@container (width <= 30rem) {
+  .request-asked {
+    inset-inline-start: 0;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    min-height: var(--size-control-height);
+    text-align: end;
+  }
+}
+
 /* A button that holds room for its other word. */
 .request-actions .request-held {
   flex-direction: column;

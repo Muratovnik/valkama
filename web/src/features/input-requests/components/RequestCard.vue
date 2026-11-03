@@ -371,6 +371,7 @@ defineExpose({ focus, focusOutcome, reveal })
   gap: var(--space-2) var(--space-3);
   align-items: center;
   min-width: 0;
+  container-type: inline-size;
 }
 
 .request-error {
