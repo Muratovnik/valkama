@@ -24,6 +24,13 @@ checkouts are therefore distinguishable even at the same version.
   only the labels stand, and each opens on its own press without selecting anything. What
   is chosen stands whole under the options and above Send, so nothing folded is sent
   unread, and choosing moves no row.
+- **No press on a question holding nothing writes,** whatever comes to stand under the
+  pointer, as when an agent answers the question above or asks a new one. "Don't answer" takes
+  two steps: the first press writes nothing and asks on the spot, with the way back in the very
+  box of that press and the way on in the box of Send, so pressing again without moving only
+  goes back. Escape goes back too without closing the card or the list, and choosing or writing
+  anything takes the step back. Send with nothing chosen or written writes nothing on any
+  question, required fields or not, and says at the first field what it wants.
 - **A mark in the card's facts** says a question is waiting and brings it into view from
   any section.
 - **An agent reads an answer without reading the discussion.** `get_work_item` carries
@@ -140,12 +147,12 @@ checkouts are therefore distinguishable even at the same version.
   in Chrome and in the desktop app. A tile out of sight is now laid out like any other, and
   a press on one just back in view reaches it. A lane still skips its layout, which a space
   of many lanes needs, and keeps the focus of a press inside it.
-- **A press cannot land on what rose under a still pointer.** A press at the point of the one
-  before, with no move between, reaches nothing inside a question unless it lands on the same
-  control, however long after it comes, and the scrim follows the same rule. So declining a
-  question cannot end the next one, and a double click on a tile leaves its card open with its
-  reading keys alive. Moving more than 3 px or turning the wheel ends that, and keys are never
-  held back.
+- **A second press reaches nothing it was not meant for.** A press at the point of the one
+  before, with no move between, reaches nothing inside a question or anywhere in a card's
+  thread unless it lands on the same control, however long after it comes, and the scrim
+  follows the same rule. So a double click cannot choose or send in the next question, and on
+  a tile it leaves the card open with its reading keys alive. Moving more than 3 px or turning
+  the wheel ends that, and keys are never held back.
 - **The keys that read work as soon as a card opens.** PageDown, PageUp, Home, End and the
   arrows scroll a card just opened, by address or from the board, and from its top bar; they
   did nothing until focus reached a control inside it. No ring appears on Close, and the
