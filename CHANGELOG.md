@@ -60,6 +60,11 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- **A press no longer lands on what the card's bar is fading out.** Scrolling a card
+  fades the reference line or the action out of its bar, and for the length of the fade
+  they still took a press: a press could go down on something already leaving, and lose
+  its click when the fade ended, so it did nothing. What has begun to fade takes no press
+  now, and a part a press went down on stays until the press ends.
 - **One failing stage of a hook costs no other.** A notice that raised no longer takes
   the lifecycle event of the same hook with it, and a session end writes the marker that
   stops its watcher first, so the watcher no longer outlives a `/clear` when the store
