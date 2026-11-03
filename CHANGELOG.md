@@ -25,7 +25,7 @@ checkouts are therefore distinguishable even at the same version.
   setting (`VALKAMA_NOTIFY=off`) switches this off.
 - **A card copies the link to its item.** The link button beside the reference in the
   card's head puts the item's short address, `/open/<number>` on the address Valkama is
-  served from, on the clipboard and says beside it whether the copy happened. The address
+  served from, on the clipboard and says in the same line whether the copy happened. The address
   opens the same card wherever it is followed, and the desktop app, which has no address
   bar, now has a way to give it.
 - **The desktop app has a context menu.** A right click offers "Copy link address" on a
@@ -69,6 +69,10 @@ checkouts are therefore distinguishable even at the same version.
   how a question ended, to the next question, to why a send failed — whatever was used
   before. A text field shows focus by turning its own edge blue, for a click as for Tab,
   with no ring around it.
+- **A note in a card's head is never cut.** What copying the reference, the link or the
+  plan anchor did is shown as a check, or a mark when it failed, with its words beside it
+  where they fit whole; the date shortens first to make room. A phone-wide card used to
+  show «Ссылка скопиров…». Screen readers hear the whole sentence either way.
 
 ## [2.4.0](https://github.com/Muratovnik/valkama/compare/v2.3.0...v2.4.0) - 2026-11-03
 
