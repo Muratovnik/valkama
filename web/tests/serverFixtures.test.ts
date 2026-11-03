@@ -16,11 +16,29 @@ import {
   validateInputRequestDetail,
   validateInputRequestList,
 } from '@/shared/api/inputRequestModel.ts'
+import {
+  OPEN_PLACES,
+  PATH_REFUSALS,
+  PLAN_REASONS,
+  PLAN_STATES,
+  validateOpenPlaces,
+  validateOpenPlan,
+} from '@/shared/api/openPlanModel.ts'
 import { validateCommentResolved, validateCommentWritten } from '@/shared/api/planningModel.ts'
 import {
   validatePlanningWorkItemBriefPayload,
   validatePlanningWorkItemPayload,
 } from '@/shared/api/platformPlanningPayload.ts'
+
+const STEP_KINDS = [
+  'focus-folder',
+  'open-link',
+  'resume-in-terminal',
+  'desktop-resume',
+  'open-file',
+  'copy',
+  'explain',
+] as const
 
 const directory = fileURLToPath(new URL('./fixtures/server/', import.meta.url))
 const read = (name: string): unknown => JSON.parse(readFileSync(`${directory}${name}`, 'utf8'))
@@ -36,12 +54,23 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'documents-refused.json': validateRefusal,
   'documents-resolve-unbound.json': validateResolved,
   'documents-resolve.json': validateResolved,
+  'open-places.json': validateOpenPlaces,
+  'open-plan-copy.json': validateOpenPlan,
+  'open-plan-file-desktop.json': validateOpenPlan,
+  'open-plan-file.json': validateOpenPlan,
+  'open-plan-folder.json': validateOpenPlan,
+  'open-plan-no-session.json': validateOpenPlan,
+  'open-plan-refused.json': validateOpenPlan,
+  'open-plan-session-desktop.json': validateOpenPlan,
+  'open-plan-session.json': validateOpenPlan,
   'request-answered.json': validateInputRequestDetail,
   'request-pending.json': validateInputRequestDetail,
   'requests.json': validateInputRequestList,
 }
 /** What only an agent reads: the MCP answers, which no web schema describes. */
 const agentOnly = new Set([
+  // The server's closed lists, which the test below holds the web's to.
+  'open-vocabulary.json',
   'mcp-get-work-item.json',
   'mcp-get-work-item-thread.json',
   'mcp-get-work-item-unresolved.json',
@@ -59,6 +88,16 @@ describe('the server fixtures', () => {
       expect(() => validate(read(name))).not.toThrow()
     },
   )
+
+  it('close the same lists of an open plan as the web does', () => {
+    expect(read('open-vocabulary.json')).toEqual({
+      places: [...OPEN_PLACES],
+      reasons: [...PLAN_REASONS],
+      path_refusals: [...PATH_REFUSALS],
+      states: [...PLAN_STATES],
+      steps: [...STEP_KINDS],
+    })
+  })
 
   it('name the executor at the claim, each step and each agent of a card', () => {
     const card = validatePlanningWorkItemPayload(read('card-executors.json'))

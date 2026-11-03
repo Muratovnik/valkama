@@ -7,9 +7,9 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { openTarget, REFUSAL_REASONS } from '@/features/session-open/openPlan.ts'
+import { openTarget, prepareOpen, REFUSAL_REASONS } from '@/features/session-open/openPlan.ts'
 import type { Outcome } from '@/features/session-open/openPlan.ts'
-import { outcomeWords, placeKey } from '@/features/session-open/placeWords.ts'
+import { actionKey, outcomeWords, placeKey } from '@/features/session-open/placeWords.ts'
 
 import {
   APP_REFUSALS,
@@ -56,6 +56,7 @@ function answer(...plans: unknown[]) {
 }
 
 beforeEach(() => {
+  i18n.global.locale.value = 'en'
   answers = []
   fetched.length = 0
   opened.mockReset()
@@ -176,7 +177,7 @@ describe('opening in a browser', () => {
     )
   })
 
-  it('carries a leading explanation as a notice beside what still opens', async () => {
+  it('runs nothing on the click an explanation comes first on; the next click acts', async () => {
     answer(
       plan({
         state: 'live',
@@ -184,7 +185,41 @@ describe('opening in a browser', () => {
       }),
     )
     const outcome = await openTarget(claude, defaults)
+    expect(opened).not.toHaveBeenCalled()
     expect(outcome).toMatchObject({ status: 'next', notice: { reason: 'live-in-terminal' } })
+    if (outcome.status !== 'next') return
+    expect(actionKey(outcome.next)).toBe('open.action.focus-folder')
+    const window = await outcome.next.run()
+    expect(opened.mock.calls.map(([link]) => link)).toEqual([FOLDER_LINK])
+    if (window.status !== 'next') throw new Error('expected the session after the window')
+    expect(actionKey(window.next)).toBe('open.action.open-link-in-window')
+  })
+
+  it('hands a panel the plan’s actions in order with none of them run', async () => {
+    answer(plan())
+    const prepared = await prepareOpen(claude, defaults)
+    expect(prepared.actions.map((action) => action.steps.map((step) => step.kind))).toEqual([
+      ['focus-folder'],
+      ['open-link'],
+    ])
+    expect(opened).not.toHaveBeenCalled()
+  })
+
+  it('says in a sentence where it opened, in the form the sentence takes', async () => {
+    const terminal = { opened_in: 'terminal', opened_host: '', source: 'recorded' }
+    const link = `claude-cli://open?q=%2Fresume%20${SESSION}`
+    answer(
+      plan({
+        place: { ...terminal, first_open: false },
+        opens: { ...terminal, missed: '' },
+        one_action: true,
+        steps: [{ kind: 'open-link', scheme: 'claude-cli', link }],
+      }),
+    )
+    const outcome = await openTarget(claude, defaults)
+    expect(outcomeWords(i18n.global.t, outcome)).toBe('Opened in a terminal')
+    i18n.global.locale.value = 'ru'
+    expect(outcomeWords(i18n.global.t, outcome)).toBe('Открыто в терминале')
   })
 
   it('reads a refused file as its path code', async () => {
@@ -282,6 +317,33 @@ function app(...answers: unknown[]) {
   Object.assign(window, { valkamaDesktop: { openSession: call } })
   return call
 }
+
+describe('naming what is not installed', () => {
+  it('names a known program, and no key path for one it has no word for', async () => {
+    answer(
+      plan({ opens: null, steps: [{ kind: 'explain', reason: 'not-installed', host: 'cursor' }] }),
+    )
+    expect(outcomeWords(i18n.global.t, await openTarget(claude, defaults))).toBe(
+      'Cursor is not installed.',
+    )
+    app({ ok: false, mode: 'refused', reason: 'not-installed', host: 'nano', next: null })
+    expect(outcomeWords(i18n.global.t, await openTarget(claude, defaults))).toBe(
+      'The program it opens in is not installed.',
+    )
+  })
+
+  it('refuses in a browser a command whose folder is not known, as the app does', async () => {
+    const settings = mergeSettings({
+      sessions: { claude: { fallback: 'vscode', always: 'custom', command: 'wt -d {cwd}' } },
+    })
+    answer({ kind: 'session', value: SESSION, resolved: true, detail: '', session: SESSION })
+    expect(await openTarget(claude, { settings })).toEqual({
+      status: 'refused',
+      refusal: { reason: 'no-folder' },
+    })
+    expect(writeText).not.toHaveBeenCalled()
+  })
+})
 
 describe('opening in the Valkama app', () => {
   // The app starts the editor itself, so a desktop plan's window step has no link.

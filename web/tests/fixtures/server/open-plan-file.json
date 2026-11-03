@@ -1,0 +1,32 @@
+{
+  "target": {
+    "kind": "file",
+    "project": "example-project",
+    "path": "docs/a.ts",
+    "line": 4
+  },
+  "surface": "browser",
+  "client": "",
+  "state": "none",
+  "place": {
+    "opened_in": "",
+    "opened_host": "",
+    "source": "none"
+  },
+  "opens": {
+    "opened_in": "ide",
+    "opened_host": "vscode",
+    "source": "fallback",
+    "missed": ""
+  },
+  "one_action": true,
+  "steps": [
+    {
+      "kind": "open-file",
+      "ide": "vscode",
+      "path": "/workspace/docs/a.ts",
+      "line": 4,
+      "link": "vscode://file//workspace/docs/a.ts:4:1"
+    }
+  ]
+}

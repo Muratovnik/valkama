@@ -5,11 +5,11 @@
  * The server decides where a target goes (`GET /api/open-plan`); nothing here
  * chooses a place by client. In the desktop app the page names only the target
  * and the owner's places, and the app reads the plan and runs it. A browser reads
- * the plan itself, follows its links and copies its commands. A browser lets a
- * page start an outside program only in answer to a person's action, and Chromium
- * refuses a second launch until there is another (its `external_protocol_handler`
- * blocks repeats between gestures), so a plan that is not `one_action` takes one
- * action per click on either surface: the first runs now and the next waits.
+ * the plan itself, follows its links and copies its commands. A browser may refuse a
+ * second launch of an outside program until the person acts again, and the app's
+ * link must not outrun the window it follows, so a plan that is not `one_action`
+ * takes one action per click on either surface: the first runs now and the next
+ * waits.
  *
  * Every outcome names a closed code, the server's, the app's or this module's,
  * and the words for each are in the dictionaries; an error's own text never
@@ -20,6 +20,7 @@ import { fetchSessionContext } from '@/shared/api/api.ts'
 import {
   APP_REFUSALS,
   fetchOpenPlan,
+  OPEN_PLACES,
   OpenPlanRequestError,
   PATH_REFUSALS,
   PLAN_REASONS,
@@ -63,20 +64,32 @@ export const REFUSAL_REASONS: readonly RefusalReason[] = [
   ...new Set<RefusalReason>([...PLAN_REASONS, ...APP_REFUSALS, ...PAGE_REFUSALS]),
 ]
 
+/** What can be not installed: the plan's places, and the two programs the app looks for. */
+const NOT_INSTALLED = [...OPEN_PLACES, 'claude-cli'] as const
+
 export interface Refusal {
   reason: RefusalReason
   /** Whether Valkama keeps a copy, for `gone`. */
   archived?: boolean
   /** Why a file or a folder opens nothing, for `path-refused`. */
   code?: ExplainStep['code']
-  /** What is not installed, for `not-installed`: a place, or the app's `claude-cli`. */
-  host?: string
+  /** What is not installed, for `not-installed`. */
+  host?: (typeof NOT_INSTALLED)[number]
 }
 
 /** One click's worth of a plan: the steps it carries out together. */
 export interface OpenAction {
   steps: OpenStep[]
   run(): Promise<Outcome>
+}
+
+/** A click's actions before any has run, for a panel that shows them in order. */
+export interface PreparedOpen {
+  /** The app's plan is its own, read at the click: there the first action is all there is. */
+  actions: OpenAction[]
+  /** What the plan says first or only: why it runs, why it opens nothing. */
+  notice: Refusal | null
+  plan: OpenPlan | null
 }
 
 export type Outcome =
@@ -100,6 +113,7 @@ type AppCall = (request: BridgeOpenRequest) => Promise<unknown>
 
 const KNOWN_REASONS = new Set<string>(REFUSAL_REASONS)
 const KNOWN_CODES = new Set<string>(PATH_REFUSALS)
+const KNOWN_HOSTS = new Set<string>(NOT_INSTALLED)
 
 /** A refusal from a plan's or the app's details; a reason without words is the app failing. */
 function refusalOf(detail: {
@@ -111,7 +125,8 @@ function refusalOf(detail: {
   const reason = detail.reason ?? ''
   if (!KNOWN_REASONS.has(reason)) return { reason: 'bridge-failed' }
   const refusal: Refusal = { reason: reason as RefusalReason }
-  if (detail.host !== undefined) refusal.host = detail.host
+  if (detail.host !== undefined && KNOWN_HOSTS.has(detail.host))
+    refusal.host = detail.host as Refusal['host']
   if (detail.code !== undefined && KNOWN_CODES.has(detail.code))
     refusal.code = detail.code as Refusal['code']
   if (detail.archived !== undefined) refusal.archived = detail.archived
@@ -283,11 +298,18 @@ async function runCustom(session: string, command: string): Promise<Outcome> {
   } catch {
     return refused('request-failed')
   }
-  const argv = customArgv(command, {
+  const values = {
     session: context.session ?? session,
     cwd: boundRoot(context),
     session_cwd: context.session_cwd || context.cwd || '',
-  })
+  }
+  // As the app refuses it: an empty folder would change what the command means.
+  if (
+    (command.includes('{cwd}') && !values.cwd) ||
+    (command.includes('{session_cwd}') && !values.session_cwd)
+  )
+    return refused('no-folder')
+  const argv = customArgv(command, values)
   return argv.length ? copyText(display(argv)) : refused('no-command')
 }
 
@@ -340,6 +362,13 @@ function planRefusal(plan: OpenPlan): Refusal {
   return last ? refusalOf(last) : { reason: 'no-session' }
 }
 
+function customAction(session: string, command: string): OpenAction {
+  return {
+    steps: [],
+    run: () => (session ? runCustom(session, command) : Promise.resolve(refused('no-command'))),
+  }
+}
+
 /**
  * The owner's places for a target. A session whose family the caller did not
  * name is planned once without them, which names its client; that plan is kept
@@ -366,24 +395,46 @@ async function placesFor(
 }
 
 /**
- * Open a target: the one function a button or a link in text calls. It carries
- * out the plan's first action now; when the plan needs another, the outcome holds
- * it as `next` for the person's next click.
+ * A click's actions, none of them run. The app reads its plan at the click and
+ * checks the process itself, so its one action asks and its answer says what
+ * follows, a panel's explanation included. A browser's plan is the page's own.
  */
-export async function openTarget(target: OpenTarget, choices: OpenChoices = {}): Promise<Outcome> {
+export async function prepareOpen(
+  target: OpenTarget,
+  choices: OpenChoices = {},
+): Promise<PreparedOpen> {
   const settings = currentSettings(choices)
   const app = appCall()
   try {
     const chosen = await placesFor(target, settings, app ? 'desktop' : 'browser')
-    if ('custom' in chosen)
-      return target.kind === 'session'
-        ? runCustom(target.session, chosen.custom)
-        : refused('no-command')
-    if (app) return await appAction({ app, target, places: chosen.places }, undefined, []).run()
+    if ('custom' in chosen) {
+      const session = target.kind === 'session' ? target.session : ''
+      return { actions: [customAction(session, chosen.custom)], notice: null, plan: null }
+    }
+    if (app) {
+      const asked = { app, target, places: chosen.places }
+      return { actions: [appAction(asked, undefined, [])], notice: null, plan: chosen.plan }
+    }
     const plan = chosen.plan ?? (await fetchOpenPlan(queryFor(target, 'browser', chosen.places)))
-    const first = browserActions(plan)[0]
-    return first ? await first.run() : { status: 'refused', refusal: planRefusal(plan) }
+    const actions = browserActions(plan)
+    const explained = plan.steps.some((step) => step.kind === 'explain')
+    return { actions, notice: explained ? planRefusal(plan) : null, plan }
   } catch (error) {
-    return refused(error instanceof OpenPlanRequestError ? error.code : 'request-failed')
+    const reason = error instanceof OpenPlanRequestError ? error.code : 'request-failed'
+    return { actions: [], notice: { reason }, plan: null }
   }
+}
+
+/**
+ * Open a target: the one function a button or a link in text calls. It carries
+ * out the plan's first action now, and when the plan needs another, the outcome
+ * holds it as `next` for the person's next click. An explanation comes first and
+ * nothing runs with it: the click shows why, and the next one acts.
+ */
+export async function openTarget(target: OpenTarget, choices: OpenChoices = {}): Promise<Outcome> {
+  const { actions, notice, plan } = await prepareOpen(target, choices)
+  const [first] = actions
+  if (!first) return { status: 'refused', refusal: notice ?? { reason: 'no-session' } }
+  if (notice) return { status: 'next', opens: plan?.opens ?? null, notice, next: first }
+  return first.run()
 }

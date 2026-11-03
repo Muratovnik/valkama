@@ -1,0 +1,29 @@
+{
+  "target": {
+    "kind": "session",
+    "session": "00000000-0000-4000-8000-000000000012",
+    "agent": ""
+  },
+  "surface": "browser",
+  "client": "claude",
+  "state": "ended",
+  "place": {
+    "opened_in": "app",
+    "opened_host": "claude-desktop",
+    "source": "recorded",
+    "first_open": false
+  },
+  "opens": {
+    "opened_in": "app",
+    "opened_host": "claude-desktop",
+    "source": "recorded",
+    "missed": ""
+  },
+  "one_action": true,
+  "steps": [
+    {
+      "kind": "copy",
+      "text": "claude --desktop --resume 00000000-0000-4000-8000-000000000012"
+    }
+  ]
+}

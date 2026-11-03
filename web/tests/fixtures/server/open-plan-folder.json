@@ -1,0 +1,30 @@
+{
+  "target": {
+    "kind": "folder",
+    "project": "example-project",
+    "path": "docs"
+  },
+  "surface": "browser",
+  "client": "",
+  "state": "none",
+  "place": {
+    "opened_in": "",
+    "opened_host": "",
+    "source": "none"
+  },
+  "opens": {
+    "opened_in": "ide",
+    "opened_host": "vscode",
+    "source": "fallback",
+    "missed": ""
+  },
+  "one_action": true,
+  "steps": [
+    {
+      "kind": "focus-folder",
+      "ide": "vscode",
+      "folder": "/workspace/docs",
+      "link": "vscode://file//workspace/docs"
+    }
+  ]
+}

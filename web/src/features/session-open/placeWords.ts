@@ -5,9 +5,7 @@
  * own text through.
  */
 
-import type { Outcome, Refusal } from '@/features/session-open/openPlan.ts'
-
-import type { OpenStep } from '@/shared/api/openPlanModel.ts'
+import type { OpenAction, Outcome, Refusal } from '@/features/session-open/openPlan.ts'
 
 type Translate = (key: string, values?: Record<string, unknown>) => string
 
@@ -23,9 +21,22 @@ export function placeKey(place: PlaceName): string {
   return word ? `open.place.${word}` : ''
 }
 
-/** What a button for one step says. */
-export function actionKey(step: OpenStep): string {
-  return step.kind === 'explain' ? '' : `open.action.${step.kind}`
+/** The phrase for being there, which a sentence takes: "in a terminal", «в терминале». */
+function whereKey(place: PlaceName): string {
+  return `open.where.${place.opened_host || place.opened_in}`
+}
+
+/**
+ * What a button for one action says. An editor's link follows the window just
+ * opened; an action whose steps the app alone knows is the opening itself.
+ */
+export function actionKey(action: OpenAction): string {
+  const step = action.steps.find(({ kind }) => kind !== 'explain')
+  if (!step) return 'session.open'
+  if (step.kind !== 'open-link') return `open.action.${step.kind}`
+  return ['claude', 'claude-cli', 'codex'].includes(step.scheme)
+    ? 'open.action.open-link'
+    : 'open.action.open-link-in-window'
 }
 
 function refusalWords(t: Translate, refusal: Refusal): string {
@@ -33,7 +44,7 @@ function refusalWords(t: Translate, refusal: Refusal): string {
     return t(`open.pathRefused.${refusal.code}`)
   if (refusal.reason === 'not-installed' && refusal.host) {
     const place = t(placeKey({ opened_in: '', opened_host: refusal.host }))
-    return t('open.refused.not-installed', { place })
+    return t('open.notInstalled', { place })
   }
   const words = t(`open.refused.${refusal.reason}`)
   return refusal.reason === 'gone' && refusal.archived ? `${words} ${t('open.archived')}` : words
@@ -46,6 +57,7 @@ export function outcomeWords(t: Translate, outcome: Outcome): string {
   // A notice before the next action says more than "now the next one".
   if (outcome.status === 'next')
     return outcome.notice ? refusalWords(t, outcome.notice) : t('open.outcome.next')
-  const key = outcome.opens ? placeKey(outcome.opens) : ''
-  return key ? t('open.outcome.opened', { place: t(key) }) : t('open.outcome.openedPlain')
+  return outcome.opens?.opened_in
+    ? t('open.outcome.opened', { where: t(whereKey(outcome.opens)) })
+    : t('open.outcome.openedPlain')
 }

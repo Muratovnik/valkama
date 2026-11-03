@@ -1,0 +1,23 @@
+{
+  "target": {
+    "kind": "session",
+    "session": "absent",
+    "agent": ""
+  },
+  "surface": "browser",
+  "client": "",
+  "state": "none",
+  "place": {
+    "opened_in": "",
+    "opened_host": "",
+    "source": "none"
+  },
+  "opens": null,
+  "one_action": false,
+  "steps": [
+    {
+      "kind": "explain",
+      "reason": "no-session"
+    }
+  ]
+}

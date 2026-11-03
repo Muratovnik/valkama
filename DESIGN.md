@@ -1014,8 +1014,9 @@ Installation health reports observed checks with their fixes. A switch is shown
 only when the Kernel actually owns that setting. Opening sessions and files states
 the rule first — a session opens where it was last open — then, per client family,
 where it falls back and an explicit "always open in" that says beside the family
-when it replaces the rule. Places a family's sessions cannot open in are omitted
-for that family rather than displayed as unusable choices.
+when it replaces the rule. Places a family's sessions cannot open in, and places
+not installed here, are omitted rather than displayed as unusable choices; one
+already chosen stays shown, with what it comes to beside it.
 
 ## Accessibility
 

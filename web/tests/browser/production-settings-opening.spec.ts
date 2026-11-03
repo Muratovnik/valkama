@@ -51,7 +51,7 @@ test('"always open in" is chosen from the keyboard, said beside the family and k
   await page.getByRole('option', { name: 'Terminal' }).press('Enter')
   await expect(always).toBeFocused()
   await expect(group.locator('.settings-opening-note')).toContainText(
-    'Every Codex session opens in Terminal',
+    'Every Codex session opens in a terminal',
   )
   await group.screenshot({ path: info.outputPath('opening-override.png') })
 
@@ -59,6 +59,27 @@ test('"always open in" is chosen from the keyboard, said beside the family and k
   await expect(page.getByRole('combobox', { name: 'Codex: Always open in' })).toContainText(
     'Terminal',
   )
+})
+
+test('a place that is not installed is not offered, and the command says what it takes', async ({
+  page,
+}, info) => {
+  await page.setViewportSize({ width: 390, height: 1800 })
+  const group = await openSection(page, 'Opening sessions and files')
+  await page.getByRole('combobox', { name: 'Editor for files' }).click()
+  await expect(page.getByRole('option', { name: 'VS Code', exact: true })).toBeVisible()
+  await expect(page.getByRole('option', { name: 'Cursor' })).toHaveCount(0)
+  await page.keyboard.press('Escape')
+
+  await page.getByRole('combobox', { name: 'Claude Code: Always open in' }).click()
+  await page.getByRole('option', { name: 'Your own command' }).click()
+  const command = group.getByRole('textbox', { name: 'Command' })
+  await expect(command).toBeVisible()
+  // The placeholders are named as they are typed, not filled in by the dictionary.
+  await expect(group).toContainText('{session}, {cwd} and {session_cwd}')
+  await expect(group).toContainText('Enter a command before selecting it.')
+  await expectNoSilentClipping(page, 'the command at 390px')
+  await group.screenshot({ path: info.outputPath('opening-command.png') })
 })
 
 test('the section keeps its edges and its words in a forced palette', async ({ page }, info) => {

@@ -223,6 +223,27 @@ export async function fetchOpenPlan(query: PlanQuery): Promise<OpenPlan> {
   return validateOpenPlan(answer.payload)
 }
 
+const placesSchema = strictObject({
+  places: z.record(enumField(OPEN_PLACES), z.boolean()),
+})
+
+export type OpenPlaces = z.infer<typeof placesSchema>['places']
+
+export function validateOpenPlaces(value: unknown): OpenPlaces {
+  return parseContract(placesSchema, value, 'places', (path, detail) => {
+    throw new OpenPlanRequestError('contract-invalid', `${path}: ${detail}`)
+  }).places
+}
+
+/** Which places this machine can open, as a plan reads it, for the settings to offer. */
+export async function fetchOpenPlaces(): Promise<OpenPlaces> {
+  const { payload, response } = await readJsonResponse('/api/open-places', {
+    headers: { Accept: 'application/json' },
+  })
+  if (!response.ok) throw new OpenPlanRequestError('request-failed', String(response.status))
+  return validateOpenPlaces(payload)
+}
+
 /**
  * What the page hands the desktop app (`valkama:open-session`): the target and the
  * owner's places, never a link or a command line. The app asks the server for the

@@ -85,7 +85,7 @@ async function open(action: OpenAction | null = null) {
         v-if="context.resolved && next"
         :disabled="busy"
         @click="open(next)"
-        >{{ t(actionKey(next.steps[0]!)) }}</VButton
+        >{{ t(actionKey(next)) }}</VButton
       >
       <VButton
         v-else-if="context.resolved"

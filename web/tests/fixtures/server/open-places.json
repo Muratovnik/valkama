@@ -1,0 +1,11 @@
+{
+  "places": {
+    "vscode": true,
+    "vscode-insiders": true,
+    "cursor": false,
+    "windsurf": true,
+    "terminal": true,
+    "claude-desktop": true,
+    "codex-app": true
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "places": [
+    "vscode",
+    "vscode-insiders",
+    "cursor",
+    "windsurf",
+    "terminal",
+    "claude-desktop",
+    "codex-app"
+  ],
+  "reasons": [
+    "no-session",
+    "invalid-session",
+    "unsupported-client",
+    "gone",
+    "live-headless",
+    "live-in-terminal",
+    "live-elsewhere",
+    "no-folder",
+    "not-installed",
+    "path-refused"
+  ],
+  "path_refusals": [
+    "project_unknown",
+    "invalid_path",
+    "outside_root",
+    "not_found",
+    "not_a_file",
+    "unreadable",
+    "directory",
+    "not_a_folder"
+  ],
+  "states": [
+    "live",
+    "ended",
+    "gone",
+    "headless",
+    "none"
+  ],
+  "steps": [
+    "focus-folder",
+    "open-link",
+    "resume-in-terminal",
+    "desktop-resume",
+    "open-file",
+    "copy",
+    "explain"
+  ]
+}

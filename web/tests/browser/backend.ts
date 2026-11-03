@@ -180,6 +180,18 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
           fulfill({ interface_version: 'valkama-planning-api', activity: activityRows() }),
         '/api/sessions': () => fulfill({ sessions: structuredClone(monitorSessions), inbox: [] }),
         '/api/session': () => fulfill(sessionContextFor(url.searchParams.get('id'))),
+        '/api/open-places': () =>
+          fulfill({
+            places: {
+              'vscode': true,
+              'vscode-insiders': false,
+              'cursor': false,
+              'windsurf': false,
+              'terminal': true,
+              'claude-desktop': true,
+              'codex-app': true,
+            },
+          }),
         '/api/execution/capabilities': () => fulfill(structuredClone(executionCapabilities)),
         '/api/memory/search': () => fulfill(structuredClone(memorySearch)),
         '/api/memory/providers': () => fulfill(structuredClone(memoryProviders)),

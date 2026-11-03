@@ -6,14 +6,14 @@
  * command. Files and folders open in one editor.
  */
 import { storeToRefs } from 'pinia'
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import SettingsGroup from '@/pages/settings/components/SettingsGroup.vue'
 import SettingsRow from '@/pages/settings/components/SettingsRow.vue'
 
-import { EDITORS } from '@/shared/api/openPlanModel.ts'
-import type { Editor, OpenPlace } from '@/shared/api/openPlanModel.ts'
+import { EDITORS, fetchOpenPlaces } from '@/shared/api/openPlanModel.ts'
+import type { Editor, OpenPlace, OpenPlaces } from '@/shared/api/openPlanModel.ts'
 import type { AlwaysChoice, SessionFamily } from '@/shared/lib/settings.ts'
 import {
   alwaysChoicesFor,
@@ -29,6 +29,20 @@ import VTextInput from '@/shared/ui/VTextInput.vue'
 
 const { t } = useI18n()
 const { settings } = storeToRefs(useSettingsStore())
+
+/** What this machine can open, as a plan reads it; until it is known, every place is offered. */
+const installed = ref<OpenPlaces | null>(null)
+const placesUnknown = ref(false)
+
+onMounted(async () => {
+  try {
+    installed.value = await fetchOpenPlaces()
+  } catch {
+    placesUnknown.value = true
+  }
+})
+
+const isMissing = (place: string) => installed.value?.[place as OpenPlace] === false
 
 const ICONS: Record<OpenPlace | 'custom' | '', ControlIconName> = {
   '': 'last-place',
@@ -46,13 +60,23 @@ function placeOption(place: OpenPlace): ChoiceOption {
   return { value: place, label: t(`open.place.${place}`), icon: ICONS[place] }
 }
 
+/**
+ * A place that is not installed is not offered. One already chosen stays shown, with
+ * what it means beside it, because the choice is the owner's and a plan passes it over.
+ */
+function offered<T extends string>(places: readonly T[], chosen: string): T[] {
+  return places.filter((place) => place === chosen || !isMissing(place))
+}
+
 function fallbackOptions(family: SessionFamily): ChoiceOption[] {
-  return placesFor(family).map((place) => placeOption(place))
+  const chosen = settings.value.sessions[family].fallback
+  return offered(placesFor(family), chosen).map((place) => placeOption(place))
 }
 
 /** A family Valkama cannot resume has nothing to fall back to: open by the command or not at all. */
 function alwaysOptions(family: SessionFamily): ChoiceOption[] {
-  return alwaysChoicesFor(family).map((choice) => {
+  const chosen = settings.value.sessions[family].always
+  return offered(alwaysChoicesFor(family), chosen).map((choice) => {
     if (choice === 'custom')
       return { value: choice, label: t('open.settings.custom'), icon: ICONS.custom }
     if (choice === '') {
@@ -64,7 +88,16 @@ function alwaysOptions(family: SessionFamily): ChoiceOption[] {
   })
 }
 
-const editorOptions = computed<ChoiceOption[]>(() => EDITORS.map((place) => placeOption(place)))
+const editorOptions = computed<ChoiceOption[]>(() =>
+  offered(EDITORS, settings.value.editor).map((place) => placeOption(place)),
+)
+
+/** What a chosen place that is not installed comes to. */
+function missingNote(chosen: string): string {
+  return chosen && isMissing(chosen)
+    ? t('open.settings.notInstalled', { place: t(`open.place.${chosen}`) })
+    : ''
+}
 
 /** While a place replaces the rule, the row says so: the click will not go where the session was. */
 function overridden(family: SessionFamily): string {
@@ -72,7 +105,7 @@ function overridden(family: SessionFamily): string {
   if (always === '' || always === 'custom') return ''
   return t('open.settings.overridden', {
     family: t(`open.settings.family.${family}`),
-    place: t(`open.place.${always}`),
+    where: t(`open.where.${always}`),
   })
 }
 
@@ -106,6 +139,17 @@ function selectEditor(value: string) {
     :title="t('open.settings.title')"
     :intro="t('open.settings.intro')"
   >
+    <template
+      v-if="placesUnknown"
+      #note
+    >
+      <p
+        class="settings-opening-unknown"
+        role="status"
+      >
+        {{ t('open.settings.placesUnknown') }}
+      </p>
+    </template>
     <SettingsRow
       v-for="family in SESSION_FAMILIES"
       :key="family"
@@ -126,6 +170,11 @@ function selectEditor(value: string) {
             :label="`${t(`open.settings.family.${family}`)}: ${t('open.settings.fallback')}`"
             @update:model-value="selectFallback(family, $event)"
           />
+          <small
+            v-if="missingNote(settings.sessions[family].fallback)"
+            class="settings-opening-note"
+            >{{ missingNote(settings.sessions[family].fallback) }}</small
+          >
         </span>
         <span class="settings-opening-lane">
           <small class="settings-opening-lane-label">{{ t('open.settings.always') }}</small>
@@ -137,6 +186,11 @@ function selectEditor(value: string) {
             :label="`${t(`open.settings.family.${family}`)}: ${t('open.settings.always')}`"
             @update:model-value="selectAlways(family, $event)"
           />
+          <small
+            v-if="missingNote(settings.sessions[family].always)"
+            class="settings-opening-note"
+            >{{ missingNote(settings.sessions[family].always) }}</small
+          >
         </span>
         <p
           v-if="overridden(family)"
@@ -170,6 +224,11 @@ function selectEditor(value: string) {
         :label="t('open.settings.editor')"
         @update:model-value="selectEditor"
       />
+      <small
+        v-if="missingNote(settings.editor)"
+        class="settings-opening-note"
+        >{{ missingNote(settings.editor) }}</small
+      >
     </SettingsRow>
   </SettingsGroup>
 </template>
@@ -195,6 +254,13 @@ function selectEditor(value: string) {
 .settings-opening-control {
   width: 100%;
   min-width: 0;
+}
+
+.settings-opening-unknown {
+  max-width: 72ch;
+  margin: 0;
+  color: var(--color-warning);
+  font: var(--font-note);
 }
 
 .settings-opening-note {

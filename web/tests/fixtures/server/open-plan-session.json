@@ -1,0 +1,36 @@
+{
+  "target": {
+    "kind": "session",
+    "session": "00000000-0000-4000-8000-000000000008",
+    "agent": ""
+  },
+  "surface": "browser",
+  "client": "claude",
+  "state": "live",
+  "place": {
+    "opened_in": "ide",
+    "opened_host": "vscode",
+    "source": "recorded",
+    "first_open": false
+  },
+  "opens": {
+    "opened_in": "ide",
+    "opened_host": "vscode",
+    "source": "recorded",
+    "missed": ""
+  },
+  "one_action": false,
+  "steps": [
+    {
+      "kind": "focus-folder",
+      "ide": "vscode",
+      "folder": "/workspace",
+      "link": "vscode://file//workspace"
+    },
+    {
+      "kind": "open-link",
+      "scheme": "vscode",
+      "link": "vscode://anthropic.claude-code/open?session=00000000-0000-4000-8000-000000000008"
+    }
+  ]
+}

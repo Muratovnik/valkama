@@ -1,0 +1,25 @@
+{
+  "target": {
+    "kind": "file",
+    "project": "example-project",
+    "path": "../x.md",
+    "line": null
+  },
+  "surface": "browser",
+  "client": "",
+  "state": "none",
+  "place": {
+    "opened_in": "",
+    "opened_host": "",
+    "source": "none"
+  },
+  "opens": null,
+  "one_action": false,
+  "steps": [
+    {
+      "kind": "explain",
+      "reason": "path-refused",
+      "code": "outside_root"
+    }
+  ]
+}
