@@ -1,4 +1,4 @@
-import type { OpenerCapability, OpenerKind } from '@/shared/lib/settings.ts'
+import type { BridgeOpenAnswer, BridgeOpenRequest } from '@/shared/api/openPlanModel.ts'
 import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
 
 export interface SourceOpenResult {
@@ -15,25 +15,14 @@ interface SourceOpenRequest {
 }
 
 interface ValkamaDesktopBridge {
-  /** Report the current shell's authoritative session-opening capabilities. */
-  listSessionOpeners(): Promise<OpenerCapability[]>
   /** Absent in a desktop app older than this page. */
   onOpenRoute?(listener: (route: string) => void): void
-  openSession?(request: {
-    client: string
-    id: string
-    opener: { command: string; kind: OpenerKind }
-    resource_ref: PlanningSpaceEntityRef | null
-    client_family?: 'codex' | 'claude' | 'other'
-    session_cwd?: string
-  }): Promise<{
-    mode: 'opened' | 'copied' | 'refused'
-    ok: boolean
-    command?: string
-    error?: string
-    source?: Record<string, unknown>
-  }>
   openSource(request: SourceOpenRequest): Promise<SourceOpenResult>
+  /**
+   * Carry out one action of an open plan. Absent in an app older than the plan,
+   * which leaves the page to carry the plan out as a browser does.
+   */
+  openTarget?(request: BridgeOpenRequest): Promise<BridgeOpenAnswer>
 }
 
 declare global {

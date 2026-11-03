@@ -1,8 +1,8 @@
 import { createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 
-import { flushPromises, mount } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mount } from '@vue/test-utils'
+import { beforeEach, describe, expect, it } from 'vitest'
 
 import SettingsGeneral from '@/pages/settings/components/SettingsGeneral.vue'
 
@@ -10,13 +10,7 @@ import { messages } from '@/shared/i18n/index.ts'
 import SelectionControl from '@/shared/ui/SelectionControl.vue'
 import VTextInput from '@/shared/ui/VTextInput.vue'
 
-const catalog = [
-  { kind: 'vscode' as const, availability: 'available' as const },
-  { kind: 'codex-app' as const, availability: 'available' as const },
-  { kind: 'terminal' as const, availability: 'unavailable' as const },
-  { kind: 'cursor' as const, availability: 'unavailable' as const },
-  { kind: 'custom' as const, availability: 'available' as const },
-]
+const FALLBACK = 'If the place is unknown or cannot be opened'
 
 function mountGeneral() {
   const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages })
@@ -27,97 +21,67 @@ function mountGeneral() {
   })
 }
 
-describe('SettingsGeneral opener catalog', () => {
-  beforeEach(() => {
-    localStorage.clear()
-    Object.assign(window, {
-      valkamaDesktop: {
-        listSessionOpeners: vi.fn().mockResolvedValue(catalog),
-      },
-    })
-  })
+/** One of the group's selects, by its accessible name. */
+function select(wrapper: ReturnType<typeof mountGeneral>, label: string) {
+  const found = wrapper
+    .findAllComponents(SelectionControl)
+    .find((control) => control.props('label') === label)
+  if (!found) throw new Error(`no select named ${label}`)
+  return found
+}
 
-  afterEach(() => {
-    Reflect.deleteProperty(window, 'valkamaDesktop')
-  })
+function values(wrapper: ReturnType<typeof mountGeneral>, label: string): string[] {
+  return select(wrapper, label)
+    .props('options')
+    .map(({ value }) => value)
+}
 
-  it('shows only compatible available desktop openers and repairs vanished selections', async () => {
+describe('SettingsGeneral opening sessions and files', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('offers each family only the places that can hold its sessions', () => {
     const wrapper = mountGeneral()
-    await flushPromises()
-
-    const controls = wrapper.findAllComponents(SelectionControl)
-    const claude = controls[1]
-    const codex = controls[2]
-    const other = controls[3]
-    expect(claude?.props('options').map(({ value }) => value)).toEqual(['vscode', 'custom'])
-    expect(codex?.props('options').map(({ value }) => value)).toEqual([
+    expect(wrapper.text()).toContain('A session opens where it was last open.')
+    expect(values(wrapper, `Claude Code: ${FALLBACK}`)).toEqual([
       'vscode',
-      'codex-app',
-      'custom',
+      'vscode-insiders',
+      'cursor',
+      'windsurf',
+      'terminal',
+      'claude-desktop',
     ])
-    expect(other?.props('options').map(({ value }) => value)).toEqual(['vscode', 'custom'])
-    expect(codex?.props('modelValue')).toBe('vscode')
-    expect(wrapper.findAll('.settings-general-opener-state')).toHaveLength(3)
-    expect(wrapper.findAll('[data-state="ready"]')).toHaveLength(3)
+    expect(values(wrapper, `Codex: ${FALLBACK}`)).toContain('codex-app')
+    expect(values(wrapper, `Codex: ${FALLBACK}`)).not.toContain('claude-desktop')
+    expect(values(wrapper, 'Other clients: Always open in')).toEqual(['', 'custom'])
+    expect(select(wrapper, 'Editor for files').props('modelValue')).toBe('vscode')
+  })
+
+  it('says beside the family when a place replaces the rule, and keeps it', async () => {
+    const wrapper = mountGeneral()
+    select(wrapper, 'Codex: Always open in').vm.$emit('update:modelValue', 'terminal')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.get('.settings-opening-note').text()).toContain(
+      'Every Codex session opens in Terminal',
+    )
+    const stored = JSON.parse(localStorage.getItem('valkama-settings') ?? '{}')
+    expect(stored.sessions.codex.always).toBe('terminal')
   })
 
   it('validates an empty custom command beside the field', async () => {
     const wrapper = mountGeneral()
-    await flushPromises()
-    const claude = wrapper.findAllComponents(SelectionControl)[1]
-    claude?.vm.$emit('update:modelValue', 'custom')
+    select(wrapper, 'Claude Code: Always open in').vm.$emit('update:modelValue', 'custom')
     await wrapper.vm.$nextTick()
-
-    const command = wrapper.getComponent(VTextInput)
-    command.vm.$emit('update:modelValue', '')
-    await wrapper.vm.$nextTick()
-
-    expect(wrapper.get('[role="alert"]').text()).toBe('Enter a command before selecting it.')
-  })
-
-  it('uses the bounded browser catalog when the desktop check fails', async () => {
-    Object.assign(window, {
-      valkamaDesktop: {
-        listSessionOpeners: vi.fn().mockRejectedValue(new Error('C:\\private\\probe.log')),
-      },
-    })
-    const wrapper = mountGeneral()
-    await flushPromises()
-
-    expect(wrapper.get('.settings-general-catalog-note').text()).toContain(
-      'Application availability could not be checked',
+    expect(wrapper.getComponent(VTextInput).props('error')).toBe(
+      'Enter a command before selecting it.',
     )
-    expect(wrapper.text()).not.toContain('C:\\private\\probe.log')
-    expect(
-      wrapper
-        .findAllComponents(SelectionControl)[2]
-        ?.props('options')
-        .map(({ value }) => value),
-    ).toEqual(['vscode', 'custom'])
-    expect(wrapper.findAllComponents(SelectionControl)[2]?.props('modelValue')).toBe('terminal')
   })
 
-  it('treats an existing bridge without the mandatory catalog method as failed discovery', async () => {
-    Object.assign(window, { valkamaDesktop: { openSource: vi.fn() } })
+  it('shows what an older build stored, translated', () => {
+    localStorage.setItem(
+      'valkama-settings',
+      JSON.stringify({ openers: { claude: { kind: 'cursor', command: '' } } }),
+    )
     const wrapper = mountGeneral()
-    await flushPromises()
-
-    expect(wrapper.find('.settings-general-catalog-note').exists()).toBe(true)
-    expect(wrapper.findAllComponents(SelectionControl)[2]?.props('modelValue')).toBe('terminal')
-  })
-
-  it('uses the shared empty state when discovery finds no available destination', async () => {
-    Object.assign(window, {
-      valkamaDesktop: {
-        listSessionOpeners: vi
-          .fn()
-          .mockResolvedValue(catalog.map((entry) => ({ ...entry, availability: 'unavailable' }))),
-      },
-    })
-    const wrapper = mountGeneral()
-    await flushPromises()
-
-    expect(wrapper.get('.data-empty').text()).toContain('No session opener is available')
-    expect(wrapper.findAllComponents(SelectionControl)).toHaveLength(1)
+    expect(select(wrapper, `Claude Code: ${FALLBACK}`).props('modelValue')).toBe('cursor')
   })
 })

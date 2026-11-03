@@ -4,7 +4,7 @@ import type { EntityRef } from '@/shared/api/platformEntityRef.ts'
 
 export type RefKind = 'session' | 'commit' | 'memory' | 'url'
 
-export type SpaceRootStatus = 'mapped' | 'missing' | 'ambiguous' | 'malformed' | 'unavailable'
+type SpaceRootStatus = 'mapped' | 'missing' | 'ambiguous' | 'malformed' | 'unavailable'
 
 export type PlanningSpaceEntityRef = Extract<EntityRef, { resource_id: string }> & {
   kind: 'planning-space'
@@ -17,7 +17,7 @@ export type PlanningSpaceEntityRef = Extract<EntityRef, { resource_id: string }>
  * an unreadable registry are three different problems, and collapsing them into
  * "not found" is what made this impossible to diagnose from the page.
  */
-export interface SpaceRootResolution {
+interface SpaceRootResolution {
   canonical_root: string | null
   reason: string
   resource_ref: PlanningSpaceEntityRef | null

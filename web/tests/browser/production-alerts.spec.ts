@@ -264,5 +264,11 @@ test('settings stored with the old notify fields open cleanly and lose them', as
   )
   expect(stored).not.toHaveProperty('notify')
   expect(stored).not.toHaveProperty('notifyEnabled')
-  expect(stored.openers.codex).toEqual({ kind: 'custom', command: 'wt {cwd}' })
+  // The old opener reads as the place it named, and the owner's command stays theirs.
+  expect(stored).not.toHaveProperty('openers')
+  expect(stored.sessions.codex).toEqual({
+    fallback: 'vscode',
+    always: 'custom',
+    command: 'wt {cwd}',
+  })
 })

@@ -9,6 +9,7 @@ import { doctorLoginMessages } from '@/shared/i18n/doctorLoginMessages.ts'
 import { globalFinderMessages } from '@/shared/i18n/globalFinderMessages.ts'
 import { inputRequestMessages } from '@/shared/i18n/inputRequestMessages.ts'
 import { memoryProviderMessages } from '@/shared/i18n/memoryProviderMessages.ts'
+import { openMessages } from '@/shared/i18n/openMessages.ts'
 /* English copy; tests/i18n.test.ts enforces parity with Russian keys. */
 import { platformIntegrationMessages } from '@/shared/i18n/platformIntegrationMessages.ts'
 import { richTextMessages } from '@/shared/i18n/richTextMessages.ts'
@@ -23,6 +24,7 @@ export const en = {
   workItemLink: workItemLinkMessages.en.workItemLink,
   history: activityMessages.en.history,
   alerts: alertMessages.en.alerts,
+  open: openMessages.en.open,
   checklistComment: checklistCommentMessages.en.checklistComment,
   threads: discussionThreadMessages.en.threads,
   finder: globalFinderMessages.en.finder,
@@ -668,64 +670,14 @@ export const en = {
     languageHint: 'Applies to the entire Valkama interface on this device.',
     searchOptions: 'Search options',
     noOptions: 'No matching options',
-    openers: 'Opening sessions',
-    openersIntro: 'Where each client opens from an active or completed session.',
-    openersEmpty: 'No session opener is available',
-    openersEmptyDetail: 'Install a supported application or configure a custom command.',
-    openerCatalogFallback:
-      'Application availability could not be checked. Browser-capable destinations are shown.',
-    openerAvailability: {
-      checking: 'Checking availability',
-      available: 'Available on this device',
-      unavailable: 'No available destination',
-    },
-    openerClient: {
-      claude: 'Claude Code',
-      codex: 'Codex',
-      other: 'Other clients',
-    },
-    openerClientHint: {
-      claude: 'Sessions from the Claude family.',
-      codex: 'Codex and Codex App sessions.',
-      other: 'Clients without a dedicated rule.',
-    },
-    customCommand: 'Command',
-    customCommandHint: 'The command receives the selected session folder and identifier.',
-    customCommandPlaceholder: 'Enter an opening command',
-    customCommandError: {
-      'required': 'Enter a command before selecting it.',
-      'too-long': 'Keep the command to 400 characters or fewer.',
-    },
-    stateLanes: {
-      availability: 'Availability',
-    },
+    opening: openMessages.en.settings,
     diagnostics: {
       needsAttention: 'Needs attention',
       passed: 'Passed checks',
     },
-    opener: {
-      'vscode': 'VS Code — session folder',
-      'codex-app': 'Codex App — open thread',
-      'terminal': 'Terminal — resume session',
-      'cursor': 'Cursor — session folder',
-      'custom': 'Custom command',
-    },
   },
   session: {
     open: 'Open session',
-    copied: 'Command copied — paste it into a terminal',
-    failed: 'Could not open the session: {message}',
-    refused: {
-      'no-cwd': 'This session reported no working directory to open.',
-      'no-session': 'There is no session identifier to resume.',
-      'no-command': 'Set the custom command in Settings first.',
-      'unsupported-client': 'This client does not provide a supported resume command.',
-      'invalid-session': 'The session id is not a canonical thread UUID.',
-      'desktop-required': 'This opener is available only in the desktop app.',
-      'opener-unavailable': 'The selected application is not installed or could not be detected.',
-      'space-root-unavailable':
-        'The exact Planning-space root is unavailable; the observed session directory is not launch authority.',
-    },
   },
   drawer: {
     close: 'Close',

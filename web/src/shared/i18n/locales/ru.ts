@@ -9,6 +9,7 @@ import { doctorLoginMessages } from '@/shared/i18n/doctorLoginMessages.ts'
 import { globalFinderMessages } from '@/shared/i18n/globalFinderMessages.ts'
 import { inputRequestMessages } from '@/shared/i18n/inputRequestMessages.ts'
 import { memoryProviderMessages } from '@/shared/i18n/memoryProviderMessages.ts'
+import { openMessages } from '@/shared/i18n/openMessages.ts'
 /* Русский каталог; tests/i18n.test.ts проверяет совпадение ключей. */
 import { platformIntegrationMessages } from '@/shared/i18n/platformIntegrationMessages.ts'
 import { richTextMessages } from '@/shared/i18n/richTextMessages.ts'
@@ -23,6 +24,7 @@ export const ru = {
   workItemLink: workItemLinkMessages.ru.workItemLink,
   history: activityMessages.ru.history,
   alerts: alertMessages.ru.alerts,
+  open: openMessages.ru.open,
   checklistComment: checklistCommentMessages.ru.checklistComment,
   threads: discussionThreadMessages.ru.threads,
   finder: globalFinderMessages.ru.finder,
@@ -667,64 +669,14 @@ export const ru = {
     languageHint: 'Применяется ко всему интерфейсу Valkama на этом устройстве.',
     searchOptions: 'Поиск по вариантам',
     noOptions: 'Подходящих вариантов нет',
-    openers: 'Открытие сессий',
-    openersIntro: 'Куда переходить из завершённой или активной сессии каждого клиента.',
-    openersEmpty: 'Нет доступного приложения для сессий',
-    openersEmptyDetail: 'Установите поддерживаемое приложение или задайте свою команду.',
-    openerCatalogFallback:
-      'Не удалось проверить доступность приложений. Показаны варианты, доступные в браузере.',
-    openerAvailability: {
-      checking: 'Проверяем доступность',
-      available: 'Доступно на этом устройстве',
-      unavailable: 'Нет доступного приложения',
-    },
-    openerClient: {
-      claude: 'Claude Code',
-      codex: 'Codex',
-      other: 'Другие клиенты',
-    },
-    openerClientHint: {
-      claude: 'Сессии семейства Claude.',
-      codex: 'Сессии Codex и Codex App.',
-      other: 'Клиенты без отдельного правила.',
-    },
-    customCommand: 'Команда',
-    customCommandHint: 'Команда получает каталог и идентификатор выбранной сессии.',
-    customCommandPlaceholder: 'Введите команду открытия',
-    customCommandError: {
-      'required': 'Введите команду перед выбором этого варианта.',
-      'too-long': 'Команда должна содержать не более 400 символов.',
-    },
-    stateLanes: {
-      availability: 'Доступность',
-    },
+    opening: openMessages.ru.settings,
     diagnostics: {
       needsAttention: 'Требует внимания',
       passed: 'Успешные проверки',
     },
-    opener: {
-      'vscode': 'VS Code — каталог сессии',
-      'codex-app': 'Codex App — открыть задачу',
-      'terminal': 'Терминал — возобновить сессию',
-      'cursor': 'Cursor — каталог сессии',
-      'custom': 'Своя команда',
-    },
   },
   session: {
     open: 'Открыть сессию',
-    copied: 'Команда скопирована — вставьте её в терминал',
-    failed: 'Не удалось открыть сессию: {message}',
-    refused: {
-      'no-cwd': 'Сессия не сообщила рабочий каталог.',
-      'no-session': 'Нет идентификатора сессии для возобновления.',
-      'no-command': 'Сначала задайте свою команду в настройках.',
-      'unsupported-client': 'Этот клиент не предоставляет поддерживаемую команду возобновления.',
-      'invalid-session': 'Идентификатор сессии не является каноническим UUID задачи.',
-      'desktop-required': 'Этот способ открытия доступен только в desktop-приложении.',
-      'opener-unavailable': 'Выбранное приложение не установлено или не удалось его обнаружить.',
-      'space-root-unavailable':
-        'Корень точного пространства планирования недоступен; наблюдаемый каталог сессии не даёт права запуска.',
-    },
   },
   drawer: {
     close: 'Закрыть',

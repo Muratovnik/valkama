@@ -60,7 +60,7 @@ test('every translation key written out in the source resolves in the catalog', 
   }
   assert.deepEqual(missing, [])
   // Known retained call sites keep a broken scanner from reporting a clean catalog.
-  for (const key of ['language.label', 'settings.interface', 'settings.openers']) {
+  for (const key of ['language.label', 'settings.interface', 'settings.opening.title']) {
     assert.ok(seen.has(key), `the scan missed the retained call site for ${key}`)
   }
 })
@@ -90,15 +90,12 @@ test('English and Russian catalogs translate checklist actors, activity, source 
   assert.equal(i18n.global.t('settings.title'), 'Valkama settings')
   assert.equal(i18n.global.t('alerts.event.question'), 'An answer or a decision is needed')
   assert.equal(
-    i18n.global.t('session.refused.no-cwd'),
-    'This session reported no working directory to open.',
+    i18n.global.t('open.refused.no-folder'),
+    'The session’s folder is unknown, so no window can be chosen for it.',
   )
   assert.equal(i18n.global.t('session.open'), 'Open session')
   assert.equal(i18n.global.t('workItem.relations'), 'Relations')
-  assert.equal(
-    i18n.global.t('session.refused.space-root-unavailable'),
-    'The exact Planning-space root is unavailable; the observed session directory is not launch authority.',
-  )
+  assert.equal(i18n.global.t('settings.opening.title'), 'Opening sessions and files')
   assert.equal(i18n.global.t('status.live'), 'Connected')
   assert.equal(i18n.global.t('workItem.back'), 'Back')
   assert.equal(i18n.global.t('graph.zoomIn'), 'Zoom in')
@@ -123,13 +120,13 @@ test('English and Russian catalogs translate checklist actors, activity, source 
   )
   assert.equal(i18n.global.t('settings.title'), 'Настройки Valkama')
   assert.equal(i18n.global.t('alerts.event.question'), 'Нужен ответ или решение')
-  assert.equal(i18n.global.t('session.refused.no-cwd'), 'Сессия не сообщила рабочий каталог.')
+  assert.equal(
+    i18n.global.t('open.refused.no-folder'),
+    'Папка сессии неизвестна, поэтому окно для неё не выбрать.',
+  )
   assert.equal(i18n.global.t('session.open'), 'Открыть сессию')
   assert.equal(i18n.global.t('workItem.relations'), 'Связи')
-  assert.equal(
-    i18n.global.t('session.refused.space-root-unavailable'),
-    'Корень точного пространства планирования недоступен; наблюдаемый каталог сессии не даёт права запуска.',
-  )
+  assert.equal(i18n.global.t('settings.opening.title'), 'Открытие сессий и файлов')
   assert.equal(i18n.global.t('status.live'), 'Подключено')
   assert.equal(i18n.global.t('workItem.back'), 'Назад')
   assert.equal(i18n.global.t('graph.zoomIn'), 'Приблизить')

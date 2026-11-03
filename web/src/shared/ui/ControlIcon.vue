@@ -8,20 +8,23 @@ import VIcon from '@/shared/ui/VIcon.vue'
 const props = defineProps<{ name: ControlIconName }>()
 
 const iconMap: Record<ControlIconName, IconName> = {
-  language: 'language',
-  vscode: 'client',
-  terminal: 'terminal',
-  command: 'settings',
-  cursor: 'cursor',
-  codex: 'client',
-  claude: 'client',
-  client: 'sessions',
-  memory: 'database',
-  board: 'board',
-  skills: 'skills',
-  search: 'search',
-  check: 'check',
-  chevron: 'chevron-down',
+  'language': 'language',
+  'vscode': 'client',
+  'terminal': 'terminal',
+  'command': 'settings',
+  'cursor': 'cursor',
+  'codex': 'client',
+  'claude': 'client',
+  'client': 'sessions',
+  // Back to where a thing last was, and a choice that does nothing.
+  'last-place': 'refresh',
+  'off': 'waiting',
+  'memory': 'database',
+  'board': 'board',
+  'skills': 'skills',
+  'search': 'search',
+  'check': 'check',
+  'chevron': 'chevron-down',
 }
 
 const icon = computed(() => iconMap[props.name])

@@ -7,6 +7,8 @@ export type ControlIconName =
   | 'codex'
   | 'claude'
   | 'client'
+  | 'last-place'
+  | 'off'
   | 'memory'
   | 'board'
   | 'skills'

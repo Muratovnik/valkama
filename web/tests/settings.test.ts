@@ -3,101 +3,112 @@ import assert from 'node:assert/strict'
 import { test } from 'vitest'
 
 import {
-  availableOpenerCapabilities,
-  browserOpenerCapabilities,
+  alwaysChoicesFor,
   DEFAULT_SETTINGS,
   mergeSettings,
-  openerClientOf,
-  openerFor,
-  openerKindsFor,
-  reconcileOpener,
+  placesFor,
+  sessionFamilyOf,
   validateCustomCommand,
 } from '@/shared/lib/settings.ts'
 
-test('defaults open each client where it can resume', () => {
-  assert.equal(DEFAULT_SETTINGS.openers.claude.kind, 'vscode')
-  assert.equal(DEFAULT_SETTINGS.openers.codex.kind, 'terminal')
-  assert.ok(browserOpenerCapabilities().some((item) => item.kind === 'codex-app'))
+const rule = { always: '', command: '' }
+
+/** What a build before this one stored, read now. */
+function stored(claude: unknown, codex: unknown, other?: unknown) {
+  return mergeSettings({ openers: { claude, codex, other } }).sessions
+}
+
+test('by default a session opens where it was last open, else in VS Code, and files in VS Code', () => {
+  assert.deepEqual(DEFAULT_SETTINGS.sessions.claude, { fallback: 'vscode', ...rule })
+  assert.deepEqual(DEFAULT_SETTINGS.sessions.codex, { fallback: 'vscode', ...rule })
+  assert.equal(DEFAULT_SETTINGS.editor, 'vscode')
 })
 
-test('merge completes any stored fragment into a valid structure', () => {
-  const merged = mergeSettings({
-    openers: { claude: { kind: 'custom', command: 'wt -d {cwd}' }, codex: 7 },
+test('each opener a build before this one stored becomes the place it named', () => {
+  // Two of them opened the session's folder; the folder's editor is now the fallback.
+  assert.deepEqual(stored({ kind: 'vscode', command: '' }, null).claude, {
+    fallback: 'vscode',
+    ...rule,
   })
-  assert.deepEqual(merged.openers.claude, { kind: 'custom', command: 'wt -d {cwd}' })
-  assert.deepEqual(merged.openers.codex, DEFAULT_SETTINGS.openers.codex)
-  assert.deepEqual(mergeSettings(null), DEFAULT_SETTINGS)
-  assert.deepEqual(mergeSettings('garbage'), DEFAULT_SETTINGS)
+  assert.deepEqual(stored({ kind: 'cursor', command: '' }, null).claude, {
+    fallback: 'cursor',
+    ...rule,
+  })
+  assert.deepEqual(stored(null, { kind: 'terminal', command: '' }).codex, {
+    fallback: 'terminal',
+    ...rule,
+  })
+  assert.deepEqual(stored(null, { kind: 'codex-app', command: '' }).codex, {
+    fallback: 'codex-app',
+    ...rule,
+  })
+  // The owner's command is an explicit replacement, for every session of the family.
+  assert.deepEqual(stored(null, null, { kind: 'custom', command: 'wt -d {cwd}' }).other, {
+    fallback: 'vscode',
+    always: 'custom',
+    command: 'wt -d {cwd}',
+  })
+  // A command typed and then left for another opener is not lost either.
+  assert.equal(
+    stored({ kind: 'terminal', command: 'x {session}' }, null).claude.command,
+    'x {session}',
+  )
 })
 
-test('settings stored by a build that kept notify fields read cleanly and lose them', () => {
-  const stored = {
+test('an old opener another client cannot hold, or no build ever had, falls back to VS Code', () => {
+  const sessions = mergeSettings({
+    openers: { claude: { kind: 'codex-app', command: '' }, codex: { kind: 'codex', command: '' } },
+  }).sessions
+  assert.equal(sessions.claude.fallback, 'vscode')
+  assert.equal(sessions.codex.fallback, 'vscode')
+})
+
+test('the current shape wins over the old one and is kept as written', () => {
+  const merged = mergeSettings({
+    editor: 'windsurf',
+    sessions: { claude: { fallback: 'claude-desktop', always: 'terminal', command: '' } },
+    openers: { claude: { kind: 'cursor', command: '' } },
+  })
+  assert.deepEqual(merged.sessions.claude, {
+    fallback: 'claude-desktop',
+    always: 'terminal',
+    command: '',
+  })
+  assert.equal(merged.editor, 'windsurf')
+})
+
+test('settings stored with the notify fields of older builds read cleanly and lose them', () => {
+  const merged = mergeSettings({
     notifyEnabled: false,
     notify: { itemCompleted: false, agentWaiting: true },
     openers: { claude: { kind: 'terminal', command: '' } },
-  }
-  assert.deepEqual(mergeSettings(stored), {
-    openers: {
-      ...DEFAULT_SETTINGS.openers,
-      claude: { kind: 'terminal', command: '' },
-    },
   })
+  assert.deepEqual(Object.keys(merged).toSorted(), ['editor', 'sessions'])
+  assert.equal(merged.sessions.claude.fallback, 'terminal')
 })
 
-test('an opener association is picked by client family, not exact string', () => {
-  assert.equal(openerClientOf('claude'), 'claude')
-  assert.equal(openerClientOf('Claude Code'), 'claude')
-  assert.equal(openerClientOf('codex'), 'codex')
-  assert.equal(openerClientOf('gemini'), 'other')
-  const settings = mergeSettings({ openers: { other: { kind: 'custom', command: 'x {session}' } } })
-  assert.equal(openerFor('gemini', settings).kind, 'custom')
-  assert.equal(openerFor('codex', settings).kind, 'terminal')
+test('anything else stored becomes the defaults rather than a broken structure', () => {
+  assert.deepEqual(mergeSettings(null), DEFAULT_SETTINGS)
+  assert.deepEqual(mergeSettings('garbage'), DEFAULT_SETTINGS)
+  assert.deepEqual(mergeSettings({ openers: 7, editor: 'notepad' }), DEFAULT_SETTINGS)
+  const odd = mergeSettings({
+    sessions: { claude: { fallback: 'codex-app', always: 'claude', command: 3 } },
+  })
+  assert.deepEqual(odd.sessions.claude, { fallback: 'vscode', ...rule })
 })
 
-test('browser-only opener discovery exposes only actions the browser can perform', () => {
-  const settings = mergeSettings({ openers: { codex: { kind: 'cursor', command: '' } } })
-  assert.equal(settings.openers.codex.kind, 'cursor')
-  assert.deepEqual(
-    availableOpenerCapabilities('codex', browserOpenerCapabilities()).map(({ kind }) => kind),
-    ['vscode', 'custom'],
-  )
-  assert.equal(
-    reconcileOpener('codex', settings.openers.codex, browserOpenerCapabilities()).kind,
-    'vscode',
-  )
+test('a family is offered only the places that can hold its sessions', () => {
+  assert.ok(placesFor('claude').includes('claude-desktop'))
+  assert.equal(placesFor('claude').includes('codex-app'), false)
+  assert.ok(placesFor('codex').includes('codex-app'))
+  assert.equal(placesFor('codex').includes('claude-desktop'), false)
+  assert.deepEqual(alwaysChoicesFor('other'), ['', 'custom'])
 })
 
-test('the desktop Codex app is distinct and obsolete opener ids are not aliases', () => {
-  const selected = mergeSettings({ openers: { codex: { kind: 'codex-app', command: '' } } })
-  assert.equal(selected.openers.codex.kind, 'codex-app')
-  const obsolete = mergeSettings({ openers: { claude: { kind: 'codex', command: '' } } })
-  assert.equal(obsolete.openers.claude.kind, 'vscode')
-})
-
-test('client opener menus are the exact compatibility and availability intersection', () => {
-  const catalog = [
-    { kind: 'vscode' as const, availability: 'available' as const },
-    { kind: 'codex-app' as const, availability: 'available' as const },
-    { kind: 'terminal' as const, availability: 'unavailable' as const },
-    { kind: 'cursor' as const, availability: 'unavailable' as const },
-    { kind: 'custom' as const, availability: 'available' as const },
-  ]
-  assert.ok(openerKindsFor('codex').includes('codex-app'))
-  assert.equal(openerKindsFor('claude').includes('codex-app'), false)
-  assert.equal(openerKindsFor('other').includes('codex-app'), false)
-  assert.equal(openerKindsFor('other').includes('terminal'), false)
-  assert.deepEqual(
-    availableOpenerCapabilities('claude', catalog).map(({ kind }) => kind),
-    ['vscode', 'custom'],
-  )
-  assert.deepEqual(
-    availableOpenerCapabilities('codex', catalog).map(({ kind }) => kind),
-    ['vscode', 'codex-app', 'custom'],
-  )
-  assert.equal(
-    mergeSettings({ openers: { claude: { kind: 'codex-app', command: '' } } }).openers.claude.kind,
-    'vscode',
-  )
+test('a session family is picked by prefix, not exact string', () => {
+  assert.equal(sessionFamilyOf('Claude Code'), 'claude')
+  assert.equal(sessionFamilyOf('codex'), 'codex')
+  assert.equal(sessionFamilyOf('gemini'), 'other')
 })
 
 test('custom commands use one bounded inline validation contract', () => {

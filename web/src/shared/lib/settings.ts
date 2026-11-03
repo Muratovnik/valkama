@@ -1,136 +1,134 @@
-const OPENER_KINDS = ['vscode', 'codex-app', 'terminal', 'cursor', 'custom'] as const
-export type OpenerKind = (typeof OPENER_KINDS)[number]
-type OpenerAvailability = 'available' | 'unavailable' | 'unknown'
+/**
+ * The owner's local preferences for opening sessions and files.
+ *
+ * A session opens where it was last open; the server decides that. What the owner
+ * sets here is only what the rule falls back to, per client family, and an
+ * explicit "always open in …" that replaces the rule for a family. A file or a
+ * folder opens in one editor. `mergeSettings` is the one reader of what a build
+ * stored, including the shape every build before this one wrote.
+ */
+
+import { EDITORS } from '@/shared/api/openPlanModel.ts'
+import type { Editor, OpenPlace } from '@/shared/api/openPlanModel.ts'
+
+/** Sessions are set per client family; a client Valkama cannot resume is `other`. */
+export const SESSION_FAMILIES = ['claude', 'codex', 'other'] as const
+export type SessionFamily = (typeof SESSION_FAMILIES)[number]
+/** "Always open in": nothing (the rule), a place, or the owner's own command. */
+export type AlwaysChoice = '' | OpenPlace | 'custom'
 export type CustomCommandError = 'required' | 'too-long'
 
-export interface OpenerCapability {
-  availability: OpenerAvailability
-  kind: OpenerKind
-}
-
-/** How one client's sessions open; `command` is read only for `custom`. */
-export interface SessionOpener {
+export interface SessionOpening {
+  always: AlwaysChoice
+  /** Read only for `always: 'custom'`, and kept when another choice is made. */
   command: string
-  kind: OpenerKind
+  /** Where a session goes when its place is unknown or cannot be opened. */
+  fallback: OpenPlace
 }
 
-/** Openers are associated per client; unknown clients use `other`. */
-const OPENER_CLIENTS = ['claude', 'codex', 'other'] as const
-export type OpenerClient = (typeof OPENER_CLIENTS)[number]
-
-const COMPATIBLE_OPENERS: Record<OpenerClient, readonly OpenerKind[]> = {
-  claude: ['vscode', 'terminal', 'cursor', 'custom'],
-  codex: OPENER_KINDS,
-  other: ['vscode', 'cursor', 'custom'],
+export interface PlatformSettings {
+  editor: Editor
+  sessions: Record<SessionFamily, SessionOpening>
 }
 
 export const MAX_CUSTOM_COMMAND_LENGTH = 400
 
-export interface PlatformSettings {
-  openers: Record<OpenerClient, SessionOpener>
+const EDITOR_PLACES: readonly OpenPlace[] = EDITORS
+/** The places that can hold a family's sessions: another client's app cannot. */
+const FAMILY_PLACES: Record<SessionFamily, readonly OpenPlace[]> = {
+  claude: [...EDITOR_PLACES, 'terminal', 'claude-desktop'],
+  codex: [...EDITOR_PLACES, 'terminal', 'codex-app'],
+  // Valkama knows no way to resume these; only the owner's command opens them.
+  other: [],
 }
 
+const DEFAULT_OPENING: SessionOpening = { fallback: 'vscode', always: '', command: '' }
+
 export const DEFAULT_SETTINGS: PlatformSettings = {
-  openers: {
-    claude: { kind: 'vscode', command: '' },
-    codex: { kind: 'terminal', command: '' },
-    other: { kind: 'vscode', command: '' },
+  editor: 'vscode',
+  sessions: {
+    claude: { ...DEFAULT_OPENING },
+    codex: { ...DEFAULT_OPENING },
+    other: { ...DEFAULT_OPENING },
   },
 }
 
-export function openerKindsFor(client: OpenerClient): readonly OpenerKind[] {
-  return COMPATIBLE_OPENERS[client]
+export function placesFor(family: SessionFamily): readonly OpenPlace[] {
+  return FAMILY_PLACES[family]
 }
 
-function asOpener(raw: unknown, fallback: SessionOpener, client: OpenerClient): SessionOpener {
-  if (typeof raw !== 'object' || raw === null) return { ...fallback }
-  const candidate = raw as Record<string, unknown>
+export function alwaysChoicesFor(family: SessionFamily): readonly AlwaysChoice[] {
+  return ['', ...FAMILY_PLACES[family], 'custom']
+}
+
+function record(raw: unknown): Record<string, unknown> {
+  return typeof raw === 'object' && raw !== null && !Array.isArray(raw)
+    ? (raw as Record<string, unknown>)
+    : {}
+}
+
+function text(value: unknown): string {
+  return typeof value === 'string' ? value : ''
+}
+
+function fallbackOf(family: SessionFamily, value: unknown): OpenPlace {
+  return placesFor(family).includes(value as OpenPlace) ? (value as OpenPlace) : 'vscode'
+}
+
+function alwaysOf(family: SessionFamily, value: unknown): AlwaysChoice {
+  return alwaysChoicesFor(family).includes(value as AlwaysChoice) ? (value as AlwaysChoice) : ''
+}
+
+function opening(family: SessionFamily, raw: unknown): SessionOpening {
+  const source = record(raw)
   return {
-    kind: openerKindsFor(client).includes(candidate.kind as OpenerKind)
-      ? (candidate.kind as OpenerKind)
-      : fallback.kind,
-    command: typeof candidate.command === 'string' ? candidate.command : fallback.command,
+    fallback: fallbackOf(family, source.fallback),
+    always: alwaysOf(family, source.always),
+    command: text(source.command),
   }
 }
 
 /**
- * Stored settings become one complete structure in the current schema. Anything
+ * What a build before this one stored: one opener per family, of which `vscode`
+ * and `cursor` opened the session's folder rather than the session. Each becomes
+ * the fallback it named, and the owner's command stays the owner's command.
+ */
+function translated(family: SessionFamily, raw: unknown): SessionOpening {
+  const source = record(raw)
+  const command = text(source.command)
+  return source.kind === 'custom'
+    ? { ...DEFAULT_OPENING, always: 'custom', command }
+    : { fallback: fallbackOf(family, source.kind), always: '', command }
+}
+
+/**
+ * Stored settings become one complete structure in the current shape. Anything
  * else in the stored value goes, such as the `notify` fields of older builds.
  */
 export function mergeSettings(raw: unknown): PlatformSettings {
-  const source = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>
-  const openerSource = (
-    typeof source.openers === 'object' && source.openers !== null ? source.openers : {}
-  ) as Record<string, unknown>
-  const openers = {} as Record<OpenerClient, SessionOpener>
-  for (const client of OPENER_CLIENTS) {
-    openers[client] = asOpener(openerSource[client], DEFAULT_SETTINGS.openers[client], client)
+  const source = record(raw)
+  const current = record(source.sessions)
+  const former = record(source.openers)
+  const sessions = {} as Record<SessionFamily, SessionOpening>
+  for (const family of SESSION_FAMILIES) {
+    if (family in current) sessions[family] = opening(family, current[family])
+    else if (family in former) sessions[family] = translated(family, former[family])
+    else sessions[family] = { ...DEFAULT_OPENING }
   }
-  return { openers }
+  const editor = EDITORS.includes(source.editor as Editor) ? (source.editor as Editor) : 'vscode'
+  return { editor, sessions }
 }
 
-/** Which opener association covers this session's client string. */
-export function openerClientOf(client: string): OpenerClient {
+/** Which family's settings cover this session's client string. */
+export function sessionFamilyOf(client: string): SessionFamily {
   const normalized = client.trim().toLowerCase()
   if (normalized.startsWith('claude')) return 'claude'
   if (normalized.startsWith('codex')) return 'codex'
   return 'other'
 }
 
-export function openerFor(client: string, settings: PlatformSettings): SessionOpener {
-  return settings.openers[openerClientOf(client)]
-}
-
-/** Remove malformed and duplicate IPC entries without inventing missing capabilities. */
-export function normalizeOpenerCapabilities(raw: unknown): OpenerCapability[] {
-  if (!Array.isArray(raw)) return []
-  const byKind = new Map<OpenerKind, OpenerAvailability>()
-  for (const entry of raw) {
-    if (typeof entry !== 'object' || entry === null) continue
-    const candidate = entry as Record<string, unknown>
-    if (!OPENER_KINDS.includes(candidate.kind as OpenerKind)) continue
-    if (!['available', 'unavailable', 'unknown'].includes(String(candidate.availability))) continue
-    byKind.set(candidate.kind as OpenerKind, candidate.availability as OpenerAvailability)
-  }
-  return OPENER_KINDS.flatMap((kind) => {
-    const availability = byKind.get(kind)
-    return availability === undefined ? [] : [{ kind, availability }]
-  })
-}
-
-/** Choices are exactly what this client understands and this surface can open now. */
-export function availableOpenerCapabilities(
-  client: OpenerClient,
-  catalog: unknown,
-): OpenerCapability[] {
-  const compatible = new Set(openerKindsFor(client))
-  return normalizeOpenerCapabilities(catalog).filter(
-    ({ availability, kind }) => availability === 'available' && compatible.has(kind),
-  )
-}
-
-/** Keep a valid choice; otherwise move to the first current capability in product order. */
-export function reconcileOpener(
-  client: OpenerClient,
-  opener: SessionOpener,
-  catalog: unknown,
-): SessionOpener {
-  const available = availableOpenerCapabilities(client, catalog)
-  if (available.some(({ kind }) => kind === opener.kind)) return opener
-  const replacement = available[0]?.kind
-  return replacement === undefined ? opener : { command: opener.command, kind: replacement }
-}
-
 /** The main process enforces the same two bounds before it can spawn a custom command. */
 export function validateCustomCommand(command: string): CustomCommandError | null {
   if (!command.trim()) return 'required'
   return command.length > MAX_CUSTOM_COMMAND_LENGTH ? 'too-long' : null
-}
-
-/** A browser can hand off a VS Code URL or copy a custom command; it cannot spawn apps. */
-export function browserOpenerCapabilities(): OpenerCapability[] {
-  return OPENER_KINDS.map((kind) => ({
-    kind,
-    availability: kind === 'vscode' || kind === 'custom' ? 'available' : 'unavailable',
-  }))
 }
