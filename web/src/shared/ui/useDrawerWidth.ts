@@ -13,6 +13,8 @@ import {
  * to what the window has room for, and kept for the next open.
  */
 export function useDrawerWidth(options: {
+  /** Enter folds what this edge sizes away and brings it back at the width it had. */
+  collapsible?: boolean
   active: () => boolean
   defaultWidth: () => number
   maxWidth: () => number
@@ -23,6 +25,7 @@ export function useDrawerWidth(options: {
   const preferredDrawerWidth = ref(options.defaultWidth())
   const viewportWidth = ref(typeof window === 'undefined' ? 1440 : window.innerWidth)
   const resizing = ref(false)
+  const collapsed = ref(false)
   let resizeStartX = 0
   let resizeStartWidth = options.defaultWidth()
 
@@ -58,6 +61,7 @@ export function useDrawerWidth(options: {
   function beginResize(event: PointerEvent) {
     if (!options.active() || !options.resizable() || event.button !== 0) return
     event.preventDefault()
+    collapsed.value = false
     resizeStartX = event.clientX
     resizeStartWidth = drawerWidth.value
     resizing.value = true
@@ -84,6 +88,11 @@ export function useDrawerWidth(options: {
   })
 
   function resizeFromKeyboard(event: KeyboardEvent) {
+    if (event.key === 'Enter' && options.collapsible && options.active()) {
+      event.preventDefault()
+      collapsed.value = !collapsed.value
+      return
+    }
     const requested = new Map([
       ['Home', drawerMinimum.value],
       ['End', drawerMaximum.value],
@@ -93,6 +102,7 @@ export function useDrawerWidth(options: {
     const target = requested.get(event.key)
     if (!options.active() || target === undefined) return
     event.preventDefault()
+    collapsed.value = false
     preferredDrawerWidth.value = Math.min(
       drawerMaximum.value,
       Math.max(drawerMinimum.value, target),
@@ -102,6 +112,7 @@ export function useDrawerWidth(options: {
 
   return {
     beginResize,
+    collapsed,
     drawerMaximum,
     drawerMinimum,
     drawerWidth,

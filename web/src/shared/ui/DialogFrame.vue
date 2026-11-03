@@ -3,6 +3,7 @@ import { computed } from 'vue'
 
 import OverlayHeader from '@/shared/ui/OverlayHeader.vue'
 import OverlayHost from '@/shared/ui/OverlayHost.vue'
+import type { OverlayPaneNames, PaneFit } from '@/shared/ui/overlayPanes.ts'
 
 const props = withDefaults(
   defineProps<{
@@ -14,6 +15,8 @@ const props = withDefaults(
     context?: string
     /** Why the last submit did not go through. */
     error?: string
+    pane?: OverlayPaneNames | null
+    paneRoom?: number
     placement?: 'center' | 'top'
     subtitle?: string
     surfaceClass?: string
@@ -21,7 +24,12 @@ const props = withDefaults(
   { subtitle: '', surfaceClass: '', busy: false, context: '', error: '', placement: 'center' },
 )
 
-const emit = defineEmits<{ close: []; submit: [] }>()
+const emit = defineEmits<{
+  'close': []
+  'pane-close': []
+  'pane-fit': [fit: PaneFit | null]
+  'submit': []
+}>()
 
 /** Absent rather than false, because `aria-busy="false"` is a claim and not a default. */
 const busyMark = computed(() => props.busy || undefined)
@@ -35,10 +43,15 @@ const busyMark = computed(() => props.busy || undefined)
     :aria-label="title"
     :surface-class="surfaceClass"
     :placement="placement"
+    :pane="pane"
+    :pane-room="paneRoom"
     @close="emit('close')"
+    @pane-close="emit('pane-close')"
+    @pane-fit="(fit) => emit('pane-fit', fit)"
   >
     <form
       class="dialog-frame"
+      :class="{ 'is-paired': pane }"
       :aria-busy="busyMark"
       @submit.prevent="emit('submit')"
     >
@@ -47,6 +60,7 @@ const busyMark = computed(() => props.busy || undefined)
         :subtitle="subtitle"
         :context="context"
         :close-label="closeLabel"
+        :focusable-title="Boolean(pane)"
         @close="emit('close')"
       />
       <div class="dialog-frame-body">
@@ -68,6 +82,11 @@ const busyMark = computed(() => props.busy || undefined)
         <slot name="footer" />
       </footer>
     </form>
+    <!-- Outside the form: a button in a form sends it unless told otherwise, and what is
+         read beside a dialog must not answer for it. -->
+    <template #pane>
+      <slot name="pane" />
+    </template>
   </OverlayHost>
 </template>
 
@@ -83,6 +102,10 @@ const busyMark = computed(() => props.busy || undefined)
   overflow: hidden;
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-overlay);
+
+  &.is-paired {
+    flex: 1 1 auto;
+  }
 }
 
 .dialog-frame-body {

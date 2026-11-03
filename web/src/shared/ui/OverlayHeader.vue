@@ -38,6 +38,8 @@ const emit = defineEmits<{ close: [] }>()
 
 const name = ref<HTMLElement | null>(null)
 const nameFocus = computed(() => (props.focusableTitle ? -1 : undefined))
+/** Absent where the title takes no focus, or F6 would be sent to something that cannot. */
+const nameMark = computed(() => (props.focusableTitle ? '' : undefined))
 defineExpose({ focusTitle: () => name.value?.focus({ preventScroll: true }) })
 </script>
 
@@ -51,6 +53,7 @@ defineExpose({ focusTitle: () => name.value?.focus({ preventScroll: true }) })
         class="overlay-header-name"
         :class="{ 'single-line': singleLine }"
         :tabindex="nameFocus"
+        :data-pane-title="nameMark"
       >
         {{ title }}
       </component>

@@ -20,6 +20,31 @@ export const DRAWER_NARROW_BREAKPOINT = 620
 export const DOCUMENT_PANE_STORAGE_KEY = 'valkama-document-pane-width'
 export const DOCUMENT_PANE_DEFAULT_WIDTH = 720
 
+/** What a dialog stands at however wide the window gets, as its stylesheet also writes it. */
+export const DIALOG_WIDTH = 640
+/** Beside a card and a document the board keeps a usable column. */
+export const BOARD_ROOM_BESIDE_DOCUMENT = 360
+/** Nothing under a modal dialog can be used, so beside one only an edge stays. */
+export const DIALOG_ROOM_BESIDE_DOCUMENT = 40
+
+/** The widest a document pane can stand beside a surface of this width. */
+export function documentPaneRoom(
+  surfaceWidth: number,
+  roomUnder: number,
+  viewportWidth: number,
+): number {
+  return viewportWidth - surfaceWidth - DRAWER_VIEWPORT_GUTTER - roomUnder
+}
+
+/** Whether a document stands beside the surface, which needs at least its minimum there. */
+export function documentFitsBeside(
+  surfaceWidth: number,
+  roomUnder: number,
+  viewportWidth: number,
+): boolean {
+  return documentPaneRoom(surfaceWidth, roomUnder, viewportWidth) >= DRAWER_MIN_WIDTH
+}
+
 function drawerMaximumForViewport(viewportWidth: number): number {
   const available = Math.max(0, Math.floor(viewportWidth))
   return available <= DRAWER_NARROW_BREAKPOINT

@@ -56,6 +56,9 @@ export const LINE_BUDGET = new Map([
   ['shared/ui/InfoTip.vue', 1],
   ['shared/ui/OverlayHeader.vue', 1],
   ['shared/ui/OverlayHost.vue', 1],
+  // The divider between two panes on one ground, and the edge of a pane beside a dialog,
+  // which is a frame as the dialog is.
+  ['shared/ui/OverlayPane.vue', 2],
   ['shared/ui/ReferencePreview.vue', 1], // Overlay edge of the card a reference shows on hover.
   ['shared/ui/SemanticState.vue', 1],
   // Markdown in free text: a quote's edge (the step quote's own), a thematic
@@ -267,9 +270,9 @@ const CONTROL_SIZE_DECLARATION =
 const CONTROL_BAND = { low: 28, high: 56 }
 
 export const CONTROL_SIZE_BUDGET = new Map([
-  // Overlay and inspector headers, both 56px: a surface header is a band rather
-  // than a control, and it is the one size the two tokens do not describe.
-  ['shared/ui/OverlayHost.vue', 1],
+  // The grip of an edge that resizes, 56px: a mark standing in a 12px hit area and no
+  // control's height, the one size the two tokens do not describe.
+  ['shared/ui/OverlayResizer.vue', 1],
 
   // The debt. Every entry is a control that named its own number before the
   // tokens existed; card #333 empties this list. Nothing here is a new

@@ -5,6 +5,7 @@ import {
   SESSION_INSPECTOR_STORAGE_KEY,
 } from '@/shared/lib/shellLayout.ts'
 import OverlayHost from '@/shared/ui/OverlayHost.vue'
+import type { OverlayPaneNames, PaneFit } from '@/shared/ui/overlayPanes.ts'
 
 /**
  * A panel at the window's right edge, resized by its left one. A card and a session
@@ -20,6 +21,8 @@ withDefaults(
     layer?: 'drawer' | 'command'
     maxWidth?: number
     minWidth?: number
+    pane?: OverlayPaneNames | null
+    paneRoom?: number
     resizeLabel?: string
     storageKey?: string
     surfaceClass?: string
@@ -35,7 +38,11 @@ withDefaults(
   },
 )
 
-const emit = defineEmits<{ close: [] }>()
+const emit = defineEmits<{
+  'close': []
+  'pane-close': []
+  'pane-fit': [fit: PaneFit | null]
+}>()
 </script>
 
 <template>
@@ -51,9 +58,16 @@ const emit = defineEmits<{ close: [] }>()
     :drawer-default-width="defaultWidth"
     :drawer-min-width="minWidth"
     :drawer-max-width="maxWidth"
+    :pane="pane"
+    :pane-room="paneRoom"
     resizable
     @close="emit('close')"
+    @pane-close="emit('pane-close')"
+    @pane-fit="(fit) => emit('pane-fit', fit)"
   >
     <slot :close="() => emit('close')" />
+    <template #pane>
+      <slot name="pane" />
+    </template>
   </OverlayHost>
 </template>

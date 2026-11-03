@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onUnmounted, ref, shallowRef, useId, watch } from 'vue'
+import { computed, onUnmounted, ref, shallowRef, useId, watch } from 'vue'
 
 import {
   DRAWER_DEFAULT_WIDTH,
@@ -8,15 +8,19 @@ import {
   DRAWER_NARROW_BREAKPOINT,
   INSPECTOR_DRAWER_STORAGE_KEY,
 } from '@/shared/lib/shellLayout.ts'
+import OverlayPane from '@/shared/ui/OverlayPane.vue'
+import { usePaneFit, usePaneWalk } from '@/shared/ui/overlayPanes.ts'
+import type { OverlayPaneNames, PaneFit } from '@/shared/ui/overlayPanes.ts'
+import OverlayResizer from '@/shared/ui/OverlayResizer.vue'
 import {
   claimOverlayOwnership,
   ownsOverlay,
-  pageWasTouched,
   releaseOverlayOwnership,
 } from '@/shared/ui/overlayStack.ts'
 import type { OverlayOwnership } from '@/shared/ui/overlayStack.ts'
 import { isStrayPress } from '@/shared/ui/strayPress.ts'
 import { useDrawerWidth } from '@/shared/ui/useDrawerWidth.ts'
+import { useOverlayFocus } from '@/shared/ui/useOverlayFocus.ts'
 
 const props = withDefaults(
   defineProps<{
@@ -32,6 +36,13 @@ const props = withDefaults(
     drawerMinWidth?: number
     interactive?: boolean
     layer?: 'drawer' | 'command'
+    /** A second pane in this surface, beside what it holds, while there is one to show. */
+    pane?: OverlayPaneNames | null
+    /**
+     * How much of the window stays clear beside this surface and a pane. Given, the surface
+     * says whether a pane would fit (`paneFit`); absent, it never holds one.
+     */
+    paneRoom?: number
     /**
      * Where a dialog stands. One whose height follows what is typed into it
      * stands near the top: centred, its search field moved up and down the
@@ -61,9 +72,14 @@ const props = withDefaults(
   },
 )
 
-const emit = defineEmits<{ close: [] }>()
+const emit = defineEmits<{
+  'close': []
+  'pane-close': []
+  'pane-fit': [fit: PaneFit | null]
+}>()
 const surface = ref<HTMLElement | null>(null)
 const titleId = `overlay-title-${useId()}`
+const mainNameId = `overlay-main-${useId()}`
 const ownership = shallowRef<OverlayOwnership | null>(null)
 const active = computed(() => props.open && props.interactive && ownsOverlay(ownership.value))
 const isResizableDrawer = computed(() => props.resizable && props.variant === 'drawer')
@@ -85,15 +101,39 @@ const {
   resizable: () => isResizableDrawer.value,
   storageKey: () => props.widthStorageKey,
 })
+const { paneFits, paneWidest } = usePaneFit({
+  isDialog: () => props.variant === 'dialog',
+  moving: () => resizing.value,
+  room: () => props.paneRoom,
+  viewportWidth: () => viewportWidth.value,
+  width: () => drawerWidth.value,
+})
+const paneResizing = ref(false)
+const { notePaneFocus, walkPanes } = usePaneWalk(() => surface.value)
+const { focusSurface, roundToFirst, roundToLast, stopWaiting, trapFocus } = useOverlayFocus({
+  active: () => active.value,
+  isDrawer: () => props.variant === 'drawer',
+  surface: () => surface.value,
+})
+
 // 4px under the window's top edge, above the first chrome label at every width
 // (9px at 390), so the edge crosses no label; the dialog padding above is cancelled.
 const TOP_EDGE = 'calc(4px - var(--space-5))'
 const TOP_PLACEMENT = { alignSelf: 'start', marginBlockStart: TOP_EDGE, maxHeight: '86dvh' }
 const surfaceStyle = computed(() => {
   if (props.placement === 'top') return TOP_PLACEMENT
+  // Two panes are as wide as they are together; the first holds this surface's own width.
+  if (props.pane) return null
   const width = viewportWidth.value <= DRAWER_NARROW_BREAKPOINT ? '100vw' : `${drawerWidth.value}px`
-  return isResizableDrawer.value ? { width } : undefined
+  return isResizableDrawer.value ? { width } : null
 })
+const mainStyle = computed(() =>
+  props.pane && props.variant === 'drawer' ? { width: `${drawerWidth.value}px` } : null,
+)
+/** A pane beside it makes what the surface holds one of two regions, each with its name. */
+const mainRegion = computed(() =>
+  props.pane ? ({ 'role': 'region', 'aria-labelledby': mainNameId } as const) : {},
+)
 
 /**
  * Whether this overlay takes input, as the five attributes that say so.
@@ -131,74 +171,6 @@ function pressOnScrim(event: MouseEvent) {
   if (!isStrayPress(event)) closeOverlay(event)
 }
 
-function focusable(): HTMLElement[] {
-  return surface.value
-    ? Array.from(
-        surface.value.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), a[href], summary, input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-        ),
-      ).filter(
-        (item) =>
-          !item.closest('[inert], [aria-hidden="true"]') &&
-          item.checkVisibility({ visibilityProperty: true }),
-      )
-    : []
-}
-
-/** The first thing to act on: the grip that resizes a drawer is not what it was opened for. */
-function firstControl() {
-  return focusable().find((control) => control.dataset.overlayResizer === undefined)
-}
-
-/** Where focus waits on an open nobody asked for, until a Tab or a press takes it on. */
-let waitingOn: HTMLElement | null = null
-
-/**
- * A drawer can open on nobody's input: an address, a link from outside, a reload. A
- * browser rings focus it cannot put down to a pointer, so its first control stood there
- * ringed as if the reader had tabbed to it, on every such open. Focus waits instead on
- * what the drawer is read with, which has no ring, answers the keys that scroll, and
- * stands inside a dialog a screen reader names. A Tab goes on to the first control from
- * there. After any input the first control takes it, and the browser decides from that
- * input whether it rings, which is what shows a keyboard reader where it is.
- */
-async function focusSurface() {
-  await nextTick()
-  resizing.value &&= active.value
-  if (!active.value || surface.value?.contains(document.activeElement)) return
-  if (props.variant === 'drawer' && !pageWasTouched()) {
-    waitingOn =
-      surface.value?.querySelector<HTMLElement>('[data-overlay-scroller]') ?? surface.value
-    waitingOn?.focus()
-    return
-  }
-  ;(firstControl() ?? surface.value)?.focus()
-}
-
-/**
- * A Tab is the browser's to move, from where the reader is, and the trap holds only the
- * ends: a stop either side of the surface sends focus round to the far end. The browser
- * goes on from a press too, from the very place pressed, but focus outranks that place, and
- * a press on text gives focus to the nearest ancestor that holds it: the scroller, or the
- * surface itself in the bar. Every Tab then started from the head of that ancestor, the
- * first fact or the far end of the card. Let go, focus goes on from the press.
- */
-function trapFocus(event: KeyboardEvent) {
-  if (event.key !== 'Tab' || event.defaultPrevented || !active.value) return
-  const focused = document.activeElement
-  if (focused === waitingOn) {
-    event.preventDefault()
-    waitingOn = null
-    if (event.shiftKey) roundToLast()
-    else (firstControl() ?? focusable()[0] ?? surface.value)?.focus()
-  } else if (focused instanceof HTMLElement && focused.tabIndex < 0) {
-    focused.blur()
-  }
-}
-
-const roundToFirst = () => (focusable()[0] ?? surface.value)?.focus()
-const roundToLast = () => (focusable().at(-1) ?? surface.value)?.focus()
-
 function release() {
   releaseOverlayOwnership(ownership.value)
   ownership.value = null
@@ -232,34 +204,73 @@ watch(
   { immediate: true, flush: 'post' },
 )
 
-watch([active, () => props.contentKey], focusSurface, { flush: 'post', immediate: true })
+function keydownInSurface(event: KeyboardEvent) {
+  if (event.key === 'F6' && active.value) walkPanes(event)
+  else trapFocus(event)
+}
+
+watch(
+  [active, () => props.contentKey],
+  () => {
+    resizing.value &&= active.value
+    void focusSurface()
+  },
+  { flush: 'post', immediate: true },
+)
+
+watch(
+  [() => props.open, active, paneFits],
+  ([open, isActive, fits]) => {
+    if (props.paneRoom !== undefined) emit('pane-fit', open ? { active: isActive, fits } : null)
+  },
+  { flush: 'post', immediate: true },
+)
 
 onUnmounted(release)
+
+/*
+ * How the template below stands.
+ *
+ * The enter and leave are the six-class pattern, on the one component that owns every
+ * overlay surface. A drawer and a dialog arrived by appearing, which reads as a jump cut:
+ * the operator has to work out what changed. There is no separate wrapper component for
+ * this because there is exactly one consumer, and a reusable transition with one consumer
+ * is ceremony. The scrim fades; the surface arrives under its own power. A drawer comes in
+ * from the edge it is attached to, and a dialog steps up from just below, because a dialog
+ * that scales up from nothing reads as an alert. Both leave the way they came, which is
+ * what tells the operator the surface went back where it was rather than being destroyed.
+ *
+ * Escape reaches the top host through the overlay stack, which hears it on the document:
+ * focus that fell out of the surface still closes it. The focusable surface is the section.
+ *
+ * The scrim is a pointer affordance by definition: clicking outside a dialog dismisses it.
+ * The keyboard equivalent is Escape. A press leaves focus in the surface until it closes,
+ * for the keys that read it. At 42% of a near-black it dimmed the canvas by about a step of
+ * the grey ramp, which is the distance between two ordinary surfaces, so a dialog looked
+ * like one more panel: it has to read as out of reach, not merely tinted.
+ *
+ * The section's role is inside `modality`, which the a11y rule cannot look into: it reads
+ * the attributes written on the element and this one carries a computed object. An
+ * interactive surface is `role="dialog"` with a name and `aria-modal`, and a passive one is
+ * `inert` and hidden, so its handlers never reach a plain `section`.
+ *
+ * What the surface holds stands in one box whether or not a pane stands beside it, or
+ * opening one would mount it again and take any draft in it away.
+ */
 </script>
 
 <template>
   <Teleport to="body">
-    <!-- The six-class enter/leave pattern, on the one component that owns every
-         overlay surface. A drawer and a dialog arrived by appearing, which
-         reads as a jump cut: the operator has to work out what changed. There
-         is no separate wrapper component for this because there is exactly one
-         consumer, and a reusable transition with one consumer is ceremony. -->
     <Transition
       name="overlay"
       appear
       @before-leave="outOfReach"
     >
-      <!-- Escape reaches the top host through the overlay stack, which hears it
-           on the document: focus that fell out of the surface still closes it.
-           The focusable surface is the section below. -->
       <div
         v-if="open"
         class="overlay-host"
         :class="[`overlay-${variant}`, `overlay-layer-${layer}`, { 'is-passive': !interactive }]"
       >
-        <!-- The scrim is a pointer affordance by definition: clicking outside a dialog -->
-        <!-- dismisses it. The keyboard equivalent is Escape, handled one level up. A press -->
-        <!-- leaves focus in the surface until it closes, for the keys that read it. -->
         <!-- eslint-disable-next-line vuejs-accessibility/click-events-have-key-events, vuejs-accessibility/no-static-element-interactions -->
         <div
           v-if="active"
@@ -275,49 +286,63 @@ onUnmounted(release)
           tabindex="0"
           @focus="roundToLast"
         />
-        <!-- The role is inside `modality`, which the a11y rule cannot look into: it
-             reads the attributes written on the element and this one carries a
-             computed object. An interactive surface here is `role="dialog"` with a
-             name and `aria-modal`, and a passive one is `inert` and hidden, so the
-             handler below never reaches a plain `section`. -->
         <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -->
         <section
           ref="surface"
           class="overlay-surface"
           tabindex="-1"
-          :class="[`overlay-surface-${variant}`, surfaceClass, { 'is-resizing': resizing }]"
+          :class="[
+            `overlay-surface-${variant}`,
+            surfaceClass,
+            { 'is-resizing': resizing || paneResizing, 'has-pane': pane },
+          ]"
           :style="surfaceStyle"
           v-bind="modality"
-          @keydown="trapFocus"
-          @pointerdown="waitingOn = null"
+          @keydown="keydownInSurface"
+          @focusin="notePaneFocus"
+          @pointerdown="stopWaiting"
         >
-          <!-- A window splitter, built the way ARIA asks: role, orientation, value -->
-          <!-- range, tabindex and its own key handler. The rule does not count -->
-          <!-- separator among the interactive roles. -->
-          <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -->
-          <div
+          <OverlayResizer
             v-if="isResizableDrawer && viewportWidth > DRAWER_NARROW_BREAKPOINT"
-            class="overlay-resizer"
-            role="separator"
-            aria-orientation="vertical"
-            tabindex="0"
-            :aria-label="resizeLabel || ariaLabel"
-            :aria-valuemin="drawerMinimum"
-            :aria-valuemax="drawerMaximum"
-            :aria-valuenow="drawerWidth"
-            data-overlay-resizer
+            :label="resizeLabel || ariaLabel"
+            :minimum="drawerMinimum"
+            :maximum="drawerMaximum"
+            :now="drawerWidth"
             @pointerdown="beginResize"
             @keydown="resizeFromKeyboard"
-          >
-            <span class="overlay-resizer-grip" />
-          </div>
+          />
           <span
             v-if="title"
             :id="titleId"
             class="visually-hidden"
             >{{ title }}</span
           >
-          <slot />
+          <div
+            class="overlay-pane-main"
+            :style="mainStyle"
+            data-overlay-pane
+            v-bind="mainRegion"
+          >
+            <span
+              v-if="pane"
+              :id="mainNameId"
+              hidden
+              >{{ pane.main }}</span
+            >
+            <slot />
+          </div>
+          <OverlayPane
+            v-if="pane"
+            :active="active"
+            :label="pane.label"
+            :resize-label="pane.resize"
+            :variant="variant"
+            :widest="paneWidest"
+            @close="emit('pane-close')"
+            @resizing="(moving) => (paneResizing = moving)"
+          >
+            <slot name="pane" />
+          </OverlayPane>
         </section>
         <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -->
         <span
@@ -345,10 +370,6 @@ onUnmounted(release)
   z-index: 100;
 }
 
-/* The scrim is what makes a surface modal: the window behind it has to read as
-   out of reach, not merely tinted. At 42% of a near-black it dimmed the canvas
-   by about a step of the grey ramp, which is the distance between two ordinary
-   surfaces — so a dialog looked like one more panel. */
 .overlay-scrim {
   position: absolute;
   inset: 0;
@@ -366,11 +387,6 @@ onUnmounted(release)
   transition: opacity var(--duration-surface) var(--ease-out);
 }
 
-/* The scrim fades; the surface arrives under its own power. A drawer comes in
-   from the edge it is attached to, and a dialog steps up from just below,
-   because a dialog that scales up from nothing reads as an alert. Both leave
-   the way they came, which is what tells the operator the surface went back
-   where it was rather than being destroyed. */
 :is(.overlay-enter-active, .overlay-leave-active) .overlay-scrim {
   transition: opacity var(--duration-surface) var(--ease-out);
 }
@@ -411,14 +427,45 @@ onUnmounted(release)
   padding: var(--space-5);
 }
 
-/* Both surfaces are their own measure. A dialog stops growing at 640px however
-   wide the monitor gets, so what its fields can afford is a question about the
-   dialog; the window kept answering a different one. */
+/* What the surface holds is its own measure and its own scroller. A dialog stops growing
+   at 640px however wide the monitor gets, so what its fields can afford is a question
+   about the dialog; the window kept answering a different one. */
+.overlay-pane-main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  container: overlay / inline-size;
+}
+
 .overlay-surface-dialog {
+  display: flex;
+  flex-direction: column;
   width: min(640px, calc(100vw - 40px));
   max-height: calc(100dvh - 40px);
-  overflow-y: auto;
-  container: overlay / inline-size;
+}
+
+/* Two panes side by side, the first at the surface's own width. A dialog and its pane
+   stand as one height, so their heads are level and neither moves as the other's text
+   grows; they are centred as a pair by the host. */
+.overlay-surface.has-pane {
+  flex-direction: row;
+  width: auto;
+
+  & .overlay-pane-main {
+    flex: 0 0 auto;
+  }
+
+  &.overlay-surface-dialog {
+    height: calc(100dvh - 40px);
+
+    & .overlay-pane-main {
+      width: min(640px, calc(100vw - 40px));
+    }
+  }
 }
 
 /* The drawer's ground is `--color-surface`, so the default sheet — one step
@@ -435,10 +482,7 @@ onUnmounted(release)
   border-inline-start: 1px solid var(--color-rule-strong);
   color: var(--color-text);
   background: var(--color-surface);
-  overflow-y: auto;
-  overscroll-behavior: contain;
   box-shadow: var(--shadow-overlay);
-  container: overlay / inline-size;
 
   &.is-resizing,
   &.is-resizing * {
@@ -447,33 +491,6 @@ onUnmounted(release)
     cursor: col-resize !important;
     user-select: none;
   }
-}
-
-.overlay-resizer {
-  position: absolute;
-  inset: 0 auto 0 -6px;
-  z-index: 4;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 12px;
-  cursor: col-resize;
-}
-
-.overlay-resizer-grip {
-  width: 1px;
-  height: 56px;
-  background: var(--color-rule-strong);
-
-  .overlay-resizer:is(:hover, :focus-visible) & {
-    width: 2px;
-    background: var(--color-focus-ring);
-  }
-}
-
-.overlay-resizer:focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: -2px;
 }
 
 /* The one viewport question left in the overlay: how wide the drawer itself
