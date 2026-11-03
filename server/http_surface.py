@@ -47,6 +47,7 @@ from .ops import configuration, desktop_app, doctor
 from .planning import agents as planning_agents
 from .planning import api as planning_api
 from .planning import calls as planning_calls
+from .planning import display_links
 from .planning import exact_api as planning_exact_api
 from .planning import interactions as planning_interactions
 from .planning import model as planning_model
@@ -57,7 +58,7 @@ from .projects import scopes
 from .refs import resolve_ref
 from .sessions import op_ingest_session_event, session_context
 from .static_assets import DIST_DIR, SOURCE_ROOT
-from .store import connect, db_path
+from .store import connect, db_path, open_read_only
 from .store_identity.primitives import ContractError
 
 CLIENT_DISCONNECT_ERRORS = (
@@ -1240,9 +1241,36 @@ class Handler(BaseHTTPRequestHandler):
             except CLIENT_DISCONNECT_ERRORS:
                 pass
 
+    def _answer_message_display(self) -> None:
+        """Claude Code's display hook: linked text, or an empty answer to show the original.
+
+        A refusal is the only other answer, and the client shows the original for that
+        too. A failure past it answers empty, and what is logged is the failure's class
+        alone, since the message of any exception here could quote the reply.
+        """
+
+        try:
+            http_security.require_local_process(self.headers)
+            payload = self._read_json(http_security.GLOBAL_JSON_LIMIT)
+        except http_security.RequestRefusedError as error:
+            self._refuse(error)
+            return
+        try:
+            answer = display_links.answer(payload, open_read_only, db_path())
+        except Exception as error:  # the reader sees the original text, whatever this was
+            print(f"message display hook: {type(error).__name__}", file=sys.stderr)  # noqa: T201
+            answer = {}
+        if answer:
+            self._send_json(200, answer)
+        else:
+            self._send(200, b"", "application/json")
+
     def do_POST(self) -> None:
         path = urlparse(self.path).path
         if not self._require_validated_host():
+            return
+        if path == display_links.HOOK_PATH:
+            self._answer_message_display()
             return
         try:
             http_security.require_write_authorization(

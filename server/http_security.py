@@ -203,6 +203,24 @@ def require_same_origin_fetch(headers: Headers, context: SecurityContext) -> Non
     _require_browser_fetch(headers)
 
 
+def require_local_process(headers: Headers) -> None:
+    """Admit a local process that is not a browser, for a route that writes nothing.
+
+    A browser puts `Origin` on every POST, whatever the page does, and `Sec-Fetch-Site`
+    on every request to 127.0.0.1, so a page of any site is refused here before its
+    body is read. It could not read the answer anyway, since nothing here answers with
+    CORS headers, and a preflight is refused. No credential is asked: a hook could carry
+    one only by keeping it in the client's settings file, and a process running as the
+    owner can read the store itself, which is the boundary `_require_browser_fetch`
+    states too.
+    """
+
+    if _header_values(headers, "Origin") or _header_values(headers, "Sec-Fetch-Site"):
+        raise RequestRefusedError(
+            403, "origin_refused", "this route answers only a local process", close=True
+        )
+
+
 def _exact_secret(headers: Headers, name: str, expected: str) -> bool:
     values = _header_values(headers, name)
     return len(values) == 1 and hmac.compare_digest(values[0], expected)

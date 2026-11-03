@@ -222,6 +222,17 @@ class RoutingTests(CliTestCase):
                 self.invoke(command, "--help")
             self.assertEqual(0, stopped.exception.code)
 
+    def test_capabilities_names_the_port_and_the_address_to_register_the_display_hook_on(
+        self,
+    ) -> None:
+        with mock.patch.dict(os.environ, {"VALKAMA_PORT": "9123"}):
+            http = json.loads(self.invoke("capabilities"))["interfaces"]["http"]
+        self.assertEqual(9123, http["port"])
+        self.assertEqual(
+            "http://127.0.0.1:9123/api/hooks/message-display",
+            http["hooks"]["claude"]["MessageDisplay"],
+        )
+
     def test_runtime_prints_the_identity_a_new_server_would_expose(self) -> None:
         identity = json.loads(self.invoke("runtime"))
         self.assertIn("backend", identity)

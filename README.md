@@ -946,6 +946,11 @@ environment variables, and every write must be an explicitly framed UTF-8 JSON
 object. Vite development is the only extra browser origin and must be enabled by
 the exact `--development-origin http://127.0.0.1:5173` flag shown above.
 
+`POST /api/hooks/message-display`, Claude Code's display hook, writes nothing and
+takes neither credential: it answers a local process, and refuses any request with
+`Origin` or `Sec-Fetch-Site`, which a browser cannot leave out. See
+[the hook contract](docs/hook-contract.md#work-item-numbers-as-links-on-the-screen).
+
 A Planning write that passes the browser credential is the owner's: its call is
 recorded as `confirmed` with source `browser` and no agent session, and when the
 request names no `author` it is signed `user`, so a claim, a checklist tick or a

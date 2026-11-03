@@ -704,6 +704,130 @@ The installation export reads neither the archive nor its rows, and lists
 "transcript archive" among what it excludes. Store snapshots copy the database,
 which holds paths and hashes, never the archive directory.
 
+## Work item numbers as links on the screen
+
+An agent in Claude Code writes a plain number, `MAIN-12`, and spends no output
+tokens on the address. Claude Code's `MessageDisplay` hook asks the running
+listener what to show instead, and the reader sees a link. Only the screen
+changes: the transcript and what the model sees keep the plain number. Codex has
+no such event, so an agent there writes the link itself.
+
+This one hook is not the `valkama hook` command. It is an `http` hook, because
+the client holds each batch of a message until the hook answers, and a process
+started per batch would cost more than the whole answer does:
+
+```json
+{
+  "type": "http",
+  "url": "http://127.0.0.1:8642/api/hooks/message-display",
+  "timeout": 2
+}
+```
+
+### The request and the answer
+
+`POST /api/hooks/message-display` takes the hook input Claude Code sends and reads
+`hook_event_name`, `message_id`, `index`, `final` and `delta`.
+
+| Situation | Status | Body |
+| --- | --- | --- |
+| The batch holds a real item outside protected text | 200 | `{"hookSpecificOutput": {"hookEventName": "MessageDisplay", "displayContent": "…"}}` |
+| Anything else, including an internal failure | 200 | empty |
+| A browser's request, a foreign `Host`, a body that is not framed JSON | 4xx | the listener's refusal envelope |
+
+`displayContent` replaces that batch's `delta`, every other character as it came.
+An empty body shows the batch as it was, and so does any failure or refusal the
+client meets: it reports those in its debug log and not in the session.
+
+### Which numbers become links
+
+A number becomes `[MAIN-12](http://127.0.0.1:8642/open/MAIN-12)`, the address an
+MCP answer's `url` field gives, only when `/open/MAIN-12` leads to a card: a
+project binds the space, and the store it names holds the item. So `UTF-8`,
+`SHA-256` and `MAIN-99999` stay as they are, and so does an item in a space no
+project binds.
+
+These stay as written, whatever they contain:
+
+- fenced code blocks, indented code and code spans;
+- the text and the target of a Markdown link or image, and anything else in square
+  brackets, because `[MAIN-12]` may be a link defined elsewhere;
+- reference definitions;
+- autolinks, raw HTML tags and comments;
+- bare URLs, `www.` addresses and `host.example/path`: a number inside an address
+  is not a mention.
+
+The fences around a number are the ones the interface uses for the same text. A
+letter or digit of any script, `_` or `-` on either side, or a `.` followed by a
+letter or digit, makes it the middle of something longer, so `MAIN-12a`,
+`MAIN-12-3`, `MAIN-12.md` and a number glued to a Cyrillic word are no mentions.
+`XMAIN-12` is a mention of a space called `XMAIN`, and stays as it is unless that
+space holds the item. A slash is no fence, so `MAIN-12/MAIN-13` is two. A backslash
+before a letter and an `@` fence as well, for Windows paths and addresses in prose.
+
+The scanner errs one way: what it cannot be sure of keeps its text. A stray backtick
+or `[` silences the rest of its paragraph, and an indented paragraph of a list item
+after a blank line reads as code. The worst outcome is a plain number.
+
+### A message in parts
+
+The client sends whole lines and only the last batch may end inside a line, so a
+reference is not cut by a batch boundary. Between batches the listener keeps, per
+`message_id`, whether a fence, a code span, brackets or a link target are open: a
+few counters and no text, for at most 256 messages, oldest out first. `final`
+releases them, including the empty final batch a message ending in a newline gets.
+
+| What happens | What the reader sees |
+| --- | --- |
+| A batch stops inside a line and is not the last | That line and the rest of the message as sent, so both halves of a cut reference stay plain |
+| The listener restarted during a message | The rest of that message as sent, since it may start inside a code block |
+| A batch never arrived, or the message was pushed out of the bound | The rest of that message as sent |
+
+### What it costs
+
+A batch with no candidate touches no store. A batch with candidates opens the store
+read-only, never migrates or locks it, reads the project registry, and reads all
+its candidates in one statement; an attached store is opened only when a candidate's
+key is bound to it. A store at another schema version is not read. Measured over
+HTTP on the running handler, one connection per request as the client makes them, on
+a store of 7,800 items and a registry of 30 projects, on a machine under other load
+(the worst of three series of 400):
+
+| Batch | p50 | p95 |
+| --- | --- | --- |
+| 30 characters, 3 mentions | 6 ms | 25 ms |
+| 10 KB, no candidate | 4 ms | 22 ms |
+| 10 KB, 300 different mentions | 10 ms | 29 ms |
+| 170 KB, 3,000 mentions | 42 ms | 64 ms |
+
+The registered timeout is 2 s rather than the event's default of 10 s, because
+the display waits for the answer and the answer normally takes milliseconds. What
+the wait can meet beyond that is a listener that is stuck, and each batch of each
+message would wait the whole timeout; a refused connection on a stopped listener
+costs a few milliseconds and no wait. An on-demand listener loads on its first
+connection, about half a second here. If that ever takes longer than the timeout,
+that message shows as it was and the next one has links.
+
+### What is kept, and who may ask
+
+The text is scanned in memory and never logged, stored, spooled or put into an
+event. A failure logs the exception's class alone, because its message could quote
+the reply. The route records no call and writes nothing.
+
+The route takes a local process that is not a browser. The listener's `Host` check
+applies as everywhere; a request with `Origin` or `Sec-Fetch-Site`, which a browser
+always sends and a page cannot remove, is refused with `403` before its body is read,
+a preflight is refused, and no answer carries a CORS header. It asks for no
+credential: a hook could carry one only in the client's settings file, and a process
+running as the owner can read the store itself. The body limit is 1 MiB, and a longer
+message is refused and shown as it was.
+
+The port in the registered URL is named by `valkama capabilities`, under
+`interfaces.http`: `port`, and the full address at `hooks.claude.MessageDisplay`.
+Host Runtime registers the hook from that. After the listener's port changes, the
+old address stops answering and messages show as they were until the installer is run
+again; whatever else listens on that old port would receive the text.
+
 ## What `doctor` shows
 
 Under Installation → Store:

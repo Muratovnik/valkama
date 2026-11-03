@@ -50,6 +50,7 @@ from .ops import adapter_check, configuration, doctor, export, setup, skills
 from .planning import model as planning_model
 from .planning import service as planning_service
 from .planning import views as planning_views
+from .planning.display_links import HOOK_PATH
 from .platform import installed
 from .projects import registry_owner, scopes
 from .static_assets import DIST_DIR, SOURCE_ROOT
@@ -180,7 +181,17 @@ def capabilities_main() -> None:
                 "legacy_protocols": list(LEGACY_PROTOCOLS),
                 "tools": len(catalogue()),
             },
-            "http": {"bind": "127.0.0.1", "default_port": 8642},
+            "http": {
+                "bind": "127.0.0.1",
+                "default_port": 8642,
+                "port": configuration.listener_port(),
+                "hooks": {
+                    "claude": {
+                        "MessageDisplay": f"http://127.0.0.1:{configuration.listener_port()}"
+                        f"{HOOK_PATH}",
+                    },
+                },
+            },
             "desktop": {"platform": "windows"},
         },
         "commands": [

@@ -891,6 +891,9 @@ bootstrap and every browser-credential write refuse a request without it, with
 forges the header is outside this model: it runs as the owner and could edit
 the store file directly. The adapter endpoint, `/api/ingest` with the
 installation bearer and no `Origin`, is unchanged and needs no fetch metadata.
+`POST /api/hooks/message-display` writes nothing, records no call and takes no
+credential; it refuses `Origin` and `Sec-Fetch-Site` instead, see
+[the hook contract](hook-contract.md#work-item-numbers-as-links-on-the-screen).
 
 A write Valkama
 makes on its own account, which today is only releasing an expired lease, is

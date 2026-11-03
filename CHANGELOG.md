@@ -19,6 +19,12 @@ checkouts are therefore distinguishable even at the same version.
   answers». Every field with options now has «Your own option» as its last row, and a comment
   on a field or on the question goes beside the choice. A comment no longer stands in for a
   required field: that field needs an option or an own option.
+- **Work item numbers show as links in Claude Code without the agent writing the address.**
+  `POST /api/hooks/message-display` answers Claude Code's `MessageDisplay` hook: a number
+  whose `/open` address leads to a card comes back as a link, on the screen only, and code,
+  existing links and URLs stay as they were. Nothing is logged or stored, and any failure
+  shows the original text. `valkama capabilities` names the address to register, under
+  `interfaces.http`.
 - **The agent working an item hears what a person did there.** Any write to an item
   answers with `from_person` when a person acted on it in the interface since an agent
   last wrote there: a comment, an answer, a status change, an edit, a cancel. Each event

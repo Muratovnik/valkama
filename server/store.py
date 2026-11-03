@@ -652,6 +652,28 @@ def _read_stored_version_without_write(path: str) -> int:
         probe.close()
 
 
+def open_read_only() -> sqlite3.Connection:
+    """The store for one quick read: nothing is created, migrated, locked or written.
+
+    A store this build did not bring to its own schema is refused rather than read,
+    the same rule a hook's direct write keeps. A store that is not there is an
+    `sqlite3.OperationalError` too, and the short timeout makes a busy one a refusal.
+    """
+
+    path = os.path.abspath(db_path()).replace(os.sep, "/")
+    escaped = path.replace("%", "%25").replace("?", "%3f").replace("#", "%23")
+    prefix = "file:" if escaped.startswith("/") else "file:/"
+    conn = sqlite3.connect(f"{prefix}{escaped}?mode=ro", uri=True, timeout=0.25)
+    try:
+        stored_version = int(conn.execute("PRAGMA user_version").fetchone()[0])
+        if stored_version != STORE_SCHEMA_VERSION:
+            raise sqlite3.OperationalError("the store is not at this build's schema")
+    except BaseException:
+        conn.close()
+        raise
+    return conn
+
+
 def connect() -> sqlite3.Connection:
     adopt_legacy_store()
     path = db_path()

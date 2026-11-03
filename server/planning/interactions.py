@@ -7,8 +7,10 @@ request names an exact project binding and never a key-only space.
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 
+from ..projects import project_registry, scopes
+from ..store_identity.metadata import ScopeError, read_store_metadata
 from ..store_identity.primitives import ContractError
 from ..store_identity.refs import (
     planning_space_ref,
@@ -198,6 +200,93 @@ def work_item_location(routing: PlanningRouting, text: str) -> str | None:
         entity = planning_work_item_entity({"space_ref": space_ref, "reference": reference})
         return f"/modules/planning/project/{project_id}?entity={route_entity_parameter(entity)}"
     return None
+
+
+def _present_in(conn: sqlite3.Connection, pairs: list[tuple[str, int]]) -> set[str]:
+    """Which (space key, number) pairs this store holds, in one indexed statement."""
+
+    if not pairs:
+        return set()
+    values = ",".join("(?,?)" for _ in pairs)
+    rows = conn.execute(
+        f"""
+        WITH wanted(space_key, number) AS (VALUES {values})
+        SELECT wanted.space_key, wanted.number
+        FROM wanted
+        JOIN planning_spaces ON planning_spaces.key = wanted.space_key
+        JOIN work_items
+          ON work_items.planning_space_id = planning_spaces.planning_space_id
+         AND work_items.number = wanted.number
+        """,  # noqa: S608 - only placeholders are interpolated
+        [value for pair in pairs for value in pair],
+    )
+    return {f"{row[0]}-{row[1]}" for row in rows}
+
+
+def _attached_present(
+    primary_db: str, pairs: list[tuple[str, int]], scopes_of_key: Mapping[str, set[str]]
+) -> set[str]:
+    """What the attached stores bound to these keys hold; one unreadable holds nothing."""
+
+    try:
+        attached = [item for item in scopes.load(primary_db) if not item.get("primary")]
+    except scopes.ScopeError:
+        return set()
+    found: set[str] = set()
+    for item in attached:
+        try:
+            store = scopes.open_readonly(item)
+            try:
+                scope = read_store_metadata(store)["data_scope_id"]
+                found |= _present_in(
+                    store, [pair for pair in pairs if scope in scopes_of_key[pair[0]]]
+                )
+            finally:
+                store.close()
+        except (sqlite3.Error, scopes.ScopeError, ScopeError):
+            continue
+    return found
+
+
+def existing_references(
+    primary: sqlite3.Connection, primary_db: str, references: Collection[str]
+) -> set[str]:
+    """Which of these references `work_item_location` leads to a card, read together.
+
+    The same rule without its per-reference cost, for a caller holding many candidates
+    and a client waiting: the registry binds the space, and the store it names holds
+    the item. The primary store answers in one statement. An attached store is opened
+    only when a candidate's key is bound to one, so a key nobody binds costs no file.
+    """
+
+    registry = project_registry.read_registry()
+    if registry["status"] != "available":
+        return set()
+    scopes_of_key: dict[str, set[str]] = {}
+    for project in registry["projects"]:
+        binding = project.get("planning_binding")
+        if binding is not None:
+            space_ref = planning_space_ref(binding)
+            scopes_of_key.setdefault(space_ref["space_key"], set()).add(space_ref["data_scope_id"])
+    pairs = [
+        (key, int(number))
+        for key, number in (reference.rsplit("-", 1) for reference in references)
+        if key in scopes_of_key
+    ]
+    if not pairs:
+        return set()
+    primary_scope = read_store_metadata(primary)["data_scope_id"]
+    found = _present_in(
+        primary, [pair for pair in pairs if primary_scope in scopes_of_key[pair[0]]]
+    )
+    outstanding = [
+        pair
+        for pair in pairs
+        if scopes_of_key[pair[0]] - {primary_scope} and f"{pair[0]}-{pair[1]}" not in found
+    ]
+    if outstanding:
+        found |= _attached_present(primary_db, outstanding, scopes_of_key)
+    return found
 
 
 def _exact_parameters(parameters: Mapping[str, list[str]], extras: set[str]) -> tuple[str, dict]:
