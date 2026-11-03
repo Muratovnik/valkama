@@ -45,20 +45,41 @@ function polygons(path: string): Point[][] {
   let current: Point[] = []
   let at: Point = [0, 0]
   for (const [, command, args] of path.matchAll(/([A-Za-z])([^A-Za-z]*)/g)) {
-    const numbers = args.trim() ? args.trim().split(/[\s,]+/).map(Number) : []
-    if (command === 'M') {
-      current = []
-      shapes.push(current)
-      at = [numbers[0], numbers[1]]
-    } else if (command === 'L') at = [numbers[0], numbers[1]]
-    else if (command === 'H') at = [numbers[0], at[1]]
-    else if (command === 'V') at = [at[0], numbers[0]]
-    else if (command === 'Z') {
-      const [first] = current
-      const last = current.at(-1)
-      if (last && first && last[0] === first[0] && last[1] === first[1]) current.pop()
-      continue
-    } else throw new Error(`the mark is straight lines only, and ${command} is not one`)
+    const numbers = args.trim()
+      ? args
+          .trim()
+          .split(/[\s,]+/)
+          .map(Number)
+      : []
+    switch (command) {
+      case 'M': {
+        current = []
+        shapes.push(current)
+        at = [numbers[0], numbers[1]]
+        break
+      }
+      case 'L': {
+        at = [numbers[0], numbers[1]]
+        break
+      }
+      case 'H': {
+        at = [numbers[0], at[1]]
+        break
+      }
+      case 'V': {
+        at = [at[0], numbers[0]]
+        break
+      }
+      case 'Z': {
+        const [first] = current
+        const last = current.at(-1)
+        if (last && first && last[0] === first[0] && last[1] === first[1]) current.pop()
+        continue
+      }
+      default: {
+        throw new Error(`the mark is straight lines only, and ${command} is not one`)
+      }
+    }
     current.push(at)
   }
   return shapes
