@@ -690,7 +690,8 @@ and only asks the file system whether each exists; it opens no file. `space` is
 the planning space's exact identity, the same value `GET /api/ref` takes, and is
 only the base of a relative path. Each path is sent as written, without its
 `:42` or `#...` suffix, and comes back unchanged in `path`, so an answer is matched
-without parsing it:
+without parsing it. A request line may not pass 64 KiB (the listener answers 414),
+so a batch of long paths is split sooner than 64:
 
 ```json
 {"paths": [
@@ -718,7 +719,7 @@ without parsing it:
 | `missing` | Nothing there, under the space's root or under a project registered inside that root |
 | `ambiguous` | A relative path found in two or more of the projects registered inside the space's root, and not under the root itself. The projects are not named |
 | `space_unbound` | A relative path in a space the registry does not bind to one existing root. An absolute path in the same request still resolves |
-| `refused` | `code` is `invalid_path` (not a local path Windows would take as written: a network or device path, a drive-relative path, a reserved name or character, longer than 1024 characters), `outside_root` (outside every registered root, answered the same whether anything is there) or `not_a_file` (a device or a pipe) |
+| `refused` | `code` is `invalid_path` (not a local path Windows would take as written: a network or device path, a drive-relative path, a reserved name or character, longer than 1024 characters), `outside_root` (outside every registered root, answered the same whether anything is there), `not_a_file` (a device or a pipe) or `unreadable` (the operating system refused to say) |
 
 A relative path is taken from the space's root first. Only when nothing is there
 is it looked for in the projects registered inside that root, so a nested project

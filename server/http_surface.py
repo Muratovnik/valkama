@@ -23,7 +23,16 @@ from pathlib import Path
 from typing import NamedTuple
 from urllib.parse import parse_qs, unquote, urlparse
 
-from . import app_shell, housekeeping, http_security, runner, static_assets, ui_state, watchers
+from . import (
+    app_shell,
+    documents,
+    housekeeping,
+    http_security,
+    runner,
+    static_assets,
+    ui_state,
+    watchers,
+)
 from .executions import api as execution_api
 from .executions import lifecycle as execution_lifecycle
 from .executions import service as execution_service
@@ -280,6 +289,41 @@ def _boundary(table: tuple[_Boundary, ...], path: str) -> _Boundary | None:
         if path in row.exact or (row.prefix is not None and path.startswith(row.prefix)):
             return row
     return None
+
+
+_DOCUMENT_RESOLVE = "/api/documents/resolve"
+_DOCUMENT_READ = "/api/documents/read"
+#: The first routes that give out the text of a file on the disk: nothing keeps a
+#: copy of the answer, and nothing guesses another type for it.
+_DOCUMENT_HEADERS = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
+_DOCUMENT_REFUSALS = {
+    "invalid_request": 400,
+    "invalid_path": 400,
+    "project_unknown": 404,
+    "outside_root": 403,
+    "not_found": 404,
+    "directory": 422,
+    "not_a_file": 422,
+    "not_markdown": 415,
+    "too_large": 413,
+    "binary": 415,
+    "not_utf8": 415,
+    "unreadable": 503,
+}
+
+
+def _document_answer(path: str, parameters: Mapping[str, list[str]]) -> tuple[int, dict]:
+    try:
+        if path == _DOCUMENT_RESOLVE:
+            paths = parameters.get("path", [])
+            return 200, {"paths": documents.resolve_paths(_first_value(parameters, "space"), paths)}
+        project = _first_value(parameters, "project")
+        relative = _first_value(parameters, "path")
+        if not project or relative is None:
+            raise documents.DocumentError("invalid_request")
+        return 200, documents.read_markdown(project, relative)
+    except documents.DocumentError as error:
+        return _DOCUMENT_REFUSALS[error.code], {"error": {"code": error.code, **error.details}}
 
 
 def _publishes(notify: _Notify | None, path: str) -> bool:
@@ -871,6 +915,9 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
         parameters = parse_qs(url.query, keep_blank_values=True)
+        if url.path in (_DOCUMENT_RESOLVE, _DOCUMENT_READ):
+            self._answer_document(url.path, parameters)
+            return
         boundary = _boundary(_GET_BOUNDARIES, url.path)
         if boundary is not None:
             self._dispatch(boundary, url.path, query=url.query, parameters=parameters)
@@ -980,6 +1027,22 @@ class Handler(BaseHTTPRequestHandler):
             )
         else:
             self._send(404, b"not found", "text/plain")
+
+    def _answer_document(self, path: str, parameters: Mapping[str, list[str]]) -> None:
+        """Not a table row: a row sees neither the request's headers nor sets its own.
+
+        Stricter than the reads beside it, which check only `Host`. Another site could
+        not read this answer anyway, for want of CORS, but the check also takes away
+        probing for what exists through a `<script>` or an `<img>`.
+        """
+
+        try:
+            http_security.require_bootstrap_origin(self.headers, self.server.security_context)
+        except http_security.RequestRefusedError as error:
+            status, answer = error.status, {"error": {"code": error.code}}
+        else:
+            status, answer = _document_answer(path, parameters)
+        self._send_json(status, answer, headers=_DOCUMENT_HEADERS)
 
     def _stream_events(
         self,

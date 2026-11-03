@@ -9,11 +9,14 @@ and `locate` takes a path as a text wrote it and says what it may open.
 
 from __future__ import annotations
 
+import hashlib
 import ntpath
 import os
 import stat
+import sys
 import unicodedata
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from typing import Literal, NamedTuple
 
 from .ops import configuration
@@ -42,6 +45,8 @@ REF_RESOLVE_TIMEOUT = 6
 
 #: A longer path is refused unread, and the page never sends one.
 MAX_PATH_CHARS = 1024
+#: How many paths one question may carry, each costing at most a few `stat` calls.
+MAX_RESOLVE_PATHS = 64
 
 # fmt: off
 # CPython 3.13.0 Lib/ntpath.py -- Copyright (c) 2001-2024 Python Software Foundation.
@@ -225,6 +230,118 @@ def locate(
     return next(iter(located.values()), found)
 
 
+class DocumentError(Exception):
+    """A refused request: one code from the closed list in `README.md`, never an OS error."""
+
+    def __init__(self, code: str, **details: int) -> None:
+        super().__init__(code)
+        self.code = code
+        self.details = details
+
+
+def _resolved(raw: str, answer: Located | DocumentRefused) -> dict[str, object]:
+    """One path's answer to the page. `absolute` is the field that does not go."""
+
+    if isinstance(answer, Located):
+        shown: dict[str, object] = {
+            "path": raw,
+            "status": answer.kind,
+            "project": answer.project,
+            "relative": answer.relative,
+        }
+        if answer.kind == "file":
+            shown["markdown"] = answer.markdown
+        return shown
+    if answer.code == "not_found":
+        return {"path": raw, "status": "missing"}
+    if answer.code in {"ambiguous", "space_unbound"}:
+        return {"path": raw, "status": answer.code}
+    return {"path": raw, "status": "refused", "code": answer.code}
+
+
+def resolve_paths(
+    space: str | None,
+    paths: Sequence[str],
+    *,
+    reader: project_registry.RegistryReader | None = None,
+) -> list[dict[str, object]]:
+    """What each written path is, from `stat` alone: no file is opened.
+
+    `space` is the exact identity of a planning space, as `GET /api/ref` takes it,
+    and only the base of a relative path: the boundary is every registered root
+    whatever the space. One that does not parse is refused, so a crafted value
+    reaches no directory at all; one the registry does not bind leaves relative
+    paths unbound and absolute ones answered.
+    """
+
+    if not paths or len(paths) > MAX_RESOLVE_PATHS:
+        raise DocumentError("invalid_request")
+    base: str | None = None
+    if space is not None:
+        mapping = project_registry.resolve_space_root(
+            {"kind": "planning-space", "resource_id": space}, reader=reader
+        )
+        if mapping["status"] == "malformed" and mapping["resource_ref"] is None:
+            raise DocumentError("invalid_request")
+        if mapping["status"] == "mapped":
+            base = os.path.realpath(str(mapping["canonical_root"]))
+    roots = registered_roots(reader=reader)
+    nested = nested_roots(base, roots) if base is not None else ()
+    return [_resolved(raw, locate(raw, base=base, roots=roots, nested=nested)) for raw in paths]
+
+
+def _read_bounded(path: str) -> tuple[bytes, os.stat_result]:
+    """At most one byte over the limit, so a file that grew after `stat` cannot pass."""
+
+    with open(path, "rb") as handle:
+        return handle.read(MAX_DOC_BYTES + 1), os.fstat(handle.fileno())
+
+
+def read_markdown(
+    project: str, path: str, *, reader: project_registry.RegistryReader | None = None
+) -> dict[str, object]:
+    """One Markdown file of one project, read from the root the registry gives.
+
+    The path comes back through `locate` with this project as its whole boundary,
+    which is what `resolve_paths` answered it from: a nested project is inside its
+    parent, and a second lookup must not take the path into another project.
+    """
+
+    root = next(
+        (found for found in registered_roots(reader=reader) if found.project == project), None
+    )
+    if root is None:
+        raise DocumentError("project_unknown")
+    located = locate(path, base=root.path, roots=(root,))
+    if isinstance(located, DocumentRefused):
+        raise DocumentError(located.code)
+    if located.kind == "directory":
+        raise DocumentError("directory")
+    if not located.markdown:
+        raise DocumentError("not_markdown")
+    try:
+        data, status = _read_bounded(located.absolute)
+    except OSError as error:
+        print(f"Valkama could not read a document: {error}", file=sys.stderr)  # noqa: T201
+        raise DocumentError("unreadable") from error
+    if len(data) > MAX_DOC_BYTES:
+        raise DocumentError("too_large", size=max(status.st_size, len(data)), limit=MAX_DOC_BYTES)
+    if b"\0" in data:
+        raise DocumentError("binary")
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise DocumentError("not_utf8") from error
+    return {
+        "project": project,
+        "path": located.relative,
+        "markdown": text.removeprefix("\ufeff"),
+        "size": len(data),
+        "modified_at": datetime.fromtimestamp(status.st_mtime, UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "revision": hashlib.sha256(data).hexdigest()[:16],
+    }
+
+
 def doc_roots() -> list[str]:
     raw = configuration.configured("document_roots") or ""
     return [part for part in (item.strip() for item in raw.split(os.pathsep)) if part]
@@ -275,15 +392,20 @@ def search_documents(query: str, roots: list[str] | None = None) -> list[dict]:
 
 __all__ = [
     "DOC_ROOTS_VAR",
+    "MAX_DOC_BYTES",
     "MAX_DOC_HITS",
     "MAX_PATH_CHARS",
+    "MAX_RESOLVE_PATHS",
     "REF_RESOLVE_TIMEOUT",
+    "DocumentError",
     "DocumentRefused",
     "Located",
     "Root",
     "doc_roots",
     "locate",
     "nested_roots",
+    "read_markdown",
     "registered_roots",
+    "resolve_paths",
     "search_documents",
 ]

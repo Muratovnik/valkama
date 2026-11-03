@@ -117,6 +117,29 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(launcher.status(self.directory)["state"], "installed")
         self.assertEqual(launcher.uninstall(self.directory)["state"], "missing")
 
+    def test_a_release_carries_the_license_files_beside_the_server(self) -> None:
+        # A notice left behind in the checkout is a license broken at the first install.
+        licenses = self.checkout / "server" / "licenses"
+        licenses.mkdir(parents=True)
+        (licenses / "third-party-LICENSE.txt").write_text("the terms\n", encoding="utf-8")
+        git(self.checkout, "add", "-A")
+        git(self.checkout, "commit", "-qm", "license")
+        self.install()
+        copied = list(self.releases.glob("*/server/licenses/third-party-LICENSE.txt"))
+        self.assertEqual(1, len(copied))
+        self.assertEqual("the terms\n", copied[0].read_text(encoding="utf-8"))
+
+    def test_this_repository_keeps_its_license_files_in_a_release(self) -> None:
+        # `pin_release` copies what `git archive` gives: what Git tracks and does not
+        # mark `export-ignore`.
+        repository = Path(__file__).resolve().parents[1]
+        notice = "server/licenses/cpython-LICENSE.txt"
+        self.assertEqual(notice, git(repository, "ls-files", "--", notice))
+        self.assertEqual(
+            f"{notice}: export-ignore: unspecified",
+            git(repository, "check-attr", "export-ignore", "--", notice),
+        )
+
     def test_command_wrapper_contains_no_checkout_path(self) -> None:
         for platform_name in ("nt", "posix"):
             with self.subTest(platform_name=platform_name):
