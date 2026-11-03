@@ -13,12 +13,13 @@
  * followed: the desktop app has no address bar to take it from. The anchor opens
  * where it lives, or is copied where nothing can open it, and its full path
  * stands in Relations with the item's other references. Each says what happened
- * beside it. The note for the link names no number: the reference stands
- * right before it, and a phone-wide line has room for the short form only.
+ * at the end of the line, by the one rule `IdentityNote` keeps for all three. The
+ * note for the link names no number: the reference stands right before it.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import IdentityNote from '@/widgets/work-item-inspector/components/IdentityNote.vue'
 import { useSourceOpen } from '@/widgets/work-item-inspector/utils/useSourceOpen.ts'
 
 import FacetMarks from '@/entities/work-item/components/FacetMarks.vue'
@@ -37,11 +38,16 @@ const props = defineProps<{
 
 const { t, d } = useI18n()
 
-const { note: sourceNote, open: openSource } = useSourceOpen(
+const {
+  failed: sourceFailed,
+  note: sourceNote,
+  open: openSource,
+} = useSourceOpen(
   () => props.item?.source ?? '',
   () => props.resourceRef,
 )
 const copyNote = ref('')
+const copyFailed = ref(false)
 
 /** Put `text` on the clipboard and say beside the line whether it got there. */
 async function copy(text: string, done: string, failed: string) {
@@ -49,8 +55,10 @@ async function copy(text: string, done: string, failed: string) {
   const words = { reference: props.reference }
   try {
     await navigator.clipboard.writeText(text)
+    copyFailed.value = false
     copyNote.value = t(done, words)
   } catch {
+    copyFailed.value = true
     copyNote.value = t(failed, words)
   }
 }
@@ -79,6 +87,7 @@ const updated = computed(() => {
 })
 
 const note = computed(() => copyNote.value || sourceNote.value)
+const noteFailed = computed(() => (copyNote.value ? copyFailed.value : sourceFailed.value))
 const sourceLabel = computed(() => `${t('source.open')}: ${props.item?.source ?? ''}`)
 </script>
 
@@ -135,11 +144,10 @@ const sourceLabel = computed(() => `${t('source.open')}: ${props.item?.source ??
         :size="14"
       />
     </button>
-    <span
-      class="identity-note"
-      role="status"
-      >{{ note }}</span
-    >
+    <IdentityNote
+      :text="note"
+      :failed="noteFailed"
+    />
   </div>
 </template>
 
@@ -222,17 +230,6 @@ const sourceLabel = computed(() => `${t('source.open')}: ${props.item?.source ??
    record's history. */
 @container drawer (width < 520px) {
   .identity-updated {
-    display: none;
-  }
-}
-
-.identity-note {
-  min-width: 0;
-  color: var(--color-text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-
-  &:empty {
     display: none;
   }
 }

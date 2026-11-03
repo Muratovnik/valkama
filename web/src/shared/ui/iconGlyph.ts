@@ -29,6 +29,7 @@ import {
   ChevronRight,
   ChevronsUp,
   ChevronUp,
+  CircleAlert,
   CircleHelp,
   CircleSlash,
   Code,
@@ -69,6 +70,8 @@ import {
 /** Manifest-owned icon keys. An unknown key intentionally gets one generic glyph. */
 const ICONS: Record<string, Component> = {
   'activity': Activity,
+  // What a press could not do, beside what it said; `check` is what it did.
+  'alert': CircleAlert,
   'analytics': BarChart3,
   'bell': Bell,
   'board': SquareKanban,

@@ -336,6 +336,7 @@ export function surfacePolicy(kind: SurfaceKind) {
 
 export type IconName =
   | 'activity'
+  | 'alert'
   | 'analytics'
   | 'bell'
   | 'board'

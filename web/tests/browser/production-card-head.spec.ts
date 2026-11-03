@@ -156,12 +156,46 @@ test('the state chip moves the item from the keyboard and says why the server re
   await expect.poll(() => moves.length).toBe(2)
 })
 
-for (const width of [1440, 390]) {
-  test(`the head copies the item's short address from the keyboard and says so, at ${width}px`, async ({
-    page,
-  }) => {
+/**
+ * A note in the head says what a press did, and is never cut: its glyph stands at any
+ * width, its words only where the line holds them whole, and the status region always
+ * carries the whole sentence.
+ */
+async function expectNoteWhole(
+  page: Page,
+  drawer: Locator,
+  sentence: string,
+  glyph: 'check' | 'circle-alert' = 'check',
+) {
+  await expect(drawer.locator('.card-identity [role="status"]')).toHaveText(sentence)
+  const shown = drawer.locator('.card-identity .identity-note')
+  await expect(shown).toBeVisible()
+  await expect(shown).toHaveAttribute('title', sentence)
+  // A failure keeps a glyph of its own, so it never reads as done.
+  const mark = shown.locator('.identity-note-glyph')
+  await expect(mark).toBeVisible()
+  await expect(mark).toHaveClass(new RegExp(`(^| )lucide-${glyph}( |$)`, 'u'))
+  const words = shown.locator('.identity-note-words')
+  // Either the whole sentence or none of it: the browser's own measure of the box.
+  const cut = await words.evaluateAll((nodes) =>
+    nodes.filter((node) => node.scrollWidth > node.clientWidth).map((node) => node.textContent),
+  )
+  expect(cut).toEqual([])
+  const said = await words.allTextContents()
+  expect(said.every((text) => text === sentence)).toBe(true)
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  )
+  expect(overflow).toBe(0)
+}
+
+for (const width of [1280, 390]) {
+  test(`every note in the head is said whole, never cut, at ${width}px`, async ({ page }) => {
     const { drawer } = await openCard(page, width)
     await page.context().grantPermissions(['clipboard-write', 'clipboard-read'])
+    const clipboard = () => page.evaluate(() => navigator.clipboard.readText())
+
+    // The link, from the keyboard: the reference, then its link.
     const link = drawer.getByRole('button', {
       name: `Копировать ссылку на ${workItemRef.reference}`,
     })
@@ -169,28 +203,28 @@ for (const width of [1440, 390]) {
     await page.keyboard.press('Tab')
     await expect(link).toBeFocused()
     await page.keyboard.press('Enter')
-
     const address = `${new URL(page.url()).origin}/open/${workItemRef.reference}`
-    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(address)
-    const note = drawer.locator('.card-identity [role="status"]')
-    await expect(note).toHaveText('Ссылка скопирована')
-    await expect(note).toBeVisible()
-    // Said whole where the line has room; a phone-wide line shortens it as it does
-    // every note there, and the live region still says all of it.
-    const whole = await note.evaluate((node) => node.scrollWidth <= node.clientWidth)
-    expect(whole || width < STACKED_BELOW).toBe(true)
-    // The note shares the line and pushes nothing out of the window.
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    )
-    expect(overflow).toBe(0)
+    await expect.poll(clipboard).toBe(address)
+    await expectNoteWhole(page, drawer, 'Ссылка скопирована')
+    await expectNoSilentClipping(page, `link note at ${width}px`)
+
+    // The reference copies itself.
+    await drawer.locator('.head-reference').click()
+    await expect.poll(clipboard).toBe(workItemRef.reference)
+    await expectNoteWhole(page, drawer, `${workItemRef.reference} скопирован`)
+
+    // The anchor, which a browser cannot open, is copied and says so.
+    await drawer.locator('.identity-source').click()
+    await expect.poll(clipboard).toBe('docs/plans/platform.md#kb:arch-plan')
+    await expectNoteWhole(page, drawer, 'Путь источника скопирован')
+    await expectNoSilentClipping(page, `anchor note at ${width}px`)
   })
 }
 
 test('a link the clipboard refuses is said to have failed, not to have been copied', async ({
   page,
 }) => {
-  const { drawer } = await openCard(page, 1440)
+  const { drawer } = await openCard(page, 390)
   await page.evaluate(() => {
     Object.defineProperty(navigator, 'clipboard', {
       value: { writeText: () => Promise.reject(new DOMException('denied', 'NotAllowedError')) },
@@ -199,9 +233,8 @@ test('a link the clipboard refuses is said to have failed, not to have been copi
   await drawer
     .getByRole('button', { name: `Копировать ссылку на ${workItemRef.reference}` })
     .click()
-  await expect(drawer.locator('.card-identity [role="status"]')).toHaveText(
-    'Не удалось скопировать ссылку',
-  )
+  await expect(drawer.locator('.identity-note-glyph')).toBeVisible()
+  await expectNoteWhole(page, drawer, 'Не удалось скопировать ссылку', 'circle-alert')
 })
 
 test('a reference in a checklist step opens its card, and pressing the step text ticks it', async ({

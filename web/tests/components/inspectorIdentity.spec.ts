@@ -40,6 +40,9 @@ function identity(locale: 'en' | 'ru' = 'en') {
 
 const linkButton = (wrapper: ReturnType<typeof identity>) => wrapper.get('button.identity-link')
 const note = (wrapper: ReturnType<typeof identity>) => wrapper.get('[role="status"]')
+/** The glyph the line shows for the note: `check`, `alert`, or null for none. */
+const glyph = (wrapper: ReturnType<typeof identity>) =>
+  wrapper.find('.identity-note v-icon-stub').attributes('name') ?? null
 
 describe('copying the link to an item', () => {
   it('puts the short address on this origin on the clipboard and says so', async () => {
@@ -52,6 +55,7 @@ describe('copying the link to an item', () => {
 
     expect(writeText).toHaveBeenCalledExactlyOnceWith(`${location.origin}/open/MAIN-12`)
     expect(note(wrapper).text()).toBe('Link copied')
+    expect(glyph(wrapper)).toBe('check')
   })
 
   it('says the copy failed when the clipboard refuses, and never that it was copied', async () => {
@@ -64,6 +68,7 @@ describe('copying the link to an item', () => {
     await flushPromises()
 
     expect(note(wrapper).text()).toBe('Could not copy the link')
+    expect(glyph(wrapper)).toBe('alert')
   })
 
   it('speaks the language of the interface', async () => {
@@ -86,5 +91,42 @@ describe('copying the link to an item', () => {
 
     expect(writeText).toHaveBeenCalledExactlyOnceWith('MAIN-12')
     expect(note(wrapper).text()).toBe('MAIN-12 copied')
+    expect(glyph(wrapper)).toBe('check')
+  })
+})
+
+describe('a note on the identity line', () => {
+  it('shows nothing and keeps its status region empty but present before a press', () => {
+    const wrapper = identity()
+    expect(wrapper.find('.identity-note').exists()).toBe(false)
+    expect(note(wrapper).text()).toBe('')
+  })
+
+  it('drops words that would be cut, and keeps the glyph and the whole sentence', async () => {
+    clipboard(async () => {})
+    // The line leaves 40px for words 120px long.
+    const room = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.classList.contains('identity-note-words') ? 40 : 0
+    })
+    const length = vi
+      .spyOn(HTMLElement.prototype, 'scrollWidth', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        return this.classList.contains('identity-note-words') ? 120 : 0
+      })
+    try {
+      const wrapper = identity()
+      await linkButton(wrapper).trigger('click')
+      await flushPromises()
+
+      expect(wrapper.find('.identity-note-words').exists()).toBe(false)
+      expect(glyph(wrapper)).toBe('check')
+      expect(wrapper.get('.identity-note').attributes('title')).toBe('Link copied')
+      expect(note(wrapper).text()).toBe('Link copied')
+    } finally {
+      room.mockRestore()
+      length.mockRestore()
+    }
   })
 })

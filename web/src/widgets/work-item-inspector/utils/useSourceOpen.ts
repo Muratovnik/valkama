@@ -16,14 +16,17 @@ import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
 export function useSourceOpen(source: () => string, resourceRef: () => PlanningSpaceEntityRef) {
   const { t } = useI18n()
   const note = ref('')
+  /** Whether the note says that opening failed, rather than what was done instead. */
+  const failed = ref(false)
 
   async function open() {
     const result = await openSourceReference({ source: source(), resource_ref: resourceRef() })
     const outcome = sourceFeedback(result)
+    failed.value = outcome === 'failed'
     if (outcome === 'copied') note.value = t('source.copied')
     else if (outcome === 'failed') note.value = t('source.failed', { message: result.error ?? '' })
     else note.value = ''
   }
 
-  return { note, open }
+  return { failed, note, open }
 }
