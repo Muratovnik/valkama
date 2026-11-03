@@ -636,6 +636,16 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   missing from the space — is the text it was. A modal dialog that could only
   open a card behind itself — the new task's preview — claims every reference as
   text.
+- **A reference's card:** `ReferencePreview` owns the one card per window shown
+  for a work item's number in free text, half a second after the pointer rests on
+  it or at once on Tab: number and state on a line, the title, the holder and the
+  steps. It only reads. Nothing in it takes focus, a press on the number still
+  opens the item, and Escape closes the card and nothing under it. A card from the
+  pointer closes when what holds the reference scrolls. A card from Tab stays,
+  because the browser's own scroll to the focused number would close it, and is
+  hidden only while the number is out of the window. Focus handed back by a closing
+  surface does not bring it up. A number the open space holds is drawn from memory
+  with no request; any other reads that item's brief record once.
 - **Writing free text:** `MarkdownEditor` owns the field, and draws it as one
   object: a slim toolbar, the text and a foot inside one hairline and one radius,
   told apart by tone; while the text has focus the hairline itself takes the focus

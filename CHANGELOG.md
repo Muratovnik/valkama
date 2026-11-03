@@ -12,6 +12,11 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Added
 
+- **A work item's number in a text shows its card.** Rest the pointer on the number for half
+  a second, or reach it with Tab, to see its state, title, holder and steps without leaving
+  what you are reading. A press still opens the item, Escape closes only the card, and a tap
+  opens the item with no card. A number in the open space costs no request; any other reads
+  the item's brief record once.
 - **A Markdown file named in a text opens in Valkama.** A press on a path to a `.md` file in
   a card or a question opens the document over them, read-only: headings, lists, tables and
   code drawn, at the `#kb:…`, heading or `:42` the path names, with a link to another document
