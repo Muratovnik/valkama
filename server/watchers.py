@@ -16,19 +16,20 @@ from .executions.lifecycle import reap_launches
 from .store import connect
 
 
-def reap_finished_launches(conn) -> bool:
-    """Reap the launches that have finished, in one immediate transaction.
+def reap_finished_launches(conn) -> list[dict]:
+    """Reap the launches that have finished, each in the transactions it opens itself.
 
-    Whether anything changed is the answer, so the loop below knows to tell
-    the event streams.
+    Recording one ending starts and commits several, and a session event starts its
+    own, so nothing may hold one open around this: that made every ending fail to
+    record. The launches are the answer, so the loop below knows to tell the event
+    streams and what to tell the owner.
     """
 
     try:
-        conn.execute("BEGIN IMMEDIATE")
-        changed = bool(reap_launches(conn))
+        ended = reap_launches(conn)
         if conn.in_transaction:
             conn.commit()
-        return changed
+        return ended
     except Exception:
         conn.rollback()
         raise

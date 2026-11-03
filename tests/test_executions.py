@@ -567,6 +567,37 @@ class ReapLoopTests(unittest.TestCase):
         self.assertEqual("changed", stream.get_nowait(), "the cycle after the failure published")
 
 
+class ReaperPassTests(LaunchHarness):
+    """The pass the listener's loop makes, not only the verb beneath it."""
+
+    def test_a_pass_records_the_ending_and_moves_the_item_to_review(self) -> None:
+        reference = self.item("finish me")
+        executions.launch_work_item(self.conn, self.packet(reference))
+        runner.RUNNER._running[reference].capture.append(
+            json.dumps(
+                {
+                    "structured_output": {
+                        "outcome": "complete",
+                        "expected_effect": "change_required",
+                        "delivery": "owned change",
+                        "oracle": "focused tests passed",
+                        "unresolved": "none",
+                    }
+                }
+            )
+        )
+        self.processes[0].code = 0
+        with contextlib.redirect_stderr(io.StringIO()) as reported:
+            ended = watchers.reap_finished_launches(self.conn)
+
+        self.assertEqual("", reported.getvalue(), "the ending recorded without a complaint")
+        self.assertEqual([reference], [item["reference"] for item in ended])
+        detail = planning.get_work_item(self.conn, reference)
+        self.assertEqual("review", detail["state"]["key"])
+        self.assertIn("outcome=complete", detail["comments"][-1]["body"])
+        self.assertFalse(self.conn.in_transaction)
+
+
 class ReapBatchTests(LaunchHarness):
     """A batch of endings is recorded one attempt at a time, and closed once."""
 
