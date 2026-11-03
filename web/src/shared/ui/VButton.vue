@@ -97,6 +97,13 @@ withDefaults(
   border-radius: var(--radius-control);
   cursor: pointer;
 
+  /* A forced palette clears the fill that made this a control, which leaves its words
+     reading as text. The outline takes no room, and the focus ring below replaces it. */
+  @media (forced-colors: active) {
+    outline: 1px solid ButtonText;
+    outline-offset: -1px;
+  }
+
   &:hover:not(:disabled, [aria-disabled='true']) {
     color: var(--color-button-ink-hover);
     background: var(--color-button-fill-hover);

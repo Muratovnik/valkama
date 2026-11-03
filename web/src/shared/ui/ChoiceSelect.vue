@@ -239,6 +239,12 @@ function updateOpen(value: boolean) {
   background: var(--color-choice-trigger-fill, var(--color-control-surface));
   border-radius: var(--radius-control);
   cursor: pointer;
+
+  /* A forced palette clears the fill that made this a control; see `VButton`. */
+  @media (forced-colors: active) {
+    outline: 1px solid ButtonText;
+    outline-offset: -1px;
+  }
 }
 
 /* The icon is the option's identity — the workspace, the board — and it carries

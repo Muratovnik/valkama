@@ -116,6 +116,34 @@ function toggle(current: boolean) {
   text-align: left;
 }
 
+/* A forced palette clears both fills, which leaves nothing to say which way the switch
+   is thrown, so the two stay out of its reach and take its own colours. */
+@media (forced-colors: active) {
+  .toggle-track,
+  .toggle-knob {
+    forced-color-adjust: none;
+  }
+
+  .toggle-track {
+    background: Canvas;
+    outline: 1px solid ButtonText;
+    outline-offset: -1px;
+  }
+
+  .toggle-knob {
+    background: ButtonText;
+  }
+
+  .toggle-switch[aria-checked='true'] .toggle-track {
+    background: Highlight;
+    outline-color: Highlight;
+  }
+
+  .toggle-switch[aria-checked='true'] .toggle-knob {
+    background: HighlightText;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .toggle-track,
   .toggle-knob {
