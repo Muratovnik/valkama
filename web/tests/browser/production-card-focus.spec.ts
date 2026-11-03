@@ -176,10 +176,12 @@ test('a route handed over to a card read from the keyboard shows where focus wen
 })
 
 /**
- * A card whose holder is whatever the last write left, with each write taking long enough
- * to be in flight while it is looked at. `claims` hears them as they are sent.
+ * A card whose holder is whatever the last write left. Each write stays out until the test
+ * lets it answer, so that what is looked at while it is out is looked at then. On a timer
+ * it answered first on a slow machine, and the press meant to land during it landed on the
+ * action the answer brought instead. `claims` hears them as they are sent.
  */
-async function cardWithSlowClaims(page: Page, holder: string) {
+async function cardWithHeldClaims(page: Page, holder: string) {
   await page.setViewportSize({ width: 1440, height: 844 })
   await installBackend(page, { longRead: true })
   const held = { by: holder }
@@ -205,15 +207,21 @@ async function cardWithSlowClaims(page: Page, holder: string) {
       },
     }),
   )
+  const out: (() => void)[] = []
   await page.route('**/api/planning/work-item/claim', async (route) => {
     const body = route.request().postDataJSON() as { release?: boolean }
     claims.push(body)
-    await new Promise((done) => setTimeout(done, 300))
+    await new Promise<void>((done) => out.push(done))
     held.by = body.release === true ? '' : 'user'
     await route.fulfill({ json: record() })
   })
+  /** Lets the one write that is out answer. */
+  const answer = async () => {
+    await expect.poll(() => out.length).toBe(1)
+    out.shift()?.()
+  }
   await page.goto(CARD)
-  return { claims, drawer: await cardBeingRead(page) }
+  return { answer, claims, drawer: await cardBeingRead(page) }
 }
 
 /** Whether focus was in the card on each frame `act` took. */
@@ -242,7 +250,7 @@ for (const where of ['.card-action', '.drawer-frame-action']) {
   test(`a takeover confirmed from ${where} keeps focus in the card, through the write and after`, async ({
     page,
   }) => {
-    const { claims, drawer } = await cardWithSlowClaims(page, 'codex')
+    const { answer, claims, drawer } = await cardWithHeldClaims(page, 'codex')
     const body = drawer.locator('.drawer-frame-body')
     await body.evaluate(
       (node, far) => node.scrollTo({ top: far }),
@@ -267,6 +275,7 @@ for (const where of ['.card-action', '.drawer-frame-action']) {
       // A press during the write is not another write and not another question.
       await page.keyboard.press('Enter')
       await expect(strip).toHaveCount(0)
+      await answer()
       await expect(action).toHaveText('Release')
     })
     expect(frames.filter((inCard) => !inCard)).toEqual([])
@@ -279,16 +288,19 @@ for (const where of ['.card-action', '.drawer-frame-action']) {
 test('taking and releasing keep focus on the action, whatever it comes to offer', async ({
   page,
 }) => {
-  const { claims, drawer } = await cardWithSlowClaims(page, '')
+  const { answer, claims, drawer } = await cardWithHeldClaims(page, '')
   const action = drawer.locator('.card-action').getByRole('button')
   await expect(action).toHaveText('Claim')
   await action.focus()
   const frames = await framesOfFocus(page, async () => {
     await page.keyboard.press('Enter')
     await expect(action).toHaveAttribute('aria-disabled', 'true')
+    await answer()
     await expect(action).toHaveText('Release')
     await expect(action).not.toHaveAttribute('aria-disabled')
     await page.keyboard.press('Enter')
+    await expect(action).toHaveAttribute('aria-disabled', 'true')
+    await answer()
     await expect(action).toHaveText('Claim')
   })
   expect(frames.filter((inCard) => !inCard)).toEqual([])
