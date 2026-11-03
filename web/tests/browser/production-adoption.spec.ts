@@ -147,7 +147,7 @@ test('a required boolean remains unanswered until No is submitted and confirmed'
   const dialog = page.getByRole('dialog', { name: 'Needs my answer', exact: true })
   const choice = dialog.getByRole('radiogroup', { name: /Should deployment proceed\?/u })
   const no = choice.getByRole('radio', { name: 'No', exact: true })
-  await expect(choice.getByRole('radio')).toHaveCount(2)
+  await expect(choice.getByRole('radio')).toHaveCount(3)
   await expect(choice.getByRole('radio', { checked: true })).toHaveCount(0)
   await dialog.getByRole('button', { name: 'Send', exact: true }).click()
   // The refusal stands at the field, which takes focus, and brings no second Refresh.
@@ -162,7 +162,8 @@ test('a required boolean remains unanswered until No is submitted and confirmed'
   await expect(choice).not.toHaveAttribute('aria-invalid')
   await expectNoSilentClipping(page, 'Question at 390px')
   await page.screenshot({ path: testInfo.outputPath('question-narrow.png') })
-  // Past the way to answer in one's own words and the way not to answer at all.
+  // Past the comments, on the field and on the question, and the way not to answer at all.
+  await page.keyboard.press('Tab')
   await page.keyboard.press('Tab')
   await page.keyboard.press('Tab')
   await page.keyboard.press('Tab')
@@ -170,7 +171,7 @@ test('a required boolean remains unanswered until No is submitted and confirmed'
   await expect(dialog.getByRole('button', { name: 'Send', exact: true })).toBeFocused()
   await page.keyboard.press('Enter')
   await expect(dialog.locator('.request-state')).toContainText('You answered')
-  await expect(dialog.locator('.request-state')).toContainText('No')
+  await expect(dialog.locator('.request-option.is-chosen')).toContainText('No')
   // Nothing is left to answer: focus stays on the card just answered, on how it
   // ended, with its ring showing, rather than on the count line at the top.
   const outcome = dialog.locator('.request-state')
@@ -191,13 +192,13 @@ test('a required boolean remains unanswered until No is submitted and confirmed'
   await dialog.getByRole('button', { name: 'Close questions', exact: true }).click()
   await page.getByRole('button', { name: /^Needs my answer/ }).click()
   await expect(dialog.locator('.request-state')).toContainText('You answered')
-  await expect(dialog.locator('.request-state')).toContainText('No')
+  await expect(dialog.locator('.request-option.is-chosen')).toContainText('No')
   const task = dialog.getByRole('button', { name: 'Open task', exact: true })
   await task.click()
   const inCard = page.locator('.drawer .request-card')
   await expect(inCard.locator('.request-state')).toContainText('You answered')
   await page.reload()
-  await expect(inCard.locator('.request-state')).toContainText('No')
+  await expect(inCard.locator('.request-option.is-chosen')).toContainText('No')
   expect(backend.attachCommands).toEqual([])
   expect(requests.executionWrites).toEqual([])
 })

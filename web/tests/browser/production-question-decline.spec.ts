@@ -150,7 +150,7 @@ for (const { fields, form, says } of FORMS) {
   })
 }
 
-test('spaces in the own answer are nothing written, and words are', async ({ page }) => {
+test('spaces in the comment are nothing written, and words are', async ({ page }) => {
   await page.setViewportSize({ width: 1680, height: 1050 })
   const { card, requests } = await openQuestion(page, [
     question({
@@ -244,7 +244,7 @@ test('choosing or writing takes the step back, so that the place of Send sends a
   await top.getByRole('radio', { name: 'Choice 2', exact: true }).click()
   await expect(back(top)).toHaveCount(0)
   await expect(send(top)).toBeVisible()
-  // Opening the own answer moves the buttons, which ends the step by itself.
+  // Opening the comment moves the buttons, which ends the step by itself.
   await press(page, await inReach(decline(top)))
   await expect(back(top)).toBeVisible()
   await top.getByRole('button', { name: 'Comment on the question', exact: true }).click()

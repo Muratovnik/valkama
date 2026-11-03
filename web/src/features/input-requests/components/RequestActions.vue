@@ -7,9 +7,10 @@
  * meant. Its two answers take the two buttons in their places, each holding room for its
  * other word, so that nothing moves: the way back stands in the very box of the press, and
  * pressing again without moving only goes back. The asking lies over what is above the
- * buttons and takes no height, since any height would move them. An own answer open is not
- * to be lain on, since nobody should refuse without seeing the end of what will not go, so
- * while it is open the asking has its room kept above the buttons, asked or not.
+ * buttons and takes no height, since any height would move them. A comment on the question
+ * that stands open is not to be lain on, since nobody should refuse without seeing the end of
+ * what will not go, so while it is open the asking has its room kept above the buttons, asked
+ * or not.
  *
  * The same buttons stay under the keyboard for the same reason, so focus has nowhere to fall.
  *
@@ -31,7 +32,7 @@ const props = defineProps<{
   /** Whether declining was asked for, and the next word on it decides. */
   declining: boolean
   disabled: boolean
-  /** An own answer stands open above the foot. */
+  /** A comment on the question stands open above the foot. */
   noting: boolean
   refreshable: boolean
   standalone: boolean
@@ -168,7 +169,7 @@ defineExpose({ focusChange, focusWayOut })
   border-radius: var(--radius-control);
 }
 
-/* Where it cannot stand clear of Your own answer it covers that whole, rather than half a word. */
+/* Where it cannot stand clear of the comment's press it covers that whole, not half a word. */
 @container (width <= 30rem) {
   .request-asked {
     inset-inline-start: 0;

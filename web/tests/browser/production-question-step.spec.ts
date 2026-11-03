@@ -333,7 +333,7 @@ for (const [width, height] of [
   [390, 844],
 ] as const) {
   for (const locale of ['en', 'ru'] as const) {
-    test(`at ${width} in ${locale} the asking leaves an own answer open to be read, and nothing moves`, async ({
+    test(`at ${width} in ${locale} the asking leaves a comment open to be read, and nothing moves`, async ({
       page,
     }) => {
       await page.setViewportSize({ width, height })
@@ -357,7 +357,7 @@ for (const [width, height] of [
 }
 
 for (const locale of ['en', 'ru'] as const) {
-  test(`on a phone in ${locale} the asking stays off the text of a field above an own answer closed`, async ({
+  test(`on a phone in ${locale} the asking stays off the text of a field above a comment closed`, async ({
     page,
   }) => {
     await page.setViewportSize({ width: 390, height: 844 })

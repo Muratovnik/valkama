@@ -927,7 +927,7 @@ its question: a press or focus landing outside it ends it, so a page holds one s
 so does its buttons moving for any reason, a question folding above or a scroll, since what the
 person pressed no longer stands where they left it. What is asked lies over what is above the
 buttons, taking no height, because any height would move them, and in a dialog, which stands
-centred, from either side. An own answer open is never lain on: its room above the buttons is
+centred, from either side. A comment on the question open is never lain on: its room above the buttons is
 kept for as long as it stays open, so that a person refuses seeing the end of what will not go.
 Send with nothing chosen or written writes nothing on any question, required
 fields or not, and says at the first field what it wants; a question always has a field.
