@@ -20,6 +20,8 @@ const KNOWN: Record<string, object> = {
 }
 
 interface Page2 {
+  /** Lets the server answer, when it was opened holding its answers back. */
+  answer: () => void
   copied: () => Promise<string[]>
   /** Sentences the status region took on, in order, kept from before the first press. */
   spoken: () => Promise<string[]>
@@ -44,9 +46,16 @@ async function open(
       },
     })
   })
+  // Held until the test says, not for a time: a loaded machine takes any time to get there.
+  const gate: { open: () => void } = { open: () => {} }
+  const held = new Promise<void>((settle) => {
+    gate.open = settle
+  })
+  const answered = slow ? held : Promise.resolve()
+  const answer = () => gate.open()
   await page.route('**/api/documents/resolve*', async (route) => {
     const paths = new URL(route.request().url()).searchParams.getAll('path')
-    if (slow) await new Promise((settle) => setTimeout(settle, 600))
+    await answered
     await route.fulfill({
       json: { paths: paths.map((path) => ({ path, ...(KNOWN[path] ?? { status: 'missing' }) })) },
     })
@@ -64,6 +73,7 @@ async function open(
       })
   })
   return {
+    answer,
     spoken: () => page.evaluate(() => (window as unknown as { __spoken: string[] }).__spoken),
     copied: () => page.evaluate(() => (window as unknown as { __copied: string[] }).__copied),
   }
@@ -120,6 +130,7 @@ test.describe('a path as a control', () => {
     await page.keyboard.press('Enter')
     await page.keyboard.press('Enter')
     expect(await run.copied()).toEqual([])
+    run.answer()
     await expect(gone).not.toHaveAttribute('aria-busy', 'true')
     await expect.poll(run.copied).toEqual(['docs/slow.md'])
     await expect(page.locator('[role="status"]')).toHaveText('Путь скопирован')
@@ -127,9 +138,10 @@ test.describe('a path as a control', () => {
   })
 
   test('a weak path does not move when it becomes a link', async ({ page }) => {
-    await open(page, { slow: true })
+    const run = await open(page, { slow: true })
     const code = page.locator('[data-paragraph="2"] code', { hasText: 'web/src' })
     const before = await code.boundingBox()
+    run.answer()
     const link = page.locator('[data-paragraph="2"] button.rich-reference', { hasText: 'web/src' })
     await expect(link).toBeVisible()
     const after = await link.boundingBox()
