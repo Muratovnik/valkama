@@ -588,8 +588,15 @@ function Invoke-MenuRestart {
     Start-TrayWork "Invoke-RestartWork" "Complete-Restart" $null
 }
 
+function New-TrayIcon([string]$Path) {
+    # The one-argument constructor takes the frame for the system's large icon
+    # size (32px at 100%), and the shell then shrinks it into the small tray
+    # slot. Asking for the small size takes the frame drawn for that slot.
+    New-Object System.Drawing.Icon($Path, [System.Windows.Forms.SystemInformation]::SmallIconSize)
+}
+
 $script:Notify = New-Object System.Windows.Forms.NotifyIcon
-$script:Notify.Icon = New-Object System.Drawing.Icon($IconPath)
+$script:Notify.Icon = New-TrayIcon $IconPath
 $script:Notify.Text = "Valkama - a session is open"
 $script:Notify.Visible = $true
 

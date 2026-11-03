@@ -549,6 +549,28 @@ class VisibleFailureTests(unittest.TestCase):
         self.assertIn("Show-TrayProblem", handler, "the fallback must still speak")
 
 
+class TrayIconTests(unittest.TestCase):
+    """The tray shows the icon frame drawn for its slot, not a shrunken large one."""
+
+    def test_the_tray_takes_the_frame_drawn_at_the_small_icon_size(self) -> None:
+        # `Width` is the size of the frame the constructor chose, not a scaled
+        # copy: given the former single 256px icon this answers 256, so the
+        # assertion fails both when the tray asks for the large size and when
+        # the icon has no small frame to give.
+        icon = os.path.join(ROOT, "windows", "valkama.ico").replace("'", "''")
+        reading = run_tray_functions(
+            f"""
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+$icon = New-TrayIcon '{icon}'
+@{{ chosen = $icon.Width; slot = [System.Windows.Forms.SystemInformation]::SmallIconSize.Width }} | ConvertTo-Json -Compress
+""",
+            app_path=os.path.join(tempfile.gettempdir(), "absent-valkama.exe"),
+            launcher_directory=tempfile.gettempdir(),
+        )
+        self.assertEqual(reading["slot"], reading["chosen"])
+
+
 BOARD = re.compile(r"\bboards?\b", re.IGNORECASE)
 
 
