@@ -18,7 +18,7 @@ from collections.abc import Callable, Mapping
 from ..projects import project_registry
 from ..store_identity.refs import planning_space_ref, validate_work_item_ref
 from ..ui_state import PlatformHttpError, envelope
-from . import interactions, model
+from . import interactions, model, service
 from .routing import PlanningRouting, one, scope_parameters, space_ref_parameters
 
 PLANNING_INTERFACE = "valkama-planning"
@@ -173,9 +173,17 @@ def work_item_payload(
 
     The record comes from Planning's own service through the loader; this
     function owns the scope and the binding. The inspector reads links and
-    refs from the work item itself.
+    refs from the work item itself. `brief=true` answers with the brief record
+    instead, the one a space's list carries, whose size does not grow with the
+    item's history: what a preview of a reference draws.
     """
 
+    brief = "brief" in parameters
+    if brief:
+        if one(parameters, "brief") != "true":
+            raise PlatformHttpError(400, "error", "brief must be true")
+        parameters = {key: values for key, values in parameters.items() if key != "brief"}
+        item_loader = service.get_work_item_brief
     scope = scope_parameters(parameters, project_extras=("data_scope_id", "space_key", "reference"))
     if scope["kind"] != "project":
         raise PlatformHttpError(400, "error", "Work item reads require exact Project scope")

@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 import tempfile
 import unittest
+from collections.abc import Callable
 from pathlib import Path
 from unittest import mock
 
@@ -14,8 +16,10 @@ from server.memory import service as memory_service
 from server.planning import exact_api
 from server.planning import service as planning_service
 from server.planning.routing import PlanningRouting
+from server.projects import scopes
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity, planning_work_item_entity
+from tests import schema9
 from tests.registry_fixtures import project_binding, project_entry, registry_bytes
 
 OTHER_STORE = "fedcbafe-dcba-4fed-8cba-fedcbafedcba"
@@ -124,6 +128,188 @@ class PlanningExactApiTests(unittest.TestCase):
                 registry_reader=self.registry_path.read_bytes,
             )
         self.assertIsNone(exact_api.handle_get(self.conn, self.db, "/api/platform/registry", {}))
+
+    def test_a_brief_read_answers_the_record_the_space_lists(self) -> None:
+        """`brief=true` is the item as its space's list carries it, through the same binding."""
+
+        planning_service.comment_work_item(self.conn, self.item["reference"], "A finding.")
+        self.conn.commit()
+        brief = exact_api.work_item_payload(
+            self.routing(),
+            self.exact(reference=self.item["reference"], brief="true"),
+            planning_service.get_work_item,
+        )
+        self.assertEqual("valkama-planning-work-item", brief["interface_version"])
+        self.assertEqual(self.item_ref, brief["work_item_ref"])
+        self.assertEqual("project", brief["scope"]["kind"])
+        (listed,) = planning_service.list_work_items(self.conn, space="EXA")
+        self.assertEqual({"work_item": listed}, brief["state"]["payload"])
+        self.assertEqual(1, listed["comment_count"])
+        # What a preview draws is all there; the history is not.
+        for field in ("state", "title", "claim_ref", "claim_state", "last_claim_ref"):
+            self.assertIn(field, listed)
+        for field in ("checklist", "updated_at", "closed_at", "kind", "priority"):
+            self.assertIn(field, listed)
+        for field in ("comments", "events", "refs", "links", "description", "agents"):
+            self.assertNotIn(field, listed)
+        # Without `brief` the read is the card's, as it always was.
+        full = exact_api.work_item_payload(
+            self.routing(),
+            self.exact(reference=self.item["reference"]),
+            planning_service.get_work_item,
+        )["state"]["payload"]["work_item"]
+        self.assertEqual(["A finding."], [comment["body"] for comment in full["comments"]])
+        self.assertNotIn("comment_count", full)
+
+    def test_a_brief_read_is_refused_as_the_full_one_is(self) -> None:
+        """Only `brief=true`; an unknown item is 404 and a binding that moved is 409."""
+
+        for parameters in (
+            self.exact(reference=self.item["reference"], brief="false"),
+            {**self.exact(reference=self.item["reference"]), "brief": ["true", "true"]},
+            {**self.exact(reference=self.item["reference"]), "brief": []},
+            self.query(scope_kind="global", brief="true"),
+        ):
+            with (
+                self.subTest(parameters=parameters),
+                self.assertRaises(ui_state.PlatformHttpError) as refusal,
+            ):
+                exact_api.work_item_payload(
+                    self.routing(), parameters, planning_service.get_work_item
+                )
+            self.assertEqual(400, refusal.exception.status)
+        with self.assertRaises(ui_state.PlatformHttpError) as refusal:
+            exact_api.work_item_payload(
+                self.routing(),
+                self.exact(reference="EXA-999", brief="true"),
+                planning_service.get_work_item,
+            )
+        self.assertEqual(404, refusal.exception.status)
+        planning_service.create_planning_space(
+            self.conn, project_id="example-project", name="Second Space", key="SEC"
+        )
+        self.conn.commit()
+        self.write_registry(
+            [
+                project_entry(
+                    "example-project",
+                    self.root,
+                    bindings=[
+                        project_binding(
+                            "example-project",
+                            planning_space_entity({**self.space_ref, "space_key": "SEC"}),
+                        )
+                    ],
+                )
+            ]
+        )
+        with self.assertRaises(ui_state.PlatformHttpError) as refusal:
+            exact_api.work_item_payload(
+                self.routing(),
+                self.exact(reference=self.item["reference"], brief="true"),
+                planning_service.get_work_item,
+            )
+        self.assertEqual(
+            (409, "No owner Project binding"), (refusal.exception.status, refusal.exception.reason)
+        )
+
+    def attach_store(self, name: str, build: Callable[[str], str]) -> dict:
+        """Attach a store `build` writes at a path of its own; answer its space ref."""
+
+        path = str(self.root / f"{name}.sqlite3")
+        space_key = build(path)
+        scopes.attach(self.db, name, path)
+        conn = sqlite3.connect(path)
+        try:
+            data_scope_id = str(
+                conn.execute("SELECT data_scope_id FROM platform_store_metadata").fetchone()[0]
+            )
+        finally:
+            conn.close()
+        space_ref = {"data_scope_id": data_scope_id, "space_key": space_key}
+        self.write_registry(
+            [
+                project_entry(
+                    "example-project",
+                    self.root,
+                    bindings=[project_binding("example-project", planning_space_entity(space_ref))],
+                )
+            ]
+        )
+        return space_ref
+
+    def brief_from(self, space_ref: dict, reference: str) -> dict:
+        answer = exact_api.work_item_payload(
+            self.routing(),
+            self.query(
+                scope_kind="project",
+                project_id="example-project",
+                reference=reference,
+                brief="true",
+                **space_ref,
+            ),
+            planning_service.get_work_item,
+        )
+        self.assertEqual({"space_ref": space_ref, "reference": reference}, answer["work_item_ref"])
+        return answer["state"]["payload"]["work_item"]
+
+    def test_a_brief_read_reaches_an_attached_store_with_the_same_key(self) -> None:
+        def current(path: str) -> str:
+            with mock.patch.dict(os.environ, {"VALKAMA_DB": path}):
+                conn = store.connect()
+                try:
+                    planning_service.create_planning_space(
+                        conn, project_id="example-project", name="Attached", key="EXA"
+                    )
+                    planning_service.create_work_item(conn, space="EXA", title="Attached item")
+                    conn.commit()
+                finally:
+                    conn.close()
+            return "EXA"
+
+        space_ref = self.attach_store("attached", current)
+        self.assertNotEqual(self.data_scope_id, space_ref["data_scope_id"])
+        brief = self.brief_from(space_ref, "EXA-1")
+        self.assertEqual(("Attached item", 0), (brief["title"], brief["comment_count"]))
+
+    def test_a_brief_read_of_a_schema_9_attached_store(self) -> None:
+        """A store a schema-9 build wrote, read as it is: the brief needs no later column."""
+
+        for name, fixture, data_scope_id in (
+            ("first", schema9.FIXTURE, "00000000-0000-4000-8000-000000000091"),
+            ("last", schema9.LAST, "00000000-0000-4000-8000-000000000092"),
+        ):
+            with self.subTest(fixture=name):
+
+                def old(
+                    path: str, fixture: Path = fixture, data_scope_id: str = data_scope_id
+                ) -> str:
+                    schema9.build(path, fixture=fixture, data_scope_id=data_scope_id)
+                    conn = sqlite3.connect(path)
+                    try:
+                        schema9.populate(conn)
+                        conn.commit()
+                    finally:
+                        conn.close()
+                    return "KEEP"
+
+                space_ref = self.attach_store(name, old)
+                held = self.brief_from(space_ref, "KEEP-1")
+                self.assertEqual(
+                    ("Held with its history", "kept-agent", "unconfirmed", 1),
+                    (
+                        held["title"],
+                        held["claim_ref"],
+                        held["claim_state"],
+                        held["comment_count"],
+                    ),
+                )
+                self.assertEqual("dev", held["state"]["key"])
+                self.assertIsNone(held["closed_at"])
+                self.assertEqual(schema9.CREATED_AT, held["updated_at"])
+                # Blocked by the first, which is open, so not startable.
+                blocked = self.brief_from(space_ref, "KEEP-2")
+                self.assertEqual(("", False), (blocked["claim_ref"], blocked["ready"]))
 
     def test_global_portfolio_and_memory_share_every_registered_project(self) -> None:
         unbound_root = self.root / "unbound"

@@ -1,14 +1,20 @@
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import unittest
 import uuid
 from contextlib import closing
+from pathlib import Path
 from unittest import mock
 
 from server import store
-from server.planning import chain, service
+from server.planning import chain, exact_api, service
+from server.planning.routing import PlanningRouting
+from server.store_identity.metadata import read_store_metadata
+from server.store_identity.refs import planning_space_entity
+from tests.registry_fixtures import project_binding, project_entry, registry_bytes
 
 
 class PlanningScaleTests(unittest.TestCase):
@@ -150,3 +156,106 @@ class PlanningScaleTests(unittest.TestCase):
             )
             self.assertEqual((2, 150), (few_edges, many_edges))
             self.assertEqual(few_cost, many_cost)
+
+    def test_a_brief_read_costs_the_same_however_long_the_history(self) -> None:
+        """The preview's read: at most 12 statements and one size for 2 or 200 comments.
+
+        Counted on the whole exact-scope answer, binding included, for each shape
+        that asks one more statement: open and startable (its blockers), held by a
+        recorded call (that call), and finished while still held (the call and
+        when it closed).
+        """
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            db = str(root / "valkama.sqlite3")
+            with (
+                mock.patch.dict(os.environ, {"VALKAMA_DB": db}),
+                closing(store.connect()) as conn,
+            ):
+                space = service.create_planning_space(
+                    conn, project_id="example-project", name="Main", key="MAIN"
+                )
+                done = next(
+                    state["state_id"]
+                    for state in space["workflow"]["states"]
+                    if state["key"] == "done"
+                )
+                items = {}
+                for count in (2, 200):
+                    reference = service.create_work_item(conn, space="MAIN", title="Same title")[
+                        "reference"
+                    ]
+                    for _ in range(count):
+                        service.comment_work_item(conn, reference, "A recorded result. " * 20)
+                    items[count] = reference
+                call = conn.execute(
+                    "INSERT INTO execution_events(event_uid,kind,identity_state,identity_source,"
+                    "session_id) VALUES('call-1','call','confirmed','codex-meta','session-1')"
+                ).lastrowid
+                conn.commit()
+                space_ref = {
+                    "data_scope_id": read_store_metadata(conn)["data_scope_id"],
+                    "space_key": "MAIN",
+                }
+                registry = root / "projects.json"
+                registry.write_bytes(
+                    registry_bytes(
+                        [
+                            project_entry(
+                                "example-project",
+                                root,
+                                bindings=[
+                                    project_binding(
+                                        "example-project", planning_space_entity(space_ref)
+                                    )
+                                ],
+                            )
+                        ]
+                    )
+                )
+
+                def read(reference: str) -> tuple[int, int]:
+                    count = 0
+
+                    def trace(_statement: str) -> None:
+                        nonlocal count
+                        count += 1
+
+                    conn.set_trace_callback(trace)
+                    try:
+                        answer = exact_api.work_item_payload(
+                            PlanningRouting(conn, db, registry_reader=registry.read_bytes),
+                            {
+                                "scope_kind": ["project"],
+                                "project_id": ["example-project"],
+                                "data_scope_id": [space_ref["data_scope_id"]],
+                                "space_key": ["MAIN"],
+                                "reference": [reference],
+                                "brief": ["true"],
+                            },
+                            service.get_work_item,
+                        )
+                    finally:
+                        conn.set_trace_callback(None)
+                    record = answer["state"]["payload"]["work_item"]
+                    # The count is the one figure that is the history's own.
+                    record.pop("comment_count")
+                    for name in ("work_item_id", "reference", "number", "created_at"):
+                        record.pop(name)
+                    return count, len(json.dumps(answer))
+
+                shapes = {
+                    "open": "",
+                    "held": "UPDATE work_items SET claim_ref = 'codex (session session-1)',"
+                    " claim_call_id = :call",
+                    "closed while held": "UPDATE work_items SET state_id = :done",
+                }
+                for shape, change in shapes.items():
+                    if change:
+                        conn.execute(change, {"call": call, "done": done})
+                        conn.commit()
+                    with self.subTest(shape=shape):
+                        few, many = read(items[2]), read(items[200])
+                        self.assertEqual(few, many)
+                        self.assertLessEqual(few[0], 12)

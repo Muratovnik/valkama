@@ -333,6 +333,15 @@ takes the agent's reads as opt-in parameters: `unresolved=true` with
 `comments_after`, `thread=<id>`, and `threads=<count>` for that many threads with
 the latest activity. `unresolved` other than `true` or `false` is `invalid_request`.
 
+**Since 2.5.** The card's read through the exact project scope also takes
+`brief=true`, which answers in the same envelope with the brief record a space's
+list carries instead of the full one: state, title, holder, steps and dates,
+with `comment_count` in place of the comments and no history, links, refs or
+agents. Its size does not grow with the item's history, and it is what a
+preview of a reference such as `MAIN-12` reads. Any other value of `brief` is
+refused with 400; an unknown item is 404 and a binding that no longer resolves
+is 409, as for the full read.
+
 ### Threads and the resolved mark
 
 **Since 2.5.** A comment is either a root or a reply. A root has no parent; a

@@ -117,6 +117,16 @@ def get_work_item(
     return record
 
 
+def get_work_item_brief(conn: sqlite3.Connection, reference: str) -> dict:
+    """One item as a space's list carries it: no history, no agents.
+
+    What a glance at an item needs — its state, title, holder, steps and dates —
+    costs the same however long its discussion is, which the full record cannot.
+    """
+
+    return read_model.present(conn, read_model.item_row(conn, reference))
+
+
 def list_work_items(
     conn: sqlite3.Connection,
     *,
