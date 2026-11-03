@@ -29,9 +29,8 @@ from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from typing import TypedDict
 
-#: The application identity the desktop installer puts on the Start menu
-#: shortcut; Windows shows a toast only for an identity a shortcut carries.
-AUMID = "local.valkama"
+from ..ops.toast import AUMID
+
 GROUP = "valkama"
 #: The tag of a toast that stands for several items at once.
 SUMMARY_TAG = "summary"
