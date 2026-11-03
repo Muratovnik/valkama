@@ -30,6 +30,7 @@ WRITE_PATHS = frozenset(
     {
         "/api/modules/planning/request",
         "/api/modules/planning/request/answer",
+        "/api/modules/planning/request/change",
         "/api/modules/planning/request/decline",
         "/api/modules/planning/request/expire",
     }
@@ -330,12 +331,14 @@ def request_command(routing: PlanningRouting, path: str, payload: dict) -> dict:
         if base
         else {"id", "expected_revision", "author"}
     )
-    if path.endswith("/answer"):
-        operation_fields |= {"answers", "note"}
+    # A change of an answer takes what the answer took.
+    answering = path.endswith(("/answer", "/change"))
+    if answering:
+        operation_fields |= {"answers", "own", "field_notes", "note"}
     required = scope_fields | (
         {"id", "kind", "prompt", "fields"} if base else {"id", "expected_revision"}
     )
-    if path.endswith("/answer"):
+    if answering:
         required.add("answers")
     if set(payload) - (scope_fields | operation_fields) or not required <= set(payload):
         raise api.PlanningHttpError(

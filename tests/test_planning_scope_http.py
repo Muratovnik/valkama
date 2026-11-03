@@ -374,13 +374,13 @@ class PlanningScopeHttpTests(unittest.TestCase):
                 **self.refs["primary"],
                 "id": created["request_id"],
                 "expected_revision": 0,
-                "answers": {},
+                "answers": {"path": "keep"},
                 "note": "In my own words",
             },
         )
         self.assertEqual(200, status, answered)
         self.assertEqual(
-            ({}, "In my own words", "user"),
+            ({"path": "keep"}, "In my own words", "user"),
             (
                 answered["request"]["answers"],
                 answered["request"]["note"],
@@ -401,8 +401,67 @@ class PlanningScopeHttpTests(unittest.TestCase):
         )
         [row] = tools.OPS["get_work_item"](conn, {"id": "SAME-1"})["questions"]["items"]
         self.assertEqual(
-            (True, [], "In my own words"), (row["by_person"], row["answer"], row["note"])
+            (True, [{"field": "path", "value": "keep", "label": "Keep it"}], "In my own words"),
+            (row["by_person"], row["answer"], row["note"]),
         )
+        # The owner changes it in the card, through the same route as the answer.
+        status, changed = self.request(
+            "/api/modules/planning/request/change",
+            {
+                "project_id": "example-project",
+                **self.refs["primary"],
+                "id": created["request_id"],
+                "expected_revision": answered["request"]["revision"],
+                "answers": {},
+                "own": {"path": "Neither, for now"},
+            },
+        )
+        self.assertEqual(200, status, changed)
+        self.assertEqual(
+            ({}, {"path": "Neither, for now"}, 2, True),
+            (
+                changed["request"]["answers"],
+                changed["request"]["own"],
+                changed["request"]["answer_version"],
+                changed["request"]["by_person"],
+            ),
+        )
+        self.assertEqual(
+            [("In my own words", True)],
+            [(v["note"], v["by_person"]) for v in changed["request"]["history"]],
+        )
+        # The card reads the versions and not the thread, which it takes from the item.
+        query = urlencode(
+            {
+                "scope_kind": "project",
+                "project_id": "example-project",
+                **self.refs["primary"],
+                "id": created["request_id"],
+            }
+        )
+        status, detail = self.request("/api/modules/planning/request?" + query)
+        self.assertEqual(200, status, detail)
+        self.assertEqual(
+            (2, 1, False),
+            (
+                detail["request"]["answer_version"],
+                len(detail["request"]["history"]),
+                "replies" in detail["request"],
+            ),
+        )
+        status, same = self.request(
+            "/api/modules/planning/request/change",
+            {
+                "project_id": "example-project",
+                **self.refs["primary"],
+                "id": created["request_id"],
+                "expected_revision": changed["request"]["revision"],
+                "answers": {},
+                "own": {"path": "Neither, for now"},
+            },
+        )
+        self.assertEqual((400, "invalid_request"), (status, same["error"]["code"]))
+        self.assertIn("[unchanged]", same["error"]["message"])
 
     def test_a_person_cannot_be_named_by_the_write_itself(self) -> None:
         conn = store.connect()

@@ -61,9 +61,11 @@ def _expired(conn: sqlite3.Connection, row: sqlite3.Row, at: str) -> str | None:
 def _present(conn: sqlite3.Connection, row: sqlite3.Row, at: str) -> dict:
     item = read_model.item_by_id(conn, row["work_item_id"])
     reason = _expired(conn, row, at)
-    given, note = request_model.split_answers(
+    parts = request_model.split_answers(
         json.loads(row["answers_json"]) if row["answers_json"] is not None else None
     )
+    # `in` on a row reads its values, so its column names are asked for by name.
+    columns = row.keys()
     return {
         "request_id": row["request_id"],
         "work_item_id": row["work_item_id"],
@@ -72,8 +74,15 @@ def _present(conn: sqlite3.Connection, row: sqlite3.Row, at: str) -> dict:
         "kind": row["kind"],
         "prompt": row["prompt"],
         "fields": json.loads(row["fields_json"]),
-        "answers": given,
-        "note": note,
+        "answers": parts["answers"],
+        "own": parts["own"],
+        "field_notes": parts["field_notes"],
+        "note": parts["note"],
+        # An attached store from before answers had versions is read as it is:
+        # what it answered, it answered once.
+        "answer_version": int(row["answer_version"])
+        if "answer_version" in columns
+        else int(row["status"] == "answered"),
         "status": "expired" if reason else row["status"],
         "author": row["author"],
         "answered_by": row["answered_by"],
@@ -87,30 +96,102 @@ def _present(conn: sqlite3.Connection, row: sqlite3.Row, at: str) -> dict:
     }
 
 
-def get(conn: sqlite3.Connection, identity: object) -> dict:
-    return _with_by_person(conn, [_present(conn, _row(conn, identity), request_model.now())])[0]
+def get(conn: sqlite3.Connection, identity: object, *, replies: bool = False) -> dict:
+    """One whole request; with `replies`, also every reply in its thread, oldest first.
+
+    Only the agent's read asks for the thread: the interface and an export read
+    those replies among the item's comments, and a strict reader of the interface
+    refuses a key it does not know.
+    """
+
+    [record] = _complete(conn, [_present(conn, _row(conn, identity), request_model.now())])
+    if not replies:
+        return record
+    thread = (
+        [
+            _flat_reply(row)
+            for row in conn.execute(
+                "SELECT m.id, m.author, m.body, m.created_at, m.call_id, m.checklist_item_id,"
+                " m.checklist_item_text, m.reply_to_request, c.identity_source"
+                " FROM work_item_comments m LEFT JOIN execution_events c ON c.id = m.call_id"
+                " WHERE m.reply_to_request = ? ORDER BY m.id",
+                (record["request_id"],),
+            )
+        ]
+        if _has_table(conn, "work_item_request_answers")
+        else []
+    )
+    return {**record, "replies": thread}
+
+
+def _flat_reply(row: sqlite3.Row) -> dict:
+    """A reply under a question in the flat form every comment read gives.
+
+    A reply is never a report and never carries the resolved mark, which the
+    store enforces, so those keys are fixed here.
+    """
+
+    return {
+        "id": int(row["id"]),
+        "kind": "comment",
+        "report": None,
+        "checklist_item_id": row["checklist_item_id"],
+        "checklist_item_text": row["checklist_item_text"],
+        "author": row["author"],
+        "body": row["body"],
+        "at": row["created_at"] or None,
+        "reply_to": None,
+        "reply_to_request": row["reply_to_request"],
+        "by_person": _reply(row)["by_person"],
+        "resolution": None,
+    }
+
+
+def _reply(row: sqlite3.Row) -> dict:
+    """A reply as a reader sees it; `by_person` is null when no call wrote it."""
+
+    return {
+        "id": int(row["id"]),
+        "author": row["author"],
+        "by_person": None if row["call_id"] is None else row["identity_source"] == calls.BROWSER,
+        "at": row["created_at"],
+        "body": row["body"],
+    }
+
+
+def _has_table(conn: sqlite3.Connection, name: str) -> bool:
+    """Whether a store has a table. An attached store is read as it is, and an older
+    one lacks what later schemas added: it has nothing of that to say."""
+
+    return (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
+        ).fetchone()
+        is not None
+    )
+
+
+def _complete(conn: sqlite3.Connection, records: list[dict]) -> list[dict]:
+    """Requests with who closed each one and the answers each current one replaced."""
+
+    return _with_history(conn, _with_by_person(conn, records))
 
 
 def _with_by_person(conn: sqlite3.Connection, records: list[dict]) -> list[dict]:
-    """Requests with whether the call that closed each one came through the interface.
+    """Requests with whether the latest call that closed or changed each came through the interface.
 
-    True for a browser write, false for any other call that answered, declined or
-    withdrew it, and null while no call has: still open, or run out by itself. The
-    `author` beside it is text the caller wrote and says nothing here; the fact
+    True for a browser write, false for any other call that answered, changed,
+    declined or withdrew it, and null while no call has: still open, or run out by
+    itself. The latest such event decides, so a changed answer is the changer's.
+    The `author` beside it is text the caller wrote and says nothing here; the fact
     stays once, on the call row. One statement for every request of a read.
     """
 
     closed = [record["request_id"] for record in records if record["resolved_at"] is not None]
     sources: dict[str, object] = {}
-    # An attached store is read as it is, and one from before calls were recorded
-    # has no such row to read: nothing there came through a call anyone proved.
-    if (
-        closed
-        and conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='execution_events'"
-        ).fetchone()
-        is not None
-    ):
+    # One from before calls were recorded has no such row to read: nothing there
+    # came through a call anyone proved.
+    if closed and _has_table(conn, "execution_events"):
         # By the request rather than its item: a merge moves a request and leaves
         # its history where it was written.
         sources = {
@@ -118,8 +199,10 @@ def _with_by_person(conn: sqlite3.Connection, records: list[dict]) -> list[dict]
             for row in conn.execute(
                 "SELECT e.detail, c.identity_source FROM work_item_events e"
                 " LEFT JOIN execution_events c ON c.id = e.call_id"
-                " WHERE e.action IN ('request_answered','request_declined','request_expired')"
-                " AND e.detail IN (SELECT value FROM json_each(?))",
+                " WHERE e.id IN (SELECT MAX(id) FROM work_item_events"
+                " WHERE action IN"
+                " ('request_answered','request_changed','request_declined','request_expired')"
+                " AND detail IN (SELECT value FROM json_each(?)) GROUP BY detail)",
                 (json.dumps(closed),),
             )
         }
@@ -134,11 +217,72 @@ def _with_by_person(conn: sqlite3.Connection, records: list[dict]) -> list[dict]
     ]
 
 
+def _with_history(conn: sqlite3.Connection, records: list[dict]) -> list[dict]:
+    """Requests with the answers each current answer replaced, oldest first.
+
+    Each version is read as the current answer is, with `by_person` from the
+    call that gave it. One statement for every request of a read.
+    """
+
+    versions: dict[str, list[dict]] = {}
+    changed = [record["request_id"] for record in records if record["answer_version"] >= 2]
+    if changed and _has_table(conn, "work_item_request_answers"):
+        for row in conn.execute(
+            "SELECT a.request_id, a.version, a.answers_json, a.answered_by, a.answered_at,"
+            " c.identity_source FROM work_item_request_answers a"
+            " LEFT JOIN execution_events c ON c.id = a.call_id"
+            " WHERE a.request_id IN (SELECT value FROM json_each(?))"
+            " ORDER BY a.request_id, a.version",
+            (json.dumps(changed),),
+        ):
+            versions.setdefault(str(row["request_id"]), []).append(
+                {
+                    "version": int(row["version"]),
+                    **request_model.split_answers(json.loads(row["answers_json"])),
+                    "answered_by": row["answered_by"],
+                    "answered_at": row["answered_at"],
+                    "by_person": row["identity_source"] == calls.BROWSER,
+                }
+            )
+    return [{**record, "history": versions.get(record["request_id"], [])} for record in records]
+
+
+def compact_all(conn: sqlite3.Connection, records: list[dict]) -> list[dict]:
+    """Requests in the compact form, each with how many replies its thread has and the latest.
+
+    One statement for every request of a read.
+    """
+
+    totals: dict[str, int] = {}
+    latest: dict[str, dict] = {}
+    identities = [record["request_id"] for record in records]
+    if identities and _has_table(conn, "work_item_request_answers"):
+        for row in conn.execute(
+            "SELECT m.id, m.author, m.body, m.created_at, m.call_id, m.reply_to_request,"
+            " c.identity_source, t.total"
+            " FROM work_item_comments m LEFT JOIN execution_events c ON c.id = m.call_id"
+            " JOIN (SELECT MAX(id) AS latest, COUNT(*) AS total FROM work_item_comments"
+            " WHERE reply_to_request IN (SELECT value FROM json_each(?))"
+            " GROUP BY reply_to_request) t ON t.latest = m.id",
+            (json.dumps(identities),),
+        ):
+            totals[str(row["reply_to_request"])] = int(row["total"])
+            latest[str(row["reply_to_request"])] = _reply(row)
+    return [
+        request_model.compact(
+            record,
+            replies=totals.get(record["request_id"], 0),
+            latest_reply=latest.get(record["request_id"]),
+        )
+        for record in records
+    ]
+
+
 def of_item(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
     """Every request on one item, newest first and with no page limit."""
 
     at = request_model.now()
-    return _with_by_person(
+    return _complete(
         conn,
         [
             _present(conn, row, at)
@@ -169,7 +313,7 @@ def item_questions(conn: sqlite3.Connection, work_item_id: str) -> dict:
     return {
         "total": len(found),
         "open": len(waiting),
-        "items": [request_model.compact(record) for record in shown],
+        "items": compact_all(conn, shown),
         "truncated": len(shown) < len(found),
     }
 
@@ -221,7 +365,9 @@ def list_page(
         parameters.append(item["work_item_id"])
     after = request_model.timestamp(answered_after, "answered_after")
     if after is not None:
-        # An answered row is final and its time has the one format `now` writes.
+        # `resolved_at` of an answered row is when its current answer was given,
+        # so a change comes again after the time a reader kept; it has the one
+        # format `now` writes.
         clauses.append("r.status='answered' AND r.resolved_at>?")
         parameters.append(after)
     # Effective expiry depends on item/execution state. Filter after projection,
@@ -261,7 +407,7 @@ def list_page(
             break
         fetched += 200
     return {
-        "requests": _with_by_person(conn, result),
+        "requests": _complete(conn, result),
         "truncated": more,
         "next_offset": start + len(result) if more else None,
     }
@@ -363,16 +509,19 @@ def resolve(
     status: str,
     expected_revision: object,
     answers: object = None,
+    own: object = None,
+    field_notes: object = None,
     note: object = None,
     author: str | None = None,
 ) -> dict:
+    """Close a pending request: answer it, decline it or withdraw it, once.
+
+    The first answer is version 1 of the answer; declining or withdrawing gives none.
+    """
+
     expected_revision = model.count_field(expected_revision, "expected_revision")
     model.enum_field(status, frozenset({"answered", "declined", "expired"}), "status")
-    said = (
-        model.multiline_field(note, "note", limit=request_model.MAX_NOTE)
-        if note is not None
-        else ""
-    )
+    said = _note(note)
     with _transaction(conn):
         row = _row(conn, identity)
         if row["revision"] != expected_revision:
@@ -380,21 +529,16 @@ def resolve(
         at = request_model.now()
         if row["status"] != "pending" or _expired(conn, row, at):
             raise model.WorkflowGuardError("request is no longer pending")
-        parsed = (
-            request_model.stored_answers(
-                request_model.answers(answers, json.loads(row["fields_json"]), note=said), said
-            )
-            if status == "answered"
-            else None
-        )
+        parsed = _stored(row, answers, own, field_notes, said) if status == "answered" else None
         changed = conn.execute(
-            "UPDATE work_item_requests SET status=?,answers_json=?,answered_by=?,resolved_at=?,expired_reason=?,revision=revision+1 WHERE request_id=? AND revision=? AND status='pending' AND (expires_at IS NULL OR julianday(expires_at)>julianday('now'))",
+            "UPDATE work_item_requests SET status=?,answers_json=?,answered_by=?,resolved_at=?,expired_reason=?,answer_version=?,revision=revision+1 WHERE request_id=? AND revision=? AND status='pending' AND (expires_at IS NULL OR julianday(expires_at)>julianday('now'))",
             (
                 status,
                 model.dumps(parsed) if parsed is not None else None,
                 model.actor(author),
                 at,
                 "withdrawn" if status == "expired" else None,
+                1 if parsed is not None else 0,
                 identity,
                 expected_revision,
             ),
@@ -403,6 +547,110 @@ def resolve(
             raise model.WorkflowGuardError("request is no longer pending")
         _event(conn, row["work_item_id"], f"request_{status}", identity, author)
     return get(conn, identity)
+
+
+def change(
+    conn: sqlite3.Connection,
+    identity: str,
+    *,
+    expected_revision: object,
+    answers: object,
+    own: object = None,
+    field_notes: object = None,
+    note: object = None,
+    author: str | None = None,
+) -> dict:
+    """Replace the answer to an answered question, keeping the replaced one as a version.
+
+    Held to the rules of a first answer. Refused for a question that is not
+    answered, on a closed item (nobody is left to act on the change), when nothing
+    differs from the current answer, and past `MAX_ANSWER_VERSIONS`. The current
+    answer stays on the request row and moves `resolved_at`, so a reader of what
+    was answered after a time finds the change; the replaced one keeps the call
+    that gave it.
+    """
+
+    expected_revision = model.count_field(expected_revision, "expected_revision")
+    said = _note(note)
+    with _transaction(conn):
+        row = _row(conn, identity)
+        if row["revision"] != expected_revision:
+            raise model.RevisionConflictError(expected_revision, row["revision"])
+        if row["status"] != "answered":
+            raise model.WorkflowGuardError("only an answered question's answer can be changed")
+        item = read_model.item_by_id(conn, row["work_item_id"])
+        if read_model.state_by_id(conn, item["state_id"])["is_terminal"]:
+            raise model.WorkflowGuardError(
+                "[task_closed] the work item is closed; reopen it to change the answer"
+            )
+        version = int(row["answer_version"])
+        if version >= request_model.MAX_ANSWER_VERSIONS:
+            raise model.WorkflowGuardError(
+                f"[answer_versions] an answer has at most {request_model.MAX_ANSWER_VERSIONS}"
+                " versions, and this one has them all"
+            )
+        parsed = _stored(row, answers, own, field_notes, said)
+        if parsed == json.loads(row["answers_json"]):
+            raise model.PlanningError("[unchanged] that is the answer already given")
+        given = conn.execute(
+            "SELECT call_id FROM work_item_events WHERE detail=?"
+            " AND action IN ('request_answered','request_changed') ORDER BY id DESC LIMIT 1",
+            (row["request_id"],),
+        ).fetchone()
+        conn.execute(
+            "INSERT INTO work_item_request_answers(request_id,version,answers_json,answered_by,"
+            "answered_at,call_id) VALUES(?,?,?,?,?,?)",
+            (
+                row["request_id"],
+                version,
+                row["answers_json"],
+                row["answered_by"],
+                row["resolved_at"],
+                given[0] if given is not None else None,
+            ),
+        )
+        changed = conn.execute(
+            "UPDATE work_item_requests SET answers_json=?,answered_by=?,resolved_at=?,"
+            "answer_version=answer_version+1,revision=revision+1"
+            " WHERE request_id=? AND revision=? AND status='answered'",
+            (
+                model.dumps(parsed),
+                model.actor(author),
+                request_model.now(),
+                row["request_id"],
+                expected_revision,
+            ),
+        )
+        if changed.rowcount != 1:  # pragma: no cover - the row was read under the write lock
+            raise model.WorkflowGuardError("only an answered question's answer can be changed")
+        _event(conn, row["work_item_id"], "request_changed", row["request_id"], author)
+    return get(conn, row["request_id"])
+
+
+def _note(note: object) -> str:
+    """The comment on the whole question, or nothing."""
+
+    return (
+        model.multiline_field(note, "note", limit=request_model.MAX_NOTE)
+        if note is not None
+        else ""
+    )
+
+
+def _stored(row: sqlite3.Row, answers: object, own: object, field_notes: object, note: str) -> dict:
+    """An answer as `answers_json` holds it, every part checked against the question's fields."""
+
+    descriptors = json.loads(row["fields_json"])
+    variants = request_model.per_field(own, descriptors, "own", limit=request_model.MAX_OWN)
+    comments = request_model.per_field(
+        field_notes, descriptors, "field_notes", limit=request_model.MAX_FIELD_NOTE
+    )
+    return request_model.stored_answers(
+        request_model.answers(answers, descriptors, own=variants),
+        note,
+        own=variants,
+        field_notes=comments,
+    )
 
 
 def _event(

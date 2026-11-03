@@ -309,7 +309,7 @@ def _requests(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> 
 def _request(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
     return {
         "interface_version": "valkama-planning-requests",
-        "request": requests.get(conn, _required(parameters, "id")),
+        "request": requests.get(conn, _required(parameters, "id"), replies=True),
     }
 
 
@@ -548,14 +548,34 @@ def _create_request(conn: sqlite3.Connection, payload: Mapping[str, object]) -> 
     )
 
 
+#: What an answer and a change of one take.
+_ANSWER_FIELDS = {"id", "answers", "own", "field_notes", "note", "expected_revision", "author"}
+
+
 def _answer_request(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
-    _request_fields(payload, {"id", "answers", "note", "expected_revision", "author"})
+    _request_fields(payload, _ANSWER_FIELDS)
     return requests.resolve(
         conn,
         _text(payload, "id"),
         status="answered",
         expected_revision=_field(payload, "expected_revision"),
         answers=_field(payload, "answers"),
+        own=payload.get("own"),
+        field_notes=payload.get("field_notes"),
+        note=payload.get("note"),
+        author=_author(payload),
+    )
+
+
+def _change_request(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
+    _request_fields(payload, _ANSWER_FIELDS)
+    return requests.change(
+        conn,
+        _text(payload, "id"),
+        expected_revision=_field(payload, "expected_revision"),
+        answers=_field(payload, "answers"),
+        own=payload.get("own"),
+        field_notes=payload.get("field_notes"),
         note=payload.get("note"),
         author=_author(payload),
     )
@@ -876,6 +896,7 @@ _WRITES: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], dict]] =
     "/api/planning/work-item/apply": _apply,
     "/api/planning/work-item/request": _create_request,
     "/api/planning/request/answer": _answer_request,
+    "/api/planning/request/change": _change_request,
     "/api/planning/request/decline": _decline_request,
     "/api/planning/request/expire": _expire_request,
 }

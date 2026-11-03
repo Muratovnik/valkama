@@ -833,10 +833,12 @@ TOOLS.extend(
             "get_work_item_request",
             "Read a human request",
             "Read one whole question: its prompt, fields with option descriptions, answers,"
-            " note, effective expiry, and by_person: true when the call that closed it came"
-            " through Valkama's interface, false for any other call, null while none has. No"
-            " argument sets it; a process holding the interface's credentials counts as the"
-            " interface.",
+            " own (an own variant by field), field_notes (a comment by field), note (a comment"
+            " on the whole question), answer_version, history (the answers a change replaced,"
+            " oldest first), replies (its whole thread, oldest first), effective expiry, and"
+            " by_person: true when the latest call that closed or changed it came through"
+            " Valkama's interface, false for any other call, null while none has. No argument"
+            " sets it; a process holding the interface's credentials counts as the interface.",
             READ_ONLY,
             {"id": _STR},
             ["id"],
@@ -846,12 +848,15 @@ TOOLS.extend(
             "List human requests",
             "List questions in the primary store, in compact form: id, status, question (the"
             f" first {request_model.QUESTION_PREVIEW} characters of the prompt), answer as rows of"
-            " field, value and label, note, answered_by, by_person and answered_at. A note or a"
-            f" written answer is cut at {request_model.MAX_COMPACT_TEXT} characters and one question"
-            f" at {request_model.MAX_COMPACT_JSON} characters of JSON, keeping its first fields, and"
-            " carries clipped=true when anything was cut. full=true gives each whole, as"
-            " get_work_item_request does. With answered_after the oldest answer comes first, and a"
-            " page runs past limit rather than part two answers of one time." + _PAGING,
+            " field, value and label, with own and note when the field has them, note,"
+            " answered_by, by_person, answered_at, answer_version, previous (the answer a change"
+            " replaced) from version 2, replies and last_reply. A note or a written answer is cut"
+            f" at {request_model.MAX_COMPACT_TEXT} characters and one question at"
+            f" {request_model.MAX_COMPACT_JSON} characters of JSON, previous first and then the"
+            " later fields, and carries clipped=true when anything was cut. full=true gives each"
+            " whole. With answered_after the oldest answer comes first, a changed answer comes"
+            " again, and a page runs past limit rather than part two answers of one time."
+            + _PAGING,
             READ_ONLY,
             {
                 "space": _SPACE,
@@ -877,21 +882,40 @@ TOOLS.extend(
         _tool(
             "answer_work_item_request",
             "Answer a human request",
-            "Answer once using the request revision; an answer cannot be changed afterwards. Does"
-            " not resume an execution.",
+            "Answer a pending question once using the request revision. A required field is"
+            " answered by a value or by its own variant; a note no longer stands in for it."
+            " change=true replaces the answer of an answered question instead, while its item is"
+            " open: the replaced answer is kept as a version. Change one only when the owner asks."
+            " Does not resume an execution.",
             WRITES,
             {
                 "id": _STR,
                 "answers": {
                     "type": "object",
-                    "description": "Field id to answer. May be empty when a note is given:"
-                    " a note stands in for required fields, and a given answer is still checked"
-                    " against its field.",
+                    "description": "Field id to answer, each checked against its field.",
+                },
+                "own": {
+                    "type": "object",
+                    "description": "Field id to an own variant, at most"
+                    f" {request_model.MAX_OWN} characters: in a choice or boolean field instead of"
+                    " an option, in a multi_choice field beside the chosen ones. A text field has"
+                    " none.",
+                },
+                "field_notes": {
+                    "type": "object",
+                    "description": "Field id to a comment on that field, at most"
+                    f" {request_model.MAX_FIELD_NOTE} characters. A text field takes none.",
                 },
                 "note": {
                     "type": "string",
                     "maxLength": request_model.MAX_NOTE,
-                    "description": "The answer in the person's own words.",
+                    "description": "A comment on the whole question; it answers no field.",
+                },
+                "change": {
+                    "type": "boolean",
+                    "description": "Replace the current answer of an answered question. Refused"
+                    " when nothing differs, on a closed item, and past"
+                    f" {request_model.MAX_ANSWER_VERSIONS} versions.",
                 },
                 "expected_revision": _EXPECTED_REVISION,
                 "author": _AUTHOR,
@@ -1207,7 +1231,16 @@ def _request_list(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> 
     answer = read[1]
     if _is_verbose(arguments, "full"):
         return answer
-    return {**answer, "requests": [request_model.compact(r) for r in answer["requests"]]}
+    return {**answer, "requests": requests.compact_all(conn, answer["requests"])}
+
+
+def _answer(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
+    """An answer, or with `change` a change of one: the same body to two writes."""
+
+    rest = {name: value for name, value in arguments.items() if name != "change"}
+    if _is_verbose(arguments, "change"):
+        return _post("/api/planning/request/change")(conn, rest)
+    return _post("/api/planning/request/answer")(conn, rest)
 
 
 def _space(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
@@ -1268,7 +1301,7 @@ OPS: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], object]] = {
     "create_work_item_request": _post("/api/planning/work-item/request"),
     "get_work_item_request": _get("/api/planning/request", "id", unwrap="request"),
     "list_work_item_requests": _request_list,
-    "answer_work_item_request": _post("/api/planning/request/answer"),
+    "answer_work_item_request": _answer,
     "decline_work_item_request": _post("/api/planning/request/decline"),
     "expire_work_item_request": _post("/api/planning/request/expire"),
 }

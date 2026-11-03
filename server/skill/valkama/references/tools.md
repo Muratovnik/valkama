@@ -188,11 +188,23 @@ An option also takes `description` (markdown, 1 to 8000 characters) and
 `recommended` (a boolean, true on at most one option of a `choice`). The fields of
 one question fit in 64 KiB as stored.
 
-`answer_work_item_request` takes `id`, `answers` (field id to answer, `{}` when
-the note says it all), `expected_revision` and optionally `note` (at most 8000
-characters) and `author`. A non-empty note stands in for required fields; an
-answer that is given is still checked against its field. An answer is final: a
-second one is refused.
+`answer_work_item_request` takes `id`, `answers` (field id to answer),
+`expected_revision` and optionally `own` (field id to an own variant, at most 8000
+characters), `field_notes` (field id to a comment, at most 2000 characters),
+`note` (a comment on the whole question, at most 8000 characters), `change` and
+`author`. Only a `choice`, `multi_choice` or `boolean` field takes an own variant
+or a comment; in a `choice` or `boolean` the own variant replaces the option, and
+giving both is refused. A required field needs a value or an own variant; a note
+no longer stands in for it, and the refusal says so: "answer path is required;
+give an option or your own variant in own; a note no longer stands in for a
+field".
+
+A pending question is answered once; a second answer is refused. `change: true`
+replaces the answer of an answered question, held to the same rules, and keeps the
+replaced one as a version: `answer_version` rises by one and `answered_at` moves to
+the change. Change an answer only when the owner asks. Refused with
+`[unchanged]` when nothing differs, `[task_closed]` once the item is closed and
+`[answer_versions]` past 50 versions.
 
 A request is `pending` until it is answered, declined or expires; it expires
 when its item closes or its deadline (`expires_at`) passes. A comment over an
@@ -209,28 +221,44 @@ unless `full` is true:
 
 ```json
 {"id": "…", "status": "answered", "question": "Which way?",
- "answer": [{"field": "path", "value": "keep", "label": "Keep it"},
-            {"field": "sure", "value": false, "label": null}],
+ "answer": [{"field": "path", "value": "keep", "label": "Keep it",
+             "note": "It is cheap"},
+            {"field": "areas", "value": ["api"], "label": "The API",
+             "own": "The docs"}],
  "note": "And the docs.", "answered_by": "user", "by_person": true,
- "answered_at": "2026-11-02T09:00:00.000000Z"}
+ "answered_at": "2026-11-02T09:00:00.000000Z", "answer_version": 2,
+ "previous": {"answer": [{"field": "path", "value": "drop", "label": "Drop it"}],
+              "note": null, "answered_at": "2026-11-01T09:00:00.000000Z"},
+ "replies": 1,
+ "last_reply": {"id": 41, "author": "user", "by_person": true,
+                "at": "2026-11-02T09:05:00Z", "body": "Ask me if unsure."}}
 ```
 
 `question` is the first 160 characters of the prompt, with `…` when it was cut.
 `label` names what was chosen in a `choice` or `multi_choice` and is null for a
-`boolean` or `text`, whose `value` reads as itself. A field left out or empty has
-no row. `answered_by` and `answered_at` are null with no answer. A note, a written
-answer and a label are cut at 500 characters with `…`, and one question is at most
-2000 characters of JSON, keeping its first fields; `clipped: true` says something
-was cut, and the key is absent otherwise.
+`boolean` or `text`, whose `value` reads as itself. A row has `own` and `note` (the
+field's comment) only when the field has them, and `value` is null when only those
+came back. A field with nothing has no row. `answered_by` and `answered_at` are
+null with no answer. `answer_version` is 0 with no answer and 1 for a first one;
+`previous` appears from version 2. `replies` counts the question's thread and
+`last_reply` quotes its latest reply, its `body` cut at 500 characters with
+`clipped: true`. A note, a written answer, an own variant, a comment and a label
+are cut at 500 characters with `…`, and one question is at most 2000 characters of
+JSON: `previous` is cut first, then the later fields; `clipped: true` says
+something was cut, and the key is absent otherwise.
 
-`by_person` is true when the call that closed the question came through Valkama's
-interface, false for any other call that answered, declined or withdrew it, and null
-while none has. No argument sets it and `author` does not count, though a process
-holding the interface's credentials counts as the interface.
+`by_person` is true when the latest call that closed or changed the question came
+through Valkama's interface, false for any other call that answered, changed,
+declined or withdrew it, and null while none has. No argument sets it and `author`
+does not count, though a process holding the interface's credentials counts as the
+interface.
 
 `get_work_item_request`, and the list with `full: true`, give the whole question:
-`prompt`, `fields` with their options and descriptions, `answers`, `note`,
-`by_person` and the rest of the record.
+`prompt`, `fields` with their options and descriptions, `answers`, `own`,
+`field_notes`, `note`, `answer_version`, `history` (the replaced answers, oldest
+first, each with `version`, its parts, `answered_by`, `answered_at` and
+`by_person`), `by_person` and the rest of the record. `get_work_item_request` also
+gives `replies`, the question's whole thread, oldest first.
 
 ## Merging
 

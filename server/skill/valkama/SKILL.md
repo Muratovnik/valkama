@@ -174,10 +174,22 @@ with a `prompt` and up to 12 `fields` (`text`, `choice`, `multi_choice` or
 `boolean`). An option may add a markdown `description` of what choosing it means,
 and `recommended`: at most one in a `choice`, any number in a `multi_choice`.
 
-The owner answers it in Valkama by choosing options, by writing a note, or both;
-a note can stand in for required fields. An answer cannot be changed afterwards,
-and a comment over an open question is not an answer. There are three ways to
-read one:
+The owner answers it in Valkama. In a field with options the answer is an option
+or an own variant (`own`): in a `choice` or `boolean` instead of an option, in a
+`multi_choice` beside the chosen ones. Such a field may also carry a comment
+(`field_notes`). `note` is a comment on the whole question; it no longer stands in
+for a required field, which needs a value or an own variant. A comment over an
+open question is not an answer; to ask about a question, reply in its thread
+(`comment_work_item` with `reply_to_request`).
+
+An answer can change after it was given: a person changes it in Valkama, and an
+agent changes it with `answer_work_item_request` and `change: true`, only when the
+owner asks for that. A change is refused when nothing differs, once the item is
+closed, and past 50 versions. A changed answer has `answer_version` 2 or more,
+the compact form shows the answer it replaced as `previous`, and the whole
+question keeps every replaced one in `history`. When you are told
+`question_changed`, read the question again: the answer you acted on is no longer
+the current one. There are three ways to read one:
 
 - `get_work_item` carries `questions`: `total`, how many are `open`, and up to 5
   `items` with the open ones first and then the newest closed, and `truncated`
@@ -185,17 +197,20 @@ read one:
 - `list_work_item_requests` finds them on an item (`id`) or in a space, by
   `status` and `answered_after`. To read answers in portions, keep the last
   `answered_at` you read and pass it as `answered_after`, and ask again while
-  `truncated` is true: the oldest comes first, and no two answers of one time are
-  parted.
+  `truncated` is true: the oldest comes first, no two answers of one time are
+  parted, and a changed answer comes again.
 - `get_work_item_request` gives one question whole, with its options and their
-  descriptions, and `list_work_item_requests` does so for each with `full: true`.
+  descriptions, its `history` and its thread as `replies`, and
+  `list_work_item_requests` gives each question whole with `full: true`.
 
 The first two answer in a compact form: `id`, `status`, `question` (the start of
-the prompt), `answer` as rows of `field`, `value` and `label`, `note`,
-`answered_by`, `answered_at`, and `by_person`, which is true when the call came
-through Valkama's interface and false when it came through a tool. A note or a
-written answer longer than 500 characters is cut there and the question carries
-`clipped: true`; `get_work_item_request` has the whole text.
+the prompt), `answer` as rows of `field`, `value` and `label` with `own` and
+`note` when the field has them, `note`, `answered_by`, `answered_at`,
+`answer_version`, `previous` once the answer changed, `replies` (how many) and
+`last_reply`, and `by_person`, which is true when the latest call that answered or
+changed it came through Valkama's interface and false when it came through a
+tool. A note or a written answer longer than 500 characters is cut there and the
+question carries `clipped: true`; `get_work_item_request` has the whole text.
 
 A request suits a question the work can go on without. No session waits for it:
 the answer arrives with the next read of the item, so go on with what does not

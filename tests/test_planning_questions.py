@@ -45,8 +45,9 @@ MULTI = {
 BOOLEAN = {"id": "sure", "label": "Sure", "type": "boolean", "required": False, "options": []}
 TEXT = {"id": "why", "label": "Why", "type": "text", "required": False, "options": []}
 
-#: Every key the web's strict schema accepts on a request: a new one here refuses
-#: the whole list in the browser, so the HTTP read must not grow on its own.
+#: Every key the web's strict schema must accept on a request: a new one here
+#: refuses the whole list in the browser, so the HTTP read must not grow on its
+#: own, and the web schema takes each key in the same release.
 WEB_REQUEST_KEYS = {
     "request_id",
     "work_item_id",
@@ -56,7 +57,11 @@ WEB_REQUEST_KEYS = {
     "prompt",
     "fields",
     "answers",
+    "own",
+    "field_notes",
     "note",
+    "answer_version",
+    "history",
     "by_person",
     "status",
     "author",
@@ -78,6 +83,9 @@ COMPACT_KEYS = {
     "answered_by",
     "by_person",
     "answered_at",
+    "answer_version",
+    "replies",
+    "last_reply",
 }
 
 
@@ -230,14 +238,16 @@ class OptionTests(QuestionCase):
 
 
 class NoteTests(QuestionCase):
-    def test_a_note_stands_in_for_required_fields_and_reads_apart_from_the_answers(self) -> None:
+    def test_a_note_reads_apart_from_the_answers(self) -> None:
         request = self.ask()
-        answered = self.answer(request, {}, note="  Neither: ask the vendor first.  ")
+        answered = self.answer(request, {"path": "keep"}, note="  But ask the vendor first.  ")
         self.assertEqual("answered", answered["status"])
-        self.assertEqual({}, answered["answers"])
-        self.assertEqual("Neither: ask the vendor first.", answered["note"])
+        self.assertEqual({"path": "keep"}, answered["answers"])
+        self.assertEqual("But ask the vendor first.", answered["note"])
         # Kept with the answers under a key no field id can take.
-        self.assertEqual({"_note": "Neither: ask the vendor first."}, self.stored_answers(request))
+        self.assertEqual(
+            {"path": "keep", "_note": "But ask the vendor first."}, self.stored_answers(request)
+        )
         self.assertEqual(
             0,
             self.conn.execute(
@@ -314,7 +324,7 @@ class NoteTests(QuestionCase):
             "/api/planning/request/answer",
             {
                 "id": request["request_id"],
-                "answers": {},
+                "answers": {"path": "keep"},
                 "note": "My own words",
                 "expected_revision": 0,
             },
@@ -403,6 +413,9 @@ class CompactFormTests(QuestionCase):
                 "answered_by": None,
                 "by_person": None,
                 "answered_at": None,
+                "answer_version": 0,
+                "replies": 0,
+                "last_reply": None,
             },
             self.compact(request),
         )
@@ -429,6 +442,9 @@ class CompactFormTests(QuestionCase):
                 "answered_by": "the-owner",
                 "by_person": False,
                 "answered_at": answered["resolved_at"],
+                "answer_version": 1,
+                "replies": 0,
+                "last_reply": None,
             },
             self.compact(request),
         )
@@ -559,7 +575,8 @@ class ThreeReadsTests(QuestionCase):
         detail = api.handle_get(self.conn, "/api/planning/request", {"id": [request["request_id"]]})
         assert listed is not None and detail is not None
         self.assertEqual(WEB_REQUEST_KEYS, set(listed[1]["requests"][0]))
-        self.assertEqual(WEB_REQUEST_KEYS, set(detail[1]["request"]))
+        # The one read of a question's thread, which the web takes from the item.
+        self.assertEqual(WEB_REQUEST_KEYS | {"replies"}, set(detail[1]["request"]))
 
     def test_the_tool_schemas_say_what_the_tools_take(self) -> None:
         schemas = {tool["name"]: tool for tool in tools.TOOLS}
