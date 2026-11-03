@@ -1694,6 +1694,7 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
                 "refs",
                 "links",
                 "comment",
+                "resolutions",
                 "summary",
                 "transition",
                 "expected_revision",
@@ -2169,6 +2170,12 @@ class CompactWorkItemReadTests(WireCallTestCase):
                         "description": "A comment id: answer with its thread, the root and"
                         " every reply oldest first; a reply's id reads its root's thread. Not"
                         " together with full or comments_after.",
+                    },
+                    "unresolved": {
+                        "type": "boolean",
+                        "description": "Answer with the roots without the resolved mark, each"
+                        " with replies and last_reply. Not together with full or thread;"
+                        " comments_after is where the next page starts.",
                     },
                 },
                 "required": ["id"],
