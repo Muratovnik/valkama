@@ -34,6 +34,19 @@ test('the renderer stays isolated, unprivileged and sandboxed', () => {
   }
 })
 
+test('every window is held to one policy, set as it is created', () => {
+  // `window_policy.test.js` proves the answers; this proves they reach every window.
+  // A handler on the main window alone left the next window with Electron's defaults.
+  const created = main.indexOf("app.on('web-contents-created'")
+  const body = main.slice(created, main.indexOf('\n  })\n', created))
+  assert.match(body, /guardWindow\(contents,/)
+  assert.match(body, /windowOptions: \{[^}]*\.\.\.EVERY_WINDOW \}/)
+  assert.ok(created < main.indexOf('app.whenReady()'), 'in place before the first window')
+  assert.doesNotMatch(main, /\.setWindowOpenHandler\(/, 'a handler outside the policy')
+  assert.doesNotMatch(main, /mainWindow\.webContents\.on\('context-menu'/)
+  assert.match(main, /new BrowserWindow\(\{[^}]*\.\.\.EVERY_WINDOW,\s*\}\)/)
+})
+
 test('every packaged fuse keeps its hardened value', () => {
   // Electron 45 supports all of these on Windows, including embedded ASAR
   // integrity, which needs Electron 30 or newer there.

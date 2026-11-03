@@ -136,7 +136,8 @@ test('the window builds the menu on every right click and copies through the cli
   // The wiring is what a test of the template cannot see: a window that stopped
   // listening would still open, with no menu anywhere.
   const main = readFileSync(path.join(__dirname, 'main.js'), 'utf8')
-  assert.match(main, /webContents\.on\('context-menu', \(_event, params\) =>/)
+  // `window_policy.test.js` holds the listener; here it is every window's.
+  assert.match(main, /guardWindow\(contents, \{[^}]*showContextMenu,/)
   assert.match(main, /Menu\.buildFromTemplate\(template\)\.popup\(/)
   assert.match(main, /clipboard\.writeText\(text\)/)
   assert.match(main, /document\.documentElement\.lang/)

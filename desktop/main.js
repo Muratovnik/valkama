@@ -34,6 +34,7 @@ const { establishServer, verifyStartedOwnership } = require('./server_startup')
 const { openSessionRequest } = require('./session_opener')
 const { createStartupLog } = require('./startup_log')
 const { resolveLocale, startupAction, startupPageUrl } = require('./startup_page')
+const { guardWindow } = require('./window_policy')
 
 const PORT = Number(process.env.VALKAMA_PORT || 8642)
 const HOST = '127.0.0.1'
@@ -352,8 +353,9 @@ async function showContextMenu(webContents, params) {
     .catch(() => '')
   const locale = pageLocale(lang) ?? startupLocale()
   const template = contextMenuTemplate(params, locale, (text) => clipboard.writeText(text))
-  if (template.length === 0 || !mainWindow) return
-  Menu.buildFromTemplate(template).popup({ window: mainWindow })
+  const window = BrowserWindow.fromWebContents(webContents)
+  if (template.length === 0 || !window) return
+  Menu.buildFromTemplate(template).popup({ window })
 }
 
 function showStartupPage(state) {
@@ -455,58 +457,47 @@ function raiseWindow() {
   mainWindow.setAlwaysOnTop(false)
 }
 
+/** What the main window and a document's own window have alike. */
+const EVERY_WINDOW = {
+  // The window is the chrome the workspace panel lies on, so this is
+  // `--color-navigation` rather than `--color-canvas`: the frame paints before the shell
+  // does, and the first thing drawn should be the ground it keeps.
+  backgroundColor: '#030405', // --color-navigation
+  autoHideMenuBar: true,
+  // Packaged, `__dirname` is inside app.asar and the repository's
+  // `windows/` is not shipped, so this path named nothing and the window
+  // fell back to the icon electron-builder embeds in Valkama.exe from the
+  // same file (`build.win.icon`). Only a run from source needs it: there
+  // the executable is electron.exe, which carries Electron's own icon.
+  icon: app.isPackaged ? undefined : path.join(__dirname, '..', 'windows', 'valkama.ico'),
+  webPreferences: {
+    contextIsolation: true,
+    nodeIntegration: false,
+    sandbox: true,
+    preload: path.join(__dirname, 'preload.js'),
+  },
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1500,
     height: 950,
     minWidth: 720,
     minHeight: 480,
-    // The window is the chrome the workspace panel lies on, so this is
-    // `--color-navigation` rather than `--color-canvas`: the frame paints before the shell
-    // does, and the first thing drawn should be the ground it keeps.
-    backgroundColor: '#030405', // --color-navigation
-    autoHideMenuBar: true,
     title: 'Valkama',
-    // Packaged, `__dirname` is inside app.asar and the repository's
-    // `windows/` is not shipped, so this path named nothing and the window
-    // fell back to the icon electron-builder embeds in Valkama.exe from the
-    // same file (`build.win.icon`). Only a run from source needs it: there
-    // the executable is electron.exe, which carries Electron's own icon.
-    icon: app.isPackaged ? undefined : path.join(__dirname, '..', 'windows', 'valkama.ico'),
-    webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      preload: path.join(__dirname, 'preload.js'),
-    },
+    ...EVERY_WINDOW,
   })
   log('window-created', { visible: mainWindow.isVisible() })
   mainWindow.once('ready-to-show', () => log('window-painted'))
   if (focusWhenCreated || requestedPath) raiseWindow()
 
-  // Anything that is not Valkama opens in the real browser, never in here.
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url)
-    return { action: 'deny' }
-  })
-  mainWindow.webContents.on('will-navigate', (event, url) => {
+  mainWindow.webContents.on('will-navigate', (_event, url) => {
+    // A remedy link on the starting page: the main process acts, the page never
+    // navigates (`guardWindow`), and a link the page does not currently offer is inert.
     const action = startupAction(url)
-    if (action) {
-      // A remedy link on the starting page: the main process acts, the page
-      // never navigates, and a link the page does not currently offer is inert.
-      event.preventDefault()
-      if (!offeredActions.includes(action)) return
-      log('remedy-chosen', { action })
-      void startValkama({ allowRestart: action === 'restart' })
-      return
-    }
-    if (!url.startsWith(URL)) {
-      event.preventDefault()
-      void shell.openExternal(url)
-    }
-  })
-  mainWindow.webContents.on('context-menu', (_event, params) => {
-    void showContextMenu(mainWindow.webContents, params)
+    if (!action || !offeredActions.includes(action)) return
+    log('remedy-chosen', { action })
+    void startValkama({ allowRestart: action === 'restart' })
   })
   mainWindow.webContents.on('did-start-navigation', (details) => {
     if (details.isMainFrame && !details.isSameDocument) pageListens = false
@@ -530,6 +521,17 @@ if (refusesLaunch(process.argv)) {
   log('second-launch', { outcome: 'handed to the running window' })
   app.quit()
 } else {
+  // Every window, as it is created: anything that is not Valkama opens in the real browser,
+  // never in here.
+  app.on('web-contents-created', (_event, contents) => {
+    guardWindow(contents, {
+      appUrl: URL,
+      openExternal: (url) => shell.openExternal(url),
+      showContextMenu,
+      windowOptions: { width: 1000, height: 900, ...EVERY_WINDOW },
+    })
+  })
+
   app.on('second-instance', (_event, argv) => {
     // The window exists from app-ready on, so a click during startup lands
     // here and brings the starting window forward instead of being lost.
