@@ -357,8 +357,9 @@ class EarlierBuildTests(RankingTestCase):
         service.transition_work_item(self.conn, b, "todo", rank="first")
         self.conn.commit()
         self.assertEqual(shape, self.schema(self.conn))
-        self.assertEqual(9, self.conn.execute("PRAGMA user_version").fetchone()[0])
-        self.assertEqual(9, store.STORE_SCHEMA_VERSION)
+        self.assertEqual(
+            store.STORE_SCHEMA_VERSION, self.conn.execute("PRAGMA user_version").fetchone()[0]
+        )
         # Opening it again takes no recovery point: there is nothing to migrate.
         store.connect().close()
         backups = self.root / "backups"

@@ -1,14 +1,17 @@
-"""A store as the schema-9 build created it before session identity arrived.
+"""Stores as two schema-9 builds created them, for the migrations that start there.
 
 Session identity is an additive step inside schema 9, so the stamp alone cannot
 tell a store that has it from one that does not, and no current code can produce
-the second kind. `fixtures/store-schema-9.sql` is every statement in
-`sqlite_master` of a fresh store the last build before that step created,
-captured once from that build rather than restated from the code under test.
+either kind. `fixtures/store-schema-9.sql` is every statement in `sqlite_master`
+of a fresh store the last build before that step created; `LAST`,
+`fixtures/store-schema-9-last.sql`, is the same for the last schema-9 build of
+all, session identity included, which is what schema 10 starts from. Each was
+captured once from its build rather than restated from the code under test.
 
 `build` writes such a store holding its identity row. `populate` gives it rows
-in every table the step touches, written as plain SQL in the shapes that build
-wrote them, so the fixture keeps working however later code writes these tables.
+in every table the identity step touches, written as plain SQL in the shapes the
+earlier build wrote them, so the fixture keeps working however later code writes
+these tables; the same rows land in either catalog.
 """
 
 from __future__ import annotations
@@ -20,21 +23,27 @@ from server.planning import store as planning_store
 from tests import schema8
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "store-schema-9.sql"
+LAST = Path(__file__).resolve().parent / "fixtures" / "store-schema-9-last.sql"
 CREATED_AT = "2026-10-31T00:00:00Z"
 
 
-def statements() -> list[tuple[str, str]]:
+def statements(fixture: Path = FIXTURE) -> list[tuple[str, str]]:
     """Every captured statement with the name of the object it creates, in order."""
 
-    return schema8.statements(FIXTURE)
+    return schema8.statements(fixture)
 
 
-def build(path: str, *, data_scope_id: str = "00000000-0000-4000-8000-000000000009") -> None:
-    """Write a store at schema 9, without session identity, holding its identity row."""
+def build(
+    path: str,
+    *,
+    data_scope_id: str = "00000000-0000-4000-8000-000000000009",
+    fixture: Path = FIXTURE,
+) -> None:
+    """Write a store at schema 9 from `fixture`, holding its identity row."""
 
     conn = sqlite3.connect(path)
     try:
-        for _, statement in statements():
+        for _, statement in statements(fixture):
             conn.execute(statement)
         conn.execute(
             "INSERT INTO platform_store_metadata"

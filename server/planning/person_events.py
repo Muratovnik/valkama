@@ -71,6 +71,9 @@ KINDS = {
     "request_answered": "question_answered",
     "request_declined": "question_declined",
     "request_expired": "question_withdrawn",
+    "comment_resolved": "thread_resolved",
+    "comment_reopened": "thread_reopened",
+    "request_changed": "question_changed",
 }
 #: The actions never told. `created`: an item a person filed says what it says, in
 #: the description an agent reads when it takes it. `execution_attached`: a launch

@@ -562,7 +562,12 @@ older schema refuses the store rather than read it, so restart every agent
 client after pinning the newer release with `launcher install`: each one
 starts its own server, and the first to open the store upgrades it. Schema 9
 dropped the extension registry's tables, the module rows and the integration
-switches; its snapshot is labelled `preschema9`.
+switches; its snapshot is labelled `preschema9`. Schema 10 lets a comment be a
+reply under another one or under a question and carry a resolve mark, numbers a
+question's answer and keeps the answers it replaced, and records where a session
+was last opened; its snapshot is labelled `preschema10`. A store older than 9
+takes both steps in one open, under the `preschema9` (or `preproductmodel`)
+snapshot.
 
 The order of work needs no migration. A placement is written to the item's
 `position`, a column every schema-9 store already has, so the schema stays 9, no
@@ -587,6 +592,16 @@ the dropped tables again, empty), or put the `preschema9` snapshot in its place,
 which loses everything written since. Before replacing the file, delete the
 `-wal` and `-shm` files beside it: a write-ahead log left behind would be
 applied to the snapshot on the next open.
+
+Going back to a build at schema 9 has one way, and its order matters. Stop every
+process that holds the store, delete the `-wal` and `-shm` files, put the
+`preschema10` snapshot in place of the store, and only then pin the earlier
+release with `launcher install --revision <commit>`. Pinned first, the release
+reaches every running session through its stdio front within seconds and
+refuses the store that is still at 10, so the board disappears from all of
+them. Everything written since the upgrade is lost. Stamping the store back to
+9 is not a way back here: a schema-9 build would show a reply as a comment of
+its own and misread the new keys in an answer.
 
 A store that still contains the Board-era model refuses to open until you
 authorize its one-way conversion. Inspect the conversion first, then apply it:

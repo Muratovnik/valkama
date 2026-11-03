@@ -66,6 +66,11 @@ EVENT_ACTIONS = (
     "request_answered",
     "request_declined",
     "request_expired",
+    # Schema 10: a thread's root marked resolved or opened again, and an answer
+    # replaced by a newer one.
+    "comment_resolved",
+    "comment_reopened",
+    "request_changed",
 )
 _EVENT_ACTION_SET = frozenset(EVENT_ACTIONS)
 

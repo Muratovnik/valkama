@@ -1,4 +1,4 @@
-"""Schema 8 to 9: the registry's tables leave, with a recovery point, and nothing else moves.
+"""Schema 8 onward: the registry's tables leave, with a recovery point, and nothing else moves.
 
 The source is a store built from the catalog the schema-8 build created, not
 one shaped by the code under test, and populated the way that build left a
@@ -45,8 +45,10 @@ RETIRED = {
 }
 RETIRED_INDEXES = {"platform_adapter_links_item", "platform_registry_audit_entity"}
 #: What the same upgrade adds: session identity is an additive step every store
-#: older than it takes on the way, schema 8 included.
-ADDED = {"execution_events"}
+#: older than it takes on the way, schema 8 included, and so is schema 10's table
+#: of replaced answers. The chain ends at the build's own schema, under the one
+#: recovery point labelled for its oldest step.
+ADDED = {"execution_events", "work_item_request_answers"}
 #: When the schema-8 build wrote the rows below.
 CREATED_AT = "2026-08-09T16:50:36Z"
 
@@ -235,7 +237,9 @@ class SchemaEightMigrationTests(unittest.TestCase):
 
         conn = store.connect()
         self.addCleanup(conn.close)
-        self.assertEqual(9, conn.execute("PRAGMA user_version").fetchone()[0])
+        self.assertEqual(
+            store.STORE_SCHEMA_VERSION, conn.execute("PRAGMA user_version").fetchone()[0]
+        )
         self.assertEqual(kept | ADDED, _catalog(conn, "table"))
         self.assertEqual(set(), RETIRED_INDEXES & _catalog(conn, "index"))
         self.assertEqual(
@@ -284,7 +288,9 @@ class SchemaEightMigrationTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"VALKAMA_DB": restored}):
             replayed = store.connect()
             self.addCleanup(replayed.close)
-            self.assertEqual(9, replayed.execute("PRAGMA user_version").fetchone()[0])
+            self.assertEqual(
+                store.STORE_SCHEMA_VERSION, replayed.execute("PRAGMA user_version").fetchone()[0]
+            )
             self.assertEqual(kept | ADDED, _catalog(replayed, "table"))
             self.assertEqual(before, _rows(replayed, shape))
         # The restored store is the snapshot's own source, so the replay reuses
@@ -297,7 +303,9 @@ class SchemaEightMigrationTests(unittest.TestCase):
         schema8.build(self.path)
         conn = store.connect()
         self.addCleanup(conn.close)
-        self.assertEqual(9, conn.execute("PRAGMA user_version").fetchone()[0])
+        self.assertEqual(
+            store.STORE_SCHEMA_VERSION, conn.execute("PRAGMA user_version").fetchone()[0]
+        )
         self.assertEqual(set(), RETIRED & _catalog(conn, "table"))
 
     def test_rows_in_the_retired_tables_are_dropped_without_being_read(self) -> None:
@@ -319,7 +327,9 @@ class SchemaEightMigrationTests(unittest.TestCase):
             conn.close()
         migrated = store.connect()
         self.addCleanup(migrated.close)
-        self.assertEqual(9, migrated.execute("PRAGMA user_version").fetchone()[0])
+        self.assertEqual(
+            store.STORE_SCHEMA_VERSION, migrated.execute("PRAGMA user_version").fetchone()[0]
+        )
         self.assertEqual(set(), RETIRED & _catalog(migrated, "table"))
 
     def test_a_failed_attempt_leaves_the_store_at_8_and_the_retry_reuses_its_copy(self) -> None:
@@ -346,7 +356,9 @@ class SchemaEightMigrationTests(unittest.TestCase):
         self.assertEqual(1, len(self.snapshots("preschema9")))
         conn = store.connect()
         self.addCleanup(conn.close)
-        self.assertEqual(9, conn.execute("PRAGMA user_version").fetchone()[0])
+        self.assertEqual(
+            store.STORE_SCHEMA_VERSION, conn.execute("PRAGMA user_version").fetchone()[0]
+        )
         self.assertEqual(1, len(self.snapshots("preschema9")))
 
     def test_a_schema_8_build_refuses_the_migrated_store_before_writing(self) -> None:
@@ -356,7 +368,10 @@ class SchemaEightMigrationTests(unittest.TestCase):
         with mock.patch.object(store, "STORE_SCHEMA_VERSION", 8):
             with self.assertRaises(store.StoreTooNewError) as refusal:
                 store.connect()
-        self.assertEqual((9, 8), (refusal.exception.stored, refusal.exception.supported))
+        self.assertEqual(
+            (store.STORE_SCHEMA_VERSION, 8),
+            (refusal.exception.stored, refusal.exception.supported),
+        )
         self.assertEqual(before, Path(self.path).read_bytes())
 
     def test_the_full_integrity_check_runs_on_a_migration_and_not_on_every_open(self) -> None:

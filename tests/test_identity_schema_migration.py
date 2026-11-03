@@ -1,11 +1,16 @@
-"""Session identity arrives in schema 9 as one additive step, under its own recovery point.
+"""Session identity arrived in schema 9 as one additive step.
 
 The source is a store built from the catalog the last build before this step
 created, populated as that build wrote it. What this suite holds the step to:
 every existing value stays, the new columns and table arrive once, a second open
-writes nothing, a fresh store has the same shape directly, and a build from
-before the step can still open and write the result. The new names are stated
-here rather than read from the code under test.
+writes nothing, a fresh store has the same shape directly, and writes in the
+columns the earlier build named still land. The new names are stated here
+rather than read from the code under test.
+
+Such a store is stamped 9, so since schema 10 the same open also takes schema
+10's steps, and its one recovery point is the one labelled for them,
+`preschema10`; the step's own `preidentity` point is taken only by a store
+already at the current stamp that lacks it.
 """
 
 from __future__ import annotations
@@ -64,6 +69,20 @@ EXECUTION_EVENT_COLUMNS = {
     "archive_sha256",
     "work_item_id",
 }
+#: What schema 10 adds in the same open, so that the shapes below are exact.
+SCHEMA10_COLUMNS = {
+    "work_item_comments": {
+        "reply_to",
+        "reply_to_request",
+        "resolved_at",
+        "resolved_by",
+        "resolution",
+        "resolved_call_id",
+    },
+    "work_item_requests": {"answer_version"},
+    "sessions": {"opened_in", "opened_host", "opened_folder", "host_session_id"},
+}
+SCHEMA10_TABLES = {"work_item_request_answers"}
 ADDED_TRIGGERS = {
     "work_items_claim_follows_call",
     "execution_events_append_only_update",
@@ -135,7 +154,7 @@ class IdentitySchemaMigrationTests(unittest.TestCase):
         patch.start()
         self.addCleanup(patch.stop)
 
-    def snapshots(self, label: str = "preidentity") -> list[Path]:
+    def snapshots(self, label: str = "preschema10") -> list[Path]:
         return list((self.root / "backups").glob(f"*-{label}-*.sqlite3"))
 
     def populated_source(self) -> None:
@@ -173,12 +192,19 @@ class IdentitySchemaMigrationTests(unittest.TestCase):
 
         conn = store.connect()
         self.addCleanup(conn.close)
-        self.assertEqual(9, conn.execute("PRAGMA user_version").fetchone()[0])
-        self.assertEqual(set(shape) | {"execution_events"}, _catalog(conn, "table"))
+        self.assertEqual(
+            store.STORE_SCHEMA_VERSION, conn.execute("PRAGMA user_version").fetchone()[0]
+        )
+        self.assertEqual(
+            set(shape) | {"execution_events"} | SCHEMA10_TABLES, _catalog(conn, "table")
+        )
         for table, columns in shape.items():
             with self.subTest(table=table):
                 self.assertEqual(
-                    set(columns) | ADDED_COLUMNS.get(table, set()), set(_columns(conn, table))
+                    set(columns)
+                    | ADDED_COLUMNS.get(table, set())
+                    | SCHEMA10_COLUMNS.get(table, set()),
+                    set(_columns(conn, table)),
                 )
         self.assertEqual(EXECUTION_EVENT_COLUMNS, set(_columns(conn, "execution_events")))
         self.assertEqual(before, _values(conn, shape))
@@ -334,9 +360,11 @@ class IdentitySchemaMigrationTests(unittest.TestCase):
             [tuple(row) for row in conn.execute("SELECT * FROM execution_events")],
         )
 
-    def test_a_build_from_before_the_step_still_opens_and_writes_the_store(self) -> None:
-        # Fresh and migrated: either is what an older build may meet after an
-        # install of this one.
+    def test_writes_in_the_columns_a_build_before_the_step_named_still_land(self) -> None:
+        # Fresh and migrated. Since schema 10 such a build refuses either store
+        # on its stamp; what is still held is that the step is additive: that
+        # build's whole catalog, run guarded, writes nothing, and its inserts,
+        # which name none of the new columns, land.
         stores = {
             "fresh": store.connect(),
             "migrated": self.migrated(str(self.root / "migrated.sqlite3")),
@@ -391,7 +419,9 @@ class IdentitySchemaMigrationTests(unittest.TestCase):
                 )
                 migrations.assert_product_model_postconditions(conn)
                 conn.commit()
-                self.assertEqual(9, conn.execute("PRAGMA user_version").fetchone()[0])
+                self.assertEqual(
+                    store.STORE_SCHEMA_VERSION, conn.execute("PRAGMA user_version").fetchone()[0]
+                )
                 self.assertEqual(
                     ("", "", "", ""),
                     tuple(
@@ -446,7 +476,7 @@ class IdentitySchemaMigrationTests(unittest.TestCase):
         source = sqlite3.connect(self.path)
         try:
             identity = store_backups.logical_identity(source)
-            whole = store_backups.snapshot(source, store._backups(), "preidentity")
+            whole = store_backups.snapshot(source, store._backups(), "preschema10")
         finally:
             source.close()
         data = Path(whole).read_bytes()

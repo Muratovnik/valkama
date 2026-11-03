@@ -34,6 +34,22 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Changed
 
+- **Breaking for every running client: store schema 10.** The first open by this build
+  takes a verified snapshot labelled `preschema10` beside the store, then, in one
+  transaction, gives every comment an empty parent and resolve mark (`reply_to`,
+  `reply_to_request`, `resolved_at`, `resolved_by`, `resolution`, `resolved_call_id`),
+  numbers each question's answer (`answer_version`, 1 for one already answered), adds
+  the table of replaced answers (`work_item_request_answers`), widens the history's
+  actions with `comment_resolved`, `comment_reopened` and `request_changed`, and gives
+  every session an empty place (`opened_in`, `opened_host`, `opened_folder`,
+  `host_session_id`). Every existing row keeps its values. Triggers refuse a reply with
+  two parents, a reply to a reply, a reply on another item than its parent, and a
+  resolve mark on a reply. A store older than 9 takes the schema-9 and schema-10 steps
+  in one open under its `preschema9` or `preproductmodel` snapshot. A schema-9 build
+  refuses the upgraded store with `StoreTooNewError` and leaves the file unchanged, so
+  restart every agent client after pinning this release with `launcher install`. Going
+  back is described in the README under "Migrating an older store": the snapshot goes
+  back in place before the earlier release is pinned.
 - **An agent cannot close past what a person said.** Its move to a completed or
   cancelled state is refused with `person_spoke` while a person acted on the item since
   an agent last wrote there, and the refusal quotes what they did. A comment sent in the

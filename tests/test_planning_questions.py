@@ -345,13 +345,14 @@ class ResolutionTests(QuestionCase):
         read = self.tool("get_work_item", id=self.reference)
         self.assertEqual(1, read["questions"]["open"])
 
-    def test_a_question_writes_no_comment_and_the_store_stays_at_9(self) -> None:
+    def test_a_question_writes_no_comment_and_moves_no_stamp(self) -> None:
         self.answer(self.ask(), {"path": "keep"}, note="Fine")
         self.assertEqual(
             0, self.conn.execute("SELECT COUNT(*) FROM work_item_comments").fetchone()[0]
         )
-        self.assertEqual(9, store.STORE_SCHEMA_VERSION)
-        self.assertEqual(9, self.conn.execute("PRAGMA user_version").fetchone()[0])
+        self.assertEqual(
+            store.STORE_SCHEMA_VERSION, self.conn.execute("PRAGMA user_version").fetchone()[0]
+        )
 
 
 class ByPersonTests(QuestionCase):

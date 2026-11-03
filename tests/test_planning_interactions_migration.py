@@ -31,6 +31,30 @@ class PlanningInteractionsMigrationTests(unittest.TestCase):
         service.set_summary(
             self.conn, self.item["reference"], {"done": "Existing report", "next": "Continue"}
         )
+        # A store from before questions has none of what schema 10 hangs on
+        # them: the thread triggers and indexes, the parent and mark columns,
+        # and the table of replaced answers.
+        for trigger in (
+            "work_item_comments_thread_shape_insert",
+            "work_item_comments_thread_shape_update",
+        ):
+            self.conn.execute(f"DROP TRIGGER {trigger}")
+        for index in (
+            "work_item_comments_reply_to",
+            "work_item_comments_reply_to_request",
+            "work_item_comments_unresolved",
+        ):
+            self.conn.execute(f"DROP INDEX {index}")
+        for column in (
+            "reply_to",
+            "reply_to_request",
+            "resolved_at",
+            "resolved_by",
+            "resolution",
+            "resolved_call_id",
+        ):
+            self.conn.execute(f"ALTER TABLE work_item_comments DROP COLUMN {column}")
+        self.conn.execute("DROP TABLE work_item_request_answers")
         self.conn.execute("DROP TABLE work_item_requests")
         self.conn.execute("ALTER TABLE work_item_comments DROP COLUMN checklist_item_id")
         self.conn.execute("ALTER TABLE work_item_comments DROP COLUMN checklist_item_text")

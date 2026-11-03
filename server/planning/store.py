@@ -25,6 +25,33 @@ _REF_SQL = ",".join(f"'{kind}'" for kind in sorted(model.REF_KINDS))
 
 _NOW = "(strftime('%Y-%m-%dT%H:%M:%SZ','now'))"
 
+#: What schema 10 appends, by table, in the order it appends it. A comment is
+#: the root of a thread when it names no parent and a reply when it names one --
+#: a root comment or a question, never both -- and only a root carries the
+#: resolve mark. A question keeps the number of its current answer; the answers
+#: it replaced live in `work_item_request_answers`. ALTER TABLE can only append,
+#: so the base schema declares these last from the same text and a fresh store
+#: has the shape a migrated one reaches.
+_THREAD_COLUMNS = {
+    "work_item_comments": (
+        ("reply_to", "reply_to INTEGER REFERENCES work_item_comments(id) ON DELETE CASCADE"),
+        (
+            "reply_to_request",
+            "reply_to_request TEXT REFERENCES work_item_requests(request_id) ON DELETE CASCADE",
+        ),
+        ("resolved_at", "resolved_at TEXT"),
+        ("resolved_by", "resolved_by TEXT NOT NULL DEFAULT ''"),
+        ("resolution", "resolution TEXT NOT NULL DEFAULT ''"),
+        ("resolved_call_id", "resolved_call_id INTEGER REFERENCES execution_events(id)"),
+    ),
+    "work_item_requests": (("answer_version", "answer_version INTEGER NOT NULL DEFAULT 0"),),
+}
+
+
+def _appended(table: str) -> str:
+    return "".join(f",\n    {definition}" for _, definition in _THREAD_COLUMNS[table])
+
+
 SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS planning_spaces(
     planning_space_id TEXT PRIMARY KEY,
@@ -127,7 +154,7 @@ CREATE TABLE IF NOT EXISTS work_item_comments(
     checklist_item_id TEXT,
     checklist_item_text TEXT,
     created_at TEXT NOT NULL DEFAULT {_NOW},
-    call_id INTEGER REFERENCES execution_events(id)
+    call_id INTEGER REFERENCES execution_events(id){_appended("work_item_comments")}
 );
 CREATE INDEX IF NOT EXISTS work_item_comments_item ON work_item_comments(work_item_id, id);
 CREATE TABLE IF NOT EXISTS work_item_refs(
@@ -167,9 +194,21 @@ CREATE TABLE IF NOT EXISTS work_item_requests(
     created_at TEXT NOT NULL,
     resolved_at TEXT,
     revision INTEGER NOT NULL DEFAULT 0,
-    expired_reason TEXT CHECK(expired_reason IN ('deadline','withdrawn','execution_closed','task_closed'))
+    expired_reason TEXT CHECK(expired_reason IN ('deadline','withdrawn','execution_closed','task_closed')){_appended("work_item_requests")}
 );
 CREATE INDEX IF NOT EXISTS work_item_requests_item ON work_item_requests(work_item_id,created_at);
+-- The answers a question's current one replaced, one row per version. The
+-- current answer stays on the request row, so each version lives in one place
+-- and every reader of the current answer reads what it always read.
+CREATE TABLE IF NOT EXISTS work_item_request_answers(
+    request_id TEXT NOT NULL REFERENCES work_item_requests(request_id) ON DELETE CASCADE,
+    version INTEGER NOT NULL CHECK(version >= 1),
+    answers_json TEXT NOT NULL,
+    answered_by TEXT NOT NULL,
+    answered_at TEXT NOT NULL,
+    call_id INTEGER REFERENCES execution_events(id),
+    PRIMARY KEY(request_id, version)
+);
 
 """
 
@@ -192,46 +231,154 @@ def migrate_interactions(conn: sqlite3.Connection) -> None:
     for column in ("checklist_item_id", "checklist_item_text"):
         if column not in columns:
             conn.execute(f"ALTER TABLE work_item_comments ADD COLUMN {column} TEXT")
+    widen_event_actions(conn)
+
+
+def widen_event_actions(conn: sqlite3.Connection) -> None:
+    """Give `work_item_events` the CHECK of every action `model.EVENT_ACTIONS` declares, once.
+
+    SQLite cannot widen a CHECK constraint in place, so a table missing any
+    declared action is rebuilt from its own stored definition with the current
+    list, every row carried over with its id, and its indexes and triggers
+    created again. A table that already holds every action is left alone, which
+    is what makes a second call in the same open, or a later open, write nothing.
+    """
+
     event = conn.execute("SELECT sql FROM sqlite_master WHERE name='work_item_events'").fetchone()
-    if event is not None and "request_created" not in event[0]:
-        definitions = [
-            row[0]
-            for row in conn.execute(
-                "SELECT sql FROM sqlite_master WHERE tbl_name='work_item_events' AND type IN ('index','trigger') AND sql IS NOT NULL"
-            )
-        ]
-        sequence = None
-        if "AUTOINCREMENT" in event[0].upper():
-            sequence = conn.execute(
-                "SELECT seq FROM sqlite_sequence WHERE name='work_item_events'"
-            ).fetchone()
-        definition = re.sub(
-            r'CREATE TABLE(?: IF NOT EXISTS)?\s+"?work_item_events"?',
-            "CREATE TABLE work_item_events_replacement",
-            event[0],
-            count=1,
-            flags=re.IGNORECASE,
+    if event is None or all(f"'{action}'" in event[0] for action in model.EVENT_ACTIONS):
+        return
+    definitions = [
+        row[0]
+        for row in conn.execute(
+            "SELECT sql FROM sqlite_master WHERE tbl_name='work_item_events'"
+            " AND type IN ('index','trigger') AND sql IS NOT NULL"
         )
-        definition, replaced = re.subn(
-            r"CHECK\s*\(\s*action\s+IN\s*\([^)]*\)\s*\)",
-            f"CHECK(action IN ({_EVENT_ACTION_SQL}))",
-            definition,
-            count=1,
-            flags=re.IGNORECASE,
+    ]
+    sequence = None
+    if "AUTOINCREMENT" in event[0].upper():
+        sequence = conn.execute(
+            "SELECT seq FROM sqlite_sequence WHERE name='work_item_events'"
+        ).fetchone()
+    definition = re.sub(
+        r'CREATE TABLE(?: IF NOT EXISTS)?\s+"?work_item_events"?',
+        "CREATE TABLE work_item_events_replacement",
+        event[0],
+        count=1,
+        flags=re.IGNORECASE,
+    )
+    definition, replaced = re.subn(
+        r"CHECK\s*\(\s*action\s+IN\s*\([^)]*\)\s*\)",
+        f"CHECK(action IN ({_EVENT_ACTION_SQL}))",
+        definition,
+        count=1,
+        flags=re.IGNORECASE,
+    )
+    if replaced != 1:
+        raise RuntimeError("event migration requires the known action constraint")
+    conn.execute(definition)
+    conn.execute("INSERT INTO work_item_events_replacement SELECT * FROM work_item_events")
+    conn.execute("DROP TABLE work_item_events")
+    conn.execute("ALTER TABLE work_item_events_replacement RENAME TO work_item_events")
+    for statement in definitions:
+        conn.execute(statement)
+    if sequence is not None:
+        conn.execute(
+            "UPDATE sqlite_sequence SET seq=max(seq,?) WHERE name='work_item_events'",
+            (sequence[0],),
         )
-        if replaced != 1:
-            raise RuntimeError("request event migration requires the known action constraint")
-        conn.execute(definition)
-        conn.execute("INSERT INTO work_item_events_replacement SELECT * FROM work_item_events")
-        conn.execute("DROP TABLE work_item_events")
-        conn.execute("ALTER TABLE work_item_events_replacement RENAME TO work_item_events")
-        for statement in definitions:
-            conn.execute(statement)
-        if sequence is not None:
-            conn.execute(
-                "UPDATE sqlite_sequence SET seq=max(seq,?) WHERE name='work_item_events'",
-                (sequence[0],),
-            )
+
+
+#: What a thread may be, refused by the store rather than only by the service:
+#: a reply names one parent, that parent is a root, it is on the reply's own work
+#: item, and only a root is resolved. One body, two triggers, because a SQLite
+#: trigger stands on one event. Neither stands on `work_item_id`: a merge moves a
+#: root and its replies in one UPDATE, and a parent checked against the reply's
+#: item halfway through that statement would stop the move.
+_THREAD_RULES = """
+    SELECT RAISE(ABORT, 'a reply names one parent: a comment or a question')
+    WHERE NEW.reply_to IS NOT NULL AND NEW.reply_to_request IS NOT NULL;
+    SELECT RAISE(ABORT, 'a reply answers a root, not another reply')
+    WHERE EXISTS (
+        SELECT 1 FROM work_item_comments parent
+        WHERE parent.id = NEW.reply_to
+          AND (parent.reply_to IS NOT NULL OR parent.reply_to_request IS NOT NULL)
+    );
+    SELECT RAISE(ABORT, 'a reply stays on the same work item as its parent')
+    WHERE EXISTS (
+        SELECT 1 FROM work_item_comments parent
+        WHERE parent.id = NEW.reply_to AND parent.work_item_id != NEW.work_item_id
+    ) OR EXISTS (
+        SELECT 1 FROM work_item_requests parent
+        WHERE parent.request_id = NEW.reply_to_request
+          AND parent.work_item_id != NEW.work_item_id
+    );
+    SELECT RAISE(ABORT, 'only a root is resolved')
+    WHERE NEW.resolved_at IS NOT NULL
+      AND (NEW.reply_to IS NOT NULL OR NEW.reply_to_request IS NOT NULL);
+"""
+_THREAD_TRIGGERS = {
+    "work_item_comments_thread_shape_insert": "INSERT",
+    "work_item_comments_thread_shape_update": "UPDATE OF reply_to, reply_to_request, resolved_at",
+}
+#: Created here rather than in the base schema, which runs before this against a
+#: table that may not have the columns yet. The partial indexes serve the two
+#: ways a thread is read -- its replies by parent -- and the open roots of an item.
+_THREAD_INDEXES = (
+    "CREATE INDEX IF NOT EXISTS work_item_comments_reply_to"
+    " ON work_item_comments(reply_to) WHERE reply_to IS NOT NULL",
+    "CREATE INDEX IF NOT EXISTS work_item_comments_reply_to_request"
+    " ON work_item_comments(reply_to_request) WHERE reply_to_request IS NOT NULL",
+    "CREATE INDEX IF NOT EXISTS work_item_comments_unresolved"
+    " ON work_item_comments(work_item_id, id)"
+    " WHERE reply_to IS NULL AND reply_to_request IS NULL AND resolved_at IS NULL",
+)
+
+
+def migrate_threads(conn: sqlite3.Connection) -> None:
+    """Schema 10's Planning step: threads, the resolve mark and answer versions, once.
+
+    Appends the columns `_THREAD_COLUMNS` names, numbers an answered question's
+    current answer 1 in the same call that adds the column (a later open leaves
+    the numbers alone), widens the event CHECK, and creates the indexes and the
+    triggers that keep a thread's shape. The table of replaced answers comes
+    from the base schema, which `store.connect()` runs before this. Every part
+    looks before it writes, so a store that has them is left as it was.
+    """
+
+    added: set[str] = set()
+    for table, definitions in _THREAD_COLUMNS.items():
+        present = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        for column, definition in definitions:
+            if column not in present:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {definition}")
+                added.add(column)
+    if "answer_version" in added:
+        conn.execute("UPDATE work_item_requests SET answer_version = 1 WHERE status = 'answered'")
+    widen_event_actions(conn)
+    for statement in _THREAD_INDEXES:
+        conn.execute(statement)
+    for name, event in _THREAD_TRIGGERS.items():
+        conn.execute(
+            f"CREATE TRIGGER IF NOT EXISTS {name} BEFORE {event} ON work_item_comments"
+            f" BEGIN{_THREAD_RULES}END"
+        )
+
+
+def assert_threads_postconditions(conn: sqlite3.Connection) -> None:
+    """Refuse to stamp a store that does not hold what `migrate_threads` gives it."""
+
+    for table, definitions in _THREAD_COLUMNS.items():
+        present = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        missing = [column for column, _ in definitions if column not in present]
+        if missing:
+            raise RuntimeError(f"post-migration {table} lacks {', '.join(missing)}")
+    objects = {str(row[0]) for row in conn.execute("SELECT name FROM sqlite_master")}
+    absent = sorted(set(_THREAD_TRIGGERS) - objects)
+    if absent:
+        raise RuntimeError(f"post-migration store lacks the trigger {', '.join(absent)}")
+    event = conn.execute("SELECT sql FROM sqlite_master WHERE name='work_item_events'").fetchone()
+    if event is None or any(f"'{action}'" not in event[0] for action in model.EVENT_ACTIONS):
+        raise RuntimeError("post-migration work_item_events does not hold every action")
 
 
 def migrate_discussion(conn: sqlite3.Connection) -> None:
@@ -366,6 +513,7 @@ SCHEMA_TABLES = (
     "work_item_refs",
     "work_item_events",
     "work_item_requests",
+    "work_item_request_answers",
 )
 
 

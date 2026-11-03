@@ -107,7 +107,11 @@ CREATE TABLE IF NOT EXISTS sessions(
     parent_session_id TEXT NOT NULL DEFAULT '',
     agent_id TEXT NOT NULL DEFAULT '',
     transcript_path TEXT NOT NULL DEFAULT '',
-    client_version TEXT NOT NULL DEFAULT ''
+    client_version TEXT NOT NULL DEFAULT '',
+    opened_in TEXT NOT NULL DEFAULT '',
+    opened_host TEXT NOT NULL DEFAULT '',
+    opened_folder TEXT NOT NULL DEFAULT '',
+    host_session_id TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS session_events(
     id INTEGER PRIMARY KEY,
@@ -207,7 +211,14 @@ MIGRATIONS = {
 # 9 dropped the extension registry's tables, the module rows with their audit,
 # and `integration_settings`. A build at 8 would create them again, empty, and
 # stamp the store back to 8; the ratchet makes it refuse a store at 9 instead.
-STORE_SCHEMA_VERSION = 9
+#
+# 10 made a comment either the root of a thread or a reply under one, put a
+# person's own option and per-field notes into an answer beside its `_note`, and
+# let an answer be replaced. A build at 9 would show a reply as a root of its
+# own, read the new answer keys as fields its own interface then refuses, carry
+# replies away from their root in a merge, and accept a note in place of a
+# required field; the ratchet makes it refuse a store at 10 instead.
+STORE_SCHEMA_VERSION = 10
 
 
 class StoreTooNewError(RuntimeError):
@@ -375,6 +386,44 @@ def _migrate_session_identity(conn: sqlite3.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS sessions_parent ON sessions(parent_session_id)"
         " WHERE parent_session_id != ''"
     )
+
+
+#: Where a session was last opened, added with schema 10: how (`opened_in`), in
+#: what (`opened_host`), the folder of the last session start, and the id the
+#: host application gives the session. Appended after the identity columns and
+#: declared last in the base schema in the same order.
+_SESSION_PLACE_COLUMNS = ("opened_in", "opened_host", "opened_folder", "host_session_id")
+
+
+def _migrate_session_place(conn: sqlite3.Connection) -> None:
+    """Give an existing `sessions` table the place columns, once.
+
+    Additive and empty, like the identity columns: an empty value reads as "not
+    known", which is true of every session recorded before them.
+    """
+
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(sessions)")}
+    for column in _SESSION_PLACE_COLUMNS:
+        if column not in columns:
+            conn.execute(f"ALTER TABLE sessions ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
+
+
+def _assert_current_catalog(conn: sqlite3.Connection) -> None:
+    """Refuse to stamp a store missing a table or column this build declares.
+
+    Every table in `SCHEMA_TABLES` is checked, so a table added to the base
+    schema is checked here without a line of its own.
+    """
+
+    tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    missing = sorted(set(SCHEMA_TABLES) - tables)
+    if missing:
+        raise RuntimeError(f"post-migration store lacks {', '.join(missing)}")
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(sessions)")}
+    absent = [column for column in _SESSION_PLACE_COLUMNS if column not in columns]
+    if absent:
+        raise RuntimeError(f"post-migration sessions lacks {', '.join(absent)}")
+    planning_store.assert_threads_postconditions(conn)
 
 
 def _snapshot_before_new_tables(conn: sqlite3.Connection) -> str | None:
@@ -622,12 +671,19 @@ def connect() -> sqlite3.Connection:
 
             # Classify and snapshot before the first persistent pragma or schema
             # write. Every upgrade of an existing store takes one named, reusable
-            # recovery point. A store older than 8 still goes through the
-            # classification and the historical row migrations, under the label
-            # those have always used; a store at 8 needs only the step that
-            # drops the retired tables, and its recovery point says so.
+            # recovery point, labelled for the oldest step it covers. A store
+            # older than 8 still goes through the classification and the
+            # historical row migrations, under the label those have always used;
+            # a store at 8 needs the step that drops the retired tables and is
+            # labelled for it; a store at 9 needs only schema 10's steps.
+            #
+            # The schema-9 steps are bound to `stored_version < 9`, not to
+            # "older than this build": bound to the ratchet, they would give a
+            # store at 9 a recovery point named for a step it does not take and
+            # the schema-8 catalog to drop again.
             upgrade = not first_store and stored_version < STORE_SCHEMA_VERSION
             historical = upgrade and stored_version < 8
+            before_schema9 = upgrade and stored_version < 9
             source_identity = None
             source_generation = None
             pretable_backup = None
@@ -638,9 +694,13 @@ def connect() -> sqlite3.Connection:
                 _, source_identity = store_backups.verified_snapshot(
                     conn, "preproductmodel", locate=_backups
                 )
-            elif upgrade:
+            elif before_schema9:
                 _, source_identity = store_backups.verified_snapshot(
                     conn, "preschema9", locate=_backups
+                )
+            elif upgrade:
+                _, source_identity = store_backups.verified_snapshot(
+                    conn, "preschema10", locate=_backups
                 )
             else:
                 pretable_backup = _snapshot_before_new_tables(conn)
@@ -694,8 +754,13 @@ def connect() -> sqlite3.Connection:
                 _execute_script(conn, planning_store.SCHEMA)
                 _migrate(conn)
                 migrate_planning_cutover(conn)
+            # A table this build adds, schema 10's included, is declared in
+            # `SCHEMA` alone, with its name in `SCHEMA_TABLES`: run against an
+            # upgraded store inside this transaction and under its recovery
+            # point, the script creates it exactly as in a fresh store, and
+            # `_assert_current_catalog` checks it by that name.
             _execute_script(conn, SCHEMA)
-            if upgrade:
+            if before_schema9:
                 # The steps below were written against schema 8's catalog, which
                 # this build no longer declares; the last step drops it again.
                 platform_migrations.ensure_schema8_catalog(conn)
@@ -704,6 +769,10 @@ def connect() -> sqlite3.Connection:
             planning_store.migrate_cancelled_state(conn)
             planning_store.migrate_identity(conn)
             _migrate_session_identity(conn)
+            # Schema 10: columns cannot come from the script, which leaves an
+            # existing table alone, so they are appended here.
+            planning_store.migrate_threads(conn)
+            _migrate_session_place(conn)
             audit_migration = platform_migrations.schema_migration_needed(conn)
             audit_order_migration = platform_migrations.registry_audit_order_migration_needed(conn)
             authorization_migration = platform_migrations.authorization_owner_migration_needed(conn)
@@ -739,7 +808,7 @@ def connect() -> sqlite3.Connection:
                 platform_migrations.migrate_product_model(conn)
             if historical:
                 platform_migrations.retire_work_support_modules(conn)
-            if upgrade:
+            if before_schema9:
                 # Schema 9: the registry's tables, the module rows with their
                 # audit, and the integration switches nothing has written since
                 # the registry replaced them. The recovery point holds them.
@@ -750,6 +819,7 @@ def connect() -> sqlite3.Connection:
             # store being created and one being upgraded.
             platform_core.initialize(conn, path, caller_owns_transaction=True)
             platform_migrations.assert_product_model_postconditions(conn)
+            _assert_current_catalog(conn)
             # The full check reads every page, so it runs where something was
             # migrated -- a recovery point was taken or the stamp moves -- and
             # not on every open of a store that is already current.
