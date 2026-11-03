@@ -271,7 +271,6 @@ class ProjectRegistryTests(unittest.TestCase):
             root / "server" / "planning" / "migration.py",
             root / "server" / "sessions.py",
             root / "server" / "executions" / "api.py",
-            root / "desktop" / "project_registry.js",
             root / "desktop" / "session_opener.js",
             root / "web" / "src" / "features" / "session-open" / "openPlan.ts",
         ]
