@@ -50,7 +50,12 @@ const meta = computed(() => {
 </template>
 
 <style scoped>
+/* On the tooltip's ground, a step lighter than any other, the information blue of
+   a state word falls under 4.5:1. The state says its tone with its dot there, and
+   its word in the tip's muted ink. */
 .branch-tip {
+  --color-state-label: var(--color-text-muted);
+
   position: absolute;
   z-index: 2;
   display: grid;

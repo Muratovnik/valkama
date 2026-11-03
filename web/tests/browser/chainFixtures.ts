@@ -3,7 +3,7 @@
  * one that draws legibly, the card's large one renamed into the space, and the
  * unit fixture's long one filed in it; and `serve`, which answers for them.
  */
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
@@ -254,4 +254,15 @@ export async function rootFramed(page: Page): Promise<boolean> {
       root.bottom <= field.bottom,
     )
   })
+}
+
+/** Along the map's raised runs until the tip names a task under way. */
+export async function pointAtWorkUnderWay(page: Page, section: Locator, word: Locator) {
+  for (const run of await section.locator('.branch-map-run.raised').all()) {
+    const box = await run.boundingBox()
+    if (!box) continue
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await new Promise((done) => setTimeout(done, 100))
+    if (await word.count()) return
+  }
 }

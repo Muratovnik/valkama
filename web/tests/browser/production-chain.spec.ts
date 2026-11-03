@@ -22,6 +22,7 @@ import {
   graphRoute,
   largeChainHere,
   longChainHere,
+  pointAtWorkUnderWay,
   rootFramed,
   routeState,
   serve,
@@ -224,6 +225,18 @@ test('the readout of the first lane stays inside a panel scrolled to the map', a
   expect(tip).not.toBeNull()
   // Above the lane it would rise past the panel's top edge and be cut off.
   expect(tip?.y ?? 0).toBeGreaterThanOrEqual(panelTop)
+})
+
+test('the tip the map shows names a state in ink that reads on its ground', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1400 })
+  await installBackend(page)
+  await serve(page, branchedChain(mapRoot, 'MAIN'))
+  const section = await openCard(page)
+  const word = section.locator('.branch-tip .semantic-state[data-state="active"] .state-label')
+  await pointAtWorkUnderWay(page, section, word)
+  await expect(word).toBeVisible()
+  const { contrast } = await word.evaluate(drawnColours, 'own' as const)
+  expect(contrast).toBeGreaterThanOrEqual(4.5)
 })
 
 test('the branch map gives a small chain a segment, a dot and a name per task', async ({
