@@ -22,12 +22,12 @@ from typing import Any
 from unittest import mock
 from urllib.parse import quote, urlencode
 
-from server import http_surface, session_open, store
+from server import http_surface, processes, session_open, store
 from server.ops import url_schemes
 from server.ops.url_schemes import Installed
 from server.planning import service
 from server.projects import project_registry
-from server.session_open import SessionTarget
+from server.session_open import PathTarget, SessionTarget
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
 from tests.registry_fixtures import project_entry, registry_bytes
@@ -339,6 +339,12 @@ class WithoutWhatWasNotSeenTests(PlanCase):
         plan = self.plan(seen=self.seen_without(url_schemes.ELSEWHERE_NOTICE))
         self.assertEqual([{"kind": "explain", "reason": "live-in-terminal"}], plan["steps"])
 
+    def test_the_notice_not_seen_holding_leaves_only_the_hint_whatever_the_fallback(self) -> None:
+        self.session(client="codex", opened_in="terminal", status="active")
+        seen = self.seen_without(url_schemes.ELSEWHERE_NOTICE)
+        plan = self.plan(fallback="codex-app", seen=seen)
+        self.assertEqual([{"kind": "explain", "reason": "live-in-terminal"}], plan["steps"])
+
     def test_the_notice_not_seen_holding_covers_an_ide_terminal_too(self) -> None:
         self.session(opened_in="ide-terminal", opened_host="vscode", status="active")
         plan = self.plan(seen=self.seen_without(url_schemes.ELSEWHERE_NOTICE))
@@ -411,8 +417,8 @@ class RowsOlderThanTheRecordTests(PlanCase):
         self.old_row()
         self.assertEqual("", self.plan()["place"]["opened_in"])
 
-    def test_a_cut_line_with_an_entrypoint_is_not_taken_from_the_middle(self) -> None:
-        head = json.dumps({"entrypoint": "cli", "pad": "x" * 100})
+    def test_an_entrypoint_in_a_line_the_read_began_inside_is_not_taken(self) -> None:
+        head = json.dumps({"pad": "x" * 100, "entrypoint": "cli"})
         tail = json.dumps({"pad": "y" * (64 * 1024 - 60)})
         self.transcript.write_text(head + "\n" + tail + "\n", encoding="utf-8")
         self.old_row()
@@ -482,7 +488,10 @@ class WhatARecordCanBeBelievedForTests(PlanCase):
 
     def test_an_editor_left_behind_by_desktop_becomes_vscode(self) -> None:
         self.session(opened_in="ide", opened_host="claude-desktop")
-        self.assertEqual(self.window_then_link(), self.plan()["steps"])
+        plan = self.plan()
+        self.assertEqual(self.window_then_link(), plan["steps"])
+        self.assertEqual("vscode", plan["place"]["opened_host"])
+        self.assertEqual(("recorded", ""), (plan["opens"]["source"], plan["opens"]["missed"]))
 
     def test_a_jetbrains_terminal_behaves_as_a_terminal(self) -> None:
         self.session(opened_in="ide-terminal", opened_host="jetbrains")
@@ -604,6 +613,15 @@ class ChoosingTheWindowTests(PlanCase):
                 self.session(opened_in="ide", opened_host="vscode", opened_folder=folder, cwd="")
                 self.assertEqual("no-folder", self.plan()["steps"][0]["reason"])
 
+    def test_a_network_folder_that_answers_is_still_not_a_window(self) -> None:
+        for folder in (r"\\server\share", "//server/share"):
+            with self.subTest(folder=folder):
+                self.conn.execute("DELETE FROM sessions")
+                self.session(opened_in="ide", opened_host="vscode", opened_folder=folder, cwd="")
+                with mock.patch.object(session_open.os.path, "isdir", return_value=True):
+                    plan = self.plan()
+                self.assertEqual("no-folder", plan["steps"][0]["reason"])
+
     def test_with_neither_the_project_root_is_the_window(self) -> None:
         self.session(opened_in="ide", opened_host="vscode", opened_folder="", cwd="")
         self.bind_to_root(self.folder)
@@ -723,6 +741,182 @@ class AlwaysOpenInTests(PlanCase):
         self.assertEqual([{"kind": "explain", "reason": "live-elsewhere"}], plan["steps"])
 
 
+class PathTargetCase(PlanCase):
+    def setUp(self) -> None:
+        super().setUp()
+        # A junction must not land where a tracked tree could hold it.
+        scratch_root = Path(__file__).resolve().parent.parent / "tmp"
+        scratch_root.mkdir(exist_ok=True)
+        scratch = tempfile.TemporaryDirectory(dir=scratch_root)
+        self.addCleanup(scratch.cleanup)
+        self.scratch = Path(os.path.realpath(scratch.name))
+        self.project = self.scratch / "project"
+        self.nested = self.project / "docs" / "a b#c"
+        self.nested.mkdir(parents=True)
+        self.document = self.nested / "plan.md"
+        self.document.write_text("words\n", encoding="utf-8")
+        self.neighbour = self.scratch / "neighbour"
+        self.neighbour.mkdir()
+        (self.neighbour / "secret.md").write_text("words\n", encoding="utf-8")
+        entries = [project_entry("example", self.project), project_entry("other", self.neighbour)]
+        reader = mock.patch.object(
+            project_registry, "_read_registry_bytes", return_value=registry_bytes(entries)
+        )
+        reader.start()
+        self.addCleanup(reader.stop)
+
+    def path_plan(
+        self,
+        kind: str,
+        path: str,
+        *,
+        project: str = "example",
+        line: int | None = None,
+        surface: str = "desktop",
+        schemes: Installed = EVERYTHING,
+        fallback: str = "",
+    ) -> dict[str, Any]:
+        return session_open.open_plan(
+            self.conn,
+            PathTarget(kind, project, path, line),
+            surface=surface,
+            fallback=fallback,
+            schemes=schemes,
+            seen=frozenset(),
+        )
+
+    def assert_refused(self, code: str, plan: dict[str, Any]) -> None:
+        self.assertEqual(
+            [{"kind": "explain", "reason": "path-refused", "code": code}], plan["steps"]
+        )
+        self.assertIsNone(plan["opens"])
+        self.assertNotIn(str(self.scratch), json.dumps(plan))
+
+
+class FileTargetTests(PathTargetCase):
+    def test_the_app_opens_the_project_window_and_then_the_file_at_its_line(self) -> None:
+        plan = self.path_plan("file", "docs/a b#c/plan.md", line=42)
+        self.assertEqual(
+            [
+                {"kind": "focus-folder", "ide": "vscode", "folder": str(self.project)},
+                {"kind": "open-file", "ide": "vscode", "path": str(self.document), "line": 42},
+            ],
+            plan["steps"],
+        )
+        self.assertTrue(plan["one_action"])
+        self.assertEqual("vscode", plan["opens"]["opened_host"])
+        self.assertEqual(
+            {"kind": "file", "project": "example", "path": "docs/a b#c/plan.md", "line": 42},
+            plan["target"],
+        )
+
+    def test_a_browser_opens_it_by_one_link_with_the_path_kept_whole(self) -> None:
+        plan = self.path_plan("file", "docs/a b#c/plan.md", line=42, surface="browser")
+        encoded = self.document.as_uri().removeprefix("file:///")
+        self.assertIn("a%20b%23c", encoded)
+        self.assertEqual(
+            [
+                {
+                    "kind": "open-file",
+                    "ide": "vscode",
+                    "path": str(self.document),
+                    "line": 42,
+                    "link": f"vscode://file/{encoded}:42:1",
+                }
+            ],
+            plan["steps"],
+        )
+        self.assertTrue(plan["one_action"])
+
+    def test_with_no_line_it_opens_at_the_top(self) -> None:
+        plan = self.path_plan("file", "docs/a b#c/plan.md", surface="browser")
+        self.assertIsNone(plan["steps"][0]["line"])
+        self.assertFalse(plan["steps"][0]["link"].endswith(":1"))
+
+    def test_the_owner_editor_is_used_and_needs_no_extension(self) -> None:
+        schemes = machine("vscode", "cursor")
+        plan = self.path_plan("file", "docs/a b#c/plan.md", fallback="cursor", schemes=schemes)
+        self.assertEqual("cursor", plan["steps"][1]["ide"])
+        self.assertEqual("", plan["opens"]["missed"])
+
+    def test_a_setting_that_is_no_editor_leaves_vscode(self) -> None:
+        plan = self.path_plan("file", "docs/a b#c/plan.md", fallback="terminal")
+        self.assertEqual("vscode", plan["steps"][1]["ide"])
+
+    def test_an_editor_gone_gives_way_to_vscode_and_is_named(self) -> None:
+        plan = self.path_plan(
+            "file", "docs/a b#c/plan.md", fallback="cursor", schemes=machine("vscode")
+        )
+        self.assertEqual("vscode", plan["steps"][1]["ide"])
+        self.assertEqual("cursor", plan["opens"]["missed"])
+
+    def test_no_editor_at_all_says_which_was_wanted(self) -> None:
+        plan = self.path_plan("file", "docs/a b#c/plan.md", fallback="cursor", schemes=machine())
+        self.assertEqual(
+            [{"kind": "explain", "reason": "not-installed", "host": "cursor"}], plan["steps"]
+        )
+
+    def test_a_path_that_climbs_out_is_refused(self) -> None:
+        self.assert_refused("outside_root", self.path_plan("file", "../neighbour/secret.md"))
+
+    def test_another_registered_project_is_outside_this_one(self) -> None:
+        self.assert_refused(
+            "outside_root", self.path_plan("file", str(self.neighbour / "secret.md"))
+        )
+        self.assertEqual(
+            ["focus-folder", "open-file"],
+            kinds(self.path_plan("file", "secret.md", project="other")),
+        )
+
+    @unittest.skipUnless(os.name == "nt", "a junction is a Windows reparse point")
+    def test_a_junction_out_of_the_project_is_refused(self) -> None:
+        link = self.project / "escape"
+        made = processes.run_text(
+            ["cmd.exe", "/d", "/c", "mklink", "/J", str(link), str(self.neighbour)],
+            # The console's code page: read only to name a failure to a person.
+            errors="replace",
+        )
+        self.assertEqual(0, made.returncode, made.stdout + made.stderr)
+        # Removing a junction must leave what it points at alone.
+        self.addCleanup(os.rmdir, link)
+        self.assert_refused("outside_root", self.path_plan("file", "escape/secret.md"))
+        self.assertTrue((self.neighbour / "secret.md").exists())
+
+    def test_a_form_windows_would_not_take_is_refused(self) -> None:
+        for path in ("//server/share/a.md", "C:relative.md", "docs/NUL.txt", "plan.md:stream"):
+            with self.subTest(path=path):
+                self.assert_refused("invalid_path", self.path_plan("file", path))
+
+    def test_nothing_there_and_an_unknown_project_say_so(self) -> None:
+        self.assert_refused("not_found", self.path_plan("file", "docs/none.md"))
+        self.assert_refused("project_unknown", self.path_plan("file", "plan.md", project="nobody"))
+
+    def test_a_folder_is_not_a_file(self) -> None:
+        self.assert_refused("directory", self.path_plan("file", "docs"))
+
+
+class FolderTargetTests(PathTargetCase):
+    def test_the_app_focuses_the_folder(self) -> None:
+        plan = self.path_plan("folder", "docs")
+        self.assertEqual(
+            [{"kind": "focus-folder", "ide": "vscode", "folder": str(self.project / "docs")}],
+            plan["steps"],
+        )
+        self.assertTrue(plan["one_action"])
+        self.assertNotIn("line", plan["target"])
+
+    def test_a_browser_follows_a_link_to_it(self) -> None:
+        plan = self.path_plan("folder", "docs/a b#c", surface="browser")
+        encoded = self.nested.as_uri().removeprefix("file:///")
+        self.assertEqual([f"vscode://file/{encoded}"], links(plan))
+
+    def test_a_file_is_not_a_folder(self) -> None:
+        self.assert_refused("not_a_folder", self.path_plan("folder", "docs/a b#c/plan.md"))
+
+    def test_a_folder_outside_is_refused(self) -> None:
+        self.assert_refused("outside_root", self.path_plan("folder", "../neighbour"))
+
+
 class OverHttpTests(unittest.TestCase):
     def setUp(self) -> None:
         directory = tempfile.TemporaryDirectory()
@@ -818,6 +1012,59 @@ class OverHttpTests(unittest.TestCase):
             ),
         ):
             with self.subTest(query=query):
+                status, answer, _ = self.get(headers=self.SAME_ORIGIN, **query)
+                self.assertEqual(400, status)
+                self.assertIn(name, answer["error"]["message"])
+
+    def test_a_file_and_a_folder_are_asked_for_by_project_and_path(self) -> None:
+        folder = self.root / "docs"
+        folder.mkdir()
+        (folder / "plan.md").write_text("words\n", encoding="utf-8")
+        entry = project_entry("example", self.root)
+        with mock.patch.object(
+            project_registry, "_read_registry_bytes", return_value=registry_bytes([entry])
+        ):
+            status, plan, response = self.get(
+                headers=self.SAME_ORIGIN,
+                target="file",
+                project="example",
+                path="docs/plan.md",
+                line="7",
+                surface="browser",
+            )
+            self.assertEqual(200, status)
+            self.assertEqual("no-store", response.getheader("Cache-Control"))
+            self.assertEqual(7, plan["steps"][0]["line"])
+            self.assertTrue(plan["steps"][0]["link"].endswith("/docs/plan.md:7:1"))
+            status, plan, _ = self.get(
+                headers=self.SAME_ORIGIN,
+                target="folder",
+                project="example",
+                path="docs",
+                surface="desktop",
+            )
+            self.assertEqual(200, status)
+            self.assertEqual(["focus-folder"], kinds(plan))
+            status, plan, _ = self.get(
+                headers=self.SAME_ORIGIN,
+                target="file",
+                project="example",
+                path="../secret.md",
+                surface="browser",
+            )
+            self.assertEqual(200, status)
+            self.assertEqual("outside_root", plan["steps"][0]["code"])
+
+    def test_a_path_target_needs_its_project_its_path_and_a_real_line(self) -> None:
+        file_target = {"target": "file", "project": "example", "path": "a.md", "surface": "browser"}
+        for query, name in (
+            ({**file_target, "project": ""}, "project"),
+            ({**file_target, "path": ""}, "path"),
+            ({**file_target, "line": "0"}, "line"),
+            ({**file_target, "line": "seven"}, "line"),
+            ({**file_target, "line": "1" * 5000}, "line"),
+        ):
+            with self.subTest(query={key: value[:12] for key, value in query.items()}):
                 status, answer, _ = self.get(headers=self.SAME_ORIGIN, **query)
                 self.assertEqual(400, status)
                 self.assertIn(name, answer["error"]["message"])

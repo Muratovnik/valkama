@@ -1,4 +1,4 @@
-"""What a click on a session should do: the one plan, for the app and the browser alike.
+"""What a click on a session, file or folder should do: one plan for the app and the browser.
 
 The plan is built from the target, where the session was last open and what the
 machine can open, and it is a list of abstract steps rather than a command line.
@@ -7,6 +7,8 @@ decides where a session goes. A session opens where it was last open: the place
 recorded in its row, or for a row older than that record, what its transcript
 says, or the owner's fallback, or finally VS Code. A place that cannot be opened
 gives way to the next in that chain, and `opens.missed` names what was passed over.
+A file or a folder opens in the owner's editor, once `documents.locate` has found it
+inside the project named; that check is the only one, here and in reading a document.
 
 Nothing here writes. A transcript is read only for one closed value, which goes no
 further than this call; `explain` steps carry closed codes, and the words for them
@@ -22,13 +24,14 @@ import sqlite3
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from . import query_params, sessions, transcripts
+from . import documents, query_params, sessions, transcripts
 from .hooks import place as places
 from .hooks.place import Place
 from .ops import url_schemes
 from .ops.url_schemes import Installed
 
 SURFACES = ("desktop", "browser")
+TARGETS = ("session", "file", "folder")
 #: What the settings may name, for the fallback and for "always open in".
 OPEN_PLACES = (
     "vscode",
@@ -62,6 +65,7 @@ REASONS = (
     "live-elsewhere",
     "no-folder",
     "not-installed",
+    "path-refused",
 )
 STATES = ("live", "ended", "gone", "headless", "none")
 
@@ -84,6 +88,9 @@ _SESSION_ID = re.compile(r"[0-9A-Za-z._:-]{4,128}")
 _SESSION_UUID = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}", re.IGNORECASE
 )
+
+#: A line a page can name; what no document reaches is no line.
+_LINE = re.compile(r"[1-9][0-9]{0,8}")
 
 _TAIL_BYTES = 64 * 1024
 _HEAD_BYTES = 256 * 1024
@@ -110,6 +117,16 @@ class SessionTarget:
     session: str
 
 
+@dataclass(frozen=True)
+class PathTarget:
+    """A file or a folder, by its project and its path from that project's root."""
+
+    kind: str
+    project: str
+    path: str
+    line: int | None = None
+
+
 def _last_entrypoint(path: str) -> str:
     """The newest `entrypoint` in a Claude transcript's tail; nothing else is taken from it."""
 
@@ -120,9 +137,8 @@ def _last_entrypoint(path: str) -> str:
             tail = handle.read(_TAIL_BYTES)
     except OSError:
         return ""
-    lines = tail.split(b"\n")
-    # A read that began inside the file began inside a line.
-    for line in reversed(lines[1:] if size > _TAIL_BYTES else lines):
+    # The part of a line the read began inside is no JSON, and it is skipped like any other.
+    for line in reversed(tail.split(b"\n")):
         if b'"entrypoint"' not in line:
             continue
         value = _json_field(line, "entrypoint")
@@ -278,7 +294,7 @@ class _Planner:
     def _would_be_a_second_writer(self, place: Place) -> bool:
         """Whether this route opens a live session away from where it runs, unwarned."""
 
-        if not self.live or (place == self.recorded and place.opened_in == "ide"):
+        if not self.live or place == self.recorded:
             return False
         if url_schemes.ELSEWHERE_NOTICE in self.seen:
             return False
@@ -569,9 +585,75 @@ def _place_plan(
     return answer(state, [*leading, failure] if failure not in leading else leading)
 
 
+def _editor_for(ask: _Ask) -> tuple[str, str]:
+    """The editor a path opens in, and the one passed over because it is not installed."""
+
+    named = _PLACE_OF[ask.fallback].opened_host if ask.fallback else "vscode"
+    wanted = named if named in url_schemes.EDITOR_HOMES else "vscode"
+    if wanted in ask.installed.schemes:
+        return wanted, ""
+    return ("vscode" if "vscode" in ask.installed.schemes else ""), wanted
+
+
+def _path_plan(target: PathTarget, ask: _Ask) -> dict[str, object]:
+    shown_target: dict[str, object] = {
+        "kind": target.kind,
+        "project": target.project,
+        "path": target.path,
+    }
+    if target.kind == "file":
+        shown_target["line"] = target.line
+
+    def refused(code: str) -> dict[str, object]:
+        steps = [_explain("path-refused", code=code)]
+        return _plan(shown_target, ask.surface, state="none", steps=steps)
+
+    root = next(
+        (root for root in documents.registered_roots() if root.project == target.project), None
+    )
+    if root is None:
+        return refused("project_unknown")
+    # Inside this project and no other, as reading a document is.
+    found = documents.locate(target.path, base=root.path, roots=(root,))
+    if isinstance(found, documents.DocumentRefused):
+        return refused(found.code)
+    if target.kind == "file" and found.kind != "file":
+        return refused("directory")
+    if target.kind == "folder" and (
+        found.kind != "directory" or not _usable_folder(found.absolute)
+    ):
+        return refused("not_a_folder")
+    editor, missed = _editor_for(ask)
+    if not editor:
+        steps = [_explain("not-installed", host=missed)]
+        return _plan(shown_target, ask.surface, state="none", steps=steps)
+    opens = {"opened_in": "ide", "opened_host": editor, "source": "fallback", "missed": missed}
+    if target.kind == "folder":
+        steps = [_focus_folder(editor, found.absolute, ask.surface)]
+    elif ask.surface == "browser":
+        # One link does both: the editor finds the window that holds the file.
+        link = url_schemes.file_link(editor, found.absolute, target.line)
+        steps = [
+            {
+                "kind": "open-file",
+                "ide": editor,
+                "path": found.absolute,
+                "line": target.line,
+                "link": link,
+            }
+        ]
+    else:
+        steps = [
+            _focus_folder(editor, root.path, ask.surface),
+            {"kind": "open-file", "ide": editor, "path": found.absolute, "line": target.line},
+        ]
+    # Two programs started one after the other, with no link to outrun a window.
+    return _plan(shown_target, ask.surface, state="none", opens=opens, steps=steps, one_action=True)
+
+
 def open_plan(
     conn: sqlite3.Connection,
-    target: SessionTarget,
+    target: SessionTarget | PathTarget,
     *,
     surface: str,
     fallback: str = "",
@@ -590,6 +672,8 @@ def open_plan(
         installed=schemes if schemes is not None else url_schemes.detect(),
         seen=url_schemes.SEEN_LIVE if seen is None else seen,
     )
+    if isinstance(target, PathTarget):
+        return _path_plan(target, ask)
     return _session_plan(conn, target, ask)
 
 
@@ -600,6 +684,26 @@ def _choice(parameters: Mapping[str, list[str]], name: str, allowed: tuple[str, 
     return value
 
 
+def _line(parameters: Mapping[str, list[str]]) -> int | None:
+    value = query_params.first(parameters, "line", error=OpenPlanError)
+    if value is None:
+        return None
+    if not _LINE.fullmatch(value):
+        raise OpenPlanError(400, "invalid_request", "line must be a positive whole number")
+    return int(value)
+
+
+def _target_from(kind: str, parameters: Mapping[str, list[str]]) -> SessionTarget | PathTarget:
+    if kind == "session":
+        return SessionTarget(query_params.required(parameters, "session", error=OpenPlanError))
+    return PathTarget(
+        kind,
+        query_params.required(parameters, "project", error=OpenPlanError),
+        query_params.required(parameters, "path", error=OpenPlanError),
+        _line(parameters) if kind == "file" else None,
+    )
+
+
 def plan_for_query(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
     """Answer `GET /api/open-plan` from its parsed query string."""
 
@@ -607,11 +711,11 @@ def plan_for_query(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]
     if surface not in SURFACES:
         raise OpenPlanError(400, "invalid_request", f"surface must be one of {', '.join(SURFACES)}")
     kind = query_params.required(parameters, "target", error=OpenPlanError)
-    if kind != "session":
-        raise OpenPlanError(400, "invalid_request", "target must be session")
+    if kind not in TARGETS:
+        raise OpenPlanError(400, "invalid_request", f"target must be one of {', '.join(TARGETS)}")
     return open_plan(
         conn,
-        SessionTarget(query_params.required(parameters, "session", error=OpenPlanError)),
+        _target_from(kind, parameters),
         surface=surface,
         fallback=_choice(parameters, "fallback", OPEN_PLACES),
         always=_choice(parameters, "always", OPEN_PLACES),

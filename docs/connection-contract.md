@@ -1451,12 +1451,17 @@ the complete space read model keep their existing scope and limits.
 
 ### What a click opens
 
-`GET /api/open-plan` says what a click on a session should do. The desktop app and
-the browser carry out the same plan, and neither decides where a session goes:
+`GET /api/open-plan` says what a click on a session, a file or a folder should do.
+The desktop app and the browser carry out the same plan, and neither decides where
+a session goes:
 
 ```text
 GET /api/open-plan?target=session&session=<id>&surface=desktop|browser
                   [&fallback=<place>][&always=<place>][&liveness=live|ended]
+GET /api/open-plan?target=file&project=<id>&path=<relative>[&line=<n>]&surface=desktop|browser
+                  [&fallback=<editor>]
+GET /api/open-plan?target=folder&project=<id>&path=<relative>&surface=desktop|browser
+                  [&fallback=<editor>]
 ```
 
 The answer names local paths, so the route takes the same fetch metadata as the
@@ -1476,7 +1481,10 @@ A session opens where it was last open. The planner tries the place recorded in
 its row, or for a row older than that record the place its transcript names, then
 `fallback`, then VS Code. `always` replaces that chain with the one place it names,
 and when that place cannot be opened the plan says so instead of going elsewhere. A
-subagent opens through its parent.
+subagent opens through its parent. A file or a folder opens in the editor `fallback`
+names, VS Code by default, and only inside the project named: the path goes through
+the same check as `GET /api/documents/read`, and the plan is the one place the
+absolute path it found is told to the page.
 
 ```json
 {"target": {"kind": "session", "session": "<id>", "agent": ""},
@@ -1506,7 +1514,7 @@ subagent opens through its parent.
 | `desktop-resume` | `session` | the app |
 | `open-file` | `ide`, `path`, `line`; `link` for the browser | the app starts the editor on the file, the browser follows the link |
 | `copy` | `text` | both |
-| `explain` | `reason`; `host` or `archived` where they apply | both |
+| `explain` | `reason`; `host`, `archived` or `code` where they apply | both |
 
 `scheme` is one of `vscode`, `vscode-insiders`, `cursor`, `windsurf`, `claude`,
 `codex` or `claude-cli`. `reason` is one of:
@@ -1521,6 +1529,7 @@ subagent opens through its parent.
 | `live-elsewhere` | It runs somewhere else, and no route here is safe for a live session |
 | `no-folder` | No folder is known for the session, and a link without a window opens an empty conversation |
 | `not-installed` | `host` is not installed: its scheme has no live handler, or its editor lacks the extension |
+| `path-refused` | A file or folder target that opens nothing. `code` is `project_unknown`, `invalid_path`, `outside_root`, `not_found`, `not_a_file`, `unreadable`, `directory` (a file target that is a folder) or `not_a_folder` (a folder target that is not one) |
 
 Which schemes are installed comes from the Windows classes the shell itself
 resolves a scheme through. A key that carries `URL Protocol` counts, unless its
