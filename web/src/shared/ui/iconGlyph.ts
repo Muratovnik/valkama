@@ -36,7 +36,7 @@ import {
   Copy,
   CornerDownRight,
   Database,
-  ExternalLink,
+  FileText,
   Filter,
   Hash,
   Info,
@@ -89,7 +89,7 @@ const ICONS: Record<string, Component> = {
   'copy': Copy,
   'cursor': MousePointer2,
   'database': Database,
-  'external-link': ExternalLink,
+  'document': FileText,
   'filters': Filter,
   // The address of an item, to hand to someone; the editor's own link is `format-link`.
   'link': Link,

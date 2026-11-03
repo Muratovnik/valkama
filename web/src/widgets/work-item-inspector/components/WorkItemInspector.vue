@@ -447,7 +447,6 @@ defineExpose({ close })
           <InspectorRelations
             v-if="section === 'relations'"
             :item="payload"
-            :resource-ref="resourceRef"
             :writable="writable && !busy"
             @changed="reloaded"
             @session="(id, family) => emit('session', id, family)"

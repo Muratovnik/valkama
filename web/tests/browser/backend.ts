@@ -27,6 +27,7 @@ import {
   sessionContextFor,
 } from './executionFixtures.ts'
 import { memoryLinks, memoryProviders, memorySearch } from './memoryFixtures.ts'
+import { projectDocument, resolvedPaths } from './planDocumentFixture.ts'
 import {
   attachedDataScopeId,
   attachedSpaceRef,
@@ -63,6 +64,8 @@ type BackendOptions = {
    * own body is not.
    */
   longRead?: boolean
+  /** The card's item points here instead of at the plan the fixture has. */
+  source?: string
   /** The text of the card's first checklist step, where a test needs markdown in it. */
   stepText?: string
   uiPrefs?: unknown
@@ -329,6 +332,7 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
           const described = options.longRead ? { ...card, description: LONG_READ } : card
           const told = {
             ...described,
+            ...(options.source === undefined ? {} : { source: options.source }),
             ...(options.agents ? { agents: options.agents() } : {}),
             ...(options.events ? { events: options.events } : {}),
             ...(options.comments ? { comments: options.comments } : {}),
@@ -382,6 +386,13 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
         },
 
         '/api/activity': () => fulfill({ activity: activityRows() }),
+
+        '/api/documents/resolve': () =>
+          fulfill({ paths: resolvedPaths(url.searchParams.getAll('path')) }),
+        '/api/documents/read': () => {
+          const found = projectDocument(url.searchParams.get('path') ?? '')
+          return found ? fulfill(found) : fulfill({ error: { code: 'not_found' } }, 404)
+        },
       }
 
       // An endpoint with no fixture answers an empty body rather than hanging: a

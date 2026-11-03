@@ -251,7 +251,7 @@ test('a work-item tile is one control, not a card with an arrow footer', () => {
   // tile for one arrow, and a second control in a tile is a second Tab stop for
   // the same destination. The marks that filter are buttons beside the title,
   // and every one of them is kept out of the Tab order.
-  assert.doesNotMatch(card, /source-open|openSource|↗/)
+  assert.doesNotMatch(card, /source-open|↗/)
   assert.match(card, /<button\s+class="tile-open"/)
   assert.match(card, /const open = \(\) => emit\('open', props\.item\.reference\)/)
   assert.equal((card.match(/<button/g) ?? []).length, 1, 'one open target per tile')

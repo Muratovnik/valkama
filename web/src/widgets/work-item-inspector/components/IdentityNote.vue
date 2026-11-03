@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * What a press in the card's identity line did: a copy made, a copy refused, an
- * anchor that could not open. One rule for every such note, because the line has
- * one height and on a phone only a few dozen pixels are left for it.
+ * What a press in the card's identity line did: a copy made or a copy refused.
+ * One rule for every such note, because the line has one height and on a phone
+ * only a few dozen pixels are left for it.
  *
  * A glyph says it at any width — a check for done, a circle with a mark for
  * failed, told apart by shape in the note's own ink — and the words stand beside it only where the line holds them whole.

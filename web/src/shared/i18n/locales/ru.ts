@@ -647,11 +647,6 @@ export const ru = {
   work: {
     active: 'В работе',
   },
-  source: {
-    open: 'Открыть источник на якоре плана',
-    copied: 'Путь источника скопирован',
-    failed: 'Не удалось открыть источник: {message}',
-  },
   settings: {
     title: 'Настройки Valkama',
     sectionLabel: 'Раздел настроек',

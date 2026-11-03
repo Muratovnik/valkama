@@ -102,7 +102,7 @@ for (const width of [1440, 1024, 390]) {
 
     // Updated and the source left the body; the path stands in Relations.
     await expect(drawer.locator('.drawer-frame-content').getByText('Обновлено')).toHaveCount(0)
-    await expect(drawer.locator('.drawer-frame-content .source-anchor')).toHaveCount(0)
+    await expect(drawer.locator('.drawer-frame-content .ref-row')).toHaveCount(0)
     await expect(drawer.locator('.identity-source')).toHaveAttribute(
       'aria-label',
       /docs\/plans\/platform\.md#kb:arch-plan$/u,

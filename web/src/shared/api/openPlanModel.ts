@@ -263,6 +263,20 @@ export type BridgeOpenRequest =
     }
   | { command: string; session: string }
 
+/** What the desktop app's preload exposes to the page; a browser has none of it. */
+interface ValkamaDesktopBridge {
+  /** Absent in a desktop app older than this page. */
+  onOpenRoute?(listener: (route: string) => void): void
+  /** Carry out one action of an open plan; the answer is read as `readBridgeAnswer` reads it. */
+  openSession?(request: BridgeOpenRequest): Promise<unknown>
+}
+
+declare global {
+  interface Window {
+    valkamaDesktop?: ValkamaDesktopBridge
+  }
+}
+
 /** Why the app opened nothing, beside the plan's reasons; a closed list it never widens. */
 export const APP_REFUSALS = [
   'not-app',

@@ -11,6 +11,7 @@ import { parseRichText, plainText } from '@/shared/lib/richText.ts'
 import {
   documentLink,
   documentParts,
+  sourceDocument,
   splitReferences,
   suffixTarget,
   wholeDocument,
@@ -253,5 +254,49 @@ describe('a link’s address', () => {
         suffix: '#kb:a7f3',
       })
     })
+  })
+})
+
+/**
+ * The forms a work item's `source` has held. The first group is what the desktop app
+ * opened before the viewer did, which keeps opening; the rest was never a Markdown
+ * path, and becomes whatever the same words become in a code span.
+ */
+describe('the path an item source names', () => {
+  it.each([
+    ['docs/plan.md#kb:a7f3', 'docs/plan.md', '#kb:a7f3'],
+    ['docs/plan.md', 'docs/plan.md', ''],
+    ['.notes/run/PLAN-2026.md#kb:opt-c1', '.notes/run/PLAN-2026.md', '#kb:opt-c1'],
+    [String.raw`docs\plan.md#kb:a7f3`, String.raw`docs\plan.md`, '#kb:a7f3'],
+    ['PLAN.md#kb:a7f3', 'PLAN.md', '#kb:a7f3'],
+    ['README.markdown', 'README.markdown', ''],
+    ['docs/my plan.md#kb:a7f3', 'docs/my plan.md', '#kb:a7f3'],
+    ['  docs/plan.md#kb:a7f3  ', 'docs/plan.md', '#kb:a7f3'],
+  ])('%s asks about the file and keeps the anchor', (source, path, suffix) => {
+    const reference = sourceDocument(source)
+    expect(reference?.strength).toBe('strong')
+    expect(reference && documentParts(reference).paths[0]).toBe(path)
+    expect(reference && documentParts(reference).suffix).toBe(suffix)
+  })
+
+  it.each([
+    ['', 'nothing'],
+    ['kb:a7f3', 'an anchor with no file'],
+    ['Notion: the migration plan', 'words'],
+    ['https://example.com/plan.md', 'a scheme'],
+    ['/docs/plan.md', 'a path from nowhere in particular'],
+    ['@scope/plan.md', 'a package'],
+    ['docs/*.md', 'a pattern'],
+    ['plan.txt', 'one name that is no Markdown file'],
+    ['MAIN-12', 'a work item'],
+    [`${'a/'.repeat(600)}plan.md`, 'a run longer than the page sends'],
+  ])('%s is text: %s', (source) => {
+    expect(sourceDocument(source)).toBeNull()
+  })
+
+  it('reads a form Markdown never made as a code span does', () => {
+    expect(sourceDocument('src/a.ts:42')?.strength).toBe('strong')
+    expect(sourceDocument('docs/plans')?.strength).toBe('weak')
+    expect(sourceDocument(String.raw`\\server\share\plan.md`)?.strength).toBe('copy-only')
   })
 })

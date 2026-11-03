@@ -25,10 +25,7 @@ const nav = source('../src/widgets/app-nav/components/AppNav.vue')
 const inspector = source('../src/widgets/work-item-inspector/components/WorkItemInspector.vue')
 const inspectorTabs = source('../src/widgets/work-item-inspector/components/InspectorTabs.vue')
 const overview = source('../src/widgets/work-item-inspector/components/InspectorOverview.vue')
-const sourceOpen = source('../src/widgets/work-item-inspector/utils/useSourceOpen.ts')
 const identity = source('../src/widgets/work-item-inspector/components/InspectorIdentity.vue')
-const relations = source('../src/widgets/work-item-inspector/components/InspectorRelations.vue')
-const sourceReference = source('../src/shared/lib/sourceReference.ts')
 const inspectorMemory = source('../src/widgets/work-item-inspector/components/InspectorMemory.vue')
 const workspace = source('../src/pages/planning/PlanningWorkspace.vue')
 const portfolio = source('../src/pages/planning/PlanningPortfolio.vue')
@@ -102,26 +99,20 @@ test('the inspector reads no extension registry', () => {
   assert.doesNotMatch(inspectorMemory, /registry|referenceProvider|agentmemory/i)
 })
 
-test('source opening carries only canonical Planning-space authority', () => {
+test('a plan anchor is asked about under the exact Planning space of its card', () => {
   assert.match(planningSurface, /boundSpaceResourceRef/)
   assert.match(planningSurface, /planningSpaceEntity\(space\)/)
   assert.match(planningSurface, /:resource-ref="boundSpaceResourceRef"/)
   assert.match(inspector, /:resource-ref="resourceRef"/)
-  // The head's icon and the Relations row open the anchor through one owner,
-  // each with the card's own space as its authority.
+  // The head's icon stands outside the card's layer of links, so it asks for its
+  // own on the same space. What pressing it does is `inspectorSource.spec.ts`.
+  assert.match(inspector, /:space="resourceRef\.resource_id"/)
   assert.match(
-    sourceOpen,
-    /openSourceReference\(\{\s*source: source\(\),\s*resource_ref: resourceRef\(\)\s*\}\)/,
+    identity,
+    /useDocumentLinks\(\(\) => \(\{ space: props\.resourceRef\.resource_id \}\)\)/,
   )
-  for (const opener of [identity, relations])
-    assert.match(
-      opener,
-      /useSourceOpen\(\s*\(\) => props\.item\??\.source[^,]*,\s*\(\) => props\.resourceRef,?\s*\)/,
-    )
-  assert.match(sourceReference, /openSource\(request\)/)
-  assert.match(sourceReference, /clipboard\.writeText\(request\.source\)/)
   assert.doesNotMatch(
-    `${planningSurface}\n${inspector}\n${overview}\n${sourceOpen}`,
+    `${planningSurface}\n${inspector}\n${overview}\n${identity}`,
     /sourceRoot|source_root/,
   )
 })

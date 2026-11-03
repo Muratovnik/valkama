@@ -134,6 +134,7 @@ const ESCAPE = /\\[!-/:-@[-`{-~]/u
 const ROOTED = /^[/\\]/u
 /** An extension holds a letter, so a version pair like `1.0/2.0` is not a file. */
 const EXTENSION = /\.[\p{L}\p{N}_-]*\p{L}[\p{L}\p{N}_-]*$/u
+const MARKDOWN_FILE = /\.(?:md|markdown)$/iu
 
 /**
  * How strong a path written in text or code is, or null when it is not one. `separators`
@@ -367,4 +368,21 @@ export function wholeDocument(text: string): DocumentReference | null {
   if (bare.lastIndexOf(':') > (DRIVE.test(bare) ? 1 : -1)) return null
   const strength = strengthOf(bare, 1)
   return strength && documentReference(value, strength)
+}
+
+/**
+ * The path a work item's `source` names, or null where it holds something else.
+ * The field is a path by what it is, so a Markdown file proves it by its name
+ * alone: one at the root has no separator, and one may hold a space.
+ */
+export function sourceDocument(text: string): DocumentReference | null {
+  const whole = wholeDocument(text)
+  if (whole) return whole
+  const value = text.trim()
+  if (!value || value.length > MAX_PATH || value.startsWith('@')) return null
+  if (/[\p{C}<>|*?"\u{60}]/u.test(value)) return null
+  const { bare } = writtenParts(value)
+  return ROOTED.test(bare) || bare.includes(':') || !MARKDOWN_FILE.test(bare)
+    ? null
+    : documentReference(value, 'strong')
 }

@@ -11,7 +11,6 @@ import { describe, expect, it } from 'vitest'
 import InspectorRelations from '@/widgets/work-item-inspector/components/InspectorRelations.vue'
 
 import type { WorkItem } from '@/shared/api/planningModel.ts'
-import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
 import { workItemFixture } from '../fixtures/workItem.ts'
@@ -38,10 +37,6 @@ function mountRelations(links: Link[]) {
   return mount(InspectorRelations, {
     props: {
       item,
-      resourceRef: planningSpaceEntity({
-        data_scope_id: '00000000-0000-4000-8000-000000000700',
-        space_key: 'MAIN',
-      }),
       writable: false,
     },
     global: {

@@ -348,7 +348,7 @@ export type IconName =
   | 'copy'
   | 'cursor'
   | 'database'
-  | 'external-link'
+  | 'document'
   | 'filters'
   | 'info'
   | 'improvements'

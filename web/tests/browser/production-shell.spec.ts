@@ -249,29 +249,6 @@ for (const width of [1440, 390]) {
   })
 }
 
-test("a work item's plan anchor is readable and can be opened where it lives", async ({ page }) => {
-  await installBackend(page)
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
-  await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
-  // The head offers the anchor as an icon; its whole path stands with the
-  // item's other references.
-  await expect(page.locator('.drawer .identity-source')).toHaveAttribute(
-    'aria-label',
-    /docs\/plans\/platform\.md#kb:arch-plan$/u,
-  )
-  await page.locator('.drawer').getByRole('button', { name: 'Relations', exact: true }).click()
-  const anchor = page.locator('.drawer .source-anchor')
-  await expect(anchor).toHaveText('docs/plans/platform.md#kb:arch-plan')
-
-  // No desktop bridge in a browser, so the honest fallback is a copy that says so.
-  await page.context().grantPermissions(['clipboard-write', 'clipboard-read'])
-  await anchor.click()
-  await expect(page.locator('.drawer .source-notice')).toContainText('copied')
-  await expect
-    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
-    .toBe('docs/plans/platform.md#kb:arch-plan')
-})
-
 test('an attached same-key space stays readable but never reaches primary-only projections or writes', async ({
   page,
 }) => {

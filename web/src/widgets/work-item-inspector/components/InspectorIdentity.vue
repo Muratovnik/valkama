@@ -10,22 +10,26 @@
  *
  * The reference copies itself, and the link beside it copies the item's short
  * address, `/open/<number>` on this origin, which opens the card wherever it is
- * followed: the desktop app has no address bar to take it from. The anchor opens
- * where it lives, or is copied where nothing can open it, and its full path
- * stands in Relations with the item's other references. Each says what happened
- * at the end of the line, by the one rule `IdentityNote` keeps for all three. The
- * note for the link names no number: the reference stands right before it.
+ * followed: the desktop app has no address bar to take it from. Each says what
+ * happened at the end of the line, by the one rule `IdentityNote` keeps for both.
+ * The note for the link names no number: the reference stands right before it.
+ *
+ * The anchor is a path like any other in the card, so the document layer decides
+ * what it does: open what the server confirmed, or copy it and say why, as the
+ * opener says everything. Its whole path stands in Relations with the item's other
+ * references, whose layer this line is outside of, so it asks for its own.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import IdentityNote from '@/widgets/work-item-inspector/components/IdentityNote.vue'
-import { useSourceOpen } from '@/widgets/work-item-inspector/utils/useSourceOpen.ts'
 
+import { useDocumentLinks } from '@/entities/project-document/documentLinks.ts'
 import FacetMarks from '@/entities/work-item/components/FacetMarks.vue'
 
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { workItemLinkAddress } from '@/shared/api/platformRoute.ts'
+import { sourceDocument } from '@/shared/lib/textReferences.ts'
 import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -38,20 +42,23 @@ const props = defineProps<{
 
 const { t, d } = useI18n()
 
-const {
-  failed: sourceFailed,
-  note: sourceNote,
-  open: openSource,
-} = useSourceOpen(
-  () => props.item?.source ?? '',
-  () => props.resourceRef,
+const documents = useDocumentLinks(() => ({ space: props.resourceRef.resource_id }))
+/** What the anchor does; none where `source` holds no path, which Relations shows as text. */
+const sourceLink = computed(() => {
+  const reference = sourceDocument(props.item?.source ?? '')
+  return reference && documents(reference)
+})
+/** Absent rather than false: a control that is not waiting makes no claim about it. */
+const sourceBusy = computed(() => sourceLink.value?.busy || undefined)
+/** Told apart by shape, as a link that copies is by its dotted underline; a wait claims neither. */
+const sourceGlyph = computed(() =>
+  sourceLink.value?.copies && !sourceLink.value.busy ? 'copy' : 'document',
 )
 const copyNote = ref('')
 const copyFailed = ref(false)
 
 /** Put `text` on the clipboard and say beside the line whether it got there. */
 async function copy(text: string, done: string, failed: string) {
-  sourceNote.value = ''
   const words = { reference: props.reference }
   try {
     await navigator.clipboard.writeText(text)
@@ -74,7 +81,7 @@ const copyLink = () =>
 
 function pressSource() {
   copyNote.value = ''
-  void openSource()
+  sourceLink.value?.open()
 }
 
 /** This year's dates without the year, as the board's own dates read. */
@@ -85,10 +92,6 @@ const updated = computed(() => {
   if (Number.isNaN(date.valueOf())) return value
   return d(date, date.getFullYear() === new Date().getFullYear() ? 'day' : 'activity')
 })
-
-const note = computed(() => copyNote.value || sourceNote.value)
-const noteFailed = computed(() => (copyNote.value ? copyFailed.value : sourceFailed.value))
-const sourceLabel = computed(() => `${t('source.open')}: ${props.item?.source ?? ''}`)
 </script>
 
 <template>
@@ -132,21 +135,22 @@ const sourceLabel = computed(() => `${t('source.open')}: ${props.item?.source ??
       >{{ t('workItem.head.updated', { date: updated }) }}</span
     >
     <button
-      v-if="item?.source"
+      v-if="sourceLink"
       class="identity-source"
       type="button"
-      :title="sourceLabel"
-      :aria-label="sourceLabel"
+      :title="sourceLink.title"
+      :aria-label="sourceLink.title"
+      :aria-busy="sourceBusy"
       @click="pressSource"
     >
       <VIcon
-        name="external-link"
+        :name="sourceGlyph"
         :size="14"
       />
     </button>
     <IdentityNote
-      :text="note"
-      :failed="noteFailed"
+      :text="copyNote"
+      :failed="copyFailed"
     />
   </div>
 </template>

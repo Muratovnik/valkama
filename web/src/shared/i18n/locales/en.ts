@@ -648,11 +648,6 @@ export const en = {
   work: {
     active: 'In work',
   },
-  source: {
-    open: 'Open source at its plan anchor',
-    copied: 'Source path copied',
-    failed: 'Could not open source: {message}',
-  },
   settings: {
     title: 'Valkama settings',
     sectionLabel: 'Settings section',

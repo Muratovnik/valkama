@@ -11,9 +11,8 @@ import { test } from './test.ts'
 
 /**
  * What the card's identity line says after a press there — the reference copied, the
- * link copied, the anchor copied where a browser cannot open it. The line has one
- * height, and a phone leaves it a few dozen pixels: these notes used to be cut to
- * «Ссылка скопиров…».
+ * link copied. The line has one height, and a phone leaves it a few dozen pixels: these
+ * notes used to be cut to «Ссылка скопиров…».
  */
 
 /** The card in Russian, the longer of the two languages, read from the clipboard's side. */
@@ -89,12 +88,6 @@ for (const width of [1280, 390]) {
     await drawer.locator('.head-reference').click()
     await expect.poll(clipboard).toBe(workItemRef.reference)
     await expectNoteWhole(page, drawer, `${workItemRef.reference} скопирован`)
-
-    // The anchor, which a browser cannot open, is copied and says so.
-    await drawer.locator('.identity-source').click()
-    await expect.poll(clipboard).toBe('docs/plans/platform.md#kb:arch-plan')
-    await expectNoteWhole(page, drawer, 'Путь источника скопирован')
-    await expectNoSilentClipping(page, `anchor note at ${width}px`)
   })
 }
 
