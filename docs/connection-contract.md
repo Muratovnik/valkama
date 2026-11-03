@@ -1449,6 +1449,91 @@ first the same way. A request detail or mutation returns the confirmed request w
 its target; attached stores remain read-only. Existing Planning searches and
 the complete space read model keep their existing scope and limits.
 
+### What a click opens
+
+`GET /api/open-plan` says what a click on a session should do. The desktop app and
+the browser carry out the same plan, and neither decides where a session goes:
+
+```text
+GET /api/open-plan?target=session&session=<id>&surface=desktop|browser
+                  [&fallback=<place>][&always=<place>][&liveness=live|ended]
+```
+
+The answer names local paths, so the route takes the same fetch metadata as the
+session bootstrap: an `Origin`, when there is one, must be allowed
+(`origin_refused`) and `Sec-Fetch-Site` must be `same-origin`
+(`fetch_metadata_refused`), both 403. The desktop app's main process sends that
+header itself, as any local process may. Every plan carries
+`Cache-Control: no-store`. A request outside the closed values is `invalid_request`
+(400), and it names the parameter.
+
+`fallback` and `always` take `vscode`, `vscode-insiders`, `cursor`, `windsurf`,
+`terminal`, `claude-desktop` or `codex-app`; a place of another client is ignored.
+`liveness` is the caller's own check of the process, which replaces
+`sessions.status`.
+
+A session opens where it was last open. The planner tries the place recorded in
+its row, or for a row older than that record the place its transcript names, then
+`fallback`, then VS Code. `always` replaces that chain with the one place it names,
+and when that place cannot be opened the plan says so instead of going elsewhere. A
+subagent opens through its parent.
+
+```json
+{"target": {"kind": "session", "session": "<id>", "agent": ""},
+ "surface": "browser", "client": "claude", "state": "ended",
+ "place": {"opened_in": "ide", "opened_host": "vscode", "source": "recorded", "first_open": false},
+ "opens": {"opened_in": "ide", "opened_host": "vscode", "source": "recorded", "missed": ""},
+ "one_action": false,
+ "steps": [{"kind": "focus-folder", "ide": "vscode", "folder": "...", "link": "vscode://file/..."},
+           {"kind": "open-link", "scheme": "vscode", "link": "vscode://anthropic.claude-code/open?session=<id>"}]}
+```
+
+- `place` is where the session is open, and `source` is `recorded`, `derived` or
+  `none`. `first_open` means the place came from a Codex rollout, which names the
+  thread's creator and not its last place.
+- `opens` is where the click goes, or `null` when the plan only explains. Its
+  `source` adds `fallback` and `always`, and `missed` names a place that was passed
+  over because it is not installed.
+- `state` is `live`, `ended`, `gone`, `headless` or `none`.
+- `one_action` says one click may run every step. Otherwise each step takes its own
+  action from the person.
+
+| Step | Fields | Who carries it out |
+| --- | --- | --- |
+| `focus-folder` | `ide`, `folder`; `link` for the browser | the app starts the editor on the folder, the browser follows the link |
+| `open-link` | `scheme`, `link` | both |
+| `resume-in-terminal` | `client`, `session`, `folder` | the app |
+| `desktop-resume` | `session` | the app |
+| `open-file` | `ide`, `path`, `line`; `link` for the browser | the app starts the editor on the file, the browser follows the link |
+| `copy` | `text` | both |
+| `explain` | `reason`; `host` or `archived` where they apply | both |
+
+`scheme` is one of `vscode`, `vscode-insiders`, `cursor`, `windsurf`, `claude`,
+`codex` or `claude-cli`. `reason` is one of:
+
+| `reason` | Meaning |
+| --- | --- |
+| `no-session`, `invalid-session` | No such session, or an id that cannot go into a link or a command line |
+| `unsupported-client` | A client other than Claude Code or Codex |
+| `gone` | The session ended and its client deleted the transcript. `archived` says whether Valkama keeps a copy. No link is offered, because one would start an empty conversation |
+| `live-headless` | It runs without a window. Stopping it is the attempt's business |
+| `live-in-terminal` | It runs in a terminal Valkama cannot raise, and a second process would write to the same transcript. Steps after this one look at it elsewhere |
+| `live-elsewhere` | It runs somewhere else, and no route here is safe for a live session |
+| `no-folder` | No folder is known for the session, and a link without a window opens an empty conversation |
+| `not-installed` | `host` is not installed: its scheme has no live handler, or its editor lacks the extension |
+
+Which schemes are installed comes from the Windows classes the shell itself
+resolves a scheme through. A key that carries `URL Protocol` counts, unless its
+`shell\open\command` names a program that no longer exists.
+
+Five routes and behaviours are undocumented or could not be settled by reading,
+and each stays off in `url_schemes.SEEN_LIVE` until it has been watched working:
+a link landing in the window just opened, `claude://code/continue`, `/resume`
+through `claude-cli://`, the extension's "still open somewhere else" notice holding
+its input, and `vscode://openai.chatgpt/local/<id>`. Until then the plan takes the
+documented way round: two actions, `desktop-resume`, a command to copy, only the
+explanation, and the Codex app.
+
 ### Server identity
 
 The `serverInfo` in the discovery result reports version `1.0.0+<build>`, where

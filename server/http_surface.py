@@ -29,6 +29,7 @@ from . import (
     housekeeping,
     http_security,
     runner,
+    session_open,
     static_assets,
     ui_state,
     watchers,
@@ -1006,6 +1007,9 @@ class Handler(BaseHTTPRequestHandler):
         if url.path in (_DOCUMENT_RESOLVE, _DOCUMENT_READ):
             self._answer_document(url.path, parameters)
             return
+        if url.path == "/api/open-plan":
+            self._send_open_plan(parameters)
+            return
         boundary = _boundary(_GET_BOUNDARIES, url.path)
         if boundary is not None:
             self._dispatch(boundary, url.path, query=url.query, parameters=parameters)
@@ -1131,6 +1135,25 @@ class Handler(BaseHTTPRequestHandler):
         else:
             status, answer = _document_answer(path, parameters)
         self._send_json(status, answer, headers=_DOCUMENT_HEADERS)
+
+    def _send_open_plan(self, parameters: Mapping[str, list[str]]) -> None:
+        """Say what a click should do; only to this origin, since the answer names local paths."""
+
+        try:
+            http_security.require_same_origin_fetch(self.headers, self.server.security_context)
+        except http_security.RequestRefusedError as error:
+            self._refuse(error)
+            return
+        conn = self._open_store()
+        if conn is None:
+            return
+        try:
+            plan = session_open.plan_for_query(conn, parameters)
+            self._send_json(200, plan, headers={"Cache-Control": "no-store"})
+        except session_open.OpenPlanError as error:
+            self._send_json(error.status, {"error": {"code": error.code, "message": error.message}})
+        finally:
+            conn.close()
 
     def _stream_events(
         self,

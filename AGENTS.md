@@ -114,7 +114,7 @@ script, the icon, the generator that renders it, and the installer.
 
 The server lives in `server/`, split into domain and surfaces. Domain modules
 answer questions about the store and know nothing about who asked: `store`,
-`sessions`, `federation`, `refs`, `released`, `documents`, `runner`, `processes`,
+`sessions`, `session_open`, `federation`, `refs`, `released`, `documents`, `runner`, `processes`,
 `git_worktrees`, `static_assets`, `watchers`, `app_shell`, `ui_state`, plus the
 `planning/`, `executions/`, `platform/`, `store_identity/`, `memory/`,
 `projects/`, `alerts/`, `ops/` and `telemetry/` subpackages. The four
