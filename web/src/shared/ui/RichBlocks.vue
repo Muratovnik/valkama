@@ -7,11 +7,13 @@
  * weight: the section this text stands in owns the outline (see `richText.ts`).
  *
  * `document` is a whole Markdown file read on its own, which owns its outline: a
- * heading is a heading there, at the level `parseRichDocument` gave it. A card never
- * passes it, and nothing it draws changes.
+ * heading is a heading there, at the level `parseRichDocument` gave it, and a frame too
+ * wide for its content is a stop on the keyboard's way (`keyScroll`). A card never passes
+ * it, and nothing it draws changes.
  */
 import { useId } from 'vue'
 
+import { keyScroll } from '@/shared/lib/keyScroll.ts'
 import type { RichAlign, RichBlock, RichListItem } from '@/shared/lib/richText.ts'
 import RichInlines from '@/shared/ui/RichInlines.vue'
 
@@ -22,6 +24,7 @@ withDefaults(defineProps<{ blocks: readonly RichBlock[]; document?: boolean }>()
 })
 defineOptions({ name: 'RichBlocks' })
 
+const vKeyScroll = keyScroll
 const id = useId()
 const listTag = (list: List) => (list.ordered ? 'ol' : 'ul')
 /** A list that starts anywhere but one says so; one that starts at one says nothing. */
@@ -63,6 +66,7 @@ const headingTag = (heading: Heading) => `h${heading.level ?? 2}`
       </p>
       <pre
         v-else-if="block.kind === 'code'"
+        v-key-scroll="document"
         class="rich-pre"
         >{{ block.text }}</pre>
       <blockquote
@@ -108,6 +112,7 @@ const headingTag = (heading: Heading) => `h${heading.level ?? 2}`
       />
       <div
         v-else-if="block.kind === 'table'"
+        v-key-scroll="document"
         class="rich-table-frame"
         :class="{ 'keeps-words': document }"
       >
