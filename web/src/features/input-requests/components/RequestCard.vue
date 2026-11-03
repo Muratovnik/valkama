@@ -23,6 +23,7 @@ import RequestActions from '@/features/input-requests/components/RequestActions.
 import RequestAnswerFields from '@/features/input-requests/components/RequestAnswerFields.vue'
 import RequestFold from '@/features/input-requests/components/RequestFold.vue'
 import { useRequestWrites } from '@/features/input-requests/composables/useRequestWrites.ts'
+import { useStepAttention } from '@/features/input-requests/composables/useStepAttention.ts'
 import { EMPTY_DRAFT, hasDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
@@ -56,6 +57,7 @@ const promptId = useId()
 const card = ref<HTMLElement | null>(null)
 onMounted(() => stopStrayPresses(card.value))
 const errorLine = ref<HTMLElement | null>(null)
+const deadlineLine = ref<HTMLElement | null>(null)
 const answerFields = ref<InstanceType<typeof RequestAnswerFields> | null>(null)
 const actions = ref<InstanceType<typeof RequestActions> | null>(null)
 
@@ -64,13 +66,13 @@ const {
   canRefresh,
   declining,
   error,
-  keep,
   pastDue,
   refresh,
   refused,
   request,
   requiresRefresh,
   resolve,
+  stepBack,
   supported,
   writable,
 } = useRequestWrites({
@@ -91,11 +93,19 @@ const {
   },
 })
 
+useStepAttention(card, declining, stepBack)
+
 const waiting = computed(() => request.value.status === 'pending')
 watch(waiting, async (now) => {
   if (now || !card.value?.contains(document.activeElement)) return
   await nextTick()
   focusOutcome()
+})
+/** A deadline disables what had focus, so focus goes to why, as it does when a write fails. */
+watch(pastDue, async (past) => {
+  if (!past || !card.value?.contains(document.activeElement)) return
+  await nextTick()
+  deadlineLine.value?.focus()
 })
 const hasFoot = computed(
   () => waiting.value || canRefresh.value || props.standalone || Boolean(error.value),
@@ -103,6 +113,7 @@ const hasFoot = computed(
 const busyMark = computed(() => busy.value || undefined)
 const fieldsDisabled = computed(() => !writable.value || busy.value)
 const sendDisabled = computed(() => !writable.value || requiresRefresh.value)
+const noting = computed(() => answerFields.value?.ownOpen ?? false)
 /** The error says the draft is kept only when there is one to keep. */
 const errorText = computed(() => {
   const kept = hasDraft(props.draft) ? '' : 'Bare'
@@ -131,18 +142,18 @@ const authorName = computed(() => actorName(request.value.author))
 const authorSession = computed(() => actorSession(request.value.author))
 
 function pressWayOut() {
-  if (declining.value) keep()
+  if (declining.value) stepBack()
   else void resolve('decline')
 }
 function pressOnward() {
   void resolve(declining.value ? 'decline' : 'answer')
 }
-/** While it is asked, Escape answers that and leaves the card or the list around it open. */
+/** While it is asked, Escape from inside answers that and leaves the card or the list open. */
 useEventListener(card, 'keydown', (event: KeyboardEvent) => {
   if (event.key !== 'Escape' || event.isComposing || !declining.value) return
   event.preventDefault()
   event.stopPropagation()
-  keep()
+  stepBack()
   actions.value?.focusWayOut()
 })
 
@@ -151,7 +162,7 @@ useEventListener(card, 'keydown', (event: KeyboardEvent) => {
  * is pressed: while the asking stands, the same place declines for good.
  */
 function edit(field: InputRequestField, value: string | boolean | string[]) {
-  keep()
+  stepBack()
   emit('update:draft', {
     ...props.draft,
     answers: { ...props.draft.answers, [field.id]: value },
@@ -159,7 +170,7 @@ function edit(field: InputRequestField, value: string | boolean | string[]) {
   refused.value = refused.value.filter((id) => id !== field.id)
 }
 function writeNote(note: string) {
-  keep()
+  stepBack()
   emit('update:draft', { ...props.draft, note })
   // Words of one's own stand in for whatever was refused for being empty.
   if (note.trim()) refused.value = []
@@ -240,7 +251,9 @@ defineExpose({ focus, focusOutcome, reveal })
       </CollapsibleText>
       <p
         v-if="request.expires_at"
-        class="request-fact"
+        ref="deadlineLine"
+        class="request-fact request-deadline"
+        tabindex="-1"
       >
         {{ deadlineLabel }}
       </p>
@@ -294,6 +307,7 @@ defineExpose({ focus, focusOutcome, reveal })
         :busy="busy"
         :declining="declining"
         :disabled="sendDisabled"
+        :noting="noting"
         :refreshable="canRefresh"
         :standalone="standalone"
         :waiting="waiting"
@@ -329,9 +343,9 @@ defineExpose({ focus, focusOutcome, reveal })
 }
 
 /* Only the app moves focus to these, to the next question and to why a write did not
-   go through, and Tab never stops on them, so the ring shows whenever they hold focus:
-   it is the one sign of where the reader was taken. */
-:is(.request-card, .request-title, .request-error):focus {
+   go through or no longer can, and Tab never stops on them, so the ring shows whenever they
+   hold focus: it is the one sign of where the reader was taken. */
+:is(.request-card, .request-title, .request-error, .request-deadline):focus {
   border-radius: var(--radius-control);
   outline: 2px solid var(--color-focus-ring);
   outline-offset: var(--space-1);
@@ -363,7 +377,7 @@ defineExpose({ focus, focusOutcome, reveal })
   font: var(--font-editor);
 }
 
-/* What `RequestActions` asks lies against this, and takes no room in it. */
+/* What `RequestActions` asks lies against this, and takes no room in it unless a note is open. */
 .request-foot {
   position: relative;
   display: flex;

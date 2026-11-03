@@ -910,10 +910,15 @@ form is built for it. Don't answer alone could write at one press and cannot be 
 so it takes two steps: the first writes nothing and asks on the spot what going on means. The
 way back stands in the very box of that press and the way on in the box of Send, each button
 holding room for its other word, so that nothing moves and pressing again without moving only
-goes back. Focus stands on the way back, and Escape answers the same without closing the card
-or the list. Choosing or writing anything takes the step back too, so that Send is Send again
-by the time it is pressed. What is asked lies over what is above the buttons, taking no height,
-because any height would move them, and in a dialog, which stands centred, from either side.
+goes back. Focus stands on the way back, and with focus inside the question Escape answers the
+same without closing the card or the list. Choosing or writing anything takes the step back too,
+so that Send is Send again by the time it is pressed. The step lasts only while attention is on
+its question: a press or focus landing outside it ends it, so a page holds one step at most, and
+so does its buttons moving for any reason, a question folding above or a scroll, since what the
+person pressed no longer stands where they left it. What is asked lies over what is above the
+buttons, taking no height, because any height would move them, and in a dialog, which stands
+centred, from either side. An own answer open is never lain on: its room above the buttons is
+kept for as long as it stays open, so that a person refuses seeing the end of what will not go.
 Send with nothing chosen or written writes nothing on any question, required
 fields or not, and says at the first field what it wants; a question always has a field.
 A press following another can still do harm where something is held: folding lifts the next

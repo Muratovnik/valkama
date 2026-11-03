@@ -15,6 +15,16 @@ export type Point = { x: number; y: number }
 export const UPPER = '44444444-4444-4444-8444-444444444441'
 export const LOWER = '44444444-4444-4444-8444-444444444442'
 export const LOWER_DECLINE = "The lower question: Don't answer"
+export const THIRD = '44444444-4444-4444-8444-444444444443'
+
+/** A question ended by someone else, as the next read brings it. */
+export const answeredElsewhere = {
+  status: 'answered',
+  answers: { route: 'choice-1' },
+  answered_by: 'another agent',
+  by_person: false,
+  resolved_at: '2026-10-24T10:30:00Z',
+} as const
 
 export const choices = (count: number): InputRequestField => ({
   id: 'route',
@@ -78,6 +88,55 @@ export async function inCard(page: Page, upper = 5, lower = 2) {
   const top = opened.card.filter({ hasText: 'The upper question' })
   const next = opened.card.filter({ hasText: 'The lower question' })
   return { ...opened, at: await inReach(decline(top)), next, top }
+}
+
+/** In the middle of the view, as a person brings up what they mean to press next. */
+export async function inMiddle(control: Locator) {
+  await control.evaluate((node) => node.scrollIntoView({ behavior: 'instant', block: 'center' }))
+  return centre(control)
+}
+
+const OLD_COMMENTS = 8
+
+export const asked = (id: string, prompt: string, options: number, hour: number) =>
+  question({
+    request_id: id,
+    prompt,
+    fields: [choices(options)],
+    created_at: `2026-10-24T${String(hour).padStart(2, '0')}:00:00Z`,
+  })
+
+/**
+ * Three questions, the first with this many options, over a thread long enough that folding
+ * the first lifts the others by all it gives up instead of running out of page.
+ */
+export async function threeInCard(page: Page, first: number, width = 1680, height = 1050) {
+  await page.setViewportSize({ width, height })
+  const opened = await openQuestion(page, [
+    asked(UPPER, 'The first question', first, 12),
+    asked(LOWER, 'The second question', 2, 11),
+    asked(THIRD, 'The third question', 2, 10),
+  ])
+  for (let id = 0; id < OLD_COMMENTS; id++)
+    opened.backend.item.comments.push({
+      id: 900 + id,
+      kind: 'comment',
+      author: 'codex',
+      at: '2020-01-01T10:00:00Z',
+      body: 'An old comment that takes up room. '.repeat(30),
+      report: null,
+      checklist_item_id: null,
+      checklist_item_text: null,
+    })
+  await opened.stream.signal('agents')
+  await expect(opened.drawer.getByText(/An old comment/u).first()).toBeVisible()
+  const named = (hasText: string) => opened.card.filter({ hasText })
+  return {
+    ...opened,
+    first: named('The first question'),
+    second: named('The second question'),
+    third: named('The third question'),
+  }
 }
 
 export const writesTo = (requests: { writes: { body: Record<string, unknown> }[] }) =>

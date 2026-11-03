@@ -102,7 +102,7 @@ export function useRequestWrites(host: {
     await host.failed()
   }
   /** Takes back the first step of declining, unless the write is already out. */
-  function keep() {
+  function stepBack() {
     if (!busy.value) asked.value = false
   }
   async function resolve(action: Action) {
@@ -182,7 +182,6 @@ export function useRequestWrites(host: {
     canRefresh,
     declining,
     error,
-    keep,
     local,
     pastDue,
     refresh,
@@ -190,6 +189,7 @@ export function useRequestWrites(host: {
     request,
     requiresRefresh,
     resolve,
+    stepBack,
     supported,
     writable,
   }

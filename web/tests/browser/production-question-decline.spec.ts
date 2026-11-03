@@ -12,6 +12,7 @@ import type { InputRequestField } from '@/shared/api/inputRequestModel.ts'
 import { centre } from './boardPage.ts'
 import { openQuestion, question, send } from './questionBackend.ts'
 import {
+  answeredElsewhere,
   choices,
   decline,
   inCard,
@@ -29,17 +30,8 @@ import {
 import { test } from './test.ts'
 
 const ASKED = "The agent gets a refusal, and it can't be taken back."
-const RESOLVED = '2026-10-24T10:30:00Z'
 
-const keep = (scope: Locator) => scope.getByRole('button', { name: 'Keep', exact: true })
-
-const answeredElsewhere = {
-  status: 'answered',
-  answers: { route: 'choice-1' },
-  answered_by: 'another agent',
-  by_person: false,
-  resolved_at: RESOLVED,
-} as const
+const back = (scope: Locator) => scope.getByRole('button', { name: 'Back', exact: true })
 
 test('a question rising under a pointer at rest takes nothing from the press that follows', async ({
   page,
@@ -53,7 +45,7 @@ test('a question rising under a pointer at rest takes nothing from the press tha
   await press(page, at)
   await pause(150)
   expect(writesTo(requests)).toEqual([])
-  await expect(keep(next)).toBeFocused()
+  await expect(back(next)).toBeFocused()
   await expect(next.getByText(ASKED, { exact: true })).toBeVisible()
   // Whatever came there, a second press only goes back.
   await press(page, at, 2)
@@ -182,9 +174,9 @@ for (const gap of [180, 350]) {
   }) => {
     const { at, requests, top } = await inCard(page)
     await press(page, at)
-    await expect(keep(top)).toBeFocused()
+    await expect(back(top)).toBeFocused()
     await pause(gap)
-    await expect.poll(() => under(page, at)).toBe('The upper question: Keep')
+    await expect.poll(() => under(page, at)).toBe('The upper question: Back')
     await press(page, at, 2)
     await pause(150)
     expect(writesTo(requests)).toEqual([])
@@ -215,7 +207,7 @@ test('the keys take the same two steps, and Escape goes back without closing the
   const { drawer, requests, top } = await inCard(page)
   await decline(top).focus()
   await page.keyboard.press('Enter')
-  await expect(keep(top)).toBeFocused()
+  await expect(back(top)).toBeFocused()
   await expect(top.getByRole('alert')).toHaveText(ASKED)
   await page.keyboard.press('Enter')
   await expect(decline(top)).toBeFocused()
@@ -246,15 +238,21 @@ test('choosing or writing takes the step back, so that the place of Send sends a
 }) => {
   const { at, card, requests, top } = await inCard(page)
   await press(page, at)
-  await expect(keep(top)).toBeVisible()
+  await expect(back(top)).toBeVisible()
   await top.getByRole('radio', { name: 'Choice 2', exact: true }).click()
-  await expect(keep(top)).toHaveCount(0)
+  await expect(back(top)).toHaveCount(0)
   await expect(send(top)).toBeVisible()
+  // Opening the own answer moves the buttons, which ends the step by itself.
   await press(page, await inReach(decline(top)))
+  await expect(back(top)).toBeVisible()
   await top.getByRole('button', { name: 'Your own answer', exact: true }).click()
-  await expect(keep(top)).toBeVisible()
+  await expect(back(top)).toHaveCount(0)
+  await press(page, await inReach(decline(top)))
+  await expect(back(top)).toBeVisible()
+  await top.getByRole('textbox', { name: 'Your own answer', exact: true }).focus()
+  await expect(back(top)).toBeVisible()
   await page.keyboard.insertText('A word')
-  await expect(keep(top)).toHaveCount(0)
+  await expect(back(top)).toHaveCount(0)
   await send(top).click()
   await expect(top.locator('.request-state')).toContainText('A word')
   expect(requests.writes.map((write) => write.action)).toEqual(['answer'])
@@ -266,7 +264,7 @@ test('an answer arriving from elsewhere ends the step along with the question', 
 }) => {
   const { at, requests, stream, top } = await inCard(page)
   await press(page, at)
-  await expect(keep(top)).toBeVisible()
+  await expect(back(top)).toBeVisible()
   requests.settle(UPPER, answeredElsewhere)
   await stream.signal('agents')
   await expect(top.locator('.request-state')).toBeFocused()

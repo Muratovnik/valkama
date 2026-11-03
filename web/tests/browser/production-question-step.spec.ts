@@ -1,0 +1,289 @@
+/**
+ * How long the step of declining stands: only while the person's attention is on its question
+ * and its buttons stand where the press left them. A step left standing turns a place on the
+ * page into one that declines for good, and a question folding above can bring that place
+ * under a pointer aimed at something else. These presses come from a real mouse.
+ */
+import { expect } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
+
+import { centre } from './boardPage.ts'
+import { openQuestion, question, send } from './questionBackend.ts'
+import {
+  answeredElsewhere,
+  asked,
+  decline,
+  inCard,
+  inMiddle,
+  inReach,
+  inTheList,
+  LOWER,
+  pair,
+  pause,
+  press,
+  THIRD,
+  threeInCard,
+  under,
+  UPPER,
+  writesTo,
+} from './questionPress.ts'
+import { test } from './test.ts'
+
+const asking = (scope: Locator | Page) => scope.locator('.request-asked')
+const onward = (scope: Locator) => scope.locator('.request-onward')
+const wayOut = (scope: Locator) => scope.locator('.request-way-out')
+
+async function raise(page: Page, card: Locator) {
+  await press(page, await inMiddle(decline(card)))
+  await expect(asking(card)).toBeVisible()
+}
+
+async function choose(page: Page, card: Locator) {
+  await press(page, await inMiddle(card.getByText('Choice 1', { exact: true })))
+  await expect(card.getByRole('radio', { name: 'Choice 1' })).toBeChecked()
+}
+
+/** The first question ends elsewhere, and the third comes to stand at this point. */
+async function folds(
+  page: Page,
+  at: { x: number; y: number },
+  opened: Awaited<ReturnType<typeof threeInCard>>,
+) {
+  opened.requests.settle(UPPER, answeredElsewhere)
+  await opened.stream.signal('agents')
+  await expect.poll(() => under(page, at)).toMatch(/^The third question: /u)
+}
+
+for (const [width, height, options] of [
+  [1680, 1050, 5],
+  [390, 844, 6],
+] as const) {
+  test(`at ${width} a question folding brings no refusal under a pointer aimed at Send in another`, async ({
+    page,
+  }) => {
+    const opened = await threeInCard(page, options, width, height)
+    const { requests, second, third } = opened
+    await raise(page, third)
+    await choose(page, second)
+    const at = await inMiddle(send(second))
+    await page.mouse.move(at.x, at.y)
+    await folds(page, at, opened)
+    await press(page, at)
+    await pause(200)
+    expect(writesTo(requests)).toEqual([])
+    await expect(asking(page)).toHaveCount(0)
+    await expect(second.getByRole('radio', { name: 'Choice 1' })).toBeChecked()
+  })
+}
+
+for (const [width, height] of [
+  [1680, 1050],
+  [390, 844],
+] as const) {
+  test(`at ${width} in the list of everything waiting a row ending brings no refusal under the pointer`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height })
+    // A long row below keeps the list at its full height, so the row below rises by all it can.
+    const opened = await openQuestion(page, [...pair(2, 2), asked(THIRD, 'A long question', 12, 9)])
+    const { next, top } = await inTheList(page, opened)
+    await raise(page, next)
+    await choose(page, top)
+    const at = await inMiddle(send(top))
+    await page.mouse.move(at.x, at.y)
+    opened.requests.settle(UPPER, answeredElsewhere)
+    // The list reads again on its timer and whenever the window comes back to the front.
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+    await expect.poll(() => under(page, at)).toMatch(/^The lower question: /u)
+    await press(page, at)
+    await pause(200)
+    expect(writesTo(opened.requests)).toEqual([])
+    await expect(asking(page)).toHaveCount(0)
+  })
+}
+
+test('the same with no press between: a pointer that only went elsewhere finds no refusal when the question moves', async ({
+  page,
+}) => {
+  const opened = await threeInCard(page, 5)
+  const { requests, second, third } = opened
+  await choose(page, second)
+  const at = await inMiddle(send(second))
+  // In view together, so that nothing has to scroll between the step and the pointer leaving.
+  await press(page, await centre(decline(third)))
+  await expect(asking(third)).toBeVisible()
+  await page.mouse.move(at.x, at.y)
+  await folds(page, at, opened)
+  await press(page, at)
+  await pause(200)
+  expect(writesTo(requests)).toEqual([])
+  await expect(asking(page)).toHaveCount(0)
+})
+
+test("the same by one's own hand: Send in one question, and a shaken second press finds no refusal in the next", async ({
+  page,
+}) => {
+  const opened = await threeInCard(page, 5)
+  const { first, requests, second } = opened
+  await raise(page, second)
+  await choose(page, first)
+  const at = await inMiddle(send(first))
+  await press(page, at)
+  await expect(first.locator('.request-state')).toBeVisible()
+  await expect.poll(() => under(page, at)).toMatch(/^The second question: /u)
+  await press(page, { x: at.x + 4, y: at.y })
+  await pause(200)
+  expect(writesTo(requests)).toEqual([UPPER])
+  await expect(asking(page)).toHaveCount(0)
+})
+
+test('a pointer resting on the confirm of a question that moves finds no refusal either', async ({
+  page,
+}) => {
+  const opened = await threeInCard(page, 5)
+  const { requests, second } = opened
+  await raise(page, second)
+  const at = await centre(onward(second))
+  await page.mouse.move(at.x, at.y)
+  await folds(page, at, opened)
+  await expect(asking(page)).toHaveCount(0)
+  await press(page, at)
+  await pause(200)
+  expect(writesTo(requests)).toEqual([])
+})
+
+test('a press anywhere outside its question ends the step, and only there', async ({ page }) => {
+  const { requests, top, next } = await inCard(page)
+  await raise(page, top)
+  // On its own words, which is still its question, and focus falls on the question itself.
+  await press(page, await centre(top.locator('.request-prompt')))
+  await expect(asking(top)).toBeVisible()
+  await press(page, await centre(next.locator('.request-prompt')))
+  await expect(asking(top)).toHaveCount(0)
+  await expect(decline(top)).toBeVisible()
+  expect(writesTo(requests)).toEqual([])
+})
+
+test('the page holds one step at most', async ({ page }) => {
+  const { drawer, next, requests, top } = await inCard(page)
+  await raise(page, top)
+  await raise(page, next)
+  await expect(asking(drawer)).toHaveCount(1)
+  await expect(asking(next)).toBeVisible()
+  await expect(decline(top)).toBeVisible()
+  expect(writesTo(requests)).toEqual([])
+})
+
+test('focus leaving its question ends the step, and focus moving inside it does not', async ({
+  page,
+}) => {
+  const { next, requests, top } = await inCard(page)
+  await decline(top).focus()
+  await page.keyboard.press('Enter')
+  await expect(asking(top)).toBeVisible()
+  await expect(wayOut(top)).toBeFocused()
+  await page.keyboard.press('Shift+Tab')
+  await expect(asking(top)).toBeVisible()
+  await page.keyboard.press('Tab')
+  await page.keyboard.press('Tab')
+  await expect(onward(top)).toBeFocused()
+  await expect(asking(top)).toBeVisible()
+  await page.keyboard.press('Tab')
+  await expect(asking(top)).toHaveCount(0)
+  await expect(next.getByRole('radio').first()).toBeFocused()
+  expect(writesTo(requests)).toEqual([])
+})
+
+test('scrolling the question away ends the step, and a read that moves nothing does not', async ({
+  page,
+}) => {
+  const { requests, stream, top } = await inCard(page)
+  await raise(page, top)
+  await stream.signal('agents')
+  await pause(150)
+  await expect(asking(top)).toBeVisible()
+  await expect(wayOut(top)).toBeFocused()
+  await page.mouse.wheel(0, -60)
+  await expect(asking(top)).toHaveCount(0)
+  expect(writesTo(requests)).toEqual([])
+})
+
+test('a deadline passing while the step stands takes focus to the line that says so', async ({
+  page,
+}) => {
+  const { requests, stream, top } = await inCard(page)
+  await raise(page, top)
+  const soon = new Date(Date.now() + 1500).toISOString()
+  requests.settle(UPPER, { expires_at: soon })
+  await stream.signal('agents')
+  const line = top.getByText(/The deadline has passed/u)
+  await expect(line).toBeFocused({ timeout: 5000 })
+  await expect(asking(top)).toHaveCount(0)
+  await expect(top.getByRole('button', { name: 'Check status', exact: true })).toBeVisible()
+  expect(writesTo(requests)).toEqual([])
+  // A later deadline brings the question back, and not the step with it.
+  requests.settle(UPPER, { expires_at: '2099-01-01T10:00:00Z' })
+  await stream.signal('agents')
+  await expect(top.getByRole('button', { name: 'Check status', exact: true })).toHaveCount(0)
+  await expect(send(top)).toBeVisible()
+  await expect(asking(top)).toHaveCount(0)
+})
+
+/** What the foot would otherwise lie on, and the buttons that must not move for it. */
+async function layout(card: Locator) {
+  return {
+    onward: await onward(card).boundingBox(),
+    own: await card.locator('.request-own').boundingBox(),
+    wayOut: await wayOut(card).boundingBox(),
+  }
+}
+
+for (const [width, height] of [
+  [1680, 1050],
+  [1024, 768],
+  [390, 844],
+] as const) {
+  for (const locale of ['en', 'ru'] as const) {
+    test(`at ${width} in ${locale} the asking leaves an own answer open to be read, and nothing moves`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height })
+      await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
+      const { card } = await openQuestion(page, pair(2, 2))
+      const lower = card.nth(1)
+      await lower.locator('.request-own-toggle').click()
+      await page.keyboard.insertText('First line of the note\nSecond line\nThird line, the last')
+      await inReach(wayOut(lower))
+      const before = await layout(lower)
+      await wayOut(lower).click()
+      const asked = await asking(lower).boundingBox()
+      expect(await layout(lower)).toEqual(before)
+      expect(asked?.y).toBeGreaterThanOrEqual((before.own?.y ?? 0) + (before.own?.height ?? 0))
+      expect((asked?.y ?? 0) + (asked?.height ?? 0)).toBeLessThanOrEqual(before.wayOut?.y ?? 0)
+      await expect(asking(lower)).toBeInViewport({ ratio: 1 })
+      await page.keyboard.press('Escape')
+      expect(await layout(lower)).toEqual(before)
+    })
+  }
+}
+
+for (const locale of ['en', 'ru'] as const) {
+  test(`on a phone in ${locale} the asking stays off the text of a field above an own answer closed`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
+    const { card } = await openQuestion(page, [
+      question({
+        request_id: LOWER,
+        prompt: 'The only question',
+        fields: [{ id: 'words', label: 'Words', type: 'text', required: true, options: [] }],
+      }),
+    ])
+    await inReach(wayOut(card))
+    await wayOut(card).click()
+    const asked = await asking(card).boundingBox()
+    const field = await card.locator('.request-fields textarea').boundingBox()
+    expect(asked?.y).toBeGreaterThanOrEqual((field?.y ?? 0) + (field?.height ?? 0))
+  })
+}

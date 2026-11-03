@@ -68,7 +68,7 @@ async function focusField(id: string) {
   await nextTick()
   controls[id]?.focus()
 }
-defineExpose({ focusField })
+defineExpose({ focusField, ownOpen })
 </script>
 
 <template>

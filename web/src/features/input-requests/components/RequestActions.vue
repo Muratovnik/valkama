@@ -7,7 +7,9 @@
  * meant. Its two answers take the two buttons in their places, each holding room for its
  * other word, so that nothing moves: the way back stands in the very box of the press, and
  * pressing again without moving only goes back. The asking lies over what is above the
- * buttons and takes no height, since any height would move them.
+ * buttons and takes no height, since any height would move them. An own answer open is not
+ * to be lain on, since nobody should refuse without seeing the end of what will not go, so
+ * while it is open the asking has its room kept above the buttons, asked or not.
  *
  * The same buttons stay under the keyboard for the same reason, so focus has nowhere to fall.
  */
@@ -21,6 +23,8 @@ const props = defineProps<{
   /** Whether declining was asked for, and the next word on it decides. */
   declining: boolean
   disabled: boolean
+  /** An own answer stands open above the foot. */
+  noting: boolean
   refreshable: boolean
   standalone: boolean
   waiting: boolean
@@ -31,7 +35,7 @@ const root = ref<HTMLElement | null>(null)
 /** Absent rather than false, because `aria-disabled="false"` is a claim and not a default. */
 const busyMark = computed(() => props.busy || undefined)
 const wayOut = computed(() => {
-  const [word, room] = [t('requests.keep'), t('requests.decline')]
+  const [word, room] = [t('requests.back'), t('requests.decline')]
   return props.declining
     ? { room, variant: 'secondary' as const, word }
     : { room: word, variant: 'ghost' as const, word: room }
@@ -57,7 +61,13 @@ defineExpose({ focusWayOut })
   <div
     ref="root"
     class="request-actions"
+    :class="{ noting }"
   >
+    <span
+      v-if="noting"
+      class="request-asked-room"
+      :data-room="t('requests.declineAsked')"
+    />
     <p
       v-if="declining"
       class="request-asked"
@@ -133,6 +143,32 @@ defineExpose({ focusWayOut })
     align-items: center;
     min-height: var(--size-control-height);
     text-align: end;
+  }
+}
+
+/* On the room kept for it, which lies just where it does, so nothing has to move when it comes. */
+.request-actions.noting {
+  position: relative;
+  flex: 0 0 100%;
+
+  .request-asked {
+    inset: 0 0 auto;
+    min-height: 0;
+    margin: 0;
+    text-align: end;
+    background: none;
+  }
+}
+
+.request-asked-room {
+  flex: 0 0 100%;
+  padding: var(--space-1) var(--space-2);
+  font: var(--font-detail);
+  text-align: end;
+  visibility: hidden;
+
+  &::before {
+    content: attr(data-room);
   }
 }
 
