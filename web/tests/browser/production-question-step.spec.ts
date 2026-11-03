@@ -164,6 +164,26 @@ test('a press anywhere outside its question ends the step, and only there', asyn
   expect(writesTo(requests)).toEqual([])
 })
 
+test('a press outside that reaches nothing ends the step as well', async ({ page }) => {
+  const { requests, second, stream, third } = await threeInCard(page, 3)
+  const at = await inMiddle(third.getByText('Choice 1', { exact: true }))
+  await press(page, at)
+  await decline(second).focus()
+  await page.keyboard.press('Enter')
+  await expect(asking(second)).toBeVisible()
+  // What the last press landed on is gone from under the pointer, so this one is held back,
+  // and focus stays where it was.
+  requests.settle(THIRD, answeredElsewhere)
+  await stream.signal('agents')
+  await expect(third.locator('.request-state')).toBeVisible()
+  await expect(wayOut(second)).toBeFocused()
+  await expect(asking(second)).toBeVisible()
+  await press(page, at)
+  await expect(wayOut(second)).toBeFocused()
+  await expect(asking(second)).toHaveCount(0)
+  expect(writesTo(requests)).toEqual([])
+})
+
 test('the page holds one step at most', async ({ page }) => {
   const { drawer, next, requests, top } = await inCard(page)
   await raise(page, top)
@@ -178,6 +198,9 @@ test('focus leaving its question ends the step, and focus moving inside it does 
   page,
 }) => {
   const { next, requests, top } = await inCard(page)
+  // The next question in view too, so that going there by Tab scrolls nothing.
+  await inMiddle(decline(top))
+  await expect(next.getByRole('radio').first()).toBeInViewport({ ratio: 1 })
   await decline(top).focus()
   await page.keyboard.press('Enter')
   await expect(asking(top)).toBeVisible()
@@ -212,12 +235,13 @@ test('a deadline passing while the step stands takes focus to the line that says
   page,
 }) => {
   const { requests, stream, top } = await inCard(page)
-  await raise(page, top)
-  const soon = new Date(Date.now() + 1500).toISOString()
-  requests.settle(UPPER, { expires_at: soon })
+  // Its line stands before the step does, or it would move the buttons and end the step itself.
+  requests.settle(UPPER, { expires_at: new Date(Date.now() + 3000).toISOString() })
   await stream.signal('agents')
+  await expect(top.getByText(/^Answer before/u)).toBeVisible()
+  await raise(page, top)
   const line = top.getByText(/The deadline has passed/u)
-  await expect(line).toBeFocused({ timeout: 5000 })
+  await expect(line).toBeFocused({ timeout: 6000 })
   await expect(asking(top)).toHaveCount(0)
   await expect(top.getByRole('button', { name: 'Check status', exact: true })).toBeVisible()
   expect(writesTo(requests)).toEqual([])
