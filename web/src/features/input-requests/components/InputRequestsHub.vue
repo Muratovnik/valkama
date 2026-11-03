@@ -8,13 +8,17 @@ import type { PendingCount } from '@/features/input-requests/composables/useInpu
 import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
+import { DIALOG_ROOM_BESIDE_DOCUMENT } from '@/shared/lib/shellLayout.ts'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
+import type { OverlayPaneNames, PaneFit } from '@/shared/ui/overlayPanes.ts'
 
-const props = defineProps<{ open: boolean }>()
+const props = defineProps<{ open: boolean; pane?: OverlayPaneNames | null }>()
 const emit = defineEmits<{
-  close: []
-  count: [value: PendingCount | null]
-  select: [target: PlanningTarget]
+  'close': []
+  'count': [value: PendingCount | null]
+  'pane-close': []
+  'pane-fit': [fit: PaneFit | null]
+  'select': [target: PlanningTarget]
 }>()
 const { t } = useI18n()
 const { result, loading, failed, partial, entries, count, refresh, changed } = useInputRequests(
@@ -36,7 +40,11 @@ watch(
     :title="t('requests.title')"
     :subtitle="t('requests.scope')"
     :close-label="t('requests.close')"
+    :pane="pane"
+    :pane-room="DIALOG_ROOM_BESIDE_DOCUMENT"
     @close="emit('close')"
+    @pane-close="emit('pane-close')"
+    @pane-fit="(fit) => emit('pane-fit', fit)"
   >
     <RequestList
       :entries="entries"
@@ -50,5 +58,8 @@ watch(
       @draft="(key, value) => (drafts[key] = value)"
       @select="emit('select', $event)"
     />
+    <template #pane>
+      <slot name="pane" />
+    </template>
   </DialogFrame>
 </template>

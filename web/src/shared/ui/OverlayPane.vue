@@ -125,13 +125,9 @@ function dismiss(event: KeyboardEvent) {
 
 /* The one divider between two panes on one ground: a shadow is what separates a drawer
    from what it lies on, and a forced palette keeps this line where it drops the shadow. */
-.overlay-pane-drawer {
+.overlay-pane-drawer .overlay-pane-region {
   border-inline-start: 1px solid var(--color-rule-strong);
   background: var(--color-surface);
-
-  &.is-collapsed {
-    border-inline-start-width: 0;
-  }
 }
 
 /* A dialog is a frame, so the pane beside it is one too, with the gap between them for the
@@ -139,7 +135,9 @@ function dismiss(event: KeyboardEvent) {
 .overlay-pane-dialog {
   margin-inline-start: var(--space-3);
 
+  /* The room above brings what it holds level with the head of the dialog beside it. */
   & .overlay-pane-region {
+    padding-block-start: var(--space-2);
     border: 1px solid var(--color-rule-strong);
     background: var(--color-surface);
     overflow: hidden;

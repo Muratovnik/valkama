@@ -273,7 +273,7 @@ function revealQuestion() {
  */
 const close = () => void leave(() => emit('close'))
 
-defineExpose({ close })
+defineExpose({ close, openFrom })
 </script>
 
 <template>

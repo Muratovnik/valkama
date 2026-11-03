@@ -8,7 +8,7 @@ import { defineComponent, h, nextTick } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, vi } from 'vitest'
 
-import DocumentViewer from '@/widgets/document-viewer/components/DocumentViewer.vue'
+import DocumentDrawer from '@/widgets/document-viewer/components/DocumentDrawer.vue'
 import { useDocumentView } from '@/widgets/document-viewer/composables/useDocumentView.ts'
 import type { DocumentView } from '@/widgets/document-viewer/composables/useDocumentView.ts'
 
@@ -93,7 +93,7 @@ export async function viewer(parent?: () => ReferenceLink | null, opener?: Docum
         if (parent) provideReferenceLinks(parent)
         if (opener) provideDocumentOpener(opener)
         const shown = view
-        return () => h(DocumentViewer, { view: shown })
+        return () => h(DocumentDrawer, { view: shown })
       },
     }),
     { attachTo: document.body, global: { plugins: [i18n] } },

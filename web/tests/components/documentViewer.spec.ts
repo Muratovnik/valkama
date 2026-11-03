@@ -161,6 +161,38 @@ describe('the states of a document', () => {
 })
 
 describe('reading a file again', () => {
+  it('a refusal already drawn stays while the window’s return reads it again', async () => {
+    disk['docs/plan.md'] = refused(422, 'not_utf8')
+    await opened()
+    const words = 'The document is not in UTF-8'
+    expect(surface()?.textContent).toContain(words)
+
+    const held: { resolve?: (text: ProjectDocument) => void } = {}
+    read.mockReturnValueOnce(new Promise((resolve) => (held.resolve = resolve)))
+    window.dispatchEvent(new Event('focus'))
+    await nextTick()
+    expect(surface()?.textContent).toContain(words)
+    expect(surface()?.querySelector('[aria-busy="true"]')).toBeNull()
+
+    // The file came right meanwhile: its text takes the place of the words, once it is read.
+    held.resolve?.(file('docs/plan.md', PLAN))
+    await flushPromises()
+    expect(surface()?.textContent).not.toContain(words)
+    expect(blocks().length).toBeGreaterThan(0)
+  })
+
+  it('a refusal read again to a refusal goes on saying so', async () => {
+    disk['docs/plan.md'] = refused(422, 'binary')
+    await opened()
+    window.dispatchEvent(new Event('focus'))
+    await flushPromises()
+    expect(surface()?.textContent).toContain('This is not text')
+    disk['docs/plan.md'] = refused(422, 'not_utf8')
+    window.dispatchEvent(new Event('focus'))
+    await flushPromises()
+    expect(surface()?.textContent).toContain('The document is not in UTF-8')
+  })
+
   it('the same revision draws nothing again', async () => {
     disk['docs/plan.md'] = file('docs/plan.md', PLAN)
     await opened()

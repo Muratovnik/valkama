@@ -56,6 +56,14 @@ const overlayHeader = readFileSync(
 )
 const overlay = readFileSync(new URL('../src/shared/ui/OverlayHost.vue', import.meta.url), 'utf8')
 const app = readFileSync(new URL('../src/app/App.vue', import.meta.url), 'utf8')
+const cardDrawer = readFileSync(
+  new URL('../src/pages/planning/PlanningCardDrawer.vue', import.meta.url),
+  'utf8',
+)
+const resizer = readFileSync(
+  new URL('../src/shared/ui/OverlayResizer.vue', import.meta.url),
+  'utf8',
+)
 const planningSurface = readFileSync(
   new URL('../src/pages/planning/PlanningModuleSurface.vue', import.meta.url),
   'utf8',
@@ -113,7 +121,8 @@ test('the inspector exposes its emits, related navigation, and shared focus owne
   assert.match(drawer, /'?open'?: \[reference: string, from: InspectorReturn\]/)
   assert.match(drawer, /'?changed'?: \[\]/)
   assert.match(drawer, /emit\('open'/)
-  assert.match(planningSurface, /<ResizableInspector/)
+  assert.match(planningSurface, /<PlanningCardDrawer/)
+  assert.match(cardDrawer, /<ResizableInspector/)
   assert.match(drawer, /<DrawerFrame/)
   assert.match(drawer, /<InspectorTabs/)
   assert.doesNotMatch(drawer, /<InspectorDrawer|<InspectorHead/)
@@ -132,7 +141,7 @@ test('the inspector exposes its emits, related navigation, and shared focus owne
 })
 
 test('the work-item inspector uses the persisted overlay drawer without consuming workspace width', () => {
-  assert.match(planningSurface, /INSPECTOR_DRAWER_STORAGE_KEY/)
+  assert.match(cardDrawer, /INSPECTOR_DRAWER_STORAGE_KEY/)
   assert.match(inspector, /<OverlayHost/)
   assert.match(inspector, /variant="drawer"/)
   assert.match(inspector, /layer: 'drawer'/)
@@ -141,14 +150,14 @@ test('the work-item inspector uses the persisted overlay drawer without consumin
   assert.doesNotMatch(inspector, /position: relative|flex: none|parentElement/)
   assert.match(overlay, /<Teleport to="body">/)
   assert.match(overlay, /position: fixed/)
-  assert.match(overlay, /role="separator"/)
+  assert.match(resizer, /role="separator"/)
   assert.match(overlay, /@keydown="resizeFromKeyboard"/)
 })
 
 test('command dialogs layer over the inspector using shared modal focus ownership', () => {
   assert.match(planningSurface, /v-if="open && boundSpaceResourceRef"/)
   assert.doesNotMatch(planningSurface, /open && !composerOpen/)
-  assert.match(planningSurface, /<ResizableInspector/)
+  assert.match(cardDrawer, /<ResizableInspector/)
   assert.match(inspector, /<OverlayHost/)
   assert.match(overlay, /interactive\?: boolean/)
   assert.match(overlay, /'aria-hidden': true, 'inert': true/)

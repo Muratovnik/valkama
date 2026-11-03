@@ -3,9 +3,9 @@
  * the places a reader came through to reach it.
  *
  * One per window, above every host that draws it, so the host can change — over a
- * card now, beside it later — without the place or Back going with it. It knows
- * nothing about the page: where a document stands on screen is the viewer's to
- * say, and it is asked for that place only when a link leaves it behind.
+ * card or beside it — without the place or Back going with it, and with no second
+ * parse of the text. Where a document stands on screen is the viewer's to say, and
+ * it is asked for that place when a link leaves it behind or a host hands it over.
  */
 import { computed, nextTick, ref, shallowRef } from 'vue'
 
@@ -13,6 +13,8 @@ import { useEventListener } from '@vueuse/core'
 
 import { DocumentRefusal, readDocument } from '@/shared/api/documentApi.ts'
 import type { ProjectDocument } from '@/shared/api/documentApi.ts'
+import { inlineWords, parseRichDocument } from '@/shared/lib/richText.ts'
+import type { RichDocument } from '@/shared/lib/richText.ts'
 
 /** A document and where in it, as the server names it and a link wrote the suffix. */
 export interface DocumentPlace {
@@ -38,16 +40,32 @@ export type Placement =
   | { kind: 'scroll'; serial: number; top: number }
   | { kind: 'suffix'; serial: number; suffix: string }
 
+/** What one host's viewer gives the next: the reader's place, as the text itself knows it. */
+export interface ReaderPlace {
+  /** The block at the top of the scroller, or -1 with none. */
+  block: number
+  /** Where focus was: a block, the head, or outside the viewer. */
+  focus: number | 'head' | 'outside'
+  /** The blocks a suffix marked. */
+  marked: readonly number[]
+  /** What the viewer says of an anchor it could not find. */
+  missing: string
+  /** How far down that block its top edge stands, as a share of its height. */
+  within: number
+}
+
 /** What only the viewer can say about the reader, who is on the page and not in here. */
 export interface DocumentReader {
   /** Notes where the reader is, and gives back how to return them after the text changes. */
   hold: () => () => void
+  /** Says where the reader is, for the viewer about to take over in another host. */
+  leave: () => ReaderPlace | null
   /** Where the text is scrolled to. */
   position: () => number
 }
 
 const NOTHING_HELD = () => {}
-const NOBODY: DocumentReader = { hold: () => NOTHING_HELD, position: () => 0 }
+const NOBODY: DocumentReader = { hold: () => NOTHING_HELD, leave: () => null, position: () => 0 }
 
 interface Visit {
   place: DocumentPlace
@@ -94,6 +112,9 @@ export function useDocumentView() {
   const visits = shallowRef<readonly Visit[]>([])
   const placement = shallowRef<Placement>({ kind: 'scroll', serial: 0, top: 0 })
   let reader = NOBODY
+  let handedOver: ReaderPlace | null = null
+  /** The link a document was opened from, which focus goes back to when it closes. */
+  let openedFrom: HTMLElement | null = null
   /** Each read is numbered, so an answer that arrives after a newer request is dropped. */
   let reading = 0
 
@@ -122,6 +143,8 @@ export function useDocumentView() {
 
   /** From a text outside the viewer: a new reading, with nothing to go back to. */
   function open(target: DocumentPlace) {
+    const focused = globalThis.document.activeElement
+    openedFrom = focused instanceof HTMLElement ? focused : null
     visits.value = []
     void read(target, () => toSuffix(target.suffix))
   }
@@ -158,6 +181,28 @@ export function useDocumentView() {
     staleness.value = null
     loading.value = false
     visits.value = []
+    const link = openedFrom
+    openedFrom = null
+    void nextTick(() => {
+      if (link?.isConnected) link.focus()
+    })
+  }
+
+  /**
+   * A refusal already drawn stays until the answer: read again on the window's return, this
+   * state went through loading first, and every return flashed the waiting panel over words
+   * that were still true.
+   */
+  async function readAgainFromFailure(target: DocumentPlace, serial: number) {
+    try {
+      const text = await readDocument(target.project, target.path)
+      if (serial !== reading) return
+      document.value = text
+      failure.value = null
+      toSuffix(target.suffix)
+    } catch (error) {
+      if (serial === reading) failure.value = failureOf(error)
+    }
   }
 
   /**
@@ -167,11 +212,11 @@ export function useDocumentView() {
   async function refresh() {
     const target = place.value
     if (!target || loading.value) return
+    const serial = ++reading
     if (!document.value) {
-      await read(target, () => toSuffix(target.suffix))
+      await readAgainFromFailure(target, serial)
       return
     }
-    const serial = ++reading
     try {
       const text = await readDocument(target.project, target.path)
       if (serial !== reading) return
@@ -204,6 +249,11 @@ export function useDocumentView() {
     if (globalThis.document.visibilityState === 'visible') comeBack()
   })
 
+  const parsed = computed<RichDocument | null>(() => {
+    const file = document.value
+    return file ? parseRichDocument(file.markdown, { base: file.path }) : null
+  })
+
   return {
     back,
     close,
@@ -212,15 +262,40 @@ export function useDocumentView() {
     go,
     loading,
     open,
+    parsed,
     place,
     placement,
     refresh,
     staleness,
     canGoBack: computed(() => visits.value.length > 0),
-    /** The viewer answers for the reader, for a place a link or a new text leaves behind. */
+    /**
+     * The viewer answers for the reader, for a place a link or a new text leaves behind.
+     * Gives back how to stop: the next host's viewer may have taken over by then.
+     */
     attachReader(next: DocumentReader) {
       reader = next
+      return () => {
+        if (reader === next) reader = NOBODY
+      }
     },
+    /** The host is about to change, while the one being left can still say where the reader is. */
+    handOver() {
+      handedOver = reader.leave()
+    },
+    /** What the host before this one said of the reader, once. */
+    takeOver() {
+      const place_ = handedOver
+      handedOver = null
+      return place_
+    },
+    /** The first `#` of the file, without a comment in it; else its name. */
+    title: computed(() => {
+      const first = parsed.value?.blocks.find(
+        ({ block }) => block.kind === 'heading' && block.level === 2,
+      )
+      const words = first?.block.kind === 'heading' ? inlineWords(first.block.children).trim() : ''
+      return words || (place.value?.path.split('/').at(-1) ?? '')
+    }),
     /** Where Back goes, for its name. */
     previous: computed(() => visits.value.at(-1)?.place ?? null),
   }

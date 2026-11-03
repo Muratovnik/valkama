@@ -9,7 +9,7 @@ import {
   INSPECTOR_DRAWER_STORAGE_KEY,
 } from '@/shared/lib/shellLayout.ts'
 import OverlayPane from '@/shared/ui/OverlayPane.vue'
-import { usePaneFit, usePaneWalk } from '@/shared/ui/overlayPanes.ts'
+import { usePaneFit, usePaneWalk, useSurfaceGlide } from '@/shared/ui/overlayPanes.ts'
 import type { OverlayPaneNames, PaneFit } from '@/shared/ui/overlayPanes.ts'
 import OverlayResizer from '@/shared/ui/OverlayResizer.vue'
 import {
@@ -109,6 +109,7 @@ const { paneFits, paneWidest } = usePaneFit({
   width: () => drawerWidth.value,
 })
 const paneResizing = ref(false)
+useSurfaceGlide(surface, () => Boolean(props.pane))
 const { notePaneFocus, walkPanes } = usePaneWalk(() => surface.value)
 const { focusSurface, roundToFirst, roundToLast, stopWaiting, trapFocus } = useOverlayFocus({
   active: () => active.value,

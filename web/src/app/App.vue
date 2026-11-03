@@ -6,6 +6,7 @@ import AppContextBar from '@/app/components/AppContextBar.vue'
 import AppDocumentPage from '@/app/components/AppDocumentPage.vue'
 import AppModuleStage from '@/app/components/AppModuleStage.vue'
 import AppNotice from '@/app/components/AppNotice.vue'
+import AppRequestsHub from '@/app/components/AppRequestsHub.vue'
 import AppRouteRecovery from '@/app/components/AppRouteRecovery.vue'
 import { useAlertPresence } from '@/app/composables/useAlertPresence.ts'
 import { useAppDocuments } from '@/app/composables/useAppDocuments.ts'
@@ -22,10 +23,9 @@ import { useShellNotice } from '@/app/composables/useShellNotice.ts'
 import { prefetchModule } from '@/app/moduleViews.ts'
 
 import AppNav from '@/widgets/app-nav/components/AppNav.vue'
-import DocumentViewer from '@/widgets/document-viewer/components/DocumentViewer.vue'
+import DocumentDrawer from '@/widgets/document-viewer/components/DocumentDrawer.vue'
 
 import GlobalWorkFinder from '@/features/global-find/GlobalWorkFinder.vue'
-import InputRequestsHub from '@/features/input-requests/components/InputRequestsHub.vue'
 import { provideOpenNotice } from '@/features/session-open/openNotice.ts'
 import SessionContext from '@/features/session-open/SessionContext.vue'
 import { resolveSessionWorkItemRoute } from '@/features/session-open/sessionWorkItemRoute.ts'
@@ -363,14 +363,14 @@ usePlatformEntryRestore({
     @close="finderOpen = false"
     @select="openTarget"
   />
-  <InputRequestsHub
+  <AppRequestsHub
     v-if="documentPage === null"
     :open="requestsOpen"
     @close="requestsOpen = false"
     @select="openTarget"
     @count="(count) => (pendingRequestCount = count)"
   />
-  <DocumentViewer
+  <DocumentDrawer
     v-if="documentPage === null"
     :view="documentView"
   />

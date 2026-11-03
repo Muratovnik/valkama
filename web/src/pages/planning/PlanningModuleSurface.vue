@@ -32,6 +32,7 @@ import { usePlanningPortfolio } from '@/pages/planning/composables/usePlanningPo
 import { usePlanningReferenceLinks } from '@/pages/planning/composables/usePlanningReferenceLinks.ts'
 import { usePlanningRouteSelection } from '@/pages/planning/composables/usePlanningRouteSelection.ts'
 import { usePlanningSubscription } from '@/pages/planning/composables/usePlanningSubscription.ts'
+import PlanningCardDrawer from '@/pages/planning/PlanningCardDrawer.vue'
 import PlanningPortfolioFrame from '@/pages/planning/PlanningPortfolioFrame.vue'
 import PlanningWorkspace from '@/pages/planning/PlanningWorkspace.vue'
 import type { PlanningViewMode } from '@/pages/planning/PlanningWorkspace.vue'
@@ -61,9 +62,7 @@ import {
   resolveResource,
 } from '@/shared/api/resourceState.ts'
 import { failureMessage, typedFailure } from '@/shared/api/typedFailure.ts'
-import { INSPECTOR_DRAWER_STORAGE_KEY } from '@/shared/lib/shellLayout.ts'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
-import ResizableInspector from '@/shared/ui/ResizableInspector.vue'
 
 const props = defineProps<{
   context: PlatformContextReady | null
@@ -326,7 +325,16 @@ function show(reference: string | null) {
 }
 
 // References written in this space's texts open its items (see the composable).
-usePlanningReferenceLinks(boundSpace, model, openItem)
+usePlanningReferenceLinks(boundSpace, model, openFromPage)
+
+/**
+ * What this layer answers while a card is open is a document standing beside it, and the
+ * card answers for leaving itself: its draft guard first, then Back to where it was left.
+ */
+function openFromPage(reference: string) {
+  if (!card.value) openItem(reference)
+  else if (reference !== open.value) card.value.openFrom(reference)
+}
 
 function openItem(reference: string, related = false, left: InspectorReturn | null = null) {
   returning.value = null
@@ -432,13 +440,10 @@ defineExpose({ refresh, selectedId })
       @view="setView"
     />
 
-    <ResizableInspector
-      surface-class="drawer"
+    <PlanningCardDrawer
       :content-key="openIdentity"
       :open="Boolean(open && boundSpaceResourceRef)"
       :label="openRecord?.title || open || ''"
-      :resize-label="t('workItem.resize')"
-      :storage-key="INSPECTOR_DRAWER_STORAGE_KEY"
       @close="closePanel"
     >
       <WorkItemInspector
@@ -462,7 +467,7 @@ defineExpose({ refresh, selectedId })
         @filter="filterFromCard"
         @open="(reference, left) => openItem(reference, true, left)"
       />
-    </ResizableInspector>
+    </PlanningCardDrawer>
   </div>
   <main
     v-else

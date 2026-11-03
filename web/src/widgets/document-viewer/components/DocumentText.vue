@@ -23,14 +23,16 @@ const props = defineProps<{
   document: RichDocument
   /** The top blocks a suffix named, marked as where the reader was sent. */
   marked: ReadonlySet<number>
+  /** The file's path, for the links in it that lead back into it. */
+  path: string
   project: string
 }>()
 const emit = defineEmits<{ leave: [] }>()
 
-const documents = useDocumentLinks((reference) => ({
-  project: props.project,
-  exact: reference.linkFrom !== undefined,
-}))
+const documents = useDocumentLinks(
+  (reference) => ({ project: props.project, exact: reference.linkFrom !== undefined }),
+  () => props.path,
+)
 provideReferenceLinks((reference, parent) => {
   if (reference.kind === 'document') return documents(reference)
   const link = parent(reference)
@@ -111,7 +113,10 @@ function bring(index: number, scroller: HTMLElement): HTMLElement | null {
   return box
 }
 
-defineExpose({ box: (index: number) => boxes()[index] ?? null, bring, topIndex })
+/** Which block holds an element, for a place to hand over; -1 for none. */
+const indexOf = (element: Element) => boxes().findIndex((box) => box.contains(element))
+
+defineExpose({ box: (index: number) => boxes()[index] ?? null, bring, indexOf, topIndex })
 </script>
 
 <template>

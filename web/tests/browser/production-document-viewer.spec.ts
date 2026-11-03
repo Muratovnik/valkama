@@ -2,96 +2,13 @@ import AxeBuilder from '@axe-core/playwright'
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import { asked, openQuestion } from './questionBackend.ts'
+import { aCardAsking, HUB_TITLE, LINK, linkIn } from './documentBackend.ts'
 import { test } from './test.ts'
 
 /**
  * A document opened from a text, in the built app with the real keyboard: from a card
  * and from the questions waiting for an answer, at a width where it stands over them.
  */
-
-const PLAN = `---
-status: proposed
-card: 12
-date: 2026-11-03
----
-
-# The migration plan <!-- kb:plan-head -->
-
-Why this plan exists, in a paragraph long enough to wrap at any width this viewer takes,
-so that a reader sees how its lines run together instead of breaking where the file does.
-
-See [the notes](notes.md) and [the second part](#part-two). The parser is at \`src/a.ts\`.
-
-| Step | Owner | State | Where it stands | What it still waits for from anyone else |
-| --- | --- | --- | --- | --- |
-| Read | Person | Done | \`docs/plan.md\` | Nothing at all, it has been finished for a while now |
-| Write | an_identifier_long_enough_that_it_cannot_wrap_in_a_narrow_column | Open | here | Time |
-
-\`\`\`text
-A line of code long enough that a phone has to scroll it inside its own frame and nowhere else.
-\`\`\`
-
-## Part two
-
-${Array.from({ length: 30 }, (_, index) => `Paragraph ${index + 1} of the second part.`).join('\n\n')}
-
-## The target <!-- kb:a7f3 -->
-
-The block an anchor lands on, far enough down that landing on it has to scroll.
-
-${Array.from({ length: 30 }, (_, index) => `Closing paragraph ${index + 1}.`).join('\n\n')}
-`
-
-const FILES: Record<string, string> = {
-  'docs/plan.md': PLAN,
-  'docs/notes.md': '# The notes\n\nBack to [the plan](plan.md#part-two).\n',
-}
-
-const confirmed = (relative: string) => ({
-  status: 'file',
-  project: 'demo',
-  relative,
-  markdown: true,
-})
-
-const KNOWN: Record<string, object> = {
-  'docs/plan.md': confirmed('docs/plan.md'),
-  'docs/notes.md': confirmed('docs/notes.md'),
-  'docs/gone.md': confirmed('docs/gone.md'),
-  'src/a.ts': { status: 'file', project: 'demo', relative: 'src/a.ts', markdown: false },
-}
-
-async function installDocuments(page: Page) {
-  await page.route('**/api/documents/resolve*', async (route) => {
-    const paths = new URL(route.request().url()).searchParams.getAll('path')
-    await route.fulfill({
-      json: { paths: paths.map((path) => ({ path, ...(KNOWN[path] ?? { status: 'missing' }) })) },
-    })
-  })
-  await page.route('**/api/documents/read*', async (route) => {
-    const path = new URL(route.request().url()).searchParams.get('path') ?? ''
-    const markdown = FILES[path]
-    await (markdown === undefined
-      ? route.fulfill({ status: 404, json: { error: { code: 'not_found' } } })
-      : route.fulfill({
-          json: {
-            project: 'demo',
-            path,
-            markdown,
-            size: markdown.length,
-            modified_at: '2026-11-03T15:12:09Z',
-            revision: '9f2c41d0a7b3e655',
-          },
-        }))
-  })
-}
-
-const LINK = 'docs/plan.md#kb:a7f3'
-const HUB_TITLE = 'Needs my answer'
-
-const aCardAsking = (page: Page, prompt: string) =>
-  openQuestion(page, [asked({ prompt })], () => installDocuments(page))
 
 function viewerOf(page: Page) {
   const viewer = page.locator('.document-drawer')
@@ -102,10 +19,6 @@ function viewerOf(page: Page) {
     status: viewer.getByRole('status').first(),
   }
 }
-
-/** The link's name says what it opens, and nothing about how the text happens to word it. */
-const linkIn = (scope: Locator, path: string) =>
-  scope.getByRole('button', { name: `Open the document in Valkama: ${path}` })
 
 async function settled(viewer: Locator) {
   await expect(viewer).toHaveCSS('transform', 'none')
@@ -188,7 +101,7 @@ test('a line leads to its block, and links lead on and back to the same place', 
   await expect(viewer.locator('.document-block.is-target')).toContainText('Why this plan exists')
 
   // A link to a place in the same file moves there and adds nothing to go back to.
-  await linkIn(viewer, '#part-two').click()
+  await viewer.getByRole('button', { name: 'Go to #part-two in this document' }).click()
   await expect(viewer.locator('.document-block.is-target')).toContainText('Part two')
   await expect(viewer.getByRole('button', { name: /^Back to/u })).toHaveCount(0)
 
@@ -241,12 +154,7 @@ test('the viewer holds to the accessibility rules with its text and a mark in it
   const { viewer } = viewerOf(page)
   await settled(viewer)
   await expect(viewer.locator('.document-block.is-target')).toBeVisible()
-  // A browser takes a scroller with no control in it into the Tab order only while it
-  // scrolls, which the phone's test below walks; a stop on every block of code would not.
-  const { violations } = await new AxeBuilder({ page })
-    .include('.document-drawer')
-    .disableRules(['scrollable-region-focusable'])
-    .analyze()
+  const { violations } = await new AxeBuilder({ page }).include('.document-drawer').analyze()
   expect(violations.map(({ id, nodes }) => [id, nodes[0]?.target])).toEqual([])
 })
 

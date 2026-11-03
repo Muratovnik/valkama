@@ -89,7 +89,11 @@ function runs(reference: DocumentReference, covered: string) {
  * second `provide` in one component would replace the first; one that provides
  * nothing else uses `provideDocumentLinks`.
  */
-export function useDocumentLinks(base: (reference: DocumentReference) => DocumentBase) {
+export function useDocumentLinks(
+  base: (reference: DocumentReference) => DocumentBase,
+  /** The file these links are read in, where one is shown: a link to it moves within it. */
+  shown?: () => string,
+) {
   const { t } = useI18n()
   const opener = useDocumentOpener()
   const memories = new Map<string, ReturnType<typeof pathMemory>>()
@@ -157,8 +161,12 @@ export function useDocumentLinks(base: (reference: DocumentReference) => Documen
 
   function openTitle(answer: Confirmed, query: DocumentParts, written: string): string | null {
     if (!attemptFor(answer)) return null
-    if (answer.status === 'file' && answer.markdown)
-      return t('documentLinks.openDocument', { path: written })
+    if (answer.status === 'file' && answer.markdown) {
+      if (answer.relative !== shown?.()) return t('documentLinks.openDocument', { path: written })
+      return query.suffix
+        ? t('documentLinks.goToPlace', { place: query.suffix })
+        : t('documentLinks.goToStart')
+    }
     const path = written.slice(0, written.length - query.suffix.length)
     const editor = opener.editor ?? 'VS Code'
     if (answer.status === 'directory') return t('documentLinks.openFolder', { editor, path })

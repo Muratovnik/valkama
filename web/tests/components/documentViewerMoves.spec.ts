@@ -7,6 +7,8 @@ import { nextTick, ref } from 'vue'
 import { flushPromises } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 
+import { i18n } from '@/shared/i18n/index.ts'
+
 import {
   blocks,
   body,
@@ -212,5 +214,36 @@ describe('moving between documents', () => {
     await press('MAIN-12')
     expect(opensCard).toHaveBeenCalledOnce()
     expect(surface()).toBeNull()
+  })
+})
+
+const linkTitles = () =>
+  [...(surface()?.querySelectorAll<HTMLElement>('.document-text button') ?? [])].map((button) =>
+    button.getAttribute('title'),
+  )
+const CONFIRMED = { status: 'file', project: 'demo', markdown: true }
+
+describe('a link back into the document it stands in', () => {
+  it.each([
+    ['en', 'Go to #part-two in this document', 'Go to the start of this document'],
+    ['ru', 'Перейти к #part-two в этом документе', 'Перейти к началу этого документа'],
+  ] as const)('is named as going to that place, in %s', async (locale, toPlace, toStart) => {
+    i18n.global.locale.value = locale
+    disk['docs/plan.md'] = file(
+      'docs/plan.md',
+      '# Plan\n\n[there](#part-two) and [up](plan.md)\n\n## Part two\n',
+    )
+    known['docs/plan.md'] = { ...CONFIRMED, relative: 'docs/plan.md' }
+    await opened()
+    await flushPromises()
+    expect(linkTitles()).toEqual([toPlace, toStart])
+  })
+
+  it('and one to another document still says it opens that', async () => {
+    disk['docs/plan.md'] = file('docs/plan.md', '# Plan\n\n[notes](notes.md#a)\n')
+    known['docs/notes.md'] = { ...CONFIRMED, relative: 'docs/notes.md' }
+    await opened()
+    await flushPromises()
+    expect(linkTitles()).toEqual(['Open the document in Valkama: notes.md#a'])
   })
 })

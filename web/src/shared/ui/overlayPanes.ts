@@ -1,5 +1,6 @@
 /** What two panes of one overlay surface share: their names, their room, the key between them. */
 import { computed, ref, watch } from 'vue'
+import type { Ref, WatchSource } from 'vue'
 
 import { DIALOG_WIDTH, documentFitsBeside, documentPaneRoom } from '@/shared/lib/shellLayout.ts'
 
@@ -45,6 +46,34 @@ export function usePaneFit(options: {
     documentPaneRoom(standing.value, options.room() ?? 0, options.viewportWidth()),
   )
   return { paneFits, paneWidest }
+}
+
+/**
+ * What a surface does as a pane comes or goes: it moves over by the room that took, the two
+ * as one object, by a transform so that nothing in them is laid out again. It stood where it
+ * ended at once, so a card jumped from under a reader who had just pressed a link in it.
+ * Under reduced motion it still does, since a script's animation is not the stylesheet's.
+ */
+export function useSurfaceGlide(surface: Ref<HTMLElement | null>, change: WatchSource<boolean>) {
+  let leftBefore = 0
+  watch(change, () => {
+    leftBefore = surface.value?.getBoundingClientRect().left ?? 0
+  })
+  watch(
+    change,
+    () => {
+      const moving = surface.value
+      if (!moving?.animate || matchMedia('(prefers-reduced-motion: reduce)').matches) return
+      const style = getComputedStyle(moving)
+      const across = leftBefore - moving.getBoundingClientRect().left
+      if (across !== 0)
+        moving.animate([{ transform: `translateX(${across}px)` }, { transform: 'none' }], {
+          duration: Number.parseFloat(style.getPropertyValue('--duration-surface')) * 1000,
+          easing: style.getPropertyValue('--ease-out'),
+        })
+    },
+    { flush: 'post' },
+  )
 }
 
 const reachable = (element: HTMLElement | undefined | null): element is HTMLElement =>

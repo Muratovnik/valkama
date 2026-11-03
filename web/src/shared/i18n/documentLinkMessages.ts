@@ -6,6 +6,8 @@ export const documentLinkMessages = {
   en: {
     documentLinks: {
       openDocument: 'Open the document in Valkama: {path}',
+      goToPlace: 'Go to {place} in this document',
+      goToStart: 'Go to the start of this document',
       openFile: 'Open in {editor}: {path}',
       openFileLine: 'Open in {editor}: {path}, line {line}',
       openFolder: 'Open the folder in {editor}: {path}',
@@ -53,6 +55,8 @@ export const documentLinkMessages = {
   ru: {
     documentLinks: {
       openDocument: 'Открыть документ в Valkama: {path}',
+      goToPlace: 'Перейти к {place} в этом документе',
+      goToStart: 'Перейти к началу этого документа',
       openFile: 'Открыть в {editor}: {path}',
       openFileLine: 'Открыть в {editor}: {path}, строка {line}',
       openFolder: 'Открыть папку в {editor}: {path}',

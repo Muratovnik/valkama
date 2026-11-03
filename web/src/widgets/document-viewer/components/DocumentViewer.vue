@@ -1,10 +1,7 @@
 <script setup lang="ts">
 /**
- * A project's Markdown file, read in Valkama over what it was opened from.
- *
- * A drawer on the command layer: over a card, which stays mounted under it with any
- * draft in it, and over the questions waiting for an answer. Escape closes it alone
- * and gives focus back to the link that opened it, which is the overlay host's to do.
+ * A project's Markdown file, read in Valkama: what stands in whichever host the window has
+ * room for, a pane beside what it was opened from or a drawer over it.
  *
  * Inside, a link to another Markdown file opens here and leaves the place the reader
  * was at for Back; a link to a place in this one only moves there. What a press in the
@@ -14,15 +11,15 @@
 import { computed, nextTick, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { useTimeoutFn } from '@vueuse/core'
+import { useTimeoutFn, useTitle } from '@vueuse/core'
 
-import DocumentHost from '@/widgets/document-viewer/components/DocumentHost.vue'
 import DocumentText from '@/widgets/document-viewer/components/DocumentText.vue'
 import DocumentWindowButton from '@/widgets/document-viewer/components/DocumentWindowButton.vue'
 import type {
   DocumentFailure,
   DocumentView,
 } from '@/widgets/document-viewer/composables/useDocumentView.ts'
+import { useReaderPlace } from '@/widgets/document-viewer/composables/useReaderPlace.ts'
 
 import {
   provideDocumentOpener,
@@ -31,7 +28,7 @@ import {
 
 import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
-import { blockAtLine, inlineWords, parseRichDocument } from '@/shared/lib/richText.ts'
+import { blockAtLine } from '@/shared/lib/richText.ts'
 import type { RichDocument } from '@/shared/lib/richText.ts'
 import { suffixTarget } from '@/shared/lib/textReferences.ts'
 import OverlayHeader from '@/shared/ui/OverlayHeader.vue'
@@ -40,17 +37,20 @@ import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
-/** `page`: the document is the whole window, at an address of its own, with nothing to close. */
-const props = defineProps<{ view: DocumentView; page?: boolean }>()
+const props = defineProps<{
+  view: DocumentView
+  /** It stands in a pane, beside what a link here may open, and not over it. */
+  beside?: boolean
+  /** The document is the whole window, at an address of its own, with nothing to close. */
+  page?: boolean
+}>()
 
 /** How long what a press said stays, before the line goes back to what stands. */
 const SAID_FOR_MS = 5000
 
-const nothing = () => {}
 const { t, d } = useI18n()
 // One view for the window's life, so its parts can stand here unwrapped for the template.
 const {
-  attachReader,
   back,
   canGoBack,
   close,
@@ -58,11 +58,13 @@ const {
   failure,
   go,
   loading,
+  parsed,
   place,
   placement,
   previous,
   refresh,
   staleness,
+  title,
 } = props.view
 
 const said = ref('')
@@ -95,21 +97,8 @@ provideDocumentOpener({
   say: (message) => void say(message),
 })
 
-const parsed = computed<RichDocument | null>(() => {
-  const file = shownFile.value
-  return file ? parseRichDocument(file.markdown, { base: file.path }) : null
-})
-
-/** The first `#` of the file, without a comment in it; else its name. */
-const title = computed(() => {
-  const first = parsed.value?.blocks.find(
-    ({ block }) => block.kind === 'heading' && block.level === 2,
-  )
-  const words = first?.block.kind === 'heading' ? inlineWords(first.block.children).trim() : ''
-  return words || (place.value?.path.split('/').at(-1) ?? '')
-})
-const label = computed(() => t('documentLinks.viewer.label', { title: title.value }))
-const isOpen = computed(() => place.value !== null)
+// A page is the window, whose tab takes the document's title.
+if (props.page) useTitle(title)
 const path = computed(() => place.value?.path ?? '')
 const project = computed(() => place.value?.project ?? '')
 const closeLabel = computed(() => (props.page ? '' : t('documentLinks.viewer.close')))
@@ -174,6 +163,7 @@ const warns = computed(
   () => !said.value && staleWords.value !== '' && staleness.value?.kind !== 'changed',
 )
 
+const root = ref<HTMLElement | null>(null)
 const header = ref<InstanceType<typeof OverlayHeader> | null>(null)
 const scroller = ref<HTMLElement | null>(null)
 const text = ref<InstanceType<typeof DocumentText> | null>(null)
@@ -235,32 +225,35 @@ watch(placement, async (aim) => {
   }
 })
 
+useReaderPlace({
+  anchorMissing,
+  focusHead: () => header.value?.focusTitle(),
+  marked,
+  parsed,
+  root,
+  scroller,
+  text,
+  view: props.view,
+})
+
 /**
- * Where the reader is, kept by the heading above them: what was added or cut above it
- * then moves nothing they are reading. Without a heading above them the scroller holds
- * its own place, which the browser keeps as the text changes under it.
+ * Beside what it was opened from nothing else takes focus as it opens, so it comes in here
+ * as the read starts: from then on Escape closes this and not the card, whatever the read
+ * comes to. A drawer has its own first control to go to.
  */
-function holdPlace(): () => void {
-  const shown = parsed.value
-  const body = scroller.value
-  const blocks = text.value
-  if (!shown || !body || !blocks) return nothing
-  for (let index = blocks.topIndex(body); index >= 0; index--) {
-    const entry = shown.blocks[index]
-    const box = blocks.box(index)
-    const anchor = entry?.block.kind === 'heading' ? entry.anchors.at(-1) : undefined
-    if (anchor && box) {
-      const past = body.scrollTop - box.offsetTop
-      return () => {
-        const at = parsed.value?.blocks.findIndex(({ anchors }) => anchors.includes(anchor)) ?? -1
-        const found = at === -1 ? null : text.value?.box(at)
-        if (found) scroller.value?.scrollTo({ top: found.offsetTop + past })
-      }
-    }
-  }
-  return nothing
+watch(
+  loading,
+  (reading) => {
+    if (reading && props.beside && !root.value?.contains(document.activeElement))
+      header.value?.focusTitle()
+  },
+  { flush: 'post', immediate: true },
+)
+
+/** A link leaves a document over the card for what it opens; beside, both stand. */
+function leaveForLink() {
+  if (!props.beside) close()
 }
-attachReader({ position: () => scroller.value?.scrollTop ?? 0, hold: holdPlace })
 
 async function copyPath() {
   try {
@@ -273,107 +266,103 @@ async function copyPath() {
 </script>
 
 <template>
-  <DocumentHost
-    :label="label"
-    :open="isOpen"
-    :page="page"
-    :title="title"
-    @close="close"
+  <article
+    ref="root"
+    class="document-viewer"
   >
-    <article class="document-viewer">
-      <OverlayHeader
-        ref="header"
-        class="document-head"
-        :title="title"
-        :close-label="closeLabel"
-        :heading="headingLevel"
-        focusable-title
-        single-line
-        @close="close"
+    <OverlayHeader
+      ref="header"
+      class="document-head"
+      :title="title"
+      :close-label="closeLabel"
+      :heading="headingLevel"
+      focusable-title
+      single-line
+      @close="close"
+    >
+      <template
+        v-if="canGoBack"
+        #start
       >
-        <template
-          v-if="canGoBack"
-          #start
+        <VButton
+          variant="ghost"
+          :aria-label="backTitle"
+          :title="backTitle"
+          icon
+          @click="back"
         >
-          <VButton
-            variant="ghost"
-            :aria-label="backTitle"
-            :title="backTitle"
-            icon
-            @click="back"
+          <VIcon name="chevron-left" />
+        </VButton>
+      </template>
+      <template #meta>
+        <p class="document-where">
+          <span class="document-project">{{ project }} ·</span>
+          <button
+            class="document-path"
+            type="button"
+            :aria-label="copyTitle"
+            :title="copyTitle"
+            @click="copyPath"
           >
-            <VIcon name="chevron-left" />
-          </VButton>
-        </template>
-        <template #meta>
-          <p class="document-where">
-            <span class="document-project">{{ project }} ·</span>
-            <button
-              class="document-path"
-              type="button"
-              :aria-label="copyTitle"
-              :title="copyTitle"
-              @click="copyPath"
-            >
-              <bdi>{{ path }}</bdi>
-            </button>
-          </p>
-        </template>
-        <template #actions>
-          <VButton
-            v-if="canRefresh"
-            variant="ghost"
-            :aria-label="refreshLabel"
-            :title="refreshTitle"
-            icon
-            @click="refresh"
-          >
-            <VIcon name="refresh" />
-          </VButton>
-          <DocumentWindowButton
-            v-if="canOpenWindow && place"
-            :place="place"
-            @opened="close"
-          />
-        </template>
-      </OverlayHeader>
-      <!-- Always there, so that what it comes to say is heard. -->
-      <p
-        class="document-status"
-        role="status"
-        :class="{ 'is-quiet': isQuiet }"
-      >
-        <VIcon
-          v-if="warns"
-          class="document-status-mark"
-          name="alert"
-          :size="14"
+            <bdi>{{ path }}</bdi>
+          </button>
+        </p>
+      </template>
+      <template #actions>
+        <VButton
+          v-if="canRefresh"
+          variant="ghost"
+          :aria-label="refreshLabel"
+          :title="refreshTitle"
+          icon
+          @click="refresh"
+        >
+          <VIcon name="refresh" />
+        </VButton>
+        <DocumentWindowButton
+          v-if="canOpenWindow && place"
+          :place="place"
+          @opened="close"
         />
-        {{ status }}
-      </p>
-      <div
-        ref="scroller"
-        class="document-body"
-        tabindex="-1"
-        data-overlay-scroller
-      >
-        <PlatformStatePanel
-          v-if="panel"
-          :state="panel"
-          :retryable="false"
-          compact
-        />
-        <DocumentText
-          v-else-if="parsed"
-          ref="text"
-          :document="parsed"
-          :marked="marked"
-          :project="project"
-          @leave="close"
-        />
-      </div>
-    </article>
-  </DocumentHost>
+      </template>
+    </OverlayHeader>
+    <!-- Always there, so that what it comes to say is heard. -->
+    <p
+      class="document-status"
+      role="status"
+      :class="{ 'is-quiet': isQuiet }"
+    >
+      <VIcon
+        v-if="warns"
+        class="document-status-mark"
+        name="alert"
+        :size="14"
+      />
+      {{ status }}
+    </p>
+    <div
+      ref="scroller"
+      class="document-body"
+      tabindex="-1"
+      data-overlay-scroller
+    >
+      <PlatformStatePanel
+        v-if="panel"
+        :state="panel"
+        :retryable="false"
+        compact
+      />
+      <DocumentText
+        v-else-if="parsed"
+        ref="text"
+        :document="parsed"
+        :marked="marked"
+        :path="path"
+        :project="project"
+        @leave="leaveForLink"
+      />
+    </div>
+  </article>
 </template>
 
 <style scoped>
