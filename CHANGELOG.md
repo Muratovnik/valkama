@@ -23,6 +23,14 @@ checkouts are therefore distinguishable even at the same version.
   `asyncRewake`, wakes an orchestrator that is idle, for example while it waits for a
   background subagent. Codex is told at its next prompt or tool call. The `notify`
   setting (`VALKAMA_NOTIFY=off`) switches this off.
+- **A card copies the link to its item.** The link button beside the reference in the
+  card's head puts the item's short address, `/open/<number>` on the address Valkama is
+  served from, on the clipboard and says beside it whether the copy happened. The address
+  opens the same card wherever it is followed, and the desktop app, which has no address
+  bar, now has a way to give it.
+- **The desktop app has a context menu.** A right click offers "Copy link address" on a
+  link, "Copy" on selected text, and Cut, Copy, Paste and Select all in a field, in the
+  language of the interface.
 
 ### Changed
 
