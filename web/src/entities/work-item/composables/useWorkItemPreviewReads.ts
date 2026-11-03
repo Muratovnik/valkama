@@ -42,7 +42,7 @@ interface PreviewRecord {
  * store or its binding went away (409); or the read failed — the network, a
  * timeout, an answer the schema refused.
  */
-type PreviewRead = PreviewRecord | { status: 'missing' | 'unavailable' | 'failed' }
+export type PreviewRead = PreviewRecord | { status: 'missing' | 'unavailable' | 'failed' }
 
 export interface WorkItemPreviewReads {
   /** What the cache holds for the reference now, fresh or not. Never asks. */

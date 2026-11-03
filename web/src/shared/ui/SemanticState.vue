@@ -48,6 +48,13 @@ const props = withDefaults(defineProps<Props>(), { compact: false, variant: 'inl
   border-radius: 50%;
 }
 
+/* The word takes the tone with the dot, unless the host says otherwise through
+   `--color-state-label`: on a ground lighter than the ladder's, a tone that reads
+   as a dot is too dark for words, and the dot alone keeps saying it. */
+.state-label {
+  color: var(--color-state-label, currentcolor);
+}
+
 /* The badge variant keeps a ground so a state can sit in a dense column, but
    the ground is neutral: a row of colored pills reads as a row of alarms even
    when most of them say "waiting", which is the ordinary state of an agent. */

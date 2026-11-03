@@ -213,6 +213,13 @@
   }
 }
 
+/* The hover card floats on the tooltip's ground, a step lighter than any other,
+   where the information blue of a state word falls under 4.5:1. The state says
+   its tone with its dot there, and its word in the card's muted ink. */
+.facet-marks[data-surface='preview'] {
+  --color-state-label: var(--color-text-muted);
+}
+
 /* A glyph is tertiary ink unless its tone says more. Kind never does: a type
    is not a state, and a coloured kind would read as one more alarm. */
 .facet-glyph {

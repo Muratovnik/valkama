@@ -26,8 +26,14 @@ import type { IconName, SemanticStatePair } from '@/shared/lib/uiSystem.ts'
 /**
  * `chain` is a member row of a card's chain: a list of items that holds no facets
  * but readiness. `lane` is the head of an epic's row on the grouped board.
+ * `preview` is the card that a reference in text shows while the pointer rests on
+ * it: nothing beside the reference says anything about the item, so it answers
+ * what the item is and where it stands, and every mark keeps its word, because
+ * the card is read rather than pressed and a glyph alone would bring a second,
+ * native hover text over it.
  */
-export type FacetSurface = 'tile' | 'list' | 'graph' | 'card' | 'finder' | 'chain' | 'lane'
+export type FacetSurface =
+  'tile' | 'list' | 'graph' | 'card' | 'finder' | 'chain' | 'lane' | 'preview'
 export type FacetId =
   'kind' | 'priority' | 'state' | 'readiness' | 'labels' | 'holder' | 'parent' | 'steps'
 
@@ -136,6 +142,7 @@ const FACET_RULES: Readonly<Record<FacetId, Partial<Record<FacetSurface, FacetRu
     graph: { form: 'glyph', only: ['bug', 'epic', 'improvement'], plain: true },
     card: { form: 'glyph-word' },
     finder: { form: 'glyph', only: ['bug', 'epic', 'improvement'] },
+    preview: { form: 'glyph-word', only: ['bug', 'epic', 'improvement'] },
   },
   // Medium is the default and is not news on a tile, a node or a finder row.
   // The list keeps it as a quiet word, because a blank cell in a sortable
@@ -147,6 +154,8 @@ const FACET_RULES: Readonly<Record<FacetId, Partial<Record<FacetSurface, FacetRu
     graph: { form: 'glyph', only: ['high', 'urgent'], plain: true },
     card: { form: 'glyph-word', always: true },
     finder: { form: 'glyph', only: ['high', 'urgent'] },
+    // A preview leads with what is news about an item; low, like medium, is not.
+    preview: { form: 'glyph-word', only: ['high', 'urgent'] },
   },
   // The board's column already says the state. An epic is no tile, so its row's
   // head says it, but only once it has moved: an epic not started is the norm of
@@ -157,6 +166,7 @@ const FACET_RULES: Readonly<Record<FacetId, Partial<Record<FacetSurface, FacetRu
     graph: { form: 'glyph-word', always: true },
     card: { form: 'glyph-word', always: true },
     finder: { form: 'glyph-word', always: true },
+    preview: { form: 'glyph-word', always: true },
   },
   // Workable is the norm of the two waiting columns, so the tile and the list print
   // only its exception, an open blocker. The graph mixes every state, so it
@@ -173,6 +183,8 @@ const FACET_RULES: Readonly<Record<FacetId, Partial<Record<FacetSurface, FacetRu
     card: { form: 'action' },
     // A chain member reads as the norm of its group: workable prints nothing.
     chain: { form: 'glyph-word', only: ['waiting'] },
+    // Why an item is not moving, which its state does not say.
+    preview: { form: 'glyph-word', only: ['waiting'] },
   },
   labels: {
     tile: { form: 'chips', limit: 3 },
@@ -184,6 +196,8 @@ const FACET_RULES: Readonly<Record<FacetId, Partial<Record<FacetSurface, FacetRu
     list: { form: 'word', always: true },
     graph: { form: 'glyph-word' },
     card: { form: 'glyph-word', always: true },
+    // Nobody prints nothing; a finished item names who held it before.
+    preview: { form: 'glyph-word' },
   },
   parent: {
     tile: { form: 'glyph-word', flatOnly: true },
@@ -196,6 +210,7 @@ const FACET_RULES: Readonly<Record<FacetId, Partial<Record<FacetSurface, FacetRu
     tile: { form: 'glyph-word', openOnly: true },
     list: { form: 'word', always: true },
     card: { form: 'word' },
+    preview: { form: 'glyph-word', openOnly: true },
   },
 }
 

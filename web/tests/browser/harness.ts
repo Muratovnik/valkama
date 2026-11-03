@@ -24,6 +24,7 @@ import '@/app/styles/index.css'
 import { DocumentLinksSurface } from './documentLinksSurface.ts'
 import { marksSurface } from './marksSurface.ts'
 import { now } from './planningFixtures.ts'
+import { previewSurface } from './previewSurface.ts'
 
 import './harness.css'
 
@@ -169,6 +170,7 @@ const Harness = defineComponent({
     }
     const selectedRuntime = ref('codex')
     if (requestedSurface === 'marks') return marksSurface
+    if (requestedSurface === 'preview') return previewSurface
     if (contextHarness) {
       return () =>
         h('main', { class: 'harness-shell' }, [

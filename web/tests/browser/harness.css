@@ -112,3 +112,25 @@
   color: var(--color-text-muted);
   font: var(--font-detail);
 }
+
+/* The hover card on the surface its reference floats it on: the tooltip's
+   ground, border and radius, at the card's width or the room the window has. */
+.preview-harness {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  align-content: start;
+  align-items: start;
+  min-height: 100vh;
+  padding: var(--space-4);
+  background: var(--color-canvas);
+}
+
+.preview-harness-surface {
+  inline-size: min(22rem, 100%);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-tooltip-border);
+  background: var(--color-tooltip-surface);
+  border-radius: var(--radius-control);
+  box-shadow: 0 8px 24px var(--color-shadow);
+}
