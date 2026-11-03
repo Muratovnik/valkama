@@ -26,11 +26,15 @@ checkouts are therefore distinguishable even at the same version.
   unread, and choosing moves no row.
 - **No press on a question holding nothing writes,** whatever comes to stand under the
   pointer, as when an agent answers the question above or asks a new one. "Don't answer" takes
-  two steps: the first press writes nothing and asks on the spot, with the way back in the very
-  box of that press and the way on in the box of Send, so pressing again without moving only
-  goes back. Escape goes back too without closing the card or the list, and choosing or writing
-  anything takes the step back. Send with nothing chosen or written writes nothing on any
-  question, required fields or not, and says at the first field what it wants.
+  two steps: the first press writes nothing and asks on the spot, with "Back" in the very box
+  of that press and the way on in the box of Send, so pressing again without moving only goes
+  back. The step lasts only while attention is on its question: a press or focus elsewhere, or
+  its buttons moving for any reason, such as a question folding above or a scroll, takes it
+  back, so a page holds one at most. With focus in the question Escape goes back too without
+  closing the card or the list, and choosing or writing anything takes the step back. An own
+  answer left open is never covered by what is asked. Send with nothing chosen or written
+  writes nothing on any question, required fields or not, and says at the first field what it
+  wants. A deadline passing takes focus to the line that says so.
 - **A mark in the card's facts** says a question is waiting and brings it into view from
   any section.
 - **An agent reads an answer without reading the discussion.** `get_work_item` carries
