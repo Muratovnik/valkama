@@ -60,6 +60,26 @@ function unavailableAnswer(status: number | null): TypedFailure {
     : { code: 'dependency_unavailable', status, retryable: false }
 }
 
+/**
+ * A refusal no retry can change, which outranks every reading of the state below:
+ * the service denied it, or the store answering was written by another build. The
+ * card's exact read says the second in the state's reason, the space's read in the code.
+ */
+function settledRefusal(
+  code: string,
+  state: PlatformUiState | undefined,
+  status: number | null,
+): TypedFailure | undefined {
+  if (state?.status === 'permission-denied' || status === 401 || status === 403)
+    return { code: 'permission_denied', status, retryable: false }
+  if (
+    code === STORE_SCHEMA_MISMATCH ||
+    (state?.status === 'unavailable' && state.reason === STORE_SCHEMA_MISMATCH)
+  )
+    return { code: STORE_SCHEMA_MISMATCH, status, retryable: false }
+  return undefined
+}
+
 export function typedFailure(error: unknown, fallbackCode = 'request_failed'): TypedFailure {
   if (isTypedFailure(error)) {
     return {
@@ -80,14 +100,8 @@ export function typedFailure(error: unknown, fallbackCode = 'request_failed'): T
       ? stableCode((error as Error & { code?: unknown }).code, fallbackCode)
       : fallbackCode
 
-  if (state?.status === 'permission-denied' || status === 401 || status === 403)
-    return { code: 'permission_denied', status, retryable: false }
-  // The card's exact read says it in the state's reason, the space's read in the code.
-  if (
-    sourceCode === STORE_SCHEMA_MISMATCH ||
-    (state?.status === 'unavailable' && state.reason === STORE_SCHEMA_MISMATCH)
-  )
-    return { code: STORE_SCHEMA_MISMATCH, status, retryable: false }
+  const settled = settledRefusal(sourceCode, state, status)
+  if (settled !== undefined) return settled
   // The state grammar has no word for "not there", so an exact read the service
   // answers 404 says `unavailable`; the status is what tells it from an outage.
   if (state?.status === 'unavailable' && status === 404)
@@ -113,7 +127,7 @@ const KNOWN_FAILURE_KEYS: Readonly<Record<string, string>> = {
   request_timeout: 'platform.failures.requestTimeout',
   session_feed_failed: 'platform.failures.sessionFeedFailed',
   sessions_request_failed: 'platform.failures.sessionsRequestFailed',
-  store_schema_mismatch: 'platform.failures.storeSchemaMismatch',
+  store_schema_mismatch: 'attachedStore.schemaMismatch',
   stream_disconnected: 'platform.failures.streamDisconnected',
 }
 

@@ -25,7 +25,7 @@ export const en = {
   requests: inputRequestMessages.en.requests,
   editor: richTextMessages.en.editor,
   textLinks: richTextMessages.en.textLinks,
-  connection: connectionMessages.en.connection,
+  ...connectionMessages.en,
   app: {
     title: 'Valkama',
   },
@@ -90,8 +90,6 @@ export const en = {
         'The local service did not respond in time. Check that Valkama is running, then retry.',
       sessionFeedFailed: 'Session activity could not be loaded.',
       sessionsRequestFailed: 'Sessions could not be loaded.',
-      storeSchemaMismatch:
-        'This space is in an attached store written by another version of Valkama. An attached store is never upgraded, so its cards cannot be read here. They open once the store and this Valkama are on the same version.',
       streamDisconnected: 'Live session updates were interrupted.',
       viewDownloadFailed:
         'This part of the interface did not download. Retry; after a Valkama update, reload the window.',

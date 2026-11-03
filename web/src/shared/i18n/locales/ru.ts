@@ -25,7 +25,7 @@ export const ru = {
   requests: inputRequestMessages.ru.requests,
   editor: richTextMessages.ru.editor,
   textLinks: richTextMessages.ru.textLinks,
-  connection: connectionMessages.ru.connection,
+  ...connectionMessages.ru,
   app: {
     title: 'Valkama',
   },
@@ -90,8 +90,6 @@ export const ru = {
         'Локальный сервис не ответил вовремя. Проверьте, что Valkama запущен, и повторите.',
       sessionFeedFailed: 'Не удалось загрузить активность сессии.',
       sessionsRequestFailed: 'Не удалось загрузить сессии.',
-      storeSchemaMismatch:
-        'Это пространство лежит в подключённом хранилище, которое записала другая версия Valkama. Подключённое хранилище не обновляется, поэтому его карточки здесь не читаются. Они откроются, когда хранилище и Valkama будут одной версии.',
       streamDisconnected: 'Поток обновлений сессий прерван.',
       viewDownloadFailed:
         'Эта часть интерфейса не загрузилась. Повторите; после обновления Valkama перезагрузите окно.',
