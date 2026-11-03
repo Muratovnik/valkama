@@ -6,9 +6,10 @@
  * set «MAIN-» at the end of one line and «384)» at the start of the next. A
  * reference is its own run, so the host can keep it whole; the text itself is
  * untouched, so a copied title still names the reference it says. What counts
- * as a reference is the one reading free text uses (`textReferences.ts`).
+ * as a reference is the one reading free text uses (`textReferences.ts`), for
+ * identifiers: a long path is many words, and kept whole it would overflow the head.
  */
-import { splitReferences } from '@/shared/lib/textReferences.ts'
+import { splitIdentifiers } from '@/shared/lib/textReferences.ts'
 
 export interface TitleRun {
   text: string
@@ -17,7 +18,7 @@ export interface TitleRun {
 }
 
 export function titleRuns(title: string): TitleRun[] {
-  return splitReferences(title).map((run) =>
+  return splitIdentifiers(title).map((run) =>
     typeof run === 'string' ? { text: run, whole: false } : { text: run.value, whole: true },
   )
 }

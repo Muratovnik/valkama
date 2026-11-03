@@ -13,6 +13,7 @@ import { parseRichInline, parseRichText, plainText, safeHref } from '@/shared/li
 /** Any node of the tree, as far as its words are concerned. */
 interface Node {
   kind: string
+  caption?: readonly Node[]
   children?: readonly Node[]
   reference?: { value: string }
   text?: string
@@ -23,6 +24,7 @@ function words(nodes: readonly Node[]): string {
   return nodes
     .map((node) => {
       if (node.kind === 'break') return '\n'
+      if (node.caption) return words(node.caption)
       return node.text ?? node.reference?.value ?? (node.children ? words(node.children) : '')
     })
     .join('')
