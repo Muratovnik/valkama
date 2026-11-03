@@ -349,9 +349,10 @@ describe('an answered question', () => {
 
   it('keeps a live region to its first line, so an arrival does not read out every option', () => {
     const wrapper = card(given([route], { answers: { route: 'keep' } }))
-    const status = wrapper.get('[role="status"]')
-    expect(status.text()).toMatch(/^You answered/u)
-    expect(status.text()).not.toContain('Merge')
+    const status = wrapper.findAll('[role="status"]')
+    expect(status).toHaveLength(1)
+    expect(present(status[0], 'status').text()).toMatch(/^You answered/u)
+    expect(present(status[0], 'status').text()).not.toContain('Merge')
   })
 
   it('opens a reference in a description where it stands, with no radio to fight it', () => {
