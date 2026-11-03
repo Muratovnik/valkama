@@ -260,6 +260,7 @@ def _work_item(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) ->
             comments_after=_count(parameters, "comments_after") or 0,
             threads=_count(parameters, "threads"),
             thread=_count(parameters, "thread"),
+            unresolved=_switch(parameters, "unresolved"),
             events=_count(parameters, "events"),
             sessions=_switch(parameters, "sessions"),
         ),
@@ -525,6 +526,24 @@ def _comment(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     )
 
 
+def _comment_id(payload: Mapping[str, object]) -> int:
+    comment_id = _field(payload, "comment_id")
+    if not isinstance(comment_id, int) or isinstance(comment_id, bool):
+        raise PlanningHttpError(400, "invalid_request", "comment_id must be an integer")
+    return comment_id
+
+
+def _resolve(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
+    return service.resolve_comment(
+        conn,
+        _text(payload, "id"),
+        _comment_id(payload),
+        resolution=_optional_text(payload, "resolution"),
+        reopen=_flag(payload, "reopen"),
+        author=_author(payload),
+    )
+
+
 def _request_fields(payload: Mapping[str, object], allowed: set[str]) -> None:
     if set(payload) - allowed:
         raise PlanningHttpError(400, "invalid_request", "request has unknown fields")
@@ -615,13 +634,10 @@ def _report(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
 
 
 def _select_summary(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
-    comment_id = _field(payload, "comment_id")
-    if not isinstance(comment_id, int) or isinstance(comment_id, bool):
-        raise PlanningHttpError(400, "invalid_request", "comment_id must be an integer")
     return service.select_summary(
         conn,
         _text(payload, "id"),
-        comment_id,
+        _comment_id(payload),
         expected_revision=_optional_int(payload, "expected_revision"),
         author=_author(payload),
     )
@@ -672,6 +688,7 @@ APPLY_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
     ("refs", frozenset({"kind", "value", "label"})),
     ("links", frozenset({"other", "kind", "remove"})),
     ("comment", frozenset({"body", "checklist_item_id", "reply_to", "reply_to_request"})),
+    ("resolutions", frozenset({"comment_id", "resolution", "reopen"})),
     ("summary", frozenset({"done", "next", "why"})),
     ("transition", frozenset({"state", "reason", "force", "rank"})),
 )
@@ -683,7 +700,9 @@ CREATE_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
     ("links", frozenset({"other", "kind"})),
 )
 #: The groups that are lists of entries rather than one object.
-_APPLY_LISTS = frozenset({"checklist_ticks", "refs", "links"})
+_APPLY_LISTS = frozenset({"checklist_ticks", "refs", "links", "resolutions"})
+#: The list groups whose answer says what each entry left rather than how many.
+_APPLY_LISTED = frozenset({"checklist_ticks", "resolutions"})
 #: The most entries one list in a batch may hold.
 MAX_APPLY_ENTRIES = 100
 
@@ -774,6 +793,9 @@ def _apply_step(
         written = _comment(conn, {**entry, **base})
         # The root a reply joined, as the single tool's answer says it.
         return {}, {name: written[name] for name in ("comment_id", "reply_to", "reply_to_request")}
+    if group == "resolutions":
+        marked = _resolve(conn, {**entry, **base})
+        return {}, {name: marked[name] for name in ("comment_id", "resolution")}
     if group == "summary":
         answer = _summary(conn, {**base, "summary": dict(entry)})
         return {}, {"summary_comment_id": answer["summary_comment_id"]}
@@ -866,7 +888,7 @@ def _run_steps(
         findings.update(extra)
         if warnings:
             findings["warnings"] = warnings
-        if group == "checklist_ticks":
+        if group in _APPLY_LISTED:
             applied.setdefault(group, []).append(change)
         elif group in _APPLY_LISTS:
             applied[group] = applied.get(group, 0) + 1
@@ -890,6 +912,7 @@ _WRITES: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], dict]] =
     "/api/planning/work-item/merge": _merge,
     "/api/planning/work-item/summary": _summary,
     "/api/planning/work-item/comment": _comment,
+    "/api/planning/work-item/comment/resolve": _resolve,
     "/api/planning/work-item/report": _report,
     "/api/planning/work-item/summary/select": _select_summary,
     "/api/planning/work-item/ref": _ref,

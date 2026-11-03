@@ -24,7 +24,6 @@ import http.client
 import json
 import os
 import re
-import sqlite3
 import sys
 import tempfile
 import threading
@@ -86,7 +85,6 @@ class _Scenario:
 
     def __init__(self, root: Path) -> None:
         self.root = root
-        self.path = root / "store.sqlite3"
         conn = store.connect()
         try:
             service.create_planning_space(conn, project_id=PROJECT, name="Contract", key=SPACE)
@@ -149,14 +147,6 @@ class _Scenario:
             conn.close()
         assert isinstance(answer, dict)
         return answer
-
-    def store(self, statement: str, parameters: tuple) -> None:
-        conn = sqlite3.connect(self.path)
-        try:
-            conn.execute(statement, parameters)
-            conn.commit()
-        finally:
-            conn.close()
 
     def scope(self, **others: str) -> str:
         return urlencode(
@@ -246,10 +236,14 @@ class _Scenario:
             "/api/planning/work-item/comment",
             {"id": ref, "body": "Is the old route still served?", "author": "user"},
         )
-        # The resolve write is a later unit: the mark is set as the store holds it.
-        self.store(
-            "UPDATE work_item_comments SET resolved_at=?, resolved_by=?, resolution=? WHERE id=?",
-            ("2026-01-02T03:04:05.000000Z", "codex", "Moved to MAIN-14", resolved["comment_id"]),
+        mark = self.http(
+            "/api/planning/work-item/comment/resolve",
+            {
+                "id": ref,
+                "comment_id": resolved["comment_id"],
+                "resolution": "Moved to MAIN-14",
+                "author": "user",
+            },
         )
         asked = self.tool(
             "create_work_item_request",
@@ -305,6 +299,7 @@ class _Scenario:
         )
         return {
             "comment-reply": reply,
+            "comment-resolved": mark,
             "card": self.http(f"/api/modules/planning/work-item?{self.scope(reference=ref)}"),
             "card-executors": self.executor_card(),
             "requests": self.http(
@@ -320,6 +315,7 @@ class _Scenario:
             "mcp-get-work-item-thread": self.tool(
                 "get_work_item", id=ref, thread=agent_root["comment_id"]
             ),
+            "mcp-get-work-item-unresolved": self.tool("get_work_item", id=ref, unresolved=True),
         }
 
 

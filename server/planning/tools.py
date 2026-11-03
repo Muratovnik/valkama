@@ -123,6 +123,18 @@ _REPLY_TO_REQUEST = {
     "type": "string",
     "description": "The id of the question this replies to. Not together with reply_to.",
 }
+#: What a resolved mark takes, in the single tool and in the batch's group.
+_RESOLVED_ROOT = {
+    "type": "integer",
+    "minimum": 1,
+    "description": "The id of the thread's root on this item; a reply is refused.",
+}
+_RESOLUTION = {
+    "type": "string",
+    "description": "The decision, one line, in words such as: moved to MAIN-14, postponed,"
+    " declined. Leave it out when the thread says it. Not together with reopen.",
+}
+_REOPEN = {"type": "boolean", "description": "true removes the mark. Not together with resolution."}
 #: The most open members one page of get_work_item_chain carries.
 CHAIN_PAGE = 200
 #: How many of a chain's newest series entries get_work_item_chain carries.
@@ -253,8 +265,11 @@ TOOLS = [
         " events_total and history_truncated, and sessions: the agent sessions whose"
         " confirmed calls wrote to it. thread returns one thread whole; full=true every"
         " comment and event; comments_after only the comments that came after one you"
-        " have read, roots and replies alike. Each comment names its parent in reply_to"
-        " or reply_to_request (null on a root) and by_person."
+        " have read, roots and replies alike; unresolved the roots without the resolved"
+        f" mark, oldest first, at most {read_model.UNRESOLVED_PAGE}, with truncated, the"
+        " next page being comments_after the last root read; unresolved_total counts them."
+        " Each comment names its parent in reply_to or reply_to_request (null on a root),"
+        " by_person, and resolution, a root's mark."
         " questions gives its questions in compact form: total, open, at most"
         f" {requests.ITEM_QUESTIONS} items with the open ones first and then the newest closed,"
         " and truncated when there are more.",
@@ -278,6 +293,12 @@ TOOLS = [
                 "description": "A comment id: answer with its thread, the root and every"
                 " reply oldest first; a reply's id reads its root's thread. Not together"
                 " with full or comments_after.",
+            },
+            "unresolved": {
+                "type": "boolean",
+                "description": "Answer with the roots without the resolved mark, each with"
+                " replies and last_reply. Not together with full or thread; comments_after"
+                " is where the next page starts.",
             },
         },
         ["id"],
@@ -661,12 +682,31 @@ TOOLS = [
         ["id", "body"],
     ),
     _tool(
+        "resolve_work_item_comment",
+        "Mark a discussion thread resolved",
+        "Mark the root of a thread resolved, which collapses the thread and leaves it out"
+        " of the unresolved read, with a one-line decision of at most"
+        f" {service.MAX_RESOLUTION} characters that may be left out; reopen=true removes"
+        " the mark. Marking again replaces the decision. A reply and a question's thread"
+        " take no mark. The mark changes no revision, writes a history event, and is"
+        " answered with work_item, comment_id and resolution as it now stands.",
+        WRITES,
+        {
+            "id": _REFERENCE,
+            "comment_id": _RESOLVED_ROOT,
+            "resolution": _RESOLUTION,
+            "reopen": _REOPEN,
+            "author": _AUTHOR,
+        },
+        ["id", "comment_id"],
+    ),
+    _tool(
         "apply_work_item_changes",
         "Apply several changes to a work item",
         "Several writes to one item in one call, all or nothing. Each group works"
         " exactly as its single tool does, and they apply in this order: claim,"
-        " checklist, checklist_ticks, refs, links, comment, summary, transition — so"
-        " a claim and its steps take one call, and a closing"
+        " checklist, checklist_ticks, refs, links, comment, resolutions, summary,"
+        " transition — so a claim and its steps take one call, and a closing"
         " transition sees the ticks and the summary sent with it, and a transition"
         " sent with claim moves an item the claim has already started; a closing"
         " transition releases the claim, so no release call follows. A refused step"
@@ -740,6 +780,22 @@ TOOLS = [
                     "reply_to_request": _REPLY_TO_REQUEST,
                 },
                 "required": ["body"],
+            },
+            "resolutions": {
+                "type": "array",
+                "maxItems": api.MAX_APPLY_ENTRIES,
+                "description": "Roots to mark resolved or reopen, as"
+                " resolve_work_item_comment takes them; applied.resolutions lists each"
+                " root's mark as it now stands.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "comment_id": _RESOLVED_ROOT,
+                        "resolution": _RESOLUTION,
+                        "reopen": _REOPEN,
+                    },
+                    "required": ["comment_id"],
+                },
             },
             "summary": {
                 "type": "object",
@@ -1073,6 +1129,13 @@ def _work_item(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> obj
     full = _is_verbose(arguments, "full")
     after = arguments.get("comments_after")
     thread = arguments.get("thread")
+    unresolved = _is_verbose(arguments, "unresolved")
+    if unresolved:
+        if full:
+            raise model.PlanningError("full and unresolved exclude each other")
+        if thread is not None:
+            raise model.PlanningError("thread and unresolved exclude each other")
+        parameters["unresolved"] = ["true"]
     if after is not None:
         if full:
             raise model.PlanningError("full and comments_after exclude each other")
@@ -1084,7 +1147,7 @@ def _work_item(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> obj
             # Here as well as at the boundary, which reads comments_after=0 as absent.
             raise model.PlanningError("thread and comments_after exclude each other")
         parameters["thread"] = [str(model.count_field(thread, "thread"))]
-    if after is None and thread is None and not full:
+    if after is None and thread is None and not full and not unresolved:
         parameters["threads"] = [str(RECENT_COMMENTS)]
     if not full:
         parameters["events"] = [str(RECENT_EVENTS)]
@@ -1290,6 +1353,7 @@ OPS: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], object]] = {
         "/api/planning/work-item/summary", acknowledgements.summarized
     ),
     "comment_work_item": _post("/api/planning/work-item/comment"),
+    "resolve_work_item_comment": _post("/api/planning/work-item/comment/resolve"),
     "apply_work_item_changes": _acknowledged(
         "/api/planning/work-item/apply", acknowledgements.applied
     ),

@@ -30,13 +30,14 @@ full item instead; it carries `url` too.
 | `transition_work_item` | `warnings`, and `overridden` when `force` carried a guard (`person_spoke` among them) |
 | `set_work_item_checklist` | `checklist`: each step's `item_id`, `text`, `done` |
 | `claim_work_item_checklist_item`, `tick_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by` |
-| `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim and transition; `applied.comment` as `comment_work_item` answers |
+| `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim and transition; `applied.comment` as `comment_work_item` answers; `applied.resolutions` each root's `comment_id` and `resolution` |
 | `merge_work_items` | `merged`: for each item, its `reference`, `state` and what it `moved` (`steps`, `comments`, `refs`, `links`) |
 
 `claim_ready_work_item` answers with the item it took, or nothing when no item
 is ready. `comment_work_item` answers with `work_item`, `comment_count`,
 `comment_id`, and `reply_to` and `reply_to_request`: the root a reply joined,
-both null for a new root.
+both null for a new root. `resolve_work_item_comment` answers with `work_item`,
+`comment_id` and `resolution`, the root's mark as it now stands.
 
 Any write to an item also answers with `from_person` when a person acted on it
 in Valkama's interface since an agent last wrote there, and has no such key
@@ -82,6 +83,7 @@ and any of these groups, applied in this order:
 | `refs` | `[{"kind": "commit", "value": "…", "label": "…"}]` | `attach_work_item_ref` |
 | `links` | `[{"other": "MAIN-20", "kind": "blocks", "remove": false}]` | `link_work_items` |
 | `comment` | `{"body": "…", "checklist_item_id": "…", "reply_to": 12, "reply_to_request": "…"}` | `comment_work_item` |
+| `resolutions` | `[{"comment_id": 12, "resolution": "…", "reopen": false}]` | `resolve_work_item_comment` |
 | `summary` | `{"done": "…", "next": "…", "why": "…"}` | `set_work_item_summary` |
 | `transition` | `{"state": "completed", "reason": "…", "force": false, "rank": "first"}` | `transition_work_item` |
 
@@ -113,15 +115,25 @@ a reply to a reply of a question under the question. Refused, writing nothing:
 both parents at once, a parent that is not on the item, and a reply with a
 `checklist_item_id`. `report_work_item` takes no parent.
 
+`resolve_work_item_comment` takes `id`, `comment_id`, the root of a thread, and
+optionally `resolution`, the decision in one line of at most 280 characters, which
+may be blank, `reopen: true` in its place to remove the mark, and `author`. Marking
+again replaces the decision and is recorded as a new mark, and reopening a root with
+no mark writes nothing. A mark writes the history event `comment_resolved` or
+`comment_reopened` and changes no revision. Refused, writing nothing: a reply, a
+comment on another item or none at all (`not_found`), a decision of two lines, and
+`resolution` with `reopen`.
+
 ## Reading an item
 
 `get_work_item` takes `id` and at most one of `full`, `comments_after` and
-`thread`:
+`thread`, or `unresolved` with or without `comments_after`:
 
 | Read | `comments` holds |
 | --- | --- |
 | none of them | the roots of the 5 threads with the newest activity, the most recent last; a thread's activity is its newest row, so a new reply lifts an old thread |
 | `thread: <id>` | one thread, the root and every reply oldest first; a reply's id reads its root's thread, and a reply to a question is refused |
+| `unresolved: true` | the roots without the resolved mark, oldest first, at most 20, each with `replies` and `last_reply`; while `truncated` is true, read on with `comments_after` set to the last root's id |
 | `comments_after: <id>` | every comment after that id, roots and replies flat, oldest first |
 | `full: true` | every comment, flat |
 
@@ -130,11 +142,11 @@ Every comment has `id`, `kind` (`comment` or `report`), `report`,
 `reply_to` and `reply_to_request` (both null on a root), `by_person`: true
 when the interface wrote it, false for another call, null for a row written
 with no call, and `resolution`: a root's resolved mark as `at`, `by`,
-`by_person` and `text`, or null, and always null on a reply. In the default read each root adds `replies`, how many it has,
+`by_person` and `text`, or null, and always null on a reply. In the default read and `unresolved` each root adds `replies`, how many it has,
 and `last_reply`, its newest reply as `id`, `author`, `by_person`, `at` and
 `body`, the body cut at 500 characters with `clipped: true`, or null. All but
 `full` add `comments_total` (every row), `threads_total` (the roots),
-`events_total` and `history_truncated`, true when fewer threads, comments or
+`unresolved_total` (the roots without the mark), `events_total` and `history_truncated`, true when fewer threads, comments or
 events are shown than there are.
 
 ## Placement

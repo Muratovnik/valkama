@@ -328,7 +328,10 @@ with its `reply_to` and `reply_to_request`, and a reader groups them into
 threads itself. Neither it nor the card's read through the exact project scope
 (`GET /api/modules/planning/work-item`) caps how many comments or events it
 returns: a card is drawn from the whole record, however long its discussion and
-history are, and a client must not refuse a record for its length.
+history are, and a client must not refuse a record for its length. The same read
+takes the agent's reads as opt-in parameters: `unresolved=true` with
+`comments_after`, `thread=<id>`, and `threads=<count>` for that many threads with
+the latest activity. `unresolved` other than `true` or `false` is `invalid_request`.
 
 ### Threads and the resolved mark
 
@@ -401,8 +404,10 @@ take:
 {"id": "MAIN-12", "comment_id": 41, "resolution": "Moved to MAIN-14", "author": "codex"}
 ```
 
-`reopen: true` in place of `resolution` removes the mark. The answer names the
-root and its mark as it now stands, `null` after a reopen:
+`resolution` may be left out, which is a blank decision. `reopen: true` in place of
+`resolution` removes the mark; naming both is refused with `invalid_request`, and so
+is a decision of two lines. The answer names the root and its mark as it now stands,
+`null` after a reopen:
 
 ```json
 {"work_item": "MAIN-12", "comment_id": 41,
@@ -411,11 +416,11 @@ root and its mark as it now stands, `null` after a reopen:
 ```
 
 Marking a resolved root again replaces its decision and is recorded as a new
-mark; reopening a root that has no mark writes nothing. A reply, a comment of
-another item and a comment that does not exist are refused (`invalid_request`,
-`not_found`). The mark is not a field of the item: it changes no revision and
+mark; reopening a root that has no mark writes nothing. A reply and a comment of
+another item are refused with `invalid_request`, and a comment that does not exist
+with `not_found`. The mark is not a field of the item: it changes no revision and
 takes no `expected_revision`. It writes a history event, `comment_resolved`
-with the detail `<comment id>: <decision>`, cut to 512 characters, or
+with the detail `<comment id>: <decision>`, the id alone for a blank decision, or
 `comment_reopened` with the detail `<comment id>`, so the history says who set
 and removed it and when. The tool is a write like any other, and its answer
 carries `from_person`. A mark set in the interface is a person's act and is told

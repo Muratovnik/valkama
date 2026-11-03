@@ -18,7 +18,7 @@ import json
 import sqlite3
 
 from . import agents as planning_agents
-from . import calls, leases, model, ranking, read_model, states, store, transitions
+from . import calls, leases, model, ranking, read_model, request_model, states, store, transitions
 
 _NOW = "strftime('%Y-%m-%dT%H:%M:%SZ','now')"
 
@@ -82,6 +82,7 @@ def get_work_item(
     comments_after: int = 0,
     threads: int | None = None,
     thread: int | None = None,
+    unresolved: bool = False,
     events: int | None = None,
     sessions: bool = False,
     agents: bool = False,
@@ -89,12 +90,12 @@ def get_work_item(
     """One item in full; `comments` and `events` keep only the newest of each.
 
     `comments_after` keeps only the comments after that id. `threads` keeps the
-    threads with the newest activity and `thread` one thread whole, as
-    `read_model.present` says. `sessions` adds the agent sessions whose
-    confirmed calls wrote to it, and `agents` the agents standing on it and an
-    `executor` at the claim, each step and each agent, which only the card asks
-    for. Without any of these the answer is the complete record a screen draws
-    from.
+    threads with the newest activity, `thread` one thread whole and `unresolved`
+    a page of the roots without the resolved mark, as `read_model.present` says.
+    `sessions` adds the agent sessions whose confirmed calls wrote to it, and
+    `agents` the agents standing on it and an `executor` at the claim, each step
+    and each agent, which only the card asks for. Without any of these the answer
+    is the complete record a screen draws from.
     """
 
     record = read_model.present(
@@ -105,6 +106,7 @@ def get_work_item(
         comments_after=comments_after,
         threads=threads,
         thread=thread,
+        unresolved=unresolved,
         events=events,
     )
     if sessions:
@@ -232,6 +234,30 @@ def _question_hits(conn: sqlite3.Connection, like: str) -> dict[str, str]:
     return {str(row[0]): str(row[1]) for row in conn.execute(_QUESTION_HITS, (like, like, like))}
 
 
+def _decision_hits(conn: sqlite3.Connection, like: str) -> dict[str, str]:
+    """Which items a phrase finds through a resolved mark's decision, and the newest such.
+
+    Its own statement for the reason `_question_hits` is: an attached store is
+    read as it is, and one older than threads has no such column to ask.
+    """
+
+    if (
+        conn.execute(
+            "SELECT 1 FROM pragma_table_info('work_item_comments') WHERE name='resolution'"
+        ).fetchone()
+        is None
+    ):
+        return {}
+    return {
+        str(row[0]): str(row[1])
+        for row in conn.execute(
+            "SELECT work_item_id, resolution FROM work_item_comments"
+            " WHERE resolution LIKE ? ORDER BY id",
+            (like,),
+        )
+    }
+
+
 def search_work_items(
     conn: sqlite3.Connection,
     query: str,
@@ -258,6 +284,7 @@ def search_work_items(
     text = model.text_field(query, "query", limit=200)
     like = f"%{text}%"
     questions = _question_hits(conn, like)
+    decisions = _decision_hits(conn, like)
     parameters: list[object] = [like, like]
     clauses = [
         "(i.title LIKE ? OR i.description LIKE ? OR i.labels LIKE ? OR i.source LIKE ?"
@@ -268,7 +295,7 @@ def search_work_items(
         " OR i.work_item_id IN (SELECT value FROM json_each(?)))"
     ]
     parameters.extend([like] * 8)
-    parameters.append(json.dumps(list(questions)))
+    parameters.append(json.dumps([*questions, *decisions]))
     if space is not None:
         clauses.append("i.planning_space_id = ?")
         parameters.append(str(_space_row(conn, space)["planning_space_id"]))
@@ -300,8 +327,9 @@ def search_work_items(
     found = []
     for row in rows:
         item = read_model.present(conn, row)
-        if row["comment_hit"]:
-            item["comment_hit"] = str(row["comment_hit"])[:240]
+        comment_hit = row["comment_hit"] or decisions.get(str(row["work_item_id"]))
+        if comment_hit:
+            item["comment_hit"] = str(comment_hit)[:240]
         question = questions.get(str(row["work_item_id"]))
         if question:
             item["question_hit"] = question[:240]
@@ -1611,6 +1639,104 @@ def _thread_parent(
     if parent["reply_to_request"] is not None:
         return None, str(parent["reply_to_request"])
     return int(parent["reply_to"] or reply_to), None
+
+
+#: The longest decision a resolved mark carries: a short label, the reasoning is the thread.
+MAX_RESOLUTION = 280
+
+
+def resolve_comment(
+    conn: sqlite3.Connection,
+    reference: str,
+    comment_id: int,
+    *,
+    resolution: str | None = None,
+    reopen: bool = False,
+    author: str | None = None,
+) -> dict:
+    """Mark a thread's root resolved with a one-line decision, or remove the mark.
+
+    The mark is no field of the item: no revision guards it or records it, and the
+    history says who set and removed it. Marking again replaces the decision and
+    counts as a new mark; reopening a root that has none writes nothing.
+    """
+
+    if not conn.in_transaction:
+        conn.execute("BEGIN IMMEDIATE")
+    row = read_model.item_row(conn, reference)
+    identity = str(row["work_item_id"])
+    decision = _decision(resolution, reopen)
+    root = _resolvable_root(conn, row, comment_id)
+    # First, so that a reopen writing nothing is still a call on this item: the
+    # answer names the item by reference, which `calls.acted_on` cannot read.
+    call = calls.call_id(conn, identity)
+    if not reopen:
+        conn.execute(
+            "UPDATE work_item_comments SET resolved_at = ?, resolved_by = ?, resolution = ?,"
+            " resolved_call_id = ? WHERE id = ?",
+            (request_model.now(), model.actor(author), decision, call, comment_id),
+        )
+        detail = f"{comment_id}: {decision}" if decision else str(comment_id)
+        _log(conn, identity, "comment_resolved", detail, author)
+    elif root["resolved_at"] is not None:
+        conn.execute(
+            "UPDATE work_item_comments SET resolved_at = NULL, resolved_by = '', resolution = '',"
+            " resolved_call_id = NULL WHERE id = ?",
+            (comment_id,),
+        )
+        _log(conn, identity, "comment_reopened", str(comment_id), author)
+    return {
+        "work_item": read_model.reference(conn, row),
+        "comment_id": comment_id,
+        "resolution": read_model.comment(conn, comment_id)["resolution"],
+    }
+
+
+def _decision(resolution: str | None, reopen: bool) -> str:
+    """The decision a mark records: one line, and blank when the thread itself says it."""
+
+    if reopen:
+        if resolution is not None:
+            raise model.PlanningError("resolution and reopen exclude each other")
+        return ""
+    text = model.text_field(
+        "" if resolution is None else resolution,
+        "resolution",
+        limit=MAX_RESOLUTION,
+        required=False,
+    )
+    # `text_field` lets a line break through; a mark is read on one line.
+    if "\n" in text:
+        raise model.PlanningError("resolution must be one line")
+    return text
+
+
+def _resolvable_root(conn: sqlite3.Connection, row: sqlite3.Row, comment_id: int) -> sqlite3.Row:
+    """The root a mark goes on, refused here before the store's trigger would."""
+
+    if not isinstance(comment_id, int) or isinstance(comment_id, bool) or comment_id < 1:
+        raise model.PlanningError("comment_id must be a positive integer")
+    found = conn.execute(
+        "SELECT work_item_id, reply_to, reply_to_request, resolved_at"
+        " FROM work_item_comments WHERE id = ?",
+        (comment_id,),
+    ).fetchone()
+    if found is None:
+        raise model.WorkItemNotFoundError(f"no comment {comment_id}")
+    if found["work_item_id"] != row["work_item_id"]:
+        raise model.PlanningError(
+            f"comment {comment_id} is not on {read_model.reference(conn, row)}"
+        )
+    if found["reply_to_request"] is not None:
+        raise model.PlanningError(
+            f"comment {comment_id} answers question {found['reply_to_request']};"
+            " a question has its own status and no mark"
+        )
+    if found["reply_to"] is not None:
+        raise model.PlanningError(
+            f"comment {comment_id} is a reply; mark its root, comment {found['reply_to']}"
+        )
+    return found
 
 
 def set_summary(

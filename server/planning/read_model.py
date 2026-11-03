@@ -257,6 +257,10 @@ def _closed(row: sqlite3.Row, found: _Closed) -> tuple[str, str | None]:
 
 #: How much of a thread's newest reply its root carries; `thread` reads it whole.
 LAST_REPLY_LIMIT = 500
+#: How many unresolved roots one read answers with. The next page starts after the
+#: last root read rather than at an offset, so a root marked between two pages
+#: moves nothing the reader has yet to see.
+UNRESOLVED_PAGE = 20
 
 #: Every comment column, and the sources of the calls that wrote the row and its
 #: resolved mark, which are what the two `by_person` values are read from.
@@ -265,6 +269,21 @@ _COMMENT_ROWS = (
     " FROM work_item_comments m"
     " LEFT JOIN execution_events c ON c.id = m.call_id"
     " LEFT JOIN execution_events k ON k.id = m.resolved_call_id"
+)
+#: The roots of an item with how many replies each has and its newest. A read
+#: closes the inner query with its own filter, order and limit, then `_ROOT_CALLS`.
+_ROOT_ROWS = (
+    "SELECT t.*, c.identity_source AS call_source, k.identity_source AS resolved_source"
+    " FROM ("
+    "  SELECT m.*,"
+    "   (SELECT COUNT(*) FROM work_item_comments r WHERE r.reply_to = m.id) AS replies,"
+    "   (SELECT MAX(r.id) FROM work_item_comments r WHERE r.reply_to = m.id) AS newest"
+    "  FROM work_item_comments m WHERE m.work_item_id = ?"
+    "  AND m.reply_to IS NULL AND m.reply_to_request IS NULL"
+)
+_ROOT_CALLS = (
+    " ) t LEFT JOIN execution_events c ON c.id = t.call_id"
+    " LEFT JOIN execution_events k ON k.id = t.resolved_call_id"
 )
 
 
@@ -299,6 +318,12 @@ def comment_record(row: sqlite3.Row) -> dict:
             "text": row["resolution"],
         },
     }
+
+
+def comment(conn: sqlite3.Connection, comment_id: int) -> dict:
+    """One comment as every read shows it, for a write to answer with what it left."""
+
+    return comment_record(conn.execute(_COMMENT_ROWS + " WHERE m.id = ?", (comment_id,)).fetchone())
 
 
 def _by_person(call: object, source: object) -> bool | None:
@@ -361,14 +386,20 @@ def request_threads(
 
 
 def _thread_counts(conn: sqlite3.Connection, identity: str) -> dict[str, int]:
-    """Every comment row of an item, and how many of them are the roots of threads."""
+    """Every comment row of an item, how many are the roots of threads, and how many of
+    those have no resolved mark."""
 
     found = conn.execute(
-        "SELECT COUNT(*), COALESCE(SUM(reply_to IS NULL AND reply_to_request IS NULL), 0)"
+        "SELECT COUNT(*), COALESCE(SUM(reply_to IS NULL AND reply_to_request IS NULL), 0),"
+        " COALESCE(SUM(reply_to IS NULL AND reply_to_request IS NULL AND resolved_at IS NULL), 0)"
         " FROM work_item_comments WHERE work_item_id = ?",
         (identity,),
     ).fetchone()
-    return {"comments_total": int(found[0]), "threads_total": int(found[1])}
+    return {
+        "comments_total": int(found[0]),
+        "threads_total": int(found[1]),
+        "unresolved_total": int(found[2]),
+    }
 
 
 def _newest_threads(conn: sqlite3.Connection, identity: str, limit: int) -> list[dict]:
@@ -379,20 +410,39 @@ def _newest_threads(conn: sqlite3.Connection, identity: str, limit: int) -> list
     the question is its root, and `get_work_item_request` reads it.
     """
 
+    return _with_replies(
+        conn,
+        conn.execute(
+            _ROOT_ROWS
+            + "  ORDER BY COALESCE(newest, m.id) DESC LIMIT ?"
+            + _ROOT_CALLS
+            + " ORDER BY COALESCE(t.newest, t.id)",
+            (identity, limit),
+        ).fetchall(),
+    )
+
+
+def _unresolved_threads(
+    conn: sqlite3.Connection, identity: str, after: int
+) -> tuple[list[dict], bool]:
+    """One page of the roots without the resolved mark after `after`, oldest first.
+
+    Read one past its size, so whether more remain is known rather than guessed.
+    """
+
     roots = conn.execute(
-        "SELECT t.*, c.identity_source AS call_source, k.identity_source AS resolved_source"
-        " FROM ("
-        "  SELECT m.*,"
-        "   (SELECT COUNT(*) FROM work_item_comments r WHERE r.reply_to = m.id) AS replies,"
-        "   (SELECT MAX(r.id) FROM work_item_comments r WHERE r.reply_to = m.id) AS newest"
-        "  FROM work_item_comments m WHERE m.work_item_id = ?"
-        "  AND m.reply_to IS NULL AND m.reply_to_request IS NULL"
-        "  ORDER BY COALESCE(newest, m.id) DESC LIMIT ?"
-        " ) t LEFT JOIN execution_events c ON c.id = t.call_id"
-        " LEFT JOIN execution_events k ON k.id = t.resolved_call_id"
-        " ORDER BY COALESCE(t.newest, t.id)",
-        (identity, limit),
+        _ROOT_ROWS
+        + "  AND m.resolved_at IS NULL AND m.id > ? ORDER BY m.id LIMIT ?"
+        + _ROOT_CALLS
+        + " ORDER BY t.id",
+        (identity, after, UNRESOLVED_PAGE + 1),
     ).fetchall()
+    return _with_replies(conn, roots[:UNRESOLVED_PAGE]), len(roots) > UNRESOLVED_PAGE
+
+
+def _with_replies(conn: sqlite3.Connection, roots: list[sqlite3.Row]) -> list[dict]:
+    """Roots read through `_ROOT_ROWS`, each with how many replies it has and the newest."""
+
     newest = {
         int(row["id"]): comment_record(row)
         for row in conn.execute(
@@ -454,6 +504,7 @@ def present(
     comments_after: int = 0,
     threads: int | None = None,
     thread: int | None = None,
+    unresolved: bool = False,
     events: int | None = None,
     closed: Mapping[str, tuple[str | None, str | None]] | None = None,
 ) -> dict:
@@ -465,11 +516,12 @@ def present(
     id, so a reader takes only what came since. Those reads are flat: every
     row, root or reply, in the order written. `threads` instead keeps the roots
     of that many threads with the newest activity, each carrying how many
-    replies it has and the newest one, and `thread` one thread whole, named by
-    any of its comments. None given is the whole history, which is what every
-    write answers with and what a screen draws from. `closed` is what
-    `closings` loaded for a read of many items; absent, the item asks `closing`
-    itself.
+    replies it has and the newest one, `thread` one thread whole, named by any
+    of its comments, and `unresolved` one page of the roots without the resolved
+    mark, carrying the same and `truncated`, the next page after `comments_after`.
+    None given is the whole history, which is what every write answers with and
+    what a screen draws from. `closed` is what `closings` loaded for a read of
+    many items; absent, the item asks `closing` itself.
     """
 
     state = state_by_id(conn, str(row["state_id"]))
@@ -543,18 +595,33 @@ def present(
             (str(row["work_item_id"]),),
         )
     ]
-    # A count may narrow `comments_after`; a thread read takes neither.
+    # A count may narrow `comments_after`; a thread read takes neither. An unresolved
+    # read takes `comments_after` as where its next page starts, and no count.
     after = comments_after or None
+    marks = unresolved or None
     if thread is not None:
-        _exclusive(thread=thread, threads=threads, comments=comments, comments_after=after)
+        _exclusive(
+            thread=thread,
+            threads=threads,
+            comments=comments,
+            comments_after=after,
+            unresolved=marks,
+        )
     if threads is not None:
-        _exclusive(threads=threads, comments=comments, comments_after=after)
+        _exclusive(threads=threads, comments=comments, comments_after=after, unresolved=marks)
+    if unresolved:
+        _exclusive(unresolved=marks, comments=comments)
     shown_threads: int | None = None
     if thread is not None:
         record["comments"] = _one_thread(conn, identity, record["reference"], thread)
         shown_threads = 1
     elif threads is not None:
         record["comments"] = _newest_threads(conn, identity, threads)
+        shown_threads = len(record["comments"])
+    elif unresolved:
+        record["comments"], record["truncated"] = _unresolved_threads(
+            conn, identity, comments_after
+        )
         shown_threads = len(record["comments"])
     else:
         record["comments"] = [

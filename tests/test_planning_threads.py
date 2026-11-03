@@ -214,7 +214,7 @@ class ReplyWriteTests(ThreadTestCase):
         root = self.comment("Decide the parser")["comment_id"]
         reply = self.comment("Take the new one", reply_to=root)["comment_id"]
         open_root = self.comment("Still open")["comment_id"]
-        # The resolve write is another change's; the read shows what the columns hold.
+        # The columns as a store holds them, so the read is tested apart from the write.
         self.conn.execute(
             "UPDATE work_item_comments SET resolved_at = ?, resolved_by = ?, resolution = ?"
             " WHERE id = ?",

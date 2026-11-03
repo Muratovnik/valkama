@@ -69,8 +69,8 @@
       "by_person": true,
       "resolution": {
         "at": "2026-01-02T03:04:05.000000Z",
-        "by": "codex",
-        "by_person": null,
+        "by": "user",
+        "by_person": true,
         "text": "Moved to MAIN-14"
       },
       "replies": 0,
@@ -86,6 +86,18 @@
       "identity": {
         "state": "unconfirmed",
         "source": null,
+        "session_id": null,
+        "agent_id": null
+      }
+    },
+    {
+      "action": "comment_resolved",
+      "detail": "4: Moved to MAIN-14",
+      "author": "user",
+      "at": "2026-01-02T03:04:05Z",
+      "identity": {
+        "state": "confirmed",
+        "source": "browser",
         "session_id": null,
         "agent_id": null
       }
@@ -141,7 +153,8 @@
   ],
   "comments_total": 6,
   "threads_total": 2,
-  "events_total": 5,
+  "unresolved_total": 1,
+  "events_total": 6,
   "history_truncated": false,
   "sessions": [],
   "questions": {

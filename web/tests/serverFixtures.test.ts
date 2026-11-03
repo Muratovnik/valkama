@@ -15,7 +15,7 @@ import {
   validateInputRequestDetail,
   validateInputRequestList,
 } from '@/shared/api/inputRequestModel.ts'
-import { validateCommentWritten } from '@/shared/api/planningModel.ts'
+import { validateCommentResolved, validateCommentWritten } from '@/shared/api/planningModel.ts'
 import { validatePlanningWorkItemPayload } from '@/shared/api/platformPlanningPayload.ts'
 
 const directory = fileURLToPath(new URL('./fixtures/server/', import.meta.url))
@@ -26,12 +26,17 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'card.json': (value) => validatePlanningWorkItemPayload(value),
   'card-executors.json': (value) => validatePlanningWorkItemPayload(value),
   'comment-reply.json': validateCommentWritten,
+  'comment-resolved.json': validateCommentResolved,
   'request-answered.json': validateInputRequestDetail,
   'request-pending.json': validateInputRequestDetail,
   'requests.json': validateInputRequestList,
 }
 /** What only an agent reads: the MCP answers, which no web schema describes. */
-const agentOnly = new Set(['mcp-get-work-item.json', 'mcp-get-work-item-thread.json'])
+const agentOnly = new Set([
+  'mcp-get-work-item.json',
+  'mcp-get-work-item-thread.json',
+  'mcp-get-work-item-unresolved.json',
+])
 
 describe('the server fixtures', () => {
   it('are each read by the web or named as an agent read', () => {

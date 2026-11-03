@@ -28,6 +28,14 @@ checkouts are therefore distinguishable even at the same version.
   agent inside it, where that session was last opened, and whether it is live, ended,
   gone, headless or none. It costs the read one more statement, however many holders the
   card has, and no MCP answer carries it.
+- **A thread can be marked resolved.** `resolve_work_item_comment`,
+  `POST /api/planning/work-item/comment/resolve` and the `resolutions` group of
+  `apply_work_item_changes`, up to 100 roots in one call, mark the root of a thread
+  with who, when and a one-line decision, and `reopen` takes the mark off. The history
+  records both as `comment_resolved` and `comment_reopened`, and no revision changes.
+  `get_work_item` with `unresolved: true` reads the roots without a mark, 20 at a time,
+  continuing with `comments_after`, and its counted reads add `unresolved_total`. A
+  search also finds an item by a mark's decision.
 - **A card copies the link to its item.** The link button beside the reference in the
   card's head puts the item's short address, `/open/<number>` on the address Valkama is
   served from, on the clipboard and says in the same line whether the copy happened. The address

@@ -427,7 +427,7 @@ class StdioTests(unittest.TestCase):
             self.assertNotIn("create_board", names)
             self.assertIn("list_platform_modules", names)
             self.assertFalse(any("improvement" in name for name in names))
-            self.assertEqual(31, len(names))
+            self.assertEqual(32, len(names))
             self.assertLessEqual(
                 {
                     "create_work_item_request",

@@ -83,7 +83,7 @@ Item and step claims are independent: a step's holder need not hold the item.
 **One call for several writes.** Writes to one item go in one
 `apply_work_item_changes` call, applied in this order and all or nothing:
 `claim`, `checklist`, `checklist_ticks`, `refs`, `links`, `comment`,
-`summary`, `transition`. A refused step writes nothing and names the group
+`resolutions`, `summary`, `transition`. A refused step writes nothing and names the group
 and index to correct. Pass the `revision` of the last acknowledgement as
 `expected_revision` to refuse a stale write.
 
@@ -117,6 +117,14 @@ replies in its thread rather than as new roots. A worker writes its report as
 the root of its own thread, posts what follows as replies there, and hands the
 root's `comment_id` back to the agent that delegated.
 
+**Resolved threads.** `resolve_work_item_comment` marks a thread's root resolved
+with a one-line decision, and `reopen: true` removes the mark; the `resolutions`
+group does up to 100 roots in one call. Mark a thread only on the owner's
+decision, for example while reviewing a digest with them, and write that decision
+in `resolution`. A reply leaves the mark in place, so reopen the discussion of a
+resolved root by writing a new root that names it. A reply and a question's thread
+take no mark.
+
 **Links.** `link_work_items` takes `kind`:
 
 - `blocks` carries readiness: an item that something unfinished blocks is not
@@ -141,7 +149,9 @@ in an old thread lifts it into that read. `thread: <comment id>` returns one
 thread whole, root first; a reply's id reads its root's thread. `comments_after:
 <id>` returns every comment after one you have read, roots and replies flat,
 each naming its parent in `reply_to` or `reply_to_request`: the way through an
-item too long to read whole. `full: true` returns all of its history. Every
+item too long to read whole. `unresolved: true` returns the roots without the
+resolved mark, oldest first, 20 at a time: while `truncated` is true, read on with
+`comments_after` set to the last root's id. `full: true` returns all of its history. Every
 comment carries `by_person`, true when it came through Valkama's interface. A
 reply to a question belongs to the question's thread, which
 `get_work_item_request` reads.

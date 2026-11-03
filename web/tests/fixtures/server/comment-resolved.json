@@ -1,0 +1,10 @@
+{
+  "work_item": "MAIN-1",
+  "comment_id": 4,
+  "resolution": {
+    "at": "2026-01-02T03:04:05.000000Z",
+    "by": "user",
+    "by_person": true,
+    "text": "Moved to MAIN-14"
+  }
+}
