@@ -125,7 +125,11 @@ for (const press of PRESSES) {
       await page.setViewportSize({ width: 1440, height: 700 })
       await installBackend(page, { longRead: true })
       const plainPage = await afterPress(page, press, key, false)
-      expect(await afterPress(page, press, key, true)).toEqual(plainPage)
+      const card = await afterPress(page, press, key, true)
+      expect(card.stop).toBe(plainPage.stop)
+      // The keys that read come to rest a pixel apart from one load to the next; a jump
+      // to either end of the card is hundreds of them.
+      expect(Math.abs(card.place - plainPage.place)).toBeLessThanOrEqual(2)
     })
   }
 }
