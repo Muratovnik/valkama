@@ -39,7 +39,11 @@ splitting one, or handing items to other agents.
    "done when" and its verify command. A plan in the repository is referenced
    by `source` (`docs/plan.md#kb:a7f3`), not copied. Umbrella work is
    `kind: epic`, its children name it as `parent`; the hierarchy is one level
-   deep. Pass `claim: true` and `checklist` when you take it at once.
+   deep. Pass `claim: true` and `checklist` when you take it at once. Link the
+   related items your search found (`relates-to`, `blocks`) and name the epic
+   whose scope covers it as `parent`. A decision the owner must make is a
+   question on the new item (see Asking the owner), with each option, what it
+   costs and your recommendation, not a list of options in the description.
 4. **Claim before working.** `claim_work_item`, or `claim_ready_work_item` to
    take the next ready item of a space. A claim is atomic and refuses naming
    the holder when someone else has the item. It also starts the work: an
