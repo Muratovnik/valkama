@@ -142,6 +142,10 @@ checkouts are therefore distinguishable even at the same version.
 - **An answer no call gave no longer reads as an agent's.** A question answered outside
   any call, by a launch or before calls were recorded, said `by_person: false`, as if a
   tool had answered it. It says `null` now, as a comment and a replaced answer do.
+- **A notice can be seen and heard from inside a card or a dialog.** The notice at the
+  window's corner lay under every open card and dialog, so what a press there said reached
+  nobody. It now lies above them, and its status region is always in the page, so a screen
+  reader announces a notice instead of meeting it with its region, a repeated one too.
 - **A press no longer lands on what the card's bar is fading out.** Scrolling a card
   fades the reference line or the action out of its bar, and for the length of the fade
   they still took a press: a press could go down on something already leaving, and lose

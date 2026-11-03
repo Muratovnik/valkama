@@ -4,8 +4,14 @@
  * can be done about it when there is one, and a way to put it away.
  *
  * It is announced politely and takes no focus: a notice reports, it does not
- * interrupt what the operator was typing.
+ * interrupt what the operator was typing. The status region is always there,
+ * so that a notice arriving in it is announced rather than appearing with its
+ * region; the box that shows the words comes and goes.
+ *
+ * It lies above every overlay, because a card or a dialog is where most presses
+ * that say something happen, and under them it was said to nobody.
  */
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { ShellNotice } from '@/app/composables/useShellNotice.ts'
@@ -13,17 +19,45 @@ import type { ShellNotice } from '@/app/composables/useShellNotice.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
-defineProps<{ notice: ShellNotice }>()
+const props = defineProps<{ notice: ShellNotice | null }>()
 const emit = defineEmits<{ act: []; dismiss: [] }>()
 const { t } = useI18n()
+/**
+ * Long enough for a screen reader to take the empty region as a change. NVDA and
+ * JAWS read an identical sentence a second time only after a clear and a pause;
+ * 100 ms is what Angular's LiveAnnouncer settled on for the same reason.
+ */
+const REANNOUNCE_MS = 100
+/** The sentence and what can be done about it, which the box's own words stand in for. */
+const spoken = ref('')
+watch(
+  () => props.notice,
+  (notice, _previous, onCleanup) => {
+    const sentence = [notice?.message, notice?.action?.label].filter(Boolean).join(' ')
+    if (!spoken.value || !sentence) {
+      spoken.value = sentence
+      return
+    }
+    spoken.value = ''
+    const timer = setTimeout(() => {
+      spoken.value = sentence
+    }, REANNOUNCE_MS)
+    onCleanup(() => clearTimeout(timer))
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
   <div
+    v-if="notice"
     class="notice"
-    role="status"
   >
-    <span class="notice-message">{{ notice.message }}</span>
+    <span
+      class="notice-message"
+      aria-hidden="true"
+      >{{ notice.message }}</span
+    >
     <VButton
       v-if="notice.action"
       class="notice-action"
@@ -45,6 +79,11 @@ const { t } = useI18n()
       />
     </VButton>
   </div>
+  <span
+    class="visually-hidden"
+    role="status"
+    >{{ spoken }}</span
+  >
 </template>
 
 <style scoped>
@@ -52,7 +91,7 @@ const { t } = useI18n()
   position: fixed;
   right: 18px;
   bottom: 18px;
-  z-index: 70;
+  z-index: 110;
   display: flex;
   gap: var(--space-2);
   align-items: center;

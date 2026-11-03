@@ -378,12 +378,6 @@ usePlatformEntryRestore({
         :context="sessionContext"
         @close="sessionContext = null"
       />
-      <AppNotice
-        v-if="currentNotice"
-        :notice="currentNotice"
-        @act="actOnNotice"
-        @dismiss="dismissNotice"
-      />
     </div>
   </div>
   <GlobalWorkFinder
@@ -397,6 +391,13 @@ usePlatformEntryRestore({
     @close="requestsOpen = false"
     @select="openTarget"
     @count="(count) => (pendingRequestCount = count)"
+  />
+  <!-- Beside the overlays rather than in the workspace, whose containment would hold it under
+       them: a press inside a card or a dialog says what it did here. -->
+  <AppNotice
+    :notice="currentNotice"
+    @act="actOnNotice"
+    @dismiss="dismissNotice"
   />
 </template>
 
