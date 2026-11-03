@@ -25,8 +25,6 @@ async function openTalkedOn(page: Page, width = 1280) {
 const threadOf = (drawer: Locator, text: string) =>
   drawer.locator('.thread-entry').filter({ hasText: text })
 const focused = (page: Page) => page.locator(':focus')
-const ground = (target: Locator) =>
-  target.evaluate((node) => getComputedStyle(node).backgroundColor)
 
 for (const [size, width] of [
   ['1280', 1280],
@@ -317,14 +315,11 @@ test('what a folded thread says reads at 4.5:1', async ({ page }) => {
 })
 
 for (const colorScheme of ['light', 'dark'] as const) {
-  test(`the pressed segment and a thread's edge survive the ${colorScheme} forced palette`, async ({
-    page,
-  }) => {
+  test(`a thread's edge survives the ${colorScheme} forced palette`, async ({ page }) => {
     await page.emulateMedia({ colorScheme, forcedColors: 'active' })
+    // The pressed segment beside it is held by `production-forced-states.spec.ts`, which reads
+    // the painted pixels: a computed ground names the colour asked for, not the one painted.
     const { drawer } = await openTalkedOn(page)
-    const pressed = drawer.locator('.thread-filter .segmented-option.active')
-    const other = drawer.locator('.thread-filter .segmented-option:not(.active)')
-    expect(await ground(pressed)).not.toBe(await ground(other))
     const edge = await drawer
       .getByRole('article', { name: /^Resolved/u })
       .evaluate((node) => getComputedStyle(node).outlineStyle)
