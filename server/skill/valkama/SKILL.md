@@ -208,8 +208,8 @@ the prompt), `answer` as rows of `field`, `value` and `label` with `own` and
 `note` when the field has them, `note`, `answered_by`, `answered_at`,
 `answer_version`, `previous` once the answer changed, `replies` (how many) and
 `last_reply`, and `by_person`, which is true when the latest call that answered or
-changed it came through Valkama's interface and false when it came through a
-tool. A note or a written answer longer than 500 characters is cut there and the
+changed it came through Valkama's interface, false when it came through a tool
+and null when no call wrote it. A note or a written answer longer than 500 characters is cut there and the
 question carries `clipped: true`; `get_work_item_request` has the whole text.
 
 A request suits a question the work can go on without. No session waits for it:

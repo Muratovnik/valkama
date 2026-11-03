@@ -109,6 +109,51 @@ class ByPersonTests(QuestionCase):
         read = self.http_request(request)
         self.assertEqual(("expired", None), (read["status"], read["by_person"]))
 
+    def test_an_answer_no_call_gave_has_no_one_to_name(self) -> None:
+        # As on a comment and a replaced version: a write outside any call, the
+        # runner's or one from before calls were recorded, proves nothing either way.
+        request = self.ask()
+        answered = requests.resolve(
+            self.conn,
+            request["request_id"],
+            status="answered",
+            expected_revision=request["revision"],
+            answers={"path": "keep"},
+        )
+        self.conn.commit()
+        self.assertEqual("answered", answered["status"])
+        self.assertIsNone(answered["by_person"])
+        self.assertIsNone(self.http_request(request)["by_person"])
+        self.assertIsNone(self.http_listed(request)["by_person"])
+        [compact] = self.tool("list_work_item_requests", id=self.reference)["requests"]
+        self.assertIsNone(compact["by_person"])
+
+    def test_an_answer_whose_event_is_gone_has_no_one_to_name(self) -> None:
+        request = self.ask()
+        self.as_person(request, answers={"path": "keep"})
+        self.conn.execute(
+            "DELETE FROM work_item_events WHERE action='request_answered' AND detail=?",
+            (request["request_id"],),
+        )
+        self.conn.commit()
+        self.assertIsNone(self.http_request(request)["by_person"])
+
+    def test_a_change_no_call_gave_leaves_the_replaced_answer_its_person(self) -> None:
+        request = self.ask()
+        answered = self.as_person(request, answers={"path": "keep"})
+        changed = requests.change(
+            self.conn,
+            request["request_id"],
+            expected_revision=answered["revision"],
+            answers={"path": "drop"},
+        )
+        self.conn.commit()
+        self.assertIsNone(changed["by_person"])
+        self.assertEqual(
+            [(1, True)],
+            [(version["version"], version["by_person"]) for version in changed["history"]],
+        )
+
     def test_a_merge_does_not_change_who_answered(self) -> None:
         merged = self.item("Asked here")
         request = self.ask(reference=merged)
@@ -154,7 +199,7 @@ class OlderAttachedStoreTests(unittest.TestCase):
                 [read] = requests.list_requests(conn)
             finally:
                 conn.close()
-        self.assertEqual(("answered", False), (read["status"], read["by_person"]))
+        self.assertEqual(("answered", None), (read["status"], read["by_person"]))
 
 
 class AnsweredAfterTests(QuestionCase):

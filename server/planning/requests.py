@@ -138,10 +138,11 @@ def _with_by_person(conn: sqlite3.Connection, records: list[dict]) -> list[dict]
     """Requests with whether the latest call that closed or changed each came through the interface.
 
     True for a browser write, false for any other call that answered, changed,
-    declined or withdrew it, and null while no call has: still open, or run out by
-    itself. The latest such event decides, so a changed answer is the changer's.
-    The `author` beside it is text the caller wrote and says nothing here; the fact
-    stays once, on the call row. One statement for every request of a read.
+    declined or withdrew it, and null while no call has: still open, run out by
+    itself, or written with no call, as on a comment. The latest such event
+    decides, so a changed answer is the changer's. The `author` beside it is text
+    the caller wrote and says nothing here; the fact stays once, on the call row.
+    One statement for every request of a read.
     """
 
     closed = [record["request_id"] for record in records if record["resolved_at"] is not None]
@@ -150,7 +151,8 @@ def _with_by_person(conn: sqlite3.Connection, records: list[dict]) -> list[dict]
     # came through a call anyone proved.
     if closed and _has_table(conn, "execution_events"):
         # By the request rather than its item: a merge moves a request and leaves
-        # its history where it was written.
+        # its history where it was written. A call row that is there always has a
+        # source, so a join that found none means no call.
         sources = {
             str(row["detail"]): row["identity_source"]
             for row in conn.execute(
@@ -164,14 +166,15 @@ def _with_by_person(conn: sqlite3.Connection, records: list[dict]) -> list[dict]
             )
         }
     return [
-        {
-            **record,
-            "by_person": sources.get(record["request_id"]) == calls.BROWSER
-            if record["resolved_at"] is not None
-            else None,
-        }
+        {**record, "by_person": _through_interface(sources.get(record["request_id"]))}
         for record in records
     ]
+
+
+def _through_interface(source: object) -> bool | None:
+    """Whether a call of this source came through the interface; null with no call."""
+
+    return None if source is None else source == calls.BROWSER
 
 
 def _with_history(conn: sqlite3.Connection, records: list[dict]) -> list[dict]:

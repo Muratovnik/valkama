@@ -1412,7 +1412,8 @@ and a refusal quote, includes own variants and comments.
 `by_person` says whether the call that closed the question was a browser write, as
 [above](#call-identity) defines it: true for one, false for any other call that
 answered, declined or withdrew it, and null while no call has, which covers a question
-still open and one that ran out by itself. Every read of a question has the key: the
+still open, one that ran out by itself, and an answer written with no call, as on a
+comment: one older than call identity, or written by a launch. Every read of a question has the key: the
 HTTP reads a screen draws from, the answer of a write, the tools and an export. It is
 read from that call's row, so no argument sets it, and `author` has no part in it: an
 agent that signs as the owner reads `false`. It means "through the interface" and no

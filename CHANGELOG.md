@@ -81,6 +81,9 @@ checkouts are therefore distinguishable even at the same version.
   leaves room for the state key, and nothing is written. The same applies to a `transition`
   inside `apply_work_item_changes`, which refuses the whole batch. A reason is never cut to
   fit.
+- **An answer no call gave no longer reads as an agent's.** A question answered outside
+  any call, by a launch or before calls were recorded, said `by_person: false`, as if a
+  tool had answered it. It says `null` now, as a comment and a replaced answer do.
 - **A press no longer lands on what the card's bar is fading out.** Scrolling a card
   fades the reference line or the action out of its bar, and for the length of the fade
   they still took a press: a press could go down on something already leaving, and lose

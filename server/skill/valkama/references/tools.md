@@ -249,7 +249,8 @@ something was cut, and the key is absent otherwise.
 
 `by_person` is true when the latest call that closed or changed the question came
 through Valkama's interface, false for any other call that answered, changed,
-declined or withdrew it, and null while none has. No argument sets it and `author`
+declined or withdrew it, and null while none has, which includes an answer written
+with no call. No argument sets it and `author`
 does not count, though a process holding the interface's credentials counts as the
 interface.
 
