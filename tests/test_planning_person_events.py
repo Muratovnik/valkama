@@ -675,8 +675,15 @@ class CloseGuardTests(Harness):
         self.conn.commit()
         self.assertEqual("done", closed["state"]["key"])
 
-    def test_words_landing_after_the_guard_read_still_come_back_with_the_close(self) -> None:
-        """A comment moves no revision, so a close can pass just before one; it is not lost."""
+    def test_words_landing_as_the_close_begins_are_read_by_its_guard(self) -> None:
+        """A comment moves no revision, so only the lock keeps it out of the close's gap.
+
+        The guard reads under the write lock the close is written with. A comment
+        arriving as the close begins therefore lands before that read and refuses
+        the close, or waits until the close has committed. It used to land between
+        the guard's read and the write it allowed, and came back only beside the
+        close as `from_person`.
+        """
 
         self.worked()
         other = store.connect()
@@ -684,18 +691,19 @@ class CloseGuardTests(Harness):
         landed: list[bool] = []
 
         def race(sql: str) -> None:
-            if not landed and sql.startswith("UPDATE work_items"):
+            if not landed and sql.lstrip().upper().startswith("BEGIN"):
                 landed.append(True)
                 with calls.bind(calls.browser(), "/api/planning/work-item/comment"):
                     service.comment_work_item(other, self.ref, "Too late?", author="user")
                 other.commit()
 
         self.conn.set_trace_callback(race)
-        answer = self.agent("transition_work_item", id=self.ref, state="done")
+        message = self.refused_agent("transition_work_item", id=self.ref, state="done")
         self.conn.set_trace_callback(None)
         self.assertEqual([True], landed)
-        self.assertEqual("done", answer["state"]["key"])
-        self.assertEqual("Too late?", answer["from_person"][0]["text"])
+        self.assertIn("[person_spoke]", message)
+        self.assertIn("Too late?", message)
+        self.assertEqual("dev", self.status())
 
     def test_merging_an_item_a_person_moved_is_refused_until_forced(self) -> None:
         other = service.create_work_item(self.conn, space=self.space["key"], title="Merge me")

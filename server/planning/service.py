@@ -447,8 +447,7 @@ def update_work_item(
     edit like the others: one guarded write, one revision, no history event.
     """
 
-    row = read_model.item_row(conn, reference)
-    _require_revision(row, expected_revision)
+    row = _row_for_write(conn, reference, expected_revision)
     placement = ranking.placement(rank) if rank is not None else None
     updates: list[str] = []
     parameters: list[object] = []
@@ -552,8 +551,7 @@ def transition_work_item(
     Reopening the item later restores nothing.
     """
 
-    row = read_model.item_row(conn, reference)
-    _require_revision(row, expected_revision)
+    row = _row_for_write(conn, reference, expected_revision)
     target = states.resolve(conn, str(row["workflow_id"]), state)
     placement = ranking.placement(rank) if rank is not None else None
     refusals, warnings = transitions.findings(conn, row, target, reason=reason)
@@ -633,8 +631,7 @@ def claim_work_item(
     for a caller that sets the state itself: a launch putting back what it found.
     """
 
-    row = read_model.item_row(conn, reference)
-    _require_revision(row, expected_revision)
+    row = _row_for_write(conn, reference, expected_revision)
     # `actor` is what the caller signs; `label` what it holds as. An unconfirmed
     # lease is still compared by the signature, as every claim was before.
     actor = model.actor(author)
@@ -920,8 +917,7 @@ def set_checklist(
     being carried over from elsewhere, and keeps the state it carries.
     """
 
-    row = read_model.item_row(conn, reference)
-    _require_revision(row, expected_revision)
+    row = _row_for_write(conn, reference, expected_revision)
     existing = model.checklist(row["checklist"])
     sent_steps = model.checklist(items)
     # The steps as sent, beside the steps as read; anything but a list (a stored
@@ -995,8 +991,7 @@ def claim_checklist_item(
     release: bool = False,
     expected_revision: int | None = None,
 ) -> dict:
-    row = read_model.item_row(conn, reference)
-    _require_revision(row, expected_revision)
+    row = _row_for_write(conn, reference, expected_revision)
     steps = model.checklist(row["checklist"])
     step = _step(steps, item_id, conn, row)
     label = calls.holder(author)
@@ -1036,8 +1031,7 @@ def tick_checklist_item(
     force: bool = False,
     expected_revision: int | None = None,
 ) -> dict:
-    row = read_model.item_row(conn, reference)
-    _require_revision(row, expected_revision)
+    row = _row_for_write(conn, reference, expected_revision)
     steps = model.checklist(row["checklist"])
     step = _step(steps, item_id, conn, row)
     label = calls.holder(author)
@@ -1139,8 +1133,7 @@ def merge_work_items(
     refuses the close, and each is recorded as `overridden`.
     """
 
-    survivor = read_model.item_row(conn, reference)
-    _require_revision(survivor, expected_revision)
+    survivor = _row_for_write(conn, reference, expected_revision)
     merged = _merged_rows(conn, survivor, items)
     overridden = _merge_claims(conn, [survivor, *merged], author, force)
     spoke = _merge_spoke(conn, merged, force)
@@ -1537,19 +1530,13 @@ def report_work_item(
     author: str | None = None,
     require_revision: bool = True,
 ) -> dict:
-    row = read_model.item_row(conn, reference)
+    row = _row_for_write(conn, reference, expected_revision)
     if make_current and require_revision and expected_revision is None:
         raise model.PlanningError("expected_revision is required when making a report current")
-    _require_revision(row, expected_revision)
     record = model.summary(payload)
     identity = str(row["work_item_id"])
     # Keep the report and the guarded current-outcome write indivisible even
     # when a caller catches a refusal and commits its surrounding transaction.
-    # Immediate, because finding the call's row reads before the first write, and
-    # a read in a deferred transaction cannot be upgraded once somebody else has
-    # committed: SQLite refuses that at once, whatever the busy timeout.
-    if not conn.in_transaction:
-        conn.execute("BEGIN IMMEDIATE")
     conn.execute("SAVEPOINT planning_report")
     try:
         inserted = conn.execute(
@@ -1578,10 +1565,9 @@ def select_summary(
     expected_revision: int | None = None,
     author: str | None = None,
 ) -> dict:
-    row = read_model.item_row(conn, reference)
+    row = _row_for_write(conn, reference, expected_revision)
     if expected_revision is None:
         raise model.PlanningError("expected_revision is required when selecting a report")
-    _require_revision(row, expected_revision)
     if not isinstance(comment_id, int) or isinstance(comment_id, bool) or comment_id < 1:
         raise model.PlanningError("comment_id must be a positive integer")
     report = conn.execute(
@@ -1590,8 +1576,6 @@ def select_summary(
     ).fetchone()
     if report is None:
         raise model.PlanningError("that comment is not a report belonging to this work item")
-    if not conn.in_transaction:
-        conn.execute("BEGIN")
     conn.execute("SAVEPOINT planning_summary")
     try:
         _write(conn, row, ["summary = ?", "summary_comment_id = ?"], [report["report"], comment_id])
@@ -1676,6 +1660,32 @@ def _workflow_payload(conn: sqlite3.Connection, workflow: sqlite3.Row) -> dict:
     }
 
 
+def _row_for_write(
+    conn: sqlite3.Connection, reference: object, expected: int | None
+) -> sqlite3.Row:
+    """The item a write decides from, read under the lock it will be written with.
+
+    Every verb a caller names an item to, and that writes it through `_write`,
+    starts here. Read first and locked second, a verb was refused for any write
+    that landed in between, including from a caller that named no revision at
+    all: four agents reporting on one item got `revision 30, not 0`, and a merge
+    wrote back the survivor's checklist as it was before somebody else added a
+    step. Taken first, the lock leaves nothing to land in between, so the
+    revision is compared only when the caller named one, and then against what
+    the item holds now.
+
+    A caller already inside a transaction keeps it: an immediate one holds the
+    lock already, and a deferred one is still refused by `_write` rather than
+    written over.
+    """
+
+    if not conn.in_transaction:
+        conn.execute("BEGIN IMMEDIATE")
+    row = read_model.item_row(conn, reference)
+    _require_revision(row, expected)
+    return row
+
+
 def _require_revision(row: sqlite3.Row, expected: int | None) -> None:
     if expected is None:
         return
@@ -1692,12 +1702,13 @@ def _write(
     """Write what this row justified, or refuse because it no longer holds.
 
     Every verb above reads an item, decides from what it read, and writes once.
-    The read takes no lock, so another connection can commit in between and the
-    decision stops being true while it is being acted on: two agents both saw an
-    unheld item, and both wrote their own name into it. Naming the revision in
-    the WHERE clause is what makes the write mean "and nothing changed since I
-    looked" — one UPDATE matches, the other matches nothing and is refused here
-    instead of landing on top of a claim that already exists.
+    `_row_for_write` reads it under the write lock, so another connection cannot
+    commit in between; naming the revision in the WHERE clause is what still
+    makes the write mean "and nothing changed since I looked" wherever that lock
+    is not held — a row read outside it, or by the take-next queue, which picks
+    before it locks. Two agents both saw an unheld item and both wrote their own
+    name into it before this clause existed: one UPDATE matches, the other
+    matches nothing and is refused here instead of landing on top of a claim.
 
     The row is passed rather than the id for the same reason: a write cannot be
     issued without the read it came from.

@@ -1,9 +1,11 @@
 """What two agents on one store do to each other.
 
 Every write verb in the Planning domain reads an item, decides from what it
-read, and writes once. Those are separate statements on a connection that holds
-no lock across them, so every test here drives the gap between them: a decision
-that was true when it was made, acted on after somebody else has already acted.
+read, and writes once. Those are separate statements, so every test here drives
+the gap between them: a decision that was true when it was made, acted on after
+somebody else has already acted. The verbs take the write lock before they read,
+which closes that gap; the tests that hand a verb a stale row prove the guarded
+write that still refuses one, and the rest prove the lock comes first.
 
 The rest of the Planning tests share a single connection and run in order, which
 is why none of them could see this. A claim is promised to be atomic and to fail
@@ -17,6 +19,7 @@ would fail on the lock rather than on the thing under test.
 
 from __future__ import annotations
 
+import functools
 import os
 import sqlite3
 import tempfile
@@ -90,69 +93,40 @@ class PlanningConcurrencyTests(unittest.TestCase):
     def test_two_connections_racing_one_item_produce_one_holder(self) -> None:
         """The reproduction the review ran, kept as a test.
 
-        Both callers read the unheld item before either writes, which is the
-        interleaving the barrier guarantees rather than hopes for. The writes are
-        then ordered so the outcome does not depend on which thread the operating
-        system prefers, and on lock timing not at all.
+        It used to hold both callers at their read until both had read, which is
+        the interleaving that let two agents both see an unheld item. A claim now
+        reads under the lock it writes with, so that interleaving cannot happen:
+        the second caller, arriving while the first is reading, cannot start, and
+        once the first has committed it reads the holder and is refused by name.
+        The second caller is driven from the first one's read, not from a thread,
+        so the order does not depend on the scheduler.
         """
 
         self.item("Contested")
-        read = threading.Barrier(2)
-        committed = threading.Event()
-        outcomes: dict[str, str] = {}
-        read_row = read_model.item_row
-        write_row = service._write
+        first = self.open()
+        second = self.open()
+        second.execute("PRAGMA busy_timeout=0")
+        during_read: list[str] = []
 
-        def synchronized(conn: sqlite3.Connection, reference: object) -> sqlite3.Row:
-            """Hold every caller at its read until both have read."""
-
-            row = read_row(conn, reference)
-            read.wait(timeout=10)
-            return row
-
-        def ordered(
-            conn: sqlite3.Connection,
-            row: sqlite3.Row,
-            updates: list[str],
-            parameters: list[object],
-        ) -> None:
-            """Let the winner commit before the loser writes.
-
-            Two uncommitted writers on one file is a lock question, and this test
-            is about the stale decision — so the scheduling is pinned and the
-            interleaving that matters is still real.
-            """
-
-            if threading.current_thread().name != "winner":
-                committed.wait(timeout=10)
-            write_row(conn, row, updates, parameters)
-
-        def claim(author: str) -> None:
-            conn = store.connect()
+        def arrive(sql: str) -> None:
+            if during_read or "FROM work_items" not in sql:
+                return
             try:
-                outcomes[author] = str(
-                    service.claim_work_item(conn, "QA-1", author=author)["claim_ref"]
-                )
-                conn.commit()
-            except model.PlanningError as refusal:
-                outcomes[author] = f"refused: {refusal}"
-            finally:
-                committed.set()
-                conn.rollback()
-                conn.close()
+                service.claim_work_item(second, "QA-1", author="agent-two")
+                during_read.append("claimed")
+            except sqlite3.OperationalError as locked:
+                during_read.append(str(locked))
+            second.rollback()
 
-        threads = [
-            threading.Thread(target=claim, args=("agent-one",), name="winner"),
-            threading.Thread(target=claim, args=("agent-two",), name="loser"),
-        ]
-        with mock.patch.object(read_model, "item_row", synchronized):
-            with mock.patch.object(service, "_write", ordered):
-                for thread in threads:
-                    thread.start()
-                for thread in threads:
-                    thread.join(timeout=30)
-        self.assertEqual("agent-one", outcomes["agent-one"])
-        self.assertIn("already held by agent-one", outcomes["agent-two"])
+        first.set_trace_callback(arrive)
+        claimed = service.claim_work_item(first, "QA-1", author="agent-one")
+        first.set_trace_callback(None)
+        first.commit()
+        self.assertEqual(["database is locked"], during_read)
+        self.assertEqual("agent-one", claimed["claim_ref"])
+        with self.assertRaisesRegex(model.PlanningError, "already held by agent-one"):
+            service.claim_work_item(second, "QA-1", author="agent-two")
+        second.rollback()
         self.assertEqual("agent-one", self.holder("QA-1"))
         self.assertEqual(1, self.events("claimed"))
 
@@ -506,6 +480,122 @@ class ReadThenWriteTests(unittest.TestCase):
         self.conn.set_trace_callback(None)
         self.assertEqual(1, len(landed))
         self.assertTrue(answer["summary"])
+
+    def test_a_write_that_names_no_revision_is_not_refused_for_one_it_never_saw(self) -> None:
+        """Four agents reporting on one item got `revision 30, not 0` without naming one.
+
+        Each verb read the item and only then took the lock it writes under, so
+        a write another agent committed in between made the guarded write refuse
+        a revision the caller never asked about. The other write lands here at
+        the first `BEGIN` the caller issues, whichever kind it is: before the
+        read when the lock comes first, after it when it does not.
+
+        The other write is a report, which changes nothing but the revision,
+        except under the merge: that one adds a step to the survivor, because a
+        merge read before the lock wrote the survivor's checklist back as it had
+        read it, with `force`, and the step was gone without a word.
+        """
+
+        mine = {"done": "Mine", "next": "Nothing"}
+        theirs = {"done": "Theirs", "next": "Nothing"}
+
+        def report(ref: str) -> None:
+            service.report_work_item(self.other, ref, theirs)
+
+        def add_step(ref: str) -> None:
+            service.set_checklist(self.other, ref, ["read", "write", "late"])
+
+        def first_step(ref: str) -> str:
+            return str(service.get_work_item(self.conn, ref)["checklist"][0]["id"])
+
+        verbs: dict[
+            str,
+            tuple[Callable[[str], object], Callable[[str], None], Callable[[dict], object], object],
+        ] = {
+            "report": (
+                lambda ref: service.report_work_item(self.conn, ref, mine),
+                report,
+                lambda item: [entry["report"]["done"] for entry in item["comments"]],
+                ["Theirs", "Theirs", "Mine"],
+            ),
+            "summary": (
+                lambda ref: service.set_summary(self.conn, ref, mine),
+                report,
+                lambda item: item["summary"]["done"],
+                "Mine",
+            ),
+            "edit": (
+                lambda ref: service.update_work_item(self.conn, ref, title="Renamed"),
+                report,
+                lambda item: item["title"],
+                "Renamed",
+            ),
+            "transition": (
+                lambda ref: service.transition_work_item(self.conn, ref, "todo"),
+                report,
+                lambda item: item["state"]["key"],
+                "todo",
+            ),
+            "claim": (
+                lambda ref: service.claim_work_item(self.conn, ref, author="agent-one"),
+                report,
+                lambda item: item["claim_ref"],
+                "agent-one",
+            ),
+            "checklist": (
+                lambda ref: service.set_checklist(self.conn, ref, ["read", "write", "ship"]),
+                report,
+                lambda item: len(item["checklist"]),
+                3,
+            ),
+            "step claim": (
+                lambda ref: service.claim_checklist_item(
+                    self.conn, ref, first_step(ref), author="agent-one"
+                ),
+                report,
+                lambda item: item["checklist"][0]["claimed_by"],
+                "agent-one",
+            ),
+            "tick": (
+                lambda ref: service.tick_checklist_item(self.conn, ref, first_step(ref)),
+                report,
+                lambda item: item["checklist"][0]["done"],
+                True,
+            ),
+            "merge": (
+                lambda ref: service.merge_work_items(self.conn, ref, [self.twin()]),
+                add_step,
+                lambda item: [step["text"] for step in item["checklist"]],
+                ["read", "write", "late", "ship"],
+            ),
+        }
+        for name, (act, other_write, observe, expected) in verbs.items():
+            with self.subTest(verb=name):
+                self.conn.rollback()
+                reference = service.create_work_item(
+                    self.conn, space=self.space["key"], title=name
+                )["reference"]
+                service.set_checklist(self.conn, reference, ["read", "write"])
+                service.report_work_item(self.conn, reference, theirs)
+                self.conn.commit()
+                landed = self.before("BEGIN", functools.partial(other_write, reference))
+                act(reference)
+                self.conn.commit()
+                self.conn.set_trace_callback(None)
+                self.assertEqual([True], landed)
+                self.assertEqual(expected, observe(service.get_work_item(self.conn, reference)))
+
+    def twin(self) -> str:
+        """A second item with one step, for a merge to fold in.
+
+        Created on the other connection, so the caller's own transaction is still
+        unopened when the merge begins.
+        """
+
+        created = service.create_work_item(self.other, space=self.space["key"], title="Twin")
+        service.set_checklist(self.other, created["reference"], ["ship"])
+        self.other.commit()
+        return str(created["reference"])
 
 
 if __name__ == "__main__":

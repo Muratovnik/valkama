@@ -40,6 +40,13 @@ checkouts are therefore distinguishable even at the same version.
   the lifecycle event of the same hook with it, and a session end writes the marker that
   stops its watcher first, so the watcher no longer outlives a `/clear` when the store
   write fails.
+- **A write that names no revision is no longer refused for one.** Agents writing to one
+  item at once got `revision_conflict` ("work item is at revision 30, not 0") on ordinary
+  reports, summaries, edits, transitions, claims and checklist writes that passed no
+  `expected_revision`: each read the item before it took the write lock, and the guarded
+  write compared what it had read. The read now happens under that lock, so a revision
+  is compared only when the caller names one. A merge read the same way could drop a
+  checklist step added to the surviving item in between; it no longer can.
 
 ## [2.4.0](https://github.com/Muratovnik/valkama/compare/v2.3.0...v2.4.0) - 2026-11-03
 
