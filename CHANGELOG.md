@@ -17,7 +17,8 @@ checkouts are therefore distinguishable even at the same version.
   takes its place by time, folded to its prompt with the reply under it. Selecting only
   selects and Send sends, the same for every kind of field; nothing is chosen for you,
   and a recommended option only says so. "Your own answer" is always there and stands in
-  for what is required.
+  for what is required. A reply says "You" only for an answer given through this interface,
+  and otherwise names the agent.
 - **Options with long descriptions keep the choices in sight.** A description of one line
   stands under its label, a longer one shows its first words, past six described options
   only the labels stand, and each opens on its own press without selecting anything. What
@@ -34,11 +35,14 @@ checkouts are therefore distinguishable even at the same version.
   of one question fit in 64 KiB.
 - `answer_work_item_request` and the HTTP answer take a `note` of up to 8000 characters,
   which stands in for required fields, so a person can answer in their own words.
-- `by_person` says whether an answer came through Valkama's interface. It is read from the
-  call that wrote the answer, so no caller can set it.
+- `by_person` says whether the call that closed a question came through Valkama's interface:
+  true for one, false for any other call that answered, declined or withdrew it, and null
+  while none has. It is read from the call that wrote the row, so no argument sets it and
+  `author` does not count. It means "through the interface": a process holding the
+  interface's credentials counts as the interface.
 - `search_work_items` finds an item by a question's text, answers and note, and a row found
   that way carries `question_hit`.
-- An export carries every question in `planning.requests`.
+- An export carries every question in `planning.requests`, with its `by_person`.
 - **A link to a work item opens in the desktop app.** On Windows with the app
   installed, `GET /open/MAIN-12` followed from outside a browser page, such as a link
   in an agent client's chat, starts the app on that card and answers a page that closes
@@ -78,8 +82,15 @@ checkouts are therefore distinguishable even at the same version.
 - "Needs my answer" shows the same form as the card, with "Send" and "Don't answer", and an
   answer given in a card lowers the count in the navigation at once.
 - `list_work_item_requests` answers in a compact form by default; pass `full: true` for
-  whole records. `get_work_item_request` adds `note` and `by_person`. The HTTP request reads
-  add only `note`, and `answers` no longer shows a note among them.
+  whole records. `get_work_item_request`, the HTTP request reads and the answers of request
+  writes add `note` and `by_person`, and `answers` no longer shows a note among them.
+- The compact form of a question stays cheap: a note, a written answer and a label are cut
+  at 500 characters, and one question is at most 2000 characters of JSON, keeping its first
+  fields and saying `clipped: true`. The whole text is in `get_work_item_request` and in the
+  list with `full: true`.
+- `list_work_item_requests` takes `offset` and says `truncated` and `next_offset`. With
+  `answered_after` the oldest answer comes first, and a page runs past `limit` rather than
+  part two answers of one time, so a reader that keeps the last `answered_at` loses none.
 - `merge_work_items` moves a merged item's questions to the survivor, where a pending one
   stays open, instead of closing them with the merged item. The warning now says they wait
   on the survivor.
@@ -129,8 +140,12 @@ checkouts are therefore distinguishable even at the same version.
   in Chrome and in the desktop app. A tile out of sight is now laid out like any other, and
   a press on one just back in view reaches it. A lane still skips its layout, which a space
   of many lanes needs, and keeps the focus of a press inside it.
-- **A double click on a tile leaves its card open.** The second press reached the scrim that
-  had just appeared, and closed the card as it arrived.
+- **A press cannot land on what rose under a still pointer.** A press at the point of the one
+  before, with no move between, reaches nothing inside a question unless it lands on the same
+  control, however long after it comes, and the scrim follows the same rule. So declining a
+  question cannot end the next one, and a double click on a tile leaves its card open with its
+  reading keys alive. Moving more than 3 px or turning the wheel ends that, and keys are never
+  held back.
 - **The keys that read work as soon as a card opens.** PageDown, PageUp, Home, End and the
   arrows scroll a card just opened, by address or from the board, and from its top bar; they
   did nothing until focus reached a control inside it. No ring appears on Close, and the
