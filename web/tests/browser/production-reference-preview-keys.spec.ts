@@ -10,6 +10,7 @@ import type { Locator, Page } from '@playwright/test'
 
 import {
   card,
+  CARD,
   cardsAfterTheDelay,
   coolDown,
   HUB_PROMPT,
@@ -250,9 +251,24 @@ test('a surface opening over a card the pointer holds up closes it', async ({ pa
   await rest(page, reference(entry, 'MAIN-12'))
   const shown = card(page)
   await expect(shown).toBeVisible()
+  // Read straight after the surface opens: the browser's next hit test would close it too,
+  // later and only if one comes, and until then the card lay over the new surface.
+  const stillUp = page.evaluate(
+    (selector) =>
+      new Promise<number>((resolve) => {
+        const opened = document.querySelectorAll('.overlay-host').length
+        const seen = new MutationObserver(() => {
+          if (document.querySelectorAll('.overlay-host').length === opened) return
+          seen.disconnect()
+          setTimeout(() => resolve(document.querySelectorAll(selector).length))
+        })
+        seen.observe(document.body, { childList: true, subtree: true })
+      }),
+    CARD,
+  )
   await page.keyboard.press('Control+k')
+  expect(await stillUp).toBe(0)
   await expect(page.getByRole('dialog', { name: 'Find', exact: false })).toBeVisible()
-  await expect(shown).toHaveCount(0)
 })
 
 test('a surface opening while the card still waits calls it off', async ({ page }) => {
