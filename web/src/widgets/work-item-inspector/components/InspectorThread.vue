@@ -50,8 +50,9 @@ import {
 } from '@/widgets/work-item-inspector/utils/useThreadForms.ts'
 
 import RequestCard from '@/features/input-requests/components/RequestCard.vue'
+import { holdsDraft } from '@/features/input-requests/utils/answerChange.ts'
 import { requestIdentity } from '@/features/input-requests/utils/requestIdentity.ts'
-import { EMPTY_DRAFT, hasDraft } from '@/features/input-requests/utils/validateAnswers.ts'
+import { EMPTY_DRAFT } from '@/features/input-requests/utils/validateAnswers.ts'
 import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
@@ -85,11 +86,9 @@ watch(thread, stopStrayPresses, { flush: 'post' })
 
 const drafts = ref<Record<string, RequestDraft>>({})
 const draftFor = (entry: InputRequestEntry) => drafts.value[requestIdentity(entry)] ?? EMPTY_DRAFT
+// The rule `RequestList` asks by too: a change of the answer counts once it says something new.
 useDraftSource('answer', () =>
-  props.questions.some((entry) => {
-    const draft = draftFor(entry)
-    return entry.request.status === 'pending' ? hasDraft(draft) : Boolean(draft.note.trim())
-  }),
+  props.questions.some((entry) => holdsDraft(entry.request, draftFor(entry))),
 )
 
 const forms = useThreadForms(
@@ -198,6 +197,7 @@ defineExpose({ revealQuestion })
           :ref="(card) => (cards[row.key] = card as CardHandle | null)"
           :entry="row.entry"
           :draft="draftFor(row.entry)"
+          :item-closed="item.state.is_terminal"
           :suggest="suggest"
           @update:draft="drafts[requestIdentity(row.entry)] = $event"
           @updated="emit('answered', $event)"
