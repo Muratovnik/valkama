@@ -668,6 +668,114 @@ Sessions SSE view are retired. Analytics dashboards and exports, Improvements,
 and the Skills catalogue and activation API are also retired. This does not
 change installed skill files or agent-client settings.
 
+## Project documents
+
+A path in a work item's text is a candidate on the page, and the server says
+what it is. `web/tests/fixtures/document-path-samples.json` is the table of what
+a text becomes: strong, weak, copy-only or nothing, and what a click copies when
+the path cannot be opened. A path is opened only when it lies inside the root of
+a registered project, after `..`, symbolic links and junctions are followed.
+Anything else the page only copies, and a network path never reaches the server.
+
+Both routes are `GET`, read files and write nothing. Unlike the other reads they
+require the request to come from the page itself: an `Origin`, when there is one,
+must be allowed (`origin_refused`) and `Sec-Fetch-Site` must be `same-origin`
+(`fetch_metadata_refused`), both 403. Every answer carries
+`Cache-Control: no-store` and `X-Content-Type-Options: nosniff`. A refusal is
+`{"error": {"code": ...}}` from the closed list below and never carries the text
+of an operating-system error.
+
+`GET /api/documents/resolve?space=<id>&path=<p>&path=<p>...` takes up to 64 paths
+and only asks the file system whether each exists; it opens no file. `space` is
+the planning space's exact identity, the same value `GET /api/ref` takes, and is
+only the base of a relative path. Each path is sent as written, without its
+`:42` or `#...` suffix, and comes back unchanged in `path`, so an answer is matched
+without parsing it:
+
+```json
+{"paths": [
+  {"path": "docs/plan.md", "status": "file", "project": "example-project",
+   "relative": "docs/plan.md", "markdown": true},
+  {"path": "src/a.ts", "status": "file", "project": "example-project",
+   "relative": "src/a.ts", "markdown": false},
+  {"path": "./docs/../docs/plan.md", "status": "file", "project": "example-project",
+   "relative": "docs/plan.md", "markdown": true},
+  {"path": "docs/plans/", "status": "directory", "project": "example-project",
+   "relative": "docs/plans"},
+  {"path": "C:/projects/example/services/example-service/web", "status": "directory",
+   "project": "example-service", "relative": "web"},
+  {"path": "D:/outside/.valkama", "status": "refused", "code": "outside_root"},
+  {"path": "../outside.md", "status": "refused", "code": "outside_root"},
+  {"path": "docs/gone.md", "status": "missing"},
+  {"path": "src/index.ts", "status": "ambiguous"},
+  {"path": "docs/x.md", "status": "space_unbound"}
+]}
+```
+
+| `status` | Meaning |
+| --- | --- |
+| `file`, `directory` | It exists. `project` is the deepest registered root it lies in and `relative` its path from that root, which is what `read` and the opener take. `markdown` comes with `file` |
+| `missing` | Nothing there, under the space's root or under a project registered inside that root |
+| `ambiguous` | A relative path found in two or more of the projects registered inside the space's root, and not under the root itself. The projects are not named |
+| `space_unbound` | A relative path in a space the registry does not bind to one existing root. An absolute path in the same request still resolves |
+| `refused` | `code` is `invalid_path` (not a local path Windows would take as written: a network or device path, a drive-relative path, a reserved name or character, longer than 1024 characters), `outside_root` (outside every registered root, answered the same whether anything is there) or `not_a_file` (a device or a pipe) |
+
+A relative path is taken from the space's root first. Only when nothing is there
+is it looked for in the projects registered inside that root, so a nested project
+never overrides the root. The server does not send back an absolute path it
+worked out; an absolute path the page sent comes back as sent. A registry that
+cannot be read leaves no roots, so a relative path is `space_unbound` and an
+absolute one `outside_root`.
+
+`GET /api/documents/read?project=<id>&path=<relative>` reads one Markdown file,
+taking `project` and `relative` from `resolve`. The path is checked again, inside
+that project and no other:
+
+```json
+{"project": "example-project", "path": "docs/plan.md", "markdown": "...", "size": 65145,
+ "modified_at": "2026-11-03T15:12:09Z", "revision": "9f2c41d0a7b3e655"}
+```
+
+`revision` is the first 16 hexadecimal digits of the SHA-256 of the bytes read.
+The text is strict UTF-8 with a leading byte order mark removed and its line
+endings untouched.
+
+| Code | HTTP | When |
+| --- | --- | --- |
+| `invalid_request` | 400 | Either route: no `path`, more than 64 paths, no `project`, or a `space` that is not a planning space's identity |
+| `invalid_path` | 400 | The path's form, as in `resolve` |
+| `project_unknown` | 404 | `project` is not in the registry |
+| `outside_root` | 403 | Outside every registered root |
+| `not_found` | 404 | Nothing there |
+| `directory`, `not_a_file` | 422 | Not a regular file |
+| `not_markdown` | 415 | Not `.md` or `.markdown` |
+| `too_large` | 413 | Over 512 KiB; the answer also carries `size` and `limit` |
+| `binary`, `not_utf8` | 415 | A NUL in the bytes, or bytes that are not UTF-8 |
+| `unreadable` | 503 | The operating system refused the read; its text goes to the server's log |
+
+### Targets the opener takes
+
+Opening a file or a folder in the editor goes through the same plan as opening a
+session, and the page names the target only by what `resolve` answered:
+
+| Target | Fields | Plan step |
+| --- | --- | --- |
+| `file` | `project`, `path` from the project's root, optional `line` | `open-file {ide, path, line}` |
+| `folder` | `project`, `path` from the project's root | `focus-folder {ide, folder}` |
+
+```text
+GET /api/open-plan?target=file&project=<id>&path=<relative>&line=<n>&surface=<surface>
+GET /api/open-plan?target=folder&project=<id>&path=<relative>&surface=<surface>
+```
+
+The planner checks both targets with the same path check as `read`, inside the
+named project, and refuses a target of the wrong kind. Its answer carries the
+absolute path by design, because `vscode://file/<path>:<line>:1` needs one. The
+desktop app runs `Code.exe -g <path>:<line>`; the browser opens that link, with
+the path encoded the way `pathToFileURL` does it. A folder's rule for a session
+(an existing absolute local folder, not a network path, without `..`) stays as it
+is, and this target adds that it lies inside a registered root.
+
 ## Client hooks
 
 `valkama hook <client> <event>` is the command Claude Code and Codex hooks run.
