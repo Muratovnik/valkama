@@ -10,7 +10,7 @@
 // server is found or started behind it, and the same window then shows
 // Valkama, or the failure and its remedy.
 
-const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron')
+const { app, BrowserWindow, Menu, clipboard, ipcMain, shell } = require('electron')
 const { spawn } = require('node:child_process')
 const { createHash } = require('node:crypto')
 const { readFileSync, statSync, writeFileSync } = require('node:fs')
@@ -25,6 +25,7 @@ const {
   parseRuntimeJson,
   validateLauncherBootstrap,
 } = require('./runtime_contract')
+const { contextMenuTemplate, pageLocale } = require('./context_menu')
 const { howToOpen, openPathFromArgv, openPathUrl } = require('./open_path')
 const { discoverSupportedOpeners, resolveSupportedOpener } = require('./opener_catalog')
 const { establishServer, verifyStartedOwnership } = require('./server_startup')
@@ -351,6 +352,23 @@ function rememberLocale(webContents) {
     .catch(() => {})
 }
 
+/**
+ * Offer what a right click can do where it landed, in the language the page speaks.
+ *
+ * The page names its language on `<html lang>` and changes it there when the
+ * operator switches, so the menu follows a switch at once; the remembered locale
+ * answers for a page that names neither.
+ */
+async function showContextMenu(webContents, params) {
+  const lang = await webContents
+    .executeJavaScript('document.documentElement.lang', false)
+    .catch(() => '')
+  const locale = pageLocale(lang) ?? startupLocale()
+  const template = contextMenuTemplate(params, locale, (text) => clipboard.writeText(text))
+  if (template.length === 0 || !mainWindow) return
+  Menu.buildFromTemplate(template).popup({ window: mainWindow })
+}
+
 function showStartupPage(state) {
   if (!mainWindow) return
   showingValkama = false
@@ -499,6 +517,9 @@ function createWindow() {
       event.preventDefault()
       void shell.openExternal(url)
     }
+  })
+  mainWindow.webContents.on('context-menu', (_event, params) => {
+    void showContextMenu(mainWindow.webContents, params)
   })
   mainWindow.webContents.on('did-start-navigation', (details) => {
     if (details.isMainFrame && !details.isSameDocument) pageListens = false
