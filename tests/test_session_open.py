@@ -68,6 +68,20 @@ def links(plan: dict[str, Any]) -> list[str]:
     return [step["link"] for step in plan["steps"] if "link" in step]
 
 
+class OpenPlacesTests(unittest.TestCase):
+    def test_a_place_is_offered_by_what_a_plan_would_find_installed(self) -> None:
+        places = session_open.open_places(
+            url_schemes.Installed(schemes=frozenset({"vscode", "codex"}))
+        )
+        self.assertEqual(set(places), set(session_open.OPEN_PLACES))
+        self.assertTrue(places["vscode"])
+        self.assertTrue(places["codex-app"])
+        # A dangling `cursor://` is no scheme here, and without Windows Terminal a plan copies.
+        self.assertFalse(places["cursor"])
+        self.assertFalse(places["claude-desktop"])
+        self.assertTrue(places["terminal"])
+
+
 class PlanCase(unittest.TestCase):
     def setUp(self) -> None:
         directory = tempfile.TemporaryDirectory()
@@ -986,6 +1000,19 @@ class OverHttpTests(unittest.TestCase):
             client.close()
 
     SAME_ORIGIN = {"Sec-Fetch-Site": "same-origin"}  # noqa: RUF012
+
+    def test_the_places_reach_only_a_same_origin_fetch(self) -> None:
+        for headers, status in ((self.SAME_ORIGIN, 200), ({"Sec-Fetch-Site": "cross-site"}, 403)):
+            client = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=5)
+            try:
+                client.request("GET", "/api/open-places", headers=headers)
+                response = client.getresponse()
+                body = json.loads(response.read())
+            finally:
+                client.close()
+            with self.subTest(headers=headers):
+                self.assertEqual(response.status, status)
+                self.assertEqual(status == 200, "places" in body)
 
     def test_the_plan_reaches_a_same_origin_fetch_and_is_not_cached(self) -> None:
         status, plan, response = self.get(

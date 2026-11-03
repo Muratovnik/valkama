@@ -68,6 +68,17 @@ REASONS = (
     "not-installed",
     "path-refused",
 )
+#: Every `code` a `path-refused` step can carry: `documents.locate`'s and the target's own.
+PATH_REFUSALS = (
+    "project_unknown",
+    "invalid_path",
+    "outside_root",
+    "not_found",
+    "not_a_file",
+    "unreadable",
+    "directory",
+    "not_a_folder",
+)
 STATES = ("live", "ended", "gone", "headless", "none")
 
 _VSCODE = Place("ide", "vscode")
@@ -86,6 +97,10 @@ _ACTIVE = {"live": True, "ended": False}
 #: The same shape the desktop app holds an id to before it reaches a command line,
 #: led by a letter or digit: one led by `-` would be read there as a flag.
 _SESSION_ID = re.compile(r"[0-9A-Za-z][0-9A-Za-z._:-]{3,127}")
+#: The scheme that says an app is here; a terminal is always offered, since without
+#: Windows Terminal a plan copies the command instead.
+_SCHEME_OF_APP = {"claude-desktop": "claude", "codex-app": "codex"}
+
 #: The extension and the Codex app take a UUID; the extension starts an empty
 #: conversation for anything else, which is the one outcome a link must not have.
 _SESSION_UUID = re.compile(
@@ -668,6 +683,16 @@ def open_plan(
     if isinstance(target, PathTarget):
         return _path_plan(target, ask)
     return _session_plan(conn, target, ask)
+
+
+def open_places(schemes: Installed | None = None) -> dict[str, bool]:
+    """Which places the settings can offer, read the same way a plan reads the machine."""
+
+    installed = schemes if schemes is not None else url_schemes.detect()
+    return {
+        place: place == "terminal" or _SCHEME_OF_APP.get(place, place) in installed.schemes
+        for place in OPEN_PLACES
+    }
 
 
 def _choice(parameters: Mapping[str, list[str]], name: str, allowed: tuple[str, ...]) -> str:

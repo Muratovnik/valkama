@@ -1624,6 +1624,11 @@ absolute path it found is told to the page.
 | `not-installed` | `host` is not installed: its scheme has no live handler, or its editor lacks the extension |
 | `path-refused` | A file or folder target that opens nothing. `code` is `project_unknown`, `invalid_path`, `outside_root`, `not_found`, `not_a_file`, `unreadable`, `directory` (a file target that is a folder) or `not_a_folder` (a folder target that is not one) |
 
+`GET /api/open-places` answers `{"places": {"vscode": true, "cursor": false, ...}}`
+for each value `fallback` and `always` take, under the same fetch metadata, so the
+settings offer what the machine can open. A terminal is always `true`, because
+without Windows Terminal a plan copies the command instead.
+
 Which schemes are installed comes from the Windows classes the shell itself
 resolves a scheme through. A key that carries `URL Protocol` counts, unless its
 `shell\open\command` names a program that no longer exists.

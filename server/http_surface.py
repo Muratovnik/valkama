@@ -1021,6 +1021,9 @@ class Handler(BaseHTTPRequestHandler):
         if url.path in (_DOCUMENT_RESOLVE, _DOCUMENT_READ):
             self._answer_document(url.path, parameters)
             return
+        if url.path == "/api/open-places":
+            self._send_open_places()
+            return
         if url.path == "/api/open-plan":
             self._send_open_plan(parameters)
             return
@@ -1149,6 +1152,17 @@ class Handler(BaseHTTPRequestHandler):
         else:
             status, answer = _document_answer(path, parameters)
         self._send_json(status, answer, headers=_DOCUMENT_HEADERS)
+
+    def _send_open_places(self) -> None:
+        """Say which places this machine can open, for the settings to offer."""
+
+        try:
+            http_security.require_same_origin_fetch(self.headers, self.server.security_context)
+        except http_security.RequestRefusedError as error:
+            self._refuse(error)
+            return
+        places = session_open.open_places()
+        self._send_json(200, {"places": places}, headers={"Cache-Control": "no-store"})
 
     def _send_open_plan(self, parameters: Mapping[str, list[str]]) -> None:
         """Say what a click should do; only to this origin, since the answer names local paths."""

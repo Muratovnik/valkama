@@ -33,7 +33,8 @@ from pathlib import Path
 from unittest import mock
 from urllib.parse import urlencode
 
-from server import http_surface, mcp_surface, sessions, store
+from server import http_surface, mcp_surface, session_open, sessions, store
+from server.ops import url_schemes
 from server.planning import calls, service
 from server.projects import project_registry
 from server.store_identity.metadata import read_store_metadata
@@ -47,6 +48,10 @@ SPACE = "MAIN"
 _UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 _ISO = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(\.\d+)?(Z|[+-]\d{2}:\d{2})$")
 _INSTANT = "2026-01-02T03:04:05"
+
+
+def _uri_path(root: Path) -> str:
+    return root.as_uri().removeprefix("file:///")
 
 
 class _Normalizer:
@@ -70,8 +75,11 @@ class _Normalizer:
         if found is not None:
             fraction = found.group(2) or ""
             return _INSTANT + ("." + "0" * (len(fraction) - 1) if fraction else "") + found.group(3)
-        for spelling in (str(self.root), self.root.as_posix()):
+        # As a path and as a link encodes it; the plan names both.
+        for spelling in (str(self.root), self.root.as_posix(), _uri_path(self.root)):
             value = value.replace(spelling, "/workspace")
+        if value.startswith("/workspace"):
+            value = value.replace("\\", "/")
         return _UUID.sub(self.uuid, value)
 
     def uuid(self, found: re.Match[str]) -> str:
@@ -252,6 +260,50 @@ class _Scenario:
             conn.close()
         return self.http(f"/api/modules/planning/work-item?{self.scope(reference=ref)}")
 
+    def open_plans(self) -> dict[str, object]:
+        """What a click is told to do: each form of a plan, for the files `documents` wrote."""
+
+        session = "6f1c2a8e-0000-4000-8000-000000000001"
+        finished = "6f1c2a8e-0000-4000-8000-000000000002"
+        conn = store.connect()
+        try:
+            sessions.record_place(
+                conn,
+                session,
+                opened_in="ide",
+                opened_host="vscode",
+                opened_folder=str(self.root),
+                host_session_id="",
+                current=True,
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        def plan(**query: str) -> dict:
+            return self.http(f"/api/open-plan?{urlencode(query)}")
+
+        where = {"project": PROJECT}
+        note = {**where, "target": "file", "path": "docs/a.ts", "line": "4"}
+        return {
+            "open-places": self.http("/api/open-places"),
+            "open-plan-session": plan(target="session", session=session, surface="browser"),
+            "open-plan-session-desktop": plan(target="session", session=session, surface="desktop"),
+            "open-plan-copy": plan(target="session", session=finished, surface="browser"),
+            "open-plan-no-session": plan(target="session", session="absent", surface="browser"),
+            "open-plan-file": plan(**note, surface="browser"),
+            "open-plan-file-desktop": plan(**note, surface="desktop"),
+            "open-plan-folder": plan(**where, target="folder", path="docs", surface="browser"),
+            "open-plan-refused": plan(**where, target="file", path="../x.md", surface="browser"),
+            "open-vocabulary": {
+                "places": session_open.OPEN_PLACES,
+                "reasons": session_open.REASONS,
+                "path_refusals": session_open.PATH_REFUSALS,
+                "states": session_open.STATES,
+                "steps": session_open.STEP_KINDS,
+            },
+        }
+
     def answers(self) -> dict[str, object]:
         """Build the discussion and the questions, then read them as each reader does."""
 
@@ -337,11 +389,12 @@ class _Scenario:
             fields=[TEXT],
             author="asking-agent",
         )
+        executors = self.executor_card()
         return {
             "comment-reply": reply,
             "comment-resolved": mark,
             "card": self.http(f"/api/modules/planning/work-item?{self.scope(reference=ref)}"),
-            "card-executors": self.executor_card(),
+            "card-executors": executors,
             "card-brief": self.http(
                 f"/api/modules/planning/work-item?{self.scope(reference=ref, brief='true')}"
             ),
@@ -360,7 +413,22 @@ class _Scenario:
             ),
             "mcp-get-work-item-unresolved": self.tool("get_work_item", id=ref, unresolved=True),
             **self.documents(),
+            **self.open_plans(),
         }
+
+
+def _everything_but_cursor() -> url_schemes.Installed:
+    """A plan reads the machine, and a fixture must not depend on which one wrote it."""
+
+    return url_schemes.Installed(
+        schemes=frozenset(url_schemes.SCHEMES) - {"cursor"},
+        extensions=frozenset(
+            (editor, extension)
+            for editor in url_schemes.EDITOR_HOMES
+            for extension in (url_schemes.CLAUDE_EXTENSION, url_schemes.CODEX_EXTENSION)
+        ),
+        terminal=True,
+    )
 
 
 def generate() -> dict[str, str]:
@@ -379,6 +447,7 @@ def generate() -> dict[str, str]:
         with (
             mock.patch.dict(os.environ, environment),
             mock.patch.object(project_registry, "_read_registry_bytes", registry.read_bytes),
+            mock.patch.object(url_schemes, "detect", _everything_but_cursor),
         ):
             scenario = _Scenario(root)
             try:
