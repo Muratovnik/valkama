@@ -127,6 +127,20 @@ function select(option: { value: T; disabled?: boolean }) {
   color: var(--color-text);
   font-weight: 600;
   background: var(--color-surface-active);
+
+  /* A forced palette clears that ground and repaints the word, and the weight alone does
+     not tell two short words apart. So the pressed segment takes the palette's own pair,
+     as a pressed chip does, and chooses its own ring since it is out of the palette's reach. */
+  @media (forced-colors: active) {
+    color: HighlightText;
+    background: Highlight;
+    forced-color-adjust: none;
+
+    &:focus-visible {
+      outline-color: Highlight;
+      outline-offset: 2px;
+    }
+  }
 }
 
 .segmented-option:disabled {
