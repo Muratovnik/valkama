@@ -214,6 +214,46 @@ class PlanningDomainTests(unittest.TestCase):
         )
         self.assertEqual("blocked", with_reason["state"]["key"])
 
+    def test_a_reason_at_the_event_limit_is_stored_whole(self) -> None:
+        created = self.item("Land the planning domain")
+        # The event reads "<state key>: <reason>" within 512 characters, so the
+        # reason may use what the state key leaves: 512 - len("blocked: ") = 503.
+        reason = ("0123456789" * 60)[: 512 - len("blocked: ")]
+        moved = service.transition_work_item(
+            self.conn, created["reference"], "blocked", reason=reason
+        )
+        self.assertEqual("blocked", moved["state"]["key"])
+        (detail,) = self.conn.execute(
+            "SELECT detail FROM work_item_events WHERE work_item_id = ?"
+            " AND action = 'transitioned' ORDER BY rowid DESC LIMIT 1",
+            (created["work_item_id"],),
+        ).fetchone()
+        self.assertEqual(f"blocked: {reason}", detail)
+
+    def test_a_reason_one_character_over_the_event_limit_is_refused_and_writes_nothing(
+        self,
+    ) -> None:
+        created = self.item("Land the planning domain")
+        before = service.get_work_item(self.conn, created["reference"])
+        events_before = self.conn.execute(
+            "SELECT COUNT(*) FROM work_item_events WHERE work_item_id = ?",
+            (created["work_item_id"],),
+        ).fetchone()[0]
+        with self.assertRaisesRegex(
+            model.PlanningError, r"^reason must be at most 503 characters$"
+        ):
+            service.transition_work_item(
+                self.conn, created["reference"], "blocked", reason="x" * (503 + 1)
+            )
+        after = service.get_work_item(self.conn, created["reference"])
+        self.assertEqual(before["state"]["key"], after["state"]["key"])
+        self.assertEqual(before["revision"], after["revision"])
+        events_after = self.conn.execute(
+            "SELECT COUNT(*) FROM work_item_events WHERE work_item_id = ?",
+            (created["work_item_id"],),
+        ).fetchone()[0]
+        self.assertEqual(events_before, events_after)
+
     def test_review_warns_without_evidence_instead_of_refusing(self) -> None:
         created = self.item("Land the planning domain")
         moved = service.transition_work_item(self.conn, created["reference"], "review")

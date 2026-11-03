@@ -531,6 +531,24 @@ def delete_work_item(conn: sqlite3.Connection, reference: str) -> dict:
     }
 
 
+#: The most characters one event's detail may hold; `_log` refuses a longer one.
+EVENT_DETAIL_LIMIT = 512
+
+
+def _transition_reason(reason: str, state_key: str) -> str:
+    """The reason a transition records, sized to the event it is written into.
+
+    The event's detail reads `<state key>: <reason>`, so the reason may use only
+    the characters the state key leaves. Checking it before the write refuses a
+    long reason by its own name, with nothing written. The reason is never cut to
+    fit: a shortened reason loses what the caller wrote.
+    """
+
+    if not reason.strip():
+        return ""
+    return model.text_field(reason, "reason", limit=EVENT_DETAIL_LIMIT - len(f"{state_key}: "))
+
+
 def transition_work_item(
     conn: sqlite3.Connection,
     reference: str,
@@ -560,6 +578,7 @@ def transition_work_item(
 
     row = _row_for_write(conn, reference, expected_revision)
     target = states.resolve(conn, str(row["workflow_id"]), state)
+    note = _transition_reason(reason, str(target["key"]))
     placement = ranking.placement(rank) if rank is not None else None
     refusals, warnings = transitions.findings(conn, row, target, reason=reason)
     if refusals and not force:
@@ -588,8 +607,8 @@ def transition_work_item(
         parameters.append(model.dumps(steps))
     _write(conn, row, updates, parameters)
     detail = str(target["key"])
-    if reason.strip():
-        detail = f"{detail}: {model.text_field(reason, 'reason', limit=512)}"
+    if note:
+        detail = f"{detail}: {note}"
     _log(conn, str(row["work_item_id"]), "transitioned", detail, author)
     if held:
         _log(conn, str(row["work_item_id"]), "released", held, author)
@@ -1852,7 +1871,7 @@ def _log(
         (
             work_item_id,
             model.event_action(action),
-            model.text_field(detail, "event.detail", limit=512, required=False),
+            model.text_field(detail, "event.detail", limit=EVENT_DETAIL_LIMIT, required=False),
             model.actor(author),
             calls.call_id(conn, work_item_id),
         ),

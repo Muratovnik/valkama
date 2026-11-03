@@ -74,6 +74,13 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- **A transition's reason is checked before the item moves.** A reason long enough to
+  overflow the history entry, which reads `<state key>: <reason>`, used to move the item
+  and then fail on that entry, naming `event.detail`, a field the caller never sent. The
+  reason is now refused by its own name, `reason must be at most N characters`, where N
+  leaves room for the state key, and nothing is written. The same applies to a `transition`
+  inside `apply_work_item_changes`, which refuses the whole batch. A reason is never cut to
+  fit.
 - **A press no longer lands on what the card's bar is fading out.** Scrolling a card
   fades the reference line or the action out of its bar, and for the length of the fade
   they still took a press: a press could go down on something already leaving, and lose

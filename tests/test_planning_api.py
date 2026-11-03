@@ -403,6 +403,40 @@ class PlanningApiTests(unittest.TestCase):
         )
         self.assertFalse(steps["checklist"][0]["done"])
 
+    def test_a_batch_transition_reason_has_the_event_limit_of_its_state(self) -> None:
+        item = self.post("/api/planning/work-items", space="QA", title="Batch reason")
+        self.conn.commit()
+        before = self.get("/api/planning/work-item", id=item["reference"])["work_item"]
+        with self.assertRaises(planning_api.PlanningHttpError) as refused:
+            planning_api.handle_post(
+                self.conn,
+                "/api/planning/work-item/apply",
+                {
+                    "id": item["reference"],
+                    "claim": True,
+                    "transition": {"state": "blocked", "reason": "x" * (503 + 1)},
+                },
+            )
+        self.assertEqual("invalid_request", refused.exception.code)
+        self.assertIn("reason must be at most 503 characters", str(refused.exception))
+        # The claim the batch took before the refused step is rolled back too.
+        self.conn.commit()
+        after = self.get("/api/planning/work-item", id=item["reference"])["work_item"]
+        self.assertEqual(before, after)
+        # The same limit, reached exactly, passes and is stored whole.
+        moved = self.post(
+            "/api/planning/work-item/apply",
+            id=item["reference"],
+            transition={"state": "blocked", "reason": "y" * 503},
+        )
+        self.assertEqual("blocked", moved["state"]["key"])
+        (detail,) = self.conn.execute(
+            "SELECT detail FROM work_item_events WHERE work_item_id = ?"
+            " AND action = 'transitioned' ORDER BY rowid DESC LIMIT 1",
+            (before["work_item_id"],),
+        ).fetchone()
+        self.assertEqual("blocked: " + "y" * 503, detail)
+
     def test_a_create_with_links_and_claim_answers_in_full_with_what_was_applied(self) -> None:
         origin = self.post("/api/planning/work-items", space="QA", title="Origin")
         created = self.post(
