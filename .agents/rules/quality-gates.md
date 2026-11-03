@@ -9,7 +9,10 @@ and jscpd before the suites; `npm run format` applies the two formatters.
 `npm run test:browser` adds the axe pass over the harness surfaces, and
 `desktop`'s own `npm test` asserts the renderer options and the packaged fuse
 set as text, because configuration is what silently reverts and no test of
-behavior can see it.
+behavior can see it. The browser suite serves the harness on 4174 and the built
+app on 4175 and never reuses a server, so a second checkout running it at the
+same time sets `VALKAMA_BROWSER_PORT` to another harness port; the app takes the
+next one.
 
 semgrep is the only dataflow analysis here: ruff matches patterns, semgrep
 follows a tainted value through a function. It reads the Python server alone,
