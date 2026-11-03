@@ -182,6 +182,14 @@ describe('what stands before any press', () => {
     wrapper.unmount()
   })
 
+  it('a session the card’s read says is gone is no button before any plan has answered', () => {
+    answerPlans(new Promise(() => {}))
+    const wrapper = mountAction({ executor: executor(nowhere, 'gone') })
+    expect(wrapper.find('button.open-action').exists()).toBe(false)
+    expect(wrapper.get('.open-action-still .open-action-place').text()).toBe('session gone')
+    wrapper.unmount()
+  })
+
   it('a reason is reachable with no pointer: the keyboard opens it and Escape closes it', async () => {
     answerPlans(plan(nowhere, null, [{ kind: 'explain', reason: 'gone' }], 'gone'))
     const wrapper = mountAction({ executor: executor(nowhere, 'gone') })

@@ -232,6 +232,9 @@ test('the card with its holders passes the accessibility rules, panel open or no
   const closed = await new AxeBuilder({ page }).include('.drawer').withRules(rules).analyze()
   expect(closed.violations).toEqual([])
   await page.locator('.drawer .card-holder button.open-action').click()
+  await expect(page.locator('.open-panel')).toBeVisible()
+  // Contrast is read off what stands, and a fade is on its way there.
+  await settled(page)
   const open = await new AxeBuilder({ page }).include('.open-panel').withRules(rules).analyze()
   expect(open.violations).toEqual([])
 })
@@ -244,18 +247,21 @@ for (const locale of ['en', 'ru'] as const)
       await page.screenshot(shot(info, `card-${locale}-${width}.png`))
 
       await page.locator('.drawer .card-holder button.open-action').click()
-      await expect(page.getByRole('dialog').last()).toBeVisible()
+      await expect(page.locator('.open-panel')).toBeVisible()
+      await settled(page)
       await page.screenshot(shot(info, `panel-${locale}-${width}.png`))
       await page.keyboard.press('Escape')
 
       await page.locator('.step-holder button.open-action').nth(1).click()
       await expect(page.locator('.open-panel-why').first()).toBeVisible()
+      await settled(page)
       await page.screenshot(shot(info, `running-${locale}-${width}.png`))
       await page.keyboard.press('Escape')
 
       await page.locator(`.step-holder button.open-action[title*="${CRASHED}"]`).click()
       await expect(page.locator('.open-panel-offer')).toBeVisible()
       await expectNoSilentClipping(page, `silent panel at ${width}px in ${locale}`)
+      await settled(page)
       await page.screenshot(shot(info, `silent-${locale}-${width}.png`))
       await page.keyboard.press('Escape')
 
@@ -301,7 +307,9 @@ for (const locale of ['en', 'ru'] as const)
       )
       const dialog = page.getByRole('dialog').last()
       await expect(dialog.locator('button.open-action')).toContainText('Claude Desktop')
+      await settled(page)
       await page.screenshot(shot(info, `dialog-${locale}-${width}.png`))
+      await expect(dialog.locator('button.open-action')).toBeVisible()
     })
   }
 
@@ -320,8 +328,27 @@ for (const colorScheme of ['dark', 'light'] as const)
         expect(await paintedPixels(page, control)).toBeGreaterThan(40)
       await page.locator('.drawer .card-holder button.open-action').click()
       await expect(page.locator('.open-panel')).toBeVisible()
+      await settled(page)
       await page.screenshot(shot(info, `forced-panel-${colorScheme}-${width}.png`))
+      await page.keyboard.press('Escape')
+      await page.locator(`.step-holder button.open-action[title*="${CRASHED}"]`).click()
+      const resume = page.locator('.open-panel-resume')
+      await expect(resume).toBeVisible()
+      await settled(page)
+      await page.screenshot(shot(info, `forced-silent-${colorScheme}-${width}.png`))
+      expect(await paintedPixels(page, resume)).toBeGreaterThan(40)
     })
+
+/**
+ * Waits until what a shot or a contrast rule reads has stopped moving: an overlay is in
+ * the document a frame before its fade starts, and a shot in that frame has no overlay.
+ */
+async function settled(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))
+    await Promise.all(document.getAnimations().map((animation) => animation.finished))
+  })
+}
 
 /**
  * How many pixels of a control are not its ground, in the picture itself: a forced
