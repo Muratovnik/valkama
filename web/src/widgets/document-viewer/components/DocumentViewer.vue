@@ -16,7 +16,9 @@ import { useI18n } from 'vue-i18n'
 
 import { useTimeoutFn } from '@vueuse/core'
 
+import DocumentHost from '@/widgets/document-viewer/components/DocumentHost.vue'
 import DocumentText from '@/widgets/document-viewer/components/DocumentText.vue'
+import DocumentWindowButton from '@/widgets/document-viewer/components/DocumentWindowButton.vue'
 import type {
   DocumentFailure,
   DocumentView,
@@ -31,20 +33,15 @@ import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import { blockAtLine, inlineWords, parseRichDocument } from '@/shared/lib/richText.ts'
 import type { RichDocument } from '@/shared/lib/richText.ts'
-import {
-  DOCUMENT_PANE_DEFAULT_WIDTH,
-  DOCUMENT_PANE_STORAGE_KEY,
-  DRAWER_MAX_WIDTH,
-  DRAWER_MIN_WIDTH,
-} from '@/shared/lib/shellLayout.ts'
 import { suffixTarget } from '@/shared/lib/textReferences.ts'
 import OverlayHeader from '@/shared/ui/OverlayHeader.vue'
+import { pageWasTouched } from '@/shared/ui/overlayStack.ts'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
-import ResizableInspector from '@/shared/ui/ResizableInspector.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
-const props = defineProps<{ view: DocumentView }>()
+/** `page`: the document is the whole window, at an address of its own, with nothing to close. */
+const props = defineProps<{ view: DocumentView; page?: boolean }>()
 
 /** How long what a press said stays, before the line goes back to what stands. */
 const SAID_FOR_MS = 5000
@@ -115,8 +112,8 @@ const label = computed(() => t('documentLinks.viewer.label', { title: title.valu
 const isOpen = computed(() => place.value !== null)
 const path = computed(() => place.value?.path ?? '')
 const project = computed(() => place.value?.project ?? '')
-const resizeLabel = computed(() => t('documentLinks.viewer.resize'))
-const closeLabel = computed(() => t('documentLinks.viewer.close'))
+const closeLabel = computed(() => (props.page ? '' : t('documentLinks.viewer.close')))
+const headingLevel = computed(() => (props.page ? 'h1' : 'h2'))
 const refreshLabel = computed(() => t('documentLinks.viewer.refresh'))
 const refreshTitle = computed(() => t('documentLinks.viewer.refreshTitle'))
 const copyTitle = computed(() => t('documentLinks.viewer.copyPath', { path: path.value }))
@@ -149,6 +146,12 @@ const panel = computed<PlatformUiState | null>(() => {
 /** Refreshing has a point where there is a text to renew or a read worth trying again. */
 const canRefresh = computed(() =>
   shownFile.value ? staleness.value?.kind !== 'deleted' : failure.value?.kind === 'unreachable',
+)
+
+/** Another window has a point only while there is a text here it would show as well. */
+const canOpenWindow = computed(
+  () =>
+    !props.page && shownFile.value !== null && (staleness.value?.kind ?? 'changed') === 'changed',
 )
 
 const anchorMissing = ref('')
@@ -199,10 +202,12 @@ function blocksFor(shown: RichDocument, suffix: string): { first: number; marks:
 /**
  * Focus follows the reader. A block a link sent them to is an answer to the press, which
  * asks for the ring; the head of a document just opened is only where reading starts,
- * and the input that opened it decides.
+ * and the input that opened it decides. A page opened by an address or a reload answers
+ * nothing: focus waits on what it is read with, unringed, where the keys that scroll work.
  */
 function land(box: HTMLElement | null) {
-  if (box) moveFocus(box, { preventScroll: true })
+  if (props.page && !pageWasTouched()) scroller.value?.focus({ preventScroll: true })
+  else if (box) moveFocus(box, { preventScroll: true })
   else header.value?.focusTitle()
 }
 
@@ -268,16 +273,11 @@ async function copyPath() {
 </script>
 
 <template>
-  <ResizableInspector
-    layer="command"
-    surface-class="document-drawer"
-    :open="isOpen"
+  <DocumentHost
     :label="label"
-    :resize-label="resizeLabel"
-    :storage-key="DOCUMENT_PANE_STORAGE_KEY"
-    :default-width="DOCUMENT_PANE_DEFAULT_WIDTH"
-    :min-width="DRAWER_MIN_WIDTH"
-    :max-width="DRAWER_MAX_WIDTH"
+    :open="isOpen"
+    :page="page"
+    :title="title"
     @close="close"
   >
     <article class="document-viewer">
@@ -286,6 +286,7 @@ async function copyPath() {
         class="document-head"
         :title="title"
         :close-label="closeLabel"
+        :heading="headingLevel"
         focusable-title
         single-line
         @close="close"
@@ -318,11 +319,9 @@ async function copyPath() {
             </button>
           </p>
         </template>
-        <template
-          v-if="canRefresh"
-          #actions
-        >
+        <template #actions>
           <VButton
+            v-if="canRefresh"
             variant="ghost"
             :aria-label="refreshLabel"
             :title="refreshTitle"
@@ -331,6 +330,11 @@ async function copyPath() {
           >
             <VIcon name="refresh" />
           </VButton>
+          <DocumentWindowButton
+            v-if="canOpenWindow && place"
+            :place="place"
+            @opened="close"
+          />
         </template>
       </OverlayHeader>
       <!-- Always there, so that what it comes to say is heard. -->
@@ -369,7 +373,7 @@ async function copyPath() {
         />
       </div>
     </article>
-  </ResizableInspector>
+  </DocumentHost>
 </template>
 
 <style scoped>
@@ -382,7 +386,7 @@ async function copyPath() {
 
 .document-head {
   flex: 0 0 auto;
-  padding: var(--space-4) var(--space-5);
+  padding: var(--space-4) max(var(--space-5), var(--document-inset, 0px));
 }
 
 /* The path's end tells two files apart, so a long one gives up its start, and the whole
@@ -427,7 +431,7 @@ async function copyPath() {
   flex: 0 0 auto;
   gap: var(--space-2);
   align-items: center;
-  padding: var(--space-2) var(--space-5);
+  padding: var(--space-2) max(var(--space-5), var(--document-inset, 0px));
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-note);
@@ -447,7 +451,7 @@ async function copyPath() {
 .document-body {
   flex: 1 1 auto;
   min-height: 0;
-  padding: var(--space-5) var(--space-6) var(--space-8);
+  padding: var(--space-5) max(var(--space-6), var(--document-inset, 0px)) var(--space-8);
   overflow-y: auto;
   overscroll-behavior: contain;
   outline: none;

@@ -10,11 +10,13 @@
  * where the operator was, which `usePlatformEntryRestore` then writes.
  */
 
-import { computed, ref, watch } from 'vue'
+import { computed, ref, shallowRef, watch } from 'vue'
 import { isNavigationFailure, NavigationFailureType } from 'vue-router'
 
 import { router } from '@/app/router.ts'
 
+import { documentPageAddress } from '@/shared/api/documentPage.ts'
+import type { DocumentPageAddress } from '@/shared/api/documentPage.ts'
 import type { ModuleId } from '@/shared/api/platformModuleContract.ts'
 import {
   isPlatformRouteUnavailable,
@@ -91,12 +93,29 @@ export function usePlatformNavigation(
   const routeFailure = ref('')
   /** The text of a work item address the server did not redirect, or null on any other. */
   const workItemLink = ref<string | null>(null)
+  /** The document a `/doc` address names, or null on any other: the page is then only that. */
+  const documentPage = shallowRef<DocumentPageAddress | null>(null)
   const entryRestorePending = ref(false)
   const pendingSession = ref('')
   /** How many times an address has asked for the panel of questions, which the shell holds. */
   const questionsAsked = ref(0)
 
   function applyLocation() {
+    // The window's address and not the router's: the first read comes before the router has
+    // read it, and the shell would stand here for a moment, with everything it starts.
+    documentPage.value = documentPageAddress(new URL(location.href))
+    if (documentPage.value === null) {
+      applyShellLocation()
+      return
+    }
+    routeFailure.value = ''
+    workItemLink.value = null
+    entryRestorePending.value = false
+    routeUnavailable.value = null
+    route.value = DEFAULT_ROUTE
+  }
+
+  function applyShellLocation() {
     const rest = withoutQuestionsAsk(new URL(router.currentRoute.value.fullPath, location.origin))
     if (rest !== null) {
       questionsAsked.value += 1
@@ -157,7 +176,10 @@ export function usePlatformNavigation(
   const activeModule = computed(() => route.value.module_id)
   const operatingScope = computed(() => route.value.scope)
   const routeBlocked = computed(
-    () => workItemLink.value !== null || Boolean(routeFailure.value || routeUnavailable.value),
+    () =>
+      documentPage.value !== null ||
+      workItemLink.value !== null ||
+      Boolean(routeFailure.value || routeUnavailable.value),
   )
 
   /**
@@ -176,6 +198,7 @@ export function usePlatformNavigation(
     routeFailure.value = ''
     routeUnavailable.value = null
     workItemLink.value = null
+    documentPage.value = null
     route.value = next
   }
 
@@ -235,9 +258,10 @@ export function usePlatformNavigation(
    * a navigation like any other here, so the leave check asks before a draft goes
    * and the page never reloads. The panel of questions opens over whatever is on
    * screen and moves nothing. The app checks the route's shape first; one this page
-   * cannot read leaves it where it is.
+   * cannot read leaves it where it is. A document's own window holds no card and does not
+   * listen: its saying so would tell the app that the main window's page is ready.
    */
-  window.valkamaDesktop?.onOpenRoute?.((href) => {
+  ;(documentPage.value === null ? window.valkamaDesktop : undefined)?.onOpenRoute?.((href) => {
     try {
       const address = new URL(href, location.origin)
       if (withoutQuestionsAsk(address) !== null) {
@@ -260,6 +284,7 @@ export function usePlatformNavigation(
 
   return {
     activeModule,
+    documentPage,
     entryRestorePending,
     goHome,
     openProject,

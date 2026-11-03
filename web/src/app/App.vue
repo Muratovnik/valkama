@@ -3,6 +3,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppContextBar from '@/app/components/AppContextBar.vue'
+import AppDocumentPage from '@/app/components/AppDocumentPage.vue'
 import AppModuleStage from '@/app/components/AppModuleStage.vue'
 import AppNotice from '@/app/components/AppNotice.vue'
 import AppRouteRecovery from '@/app/components/AppRouteRecovery.vue'
@@ -55,6 +56,7 @@ function localizedFailure(failure: TypedFailure): string {
 
 const {
   activeModule,
+  documentPage,
   entryRestorePending,
   goHome,
   openProject,
@@ -266,12 +268,16 @@ usePlatformEntryRestore({
 
 <template>
   <a
+    v-if="documentPage === null"
     class="skip-link"
     href="#main-content"
     @click.prevent="focusMainContent"
     >{{ t('accessibility.skipToContent') }}</a
   >
-  <div class="app-shell">
+  <div
+    v-if="documentPage === null"
+    class="app-shell"
+  >
     <AppNav
       :modules="modules"
       :active="currentModule"
@@ -351,18 +357,27 @@ usePlatformEntryRestore({
     </div>
   </div>
   <GlobalWorkFinder
+    v-if="documentPage === null"
     :open="finderOpen"
     :projects="contextReady?.projects ?? []"
     @close="finderOpen = false"
     @select="openTarget"
   />
   <InputRequestsHub
+    v-if="documentPage === null"
     :open="requestsOpen"
     @close="requestsOpen = false"
     @select="openTarget"
     @count="(count) => (pendingRequestCount = count)"
   />
-  <DocumentViewer :view="documentView" />
+  <DocumentViewer
+    v-if="documentPage === null"
+    :view="documentView"
+  />
+  <AppDocumentPage
+    v-else
+    :address="documentPage"
+  />
   <!-- Beside the overlays rather than in the workspace, whose containment would hold it under
        them: a press inside a card or a dialog says what it did here. -->
   <AppNotice

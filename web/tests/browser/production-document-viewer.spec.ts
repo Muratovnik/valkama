@@ -266,6 +266,8 @@ test('the keyboard walks the head, then the links of the text, and comes round',
   await page.keyboard.press('Tab')
   await expect(viewer.getByRole('button', { name: 'Refresh' })).toBeFocused()
   await page.keyboard.press('Tab')
+  await expect(viewer.getByRole('button', { name: 'Open in a new window' })).toBeFocused()
+  await page.keyboard.press('Tab')
   await expect(viewer.getByRole('button', { name: 'Close the document' })).toBeFocused()
   await page.keyboard.press('Tab')
   await expect(linkIn(viewer, 'notes.md')).toBeFocused()

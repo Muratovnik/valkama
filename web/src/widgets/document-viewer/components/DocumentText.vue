@@ -115,6 +115,7 @@ defineExpose({ box: (index: number) => boxes()[index] ?? null, topIndex })
 .document-text {
   display: grid;
   gap: var(--space-3);
+  width: 100%;
   min-width: 0;
   max-width: 88ch;
   line-height: var(--line-height-reading);

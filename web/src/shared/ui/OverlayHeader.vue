@@ -11,17 +11,27 @@ import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = withDefaults(
   defineProps<{
-    closeLabel: string
     title: string
+    /** What the way out is called. A head with none is the head of a window, which has its own. */
+    closeLabel?: string
     /** Which record the overlay is about: an identifier and its title. */
     context?: string
     /** The title can hold focus, for a host whose content takes it only once it arrives. */
     focusableTitle?: boolean
+    /** What the title is in the page's outline: the top of it, on a page that is only this. */
+    heading?: 'h1' | 'h2'
     /** A title that may run long stays on its line, and the whole of it is elsewhere. */
     singleLine?: boolean
     subtitle?: string
   }>(),
-  { subtitle: '', context: '', focusableTitle: false, singleLine: false },
+  {
+    closeLabel: '',
+    heading: 'h2',
+    subtitle: '',
+    context: '',
+    focusableTitle: false,
+    singleLine: false,
+  },
 )
 
 const emit = defineEmits<{ close: [] }>()
@@ -35,14 +45,15 @@ defineExpose({ focusTitle: () => name.value?.focus({ preventScroll: true }) })
   <header class="overlay-header">
     <slot name="start" />
     <div class="overlay-header-title">
-      <h2
+      <component
+        :is="heading"
         ref="name"
         class="overlay-header-name"
         :class="{ 'single-line': singleLine }"
         :tabindex="nameFocus"
       >
         {{ title }}
-      </h2>
+      </component>
       <p
         v-if="subtitle"
         class="overlay-header-subtitle"
@@ -56,8 +67,14 @@ defineExpose({ focusTitle: () => name.value?.focus({ preventScroll: true }) })
       >
       <slot name="meta" />
     </div>
-    <slot name="actions" />
+    <div
+      v-if="$slots.actions"
+      class="overlay-header-actions"
+    >
+      <slot name="actions" />
+    </div>
     <button
+      v-if="closeLabel"
       class="overlay-header-close"
       type="button"
       :aria-label="closeLabel"
@@ -122,6 +139,15 @@ defineExpose({ focusTitle: () => name.value?.focus({ preventScroll: true }) })
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* As tall as the way out, so that the icons of the row stand on one line. */
+.overlay-header-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--space-1);
+  align-items: center;
+  min-height: var(--size-control-target);
 }
 
 /* The head already draws the rule under itself; a second outline around the
