@@ -125,6 +125,71 @@ test('a press on the part of the bar that has begun to fade does nothing', async
   expect(await copies(page)).toEqual([workItemRef.reference])
 })
 
+/**
+ * Scrolls the card to its end and comes back the moment the bar has taken the action in,
+ * with every fade that started held `into` milliseconds in. Read on the bar's own class,
+ * before a frame has passed, so no fade has run on by itself.
+ */
+function scrollActionIn(body: Locator, into: number) {
+  return body.evaluate(
+    (scroller, held) =>
+      new Promise<number>((done) => {
+        const bar = scroller.parentElement?.querySelector('.drawer-frame-bar')
+        if (!bar) throw new Error('no bar')
+        const observer = new MutationObserver(() => {
+          if (!bar.classList.contains('action-away')) return
+          observer.disconnect()
+          const fades = bar.getAnimations({ subtree: true })
+          for (const fade of fades) {
+            fade.pause()
+            fade.currentTime = held
+          }
+          done(fades.length)
+        })
+        observer.observe(bar, { attributes: true, attributeFilter: ['class'] })
+        scroller.scrollTo({ top: scroller.scrollHeight })
+      }),
+    into,
+  )
+}
+
+test('the action coming into the bar takes no press until it is there to see', async ({ page }) => {
+  const drawer = await openLongCard(page)
+  const bar = drawer.locator('.drawer-frame-bar')
+  const slot = bar.locator('.drawer-frame-action')
+  const action = slot.getByRole('button', { name: 'Take over', exact: true })
+  const question = drawer.locator('.confirm-strip')
+  await page.evaluate(() => {
+    const reached: boolean[] = []
+    addEventListener(
+      'click',
+      ({ target }) =>
+        reached.push(target instanceof Element && target.closest('.drawer-frame-action') !== null),
+      { capture: true },
+    )
+    Object.assign(window, { reached })
+  })
+  const reached = () =>
+    page.evaluate(() => [...(window as unknown as { reached: boolean[] }).reached])
+
+  expect(await scrollActionIn(drawer.locator('.drawer-frame-body'), 1)).toBeGreaterThan(0)
+  // One millisecond in, the action already counts as shown and nothing of it is to be seen.
+  await expect(slot).toHaveCSS('visibility', 'visible')
+  expect(Number(await slot.evaluate((node) => getComputedStyle(node).opacity))).toBeLessThan(0.05)
+  const at = await centreOf(action)
+  await page.mouse.click(at.x, at.y)
+  expect(await reached()).toEqual([false])
+  await expect(question).toHaveCount(0)
+
+  // Come in, the same press takes it.
+  await bar.evaluate((node) => {
+    for (const fade of node.getAnimations({ subtree: true })) fade.finish()
+  })
+  await page.mouse.click(at.x, at.y)
+  expect(await reached()).toEqual([false, true])
+  await expect(question).toBeVisible()
+})
+
 test('a press held on the bar keeps its control through the scroll, and the bar answers after', async ({
   page,
 }) => {

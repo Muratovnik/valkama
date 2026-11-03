@@ -290,22 +290,30 @@ defineExpose({ holdFocus, position, restore, scrollToContent })
 }
 
 /* The fades, and the only things the scroller's position decides. What is out of sight
-   is out of reach too, and from the moment it starts to go: `visibility` holds until the
-   fade has ended, and a press went down on what was already leaving. A
-   control the keyboard holds stays where it is until the keyboard moves on, one a press
-   holds until the press ends, and what would stand over it waits. */
+   is out of reach too, from the moment it starts to go and until it has come in:
+   `visibility` holds until a fade out has ended and turns at the first instant of a fade
+   in, so a press went down on what was already leaving, and on what was not there to see
+   yet. So `pointer-events` is a transition only on the way in, where a discrete value
+   turns at the half of the eased progress, the very point at which the same curve has the
+   part half opaque; on the way out it is no transition and turns at once. The state each
+   part is going to says which. A control the keyboard holds stays where it is until the
+   keyboard moves on, one a press holds until the press ends, and what would stand over it
+   waits. */
 .drawer-frame-identity,
 .drawer-frame-pinned-title,
 .drawer-frame-action {
   transition:
     opacity var(--duration-surface) var(--ease-out),
-    visibility var(--duration-surface) var(--ease-out);
+    visibility var(--duration-surface) var(--ease-out),
+    pointer-events var(--duration-surface) var(--ease-out);
+  transition-behavior: allow-discrete;
 }
 
 .drawer-frame-pinned-title,
 .drawer-frame-action,
 .title-away .drawer-frame-identity {
   opacity: 0;
+  transition-behavior: normal;
   pointer-events: none;
   visibility: hidden;
 }
@@ -315,6 +323,7 @@ defineExpose({ holdFocus, position, restore, scrollToContent })
 .drawer-frame-identity:has(:focus-visible),
 .drawer-frame-action:has(:focus-visible) {
   opacity: 1;
+  transition-behavior: allow-discrete;
   pointer-events: auto;
   visibility: visible;
 }
@@ -323,6 +332,7 @@ defineExpose({ holdFocus, position, restore, scrollToContent })
   .drawer-frame-pinned-title,
   .drawer-frame-action {
     opacity: 0;
+    transition-behavior: normal;
     pointer-events: none;
     visibility: hidden;
   }

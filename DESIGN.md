@@ -859,7 +859,8 @@ the identity's place once the big title has passed under the bar, and the action
 in beside Close once its own place has. Each has its room from the start, so its arrival
 cuts no word and shifts no neighbour; a reason goes with the facts and leaves the title
 its room. A control the keyboard holds in the bar stays until the keyboard moves on, and
-one a press went down on until the press ends; what has begun to fade takes no press.
+one a press went down on until the press ends; what has begun to fade takes no press, and
+what is fading in takes one once it is half there.
 Pinned, the bar and the tabs are no taller than the title and tabs of 2.1.0, and they say
 which item this is and keep the action and every section in reach: keeping the facts, a
 full-width action and two rows of tabs, an earlier head held 279px of a phone. A section

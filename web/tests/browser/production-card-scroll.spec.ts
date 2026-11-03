@@ -385,9 +385,10 @@ test('what the bar shows arrives by a fade on the surface tokens, and at once un
   page,
 }) => {
   const drawer = await openLongCard(page, 1024)
+  // Reach goes with the fade: it turns half way in, and at once on the way out.
   expect(await fadeOf(drawer)).toEqual({
-    duration: '0.24s, 0.24s',
-    property: 'opacity, visibility',
+    duration: '0.24s, 0.24s, 0.24s',
+    property: 'opacity, visibility, pointer-events',
   })
 
   await page.emulateMedia({ reducedMotion: 'reduce' })
