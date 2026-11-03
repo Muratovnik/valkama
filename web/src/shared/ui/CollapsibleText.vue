@@ -99,7 +99,8 @@ watch(expanded, (open) => {
  * now holds links, and Tab reached the ones below the cut: the browser scrolled
  * the held box to show the focused one, and the box then showed the middle of
  * the text with its top cut away, which nothing on the page could undo. A link
- * the reader can already see leaves the text as it is.
+ * the reader can already see leaves the text as it is. Opened, the text has moved
+ * the link away from where the browser scrolled to, so it is brought back to view.
  */
 function reveal(event: FocusEvent) {
   const element = body.value
@@ -110,8 +111,13 @@ function reveal(event: FocusEvent) {
     event.target.getBoundingClientRect().bottom -
     element.getBoundingClientRect().top +
     element.scrollTop
-  if (end > element.clientHeight + 1) expanded.value = true
+  const below = end > element.clientHeight + 1
+  if (below) expanded.value = true
   element.scrollTop = 0
+  if (below) void nextTick(() => event.target instanceof Element && scrollIntoSight(event.target))
+}
+function scrollIntoSight(link: Element) {
+  link.scrollIntoView({ block: 'nearest' })
 }
 const toggleLabel = computed(() =>
   t(expanded.value ? 'platform.actions.collapse' : 'platform.actions.expand'),
