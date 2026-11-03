@@ -408,6 +408,17 @@ export function workItemLinkText(path: string): string | null {
   }
 }
 
+/**
+ * The short address of one work item on this origin, `<origin>/open/<number>`.
+ *
+ * The same address an agent hands a person, which the server spells in
+ * `work_item_url`: it opens the card wherever it is followed, and a reader of it
+ * sees the item's number. `workItemLinkText` reads it back.
+ */
+export function workItemLinkAddress(origin: string, reference: string): string {
+  return `${origin}/open/${encodeURIComponent(reference)}`
+}
+
 function validateRoute(value: unknown): PlatformRoute {
   const object = plainObject(value, 'route')
   exactKeys(object, ['module_id', 'scope', 'entity', 'state'], 'route')

@@ -397,8 +397,11 @@ test('a control the keyboard holds in the bar stays until the keyboard moves on'
   await expect(reference).toBeFocused()
   await expect(bar.locator('.drawer-frame-pinned-title')).toBeHidden()
 
-  // The source's turn, the last control of the identity; then the state, which brings
-  // the facts back into view on its way. Read down from there, the identity makes way.
+  // The link's turn and the source's, the last control of the identity; then the state,
+  // which brings the facts back into view on its way. Read down from there, the identity
+  // makes way.
+  await page.keyboard.press('Tab')
+  await expect(bar.locator('.identity-link')).toBeFocused()
   await page.keyboard.press('Tab')
   await expect(bar.locator('.identity-source')).toBeFocused()
   await page.keyboard.press('Tab')

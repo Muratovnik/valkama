@@ -8,9 +8,13 @@
  * reference under the title, «Обновлено» and «Источник» as two cells of a fact
  * grid below the writes, which put the state half way down the drawer.
  *
- * The reference copies itself; the anchor opens where it lives, or is copied
- * where nothing can open it, and its full path stands in Relations with the
- * item's other references. Either says what happened beside it.
+ * The reference copies itself, and the link beside it copies the item's short
+ * address, `/open/<number>` on this origin, which opens the card wherever it is
+ * followed: the desktop app has no address bar to take it from. The anchor opens
+ * where it lives, or is copied where nothing can open it, and its full path
+ * stands in Relations with the item's other references. Each says what happened
+ * beside it. The note for the link names no number: the reference stands
+ * right before it, and a phone-wide line has room for the short form only.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -20,6 +24,7 @@ import { useSourceOpen } from '@/widgets/work-item-inspector/utils/useSourceOpen
 import FacetMarks from '@/entities/work-item/components/FacetMarks.vue'
 
 import type { WorkItem } from '@/shared/api/planningModel.ts'
+import { workItemLinkAddress } from '@/shared/api/platformRoute.ts'
 import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -38,15 +43,26 @@ const { note: sourceNote, open: openSource } = useSourceOpen(
 )
 const copyNote = ref('')
 
-async function copyReference() {
+/** Put `text` on the clipboard and say beside the line whether it got there. */
+async function copy(text: string, done: string, failed: string) {
   sourceNote.value = ''
+  const words = { reference: props.reference }
   try {
-    await navigator.clipboard.writeText(props.reference)
-    copyNote.value = t('workItem.head.referenceCopied', { reference: props.reference })
+    await navigator.clipboard.writeText(text)
+    copyNote.value = t(done, words)
   } catch {
-    copyNote.value = t('workItem.head.referenceCopyFailed', { reference: props.reference })
+    copyNote.value = t(failed, words)
   }
 }
+
+const copyReference = () =>
+  copy(props.reference, 'workItem.head.referenceCopied', 'workItem.head.referenceCopyFailed')
+const copyLink = () =>
+  copy(
+    workItemLinkAddress(location.origin, props.reference),
+    'workItem.head.linkCopied',
+    'workItem.head.linkCopyFailed',
+  )
 
 function pressSource() {
   copyNote.value = ''
@@ -87,6 +103,18 @@ const sourceLabel = computed(() => `${t('source.open')}: ${props.item?.source ??
         @click="copyReference"
       >
         {{ reference }}
+      </button>
+      <button
+        class="identity-link"
+        type="button"
+        :title="t('workItem.head.copyLink', { reference })"
+        :aria-label="t('workItem.head.copyLink', { reference })"
+        @click="copyLink"
+      >
+        <VIcon
+          name="link"
+          :size="14"
+        />
       </button>
     </span>
     <span
@@ -150,6 +178,7 @@ const sourceLabel = computed(() => `${t('source.open')}: ${props.item?.source ??
 }
 
 .head-reference,
+.identity-link,
 .identity-source {
   display: inline-flex;
   align-items: center;
@@ -177,10 +206,16 @@ const sourceLabel = computed(() => `${t('source.open')}: ${props.item?.source ??
   font-variant-numeric: tabular-nums;
 }
 
+.identity-link,
 .identity-source {
   flex: none;
   justify-content: center;
   min-inline-size: var(--size-control-inline);
+}
+
+/* The link belongs to the reference it copies, a step apart so the two rings never touch. */
+.identity-link {
+  margin-inline-start: var(--space-1);
 }
 
 /* A phone-wide drawer keeps who the item is and leaves when it changed to the

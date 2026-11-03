@@ -352,6 +352,7 @@ export type IconName =
   | 'info'
   | 'improvements'
   | 'language'
+  | 'link'
   | 'menu'
   | 'message-square'
   | 'play'

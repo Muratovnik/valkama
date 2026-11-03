@@ -122,8 +122,8 @@ test('the state chip moves the item from the keyboard and says why the server re
   const { drawer, moves } = await openCard(page, 1440)
   const chip = drawer.getByRole('combobox', { name: /^Состояние: Dev/u })
   await drawer.locator('.drawer-frame-close').focus()
-  // Close, the reference, the source, then the state.
-  for (let step = 0; step < 3; step += 1) await page.keyboard.press('Tab')
+  // Close, the reference, its link, the source, then the state.
+  for (let step = 0; step < 4; step += 1) await page.keyboard.press('Tab')
   await expect(chip).toBeFocused()
 
   await page.keyboard.press('Enter')
@@ -154,6 +154,54 @@ test('the state chip moves the item from the keyboard and says why the server re
   await chip.click()
   await page.getByRole('option', { name: 'Done' }).click()
   await expect.poll(() => moves.length).toBe(2)
+})
+
+for (const width of [1440, 390]) {
+  test(`the head copies the item's short address from the keyboard and says so, at ${width}px`, async ({
+    page,
+  }) => {
+    const { drawer } = await openCard(page, width)
+    await page.context().grantPermissions(['clipboard-write', 'clipboard-read'])
+    const link = drawer.getByRole('button', {
+      name: `Копировать ссылку на ${workItemRef.reference}`,
+    })
+    await drawer.locator('.head-reference').focus()
+    await page.keyboard.press('Tab')
+    await expect(link).toBeFocused()
+    await page.keyboard.press('Enter')
+
+    const address = `${new URL(page.url()).origin}/open/${workItemRef.reference}`
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(address)
+    const note = drawer.locator('.card-identity [role="status"]')
+    await expect(note).toHaveText('Ссылка скопирована')
+    await expect(note).toBeVisible()
+    // Said whole where the line has room; a phone-wide line shortens it as it does
+    // every note there, and the live region still says all of it.
+    const whole = await note.evaluate((node) => node.scrollWidth <= node.clientWidth)
+    expect(whole || width < STACKED_BELOW).toBe(true)
+    // The note shares the line and pushes nothing out of the window.
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    )
+    expect(overflow).toBe(0)
+  })
+}
+
+test('a link the clipboard refuses is said to have failed, not to have been copied', async ({
+  page,
+}) => {
+  const { drawer } = await openCard(page, 1440)
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: () => Promise.reject(new DOMException('denied', 'NotAllowedError')) },
+    })
+  })
+  await drawer
+    .getByRole('button', { name: `Копировать ссылку на ${workItemRef.reference}` })
+    .click()
+  await expect(drawer.locator('.card-identity [role="status"]')).toHaveText(
+    'Не удалось скопировать ссылку',
+  )
 })
 
 test('a reference in a checklist step opens its card, and pressing the step text ticks it', async ({

@@ -3,7 +3,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { readWorkItemLink } from '@/features/work-item-link/workItemLink.ts'
 
 import { planningWorkItemRef } from '@/shared/api/platformPlanningRefs.ts'
-import { parsePlatformRoute, workItemLinkText } from '@/shared/api/platformRoute.ts'
+import {
+  parsePlatformRoute,
+  workItemLinkAddress,
+  workItemLinkText,
+} from '@/shared/api/platformRoute.ts'
 
 import { finderResponse, finderTarget } from './support/globalFinder.ts'
 
@@ -102,6 +106,18 @@ describe('the address grammar', () => {
     expect(workItemLinkText('/open/%E0%A4%A')).toBe('%E0%A4%A')
     expect(workItemLinkText('/opening/MAIN-12')).toBeNull()
     expect(workItemLinkText('/modules/planning/global')).toBeNull()
+  })
+
+  it('writes the short address on the origin it is given, as the server spells it', () => {
+    // `work_item_url` in server/planning/acknowledgements.py writes this literal.
+    expect(workItemLinkAddress('http://127.0.0.1:8642', 'MAIN-12')).toBe(
+      'http://127.0.0.1:8642/open/MAIN-12',
+    )
+    // Whatever it writes, the grammar above reads back as the same number.
+    for (const reference of ['MAIN-12', 'VAL-2041', 'а-1', 'A B-1']) {
+      const { pathname } = new URL(workItemLinkAddress('http://localhost:5173', reference))
+      expect(workItemLinkText(pathname)).toBe(reference)
+    }
   })
 
   it('reads the route the server redirects to as the card it names', () => {

@@ -88,6 +88,8 @@ const ICONS: Record<string, Component> = {
   'database': Database,
   'external-link': ExternalLink,
   'filters': Filter,
+  // The address of an item, to hand to someone; the editor's own link is `format-link`.
+  'link': Link,
   'info': Info,
   'improvements': Wrench,
   'layout-dashboard': SquareKanban,
