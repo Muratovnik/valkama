@@ -1399,8 +1399,10 @@ oldest first, `[]` when there is none:
 ```
 
 (The request's other keys are as before and left out here.) A version's
-`by_person` is read from the call that gave it, and the answer in force takes its
-`by_person` from the latest `request_answered` or `request_changed` event.
+`by_person` is read from the call that gave it, and is `null`, as on a comment,
+for a version no call gave: one older than call identity, or written by a launch.
+The answer in force takes its `by_person` from the latest `request_answered` or
+`request_changed` event.
 `get_work_item_request`, and its HTTP read `GET /api/planning/request`, also carry
 `replies`: the question's whole thread, as comments in the flat form. No other read
 of a question carries it: the interface and an export read those replies among the

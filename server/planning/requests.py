@@ -178,7 +178,8 @@ def _with_history(conn: sqlite3.Connection, records: list[dict]) -> list[dict]:
     """Requests with the answers each current answer replaced, oldest first.
 
     Each version is read as the current answer is, with `by_person` from the
-    call that gave it. One statement for every request of a read.
+    call that gave it, and null, as on a comment, for a version no call gave.
+    One statement for every request of a read.
     """
 
     versions: dict[str, list[dict]] = {}
@@ -186,7 +187,7 @@ def _with_history(conn: sqlite3.Connection, records: list[dict]) -> list[dict]:
     if changed and _has_table(conn, "work_item_request_answers"):
         for row in conn.execute(
             "SELECT a.request_id, a.version, a.answers_json, a.answered_by, a.answered_at,"
-            " c.identity_source FROM work_item_request_answers a"
+            " a.call_id, c.identity_source FROM work_item_request_answers a"
             " LEFT JOIN execution_events c ON c.id = a.call_id"
             " WHERE a.request_id IN (SELECT value FROM json_each(?))"
             " ORDER BY a.request_id, a.version",
@@ -198,7 +199,9 @@ def _with_history(conn: sqlite3.Connection, records: list[dict]) -> list[dict]:
                     **request_model.split_answers(json.loads(row["answers_json"])),
                     "answered_by": row["answered_by"],
                     "answered_at": row["answered_at"],
-                    "by_person": row["identity_source"] == calls.BROWSER,
+                    "by_person": None
+                    if row["call_id"] is None
+                    else row["identity_source"] == calls.BROWSER,
                 }
             )
     return [{**record, "history": versions.get(record["request_id"], [])} for record in records]

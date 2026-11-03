@@ -300,6 +300,25 @@ class ChangeTests(AnswerCase):
             ],
         )
 
+    def test_a_version_no_call_gave_is_nobody_known(self) -> None:
+        # As on a comment: `by_person` is null for a row no call wrote, such as
+        # one older than call identity or a write made outside any call.
+        request = self.ask()
+        first = requests.resolve(
+            self.conn,
+            request["request_id"],
+            status="answered",
+            expected_revision=request["revision"],
+            answers={"path": "keep"},
+        )
+        self.conn.commit()
+        changed = self.as_person("change", first, answers={"path": "drop"})
+        self.assertEqual(
+            [(1, None)],
+            [(version["version"], version["by_person"]) for version in changed["history"]],
+        )
+        self.assertIs(True, changed["by_person"])
+
     def test_who_answered_is_read_from_the_latest_call_on_every_read(self) -> None:
         request = self.ask()
         first = self.answer(request, {"path": "keep"})
