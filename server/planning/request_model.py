@@ -203,6 +203,24 @@ def answers(value: object, descriptors: list[dict], *, own: dict | None = None) 
     return result
 
 
+def same_answer(descriptors: list[dict], given: dict, stored: dict) -> bool:
+    """Whether two answers as `answers_json` holds them say the same.
+
+    A `multi_choice` answer is the set of options chosen, so the order they were
+    sent in does not make it another answer.
+    """
+
+    sets = {field["id"] for field in descriptors if field["type"] == "multi_choice"}
+
+    def chosen(answer: dict) -> dict:
+        return {
+            name: sorted(value) if name in sets and isinstance(value, list) else value
+            for name, value in answer.items()
+        }
+
+    return chosen(given) == chosen(stored)
+
+
 def stored_answers(
     given: dict, note: str, *, own: dict | None = None, field_notes: dict | None = None
 ) -> dict:

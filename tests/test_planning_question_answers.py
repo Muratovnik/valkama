@@ -324,6 +324,18 @@ class ChangeTests(AnswerCase):
         )
         self.assertEqual(1, self.row(request)["answer_version"])
 
+    def test_the_same_options_in_another_order_are_unchanged(self) -> None:
+        # A multi_choice answer is the set of options chosen: the order they were
+        # sent in says nothing, so it is the answer already given.
+        request = self.ask([CHOICE, MULTI])
+        first = self.answer(request, {"path": "keep", "areas": ["api", "web"]})
+        with self.assertRaisesRegex(model.PlanningError, r"\[unchanged\]"):
+            self.change(first, {"path": "keep", "areas": ["web", "api"]})
+        self.assertEqual(
+            (1, {"path": "keep", "areas": ["api", "web"]}),
+            (self.row(request)["answer_version"], self.stored_answers(first)),
+        )
+
     def test_answering_again_without_change_is_still_refused(self) -> None:
         first = self.answer(self.ask(), {"path": "keep"})
         with self.assertRaisesRegex(model.WorkflowGuardError, "no longer pending"):

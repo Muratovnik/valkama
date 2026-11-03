@@ -537,7 +537,9 @@ def change(
                 " versions, and this one has them all"
             )
         parsed = _stored(row, answers, own, field_notes, said)
-        if parsed == json.loads(row["answers_json"]):
+        if request_model.same_answer(
+            json.loads(row["fields_json"]), parsed, json.loads(row["answers_json"])
+        ):
             raise model.PlanningError("[unchanged] that is the answer already given")
         given = conn.execute(
             "SELECT call_id FROM work_item_events WHERE detail=?"

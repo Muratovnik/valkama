@@ -1304,7 +1304,8 @@ time of the change and writes the history event `request_changed` with the
 request's id as its detail. A reader that asks with `answered_after` therefore
 gets a changed answer as a new one. Refused, with nothing written:
 
-- an answer equal to the one in force, with `invalid_request` (`unchanged`);
+- an answer equal to the one in force, with `invalid_request` (`unchanged`); the
+  options of a `multi_choice` are a set, so the same ones in another order are equal;
 - a request that is not answered, an item that is closed, and a request with 50
   versions, with `workflow_guard`;
 - a stale `expected_revision`, with `revision_conflict`.
