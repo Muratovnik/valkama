@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { threadRows } from '@/widgets/work-item-inspector/utils/threadRows.ts'
+import { threadGroups, threadRows } from '@/widgets/work-item-inspector/utils/threadRows.ts'
 
 import { descriptionViews } from '@/features/input-requests/utils/optionDescriptions.ts'
 
@@ -32,9 +32,15 @@ function asked(id: string, createdAt: string, status: 'pending' | 'declined' = '
   return entry
 }
 
+const ordered = (
+  comments: WorkItem['comments'],
+  questions: ReturnType<typeof asked>[],
+  kept: ReadonlySet<string>,
+) => threadRows(threadGroups(comments, questions), kept, new Map())
+
 describe('threadRows', () => {
   it('stands what waits first however old, and the rest by time, newest first', () => {
-    const rows = threadRows(
+    const rows = ordered(
       [comment(1, '2026-01-01T00:00:00Z'), comment(2, '2026-03-01T00:00:00Z'), comment(3, null)],
       [
         asked('waiting-old', '2020-01-01T00:00:00Z'),
@@ -56,14 +62,14 @@ describe('threadRows', () => {
   it('keeps a question that waited while the card was open where it stood', () => {
     const closed = asked('was-waiting', '2020-01-01T00:00:00Z', 'declined')
     const comments = [comment(1, '2026-01-01T00:00:00Z')]
-    const keys = (kept: Set<string>) => threadRows(comments, [closed], kept).map((row) => row.key)
+    const keys = (kept: Set<string>) => ordered(comments, [closed], kept).map((row) => row.key)
     expect(keys(new Set())).toEqual(['comment-1', 'question-was-waiting'])
     expect(keys(new Set(['was-waiting']))).toEqual(['question-was-waiting', 'comment-1'])
   })
 
   it('orders comments of one moment by their ids, as the thread always did', () => {
     const at = '2026-01-01T00:00:00Z'
-    const rows = threadRows([comment(1, at), comment(2, at)], [], new Set())
+    const rows = ordered([comment(1, at), comment(2, at)], [], new Set())
     expect(rows.map((row) => row.key)).toEqual(['comment-2', 'comment-1'])
   })
 })

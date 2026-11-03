@@ -77,7 +77,8 @@ export const LINE_BUDGET = new Map([
   // Planning's own surfaces. Overview divides the facts from the record; the
   // list's sticky header stands on the rule that stops it melting into row one.
   ['widgets/work-item-inspector/components/InspectorDiscussion.vue', 1], // Frozen step quote.
-  ['widgets/work-item-inspector/components/InspectorThread.vue', 1], // A comment's frozen step quote.
+  ['widgets/work-item-inspector/components/InspectorCommentThread.vue', 1], // A comment's frozen step quote.
+  ['widgets/work-item-inspector/components/InspectorThreadReplies.vue', 1], // What ties replies to their root.
   ['widgets/work-item-inspector/components/InspectorSummary.vue', 1],
   ['widgets/work-item-inspector/components/InspectorOverview.css', 1],
   ['widgets/work-item-inspector/components/InspectorExecution.vue', 1],

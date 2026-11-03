@@ -37,6 +37,12 @@ checkouts are therefore distinguishable even at the same version.
   [Windows notifications](README.md#windows-notifications).
 - **The panel of open questions has an address.** `/open/questions` opens it in the desktop
   app or the browser, as `/open/<number>` opens a card.
+- **A card's discussion reads in threads.** A reply stands under its root and a question
+  has replies of its own, with the field for the next one in the same place. Threads open
+  by their latest activity and hold still while the card is open: a thread with news says
+  «New reply» rather than moving. A thread can be marked resolved with a short decision,
+  which folds it to one line and can be taken back; the heading counts what is still open,
+  and a filter shows only that.
 - **The agent working an item hears what a person did there.** Any write to an item
   answers with `from_person` when a person acted on it in the interface since an agent
   last wrote there: a comment, an answer, a status change, an edit, a cancel. Each event

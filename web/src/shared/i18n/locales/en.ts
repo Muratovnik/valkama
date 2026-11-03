@@ -4,6 +4,7 @@ import { activityMessages } from '@/shared/i18n/activityMessages.ts'
 import { alertMessages } from '@/shared/i18n/alertMessages.ts'
 import { checklistCommentMessages } from '@/shared/i18n/checklistCommentMessages.ts'
 import { connectionMessages } from '@/shared/i18n/connectionMessages.ts'
+import { discussionThreadMessages } from '@/shared/i18n/discussionThreadMessages.ts'
 import { doctorLoginMessages } from '@/shared/i18n/doctorLoginMessages.ts'
 import { globalFinderMessages } from '@/shared/i18n/globalFinderMessages.ts'
 import { inputRequestMessages } from '@/shared/i18n/inputRequestMessages.ts'
@@ -22,6 +23,7 @@ export const en = {
   history: activityMessages.en.history,
   alerts: alertMessages.en.alerts,
   checklistComment: checklistCommentMessages.en.checklistComment,
+  threads: discussionThreadMessages.en.threads,
   finder: globalFinderMessages.en.finder,
   requests: inputRequestMessages.en.requests,
   editor: richTextMessages.en.editor,
@@ -174,15 +176,6 @@ export const en = {
   refresh: {
     title: 'Refresh boards, activity, and the current view now',
     done: 'Board data refreshed',
-  },
-  thread: {
-    label: 'Related context',
-    work: 'Selected work',
-    session: 'Linked session',
-    evidence: 'Latest evidence',
-    freshness: 'Observed {at}',
-    relationship:
-      'Card {card} is linked to the current {client} session and its latest recorded evidence.',
   },
   composer: {
     cancel: 'Cancel',
@@ -949,6 +942,8 @@ export const en = {
       description: 'description',
       comment: 'comment',
       outcome: 'task outcome',
+      reply: 'reply',
+      resolution: 'decision',
     },
     refusal: {
       transition: 'Moving to “{state}” was refused',
@@ -1091,6 +1086,9 @@ export const en = {
     request_answered: 'Answer recorded',
     request_declined: 'Request declined',
     request_expired: 'Request closed',
+    request_changed: 'Answer changed',
+    comment_resolved: 'Thread resolved',
+    comment_reopened: 'Thread reopened',
     created: 'Work item created',
     transitioned: 'State changed',
     claimed: 'Work claimed',

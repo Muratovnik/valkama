@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * The thread of an item: its questions, comments and work reports, in the order
- * `threadRows` gives them, with what still waits for an answer on top.
+ * The threads of an item: its questions, comments and work reports with what answers them,
+ * in the order `threadRows` gives them, with what still waits for an answer on top.
  *
  * Every comment is the text its author wrote, drawn as markdown, and held to a
  * few lines until expanded — a report included, which used to be printed in
@@ -14,16 +14,40 @@
  * and is a draft: leaving asks first. A note still written when its question closed some
  * other way stays one, because it is the only copy of what was written.
  *
+ * A thread takes its place when it is first seen here and keeps it for as long as the card
+ * is open, so a reply arriving moves nothing: the thread says «New reply» instead. The
+ * unresolved view hides what is settled, except a thread marked while the view stands,
+ * which stays where the reader's hands are until the view changes, and any thread holding
+ * words not sent yet.
+ *
  * A question folding lifts all that stands below it, a report's Make task outcome among it,
  * so a stray press reaches nothing anywhere in the thread.
  */
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import InspectorReport from '@/widgets/work-item-inspector/components/InspectorReport.vue'
-import { anchorState } from '@/widgets/work-item-inspector/utils/checklistAnchor.ts'
-import { threadRows } from '@/widgets/work-item-inspector/utils/threadRows.ts'
+import InspectorCommentThread from '@/widgets/work-item-inspector/components/InspectorCommentThread.vue'
+import InspectorThreadReplies from '@/widgets/work-item-inspector/components/InspectorThreadReplies.vue'
+import {
+  hasNewReply,
+  isUnresolved,
+  keepThreadPlaces,
+  threadGroups,
+  threadRows,
+} from '@/widgets/work-item-inspector/utils/threadRows.ts'
+import type {
+  ThreadFilter,
+  ThreadPlace,
+  ThreadRow,
+} from '@/widgets/work-item-inspector/utils/threadRows.ts'
 import { useDraftSource } from '@/widgets/work-item-inspector/utils/useDraftGuard.ts'
+import {
+  anchored,
+  entryAnchor,
+  provideThreadForms,
+  replyAnchor,
+  useThreadForms,
+} from '@/widgets/work-item-inspector/utils/useThreadForms.ts'
 
 import RequestCard from '@/features/input-requests/components/RequestCard.vue'
 import { requestIdentity } from '@/features/input-requests/utils/requestIdentity.ts'
@@ -32,19 +56,28 @@ import type { RequestDraft } from '@/features/input-requests/utils/validateAnswe
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
-import { actorName, actorSession } from '@/shared/lib/actor.ts'
-import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
+import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import { stopStrayPresses } from '@/shared/ui/strayPress.ts'
 import VButton from '@/shared/ui/VButton.vue'
 
-const props = defineProps<{
-  item: WorkItem
-  pending: boolean
-  questions: readonly InputRequestEntry[]
-  suggest: InstanceType<typeof RequestCard>['$props']['suggest']
-  writable: boolean
+const props = withDefaults(
+  defineProps<{
+    item: WorkItem
+    pending: boolean
+    questions: readonly InputRequestEntry[]
+    suggest: InstanceType<typeof RequestCard>['$props']['suggest']
+    writable: boolean
+    filter?: ThreadFilter
+  }>(),
+  { filter: 'all' },
+)
+const emit = defineEmits<{
+  'answered': [entry: InputRequestEntry]
+  'changed': []
+  'refresh': []
+  'select': [commentId: number]
+  'show-all': []
 }>()
-const emit = defineEmits<{ answered: [entry: InputRequestEntry]; select: [commentId: number] }>()
 const { t, d } = useI18n()
 
 const thread = ref<HTMLElement | null>(null)
@@ -59,6 +92,14 @@ useDraftSource('answer', () =>
   }),
 )
 
+const forms = useThreadForms(
+  () => props.item.work_item_id,
+  () => emit('changed'),
+)
+provideThreadForms(forms)
+const { hasDraft: holdsWords, held, isOpen, pending: writing, settleFocus, show } = forms
+const busy = computed(() => props.pending || writing.value)
+
 /** What has waited while this card is open, which stays where it stood once answered. */
 const kept = ref(new Set<string>())
 watch(
@@ -69,9 +110,41 @@ watch(
   },
   { immediate: true },
 )
-const rows = computed(() => threadRows(props.item.comments, props.questions, kept.value))
+const groups = computed(() => threadGroups(props.item.comments, props.questions))
+const places = shallowRef<ReadonlyMap<string, ThreadPlace>>(new Map())
+watch(
+  [() => props.item.work_item_id, groups] as const,
+  ([identity, rows], before) => {
+    places.value = keepThreadPlaces(rows, identity === before?.[0] ? places.value : new Map())
+  },
+  { immediate: true },
+)
+const rows = computed(() => threadRows(groups.value, kept.value, places.value))
+const shown = computed(() =>
+  props.filter === 'all' ? rows.value : rows.value.filter((row) => stays(row)),
+)
+const hiddenRows = computed(() => rows.value.filter((row) => !shown.value.includes(row)))
+const hiddenCount = computed(() => hiddenRows.value.length)
+const emptyLine = computed(() =>
+  t(rows.value.length ? 'threads.noneUnresolved' : 'workItem.noDiscussion'),
+)
+function stays(row: ThreadRow) {
+  return (
+    isUnresolved(row, kept.value) ||
+    held.value.has(row.key) ||
+    isOpen(row.key) ||
+    holdsWords(row.key) ||
+    // The task's outcome is what the card's link to the report leads to.
+    (row.kind === 'comment' && row.comment.id === props.item.summary_comment_id)
+  )
+}
+watch(
+  () => props.filter,
+  () => (held.value = new Set()),
+)
+watch(rows, settleFocus, { flush: 'post' })
 
-type CardHandle = { reveal: () => void }
+type CardHandle = { focus: () => void; reveal: () => void }
 const cards: Record<string, CardHandle | null> = {}
 /** Brings the question still waiting, the newest of them, into view. */
 function revealQuestion() {
@@ -80,32 +153,40 @@ function revealQuestion() {
   )
   if (first) cards[first.key]?.reveal()
 }
+/** What was hidden comes back in place, and the reader lands on the first of it. */
+async function showAll() {
+  const first = hiddenRows.value[0]
+  emit('show-all')
+  await nextTick()
+  if (first?.kind === 'question') cards[first.key]?.focus()
+  else if (first?.kind === 'comment') moveFocus(anchored(entryAnchor(first.comment.id)))
+}
 
-function isOutcome(commentId: number) {
-  return commentId === props.item.summary_comment_id
-}
-function reportLabel(commentId: number) {
-  return t(isOutcome(commentId) ? 'workItem.currentOutcome' : 'workItem.workReport')
-}
-function quoteLabel(id: string, text: string | null | undefined) {
-  return t(`checklistComment.${anchorState(props.item, id, text)}`)
-}
 function when(value: string | null) {
   if (value === null) return t('workItem.unknownTime')
   const date = new Date(value)
   return Number.isNaN(date.valueOf()) ? value : d(date, 'activity')
+}
+function fresh(row: ThreadRow) {
+  return hasNewReply(row, places.value.get(row.key))
+}
+function draftSetAside(row: ThreadRow) {
+  return holdsWords(row.key) && !isOpen(row.key)
+}
+function questionParent(row: Extract<ThreadRow, { kind: 'question' }>) {
+  return { reply_to_request: row.entry.request.request_id }
 }
 defineExpose({ revealQuestion })
 </script>
 
 <template>
   <ol
-    v-if="rows.length"
+    v-if="shown.length"
     ref="thread"
     class="thread"
   >
     <template
-      v-for="row in rows"
+      v-for="row in shown"
       :key="row.key"
     >
       <li
@@ -121,52 +202,73 @@ defineExpose({ revealQuestion })
           @update:draft="drafts[requestIdentity(row.entry)] = $event"
           @updated="emit('answered', $event)"
         />
+        <div
+          v-if="writable || row.replies.length"
+          class="thread-tail"
+        >
+          <div
+            v-if="writable"
+            class="thread-tail-actions"
+          >
+            <VButton
+              :id="replyAnchor(row.key)"
+              variant="ghost"
+              size="inline"
+              :disabled="busy"
+              @click="show(row.key, 'reply')"
+              >{{ t('threads.replyInThread') }}</VButton
+            >
+            <span
+              v-if="fresh(row)"
+              class="thread-tail-flag"
+              >{{ t('threads.newReply') }}</span
+            >
+            <span
+              v-if="draftSetAside(row)"
+              class="thread-tail-flag"
+              >{{ t('threads.draft') }}</span
+            >
+          </div>
+          <InspectorThreadReplies
+            :can-mark="false"
+            :parent="questionParent(row)"
+            :replies="row.replies"
+            :root="null"
+            :suggest="suggest"
+            :thread-key="row.key"
+            :when="when"
+            @refresh="emit('refresh')"
+          />
+        </div>
+      </li>
+      <li
+        v-else-if="row.kind === 'comment'"
+        class="thread-row"
+      >
+        <InspectorCommentThread
+          :fresh="fresh(row)"
+          :item="item"
+          :pending="pending"
+          :row="row"
+          :suggest="suggest"
+          :when="when"
+          :writable="writable"
+          @refresh="emit('refresh')"
+          @select="emit('select', $event)"
+        />
       </li>
       <li
         v-else
-        :id="`work-report-${row.comment.id}`"
-        class="thread-entry"
-        tabindex="-1"
+        class="thread-row thread-tail"
       >
-        <div class="thread-meta">
-          <span
-            >{{ actorName(row.comment.author) || t('workItem.unknownAuthor') }}
-            <span v-if="actorSession(row.comment.author)">{{
-              actorSession(row.comment.author)
-            }}</span></span
-          >
-          <span>{{ when(row.comment.at) }}</span>
-        </div>
-        <template v-if="row.comment.kind === 'report' && row.comment.report">
-          <strong class="thread-label">{{ reportLabel(row.comment.id) }}</strong>
-          <CollapsibleText
-            class="thread-text"
-            :reset-key="row.comment.id"
-            :lines="10"
-          >
-            <InspectorReport :report="row.comment.report" />
-          </CollapsibleText>
-          <VButton
-            v-if="writable && !isOutcome(row.comment.id)"
-            class="thread-action"
-            :disabled="pending"
-            @click="emit('select', row.comment.id)"
-            >{{ t('workItem.makeOutcome') }}</VButton
-          >
-        </template>
-        <blockquote
-          v-if="row.comment.kind === 'comment' && row.comment.checklist_item_id"
-          class="thread-quote"
-        >
-          <strong>{{
-            quoteLabel(row.comment.checklist_item_id, row.comment.checklist_item_text)
-          }}</strong>
-          <p class="thread-quote-text">{{ row.comment.checklist_item_text }}</p>
-        </blockquote>
-        <CollapsibleText
-          v-if="row.comment.kind === 'comment'"
-          class="thread-text"
-          :text="row.comment.body"
+        <p class="thread-tail-flag">{{ t('threads.detached') }}</p>
+        <InspectorThreadReplies
+          :can-mark="false"
+          :parent="null"
+          :replies="row.replies"
+          :root="null"
+          :thread-key="row.key"
+          :when="when"
         />
       </li>
     </template>
@@ -175,7 +277,19 @@ defineExpose({ revealQuestion })
     v-else
     class="thread-empty"
   >
-    {{ t('workItem.noDiscussion') }}
+    {{ emptyLine }}
+  </p>
+  <p
+    v-if="hiddenCount"
+    class="thread-hidden"
+  >
+    {{ t('threads.hidden', { n: hiddenCount }) }}
+    <VButton
+      variant="ghost"
+      size="inline"
+      @click="showAll"
+      >{{ t('threads.showAll') }}</VButton
+    >
   </p>
 </template>
 
@@ -188,62 +302,62 @@ defineExpose({ revealQuestion })
   list-style: none;
 }
 
-/* The widget is its own sheet, here and in the list of everything waiting. */
-.thread-question {
+.thread-row {
   min-width: 0;
 }
 
-/* A sheet on the drawer's ground: the card is visible, so its padding reads
-   as the card's inset rather than as text shifted off the column. */
-.thread-entry {
+/* The widget is its own sheet, here and in the list of everything waiting. */
+.thread-question {
+  display: grid;
+  gap: var(--space-half);
+  min-width: 0;
+}
+
+/* What hangs under a question reads as the same sheet going on: its ground, and only the
+   hairline of a gap between them. */
+.thread-tail {
   display: grid;
   gap: var(--space-2);
   min-width: 0;
-  padding: var(--space-3);
+  padding: var(--space-2) var(--space-3);
   background: var(--color-surface-sheet);
   border-radius: var(--radius-card);
-  scroll-margin-top: var(--space-4);
 }
 
-.thread-meta {
+/* A forced palette clears the sheets, and with them where a thread ends. */
+@media (forced-colors: active) {
+  .thread-question,
+  .thread-row.thread-tail {
+    border-radius: var(--radius-card);
+    outline: 1px solid;
+    outline-offset: -1px;
+  }
+}
+
+.thread-tail-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
-  justify-content: space-between;
-  color: var(--color-text-tertiary);
+  gap: var(--space-1) var(--space-2);
+  align-items: center;
+}
+
+.thread-tail-flag {
+  margin: 0;
+  color: var(--color-text-muted);
   font: var(--font-detail);
 }
 
-.thread-label {
-  font: var(--font-strong);
-}
-
-.thread-text {
-  font: var(--font-editor);
-}
-
-.thread-action {
-  justify-self: start;
-}
-
-.thread-quote {
-  display: grid;
-  gap: var(--space-2);
-  padding-inline-start: var(--space-3);
-  margin: 0;
-  border-inline-start: 1px solid var(--color-rule-strong);
-  color: var(--color-text-muted);
-  font: var(--font-line);
-}
-
-.thread-quote-text {
-  margin: 0;
-  font: var(--font-editor);
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
-}
-
 .thread-empty {
+  margin: 0;
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+}
+
+.thread-hidden {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);

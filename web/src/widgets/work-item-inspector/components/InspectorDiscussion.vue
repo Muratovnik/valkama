@@ -10,6 +10,9 @@
  * `InspectorThread`, which takes the questions as a list and stands them among the
  * comments, so a read of them that failed is said here: not knowing is not none.
  *
+ * How many threads are still open stands in the heading whichever way the list is
+ * filtered (`useThreadFilter`).
+ *
  * A person writes comments here, in the shared markdown editor. Work reports are
  * how agents write, through their tools, and the thread shows them. The form
  * used to offer a report as a second kind of entry, and nobody at the keyboard
@@ -31,6 +34,7 @@ import { anchorState } from '@/widgets/work-item-inspector/utils/checklistAnchor
 import { useDraftSource } from '@/widgets/work-item-inspector/utils/useDraftGuard.ts'
 import { useInspectorMutation } from '@/widgets/work-item-inspector/utils/useInspectorMutation.ts'
 import type { StateMove } from '@/widgets/work-item-inspector/utils/useInspectorWrites.ts'
+import { useThreadFilter } from '@/widgets/work-item-inspector/utils/useThreadFilter.ts'
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import {
@@ -42,6 +46,7 @@ import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { workItemSuggest } from '@/shared/lib/workItemSuggest.ts'
 import MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
+import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
 import VButton from '@/shared/ui/VButton.vue'
 
 const props = withDefaults(
@@ -88,7 +93,18 @@ const waitingMove = computed(() => {
 })
 const outcomeForm = ref<InstanceType<typeof InspectorOutcomeForm> | null>(null)
 const thread = ref<InstanceType<typeof InspectorThread> | null>(null)
-const entryCount = computed(() => props.item.comments.length + props.questions.length || '')
+const {
+  chosen: chosenFilter,
+  counts,
+  filter: threadFilter,
+  options: filterOptions,
+} = useThreadFilter(() => props.item.comments)
+const entryCount = computed(() => {
+  const entries = props.item.comments.length + props.questions.length || ''
+  return counts.value.unresolved
+    ? `${entries} · ${t('threads.unresolvedCount', counts.value.unresolved)}`
+    : entries
+})
 
 const suggest = workItemSuggest(
   () => props.item.planning_space_id,
@@ -251,6 +267,14 @@ defineExpose({ askOutcome, discussStep, revealQuestion })
       :title="t('workItem.discussion')"
       :count="entryCount"
     />
+    <SegmentedControl
+      v-if="counts.threads"
+      v-model="chosenFilter"
+      class="thread-filter"
+      size="compact"
+      :label="t('threads.filter')"
+      :options="filterOptions"
+    />
     <InspectorOutcomeForm
       v-if="writable && closing"
       ref="outcomeForm"
@@ -356,13 +380,17 @@ defineExpose({ askOutcome, discussStep, revealQuestion })
     </p>
     <InspectorThread
       ref="thread"
+      :filter="threadFilter"
       :item="item"
       :pending="pending"
       :questions="questions"
       :suggest="suggest"
       :writable="writable"
       @answered="emit('answered', $event)"
+      @changed="emit('changed')"
+      @refresh="emit('refresh')"
       @select="select"
+      @show-all="chosenFilter = 'all'"
     />
   </section>
 </template>
@@ -384,6 +412,10 @@ defineExpose({ askOutcome, discussStep, revealQuestion })
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
+}
+
+.thread-filter {
+  justify-self: start;
 }
 
 .discussion-form {

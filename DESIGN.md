@@ -885,6 +885,21 @@ and a read that failed or could not reach every source is said over the thread w
 way to read again, because not knowing is not the same as there being none. A card with more
 questions than one read brings reads those still waiting on their own, and says that the
 newest and those waiting are shown and older ones left out.
+Whatever answers a comment, a report or a question stands under it as a thread, a reply set
+off from its root by one rule, and the whole thread is one `article` named by its root's
+meta line. Threads open by their latest activity and then hold still: a reply arriving says
+«New reply» on its thread and moves nothing until the card is opened again, while a new
+thread takes the top. Four replies or more show their last two under a button that opens
+the rest in place. One form stands open at a time, a reply's field or a mark's line, and
+what was written in another thread stays there as a draft the card asks about before
+leaving. A resolved comment or report folds to its mark and the first line of its root, in
+the muted ink and with no sign of success, because the mark says the discussion stopped and
+nothing about whether it went well; it opens with a button that stays where it is, and it
+stays open while a form is left in it. The heading counts what is unresolved whichever way
+the view is set. The unresolved view hides marked threads and closed questions and says how
+many, and a thread marked in that view stays under the reader's hands until the view
+changes, as a question answered does. A reply whose question could not be read stands on
+its own and says so: not knowing what it answers is no reason to hide what it says.
 One form answers every kind of field, here and in «Needs my answer», which adds whose
 task it is and the way there. Selecting does nothing but select, nothing is chosen for
 the person, recommended or not, and Send is what sends. Every choice is a full-width row

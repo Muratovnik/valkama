@@ -256,7 +256,10 @@ describe('task description and discussion', () => {
       item: { ...item, summary_comment_id: 11, summary: { done: '<img src=x>', next: 'Review' } },
     })
     expect(wrapper.get('.thread-label').text()).toContain('task outcome')
-    expect(wrapper.find('.thread-entry button').exists()).toBe(false)
+    expect(wrapper.findAll('.thread-entry button').map((button) => button.text())).toEqual([
+      'Reply',
+      'Resolve',
+    ])
     const outcome = mount(InspectorSummary, {
       props: {
         item: { ...item, summary_comment_id: 11, summary: { done: '<img src=x>', next: 'Review' } },
@@ -373,7 +376,8 @@ describe('task description and discussion', () => {
     expect(wrapper.text()).toContain('Read me')
     expect(wrapper.text()).toContain('Done')
     expect(wrapper.find('textarea').exists()).toBe(false)
-    expect(wrapper.find('button').exists()).toBe(false)
+    // Which threads to read is not an edit: the filter stays, and the only buttons are its own.
+    expect(wrapper.findAll('button:not(.segmented-option)')).toEqual([])
   })
 
   it('does not clear a new item draft when an earlier item request finishes', async () => {

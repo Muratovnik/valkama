@@ -4,6 +4,7 @@ import { activityMessages } from '@/shared/i18n/activityMessages.ts'
 import { alertMessages } from '@/shared/i18n/alertMessages.ts'
 import { checklistCommentMessages } from '@/shared/i18n/checklistCommentMessages.ts'
 import { connectionMessages } from '@/shared/i18n/connectionMessages.ts'
+import { discussionThreadMessages } from '@/shared/i18n/discussionThreadMessages.ts'
 import { doctorLoginMessages } from '@/shared/i18n/doctorLoginMessages.ts'
 import { globalFinderMessages } from '@/shared/i18n/globalFinderMessages.ts'
 import { inputRequestMessages } from '@/shared/i18n/inputRequestMessages.ts'
@@ -22,6 +23,7 @@ export const ru = {
   history: activityMessages.ru.history,
   alerts: alertMessages.ru.alerts,
   checklistComment: checklistCommentMessages.ru.checklistComment,
+  threads: discussionThreadMessages.ru.threads,
   finder: globalFinderMessages.ru.finder,
   requests: inputRequestMessages.ru.requests,
   editor: richTextMessages.ru.editor,
@@ -173,15 +175,6 @@ export const ru = {
   refresh: {
     title: 'Обновить доски, активность и текущий вид сейчас',
     done: 'Данные доски обновлены',
-  },
-  thread: {
-    label: 'Связанный контекст',
-    work: 'Текущая работа',
-    session: 'Связанная сессия',
-    evidence: 'Последнее свидетельство',
-    freshness: 'Наблюдение {at}',
-    relationship:
-      'Карточка {card} связана с текущей сессией {client} и её последним записанным свидетельством.',
   },
   composer: {
     cancel: 'Отмена',
@@ -949,6 +942,8 @@ export const ru = {
       description: 'описание',
       comment: 'комментарий',
       outcome: 'итог задачи',
+      reply: 'ответ в ветке',
+      resolution: 'решение',
     },
     refusal: {
       transition: 'Перевод в «{state}» не выполнен',
@@ -1091,6 +1086,9 @@ export const ru = {
     request_answered: 'Ответ записан',
     request_declined: 'Запрос отклонён',
     request_expired: 'Запрос закрыт',
+    request_changed: 'Ответ изменён',
+    comment_resolved: 'Ветка отмечена разобранной',
+    comment_reopened: 'Отметка «Разобрано» снята',
     created: 'Работа создана',
     transitioned: 'Состояние изменено',
     claimed: 'Работа взята',

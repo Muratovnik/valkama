@@ -1,0 +1,182 @@
+import { inject, nextTick, provide, ref, watch } from 'vue'
+import type { InjectionKey } from 'vue'
+
+import { useDraftSource } from '@/widgets/work-item-inspector/utils/useDraftGuard.ts'
+import { useInspectorMutation } from '@/widgets/work-item-inspector/utils/useInspectorMutation.ts'
+
+import { useThreadWrites } from '@/features/discussion-thread/composables/useThreadWrites.ts'
+import type { ThreadParent } from '@/features/discussion-thread/composables/useThreadWrites.ts'
+
+import { moveFocus } from '@/shared/lib/moveFocus.ts'
+
+export type ThreadForm = 'reply' | 'resolve'
+
+type ThreadForms = ReturnType<typeof useThreadForms>
+
+const THREAD_FORMS: InjectionKey<ThreadForms> = Symbol('thread-forms')
+
+/** The ids a thread's controls answer to, for focus to come back to them. */
+export const replyAnchor = (key: string) => `thread-reply-${key}`
+export const resolveAnchor = (key: string) => `thread-resolve-${key}`
+export const entryAnchor = (rootId: number) => `work-report-${rootId}`
+export const writtenAnchor = (commentId: number) => `thread-comment-${commentId}`
+
+export const anchored = (id: string) => document.querySelector<HTMLElement>(`#${id}`)
+
+/**
+ * The forms of a card's threads: one stands open at a time and every thread keeps what was
+ * written in its own, so opening another form sets a draft aside rather than losing it.
+ * Those drafts are text nobody has anywhere else, so the card asks before leaving them.
+ *
+ * Focus follows a write. A new reply exists only after the card is read again, so focus
+ * waits on the reply button until then; a mark's thread stays one element as it folds, so
+ * focus can go straight to it.
+ */
+export function useThreadForms(identity: () => string, changed: () => void) {
+  const { pending, error, submit } = useInspectorMutation(identity, changed)
+  const writes = useThreadWrites(identity, submit)
+  const open = ref<{ form: ThreadForm; key: string } | null>(null)
+  const replies = ref<Record<string, string>>({})
+  const decisions = ref<Record<string, string>>({})
+  const marks = ref<Record<string, boolean>>({})
+  /** The thread the last failed write belongs to, and which of its controls made it. */
+  const failedAt = ref<{ form: ThreadForm | 'reopen'; key: string } | null>(null)
+  /** Threads marked while the unresolved view stands: they stay until the view changes. */
+  const held = ref(new Set<string>())
+  /** Threads opened out of their folded line. */
+  const expanded = ref(new Set<string>())
+  let owedReply: number | null = null
+
+  useDraftSource('reply', () => Object.values(replies.value).some((text) => text.trim()))
+  useDraftSource('resolution', () => Object.values(decisions.value).some((text) => text.trim()))
+
+  watch(identity, () => {
+    open.value = null
+    replies.value = {}
+    decisions.value = {}
+    marks.value = {}
+    failedAt.value = null
+    held.value = new Set()
+    expanded.value = new Set()
+    owedReply = null
+  })
+
+  const errorAt = (key: string, form: ThreadForm | 'reopen') =>
+    failedAt.value?.key === key && failedAt.value.form === form ? error.value : ''
+  const hasDraft = (key: string) =>
+    Boolean(replies.value[key]?.trim() || decisions.value[key]?.trim())
+  const isOpen = (key: string, form?: ThreadForm) =>
+    open.value?.key === key && (form === undefined || open.value.form === form)
+
+  function show(key: string, form: ThreadForm) {
+    failedAt.value = null
+    if (open.value?.key === key && open.value.form === form) return
+    open.value = { form, key }
+  }
+  async function hide(back: ThreadForm) {
+    const key = open.value?.key
+    open.value = null
+    failedAt.value = null
+    if (!key) return
+    await nextTick()
+    anchored(back === 'reply' ? replyAnchor(key) : resolveAnchor(key))?.focus()
+  }
+  /** Escape, or Cancel: the words go with it, since asking first is the form's. */
+  function cancel() {
+    const current = open.value
+    if (!current) return
+    if (current.form === 'reply') {
+      replies.value[current.key] = ''
+      marks.value[current.key] = false
+    } else decisions.value[current.key] = ''
+    void hide(current.form)
+  }
+
+  /** Focus on a reply that has just arrived, when one is owed. */
+  function settleFocus() {
+    if (owedReply === null) return
+    const target = anchored(writtenAnchor(owedReply))
+    if (!target) return
+    owedReply = null
+    moveFocus(target)
+  }
+
+  /** The root's id goes with the parent when the reply is to mark the thread as well. */
+  function sendReply(key: string, parent: ThreadParent, root: number | null) {
+    const marking = root !== null && marks.value[key] === true
+    failedAt.value = { form: 'reply', key }
+    if (marking) held.value.add(key)
+    void writes.reply(parent, replies.value[key] ?? '', marking ? root : null, (written) => {
+      replies.value[key] = ''
+      marks.value[key] = false
+      void hide('reply').then(() => {
+        if (marking && !writes.unmarked.value.has(root)) {
+          moveFocus(anchored(entryAnchor(root)))
+        } else {
+          owedReply = written
+          settleFocus()
+        }
+      })
+    })
+  }
+  function sendResolve(key: string, root: number) {
+    failedAt.value = { form: 'resolve', key }
+    void writes.resolve(root, decisions.value[key] ?? '', () => {
+      decisions.value[key] = ''
+      held.value.add(key)
+      expanded.value.delete(key)
+      open.value = null
+      failedAt.value = null
+      void nextTick(() => moveFocus(anchored(entryAnchor(root))))
+    })
+  }
+  function sendReopen(key: string, root: number) {
+    failedAt.value = { form: 'reopen', key }
+    // The write disables the button that was pressed, which drops focus on the page.
+    void writes.reopen(root).then(async () => {
+      await nextTick()
+      if (document.activeElement === document.body) anchored(resolveAnchor(key))?.focus()
+    })
+  }
+  function markAgain(key: string, root: number) {
+    held.value.add(key)
+    void writes.markAgain(root, () => {
+      if (!writes.unmarked.value.has(root)) moveFocus(anchored(entryAnchor(root)))
+    })
+  }
+  function toggle(key: string) {
+    if (!expanded.value.delete(key)) expanded.value.add(key)
+  }
+
+  return {
+    cancel,
+    decisions,
+    errorAt,
+    expanded,
+    hasDraft,
+    held,
+    isOpen,
+    markAgain,
+    marks,
+    pending,
+    replies,
+    sendReopen,
+    sendReply,
+    sendResolve,
+    settleFocus,
+    show,
+    toggle,
+    unmarked: writes.unmarked,
+  }
+}
+
+/** The card's forms, for the threads under `InspectorThread`, which owns them. */
+export function provideThreadForms(forms: ThreadForms) {
+  provide(THREAD_FORMS, forms)
+}
+
+export function injectThreadForms() {
+  const forms = inject(THREAD_FORMS)
+  if (!forms) throw new Error('A thread stands inside InspectorThread')
+  return forms
+}
