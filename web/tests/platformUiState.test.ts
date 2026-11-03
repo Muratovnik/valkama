@@ -3,7 +3,6 @@ import assert from 'node:assert/strict'
 import { test } from 'vitest'
 
 import {
-  MAX_UI_STATE_PAYLOAD_BYTES,
   MAX_UI_STATE_STRING_LENGTH,
   uiDegraded,
   uiEmpty,
@@ -92,8 +91,7 @@ test('reasons reject executable/path text while bounded domain payload text stay
   )
 })
 
-test('validated payloads clone safely and enforce deterministic UTF-8 bounds', () => {
-  assert.equal(MAX_UI_STATE_PAYLOAD_BYTES, 1024 * 1024)
+test('validated payloads clone safely, bound each string and leave the size to the server', () => {
   assert.throws(() => uiReady('x'.repeat(MAX_UI_STATE_STRING_LENGTH + 1)), /string exceeds/)
   // The service stores a description this long, and the card holding it has to read.
   assert.doesNotThrow(() => uiReady({ description: 'x'.repeat(20_000) }))
@@ -101,10 +99,13 @@ test('validated payloads clone safely and enforce deterministic UTF-8 bounds', (
   assert.doesNotThrow(() =>
     uiReady({ comments: Array.from({ length: 40 }, () => ({ body: 'x'.repeat(8000) })) }),
   )
-  const oversized = {
+  // The server bounds no answer's size, so neither does this: past the 1 MiB and
+  // 16384 values this once held, a long card still reads.
+  const large = {
     rows: Array.from({ length: 54 }, () => ({ value: 'x'.repeat(MAX_UI_STATE_STRING_LENGTH) })),
+    events: Array.from({ length: 4000 }, (_, index) => ({ index, detail: 'a step' })),
   }
-  assert.throws(() => uiReady(oversized), /deterministic UTF-8|bytes/)
+  assert.doesNotThrow(() => uiReady(large))
   const input = { nested: { value: 'safe' } }
   const output = uiReady(input)
   input.nested.value = 'mutated'

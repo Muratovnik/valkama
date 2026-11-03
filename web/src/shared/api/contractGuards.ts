@@ -39,27 +39,26 @@ const SEMVER =
 const MAX_SEMVER_LENGTH = 128
 
 /**
- * What one walk over a payload tree spends as it descends: how deep it is, which
- * objects it has already entered, and how many values it has counted.
+ * What one walk over a payload tree carries as it descends: how deep it is and
+ * which objects it has already entered.
  *
- * The three are one thing -- a budget for this walk -- and every validator here
- * carries all three. Passing them separately is what put five parameters on
- * each of those signatures.
+ * The two are one thing -- a budget for this walk -- and every validator here
+ * carries both. Passing them separately is what put five parameters on each of
+ * those signatures.
  */
 export interface WalkBudget {
   depth: number
-  nodes: { count: number }
   seen: WeakSet<object>
 }
 
 /** A budget for a walk that starts at the root of a payload. */
 export function walkBudget(): WalkBudget {
-  return { depth: 0, nodes: { count: 0 }, seen: new WeakSet<object>() }
+  return { depth: 0, seen: new WeakSet<object>() }
 }
 
-/** One level down. The cycle set and the node count stay shared with the parent. */
+/** One level down. The cycle set stays shared with the parent. */
 export function descend(walk: WalkBudget): WalkBudget {
-  return { depth: walk.depth + 1, nodes: walk.nodes, seen: walk.seen }
+  return { depth: walk.depth + 1, seen: walk.seen }
 }
 
 export function isCanonicalSemver(value: unknown): value is string {

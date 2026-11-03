@@ -4,7 +4,6 @@ import {
   contractGuards,
   descend,
   MAX_CONTRACT_DEPTH,
-  MAX_CONTRACT_NODES,
   POLLUTION_KEYS,
   walkBudget,
 } from '@/shared/api/contractGuards.ts'
@@ -78,12 +77,6 @@ const MAX_UI_STATE_REASON_LENGTH = 240
  * could not be read back at all.
  */
 export const MAX_UI_STATE_STRING_LENGTH = 20_000
-/**
- * Deterministic UTF-8 JSON ceiling for every validated ready/degraded payload, the
- * service's own transport bound. A card carries its whole discussion, so below that a
- * long one could not be read back at all.
- */
-export const MAX_UI_STATE_PAYLOAD_BYTES = 1024 * 1024
 
 function reason(value: unknown, path: string): string {
   if (typeof value !== 'string' || value.length === 0 || value.length > MAX_UI_STATE_REASON_LENGTH)
@@ -107,15 +100,19 @@ function timestamp(value: unknown, path: string): string {
   return value
 }
 
+/**
+ * A copy of a payload the server sent, as plain JSON: no cycle, no prototype key,
+ * no string past the longest the service stores, and no deeper than its shapes go.
+ * Its size is not bounded here: the server bounds none of its answers, and a
+ * ceiling here refused a card whose discussion and history outgrew it, twice.
+ * What each field may hold is the module's own validator's to say.
+ */
 function clonePayload(
   value: unknown,
   path = 'state.payload',
   walk: WalkBudget = walkBudget(),
 ): unknown {
   if (walk.depth > MAX_CONTRACT_DEPTH) invalid(path, `payload exceeds depth ${MAX_CONTRACT_DEPTH}`)
-  walk.nodes.count += 1
-  if (walk.nodes.count > MAX_CONTRACT_NODES)
-    invalid(path, `payload exceeds ${MAX_CONTRACT_NODES} values`)
   // Payload ownership stays with the caller; this boundary must not mutate it.
   if (Array.isArray(value)) return cloneArray(value, path, walk)
   if (value !== null && typeof value === 'object') return cloneObject(value, path, walk)
@@ -181,78 +178,6 @@ function clonedScalar(value: unknown, path: string): unknown {
   return value
 }
 
-function canonicalPayloadJson(
-  value: unknown,
-  path = 'state.payload',
-  depth = 0,
-  seen = new WeakSet<object>(),
-): string {
-  if (depth > MAX_CONTRACT_DEPTH) invalid(path, `payload exceeds depth ${MAX_CONTRACT_DEPTH}`)
-  if (
-    value === null ||
-    typeof value === 'boolean' ||
-    typeof value === 'number' ||
-    typeof value === 'string'
-  ) {
-    const encoded = JSON.stringify(value)
-    if (encoded === undefined) invalid(path, 'payload must contain JSON values')
-    return encoded
-  }
-  if (Array.isArray(value)) return canonicalPayloadArray(value, path, depth, seen)
-  if (typeof value === 'object') return canonicalPayloadObject(value, path, depth, seen)
-  return invalid(path, 'payload must contain JSON values')
-}
-
-/** `[a,b,c]` with each entry canonical. */
-function canonicalPayloadArray(
-  value: unknown[],
-  path: string,
-  depth: number,
-  seen: WeakSet<object>,
-): string {
-  if (seen.has(value)) invalid(path, 'cyclic payload is not allowed')
-  seen.add(value)
-  const parts = value.map((entry, index) =>
-    canonicalPayloadJson(entry, `${path}[${index}]`, depth + 1, seen),
-  )
-  const encoded = `[${parts.join(',')}]`
-  seen.delete(value)
-  return encoded
-}
-
-/** `{"a":1}` with keys sorted, so one payload has one byte length. */
-function canonicalPayloadObject(
-  value: object,
-  path: string,
-  depth: number,
-  seen: WeakSet<object>,
-): string {
-  const object = value as Record<string, unknown>
-  if (seen.has(object)) invalid(path, 'cyclic payload is not allowed')
-  seen.add(object)
-  const parts = Object.keys(object)
-    .sort()
-    .map((key) => {
-      const child = canonicalPayloadJson(object[key], `${path}.${key}`, depth + 1, seen)
-      return `${JSON.stringify(key)}:${child}`
-    })
-  const encoded = `{${parts.join(',')}}`
-  seen.delete(object)
-  return encoded
-}
-
-function cloneAndBoundPayload(value: unknown, path: string): unknown {
-  const cloned = clonePayload(value, path)
-  const encoded = canonicalPayloadJson(cloned, path)
-  const bytes = new TextEncoder().encode(encoded).byteLength
-  if (bytes > MAX_UI_STATE_PAYLOAD_BYTES)
-    invalid(
-      path,
-      `payload exceeds deterministic UTF-8 limit of ${MAX_UI_STATE_PAYLOAD_BYTES} bytes`,
-    )
-  return cloned
-}
-
 /**
  * `ready` carries a payload and nothing else.
  *
@@ -266,7 +191,7 @@ function readyState<T>(object: Record<string, unknown>, path: string): PlatformU
   return {
     interface_version: UI_STATE_INTERFACE,
     status: 'ready',
-    payload: cloneAndBoundPayload(object.payload, `${path}.payload`) as T,
+    payload: clonePayload(object.payload, `${path}.payload`) as T,
   }
 }
 
@@ -364,7 +289,7 @@ export function validatePlatformUiState<T = unknown>(
         interface_version: UI_STATE_INTERFACE,
         status: 'degraded',
         stale: true,
-        payload: cloneAndBoundPayload(object.payload, `${path}.payload`) as T,
+        payload: clonePayload(object.payload, `${path}.payload`) as T,
         observed_at: timestamp(object.observed_at, `${path}.observed_at`),
         ...(degradedReason === undefined ? {} : { reason: degradedReason }),
       }

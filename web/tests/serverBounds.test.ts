@@ -102,6 +102,17 @@ const named = (index: number, title = 'Project') => ({
   binding_state: 'unbound',
 })
 const project = (index: number, title?: string) => ({ ...named(index, title), planning_spaces: [] })
+const summary = (index: number) => ({
+  work_item_ref: { space_ref: spaceRef, reference: `QA-${index + 1}` },
+  title: 'Item',
+  state_key: 'dev',
+  state_category: 'active',
+  priority: 'medium',
+  labels: [],
+  claim_ref: '',
+  revision: 1,
+  updated_at: at,
+})
 const space = (title: string, work_items: unknown[] = []) => ({
   space_ref: spaceRef,
   title,
@@ -236,6 +247,10 @@ describe('the project directory', () => {
   it.each([
     ['257 projects', { projects: many(257, (index) => project(index)), planning_spaces: [] }],
     ['1025 spaces', { projects: [project(0)], planning_spaces: many(1025, () => space('S')) }],
+    [
+      'a space of 20001 items',
+      { projects: [project(0)], planning_spaces: [space('Big', many(20_001, summary))] },
+    ],
     [
       'a project and a space named as the server allows',
       { projects: [project(0, longName)], planning_spaces: [space(longName)] },
