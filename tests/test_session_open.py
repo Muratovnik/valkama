@@ -530,9 +530,11 @@ class WhatARecordCanBeBelievedForTests(PlanCase):
         self.assertEqual("live", self.plan(liveness="live")["state"])
 
     def test_a_session_id_a_command_line_would_read_is_refused(self) -> None:
-        self.session("abcd&calc", opened_in="terminal")
-        plan = self.plan("abcd&calc")
-        self.assertEqual([{"kind": "explain", "reason": "invalid-session"}], plan["steps"])
+        for session in ("abcd&calc", "--dangerously-skip-permissions"):
+            with self.subTest(session=session):
+                self.session(session, opened_in="terminal")
+                plan = self.plan(session)
+                self.assertEqual([{"kind": "explain", "reason": "invalid-session"}], plan["steps"])
 
     def test_an_id_the_extension_would_not_find_is_refused_before_an_empty_conversation(
         self,

@@ -83,8 +83,9 @@ _PLACE_OF = {
 _APP_OF_FAMILY = {"claude": "claude-desktop", "codex": "codex-app"}
 _ACTIVE = {"live": True, "ended": False}
 
-#: The same shape the desktop app holds an id to before it reaches a command line.
-_SESSION_ID = re.compile(r"[0-9A-Za-z._:-]{4,128}")
+#: The same shape the desktop app holds an id to before it reaches a command line,
+#: led by a letter or digit: one led by `-` would be read there as a flag.
+_SESSION_ID = re.compile(r"[0-9A-Za-z][0-9A-Za-z._:-]{3,127}")
 #: The extension and the Codex app take a UUID; the extension starts an empty
 #: conversation for anything else, which is the one outcome a link must not have.
 _SESSION_UUID = re.compile(
