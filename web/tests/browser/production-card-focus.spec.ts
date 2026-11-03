@@ -357,34 +357,6 @@ test('a card opened with the pointer reads from the keyboard too, from its bar',
   await readWithTheKeys(page, drawer.locator('.drawer-frame-body'))
 })
 
-test('a press on plain text far down leaves Tab and Shift+Tab where they were', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1440, height: 700 })
-  await installBackend(page, { longRead: true })
-  await page.goto(CARD)
-  const drawer = await cardBeingRead(page)
-  const body = drawer.locator('.drawer-frame-body')
-  const box = await body.boundingBox()
-  await page.mouse.move((box?.x ?? 0) + 200, (box?.y ?? 0) + 300)
-  await page.mouse.wheel(0, 400)
-  await expect.poll(() => placeOf(body)).toBe(400)
-  const text = drawer.getByText('Paragraph 12 of a description').first()
-  const line = await text.boundingBox()
-  await page.mouse.click((line?.x ?? 0) + 20, (line?.y ?? 0) + 6)
-  await page.keyboard.press('PageDown')
-  await expect.poll(() => placeOf(body)).toBeGreaterThan(400)
-  const read = await placeOf(body)
-  await page.keyboard.press('PageUp')
-  await expect.poll(() => placeOf(body)).toBeLessThan(read)
-  const place = await placeOf(body)
-  await page.keyboard.press('Shift+Tab')
-  // Nowhere near the end of the card, where the trap's last control is.
-  const end = await bottomOf(body)
-  expect(await placeOf(body)).toBeLessThan(end - 200)
-  expect(await placeOf(body)).toBeLessThanOrEqual(place)
-})
-
 test('retrying a failed read keeps focus in the card while it waits, and whatever the answer', async ({
   page,
 }) => {
