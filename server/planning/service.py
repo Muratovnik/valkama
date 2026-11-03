@@ -1155,8 +1155,6 @@ def merge_work_items(
             )
         closing.append(target)
     note = model.text_field(reason, "reason", limit=512, required=False)
-    if not conn.in_transaction:
-        conn.execute("BEGIN IMMEDIATE")
     conn.execute("SAVEPOINT planning_merge")
     try:
         answer = _fold(
