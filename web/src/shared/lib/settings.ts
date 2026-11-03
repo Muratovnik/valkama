@@ -91,14 +91,16 @@ function opening(family: SessionFamily, raw: unknown): SessionOpening {
 /**
  * What a build before this one stored: one opener per family, of which `vscode`
  * and `cursor` opened the session's folder rather than the session. Each becomes
- * the fallback it named, and the owner's command stays the owner's command.
+ * the fallback it named, and the owner's command stays the owner's command. Those
+ * builds saved `terminal` for Codex by default, so it says nothing about a choice
+ * and Codex takes today's default like a family that never stored anything.
  */
 function translated(family: SessionFamily, raw: unknown): SessionOpening {
   const source = record(raw)
   const command = text(source.command)
-  return source.kind === 'custom'
-    ? { ...DEFAULT_OPENING, always: 'custom', command }
-    : { fallback: fallbackOf(family, source.kind), always: '', command }
+  if (source.kind === 'custom') return { ...DEFAULT_OPENING, always: 'custom', command }
+  const named = family === 'codex' && source.kind === 'terminal' ? undefined : source.kind
+  return { fallback: fallbackOf(family, named), always: '', command }
 }
 
 /**

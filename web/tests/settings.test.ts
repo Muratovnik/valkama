@@ -34,7 +34,7 @@ test('each opener a build before this one stored becomes the place it named', ()
     fallback: 'cursor',
     ...rule,
   })
-  assert.deepEqual(stored(null, { kind: 'terminal', command: '' }).codex, {
+  assert.deepEqual(stored({ kind: 'terminal', command: '' }, null).claude, {
     fallback: 'terminal',
     ...rule,
   })
@@ -51,6 +51,18 @@ test('each opener a build before this one stored becomes the place it named', ()
   // A command typed and then left for another opener is not lost either.
   assert.equal(
     stored({ kind: 'terminal', command: 'x {session}' }, null).claude.command,
+    'x {session}',
+  )
+})
+
+test("Codex's old default is not read as a choice, and a command saved with it stays", () => {
+  // Every earlier build saved `terminal` for Codex whether or not anyone chose it.
+  assert.deepEqual(stored(null, { kind: 'terminal', command: '' }).codex, {
+    fallback: 'vscode',
+    ...rule,
+  })
+  assert.equal(
+    stored(null, { kind: 'terminal', command: 'x {session}' }).codex.command,
     'x {session}',
   )
 })
