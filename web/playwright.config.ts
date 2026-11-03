@@ -51,8 +51,10 @@ export default defineConfig({
       timeout: 120_000,
     },
     {
-      command: `node scripts/build-for-browser-tests.mjs && node node_modules/vite/bin/vite.js preview --config tests/browser/vite.config.ts --host 127.0.0.1 --port ${appPort} --strictPort`,
+      command: `npm run build && node node_modules/vite/bin/vite.js preview --config tests/browser/vite.config.ts --host 127.0.0.1 --port ${appPort} --strictPort`,
       url: `${app}/`,
+      // `vue-tsc` writes a type error to standard output, which Playwright drops by default.
+      stdout: 'pipe',
       reuseExistingServer: false,
       timeout: 180_000,
     },
