@@ -31,6 +31,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from typing import BinaryIO, TypeVar
 
+    from . import place
+
     T = TypeVar("T")
 
 #: The most stdin a hook reads. A Valkama call's arguments are far below it;
@@ -45,6 +47,8 @@ IDENTITY_EVENT = "pre-tool-use"
 IDENTITY_CLIENTS = frozenset({"claude"})
 #: `normalize.AGENT_TOOLS`, which a hook on any other tool does not load.
 _AGENT_TOOLS = frozenset({"Agent", "Task"})
+#: The one event that reads where its session is open, ancestors included.
+SESSION_START = "session-start"
 
 
 def main(
@@ -128,14 +132,35 @@ def _stage(action: Callable[..., T], *arguments: object) -> T | None:
 
 def _identity(raw: bytes, stdout: BinaryIO) -> None:
     import json
+    import os
 
-    from . import normalize
+    from . import normalize, place
 
     payload = normalize.parse_input(raw) if len(raw) <= MAX_INPUT_BYTES else None
-    output = normalize.identity_output(payload) if payload is not None else None
+    if payload is None:
+        return
+    # The variables alone: a tool call reads no process snapshot.
+    opened_in = place.classify("claude", place.whitelisted(os.environ)).opened_in
+    output = normalize.identity_output(payload, opened_in=opened_in)
     if output is not None:
         stdout.write(json.dumps(output, ensure_ascii=False).encode("utf-8"))
         stdout.flush()
+
+
+def _place(client: str) -> place.Place:
+    """Where this session start finds its session open.
+
+    The process snapshot is read here only: a session start is when a session
+    opens in a client, and the one event that may say where it now is. A
+    snapshot that fails costs the host product, never the event.
+    """
+
+    import os
+
+    from . import place
+
+    ancestors = _stage(place.ancestors) or ()
+    return place.classify(client, place.whitelisted(os.environ), ancestors)
 
 
 def _lifecycle(client: str, event: str, payload: dict | None) -> None:
@@ -156,6 +181,7 @@ def _lifecycle(client: str, event: str, payload: dict | None) -> None:
         payload,
         event_uid=str(uuid.uuid4()),
         occurred_at=normalize.timestamp(occurred_ns),
+        place=_place(client) if event == SESSION_START else None,
     )
     if record is None:
         return

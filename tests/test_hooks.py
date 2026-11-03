@@ -195,7 +195,7 @@ class NormalizeTests(unittest.TestCase):
             normalize.spool_line(record, spooled_at="2026-10-31T10:00:01.000Z", reason="busy")
         )
         changes = {
-            "unknown version": {"v": 2},
+            "unknown version": {"v": 3},
             "unknown key": {"prompt": "x"},
             "kind does not match the hook": {"kind": "session_end"},
             "unknown client": {"client": "cursor"},
@@ -780,9 +780,10 @@ class EntryProcessTests(unittest.TestCase):
             "out = io.BytesIO()\n"
             "entry.main(['claude', 'pre-tool-use'], io.BytesIO(sys.stdin.buffer.read()), out)\n"
             "transform = sorted(m for m in sys.modules if m.startswith('server.'))\n"
+            "snapshot = 'ctypes' in sys.modules\n"
             "entry.main(['claude', 'stop'], io.BytesIO(b'{\"session_id\": \"S\"}'), io.BytesIO())\n"
             "lifecycle = sorted(m for m in sys.modules if m.startswith('server.'))\n"
-            "sys.stdout.write(json.dumps([bool(out.getvalue()), transform, lifecycle]))\n"
+            "sys.stdout.write(json.dumps([bool(out.getvalue()), transform, snapshot, lifecycle]))\n"
         )
         done = subprocess.run(
             [sys.executable, "-c", script],
@@ -793,12 +794,16 @@ class EntryProcessTests(unittest.TestCase):
             timeout=60,
             check=True,
         )
-        answered, transform, lifecycle_modules = json.loads(done.stdout)
+        answered, transform, snapshot, lifecycle_modules = json.loads(done.stdout)
         self.assertTrue(answered)
         self.assertNotIn("server.store", transform)
+        # The transform reads where the session is open from variables alone:
+        # the process snapshot belongs to a session start, never to a tool call.
         self.assertEqual(
-            {"server.hooks", "server.hooks.entry", "server.hooks.normalize"}, set(transform)
+            {"server.hooks", "server.hooks.entry", "server.hooks.normalize", "server.hooks.place"},
+            set(transform),
         )
+        self.assertFalse(snapshot)
         self.assertIn("server.store", lifecycle_modules)
         for surface in ("server.cli", "server.mcp_surface", "server.http_surface"):
             self.assertNotIn(surface, lifecycle_modules)

@@ -21,6 +21,8 @@ import time
 import unicodedata
 from dataclasses import asdict, dataclass
 
+from . import place as places
+
 #: The command's two arguments, `valkama hook <client> <event>`, mapped to the
 #: client's own hook name and the kind Valkama records. The event names are the
 #: client's hook names in kebab case.
@@ -86,8 +88,11 @@ _PER_KIND = {
 }
 _PATHS = ("cwd", "transcript_path", "agent_transcript_path")
 
-#: The spool line format this build writes and reads.
-SPOOL_VERSION = 1
+#: The spool line format of an event that carries a place. A line without one
+#: is still written as version 1, the shape a build that predates places reads,
+#: and this build reads both. A line of version 2 is one such a build sets aside.
+SPOOL_VERSION = 2
+_PLACELESS_VERSION = 1
 
 _TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z")
 _UID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
@@ -114,10 +119,18 @@ class HookEvent:
     transcript_path: str | None = None
     agent_transcript_path: str | None = None
     label: str | None = None
+    #: Where the session is open (`place`), on a session start only; all three
+    #: are set together, each a closed value or empty, or all are absent.
+    opened_in: str | None = None
+    opened_host: str | None = None
+    host_session_id: str | None = None
 
 
+_PLACE_FIELDS = ("opened_in", "opened_host", "host_session_id")
 _FIELDS = frozenset(HookEvent.__dataclass_fields__)
+_PLACELESS_FIELDS = _FIELDS - frozenset(_PLACE_FIELDS)
 _SPOOL_ONLY = frozenset({"v", "spooled_at", "spool_reason"})
+_SESSION_START = "session_start"
 
 
 def timestamp(nanoseconds: int) -> str:
@@ -188,13 +201,22 @@ def normalize_path(path: str) -> str:
 
 
 def lifecycle_event(
-    client: str, event: str, payload: dict, *, event_uid: str, occurred_at: str
+    client: str,
+    event: str,
+    payload: dict,
+    *,
+    event_uid: str,
+    occurred_at: str,
+    place: places.Place | None = None,
 ) -> HookEvent | None:
     """The kept fields of one lifecycle hook input, or nothing to record.
 
     Nothing is recorded for an event this client does not have, for input that
     names a different hook than the command line does, or without a session id:
     an event that cannot be attributed to a session is not evidence of one.
+
+    `place` is where the hook found the session open. A session start keeps it;
+    any other event ignores it, because only a start says where a session is.
     """
 
     if event not in CLIENT_EVENTS.get(client, frozenset()):
@@ -217,6 +239,12 @@ def lifecycle_event(
         if launched is None:
             return None
         fields.update(launched)
+    if kind == _SESSION_START and place is not None:
+        fields.update(
+            opened_in=place.opened_in,
+            opened_host=place.opened_host,
+            host_session_id=place.host_session_id,
+        )
     return HookEvent(
         event_uid=event_uid,
         occurred_at=occurred_at,
@@ -257,9 +285,19 @@ def _launched_agent(payload: dict) -> dict[str, str | None] | None:
 
 
 def spool_line(record: HookEvent, *, spooled_at: str, reason: str) -> bytes:
-    """One spool line: the normalized event plus when and why it was spooled."""
+    """One spool line: the normalized event plus when and why it was spooled.
 
-    line = {"v": SPOOL_VERSION, **asdict(record), "spooled_at": spooled_at, "spool_reason": reason}
+    An event without a place is written in the version 1 shape, key for key, so
+    a build that predates places still delivers it.
+    """
+
+    fields = asdict(record)
+    version = SPOOL_VERSION
+    if record.opened_in is None:
+        version = _PLACELESS_VERSION
+        for field in _PLACE_FIELDS:
+            del fields[field]
+    line = {"v": version, **fields, "spooled_at": spooled_at, "spool_reason": reason}
     return json.dumps(line, ensure_ascii=False, separators=(",", ":")).encode("utf-8") + b"\n"
 
 
@@ -268,13 +306,15 @@ def read_spool_line(line: dict) -> tuple[HookEvent, str] | None:
 
     The file is read back from disk, so it is checked as strictly as a hook
     input is: a known version, known keys only, and every value of the shape
-    `lifecycle_event` produces.
+    `lifecycle_event` produces. Version 1 has no place; version 2 is a session
+    start with all three place fields.
     """
 
     version = line.get("v")
-    if type(version) is not int or version != SPOOL_VERSION:
+    if type(version) is not int or version not in (_PLACELESS_VERSION, SPOOL_VERSION):
         return None
-    if not set(line) <= _FIELDS | _SPOOL_ONLY:
+    allowed = _FIELDS if version == SPOOL_VERSION else _PLACELESS_FIELDS
+    if not set(line) <= allowed | _SPOOL_ONLY:
         return None
     # Every value is text or absent before anything looks one up: a list or an
     # object from disk would otherwise reach a dictionary lookup and raise.
@@ -307,10 +347,25 @@ def read_spool_line(line: dict) -> tuple[HookEvent, str] | None:
         return None
     if record.client not in CLIENT_EVENTS or _KIND_OF_HOOK.get(record.hook_event) != record.kind:
         return None
+    if version == SPOOL_VERSION and not _valid_place(record):
+        return None
     return record, spooled_at
 
 
-def identity_output(payload: dict) -> dict | None:
+def _valid_place(record: HookEvent) -> bool:
+    """Whether a session start carries a place `places.classify` could have made."""
+
+    host_id = record.host_session_id
+    return (
+        record.kind == _SESSION_START
+        and record.opened_in in ("", *places.OPENED_IN)
+        and record.opened_host in ("", *places.OPENED_HOST)
+        and isinstance(host_id, str)
+        and (host_id == "" or places.HOST_SESSION_ID.fullmatch(host_id) is not None)
+    )
+
+
+def identity_output(payload: dict, *, opened_in: str = "") -> dict | None:
     """The Claude `PreToolUse` output that adds `_identity` to an MCP call, or nothing.
 
     `updatedInput` replaces the whole input, so it is the original arguments
@@ -318,6 +373,10 @@ def identity_output(payload: dict) -> dict | None:
     No `permissionDecision` is returned: rewriting the input does not need one,
     and returning `allow` would skip a permission prompt the user configured.
     Anything malformed gives nothing, and the call then proceeds unconfirmed.
+
+    `opened_in`, when known, goes in as `place`: a client can resume a session
+    without a session start, and the confirmed call is then the only report of
+    how it is open now.
     """
 
     if payload.get("hook_event_name", "PreToolUse") != "PreToolUse":
@@ -338,6 +397,8 @@ def identity_output(payload: dict) -> dict | None:
         value = payload.get(field)
         if isinstance(value, str) and value:
             identity[field] = value
+    if opened_in in places.OPENED_IN:
+        identity["place"] = opened_in
     return {
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
