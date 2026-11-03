@@ -185,28 +185,34 @@ const PARTS = [
 ] as const
 
 /**
- * Where a turn's press goes: the first control of the part the pointer can reach right
- * now. A part of the bar can begin to fade between this and the press, which is the race
- * the bar must win.
+ * Where a turn's press goes: the first control the pointer can reach right now in the
+ * turn's part, or in the next part that has one, so that no turn goes without a press. A
+ * part of the bar can begin to fade between this and the press, which is the race the bar
+ * must win.
  */
 const aim = (page: Page, turn: number) =>
   page.evaluate(
-    (part) => {
-      const node = [...document.querySelectorAll<HTMLElement>(`.drawer ${part} button`)].find(
-        (each) => {
-          const { x, y, width, height } = each.getBoundingClientRect()
-          if (width === 0 || height === 0) return false
-          const hit = document.elementFromPoint(x + width / 2, y + height / 2)
-          return hit !== null && (each === hit || each.contains(hit))
-        },
-      )
-      if (!node) return null
-      const { x, y, width, height } = node.getBoundingClientRect()
-      return { x: x + width / 2, y: y + height / 2 }
+    ({ first, parts }) => {
+      for (const step of parts.keys()) {
+        const part = parts[(first + step) % parts.length]
+        const node = [...document.querySelectorAll<HTMLElement>(`.drawer ${part} button`)].find(
+          (each) => {
+            const { x, y, width, height } = each.getBoundingClientRect()
+            if (width === 0 || height === 0) return false
+            const hit = document.elementFromPoint(x + width / 2, y + height / 2)
+            return hit !== null && (each === hit || each.contains(hit))
+          },
+        )
+        if (node) {
+          const { x, y, width, height } = node.getBoundingClientRect()
+          return { x: x + width / 2, y: y + height / 2 }
+        }
+      }
+      return null
     },
     // Two turns to a part, so that each is pressed once with the wheel landed and once
     // with it on its way.
-    PARTS[Math.floor(turn / 2) % PARTS.length],
+    { first: Math.floor(turn / 2) % PARTS.length, parts: [...PARTS] },
   )
 
 /**
