@@ -508,7 +508,9 @@ def _edited(row: sqlite3.Row, updates: list[str], parameters: list[object]) -> s
 
 
 def delete_work_item(conn: sqlite3.Connection, reference: str) -> dict:
-    row = read_model.item_row(conn, reference)
+    # Under the lock, so a child created meanwhile is counted here and refused
+    # in words, rather than met by the DELETE as a raw FOREIGN KEY failure.
+    row = _row_for_write(conn, reference, None)
     children = conn.execute(
         "SELECT COUNT(*) FROM work_items WHERE parent_id = ?", (str(row["work_item_id"]),)
     ).fetchone()[0]
@@ -1670,7 +1672,8 @@ def _row_for_write(
     wrote back the survivor's checklist as it was before somebody else added a
     step. Taken first, the lock leaves nothing to land in between, so the
     revision is compared only when the caller named one, and then against what
-    the item holds now.
+    the item holds now. A delete starts here too: it decides from the item's
+    children.
 
     A caller already inside a transaction keeps it: an immediate one holds the
     lock already, and a deferred one is still refused by `_write` rather than

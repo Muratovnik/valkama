@@ -46,7 +46,9 @@ checkouts are therefore distinguishable even at the same version.
   `expected_revision`: each read the item before it took the write lock, and the guarded
   write compared what it had read. The read now happens under that lock, so a revision
   is compared only when the caller names one. A merge read the same way could drop a
-  checklist step added to the surviving item in between; it no longer can.
+  checklist step added to the surviving item in between; it no longer can. Deleting an
+  item while another agent gave it a child answered with a raw `FOREIGN KEY constraint
+  failed`; the child is now counted under that lock and the delete is refused naming it.
 
 ## [2.4.0](https://github.com/Muratovnik/valkama/compare/v2.3.0...v2.4.0) - 2026-11-03
 

@@ -585,6 +585,31 @@ class ReadThenWriteTests(unittest.TestCase):
                 self.assertEqual([True], landed)
                 self.assertEqual(expected, observe(service.get_work_item(self.conn, reference)))
 
+    def test_a_delete_counts_children_under_the_lock_it_deletes_with(self) -> None:
+        """A child created as the delete begins is counted, not met as a raw FOREIGN KEY.
+
+        The delete counted the item's children and only then took the lock, so a
+        child another agent created in between reached the DELETE, and the caller
+        got SQLite's `IntegrityError` instead of the refusal that names the child.
+        """
+
+        parent = service.create_work_item(self.conn, space=self.space["key"], title="Parent")
+        self.conn.commit()
+
+        def other_child() -> None:
+            service.create_work_item(
+                self.other, space=self.space["key"], title="Child", parent=parent["reference"]
+            )
+
+        landed = self.before("BEGIN", other_child)
+        with self.assertRaisesRegex(model.PlanningError, "still has 1 child item"):
+            service.delete_work_item(self.conn, parent["reference"])
+        self.conn.rollback()
+        self.conn.set_trace_callback(None)
+        self.assertEqual([True], landed)
+        titles = {row[0] for row in self.conn.execute("SELECT title FROM work_items")}
+        self.assertEqual({"Parent", "Child"}, titles)
+
     def twin(self) -> str:
         """A second item with one step, for a merge to fold in.
 

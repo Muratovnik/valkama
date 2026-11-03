@@ -139,12 +139,15 @@ view takes from one read model rather than a second fetch. `planning/service.py`
 writes and `planning/read_model.py` shapes what a caller sees; the dependency
 runs that way only.
 
-Every write there names the revision it read, in the `WHERE` clause of the one
-UPDATE `service._write` issues, which is why it takes the row rather than the id.
-A read takes no lock, so without that clause two agents both saw an unheld item
-and both wrote their own name into it — the claim the tool contract calls atomic
-was neither, and nothing failed loudly. `tests/test_planning_concurrency.py` is
-the only suite here with two connections, and it is what proves the guard.
+A write there reads its item through `service._row_for_write`, which takes the
+write lock before it reads, so nothing lands between the decision and the write
+and a revision is compared only when the caller names one. Read first and locked
+second, four agents reporting on one item were refused for revisions they never
+named, and a merge dropped a step added in between. The write still names the
+revision it read, in the `WHERE` clause of the one UPDATE `service._write`
+issues, which is why it takes the row rather than the id: that clause is the
+backstop for a row read outside the lock. `tests/test_planning_concurrency.py`
+drives both with two connections, and it is what proves them.
 
 One attempt at a work item is `executions/`: its own tables, its lifecycle, the
 Git baseline it started from, and one driver per agent client. A driver owns that
