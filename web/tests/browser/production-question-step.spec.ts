@@ -78,6 +78,8 @@ for (const [width, height, options] of [
     await page.mouse.move(at.x, at.y)
     await folds(page, at, opened)
     expect(await onWayOn(third, at)).toBe(true)
+    // The step is down before the press: what stands there now only sends, and sends nothing.
+    await expect.poll(() => under(page, at)).toBe('The third question: Send')
     await press(page, at)
     await pause(200)
     expect(writesTo(requests)).toEqual([])
@@ -101,6 +103,7 @@ test('in the list of everything waiting a row ending brings no refusal under the
   // The list reads again on its timer and whenever the window comes back to the front.
   await page.evaluate(() => window.dispatchEvent(new Event('focus')))
   await expect.poll(() => onWayOn(next, at)).toBe(true)
+  await expect.poll(() => under(page, at)).toBe('The lower question: Send')
   await press(page, at)
   await pause(200)
   expect(writesTo(opened.requests)).toEqual([])
@@ -120,6 +123,7 @@ test('the same with no press between: a pointer that only went elsewhere finds n
   await page.mouse.move(at.x, at.y)
   await folds(page, at, opened)
   expect(await onWayOn(third, at)).toBe(true)
+  await expect.poll(() => under(page, at)).toBe('The third question: Send')
   await press(page, at)
   await pause(200)
   expect(writesTo(requests)).toEqual([])
@@ -137,6 +141,7 @@ test("the same by one's own hand: Send in one question, and a shaken second pres
   await press(page, at)
   await expect(first.locator('.request-state')).toBeVisible()
   await expect.poll(() => onWayOn(second, { x: at.x + 4, y: at.y })).toBe(true)
+  await expect.poll(() => under(page, { x: at.x + 4, y: at.y })).toBe('The second question: Send')
   await press(page, { x: at.x + 4, y: at.y })
   await pause(200)
   expect(writesTo(requests)).toEqual([UPPER])
