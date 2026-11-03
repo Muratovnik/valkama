@@ -6,6 +6,7 @@ import { checklistCommentMessages } from '@/shared/i18n/checklistCommentMessages
 import { connectionMessages } from '@/shared/i18n/connectionMessages.ts'
 import { discussionThreadMessages } from '@/shared/i18n/discussionThreadMessages.ts'
 import { doctorLoginMessages } from '@/shared/i18n/doctorLoginMessages.ts'
+import { documentLinkMessages } from '@/shared/i18n/documentLinkMessages.ts'
 import { globalFinderMessages } from '@/shared/i18n/globalFinderMessages.ts'
 import { inputRequestMessages } from '@/shared/i18n/inputRequestMessages.ts'
 import { memoryProviderMessages } from '@/shared/i18n/memoryProviderMessages.ts'
@@ -28,6 +29,7 @@ export const en = {
   requests: inputRequestMessages.en.requests,
   editor: richTextMessages.en.editor,
   textLinks: richTextMessages.en.textLinks,
+  documentLinks: documentLinkMessages.en.documentLinks,
   ...connectionMessages.en,
   app: {
     title: 'Valkama',

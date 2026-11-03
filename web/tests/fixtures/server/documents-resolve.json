@@ -1,0 +1,38 @@
+{
+  "paths": [
+    {
+      "path": "docs/plan.md",
+      "status": "file",
+      "project": "example-project",
+      "relative": "docs/plan.md",
+      "markdown": true
+    },
+    {
+      "path": "docs/a.ts",
+      "status": "file",
+      "project": "example-project",
+      "relative": "docs/a.ts",
+      "markdown": false
+    },
+    {
+      "path": "docs",
+      "status": "directory",
+      "project": "example-project",
+      "relative": "docs"
+    },
+    {
+      "path": "docs/gone.md",
+      "status": "missing"
+    },
+    {
+      "path": "../outside.md",
+      "status": "refused",
+      "code": "outside_root"
+    },
+    {
+      "path": "CON",
+      "status": "refused",
+      "code": "invalid_path"
+    }
+  ]
+}

@@ -14,7 +14,7 @@ import type { WorkItem } from '@/shared/api/planningModel.ts'
 
 const props = defineProps<{
   item: WorkItem | null
-  /** The card's planning space, by its exact identity, for the commit lookup. */
+  /** The card's planning space, by its exact identity, for commits and paths. */
   space?: string
 }>()
 const emit = defineEmits<{ open: [reference: string] }>()
@@ -22,6 +22,7 @@ const emit = defineEmits<{ open: [reference: string] }>()
 const { peeked } = useInspectorReferenceLinks({
   item: () => props.item,
   openFrom: (reference) => emit('open', reference),
+  space: () => props.space,
 })
 </script>
 

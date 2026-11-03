@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
+import { validateDocument, validateRefusal, validateResolved } from '@/shared/api/documentApi.ts'
 import {
   validateInputRequestDetail,
   validateInputRequestList,
@@ -27,6 +28,10 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'card-executors.json': (value) => validatePlanningWorkItemPayload(value),
   'comment-reply.json': validateCommentWritten,
   'comment-resolved.json': validateCommentResolved,
+  'documents-read.json': validateDocument,
+  'documents-refused.json': validateRefusal,
+  'documents-resolve-unbound.json': validateResolved,
+  'documents-resolve.json': validateResolved,
   'request-answered.json': validateInputRequestDetail,
   'request-pending.json': validateInputRequestDetail,
   'requests.json': validateInputRequestList,
@@ -58,6 +63,22 @@ describe('the server fixtures', () => {
     expect(item.claim?.executor?.state).toBe('live')
     expect(item.checklist.map((step) => step.executor?.state)).toEqual(['live', 'none', 'none'])
     expect(item.agents?.map((agent) => agent.executor?.state).toSorted()).toEqual(['ended', 'live'])
+  })
+
+  it('carry what a path in a text can come to', () => {
+    const { paths } = validateResolved(read('documents-resolve.json'))
+    expect(paths.map((answer) => answer.status)).toEqual([
+      'file',
+      'file',
+      'directory',
+      'missing',
+      'refused',
+      'refused',
+    ])
+    expect(validateResolved(read('documents-resolve-unbound.json')).paths[0]?.status).toBe(
+      'space_unbound',
+    )
+    expect(validateRefusal(read('documents-refused.json')).code).toBe('project_unknown')
   })
 
   it('carry every 2.5 form the card and the question view draw', () => {

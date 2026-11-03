@@ -497,7 +497,8 @@ function blockWords(block: RichBlock): string {
   return ''
 }
 
-function inlineWords(nodes: readonly RichInline[]): string {
+/** The words inline nodes read as, for what must name them, such as a control's name. */
+export function inlineWords(nodes: readonly RichInline[]): string {
   return nodes.map((node) => nodeWords(node)).join('')
 }
 

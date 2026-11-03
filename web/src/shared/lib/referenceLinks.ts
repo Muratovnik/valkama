@@ -18,6 +18,14 @@ import type { TextReference } from '@/shared/lib/textReferences.ts'
 export interface ReferenceLink {
   /** What the link opens, for its accessible name and tooltip. */
   title: string
+  /** The rest of the run, which follows the control as prose. */
+  after?: string
+  /** Its answer is on its way, and a press waits for it. */
+  busy?: boolean
+  /** It copies rather than opens, which the text says by its dotted underline. */
+  copies?: boolean
+  /** The part of the written run the control covers, when that is not all of it. */
+  label?: string
   open: () => void
 }
 

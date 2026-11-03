@@ -6,19 +6,46 @@
  * it is the text it was. Ids, hashes and code are set in the metadata font,
  * because they are compared character by character; a work item reference
  * stays in the reading font, as it is everywhere else in the product.
+ *
+ * A path in prose keeps the reading font too, because a weak one starts as text
+ * and may become a link when the server answers: only its underline and tooltip
+ * may change then, so it also holds the box a button will be, which is atomic
+ * in a line. A path that copies rather than opens has a dotted underline, which
+ * is what tells the two apart without colour, in forced colours as well.
  */
 import { useReferenceLinks } from '@/shared/lib/referenceLinks.ts'
+import { inlineWords } from '@/shared/lib/richText.ts'
 import type { RichInline } from '@/shared/lib/richText.ts'
 import type { TextReference } from '@/shared/lib/textReferences.ts'
 
 defineProps<{ nodes: readonly RichInline[] }>()
 defineOptions({ name: 'RichInlines' })
 
+type ReferenceNode = Extract<RichInline, { kind: 'reference' }>
+
 const resolve = useReferenceLinks()
 /** What a reference links to here, or null where it is text. */
 const linkFor = (reference: TextReference) => resolve(reference)
 const titleFor = (reference: TextReference) => resolve(reference)?.title
-const isId = (reference: TextReference) => reference.kind !== 'work-item'
+const isId = ({ caption, code, reference }: ReferenceNode) =>
+  reference.kind === 'document' ? code && !caption : reference.kind !== 'work-item'
+const isWeak = ({ reference }: ReferenceNode) =>
+  reference.kind === 'document' && reference.strength === 'weak'
+/** What a control shows without a caption: the part of the run it covers. */
+const labelOf = (reference: TextReference) => resolve(reference)?.label ?? reference.value
+/** What follows a control as prose; a caption stands for the whole run. */
+const afterOf = ({ caption, reference }: ReferenceNode) =>
+  caption ? '' : (resolve(reference)?.after ?? '')
+/**
+ * A path says where it leads or why it only copies. The caption is in the name
+ * too, because a name that leaves out the visible words cannot be spoken to.
+ */
+function nameOf({ caption, reference }: ReferenceNode) {
+  const named = caption ? `${inlineWords(caption)} — ${titleFor(reference)}` : titleFor(reference)
+  return reference.kind === 'document' ? named : undefined
+}
+/** Absent rather than false: a control that is not waiting makes no claim about it. */
+const busyOf = (reference: TextReference) => resolve(reference)?.busy || undefined
 function open(reference: TextReference) {
   resolve(reference)?.open()
 }
@@ -54,19 +81,39 @@ function open(reference: TextReference) {
       v-else-if="node.kind === 'code'"
       class="rich-code"
       >{{ node.text }}</code
-    ><button
-      v-else-if="linkFor(node.reference)"
-      type="button"
-      class="rich-reference"
-      :class="{ 'rich-code': node.code, 'identifier': isId(node.reference) }"
-      :title="titleFor(node.reference)"
-      @click="open(node.reference)"
-    >
-      <span>{{ node.reference.value }}</span></button
-    ><code
+    ><template v-else-if="linkFor(node.reference)"
+      ><button
+        type="button"
+        class="rich-reference"
+        :class="{
+          'rich-code': node.code,
+          'identifier': isId(node),
+          'copies': linkFor(node.reference)?.copies,
+        }"
+        :title="titleFor(node.reference)"
+        :aria-label="nameOf(node)"
+        :aria-busy="busyOf(node.reference)"
+        @click="open(node.reference)"
+      >
+        <span
+          ><RichInlines
+            v-if="node.caption"
+            :nodes="node.caption"
+          /><template v-else>{{ labelOf(node.reference) }}</template></span
+        ></button
+      >{{ afterOf(node) }}</template
+    ><RichInlines
+      v-else-if="node.caption"
+      :nodes="node.caption"
+    /><code
       v-else-if="node.code"
       class="rich-code"
+      :class="{ 'rich-atom': isWeak(node) }"
       >{{ node.reference.value }}</code
+    ><span
+      v-else-if="isWeak(node)"
+      class="rich-atom"
+      >{{ node.reference.value }}</span
     ><template v-else>{{ node.reference.value }}</template></template
   >
 </template>
@@ -124,12 +171,33 @@ function open(reference: TextReference) {
     translate: 0 -50%;
   }
 
+  /* A code span stays one as a link: same size and ground, so nothing moves. */
+  &.rich-code {
+    padding: 0 var(--space-1);
+    font-size: var(--font-size-dense);
+    background: var(--color-surface-recess);
+  }
+
   &.identifier {
     font-family: var(--font-family-mono);
+  }
+
+  &.copies {
+    text-decoration-style: dotted;
+  }
+
+  &[aria-busy='true'] {
+    cursor: progress;
   }
 
   &:hover {
     text-decoration-thickness: 2px;
   }
+}
+
+/* A weak path as text: laid out as the button it may become, and read as prose. */
+.rich-atom {
+  display: inline-block;
+  vertical-align: baseline;
 }
 </style>

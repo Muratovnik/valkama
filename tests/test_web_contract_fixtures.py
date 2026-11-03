@@ -136,6 +136,46 @@ class _Scenario:
             raise AssertionError(f"{path} answered {response.status}: {answer}")
         return answer
 
+    def refusal(self, path: str) -> dict:
+        """A call the server must refuse, as the browser makes it."""
+
+        client = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=10)
+        try:
+            client.request(
+                "GET",
+                path,
+                headers={
+                    "Origin": f"http://127.0.0.1:{self.server.server_port}",
+                    "Sec-Fetch-Site": "same-origin",
+                },
+            )
+            response = client.getresponse()
+            answer = json.loads(response.read())
+        finally:
+            client.close()
+        if response.status < 400:
+            raise AssertionError(f"{path} answered {response.status}: {answer}")
+        return answer
+
+    def documents(self) -> dict[str, dict]:
+        """The document routes, with what a path in a text can come to."""
+
+        (self.root / "docs").mkdir()
+        (self.root / "docs" / "plan.md").write_bytes(b"# Plan\n")
+        (self.root / "docs" / "a.ts").write_bytes(b"a\n")
+        space = planning_space_entity(self.space_ref)["resource_id"]
+        paths = ["docs/plan.md", "docs/a.ts", "docs", "docs/gone.md", "../outside.md", "CON"]
+        asked = urlencode([("space", space), *(("path", path) for path in paths)])
+        document = urlencode({"project": PROJECT, "path": "docs/plan.md"})
+        return {
+            "documents-resolve": self.http(f"/api/documents/resolve?{asked}"),
+            "documents-resolve-unbound": self.http("/api/documents/resolve?path=docs%2Fplan.md"),
+            "documents-read": self.http(f"/api/documents/read?{document}"),
+            "documents-refused": self.refusal(
+                f"/api/documents/read?{urlencode({'project': 'no-such-project', 'path': 'a.md'})}"
+            ),
+        }
+
     def tool(self, name: str, **arguments: object) -> dict:
         """A call as an agent makes it, through the MCP surface."""
 
@@ -316,6 +356,7 @@ class _Scenario:
                 "get_work_item", id=ref, thread=agent_root["comment_id"]
             ),
             "mcp-get-work-item-unresolved": self.tool("get_work_item", id=ref, unresolved=True),
+            **self.documents(),
         }
 
 

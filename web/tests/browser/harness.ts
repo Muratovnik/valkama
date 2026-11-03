@@ -21,6 +21,7 @@ import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 import '@/app/styles/index.css'
 
+import { DocumentLinksSurface } from './documentLinksSurface.ts'
 import { marksSurface } from './marksSurface.ts'
 import { now } from './planningFixtures.ts'
 
@@ -157,6 +158,9 @@ const Harness = defineComponent({
     const contextHarness = requestedSurface === 'context-bar'
     const itemHarness = requestedSurface === 'work-item'
     if (requestedSurface === 'buttons') return () => buttonMatrix()
+    if (requestedSurface?.startsWith('document-links'))
+      return () =>
+        h(DocumentLinksSurface, { inDrawer: requestedSurface === 'document-links-drawer' })
     const active = ref<ModuleId>('planning')
     const surfaceInspector = ref(false)
     const surfaceDialog = ref(false)

@@ -18,6 +18,8 @@ import { provideReferenceLinks, referenceSpaceKey } from '@/shared/lib/reference
  *   for its own references below this layer, from the items it holds.
  * - A session id is a link once the server's session table knows it; it is
  *   asked once per id and remembered for as long as the app runs.
+ * - A path means nothing without the space its text belongs to, so it is text
+ *   here. The card and the question provide the layer that answers for one.
  */
 export function useAppReferenceLinks(options: {
   openSession: (id: string) => void

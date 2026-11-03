@@ -1,6 +1,8 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { useDocumentLinks } from '@/entities/project-document/documentLinks.ts'
+
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import {
   provideReferenceLinks,
@@ -23,14 +25,21 @@ type Ref = WorkItem['refs'][number]
  *   one record Valkama holds of either: opening it shows that record — who
  *   attached it, when, under what label — and, for a commit, what git says of
  *   it. One the card does not carry is text.
+ * - A path is taken from the root of the card's space, by the document layer.
+ *   It is composed here because one component holds one layer.
  */
 export function useInspectorReferenceLinks(options: {
   item: () => WorkItem | null
   openFrom: (reference: string) => void
+  space: () => string | undefined
 }) {
   const { t } = useI18n()
   /** The ref whose record is open over the card, if any. */
   const peeked = ref<Ref | null>(null)
+  const documents = useDocumentLinks(() => {
+    const space = options.space()
+    return space ? { space } : {}
+  })
 
   function workItem(value: string, above: ReferenceLink | null): ReferenceLink | null {
     const own = options.item()?.reference ?? ''
@@ -57,6 +66,7 @@ export function useInspectorReferenceLinks(options: {
   }
 
   provideReferenceLinks((reference, parent) => {
+    if (reference.kind === 'document') return documents(reference)
     if (reference.kind === 'work-item') return workItem(reference.value, parent(reference))
     if (reference.kind === 'commit' || reference.kind === 'memory') return record(reference)
     return parent(reference)

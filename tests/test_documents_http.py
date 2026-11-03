@@ -258,6 +258,29 @@ class ResolveTests(DocumentRoutesHarness):
                 self.assertNotIn(spelling, text)
 
 
+class RequestLineTests(DocumentRoutesHarness):
+    """The length the page's batches hold to: `RESOLVE_ADDRESS_LIMIT` in `documentApi.ts`."""
+
+    def status_for(self, length: int) -> int:
+        start = "/api/documents/resolve?path="
+        client = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=10)
+        self.addCleanup(client.close)
+        client.request(
+            "GET",
+            start + "a" * (length - len(start)),
+            headers={"Sec-Fetch-Site": "same-origin"},
+        )
+        response = client.getresponse()
+        response.read()
+        return response.status
+
+    def test_the_address_the_page_may_send_is_answered(self) -> None:
+        self.assertEqual(200, self.status_for(65_000))
+
+    def test_the_listener_refuses_an_address_past_its_limit(self) -> None:
+        self.assertEqual(414, self.status_for(65_600))
+
+
 class ReadTests(DocumentRoutesHarness):
     def test_a_document_comes_with_its_facts(self) -> None:
         status, body = self.read("workspace", "docs/plan.md")

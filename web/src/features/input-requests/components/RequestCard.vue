@@ -38,8 +38,11 @@ import {
 } from '@/features/input-requests/utils/validateAnswers.ts'
 import type { FieldEdit, RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
+import { provideDocumentLinks } from '@/entities/project-document/documentLinks.ts'
+
 import type { InputRequestEntry, InputRequestField } from '@/shared/api/inputRequestModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
+import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { actorName, actorSession } from '@/shared/lib/actor.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import { revealFrame } from '@/shared/lib/revealFrame.ts'
@@ -67,6 +70,10 @@ const emit = defineEmits<{
 }>()
 const { t, d } = useI18n()
 const promptId = useId()
+// A path in a question belongs to that question's task, whichever task is open.
+provideDocumentLinks(() => ({
+  space: planningSpaceEntity(props.entry.target.space_ref).resource_id,
+}))
 const card = ref<HTMLElement | null>(null)
 onMounted(() => stopStrayPresses(card.value))
 const errorLine = ref<HTMLElement | null>(null)
