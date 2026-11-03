@@ -1,9 +1,14 @@
 /**
  * The words of free text: the markdown editor, and the links a text's
  * references become (`RichText`, `MarkdownEditor`, the reference layers).
+ * A path's words have a file of their own and are carried here, because the
+ * locale catalogues are held to the size they have.
  */
+import { documentLinkMessages } from '@/shared/i18n/documentLinkMessages.ts'
+
 export const richTextMessages = {
   en: {
+    documentLinks: documentLinkMessages.en.documentLinks,
     editor: {
       write: 'Write',
       preview: 'Preview',
@@ -39,6 +44,7 @@ export const richTextMessages = {
     },
   },
   ru: {
+    documentLinks: documentLinkMessages.ru.documentLinks,
     editor: {
       write: 'Текст',
       preview: 'Просмотр',
