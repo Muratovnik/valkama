@@ -16,6 +16,7 @@ import {
   uniqueList,
   z,
 } from '@/shared/api/contract.ts'
+import { executorSchema } from '@/shared/api/executorModel.ts'
 import { enumField, ID, invalid, ISO, PROJECT_ID, UUID } from '@/shared/api/platformApiGuards.ts'
 
 const PLANNING_READ_MODEL = 'valkama-planning-read-model' as const
@@ -111,37 +112,6 @@ const workflowStateSchema = strictObject({ ...stateShape, position: positiveInt(
  */
 export const CLAIM_STATES = ['live', 'stale', 'unconfirmed'] as const
 const claimStateField = () => enumField(CLAIM_STATES).nullable()
-
-/**
- * Who stands behind a claim, a step or an agent, and what opening them would
- * reach: only the card's read carries it. `session` is the session a click opens,
- * an agent's parent for an agent. `none` is a holder with no session to open, a
- * person's or one a label cannot name, and leaves every other field empty.
- */
-const executorSchema = strictObject({
-  session: blankable(200).nullable(),
-  agent: blankable(200).nullable(),
-  opened_in: enumField([
-    '',
-    'ide',
-    'ide-terminal',
-    'terminal',
-    'background',
-    'app',
-    'headless',
-  ] as const),
-  opened_host: enumField([
-    '',
-    'vscode',
-    'vscode-insiders',
-    'cursor',
-    'windsurf',
-    'jetbrains',
-    'claude-desktop',
-    'codex-app',
-  ] as const),
-  state: enumField(['live', 'ended', 'gone', 'headless', 'none'] as const),
-})
 
 const stepText = () => boundedText(/^[^\u{0}]{1,1000}$/u, 1000)
 const checklistStepSchema = strictObject({
