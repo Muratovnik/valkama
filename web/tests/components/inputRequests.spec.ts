@@ -38,6 +38,7 @@ vi.mock('@/shared/api/inputRequestApi.ts', async (original) => ({
   fetchInputRequest: vi.fn(),
   fetchInputRequests: vi.fn(),
 }))
+const extrasNone = { own: {}, field_notes: {} }
 type Wrapper = ReturnType<typeof mount>
 const wrappers: Wrapper[] = []
 const plugins = (locale: 'en' | 'ru' = 'en') => [createI18n({ legacy: false, locale, messages })]
@@ -102,7 +103,11 @@ describe('human input requests', () => {
       request: { ...entry.request, status: 'answered', answers: { proceed: false }, revision: 2 },
     })
     const wrapper = card(entry)
-    expect(radios(wrapper).map((input) => radioLabel(input))).toEqual(['Yes', 'No'])
+    expect(radios(wrapper).map((input) => radioLabel(input))).toEqual([
+      'Yes',
+      'No',
+      'Your own option',
+    ])
     expect(checkedLabels(wrapper)).toEqual([])
     await button(wrapper, 'Send').trigger('click')
     expect(answerInputRequest).not.toHaveBeenCalled()
@@ -110,9 +115,14 @@ describe('human input requests', () => {
     expect(checkedLabels(wrapper)).toEqual(['No'])
     await button(wrapper, 'Send').trigger('click')
     await flushPromises()
-    expect(answerInputRequest).toHaveBeenCalledExactlyOnceWith(entry, { proceed: false }, '')
+    expect(answerInputRequest).toHaveBeenCalledExactlyOnceWith(
+      entry,
+      { proceed: false },
+      '',
+      extrasNone,
+    )
     expect(wrapper.text()).toContain('Answer received')
-    expect(wrapper.get('.request-state').text()).toContain('No')
+    expect(wrapper.get('.request-option.is-chosen').text()).toContain('No')
     expect(declineInputRequest).not.toHaveBeenCalled()
   })
 
@@ -161,7 +171,7 @@ describe('human input requests', () => {
       },
     ]
     const wrapper = card(entry)
-    expect(radios(wrapper).map((input) => radioLabel(input))).toEqual(ids)
+    expect(radios(wrapper).map((input) => radioLabel(input))).toEqual([...ids, 'Your own option'])
     expect(checkedLabels(wrapper)).toEqual([])
     await button(wrapper, 'Send').trigger('click')
     await flushPromises()
@@ -343,9 +353,12 @@ describe('human input requests', () => {
     await wrapper.get('input[type="checkbox"][value="alpha"]').setValue(true)
     await button(wrapper, 'Send').trigger('click')
     await flushPromises()
-    expect(answerInputRequest).toHaveBeenCalledExactlyOnceWith(entry, answers, '')
-    expect(wrapper.get('dl').text()).toContain('A useful reason')
-    expect(wrapper.get('dl').text()).toContain('Beta')
+    expect(answerInputRequest).toHaveBeenCalledExactlyOnceWith(entry, answers, '', extrasNone)
+    expect(wrapper.get('.request-reply').text()).toContain('A useful reason')
+    expect(wrapper.findAll('.request-option.is-chosen').map((row) => row.text())).toEqual([
+      'Betaselected',
+      'Alphaselected',
+    ])
   })
 
   // Answering takes away the buttons that held focus. Focus used to fall to the

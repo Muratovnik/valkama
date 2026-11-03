@@ -12,6 +12,7 @@ import { openQuestion, question, send } from './questionBackend.ts'
 import {
   answeredElsewhere,
   asked,
+  closedElsewhere,
   decline,
   inCard,
   inMiddle,
@@ -58,14 +59,14 @@ async function onWayOn(card: Locator, at: Point) {
 
 /** The first question ends elsewhere, and the third comes to stand at this point. */
 async function folds(page: Page, at: Point, opened: Awaited<ReturnType<typeof threeInCard>>) {
-  opened.requests.settle(UPPER, answeredElsewhere)
+  opened.requests.settle(UPPER, closedElsewhere)
   await opened.stream.signal('agents')
   await expect.poll(() => under(page, at)).toMatch(/^The third question: /u)
 }
 
 for (const [width, height, options] of [
   [1680, 1050, 5],
-  [390, 844, 6],
+  [390, 844, 5],
 ] as const) {
   test(`at ${width} a question folding brings no refusal under a pointer aimed at Send in another`, async ({
     page,
@@ -93,13 +94,13 @@ test('in the list of everything waiting a row ending brings no refusal under the
 }) => {
   await page.setViewportSize({ width: 1680, height: 1050 })
   // A long row below keeps the list at its full height, so the row below rises by all it can.
-  const opened = await openQuestion(page, [...pair(2, 2), asked(THIRD, 'A long question', 12, 9)])
+  const opened = await openQuestion(page, [...pair(2, 1), asked(THIRD, 'A long question', 12, 9)])
   const { next, top } = await inTheList(page, opened)
   await raise(page, next)
   await choose(page, top)
   const at = await inMiddle(send(top))
   await page.mouse.move(at.x, at.y)
-  opened.requests.settle(UPPER, answeredElsewhere)
+  opened.requests.settle(UPPER, closedElsewhere)
   // The list reads again on its timer and whenever the window comes back to the front.
   await page.evaluate(() => window.dispatchEvent(new Event('focus')))
   await expect.poll(() => onWayOn(next, at)).toBe(true)
@@ -127,24 +128,6 @@ test('the same with no press between: a pointer that only went elsewhere finds n
   await press(page, at)
   await pause(200)
   expect(writesTo(requests)).toEqual([])
-  await expect(asking(page)).toHaveCount(0)
-})
-
-test("the same by one's own hand: Send in one question, and a shaken second press finds no refusal in the next", async ({
-  page,
-}) => {
-  const opened = await threeInCard(page, 5)
-  const { first, requests, second } = opened
-  await raise(page, second)
-  await choose(page, first)
-  const at = await inMiddle(send(first))
-  await press(page, at)
-  await expect(first.locator('.request-state')).toBeVisible()
-  await expect.poll(() => onWayOn(second, { x: at.x + 4, y: at.y })).toBe(true)
-  await expect.poll(() => under(page, { x: at.x + 4, y: at.y })).toBe('The second question: Send')
-  await press(page, { x: at.x + 4, y: at.y })
-  await pause(200)
-  expect(writesTo(requests)).toEqual([UPPER])
   await expect(asking(page)).toHaveCount(0)
 })
 
@@ -339,7 +322,7 @@ test('a deadline passing while the step stands takes focus to the line that says
 async function layout(card: Locator) {
   return {
     onward: await onward(card).boundingBox(),
-    own: await card.locator('.request-own').boundingBox(),
+    own: await card.locator('.request-note').last().boundingBox(),
     wayOut: await wayOut(card).boundingBox(),
   }
 }
@@ -357,7 +340,7 @@ for (const [width, height] of [
       await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
       const { card } = await openQuestion(page, pair(2, 2))
       const lower = card.nth(1)
-      await lower.locator('.request-own-toggle').click()
+      await lower.locator('.request-note-toggle').last().click()
       await page.keyboard.insertText('First line of the note\nSecond line\nThird line, the last')
       await inReach(wayOut(lower))
       const before = await layout(lower)

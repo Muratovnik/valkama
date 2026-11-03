@@ -104,16 +104,18 @@ test('an option label stays the text it was in the form, while written words are
       by_person: true,
     }),
   ])
-  const one = card.filter({ hasText: 'One field' }).locator('.request-state')
-  await expect(one).toContainText(label)
-  await expect(one.locator('strong, code')).toHaveCount(0)
+  const one = card.filter({ hasText: 'One field' }).locator('.request-reply')
+  await expect(one.locator('.request-option')).toContainText(label)
+  await expect(one.locator('.request-option').locator('strong, code')).toHaveCount(0)
   await expect(one.locator('em')).toHaveText('note')
-  const values = card.filter({ hasText: 'Several fields' }).locator('.request-value')
-  await expect(values.nth(0)).toHaveText('1. not a list')
-  await expect(values.nth(0).locator('ol')).toHaveCount(0)
-  await expect(values.nth(1)).toHaveText('**a**, _b_')
-  await expect(values.nth(2)).toHaveText('Yes')
-  await expect(values.nth(3).locator('strong')).toHaveText('v2')
+  const several = card.filter({ hasText: 'Several fields' }).locator('.request-reply')
+  const chosen = several.locator('.request-option.is-chosen')
+  await expect(chosen.nth(0)).toContainText('1. not a list')
+  await expect(several.locator('ol')).toHaveCount(0)
+  await expect(chosen.nth(1)).toContainText('**a**')
+  await expect(chosen.nth(2)).toContainText('_b_')
+  await expect(chosen.nth(3)).toContainText('Yes')
+  await expect(several.locator('.request-answer').last().locator('strong')).toHaveText('v2')
 })
 
 test('the ring on how a question ended stands clear of its words and moves none of them', async ({
@@ -193,7 +195,7 @@ test('a question waiting stands under the form past the first hundred, and the c
   ])
   const first = drawer.locator('.thread > li').first()
   await expect(first).toContainText(ROUTE_ASKED)
-  await expect(first.getByRole('radio')).toHaveCount(3)
+  await expect(first.getByRole('radio')).toHaveCount(4)
   await expect(drawer.getByText(CUT, { exact: true })).toBeVisible()
   expect(requests.reads.filter((read) => read.includes('reference=')).join(' ')).toContain(
     'status=pending',
@@ -204,7 +206,7 @@ test('with all of a card’s questions in one read nothing more is read or said'
   page,
 }) => {
   const { drawer, requests, card } = await openQuestion(page, [asked()])
-  await expect(card.getByRole('radio')).toHaveCount(3)
+  await expect(card.getByRole('radio')).toHaveCount(4)
   await expect(drawer.getByText(CUT, { exact: true })).toHaveCount(0)
   expect(requests.reads.filter((read) => read.includes('reference=')).join(' ')).not.toContain(
     'status=pending',

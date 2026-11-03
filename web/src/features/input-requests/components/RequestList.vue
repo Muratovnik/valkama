@@ -20,8 +20,9 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import RequestCard from '@/features/input-requests/components/RequestCard.vue'
+import { holdsDraft } from '@/features/input-requests/utils/answerChange.ts'
 import { requestIdentity } from '@/features/input-requests/utils/requestIdentity.ts'
-import { EMPTY_DRAFT, hasDraft } from '@/features/input-requests/utils/validateAnswers.ts'
+import { EMPTY_DRAFT } from '@/features/input-requests/utils/validateAnswers.ts'
 import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
 import type { InputRequestEntry, InputRequestList } from '@/shared/api/inputRequestModel.ts'
@@ -64,11 +65,9 @@ const waiting = computed(
 )
 /** The same condition the rail's count carries as its plus: a source or a page was not read. */
 const incomplete = computed(() => props.partial || Boolean(props.result?.has_more))
-/** Whether a question still open here has anything typed or chosen in it. */
+/** Whether a question here holds anything typed or chosen that a failed read must not cost. */
 const drafted = computed(() =>
-  props.entries.some(
-    (entry) => entry.request.status === 'pending' && hasDraft(props.drafts[requestIdentity(entry)]),
-  ),
+  props.entries.some((entry) => holdsDraft(entry.request, props.drafts[requestIdentity(entry)])),
 )
 /** What the refresh beside it would change: the first read, its failure, or the count. */
 const statusText = computed(() => {
@@ -124,9 +123,14 @@ function draftFor(entry: InputRequestEntry) {
 }
 async function updated(entry: InputRequestEntry) {
   emit('updated', entry)
-  if (entry.request.status === 'pending') return
-  await nextTick()
   const key = requestIdentity(entry)
+  // A form still open keeps the keyboard, and a changed answer is still this question's.
+  if (entry.request.status === 'pending' || props.drafts[key]?.changing != null) return
+  await nextTick()
+  if (entry.request.answer_version > 1) {
+    cards[key]?.focusOutcome()
+    return
+  }
   const at = props.entries.findIndex((candidate) => requestIdentity(candidate) === key)
   const next = [...props.entries.slice(at + 1), ...props.entries.slice(0, Math.max(at, 0))].find(
     (candidate) => candidate.request.status === 'pending',

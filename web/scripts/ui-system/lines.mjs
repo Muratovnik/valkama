@@ -66,6 +66,8 @@ export const LINE_BUDGET = new Map([
   // GraphView keeps the pan viewport frame, the floating flow controls and a
   // legend glyph whose border is the drawing itself.
   ['features/input-requests/components/RequestFold.vue', 1], // A reply's rule, as a quote's.
+  ['features/input-requests/components/RequestFieldAnswer.vue', 1], // A comment's rule, as a quote's.
+  ['features/input-requests/components/RequestHistory.vue', 1], // A replaced answer's, the same.
   // Settings General uses one earned divider between its preference groups
   // and one row family. Diagnostics uses section and row dividers, plus status
   // edges for initial-load and refresh failures.

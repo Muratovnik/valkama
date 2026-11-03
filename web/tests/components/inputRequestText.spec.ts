@@ -99,8 +99,11 @@ describe('a text answer to a question', () => {
     await view('Write').trigger('click')
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter', ctrlKey: true })
     await flushPromises()
-    expect(answerInputRequest).toHaveBeenCalledExactlyOnceWith(entry, { note: 'Use **v2**' }, '')
-    expect(wrapper.get('.request-state strong').text()).toBe('v2')
+    expect(answerInputRequest).toHaveBeenCalledExactlyOnceWith(entry, { note: 'Use **v2**' }, '', {
+      own: {},
+      field_notes: {},
+    })
+    expect(wrapper.get('.request-reply strong').text()).toBe('v2')
   })
 
   it('offers no write-or-preview switch for a question without a text answer', () => {

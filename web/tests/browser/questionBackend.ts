@@ -106,6 +106,23 @@ export const mixedField: InputRequestField = {
 /** How many questions one read of the list brings, as the server's limit does. */
 const READ_LIMIT = 100
 
+/** The next `answer_version` and `history` of a question that one of these writes reached. */
+function nextVersions(was: Request, action: string): Pick<Request, 'answer_version' | 'history'> {
+  if (action !== 'change')
+    return { answer_version: action === 'answer' ? 1 : 0, history: was.history }
+  const replaced = {
+    version: was.answer_version,
+    answers: was.answers ?? {},
+    own: was.own ?? {},
+    field_notes: was.field_notes ?? {},
+    note: was.note,
+    answered_by: was.answered_by,
+    by_person: was.by_person,
+    answered_at: was.resolved_at ?? '2026-10-24T10:00:00Z',
+  }
+  return { answer_version: was.answer_version + 1, history: [...was.history, replaced] }
+}
+
 /**
  * The questions' side of the server. The answer is the existing endpoint, and it may
  * come with `note`; `settle` changes a question the way another window would.
@@ -114,6 +131,7 @@ async function installQuestions(page: Page, entries: InputRequestEntry[]) {
   const writes: { action: string; body: Record<string, unknown> }[] = []
   const reads: string[] = []
   let failure: number | 'abort' | null = null
+  let refusal: { message: string; status: number } | null = null
   let held: Promise<unknown> = Promise.resolve()
   await page.route('**/api/modules/planning/request**', async (route) => {
     const request = route.request()
@@ -158,20 +176,24 @@ async function installQuestions(page: Page, entries: InputRequestEntry[]) {
       failure = null
       return route.fulfill({ status, json: {} })
     }
+    if (refusal) {
+      const { message, status } = refusal
+      refusal = null
+      return route.fulfill({ status, json: { error: { code: 'workflow_guard', message } } })
+    }
     const entry = entries.find((candidate) => candidate.request.request_id === body.id)
     if (!entry) return route.fulfill({ status: 404, json: {} })
     if (body.expected_revision !== entry.request.revision)
       return route.fulfill({ status: 409, json: {} })
+    const given = action === 'answer' || action === 'change'
+    const was = entry.request
     entry.request = {
-      ...entry.request,
-      status: action === 'answer' ? 'answered' : 'declined',
-      answers: action === 'answer' ? (body.answers as Request['answers']) : null,
-      own: action === 'answer' ? ((body.own as Request['own'] | undefined) ?? {}) : null,
-      field_notes:
-        action === 'answer'
-          ? ((body.field_notes as Request['field_notes'] | undefined) ?? {})
-          : null,
-      answer_version: action === 'answer' ? 1 : 0,
+      ...was,
+      status: given ? 'answered' : 'declined',
+      answers: given ? (body.answers as Request['answers']) : null,
+      own: given ? ((body.own as Request['own'] | undefined) ?? {}) : null,
+      field_notes: given ? ((body.field_notes as Request['field_notes'] | undefined) ?? {}) : null,
+      ...nextVersions(was, action),
       note: (body.note as string | undefined) ?? null,
       answered_by: 'user',
       by_person: true,
@@ -185,6 +207,8 @@ async function installQuestions(page: Page, entries: InputRequestEntry[]) {
     writes,
     reads,
     failNext: (next: number | 'abort') => (failure = next),
+    /** The next write is refused with the server's words. */
+    refuseNext: (message: string, status = 409) => (refusal = { message, status }),
     /** A write the server does not answer until this settles. */
     holdWrites(until: Promise<unknown>) {
       held = until

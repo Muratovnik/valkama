@@ -12,6 +12,10 @@
  * while it is open the asking has its room kept above the buttons, asked or not.
  *
  * The same buttons stay under the keyboard for the same reason, so focus has nowhere to fall.
+ *
+ * An answered question offers to change its answer here, where a question offers everything
+ * else, and while that form is open the same two places hold Cancel and Save. Cancel is
+ * always there to press: whatever else is wrong, the way out of the form is not.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -20,6 +24,10 @@ import VButton from '@/shared/ui/VButton.vue'
 
 const props = defineProps<{
   busy: boolean
+  /** The answer can be changed from here and its form is not open. */
+  changeable: boolean
+  /** The form of a change is open. */
+  changing: boolean
   /** Whether declining was asked for, and the next word on it decides. */
   declining: boolean
   disabled: boolean
@@ -29,18 +37,34 @@ const props = defineProps<{
   standalone: boolean
   waiting: boolean
 }>()
-const emit = defineEmits<{ 'onward': []; 'open': []; 'refresh': []; 'way-out': [] }>()
+const emit = defineEmits<{
+  'onward': []
+  'open': []
+  'refresh': []
+  'start-change': []
+  'way-out': []
+}>()
 const { t } = useI18n()
 const root = ref<HTMLElement | null>(null)
 /** Absent rather than false, because `aria-disabled="false"` is a claim and not a default. */
 const busyMark = computed(() => props.busy || undefined)
+const asksTwo = computed(() => props.waiting || props.changing)
+const wayOutDisabled = computed(() => !props.changing && props.disabled)
 const wayOut = computed(() => {
+  if (props.changing) {
+    const word = t('requests.cancel')
+    return { room: word, variant: 'ghost' as const, word }
+  }
   const [word, room] = [t('requests.back'), t('requests.decline')]
   return props.declining
     ? { room, variant: 'secondary' as const, word }
     : { room: word, variant: 'ghost' as const, word: room }
 })
 const onward = computed(() => {
+  if (props.changing) {
+    const word = t('requests.saveChange')
+    return { room: word, variant: 'primary' as const, word }
+  }
   const [word, room] = [t('requests.decline'), t('requests.answer')]
   return props.declining
     ? { room, variant: 'danger' as const, word }
@@ -50,11 +74,14 @@ const onward = computed(() => {
 function focusWayOut() {
   root.value?.querySelector<HTMLElement>('.request-way-out')?.focus({ preventScroll: true })
 }
+function focusChange() {
+  root.value?.querySelector<HTMLElement>('.request-change')?.focus({ preventScroll: true })
+}
 function pressWayOut() {
   emit('way-out')
   focusWayOut()
 }
-defineExpose({ focusWayOut })
+defineExpose({ focusChange, focusWayOut })
 </script>
 
 <template>
@@ -88,17 +115,24 @@ defineExpose({ focusWayOut })
       >{{ t('requests.checkStatus') }}</VButton
     >
     <VButton
-      v-if="waiting"
+      v-if="changeable"
+      class="request-change"
+      variant="ghost"
+      @click="emit('start-change')"
+      >{{ t('requests.changeAnswer') }}</VButton
+    >
+    <VButton
+      v-if="asksTwo"
       class="request-way-out request-held"
       :aria-disabled="busyMark"
       :data-room="wayOut.room"
-      :disabled="disabled"
+      :disabled="wayOutDisabled"
       :variant="wayOut.variant"
       @click="pressWayOut"
       >{{ wayOut.word }}</VButton
     >
     <VButton
-      v-if="waiting"
+      v-if="asksTwo"
       class="request-onward request-held"
       :aria-disabled="busyMark"
       :data-room="onward.room"

@@ -15,12 +15,15 @@ import { WEB_AUTHOR } from '@/shared/api/webAuthor.ts'
 
 export class InputRequestError extends Error {
   readonly code: string
+  /** The server's bracketed word on why, such as `task_closed`; empty when it gave none. */
+  readonly reason: string
   readonly status: number
 
-  constructor(code: string, status: number) {
+  constructor(code: string, status: number, reason = '') {
     super(code)
     this.name = 'InputRequestError'
     this.code = code
+    this.reason = reason
     this.status = status
   }
 }
@@ -29,7 +32,11 @@ async function request(url: string, init?: RequestInit): Promise<unknown> {
   const { response, payload } = await readJsonResponse(url, init)
   if (!response.ok) {
     const refusal = readRefusal(payload)
-    throw new InputRequestError(refusal?.error.code ?? 'request_failed', response.status)
+    throw new InputRequestError(
+      refusal?.error.code ?? 'request_failed',
+      response.status,
+      /^\[([a-z_]+)\]/u.exec(refusal?.error.message ?? '')?.[1],
+    )
   }
   return payload
 }

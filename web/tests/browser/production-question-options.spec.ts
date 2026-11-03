@@ -34,10 +34,10 @@ for (const [width, height] of SIZES) {
     ])
     await drawer.getByRole('button', { name: 'Waiting for an answer', exact: true }).click()
     const rows = card.locator('.request-option')
-    await expect(rows).toHaveCount(12)
+    await expect(rows).toHaveCount(13)
     // The labels are what is read; no paragraph of any description stands yet.
     await expect(card).not.toContainText('opening paragraph')
-    const last = rows.last().getByText('Option 12', { exact: true })
+    const last = rows.nth(11).getByText('Option 12', { exact: true })
     await expect(last).toBeInViewport()
     await expect
       .poll(async () => {
@@ -274,12 +274,12 @@ test('every arrow goes on round the ends, and a modified one is left to the brow
   const radio = (name: string) => card.getByRole('radio', { name, exact: true })
   await radio('With a line').focus()
   await page.keyboard.press('ArrowUp')
-  await expect(radio('With nothing')).toBeChecked()
-  await expect(radio('With nothing')).toBeFocused()
+  await expect(radio('Your own option')).toBeChecked()
+  await expect(radio('Your own option')).toBeFocused()
   await page.keyboard.press('ArrowRight')
   await expect(radio('With a line')).toBeChecked()
   await page.keyboard.press('ArrowLeft')
-  await expect(radio('With nothing')).toBeChecked()
+  await expect(radio('Your own option')).toBeChecked()
   await page.keyboard.press('ArrowDown')
   await expect(radio('With a line')).toBeChecked()
   await page.keyboard.press('Control+ArrowDown')
@@ -331,7 +331,7 @@ test('with nothing chosen the keyboard still meets one radio and one toggle', as
   await page.keyboard.press('Tab')
   await expect(card.locator('.request-option').first().getByRole('button')).toBeFocused()
   await page.keyboard.press('Tab')
-  await expect(card.getByRole('button', { name: 'Your own answer', exact: true })).toBeFocused()
+  await expect(card.getByRole('button', { name: /^Comment on this field/u })).toBeFocused()
   await expect(card.getByRole('radio', { checked: true })).toHaveCount(0)
 })
 
@@ -351,7 +351,11 @@ test('the keyboard meets one description on its way to Send, not twelve', async 
   // The link inside what was just opened comes first, and then the way on.
   await expect(card.locator('.request-option').nth(1).getByRole('link')).toBeFocused()
   await page.keyboard.press('Tab')
-  await expect(card.getByRole('button', { name: 'Your own answer', exact: true })).toBeFocused()
+  await expect(card.getByRole('button', { name: /^Comment on this field/u })).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(
+    card.getByRole('button', { name: 'Comment on the question', exact: true }),
+  ).toBeFocused()
   await page.keyboard.press('Tab')
   await page.keyboard.press('Tab')
   await expect(send(card)).toBeFocused()

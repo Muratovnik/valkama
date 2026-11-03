@@ -893,7 +893,9 @@ its description as leaves the labels scannable, so that the first screen still s
 is asked and what the choices are. A description of one line stands whole under its
 label; a longer one shows its first words on one quiet line, and past six described
 options even that goes; either opens on the row's own chevron, selects nothing by opening,
-and can stand open beside another. What is chosen is never left folded: it stands whole
+and can stand open beside another. Nothing in a row's label can be pressed, because a press
+there selects: a reference in it reads as text, and a line holding a link opens on its chevron
+like one that runs on, so the link works where it opened. What is chosen is never left folded: it stands whole
 under the options and above Send, because only what was shown in full may be sent as the
 person's answer, and an agent can put a condition in what a row folds away. It stands
 there rather than opening in the row so that choosing moves no row: a row closing above the
@@ -904,6 +906,13 @@ label alone and described only by a line, or a screen reader would read paragrap
 arrow press; a description standing under the options is named as its details and read by
 going on to it. The chevron is a tab stop only on the row the keyboard stands on, so that
 Tab reaches Send.
+Your own option is the last row of every field with options, Yes and No included, which is
+why they stand in a column: a row that opens a field cannot stand in a row with others. It is a
+radio of the same group, or a tick beside the others. Choosing it opens its field in place and
+leaves focus in the group, because an arrow both moves and chooses and focus taken away would
+end the walk; the field is the next stop on Tab, with no toolbar in the way, and Shift+Tab comes
+straight back. Taking the row back hides the field and keeps the words until the answer is sent,
+and chosen with no words it is refused at the field itself.
 No press on a question nobody has put anything into writes, whatever came to stand under
 the pointer. Controls can rise under a pointer at rest, as when an agent answers the question
 above or asks a new one, and no watch on the pointer catches every way that happens, so the
@@ -935,15 +944,29 @@ does not stay empty to prevent it. The scrim follows the same rule, so a second 
 leaves its card open, and a press on the scrim that does not close takes no focus out of the
 surface. It is not a rule of the whole interface: those are the places where the press would
 choose or send without being meant, or take away what was just opened.
-Words of one's own are always one quiet press away, in the shared editor under the options,
-and with text in them no field is required; declining is as quiet. A selection or a note
-held is a draft the guard asks about. A send that fails keeps all of it with the reason in
+A comment is one quiet press away, on a field under its options and on the whole question
+under them all, and it explains a choice without standing in for one; declining is as quiet. A
+selection or a comment held is a draft the guard asks about. A send that fails keeps all of it with the reason in
 the foot, and does not look sent; while a write is out, the buttons read as busy and keep
 focus. Answered, the question folds to its prompt with the reply under it, its author and its
-time; declined or closed, to its prompt and a quiet line. It says "you" only when the server
-says the call that closed it came through this interface, because a name is only what the
-caller signed. An option's label stays the text it was in the form, while words written in
-a field or a note are markdown. An
+time, and every field keeps all it offered, so the answer can be read against what it was chosen
+from: the same rows with no control in them, the chosen one on a brighter ground and in full ink
+with the word «selected», the others stepped back. That word and a line in a forced palette are
+what carry it where colour does not. An own option stands as a chosen row with its words, a
+comment as a quote under its field and the one on the question last. They are a list, not disabled
+radios, which a screen reader cannot walk; only the first line of the reply is a live region, or
+every option would be read out when an answer arrives. Declined or closed, the question folds to
+its prompt and a quiet line. It says "you" only when the server says the call that closed it came
+through this interface, because a name is only what the caller signed. An option's label stays
+the text it was in the form, while words written in a field or a note are markdown.
+An answer can be changed while its task is open, from the foot where a question keeps everything
+else it can do. The same form opens on the answer in force, and Save stays off until the form
+says something else. Cancel closes at once if nothing changed and otherwise asks first, with
+focus on going on, and Escape from inside is that same Cancel. The change is written against the
+revision the form opened on, so an answer that moved on under it is a conflict to read, with the
+draft kept, and not something overwritten. The line of the reply then says it was changed and
+when, and «Previous answers» opens what it replaced, newest first, as plain words with who said
+them. A closed task says to reopen it instead of offering the button. An
 answer arriving from elsewhere folds it the same way, and a note still in the form stays in
 view, saying it was not sent, until the person leaves. While a question waits, the card's
 facts carry a mark that brings it into view under the tabs from any section.

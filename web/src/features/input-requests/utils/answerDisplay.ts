@@ -1,15 +1,58 @@
-import type { InputAnswers, InputRequestField } from '@/shared/api/inputRequestModel.ts'
+import type {
+  InputAnswers,
+  InputRequestEntry,
+  InputRequestField,
+  InputRequestOption,
+} from '@/shared/api/inputRequestModel.ts'
+import { plainText } from '@/shared/lib/richText.ts'
+
+type Translate = (key: string, values?: Record<string, unknown>) => string
+type Version = InputRequestEntry['request']['history'][number]
+
+/** What a field offers to choose from: Yes and No are the options of a boolean. */
+export function fieldOptions(
+  field: InputRequestField,
+  t: (key: string) => string,
+): readonly InputRequestOption[] {
+  if (field.type !== 'boolean') return field.options
+  return [
+    { id: 'true', label: t('requests.yes') },
+    { id: 'false', label: t('requests.no') },
+  ]
+}
 
 /** A confirmed answer as the reader reads it: options by their labels, Yes or No for a boolean. */
-export function displayAnswer(
+function displayAnswer(
   field: InputRequestField,
   value: InputAnswers[string] | undefined,
-  t: (key: string) => string,
-): string {
+  t: Translate,
+) {
   if (typeof value === 'boolean') return t(value ? 'requests.yes' : 'requests.no')
   const label = (option: string) =>
     field.options.find((item) => item.id === option)?.label ?? option
   if (Array.isArray(value)) return value.map((option) => label(option)).join(', ')
-  if (typeof value !== 'string') return t('requests.noAnswer')
-  return field.type === 'choice' ? label(value) : value
+  if (typeof value !== 'string') return ''
+  return field.type === 'choice' ? label(value) : plainText(value)
+}
+
+/**
+ * A replaced answer as one line per field that said something: what was chosen, the own
+ * variant, and the comment. It is the record of what stood, so it reads as plain words and
+ * offers nothing; the answer in force is the one with the options around it.
+ */
+export function versionLines(
+  fields: readonly InputRequestField[],
+  version: Pick<Version, 'answers' | 'field_notes' | 'own'>,
+  t: Translate,
+): { id: string; text: string }[] {
+  const said = (key: string, text: string | undefined) =>
+    text ? t(key, { text: plainText(text) }) : ''
+  return fields.flatMap((field) => {
+    const parts = [
+      displayAnswer(field, version.answers[field.id], t),
+      said('requests.ownVariantSaid', version.own[field.id]),
+      said('requests.fieldNoteSaid', version.field_notes[field.id]),
+    ].filter(Boolean)
+    return parts.length ? [{ id: field.id, text: `${field.label}: ${parts.join('; ')}` }] : []
+  })
 }

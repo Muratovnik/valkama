@@ -1,16 +1,22 @@
 <script setup lang="ts">
 /**
  * A question no longer waiting: what was asked, and under it how that ended. An answer
- * stands as a reply, with who gave it and when; one field reads as a sentence, several
- * with their labels. A question declined or closed says so on one quiet line.
+ * stands as a reply, with who gave it and when, and every field shows all it offered with
+ * what was chosen set apart, because an answer read without its options says neither what
+ * was weighed nor what was left. A question declined or closed says so on one quiet line.
  *
- * A note still in the form when the question closed some other way is the only copy of
- * what was written. It stays in view under its own words, and it never joins the reply.
+ * Only that first line of the reply is a status, and it is what focus comes to. Everything
+ * under it is there to be read on, and a live region around twelve options would read all
+ * of them out each time an answer arrived.
+ *
+ * Words still in the form when the question closed some other way are the only copy of
+ * what was written. They stay in view under their own words, and never join the reply.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { displayAnswer } from '@/features/input-requests/utils/answerDisplay.ts'
+import RequestFieldAnswer from '@/features/input-requests/components/RequestFieldAnswer.vue'
+import RequestHistory from '@/features/input-requests/components/RequestHistory.vue'
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import { actorName } from '@/shared/lib/actor.ts'
@@ -28,33 +34,18 @@ const when = computed(() => {
   const at = props.request.resolved_at
   return at ? d(new Date(at), 'activity') : ''
 })
+/** The time of the answer in force, which says it replaced another once there is one. */
+const answerTime = computed(() =>
+  props.request.history.length ? t('requests.changedAt', { time: when.value }) : when.value,
+)
 /** "You" is the server's word about the call that closed this: a name is only what it signed. */
 const replier = computed(() => {
   const { answered_by: by, by_person: person } = props.request
   if (person) return t('requests.youAnswered')
   return by ? t('requests.agentAnswered', { actor: actorName(by) }) : t('requests.answered')
 })
-/**
- * The fields that have an answer, as the reader reads them. Words written are markdown; a
- * label chosen is the text the form showed, whatever characters it happens to hold.
- */
-const replies = computed(() =>
-  props.request.fields
-    .filter((field) => props.request.answers?.[field.id] !== undefined)
-    .map((field) => ({
-      id: field.id,
-      label: field.label,
-      rich: field.type === 'text',
-      value: displayAnswer(field, props.request.answers?.[field.id], t),
-    })),
-)
-const onlyReply = computed(() => {
-  const [first] = replies.value
-  return replies.value.length === 1 && props.request.fields.length === 1 && first?.value
-    ? first
-    : null
-})
-const labelled = computed(() => (onlyReply.value ? [] : replies.value))
+/** One text field reads as the sentence it is, with nothing to tell it from. */
+const bareText = computed(() => props.request.fields.length === 1)
 const note = computed(() => props.request.note ?? '')
 const closing = computed(() => {
   const { status, answered_by: by, by_person: person } = props.request
@@ -79,49 +70,36 @@ const closing = computed(() => {
     </CollapsibleText>
     <div
       v-if="answered"
-      class="request-reply request-state"
-      role="status"
-      tabindex="-1"
+      class="request-reply"
     >
-      <div class="request-reply-meta">
-        <span>{{ replier }}</span>
-        <span>{{ when }}</span>
-      </div>
-      <template v-if="onlyReply">
-        <RichText
-          v-if="onlyReply.rich"
-          class="request-reply-text"
-          :source="onlyReply.value"
-        />
-        <p
-          v-else
-          class="request-reply-text request-reply-chosen"
-        >
-          {{ onlyReply.value }}
-        </p>
-      </template>
-      <dl
-        v-if="labelled.length"
-        class="request-outcome"
-        :aria-label="t('requests.outcome')"
+      <div
+        class="request-reply-meta request-state"
+        role="status"
+        tabindex="-1"
       >
-        <template
-          v-for="reply in labelled"
-          :key="reply.id"
-          ><dt class="request-term">{{ reply.label }}</dt>
-          <dd class="request-value">
-            <RichText
-              v-if="reply.rich"
-              :source="reply.value"
-            />
-            <template v-else>{{ reply.value }}</template>
-          </dd></template
-        >
-      </dl>
-      <RichText
+        <span>{{ replier }}</span>
+        <span>{{ answerTime }}</span>
+      </div>
+      <RequestFieldAnswer
+        v-for="field in request.fields"
+        :key="field.id"
+        :bare-text="bareText"
+        :field="field"
+        :note="request.field_notes?.[field.id]"
+        :own="request.own?.[field.id]"
+        :value="request.answers?.[field.id]"
+      />
+      <blockquote
         v-if="note"
-        class="request-reply-text"
-        :source="note"
+        class="request-reply-note"
+        :aria-label="t('requests.questionNote')"
+      >
+        <span class="request-reply-note-label">{{ t('requests.questionNote') }}</span>
+        <RichText :source="note" />
+      </blockquote>
+      <RequestHistory
+        v-if="request.history.length"
+        :request="request"
       />
     </div>
     <p
@@ -156,7 +134,7 @@ const closing = computed(() => {
 /* A reply to the prompt above it, set in from it as a quote is. */
 .request-reply {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-3);
   min-width: 0;
   padding-inline-start: var(--space-3);
   border-inline-start: 1px solid var(--color-rule-strong);
@@ -165,36 +143,23 @@ const closing = computed(() => {
 .request-reply-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: 0 var(--space-2);
   justify-content: space-between;
   color: var(--color-text-tertiary);
   font: var(--font-detail);
 }
 
-.request-reply-text {
-  font: var(--font-editor);
-}
-
-.request-reply-chosen {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-
-.request-outcome {
+.request-reply-note {
   display: grid;
   gap: var(--space-half);
+  min-width: 0;
   margin: 0;
   font: var(--font-editor);
 }
 
-.request-term {
+.request-reply-note-label {
   color: var(--color-text-muted);
-  font: var(--font-detail);
-}
-
-.request-value {
-  margin: 0 0 var(--space-1);
-  overflow-wrap: anywhere;
+  font: var(--font-field-label);
 }
 
 .request-closed {

@@ -15,6 +15,7 @@ import { openQuestion, question, send } from './questionBackend.ts'
 import {
   answeredElsewhere,
   choices,
+  closedElsewhere,
   decline,
   inCard,
   inReach,
@@ -39,7 +40,7 @@ test('a question rising under a pointer at rest takes nothing from the press tha
 }) => {
   const { at, next, requests, stream, top } = await inCard(page)
   await page.mouse.move(at.x, at.y)
-  requests.settle(UPPER, answeredElsewhere)
+  requests.settle(UPPER, closedElsewhere)
   await stream.signal('agents')
   await expect(top.locator('.request-state')).toBeVisible()
   await expect.poll(() => under(page, at)).toBe(LOWER_DECLINE)
@@ -51,7 +52,7 @@ test('a question rising under a pointer at rest takes nothing from the press tha
   // Whatever came there, a second press only goes back.
   await press(page, at, 2)
   await expect(decline(next)).toBeFocused()
-  await expect(next.getByRole('radio')).toHaveCount(2)
+  await expect(next.getByRole('radio')).toHaveCount(3)
   expect(writesTo(requests)).toEqual([])
 })
 
@@ -96,7 +97,7 @@ for (const [hand, shift, wheel] of [
     await pause(150)
     expect(writesTo(requests)).toEqual([])
     await expect(decline(top)).toBeVisible()
-    await expect(next.getByRole('radio')).toHaveCount(2)
+    await expect(next.getByRole('radio')).toHaveCount(3)
   })
 }
 
@@ -158,14 +159,14 @@ test('spaces in the own answer are nothing written, and words are', async ({ pag
       fields: [{ ...choices(2), required: false }],
     }),
   ])
-  await card.getByRole('button', { name: 'Your own answer', exact: true }).click()
+  await card.getByRole('button', { name: 'Comment on the question', exact: true }).click()
   await page.keyboard.insertText('   ')
   await send(card).click()
   await pause(150)
   expect(writesTo(requests)).toEqual([])
-  await card.getByRole('textbox', { name: 'Your own answer', exact: true }).fill('A word')
+  await card.getByRole('textbox', { name: 'Comment on the question', exact: true }).fill('A word')
   await send(card).click()
-  await expect(card.locator('.request-state')).toContainText('A word')
+  await expect(card.locator('.request-reply')).toContainText('A word')
   expect(writesTo(requests)).toEqual([UPPER])
 })
 
@@ -183,7 +184,7 @@ for (const gap of [180, 350]) {
     expect(writesTo(requests)).toEqual([])
     await expect(decline(top)).toBeFocused()
     await expect(top.getByText(ASKED, { exact: true })).toHaveCount(0)
-    await expect(top.getByRole('radio')).toHaveCount(5)
+    await expect(top.getByRole('radio')).toHaveCount(6)
   })
 }
 
@@ -199,7 +200,7 @@ test('going ahead by hand writes once, and a second press there reaches nothing'
   await pause(150)
   expect(writesTo(requests)).toEqual([UPPER])
   expect(requests.writes[0]?.action).toBe('decline')
-  await expect(next.getByRole('radio')).toHaveCount(2)
+  await expect(next.getByRole('radio')).toHaveCount(3)
 })
 
 test('the keys take the same two steps, and Escape goes back without closing the card', async ({
@@ -246,16 +247,16 @@ test('choosing or writing takes the step back, so that the place of Send sends a
   // Opening the own answer moves the buttons, which ends the step by itself.
   await press(page, await inReach(decline(top)))
   await expect(back(top)).toBeVisible()
-  await top.getByRole('button', { name: 'Your own answer', exact: true }).click()
+  await top.getByRole('button', { name: 'Comment on the question', exact: true }).click()
   await expect(back(top)).toHaveCount(0)
   await press(page, await inReach(decline(top)))
   await expect(back(top)).toBeVisible()
-  await top.getByRole('textbox', { name: 'Your own answer', exact: true }).focus()
+  await top.getByRole('textbox', { name: 'Comment on the question', exact: true }).focus()
   await expect(back(top)).toBeVisible()
   await page.keyboard.insertText('A word')
   await expect(back(top)).toHaveCount(0)
   await send(top).click()
-  await expect(top.locator('.request-state')).toContainText('A word')
+  await expect(top.locator('.request-reply')).toContainText('A word')
   expect(requests.writes.map((write) => write.action)).toEqual(['answer'])
   await expect(card).toHaveCount(2)
 })
@@ -269,7 +270,9 @@ test('an answer arriving from elsewhere ends the step along with the question', 
   requests.settle(UPPER, answeredElsewhere)
   await stream.signal('agents')
   await expect(top.locator('.request-state')).toBeFocused()
-  await expect(top.getByRole('button')).toHaveCount(0)
+  await expect(back(top)).toHaveCount(0)
+  await expect(decline(top)).toHaveCount(0)
+  await expect(top.getByRole('radio')).toHaveCount(0)
   expect(writesTo(requests)).toEqual([])
 })
 
@@ -370,7 +373,7 @@ async function reportUnder(page: Page, options: number) {
   return { ...opened, at: { x: (box?.x ?? 0) + 10, y }, top }
 }
 
-const OUTCOME_OPTIONS = 4
+const OUTCOME_OPTIONS = 2
 
 test('a second press lands on nothing in the thread, such as a report rising under it on a phone', async ({
   page,
@@ -378,7 +381,7 @@ test('a second press lands on nothing in the thread, such as a report rising und
   const { at, backend, requests, stream, top } = await reportUnder(page, OUTCOME_OPTIONS)
   await press(page, at)
   // However the question came to fold, the point has not been left.
-  requests.settle(UPPER, answeredElsewhere)
+  requests.settle(UPPER, closedElsewhere)
   await stream.signal('agents')
   await expect(top.locator('.request-state')).toBeVisible()
   await expect.poll(() => under(page, at)).toContain('outcome')

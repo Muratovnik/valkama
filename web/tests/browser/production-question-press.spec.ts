@@ -62,7 +62,7 @@ for (const [upper, lower] of [
       await press(page, at, 2)
       await pause(150)
       expect(writesTo(requests)).toEqual([UPPER])
-      await expect(next.getByRole('radio')).toHaveCount(lower)
+      await expect(next.getByRole('radio')).toHaveCount(lower + 1)
       // Nor did it take the keyboard away from how the upper question ended.
       await expect(top.locator('.request-state')).toBeFocused()
     })
@@ -108,7 +108,9 @@ test('a pointer gone and come back has moved', async ({ page }) => {
   expect(writesTo(requests)).toEqual([UPPER, LOWER])
 })
 
-test('a second press on Send does not send what is held in the next question', async ({ page }) => {
+test('a second press on Send opens nothing and sends nothing, in this question or the next', async ({
+  page,
+}) => {
   const { next, requests, top } = await inCard(page)
   await top.getByRole('radio', { name: 'Choice 2', exact: true }).click()
   await held(next).click()
@@ -116,11 +118,11 @@ test('a second press on Send does not send what is held in the next question', a
   const at = await inReach(send(top))
   await press(page, at)
   await expect(top.locator('.request-state')).toBeVisible()
-  await expect.poll(() => under(page, at)).toBe(LOWER_SEND)
   await press(page, at, 2)
   await pause(150)
   expect(writesTo(requests)).toEqual([UPPER])
   await expect(held(next)).toBeChecked()
+  await expect(top.getByRole('radio')).toHaveCount(0)
 })
 
 test('the wheel takes the guard off as moving does', async ({ page }) => {
@@ -166,7 +168,7 @@ test('a press repeated on the same control works as it always did', async ({ pag
   await expect(chevron).toHaveAttribute('aria-expanded', 'true')
   await press(page, atChevron, 2)
   await expect(chevron).toHaveAttribute('aria-expanded', 'false')
-  const own = card.getByRole('button', { name: 'Your own answer', exact: true })
+  const own = card.getByRole('button', { name: 'Comment on the question', exact: true })
   const atOwn = await centre(own)
   await press(page, atOwn)
   await expect(card.getByRole('textbox')).toBeFocused()
@@ -184,7 +186,7 @@ test('in the list of everything waiting a second press selects nothing of the ne
   const at = await centre(decline(top))
   await press(page, at)
   await expect(top.locator('.request-state')).toBeVisible()
-  await expect.poll(() => under(page, at)).toBe('The lower question: Choice 1')
+  await expect.poll(() => under(page, at)).toMatch(/^The lower question: Choice/u)
   await press(page, at, 2)
   await pause(150)
   expect(writesTo(opened.requests)).toEqual([UPPER])

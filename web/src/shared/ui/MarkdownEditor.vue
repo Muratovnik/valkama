@@ -52,6 +52,12 @@ const props = withDefaults(
     error?: string
     /** The section around the editor already names it; the name stays for a reader. */
     hideLabel?: boolean
+    /**
+     * Leaves the toolbar out, where the text has to be the next thing Tab reaches and each
+     * of its buttons would stand in between. What the text means is unchanged: it is still
+     * markdown, and Ctrl+B and Ctrl+I still work.
+     */
+    hideTools?: boolean
     maxlength?: number
     placeholder?: string
     /**
@@ -67,6 +73,7 @@ const props = withDefaults(
     disabled: false,
     error: '',
     hideLabel: false,
+    hideTools: false,
     maxlength: undefined,
     placeholder: '',
     quietError: false,
@@ -287,6 +294,7 @@ defineExpose({
       :class="{ disabled }"
     >
       <MarkdownToolbar
+        v-if="!hideTools"
         v-model:preview="preview"
         :disabled="disabled"
         :mentions="Boolean(suggest)"

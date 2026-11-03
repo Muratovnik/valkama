@@ -12,6 +12,13 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Added
 
+- **A question's answer can be changed and its options stay in view.** An answered question
+  shows every option of every field with the chosen one set apart, and while its task is open
+  it offers «Change answer»: the same form on the answer in force, Save off until it differs,
+  and Cancel asking before it discards anything. The replaced answers stay behind «Previous
+  answers». Every field with options now has «Your own option» as its last row, and a comment
+  on a field or on the question goes beside the choice. A comment no longer stands in for a
+  required field: that field needs an option or an own option.
 - **The agent working an item hears what a person did there.** Any write to an item
   answers with `from_person` when a person acted on it in the interface since an agent
   last wrote there: a comment, an answer, a status change, an edit, a cancel. Each event

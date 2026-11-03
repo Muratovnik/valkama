@@ -30,6 +30,17 @@ export const answeredElsewhere = {
   resolved_at: '2026-10-24T10:30:00Z',
 } as const
 
+/**
+ * A question someone else withdrew, as the next read brings it. It folds to one line, which
+ * is what lifts what stands below: an answered one keeps its options on screen and hardly moves.
+ */
+export const closedElsewhere = {
+  status: 'declined',
+  answered_by: 'another agent',
+  by_person: false,
+  resolved_at: '2026-10-24T10:30:00Z',
+} as const
+
 export const choices = (count: number): InputRequestField => ({
   id: 'route',
   label: 'Route',

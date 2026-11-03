@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * The fields of a question still waiting for its answer, and the way to answer it in
- * one's own words, which is there on every question and stands in for what is required.
- * It closes again while it is empty, and never over something written in it.
+ * The fields of a question being answered, and the comment on the whole question. A
+ * comment explains an answer and does not stand in for one: it takes nothing away from
+ * what is required.
  *
  * Text is markdown, and the fields share one Write | Preview choice: several text
  * answers are one answer being written, and a choice per field would let them disagree
@@ -13,19 +13,20 @@ import { computed, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import RequestField from '@/features/input-requests/components/RequestField.vue'
+import RequestNote from '@/features/input-requests/components/RequestNote.vue'
+import { chosenOwn } from '@/features/input-requests/utils/validateAnswers.ts'
+import type { FieldEdit, RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
-import type { InputAnswers, InputRequestField } from '@/shared/api/inputRequestModel.ts'
-import MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
-import VButton from '@/shared/ui/VButton.vue'
+import type { InputRequestField } from '@/shared/api/inputRequestModel.ts'
+import type MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
 
 type EditorSuggest = InstanceType<typeof MarkdownEditor>['$props']['suggest']
 
 const props = withDefaults(
   defineProps<{
     disabled: boolean
-    draft: InputAnswers
+    draft: RequestDraft
     fields: readonly InputRequestField[]
-    note: string
     /** The element holding the question these fields answer. */
     promptId: string
     /** The fields the last send refused, by id. */
@@ -35,32 +36,28 @@ const props = withDefaults(
   { suggest: undefined },
 )
 const emit = defineEmits<{
-  edit: [field: InputRequestField, value: string | boolean | string[]]
+  edit: [field: InputRequestField, edit: FieldEdit]
   note: [value: string]
   submit: []
 }>()
 const { t } = useI18n()
 const previewing = ref(false)
 const controls: Record<string, { focus: () => void } | null> = {}
-const ownEditor = ref<InstanceType<typeof MarkdownEditor> | null>(null)
-const asked = ref(false)
-const written = computed(() => Boolean(props.note.trim()))
-const ownOpen = computed(() => asked.value || written.value)
+const questionNote = ref<InstanceType<typeof RequestNote> | null>(null)
+const noteOpen = computed(() => questionNote.value?.open ?? false)
 
+const isOwnChosen = (field: InputRequestField) => props.draft.ownChosen.includes(field.id)
+/** An own variant chosen and left empty, which is said on its own editor. */
+function ownRefused(field: InputRequestField) {
+  return props.refused.includes(field.id) && isOwnChosen(field) && !chosenOwn(props.draft, field.id)
+}
+function ownError(field: InputRequestField) {
+  return ownRefused(field) ? t('requests.missing.own') : ''
+}
 function fieldError(field: InputRequestField) {
-  return props.refused.includes(field.id) ? t(`requests.missing.${field.type}`) : ''
-}
-function isRequired(field: InputRequestField) {
-  return field.required && !written.value
-}
-async function focusOwn() {
-  previewing.value = false
-  await nextTick()
-  ownEditor.value?.focus()
-}
-function pressOwn() {
-  if (!written.value) asked.value = !asked.value
-  if (ownOpen.value) void focusOwn()
+  return props.refused.includes(field.id) && !ownRefused(field)
+    ? t(`requests.missing.${field.type}`)
+    : ''
 }
 /** Take focus to one field; a text answer can only be fixed where it is written. */
 async function focusField(id: string) {
@@ -68,7 +65,7 @@ async function focusField(id: string) {
   await nextTick()
   controls[id]?.focus()
 }
-defineExpose({ focusField, ownOpen })
+defineExpose({ focusField, noteOpen })
 </script>
 
 <template>
@@ -79,56 +76,37 @@ defineExpose({ focusField, ownOpen })
       :ref="(control) => (controls[field.id] = control as { focus: () => void } | null)"
       v-model:preview="previewing"
       :field="field"
-      :model-value="draft[field.id]"
+      :model-value="draft.answers[field.id]"
+      :note="draft.fieldNotes[field.id]"
+      :own="draft.own[field.id]"
+      :own-chosen="isOwnChosen(field)"
+      :own-error="ownError(field)"
       :disabled="disabled"
       :error="fieldError(field)"
       :prompt-id="promptId"
-      :required="isRequired(field)"
       :suggest="suggest"
-      @update:model-value="emit('edit', field, $event)"
+      @edit="emit('edit', field, $event)"
       @submit="emit('submit')"
     />
-    <div class="request-own">
-      <VButton
-        class="request-own-toggle"
-        variant="ghost"
-        size="inline"
-        :disabled="disabled"
-        :aria-expanded="ownOpen"
-        @click="pressOwn"
-        >{{ t('requests.ownAnswer') }}</VButton
-      >
-      <MarkdownEditor
-        v-if="ownOpen"
-        ref="ownEditor"
-        v-model:preview="previewing"
-        :label="t('requests.ownAnswer')"
-        :rows="3"
-        :maxlength="8000"
-        :model-value="note"
-        :disabled="disabled"
-        :suggest="suggest"
-        hide-label
-        @update:model-value="emit('note', $event)"
-        @submit="emit('submit')"
-      />
-    </div>
+    <RequestNote
+      ref="questionNote"
+      v-model:preview="previewing"
+      :disabled="disabled"
+      :label="t('requests.questionNote')"
+      :maxlength="8000"
+      :model-value="draft.note"
+      :rows="3"
+      :suggest="suggest"
+      @update:model-value="emit('note', $event)"
+      @submit="emit('submit')"
+    />
   </div>
 </template>
 
 <style scoped>
-.request-fields,
-.request-own {
+.request-fields {
   display: grid;
   gap: var(--space-3);
   min-width: 0;
-}
-
-.request-own {
-  gap: var(--space-2);
-}
-
-.request-own-toggle {
-  justify-self: start;
 }
 </style>
