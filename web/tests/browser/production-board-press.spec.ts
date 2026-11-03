@@ -127,6 +127,8 @@ test('a second press past the double click interval, on a card reading slowly, l
   page,
 }) => {
   await board(page, {})
+  // Wide enough for the card to leave the tile under the scrim once it has slid in.
+  await page.setViewportSize({ width: 1680, height: 1050 })
   await page.route('**/api/modules/planning/work-item?*', async (route) => {
     await new Promise((done) => setTimeout(done, 700))
     await route.fallback()
@@ -136,6 +138,12 @@ test('a second press past the double click interval, on a card reading slowly, l
   const { x, y } = await centre(title)
   await page.mouse.click(x, y)
   await new Promise((done) => setTimeout(done, 750))
+  await expect(page.locator('.overlay-scrim')).toBeVisible()
+  const under = await page.evaluate((at) => document.elementFromPoint(at.x, at.y)?.className, {
+    x,
+    y,
+  })
+  expect(under).toBe('overlay-scrim')
   // A browser counts this press as a first one, so only where it stands can tell it apart.
   await page.mouse.click(x, y)
   await readable(page)

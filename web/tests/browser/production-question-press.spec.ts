@@ -181,6 +181,8 @@ test('the wheel takes the guard off as moving does', async ({ page }) => {
 test('the keyboard is not held back by a pointer standing still', async ({ page }) => {
   const { at, next, requests, top } = await inCard(page)
   await riseUnder(page, at, top)
+  // A press stopped just now says nothing about the key that comes after it.
+  await press(page, at, 2)
   await decline(next).focus()
   await page.keyboard.press('Enter')
   await expect(next.locator('.request-state')).toContainText('You declined')
