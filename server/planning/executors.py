@@ -80,14 +80,14 @@ def _transcript_lost(path: str) -> bool:
     return False
 
 
-def _place_of(row: sqlite3.Row) -> dict[str, str]:
+def _place_of(row: sqlite3.Row, active: bool | None = None) -> dict[str, str]:
     """One session's place and state, every field of an executor but who it is."""
 
     recorded = _column(row, "opened_in")
     opened_in = recorded if recorded in places.OPENED_IN else ""
     if not opened_in and row["run_by_valkama"]:
         opened_in = _HEADLESS_PLACE
-    if row["status"] == "active":
+    if row["status"] == "active" if active is None else active:
         state = HEADLESS if opened_in == _HEADLESS_PLACE else LIVE
     else:
         state = GONE if _transcript_lost(_column(row, "transcript_path")) else ENDED
@@ -96,6 +96,19 @@ def _place_of(row: sqlite3.Row) -> dict[str, str]:
         "opened_host": places.agreeing_host(opened_in, _column(row, "opened_host")),
         "state": state,
     }
+
+
+def session_place(
+    conn: sqlite3.Connection, session_id: str, *, active: bool | None = None
+) -> dict[str, str] | None:
+    """One session's place and state, by the rules a card's holders are read with.
+
+    `active` is the caller's own check of the process, for the moment of a click;
+    without one the row says. A session with no row has no answer.
+    """
+
+    row = conn.execute(_SESSIONS, (json.dumps([session_id]),)).fetchone()
+    return None if row is None else _place_of(row, active)
 
 
 def _places(conn: sqlite3.Connection, holders: Iterable[_Holder | None]) -> dict[str, dict]:

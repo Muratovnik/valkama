@@ -29,6 +29,7 @@ from .hooks import place as places
 from .hooks.place import Place
 from .ops import url_schemes
 from .ops.url_schemes import Installed
+from .planning import executors
 
 SURFACES = ("desktop", "browser")
 TARGETS = ("session", "file", "folder")
@@ -80,6 +81,7 @@ _PLACE_OF = {
     "codex-app": Place("app", "codex-app"),
 }
 _APP_OF_FAMILY = {"claude": "claude-desktop", "codex": "codex-app"}
+_ACTIVE = {"live": True, "ended": False}
 
 #: The same shape the desktop app holds an id to before it reaches a command line.
 _SESSION_ID = re.compile(r"[0-9A-Za-z._:-]{4,128}")
@@ -193,11 +195,11 @@ def _consistent(row: sqlite3.Row, family: str) -> Place:
     still describe the place the session left: `terminal` beside `claude-desktop`.
     """
 
-    opened_in, host = row["opened_in"], row["opened_host"]
-    if opened_in in ("ide", "ide-terminal"):
-        known = host in url_schemes.EDITOR_HOMES or host == "jetbrains"
-        return Place(opened_in, host if known else "vscode")
-    if opened_in == "app" and family in _APP_OF_FAMILY:
+    opened_in = row["opened_in"]
+    if opened_in not in places.OPENED_IN:
+        return Place()
+    host = places.agreeing_host(opened_in, row["opened_host"])
+    if opened_in == "app":
         host_id = row["host_session_id"]
         keeps_id = (
             family == "claude"
@@ -205,18 +207,7 @@ def _consistent(row: sqlite3.Row, family: str) -> Place:
             and places.HOST_SESSION_ID.fullmatch(host_id) is not None
         )
         return Place("app", _APP_OF_FAMILY[family], host_id if keeps_id else "")
-    if opened_in in ("terminal", "background", "headless"):
-        return Place(opened_in)
-    return Place()
-
-
-def _runs_an_attempt(conn: sqlite3.Connection, session_id: str) -> bool:
-    return (
-        conn.execute(
-            "SELECT 1 FROM execution_sessions WHERE session_id = ? LIMIT 1", (session_id,)
-        ).fetchone()
-        is not None
-    )
+    return Place(opened_in, host or ("vscode" if opened_in in ("ide", "ide-terminal") else ""))
 
 
 def _usable_folder(folder: str) -> bool:
@@ -409,13 +400,12 @@ def _session_row(conn: sqlite3.Connection, session_id: str) -> tuple[sqlite3.Row
     return conn.execute(query, (row["parent_session_id"],)).fetchone(), str(row["agent_id"])
 
 
-def _recorded_place(
-    conn: sqlite3.Connection, row: sqlite3.Row, family: str
-) -> tuple[Place, str, bool]:
+def _recorded_place(row: sqlite3.Row, family: str, attempt_place: str) -> tuple[Place, str, bool]:
     """Where the session was last open, how that is known, and whether it is its first open."""
 
     columns = (row["opened_in"], row["opened_host"], row["opened_folder"], row["host_session_id"])
-    if family == "codex" and not row["opened_in"] and _runs_an_attempt(conn, row["id"]):
+    if not row["opened_in"] and attempt_place == "headless":
+        # Valkama ran it and no client placed it, as the card says of the same session.
         return Place("headless"), "derived", False
     if any(columns):
         # An empty `opened_in` beside other columns is a start nothing recognized,
@@ -492,9 +482,10 @@ def _session_plan(conn: sqlite3.Connection, target: SessionTarget, ask: _Ask) ->
         return _plan(
             shown_target, ask.surface, state="none", client=family, steps=[_explain(reason)]
         )
-    live = ask.liveness == "live" or (not ask.liveness and row["status"] == "active")
-    transcript = str(row["transcript_path"])
-    if not live and transcript and not os.path.isfile(transcript):
+    known = executors.session_place(conn, session_id, active=_ACTIVE.get(ask.liveness))
+    if known is None:
+        return _plan(shown_target, ask.surface, state="none", steps=[_explain("no-session")])
+    if known["state"] == executors.GONE:
         # Nothing can be resumed from a file the client deleted, so no link is offered:
         # one would start an empty conversation under the session's name.
         kept = any(
@@ -503,7 +494,7 @@ def _session_plan(conn: sqlite3.Connection, target: SessionTarget, ask: _Ask) ->
         )
         steps = [_explain("gone", archived=kept)]
         return _plan(shown_target, ask.surface, state="gone", client=family, steps=steps)
-    return _place_plan(conn, row, shown_target, family, live, ask)
+    return _place_plan(conn, row, shown_target, family, known, ask)
 
 
 def _place_plan(
@@ -511,12 +502,13 @@ def _place_plan(
     row: sqlite3.Row,
     target: Mapping[str, object],
     family: str,
-    live: bool,
+    known: Mapping[str, str],
     ask: _Ask,
 ) -> dict[str, object]:
     """Walk the chain of places for a session that can still be opened."""
 
-    recorded, source, first_open = _recorded_place(conn, row, family)
+    recorded, source, first_open = _recorded_place(row, family, known["opened_in"])
+    live = known["state"] in (executors.LIVE, executors.HEADLESS)
     shown = {**_shown(recorded), "source": source, "first_open": first_open}
 
     def answer(

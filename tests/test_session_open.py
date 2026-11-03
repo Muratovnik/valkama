@@ -250,6 +250,7 @@ class EveryRowOfTheClickTableTests(PlanCase):
         for surface in session_open.SURFACES:
             plan = self.plan(surface=surface)
             self.assertEqual("headless", plan["state"])
+            self.assertEqual("recorded", plan["place"]["source"])
             self.assertEqual([{"kind": "explain", "reason": "live-headless"}], plan["steps"])
 
     def test_an_ended_session_without_a_window_opens_in_the_fallback(self) -> None:
@@ -463,14 +464,33 @@ class RowsOlderThanTheRecordTests(PlanCase):
         self.assertEqual("", plan["place"]["opened_in"])
         self.assertEqual("fallback", plan["opens"]["source"])
 
-    def test_a_codex_session_of_an_attempt_has_no_window(self) -> None:
-        self.session(client="codex", opened_folder="", status="active")
+    def link_to_attempt(self, relation: str) -> None:
         self.conn.execute("PRAGMA foreign_keys = OFF")
         self.conn.execute(
             "INSERT INTO execution_sessions(execution_id, session_id, relation) VALUES (?, ?, ?)",
-            ("attempt", UID, "launched"),
+            ("attempt", UID, relation),
         )
-        self.assertEqual("live-headless", self.plan()["steps"][0]["reason"])
+
+    def test_a_session_valkama_ran_has_no_window(self) -> None:
+        for client in ("codex", "claude"):
+            with self.subTest(client=client):
+                self.conn.execute("DELETE FROM sessions")
+                self.conn.execute("DELETE FROM execution_sessions")
+                self.session(client=client, opened_folder="", status="active")
+                self.link_to_attempt("launched")
+                plan = self.plan()
+                self.assertEqual("headless", plan["state"])
+                self.assertEqual("live-headless", plan["steps"][0]["reason"])
+
+    def test_a_session_a_person_attached_ran_elsewhere(self) -> None:
+        self.session(client="codex", opened_folder="", transcript_path="", status="active")
+        self.link_to_attempt("attached")
+        self.assertEqual("", self.plan()["place"]["opened_in"])
+
+    def test_a_place_recorded_since_wins_over_the_attempt(self) -> None:
+        self.session(client="codex", opened_in="app", opened_host="codex-app", status="active")
+        self.link_to_attempt("launched")
+        self.assertEqual([f"codex://threads/{UID}"], links(self.plan()))
 
 
 class WhatARecordCanBeBelievedForTests(PlanCase):
@@ -570,6 +590,15 @@ class AGoneSessionTests(PlanCase):
         self.session(opened_in="ide", opened_host="vscode", status="active")
         self.transcript.unlink()
         self.assertEqual("live", self.plan()["state"])
+
+    def test_the_executor_own_check_of_the_process_decides_gone_too(self) -> None:
+        self.session(opened_in="ide", opened_host="vscode", status="active")
+        self.transcript.unlink()
+        self.assertEqual("gone", self.plan(liveness="ended")["state"])
+
+    def test_a_path_that_cannot_be_read_says_nothing_about_the_file(self) -> None:
+        self.session(opened_in="ide", opened_host="vscode", transcript_path=str(self.folder))
+        self.assertEqual("ended", self.plan()["state"])
 
     def test_a_row_with_no_transcript_path_is_not_gone(self) -> None:
         self.session(opened_in="ide", opened_host="vscode", transcript_path="")
