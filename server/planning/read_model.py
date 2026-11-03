@@ -324,6 +324,42 @@ def last_reply(reply: Mapping[str, object] | None) -> dict | None:
     return found
 
 
+def request_replies(conn: sqlite3.Connection, request_id: str) -> list[dict]:
+    """Every reply under a question, oldest first, each as every read shows a comment."""
+
+    return [
+        comment_record(row)
+        for row in conn.execute(
+            _COMMENT_ROWS + " WHERE m.reply_to_request = ? ORDER BY m.id", (request_id,)
+        )
+    ]
+
+
+def request_threads(
+    conn: sqlite3.Connection, request_ids: list[str]
+) -> dict[str, tuple[int, dict]]:
+    """For each question with replies, how many it has and the newest one's record.
+
+    A question without a reply is absent. Two statements for every question named,
+    however many: the counts, then the newest replies' records.
+    """
+
+    totals = {
+        int(row[0]): int(row[1])
+        for row in conn.execute(
+            "SELECT MAX(id), COUNT(*) FROM work_item_comments"
+            " WHERE reply_to_request IN (SELECT value FROM json_each(?)) GROUP BY reply_to_request",
+            (json.dumps(request_ids),),
+        )
+    }
+    return {
+        str(row["reply_to_request"]): (totals[int(row["id"])], comment_record(row))
+        for row in conn.execute(
+            _COMMENT_ROWS + " JOIN json_each(?) w ON w.value = m.id", (json.dumps(list(totals)),)
+        )
+    }
+
+
 def _thread_counts(conn: sqlite3.Connection, identity: str) -> dict[str, int]:
     """Every comment row of an item, and how many of them are the roots of threads."""
 

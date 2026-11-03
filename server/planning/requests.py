@@ -107,56 +107,13 @@ def get(conn: sqlite3.Connection, identity: object, *, replies: bool = False) ->
     [record] = _complete(conn, [_present(conn, _row(conn, identity), request_model.now())])
     if not replies:
         return record
+    # A store older than question threads has no reply to read.
     thread = (
-        [
-            _flat_reply(row)
-            for row in conn.execute(
-                "SELECT m.id, m.author, m.body, m.created_at, m.call_id, m.checklist_item_id,"
-                " m.checklist_item_text, m.reply_to_request, c.identity_source"
-                " FROM work_item_comments m LEFT JOIN execution_events c ON c.id = m.call_id"
-                " WHERE m.reply_to_request = ? ORDER BY m.id",
-                (record["request_id"],),
-            )
-        ]
+        read_model.request_replies(conn, record["request_id"])
         if _has_table(conn, "work_item_request_answers")
         else []
     )
     return {**record, "replies": thread}
-
-
-def _flat_reply(row: sqlite3.Row) -> dict:
-    """A reply under a question in the flat form every comment read gives.
-
-    A reply is never a report and never carries the resolved mark, which the
-    store enforces, so those keys are fixed here.
-    """
-
-    return {
-        "id": int(row["id"]),
-        "kind": "comment",
-        "report": None,
-        "checklist_item_id": row["checklist_item_id"],
-        "checklist_item_text": row["checklist_item_text"],
-        "author": row["author"],
-        "body": row["body"],
-        "at": row["created_at"] or None,
-        "reply_to": None,
-        "reply_to_request": row["reply_to_request"],
-        "by_person": _reply(row)["by_person"],
-        "resolution": None,
-    }
-
-
-def _reply(row: sqlite3.Row) -> dict:
-    """A reply as a reader sees it; `by_person` is null when no call wrote it."""
-
-    return {
-        "id": int(row["id"]),
-        "author": row["author"],
-        "by_person": None if row["call_id"] is None else row["identity_source"] == calls.BROWSER,
-        "at": row["created_at"],
-        "body": row["body"],
-    }
 
 
 def _has_table(conn: sqlite3.Connection, name: str) -> bool:
@@ -253,29 +210,19 @@ def compact_all(conn: sqlite3.Connection, records: list[dict]) -> list[dict]:
     One statement for every request of a read.
     """
 
-    totals: dict[str, int] = {}
-    latest: dict[str, dict] = {}
     identities = [record["request_id"] for record in records]
-    if identities and _has_table(conn, "work_item_request_answers"):
-        for row in conn.execute(
-            "SELECT m.id, m.author, m.body, m.created_at, m.call_id, m.reply_to_request,"
-            " c.identity_source, t.total"
-            " FROM work_item_comments m LEFT JOIN execution_events c ON c.id = m.call_id"
-            " JOIN (SELECT MAX(id) AS latest, COUNT(*) AS total FROM work_item_comments"
-            " WHERE reply_to_request IN (SELECT value FROM json_each(?))"
-            " GROUP BY reply_to_request) t ON t.latest = m.id",
-            (json.dumps(identities),),
-        ):
-            totals[str(row["reply_to_request"])] = int(row["total"])
-            latest[str(row["reply_to_request"])] = _reply(row)
-    return [
-        request_model.compact(
-            record,
-            replies=totals.get(record["request_id"], 0),
-            latest_reply=latest.get(record["request_id"]),
+    threads = (
+        read_model.request_threads(conn, identities)
+        if identities and _has_table(conn, "work_item_request_answers")
+        else {}
+    )
+    shown = []
+    for record in records:
+        replies, newest = threads.get(record["request_id"], (0, None))
+        shown.append(
+            request_model.compact(record, replies=replies, last_reply=read_model.last_reply(newest))
         )
-        for record in records
-    ]
+    return shown
 
 
 def of_item(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:

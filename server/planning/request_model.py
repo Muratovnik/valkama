@@ -27,8 +27,6 @@ MAX_OWN = 8000
 MAX_FIELD_NOTE = 2000
 #: How many versions one answer may have: the first and 49 changes.
 MAX_ANSWER_VERSIONS = 50
-#: How much of a reply in a question's thread the compact form quotes.
-MAX_REPLY_PREVIEW = 500
 #: The fields a person picks from. Only these take an own variant or a comment:
 #: a text field is already the person's own words.
 _PICKED = frozenset({"choice", "multi_choice", "boolean"})
@@ -311,20 +309,6 @@ def answer_text(descriptors: list[dict], stored: dict) -> str:
     return "; ".join([*lines, note] if note else lines)
 
 
-def last_reply(reply: dict) -> dict:
-    """The latest reply of a thread as a scan quotes it, its body cut at 500 characters."""
-
-    body = reply["body"]
-    shown = {
-        "id": reply["id"],
-        "author": reply["author"],
-        "by_person": reply["by_person"],
-        "at": reply["at"],
-        "body": body[:MAX_REPLY_PREVIEW],
-    }
-    return {**shown, "clipped": True} if len(body) > MAX_REPLY_PREVIEW else shown
-
-
 def _fits(item: dict) -> bool:
     """Whether a compact question is within its size, its `clipped` key counted.
 
@@ -335,15 +319,16 @@ def _fits(item: dict) -> bool:
     return len(json.dumps({**item, "clipped": True}, ensure_ascii=False)) <= MAX_COMPACT_JSON
 
 
-def compact(record: dict, *, replies: int, latest_reply: dict | None) -> dict:
+def compact(record: dict, *, replies: int, last_reply: dict | None) -> dict:
     """A question for an agent that scans: what was asked and what came back, no options.
 
     `answered_by` and `answered_at` belong to an answer only, though the row also
     records who declined or withdrew a question and when. A changed answer shows
     the one it replaced as `previous`. `replies` counts the question's thread and
-    `last_reply` quotes its latest reply. `clipped` appears when anything was left
-    out or cut: past `MAX_COMPACT_TEXT` in a text, or past `MAX_COMPACT_JSON` the
-    replaced answer first and then the later fields of the current one.
+    `last_reply` quotes its latest reply as a thread's root carries it.
+    `clipped` appears when anything was left out or cut: past `MAX_COMPACT_TEXT`
+    in a text, or past `MAX_COMPACT_JSON` the replaced answer first and then the
+    later fields of the current one.
     """
 
     prompt = record["prompt"]
@@ -361,7 +346,7 @@ def compact(record: dict, *, replies: int, latest_reply: dict | None) -> dict:
         "answered_at": record["resolved_at"] if answered else None,
         "answer_version": record["answer_version"],
         "replies": replies,
-        "last_reply": last_reply(latest_reply) if latest_reply is not None else None,
+        "last_reply": last_reply,
     }
     clipped = clipped or item["note"] != note
     for row in rows:
