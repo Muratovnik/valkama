@@ -899,7 +899,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if url.path == "/api/security/bootstrap":
             try:
-                http_security.require_bootstrap_origin(self.headers, self.server.security_context)
+                http_security.require_same_origin_fetch(self.headers, self.server.security_context)
             except http_security.RequestRefusedError as error:
                 self._refuse(error)
                 return
@@ -1037,7 +1037,7 @@ class Handler(BaseHTTPRequestHandler):
         """
 
         try:
-            http_security.require_bootstrap_origin(self.headers, self.server.security_context)
+            http_security.require_same_origin_fetch(self.headers, self.server.security_context)
         except http_security.RequestRefusedError as error:
             status, answer = error.status, {"error": {"code": error.code}}
         else:

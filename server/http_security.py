@@ -190,8 +190,8 @@ def is_person_navigation(headers: Headers) -> bool:
     return not (_header_values(headers, "Sec-Purpose") or _header_values(headers, "Purpose"))
 
 
-def require_bootstrap_origin(headers: Headers, context: SecurityContext) -> None:
-    """The browser session token goes only to the web client's own same-origin fetch.
+def require_same_origin_fetch(headers: Headers, context: SecurityContext) -> None:
+    """Only the web client's own same-origin fetch gets the session token or a project's files.
 
     A same-origin GET carries no `Origin`, so an absent one is allowed; one
     that is present must be an allowed origin.
