@@ -97,16 +97,48 @@ test('a press on what a lane says keeps focus in that lane, with no ring', async
   expect(await epic.evaluate((node) => node.contains(document.activeElement))).toBe(true)
 })
 
-test('a double click on a tile leaves its card open', async ({ page }) => {
+/** The card is open and the keys that read it work, so focus is still inside it. */
+async function readable(page: Page) {
+  await expect(page.locator('.overlay-surface-drawer')).toHaveCSS('transform', 'none')
+  await expect(page.locator('.drawer-frame-body > *').first()).toBeVisible()
+  // A card long enough to have somewhere to go.
+  await page.addStyleTag({
+    content: '.drawer-frame-body::after { content: ""; display: block; height: 3000px; }',
+  })
+  await page.keyboard.press('PageDown')
+  await expect
+    .poll(() => page.locator('.drawer-frame-body').evaluate((node) => node.scrollTop))
+    .toBeGreaterThan(0)
+}
+
+test('a double click on a tile leaves its card open, its keys alive', async ({ page }) => {
   await board(page, {})
   const title = tileIn(page.locator('.work-item-column').first()).locator('.tile-open')
   await title.scrollIntoViewIfNeeded()
   const { x, y } = await centre(title)
   await page.mouse.dblclick(x, y)
-  await expect(page.locator('.drawer')).toBeVisible()
   // The second press reached the scrim that had just appeared, and closed what it opened.
-  await expect(page.locator('.overlay-surface-drawer')).toHaveCSS('transform', 'none')
-  await expect(page.locator('.drawer')).toBeVisible()
+  await readable(page)
+  await page.mouse.click(5, 5)
+  await expect(page.locator('.drawer')).toHaveCount(0)
+})
+
+test('a second press past the double click interval, on a card reading slowly, leaves it open', async ({
+  page,
+}) => {
+  await board(page, {})
+  await page.route('**/api/modules/planning/work-item?*', async (route) => {
+    await new Promise((done) => setTimeout(done, 700))
+    await route.fallback()
+  })
+  const title = tileIn(page.locator('.work-item-column').first()).locator('.tile-open')
+  await title.scrollIntoViewIfNeeded()
+  const { x, y } = await centre(title)
+  await page.mouse.click(x, y)
+  await new Promise((done) => setTimeout(done, 750))
+  // A browser counts this press as a first one, so only where it stands can tell it apart.
+  await page.mouse.click(x, y)
+  await readable(page)
   await page.mouse.click(5, 5)
   await expect(page.locator('.drawer')).toHaveCount(0)
 })

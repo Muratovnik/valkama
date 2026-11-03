@@ -11,8 +11,10 @@
  * Folding takes the controls that had focus away, whoever answered, so focus goes to how
  * it ended: the person stays on the question they were in. What is held belongs to the
  * host, which outlives this while a dialog closes and opens and which the draft guard asks.
+ * Folding also lifts what stands below it, so a press that lands here only because of that
+ * reaches nothing: declining is for good, and this one was meant for another question.
  */
-import { computed, nextTick, ref, useId, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import RequestAnswerFields from '@/features/input-requests/components/RequestAnswerFields.vue'
@@ -30,6 +32,7 @@ import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
 import type MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
 import RichText from '@/shared/ui/RichText.vue'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
+import { stopStrayPresses } from '@/shared/ui/strayPress.ts'
 import VButton from '@/shared/ui/VButton.vue'
 
 const props = withDefaults(
@@ -49,6 +52,7 @@ const emit = defineEmits<{
 const { t, d } = useI18n()
 const promptId = useId()
 const card = ref<HTMLElement | null>(null)
+onMounted(() => stopStrayPresses(card.value))
 const errorLine = ref<HTMLElement | null>(null)
 const answerFields = ref<InstanceType<typeof RequestAnswerFields> | null>(null)
 

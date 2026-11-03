@@ -15,6 +15,7 @@ import {
   releaseOverlayOwnership,
 } from '@/shared/ui/overlayStack.ts'
 import type { OverlayOwnership } from '@/shared/ui/overlayStack.ts'
+import { isStrayPress } from '@/shared/ui/strayPress.ts'
 import { useDrawerWidth } from '@/shared/ui/useDrawerWidth.ts'
 
 const props = withDefaults(
@@ -122,11 +123,12 @@ function closeOverlay(event: Event) {
 }
 
 /**
- * The second press of a double click that opened this lands on the scrim that has just
- * appeared. It is not a wish to close, and it took the card away as it arrived.
+ * A press may land on the scrim only because it has appeared under a pointer that stood
+ * still, as the second of a double click does. That is no wish to close, and it took the
+ * card away as it arrived.
  */
 function pressOnScrim(event: MouseEvent) {
-  if (event.detail < 2) closeOverlay(event)
+  if (!isStrayPress(event)) closeOverlay(event)
 }
 
 function focusable(): HTMLElement[] {
@@ -254,12 +256,14 @@ onUnmounted(release)
         :class="[`overlay-${variant}`, `overlay-layer-${layer}`, { 'is-passive': !interactive }]"
       >
         <!-- The scrim is a pointer affordance by definition: clicking outside a dialog -->
-        <!-- dismisses it. The keyboard equivalent is Escape, handled one level up. -->
+        <!-- dismisses it. The keyboard equivalent is Escape, handled one level up. A press -->
+        <!-- leaves focus in the surface until it closes, for the keys that read it. -->
         <!-- eslint-disable-next-line vuejs-accessibility/click-events-have-key-events, vuejs-accessibility/no-static-element-interactions -->
         <div
           v-if="active"
           class="overlay-scrim"
           @click="pressOnScrim"
+          @mousedown.prevent
         />
         <!-- The role is inside `modality`, which the a11y rule cannot look into: it
              reads the attributes written on the element and this one carries a

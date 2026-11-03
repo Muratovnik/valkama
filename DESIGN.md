@@ -903,6 +903,19 @@ label alone and described only by a line, or a screen reader would read paragrap
 arrow press; a description standing under the options is named as its details and read by
 going on to it. The chevron is a tab stop only on the row the keyboard stands on, so that
 Tab reaches Send.
+A question that folds lifts the one below it, and what rises can stop exactly under a
+pointer that has not moved, where the next press would end a question nobody has seen. So a
+press at the point of the one before, with no move between, on anything but what that one
+landed on, reaches nothing inside a question, however long after it comes. Neither the time
+nor the browser's click count can tell: a slow write lets the newcomer arrive a second
+later, and that press counts as a first. It holds until the pointer has moved more than 3 px
+or the wheel has turned, however often the press is repeated, because pressing on while a
+write hangs must not get through in the end. The keyboard is never held back, a press
+repeated on the same control works as it always did, and the layout does not stay empty to
+prevent it. The scrim follows the same rule, so a second press on a tile leaves its card
+open, and a press on the scrim that does not close takes no focus out of the surface. It is
+not a rule of the whole interface: those are the two places where the press cannot be taken
+back or takes away what was just opened.
 Words of one's own are always one quiet press away, in the shared editor under the options,
 and with text in them no field is required; declining is as quiet. A selection or a note
 held is a draft the guard asks about. A send that fails keeps all of it with the reason in
