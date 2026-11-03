@@ -152,7 +152,10 @@ open question changes nothing about it.
 `{"total": 6, "open": 2, "items": […], "truncated": true}`, at most 5 items, the
 open ones first and then the newest closed. `list_work_item_requests` takes
 `space`, `id` (one item), `status`, `answered_after` (an ISO timestamp with a
-timezone), `limit` and `full`. Both give a compact form unless `full` is true:
+timezone), `limit`, `offset` and `full`, and its page says `truncated` and
+`next_offset`. With `answered_after` the oldest answer comes first, and a page runs
+past `limit` rather than part two answers of one time. Both give a compact form
+unless `full` is true:
 
 ```json
 {"id": "…", "status": "answered", "question": "Which way?",
@@ -165,9 +168,15 @@ timezone), `limit` and `full`. Both give a compact form unless `full` is true:
 `question` is the first 160 characters of the prompt, with `…` when it was cut.
 `label` names what was chosen in a `choice` or `multi_choice` and is null for a
 `boolean` or `text`, whose `value` reads as itself. A field left out or empty has
-no row. `answered_by`, `by_person` and `answered_at` are null with no answer.
-`by_person` is true when the answer came through Valkama's interface and false
-when it came through a tool; a caller cannot set it.
+no row. `answered_by` and `answered_at` are null with no answer. A note, a written
+answer and a label are cut at 500 characters with `…`, and one question is at most
+2000 characters of JSON, keeping its first fields; `clipped: true` says something
+was cut, and the key is absent otherwise.
+
+`by_person` is true when the call that closed the question came through Valkama's
+interface, false for any other call that answered, declined or withdrew it, and null
+while none has. No argument sets it and `author` does not count, though a process
+holding the interface's credentials counts as the interface.
 
 `get_work_item_request`, and the list with `full: true`, give the whole question:
 `prompt`, `fields` with their options and descriptions, `answers`, `note`,

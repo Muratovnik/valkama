@@ -1002,9 +1002,14 @@ An agent reads a question three ways:
   open ones first and then the newest closed. The HTTP read of a card has no such
   key.
 - `list_work_item_requests` takes `space`, `id` (one item), `status`,
-  `answered_after` and `limit`, and answers in the compact form below, or whole with
-  `full: true`. `answered_after` keeps only answers given after that timestamp, so a
-  reader that keeps the last `answered_at` takes only what came since.
+  `answered_after`, `limit` and `offset`, and answers in the compact form below, or
+  whole with `full: true`. Its page says `truncated` and `next_offset` as every list
+  does. `answered_after` keeps only answers given after that timestamp, oldest first
+  by `answered_at` and then by id, so a reader takes what came since by passing the
+  last `answered_at` it read and asking again while `truncated` is true. A page never
+  ends between two answers of one time: it runs past `limit` by the tie, because the
+  next page starts after that time. Without `answered_after` the newest question
+  comes first.
 - `get_work_item_request` answers with one question whole.
 
 The compact form carries no options and no descriptions:
@@ -1022,14 +1027,25 @@ The compact form carries no options and no descriptions:
 `status` is the effective one. `field` is the field's id and `value` the answer as
 stored; `label` is what was chosen in a `choice` or `multi_choice` and null for a
 `boolean` or `text`. A field left out or empty has no row. `answered_by`, `by_person`
-and `answered_at` are null with no answer, a declined or withdrawn question included.
+and `answered_at` are null with no answer; `by_person` keeps its meaning below on a
+declined or withdrawn question, and the other two stay null there.
 
-`by_person` is true when the call that wrote the answer was a browser write, as
-[above](#call-identity) defines it, and false for any other answer. It is read
-from that call's row, so nothing a caller sends sets it. It carries what `browser`
-carries and no more: it says the owner's interface sent the answer, not who was at
-the keyboard. A whole question in these tools carries it too; the HTTP reads a screen
-draws from do not.
+The compact form stays cheap to pull. A note, a written answer and a label are cut at
+500 characters with `…`, and one question is at most 2000 characters of JSON: past
+that it keeps its first fields and leaves out the rest. An item that lost anything
+this way carries `clipped: true`, and one that lost nothing has no such key. The
+whole text is in `get_work_item_request` and in the list with `full: true`.
+
+`by_person` says whether the call that closed the question was a browser write, as
+[above](#call-identity) defines it: true for one, false for any other call that
+answered, declined or withdrew it, and null while no call has, which covers a question
+still open and one that ran out by itself. Every read of a question has the key: the
+HTTP reads a screen draws from, the answer of a write, the tools and an export. It is
+read from that call's row, so no argument sets it, and `author` has no part in it: an
+agent that signs as the owner reads `false`. It means "through the interface" and no
+more. `GET /api/security/bootstrap` gives its token to any request with the fetch
+metadata a browser sends, so a local process that sends them counts as the interface.
+That is the boundary of local credentials, not a proof of who was at the keyboard.
 
 `search_work_items` also reads a question's prompt, the labels and descriptions of
 its fields and options, its answers and its note, and a row found that way carries

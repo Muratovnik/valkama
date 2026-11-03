@@ -148,15 +148,19 @@ read one:
   `items` with the open ones first and then the newest closed, and `truncated`
   when there are more. Read this when you come back to an item.
 - `list_work_item_requests` finds them on an item (`id`) or in a space, by
-  `status` and `answered_after`. Keep the last `answered_at` you read and pass it
-  to take only what came since.
+  `status` and `answered_after`. To read answers in portions, keep the last
+  `answered_at` you read and pass it as `answered_after`, and ask again while
+  `truncated` is true: the oldest comes first, and no two answers of one time are
+  parted.
 - `get_work_item_request` gives one question whole, with its options and their
   descriptions, and `list_work_item_requests` does so for each with `full: true`.
 
 The first two answer in a compact form: `id`, `status`, `question` (the start of
 the prompt), `answer` as rows of `field`, `value` and `label`, `note`,
-`answered_by`, `answered_at`, and `by_person`, which is true when the answer came
-through Valkama's interface and false when it came through a tool.
+`answered_by`, `answered_at`, and `by_person`, which is true when the call came
+through Valkama's interface and false when it came through a tool. A note or a
+written answer longer than 500 characters is cut there and the question carries
+`clipped: true`; `get_work_item_request` has the whole text.
 
 A pending request expires when its item closes. Whether to ask through a request,
 the client or a message is the owner's rule; this tool is how the question is
