@@ -88,22 +88,29 @@ def _present(conn: sqlite3.Connection, row: sqlite3.Row, at: str) -> dict:
 
 
 def get(conn: sqlite3.Connection, identity: object) -> dict:
-    return _present(conn, _row(conn, identity), request_model.now())
+    return _with_by_person(conn, [_present(conn, _row(conn, identity), request_model.now())])[0]
 
 
-def with_by_person(conn: sqlite3.Connection, records: list[dict]) -> list[dict]:
-    """Requests with whether a person gave each answer, as the call that wrote it proved.
+def _with_by_person(conn: sqlite3.Connection, records: list[dict]) -> list[dict]:
+    """Requests with whether the call that closed each one came through the interface.
 
-    True when the `request_answered` event's call came through the browser
-    credential, the owner's own UI; false for any other answer; null with no answer
-    to speak of. Nothing a caller sends reaches this, and the fact stays once, on
-    the call row. A separate step rather than part of `_present`, because the web's
-    schema is strict and this key is for an agent's reads.
+    True for a browser write, false for any other call that answered, declined or
+    withdrew it, and null while no call has: still open, or run out by itself. The
+    `author` beside it is text the caller wrote and says nothing here; the fact
+    stays once, on the call row. One statement for every request of a read.
     """
 
-    answered = [record["request_id"] for record in records if record["status"] == "answered"]
+    closed = [record["request_id"] for record in records if record["resolved_at"] is not None]
     sources: dict[str, object] = {}
-    if answered:
+    # An attached store is read as it is, and one from before calls were recorded
+    # has no such row to read: nothing there came through a call anyone proved.
+    if (
+        closed
+        and conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='execution_events'"
+        ).fetchone()
+        is not None
+    ):
         # By the request rather than its item: a merge moves a request and leaves
         # its history where it was written.
         sources = {
@@ -111,16 +118,16 @@ def with_by_person(conn: sqlite3.Connection, records: list[dict]) -> list[dict]:
             for row in conn.execute(
                 "SELECT e.detail, c.identity_source FROM work_item_events e"
                 " LEFT JOIN execution_events c ON c.id = e.call_id"
-                " WHERE e.action = 'request_answered'"
+                " WHERE e.action IN ('request_answered','request_declined','request_expired')"
                 " AND e.detail IN (SELECT value FROM json_each(?))",
-                (json.dumps(answered),),
+                (json.dumps(closed),),
             )
         }
     return [
         {
             **record,
             "by_person": sources.get(record["request_id"]) == calls.BROWSER
-            if record["status"] == "answered"
+            if record["resolved_at"] is not None
             else None,
         }
         for record in records
@@ -131,14 +138,17 @@ def of_item(conn: sqlite3.Connection, work_item_id: str) -> list[dict]:
     """Every request on one item, newest first and with no page limit."""
 
     at = request_model.now()
-    return [
-        _present(conn, row, at)
-        for row in conn.execute(
-            "SELECT * FROM work_item_requests WHERE work_item_id=?"
-            " ORDER BY created_at DESC,request_id",
-            (work_item_id,),
-        ).fetchall()
-    ]
+    return _with_by_person(
+        conn,
+        [
+            _present(conn, row, at)
+            for row in conn.execute(
+                "SELECT * FROM work_item_requests WHERE work_item_id=?"
+                " ORDER BY created_at DESC,request_id",
+                (work_item_id,),
+            ).fetchall()
+        ],
+    )
 
 
 def item_questions(conn: sqlite3.Connection, work_item_id: str) -> dict:
@@ -159,7 +169,7 @@ def item_questions(conn: sqlite3.Connection, work_item_id: str) -> dict:
     return {
         "total": len(found),
         "open": len(waiting),
-        "items": [request_model.compact(record) for record in with_by_person(conn, shown)],
+        "items": [request_model.compact(record) for record in shown],
         "truncated": len(shown) < len(found),
     }
 
@@ -171,8 +181,31 @@ def list_requests(
     status: str | None = None,
     limit: int = 100,
     reference: str | None = None,
-    answered_after: object = None,
 ) -> list[dict]:
+    """One page of requests, newest first, for a reader that asks for what it can draw."""
+
+    return list_page(conn, space=space, status=status, limit=limit, reference=reference)["requests"]
+
+
+def list_page(
+    conn: sqlite3.Connection,
+    *,
+    space: str | None = None,
+    status: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    reference: str | None = None,
+    answered_after: object = None,
+) -> dict:
+    """One page of requests, and whether more follow.
+
+    Newest first, or, asked for what was answered after a time, oldest answer first
+    by `resolved_at` and then `request_id`, so a reader that keeps the last time it
+    read moves forward through them. Such a page never ends between two answers of
+    one time: it runs past `limit` by the tie, because the next page starts after
+    that time and would otherwise skip the other one.
+    """
+
     if status is not None:
         model.enum_field(status, request_model.STATUSES, "status")
     clauses: list[str] = []
@@ -197,23 +230,41 @@ def list_requests(
         "SELECT r.* FROM work_item_requests r JOIN work_items i ON i.work_item_id=r.work_item_id",
         clauses,
     )
-    query += " ORDER BY r.created_at DESC,r.request_id LIMIT ? OFFSET ?"
+    query += (
+        " ORDER BY r.resolved_at,r.request_id LIMIT ? OFFSET ?"
+        if after is not None
+        else " ORDER BY r.created_at DESC,r.request_id LIMIT ? OFFSET ?"
+    )
     bounded = max(1, min(int(limit), 201))
+    start = model.count_field(offset, "offset")
     result: list[dict] = []
     at = request_model.now()
-    offset = 0
-    while len(result) < bounded:
-        rows = conn.execute(query, (*parameters, 200, offset)).fetchall()
+    seen = 0
+    fetched = 0
+    more = False
+    while not more:
+        rows = conn.execute(query, (*parameters, 200, fetched)).fetchall()
         for row in rows:
             presented = _present(conn, row, at)
-            if status is None or presented["status"] == status:
-                result.append(presented)
-                if len(result) == bounded:
-                    break
+            if status is not None and presented["status"] != status:
+                continue
+            seen += 1
+            if seen <= start:
+                continue
+            if len(result) >= bounded and not (
+                after is not None and presented["resolved_at"] == result[-1]["resolved_at"]
+            ):
+                more = True
+                break
+            result.append(presented)
         if len(rows) < 200:
             break
-        offset += 200
-    return result
+        fetched += 200
+    return {
+        "requests": _with_by_person(conn, result),
+        "truncated": more,
+        "next_offset": start + len(result) if more else None,
+    }
 
 
 def _bindings(

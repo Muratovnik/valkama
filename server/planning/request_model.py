@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import UTC, datetime
 
@@ -18,6 +19,11 @@ MAX_FIELDS_BYTES = 64 * 1024
 NOTE_KEY = "_note"
 #: How much of the prompt the compact form of a question quotes.
 QUESTION_PREVIEW = 160
+#: How much of a note or a written answer the compact form quotes, and how large one
+#: compact question may be as JSON. An agent pulls answers often, so what a person
+#: wrote at length stays one `get_work_item_request` away.
+MAX_COMPACT_TEXT = 500
+MAX_COMPACT_JSON = 2000
 _KEY = re.compile(r"[a-z][a-z0-9_-]{0,63}\Z")
 _OPTION_KEYS = frozenset({"id", "label", "description", "recommended"})
 
@@ -168,37 +174,79 @@ def _answer_label(field: dict, answer: object) -> str | None:
     return None
 
 
-def _answer_rows(descriptors: list[dict], given: dict | None) -> list[dict]:
-    """Each answered field, in the question's order. An empty answer names nothing."""
+def _clip(text: str) -> str:
+    return text if len(text) <= MAX_COMPACT_TEXT else text[:MAX_COMPACT_TEXT] + "…"
+
+
+def _answer_rows(descriptors: list[dict], given: dict | None) -> tuple[list[dict], bool]:
+    """Each answered field, in the question's order, and whether a long one was cut.
+
+    An empty answer names nothing. A list of chosen ids has no length worth
+    cutting; its labels do.
+    """
 
     rows = []
+    clipped = False
     for field in descriptors:
         answer = (given or {}).get(field["id"])
         if answer is None or answer == [] or (isinstance(answer, str) and not answer.strip()):
             continue
-        rows.append({"field": field["id"], "value": answer, "label": _answer_label(field, answer)})
-    return rows
+        label = _answer_label(field, answer)
+        row = {
+            "field": field["id"],
+            "value": _clip(answer) if isinstance(answer, str) else answer,
+            "label": _clip(label) if label is not None else None,
+        }
+        clipped = clipped or row["value"] != answer or row["label"] != label
+        rows.append(row)
+    return rows, clipped
+
+
+def _fits(item: dict) -> bool:
+    """Whether a compact question is within its size, its `clipped` key counted.
+
+    Measured with `json.dumps`'s roomier default separators, so no way of writing
+    it without escaping text that is not ASCII comes out larger.
+    """
+
+    return len(json.dumps({**item, "clipped": True}, ensure_ascii=False)) <= MAX_COMPACT_JSON
 
 
 def compact(record: dict) -> dict:
     """A question for an agent that scans: what was asked and what came back, no options.
 
     `answered_by` and `answered_at` belong to an answer only, though the row also
-    records who declined or withdrew a question and when.
+    records who declined or withdrew a question and when. `clipped` appears when
+    anything was left out or cut: past `MAX_COMPACT_TEXT` in a text, or the later
+    fields of an answer past `MAX_COMPACT_JSON`.
     """
 
     prompt = record["prompt"]
     answered = record["status"] == "answered"
-    return {
+    note = record["note"]
+    rows, clipped = _answer_rows(record["fields"], record["answers"])
+    item = {
         "id": record["request_id"],
         "status": record["status"],
         "question": prompt[:QUESTION_PREVIEW] + ("…" if len(prompt) > QUESTION_PREVIEW else ""),
-        "answer": _answer_rows(record["fields"], record["answers"]),
-        "note": record["note"],
+        "answer": [],
+        "note": _clip(note) if note is not None else None,
         "answered_by": record["answered_by"] if answered else None,
         "by_person": record["by_person"],
         "answered_at": record["resolved_at"] if answered else None,
     }
+    clipped = clipped or item["note"] != note
+    for row in rows:
+        if not _fits({**item, "answer": [*item["answer"], row]}):
+            clipped = True
+            break
+        item["answer"].append(row)
+    # Only text that nearly all escapes in JSON can leave this still too large.
+    for name in ("note", "question"):
+        while not _fits(item) and item[name] is not None and len(item[name]) > 2:
+            item[name] = item[name][: len(item[name]) // 2] + "…"
+            clipped = True
+    return {**item, "clipped": True} if clipped else item
 
 
 def timestamp(value: object, field: str = "expires_at") -> str | None:

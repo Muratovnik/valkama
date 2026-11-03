@@ -776,8 +776,10 @@ TOOLS.extend(
             "get_work_item_request",
             "Read a human request",
             "Read one whole question: its prompt, fields with option descriptions, answers,"
-            " note, effective expiry, and by_person: true when a person answered in Valkama's"
-            " interface, false when the answer came through a tool, null with no answer.",
+            " note, effective expiry, and by_person: true when the call that closed it came"
+            " through Valkama's interface, false for any other call, null while none has. No"
+            " argument sets it; a process holding the interface's credentials counts as the"
+            " interface.",
             READ_ONLY,
             {"id": _STR},
             ["id"],
@@ -787,8 +789,12 @@ TOOLS.extend(
             "List human requests",
             "List questions in the primary store, in compact form: id, status, question (the"
             f" first {request_model.QUESTION_PREVIEW} characters of the prompt), answer as rows of"
-            " field, value and label, note, answered_by, by_person and answered_at. full=true gives"
-            " each whole, as get_work_item_request does.",
+            " field, value and label, note, answered_by, by_person and answered_at. A note or a"
+            f" written answer is cut at {request_model.MAX_COMPACT_TEXT} characters and one question"
+            f" at {request_model.MAX_COMPACT_JSON} characters of JSON, keeping its first fields, and"
+            " carries clipped=true when anything was cut. full=true gives each whole, as"
+            " get_work_item_request does. With answered_after the oldest answer comes first, and a"
+            " page runs past limit rather than part two answers of one time." + _PAGING,
             READ_ONLY,
             {
                 "space": _SPACE,
@@ -800,9 +806,11 @@ TOOLS.extend(
                 "answered_after": {
                     "type": "string",
                     "description": "An ISO timestamp with a timezone: only answers given after it,"
-                    " so a reader that keeps the last answered_at it read takes what came since.",
+                    " oldest first, so a reader that keeps the last answered_at it read takes what"
+                    " came since. While truncated is true, ask again from the last answered_at.",
                 },
                 "limit": _INT,
+                "offset": _OFFSET,
                 "full": {
                     "type": "boolean",
                     "description": "Answer with each whole question instead of the compact form.",
@@ -1087,27 +1095,21 @@ def _chain(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
     return found
 
 
-def _request(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
-    """One whole question, with who answered it: an agent's read, not the screen's."""
-
-    return requests.with_by_person(conn, [requests.get(conn, arguments["id"])])[0]
-
-
 def _request_list(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
     """Questions as an agent scans them; the HTTP list a screen draws from stays whole."""
 
     parameters = {
         name: [str(arguments[name])]
-        for name in ("space", "id", "status", "answered_after", "limit")
+        for name in ("space", "id", "status", "answered_after", "limit", "offset")
         if arguments.get(name) is not None
     }
     read = api.handle_get(conn, "/api/planning/requests", parameters)
     if read is None:  # pragma: no cover - the path table above is closed
         raise ValueError("no planning requests read")
     answer = read[1]
-    records = requests.with_by_person(conn, answer["requests"])
-    full = _is_verbose(arguments, "full")
-    return {**answer, "requests": records if full else [request_model.compact(r) for r in records]}
+    if _is_verbose(arguments, "full"):
+        return answer
+    return {**answer, "requests": [request_model.compact(r) for r in answer["requests"]]}
 
 
 def _space(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
@@ -1166,7 +1168,7 @@ OPS: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], object]] = {
     ),
     "delete_work_item": _post("/api/planning/work-item/delete"),
     "create_work_item_request": _post("/api/planning/work-item/request"),
-    "get_work_item_request": _request,
+    "get_work_item_request": _get("/api/planning/request", "id", unwrap="request"),
     "list_work_item_requests": _request_list,
     "answer_work_item_request": _post("/api/planning/request/answer"),
     "decline_work_item_request": _post("/api/planning/request/decline"),

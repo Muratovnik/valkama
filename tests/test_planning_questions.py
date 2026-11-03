@@ -57,6 +57,7 @@ WEB_REQUEST_KEYS = {
     "fields",
     "answers",
     "note",
+    "by_person",
     "status",
     "author",
     "answered_by",
@@ -461,7 +462,8 @@ class CompactFormTests(QuestionCase):
         )
         compact = self.compact(request)
         self.assertEqual(
-            ("declined", None, None, None),
+            # Who declined it is no answerer, and the call that did was an agent's.
+            ("declined", None, False, None),
             (
                 compact["status"],
                 compact["answered_by"],

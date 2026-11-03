@@ -387,13 +387,12 @@ class PlanningScopeHttpTests(unittest.TestCase):
                 answered["request"]["answered_by"],
             ),
         )
-        # The web's schema is strict: a key it does not name refuses the whole list.
-        self.assertNotIn("by_person", answered["request"])
+        self.assertIs(True, answered["request"]["by_person"])
         status, listed = self.request(
             "/api/modules/planning/requests?scope_kind=global&status=answered"
         )
         self.assertEqual(200, status, listed)
-        self.assertNotIn("by_person", listed["items"][0]["request"])
+        self.assertIs(True, listed["items"][0]["request"]["by_person"])
         self.assertEqual([field], listed["items"][0]["request"]["fields"])
         # What an agent reads afterwards says who answered, from the call itself.
         self.assertIs(

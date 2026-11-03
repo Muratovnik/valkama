@@ -292,13 +292,14 @@ def _search(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> di
 def _requests(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) -> dict:
     return {
         "interface_version": "valkama-planning-requests",
-        "requests": requests.list_requests(
+        **requests.list_page(
             conn,
             space=_first(parameters, "space"),
             reference=_first(parameters, "id"),
             status=_first(parameters, "status"),
             answered_after=_first(parameters, "answered_after"),
             limit=_int(_first(parameters, "limit"), "limit", 100),
+            offset=_offset(parameters),
         ),
     }
 
