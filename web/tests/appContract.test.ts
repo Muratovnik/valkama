@@ -17,6 +17,7 @@ const readModels = source('../src/app/composables/usePlatformReadModels.ts')
 const liveFeed = source('../src/app/composables/usePlatformLiveFeed.ts')
 const sessionWorkItemRoute = source('../src/features/session-open/sessionWorkItemRoute.ts')
 const moduleAuthority = source('../src/app/composables/useModuleRouteAuthority.ts')
+const projectResources = source('../src/app/composables/useProjectResources.ts')
 const api = source('../src/shared/api/platformApi.ts')
 const planningApi = source('../src/shared/api/platformPlanningApi.ts')
 const coreApi = source('../src/shared/api/api.ts')
@@ -53,10 +54,13 @@ test('one explicit operating-scope grammar owns Global, Project, and neutral res
   assert.match(app, /availableProjectResources/)
   assert.match(app, /selectResource/)
   assert.match(
-    app,
+    projectResources,
     /selectableProjectResources\(activeManifest\.value, mappedProjectResources\.value\)/,
   )
-  assert.match(app, /resolveResourceSelection\(activeManifest\.value, route\.value, selected\)/)
+  assert.match(
+    projectResources,
+    /resolveResourceSelection\(activeManifest\.value, route\.value, selected\)/,
+  )
   assert.doesNotMatch(
     app,
     /scope_kind:\s*['"]all['"]|\?scope=|\?board=|localStorage\.getItem\([^)]*scope/,

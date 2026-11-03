@@ -11,15 +11,12 @@ import { useAppDocuments } from '@/app/composables/useAppDocuments.ts'
 import { useAppReferenceLinks } from '@/app/composables/useAppReferenceLinks.ts'
 import { useDocumentOpening } from '@/app/composables/useDocumentOpening.ts'
 import { useGlobalWorkActions } from '@/app/composables/useGlobalWorkActions.ts'
-import {
-  resolveResourceSelection,
-  selectableProjectResources,
-  useModuleRouteAuthority,
-} from '@/app/composables/useModuleRouteAuthority.ts'
+import { useModuleRouteAuthority } from '@/app/composables/useModuleRouteAuthority.ts'
 import { usePlatformEntryRestore } from '@/app/composables/usePlatformEntryRestore.ts'
 import { usePlatformLiveFeed } from '@/app/composables/usePlatformLiveFeed.ts'
 import { DEFAULT_ROUTE, usePlatformNavigation } from '@/app/composables/usePlatformNavigation.ts'
 import { usePlatformReadModels } from '@/app/composables/usePlatformReadModels.ts'
+import { useProjectResources } from '@/app/composables/useProjectResources.ts'
 import { useShellNotice } from '@/app/composables/useShellNotice.ts'
 import { prefetchModule } from '@/app/moduleViews.ts'
 
@@ -31,8 +28,6 @@ import InputRequestsHub from '@/features/input-requests/components/InputRequests
 import SessionContext from '@/features/session-open/SessionContext.vue'
 import { resolveSessionWorkItemRoute } from '@/features/session-open/sessionWorkItemRoute.ts'
 import WorkItemLinkPanel from '@/features/work-item-link/WorkItemLinkPanel.vue'
-
-import { EMPTY_WORK_FILTER, writeWorkFilter } from '@/entities/work-item/utils/workFilter.ts'
 
 import { fetchSessionContext } from '@/shared/api/api.ts'
 import type { PlanningConnectionState } from '@/shared/api/planningApi.ts'
@@ -99,14 +94,6 @@ const contextReady = computed(() =>
 )
 // Every surface that names a project reads the same list the finder does.
 provideProjectTitles(computed(() => contextReady.value?.projects ?? []))
-const mappedProjectResources = computed(() => {
-  const scope = operatingScope.value
-  return scope.kind === 'project'
-    ? (contextReady.value?.projects.find(
-        (project) => project.project_id === scope.project_ref.project_id,
-      )?.resources ?? [])
-    : []
-})
 const moduleStage = ref<InstanceType<typeof AppModuleStage> | null>(null)
 // The card by the id a sender of alerts knows it by: the route has only its reference.
 useAlertPresence(
@@ -162,24 +149,15 @@ const {
   te,
   translate: t,
 })
-const availableProjectResources = computed(() =>
-  modulesAuthoritative.value
-    ? selectableProjectResources(activeManifest.value, mappedProjectResources.value)
-    : [],
-)
-const selectedResourceRef = computed<EntityRef | undefined>(() => {
-  const entity = route.value.entity
-  let selected: EntityRef | undefined
-  if (entity !== undefined) {
-    const encoded = JSON.stringify(entity)
-    if (
-      availableProjectResources.value.some(
-        (resource) => JSON.stringify(resource.resource_ref) === encoded,
-      )
-    )
-      selected = entity
-  }
-  return selected
+const { availableProjectResources, selectedResourceRef, selectResource } = useProjectResources({
+  activeManifest,
+  contextReady,
+  modulesAuthoritative,
+  refused: () => {
+    notice.value = t('platform.route.invalid')
+  },
+  route,
+  writeRoute,
 })
 const routeRecoveryFailure = computed(
   () => routeFailure.value || (modulesAuthoritative.value ? '' : modulesFailure.value),
@@ -211,27 +189,6 @@ const primaryWriteScopeId = computed(() =>
     ? contextReady.value.primary.data_scope_id
     : null,
 )
-function selectResource(value: string) {
-  const selected = availableProjectResources.value.find(
-    (resource) => JSON.stringify(resource.resource_ref) === value,
-  )
-  const proposed =
-    selected && modulesAuthoritative.value
-      ? resolveResourceSelection(activeManifest.value, route.value, selected)
-      : null
-  if (proposed === null || activeManifest.value === undefined) {
-    notice.value = t('platform.route.invalid')
-    return
-  }
-  // The Work filter names labels and holders of the space being left, so it
-  // stays with that space's address; Back to it brings the filter back.
-  const { state } = writeWorkFilter(
-    proposed.state,
-    EMPTY_WORK_FILTER,
-    activeManifest.value.state_schema.max_bytes,
-  )
-  writeRoute({ ...proposed, state: Object.keys(state).length ? state : undefined })
-}
 
 function openEntity(entity?: EntityRef) {
   writeRoute({
