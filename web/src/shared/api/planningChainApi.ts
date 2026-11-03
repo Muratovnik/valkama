@@ -14,14 +14,7 @@
  * a headline that disagrees with the rows under it is worse than an error.
  */
 
-import {
-  boundedList,
-  boundedText,
-  parseContract,
-  positiveInt,
-  strictObject,
-  z,
-} from '@/shared/api/contract.ts'
+import { boundedText, parseContract, positiveInt, strictObject, z } from '@/shared/api/contract.ts'
 import {
   blankable,
   CLAIM_STATES,
@@ -109,19 +102,22 @@ const chainSchema = strictObject({
   open: count(),
   ready: count(),
   by_category: z.partialRecord(enumField(STATE_CATEGORIES), count()),
-  origins: boundedList(originSchema, 500),
-  series: boundedList(daySchema, 4000).refine(
-    (days) => days.every((entry, index) => index === 0 || days[index - 1].day < entry.day),
-    { message: 'expected ascending days' },
-  ),
+  // A chain is as large as the work it grew into; the server caps none of these.
+  origins: z.array(originSchema),
+  series: z
+    .array(daySchema)
+    .refine(
+      (days) => days.every((entry, index) => index === 0 || days[index - 1].day < entry.day),
+      { message: 'expected ascending days' },
+    ),
   recent: strictObject({
     days: positiveInt(),
     created: count(),
     closed: count(),
     trend: enumField(['growing', 'converging', 'steady'] as const),
   }),
-  members: boundedList(memberSchema, 5000),
-  edges: boundedList(edgeSchema, 20_000),
+  members: z.array(memberSchema),
+  edges: z.array(edgeSchema),
 })
   .refine((chain) => chain.open + chain.closed === chain.total, {
     message: 'open and closed add up to the total',

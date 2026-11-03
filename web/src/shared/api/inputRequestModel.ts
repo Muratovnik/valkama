@@ -63,7 +63,7 @@ const requestSchema = strictObject({
   /** Comments on fields with options; null while there is no answer. */
   field_notes: fieldNotesSchema.nullable(),
   /** A comment on the whole question. It is part of the answer and answers no field. */
-  note: text(8000).nullable().optional(),
+  note: text(8000).nullable(),
   /** 0 with no answer, 1 for the first, one more for each change. */
   answer_version: positiveInt(true),
   /** The replaced versions, oldest first. */
@@ -120,7 +120,8 @@ const detailSchema = strictObject({
 const listSchema = strictObject({
   interface_version: z.literal('valkama-planning-requests'),
   items: boundedList(entrySchema, 100),
-  coverage: boundedList(planningCoverageSchema, 2000),
+  // One source per registered project, and the registry counts none.
+  coverage: z.array(planningCoverageSchema),
   limit: positiveInt().max(100),
   has_more: z.boolean(),
 })

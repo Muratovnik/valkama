@@ -79,6 +79,16 @@ export function blankable(max: number) {
     .refine((value) => !/\u{0}/u.test(value), { message: 'expected bounded string' })
 }
 
+/**
+ * Text the server composes itself (a warning, a refusal joining its guards),
+ * which no write bounds: present and free of NUL, at whatever length it runs.
+ */
+const serverText = () =>
+  z
+    .string()
+    .min(1)
+    .refine((value) => !/\u{0}/u.test(value), { message: 'expected text' })
+
 /** Free text an agent wrote about itself, bounded and never resolved. */
 const actor = () => blankable(128)
 /** A holder that is somebody: `claim_ref` as it reads while the item is held. */
@@ -308,9 +318,11 @@ const stateMoveSchema = strictObject({
 
 /** An agent on an item: only the card's read carries the list. */
 const workItemAgentSchema = strictObject({
-  agent_id: boundedText(/^[^\u{0}]{1,128}$/u, 128),
-  session_id: boundedText(/^[^\u{0}]{1,128}$/u, 128),
-  agent_type: blankable(128),
+  // A call names its session and agent in up to 200 characters, and an agent
+  // on the card is read from those calls.
+  agent_id: boundedText(/^[^\u{0}]{1,200}$/u, 200),
+  session_id: boundedText(/^[^\u{0}]{1,200}$/u, 200),
+  agent_type: blankable(200),
   label: blankable(200),
   started_at: boundedText(ISO, 96).nullable(),
   last_activity_at: boundedText(ISO, 96).nullable(),
@@ -322,21 +334,22 @@ const workItemAgentSchema = strictObject({
 
 const workItemSchema = strictObject({
   ...workItemBriefShape,
-  agents: boundedList(workItemAgentSchema, 5000).optional(),
+  agents: z.array(workItemAgentSchema).optional(),
   claim: claimSchema.nullable(),
   comment_count: positiveInt(true).optional(),
   description: blankable(20_000),
   summary: summarySchema.nullable(),
   summary_comment_id: positiveInt().nullable(),
-  links: boundedList(linkSchema, 200),
-  refs: boundedList(refSchema, 200),
+  // The server counts neither, so neither does the card.
+  links: z.array(linkSchema),
+  refs: z.array(refSchema),
   // Unbounded on purpose: the server sends the whole record, however long the
   // discussion and the history grew, and a card refused for its length is lost.
   // Each entry stays bounded.
   comments: z.array(commentSchema),
   events: z.array(eventSchema),
   // A transition answers with these; a plain read does not.
-  warnings: boundedList(boundedText(/^[^\u{0}]{1,512}$/u, 512), 32).optional(),
+  warnings: z.array(serverText()).optional(),
   overridden: uniqueList(boundedText(ID, 64), 16).optional(),
   // A claim that started the item, and a release that put it back in the queue.
   started: stateMoveSchema.optional(),
@@ -366,11 +379,9 @@ const workflowSchema = strictObject({
   workflow_id: boundedText(UUID, 36),
   name: boundedText(TITLE, 200),
   initial_state_id: boundedText(UUID, 36),
-  states: boundedList(workflowStateSchema, 64).min(1),
-  transitions: boundedList(
-    strictObject({ from: boundedText(UUID, 36), to: boundedText(UUID, 36) }),
-    4096,
-  ),
+  // No write bounds a workflow: an upgraded store keeps every column it had.
+  states: z.array(workflowStateSchema).min(1),
+  transitions: z.array(strictObject({ from: boundedText(UUID, 36), to: boundedText(UUID, 36) })),
 })
 
 //: A parent edge is derived from the item's own `parent_id` rather than stored
@@ -433,7 +444,7 @@ const apiVersion = z.literal(PLANNING_API, { message: `expected ${PLANNING_API}`
 const refusalSchema = strictObject({
   error: strictObject({
     code: boundedText(/^[a-z_]{1,64}$/u, 64),
-    message: boundedText(/^[^\u{0}]{1,1000}$/u, 1000),
+    message: serverText(),
     expected: positiveInt(true).optional(),
     actual: positiveInt(true).optional(),
   }),

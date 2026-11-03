@@ -173,7 +173,8 @@ const executionSchema = strictObject({
   started_at: boundedText(ISO, 64),
   ended_at: boundedText(ISO, 64).nullable(),
   revision: positiveInt(true),
-  sessions: boundedList(executionSessionSchema, 50),
+  // The sessions linked to one attempt are not counted by the server.
+  sessions: z.array(executionSessionSchema),
 })
 
 const historySchema = strictObject({

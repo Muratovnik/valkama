@@ -36,7 +36,7 @@ const searchSchema = strictObject({
   limit: z.number().int().min(1).max(100),
   has_more: z.boolean(),
   items: z.array(resultSchema).max(100),
-  coverage: z.array(planningCoverageSchema).max(10_000),
+  coverage: z.array(planningCoverageSchema),
 }).refine((result) => result.items.length <= result.limit, {
   message: 'Search result exceeds its requested limit',
 })

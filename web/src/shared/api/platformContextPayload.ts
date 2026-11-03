@@ -27,7 +27,9 @@ const projectResourceSchema = strictObject({
 
 const projectDirectorySchema = strictObject({
   project_id: boundedText(PROJECT_ID, 160),
-  title: boundedText(/^[^\u{0}-\u{1F}<>]{1,160}$/u, 160),
+  // The registry keeps a project's name in up to 200 characters, brackets
+  // included; it is shown as text, never as markup.
+  title: boundedText(/^[^\u{0}]{1,200}$/u, 200),
   binding_state: z.enum([...BINDING_STATES] as [BindingState, ...BindingState[]], {
     message: 'unknown binding state',
   }),
@@ -71,7 +73,7 @@ const contextReadySchema = strictObject({
     data_scope_id: boundedText(UUID, 36),
     is_writable: z.literal(true, { message: 'primary must be explicitly writable' }),
   }),
-  projects: boundedList(projectDirectorySchema, 256),
+  projects: z.array(projectDirectorySchema),
   ui_prefs: savedUiPrefsSchema,
 })
 

@@ -43,6 +43,12 @@ const planningEnvelopeSchema = strictObject({
   state: z.unknown(),
 })
 
+/**
+ * A space's or a project's name as the server keeps it: up to 200 characters,
+ * brackets included. It is shown as text, never as markup.
+ */
+const displayName = () => boundedText(/^[^\u{0}]{1,200}$/u, 200)
+
 const workItemRefSchema = strictObject({
   space_ref: fromValidator(validatePlanningSpaceRef),
   reference: boundedText(/^[A-Z][A-Z0-9]{1,7}-[1-9]\d{0,8}$/u, 18),
@@ -74,19 +80,19 @@ const workItemSummarySchema = strictObject({
 
 const spaceSummarySchema = strictObject({
   space_ref: fromValidator(validatePlanningSpaceRef),
-  title: boundedText(/^[^<>\u{0}-\u{1F}]{1,160}$/u, 160),
+  title: displayName(),
   work_item_count: positiveInt(true),
 })
 
 const spaceViewSchema = strictObject({
   space_ref: fromValidator(validatePlanningSpaceRef),
-  title: boundedText(/^[^<>\u{0}-\u{1F}]{1,160}$/u, 160),
-  work_items: boundedList(workItemSummarySchema, 20_000),
+  title: displayName(),
+  work_items: z.array(workItemSummarySchema),
 })
 
 const planningProjectSchema = strictObject({
   project_id: boundedText(PROJECT_ID, 160),
-  title: boundedText(/^[^<>\u{0}-\u{1F}]{1,160}$/u, 160),
+  title: displayName(),
   binding_state: z.enum([...BINDING_STATES] as [BindingState, ...BindingState[]], {
     message: 'unknown binding state',
   }),
@@ -94,8 +100,9 @@ const planningProjectSchema = strictObject({
 })
 
 const planningReadySchema = strictObject({
-  projects: boundedList(planningProjectSchema, 256),
-  planning_spaces: boundedList(spaceViewSchema, 1024),
+  // The registry counts no projects, and a space holds as many items as it has.
+  projects: z.array(planningProjectSchema),
+  planning_spaces: z.array(spaceViewSchema),
 })
 
 function planningReady(value: unknown, path: string): PlatformPlanningReady {

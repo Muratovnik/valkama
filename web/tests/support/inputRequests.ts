@@ -17,6 +17,7 @@ export function requestEntry(): InputRequestEntry {
       prompt: 'Should deployment proceed?',
       fields: [{ id: 'proceed', label: 'Proceed', type: 'boolean', required: true, options: [] }],
       answers: null,
+      note: null,
       own: null,
       field_notes: null,
       answer_version: 0,
