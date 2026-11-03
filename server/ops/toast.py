@@ -116,7 +116,9 @@ def log_path() -> str:
     return os.path.join(tempfile.gettempdir(), "valkama-alerts.log")
 
 
-def _log(message: str) -> None:
+def log(message: str) -> None:
+    """One line in the shared alerts log; a log that cannot be written costs nothing."""
+
     stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     with contextlib.suppress(OSError):
         # Python opens a file shared for reading and writing on Windows, which
@@ -205,7 +207,7 @@ def helper(root: str | None = None) -> str:
     finally:
         with contextlib.suppress(OSError):
             scratch.unlink()
-    _log(f"helper built: {target}")
+    log(f"helper built: {target}")
     return str(target)
 
 
@@ -225,7 +227,7 @@ def _start(op: str, payload: Mapping[str, object]) -> bool:
         executable = helper()
         processes.start_detached(command(executable, op, payload), cwd=os.path.dirname(executable))
     except (HelperUnavailableError, OSError, subprocess.SubprocessError) as error:
-        _log(f"{op} {payload.get('tag', '')} not started: {error}")
+        log(f"{op} {payload.get('tag', '')} not started: {error}")
         return False
     return True
 

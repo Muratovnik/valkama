@@ -608,6 +608,24 @@ def _stored(row: sqlite3.Row, answers: object, own: object, field_notes: object,
     )
 
 
+def open_rows(conn: sqlite3.Connection, work_item_id: str | None = None) -> list[sqlite3.Row]:
+    """The questions still open, on one item or everywhere in this store.
+
+    Open as a reader sees it: a pending row past its deadline, on a closed item or
+    on a finished execution has lapsed although nothing wrote that down.
+    """
+
+    query = "SELECT * FROM work_item_requests WHERE status='pending'"
+    parameters: tuple[str, ...] = ()
+    if work_item_id is not None:
+        query += " AND work_item_id=?"
+        parameters = (work_item_id,)
+    at = request_model.now()
+    return [
+        row for row in conn.execute(query, parameters).fetchall() if not _expired(conn, row, at)
+    ]
+
+
 def _event(
     conn: sqlite3.Connection, work_item_id: str, action: str, request_id: str, author: str | None
 ) -> None:

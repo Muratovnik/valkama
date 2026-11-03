@@ -42,6 +42,10 @@ os.environ["VALKAMA_PROTECTED_STORE"] = os.path.join(
 )
 # A test must never put an icon in the tray or reach a real user runtime root.
 os.environ.setdefault("VALKAMA_NO_TRAY", "1")
+# Nor a toast on the desktop of whoever runs the suite: every process a test starts
+# inherits this, and the tests of the executor take it off with the process start
+# replaced.
+os.environ.setdefault("VALKAMA_NO_ALERTS", "1")
 
 
 class RunKeyDouble:

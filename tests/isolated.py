@@ -176,6 +176,7 @@ def isolated_environment(home: Path) -> dict[str, str]:
             "APPDATA": str(home / "AppData" / "Roaming"),
             "VALKAMA_DB": str(store_path(home)),
             "VALKAMA_NO_TRAY": "1",
+            "VALKAMA_NO_ALERTS": "1",
             "VALKAMA_PROTECTED_STORE": str(real_store),
             "PYTHONUTF8": "1",
         }

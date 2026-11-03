@@ -15,6 +15,7 @@ from collections.abc import Callable
 from typing import NamedTuple
 
 from . import housekeeping, launcher, static_assets
+from .alerts import emit as alert_emit
 from .ops import configuration, tray
 from .planning import acknowledgements
 from .planning import api as planning_api
@@ -289,15 +290,10 @@ def _client(params: dict) -> _Client:
     )
 
 
-def call_tool(
-    conn: sqlite3.Connection,
-    name: str,
-    arguments: dict,
-    *,
-    meta: object = None,
-    client: _Client | None = None,
-) -> object:
-    """Run one tool as one call, under the identity its client proved.
+def _prepared(
+    name: str, arguments: dict, meta: object, client: _Client | None
+) -> tuple[planning_calls.Identity, dict]:
+    """Who is calling this tool, and its arguments under their published names.
 
     `_identity` is what a client's `PreToolUse` hook adds to every call, so it
     is taken out here, for every tool and before any schema is consulted: no
@@ -319,8 +315,51 @@ def call_tool(
     identity = planning_calls.verify_mcp(
         meta, claimed, client=client.name, client_version=client.version
     )
+    return identity, arguments or {}
+
+
+def call_tool(
+    conn: sqlite3.Connection,
+    name: str,
+    arguments: dict,
+    *,
+    meta: object = None,
+    client: _Client | None = None,
+) -> object:
+    """Run one tool as one call, under the identity its client proved. The caller commits."""
+
+    identity, prepared = _prepared(name, arguments, meta, client)
     with planning_calls.bind(identity, name):
-        return _OPS[name](conn, arguments or {})
+        return _OPS[name](conn, prepared)
+
+
+def run_tool_call(
+    conn: sqlite3.Connection,
+    name: str,
+    arguments: dict,
+    *,
+    meta: object = None,
+    client: _Client | None = None,
+) -> object:
+    """One tool call as the stdio loop runs it: answered, committed, then alerted on.
+
+    What the call owes the owner is read while the call is still bound, because who
+    made it is known only there, and handed over only after the commit: a refused
+    call raises before either, and a commit that fails hands nothing over. Nothing
+    here waits for a toast.
+    """
+
+    identity, prepared = _prepared(name, arguments, meta, client)
+    with planning_calls.bind(identity, name):
+        data = _OPS[name](conn, prepared)
+        due = alert_emit.due_after_write(conn)
+    # The write has to be committed here. Board operations committed inside
+    # themselves; the Planning service leaves the transaction to its caller, so
+    # without this every tool write an agent made was rolled back when the
+    # process ended.
+    conn.commit()
+    alert_emit.send(due)
+    return data
 
 
 def _compact(payload: object) -> str:
@@ -469,6 +508,9 @@ def mcp_main() -> None:
         )
         _mcp_loop(conn, source_watch, catalogue())
     finally:
+        # The client is gone, so a question it asked a moment ago must not wait
+        # out the window, or be the reason this process lingers.
+        alert_emit.flush()
         conn.close()
 
 
@@ -598,18 +640,13 @@ def _mcp_loop(
             )
         elif method == "tools/call":
             try:
-                data = call_tool(
+                data = run_tool_call(
                     conn,
                     params.get("name", ""),
                     params.get("arguments") or {},
                     meta=params.get("_meta"),
                     client=client,
                 )
-                # The write has to be committed here. Board operations committed
-                # inside themselves; the Planning service leaves the transaction
-                # to its caller, so without this every tool write an agent made
-                # was rolled back when the process ended.
-                conn.commit()
                 content = _compact(data)
                 result = {"content": [{"type": "text", "text": content}], "isError": False}
             except (planning_model.PlanningError, planning_api.PlanningHttpError) as error:

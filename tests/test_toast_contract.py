@@ -282,6 +282,8 @@ class HelperDryRunTests(unittest.TestCase):
         patch = mock.patch.dict(os.environ, {"LOCALAPPDATA": directory.name})
         patch.start()
         cls.addClassCleanup(patch.stop)
+        # Nothing in this class shows or removes a toast: `check` only reads an answer.
+        os.environ.pop(toast.SWITCH, None)
         log = mock.patch.object(toast, "log_path", return_value=str(Path(directory.name) / "log"))
         log.start()
         cls.addClassCleanup(log.stop)
