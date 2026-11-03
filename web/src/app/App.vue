@@ -263,12 +263,13 @@ async function openSession(sessionId: string, _clientFamily: string, navigate = 
   }
 }
 const sessionContext = ref<ResolvedRef | null>(null)
-const documentView = useAppDocuments({
-  say,
-  openedFrom: [activeModule, () => JSON.stringify(route.value.entity), requestsOpen],
-})
+const { documentView, openDocument } = useAppDocuments([
+  activeModule,
+  () => JSON.stringify(route.value.entity),
+  requestsOpen,
+])
 // What a path written in free text can do from here: see the composable.
-useDocumentOpening(say)
+useDocumentOpening(say, openDocument)
 // References written in free text, anywhere in the shell: see the composable.
 useAppReferenceLinks({
   projects: () => contextReady.value?.projects ?? [],

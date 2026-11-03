@@ -2,7 +2,7 @@
  * What a path written in free text can do from anywhere in the shell. A file or a
  * folder opens in the owner's editor by the server's plan, and the result is said
  * in the shell's status region; a refused plan leaves the path copied, as the
- * links say. Markdown documents copy until the viewer lands.
+ * links say. A Markdown document opens in the window's viewer.
  */
 import { useI18n } from 'vue-i18n'
 
@@ -11,10 +11,14 @@ import type { OpenTarget } from '@/features/session-open/openPlan.ts'
 import { outcomeWords } from '@/features/session-open/placeWords.ts'
 
 import { provideDocumentOpener } from '@/entities/project-document/documentLinks.ts'
+import type { DocumentTarget } from '@/entities/project-document/documentLinks.ts'
 
 import { useSettingsStore } from '@/shared/stores/settingsStore.ts'
 
-export function useDocumentOpening(say: (message: string) => void): void {
+export function useDocumentOpening(
+  say: (message: string) => void,
+  openDocument: (target: DocumentTarget) => boolean,
+): void {
   const { t } = useI18n()
   const settingsStore = useSettingsStore()
 
@@ -27,6 +31,7 @@ export function useDocumentOpening(say: (message: string) => void): void {
 
   provideDocumentOpener({
     say,
+    openDocument,
     get editor() {
       return t(`open.place.${settingsStore.settings.editor}`)
     },

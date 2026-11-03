@@ -12,6 +12,9 @@ import DocumentViewer from '@/widgets/document-viewer/components/DocumentViewer.
 import { useDocumentView } from '@/widgets/document-viewer/composables/useDocumentView.ts'
 import type { DocumentView } from '@/widgets/document-viewer/composables/useDocumentView.ts'
 
+import { provideDocumentOpener } from '@/entities/project-document/documentLinks.ts'
+import type { DocumentOpener } from '@/entities/project-document/documentLinks.ts'
+
 import { DocumentRefusal, readDocument, resolveDocuments } from '@/shared/api/documentApi.ts'
 import type { ProjectDocument, ResolvedPath } from '@/shared/api/documentApi.ts'
 import { i18n } from '@/shared/i18n/index.ts'
@@ -38,6 +41,7 @@ export const refused = (status: number, code: string, more: { size?: number } = 
 export const disk: Record<string, ProjectDocument | Error> = {}
 export const known: Record<string, object> = {}
 export const scrolledInto: Element[] = []
+export const copied = vi.fn((_text: string) => Promise.resolve())
 const mounted: ReturnType<typeof mount>[] = []
 
 const emptied = (record: Record<string, unknown>) => {
@@ -66,10 +70,8 @@ export function viewerSuite() {
     HTMLElement.prototype.scrollIntoView = function (this: HTMLElement) {
       scrolledInto.push(this)
     }
-    vi.stubGlobal('navigator', {
-      ...navigator,
-      clipboard: { writeText: vi.fn(() => Promise.resolve()) },
-    })
+    copied.mockClear()
+    vi.stubGlobal('navigator', { clipboard: { writeText: copied } })
   })
 
   afterEach(async () => {
@@ -82,13 +84,14 @@ export function viewerSuite() {
   })
 }
 
-export async function viewer(parent?: () => ReferenceLink | null) {
+export async function viewer(parent?: () => ReferenceLink | null, opener?: DocumentOpener) {
   let view: DocumentView | undefined
   const wrapper = mount(
     defineComponent({
       setup() {
         view = useDocumentView()
         if (parent) provideReferenceLinks(parent)
+        if (opener) provideDocumentOpener(opener)
         const shown = view
         return () => h(DocumentViewer, { view: shown })
       },

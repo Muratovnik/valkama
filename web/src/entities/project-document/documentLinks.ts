@@ -23,7 +23,7 @@ import { documentParts, suffixTarget } from '@/shared/lib/textReferences.ts'
 import type { DocumentParts, DocumentReference } from '@/shared/lib/textReferences.ts'
 
 /** What an opener is told to open: the server's own names for it, and where in it. */
-interface DocumentTarget {
+export interface DocumentTarget {
   line: number | null
   path: string
   project: string

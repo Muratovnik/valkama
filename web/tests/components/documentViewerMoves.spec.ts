@@ -2,7 +2,7 @@
  * Moving inside the viewer: Back through several documents, a link within one, and what
  * a press in the text says and does.
  */
-import { nextTick } from 'vue'
+import { nextTick, ref } from 'vue'
 
 import { flushPromises } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
@@ -11,6 +11,7 @@ import {
   blocks,
   body,
   control,
+  copied,
   disk,
   file,
   known,
@@ -45,6 +46,7 @@ async function press(name: string) {
   await nextTick()
 }
 
+const link = () => surface()?.querySelector<HTMLButtonElement>('.document-text button')
 const heading = () => surface()?.querySelector('.document-text h2')?.textContent?.trim()
 
 describe('moving between documents', () => {
@@ -144,7 +146,7 @@ describe('moving between documents', () => {
     await flushPromises()
     await press('gone')
     await flushPromises()
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('gone.md')
+    expect(copied).toHaveBeenCalledWith('gone.md')
     expect(status()).toBe('Path copied')
   })
 
@@ -156,12 +158,47 @@ describe('moving between documents', () => {
     expect(resolve).toHaveBeenCalledWith({ project: 'demo', exact: true }, ['docs/note.md'])
   })
 
+  it('a file in the text goes to the opener above, under the name it says now', async () => {
+    const editor = ref('VS Code')
+    const openFile = vi.fn(() => true)
+    const view = await viewer(undefined, {
+      say: vi.fn(),
+      get editor() {
+        return editor.value
+      },
+      openFile,
+    })
+    disk['docs/plan.md'] = file('docs/plan.md', 'See `src/a.ts:42` first.\n')
+    known['src/a.ts'] = {
+      status: 'file',
+      project: 'demo',
+      relative: 'src/a.ts',
+      markdown: false,
+    }
+    view.open({ project: 'demo', path: 'docs/plan.md', suffix: '' })
+    await flushPromises()
+    await nextTick()
+    expect(link()?.title).toBe('Open in VS Code: src/a.ts, line 42')
+    editor.value = 'Cursor'
+    await nextTick()
+    expect(link()?.title).toBe('Open in Cursor: src/a.ts, line 42')
+    link()?.click()
+    await flushPromises()
+    expect(openFile).toHaveBeenCalledWith({
+      project: 'demo',
+      path: 'src/a.ts',
+      suffix: ':42',
+      line: 42,
+    })
+    expect(view.place.value?.path).toBe('docs/plan.md')
+  })
+
   it('the head copies the path from the project root', async () => {
     disk['docs/plan.md'] = file('docs/plan.md', PLAN)
     await opened()
     control('Copy the path docs/plan.md')?.click()
     await flushPromises()
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('docs/plan.md')
+    expect(copied).toHaveBeenCalledWith('docs/plan.md')
     expect(status()).toBe('Path copied')
   })
 

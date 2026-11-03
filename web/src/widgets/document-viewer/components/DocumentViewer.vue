@@ -83,8 +83,14 @@ async function say(message: string) {
   said.value = message
   quiet.start()
 }
+const outer = useDocumentOpener()
 provideDocumentOpener({
-  ...useDocumentOpener(),
+  // Read through, not copied: the editor's name follows the setting and the language.
+  get editor() {
+    return outer.editor
+  },
+  openFile: outer.openFile,
+  openFolder: outer.openFolder,
   openDocument: ({ path, project, suffix }) => {
     go({ path, project, suffix })
     return true
@@ -417,7 +423,10 @@ async function copyPath() {
 /* A band of its own tone, under the head's rule, that takes no room with nothing to say.
    It is still there then, because a status region has to exist before what it announces. */
 .document-status {
+  display: flex;
   flex: 0 0 auto;
+  gap: var(--space-2);
+  align-items: center;
   padding: var(--space-2) var(--space-5);
   margin: 0;
   color: var(--color-text-muted);
@@ -431,8 +440,7 @@ async function copyPath() {
 }
 
 .document-status-mark {
-  vertical-align: -2px;
-  margin-inline-end: var(--space-1);
+  flex: 0 0 auto;
   color: var(--color-warning);
 }
 
