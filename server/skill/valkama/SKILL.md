@@ -162,9 +162,13 @@ through Valkama's interface and false when it came through a tool. A note or a
 written answer longer than 500 characters is cut there and the question carries
 `clipped: true`; `get_work_item_request` has the whole text.
 
-A pending request expires when its item closes. Whether to ask through a request,
-the client or a message is the owner's rule; this tool is how the question is
-kept on the item.
+A request suits a question the work can go on without. No session waits for it:
+the answer arrives with the next read of the item, so go on with what does not
+depend on it. A question the work cannot go on without belongs in the client,
+where the person answers now. A request bound to an `execution_id` expires when
+that execution ends, and any pending request expires when its item closes, so an
+item holding an open request stays open. The owner's own rules on where to ask
+come first.
 
 ## Merging items that are one change
 
