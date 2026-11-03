@@ -670,7 +670,6 @@ export const en = {
     languageHint: 'Applies to the entire Valkama interface on this device.',
     searchOptions: 'Search options',
     noOptions: 'No matching options',
-    opening: openMessages.en.settings,
     diagnostics: {
       needsAttention: 'Needs attention',
       passed: 'Passed checks',

@@ -43,7 +43,9 @@ function refusalWords(t: Translate, refusal: Refusal): string {
 export function outcomeWords(t: Translate, outcome: Outcome): string {
   if (outcome.status === 'refused') return refusalWords(t, outcome.refusal)
   if (outcome.status === 'copied') return t('open.outcome.copied')
-  if (outcome.status === 'next') return t('open.outcome.next')
+  // A notice before the next action says more than "now the next one".
+  if (outcome.status === 'next')
+    return outcome.notice ? refusalWords(t, outcome.notice) : t('open.outcome.next')
   const key = outcome.opens ? placeKey(outcome.opens) : ''
   return key ? t('open.outcome.opened', { place: t(key) }) : t('open.outcome.openedPlain')
 }

@@ -72,7 +72,6 @@ export const PATH_REFUSALS = [
 
 export type OpenPlace = (typeof OPEN_PLACES)[number]
 export type Editor = (typeof EDITORS)[number]
-export type PlanReason = (typeof PLAN_REASONS)[number]
 
 const MAX_PATH = 4096
 const id = () => boundedText(/^[^\u{0}]+$/u, 200)
@@ -225,35 +224,62 @@ export async function fetchOpenPlan(query: PlanQuery): Promise<OpenPlan> {
 }
 
 /**
- * What the page hands the desktop app for one action: the target and the owner's
- * places, never a link or a command line. The app asks the server for the same
- * plan itself and checks every step against its own closed list; `steps` names
- * which of that plan's steps this action takes. `command` is the owner's own
- * command, the one template that comes from the page, as it always has.
+ * What the page hands the desktop app (`valkama:open-session`): the target and the
+ * owner's places, never a link or a command line. The app asks the server for the
+ * plan itself and checks every step against its own closed list. Without `step`
+ * it runs the plan's first action; with it, the one step it names, which the
+ * answer before gave as `next`. `command` is the owner's own command, the one
+ * template that comes from the page.
  */
-export interface BridgeOpenRequest {
-  always: OpenPlace | ''
-  fallback: OpenPlace | ''
-  steps: number[]
-  target:
-    | { kind: 'session'; session: string }
-    | { kind: 'file'; line: number | null; path: string; project: string }
-    | { kind: 'folder'; path: string; project: string }
-  command?: string
-}
+export type BridgeOpenRequest =
+  | { session: string; always?: OpenPlace; fallback?: OpenPlace; step?: number }
+  | {
+      path:
+        | { kind: 'file'; path: string; project: string; line?: number }
+        | { kind: 'folder'; path: string; project: string }
+      fallback?: OpenPlace
+      step?: number
+    }
+  | { command: string; session: string }
+
+/** Why the app opened nothing, beside the plan's reasons; a closed list it never widens. */
+export const APP_REFUSALS = [
+  'not-app',
+  'invalid-request',
+  'plan-unavailable',
+  'invalid-plan',
+  'invalid-step',
+  'not-installed',
+  'launch-failed',
+  'window-not-confirmed',
+  'no-folder',
+  'no-command',
+] as const
 
 const bridgeAnswerSchema = strictObject({
-  status: enumField(['opened', 'copied', 'refused'] as const),
-  /** A closed code for a refusal; the app's own error text stays in its log. */
-  code: z.string().max(64).optional(),
+  ok: z.boolean(),
+  mode: enumField(['opened', 'copied', 'explained', 'refused'] as const),
+  /** A closed code; the app's own error text stays in its log. */
+  reason: z.string().max(64).optional(),
+  host: z.string().max(32).optional(),
+  archived: z.boolean().optional(),
+  code: z.string().max(32).optional(),
   /** What was copied, for a `copied` answer. */
-  text: z.string().max(400).optional(),
+  command: z.string().max(400).optional(),
+  /** The step the person's next action takes, or none. */
+  next: z.number().int().min(0).max(7).nullable(),
+  /** The plan the app carried out; read again with the page's own schema. */
+  plan: z.unknown().optional(),
 })
 
-export type BridgeOpenAnswer = z.infer<typeof bridgeAnswerSchema>
+export type BridgeOpenAnswer = Omit<z.infer<typeof bridgeAnswerSchema>, 'plan'> & {
+  plan: OpenPlan | null
+}
 
 /** The app's answer, or `null` when it is not one, which the page reports as a failure. */
 export function readBridgeAnswer(value: unknown): BridgeOpenAnswer | null {
   const result = bridgeAnswerSchema.safeParse(value)
-  return result.success ? result.data : null
+  if (!result.success) return null
+  const plan = result.data.plan === undefined ? null : planSchema.safeParse(result.data.plan)
+  return { ...result.data, plan: plan?.success ? plan.data : null }
 }

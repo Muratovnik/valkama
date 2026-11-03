@@ -7,11 +7,12 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { EXECUTOR_CODES, openTarget } from '@/features/session-open/openPlan.ts'
+import { openTarget, REFUSAL_REASONS } from '@/features/session-open/openPlan.ts'
 import type { Outcome } from '@/features/session-open/openPlan.ts'
 import { outcomeWords, placeKey } from '@/features/session-open/placeWords.ts'
 
 import {
+  APP_REFUSALS,
   OPEN_PLACES,
   OPENED_HOSTS,
   OPENED_IN,
@@ -274,46 +275,78 @@ describe('asking for the plan', () => {
   })
 })
 
+/** The app's bridge, answering each request with the next of these in turn. */
+function app(...answers: unknown[]) {
+  const call = vi.fn()
+  for (const reply of answers) call.mockResolvedValueOnce(reply)
+  Object.assign(window, { valkamaDesktop: { openSession: call } })
+  return call
+}
+
 describe('opening in the Valkama app', () => {
-  it('hands the app the target and one action’s steps, never a link', async () => {
-    const bridge = vi.fn().mockResolvedValue({ status: 'opened' })
-    Object.assign(window, { valkamaDesktop: { openTarget: bridge } })
-    // The app starts the editor itself, so a desktop plan's window step has no link.
-    const desktopSteps = [
+  // The app starts the editor itself, so a desktop plan's window step has no link.
+  const desktopPlan = plan({
+    surface: 'desktop',
+    steps: [
       { kind: 'focus-folder', ide: 'vscode', folder: FOLDER },
       { kind: 'open-link', scheme: 'vscode', link: SESSION_LINK },
-    ]
-    answer(plan({ surface: 'desktop', steps: desktopSteps }))
-    const first: Outcome = await openTarget(claude, defaults)
-    expect(new URL(fetched[0] ?? '', 'https://valkama.invalid').searchParams.get('surface')).toBe(
-      'desktop',
+    ],
+  })
+
+  it('names the target and the next step, never a link, one action per click', async () => {
+    const call = app(
+      { ok: true, mode: 'opened', next: 1, plan: desktopPlan },
+      { ok: true, mode: 'opened', next: null, plan: desktopPlan },
     )
-    expect(bridge).toHaveBeenCalledWith({
-      target: { kind: 'session', session: SESSION },
-      fallback: 'vscode',
-      always: '',
-      steps: [0],
-    })
+    const first: Outcome = await openTarget(claude, defaults)
+    expect(fetched).toEqual([])
+    expect(call).toHaveBeenCalledWith({ session: SESSION, fallback: 'vscode' })
     if (first.status !== 'next') throw new Error('expected a second action')
-    await first.next.run()
-    expect(bridge).toHaveBeenLastCalledWith(expect.objectContaining({ steps: [1] }))
+    expect(first.next.steps.map((step) => step.kind)).toEqual(['open-link'])
+    expect(call).toHaveBeenCalledTimes(1)
+
+    const second = await first.next.run()
+    expect(call).toHaveBeenLastCalledWith({ session: SESSION, fallback: 'vscode', step: 1 })
+    expect(second).toMatchObject({ status: 'opened', opens: { opened_host: 'vscode' } })
     expect(opened).not.toHaveBeenCalled()
   })
 
-  it('reports an app refusal it has no words for as the app failing', async () => {
-    const bridge = vi.fn().mockResolvedValue({ status: 'refused', code: 'ENOENT spawn C:\\x' })
-    Object.assign(window, { valkamaDesktop: { openTarget: bridge } })
-    answer(
-      plan({
-        surface: 'desktop',
-        one_action: true,
-        steps: [{ kind: 'desktop-resume', session: SESSION }],
-      }),
+  it('carries an explanation the app gave before the next step as a notice', async () => {
+    app({ ok: false, mode: 'explained', reason: 'live-in-terminal', next: 1, plan: desktopPlan })
+    const outcome = await openTarget(claude, defaults)
+    expect(outcome).toMatchObject({ status: 'next', notice: { reason: 'live-in-terminal' } })
+    expect(outcomeWords(i18n.global.t, outcome)).toContain('runs in a terminal')
+  })
+
+  it('asks for a file with its line and the editor, and for the owner’s command by itself', async () => {
+    const call = app(
+      { ok: true, mode: 'opened', next: null },
+      { ok: false, mode: 'refused', reason: 'no-folder', next: null },
     )
-    expect(await openTarget(claude, defaults)).toEqual({
-      status: 'refused',
-      refusal: { reason: 'bridge-failed' },
+    await openTarget(
+      { kind: 'file', project: 'example-project', path: 'docs/a.md', line: 4 },
+      { settings: mergeSettings({ editor: 'cursor' }) },
+    )
+    expect(call).toHaveBeenLastCalledWith({
+      path: { kind: 'file', project: 'example-project', path: 'docs/a.md', line: 4 },
+      fallback: 'cursor',
     })
+    const settings = mergeSettings({
+      sessions: { claude: { fallback: 'vscode', always: 'custom', command: 'wt -d {cwd}' } },
+    })
+    const outcome = await openTarget(claude, { settings })
+    expect(call).toHaveBeenLastCalledWith({ session: SESSION, command: 'wt -d {cwd}' })
+    expect(outcome).toEqual({ status: 'refused', refusal: { reason: 'no-folder' } })
+  })
+
+  it('reports a refusal it has no words for, or no answer at all, as the app failing', async () => {
+    app(
+      { ok: false, mode: 'refused', reason: 'ENOENT spawn C:\\x', next: null },
+      { ok: false, mode: 'refused', error: 'C:\\private\\stack', next: null },
+    )
+    const failed = { status: 'refused', refusal: { reason: 'bridge-failed' } }
+    expect(await openTarget(claude, defaults)).toEqual(failed)
+    expect(await openTarget(claude, defaults)).toEqual(failed)
   })
 })
 
@@ -325,13 +358,17 @@ function walk(catalog: unknown, key: string): unknown {
 }
 
 describe('the words for the plan', () => {
+  it('name every reason the server and the app can give', () => {
+    expect(REFUSAL_REASONS).toEqual(expect.arrayContaining([...PLAN_REASONS, ...APP_REFUSALS]))
+  })
+
   it.each(['en', 'ru'] as const)('cover every refusal, place and state in %s', (locale) => {
     const catalog = messages[locale]
     const keys = [
-      ...[...PLAN_REASONS, ...EXECUTOR_CODES].map((reason) => `open.refused.${reason}`),
+      ...REFUSAL_REASONS.map((reason) => `open.refused.${reason}`),
       ...PATH_REFUSALS.map((code) => `open.pathRefused.${code}`),
       ...PLAN_STATES.map((state) => `open.state.${state}`),
-      ...[...OPENED_IN, ...OPENED_HOSTS, ...OPEN_PLACES]
+      ...[...OPENED_IN, ...OPENED_HOSTS, ...OPEN_PLACES, 'claude-cli']
         .filter(Boolean)
         .map((word) => placeKey({ opened_in: word, opened_host: '' })),
     ]

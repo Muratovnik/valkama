@@ -18,7 +18,7 @@ export type SessionFamily = (typeof SESSION_FAMILIES)[number]
 export type AlwaysChoice = '' | OpenPlace | 'custom'
 export type CustomCommandError = 'required' | 'too-long'
 
-export interface SessionOpening {
+interface SessionOpening {
   always: AlwaysChoice
   /** Read only for `always: 'custom'`, and kept when another choice is made. */
   command: string

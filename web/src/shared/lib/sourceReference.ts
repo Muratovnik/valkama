@@ -1,4 +1,4 @@
-import type { BridgeOpenAnswer, BridgeOpenRequest } from '@/shared/api/openPlanModel.ts'
+import type { BridgeOpenRequest } from '@/shared/api/openPlanModel.ts'
 import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
 
 export interface SourceOpenResult {
@@ -17,12 +17,9 @@ interface SourceOpenRequest {
 interface ValkamaDesktopBridge {
   /** Absent in a desktop app older than this page. */
   onOpenRoute?(listener: (route: string) => void): void
+  /** Carry out one action of an open plan; the answer is read as `readBridgeAnswer` reads it. */
+  openSession?(request: BridgeOpenRequest): Promise<unknown>
   openSource(request: SourceOpenRequest): Promise<SourceOpenResult>
-  /**
-   * Carry out one action of an open plan. Absent in an app older than the plan,
-   * which leaves the page to carry the plan out as a browser does.
-   */
-  openTarget?(request: BridgeOpenRequest): Promise<BridgeOpenAnswer>
 }
 
 declare global {

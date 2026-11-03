@@ -9,6 +9,7 @@ export const openMessages = {
         'cursor': 'Cursor',
         'windsurf': 'Windsurf',
         'jetbrains': 'JetBrains',
+        'claude-cli': 'Claude Code CLI',
         'claude-desktop': 'Claude Desktop',
         'codex-app': 'Codex',
         'terminal': 'Terminal',
@@ -56,6 +57,14 @@ export const openMessages = {
         'desktop-only': 'Only the Valkama app can open this.',
         'bridge-failed': 'The Valkama app could not open it.',
         'no-command': 'Set your own command in the settings first.',
+        'not-app': 'Only a page of this Valkama may ask the app to open things.',
+        'invalid-request': 'The Valkama app did not take this request.',
+        'plan-unavailable': 'The Valkama app could not ask the local service how to open it.',
+        'invalid-plan': 'The Valkama app refused a plan it could not check.',
+        'invalid-step': 'That step is no longer in the plan; open it again.',
+        'launch-failed': 'The program did not start.',
+        'window-not-confirmed':
+          'The project window did not confirm it opened. When it is there, open the session in it.',
       },
       archived: 'A copy is kept in Valkama.',
       pathRefused: {
@@ -68,37 +77,37 @@ export const openMessages = {
         directory: 'This is a folder, not a file.',
         not_a_folder: 'This is not a folder.',
       },
-    },
-    settings: {
-      title: 'Opening sessions and files',
-      intro:
-        'A session opens where it was last open. What you set here applies when that place is unknown or cannot be opened.',
-      family: {
-        claude: 'Claude Code',
-        codex: 'Codex',
-        other: 'Other clients',
-      },
-      familyHint: {
-        claude: 'Sessions of Claude Code in an editor, a terminal or Claude Desktop.',
-        codex: 'Codex sessions in the app, an editor or a terminal.',
-        other: 'Valkama cannot resume these itself; only your own command opens them.',
-      },
-      fallback: 'If the place is unknown or cannot be opened',
-      always: 'Always open in',
-      lastPlace: 'Where it was last open',
-      none: 'Do not open',
-      custom: 'Your own command',
-      overridden:
-        'Every {family} session opens in {place}, whatever its place; the setting says so beside the session.',
-      editor: 'Editor for files',
-      editorHint: 'Files and folders of a project open here.',
-      command: 'Command',
-      commandHint:
-        "Runs instead of opening the session. {'{session}'}, {'{cwd}'} and {'{session_cwd}'} are filled in.",
-      commandPlaceholder: 'Enter an opening command',
-      commandError: {
-        'required': 'Enter a command before selecting it.',
-        'too-long': 'Keep the command to 400 characters or fewer.',
+      settings: {
+        title: 'Opening sessions and files',
+        intro:
+          'A session opens where it was last open. What you set here applies when that place is unknown or cannot be opened.',
+        family: {
+          claude: 'Claude Code',
+          codex: 'Codex',
+          other: 'Other clients',
+        },
+        familyHint: {
+          claude: 'Sessions of Claude Code in an editor, a terminal or Claude Desktop.',
+          codex: 'Codex sessions in the app, an editor or a terminal.',
+          other: 'Valkama cannot resume these itself; only your own command opens them.',
+        },
+        fallback: 'If the place is unknown or cannot be opened',
+        always: 'Always open in',
+        lastPlace: 'Where it was last open',
+        none: 'Do not open',
+        custom: 'Your own command',
+        overridden:
+          'Every {family} session opens in {place}, whatever its place; the setting says so beside the session.',
+        editor: 'Editor for files',
+        editorHint: 'Files and folders of a project open here.',
+        command: 'Command',
+        commandHint:
+          "Runs instead of opening the session, with {'{session}'}, {'{cwd}'} and {'{session_cwd}'} filled in. A folder is known only for a session in an editor or a terminal: for one in an app, a command that names a folder is refused.",
+        commandPlaceholder: 'Enter an opening command',
+        commandError: {
+          'required': 'Enter a command before selecting it.',
+          'too-long': 'Keep the command to 400 characters or fewer.',
+        },
       },
     },
   },
@@ -110,6 +119,7 @@ export const openMessages = {
         'cursor': 'Cursor',
         'windsurf': 'Windsurf',
         'jetbrains': 'JetBrains',
+        'claude-cli': 'Claude Code CLI',
         'claude-desktop': 'Claude Desktop',
         'codex-app': 'Codex',
         'terminal': 'Терминал',
@@ -157,6 +167,15 @@ export const openMessages = {
         'desktop-only': 'Это открывает только приложение Valkama.',
         'bridge-failed': 'Приложению Valkama не удалось это открыть.',
         'no-command': 'Сначала задайте свою команду в настройках.',
+        'not-app': 'Просить приложение открыть может только страница этой Valkama.',
+        'invalid-request': 'Приложение Valkama не приняло этот запрос.',
+        'plan-unavailable':
+          'Приложению Valkama не удалось спросить у локальной службы, как это открыть.',
+        'invalid-plan': 'Приложение Valkama отклонило план, который не смогло проверить.',
+        'invalid-step': 'Этого шага в плане уже нет; откройте заново.',
+        'launch-failed': 'Программа не запустилась.',
+        'window-not-confirmed':
+          'Окно проекта не подтвердило, что открылось. Когда оно появится, откройте сессию в нём.',
       },
       archived: 'Копия хранится в Valkama.',
       pathRefused: {
@@ -169,37 +188,37 @@ export const openMessages = {
         directory: 'Это папка, а не файл.',
         not_a_folder: 'Это не папка.',
       },
-    },
-    settings: {
-      title: 'Открытие сессий и файлов',
-      intro:
-        'Сессия открывается там, где была открыта последней. Заданное здесь действует, когда это место неизвестно или его не открыть.',
-      family: {
-        claude: 'Claude Code',
-        codex: 'Codex',
-        other: 'Другие клиенты',
-      },
-      familyHint: {
-        claude: 'Сессии Claude Code в редакторе, терминале или Claude Desktop.',
-        codex: 'Сессии Codex в приложении, редакторе или терминале.',
-        other: 'Их Valkama сама не возобновляет; открывает только своя команда.',
-      },
-      fallback: 'Если место неизвестно или его не открыть',
-      always: 'Всегда открывать в',
-      lastPlace: 'Где была открыта',
-      none: 'Не открывать',
-      custom: 'Своя команда',
-      overridden:
-        'Все сессии {family} открываются в {place}, где бы они ни были открыты; рядом с сессией сказано, что это по настройке.',
-      editor: 'Редактор для файлов',
-      editorHint: 'Здесь открываются файлы и папки проекта.',
-      command: 'Команда',
-      commandHint:
-        "Запускается вместо открытия сессии. Подставляются {'{session}'}, {'{cwd}'} и {'{session_cwd}'}.",
-      commandPlaceholder: 'Введите команду открытия',
-      commandError: {
-        'required': 'Введите команду, прежде чем выбрать её.',
-        'too-long': 'Команда должна быть не длиннее 400 символов.',
+      settings: {
+        title: 'Открытие сессий и файлов',
+        intro:
+          'Сессия открывается там, где была открыта последней. Заданное здесь действует, когда это место неизвестно или его не открыть.',
+        family: {
+          claude: 'Claude Code',
+          codex: 'Codex',
+          other: 'Другие клиенты',
+        },
+        familyHint: {
+          claude: 'Сессии Claude Code в редакторе, терминале или Claude Desktop.',
+          codex: 'Сессии Codex в приложении, редакторе или терминале.',
+          other: 'Их Valkama сама не возобновляет; открывает только своя команда.',
+        },
+        fallback: 'Если место неизвестно или его не открыть',
+        always: 'Всегда открывать в',
+        lastPlace: 'Где была открыта',
+        none: 'Не открывать',
+        custom: 'Своя команда',
+        overridden:
+          'Все сессии {family} открываются в {place}, где бы они ни были открыты; рядом с сессией сказано, что это по настройке.',
+        editor: 'Редактор для файлов',
+        editorHint: 'Здесь открываются файлы и папки проекта.',
+        command: 'Команда',
+        commandHint:
+          "Запускается вместо открытия сессии, с подставленными {'{session}'}, {'{cwd}'} и {'{session_cwd}'}. Папка известна только у сессии в редакторе или терминале: для сессии в приложении команда с папкой не запустится.",
+        commandPlaceholder: 'Введите команду открытия',
+        commandError: {
+          'required': 'Введите команду, прежде чем выбрать её.',
+          'too-long': 'Команда должна быть не длиннее 400 символов.',
+        },
       },
     },
   },

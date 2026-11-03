@@ -8,6 +8,7 @@ import AppNotice from '@/app/components/AppNotice.vue'
 import AppRouteRecovery from '@/app/components/AppRouteRecovery.vue'
 import { useAlertPresence } from '@/app/composables/useAlertPresence.ts'
 import { useAppReferenceLinks } from '@/app/composables/useAppReferenceLinks.ts'
+import { useDocumentOpening } from '@/app/composables/useDocumentOpening.ts'
 import { useGlobalWorkActions } from '@/app/composables/useGlobalWorkActions.ts'
 import {
   resolveResourceSelection,
@@ -29,7 +30,6 @@ import SessionContext from '@/features/session-open/SessionContext.vue'
 import { resolveSessionWorkItemRoute } from '@/features/session-open/sessionWorkItemRoute.ts'
 import WorkItemLinkPanel from '@/features/work-item-link/WorkItemLinkPanel.vue'
 
-import { provideDocumentOpener } from '@/entities/project-document/documentLinks.ts'
 import { EMPTY_WORK_FILTER, writeWorkFilter } from '@/entities/work-item/utils/workFilter.ts'
 
 import { fetchSessionContext } from '@/shared/api/api.ts'
@@ -261,9 +261,8 @@ async function openSession(sessionId: string, _clientFamily: string, navigate = 
   }
 }
 const sessionContext = ref<ResolvedRef | null>(null)
-// What a path written in free text can do from here. The viewer and the editor plan add
-// to this as they land; until then a confirmed path copies, as an unconfirmed one does.
-provideDocumentOpener({ say })
+// What a path written in free text can do from here: see the composable.
+useDocumentOpening(say)
 // References written in free text, anywhere in the shell: see the composable.
 useAppReferenceLinks({
   projects: () => contextReady.value?.projects ?? [],

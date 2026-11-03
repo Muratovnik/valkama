@@ -669,7 +669,6 @@ export const ru = {
     languageHint: 'Применяется ко всему интерфейсу Valkama на этом устройстве.',
     searchOptions: 'Поиск по вариантам',
     noOptions: 'Подходящих вариантов нет',
-    opening: openMessages.ru.settings,
     diagnostics: {
       needsAttention: 'Требует внимания',
       passed: 'Успешные проверки',

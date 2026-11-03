@@ -54,11 +54,11 @@ function fallbackOptions(family: SessionFamily): ChoiceOption[] {
 function alwaysOptions(family: SessionFamily): ChoiceOption[] {
   return alwaysChoicesFor(family).map((choice) => {
     if (choice === 'custom')
-      return { value: choice, label: t('settings.opening.custom'), icon: ICONS.custom }
+      return { value: choice, label: t('open.settings.custom'), icon: ICONS.custom }
     if (choice === '') {
       return family === 'other'
-        ? { value: choice, label: t('settings.opening.none'), icon: 'off' }
-        : { value: choice, label: t('settings.opening.lastPlace'), icon: ICONS[''] }
+        ? { value: choice, label: t('open.settings.none'), icon: 'off' }
+        : { value: choice, label: t('open.settings.lastPlace'), icon: ICONS[''] }
     }
     return placeOption(choice)
   })
@@ -70,8 +70,8 @@ const editorOptions = computed<ChoiceOption[]>(() => EDITORS.map((place) => plac
 function overridden(family: SessionFamily): string {
   const always = settings.value.sessions[family].always
   if (always === '' || always === 'custom') return ''
-  return t('settings.opening.overridden', {
-    family: t(`settings.opening.family.${family}`),
+  return t('open.settings.overridden', {
+    family: t(`open.settings.family.${family}`),
     place: t(`open.place.${always}`),
   })
 }
@@ -79,7 +79,7 @@ function overridden(family: SessionFamily): string {
 function commandError(family: SessionFamily): string {
   const opening = settings.value.sessions[family]
   const error = opening.always === 'custom' ? validateCustomCommand(opening.command) : null
-  return error === null ? '' : t(`settings.opening.commandError.${error}`)
+  return error === null ? '' : t(`open.settings.commandError.${error}`)
 }
 
 function selectFallback(family: SessionFamily, value: string) {
@@ -103,38 +103,38 @@ function selectEditor(value: string) {
 
 <template>
   <SettingsGroup
-    :title="t('settings.opening.title')"
-    :intro="t('settings.opening.intro')"
+    :title="t('open.settings.title')"
+    :intro="t('open.settings.intro')"
   >
     <SettingsRow
       v-for="family in SESSION_FAMILIES"
       :key="family"
-      :label="t(`settings.opening.family.${family}`)"
-      :hint="t(`settings.opening.familyHint.${family}`)"
+      :label="t(`open.settings.family.${family}`)"
+      :hint="t(`open.settings.familyHint.${family}`)"
     >
       <span class="settings-opening-lanes">
         <span
           v-if="placesFor(family).length"
           class="settings-opening-lane"
         >
-          <small class="settings-opening-lane-label">{{ t('settings.opening.fallback') }}</small>
+          <small class="settings-opening-lane-label">{{ t('open.settings.fallback') }}</small>
           <SelectionControl
             class="settings-opening-control"
             mode="combobox"
             :model-value="settings.sessions[family].fallback"
             :options="fallbackOptions(family)"
-            :label="`${t(`settings.opening.family.${family}`)}: ${t('settings.opening.fallback')}`"
+            :label="`${t(`open.settings.family.${family}`)}: ${t('open.settings.fallback')}`"
             @update:model-value="selectFallback(family, $event)"
           />
         </span>
         <span class="settings-opening-lane">
-          <small class="settings-opening-lane-label">{{ t('settings.opening.always') }}</small>
+          <small class="settings-opening-lane-label">{{ t('open.settings.always') }}</small>
           <SelectionControl
             class="settings-opening-control"
             mode="combobox"
             :model-value="settings.sessions[family].always"
             :options="alwaysOptions(family)"
-            :label="`${t(`settings.opening.family.${family}`)}: ${t('settings.opening.always')}`"
+            :label="`${t(`open.settings.family.${family}`)}: ${t('open.settings.always')}`"
             @update:model-value="selectAlways(family, $event)"
           />
         </span>
@@ -149,25 +149,25 @@ function selectEditor(value: string) {
           class="settings-opening-control"
           autocomplete="off"
           :model-value="settings.sessions[family].command"
-          :label="t('settings.opening.command')"
-          :hint="t('settings.opening.commandHint')"
+          :label="t('open.settings.command')"
+          :hint="t('open.settings.commandHint')"
           :maxlength="MAX_CUSTOM_COMMAND_LENGTH"
-          :placeholder="t('settings.opening.commandPlaceholder')"
+          :placeholder="t('open.settings.commandPlaceholder')"
           :error="commandError(family)"
           @update:model-value="editCommand(family, $event)"
         />
       </span>
     </SettingsRow>
     <SettingsRow
-      :label="t('settings.opening.editor')"
-      :hint="t('settings.opening.editorHint')"
+      :label="t('open.settings.editor')"
+      :hint="t('open.settings.editorHint')"
     >
       <SelectionControl
         class="settings-opening-control"
         mode="combobox"
         :model-value="settings.editor"
         :options="editorOptions"
-        :label="t('settings.opening.editor')"
+        :label="t('open.settings.editor')"
         @update:model-value="selectEditor"
       />
     </SettingsRow>

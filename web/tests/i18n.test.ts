@@ -60,7 +60,7 @@ test('every translation key written out in the source resolves in the catalog', 
   }
   assert.deepEqual(missing, [])
   // Known retained call sites keep a broken scanner from reporting a clean catalog.
-  for (const key of ['language.label', 'settings.interface', 'settings.opening.title']) {
+  for (const key of ['language.label', 'settings.interface', 'open.settings.title']) {
     assert.ok(seen.has(key), `the scan missed the retained call site for ${key}`)
   }
 })
@@ -95,7 +95,7 @@ test('English and Russian catalogs translate checklist actors, activity, source 
   )
   assert.equal(i18n.global.t('session.open'), 'Open session')
   assert.equal(i18n.global.t('workItem.relations'), 'Relations')
-  assert.equal(i18n.global.t('settings.opening.title'), 'Opening sessions and files')
+  assert.equal(i18n.global.t('open.settings.title'), 'Opening sessions and files')
   assert.equal(i18n.global.t('status.live'), 'Connected')
   assert.equal(i18n.global.t('workItem.back'), 'Back')
   assert.equal(i18n.global.t('graph.zoomIn'), 'Zoom in')
@@ -126,7 +126,7 @@ test('English and Russian catalogs translate checklist actors, activity, source 
   )
   assert.equal(i18n.global.t('session.open'), 'Открыть сессию')
   assert.equal(i18n.global.t('workItem.relations'), 'Связи')
-  assert.equal(i18n.global.t('settings.opening.title'), 'Открытие сессий и файлов')
+  assert.equal(i18n.global.t('open.settings.title'), 'Открытие сессий и файлов')
   assert.equal(i18n.global.t('status.live'), 'Подключено')
   assert.equal(i18n.global.t('workItem.back'), 'Назад')
   assert.equal(i18n.global.t('graph.zoomIn'), 'Приблизить')

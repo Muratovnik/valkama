@@ -273,7 +273,7 @@ class ProjectRegistryTests(unittest.TestCase):
             root / "server" / "executions" / "api.py",
             root / "desktop" / "project_registry.js",
             root / "desktop" / "session_opener.js",
-            root / "web" / "src" / "features" / "session-open" / "sessionOpen.ts",
+            root / "web" / "src" / "features" / "session-open" / "openPlan.ts",
             root / "web" / "src" / "shared" / "lib" / "sourceReference.ts",
         ]
         identity_aliases = (
@@ -294,7 +294,7 @@ class ProjectRegistryTests(unittest.TestCase):
             root / "server" / "sessions.py",
             root / "server" / "refs.py",
             root / "web" / "src" / "app" / "App.vue",
-            root / "web" / "src" / "features" / "session-open" / "sessionOpen.ts",
+            root / "web" / "src" / "features" / "session-open" / "openPlan.ts",
             root / "web" / "src" / "features" / "session-open" / "sessionWorkItemRoute.ts",
             root / "web" / "src" / "features" / "session-open" / "SessionContext.vue",
         ]
