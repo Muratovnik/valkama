@@ -65,6 +65,10 @@ checkouts are therefore distinguishable even at the same version.
   they still took a press: a press could go down on something already leaving, and lose
   its click when the fade ended, so it did nothing. What has begun to fade takes no press
   now, and a part a press went down on stays until the press ends.
+- **A press no longer lands on what the card's bar is still fading in.** The action and
+  the title coming into the bar took a press from the first instant of their fade, while
+  nothing of them could be seen yet, so a tap on an empty-looking place could start a
+  takeover. They now take a press once they are half there.
 - **One failing stage of a hook costs no other.** A notice that raised no longer takes
   the lifecycle event of the same hook with it, and a session end writes the marker that
   stops its watcher first, so the watcher no longer outlives a `/clear` when the store
