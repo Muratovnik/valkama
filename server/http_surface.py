@@ -1235,7 +1235,7 @@ class Handler(BaseHTTPRequestHandler):
                     else:
                         self.wfile.write(b": keep-alive\n\n")
                         self.wfile.flush()
-            except ui_state.PlatformHttpError:
+            except (ui_state.PlatformHttpError, planning_model.StoreSchemaError):
                 self.close_connection = True
             except CLIENT_DISCONNECT_ERRORS:
                 pass

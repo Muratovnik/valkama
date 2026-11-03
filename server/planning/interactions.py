@@ -190,8 +190,9 @@ def work_item_location(routing: PlanningRouting, text: str) -> str | None:
         if routing.unavailable_reason(project_id, space_ref) is not None:
             continue
         with routing.planning_store(_store_parameters(project_id, space_ref)) as (conn, _key):
+            # Only whether it is there: the card's own read says if it cannot be read.
             try:
-                service.get_work_item(conn, reference)
+                read_model.item_row(conn, reference)
             except (ValueError, KeyError):
                 continue
         entity = planning_work_item_entity({"space_ref": space_ref, "reference": reference})

@@ -65,6 +65,14 @@ describe('a failed Planning read names its cause and never the raw word unavaila
     expect(message).toEqual({ key: 'connection.readFailed' })
   })
 
+  it('names a space in a store another build wrote, and offers no retry', async () => {
+    const { failure, message } = await failedRead(async () =>
+      envelope('store_schema_mismatch', 'written by another build', 409),
+    )
+    expect(failure).toEqual({ code: 'store_schema_mismatch', status: 409, retryable: false })
+    expect(message).toEqual({ key: 'platform.failures.storeSchemaMismatch' })
+  })
+
   it('keeps a 404 error envelope with the unavailable code as a missing record', async () => {
     const { failure, message } = await failedRead(async () =>
       envelope('unavailable', 'project alpha has no planning space yet', 404),

@@ -74,6 +74,7 @@ def get_planning_space(conn: sqlite3.Connection, reference: str) -> dict:
     }
 
 
+@read_model.whole_store_read()
 def get_work_item(
     conn: sqlite3.Connection,
     reference: str,

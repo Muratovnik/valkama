@@ -1449,6 +1449,25 @@ first the same way. A request detail or mutation returns the confirmed request w
 its target; attached stores remain read-only. Existing Planning searches and
 the complete space read model keep their existing scope and limits.
 
+An attached store is read as it is and never migrated, so one another build wrote
+may lack a table or a column a read names. The stamp does not tell, since an added
+table or column does not raise it; the read itself does. Such a read of a card
+answers 409 with the code `store_schema_mismatch`:
+`GET /api/modules/planning/work-item` in the state envelope
+(`{"interface_version": "valkama-ui-state", "status": "unavailable", "reason":
+"store_schema_mismatch"}`), and a read of the whole space, `GET /api/planning`, as
+`{"error": {"code": "store_schema_mismatch", "message": "..."}}`. Neither carries
+SQLite's words, and nothing is retried: asking again cannot change what the store
+holds. A store that is busy or failing is not this refusal. `/open/<reference>`
+still leads to such a card, because it asks only whether the item is there, and the
+card says why it cannot be read. What such a store can answer it still answers: its
+listing, the mapped search and its requests. To read its cards, open that file once
+as the primary store with this build, which migrates it after its backup, or read it
+with the build that wrote it. It covers a store a later build wrote only where that
+build dropped what this one reads; a later build that changed what a row means is
+not told apart. No MCP tool opens an attached store: an agent's connection is the
+primary, where `get_work_item` for such an item answers `not_found`.
+
 ### What a click opens
 
 `GET /api/open-plan` says what a click on a session, a file or a folder should do.

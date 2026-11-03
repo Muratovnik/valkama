@@ -16,6 +16,7 @@ from . import calls, leases, model, read_model, service, store
 READ_MODEL_INTERFACE = f"{model.PLANNING_INTERFACE}-read-model"
 
 
+@read_model.whole_store_read()
 def planning_payload(conn: sqlite3.Connection, *, space: str | None = None) -> dict:
     """One space's whole graph: its workflow, its items, and the edges between."""
 

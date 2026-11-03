@@ -18,6 +18,7 @@ import re
 from uuid import UUID, uuid4
 
 PLANNING_INTERFACE = "valkama-planning"
+STORE_SCHEMA_MISMATCH = "store_schema_mismatch"
 
 # A state's category, which is shared, and its name, which is not. Analytics
 # counts an item in `active` without being told that Dev is what it is called.
@@ -99,6 +100,15 @@ class WorkItemNotFoundError(PlanningError):
     Its own code rather than `invalid_request`: the request was well formed, the
     item is simply not there, and a caller -- the web card, the graph's chain, an
     agent -- says something different to a person about each.
+    """
+
+
+class StoreSchemaError(PlanningError):
+    """A store this build reads as it is cannot answer: it lacks what the read names.
+
+    An attached store is never migrated, so one another build wrote may hold no
+    such table or column. Its own code, so a reader can say that instead of
+    reporting a failure, and it carries none of the store's own words.
     """
 
 

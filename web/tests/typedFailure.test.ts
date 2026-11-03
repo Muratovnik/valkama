@@ -85,6 +85,31 @@ test('a bare unavailable code without a ui state is typed, so the raw word never
   assert.equal(failureMessage(down).key, 'platform.failures.dependencyUnavailable')
 })
 
+test('a store another build wrote is worded in both languages and offers no retry', () => {
+  const expected = { code: 'store_schema_mismatch', status: 409, retryable: false }
+  // The card's exact read answers in the ui state, the space's read in an error envelope.
+  assert.deepEqual(
+    typedFailure(
+      Object.assign(new Error('store_schema_mismatch'), {
+        status: 409,
+        state: {
+          interface_version: 'valkama-ui-state',
+          status: 'unavailable',
+          reason: 'store_schema_mismatch',
+        },
+      }),
+      'work_item_request_failed',
+    ),
+    expected,
+  )
+  assert.deepEqual(
+    typedFailure(Object.assign(new Error('x'), { status: 409, code: 'store_schema_mismatch' })),
+    expected,
+  )
+  assert.match(localized('en', 'store_schema_mismatch'), /another version of Valkama/u)
+  assert.match(localized('ru', 'store_schema_mismatch'), /другая версия Valkama/u)
+})
+
 test('a key alone never leads to the unknown sentence with its technical code left empty', () => {
   const unknown = { code: 'internal', status: 500, retryable: true }
   assert.equal(failureMessageKey(unknown), 'platform.failures.requestFailed')

@@ -10,7 +10,7 @@ import {
 } from '@/shared/api/platformUiState.ts'
 import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
 import type { ResourceState } from '@/shared/api/resourceState.ts'
-import { failureMessageKey } from '@/shared/api/typedFailure.ts'
+import { failureMessageKey, STORE_SCHEMA_MISMATCH } from '@/shared/api/typedFailure.ts'
 import type { TypedFailure } from '@/shared/api/typedFailure.ts'
 
 /** One accepted answer and the time at which it became observable. */
@@ -27,7 +27,11 @@ interface ProjectionOptions<T> {
 
 function coldFailure<T>(failure: TypedFailure, reason: string): PlatformUiState<T> {
   if (failure.code === 'permission_denied') return uiPermissionDenied(reason)
-  if (!failure.retryable && failure.code === 'dependency_unavailable') return uiUnavailable(reason)
+  if (
+    !failure.retryable &&
+    (failure.code === 'dependency_unavailable' || failure.code === STORE_SCHEMA_MISMATCH)
+  )
+    return uiUnavailable(reason)
   return uiError(reason)
 }
 

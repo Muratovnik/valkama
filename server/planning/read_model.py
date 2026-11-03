@@ -13,11 +13,32 @@ about a container.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import sqlite3
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 
 from . import calls, leases, model
+
+
+@contextlib.contextmanager
+def whole_store_read() -> Iterator[None]:
+    """A read that needs the store's whole schema, or a refusal saying it cannot have it.
+
+    No statement here branches on what a store holds: the one schema this build
+    knows is asked for, and a store without it answers with `StoreSchemaError`.
+    Anything else SQLite says, such as a busy database, is not about the schema
+    and stays what it is.
+    """
+
+    try:
+        yield
+    except sqlite3.OperationalError as error:
+        if str(error).startswith(("no such table", "no such column")):
+            raise model.StoreSchemaError(
+                "this store was written by another build of Valkama and cannot answer this read"
+            ) from error
+        raise
 
 
 def item_row(conn: sqlite3.Connection, reference: object) -> sqlite3.Row:

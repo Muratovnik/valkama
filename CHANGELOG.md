@@ -92,6 +92,13 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- **A card in an attached store another build wrote says so.** An attached store is
+  never migrated, so since the threads migration a store the previous release wrote
+  listed its items and then answered 500 on opening one, and `/open/<reference>` a
+  503. The card now answers 409 `store_schema_mismatch`, the page says what that
+  means in both languages with no retry to press, and the short address leads to
+  the card. A store old enough that its whole space cannot be read answers the same
+  code where it used to drop the connection.
 - **A transition's reason is checked before the item moves.** A reason long enough to
   overflow the history entry, which reads `<state key>: <reason>`, used to move the item
   and then fail on that entry, naming `event.detail`, a field the caller never sent. The

@@ -18,7 +18,7 @@ from collections.abc import Callable, Mapping
 from ..projects import project_registry
 from ..store_identity.refs import planning_space_ref, validate_work_item_ref
 from ..ui_state import PlatformHttpError, envelope
-from . import interactions
+from . import interactions, model
 from .routing import PlanningRouting, one, scope_parameters, space_ref_parameters
 
 PLANNING_INTERFACE = "valkama-planning"
@@ -189,6 +189,8 @@ def work_item_payload(
     with routing.store_connection(space_ref) as store:
         try:
             work_item = item_loader(store, work_item_ref["reference"])
+        except model.StoreSchemaError as error:
+            raise PlatformHttpError(409, "unavailable", model.STORE_SCHEMA_MISMATCH) from error
         except (ValueError, KeyError) as error:
             raise PlatformHttpError(404, "unavailable", "Exact work item is unavailable") from error
     return {

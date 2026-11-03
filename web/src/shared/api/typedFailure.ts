@@ -14,6 +14,9 @@ export interface FailureMessage {
   params?: { code: string }
 }
 
+/** The refusal of a store another build wrote: asking again cannot change what it holds. */
+export const STORE_SCHEMA_MISMATCH = 'store_schema_mismatch'
+
 const CODE_LIMIT = 64
 const SAFE_CODE = /^[a-z][a-z0-9_-]*$/u
 
@@ -79,6 +82,12 @@ export function typedFailure(error: unknown, fallbackCode = 'request_failed'): T
 
   if (state?.status === 'permission-denied' || status === 401 || status === 403)
     return { code: 'permission_denied', status, retryable: false }
+  // The card's exact read says it in the state's reason, the space's read in the code.
+  if (
+    sourceCode === STORE_SCHEMA_MISMATCH ||
+    (state?.status === 'unavailable' && state.reason === STORE_SCHEMA_MISMATCH)
+  )
+    return { code: STORE_SCHEMA_MISMATCH, status, retryable: false }
   // The state grammar has no word for "not there", so an exact read the service
   // answers 404 says `unavailable`; the status is what tells it from an outage.
   if (state?.status === 'unavailable' && status === 404)
@@ -104,6 +113,7 @@ const KNOWN_FAILURE_KEYS: Readonly<Record<string, string>> = {
   request_timeout: 'platform.failures.requestTimeout',
   session_feed_failed: 'platform.failures.sessionFeedFailed',
   sessions_request_failed: 'platform.failures.sessionsRequestFailed',
+  store_schema_mismatch: 'platform.failures.storeSchemaMismatch',
   stream_disconnected: 'platform.failures.streamDisconnected',
 }
 
