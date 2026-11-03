@@ -4,6 +4,7 @@ import { activityMessages } from '@/shared/i18n/activityMessages.ts'
 import { alertMessages } from '@/shared/i18n/alertMessages.ts'
 import { checklistCommentMessages } from '@/shared/i18n/checklistCommentMessages.ts'
 import { connectionMessages } from '@/shared/i18n/connectionMessages.ts'
+import { doctorLoginMessages } from '@/shared/i18n/doctorLoginMessages.ts'
 import { globalFinderMessages } from '@/shared/i18n/globalFinderMessages.ts'
 import { inputRequestMessages } from '@/shared/i18n/inputRequestMessages.ts'
 import { memoryProviderMessages } from '@/shared/i18n/memoryProviderMessages.ts'
@@ -454,24 +455,7 @@ export const ru = {
         title: 'Навык Valkama',
         detail: 'Ни Claude Code, ни Codex не настроены для этого пользователя.',
       },
-      'autostart-off': {
-        title: 'Слушатель при входе выключен',
-        detail: 'Ссылка на задачу открывается, только пока запущен сервер.',
-      },
-      'autostart-on': {
-        title: 'Слушатель при входе',
-        detail: 'При входе порт {port} занимается и ждёт первого перехода по ссылке.',
-      },
-      'autostart-stale': {
-        title: 'Слушатель при входе устарел',
-        detail: 'Значение автозагрузки запускает не ту команду, которую записал бы лаунчер.',
-        fix: 'Включите автозагрузку заново из лаунчера.',
-      },
-      'autostart-foreign': {
-        title: 'Значение автозагрузки занято другой программой',
-        detail: 'Значение автозагрузки Valkama запускает команду, которую этот лаунчер не писал.',
-        fix: 'Проверьте эту команду. Включение автозагрузки с принуждением заменит её.',
-      },
+      ...doctorLoginMessages.ru,
       'listener-offline': {
         title: 'Локальный сервер не запущен',
         detail: 'На порту {port} нет ответа.',

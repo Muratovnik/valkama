@@ -4,6 +4,7 @@ import { activityMessages } from '@/shared/i18n/activityMessages.ts'
 import { alertMessages } from '@/shared/i18n/alertMessages.ts'
 import { checklistCommentMessages } from '@/shared/i18n/checklistCommentMessages.ts'
 import { connectionMessages } from '@/shared/i18n/connectionMessages.ts'
+import { doctorLoginMessages } from '@/shared/i18n/doctorLoginMessages.ts'
 import { globalFinderMessages } from '@/shared/i18n/globalFinderMessages.ts'
 import { inputRequestMessages } from '@/shared/i18n/inputRequestMessages.ts'
 import { memoryProviderMessages } from '@/shared/i18n/memoryProviderMessages.ts'
@@ -455,24 +456,7 @@ export const en = {
         title: 'Valkama skill',
         detail: 'Neither Claude Code nor Codex is set up for this user.',
       },
-      'autostart-off': {
-        title: 'Listener at login is off',
-        detail: 'A work item link opens only while a server is running.',
-      },
-      'autostart-on': {
-        title: 'Listener at login',
-        detail: 'Login holds port {port} until a link is followed.',
-      },
-      'autostart-stale': {
-        title: 'Listener at login is out of date',
-        detail: 'The autostart value runs another command than this launcher would write.',
-        fix: 'Turn autostart on again from the launcher.',
-      },
-      'autostart-foreign': {
-        title: 'Another program holds the autostart value',
-        detail: 'The Valkama autostart value runs a command this launcher did not write.',
-        fix: 'Check that command. Turning autostart on with force replaces it.',
-      },
+      ...doctorLoginMessages.en,
       'listener-offline': {
         title: 'Local server is not running',
         detail: 'Nothing is answering on port {port}.',

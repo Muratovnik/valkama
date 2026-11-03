@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import pathlib
+import re
 import sqlite3
 import sys
 import tempfile
@@ -24,7 +25,7 @@ sys.path.insert(0, ROOT)
 from server import cli, processes, runner, store, transcripts
 from server.executions import service as execution_service
 from server.hooks import spool
-from server.ops import configuration, doctor, setup
+from server.ops import configuration, doctor, setup, toast
 from server.planning import service as planning
 from tests import SUITE_STORE
 
@@ -64,6 +65,100 @@ def isolate_home(test: unittest.TestCase) -> pathlib.Path:
     patch.start()
     test.addCleanup(patch.stop)
     return root
+
+
+class DoctorAlertsLineTests(unittest.TestCase):
+    """One line that reads the disk and the registry and nothing more."""
+
+    def line(
+        self,
+        *,
+        shortcut: bool = True,
+        helper: bool = True,
+        app: str | None = r"C:\work\Valkama.exe",
+        switched_off: bool = False,
+    ) -> list[dict]:
+        environment = dict(os.environ)
+        environment.pop(toast.SWITCH, None)
+        if switched_off:
+            environment[toast.SWITCH] = "1"
+        with (
+            mock.patch.dict(os.environ, environment, clear=True),
+            mock.patch.object(doctor.sys, "platform", "win32"),
+            mock.patch.object(toast, "shortcut_found", return_value=shortcut),
+            mock.patch.object(toast, "buildable", return_value=helper),
+            mock.patch.object(doctor.desktop_app, "installed_path", return_value=app),
+            mock.patch.object(toast, "check", side_effect=AssertionError("asked Windows")),
+            mock.patch.object(toast, "helper", side_effect=AssertionError("compiled")),
+            mock.patch.object(toast, "show", side_effect=AssertionError("showed a toast")),
+            mock.patch.object(
+                doctor.alert_readiness.launcher,
+                "autostart_status",
+                return_value={"state": "disabled", "port": 8642},
+            ),
+        ):
+            return doctor._alerts_check()
+
+    def test_a_machine_that_can_alert_says_so_and_names_autostart(self) -> None:
+        [check] = self.line()
+        self.assertEqual("ok", check["status"])
+        self.assertEqual("alerts-ready", check["presentation"]["code"])
+        self.assertEqual("disabled", check["presentation"]["parameters"]["autostart"])
+        for word in ("shortcut", "helper", "login"):
+            self.assertIn(word, check["detail"])
+
+    def test_a_shortcut_missing_beside_an_installed_app_is_a_warning_with_a_fix(self) -> None:
+        # Windows drops the toast without an error, so nothing else would ever say.
+        [check] = self.line(shortcut=False)
+        self.assertEqual(
+            ("warn", "alerts-no-shortcut"), (check["status"], check["presentation"]["code"])
+        )
+        self.assertTrue(check["fix"])
+
+    def test_no_desktop_app_is_a_choice_rather_than_a_fault(self) -> None:
+        [check] = self.line(shortcut=False, app=None)
+        self.assertEqual(
+            ("ok", "alerts-no-desktop"), (check["status"], check["presentation"]["code"])
+        )
+
+    def test_a_helper_that_cannot_be_built_is_a_warning_with_a_fix(self) -> None:
+        [check] = self.line(helper=False)
+        self.assertEqual(
+            ("warn", "alerts-no-helper"), (check["status"], check["presentation"]["code"])
+        )
+        self.assertTrue(check["fix"])
+
+    def test_the_switch_is_named(self) -> None:
+        [check] = self.line(switched_off=True)
+        self.assertEqual(
+            ("ok", "alerts-switched-off"), (check["status"], check["presentation"]["code"])
+        )
+        self.assertIn(toast.SWITCH, check["detail"])
+
+    def test_elsewhere_there_is_no_line(self) -> None:
+        with mock.patch.object(doctor.sys, "platform", "linux"):
+            self.assertEqual([], doctor._alerts_check())
+
+    def test_each_line_has_words_in_both_languages_and_they_match_the_parameters(self) -> None:
+        codes = {
+            "alerts-ready": ("{autostart}",),
+            "alerts-no-desktop": (),
+            "alerts-no-shortcut": (),
+            "alerts-no-helper": (),
+            "alerts-switched-off": ("{switch}",),
+        }
+        source = (
+            pathlib.Path(__file__).resolve().parents[1]
+            / "web/src/shared/i18n/doctorLoginMessages.ts"
+        ).read_text(encoding="utf-8")
+        english, _ru, russian = source.partition("\n  ru: {\n")
+        self.assertTrue(russian, "the module has a Russian half")
+        for half in (english, russian):
+            for code, parameters in codes.items():
+                found = re.search(rf"'{code}': \{{(.*?)\}},\n", half, flags=re.DOTALL)
+                assert found is not None, code
+                for parameter in parameters:
+                    self.assertIn(parameter, found.group(1))
 
 
 class DoctorShapeTests(unittest.TestCase):

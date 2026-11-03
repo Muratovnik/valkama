@@ -910,6 +910,49 @@ Set `VALKAMA_NO_TRAY=1` to turn it off.
 > because VS Code exports `ELECTRON_RUN_AS_NODE=1`. Clear that variable first.
 > The installed app is unaffected.
 
+## Windows notifications
+
+When an agent asks you a question or asks for a decision, or moves work to review,
+Valkama shows a Windows notification, so you need not watch the board or the chats. It
+works with Valkama's window closed, because the process that wrote the event shows it.
+A launch from Valkama that fails can notify you too; that one is off until you turn it on.
+
+**What it needs:**
+
+- **The desktop app.** Its installer puts the Valkama shortcut in the Start menu, whose
+  identity the notifications are shown under, and registers the `valkama:` scheme a click
+  opens. Without the shortcut Windows drops a notification and reports no error, so
+  without the app there are no notifications.
+- **.NET Framework 4,** which Windows includes. A notification is shown by a small C#
+  program, `windows/toast.cs`, compiled on first use into
+  `%LOCALAPPDATA%\Valkama\toast`. The repository holds no binary and you need no SDK.
+- **Notifications on in Windows,** under Settings → System → Notifications, for the system
+  and for Valkama. Do Not Disturb is respected: there is no banner and the notification
+  waits in the notification centre, unless you make Valkama a priority app.
+
+A click starts the app if it is closed, and the app starts the server, so nothing has to
+hold the port and `launcher autostart` is not needed for this. With autostart on, the
+listener answers a notification's one question without loading the server.
+
+**What it does:**
+
+- A click opens the item. Several items within a few seconds become one notification,
+  and a click on that one opens the panel «Needs my answer» when any of them is a question.
+- A question already on your screen, in a focused Valkama page, shows nothing. Another
+  screen in the same window does not count as showing it.
+- A newer notification about an item replaces the older one. It is taken away when the
+  item has no open question left or is closed.
+- A notification is shown at most once. A process killed before showing one loses it, and
+  the question still waits in the panel.
+
+Settings → Windows notifications chooses the events and how much the text reveals, and
+sends a trial notification. The lock screen shows the same text unless you turn on
+Windows' "Hide content when notifications are on lock screen" for Valkama. `doctor`
+reports the shortcut, the helper and autostart in one line, without compiling anything or
+showing a notification; it cannot see whether Windows has blocked Valkama, which the
+settings screen asks Windows directly. `VALKAMA_NO_ALERTS=1` turns notifications off for
+a process, for tests and for machines with no desktop.
+
 ## Building the UI
 
 ```bash

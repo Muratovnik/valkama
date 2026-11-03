@@ -170,8 +170,12 @@ that runs another command is reported as `foreign` and left alone unless you pas
 leaves a running listener until logout or `listener stop`.
 
 `serve --on-demand` binds the port with no part of the server loaded. On the first
-connection it loads the server into the same process and serves the same socket, so
-that connection is answered rather than redirected or dropped. To the desktop app,
+connection the server has to answer, it loads the server into the same process and
+serves the same socket, so that connection is answered rather than redirected or
+dropped. One read is answered without it: a process about to show a Windows
+notification asks `GET /api/alerts/presence` whether a page already shows the item,
+and no page can be open before the server is loaded, so the answer is
+`{"visible":false}` and the listener stays small. To the desktop app,
 the tray and `listener status` or `stop` it is an ordinary managed listener;
 `listener status` adds `"on_demand": true`.
 

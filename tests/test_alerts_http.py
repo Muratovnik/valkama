@@ -344,6 +344,21 @@ class TrialAndStatusTests(Listener):
         ):
             self.assertEqual("unknown", readiness.status()["autostart"])
 
+    def test_what_is_installed_is_read_without_starting_the_helper(self) -> None:
+        with (
+            mock.patch.object(toast, "check", side_effect=AssertionError("asked Windows")),
+            mock.patch.object(toast, "helper", side_effect=AssertionError("compiled")),
+            mock.patch.object(toast, "show", side_effect=AssertionError("showed a toast")),
+            mock.patch.object(toast, "shortcut_found", return_value=True),
+            mock.patch.object(toast, "buildable", return_value=True),
+            mock.patch.object(
+                launcher, "autostart_status", return_value={"state": "enabled", "port": 8642}
+            ),
+        ):
+            self.assertEqual(
+                {"shortcut": True, "helper": True, "autostart": "enabled"}, readiness.installed()
+            )
+
 
 class ShortcutTests(unittest.TestCase):
     """What the shortcut check reads, on files written here: not the owner's Start menu."""

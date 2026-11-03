@@ -1,7 +1,8 @@
 """Whether alerts can reach the owner on this machine, and a toast to prove it.
 
 Both answer the settings screen. `status` reads what is true now without showing
-anything; `send_trial` shows a toast, and says why when Windows would not.
+anything; `send_trial` shows a toast, and says why when Windows would not. `installed`
+is the part of `status` that starts no process, which is all `doctor` may ask.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from . import messages
 from . import settings as alert_settings
 
 
-class Status(TypedDict):
+class Installed(TypedDict):
     #: The Start menu shortcut with Valkama's identity is there. Without it Windows
     #: drops every toast without a word, so this is the first thing to name.
     shortcut: bool
@@ -23,6 +24,9 @@ class Status(TypedDict):
     helper: bool
     #: `launcher.autostart_status`'s state, or `unknown` when it cannot be read.
     autostart: str
+
+
+class Status(Installed):
     #: What Windows answers about showing Valkama's toasts.
     windows: toast.Check
 
@@ -32,7 +36,9 @@ class Trial(toast.Check):
     shown: bool
 
 
-def status() -> Status:
+def installed() -> Installed:
+    """What the files and the registry say. Compiles nothing, starts nothing, shows nothing."""
+
     try:
         autostart = str(launcher.autostart_status()["state"])
     except launcher.LauncherError:
@@ -41,8 +47,11 @@ def status() -> Status:
         "shortcut": toast.shortcut_found(),
         "helper": toast.buildable(),
         "autostart": autostart,
-        "windows": toast.check(),
     }
+
+
+def status() -> Status:
+    return {**installed(), "windows": toast.check()}
 
 
 def send_trial(conn: sqlite3.Connection) -> Trial:

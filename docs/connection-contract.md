@@ -442,6 +442,7 @@ as every other, and it answers:
 | --- | --- |
 | names an item in a space a project binds, followed by a person, with the desktop app installed | `200` and a small page, after starting the app on the card; see below |
 | names an item in a space a project binds, in any other case | `302` to `/modules/planning/project/<project>?entity=<entity>`, the route the card has when it is opened any other way, with `Cache-Control: no-store` |
+| is exactly `/open/questions` | as for an item, but the panel of open questions in place of a card; see [The panel of open questions](#the-panel-of-open-questions) |
 | names anything else | the app page with `404`, which says what is wrong and offers the next step |
 | reaches a store or a project registry that cannot be read | the app page with `503`, which offers another try |
 
@@ -515,6 +516,67 @@ The address needs a listener. While nothing listens on the port, following it en
 in the browser's own connection error. On Windows `launcher autostart enable` keeps
 a listener on the port from login, which loads the server when the first address is
 followed ([`SERVICE.md`](../SERVICE.md#holding-the-port-from-login)).
+
+### The panel of open questions
+
+`/open/questions` is reserved. A reference always ends in `-<number>`, so no item can
+be spelled this way, and only this exact lowercase word is reserved: `/open/QUESTIONS`
+gets the app page with `404`. It reads no store. Its route is
+`/modules/planning/global?panel=questions`, and it reaches the desktop app and the
+browser under the same conditions as a card.
+
+`panel=questions` is an order to the page, not part of a route. The page opens the panel
+and takes the parameter out of the address, so a reload or Back does not open it again
+after it was closed. A window already showing a current page opens the panel over what
+it shows and does not move, so a draft stays where it is.
+
+### The `valkama:` scheme
+
+The desktop installer registers `valkama:` for the user in `HKCU\Software\Classes` and
+an uninstall removes it. A Windows notification opens it, because a click must work
+after the process that showed the notification has exited and with nothing listening on
+the port: the app starts the server itself. Without the app there are no notifications,
+so there is no fallback through a browser.
+
+The app takes two addresses and treats a page calling the scheme like any other caller:
+
+| Address | What the window does |
+| --- | --- |
+| `valkama://open/<REFERENCE>` | opens the card; the reference is in upper case, as Valkama writes it |
+| `valkama://open/questions` | opens the panel of open questions |
+
+Anything else is refused: another host, an extra path, a query, a fragment, a percent
+escape, a lower-case reference, or a command line holding a second address. The process
+exits without a window and does not raise a running one. Windows starts the app before
+anything can read the address, so a refused launch still starts a process briefly.
+
+The app knows only the number, so it reads the card's route from
+`/open/<REFERENCE>?in=browser`, which starts nothing. At first start the window loads
+that address. A page already up asks for it and moves with its own router, as it does
+for a route the listener hands over; a number that leads nowhere is shown by the app page
+at that address.
+
+### Windows notification routes
+
+Reads answer under the `Host` rule alone, because an agent's session holds no browser
+credential. Writes take the browser's credential and, like every JSON write here, need
+`Content-Length` and `Content-Type: application/json` with a JSON object for a body. A
+`POST` without a length gets `411`, and one with an empty body and no type, which is what
+a bare `fetch` sends, gets `415`: send `{}` where there is nothing to say.
+
+| Route | What it does |
+| --- | --- |
+| `GET /api/alerts/settings` | the owner's settings: `enabled`, `events`, `content`, `locale` |
+| `PUT /api/alerts/settings` | replaces them; an unknown key is refused and a missing one takes its default |
+| `GET /api/alerts/status` | `shortcut`, `helper`, `autostart` and `windows`, which is what Windows says. Its first use may compile the helper, and it waits up to five seconds for Windows |
+| `POST /api/alerts/test` with `{}` | shows a trial notification, and answers what Windows said with `shown` |
+| `POST /api/alerts/presence` | a page reports `{page_id, focused, work_item_id, hub_open}`; a report counts for 30 seconds and is kept in memory only |
+| `GET /api/alerts/presence?work_item=<id>` | `{"visible": <bool>}`, whether a focused page shows that item; with `hub=1` the panel of open questions counts too |
+
+The last read is what a process asks before it shows a notification, and it gives up
+after 150 ms, which reads as nothing being visible. An on-demand listener answers it with
+`false` without loading the server
+([`SERVICE.md`](../SERVICE.md#holding-the-port-from-login)).
 
 ### What a link says about its other end
 

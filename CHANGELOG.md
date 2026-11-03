@@ -25,6 +25,18 @@ checkouts are therefore distinguishable even at the same version.
   existing links and URLs stay as they were. Nothing is logged or stored, and any failure
   shows the original text. `valkama capabilities` names the address to register, under
   `interfaces.http`.
+- **Windows notifications when an agent needs you.** A question or decision from an agent
+  and work moved to review show a Windows notification from the process that wrote them,
+  with Valkama's window closed too; a failed launch can as well. A question already on your
+  screen stays silent, several items within a few seconds become one notification, and one
+  that stops being true is taken away. A click opens the item, or the panel of open
+  questions for a notification about several, through the `valkama:` scheme the desktop
+  installer now registers. Settings → Windows notifications chooses the events and the
+  text and sends a trial. They need the desktop app; `doctor` reports the shortcut, the
+  helper and autostart in one line. See
+  [Windows notifications](README.md#windows-notifications).
+- **The panel of open questions has an address.** `/open/questions` opens it in the desktop
+  app or the browser, as `/open/<number>` opens a card.
 - **The agent working an item hears what a person did there.** Any write to an item
   answers with `from_person` when a person acted on it in the interface since an agent
   last wrote there: a comment, an answer, a status change, an edit, a cancel. Each event
@@ -110,6 +122,10 @@ checkouts are therefore distinguishable even at the same version.
   bar went to the comment field and scrolled the card to its end, and Tab after a press
   far down went back to the first fact at the top. Tab and Shift+Tab now go on from the
   place pressed, as on a page, and still come round at the ends of the card.
+- **A switch, a button and a select stay legible in a forced palette.** Windows' contrast
+  themes cleared the fills they are drawn with, which left a switch showing nothing of which
+  way it was thrown and a button reading as text. Each now keeps an outline, and a switch
+  its own colours.
 - **A transition's reason is checked before the item moves.** A reason long enough to
   overflow the history entry, which reads `<state key>: <reason>`, used to move the item
   and then fail on that entry, naming `event.detail`, a field the caller never sent. The
@@ -158,6 +174,13 @@ checkouts are therefore distinguishable even at the same version.
   plan anchor did is shown as a check, or a mark when it failed, with its words beside it
   where they fit whole; the date shortens first to make room. A phone-wide card used to
   show «Ссылка скопиров…». Screen readers hear the whole sentence either way.
+
+### Removed
+
+- **The notification settings no code obeyed.** The browser-stored `notify` and
+  `notifyEnabled` fields, their seven events and their strings in both languages are gone,
+  and a stored value drops them when it is next read. Settings → Windows notifications
+  replaces them, and keeps its choices in the store.
 
 ## [2.4.0](https://github.com/Muratovnik/valkama/compare/v2.3.0...v2.4.0) - 2026-11-03
 

@@ -27,12 +27,14 @@ import json
 import os
 import shutil
 import sqlite3
+import sys
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib import error, request
 
 from .. import launcher, runner, static_assets, store, transcripts
+from ..alerts import readiness as alert_readiness
 from ..executions import drivers as execution_drivers
 from ..hooks import ingest, spool
 from ..memory import service as memory_service
@@ -40,7 +42,7 @@ from ..platform import installed
 from ..projects import project_registry
 from ..telemetry import journal as telemetry_journal
 from ..telemetry.projections import JOURNAL_ADAPTERS
-from . import configuration, skills
+from . import configuration, desktop_app, skills, toast
 
 #: What a check can conclude. `warn` is a real answer, not a soft failure: a
 #: store with no recent snapshot works perfectly until the day it matters.
@@ -691,10 +693,79 @@ def _runtime_checks(port: int, *, probe: bool) -> list[dict]:
         )
     ]
     checks.extend(_autostart_check())
+    checks.extend(_alerts_check())
     if not probe:
         return checks
     checks.append(_listener_check(port, snapshot.identity))
     return checks
+
+
+def _alerts_check() -> list[dict]:
+    """One line: whether a toast can reach the owner, from what is on disk.
+
+    It asks only `readiness.installed`: Windows' own answer needs the helper, which
+    would compile here, and this report writes nothing. The settings screen asks that
+    question and can show a trial toast. No toast is ever shown from here.
+    """
+
+    if sys.platform != "win32":
+        return []
+    title = "Windows notifications"
+    if os.environ.get(toast.SWITCH):
+        return [
+            _check(
+                "alerts",
+                title,
+                "ok",
+                f"off: {toast.SWITCH} is set",
+                presentation_code="alerts-switched-off",
+                parameters={"switch": toast.SWITCH},
+            )
+        ]
+    found = alert_readiness.installed()
+    if not found["shortcut"]:
+        if desktop_app.installed_path() is None:
+            return [
+                _check(
+                    "alerts",
+                    title,
+                    "ok",
+                    "off: they need the desktop app, which is not installed",
+                    presentation_code="alerts-no-desktop",
+                )
+            ]
+        return [
+            _check(
+                "alerts",
+                title,
+                "warn",
+                "the Start menu has no Valkama shortcut, so Windows drops every toast",
+                "Reinstall the desktop app",
+                presentation_code="alerts-no-shortcut",
+            )
+        ]
+    if not found["helper"]:
+        return [
+            _check(
+                "alerts",
+                title,
+                "warn",
+                "the toast helper cannot be built: this Windows lacks the .NET Framework 4 "
+                "compiler or the WinRT metadata",
+                "Turn on .NET Framework 4 in Windows features",
+                presentation_code="alerts-no-helper",
+            )
+        ]
+    return [
+        _check(
+            "alerts",
+            title,
+            "ok",
+            f"shortcut found, helper can be built, listener at login {found['autostart']}",
+            presentation_code="alerts-ready",
+            parameters={"autostart": found["autostart"]},
+        )
+    ]
 
 
 def _autostart_check() -> list[dict]:
