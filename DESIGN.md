@@ -1011,9 +1011,11 @@ Settings uses one section anatomy and one type scale, and its groups read as
 label left, control right. Module rows state what a module is and whether it is
 on; interface versions are wire facts and do not appear as interface copy.
 Installation health reports observed checks with their fixes. A switch is shown
-only when the Kernel actually owns that setting. Session opener choices show application identity,
-availability, and a single collision-aware selector. Impossible destinations
-are omitted for that client family rather than displayed as unusable choices.
+only when the Kernel actually owns that setting. Opening sessions and files states
+the rule first — a session opens where it was last open — then, per client family,
+where it falls back and an explicit "always open in" that says beside the family
+when it replaces the rule. Places a family's sessions cannot open in are omitted
+for that family rather than displayed as unusable choices.
 
 ## Accessibility
 

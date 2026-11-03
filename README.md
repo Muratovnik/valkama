@@ -757,25 +757,49 @@ endings untouched.
 ### Targets the opener takes
 
 Opening a file or a folder in the editor goes through the same plan as opening a
-session, and the page names the target only by what `resolve` answered:
-
-| Target | Fields | Plan step |
-| --- | --- | --- |
-| `file` | `project`, `path` from the project's root, optional `line` | `open-file {ide, path, line}` |
-| `folder` | `project`, `path` from the project's root | `focus-folder {ide, folder}` |
+session (`docs/connection-contract.md`, "What a click opens"), and the page names
+the target only by what `resolve` answered:
 
 ```text
-GET /api/open-plan?target=file&project=<id>&path=<relative>&line=<n>&surface=<surface>
-GET /api/open-plan?target=folder&project=<id>&path=<relative>&surface=<surface>
+GET /api/open-plan?target=file&project=<id>&path=<relative>[&line=<n>]&surface=desktop|browser[&fallback=<editor>]
+GET /api/open-plan?target=folder&project=<id>&path=<relative>&surface=desktop|browser[&fallback=<editor>]
 ```
 
+`fallback` names the editor: `vscode`, `vscode-insiders`, `cursor` or `windsurf`,
+VS Code when it is absent or names no editor. When that editor is not installed
+the plan opens VS Code instead and says so in `opens.missed`; with VS Code missing
+too it only explains, `explain {reason: "not-installed", host}`. The steps depend
+on the surface:
+
+| Target | In the desktop app | In a browser |
+| --- | --- | --- |
+| `file` | `focus-folder {ide, folder}` on the project's root, then `open-file {ide, path, line}` | `open-file {ide, path, line, link}` |
+| `folder` | `focus-folder {ide, folder}` | `focus-folder {ide, folder, link}` |
+
+The desktop app starts the editor on the folder and then on the file, so both
+steps run on one click. A browser follows `link`, `vscode://file/<path>:<line>:1`
+for a file and `vscode://file/<path>` for a folder, with the editor's own scheme in
+place of `vscode` and the path encoded as Python's `Path.as_uri` encodes it.
+
 The planner checks both targets with the same path check as `read`, inside the
-named project, and refuses a target of the wrong kind. Its answer carries the
-absolute path by design, because `vscode://file/<path>:<line>:1` needs one. The
-desktop app runs `Code.exe -g <path>:<line>`; the browser opens that link, with
-the path encoded the way `pathToFileURL` does it. A folder's rule for a session
-(an existing absolute local folder, not a network path, without `..`) stays as it
-is, and this target adds that it lies inside a registered root.
+named project, and the answer carries the absolute path it found, because a link
+needs one. A folder's rule for a session (an existing absolute local folder, not
+a network path, without `..`) stays as it is, and this target adds that it lies
+inside a registered root.
+
+A target that opens nothing is not an HTTP error. The plan answers 200 with one
+step, `explain {reason: "path-refused", code}`, where `code` is one of `read`'s
+codes or one the opener adds:
+
+| `code` | When |
+| --- | --- |
+| `project_unknown` | `project` is not in the registry |
+| `invalid_path`, `outside_root`, `not_found`, `not_a_file`, `unreadable` | As in `read` |
+| `directory` | A `file` target that is a folder |
+| `not_a_folder` | A `folder` target that is not one |
+
+Only a request outside the closed values, such as no `project`, is refused with
+HTTP 400 `invalid_request`.
 
 ## Client hooks
 
