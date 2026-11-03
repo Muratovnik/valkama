@@ -66,7 +66,9 @@ test('Settings has nothing to switch modules with and nothing the registry used 
   await installBackend(page)
   await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
   await expect(page.getByRole('heading', { name: 'Interface', exact: true })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Opening sessions', exact: true })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Opening sessions and files', exact: true }),
+  ).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Windows notifications' })).toBeVisible()
 
   // The module list is the build's, so there is no section that changes it.

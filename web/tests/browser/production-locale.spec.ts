@@ -27,7 +27,9 @@ test('Russian production shell localizes Settings without runtime failures', asy
   for (const width of [1440, 1024, 816, 360]) {
     await page.setViewportSize({ width, height: 900 })
     await sections.getByRole('button', { name: 'Общие' }).click()
-    await expect(page.getByRole('heading', { name: 'Открытие сессий', exact: true })).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: 'Открытие сессий и файлов', exact: true }),
+    ).toBeVisible()
     await expectNoSilentClipping(page, `Russian Settings General at ${width}px`)
 
     await expect(sections.getByRole('button')).toHaveText(['Общие', 'Диагностика'])
