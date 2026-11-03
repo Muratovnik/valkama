@@ -500,6 +500,11 @@ export function validateWorkItemRecord(value: unknown, path = 'planning.workItem
   return parseContract(workItemSchema, value, path, invalid)
 }
 
+/** The brief record a space's list carries, as one item's preview reads it alone. */
+export function validateWorkItemBrief(value: unknown, path = 'planning.workItem'): WorkItemBrief {
+  return parseContract(workItemBriefSchema, value, path, invalid)
+}
+
 export function validateCommentWritten(value: unknown): CommentWritten {
   return parseContract(commentWrittenSchema, value, 'planning.comment', invalid)
 }

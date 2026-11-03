@@ -1,0 +1,52 @@
+{
+  "interface_version": "valkama-planning-work-item",
+  "scope": {
+    "kind": "project",
+    "project_ref": {
+      "project_id": "example-project"
+    }
+  },
+  "work_item_ref": {
+    "space_ref": {
+      "data_scope_id": "00000000-0000-4000-8000-000000000001",
+      "space_key": "MAIN"
+    },
+    "reference": "MAIN-1"
+  },
+  "state": {
+    "interface_version": "valkama-ui-state",
+    "status": "ready",
+    "payload": {
+      "work_item": {
+        "work_item_id": "00000000-0000-4000-8000-000000000002",
+        "planning_space_id": "00000000-0000-4000-8000-000000000003",
+        "reference": "MAIN-1",
+        "number": 1,
+        "title": "Contract card",
+        "kind": "task",
+        "priority": "medium",
+        "state": {
+          "state_id": "00000000-0000-4000-8000-000000000004",
+          "key": "backlog",
+          "name": "Backlog",
+          "category": "backlog",
+          "is_terminal": false
+        },
+        "claim_ref": "",
+        "claim_state": null,
+        "parent_id": null,
+        "labels": [],
+        "source": "",
+        "checklist": [],
+        "revision": 0,
+        "created_at": "2026-01-02T03:04:05Z",
+        "updated_at": "2026-01-02T03:04:05Z",
+        "closed_at": null,
+        "last_claim_ref": null,
+        "container": false,
+        "ready": true,
+        "comment_count": 6
+      }
+    }
+  }
+}

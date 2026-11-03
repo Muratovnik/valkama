@@ -56,13 +56,14 @@ export type PlatformPlanningPayload = {
   state: PlatformUiState<PlatformPlanningReady>
 }
 
-export type PlanningWorkItemReady = {
-  work_item: WorkItem
+/** One work item: the full record the card draws, or the brief a preview draws. */
+export type PlanningWorkItemReady<Item = WorkItem> = {
+  work_item: Item
 }
 
-export type PlanningWorkItemPayload = {
+export type PlanningWorkItemPayload<Item = WorkItem> = {
   interface_version: typeof PLANNING_WORK_ITEM_INTERFACE
   scope: OperatingScope
-  state: PlatformUiState<PlanningWorkItemReady>
+  state: PlatformUiState<PlanningWorkItemReady<Item>>
   work_item_ref: WorkItemRef
 }

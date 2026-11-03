@@ -342,6 +342,9 @@ class _Scenario:
             "comment-resolved": mark,
             "card": self.http(f"/api/modules/planning/work-item?{self.scope(reference=ref)}"),
             "card-executors": self.executor_card(),
+            "card-brief": self.http(
+                f"/api/modules/planning/work-item?{self.scope(reference=ref, brief='true')}"
+            ),
             "requests": self.http(
                 f"/api/modules/planning/requests?{self.scope(reference=ref, limit='100')}"
             ),

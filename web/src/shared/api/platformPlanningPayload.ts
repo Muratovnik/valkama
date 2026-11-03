@@ -11,8 +11,8 @@ import {
   strictObject,
   z,
 } from '@/shared/api/contract.ts'
-import { validateWorkItemRecord } from '@/shared/api/planningModel.ts'
-import type { WorkItem } from '@/shared/api/planningModel.ts'
+import { validateWorkItemBrief, validateWorkItemRecord } from '@/shared/api/planningModel.ts'
+import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 import {
   BINDING_STATES,
   enumField,
@@ -127,16 +127,6 @@ const workItemReadySchema = strictObject({
   work_item: z.unknown(),
 })
 
-function workItem(value: unknown, path: string): WorkItem {
-  return validateWorkItemRecord(structuredClone(value), path)
-}
-
-function planningWorkItemReady(value: unknown, path: string): PlanningWorkItemReady {
-  const record = parseContract(workItemReadySchema, value, path, invalid)
-  // The item is deep-cloned away from the caller's payload, so it stays a call.
-  return { work_item: workItem(record.work_item, `${path}.work_item`) }
-}
-
 const planningWorkItemPayloadSchema = strictObject({
   interface_version: z.literal(PLANNING_WORK_ITEM_INTERFACE, {
     message: `expected ${PLANNING_WORK_ITEM_INTERFACE}`,
@@ -146,15 +136,36 @@ const planningWorkItemPayloadSchema = strictObject({
   state: z.unknown(),
 })
 
+function workItemPayload<Item>(
+  value: unknown,
+  path: string,
+  validateRecord: (value: unknown, path: string) => Item,
+): PlanningWorkItemPayload<Item> {
+  const payload = parseContract(planningWorkItemPayloadSchema, value, path, invalid)
+  const ready = (state: unknown, at: string): PlanningWorkItemReady<Item> => {
+    const record = parseContract(workItemReadySchema, state, at, invalid)
+    // The item is deep-cloned away from the caller's payload, so it stays a call.
+    return { work_item: validateRecord(structuredClone(record.work_item), `${at}.work_item`) }
+  }
+  return {
+    interface_version: PLANNING_WORK_ITEM_INTERFACE,
+    scope: payload.scope,
+    work_item_ref: payload.work_item_ref,
+    state: validateTypedState(payload.state, `${path}.state`, ready),
+  }
+}
+
 export function validatePlanningWorkItemPayload(
   value: unknown,
   path = 'planning_work_item',
 ): PlanningWorkItemPayload {
-  const record = parseContract(planningWorkItemPayloadSchema, value, path, invalid)
-  return {
-    interface_version: PLANNING_WORK_ITEM_INTERFACE,
-    scope: record.scope,
-    work_item_ref: record.work_item_ref,
-    state: validateTypedState(record.state, `${path}.state`, planningWorkItemReady),
-  }
+  return workItemPayload(value, path, validateWorkItemRecord)
+}
+
+/** The same read with `brief=true`: the item as its space's list carries it. */
+export function validatePlanningWorkItemBriefPayload(
+  value: unknown,
+  path = 'planning_work_item',
+): PlanningWorkItemPayload<WorkItemBrief> {
+  return workItemPayload(value, path, validateWorkItemBrief)
 }

@@ -17,7 +17,10 @@ import {
   validateInputRequestList,
 } from '@/shared/api/inputRequestModel.ts'
 import { validateCommentResolved, validateCommentWritten } from '@/shared/api/planningModel.ts'
-import { validatePlanningWorkItemPayload } from '@/shared/api/platformPlanningPayload.ts'
+import {
+  validatePlanningWorkItemBriefPayload,
+  validatePlanningWorkItemPayload,
+} from '@/shared/api/platformPlanningPayload.ts'
 
 const directory = fileURLToPath(new URL('./fixtures/server/', import.meta.url))
 const read = (name: string): unknown => JSON.parse(readFileSync(`${directory}${name}`, 'utf8'))
@@ -25,6 +28,7 @@ const read = (name: string): unknown => JSON.parse(readFileSync(`${directory}${n
 /** Each fixture the web reads, with the validator of the call that reads it. */
 const readers: Record<string, (value: unknown) => unknown> = {
   'card.json': (value) => validatePlanningWorkItemPayload(value),
+  'card-brief.json': (value) => validatePlanningWorkItemBriefPayload(value),
   'card-executors.json': (value) => validatePlanningWorkItemPayload(value),
   'comment-reply.json': validateCommentWritten,
   'comment-resolved.json': validateCommentResolved,
