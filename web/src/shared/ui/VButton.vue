@@ -119,6 +119,13 @@ withDefaults(
     color: var(--color-button-ink-disabled);
     background: var(--color-button-fill-disabled);
     cursor: not-allowed;
+
+    /* A forced palette paints a disabled button as an enabled one, since the ink and the
+       fill that told them apart are both cleared; its colour for unavailable text does. */
+    @media (forced-colors: active) {
+      color: GrayText;
+      outline-color: GrayText;
+    }
   }
 
   /* The light fill, and on hover the same fill one step lighter still: stronger

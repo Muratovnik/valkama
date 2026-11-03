@@ -180,6 +180,12 @@ checkouts are therefore distinguishable even at the same version.
   how a question ended, to the next question, to why a send failed — whatever was used
   before. A text field shows focus by turning its own edge blue, for a click as for Tab,
   with no ring around it.
+- **A forced palette keeps what is chosen.** With Windows contrast themes, or any forced
+  colour palette, the pressed segment of a segmented control, the current page in the
+  navigation and the suggestion Enter takes were told apart by a ground the palette clears,
+  and a button waiting on its answer looked like one ready to press. The first two now take
+  the palette's colours for a selection, the suggestion an edge, and the waiting button
+  the palette's colour for unavailable text.
 - **A note in a card's head is never cut.** What copying the reference, the link or the
   plan anchor did is shown as a check, or a mark when it failed, with its words beside it
   where they fit whole; the date shortens first to make room. A phone-wide card used to

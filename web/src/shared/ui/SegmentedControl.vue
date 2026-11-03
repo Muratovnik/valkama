@@ -77,6 +77,13 @@ function select(option: { value: T; disabled?: boolean }) {
   padding: var(--space-half);
   background: var(--color-surface-muted);
   border-radius: var(--radius-control);
+
+  /* A forced palette clears this ground too, and with it the one boundary the segments
+     share, so the ones not pressed read as words; the track takes an edge, as `VButton` does. */
+  @media (forced-colors: active) {
+    outline: 1px solid ButtonText;
+    outline-offset: -1px;
+  }
 }
 
 /* `compact` is for a control that rides a chart header, where the surrounding

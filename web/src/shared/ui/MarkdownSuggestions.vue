@@ -148,6 +148,13 @@ defineExpose({
 
   &.active {
     background: var(--color-surface-hover);
+
+    /* A forced palette clears that ground, and focus stays in the field, so nothing else
+       says which row Enter takes. An edge does, as it does on `OptionGroups`' rows. */
+    @media (forced-colors: active) {
+      outline: 1px solid Highlight;
+      outline-offset: -1px;
+    }
   }
 }
 

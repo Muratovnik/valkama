@@ -169,6 +169,24 @@ function currentState(module: ModuleManifest) {
     .nav-item-label {
       font-weight: 600;
     }
+
+    /* A forced palette clears the ground, which leaves the weight alone to say where you
+       are. The row takes the palette's selected pair instead, out of its reach as a pressed
+       `SegmentedControl` segment is; the count it carries goes back into reach, and the
+       ring outside the row takes the palette's colour, not the app's. */
+    @media (forced-colors: active) {
+      color: HighlightText;
+      background: Highlight;
+      forced-color-adjust: none;
+
+      .nav-item-count {
+        forced-color-adjust: auto;
+      }
+
+      &:focus-visible {
+        outline-color: Highlight;
+      }
+    }
   }
 }
 
