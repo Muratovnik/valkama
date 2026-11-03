@@ -307,7 +307,11 @@ interface, and an agent's write signed `user` is not one.
 
 The work of a session is what it holds: the claim of an item and the steps on
 its checklist, held by the session or by one of its agents. A holder is read
-from the store, never from who signed a write.
+from the store, never from who signed a write. Only a claim made by a call that
+proved its session holds as that session, so Claude Code needs
+[the identity transform](#the-identity-transform) registered: without it its
+claims are held by a name, and no hook of that session is ever told anything.
+Codex proves its session in every call.
 
 - **The orchestrator**, a hook input without `agent_id`, is told about every
   item its session holds, its subagents' steps included. It keeps the whole and
@@ -378,12 +382,17 @@ hook at all. `valkama hook claude watch`, registered with `asyncRewake` on
   Claude Code queues the wake behind the turn under way.
 - **Leaves without a wake** when the session ends or is cleared (`SessionEnd`,
   which `/clear` sends too, leaves `notify/<session>.end`), when the process
-  named by `CLAUDE_PID` is gone, when `CLAUDE_CODE_SESSION_ID` names another
+  named by `CLAUDE_PID` is gone (where that process cannot be opened, only the
+  other ways and the `timeout` end it), when `CLAUDE_CODE_SESSION_ID` names another
   session than its input, when it was started inside a subagent, and when
   notices are switched off.
 - **Lives for its `timeout`.** Claude Code ends it then, with no wake. Each
   prompt and each turn end starts it again, so a session at work is always
   watched; one idle for longer than the `timeout` is not, until its next prompt.
+  Claude Code keeps a `timeout` above an hour: with 7200 and 86400 seconds a
+  watcher lived 65 minutes and woke its session, and one with 3700 was ended at
+  3700 seconds. Longer lives were not observed. Register it with a day, 86400,
+  so a session left waiting overnight still hears the morning's news.
 
 `UserPromptSubmit` and `Stop` run for the orchestrator. A watcher whose input
 names an `agent_id` exits at once: started in a subagent, it would wake the
@@ -430,7 +439,7 @@ events, from process start to exit, 60 calls each:
 | `python valkama.py hook claude post-tool-use`, before this change | 57 ms | 60 ms |
 | `python -I -S <shim> hook claude post-tool-use`, nothing new | 29 ms | 32 ms |
 | the same, with a notice to print | 39 ms | 42 ms |
-| `cmd.exe /d /c valkama.cmd hook claude post-tool-use`, nothing new | 47 ms | 49 ms |
+| `cmd.exe /d /c valkama.cmd hook claude post-tool-use` after this change, nothing new | 47 ms | 49 ms |
 
 So register these hooks in exec form: `command` the launcher's own `python.exe`
 (the `python` its manifest records) and `args` `["-I", "-S",
