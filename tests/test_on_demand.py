@@ -226,6 +226,78 @@ class RealProcessTests(unittest.TestCase):
         self.assertEqual(200, _get(self.port)[0])
         _wait_for_log(self.home, "serving after")
 
+    def test_a_sender_asking_about_presence_leaves_it_holding_the_port(self) -> None:
+        """What each toast does to this port. A wake here costs megabytes until logout."""
+
+        self.start()
+        _wait_for_log(self.home, f"holding port {self.port}")
+        reads = ("/api/alerts/presence?work_item=abc", "/api/alerts/presence?work_item=a&hub=1")
+        for path in reads:
+            status, kind, body = _get(self.port, path, timeout=5.0)
+            self.assertEqual(200, status)
+            self.assertIn("application/json", kind)
+            self.assertIs(False, json.loads(body)["visible"])
+        time.sleep(0.2)
+        self.assertNotIn("server.http_surface", self.loaded())
+        self.assertFalse((self.home / "store.sqlite3").exists())
+
+        # The loaded server gives the same answer to the same read.
+        self.assertEqual(200, _get(self.port)[0])
+        self.assertEqual(body, _get(self.port, reads[-1])[2])
+
+    def test_any_other_request_still_loads_the_server_and_gets_its_answer(self) -> None:
+        """The stub's one exception must not swallow what the server has to refuse."""
+
+        own_host = b"Host: 127.0.0.1:{port}\r\n"
+        cases: tuple[tuple[bytes, int], ...] = (
+            (b"GET /api/runtime HTTP/1.1\r\n" + own_host + b"\r\n", 200),
+            (b"GET /api/alerts/presence HTTP/1.1\r\n" + own_host + b"\r\n", 400),
+            (b"GET /api/alerts/presence?work_item= HTTP/1.1\r\n" + own_host + b"\r\n", 400),
+            (b"GET /api/alerts/presence?work_item=a HTTP/1.1\r\nHost: evil.example\r\n\r\n", 400),
+            (b"GET /api/alerts/presence?work_item=a HTTP/1.1\r\n\r\n", 400),
+            (
+                b"GET /api/alerts/presence?work_item=a HTTP/1.1\r\n"
+                + own_host
+                + b"Host: 127.0.0.1:1\r\n\r\n",
+                400,
+            ),
+        )
+        for request, status in cases:
+            with self.subTest(request=request):
+                self.port = _free_port()
+                self.imports = self.home / f"imports-{self.port}.log"
+                process = self.start()
+                _wait_for_log(self.home, f"holding port {self.port}")
+                with socket.create_connection(("127.0.0.1", self.port), timeout=60) as client:
+                    client.sendall(request.replace(b"{port}", str(self.port).encode()))
+                    answer = client.makefile("rb").readline()
+                self.assertEqual(status, int(answer.split()[1]), answer)
+                self.assertIn("server.http_surface", self.loaded())
+                process.kill()
+                process.wait()
+
+    def test_a_connection_that_says_nothing_at_first_is_still_served(self) -> None:
+        """A browser's preconnect: it wakes the server, which reads it when it speaks."""
+
+        self.start()
+        _wait_for_log(self.home, f"holding port {self.port}")
+        with socket.create_connection(("127.0.0.1", self.port), timeout=60) as client:
+            _wait_for_log(self.home, "serving after", seconds=60)
+            client.sendall(
+                f"GET /api/runtime HTTP/1.1\r\nHost: 127.0.0.1:{self.port}\r\n\r\n".encode()
+            )
+            self.assertIn(b" 200 ", client.makefile("rb").readline())
+
+    def test_a_request_that_arrives_in_pieces_is_read_whole(self) -> None:
+        self.start()
+        _wait_for_log(self.home, f"holding port {self.port}")
+        with socket.create_connection(("127.0.0.1", self.port), timeout=5) as client:
+            client.sendall(b"GET /api/alerts/presence?work_item=a HTTP/1.1\r\n")
+            time.sleep(0.02)
+            client.sendall(f"Host: 127.0.0.1:{self.port}\r\n\r\n".encode())
+            self.assertIn(b" 200 ", client.makefile("rb").readline())
+        self.assertNotIn("server.http_surface", self.loaded())
+
     def test_every_connection_that_arrives_while_it_loads_is_answered(self) -> None:
         self.start()
         _wait_for_log(self.home, f"holding port {self.port}")
@@ -277,7 +349,7 @@ class LoadFailureTests(unittest.TestCase):
         self.port = _free_port()
 
     def run_with(self, load: on_demand.Load) -> threading.Thread:
-        """Hold the port in a thread; `load` ends it by serving one call and closing."""
+        """Hold the port in a thread; `load` ends it by serving the one call and closing."""
 
         thread = threading.Thread(
             target=on_demand.run, args=(self.port,), kwargs={"load": load}, daemon=True
@@ -295,8 +367,8 @@ class LoadFailureTests(unittest.TestCase):
         self.assertIn(b"Valkama did not start", body)
 
     @staticmethod
-    def serve_one(listener: socket.socket) -> None:
-        connection, _address = listener.accept()
+    def serve_one(listener: socket.socket, waiting: on_demand.Waiting) -> None:
+        connection, _address = waiting
         with connection:
             connection.recv(65536)
             connection.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
@@ -316,13 +388,14 @@ class LoadFailureTests(unittest.TestCase):
                     listener: socket.socket,
                     _port: int,
                     _origin: str | None,
+                    waiting: on_demand.Waiting,
                     reason: BaseException = failure,
                     attempts: list[int] = attempts,
                 ) -> None:
                     attempts.append(1)
                     if len(attempts) == 1:
                         raise reason
-                    self.serve_one(listener)
+                    self.serve_one(listener, waiting)
 
                 with mock.patch.object(on_demand, "RELOAD_AFTER_SECONDS", 0.0):
                     thread = self.run_with(fails_once)
@@ -335,11 +408,13 @@ class LoadFailureTests(unittest.TestCase):
     def test_a_load_is_tried_again_only_after_a_pause(self) -> None:
         attempts: list[int] = []
 
-        def fails_once(listener: socket.socket, _port: int, _origin: str | None) -> None:
+        def fails_once(
+            listener: socket.socket, _port: int, _origin: str | None, waiting: on_demand.Waiting
+        ) -> None:
             attempts.append(1)
             if len(attempts) == 1:
                 raise ValueError("not yet")
-            self.serve_one(listener)
+            self.serve_one(listener, waiting)
 
         with mock.patch.object(on_demand, "RELOAD_AFTER_SECONDS", 1.5):
             self.run_with(fails_once)
@@ -351,7 +426,10 @@ class LoadFailureTests(unittest.TestCase):
         self.assertEqual(2, len(attempts))
 
     def test_a_server_that_took_the_socket_and_died_ends_the_process(self) -> None:
-        def dies(listener: socket.socket, _port: int, _origin: str | None) -> None:
+        def dies(
+            listener: socket.socket, _port: int, _origin: str | None, waiting: on_demand.Waiting
+        ) -> None:
+            waiting[0].close()
             listener.close()
             raise RuntimeError("the server crashed")
 

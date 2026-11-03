@@ -1329,8 +1329,11 @@ def serve_main(
     *,
     development_origin: str | None = None,
     adopted: socket.socket | None = None,
+    waiting: tuple[socket.socket, tuple[str, int]] | None = None,
     ready: Callable[[], None] | None = None,
 ) -> None:
+    """Serve until stopped. `waiting` is a connection `on_demand` already accepted."""
+
     runtime_snapshot = static_assets.capture_runtime_snapshot(SOURCE_ROOT, DIST_DIR)
     if "index.html" not in runtime_snapshot.assets:
         # This process has no logger and no caller to return to: it is the
@@ -1377,6 +1380,8 @@ def serve_main(
     if ready is not None:
         ready()
     try:
+        if waiting is not None:
+            server.process_request(*waiting)
         server.serve_forever()
     finally:
         server.server_close()

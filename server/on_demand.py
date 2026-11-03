@@ -3,11 +3,17 @@
 A work item address is followed from a chat at any hour, so something has to answer
 it even when nobody started Valkama today. A full server costs tens of megabytes
 all day for the few clicks that need it, so this process holds the port and nothing
-else until the first connection. Then it loads the server into itself and serves
-that same socket. Nothing is handed between processes: the waiting connection sits
-in the socket's own queue and is accepted like any other, so a browser only waits.
-To everyone else this is the managed listener `serve` is: same process, same port,
-same `/api/runtime`, stopped the same way.
+else until the first connection the server has to answer. Then it loads the server
+into itself and serves that same socket. Nothing is handed between processes: the
+connection that woke it goes to the server as accepted, the rest sit in the socket's
+own queue and are accepted like any other, so a browser only waits. To everyone else
+this is the managed listener `serve` is: same process, same port, same `/api/runtime`,
+stopped the same way.
+
+One read never wakes it. Before showing a toast, whichever process wrote asks this port
+whether a page in focus already shows the item (`alerts.emit.listener_sees`). A page
+exists only once the server is loaded, so here the answer can only be no, and loading
+tens of megabytes for each toast to learn that would undo what this process is for.
 
 What it imports decides what it costs, which is why `valkama.py` sends this command
 here before it imports the command line, and why this module names the standard
@@ -35,6 +41,12 @@ RELOAD_AFTER_SECONDS = 5.0
 #: Waking this rarely costs nothing and still lets Ctrl+C through on a console.
 _WAKE_SECONDS = 2.0
 _MAX_LOG_BYTES = 1024 * 1024
+#: How long a new connection has to say what it wants before it counts as one for the
+#: server: a browser's preconnect may say nothing until it is used. Under the sender's
+#: `alerts.emit.PRESENCE_TIMEOUT`, and a sender slower than this only wakes the server.
+_REQUEST_WAIT_SECONDS = 0.1
+#: More than the head of the one request answered here; anything longer is not it.
+_MOST_REQUEST_BYTES = 8192
 #: `launcher.LAUNCHER_ENV` and `launcher.MANIFEST_NAME`, for the same reason.
 _LAUNCHER_ENV = "VALKAMA_LAUNCHER_DIR"
 _MANIFEST_NAME = "valkama-launcher.json"
@@ -67,9 +79,23 @@ _LOAD_FAILED = (
     b"Retry-After: 5\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n" + _LOAD_FAILED_BODY
 )
 
-#: What becomes the server: `load(listener, port, development_origin)`. It returns
-#: when the server stops, and a failure before that leaves the socket with the caller.
-Load = Callable[[socket.socket, int, str | None], None]
+_PRESENCE_PATH = b"/api/alerts/presence"
+#: `_alert_presence_read` in `http_surface` once the server is loaded; `test_on_demand`
+#: compares the two answers.
+_PRESENCE_BODY = b'{"visible":false}'
+_PRESENCE_ANSWER = (
+    b"HTTP/1.1 200 OK\r\n"
+    b"Content-Type: application/json\r\n"
+    b"Content-Length: " + str(len(_PRESENCE_BODY)).encode() + b"\r\n"
+    b"Cache-Control: no-store\r\nConnection: close\r\n\r\n" + _PRESENCE_BODY
+)
+
+#: A connection this process accepted for the server: the socket and the peer's address.
+Waiting = tuple[socket.socket, tuple[str, int]]
+#: What becomes the server: `load(listener, port, development_origin, waiting)`. It
+#: returns when the server stops, and a failure before that leaves both sockets with
+#: the caller.
+Load = Callable[[socket.socket, int, str | None, Waiting], None]
 
 
 def log_path() -> str:
@@ -204,21 +230,110 @@ def _bind_when_free(port: int, retry_seconds: float) -> socket.socket | None:
             return None
 
 
+def _refuse(connection: socket.socket) -> None:
+    """Answer one connection that a failed load left without a server."""
+
+    with connection:
+        try:
+            connection.settimeout(1.0)
+            connection.recv(65536)
+            connection.sendall(_LOAD_FAILED)
+        except OSError:
+            pass
+
+
 def _refuse_waiting(listener: socket.socket) -> None:
     """Answer every connection in the queue, so none of them ends in a dropped socket."""
 
     while select.select([listener], [], [], 0)[0]:
-        connection, _address = listener.accept()
-        with connection:
-            try:
-                connection.settimeout(1.0)
-                connection.recv(65536)
-                connection.sendall(_LOAD_FAILED)
-            except OSError:
-                pass
+        _refuse(listener.accept()[0])
 
 
-def _load_server(listener: socket.socket, port: int, development_origin: str | None) -> None:
+def _peek_request(connection: socket.socket) -> bytes:
+    """What a connection has sent so far, left in the socket for whoever reads it next."""
+
+    deadline = time.monotonic() + _REQUEST_WAIT_SECONDS
+    seen = b""
+    while b"\r\n\r\n" not in seen and len(seen) < _MOST_REQUEST_BYTES:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        connection.settimeout(remaining)
+        try:
+            sent = connection.recv(_MOST_REQUEST_BYTES, socket.MSG_PEEK)
+        except OSError:
+            break
+        if not sent:
+            break
+        if sent == seen:
+            time.sleep(0.002)  # a peek never drains, so waiting for more is a poll
+        seen = sent
+    return seen
+
+
+def _asks_presence(request: bytes, port: int) -> bool:
+    """Whether this is the read of a sender, spelled as the loaded server would accept it.
+
+    Anything else goes to the server, which owns every refusal: a wrong `Host`, a read
+    that names no work item, a request cut short.
+    """
+
+    head, ended, _rest = request.partition(b"\r\n\r\n")
+    if not ended:
+        return False
+    line, *headers = head.split(b"\r\n")
+    parts = line.split(b" ")
+    if len(parts) != 3 or parts[0] != b"GET" or parts[2] != b"HTTP/1.1":
+        return False
+    path, _mark, query = parts[1].partition(b"?")
+    if path != _PRESENCE_PATH or not any(
+        pair.startswith(b"work_item=") and len(pair) > len(b"work_item=")
+        for pair in query.split(b"&")
+    ):
+        return False
+    hosts = [
+        value.strip()
+        for name, _colon, value in (header.partition(b":") for header in headers)
+        if name.lower() == b"host"
+    ]
+    return hosts == [f"127.0.0.1:{port}".encode()]
+
+
+def _answer_presence(connection: socket.socket, request: bytes) -> None:
+    """No page can be connected before the server is loaded, so nothing is visible.
+
+    The request is read off first: closing a socket with unread data resets the
+    connection, and on Windows that can lose the answer on its way to the reader.
+    """
+
+    with connection:
+        try:
+            connection.settimeout(1.0)
+            connection.recv(len(request))
+            connection.sendall(_PRESENCE_ANSWER)
+            connection.shutdown(socket.SHUT_WR)
+        except OSError:
+            pass
+
+
+def _take_connection(listener: socket.socket, port: int) -> Waiting | None:
+    """Accept one connection, and return it if the server has to answer it."""
+
+    try:
+        connection, address = listener.accept()
+    except OSError:
+        return None
+    request = _peek_request(connection)
+    if _asks_presence(request, port):
+        _answer_presence(connection, request)
+        return None
+    connection.settimeout(None)
+    return connection, address
+
+
+def _load_server(
+    listener: socket.socket, port: int, development_origin: str | None, waiting: Waiting
+) -> None:
     begun = time.monotonic()
     from .http_surface import serve_main
 
@@ -226,6 +341,7 @@ def _load_server(listener: socket.socket, port: int, development_origin: str | N
         port,
         development_origin=development_origin,
         adopted=listener,
+        waiting=waiting,
         ready=lambda: _log(f"serving after {time.monotonic() - begun:.2f} s"),
     )
 
@@ -237,7 +353,7 @@ def run(
     load: Load | None = None,
     retry_seconds: float = BIND_RETRY_SECONDS,
 ) -> int:
-    """Hold `port` until someone connects, then serve it until the process ends."""
+    """Hold `port` until the server is needed, then serve it until the process ends."""
 
     if not 1 <= port <= 65535:
         raise SystemExit(f"invalid listener port {port}")
@@ -254,10 +370,14 @@ def run(
         if failed_at is not None and time.monotonic() - failed_at < RELOAD_AFTER_SECONDS:
             _refuse_waiting(listener)
             continue
+        waiting = _take_connection(listener, port)
+        if waiting is None:
+            continue
         if _follow_release(port, listener):
+            waiting[0].close()
             return 0
         try:
-            become_server(listener, port, development_origin)
+            become_server(listener, port, development_origin, waiting)
             return 0
         except KeyboardInterrupt:
             raise
@@ -269,6 +389,7 @@ def run(
                 print(f"the server stopped: {error}", file=sys.stderr)  # noqa: T201
                 return 1
             failed_at = time.monotonic()
+            _refuse(waiting[0])
             _refuse_waiting(listener)
 
 

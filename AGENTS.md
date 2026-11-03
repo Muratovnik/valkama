@@ -120,7 +120,7 @@ answer questions about the store and know nothing about who asked: `store`,
 `projects/`, `alerts/`, `ops/` and `telemetry/` subpackages. The four
 surfaces own no domain rule: `mcp_surface`, `mcp_front`, `http_surface` and
 `cli`. `on_demand` holds the port before `http_surface` is loaded, and imports
-only the standard library until the first connection.
+only the standard library until a connection needs the server.
 
 `store` keeps what only it can own — the schema, the ratchet, the store's own
 path, and the order a store is brought up in, read top to bottom in `connect()`.

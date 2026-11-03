@@ -228,7 +228,7 @@ python valkama.py <command> [options]
 | Command | What it does |
 | --- | --- |
 | `mcp` | speak MCP over stdio — what the installed launcher runs for agent clients |
-| `serve [--port 8642] [--on-demand]` | serve the JSON API and Valkama UI; with `--on-demand`, hold the port and load the server on the first connection |
+| `serve [--port 8642] [--on-demand]` | serve the JSON API and Valkama UI; with `--on-demand`, hold the port and load the server on the first connection that needs it |
 | `capabilities` | report public interfaces, MCP revisions and tool count as JSON without reading user data |
 | `status [--launcher-directory DIR]` | report source, database, runtime and launcher state without opening the database |
 | `launcher install [--revision REV] [--checkout DIR] [--releases DIR] [--directory DIR] [--force]` | pin a commit as a release and atomically install or repair the stable client command that runs it |
