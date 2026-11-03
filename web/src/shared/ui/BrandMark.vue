@@ -2,21 +2,21 @@
 /**
  * The Valkama mark: one drawing, two tones.
  *
- * Everything that shows the mark in the application renders this component —
- * the navigation brand was a letter `V` in a box standing in for it. The two
- * copies that cannot import a Vue component are the browser tab
- * (`public/favicon.svg`) and the Windows icon (`windows/make_icon.py`), because
- * neither a tab nor an ICO resolves a custom property or a bundler import;
- * `tests/brandMark.test.ts` holds all three to the same path data.
+ * The drawing is a spark on a 96-unit square: a long stroke, and an accent of
+ * a triangle under its short arm and a four-pointed star. Everything that shows
+ * the mark in the application renders this component. The two copies that
+ * cannot import a Vue component are the browser tab (`public/favicon.svg`) and
+ * the Windows icon (`windows/make_icon.py`), because neither a tab nor an ICO
+ * resolves a custom property or a bundler import; `tests/brandMark.test.ts`
+ * holds all three to the same geometry.
  *
- * `brand` is the gradient in the accent family from `tokens.css`, not the teal
- * the drawing arrived in. It belongs where the mark stands alone on someone
- * else's ground: a browser tab, a tray, an installer.
+ * `brand` is two flat colours from `tokens.css`, the stroke and the accent. It
+ * belongs where the mark stands alone on someone else's ground: a browser tab,
+ * a tray, an installer.
  *
  * `chrome` is the same drawing in one ink, taking its color from the carrier.
- * Inside the shell the gradient was the only one in an interface whose own
- * rules forbid them, and four chromatic events in a chrome that rations a
- * status down to a single dot.
+ * Inside the shell a second colour would be a chromatic event in a chrome that
+ * rations a status down to a single dot.
  */
 import { computed } from 'vue'
 
@@ -25,18 +25,12 @@ const props = withDefaults(
   { size: 26, title: '', tone: 'brand' },
 )
 
-/** One id per instance would be tidier, but the mark appears once per view and
- *  a stable id keeps the markup readable in the DOM inspector. */
-const GRADIENT_ID = 'valkama-mark-gradient'
-const SPARK_ID = 'valkama-mark-spark'
-
-/** The mark's own aspect ratio, so a caller sets one number and not two. */
-const height = computed(() => Math.round((props.size * 306) / 353))
-
-const strokeFill = computed(() =>
-  props.tone === 'chrome' ? 'currentColor' : `url(#${GRADIENT_ID})`,
+const bodyFill = computed(() =>
+  props.tone === 'chrome' ? 'currentColor' : 'var(--color-brand-body)',
 )
-const sparkFill = computed(() => (props.tone === 'chrome' ? 'currentColor' : `url(#${SPARK_ID})`))
+const accentFill = computed(() =>
+  props.tone === 'chrome' ? 'currentColor' : 'var(--color-brand-accent)',
+)
 
 /**
  * A titled mark is an image with a name; an untitled one is decoration.
@@ -51,59 +45,21 @@ const labelling = computed(() => (props.title ? { role: 'img' } : { 'aria-hidden
 <template>
   <svg
     class="brand-mark-svg"
-    viewBox="0 0 353 306"
+    viewBox="0 0 96 96"
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
     :width="size"
-    :height="height"
+    :height="size"
     v-bind="labelling"
   >
     <title v-if="title">{{ title }}</title>
-    <defs v-if="tone === 'brand'">
-      <linearGradient
-        :id="GRADIENT_ID"
-        x1="4"
-        y1="279"
-        x2="359"
-        y2="19"
-        gradientUnits="userSpaceOnUse"
-      >
-        <stop stop-color="var(--color-brand-gradient-from)" />
-        <stop
-          offset="0.55"
-          stop-color="var(--color-brand-gradient-mid)"
-        />
-        <stop
-          offset="1"
-          stop-color="var(--color-brand-gradient-to)"
-        />
-      </linearGradient>
-      <linearGradient
-        :id="SPARK_ID"
-        x1="324"
-        y1="46.5"
-        x2="353"
-        y2="21.5"
-        gradientUnits="userSpaceOnUse"
-      >
-        <stop stop-color="var(--color-brand-spark-from)" />
-        <stop
-          offset="1"
-          stop-color="var(--color-brand-spark-to)"
-        />
-      </linearGradient>
-    </defs>
     <path
-      d="M0 0H88L230 239L190 306L0 0Z"
-      :fill="strokeFill"
+      d="M48 94L59 72L24 2H2L48 94Z"
+      :fill="bodyFill"
     />
     <path
-      d="M210 175L240 225L339 67L284 67L210 175Z"
-      :fill="strokeFill"
-    />
-    <path
-      d="M338.5 21C340 29.5 344 33.5 353 35C344 36.5 340 40.5 338.5 49C337 40.5 333 36.5 324 35C333 33.5 337 29.5 338.5 21Z"
-      :fill="sparkFill"
+      d="M62.91 64.17L73 44H52.83L62.91 64.17ZM75 0L79.65 13.35L90.5 18L79.65 22.65L75 36L70.35 22.65L59.5 18L70.35 13.35L75 0Z"
+      :fill="accentFill"
     />
   </svg>
 </template>

@@ -159,27 +159,12 @@ const MIRRORS = [
         replace: (tokens) => hexTriple(value(tokens, '--color-gray-900', 'BACKGROUND')),
       },
       {
-        anchor: /\(\(0\.0, \(([^)]*)\)\), \(0\.55,/,
-        replace: (tokens) =>
-          hexTriple(value(tokens, '--color-brand-gradient-from', 'STROKE_GRADIENT')),
+        anchor: /\bBODY = \(([^)]*)\)/,
+        replace: (tokens) => hexTriple(value(tokens, '--color-brand-body', 'BODY')),
       },
       {
-        anchor: /\(0\.55, \(([^)]*)\)\)/,
-        replace: (tokens) =>
-          hexTriple(value(tokens, '--color-brand-gradient-mid', 'STROKE_GRADIENT')),
-      },
-      {
-        anchor: /\(0\.55, \([^)]*\)\), \(1\.0, \(([^)]*)\)\)/,
-        replace: (tokens) =>
-          hexTriple(value(tokens, '--color-brand-gradient-to', 'STROKE_GRADIENT')),
-      },
-      {
-        anchor: /SPARK_GRADIENT = \([\s\S]*?\(\(0\.0, \(([^)]*)\)\)/,
-        replace: (tokens) => hexTriple(value(tokens, '--color-brand-spark-from', 'SPARK_GRADIENT')),
-      },
-      {
-        anchor: /SPARK_GRADIENT = \([\s\S]*?\(1\.0, \(([^)]*)\)\)/,
-        replace: (tokens) => hexTriple(value(tokens, '--color-brand-spark-to', 'SPARK_GRADIENT')),
+        anchor: /\bACCENT = \(([^)]*)\)/,
+        replace: (tokens) => hexTriple(value(tokens, '--color-brand-accent', 'ACCENT')),
       },
     ],
   },
@@ -191,24 +176,12 @@ const MIRRORS = [
         replace: (tokens) => value(tokens, '--color-gray-900', 'favicon tile'),
       },
       {
-        anchor: /id="mark"[\s\S]*?<stop stop-color="([^"]*)"/,
-        replace: (tokens) => value(tokens, '--color-brand-gradient-from', 'mark gradient'),
+        anchor: /id="body"[^>]*fill="([^"]*)"/,
+        replace: (tokens) => value(tokens, '--color-brand-body', 'mark body'),
       },
       {
-        anchor: /id="mark"[\s\S]*?offset="0\.55" stop-color="([^"]*)"/,
-        replace: (tokens) => value(tokens, '--color-brand-gradient-mid', 'mark gradient'),
-      },
-      {
-        anchor: /id="mark"[\s\S]*?offset="1" stop-color="([^"]*)"/,
-        replace: (tokens) => value(tokens, '--color-brand-gradient-to', 'mark gradient'),
-      },
-      {
-        anchor: /id="spark"[\s\S]*?<stop stop-color="([^"]*)"/,
-        replace: (tokens) => value(tokens, '--color-brand-spark-from', 'spark gradient'),
-      },
-      {
-        anchor: /id="spark"[\s\S]*?offset="1" stop-color="([^"]*)"/,
-        replace: (tokens) => value(tokens, '--color-brand-spark-to', 'spark gradient'),
+        anchor: /id="accent"[^>]*fill="([^"]*)"/,
+        replace: (tokens) => value(tokens, '--color-brand-accent', 'mark accent'),
       },
     ],
   },

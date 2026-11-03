@@ -19,11 +19,8 @@ colors:
   scrollbar-thumb: "#464646"
   scrollbar-thumb-hover: "#5c5c5c"
   accent: "#7cacf8"
-  brand-gradient-from: "#ececec"
-  brand-gradient-mid: "#b9cdf5"
-  brand-gradient-to: "#7cacf8"
-  brand-spark-from: "#7cacf8"
-  brand-spark-to: "#ececec"
+  brand-body: "#ececec"
+  brand-accent: "#08c5d5"
   action-primary: "#ececec"
   danger: "#f99a8f"
   success: "#7bd6a1"
@@ -585,12 +582,13 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   absent, why it matters, and the next valid action when one exists.
 - **Icons and badges:** application glyphs come from the central icon owner;
   local SVGs and per-screen badge shapes are prohibited.
-- **The mark:** one drawing, two tones, owned by `BrandMark`. Inside the shell
-  it is a single ink taking its color from the carrier; the gradient version
-  belongs only where the mark stands alone on a ground this palette does not
-  own — a browser tab, the tray, an installer. A gradient in the chrome is the
-  one exception this document would otherwise have to write into the rule above
-  that forbids them.
+- **The mark:** one drawing — a spark: a long stroke, a triangle under its short
+  arm and a four-pointed star — in two tones, owned by `BrandMark`. Inside the
+  shell it is a single ink taking its color from the carrier. Where it stands
+  alone on a ground this palette does not own — a browser tab, the tray, the
+  taskbar, an installer, a notification — it is two flat colours on its own dark
+  rounded tile: the stroke in `brand-body`, the triangle and the star in
+  `brand-accent`. No version of the mark uses a gradient.
 - **Buttons:** `VButton` owns the five weights the product uses — primary
   (light on dark, one per surface), secondary, ghost, text, danger. A ghost with a
   label rests on the control fill and steps one further on hover, so a text action

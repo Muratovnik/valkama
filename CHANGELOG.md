@@ -57,6 +57,15 @@ checkouts are therefore distinguishable even at the same version.
 - **A client hook starts faster.** The launcher starts it without importing `runpy` and
   `pathlib`, which took about as long as the rest of the hook. Every other command starts
   as before.
+- **A new mark: a spark.** A long stroke, a triangle under its short arm and a
+  four-pointed star replace the gradient V everywhere the product shows its mark. In the
+  navigation it is one ink, as before. The browser tab, the taskbar, the tray, the
+  installer and a notification show it in two flat colours, light grey and teal, on its
+  own dark rounded tile; no version of the mark uses a gradient any more. The Windows
+  icon now holds a frame drawn at each size Windows shows it (16, 20, 24, 32, 40, 48, 64
+  and 256 pixels) instead of one 256-pixel image Windows shrank, and the tray takes the
+  small frame, so the star stays apart at 16 pixels. The installed desktop app shows the
+  new icon once it is rebuilt and reinstalled.
 
 ### Fixed
 

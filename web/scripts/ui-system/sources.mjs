@@ -3,7 +3,7 @@
 export const defaultSourceRoot = fileURLToPath(new URL('../../src/', import.meta.url))
 
 // VIcon owns the interface icon set. The brand mark is not one of them: it
-// is a drawing with its own gradient that no icon font or stroke set can carry,
+// is a filled drawing in two colours that no icon font or stroke set can carry,
 // and it exists once so the tab, the tray and the shell show the same one.
 
 function normalizedRelative(root, file) {

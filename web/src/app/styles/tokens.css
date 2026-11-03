@@ -91,10 +91,13 @@
   --color-gray-50: #f2f2f2;
   --color-gray-0: #fff;
 
-  /* The quiet blue that carries selection, focus and links, its light mid-stop
-     for the brand ramp, and the near-black blue a selected row sits on. */
+  /* The quiet blue that carries selection, focus and links. */
   --color-blue-500: #7cacf8;
-  --color-blue-300: #b9cdf5;
+
+  /* The mark's accent and nothing else's: a saturated teal the interface does
+     not otherwise spend, so the star stays the mark's own where it stands
+     alone. A different hue from the categorical cyan, not a step on it. */
+  --color-teal-500: #08c5d5;
 
   /* The hues that carry meaning. Each is light enough to hold 4.5:1 as text
      on a hovered card and 3:1 as a mark on the lightest control. The red was
@@ -431,20 +434,14 @@
   --color-graph-line: var(--color-cyan-400);
   --color-graph-line-muted: var(--color-slate-450);
 
-  /* The brand mark's own ramp: light to accent, over a near-black shell.
-     The drawing arrived in a teal the product does not otherwise use, and
-     running the ramp the other way — dark to light — sank the mark's heaviest
-     stroke into the chrome behind it. It starts at the tone that carries the
-     primary action and ends at the accent, so the mark reads at 16px and still
-     belongs to the palette of the focus ring it sits above.
+  /* The brand mark's two flat colours where it stands alone on its dark tile:
+     the long stroke in the tone that carries the primary action, the triangle
+     and the star in the mark's own teal, each one flat fill with no ramp.
      `windows/make_icon.py` and `public/favicon.svg` copy these literally, because an
      ICO and a browser tab resolve no custom property; `sync-tokens.mjs`
      rewrites both from here. */
-  --color-brand-gradient-from: var(--color-gray-100);
-  --color-brand-gradient-mid: var(--color-blue-300);
-  --color-brand-gradient-to: var(--color-blue-500);
-  --color-brand-spark-from: var(--color-blue-500);
-  --color-brand-spark-to: var(--color-gray-100);
+  --color-brand-body: var(--color-gray-100);
+  --color-brand-accent: var(--color-teal-500);
 
   /* Canvas has no cascade: a chart resolves nothing, so `chartOptions.ts`
      mirrors these literally and `sync-tokens.mjs` keeps the copies equal. */

@@ -1,177 +1,175 @@
 """Render valkama.ico from the same mark as the web favicon.
 
-Stdlib only: an ICO is a header plus a bottom-up BGRA bitmap, so no image
-library is needed for a rounded square, two filled polygons and a spark. The
-geometry below is the mark's own 353x306 drawing space, placed on the same
-64-unit grid the SVG favicon uses, which is what keeps one mark across the tab,
-the taskbar, the tray and the installer.
+Stdlib only: an ICO is a directory plus one bottom-up BGRA bitmap per frame, so
+no image library is needed for a rounded square and three filled polygons. The
+geometry below is the mark's own 96-unit drawing, placed on the same 64-unit
+grid the SVG favicon uses, which is what keeps one mark across the tab, the
+taskbar, the tray and the installer.
 
-The gradient is the accent family from `tokens.css`, copied literally because
-an ICO resolves no custom property; `web/tests/brandMark.test.ts` fails when
-this copy and the tokens drift apart.
+Every frame is rendered from the polygons at its own size. With one 256px image
+Windows downscaled it for the 16px tray and the 24px taskbar, and the star blurred
+into the tile; a frame drawn at the size it is shown keeps it.
+
+The colours are the tokens from `tokens.css`, copied literally because an ICO
+resolves no custom property; `web/scripts/sync-tokens.mjs` rewrites them here.
 """
 
 from __future__ import annotations
 
+import math
 import os
 import struct
 
-SIZE = 256  # electron-builder rejects Windows icons smaller than this
+# The sizes Windows asks an icon for: the tray and small icons at 100-200%
+# scaling (16, 20, 24, 32), the taskbar and Explorer (24-64), and 256, below
+# which electron-builder rejects a Windows icon.
+SIZES = (16, 20, 24, 32, 40, 48, 64, 256)
 UNIT = 64  # the design grid the SVG favicon uses
+CORNER = 14
+
 # --color-gray-900. A primitive step rather than a zone, and deliberately: an OS
 # surface keeps a neutral ground when the application's own chrome takes a tint.
-# The comment used to say --color-navigation, which this has not equalled for a while.
 BACKGROUND = (0x18, 0x18, 0x18)
-CORNER = 14
-SCALE = SIZE / UNIT
+# --color-brand-body and --color-brand-accent. Written by sync-tokens; edit tokens.css.
+BODY = (0xEC, 0xEC, 0xEC)
+ACCENT = (0x08, 0xC5, 0xD5)
 
-# Where the mark sits on the 64-unit grid, matching public/favicon.svg.
-MARK_OFFSET = (9.0, 12.0)
-MARK_SCALE = 0.13031
+# Where the mark sits on the 64-unit grid, matching public/favicon.svg: at three
+# quarters of the tile, an eighth in from each side.
+MARK_OFFSET = (8.0, 8.0)
+MARK_SCALE = 0.5
 
-# The mark, in its own drawing space. The two strokes of the V are polygons;
-# the spark is the four-pointed star the SVG draws with curves, approximated by
-# its eight extreme points because this is rasterized at 256px and below.
-STROKE_POLYGONS = [
-    [(0.0, 0.0), (88.0, 0.0), (230.0, 239.0), (190.0, 306.0)],
-    [(210.0, 175.0), (240.0, 225.0), (339.0, 67.0), (284.0, 67.0)],
+# The mark, in its own 96-unit drawing space: the path data of BrandMark.vue,
+# which is straight lines only, as point lists.
+BODY_POLYGONS = [
+    [(48.0, 94.0), (59.0, 72.0), (24.0, 2.0), (2.0, 2.0)],
 ]
-SPARK_POLYGON = [
-    (338.5, 21.0),
-    (342.0, 31.5),
-    (353.0, 35.0),
-    (342.0, 38.5),
-    (338.5, 49.0),
-    (335.0, 38.5),
-    (324.0, 35.0),
-    (335.0, 31.5),
+ACCENT_POLYGONS = [
+    [(62.91, 64.17), (73.0, 44.0), (52.83, 44.0)],
+    [
+        (75.0, 0.0),
+        (79.65, 13.35),
+        (90.5, 18.0),
+        (79.65, 22.65),
+        (75.0, 36.0),
+        (70.35, 22.65),
+        (59.5, 18.0),
+        (70.35, 13.35),
+    ],
 ]
 
-# --brand-gradient-* and --brand-spark-*, with the gradient vectors the SVG uses.
-# The channel triples are written by web/scripts/sync-tokens.mjs; edit tokens.css.
-STROKE_GRADIENT = (
-    (4.0, 279.0),
-    (359.0, 19.0),
-    ((0.0, (0xEC, 0xEC, 0xEC)), (0.55, (0xB9, 0xCD, 0xF5)), (1.0, (0x7C, 0xAC, 0xF8))),
-)
-SPARK_GRADIENT = (
-    (324.0, 46.5),
-    (353.0, 21.5),
-    ((0.0, (0x7C, 0xAC, 0xF8)), (1.0, (0xEC, 0xEC, 0xEC))),
-)
-
-# Three subsamples per axis. The mark is all diagonals, and one sample per pixel
-# keeps a stepped edge that survives Windows' own downscale to 16px.
-SUBSAMPLES = 3
+# Coverage is exact along a row and sampled down a column, this many rows per
+# pixel. At 16px the star's arms are under a pixel wide, so a few point samples
+# per pixel would decide whether an arm exists at all.
+ROWS_PER_PIXEL = 16
 
 
-def _inside_rounded_square(x: float, y: float) -> bool:
-    edge = UNIT - CORNER
-    for corner_x, corner_y in ((CORNER, CORNER), (edge, CORNER), (CORNER, edge), (edge, edge)):
-        beyond_x = x < CORNER if corner_x == CORNER else x > edge
-        beyond_y = y < CORNER if corner_y == CORNER else y > edge
-        if beyond_x and beyond_y:
-            return (x - corner_x) ** 2 + (y - corner_y) ** 2 <= CORNER**2
-    return True
+def _tile_span(y: float) -> tuple[float, float] | None:
+    """Where the rounded square covers one row of the grid, or None outside it."""
+    if not 0.0 <= y < UNIT:
+        return None
+    rise = max(CORNER - y, y - (UNIT - CORNER), 0.0)
+    inset = CORNER - math.sqrt(max(CORNER * CORNER - rise * rise, 0.0)) if rise else 0.0
+    return (inset, UNIT - inset)
 
 
-def _inside_polygon(x: float, y: float, polygon: list[tuple[float, float]]) -> bool:
-    """Even-odd crossing test, the rule the SVG fill uses for these shapes."""
-    inside = False
+def _polygon_spans(y: float, polygon: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """Where one polygon covers one row of its own space, by the even-odd rule."""
+    crossings = []
     count = len(polygon)
     for index in range(count):
         first_x, first_y = polygon[index]
         second_x, second_y = polygon[(index + 1) % count]
         if (first_y > y) != (second_y > y):
-            crossing = first_x + (y - first_y) / (second_y - first_y) * (second_x - first_x)
-            if x < crossing:
-                inside = not inside
-    return inside
+            crossings.append(first_x + (y - first_y) / (second_y - first_y) * (second_x - first_x))
+    crossings.sort()
+    return list(zip(crossings[::2], crossings[1::2], strict=True))
 
 
-def _gradient_colour(
-    x: float,
-    y: float,
-    gradient: tuple[
-        tuple[float, float], tuple[float, float], tuple[tuple[float, tuple[int, int, int]], ...]
-    ],
-) -> tuple[int, int, int]:
-    """The colour at one point of a linear gradient, in the mark's own space."""
-    (start_x, start_y), (end_x, end_y), stops = gradient
-    run_x, run_y = end_x - start_x, end_y - start_y
-    length = run_x * run_x + run_y * run_y
-    along = 0.0 if length == 0 else ((x - start_x) * run_x + (y - start_y) * run_y) / length
-    along = max(0.0, min(1.0, along))
-    for index in range(len(stops) - 1):
-        left_offset, left_colour = stops[index]
-        right_offset, right_colour = stops[index + 1]
-        if along <= right_offset or index == len(stops) - 2:
-            span = right_offset - left_offset
-            ratio = 0.0 if span == 0 else (along - left_offset) / span
-            ratio = max(0.0, min(1.0, ratio))
-            return tuple(  # type: ignore[return-value]
-                round(left_colour[channel] + (right_colour[channel] - left_colour[channel]) * ratio)
-                for channel in range(3)
-            )
-    return stops[-1][1]
-
-
-def _sample(x: float, y: float) -> tuple[int, int, int] | None:
-    """The colour at one point of the design grid, or None outside the icon."""
-    if not _inside_rounded_square(x, y):
-        return None
-    mark_x = (x - MARK_OFFSET[0]) / MARK_SCALE
+def _mark_spans(y: float, polygons: list[list[tuple[float, float]]]) -> list[tuple[float, float]]:
+    """A group of the mark's polygons on one row of the grid, in grid units."""
     mark_y = (y - MARK_OFFSET[1]) / MARK_SCALE
-    if _inside_polygon(mark_x, mark_y, SPARK_POLYGON):
-        return _gradient_colour(mark_x, mark_y, SPARK_GRADIENT)
-    for polygon in STROKE_POLYGONS:
-        if _inside_polygon(mark_x, mark_y, polygon):
-            return _gradient_colour(mark_x, mark_y, STROKE_GRADIENT)
-    return BACKGROUND
+    return [
+        (MARK_OFFSET[0] + left * MARK_SCALE, MARK_OFFSET[0] + right * MARK_SCALE)
+        for polygon in polygons
+        for left, right in _polygon_spans(mark_y, polygon)
+    ]
 
 
-def _pixel(pixel_x: int, pixel_y: int) -> tuple[int, int, int, int]:
-    step = 1.0 / SUBSAMPLES
-    red = green = blue = 0.0
-    covered = 0
-    for row in range(SUBSAMPLES):
-        for column in range(SUBSAMPLES):
-            x = (pixel_x + (column + 0.5) * step) / SCALE
-            y = (pixel_y + (row + 0.5) * step) / SCALE
-            colour = _sample(x, y)
-            if colour is None:
+def _add_coverage(row: list[float], left: float, right: float, weight: float) -> None:
+    """Add how much of each pixel a span covers, exactly, scaled by `weight`."""
+    left, right = max(left, 0.0), min(right, float(len(row)))
+    for pixel in range(int(left), math.ceil(right)):
+        covered = min(right, pixel + 1.0) - max(left, float(pixel))
+        if covered > 0:
+            row[pixel] += covered * weight
+
+
+def _frame(size: int) -> list[list[tuple[int, int, int, int]]]:
+    """One frame as rows of straight-alpha RGBA, top row first."""
+    scale = size / UNIT
+    weight = 1.0 / ROWS_PER_PIXEL
+    frame = []
+    for pixel_y in range(size):
+        tile = [0.0] * size
+        body = [0.0] * size
+        accent = [0.0] * size
+        for step in range(ROWS_PER_PIXEL):
+            y = (pixel_y + (step + 0.5) * weight) / scale
+            span = _tile_span(y)
+            if span is None:
                 continue
-            covered += 1
-            red += colour[0]
-            green += colour[1]
-            blue += colour[2]
-    if not covered:
+            _add_coverage(tile, span[0] * scale, span[1] * scale, weight)
+            for left, right in _mark_spans(y, BODY_POLYGONS):
+                _add_coverage(body, left * scale, right * scale, weight)
+            for left, right in _mark_spans(y, ACCENT_POLYGONS):
+                _add_coverage(accent, left * scale, right * scale, weight)
+        frame.append([_pixel(tile[x], body[x], accent[x]) for x in range(size)])
+    return frame
+
+
+def _pixel(tile: float, body: float, accent: float) -> tuple[int, int, int, int]:
+    """Mix what covers one pixel; the mark lies inside the tile, so the rest is ground."""
+    if tile <= 0:
         return (0, 0, 0, 0)
-    total = SUBSAMPLES * SUBSAMPLES
-    alpha = round(255 * covered / total)
-    return (round(blue / covered), round(green / covered), round(red / covered), alpha)
+    ground = max(tile - body - accent, 0.0)
+    colour = tuple(
+        round((BACKGROUND[c] * ground + BODY[c] * body + ACCENT[c] * accent) / tile)
+        for c in range(3)
+    )
+    return (colour[0], colour[1], colour[2], round(255 * min(tile, 1.0)))
+
+
+def _bitmap(size: int) -> bytes:
+    """One frame as an ICO stores it: a BMP header, BGRA bottom-up, then the mask."""
+    pixels = b"".join(
+        bytes(channel for red, green, blue, alpha in row for channel in (blue, green, red, alpha))
+        for row in reversed(_frame(size))
+    )
+    # The AND mask is one bit per pixel in rows padded to four bytes; all clear,
+    # because the alpha channel carries the shape.
+    mask = b"\x00" * (((size + 31) // 32) * 4 * size)
+    header = struct.pack("<IiiHHIIiiII", 40, size, size * 2, 1, 32, 0, len(pixels), 0, 0, 0, 0)
+    return header + pixels + mask
 
 
 def build() -> bytes:
-    # BMP scanlines run bottom-up
-    rows = [
-        bytes(channel for x in range(SIZE) for channel in _pixel(x, y))
-        for y in range(SIZE - 1, -1, -1)
-    ]
-    pixels = b"".join(rows)
-    mask = b"\x00" * (SIZE * SIZE // 8)  # fully opaque, alpha carries the shape
-    header = struct.pack("<IiiHHIIiiII", 40, SIZE, SIZE * 2, 1, 32, 0, len(pixels), 0, 0, 0, 0)
-    image = header + pixels + mask
-    # A 256-wide image is written as 0 in the directory entry, which is the
-    # documented escape for "256" in a single byte.
-    directory = struct.pack("<HHH", 0, 1, 1) + struct.pack(
-        "<BBBBHHII", SIZE % 256, SIZE % 256, 0, 0, 1, 32, len(image), 22
-    )
-    return directory + image
+    images = [_bitmap(size) for size in SIZES]
+    directory = struct.pack("<HHH", 0, 1, len(images))
+    offset = len(directory) + 16 * len(images)
+    for size, image in zip(SIZES, images, strict=True):
+        # A 256-wide image is written as 0 in its directory entry, which is the
+        # documented escape for "256" in a single byte.
+        directory += struct.pack(
+            "<BBBBHHII", size % 256, size % 256, 0, 0, 1, 32, len(image), offset
+        )
+        offset += len(image)
+    return directory + b"".join(images)
 
 
 if __name__ == "__main__":
     target = os.path.join(os.path.dirname(os.path.abspath(__file__)), "valkama.ico")
     with open(target, "wb") as file:
         file.write(build())
-    print(f"wrote {target} ({os.path.getsize(target)} bytes, {SIZE}x{SIZE})")
+    frames = ", ".join(str(size) for size in SIZES)
+    print(f"wrote {target} ({os.path.getsize(target)} bytes, frames {frames})")
