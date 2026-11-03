@@ -34,8 +34,8 @@ from pathlib import Path
 from unittest import mock
 from urllib.parse import urlencode
 
-from server import http_surface, mcp_surface, store
-from server.planning import service
+from server import http_surface, mcp_surface, sessions, store
+from server.planning import calls, service
 from server.projects import project_registry
 from server.store_identity.metadata import read_store_metadata
 from server.store_identity.refs import planning_space_entity
@@ -169,6 +169,59 @@ class _Scenario:
             }
         )
 
+    def executor_card(self) -> dict:
+        """A card whose claim, steps and agents each name an executor."""
+
+        session = "6f1c2a8e-0000-4000-8000-000000000001"
+        finished = "6f1c2a8e-0000-4000-8000-000000000002"
+
+        def who(identity: str, agent: str | None = None) -> calls.Identity:
+            return calls.Identity(
+                state=calls.CONFIRMED,
+                source=calls.CLAUDE_HOOK,
+                session_id=identity,
+                agent_id=agent,
+                tool_use_id="t",
+                client="claude",
+            )
+
+        conn = store.connect()
+        try:
+            ref = str(
+                service.create_work_item(conn, space=SPACE, title="Card with executors")[
+                    "reference"
+                ]
+            )
+            service.set_checklist(conn, ref, ["An agent's", "A person's", "A digest's"])
+            agent, person, digest = service.get_work_item(conn, ref)["checklist"]
+            with calls.bind(who(session), "claim_work_item"):
+                service.claim_work_item(conn, ref, move_state=False)
+            with calls.bind(who(session, "a4d2c8f1e0b3a297"), "claim_work_item_checklist_item"):
+                service.claim_checklist_item(conn, ref, agent["id"])
+            service.claim_checklist_item(conn, ref, person["id"], author="the owner")
+            with calls.bind(who("session-" + "x" * 50), "claim_work_item_checklist_item"):
+                service.claim_checklist_item(conn, ref, digest["id"])
+            with calls.bind(who(finished, "b5e3d9a2f1c4b308"), "comment_work_item"):
+                service.comment_work_item(conn, ref, "From an agent of a finished session.")
+            for identity, opened_in, opened_host in (
+                (session, "ide", "vscode"),
+                (finished, "app", "claude-desktop"),
+            ):
+                sessions.record_place(
+                    conn,
+                    identity,
+                    opened_in=opened_in,
+                    opened_host=opened_host,
+                    opened_folder="",
+                    host_session_id="",
+                    current=True,
+                )
+            conn.execute("UPDATE sessions SET status = 'ended' WHERE id = ?", (finished,))
+            conn.commit()
+        finally:
+            conn.close()
+        return self.http(f"/api/modules/planning/work-item?{self.scope(reference=ref)}")
+
     def answers(self) -> dict[str, object]:
         """Build the discussion and the questions, then read them as each reader does."""
 
@@ -253,6 +306,7 @@ class _Scenario:
         return {
             "comment-reply": reply,
             "card": self.http(f"/api/modules/planning/work-item?{self.scope(reference=ref)}"),
+            "card-executors": self.executor_card(),
             "requests": self.http(
                 f"/api/modules/planning/requests?{self.scope(reference=ref, limit='100')}"
             ),

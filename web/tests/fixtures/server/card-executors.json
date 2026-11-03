@@ -1,0 +1,251 @@
+{
+  "interface_version": "valkama-planning-work-item",
+  "scope": {
+    "kind": "project",
+    "project_ref": {
+      "project_id": "example-project"
+    }
+  },
+  "work_item_ref": {
+    "space_ref": {
+      "data_scope_id": "00000000-0000-4000-8000-000000000001",
+      "space_key": "MAIN"
+    },
+    "reference": "MAIN-2"
+  },
+  "state": {
+    "interface_version": "valkama-ui-state",
+    "status": "ready",
+    "payload": {
+      "work_item": {
+        "work_item_id": "00000000-0000-4000-8000-000000000007",
+        "planning_space_id": "00000000-0000-4000-8000-000000000003",
+        "reference": "MAIN-2",
+        "number": 2,
+        "title": "Card with executors",
+        "kind": "task",
+        "priority": "medium",
+        "state": {
+          "state_id": "00000000-0000-4000-8000-000000000004",
+          "key": "backlog",
+          "name": "Backlog",
+          "category": "backlog",
+          "is_terminal": false
+        },
+        "claim_ref": "claude (session 00000000-0000-4000-8000-000000000008)",
+        "claim_state": "live",
+        "parent_id": null,
+        "labels": [],
+        "source": "",
+        "checklist": [
+          {
+            "id": "00000000-0000-4000-8000-000000000009",
+            "text": "An agent's",
+            "done": false,
+            "claimed_by": "claude agent a4d2c8f1e0b3a297 (session 00000000-0000-4000-8000-000000000008)",
+            "done_by": "",
+            "executor": {
+              "session": "00000000-0000-4000-8000-000000000008",
+              "agent": "a4d2c8f1e0b3a297",
+              "opened_in": "ide",
+              "opened_host": "vscode",
+              "state": "live"
+            }
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000010",
+            "text": "A person's",
+            "done": false,
+            "claimed_by": "the owner",
+            "done_by": "",
+            "executor": {
+              "session": null,
+              "agent": null,
+              "opened_in": "",
+              "opened_host": "",
+              "state": "none"
+            }
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000011",
+            "text": "A digest's",
+            "done": false,
+            "claimed_by": "claude (session 388ed4aac64b107a)",
+            "done_by": "",
+            "executor": {
+              "session": null,
+              "agent": null,
+              "opened_in": "",
+              "opened_host": "",
+              "state": "none"
+            }
+          }
+        ],
+        "revision": 5,
+        "created_at": "2026-01-02T03:04:05Z",
+        "updated_at": "2026-01-02T03:04:05Z",
+        "closed_at": null,
+        "last_claim_ref": null,
+        "container": false,
+        "ready": false,
+        "claim": {
+          "holder": "claude (session 00000000-0000-4000-8000-000000000008)",
+          "state": "live",
+          "session_id": "00000000-0000-4000-8000-000000000008",
+          "agent_id": null,
+          "source": "claude-hook",
+          "acquired_at": "2026-01-02T03:04:05.000Z",
+          "last_seen": "2026-01-02T03:04:05Z",
+          "expires_at": "2026-01-02T03:04:05Z",
+          "executor": {
+            "session": "00000000-0000-4000-8000-000000000008",
+            "agent": null,
+            "opened_in": "ide",
+            "opened_host": "vscode",
+            "state": "live"
+          }
+        },
+        "description": "",
+        "summary": null,
+        "summary_comment_id": null,
+        "links": [],
+        "refs": [],
+        "comments": [
+          {
+            "id": 7,
+            "kind": "comment",
+            "report": null,
+            "checklist_item_id": null,
+            "checklist_item_text": null,
+            "author": "agent",
+            "body": "From an agent of a finished session.",
+            "at": "2026-01-02T03:04:05Z",
+            "reply_to": null,
+            "reply_to_request": null,
+            "by_person": false,
+            "resolution": null
+          }
+        ],
+        "events": [
+          {
+            "action": "created",
+            "detail": "backlog",
+            "author": "agent",
+            "at": "2026-01-02T03:04:05Z",
+            "identity": {
+              "state": "unconfirmed",
+              "source": null,
+              "session_id": null,
+              "agent_id": null
+            }
+          },
+          {
+            "action": "checklist_replaced",
+            "detail": "3",
+            "author": "agent",
+            "at": "2026-01-02T03:04:05Z",
+            "identity": {
+              "state": "unconfirmed",
+              "source": null,
+              "session_id": null,
+              "agent_id": null
+            }
+          },
+          {
+            "action": "claimed",
+            "detail": "",
+            "author": "agent",
+            "at": "2026-01-02T03:04:05Z",
+            "identity": {
+              "state": "confirmed",
+              "source": "claude-hook",
+              "session_id": "00000000-0000-4000-8000-000000000008",
+              "agent_id": null
+            }
+          },
+          {
+            "action": "checklist_claimed",
+            "detail": "An agent's",
+            "author": "agent",
+            "at": "2026-01-02T03:04:05Z",
+            "identity": {
+              "state": "confirmed",
+              "source": "claude-hook",
+              "session_id": "00000000-0000-4000-8000-000000000008",
+              "agent_id": "a4d2c8f1e0b3a297"
+            }
+          },
+          {
+            "action": "checklist_claimed",
+            "detail": "A person's",
+            "author": "the owner",
+            "at": "2026-01-02T03:04:05Z",
+            "identity": {
+              "state": "unconfirmed",
+              "source": null,
+              "session_id": null,
+              "agent_id": null
+            }
+          },
+          {
+            "action": "checklist_claimed",
+            "detail": "A digest's",
+            "author": "agent",
+            "at": "2026-01-02T03:04:05Z",
+            "identity": {
+              "state": "confirmed",
+              "source": "claude-hook",
+              "session_id": "session-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "agent_id": null
+            }
+          }
+        ],
+        "agents": [
+          {
+            "agent_id": "b5e3d9a2f1c4b308",
+            "session_id": "00000000-0000-4000-8000-000000000012",
+            "agent_type": "",
+            "label": "",
+            "started_at": "2026-01-02T03:04:05Z",
+            "last_activity_at": "2026-01-02T03:04:05Z",
+            "ended_at": null,
+            "steps": [],
+            "link": "exact",
+            "coordinator_items": null,
+            "executor": {
+              "session": "00000000-0000-4000-8000-000000000012",
+              "agent": "b5e3d9a2f1c4b308",
+              "opened_in": "app",
+              "opened_host": "claude-desktop",
+              "state": "ended"
+            }
+          },
+          {
+            "agent_id": "a4d2c8f1e0b3a297",
+            "session_id": "00000000-0000-4000-8000-000000000008",
+            "agent_type": "",
+            "label": "",
+            "started_at": "2026-01-02T03:04:05Z",
+            "last_activity_at": "2026-01-02T03:04:05Z",
+            "ended_at": null,
+            "steps": [
+              {
+                "id": "00000000-0000-4000-8000-000000000009",
+                "text": "An agent's"
+              }
+            ],
+            "link": "exact",
+            "coordinator_items": null,
+            "executor": {
+              "session": "00000000-0000-4000-8000-000000000008",
+              "agent": "a4d2c8f1e0b3a297",
+              "opened_in": "ide",
+              "opened_host": "vscode",
+              "state": "live"
+            }
+          }
+        ]
+      }
+    }
+  }
+}

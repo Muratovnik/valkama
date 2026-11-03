@@ -24,6 +24,7 @@ const read = (name: string): unknown => JSON.parse(readFileSync(`${directory}${n
 /** Each fixture the web reads, with the validator of the call that reads it. */
 const readers: Record<string, (value: unknown) => unknown> = {
   'card.json': (value) => validatePlanningWorkItemPayload(value),
+  'card-executors.json': (value) => validatePlanningWorkItemPayload(value),
   'comment-reply.json': validateCommentWritten,
   'request-answered.json': validateInputRequestDetail,
   'request-pending.json': validateInputRequestDetail,
@@ -44,6 +45,15 @@ describe('the server fixtures', () => {
       expect(() => validate(read(name))).not.toThrow()
     },
   )
+
+  it('name the executor at the claim, each step and each agent of a card', () => {
+    const card = validatePlanningWorkItemPayload(read('card-executors.json'))
+    if (card.state.status !== 'ready') throw new Error('the card read is not ready')
+    const { work_item: item } = card.state.payload
+    expect(item.claim?.executor?.state).toBe('live')
+    expect(item.checklist.map((step) => step.executor?.state)).toEqual(['live', 'none', 'none'])
+    expect(item.agents?.map((agent) => agent.executor?.state).toSorted()).toEqual(['ended', 'live'])
+  })
 
   it('carry every 2.5 form the card and the question view draw', () => {
     const card = validatePlanningWorkItemPayload(read('card.json'))

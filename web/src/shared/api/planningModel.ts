@@ -112,6 +112,37 @@ const workflowStateSchema = strictObject({ ...stateShape, position: positiveInt(
 export const CLAIM_STATES = ['live', 'stale', 'unconfirmed'] as const
 const claimStateField = () => enumField(CLAIM_STATES).nullable()
 
+/**
+ * Who stands behind a claim, a step or an agent, and what opening them would
+ * reach: only the card's read carries it. `session` is the session a click opens,
+ * an agent's parent for an agent. `none` is a holder with no session to open, a
+ * person's or one a label cannot name, and leaves every other field empty.
+ */
+const executorSchema = strictObject({
+  session: blankable(200).nullable(),
+  agent: blankable(200).nullable(),
+  opened_in: enumField([
+    '',
+    'ide',
+    'ide-terminal',
+    'terminal',
+    'background',
+    'app',
+    'headless',
+  ] as const),
+  opened_host: enumField([
+    '',
+    'vscode',
+    'vscode-insiders',
+    'cursor',
+    'windsurf',
+    'jetbrains',
+    'claude-desktop',
+    'codex-app',
+  ] as const),
+  state: enumField(['live', 'ended', 'gone', 'headless', 'none'] as const),
+})
+
 const stepText = () => boundedText(/^[^\u{0}]{1,1000}$/u, 1000)
 const checklistStepSchema = strictObject({
   id: boundedText(UUID, 36),
@@ -119,6 +150,7 @@ const checklistStepSchema = strictObject({
   done: z.boolean(),
   claimed_by: actor(),
   done_by: actor(),
+  executor: executorSchema.optional(),
 })
 
 const workItemBriefShape = {
@@ -308,6 +340,7 @@ const claimSchema = strictObject({
   acquired_at: boundedText(ISO, 96).nullable(),
   last_seen: boundedText(ISO, 96).nullable(),
   expires_at: boundedText(ISO, 96).nullable(),
+  executor: executorSchema.optional(),
 })
 
 /** Where a claim or a release moved an item: the state keys before and after. */
@@ -330,6 +363,7 @@ const workItemAgentSchema = strictObject({
   steps: boundedList(strictObject({ id: boundedText(UUID, 36), text: stepText() }), 100),
   link: enumField(['exact', 'claim'] as const),
   coordinator_items: positiveInt().nullable(),
+  executor: executorSchema.optional(),
 })
 
 const workItemSchema = strictObject({
