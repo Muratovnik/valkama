@@ -62,7 +62,9 @@ const closing = computed(() => {
   if (status === 'declined' && person) return t('requests.youDeclined')
   if (status === 'declined' && by) return t('requests.agentDeclined', { actor: actorName(by) })
   const state = t(`requests.${status}`)
-  return by ? `${state} · ${t('requests.resolvedBy', { actor: actorName(by) })}` : state
+  if (!by) return state
+  const signed = person === false ? 'requests.agentResolved' : 'requests.resolvedBy'
+  return `${state} · ${t(signed, { actor: actorName(by) })}`
 })
 </script>
 

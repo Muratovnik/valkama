@@ -882,8 +882,8 @@ list of entries and does not know where they are stored. They are read at their 
 half-minute, whenever the window comes back and whenever the card's record is read again,
 and a read that failed or could not reach every source is said over the thread with the
 way to read again, because not knowing is not the same as there being none. A card with more
-questions than one read brings reads those still waiting on their own, and says that not
-all of them are shown.
+questions than one read brings reads those still waiting on their own, and says that the
+newest and those waiting are shown and older ones left out.
 One form answers every kind of field, here and in «Needs my answer», which adds whose
 task it is and the way there. Selecting does nothing but select, nothing is chosen for
 the person, recommended or not, and Send is what sends. Every choice is a full-width row
@@ -903,19 +903,32 @@ label alone and described only by a line, or a screen reader would read paragrap
 arrow press; a description standing under the options is named as its details and read by
 going on to it. The chevron is a tab stop only on the row the keyboard stands on, so that
 Tab reaches Send.
-A question that folds lifts the one below it, and what rises can stop exactly under a
-pointer that has not moved, where the next press would end a question nobody has seen. So a
-press at the point of the one before, with no move between, on anything but what that one
-landed on, reaches nothing inside a question, however long after it comes. Neither the time
-nor the browser's click count can tell: a slow write lets the newcomer arrive a second
-later, and that press counts as a first. It holds until the pointer has moved more than 3 px
-or the wheel has turned, however often the press is repeated, because pressing on while a
-write hangs must not get through in the end. The keyboard is never held back, a press
-repeated on the same control works as it always did, and the layout does not stay empty to
-prevent it. The scrim follows the same rule, so a second press on a tile leaves its card
-open, and a press on the scrim that does not close takes no focus out of the surface. It is
-not a rule of the whole interface: those are the two places where the press cannot be taken
-back or takes away what was just opened.
+No press on a question nobody has put anything into writes, whatever came to stand under
+the pointer. Controls can rise under a pointer at rest, as when an agent answers the question
+above or asks a new one, and no watch on the pointer catches every way that happens, so the
+form is built for it. Don't answer alone could write at one press and cannot be taken back,
+so it takes two steps: the first writes nothing and asks on the spot what going on means. The
+way back stands in the very box of that press and the way on in the box of Send, each button
+holding room for its other word, so that nothing moves and pressing again without moving only
+goes back. Focus stands on the way back, and Escape answers the same without closing the card
+or the list. Choosing or writing anything takes the step back too, so that Send is Send again
+by the time it is pressed. What is asked lies over what is above the buttons, taking no height,
+because any height would move them, and in a dialog, which stands centred, from either side.
+Send with nothing chosen or written writes nothing on any question, required
+fields or not, and says at the first field what it wants; a question always has a field.
+A press following another can still do harm where something is held: folding lifts the next
+question, and its options or a Send over its choice can arrive under the second press of a
+double click. So a press at the point of the one before, with no move between, on anything
+but what that one landed on, reaches nothing inside a question or in the thread around it,
+however long after it comes. Neither the time nor the browser's click count can tell: a slow
+write lets the newcomer arrive a second later, and that press counts as a first. It holds until
+the pointer has moved more than 3 px or the wheel has turned, however often the press is
+repeated, because pressing on while a write hangs must not get through in the end. The keyboard
+is never held back, a press repeated on the same control works as it always did, and the layout
+does not stay empty to prevent it. The scrim follows the same rule, so a second press on a tile
+leaves its card open, and a press on the scrim that does not close takes no focus out of the
+surface. It is not a rule of the whole interface: those are the places where the press would
+choose or send without being meant, or take away what was just opened.
 Words of one's own are always one quiet press away, in the shared editor under the options,
 and with text in them no field is required; declining is as quiet. A selection or a note
 held is a draft the guard asks about. A send that fails keeps all of it with the reason in

@@ -13,6 +13,9 @@
  * here. What is selected or written in it lives here, for as long as the card is open,
  * and is a draft: leaving asks first. A note still written when its question closed some
  * other way stays one, because it is the only copy of what was written.
+ *
+ * A question folding lifts all that stands below it, a report's Make task outcome among it,
+ * so a stray press reaches nothing anywhere in the thread.
  */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -31,6 +34,7 @@ import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { actorName, actorSession } from '@/shared/lib/actor.ts'
 import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
+import { stopStrayPresses } from '@/shared/ui/strayPress.ts'
 import VButton from '@/shared/ui/VButton.vue'
 
 const props = defineProps<{
@@ -42,6 +46,9 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ answered: [entry: InputRequestEntry]; select: [commentId: number] }>()
 const { t, d } = useI18n()
+
+const thread = ref<HTMLElement | null>(null)
+watch(thread, stopStrayPresses, { flush: 'post' })
 
 const drafts = ref<Record<string, RequestDraft>>({})
 const draftFor = (entry: InputRequestEntry) => drafts.value[requestIdentity(entry)] ?? EMPTY_DRAFT
@@ -94,6 +101,7 @@ defineExpose({ revealQuestion })
 <template>
   <ol
     v-if="rows.length"
+    ref="thread"
     class="thread"
   >
     <template

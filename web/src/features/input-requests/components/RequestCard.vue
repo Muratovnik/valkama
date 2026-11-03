@@ -12,11 +12,14 @@
  * it ended: the person stays on the question they were in. What is held belongs to the
  * host, which outlives this while a dialog closes and opens and which the draft guard asks.
  * Folding also lifts what stands below it, so a press that lands here only because of that
- * reaches nothing: declining is for good, and this one was meant for another question.
+ * reaches nothing: it was meant for another question.
  */
 import { computed, nextTick, onMounted, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { useEventListener } from '@vueuse/core'
+
+import RequestActions from '@/features/input-requests/components/RequestActions.vue'
 import RequestAnswerFields from '@/features/input-requests/components/RequestAnswerFields.vue'
 import RequestFold from '@/features/input-requests/components/RequestFold.vue'
 import { useRequestWrites } from '@/features/input-requests/composables/useRequestWrites.ts'
@@ -33,7 +36,6 @@ import type MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
 import RichText from '@/shared/ui/RichText.vue'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
 import { stopStrayPresses } from '@/shared/ui/strayPress.ts'
-import VButton from '@/shared/ui/VButton.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -55,11 +57,14 @@ const card = ref<HTMLElement | null>(null)
 onMounted(() => stopStrayPresses(card.value))
 const errorLine = ref<HTMLElement | null>(null)
 const answerFields = ref<InstanceType<typeof RequestAnswerFields> | null>(null)
+const actions = ref<InstanceType<typeof RequestActions> | null>(null)
 
 const {
   busy,
   canRefresh,
+  declining,
   error,
+  keep,
   pastDue,
   refresh,
   refused,
@@ -125,7 +130,28 @@ const context = computed(() => {
 const authorName = computed(() => actorName(request.value.author))
 const authorSession = computed(() => actorSession(request.value.author))
 
+function pressWayOut() {
+  if (declining.value) keep()
+  else void resolve('decline')
+}
+function pressOnward() {
+  void resolve(declining.value ? 'decline' : 'answer')
+}
+/** While it is asked, Escape answers that and leaves the card or the list around it open. */
+useEventListener(card, 'keydown', (event: KeyboardEvent) => {
+  if (event.key !== 'Escape' || event.isComposing || !declining.value) return
+  event.preventDefault()
+  event.stopPropagation()
+  keep()
+  actions.value?.focusWayOut()
+})
+
+/**
+ * Choosing or writing means answering after all, and Send must be Send again by the time it
+ * is pressed: while the asking stands, the same place declines for good.
+ */
 function edit(field: InputRequestField, value: string | boolean | string[]) {
+  keep()
   emit('update:draft', {
     ...props.draft,
     answers: { ...props.draft.answers, [field.id]: value },
@@ -133,6 +159,7 @@ function edit(field: InputRequestField, value: string | boolean | string[]) {
   refused.value = refused.value.filter((id) => id !== field.id)
 }
 function writeNote(note: string) {
+  keep()
   emit('update:draft', { ...props.draft, note })
   // Words of one's own stand in for whatever was refused for being empty.
   if (note.trim()) refused.value = []
@@ -262,36 +289,19 @@ defineExpose({ focus, focusOutcome, reveal })
       >
         {{ errorText }}
       </p>
-      <div class="request-actions">
-        <VButton
-          v-if="standalone"
-          variant="ghost"
-          @click="emit('select', entry.target)"
-          >{{ t('requests.openTask') }}</VButton
-        >
-        <VButton
-          v-if="canRefresh"
-          :aria-disabled="busyMark"
-          @click="refresh"
-          >{{ t('requests.checkStatus') }}</VButton
-        >
-        <VButton
-          v-if="waiting"
-          variant="ghost"
-          :aria-disabled="busyMark"
-          :disabled="sendDisabled"
-          @click="resolve('decline')"
-          >{{ t('requests.decline') }}</VButton
-        >
-        <VButton
-          v-if="waiting"
-          variant="primary"
-          :aria-disabled="busyMark"
-          :disabled="sendDisabled"
-          @click="resolve('answer')"
-          >{{ t('requests.answer') }}</VButton
-        >
-      </div>
+      <RequestActions
+        ref="actions"
+        :busy="busy"
+        :declining="declining"
+        :disabled="sendDisabled"
+        :refreshable="canRefresh"
+        :standalone="standalone"
+        :waiting="waiting"
+        @onward="pressOnward"
+        @open="emit('select', entry.target)"
+        @refresh="refresh"
+        @way-out="pressWayOut"
+      />
     </footer>
   </article>
 </template>
@@ -353,7 +363,9 @@ defineExpose({ focus, focusOutcome, reveal })
   font: var(--font-editor);
 }
 
+/* What `RequestActions` asks lies against this, and takes no room in it. */
 .request-foot {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2) var(--space-3);
@@ -367,13 +379,5 @@ defineExpose({ focus, focusOutcome, reveal })
   margin: 0;
   color: var(--color-danger);
   font: var(--font-detail);
-}
-
-.request-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  justify-content: flex-end;
-  margin-inline-start: auto;
 }
 </style>

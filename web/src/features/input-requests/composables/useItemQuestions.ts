@@ -19,7 +19,7 @@ export function useItemQuestions(target: () => PlanningTarget | undefined, strea
   const waiting = computed(() => entries.value.some((entry) => entry.request.status === 'pending'))
   /** Not knowing is not the same as there being none, so the discussion says it. */
   const unread = computed(() => failed.value || partial.value)
-  /** More of them than one read brings: those waiting are all here, but not those ended. */
+  /** More of them than one read brings: the newest are here and those waiting, not the rest. */
   const cut = computed(() => result.value?.has_more ?? false)
   watch(stream, () => void refresh())
   return { changed, cut, entries, refresh, unread, waiting }

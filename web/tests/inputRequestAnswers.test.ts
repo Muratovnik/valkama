@@ -31,6 +31,20 @@ test('refuses a value that is present but not an answer', () => {
   expect(refused).toEqual(['proceed', 'branch', 'note'])
 })
 
+test('asks for something at the first field when nothing is chosen or written, required or not', () => {
+  const optional = [
+    { id: 'extra', label: 'Extra', type: 'multi_choice', required: false, options: [] },
+    { id: 'words', label: 'Words', type: 'text', required: false, options: [] },
+  ] as InputRequestField[]
+  expect(checkAnswers(optional, {}).refused).toEqual(['extra'])
+  expect(checkAnswers(optional, { extra: [], words: '' }, '   ').refused).toEqual(['extra'])
+  expect(checkAnswers(optional, {}, 'Words of my own')).toEqual({ refused: [], values: {} })
+  expect(checkAnswers(optional, { words: 'A word' })).toEqual({
+    refused: [],
+    values: { words: 'A word' },
+  })
+})
+
 test('sends false, leaves out an empty optional field and refuses nothing', () => {
   expect(checkAnswers(fields, { proceed: false, branch: 'merge', extra: [], note: 'why' })).toEqual(
     { refused: [], values: { proceed: false, branch: 'merge', note: 'why' } },

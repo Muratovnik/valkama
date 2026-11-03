@@ -10,7 +10,7 @@ import {
   fetchInputRequest,
   InputRequestError,
 } from '@/shared/api/inputRequestApi.ts'
-import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
+import type { InputAnswers, InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 
 const SUPPORTED_FIELDS = new Set(['boolean', 'choice', 'multi_choice', 'text'])
 
@@ -23,6 +23,10 @@ type Action = 'answer' | 'decline'
  * the question still waits, and it must not bring the fields back. A write's answer
  * that names another question is not an answer to this one. A write that failed leaves
  * the question as it was, because what is on the server is not known until it is read.
+ *
+ * Declining is the one write a person need put nothing into, and it cannot be taken back,
+ * so asking for it the first time only asks in return (`declining`), and nothing else can
+ * start it.
  */
 export function useRequestWrites(host: {
   draft: () => RequestDraft
@@ -40,6 +44,8 @@ export function useRequestWrites(host: {
   /** The fields the last send refused, by id; each clears once it is edited. */
   const refused = ref<string[]>([])
   const requiresRefresh = ref(false)
+  /** Declining was asked for once, and the next word on it decides. */
+  const asked = ref(false)
   const now = ref(Date.now())
   let generation = 0
   const request = computed(() => local.value.request)
@@ -55,6 +61,7 @@ export function useRequestWrites(host: {
     error.value = ''
     refused.value = []
     requiresRefresh.value = false
+    asked.value = false
   }
   watch(host.entry, (entry) => {
     if (requestIdentity(entry) !== requestIdentity(local.value)) {
@@ -80,6 +87,7 @@ export function useRequestWrites(host: {
       !pastDue.value &&
       supported.value,
   )
+  const declining = computed(() => asked.value && writable.value && !requiresRefresh.value)
   /**
    * Only a write the server refused or could not confirm, or a deadline that has passed
    * here, needs the request read again; a question that has closed has nothing left to read.
@@ -93,8 +101,18 @@ export function useRequestWrites(host: {
     if (blocking) requiresRefresh.value = true
     await host.failed()
   }
+  /** Takes back the first step of declining, unless the write is already out. */
+  function keep() {
+    if (!busy.value) asked.value = false
+  }
   async function resolve(action: Action) {
     if (busy.value || !writable.value || requiresRefresh.value) return
+    // A person need put nothing into a question to decline it, and it cannot be taken back,
+    // so whatever brought this press here, the first one only asks.
+    if (action === 'decline' && !asked.value) {
+      asked.value = true
+      return
+    }
     const { answers, note } = host.draft()
     const checked =
       action === 'answer' ? checkAnswers(request.value.fields, answers, note) : undefined
@@ -105,6 +123,10 @@ export function useRequestWrites(host: {
       await host.refuse(first)
       return
     }
+    asked.value = action === 'decline'
+    await write(action, checked?.values ?? {}, note)
+  }
+  async function write(action: Action, values: InputAnswers, note: string) {
     const entry = local.value
     const identity = requestIdentity(entry)
     const current = ++generation
@@ -112,7 +134,7 @@ export function useRequestWrites(host: {
     error.value = ''
     try {
       const result = await (action === 'answer'
-        ? answerInputRequest(entry, checked?.values ?? {}, note)
+        ? answerInputRequest(entry, values, note)
         : declineInputRequest(entry))
       if (current !== generation || identity !== requestIdentity(local.value)) return
       if (requestIdentity(result) !== identity) {
@@ -126,7 +148,10 @@ export function useRequestWrites(host: {
         error_ instanceof InputRequestError && (error_.status === 409 || error_.status === 410)
       if (current === generation) await fail(closed ? 'conflict' : 'mutationError', true)
     } finally {
-      if (current === generation) busy.value = false
+      if (current === generation) {
+        busy.value = false
+        asked.value = false
+      }
     }
   }
   async function refresh() {
@@ -155,7 +180,9 @@ export function useRequestWrites(host: {
   return {
     busy,
     canRefresh,
+    declining,
     error,
+    keep,
     local,
     pastDue,
     refresh,

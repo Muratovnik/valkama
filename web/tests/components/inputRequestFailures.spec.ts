@@ -95,6 +95,7 @@ describe('a question that could not be read or sent', () => {
     vi.mocked(declineInputRequest).mockRejectedValue(new InputRequestError('rejected', 409))
     const wrapper = card()
     await button(wrapper, "Don't answer").trigger('click')
+    await button(wrapper, "Don't answer").trigger('click')
     await flushPromises()
     const reason = wrapper.get('[role="alert"]')
     expect(reason.text()).toBe('This request changed or closed. Check its status.')

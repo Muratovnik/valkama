@@ -211,6 +211,10 @@ test('declining is the quiet way out, and an expired question folds the same way
     }),
   ])
   const pending = card.filter({ hasText: ROUTE_ASKED })
+  // The first press only asks, and the same words stand on the way on.
+  await pending.getByRole('button', { name: "Don't answer", exact: true }).click()
+  await expect(pending.getByRole('radio')).toHaveCount(3)
+  expect(requests.writes).toEqual([])
   await pending.getByRole('button', { name: "Don't answer", exact: true }).click()
   await expect(pending.locator('.request-state')).toContainText('You declined')
   await expect(pending.getByRole('radio')).toHaveCount(0)

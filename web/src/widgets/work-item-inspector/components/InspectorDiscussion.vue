@@ -339,7 +339,7 @@ defineExpose({ askOutcome, discussStep, revealQuestion })
       class="questions-unread"
       role="status"
     >
-      {{ t('requests.truncated') }}
+      {{ t('requests.cut') }}
     </p>
     <p
       v-if="questionsUnread"

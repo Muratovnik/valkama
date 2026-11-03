@@ -39,7 +39,9 @@ export function hasDraft(draft: RequestDraft | undefined): boolean {
  * Each refused field is named so its own message can stand beside it; a single
  * "fill in the required fields" at the foot of the form left the reader to find
  * which one it meant. An empty optional field is left out of the answers, and with
- * words of one's own in `note` no field is required any more.
+ * words of one's own in `note` no field is required any more. With nothing chosen or
+ * written at all the first field is refused, required or not: an answer with nothing in it
+ * tells the agent nothing and cannot be taken back. A question always has a field.
  */
 export function checkAnswers(
   fields: InputRequestField[],
@@ -57,5 +59,8 @@ export function checkAnswers(
     if (validField(field, value)) values[field.id] = value
     else refused.push(field.id)
   }
+  const [first] = fields
+  if (first && !refused.length && !Object.keys(values).length && !note.trim())
+    refused.push(first.id)
   return { values, refused }
 }

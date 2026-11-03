@@ -18,7 +18,7 @@ import {
 import { test } from './test.ts'
 
 const RESOLVED = '2026-10-24T10:30:00Z'
-const CUT = 'Only the first 100 requests are shown.'
+const CUT = 'Shown are the newest questions and those still waiting; older ones are left out.'
 
 const ended = (id: string, prompt: string, change: Partial<InputRequestEntry['request']>) =>
   question({
@@ -68,7 +68,7 @@ test('the card says "you" only of a write this interface made, whatever the writ
   const outcome = (prompt: string) => card.filter({ hasText: prompt }).locator('.request-state')
   await expect(outcome('Answered by a script')).toContainText('Answered by agent user')
   await expect(outcome('Declined by a script')).toContainText('Declined by agent user')
-  await expect(outcome('Withdrawn by a script')).toContainText('Resolved by user')
+  await expect(outcome('Withdrawn by a script')).toContainText('Resolved by agent user')
   await expect(outcome('Answered in a session')).toContainText('Answered by agent codex')
   await expect(outcome('Answered here')).toContainText('You answered')
   await expect(outcome('Declined here')).toContainText('You declined')
@@ -123,10 +123,12 @@ test('the ring on how a question ended stands clear of its words and moves none 
   const decline = card.getByRole('button', { name: "Don't answer", exact: true })
   requests.failNext(503)
   await decline.click()
+  await decline.click()
   const error = card.locator('.request-error')
   await expect(error).toBeFocused()
   await expect(error).toHaveCSS('outline-offset', '4px')
   await card.getByRole('button', { name: 'Check status', exact: true }).click()
+  await decline.click()
   await decline.click()
   const state = card.locator('.request-state')
   await expect(state).toBeFocused()
