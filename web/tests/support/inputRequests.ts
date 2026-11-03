@@ -17,6 +17,10 @@ export function requestEntry(): InputRequestEntry {
       prompt: 'Should deployment proceed?',
       fields: [{ id: 'proceed', label: 'Proceed', type: 'boolean', required: true, options: [] }],
       answers: null,
+      own: null,
+      field_notes: null,
+      answer_version: 0,
+      history: [],
       status: 'pending',
       author: 'operator',
       answered_by: '',
@@ -63,12 +67,16 @@ export function twoQuestions(): [InputRequestEntry, InputRequestEntry] {
   older.request = { ...older.request, title: 'Older question' }
   return [newer, older]
 }
+/** The parts besides `answers` of a first answer that gave no own variant and no comment. */
+export const firstAnswer = { own: {}, field_notes: {}, answer_version: 1 } as const
+
 export const answered = (entry: InputRequestEntry, by = 'user'): InputRequestEntry => ({
   ...entry,
   request: {
     ...entry.request,
     status: 'answered',
     answers: { proceed: true },
+    ...firstAnswer,
     answered_by: by,
     by_person: by === 'user',
     resolved_at: '2026-10-24T12:00:00Z',

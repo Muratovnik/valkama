@@ -12,6 +12,7 @@ import { messages } from '@/shared/i18n/index.ts'
 
 import { deferred, getButton, workItemFixture } from '../fixtures/workItem.ts'
 import { present } from '../support/present.ts'
+import { asRoot } from '../support/threads.ts'
 
 vi.mock('@/shared/api/planningApi.ts', async (load) => ({
   ...(await load<typeof import('@/shared/api/planningApi.ts')>()),
@@ -129,6 +130,7 @@ describe('checklist-linked comments', () => {
       {
         id: 1,
         kind: 'comment',
+        ...asRoot,
         author: 'user',
         at: item.created_at,
         body: 'A note',

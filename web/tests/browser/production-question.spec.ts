@@ -5,6 +5,7 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
+import { asRoot } from '../support/threads.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { now } from './planningFixtures.ts'
 import {
@@ -99,12 +100,21 @@ test('a pending question stands under the form however old, a closed one takes i
   ])
   await expect(drawer.locator('.thread > li')).toHaveCount(2)
   backend.item.comments.push(
-    { id: 901, author: 'user', at: now, kind: 'comment', report: null, body: 'A fresh comment' },
+    {
+      id: 901,
+      author: 'user',
+      at: now,
+      kind: 'comment',
+      ...asRoot,
+      report: null,
+      body: 'A fresh comment',
+    },
     {
       id: 902,
       author: 'user',
       at: '2019-01-01T10:00:00Z',
       kind: 'comment',
+      ...asRoot,
       report: null,
       body: 'An older comment',
     },

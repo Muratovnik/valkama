@@ -58,6 +58,9 @@ export async function installInputRequestBackend(page: Page) {
       return route.fulfill({ status: 409, json: {} })
     entry.request.status = 'answered'
     entry.request.answers = body.answers as Record<string, boolean>
+    entry.request.own = {}
+    entry.request.field_notes = {}
+    entry.request.answer_version = 1
     entry.request.answered_by = 'user'
     entry.request.by_person = true
     entry.request.resolved_at = '2026-10-24T10:05:00Z'

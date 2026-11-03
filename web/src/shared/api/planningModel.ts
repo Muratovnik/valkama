@@ -54,6 +54,9 @@ const EVENT_ACTIONS = [
   'request_answered',
   'request_declined',
   'request_expired',
+  'request_changed',
+  'comment_resolved',
+  'comment_reopened',
   'overridden',
 ] as const
 
@@ -203,7 +206,28 @@ const refSchema = strictObject({
   at: boundedText(ISO, 96),
 })
 
-const commentIdentity = { id: positiveInt(), author: actor() }
+/**
+ * A root's resolved mark: who set it, when, and the one-line decision, which may
+ * be blank. `by_person` is the server's fact about the call, as on a comment.
+ */
+const resolutionSchema = strictObject({
+  at: boundedText(ISO, 96),
+  by: actor(),
+  by_person: z.boolean().nullable(),
+  text: blankable(280).refine((value) => !/[\r\n]/u.test(value), { message: 'expected one line' }),
+})
+
+/**
+ * Who wrote a comment and where it hangs. `by_person` is true for a write that
+ * came through the interface, false for another call, and null for a row with no
+ * call. A root has neither parent; a reply has one and never a mark.
+ */
+const commentIdentity = {
+  id: positiveInt(),
+  author: actor(),
+  by_person: z.boolean().nullable(),
+  resolution: resolutionSchema.nullable(),
+}
 const commentSchema = z.union([
   strictObject({
     ...commentIdentity,
@@ -213,7 +237,17 @@ const commentSchema = z.union([
     report: z.null(),
     body: boundedText(/^[^\u{0}]{1,8000}$/u, 8000),
     at: boundedText(ISO, 96),
-  }),
+    reply_to: positiveInt().nullable(),
+    reply_to_request: boundedText(UUID, 36).nullable(),
+  }).refine(
+    (comment) =>
+      (comment.reply_to === null && comment.reply_to_request === null) ||
+      ((comment.reply_to === null) !== (comment.reply_to_request === null) &&
+        !comment.checklist_item_id &&
+        comment.resolution === null),
+    { message: 'a reply has one parent, no step and no mark' },
+  ),
+  // A report is always a root: no write takes a parent for one.
   strictObject({
     ...commentIdentity,
     kind: z.literal('report'),
@@ -222,6 +256,8 @@ const commentSchema = z.union([
     report: summarySchema,
     body: blankable(8000),
     at: boundedText(ISO, 96).nullable(),
+    reply_to: z.null(),
+    reply_to_request: z.null(),
   }),
 ])
 
@@ -294,8 +330,11 @@ const workItemSchema = strictObject({
   summary_comment_id: positiveInt().nullable(),
   links: boundedList(linkSchema, 200),
   refs: boundedList(refSchema, 200),
-  comments: boundedList(commentSchema, 500),
-  events: boundedList(eventSchema, 1000),
+  // Unbounded on purpose: the server sends the whole record, however long the
+  // discussion and the history grew, and a card refused for its length is lost.
+  // Each entry stays bounded.
+  comments: z.array(commentSchema),
+  events: z.array(eventSchema),
   // A transition answers with these; a plain read does not.
   warnings: boundedList(boundedText(/^[^\u{0}]{1,512}$/u, 512), 32).optional(),
   overridden: uniqueList(boundedText(ID, 64), 16).optional(),
@@ -410,6 +449,22 @@ const pendingSchema = strictObject({
   }),
 })
 
+/** A comment write's answer: a reply names the root it landed under, a root names none. */
+const commentWrittenSchema = strictObject({
+  work_item: boundedText(WORK_ITEM_REFERENCE, 20),
+  comment_count: positiveInt(true),
+  comment_id: positiveInt(),
+  reply_to: positiveInt().nullable(),
+  reply_to_request: boundedText(UUID, 36).nullable(),
+})
+
+/** A mark's answer: the root's mark as it now stands, null once reopened. */
+const commentResolvedSchema = strictObject({
+  work_item: boundedText(WORK_ITEM_REFERENCE, 20),
+  comment_id: positiveInt(),
+  resolution: resolutionSchema.nullable(),
+})
+
 export type WorkflowState = z.infer<typeof workflowStateSchema>
 export type WorkItemBrief = z.infer<typeof workItemBriefSchema>
 export type WorkItem = z.infer<typeof workItemSchema>
@@ -419,6 +474,8 @@ export type PlanningReadModel = z.infer<typeof readModelSchema>
 export type PlanningEdge = z.infer<typeof edgeSchema>
 export type PlanningRefusal = z.infer<typeof refusalSchema>
 export type PlanningPending = z.infer<typeof pendingSchema>
+export type CommentWritten = z.infer<typeof commentWrittenSchema>
+export type CommentResolved = z.infer<typeof commentResolvedSchema>
 
 export function validateReadModel(value: unknown, path = 'planning'): PlanningReadModel {
   return parseContract(readModelSchema, value, path, invalid)
@@ -426,6 +483,14 @@ export function validateReadModel(value: unknown, path = 'planning'): PlanningRe
 
 export function validateWorkItemRecord(value: unknown, path = 'planning.workItem'): WorkItem {
   return parseContract(workItemSchema, value, path, invalid)
+}
+
+export function validateCommentWritten(value: unknown): CommentWritten {
+  return parseContract(commentWrittenSchema, value, 'planning.comment', invalid)
+}
+
+export function validateCommentResolved(value: unknown): CommentResolved {
+  return parseContract(commentResolvedSchema, value, 'planning.resolution', invalid)
 }
 
 export function readRefusal(value: unknown): PlanningRefusal | null {

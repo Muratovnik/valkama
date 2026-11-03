@@ -24,6 +24,7 @@ import {
   inspectorResourceRef as resourceRef,
   value,
 } from '../fixtures/workItem.ts'
+import { asRoot } from '../support/threads.ts'
 
 vi.mock('@/shared/api/planningApi.ts', async (load) => ({
   ...(await load<typeof import('@/shared/api/planningApi.ts')>()),
@@ -201,6 +202,7 @@ describe('task description and discussion', () => {
         {
           id: 11,
           kind: 'report',
+          ...asRoot,
           author: 'codex',
           body: '',
           at: now,
@@ -227,6 +229,7 @@ describe('task description and discussion', () => {
         {
           id: 11,
           kind: 'report',
+          ...asRoot,
           author: 'user',
           body: '',
           at: null,
@@ -270,6 +273,7 @@ describe('task description and discussion', () => {
         {
           id: 1,
           kind: 'comment',
+          ...asRoot,
           report: null,
           body: 'Later comment',
           author: 'user',
@@ -278,6 +282,7 @@ describe('task description and discussion', () => {
         {
           id: 100,
           kind: 'report',
+          ...asRoot,
           report: { done: 'Earlier report', next: 'Review' },
           body: '',
           author: 'writer',
@@ -286,6 +291,7 @@ describe('task description and discussion', () => {
         {
           id: 99,
           kind: 'report',
+          ...asRoot,
           report: { done: 'Historical report', next: 'Review' },
           body: '',
           author: '',
@@ -319,7 +325,7 @@ describe('task description and discussion', () => {
       ...record('Task', 5),
       summary: report,
       summary_comment_id: 11,
-      comments: [{ id: 11, kind: 'report', author: 'user', body: '', at: now, report }],
+      comments: [{ id: 11, kind: 'report', ...asRoot, author: 'user', body: '', at: now, report }],
     }
     const wrapper = mount(InspectorOverview, {
       props: { item, resourceRef, writable: true },
@@ -352,6 +358,7 @@ describe('task description and discussion', () => {
         {
           id: 1,
           kind: 'report',
+          ...asRoot,
           report: { done: 'Done', next: 'Next' },
           body: '',
           author: 'user',

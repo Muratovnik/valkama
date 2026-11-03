@@ -2,6 +2,7 @@ import { expect } from '@playwright/test'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
+import { asRoot } from '../support/threads.ts'
 import { installDiscussionBackend } from './discussionBackend.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { now, planningSpace, projectScope } from './planningFixtures.ts'
@@ -14,6 +15,7 @@ test('description, comments and selected reports survive a fresh item read', asy
     backend.item.comments.push({
       id: index + 1,
       kind: 'report',
+      ...asRoot,
       author: 'codex',
       at: now,
       body: '',

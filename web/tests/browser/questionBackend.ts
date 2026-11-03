@@ -9,6 +9,20 @@ import { installStreamDouble } from './streamDouble.ts'
 
 type Request = InputRequestEntry['request']
 
+/**
+ * The other parts of an answer follow `answers`, as the server keeps them, so a
+ * test that says only what was chosen still sends a whole answered question.
+ */
+function withAnswerParts(request: Request): Request {
+  if (request.answers === null || request.answer_version > 0) return request
+  return {
+    ...request,
+    own: request.own ?? {},
+    field_notes: request.field_notes ?? {},
+    answer_version: 1,
+  }
+}
+
 /** A question on the card the browser tests open. */
 export function question(request: Partial<Request> = {}): InputRequestEntry {
   const base = requestEntry().request
@@ -19,7 +33,7 @@ export function question(request: Partial<Request> = {}): InputRequestEntry {
       reference: workItemRef.reference,
       writable: true,
     },
-    request: {
+    request: withAnswerParts({
       ...base,
       work_item_id: workItem.work_item_id,
       reference: workItemRef.reference,
@@ -28,7 +42,7 @@ export function question(request: Partial<Request> = {}): InputRequestEntry {
       execution_id: null,
       session_id: null,
       ...request,
-    },
+    }),
   }
 }
 
@@ -152,6 +166,12 @@ async function installQuestions(page: Page, entries: InputRequestEntry[]) {
       ...entry.request,
       status: action === 'answer' ? 'answered' : 'declined',
       answers: action === 'answer' ? (body.answers as Request['answers']) : null,
+      own: action === 'answer' ? ((body.own as Request['own'] | undefined) ?? {}) : null,
+      field_notes:
+        action === 'answer'
+          ? ((body.field_notes as Request['field_notes'] | undefined) ?? {})
+          : null,
+      answer_version: action === 'answer' ? 1 : 0,
       note: (body.note as string | undefined) ?? null,
       answered_by: 'user',
       by_person: true,
@@ -173,7 +193,11 @@ async function installQuestions(page: Page, entries: InputRequestEntry[]) {
     settle(id: string, change: Partial<Request>) {
       const entry = entries.find((candidate) => candidate.request.request_id === id)
       if (!entry) throw new Error('No such question')
-      entry.request = { ...entry.request, revision: entry.request.revision + 1, ...change }
+      entry.request = withAnswerParts({
+        ...entry.request,
+        revision: entry.request.revision + 1,
+        ...change,
+      })
     },
   }
 }

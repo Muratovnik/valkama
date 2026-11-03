@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect } from '@playwright/test'
 
+import { asRoot } from '../support/threads.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { test } from './test.ts'
 
@@ -78,6 +79,7 @@ test.beforeEach(async ({ page }) => {
                 {
                   id: 1,
                   kind: 'report',
+                  ...asRoot,
                   report: {
                     done: 'First loaded line\nSecond loaded line\nThird loaded line\nFourth loaded line\nFifth loaded line\nSixth loaded line',
                     next: 'Continue review',

@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test'
 
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 
+import { asRoot } from '../support/threads.ts'
 import { installBackend } from './backend.ts'
 import { doneState, now, projectScope, workItem, workItemRef } from './planningFixtures.ts'
 
@@ -72,6 +73,7 @@ export async function installDiscussionBackend(page: Page) {
         ? {
             ...saved,
             kind: 'report',
+            ...asRoot,
             report,
             body: '',
             checklist_item_id: null,
@@ -80,6 +82,7 @@ export async function installDiscussionBackend(page: Page) {
         : {
             ...saved,
             kind: 'comment',
+            ...asRoot,
             report: null,
             body: String(body.body),
             ...checklistQuote(item, body.checklist_item_id),

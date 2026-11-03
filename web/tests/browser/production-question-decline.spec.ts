@@ -9,6 +9,7 @@ import type { Locator, Page } from '@playwright/test'
 
 import type { InputRequestField } from '@/shared/api/inputRequestModel.ts'
 
+import { asRoot } from '../support/threads.ts'
 import { centre } from './boardPage.ts'
 import { openQuestion, question, send } from './questionBackend.ts'
 import {
@@ -352,6 +353,7 @@ async function reportUnder(page: Page, options: number) {
   opened.backend.item.comments.push({
     id: 901,
     kind: 'report',
+    ...asRoot,
     author: 'codex',
     at: '2020-01-01T10:00:00Z',
     body: '',

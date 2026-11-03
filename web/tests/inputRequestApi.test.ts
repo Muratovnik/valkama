@@ -11,7 +11,7 @@ import {
   validateInputRequestList,
 } from '@/shared/api/inputRequestModel.ts'
 
-import { requestEntry, requestList } from './support/inputRequests.ts'
+import { firstAnswer, requestEntry, requestList } from './support/inputRequests.ts'
 import { present } from './support/present.ts'
 import { requestBody, requestUrl, withSecurityBootstrap } from './support/request.ts'
 
@@ -64,6 +64,7 @@ describe('input request wire contract', () => {
         ...entry.request,
         status: 'answered',
         answers: { proceed: false },
+        ...firstAnswer,
         revision: 2,
         resolved_at: '2026-10-24T10:01:00Z',
         answered_by: 'user',
@@ -105,6 +106,7 @@ describe('input request wire contract', () => {
         ...entry.request,
         status: 'answered',
         answers: {},
+        ...firstAnswer,
         note: 'In my own words',
         answered_by: 'user',
         by_person: true,
@@ -123,7 +125,7 @@ describe('input request wire contract', () => {
     expect(bodies[1]).not.toHaveProperty('note')
   })
 
-  it('reads an option’s description and recommendation, and an answer that is only a note', () => {
+  it('reads an option’s description and recommendation, and an older answer that is only a note', () => {
     const entry = requestEntry()
     entry.request.fields = [
       {
@@ -143,7 +145,7 @@ describe('input request wire contract', () => {
     })
     const noted = {
       ...envelope,
-      request: { ...entry.request, status: 'answered', answers: {}, note: 'Words' },
+      request: { ...entry.request, status: 'answered', answers: {}, ...firstAnswer, note: 'Words' },
     }
     expect(validateInputRequestDetail(noted).request.note).toBe('Words')
   })

@@ -11,11 +11,20 @@ import { descriptionViews } from '@/features/input-requests/utils/optionDescript
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 
 import { requestEntry } from './support/inputRequests.ts'
+import { asRoot } from './support/threads.ts'
 
 const comment = (id: number, at: string | null): WorkItem['comments'][number] =>
   at === null
-    ? { id, author: 'user', at, kind: 'report', report: { done: 'd', next: 'n' }, body: '' }
-    : { id, author: 'user', at, kind: 'comment', report: null, body: `comment ${id}` }
+    ? {
+        id,
+        author: 'user',
+        at,
+        kind: 'report',
+        ...asRoot,
+        report: { done: 'd', next: 'n' },
+        body: '',
+      }
+    : { id, author: 'user', at, kind: 'comment', ...asRoot, report: null, body: `comment ${id}` }
 
 function asked(id: string, createdAt: string, status: 'pending' | 'declined' = 'pending') {
   const entry = requestEntry()

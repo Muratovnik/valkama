@@ -31,6 +31,23 @@ const answerSchema = z.union([text(8000), boundedList(text(64), 20), z.boolean()
 const answersSchema = z
   .record(identifier, answerSchema)
   .refine((answers) => Object.keys(answers).length <= 12)
+/** Text per field: an own variant (up to 8000) or a field's comment (up to 2000). */
+const perField = (max: number) =>
+  z.record(identifier, z.string().min(1).max(max)).refine((map) => Object.keys(map).length <= 12)
+const ownSchema = perField(8000)
+const fieldNotesSchema = perField(2000)
+
+/** An answer the one in force replaced, with who gave it and through what. */
+const versionSchema = strictObject({
+  version: positiveInt(),
+  answers: answersSchema,
+  own: ownSchema,
+  field_notes: fieldNotesSchema,
+  note: text(8000).nullable(),
+  answered_by: text(200),
+  by_person: z.boolean().nullable(),
+  answered_at: boundedText(ISO, 96),
+})
 
 const requestSchema = strictObject({
   request_id: boundedText(UUID, 36),
@@ -41,8 +58,16 @@ const requestSchema = strictObject({
   prompt: z.string().min(1).max(8000),
   fields: boundedList(fieldSchema, 12).min(1),
   answers: answersSchema.nullable(),
-  /** What the person wrote in their own words, which may stand in for the required fields. */
+  /** Own variants of fields with options; null while there is no answer. */
+  own: ownSchema.nullable(),
+  /** Comments on fields with options; null while there is no answer. */
+  field_notes: fieldNotesSchema.nullable(),
+  /** A comment on the whole question. It is part of the answer and answers no field. */
   note: text(8000).nullable().optional(),
+  /** 0 with no answer, 1 for the first, one more for each change. */
+  answer_version: positiveInt(true),
+  /** The replaced versions, oldest first. */
+  history: boundedList(versionSchema, 49),
   status: z.enum(['pending', 'answered', 'declined', 'expired']),
   author: text(200),
   answered_by: text(200),
@@ -64,8 +89,18 @@ const requestSchema = strictObject({
     'Duplicate field IDs',
   )
   .refine(
-    (request) => (request.status === 'answered') === (request.answers !== null),
+    (request) =>
+      (request.status === 'answered') === (request.answers !== null) &&
+      (request.answers === null) === (request.own === null) &&
+      (request.answers === null) === (request.field_notes === null) &&
+      (request.answers === null) === (request.answer_version === 0),
     'Invalid answer state',
+  )
+  .refine(
+    (request) =>
+      request.history.length === Math.max(0, request.answer_version - 1) &&
+      request.history.every((version, index) => version.version === index + 1),
+    'Invalid answer history',
   )
 
 const entrySchema = strictObject({ target: planningTargetSchema, request: requestSchema }).refine(

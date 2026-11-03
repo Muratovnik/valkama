@@ -69,10 +69,42 @@ export async function fetchInputRequest(
   )
 }
 
+/** The parts of an answer besides the chosen values; each is left out when empty. */
+interface AnswerExtras {
+  /** Comments on fields with options, by field id. */
+  field_notes?: Record<string, string>
+  /** A comment on the whole question; it answers no field. */
+  note?: string
+  /** Own variants of fields with options, by field id. */
+  own?: Record<string, string>
+}
+
+type AnswerBody = AnswerExtras & { answers?: InputAnswers }
+
+function written(map: Record<string, string> | undefined): Record<string, string> | undefined {
+  if (map === undefined) return undefined
+  const kept = Object.entries(map)
+    .map(([field, value]) => [field, value.trim()] as const)
+    .filter(([, value]) => value !== '')
+  return kept.length ? Object.fromEntries(kept) : undefined
+}
+
+function answerBody(answers: InputAnswers, extras: AnswerExtras): AnswerBody {
+  const note = extras.note?.trim()
+  const own = written(extras.own)
+  const fieldNotes = written(extras.field_notes)
+  return {
+    answers,
+    ...(own ? { own } : {}),
+    ...(fieldNotes ? { field_notes: fieldNotes } : {}),
+    ...(note ? { note } : {}),
+  }
+}
+
 async function resolve(
   entry: InputRequestEntry,
-  action: 'answer' | 'decline',
-  answer: { answers?: InputAnswers; note?: string } = {},
+  action: 'answer' | 'change' | 'decline',
+  answer: AnswerBody = {},
 ): Promise<InputRequestEntry> {
   const payload = await request(`/api/modules/planning/request/${action}`, {
     method: 'POST',
@@ -89,14 +121,29 @@ async function resolve(
   return validateInputRequestDetail(payload)
 }
 
-/** A note, when there is one, may stand in for the required fields, so `answers` may be empty. */
+/**
+ * Answer a pending question. A required field is answered by a value or an own
+ * variant; the note is a comment on the whole question and stands in for none.
+ */
 export function answerInputRequest(
   entry: InputRequestEntry,
   answers: InputAnswers,
   note = '',
+  extras: Omit<AnswerExtras, 'note'> = {},
 ): Promise<InputRequestEntry> {
-  const written = note.trim()
-  return resolve(entry, 'answer', { answers, ...(written ? { note: written } : {}) })
+  return resolve(entry, 'answer', answerBody(answers, { ...extras, note }))
+}
+
+/**
+ * Replace the answer in force while the item is open. The request's revision
+ * guards it, and an answer equal to the one in force is refused as unchanged.
+ */
+export function changeInputRequestAnswer(
+  entry: InputRequestEntry,
+  answers: InputAnswers,
+  extras: AnswerExtras = {},
+): Promise<InputRequestEntry> {
+  return resolve(entry, 'change', answerBody(answers, extras))
 }
 
 export function declineInputRequest(entry: InputRequestEntry): Promise<InputRequestEntry> {

@@ -12,6 +12,7 @@ import { expect } from '@playwright/test'
 import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
+import { asRoot } from '../support/threads.ts'
 import { installDiscussionBackend } from './discussionBackend.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import {
@@ -59,6 +60,7 @@ test('a long markdown report holds on a whole line, opens, and links what resolv
   backend.item.comments.push({
     id: 1,
     kind: 'report',
+    ...asRoot,
     report: { done: report, next: 'Review MAIN-265', why: '' },
     body: '',
     author: 'agent',
@@ -175,6 +177,7 @@ test('a line that holds a reference is as tall as a line of plain text', async (
   backend.item.comments.push({
     id: 2,
     kind: 'report',
+    ...asRoot,
     report: {
       done: [
         'Plain line one',

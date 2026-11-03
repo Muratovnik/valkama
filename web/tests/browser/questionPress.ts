@@ -3,6 +3,7 @@ import type { Locator, Page } from '@playwright/test'
 
 import type { InputRequestField } from '@/shared/api/inputRequestModel.ts'
 
+import { asRoot } from '../support/threads.ts'
 import { centre } from './boardPage.ts'
 import { openQuestion, question } from './questionBackend.ts'
 
@@ -21,6 +22,9 @@ export const THIRD = '44444444-4444-4444-8444-444444444443'
 export const answeredElsewhere = {
   status: 'answered',
   answers: { route: 'choice-1' },
+  own: {},
+  field_notes: {},
+  answer_version: 1,
   answered_by: 'another agent',
   by_person: false,
   resolved_at: '2026-10-24T10:30:00Z',
@@ -121,6 +125,7 @@ export async function threeInCard(page: Page, first: number, width = 1680, heigh
     opened.backend.item.comments.push({
       id: 900 + id,
       kind: 'comment',
+      ...asRoot,
       author: 'codex',
       at: '2020-01-01T10:00:00Z',
       body: 'An old comment that takes up room. '.repeat(30),

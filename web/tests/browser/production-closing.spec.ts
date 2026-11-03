@@ -4,6 +4,7 @@ import type { Locator, Page } from '@playwright/test'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
+import { asRoot } from '../support/threads.ts'
 import { installDiscussionBackend } from './discussionBackend.ts'
 import { doneState, now, projectScope } from './planningFixtures.ts'
 import { test } from './test.ts'
@@ -43,6 +44,7 @@ const withAgentReport = seed((item) => {
   item.comments.push({
     id: 1,
     kind: 'report',
+    ...asRoot,
     author: 'codex',
     at: now,
     body: '',

@@ -4,6 +4,8 @@ import { expect, test } from 'vitest'
 
 import { validatePlanningWorkItemPayload } from '@/shared/api/platformPlanningPayload.ts'
 
+import { asRoot } from './support/threads.ts'
+
 function planningWorkItemPayload() {
   const spaceRef = {
     data_scope_id: '123e4567-e89b-42d3-a456-426614174000',
@@ -62,6 +64,7 @@ function planningWorkItemPayload() {
             {
               id: 1,
               kind: 'comment',
+              ...asRoot,
               report: null,
               author: 'codex',
               body: 'Use /api/platform/<module> as inert text.',
@@ -122,15 +125,16 @@ test.each([
 })
 
 test.each([
-  { kind: 'report', report: null, body: '', at: null },
+  { kind: 'report', ...asRoot, report: null, body: '', at: null },
   {
     kind: 'comment',
+    ...asRoot,
     report: { done: 'Result', next: 'Next' },
     body: 'Text',
     at: '2026-08-13T09:00:00Z',
   },
-  { kind: 'comment', report: null, body: '', at: '2026-08-13T09:00:00Z' },
-  { kind: 'comment', report: null, body: 'Text', at: null },
+  { kind: 'comment', ...asRoot, report: null, body: '', at: '2026-08-13T09:00:00Z' },
+  { kind: 'comment', ...asRoot, report: null, body: 'Text', at: null },
 ])('rejects a malformed typed discussion entry: %o', (invalidEntry) => {
   const payload = planningWorkItemPayload()
   const entry = payload.state.payload.work_item.comments[0]
@@ -145,6 +149,7 @@ test('accepts an imported report with unknown time and rejects extra fields', ()
   if (entry === undefined) throw new Error('Expected discussion fixture')
   Object.assign(entry, {
     kind: 'report',
+    ...asRoot,
     report: { done: 'Historical result', next: 'Review' },
     body: '',
     at: null,

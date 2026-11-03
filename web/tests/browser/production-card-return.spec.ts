@@ -5,6 +5,7 @@ import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { branchedChain } from '../fixtures/chainMap.ts'
+import { asRoot } from '../support/threads.ts'
 import { installBackend } from './backend.ts'
 import { largeChainHere, serve } from './chainFixtures.ts'
 import { now, projectScope, workItem, workItemRef } from './planningFixtures.ts'
@@ -128,6 +129,7 @@ test('Back on a slow chain moves to the place though the browser has moved the c
   const discussion = Array.from({ length: 30 }, (_, index) => ({
     id: index + 1,
     kind: 'comment',
+    ...asRoot,
     author: 'codex',
     at: now,
     body: `Remark ${index + 1}.`,

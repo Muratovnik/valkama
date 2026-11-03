@@ -10,10 +10,17 @@
 import {
   readPending,
   readRefusal,
+  validateCommentResolved,
+  validateCommentWritten,
   validateReadModel,
   validateWorkItemRecord,
 } from '@/shared/api/planningModel.ts'
-import type { PlanningReadModel, WorkItem } from '@/shared/api/planningModel.ts'
+import type {
+  CommentResolved,
+  CommentWritten,
+  PlanningReadModel,
+  WorkItem,
+} from '@/shared/api/planningModel.ts'
 import { fetchPlanningWorkItem } from '@/shared/api/platformPlanningApi.ts'
 import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import { readJsonResponse } from '@/shared/api/readJsonResponse.ts'
@@ -296,6 +303,34 @@ export async function commentWorkItem(input: {
   checklist_item_id?: string
 }): Promise<void> {
   await write('/api/planning/work-item/comment', { ...input })
+}
+
+/** Where a reply hangs: under a comment root or under a question, never both. */
+type ReplyParent = { reply_to: number } | { reply_to_request: string }
+
+/**
+ * Reply in a thread. A reply to a reply lands under that reply's root, and the
+ * answer names the root it landed under.
+ */
+export async function replyInThread(
+  input: { body: string; id: string; author?: string } & ReplyParent,
+): Promise<CommentWritten> {
+  return validateCommentWritten(await write('/api/planning/work-item/comment', { ...input }))
+}
+
+/**
+ * Mark a root resolved with a one-line decision, which may be blank, or remove
+ * the mark with `reopen`. The mark is not a field of the item, so no revision
+ * guards it.
+ */
+export async function resolveThread(
+  input: { comment_id: number; id: string; author?: string } & (
+    { reopen: true } | { resolution: string }
+  ),
+): Promise<CommentResolved> {
+  return validateCommentResolved(
+    await write('/api/planning/work-item/comment/resolve', { ...input }),
+  )
 }
 
 export async function updateWorkItemDescription(input: {
