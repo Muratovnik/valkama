@@ -313,7 +313,7 @@ test('a dead pid makes a crashed terminal session resumable in a new terminal', 
   )
   const started = effects(box.timeline)[0]
   assert.equal(started.spawn, WT)
-  assert.deepEqual(started.args, ['-d', '.', 'cmd.exe', '/k', 'claude', '--resume', ID])
+  assert.deepEqual(started.args, ['-d', FOLDER, 'cmd.exe', '/k', 'claude', '--resume', ID])
   assert.equal(started.options.cwd, FOLDER)
 })
 
@@ -352,7 +352,8 @@ test('the registry is not asked about a client it does not know', async () => {
   assert.equal(box.queries.length, 1)
 })
 
-test('a terminal folder never reaches the terminal command line', async () => {
+test('a folder Windows Terminal would split into two commands is refused', async () => {
+  // The folder exists; its name alone is what would start another command.
   const folder = 'C:\\work\\my;folder'
   const box = machine({
     plans: plan([{ kind: 'resume-in-terminal', client: 'codex', session: ID, folder }], {
@@ -360,10 +361,9 @@ test('a terminal folder never reaches the terminal command line', async () => {
       one_action: true,
     }),
   })
-  await openSessionRequest(box.options({ request: { session: ID } }))
-  const started = effects(box.timeline)[0]
-  assert.deepEqual(started.args, ['-d', '.', 'cmd.exe', '/k', 'codex', 'resume', ID])
-  assert.equal(started.options.cwd, folder)
+  const result = await openSessionRequest(box.options({ request: { session: ID } }))
+  assert.equal(result.reason, 'invalid-plan')
+  assert.deepEqual(effects(box.timeline), [])
 })
 
 test('the remaining steps each do their one thing', async () => {

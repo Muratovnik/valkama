@@ -183,6 +183,9 @@ function validStep(step, checks) {
         exactly(step, ['kind', 'client', 'session', 'folder']) &&
         Object.hasOwn(RESUME, step.client) &&
         sessionId(step.session) &&
+        // Windows Terminal reads `;` anywhere on its command line as the start of
+        // another command, so a folder named with one would run what follows it.
+        !String(step.folder).includes(';') &&
         usableFolder(step.folder, checks.isDirectory)
       )
     case 'desktop-resume':
@@ -291,10 +294,7 @@ async function runStep(step, context, linkFollows) {
   if (step.kind === 'resume-in-terminal') {
     const terminal = context.findExecutable('wt.exe')
     if (!terminal) throw new Refusal('not-installed', { host: 'terminal' })
-    // `-d .` takes the folder from the started process rather than its command
-    // line, where Windows Terminal would read a `;` in a folder's name as the
-    // start of another command.
-    const argv = ['-d', '.', 'cmd.exe', '/k', ...RESUME[step.client](step.session)]
+    const argv = ['-d', step.folder, 'cmd.exe', '/k', ...RESUME[step.client](step.session)]
     await launch(context, terminal, argv, { cwd: step.folder })
     return
   }
@@ -439,7 +439,10 @@ async function openSessionRequest(options) {
   if (!plan) return refused('plan-unavailable')
   const steps = validPlan(plan, checks)
   if (!steps) {
-    context.log('open-plan-invalid', {})
+    const failing = Array.isArray(plan.steps)
+      ? plan.steps.find((step) => !validStep(step, checks))
+      : null
+    context.log('open-plan-invalid', { step: plainObject(failing) ? String(failing.kind) : '' })
     return refused('invalid-plan')
   }
   const start = parsed.step ?? 0
