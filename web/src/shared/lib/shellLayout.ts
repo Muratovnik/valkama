@@ -13,6 +13,13 @@ export const DRAWER_MAX_WIDTH = 960
 export const DRAWER_VIEWPORT_GUTTER = 40
 export const DRAWER_NARROW_BREAKPOINT = 620
 
+/**
+ * A Markdown document read beside or over a card: its own width, kept apart from the
+ * card's, so that reading a plan wide does not widen the next card.
+ */
+export const DOCUMENT_PANE_STORAGE_KEY = 'valkama-document-pane-width'
+export const DOCUMENT_PANE_DEFAULT_WIDTH = 720
+
 function drawerMaximumForViewport(viewportWidth: number): number {
   const available = Math.max(0, Math.floor(viewportWidth))
   return available <= DRAWER_NARROW_BREAKPOINT
