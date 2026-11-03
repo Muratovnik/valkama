@@ -88,7 +88,7 @@ test('English and Russian catalogs translate checklist actors, activity, source 
   assert.equal(i18n.global.t('workItem.listEmpty'), 'This space has no work items yet.')
   assert.equal(i18n.global.t('workItem.noSpace'), 'This project has no planning space yet.')
   assert.equal(i18n.global.t('settings.title'), 'Valkama settings')
-  assert.equal(i18n.global.t('settings.event.agentWaiting'), 'Agent ends every turn (noisy)')
+  assert.equal(i18n.global.t('alerts.event.question'), 'An answer or a decision is needed')
   assert.equal(
     i18n.global.t('session.refused.no-cwd'),
     'This session reported no working directory to open.',
@@ -122,7 +122,7 @@ test('English and Russian catalogs translate checklist actors, activity, source 
     'У этого проекта пока нет пространства планирования.',
   )
   assert.equal(i18n.global.t('settings.title'), 'Настройки Valkama')
-  assert.equal(i18n.global.t('settings.event.agentWaiting'), 'Агент завершил каждый ход (шумно)')
+  assert.equal(i18n.global.t('alerts.event.question'), 'Нужен ответ или решение')
   assert.equal(i18n.global.t('session.refused.no-cwd'), 'Сессия не сообщила рабочий каталог.')
   assert.equal(i18n.global.t('session.open'), 'Открыть сессию')
   assert.equal(i18n.global.t('workItem.relations'), 'Связи')

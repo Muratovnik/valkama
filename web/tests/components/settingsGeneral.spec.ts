@@ -22,7 +22,8 @@ function mountGeneral() {
   const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages })
   return mount(SettingsGeneral, {
     props: { locale: 'en' },
-    global: { plugins: [createPinia(), i18n] },
+    // The alerts group has its own spec, its own reads and its own controls.
+    global: { plugins: [createPinia(), i18n], stubs: { SettingsAlerts: true } },
   })
 }
 

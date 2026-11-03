@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 import { settingsView } from '@/app/moduleViews.ts'
 
@@ -40,7 +40,9 @@ async function refresh() {
 function stateValue(key: string, fallback = '') {
   return String(props.route.state?.[key] ?? fallback)
 }
-defineExpose({ refresh })
+/** The work item whose card is on show, for as long as its module is. */
+const openCardId = computed(() => planningSurface.value?.selectedId ?? null)
+defineExpose({ openCardId, refresh })
 </script>
 <template>
   <PlanningModuleSurface

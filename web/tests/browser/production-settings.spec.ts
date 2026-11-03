@@ -37,7 +37,7 @@ test('Settings sections share one measure and one compact control lane', async (
   ).toBeLessThanOrEqual(25)
 
   const controlLefts = await page
-    .locator('.settings-general-control, .settings-general-toggle, .settings-general-checkbox')
+    .locator('.settings-general-control, .settings-alerts-control')
     .evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().left))
   expect(Math.max(...controlLefts) - Math.min(...controlLefts)).toBeLessThan(2)
   expect(controlLefts[0] - (pageBox?.x ?? 0)).toBeGreaterThan((pageBox?.width ?? 0) * 0.48)
@@ -67,7 +67,7 @@ test('Settings has nothing to switch modules with and nothing the registry used 
   await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
   await expect(page.getByRole('heading', { name: 'Interface', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Opening sessions', exact: true })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Notifications', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Windows notifications' })).toBeVisible()
 
   // The module list is the build's, so there is no section that changes it.
   const sections = page.getByRole('group', { name: 'Settings section' }).getByRole('button')

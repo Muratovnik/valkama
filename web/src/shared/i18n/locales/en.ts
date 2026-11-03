@@ -1,6 +1,7 @@
 /* The locale is intentionally a parity-checked catalogue, not executable logic. */
 
 import { activityMessages } from '@/shared/i18n/activityMessages.ts'
+import { alertMessages } from '@/shared/i18n/alertMessages.ts'
 import { checklistCommentMessages } from '@/shared/i18n/checklistCommentMessages.ts'
 import { connectionMessages } from '@/shared/i18n/connectionMessages.ts'
 import { globalFinderMessages } from '@/shared/i18n/globalFinderMessages.ts'
@@ -18,6 +19,7 @@ import { workItemLinkMessages } from '@/shared/i18n/workItemLinkMessages.ts'
 export const en = {
   workItemLink: workItemLinkMessages.en.workItemLink,
   history: activityMessages.en.history,
+  alerts: alertMessages.en.alerts,
   checklistComment: checklistCommentMessages.en.checklistComment,
   finder: globalFinderMessages.en.finder,
   requests: inputRequestMessages.en.requests,
@@ -687,15 +689,6 @@ export const en = {
     languageHint: 'Applies to the entire Valkama interface on this device.',
     searchOptions: 'Search options',
     noOptions: 'No matching options',
-    notificationsIntro:
-      'Choose the events that deserve your attention. System permission is requested only from this page.',
-    notifications: 'Notifications',
-    notifyEnabled: 'Notify about agent and card events',
-    notifyEnabledHint: 'The master switch keeps the event choices below.',
-    permissionIntro: 'Valkama requests system permission only after this action.',
-    permissionAsk: 'Allow system notifications',
-    permissionDenied:
-      'The browser blocks notifications for this page. Allow them in the site settings (the lock icon in the address bar).',
     openers: 'Opening sessions',
     openersIntro: 'Where each client opens from an active or completed session.',
     openersEmpty: 'No session opener is available',
@@ -737,15 +730,6 @@ export const en = {
       'terminal': 'Terminal — resume session',
       'cursor': 'Cursor — session folder',
       'custom': 'Custom command',
-    },
-    event: {
-      itemCompleted: 'Work item reaches a completed state',
-      itemInReview: 'Work item reaches review',
-      itemBlocked: 'Work item becomes blocked',
-      sessionEnded: 'Agent session finishes',
-      sessionFailed: 'Agent session fails',
-      agentBlocked: 'Agent needs input',
-      agentWaiting: 'Agent ends every turn (noisy)',
     },
   },
   session: {

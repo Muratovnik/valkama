@@ -7,7 +7,6 @@ import {
   browserOpenerCapabilities,
   DEFAULT_SETTINGS,
   mergeSettings,
-  NOTIFY_EVENTS,
   openerClientOf,
   openerFor,
   openerKindsFor,
@@ -15,12 +14,7 @@ import {
   validateCustomCommand,
 } from '@/shared/lib/settings.ts'
 
-test('defaults notify about finished work but keep the per-turn waiting quiet', () => {
-  assert.equal(DEFAULT_SETTINGS.notifyEnabled, true)
-  assert.equal(DEFAULT_SETTINGS.notify.itemCompleted, true)
-  assert.equal(DEFAULT_SETTINGS.notify.sessionEnded, true)
-  assert.equal(DEFAULT_SETTINGS.notify.sessionFailed, true)
-  assert.equal(DEFAULT_SETTINGS.notify.agentWaiting, false)
+test('defaults open each client where it can resume', () => {
   assert.equal(DEFAULT_SETTINGS.openers.claude.kind, 'vscode')
   assert.equal(DEFAULT_SETTINGS.openers.codex.kind, 'terminal')
   assert.ok(browserOpenerCapabilities().some((item) => item.kind === 'codex-app'))
@@ -28,17 +22,26 @@ test('defaults notify about finished work but keep the per-turn waiting quiet', 
 
 test('merge completes any stored fragment into a valid structure', () => {
   const merged = mergeSettings({
-    notifyEnabled: false,
-    notify: { itemCompleted: false, nonsense: true },
     openers: { claude: { kind: 'custom', command: 'wt -d {cwd}' }, codex: 7 },
   })
-  assert.equal(merged.notifyEnabled, false)
-  assert.equal(merged.notify.itemCompleted, false)
-  for (const event of NOTIFY_EVENTS) assert.equal(typeof merged.notify[event], 'boolean')
   assert.deepEqual(merged.openers.claude, { kind: 'custom', command: 'wt -d {cwd}' })
   assert.deepEqual(merged.openers.codex, DEFAULT_SETTINGS.openers.codex)
   assert.deepEqual(mergeSettings(null), DEFAULT_SETTINGS)
   assert.deepEqual(mergeSettings('garbage'), DEFAULT_SETTINGS)
+})
+
+test('settings stored by a build that kept notify fields read cleanly and lose them', () => {
+  const stored = {
+    notifyEnabled: false,
+    notify: { itemCompleted: false, agentWaiting: true },
+    openers: { claude: { kind: 'terminal', command: '' } },
+  }
+  assert.deepEqual(mergeSettings(stored), {
+    openers: {
+      ...DEFAULT_SETTINGS.openers,
+      claude: { kind: 'terminal', command: '' },
+    },
+  })
 })
 
 test('an opener association is picked by client family, not exact string', () => {

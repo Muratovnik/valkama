@@ -6,6 +6,7 @@ import AppContextBar from '@/app/components/AppContextBar.vue'
 import AppModuleStage from '@/app/components/AppModuleStage.vue'
 import AppNotice from '@/app/components/AppNotice.vue'
 import AppRouteRecovery from '@/app/components/AppRouteRecovery.vue'
+import { useAlertPresence } from '@/app/composables/useAlertPresence.ts'
 import { useAppReferenceLinks } from '@/app/composables/useAppReferenceLinks.ts'
 import { useGlobalWorkActions } from '@/app/composables/useGlobalWorkActions.ts'
 import {
@@ -100,6 +101,11 @@ const mappedProjectResources = computed(() => {
     : []
 })
 const moduleStage = ref<InstanceType<typeof AppModuleStage> | null>(null)
+// The card by the id a sender of alerts knows it by: the route has only its reference.
+useAlertPresence(
+  () => moduleStage.value?.openCardId ?? null,
+  () => requestsOpen.value,
+)
 /** The open space's stream; null while no space is open, and the shell's connection speaks. */
 const planningConnection = ref<PlanningConnectionState | null>('connecting')
 const { contextState, loadContext } = usePlatformReadModels()

@@ -387,7 +387,7 @@ async function refresh() {
   reconnect()
 }
 
-defineExpose({ refresh })
+defineExpose({ refresh, selectedId })
 </script>
 
 <template>

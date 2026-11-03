@@ -1,6 +1,7 @@
 /* The locale is intentionally a parity-checked catalogue, not executable logic. */
 
 import { activityMessages } from '@/shared/i18n/activityMessages.ts'
+import { alertMessages } from '@/shared/i18n/alertMessages.ts'
 import { checklistCommentMessages } from '@/shared/i18n/checklistCommentMessages.ts'
 import { connectionMessages } from '@/shared/i18n/connectionMessages.ts'
 import { globalFinderMessages } from '@/shared/i18n/globalFinderMessages.ts'
@@ -18,6 +19,7 @@ import { workItemLinkMessages } from '@/shared/i18n/workItemLinkMessages.ts'
 export const ru = {
   workItemLink: workItemLinkMessages.ru.workItemLink,
   history: activityMessages.ru.history,
+  alerts: alertMessages.ru.alerts,
   checklistComment: checklistCommentMessages.ru.checklistComment,
   finder: globalFinderMessages.ru.finder,
   requests: inputRequestMessages.ru.requests,
@@ -686,15 +688,6 @@ export const ru = {
     languageHint: 'Применяется ко всему интерфейсу Valkama на этом устройстве.',
     searchOptions: 'Поиск по вариантам',
     noOptions: 'Подходящих вариантов нет',
-    notificationsIntro:
-      'Выберите события, которые действительно требуют внимания. Системное разрешение запрашивается только здесь.',
-    notifications: 'Оповещения',
-    notifyEnabled: 'Оповещать о событиях агентов и карточек',
-    notifyEnabledHint: 'Главный выключатель сохраняет выбранные события.',
-    permissionIntro: 'Valkama запросит системное разрешение только после этого действия.',
-    permissionAsk: 'Разрешить системные уведомления',
-    permissionDenied:
-      'Браузер блокирует уведомления для этой страницы. Разрешите их в настройках сайта (значок замка в адресной строке).',
     openers: 'Открытие сессий',
     openersIntro: 'Куда переходить из завершённой или активной сессии каждого клиента.',
     openersEmpty: 'Нет доступного приложения для сессий',
@@ -736,15 +729,6 @@ export const ru = {
       'terminal': 'Терминал — возобновить сессию',
       'cursor': 'Cursor — каталог сессии',
       'custom': 'Своя команда',
-    },
-    event: {
-      itemCompleted: 'Задача дошла до завершающего состояния',
-      itemInReview: 'Задача дошла до проверки',
-      itemBlocked: 'Задача заблокирована',
-      sessionEnded: 'Сессия агента завершилась',
-      sessionFailed: 'Сессия агента упала',
-      agentBlocked: 'Агенту нужен ответ',
-      agentWaiting: 'Агент завершил каждый ход (шумно)',
     },
   },
   session: {

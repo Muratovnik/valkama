@@ -1,16 +1,3 @@
-/** Every event the owner can be notified about; the settings screen lists these. */
-export const NOTIFY_EVENTS = [
-  'itemCompleted',
-  'itemInReview',
-  'itemBlocked',
-  'sessionEnded',
-  'sessionFailed',
-  'agentBlocked',
-  'agentWaiting',
-] as const
-
-type NotifyEvent = (typeof NOTIFY_EVENTS)[number]
-
 const OPENER_KINDS = ['vscode', 'codex-app', 'terminal', 'cursor', 'custom'] as const
 export type OpenerKind = (typeof OPENER_KINDS)[number]
 type OpenerAvailability = 'available' | 'unavailable' | 'unknown'
@@ -40,27 +27,10 @@ const COMPATIBLE_OPENERS: Record<OpenerClient, readonly OpenerKind[]> = {
 export const MAX_CUSTOM_COMMAND_LENGTH = 400
 
 export interface PlatformSettings {
-  notify: Record<NotifyEvent, boolean>
-  notifyEnabled: boolean
   openers: Record<OpenerClient, SessionOpener>
 }
 
-/**
- * The defaults the owner asked to be sensible without configuration: finished
- * and failed work notifies, the per-turn "waiting for you" stays quiet because
- * it fires on every completed turn of an interactive session.
- */
 export const DEFAULT_SETTINGS: PlatformSettings = {
-  notifyEnabled: true,
-  notify: {
-    itemCompleted: true,
-    itemInReview: true,
-    itemBlocked: true,
-    sessionEnded: true,
-    sessionFailed: true,
-    agentBlocked: true,
-    agentWaiting: false,
-  },
   openers: {
     claude: { kind: 'vscode', command: '' },
     codex: { kind: 'terminal', command: '' },
@@ -83,32 +53,20 @@ function asOpener(raw: unknown, fallback: SessionOpener, client: OpenerClient): 
   }
 }
 
-/** Stored settings become one complete structure in the current schema. */
+/**
+ * Stored settings become one complete structure in the current schema. Anything
+ * else in the stored value goes, such as the `notify` fields of older builds.
+ */
 export function mergeSettings(raw: unknown): PlatformSettings {
   const source = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>
-  const notifySource = (
-    typeof source.notify === 'object' && source.notify !== null ? source.notify : {}
-  ) as Record<string, unknown>
   const openerSource = (
     typeof source.openers === 'object' && source.openers !== null ? source.openers : {}
   ) as Record<string, unknown>
-  const notify = {} as Record<NotifyEvent, boolean>
-  for (const event of NOTIFY_EVENTS) {
-    const value = notifySource[event]
-    notify[event] = typeof value === 'boolean' ? value : DEFAULT_SETTINGS.notify[event]
-  }
   const openers = {} as Record<OpenerClient, SessionOpener>
   for (const client of OPENER_CLIENTS) {
     openers[client] = asOpener(openerSource[client], DEFAULT_SETTINGS.openers[client], client)
   }
-  return {
-    notifyEnabled:
-      typeof source.notifyEnabled === 'boolean'
-        ? source.notifyEnabled
-        : DEFAULT_SETTINGS.notifyEnabled,
-    notify,
-    openers,
-  }
+  return { openers }
 }
 
 /** Which opener association covers this session's client string. */

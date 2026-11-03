@@ -3,6 +3,10 @@ import { storeToRefs } from 'pinia'
 import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import SettingsAlerts from '@/pages/settings/components/SettingsAlerts.vue'
+import SettingsGroup from '@/pages/settings/components/SettingsGroup.vue'
+import SettingsRow from '@/pages/settings/components/SettingsRow.vue'
+
 import type {
   CustomCommandError,
   OpenerCapability,
@@ -17,7 +21,6 @@ import {
 import { useSettingsStore } from '@/shared/stores/settingsStore.ts'
 import type { ChoiceOption, ControlIconName } from '@/shared/ui/choiceControls.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
-import SectionHeading from '@/shared/ui/SectionHeading.vue'
 import SelectionControl from '@/shared/ui/SelectionControl.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import VTextInput from '@/shared/ui/VTextInput.vue'
@@ -106,16 +109,15 @@ onMounted(() => void settingsStore.loadOpenerCatalog())
     :aria-label="t('settings.section.general')"
   >
     <div class="settings-general-sheet">
-      <section class="settings-general-group">
-        <header class="settings-general-head">
-          <SectionHeading as="h3">{{ t('settings.interface') }}</SectionHeading>
-          <p class="settings-general-description">{{ t('settings.interfaceIntro') }}</p>
-        </header>
-        <div class="settings-general-row">
-          <span class="settings-general-identity">
-            <strong class="settings-general-label">{{ t('language.label') }}</strong>
-            <small class="settings-general-hint">{{ t('settings.languageHint') }}</small>
-          </span>
+      <SettingsGroup
+        class="settings-general-group"
+        :title="t('settings.interface')"
+        :intro="t('settings.interfaceIntro')"
+      >
+        <SettingsRow
+          :label="t('language.label')"
+          :hint="t('settings.languageHint')"
+        >
           <SelectionControl
             class="settings-general-control"
             mode="combobox"
@@ -124,35 +126,37 @@ onMounted(() => void settingsStore.loadOpenerCatalog())
             :label="t('language.label')"
             @update:model-value="emitLocale"
           />
-        </div>
-      </section>
+        </SettingsRow>
+      </SettingsGroup>
 
-      <section class="settings-general-group">
-        <header class="settings-general-head">
-          <SectionHeading as="h3">{{ t('settings.openers') }}</SectionHeading>
-          <p class="settings-general-description">{{ t('settings.openersIntro') }}</p>
+      <SettingsAlerts
+        class="settings-general-group"
+        :locale="locale"
+      />
+
+      <SettingsGroup
+        class="settings-general-group"
+        :title="t('settings.openers')"
+        :intro="t('settings.openersIntro')"
+      >
+        <template
+          v-if="openerCatalogFallback"
+          #note
+        >
           <p
-            v-if="openerCatalogFallback"
             class="settings-general-catalog-note"
             role="status"
           >
             {{ t('settings.openerCatalogFallback') }}
           </p>
-        </header>
+        </template>
         <template v-if="hasAvailableOpeners || openerCatalogLoading">
-          <div
+          <SettingsRow
             v-for="client in openerClients"
             :key="client"
-            class="settings-general-row"
+            :label="t(`settings.openerClient.${client}`)"
+            :hint="t(`settings.openerClientHint.${client}`)"
           >
-            <span class="settings-general-identity">
-              <strong class="settings-general-label">{{
-                t(`settings.openerClient.${client}`)
-              }}</strong>
-              <small class="settings-general-hint">{{
-                t(`settings.openerClientHint.${client}`)
-              }}</small>
-            </span>
             <span class="settings-general-opener">
               <span class="settings-general-opener-state">
                 <small class="settings-general-lane-label">{{
@@ -193,7 +197,7 @@ onMounted(() => void settingsStore.loadOpenerCatalog())
                 {{ commandErrorText(client) }}
               </p>
             </span>
-          </div>
+          </SettingsRow>
         </template>
         <DataEmptyState
           v-else
@@ -201,7 +205,7 @@ onMounted(() => void settingsStore.loadOpenerCatalog())
           :description="t('settings.openersEmptyDetail')"
           compact
         />
-      </section>
+      </SettingsGroup>
     </div>
   </section>
 </template>
@@ -218,56 +222,15 @@ onMounted(() => void settingsStore.loadOpenerCatalog())
   border-radius: var(--radius-card);
 }
 
-.settings-general-group {
-  min-width: 0;
-
-  & + .settings-general-group {
-    border-top: 1px solid var(--color-rule-strong);
-  }
+.settings-general-group + .settings-general-group {
+  border-top: 1px solid var(--color-rule-strong);
 }
 
-.settings-general-head {
-  display: grid;
-  gap: var(--space-heading-content);
-  padding: var(--space-4);
-  background: var(--color-surface-muted);
-
-  .settings-general-description,
-  .settings-general-catalog-note {
-    max-width: 72ch;
-    margin: 0;
-    color: var(--color-text-muted);
-    font: var(--font-note);
-  }
-
-  .settings-general-catalog-note {
-    color: var(--color-warning);
-  }
-}
-
-.settings-general-row {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--size-column-gutter);
-  align-items: center;
-  min-width: 0;
-  padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--color-rule);
-}
-
-.settings-general-identity {
-  display: grid;
-  gap: var(--space-label-value);
-  min-width: 0;
-
-  .settings-general-label {
-    font: var(--font-label);
-  }
-
-  .settings-general-hint {
-    color: var(--color-text-muted);
-    font: var(--font-detail);
-  }
+.settings-general-catalog-note {
+  max-width: 72ch;
+  margin: 0;
+  color: var(--color-warning);
+  font: var(--font-note);
 }
 
 .settings-general-control,
@@ -296,13 +259,5 @@ onMounted(() => void settingsStore.loadOpenerCatalog())
   margin: 0;
   color: var(--color-danger);
   font: var(--font-detail);
-}
-
-@container workspace (width <= 696px) {
-  .settings-general-row {
-    grid-template-columns: 1fr;
-    gap: var(--space-3);
-    align-items: start;
-  }
 }
 </style>

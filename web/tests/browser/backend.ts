@@ -17,6 +17,7 @@ import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { chainResponse, emptyChain } from '../fixtures/chain.ts'
 import { requestList } from '../support/inputRequests.ts'
 import { moduleRegistrations } from '../support/moduleRegistrations.ts'
+import { ALERT_SETTINGS, ALERT_STATUS_READY, TRIAL_SHOWN } from './alertsFixtures.ts'
 import { installBrowserDoubles } from './browserDoubles.ts'
 import { doctorReport } from './doctorFixtures.ts'
 import {
@@ -183,6 +184,11 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
         '/api/memory/search': () => fulfill(structuredClone(memorySearch)),
         '/api/memory/providers': () => fulfill(structuredClone(memoryProviders)),
         '/api/memory/linked': () => fulfill(structuredClone(memoryLinks)),
+        '/api/alerts/settings': () =>
+          fulfill(request.method() === 'PUT' ? request.postDataJSON() : ALERT_SETTINGS),
+        '/api/alerts/status': () => fulfill(ALERT_STATUS_READY),
+        '/api/alerts/test': () => fulfill(TRIAL_SHOWN),
+        '/api/alerts/presence': () => fulfill({ ok: true }),
         '/api/doctor': () => fulfill(structuredClone(doctorReport)),
         '/api/execution/history': () => {
           const requested = url.searchParams.get('work_item')
