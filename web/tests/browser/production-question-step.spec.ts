@@ -163,6 +163,75 @@ test('a pointer resting on the confirm of a question that moves finds no refusal
   expect(writesTo(requests)).toEqual([])
 })
 
+/**
+ * Holds back the page's own frames: what it asks of `requestAnimationFrame` waits until
+ * `release`, while the browser still lays out and hit-tests. A press sent meanwhile lands
+ * after the page changed and before any check made on a frame has seen it, which is the
+ * moment a person cannot aim at but a slow frame or a busy page stretches.
+ */
+async function holdFrames(page: Page) {
+  await page.evaluate(() => {
+    const native = window.requestAnimationFrame.bind(window)
+    const held: FrameRequestCallback[] = []
+    window.requestAnimationFrame = (callback) => {
+      held.push(callback)
+      return 0
+    }
+    Object.assign(window, {
+      heldFrames: () => held.length,
+      releaseFrames: () => {
+        window.requestAnimationFrame = native
+        for (const callback of held.splice(0)) native(callback)
+      },
+    })
+  })
+  // The frame asked for before the hold comes once more; after it nothing runs until release.
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { heldFrames(): number }).heldFrames()))
+    .toBeGreaterThan(0)
+  return () => page.evaluate(() => (window as unknown as { releaseFrames(): void }).releaseFrames())
+}
+
+/** The step stands on the second question, which holds a choice, so Send there would answer. */
+async function chosenAndAsked(page: Page) {
+  const opened = await threeInCard(page, 5)
+  await choose(page, opened.second)
+  await raise(page, opened.second)
+  return { ...opened, release: await holdFrames(page) }
+}
+
+test('a press on the confirm in the instant its question moved, before any frame, writes nothing', async ({
+  page,
+}) => {
+  const { first, release, requests, second, stream } = await chosenAndAsked(page)
+  requests.settle(UPPER, answeredElsewhere)
+  await stream.signal('agents')
+  await expect(first.locator('.request-state')).toBeVisible()
+  // The fold is laid out, and the step has not yet been measured against it.
+  await expect(asking(second)).toBeVisible()
+  const at = await centre(onward(second))
+  await expect.poll(() => under(page, at)).toBe("The second question: Don't answer")
+  await press(page, at)
+  await pause(200)
+  expect(requests.writes.map((write) => write.action)).toEqual([])
+  await expect(asking(page)).toHaveCount(0)
+  await release()
+  await pause(100)
+  expect(writesTo(requests)).toEqual([])
+  await expect(second.getByRole('radio', { name: 'Choice 1' })).toBeChecked()
+})
+
+test('with the same frames held back, a confirm whose question stayed put declines', async ({
+  page,
+}) => {
+  const { release, requests, second } = await chosenAndAsked(page)
+  await press(page, await centre(onward(second)))
+  await expect(second.locator('.request-state')).toContainText('You declined')
+  expect(writesTo(requests)).toEqual([LOWER])
+  expect(requests.writes[0]?.action).toBe('decline')
+  await release()
+})
+
 test('a press anywhere outside its question ends the step, and only there', async ({ page }) => {
   const { requests, top, next } = await inCard(page)
   await raise(page, top)

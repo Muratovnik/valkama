@@ -3,6 +3,8 @@ import type { Ref } from 'vue'
 
 import { useEventListener, useRafFn } from '@vueuse/core'
 
+import { strayThisPress } from '@/shared/ui/strayPress.ts'
+
 /**
  * How long the step of declining stands.
  *
@@ -15,6 +17,12 @@ import { useEventListener, useRafFn } from '@vueuse/core'
  * also holds only while its buttons stand where the press left them, whatever moves them: a
  * read, a scroll, a resize. They are compared on each frame, only while a step stands, and what
  * the pointer does or what is under it plays no part.
+ *
+ * A frame comes only after the page has changed, and a press can land in between. So they are
+ * compared again when a press goes down, and one that finds them moved ends the step there; if
+ * it went down on them, it was aimed at where they stood before, and it reaches neither, or
+ * the place of Send would send what the form holds. A key on a button in focus aims at
+ * nothing and is left to the frame.
  *
  * A step that ended stays ended, so it cannot come back with a later deadline or a read.
  */
@@ -31,12 +39,26 @@ export function useStepAttention(
     },
     { capture: true },
   )
-  const place = () => question.value?.querySelector('.request-actions')?.getBoundingClientRect()
+  const actions = () => question.value?.querySelector('.request-actions')
+  const place = () => actions()?.getBoundingClientRect()
   let left = place()
+  const moved = () => {
+    const now = place()
+    return now?.x !== left?.x || now?.y !== left?.y
+  }
+  useEventListener(
+    () => (standing.value ? document : null),
+    'pointerdown',
+    (event: PointerEvent) => {
+      if (!moved()) return
+      end()
+      if (actions()?.contains(event.target as Node)) strayThisPress()
+    },
+    { capture: true },
+  )
   const { pause, resume } = useRafFn(
     () => {
-      const now = place()
-      if (now?.x !== left?.x || now?.y !== left?.y) end()
+      if (moved()) end()
     },
     { immediate: false },
   )

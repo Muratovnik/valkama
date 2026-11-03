@@ -67,6 +67,14 @@ if (typeof document !== 'undefined') {
   )
 }
 
+/**
+ * Counts the press under way as stray, from its `pointerdown` on: a place that knows what it
+ * is aimed at moved from under it in the same instant says so, which the pointer cannot.
+ */
+export function strayThisPress() {
+  stray = true
+}
+
 /** Whether this event belongs to a stray press. A key's click (`detail` 0) never does. */
 export function isStrayPress(event: MouseEvent) {
   return stray && event.detail > 0

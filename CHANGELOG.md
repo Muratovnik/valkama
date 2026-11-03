@@ -49,6 +49,12 @@ checkouts are therefore distinguishable even at the same version.
   checklist step added to the surviving item in between; it no longer can. Deleting an
   item while another agent gave it a child answered with a raw `FOREIGN KEY constraint
   failed`; the child is now counted under that lock and the delete is refused naming it.
+- **A press in the instant a question's buttons move no longer declines it.** The step of
+  "Don't answer" ended when its buttons moved, but that was seen only at the next frame, so
+  a press landing between a question folding above and that frame still confirmed the
+  refusal. The buttons are now compared when the press goes down as well: one that finds
+  them moved ends the step, and if it went down on them it reaches neither, so it writes
+  nothing, not even what Send would. Keys on a button in focus work as before.
 
 ## [2.4.0](https://github.com/Muratovnik/valkama/compare/v2.3.0...v2.4.0) - 2026-11-03
 
