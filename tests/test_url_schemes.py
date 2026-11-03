@@ -7,6 +7,7 @@ uninstalled editor left behind, whose command names a program that is gone.
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import types
@@ -96,22 +97,22 @@ class WhoHandlesASchemeTests(unittest.TestCase):
             self.assertIsNone(url_schemes._winreg())
 
 
+#: The samples `desktop/opener_catalog.test.js` reads too, so both readings agree.
+COMMAND_SAMPLES = Path(__file__).resolve().parent / "fixtures" / "scheme-command-samples.json"
+
+
 class ReadingACommandTests(unittest.TestCase):
     def test_the_program_is_read_however_the_command_is_written(self) -> None:
-        for command, expected in (
-            (r'"C:\Program Files\x\Code.exe" --open-url "%1"', r"C:\Program Files\x\Code.exe"),
-            (r"C:\Program Files\x\Code.exe --open-url %1", r"C:\Program Files\x\Code.exe"),
-            (r"C:\tools\run.exe", r"C:\tools\run.exe"),
-            ("rundll32 url.dll,FileProtocolHandler %1", "rundll32"),
-            ("", ""),
-        ):
-            with self.subTest(command=command):
-                self.assertEqual(expected, url_schemes.command_executable(command))
-
-    def test_a_variable_in_the_command_is_expanded(self) -> None:
-        with mock.patch.dict(os.environ, {"EDITOR_HOME": "somewhere"}):
-            found = url_schemes.command_executable(os.path.join("$EDITOR_HOME", "Code.exe") + " %1")
-        self.assertTrue(found.startswith("somewhere"))
+        samples = json.loads(COMMAND_SAMPLES.read_text(encoding="utf-8"))["samples"]
+        self.assertGreater(len(samples), 5)
+        for sample in samples:
+            with (
+                self.subTest(command=sample["command"]),
+                mock.patch.dict(os.environ, sample["env"]),
+            ):
+                self.assertEqual(
+                    sample["expected"], url_schemes.command_executable(sample["command"])
+                )
 
     def test_a_program_named_without_a_folder_is_looked_for_on_the_path(self) -> None:
         with mock.patch.object(url_schemes.shutil, "which", return_value="found") as which:

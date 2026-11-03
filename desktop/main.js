@@ -27,7 +27,9 @@ const {
 } = require('./runtime_contract')
 const { contextMenuTemplate, pageLocale } = require('./context_menu')
 const { howToOpen, openPathFromArgv, openPathUrl, refusesLaunch } = require('./open_path')
-const { discoverSupportedOpeners, resolveSupportedOpener } = require('./opener_catalog')
+const { claudeLiveness } = require('./live_sessions')
+const { discoverSupportedOpeners } = require('./opener_catalog')
+const { fetchOpenPlan } = require('./open_plan_request')
 const { establishServer, verifyStartedOwnership } = require('./server_startup')
 const { openSessionRequest } = require('./session_opener')
 const { openSourceRequest } = require('./source_opener')
@@ -120,14 +122,6 @@ ipcMain.on('valkama:open-route-ready', (event) => {
   if (isValkamaSender(event)) pageListens = true
 })
 
-function directoryExists(dir) {
-  try {
-    return statSync(dir).isDirectory()
-  } catch {
-    return false
-  }
-}
-
 function protocolAvailability(protocol) {
   try {
     return app.getApplicationNameForProtocol(`${protocol}://`) ? 'available' : 'unavailable'
@@ -138,18 +132,17 @@ function protocolAvailability(protocol) {
 
 ipcMain.handle('valkama:open-session', async (event, request) => {
   const senderUrl = event.senderFrame?.url || event.sender.getURL()
+  // The page names a target; the plan comes from the server, asked from here.
   return openSessionRequest({
     senderUrl,
     appUrl: URL,
     request,
     shell,
+    clipboard,
     spawn,
-    directoryExists,
-    resolveOpener(kind) {
-      return resolveSupportedOpener(kind, { protocolAvailability })
-    },
-    // The Electron main process resolves the exact planning resource itself.
-    // The renderer's opaque IPC request is never accepted as spawn authority.
+    fetchPlan: (parameters) => fetchOpenPlan(URL, parameters),
+    liveness: (session) => claudeLiveness(session),
+    log,
   })
 })
 

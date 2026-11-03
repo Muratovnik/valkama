@@ -1,217 +1,483 @@
 'use strict'
 
 const fs = require('node:fs')
-const { trustedTarget } = require('./project_registry')
-const { resolveSupportedOpener } = require('./opener_catalog')
+const os = require('node:os')
+const path = require('node:path')
+const { EDITORS, editorExecutable, findExecutable } = require('./opener_catalog')
 
-// Opening one observed agent session in its associated program. The renderer
-// sends the raw target and opener choice; this side rebuilds the launch plan
-// from scratch, so a compromised page can never hand the shell a prebuilt
-// command line — the same trust boundary as the source opener.
+// Carrying out what a click on a session, a file or a folder opens.
+//
+// The page names only its target and the owner's settings. Where it goes is the
+// server's plan (`GET /api/open-plan`), which this side fetches itself, checks
+// step by step against closed lists, and only then carries out. Nothing the page
+// sends becomes a link, a program or an argument, so a compromised page can ask
+// for no more than a click in the app could. The one exception is the owner's
+// own command, which has no step in the plan and is carried out here as before.
 
-const SESSION_ID = /^[0-9A-Za-z._:-]{4,128}$/
-// Codex task identifiers currently use UUIDv7. Keep the accepted versions
-// aligned with RFC 9562 instead of silently limiting launches to UUIDv1-v5.
-const SESSION_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-const OPENER_KINDS = new Set(['vscode', 'codex-app', 'terminal', 'cursor', 'custom'])
+// A leading letter or digit: an id that began with `-` would reach a command line as a flag.
+const SESSION_ID = /^[0-9A-Za-z][0-9A-Za-z._:-]{3,127}$/
+/** What the settings may name, for the fallback and for "always open in". */
+const OPEN_PLACES = Object.freeze([
+  'vscode',
+  'vscode-insiders',
+  'cursor',
+  'windsurf',
+  'terminal',
+  'claude-desktop',
+  'codex-app',
+])
+const SCHEMES = Object.freeze([...EDITORS, 'claude', 'codex', 'claude-cli'])
+/** Every reason an `explain` step can give, as the server's planner names them. */
+const REASONS = Object.freeze([
+  'no-session',
+  'invalid-session',
+  'unsupported-client',
+  'gone',
+  'live-headless',
+  'live-in-terminal',
+  'live-elsewhere',
+  'no-folder',
+  'not-installed',
+  'path-refused',
+])
+/** Why this side opened nothing; the page has words for each, and never an exception's text. */
+const REFUSALS = Object.freeze([
+  'not-app',
+  'invalid-request',
+  'plan-unavailable',
+  'invalid-plan',
+  'invalid-step',
+  'not-installed',
+  'launch-failed',
+  'window-not-confirmed',
+  'no-folder',
+  'no-command',
+])
+const RESUME = Object.freeze({
+  claude: (id) => ['claude', '--resume', id],
+  codex: (id) => ['codex', 'resume', id],
+})
+const COPY_TEXT = /^(?:claude --resume|codex resume|claude --desktop --resume) [0-9A-Za-z][0-9A-Za-z._:-]{3,127}$/
+const DETAIL = Object.freeze({
+  host: (value) => typeof value === 'string' && /^[a-z][a-z-]{0,31}$/.test(value),
+  archived: (value) => typeof value === 'boolean',
+  code: (value) => typeof value === 'string' && /^[a-z_]{1,32}$/.test(value),
+})
+const CONTROL = /[\u0000-\u001f\u007f]/
+const MAX_STEPS = 8
+const MAX_LINK = 4096
 const MAX_COMMAND = 400
+const MAX_TEXT = 1024
+/** How long after a window opens before a link is sent, so it reaches that window. */
+const PAUSE_MS = 300
+/** A running editor's second instance exits once the window is open; a first one never does. */
+const WINDOW_WAIT_MS = 15000
 
-function text(value) {
-  return typeof value === 'string' ? value.trim() : ''
+class Refusal extends Error {
+  constructor(reason, detail = {}) {
+    super(reason)
+    this.reason = reason
+    this.detail = detail
+  }
 }
 
-/** vscode://file/c:/path — the folder form VS Code's own URL handler accepts. */
-function vscodeFolderUrl(dir) {
-  const forward = dir.replace(/\\/g, '/').replace(/\/+$/, '')
-  const rooted = forward.startsWith('/') ? forward : `/${forward}`
-  return `vscode://file${encodeURI(rooted)}`
+function sessionId(value) {
+  return typeof value === 'string' && SESSION_ID.test(value)
 }
 
-function codexThreadUrl(id) {
-  return SESSION_UUID.test(id) ? `codex://threads/${id}` : ''
+function plainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
-/** Split a custom template into argv, honoring double quotes, then substitute. */
+function onlyKeys(value, allowed) {
+  return plainObject(value) && Object.keys(value).every((key) => allowed.includes(key))
+}
+
+function text(value, max) {
+  return typeof value === 'string' && value.length > 0 && value.length <= max && !CONTROL.test(value)
+}
+
+function choice(value) {
+  return value === undefined || value === '' || OPEN_PLACES.includes(value)
+}
+
+/**
+ * The page's request, reduced to the query the plan is asked with, or null.
+ *
+ * `{session, fallback?, always?, step?}`, `{path: {kind, project, path, line?},
+ * fallback?, step?}` or the owner's command `{session, command}`; any other key,
+ * a URL, an argv or an opener included, refuses the whole request.
+ */
+function parseRequest(raw) {
+  if (!plainObject(raw)) return null
+  const step = raw.step
+  if (step !== undefined && !(Number.isInteger(step) && step >= 0 && step < MAX_STEPS)) return null
+  if (Object.hasOwn(raw, 'command')) {
+    if (!onlyKeys(raw, ['session', 'command']) || !sessionId(raw.session)) return null
+    if (typeof raw.command !== 'string') return null
+    return { custom: raw.command, query: { target: 'session', session: raw.session } }
+  }
+  if (Object.hasOwn(raw, 'session')) {
+    if (!onlyKeys(raw, ['session', 'fallback', 'always', 'step'])) return null
+    if (!sessionId(raw.session) || !choice(raw.fallback) || !choice(raw.always)) {
+      return null
+    }
+    const query = { target: 'session', session: raw.session }
+    if (raw.fallback) query.fallback = raw.fallback
+    if (raw.always) query.always = raw.always
+    return { step, query, session: true }
+  }
+  if (!onlyKeys(raw, ['path', 'fallback', 'step']) || !choice(raw.fallback)) return null
+  const target = raw.path
+  if (!onlyKeys(target, ['kind', 'project', 'path', 'line'])) return null
+  if (target.kind !== 'file' && target.kind !== 'folder') return null
+  if (!text(target.project, 256) || !text(target.path, MAX_TEXT)) return null
+  const line = target.line
+  if (line !== undefined && line !== null) {
+    if (target.kind !== 'file' || !Number.isInteger(line) || line < 1 || line > 999999999) {
+      return null
+    }
+  }
+  const query = { target: target.kind, project: target.project, path: target.path }
+  if (line) query.line = String(line)
+  if (raw.fallback) query.fallback = raw.fallback
+  return { step, query, session: false }
+}
+
+/** An existing local folder by its drive: no network path, no way back up. */
+function usableFolder(folder, isDirectory) {
+  if (!text(folder, MAX_TEXT) || !/^[A-Za-z]:[\\/]/.test(folder)) return false
+  return !folder.split(/[\\/]/).includes('..') && isDirectory(folder)
+}
+
+function usableFile(file, isFile) {
+  if (!text(file, MAX_TEXT) || !/^[A-Za-z]:[\\/]/.test(file)) return false
+  return !file.split(/[\\/]/).includes('..') && isFile(file)
+}
+
+function exactly(step, keys) {
+  const present = Object.keys(step)
+  return present.length === keys.length && keys.every((key) => Object.hasOwn(step, key))
+}
+
+/** Whether one step is a step this side carries out, with every field as the contract says. */
+function validStep(step, checks) {
+  if (!plainObject(step)) return false
+  switch (step.kind) {
+    case 'focus-folder':
+      return (
+        exactly(step, ['kind', 'ide', 'folder']) &&
+        EDITORS.includes(step.ide) &&
+        usableFolder(step.folder, checks.isDirectory)
+      )
+    case 'open-link':
+      return (
+        exactly(step, ['kind', 'scheme', 'link']) &&
+        SCHEMES.includes(step.scheme) &&
+        text(step.link, MAX_LINK) &&
+        !/\s/.test(step.link) &&
+        step.link.startsWith(`${step.scheme}://`)
+      )
+    case 'resume-in-terminal':
+      return (
+        exactly(step, ['kind', 'client', 'session', 'folder']) &&
+        Object.hasOwn(RESUME, step.client) &&
+        sessionId(step.session) &&
+        usableFolder(step.folder, checks.isDirectory)
+      )
+    case 'desktop-resume':
+      return exactly(step, ['kind', 'session']) && sessionId(step.session)
+    case 'open-file':
+      return (
+        exactly(step, ['kind', 'ide', 'path', 'line']) &&
+        EDITORS.includes(step.ide) &&
+        (step.line === null || (Number.isInteger(step.line) && step.line > 0)) &&
+        usableFile(step.path, checks.isFile)
+      )
+    case 'copy':
+      return exactly(step, ['kind', 'text']) && typeof step.text === 'string' && COPY_TEXT.test(step.text)
+    case 'explain':
+      return (
+        REASONS.includes(step.reason) &&
+        Object.keys(step).every(
+          (key) => key === 'kind' || key === 'reason' || (Object.hasOwn(DETAIL, key) && DETAIL[key](step[key])),
+        )
+      )
+    default:
+      return false
+  }
+}
+
+/** The plan's steps when every one of them passes, or null: one bad step and nothing runs. */
+function validPlan(plan, checks) {
+  if (!plainObject(plan) || plan.surface !== 'desktop' || !Array.isArray(plan.steps)) return null
+  if (plan.steps.length === 0 || plan.steps.length > MAX_STEPS) return null
+  return plan.steps.every((step) => validStep(step, checks)) ? plan.steps : null
+}
+
+/** The environment a started program gets: never told to run as plain Node. */
+function childEnvironment(env) {
+  const copy = { ...env }
+  delete copy.ELECTRON_RUN_AS_NODE
+  return copy
+}
+
+/**
+ * Start one program. With `waitMs` it resolves once the program exits, or with
+ * `exited: false` when it is still running then; without, once it has started.
+ */
+function launch(context, file, args, { cwd, hidden = false, waitMs = 0 }) {
+  return new Promise((resolve, reject) => {
+    let settled = false
+    let timer = null
+    let child
+    const settle = (outcome, value) => {
+      if (settled) return
+      settled = true
+      if (timer) clearTimeout(timer)
+      child?.unref?.()
+      outcome(value)
+    }
+    try {
+      child = context.spawn(file, args, {
+        cwd,
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: hidden,
+        env: childEnvironment(context.env),
+      })
+    } catch (error) {
+      reject(error)
+      return
+    }
+    child.once('error', (error) => settle(reject, error))
+    child.once('spawn', () => {
+      if (!waitMs) settle(resolve, { exited: false })
+      else timer = setTimeout(() => settle(resolve, { exited: false }), waitMs)
+    })
+    if (waitMs) child.once('exit', () => settle(resolve, { exited: true }))
+  })
+}
+
+async function runStep(step, context, linkFollows) {
+  if (step.kind === 'explain') return
+  if (step.kind === 'open-link') {
+    await context.shell.openExternal(step.link)
+    return
+  }
+  if (step.kind === 'copy') {
+    context.clipboard.writeText(step.text)
+    return
+  }
+  if (step.kind === 'focus-folder') {
+    const editor = context.editorExecutable(step.ide)
+    if (!editor) throw new Refusal('not-installed', { host: step.ide })
+    const waitMs = linkFollows ? context.windowWaitMs : 0
+    const started = await launch(context, editor, [step.folder], { cwd: step.folder, waitMs })
+    if (!linkFollows) return
+    // The link goes to the window in focus: sent before the window is there, it
+    // starts an empty conversation in another one, so nothing is sent unconfirmed.
+    if (!started.exited) throw new Refusal('window-not-confirmed')
+    await context.sleep(PAUSE_MS)
+    return
+  }
+  if (step.kind === 'open-file') {
+    const editor = context.editorExecutable(step.ide)
+    if (!editor) throw new Refusal('not-installed', { host: step.ide })
+    const target = step.line ? `${step.path}:${step.line}` : step.path
+    await launch(context, editor, ['-g', target], { cwd: path.dirname(step.path) })
+    return
+  }
+  if (step.kind === 'resume-in-terminal') {
+    const terminal = context.findExecutable('wt.exe')
+    if (!terminal) throw new Refusal('not-installed', { host: 'terminal' })
+    // `-d .` takes the folder from the started process rather than its command
+    // line, where Windows Terminal would read a `;` in a folder's name as the
+    // start of another command.
+    const argv = ['-d', '.', 'cmd.exe', '/k', ...RESUME[step.client](step.session)]
+    await launch(context, terminal, argv, { cwd: step.folder })
+    return
+  }
+  // desktop-resume: the CLI hands the session to Claude Desktop, with no window of its own.
+  const cli = context.findExecutable('claude.exe')
+  if (!cli) throw new Refusal('not-installed', { host: 'claude-cli' })
+  await launch(context, cli, ['--desktop', '--resume', step.session], {
+    cwd: context.home,
+    hidden: true,
+  })
+}
+
+function refused(reason, extra = {}) {
+  return { ok: false, mode: 'refused', reason, next: null, ...extra }
+}
+
+function explained(step, plan, next) {
+  const { kind: _kind, ...detail } = step
+  return { ok: false, mode: 'explained', ...detail, next, plan }
+}
+
+async function fetchPlan(context, query) {
+  const answer = await context.fetchPlan({ ...query, surface: 'desktop' })
+  if (answer?.status !== 200) {
+    context.log('open-plan-refused', { status: answer?.status ?? 0 })
+    return null
+  }
+  try {
+    const plan = JSON.parse(answer.body)
+    return plainObject(plan) ? plan : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The plan, asked again with the process's own state when Claude Code's
+ * registry of running sessions says otherwise than the server's row (D3).
+ */
+async function planWithLiveness(context, parsed) {
+  const plan = await fetchPlan(context, parsed.query)
+  if (!plan || !parsed.session || plan.client !== 'claude') return plan
+  if (plan.state !== 'live' && plan.state !== 'ended') return plan
+  const session = plan.target?.session
+  if (!sessionId(session)) return plan
+  const verdict = context.liveness(session)
+  if (verdict !== 'live' && verdict !== 'ended') return plan
+  if (verdict === plan.state) return plan
+  return fetchPlan(context, { ...parsed.query, liveness: verdict })
+}
+
+/** Split the owner's template into argv, honoring double quotes, then substitute. */
 function customArgv(template, target) {
   const tokens = template.match(/"[^"]*"|\S+/g) || []
   return tokens
     .map((token) => (token.startsWith('"') && token.endsWith('"') ? token.slice(1, -1) : token))
     .map((token) =>
       token
-        .replaceAll('{session}', target.id)
-        .replaceAll('{cwd}', target.cwd)
-        .replaceAll('{session_cwd}', target.session_cwd || target.cwd),
+        .replaceAll('{session}', target.session)
+        .replaceAll('{cwd}', target.folder)
+        .replaceAll('{session_cwd}', target.folder),
     )
     .filter((token) => token.length > 0)
 }
 
-function display(argv) {
-  return argv.map((part) => (/\s/.test(part) ? `"${part}"` : part)).join(' ')
+async function runCustom(context, parsed, checks) {
+  const template = parsed.custom.trim()
+  if (!template || template.length > MAX_COMMAND) return refused('no-command')
+  const plan = await fetchPlan(context, parsed.query)
+  if (!plan) return refused('plan-unavailable')
+  const session = plan.target?.session
+  if (plan.state === 'none' || plan.state === 'gone' || !sessionId(session)) {
+    const first = Array.isArray(plan.steps) ? plan.steps[0] : null
+    return validStep(first, checks) && first.kind === 'explain'
+      ? explained(first, plan, null)
+      : refused('invalid-plan')
+  }
+  const steps = Array.isArray(plan.steps) ? plan.steps : []
+  const folder =
+    steps
+      .map((step) => (plainObject(step) ? step.folder : ''))
+      .find((candidate) => usableFolder(candidate, checks.isDirectory)) || ''
+  if (!folder && /\{(?:session_)?cwd\}/.test(template)) return refused('no-folder')
+  const argv = customArgv(template, { session, folder })
+  if (!argv.length) return refused('no-command')
+  try {
+    await launch(context, argv[0], argv.slice(1), { cwd: folder || context.home })
+  } catch (failure) {
+    context.log('open-session-failed', { step: 'custom', error: failure?.message })
+    return refused('launch-failed')
+  }
+  return { ok: true, mode: 'opened', next: null, plan }
+}
+
+function defaultIsDirectory(dir) {
+  try {
+    return fs.statSync(dir).isDirectory()
+  } catch {
+    return false
+  }
+}
+
+function defaultIsFile(file) {
+  try {
+    return fs.statSync(file).isFile()
+  } catch {
+    return false
+  }
 }
 
 /**
- * The validated launch plan for one request. Pure so tests can enumerate it:
- * `url` goes to the OS handler, `terminal` opens a console window through
- * cmd start, `spawn` runs the owner's own windowed program directly.
+ * One click from the page. `step` names a step of the server's plan to carry
+ * out on its own: a plan that is not `one_action` takes one action from the
+ * person per step, and the answer's `next` says which step that is.
  */
-function planSessionRequest(request, resolved = {}) {
-  const id = text(request && request.id)
-  const cwd = text(request && request.cwd)
-  const opener = (request && request.opener) || {}
-  if (!OPENER_KINDS.has(opener.kind)) return { mode: 'refused', reason: 'invalid-request' }
-  if (id && !SESSION_ID.test(id)) return { mode: 'refused', reason: 'invalid-session' }
-  if (opener.kind === 'codex-app') {
-    if (text(request && request.client_family).toLowerCase() !== 'codex') {
-      return { mode: 'refused', reason: 'unsupported-client' }
-    }
-    const url = codexThreadUrl(id)
-    if (!url) return { mode: 'refused', reason: 'invalid-session' }
-    if (resolved.availability !== 'available')
-      return { mode: 'refused', reason: 'opener-unavailable' }
-    return { mode: 'url', url }
+async function openSessionRequest(options) {
+  const { senderUrl, appUrl, request } = options
+  if (typeof senderUrl !== 'string' || !senderUrl.startsWith(appUrl)) return refused('not-app')
+  const context = {
+    shell: options.shell,
+    clipboard: options.clipboard,
+    spawn: options.spawn,
+    fetchPlan: options.fetchPlan,
+    liveness: options.liveness || (() => ''),
+    editorExecutable: options.editorExecutable || editorExecutable,
+    findExecutable: options.findExecutable || findExecutable,
+    sleep: options.sleep || ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
+    log: options.log || (() => {}),
+    env: options.env || process.env,
+    home: options.home || os.homedir(),
+    windowWaitMs: options.windowWaitMs || WINDOW_WAIT_MS,
   }
-  if (opener.kind === 'vscode') {
-    if (!cwd) return { mode: 'refused', reason: 'no-cwd' }
-    return { mode: 'url', url: vscodeFolderUrl(cwd) }
+  const checks = {
+    isDirectory: options.isDirectory || defaultIsDirectory,
+    isFile: options.isFile || defaultIsFile,
   }
-  if (opener.kind === 'cursor') {
-    if (!cwd) return { mode: 'refused', reason: 'no-cwd' }
-    if (!resolved.executable) return { mode: 'refused', reason: 'opener-unavailable' }
-    const argv = [resolved.executable, cwd]
-    return { mode: 'spawn', argv, cwd, display: `Cursor · ${cwd}` }
-  }
-  if (opener.kind === 'terminal') {
-    if (!id) return { mode: 'refused', reason: 'no-session' }
-    if (!resolved.executable) return { mode: 'refused', reason: 'opener-unavailable' }
-    const family = text(request && request.client).toLowerCase()
-    const resume = family.startsWith('claude')
-      ? ['claude', '--resume', id]
-      : family.startsWith('codex')
-        ? ['codex', 'resume', id]
-        : []
-    if (!resume.length) return { mode: 'refused', reason: 'unsupported-client' }
-    const argv = [resolved.executable, '-d', cwd, 'cmd.exe', '/k', ...resume]
-    return { mode: 'spawn', argv, cwd, display: display(resume) }
-  }
-  const command = text(opener.command)
-  if (!command || command.length > MAX_COMMAND) return { mode: 'refused', reason: 'no-command' }
-  if (!id && command.includes('{session}')) return { mode: 'refused', reason: 'no-session' }
-  const argv = customArgv(command, {
-    id,
-    cwd,
-    session_cwd: text(request && request.session_cwd) || cwd,
-  })
-  if (!argv.length) return { mode: 'refused', reason: 'no-command' }
-  return { mode: 'spawn', argv, cwd, display: display(argv) }
-}
+  const parsed = parseRequest(request)
+  if (!parsed) return refused('invalid-request')
+  if (parsed.custom !== undefined) return runCustom(context, parsed, checks)
 
-/** Resolves once the child actually started; ENOENT arrives as an event. */
-function started(child) {
-  return new Promise((resolve, reject) => {
-    child.once('spawn', resolve)
-    child.once('error', reject)
-  })
-}
+  const plan = await planWithLiveness(context, parsed)
+  if (!plan) return refused('plan-unavailable')
+  const steps = validPlan(plan, checks)
+  if (!steps) {
+    context.log('open-plan-invalid', {})
+    return refused('invalid-plan')
+  }
+  const start = parsed.step ?? 0
+  if (start >= steps.length) return refused('invalid-step', { plan })
+  const end = parsed.step === undefined && plan.one_action === true ? steps.length : start + 1
+  const nextOf = (index) => (index < steps.length ? index : null)
 
-async function openSessionRequest({
-  senderUrl,
-  appUrl,
-  request,
-  shell,
-  spawn,
-  directoryExists,
-  readBytes,
-  resolveOpener,
-}) {
-  if (typeof senderUrl !== 'string' || !senderUrl.startsWith(appUrl)) {
-    return {
-      ok: false,
-      mode: 'refused',
-      error: 'Session requests are limited to the Valkama app',
-    }
-  }
-  const exists =
-    typeof directoryExists === 'function'
-      ? directoryExists
-      : (directory) => {
-          try {
-            return fs.statSync(directory).isDirectory()
-          } catch {
-            return false
-          }
-        }
-  const trusted = trustedTarget(request || {}, {
-    readBytes,
-    directoryExists: exists,
-  })
-  if (!trusted.effective_cwd || !exists(trusted.effective_cwd)) {
-    return {
-      ok: false,
-      mode: 'refused',
-      error: 'space-root-unavailable',
-      source: trusted,
-    }
-  }
-  // Renderer-supplied cwd is observational. The exact project binding result
-  // above is the sole spawn authority on the Electron side.
-  const resolve = typeof resolveOpener === 'function' ? resolveOpener : resolveSupportedOpener
-  const resolved = resolve(request?.opener?.kind)
-  const plan = planSessionRequest(
-    {
-      ...(request || {}),
-      cwd: trusted.effective_cwd,
-      session_cwd: trusted.session_cwd,
-    },
-    resolved,
-  )
-  if (plan.mode === 'refused') return { ok: false, mode: 'refused', error: plan.reason }
-  try {
-    if (plan.mode === 'url') {
-      await shell.openExternal(plan.url)
-      return {
-        ok: true,
-        mode: 'opened',
-        command: plan.url,
-        cwd: trusted.effective_cwd,
-        source: trusted.source,
-        status: trusted.status,
-        fallback: Boolean(trusted.fallback),
+  for (let index = start; index < end; index += 1) {
+    const step = steps[index]
+    if (step.kind === 'explain') return explained(step, plan, nextOf(index + 1))
+    try {
+      await runStep(step, context, index + 1 < end && steps[index + 1].kind === 'open-link')
+    } catch (failure) {
+      if (failure instanceof Refusal) {
+        // A window that did not confirm still leaves the link for the person to send.
+        const next = failure.reason === 'window-not-confirmed' ? nextOf(index + 1) : null
+        return refused(failure.reason, { ...failure.detail, next, plan })
       }
-    }
-    // The cwd was validated above. Never omit it: doing so would silently
-    // inherit Electron's process directory and lose the trust boundary.
-    const cwd = plan.cwd
-    const child = spawn(plan.argv[0], plan.argv.slice(1), {
-      cwd,
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: false,
-    })
-    await started(child)
-    child.unref()
-    return {
-      ok: true,
-      mode: 'opened',
-      command: plan.display,
-      cwd: trusted.effective_cwd,
-      source: trusted.source,
-      status: trusted.status,
-      fallback: Boolean(trusted.fallback),
-    }
-  } catch (failure) {
-    return {
-      ok: false,
-      mode: 'refused',
-      error: failure instanceof Error ? failure.message : String(failure),
+      context.log('open-session-failed', { step: step.kind, error: failure?.message })
+      return refused('launch-failed', { plan })
     }
   }
+  const last = steps[end - 1]
+  if (last.kind === 'copy') {
+    return { ok: true, mode: 'copied', command: last.text, next: nextOf(end), plan }
+  }
+  return { ok: true, mode: 'opened', next: nextOf(end), plan }
 }
 
 module.exports = {
+  OPEN_PLACES,
+  PAUSE_MS,
+  REASONS,
+  REFUSALS,
+  SCHEMES,
   SESSION_ID,
-  codexThreadUrl,
   customArgv,
   openSessionRequest,
-  planSessionRequest,
-  vscodeFolderUrl,
+  parseRequest,
+  validPlan,
 }

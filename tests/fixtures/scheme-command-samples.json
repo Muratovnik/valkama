@@ -1,0 +1,47 @@
+{
+  "about": "shell\\open\\command values and the program each starts. server/ops/url_schemes.py (command_executable) and desktop/opener_catalog.js (commandExecutable) both read these, so the server's verdict that an editor is installed and the program the desktop app starts for it cannot drift apart.",
+  "samples": [
+    {
+      "command": "\"C:\\Program Files\\x\\Code.exe\" --open-url \"%1\"",
+      "env": {},
+      "expected": "C:\\Program Files\\x\\Code.exe"
+    },
+    {
+      "command": "C:\\Program Files\\x\\Code.exe --open-url %1",
+      "env": {},
+      "expected": "C:\\Program Files\\x\\Code.exe"
+    },
+    { "command": "C:\\tools\\run.exe", "env": {}, "expected": "C:\\tools\\run.exe" },
+    {
+      "command": "rundll32 url.dll,FileProtocolHandler %1",
+      "env": {},
+      "expected": "rundll32"
+    },
+    { "command": "", "env": {}, "expected": "" },
+    {
+      "command": "$EDITOR_HOME\\Code.exe %1",
+      "env": { "EDITOR_HOME": "C:\\work\\editor" },
+      "expected": "C:\\work\\editor\\Code.exe"
+    },
+    {
+      "command": "\"%EDITOR_HOME%\\Code.exe\" --open-url -- \"%1\"",
+      "env": { "EDITOR_HOME": "C:\\work\\my editor" },
+      "expected": "C:\\work\\my editor\\Code.exe"
+    },
+    {
+      "command": "\"${EDITOR_HOME}\\Code.exe\" \"%1\"",
+      "env": { "EDITOR_HOME": "C:\\work\\editor" },
+      "expected": "C:\\work\\editor\\Code.exe"
+    },
+    {
+      "command": "%NO_SUCH_EDITOR_HOME%\\run.exe %1",
+      "env": {},
+      "expected": "%NO_SUCH_EDITOR_HOME%\\run.exe"
+    },
+    {
+      "command": "  \"C:\\work\\Редактор\\Code.exe\" %1",
+      "env": {},
+      "expected": "C:\\work\\Редактор\\Code.exe"
+    }
+  ]
+}
