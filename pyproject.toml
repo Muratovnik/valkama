@@ -188,7 +188,7 @@ layers = [
   "cli",
   "on_demand",
   "http_surface | mcp_surface | mcp_front",
-  "app_shell : documents : executions : federation : hooks : housekeeping : memory : ops : planning : platform : processes : projects : refs : released : runner : sessions : static_assets : store : store_identity : telemetry : transcripts : ui_state : watchers",
+  "alerts : app_shell : documents : executions : federation : hooks : housekeeping : memory : ops : planning : platform : processes : projects : refs : released : runner : sessions : static_assets : store : store_identity : telemetry : transcripts : ui_state : watchers",
 ]
 containers = ["server"]
 

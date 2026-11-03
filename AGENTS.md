@@ -117,7 +117,7 @@ answer questions about the store and know nothing about who asked: `store`,
 `sessions`, `federation`, `refs`, `released`, `documents`, `runner`, `processes`,
 `git_worktrees`, `static_assets`, `watchers`, `app_shell`, `ui_state`, plus the
 `planning/`, `executions/`, `platform/`, `store_identity/`, `memory/`,
-`projects/`, `ops/` and `telemetry/` subpackages. The four
+`projects/`, `alerts/`, `ops/` and `telemetry/` subpackages. The four
 surfaces own no domain rule: `mcp_surface`, `mcp_front`, `http_surface` and
 `cli`. `on_demand` holds the port before `http_surface` is loaded, and imports
 only the standard library until the first connection.

@@ -53,3 +53,8 @@ _.array_hook  # unused variable (server\hooks\notify.py)
 _.parse_float  # unused variable (server\hooks\notify.py)
 _.parse_int  # unused variable (server\hooks\notify.py)
 _.parse_constant  # unused method (server\hooks\notify.py)
+
+# A TypedDict's fields are read by subscript, which vulture does not tie to the
+# declaration: the toast executor reads these two of `alerts.messages.Message` by key.
+_.aumid  # unused variable (server\alerts\messages.py)
+_.xml  # unused variable (server\alerts\messages.py)

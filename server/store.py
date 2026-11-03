@@ -180,6 +180,16 @@ END;
     # the sessions that carried it, and a foreign key wants its target to exist.
     + execution_store.SCHEMA
     + platform_core.SCHEMA
+    # The owner's Windows alert settings, added with schema 10: one row, and no
+    # row means the defaults `alerts.settings` keeps. Additive and empty in an
+    # upgraded store, so this script is the whole of its migration.
+    + """
+CREATE TABLE IF NOT EXISTS owner_alert_settings(
+    key TEXT PRIMARY KEY CHECK(key='settings'),
+    record_json TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+"""
 )
 
 
@@ -337,6 +347,7 @@ SCHEMA_TABLES = (
     "execution_events",
     *execution_store.SCHEMA_TABLES,
     *platform_core.SCHEMA_TABLES,
+    "owner_alert_settings",
 )
 
 #: What a session row learned to say about itself when session identity

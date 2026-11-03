@@ -39,7 +39,7 @@ ADDED_COLUMNS = {
     "work_item_requests": ["answer_version"],
     "sessions": ["opened_in", "opened_host", "opened_folder", "host_session_id"],
 }
-ADDED_TABLES = {"work_item_request_answers"}
+ADDED_TABLES = {"work_item_request_answers", "owner_alert_settings"}
 ANSWER_COLUMNS = ["request_id", "version", "answers_json", "answered_by", "answered_at", "call_id"]
 ADDED_INDEXES = {
     "work_item_comments_reply_to",

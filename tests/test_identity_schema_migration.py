@@ -82,7 +82,7 @@ SCHEMA10_COLUMNS = {
     "work_item_requests": {"answer_version"},
     "sessions": {"opened_in", "opened_host", "opened_folder", "host_session_id"},
 }
-SCHEMA10_TABLES = {"work_item_request_answers"}
+SCHEMA10_TABLES = {"work_item_request_answers", "owner_alert_settings"}
 ADDED_TRIGGERS = {
     "work_items_claim_follows_call",
     "execution_events_append_only_update",
