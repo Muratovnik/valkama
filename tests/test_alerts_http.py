@@ -33,7 +33,7 @@ ENABLED: toast.Check = {"state": "enabled", "setting": 0, "reason": None}
 ROOT = Path(__file__).resolve().parent.parent
 
 
-class PresenceRecord(unittest.TestCase):
+class PresenceRecordTests(unittest.TestCase):
     """The record itself, on a clock the test moves."""
 
     def setUp(self) -> None:
@@ -201,7 +201,7 @@ class Listener(unittest.TestCase):
         }
 
 
-class PresenceOverHttp(Listener):
+class PresenceOverHttpTests(Listener):
     def test_a_page_reports_with_credentials_and_a_session_reads_without_them(self) -> None:
         status, answer = self.call("POST", "/api/alerts/presence", self.page())
         self.assertEqual((200, {"ok": True}), (status, answer))
@@ -244,7 +244,7 @@ class PresenceOverHttp(Listener):
         self.assertFalse(emit.listener_sees(identity, question=False))
 
 
-class SettingsOverHttp(Listener):
+class SettingsOverHttpTests(Listener):
     def test_a_store_without_the_row_answers_the_defaults(self) -> None:
         status, answer = self.call("GET", "/api/alerts/settings", credentials=False)
         self.assertEqual(200, status)
@@ -281,7 +281,7 @@ class SettingsOverHttp(Listener):
         self.assertTrue(self.call("GET", "/api/alerts/settings")[1]["enabled"])
 
 
-class TrialAndStatus(Listener):
+class TrialAndStatusTests(Listener):
     def test_the_trial_shows_a_toast_when_windows_would(self) -> None:
         with mock.patch.object(toast, "shortcut_found", return_value=True):
             status, answer = self.call("POST", "/api/alerts/test", {})
@@ -345,7 +345,7 @@ class TrialAndStatus(Listener):
             self.assertEqual("unknown", readiness.status()["autostart"])
 
 
-class Shortcut(unittest.TestCase):
+class ShortcutTests(unittest.TestCase):
     """What the shortcut check reads, on files written here: not the owner's Start menu."""
 
     def setUp(self) -> None:
@@ -378,7 +378,7 @@ class Shortcut(unittest.TestCase):
         self.assertEqual(package["build"]["appId"], toast.AUMID)
 
 
-class AnsweredInTheInterface(Listener):
+class AnsweredInTheInterfaceTests(Listener):
     """The panel of questions writes through the exact route; both routes take a toast back."""
 
     def setUp(self) -> None:

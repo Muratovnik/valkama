@@ -83,7 +83,7 @@ class ReaperHarness(test_executions.LaunchHarness):
         return str(planning.get_work_item(self.conn, reference)["state"]["key"])
 
 
-class ReviewAfterALaunch(ReaperHarness):
+class ReviewAfterALaunchTests(ReaperHarness):
     def test_a_launch_that_moved_its_item_to_review_is_one_toast(self) -> None:
         reference = self.launch()
         self.finish(reference)
@@ -152,7 +152,7 @@ class ReviewAfterALaunch(ReaperHarness):
         self.assertIn(second, message["xml"])
 
 
-class AFailedLaunch(ReaperHarness):
+class AFailedLaunchTests(ReaperHarness):
     def fail(self) -> str:
         reference = self.launch("it fails")
         self.finish(reference, delivered=False, code=1)
@@ -194,7 +194,7 @@ class AFailedLaunch(ReaperHarness):
         self.assertEqual([], self.shown)
 
 
-class TheLoop(ReaperHarness):
+class TheLoopTests(ReaperHarness):
     def run_loop(self, registry: watchers.Watchers, **options: object) -> None:
         """The loop on this test's connection: its own stays open by design, for its life."""
 
@@ -256,7 +256,7 @@ class TheLoop(ReaperHarness):
             emit.after_reap(self.conn, [{"reference": "TST-1"}])
 
 
-class WhichListener(ReaperHarness):
+class WhichListenerTests(ReaperHarness):
     """`serve_main` hands the reaper its answer from the port it really holds."""
 
     def served_with(self, *, port: int, expected: str) -> bool:

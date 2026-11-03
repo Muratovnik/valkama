@@ -116,7 +116,7 @@ class EmitHarness(unittest.TestCase):
         emit.EMITTER.flush(5)
 
 
-class OneQuestion(EmitHarness):
+class OneQuestionTests(EmitHarness):
     def test_a_question_from_an_agent_is_one_toast_for_its_item_after_the_write(self) -> None:
         self.ask(expires_at="2099-01-01T09:30:00Z")
         self.settle()
@@ -178,7 +178,7 @@ class OneQuestion(EmitHarness):
         self.assertEqual([], self.removed)
 
 
-class WhoWrote(EmitHarness):
+class WhoWroteTests(EmitHarness):
     def question_as(self, identity: calls.Identity) -> None:
         with calls.bind(identity, "test"):
             requests.create(self.conn, self.ref, kind="question", prompt="?", fields=[FIELD])
@@ -214,7 +214,7 @@ class WhoWrote(EmitHarness):
         self.assertEqual([], self.shown)
 
 
-class Coalescing(EmitHarness):
+class CoalescingTests(EmitHarness):
     def test_questions_on_three_items_in_one_window_are_one_summary(self) -> None:
         references = [self.ref, self.item("Second"), self.item("Third")]
         for reference in references:
@@ -268,7 +268,7 @@ class Coalescing(EmitHarness):
         self.assertIsNone(self.shown[-1]["expires_at"], "one open question has no deadline")
 
 
-class Settings(EmitHarness):
+class SettingsTests(EmitHarness):
     def test_alerts_turned_off_raise_nothing(self) -> None:
         alert_settings.write(self.conn, {"enabled": False})
         self.ask()
@@ -306,7 +306,7 @@ class Settings(EmitHarness):
         self.assertIn("нужен ваш ответ", self.shown[0]["xml"])
 
 
-class Presence(EmitHarness):
+class PresenceTests(EmitHarness):
     def test_a_page_showing_the_item_silences_its_toast(self) -> None:
         self.visible.add(self.work_item_id(self.ref))
         self.ask()
@@ -341,7 +341,7 @@ class Presence(EmitHarness):
         self.assertEqual([self.ref], [message["tag"] for message in self.shown])
 
 
-class NoListener(unittest.TestCase):
+class NoListenerTests(unittest.TestCase):
     """The real question, against a port nothing listens on and one that never answers."""
 
     def test_no_listener_means_no_page_is_open(self) -> None:
@@ -361,7 +361,7 @@ class NoListener(unittest.TestCase):
         self.assertLess(time.monotonic() - started, 2.0, "and the question does not hang")
 
 
-class Review(EmitHarness):
+class ReviewTests(EmitHarness):
     def test_a_move_to_review_is_one_toast(self) -> None:
         self.agent("transition_work_item", id=self.ref, state="review", reason="ready")
         self.settle()
@@ -399,7 +399,7 @@ class Review(EmitHarness):
         self.assertEqual([], self.shown)
 
 
-class TakingBack(EmitHarness):
+class TakingBackTests(EmitHarness):
     def test_closing_an_item_takes_its_toast_back(self) -> None:
         self.agent("transition_work_item", id=self.ref, state="cancelled", force=True)
         self.settle()
@@ -471,7 +471,7 @@ class TakingBack(EmitHarness):
         self.assertEqual([], self.shown, "the other item's window is still open")
 
 
-class Failures(EmitHarness):
+class FailuresTests(EmitHarness):
     def test_a_failed_decision_leaves_the_write_committed_and_a_log_line(self) -> None:
         with mock.patch.object(emit, "_write_dues", side_effect=sqlite_failure()):
             answer = self.ask()
@@ -534,7 +534,7 @@ mcp_surface.mcp_main()
 """
 
 
-class SessionEnd(unittest.TestCase):
+class SessionEndTests(unittest.TestCase):
     def session(self, window: float, frames: list[dict]) -> tuple[list, float]:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             seen = os.path.join(directory, "seen.jsonl")

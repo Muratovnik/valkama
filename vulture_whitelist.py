@@ -58,3 +58,6 @@ _.parse_constant  # unused method (server\hooks\notify.py)
 # declaration: the toast executor reads these two of `alerts.messages.Message` by key.
 _.aumid  # unused variable (server\alerts\messages.py)
 _.xml  # unused variable (server\alerts\messages.py)
+
+# A key of the `/api/alerts/status` answer: the settings page reads it over HTTP.
+_.shortcut  # unused variable (server\alerts\readiness.py)
