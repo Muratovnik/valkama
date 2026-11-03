@@ -312,6 +312,44 @@ class StateTests(Harness):
         self.assertEqual([], [name for name in names if name.endswith(".marks")])
 
 
+class StagesTests(Harness):
+    """A notice that fails costs neither the lifecycle event nor the end of a watcher."""
+
+    def run_hook(self, event: str, payload: dict) -> tuple[int, bytes, bytes]:
+        out = io.BytesIO()
+        fake = mock.Mock()
+        fake.buffer = io.BytesIO()
+        with mock.patch.object(sys, "stderr", fake):
+            code = entry.main(["claude", event], io.BytesIO(json.dumps(payload).encode()), out)
+        return code, out.getvalue(), fake.buffer.getvalue()
+
+    def test_a_failing_notice_still_records_the_event(self) -> None:
+        self.claim_with_a_step_for_the_subagent()
+        with mock.patch.object(notify, "collect", side_effect=OSError("disk full")):
+            code, out, err = self.run_hook("stop", {"session_id": SESSION})
+        self.assertEqual((0, b""), (code, out))
+        self.assertIn(b"disk full", err)
+        kinds = [
+            row[0]
+            for row in self.conn.execute(
+                "SELECT kind FROM execution_events WHERE session_id = ? AND kind = 'turn_end'",
+                (SESSION,),
+            )
+        ]
+        self.assertEqual(["turn_end"], kinds)
+
+    def test_a_session_end_stops_the_watcher_even_when_the_store_cannot_be_written(self) -> None:
+        self.claim_with_a_step_for_the_subagent()
+        self.assertIsNone(self.hook(event="stop"))
+        from server.hooks import ingest
+
+        with mock.patch.object(ingest, "deliver", side_effect=OSError("store gone")):
+            code, _out, err = self.run_hook("session-end", {"session_id": SESSION})
+        self.assertEqual(0, code)
+        self.assertIn(b"store gone", err)
+        self.assertTrue(os.path.exists(os.path.join(self.state(), SESSION + ".end")))
+
+
 class WatcherTests(Harness):
     def setUp(self) -> None:
         super().setUp()

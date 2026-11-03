@@ -28,7 +28,10 @@ import sys
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
-    from typing import BinaryIO
+    from collections.abc import Callable
+    from typing import BinaryIO, TypeVar
+
+    T = TypeVar("T")
 
 #: The most stdin a hook reads. A Valkama call's arguments are far below it;
 #: anything larger is not an input this command was written for.
@@ -95,10 +98,13 @@ def _run(arguments: list[str], stdin: BinaryIO, stdout: BinaryIO) -> int:
     if event == notify.WATCH_EVENT and client == "claude":
         payload = notify.parse(raw) if len(raw) <= MAX_INPUT_BYTES else None
         return notify.watch(payload) if payload is not None else 0
-    notice = event in notify.DELIVERY_EVENTS.get(client, {})
     payload = notify.parse(raw) if len(raw) <= MAX_INPUT_BYTES else None
-    if notice and payload is not None:
-        answer = notify.deliver(client, event, payload)
+    # Each stage stands alone: a notice that failed must not cost the lifecycle
+    # event, and a session end must stop its watcher whatever the store says.
+    if event == "session-end" and payload is not None and client == "claude":
+        _stage(notify.session_ended, payload)
+    if event in notify.DELIVERY_EVENTS.get(client, {}) and payload is not None:
+        answer = _stage(notify.deliver, client, event, payload)
         if answer is not None:
             stdout.write(answer)
             stdout.flush()
@@ -107,9 +113,17 @@ def _run(arguments: list[str], stdin: BinaryIO, stdout: BinaryIO) -> int:
     ):
         return 0  # only the Agent tool's answer is a lifecycle event
     _lifecycle(client, event, payload)
-    if event == "session-end" and payload is not None and client == "claude":
-        notify.session_ended(payload)
     return 0
+
+
+def _stage(action: Callable[..., T], *arguments: object) -> T | None:
+    """One stage of a hook; a failure is reported on stderr and the next stage runs."""
+
+    try:
+        return action(*arguments)
+    except Exception as error:  # noqa: BLE001 -- a hook never fails its client
+        _note(f"{type(error).__name__}: {error}")
+        return None
 
 
 def _identity(raw: bytes, stdout: BinaryIO) -> None:
