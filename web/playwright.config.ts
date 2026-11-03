@@ -51,7 +51,7 @@ export default defineConfig({
       timeout: 120_000,
     },
     {
-      command: `npm run build && node node_modules/vite/bin/vite.js preview --config tests/browser/vite.config.ts --host 127.0.0.1 --port ${appPort} --strictPort`,
+      command: `node scripts/build-for-browser-tests.mjs && node node_modules/vite/bin/vite.js preview --config tests/browser/vite.config.ts --host 127.0.0.1 --port ${appPort} --strictPort`,
       url: `${app}/`,
       reuseExistingServer: false,
       timeout: 180_000,
