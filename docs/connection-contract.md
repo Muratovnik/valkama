@@ -1577,7 +1577,10 @@ and when that place cannot be opened the plan says so instead of going elsewhere
 subagent opens through its parent. A file or a folder opens in the editor `fallback`
 names, VS Code by default, and only inside the project named: the path goes through
 the same check as `GET /api/documents/read`, and the plan is the one place the
-absolute path it found is told to the page.
+absolute path it found is told to the page. A path in a document Valkama shows is
+named the same way: the page asks `GET /api/documents/resolve` with that
+document's `project` as the base, and takes `project` and `relative` from the
+answer.
 
 ```json
 {"target": {"kind": "session", "session": "<id>", "agent": ""},

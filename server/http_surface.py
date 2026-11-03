@@ -331,7 +331,12 @@ def _document_answer(path: str, parameters: Mapping[str, list[str]]) -> tuple[in
     try:
         if path == _DOCUMENT_RESOLVE:
             paths = parameters.get("path", [])
-            return 200, {"paths": documents.resolve_paths(_first_value(parameters, "space"), paths)}
+            answers = documents.resolve_paths(
+                _first_value(parameters, "space"),
+                paths,
+                project=_first_value(parameters, "project"),
+            )
+            return 200, {"paths": answers}
         project = _first_value(parameters, "project")
         relative = _first_value(parameters, "path")
         if not project or relative is None:

@@ -259,10 +259,20 @@ def _resolved(raw: str, answer: Located | DocumentRefused) -> dict[str, object]:
     return {"path": raw, "status": "refused", "code": answer.code}
 
 
+def _project_root(project: str, roots: Sequence[Root]) -> str:
+    """A registered project's root, named by its id: the registry's, never the page's."""
+
+    root = next((found for found in roots if found.project == project), None)
+    if root is None:
+        raise DocumentError("project_unknown")
+    return root.path
+
+
 def resolve_paths(
     space: str | None,
     paths: Sequence[str],
     *,
+    project: str | None = None,
     reader: project_registry.RegistryReader | None = None,
 ) -> list[dict[str, object]]:
     """What each written path is, from `stat` alone: no file is opened.
@@ -272,12 +282,21 @@ def resolve_paths(
     whatever the space. One that does not parse is refused, so a crafted value
     reaches no directory at all; one the registry does not bind leaves relative
     paths unbound and absolute ones answered.
+
+    `project` names the other base a page has: the project of a document it shows,
+    whose links the page has already read from the document's folder into paths
+    from that project's root. The root is the registry's for that id, and the
+    boundary is still every registered root, as from a space. A page names one
+    base or none.
     """
 
-    if not paths or len(paths) > MAX_RESOLVE_PATHS:
+    if not paths or len(paths) > MAX_RESOLVE_PATHS or (space is not None and project is not None):
         raise DocumentError("invalid_request")
+    roots = registered_roots(reader=reader)
     base: str | None = None
-    if space is not None:
+    if project is not None:
+        base = _project_root(project, roots)
+    elif space is not None:
         mapping = project_registry.resolve_space_root(
             {"kind": "planning-space", "resource_id": space}, reader=reader
         )
@@ -285,7 +304,6 @@ def resolve_paths(
             raise DocumentError("invalid_request")
         if mapping["status"] == "mapped":
             base = os.path.realpath(str(mapping["canonical_root"]))
-    roots = registered_roots(reader=reader)
     nested = nested_roots(base, roots) if base is not None else ()
     return [_resolved(raw, locate(raw, base=base, roots=roots, nested=nested)) for raw in paths]
 
@@ -307,11 +325,7 @@ def read_markdown(
     parent, and a second lookup must not take the path into another project.
     """
 
-    root = next(
-        (found for found in registered_roots(reader=reader) if found.project == project), None
-    )
-    if root is None:
-        raise DocumentError("project_unknown")
+    root = Root(project, _project_root(project, registered_roots(reader=reader)))
     located = locate(path, base=root.path, roots=(root,))
     if isinstance(located, DocumentRefused):
         raise DocumentError(located.code)

@@ -221,6 +221,49 @@ class ResolveTests(DocumentRoutesHarness):
         status, body, _ = self.request("/api/documents/resolve?space=..%5Cx&path=a.md")
         self.assertEqual((400, "invalid_request"), (status, body["error"]["code"]))
 
+    def resolve_from(self, project: str, *paths: str) -> tuple[int, dict]:
+        query = urlencode([("project", project), *(("path", path) for path in paths)])
+        status, body, _ = self.request(f"/api/documents/resolve?{query}")
+        return status, body
+
+    def test_a_document_s_project_is_a_base_like_a_space_s_root(self) -> None:
+        # The project of a document the page shows: relative paths start at its root,
+        # a nested project is asked after it, and the boundary is still every root.
+        status, body = self.resolve_from(
+            "workspace",
+            "docs/plan.md",
+            "src/only-one.md",
+            str(self.other / "b.md"),
+            "../outside/secret.md",
+        )
+        self.assertEqual(200, status, body)
+        plan, nested, other, outside = body["paths"]
+        self.assertEqual(("workspace", "docs/plan.md"), (plan["project"], plan["relative"]))
+        self.assertEqual(("one", "src/only-one.md"), (nested["project"], nested["relative"]))
+        self.assertEqual(("other", "b.md"), (other["project"], other["relative"]))
+        self.assertEqual(
+            {"path": "../outside/secret.md", "status": "refused", "code": "outside_root"}, outside
+        )
+
+    def test_a_project_base_is_the_registry_s_root_for_that_id(self) -> None:
+        # A nested project's base is its own root, not its parent's.
+        status, body = self.resolve_from("one", "src/only-one.md", "docs/plan.md")
+        self.assertEqual(200, status, body)
+        found, parent = body["paths"]
+        self.assertEqual(("one", "src/only-one.md"), (found["project"], found["relative"]))
+        self.assertEqual("missing", parent["status"])
+
+    def test_a_project_the_registry_does_not_know_is_refused_whole(self) -> None:
+        for project in ("nobody", "", "../workspace"):
+            with self.subTest(project=project):
+                status, body = self.resolve_from(project, "docs/plan.md")
+                self.assertEqual((404, {"error": {"code": "project_unknown"}}), (status, body))
+
+    def test_a_page_names_one_base_or_none(self) -> None:
+        query = urlencode([("space", SPACE), ("project", "workspace"), ("path", "docs/plan.md")])
+        status, body, _ = self.request(f"/api/documents/resolve?{query}")
+        self.assertEqual((400, "invalid_request"), (status, body["error"]["code"]))
+
     def test_the_batch_limit(self) -> None:
         paths = [f"docs/{number}.md" for number in range(documents.MAX_RESOLVE_PATHS)]
         self.assertEqual(64, len(self.resolve(*paths)))

@@ -688,7 +688,14 @@ of an operating-system error.
 `GET /api/documents/resolve?space=<id>&path=<p>&path=<p>...` takes up to 64 paths
 and only asks the file system whether each exists; it opens no file. `space` is
 the planning space's exact identity, the same value `GET /api/ref` takes, and is
-only the base of a relative path. Each path is sent as written, without its
+only the base of a relative path. Inside a document the page shows, the base is
+that document's project instead: `project=<id>` in place of `space`, the id
+`resolve` answered with. Its root is the one the registry gives that id, a
+project registered inside it is asked after it, as from a space, and the boundary
+stays every registered root. The page has already read a link in the document
+from the document's folder into a path from the project's root, so no folder is
+sent. A `project` the registry does not know is `project_unknown` for the whole
+request, and naming both `space` and `project` is `invalid_request`. Each path is sent as written, without its
 `:42` or `#...` suffix, and comes back unchanged in `path`, so an answer is matched
 without parsing it. A request line may not pass 64 KiB (the listener answers 414),
 so a batch of long paths is split sooner than 64:
@@ -743,9 +750,9 @@ endings untouched.
 
 | Code | HTTP | When |
 | --- | --- | --- |
-| `invalid_request` | 400 | Either route: no `path`, more than 64 paths, no `project`, or a `space` that is not a planning space's identity |
+| `invalid_request` | 400 | Either route: no `path`, more than 64 paths, no `project` for `read`, both `space` and `project` for `resolve`, or a `space` that is not a planning space's identity |
 | `invalid_path` | 400 | The path's form, as in `resolve` |
-| `project_unknown` | 404 | `project` is not in the registry |
+| `project_unknown` | 404 | `project` is not in the registry, for either route |
 | `outside_root` | 403 | Outside every registered root |
 | `not_found` | 404 | Nothing there |
 | `directory`, `not_a_file` | 422 | Not a regular file |
