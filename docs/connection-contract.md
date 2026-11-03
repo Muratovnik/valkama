@@ -1219,6 +1219,10 @@ wrote, or a separate release sent after an older close, including a lease that
 expired then. A release before the close is not the holder at the close, and
 the field is `null`.
 
+The card's own read says more about who that was: `last_claim_executor` is the
+same `executor` its claim, steps and agents carry, for the holder
+`last_claim_ref` names, with `state` `none` when there is no session to open.
+
 ### What a person did reaches the agent
 
 A person works in the interface and an agent through its tools, on the same item

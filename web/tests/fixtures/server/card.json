@@ -216,7 +216,15 @@
             }
           }
         ],
-        "agents": []
+        "agents": [],
+        "last_claim_executor": {
+          "session": null,
+          "agent": null,
+          "opened_in": "",
+          "opened_host": "",
+          "family": "",
+          "state": "none"
+        }
       }
     }
   }

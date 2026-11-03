@@ -340,6 +340,8 @@ const workItemSchema = strictObject({
   ...workItemBriefShape,
   agents: z.array(workItemAgentSchema).optional(),
   claim: claimSchema.nullable(),
+  /** Who `last_claim_ref` names and what opening them would reach: only the card reads it. */
+  last_claim_executor: executorSchema.optional(),
   comment_count: positiveInt(true).optional(),
   description: blankable(20_000),
   summary: summarySchema.nullable(),

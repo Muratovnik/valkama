@@ -49,6 +49,7 @@
               "agent": "a4d2c8f1e0b3a297",
               "opened_in": "ide",
               "opened_host": "vscode",
+              "family": "claude",
               "state": "live"
             }
           },
@@ -63,6 +64,7 @@
               "agent": null,
               "opened_in": "",
               "opened_host": "",
+              "family": "",
               "state": "none"
             }
           },
@@ -77,6 +79,7 @@
               "agent": null,
               "opened_in": "",
               "opened_host": "",
+              "family": "",
               "state": "none"
             }
           }
@@ -102,6 +105,7 @@
             "agent": null,
             "opened_in": "ide",
             "opened_host": "vscode",
+            "family": "claude",
             "state": "live"
           }
         },
@@ -217,6 +221,7 @@
               "agent": "b5e3d9a2f1c4b308",
               "opened_in": "app",
               "opened_host": "claude-desktop",
+              "family": "claude",
               "state": "ended"
             }
           },
@@ -241,10 +246,19 @@
               "agent": "a4d2c8f1e0b3a297",
               "opened_in": "ide",
               "opened_host": "vscode",
+              "family": "claude",
               "state": "live"
             }
           }
-        ]
+        ],
+        "last_claim_executor": {
+          "session": null,
+          "agent": null,
+          "opened_in": "",
+          "opened_host": "",
+          "family": "",
+          "state": "none"
+        }
       }
     }
   }

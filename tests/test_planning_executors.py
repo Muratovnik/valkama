@@ -25,7 +25,14 @@ from tests.test_planning_agents import AGENT, OTHER_PARENT, PARENT, SIBLING, Age
 
 #: Longer than a holder label carries as it is, so the label holds its digest.
 LONG_SESSION = "session-" + "x" * 50
-NOBODY = {"session": None, "agent": None, "opened_in": "", "opened_host": "", "state": "none"}
+NOBODY = {
+    "session": None,
+    "agent": None,
+    "opened_in": "",
+    "opened_host": "",
+    "family": "",
+    "state": "none",
+}
 #: Any statement that reads the table itself, and not `execution_sessions`.
 _NAMES_SESSIONS = re.compile(r"(?<![a-z_])sessions(?![a-z_])")
 
@@ -105,6 +112,7 @@ class CardTests(ExecutorCase):
                 "agent": None,
                 "opened_in": "ide",
                 "opened_host": "vscode",
+                "family": "claude",
                 "state": "live",
             },
             self.record["claim"]["executor"],
@@ -117,6 +125,7 @@ class CardTests(ExecutorCase):
                 "agent": AGENT,
                 "opened_in": "ide",
                 "opened_host": "vscode",
+                "family": "claude",
                 "state": "live",
             },
             self.record["checklist"][0]["executor"],
@@ -148,6 +157,7 @@ class CardTests(ExecutorCase):
                         "agent": entry["agent_id"],
                         "opened_in": "ide",
                         "opened_host": "vscode",
+                        "family": "claude",
                         "state": "live",
                     },
                     entry["executor"],
@@ -352,6 +362,20 @@ class HolderTests(ExecutorCase):
             self.conn.set_trace_callback(None)
         self.assertEqual(1, len(seen), seen)
 
+    def test_who_last_held_a_finished_item_costs_no_statement_of_its_own(self) -> None:
+        self.held_by()
+        self.placed(PARENT, "ide", "vscode")
+        service.transition_work_item(self.conn, self.card, "done", force=True, author="agent")
+        record = {**self.read()}
+        seen: list[str] = []
+        self.conn.set_trace_callback(seen.append)
+        try:
+            executors.attach(self.conn, record, recorded=True)
+        finally:
+            self.conn.set_trace_callback(None)
+        self.assertEqual(1, len(seen), seen)
+        self.assertEqual(PARENT, record["last_claim_executor"]["session"])
+
     def test_a_card_with_no_session_to_name_asks_nothing(self) -> None:
         record = {**self.read()}
         seen: list[str] = []
@@ -384,10 +408,54 @@ class PlaceColumnTests(ExecutorCase):
         )
 
 
+class LastHolderTests(ExecutorCase):
+    """A close ends the claim, and the card can still reach whoever held it."""
+
+    def close(self) -> dict:
+        service.transition_work_item(self.conn, self.card, "done", force=True, author="agent")
+        return self.read()
+
+    def test_a_finished_item_names_who_held_it_and_where_it_was_opened(self) -> None:
+        self.held_by()
+        self.placed(PARENT, "app", "claude-desktop")
+        self.session(status="ended")
+        record = self.close()
+        self.assertIsNone(record["claim"])
+        self.assertEqual(
+            {
+                "session": PARENT,
+                "agent": None,
+                "opened_in": "app",
+                "opened_host": "claude-desktop",
+                "family": "claude",
+                "state": "ended",
+            },
+            record["last_claim_executor"],
+        )
+
+    def test_a_session_since_deleted_is_gone(self) -> None:
+        self.held_by()
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+            self.session(status="ended", transcript_path=os.path.join(directory, "deleted.jsonl"))
+            self.assertEqual("gone", self.close()["last_claim_executor"]["state"])
+
+    def test_an_item_closed_unheld_has_nobody_to_open(self) -> None:
+        self.assertEqual(NOBODY, self.close()["last_claim_executor"])
+
+    def test_a_person_who_held_it_has_no_session(self) -> None:
+        service.claim_work_item(self.conn, self.card, author="the owner", move_state=False)
+        self.assertEqual(NOBODY, self.close()["last_claim_executor"])
+
+    def test_open_work_has_nobody_before_its_holder(self) -> None:
+        self.held_by()
+        self.assertEqual(NOBODY, self.read()["last_claim_executor"])
+
+
 class OlderStoreTests(unittest.TestCase):
     def record(self, session: str = PARENT) -> dict:
         return {
             "work_item_id": "any",
+            "last_claim_ref": None,
             "claim": {"state": "live", "session_id": session, "agent_id": None},
             "checklist": [
                 {
@@ -430,6 +498,7 @@ class OlderStoreTests(unittest.TestCase):
                 "agent": None,
                 "opened_in": "",
                 "opened_host": "",
+                "family": "claude",
                 "state": "live",
             },
             record["claim"]["executor"],

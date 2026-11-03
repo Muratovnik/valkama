@@ -1,14 +1,16 @@
 """Who stands behind a claim, a step or an agent on a card, and in what state.
 
 A card names three kinds of holder, each its own way: a claim by the call that
-took it, a step by its holder's label, an agent by its own row. `attach` gives
-each the same short `executor`, so the card never reads a label to find a session:
+took it, a step by its holder's label, an agent by its own row. A finished item
+names a fourth, by the label its last claim left. `attach` gives each the same
+short `executor`, so the card never reads a label to find a session:
 
 | Field | Says |
 |---|---|
 | `session` | the session a click on this holder opens; an agent's parent, because a subagent cannot be opened from outside |
 | `agent` | the agent inside that session, as far as the holder names one |
 | `opened_in`, `opened_host` | where that session was last opened, empty when unknown |
+| `family` | whose settings cover that session: `claude`, `codex` or `other`, empty for `none` |
 | `state` | `live`, `ended`, `gone`, `headless` or `none` |
 
 | Checked in order | State |
@@ -39,6 +41,7 @@ import os
 import sqlite3
 from collections.abc import Iterable, Mapping
 
+from .. import sessions
 from ..hooks import place as places
 from . import calls, leases
 
@@ -81,7 +84,7 @@ def _transcript_lost(path: str) -> bool:
 
 
 def _place_of(row: sqlite3.Row, active: bool | None = None) -> dict[str, str]:
-    """One session's place and state, every field of an executor but who it is."""
+    """One session's place, family and state, every field of an executor but who it is."""
 
     recorded = _column(row, "opened_in")
     opened_in = recorded if recorded in places.OPENED_IN else ""
@@ -94,6 +97,7 @@ def _place_of(row: sqlite3.Row, active: bool | None = None) -> dict[str, str]:
     return {
         "opened_in": opened_in,
         "opened_host": places.agreeing_host(opened_in, _column(row, "opened_host")),
+        "family": sessions.client_family(row["client"]),
         "state": state,
     }
 
@@ -137,12 +141,22 @@ def _step_holder(step: Mapping) -> _Holder | None:
 def _executor(holder: _Holder | None, known: Mapping[str, dict]) -> dict:
     place = known.get(holder[0]) if holder is not None else None
     if holder is None or place is None:
-        return {"session": None, "agent": None, "opened_in": "", "opened_host": "", "state": NONE}
+        return {
+            "session": None,
+            "agent": None,
+            "opened_in": "",
+            "opened_host": "",
+            "family": "",
+            "state": NONE,
+        }
     return {"session": holder[0], "agent": holder[1], **place}
 
 
 def attach(conn: sqlite3.Connection, record: dict, *, recorded: bool) -> None:
     """Add an `executor` to the record's claim, to each step and to each agent.
+
+    The record itself takes `last_claim_executor`, for whoever `last_claim_ref`
+    names: a close ends the claim, and its holder may be the one worth resuming.
 
     `recorded` is whether this store records agents at all. One an earlier build
     wrote may have no session table, so it is not asked, and every executor reads
@@ -153,7 +167,10 @@ def attach(conn: sqlite3.Connection, record: dict, *, recorded: bool) -> None:
     claim_holder = _claim_holder(claim) if claim is not None else None
     step_holders = [_step_holder(step) for step in steps]
     agent_holders: list[_Holder] = [(agent["session_id"], agent["agent_id"]) for agent in agents]
-    known = _places(conn, [claim_holder, *step_holders, *agent_holders]) if recorded else {}
+    last_holder = calls.holder_ids(str(record["last_claim_ref"] or ""))
+    named = [claim_holder, last_holder, *step_holders, *agent_holders]
+    known = _places(conn, named) if recorded else {}
+    record["last_claim_executor"] = _executor(last_holder, known)
     if claim is not None:
         claim["executor"] = _executor(claim_holder, known)
     for step, holder in zip(steps, step_holders, strict=True):

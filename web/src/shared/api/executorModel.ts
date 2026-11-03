@@ -6,6 +6,7 @@
  */
 
 import { boundedText, strictObject } from '@/shared/api/contract.ts'
+import type { z } from '@/shared/api/contract.ts'
 import { OPENED_HOSTS, OPENED_IN, PLAN_STATES } from '@/shared/api/openPlanModel.ts'
 import { enumField } from '@/shared/api/platformApiGuards.ts'
 
@@ -16,5 +17,9 @@ export const executorSchema = strictObject({
   agent: callId(),
   opened_in: enumField(OPENED_IN),
   opened_host: enumField(OPENED_HOSTS),
+  /** Whose settings cover the session; empty for `none`. */
+  family: enumField(['', 'claude', 'codex', 'other'] as const),
   state: enumField(PLAN_STATES),
 })
+
+export type Executor = z.infer<typeof executorSchema>
