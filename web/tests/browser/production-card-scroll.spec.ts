@@ -172,20 +172,42 @@ function logPresses(page: Page) {
 const pressesSoFar = (page: Page) =>
   page.evaluate(() => (window as unknown as { pressLog: PressLog }).pressLog.presses)
 
-/** A control the pointer can reach right now, chosen by turn from what is on screen. */
+/**
+ * The frame's parts, aimed at in turn. Not its buttons: which button a turn pressed used
+ * to follow how many the card had, so a button added to the bar moved every press to
+ * another control at another place in the scroll.
+ */
+const PARTS = [
+  '.drawer-frame-identity',
+  '.drawer-frame-action',
+  '.drawer-frame-controls',
+  '.drawer-frame-body',
+] as const
+
+/**
+ * Where a turn's press goes: the first control of the part the pointer can reach right
+ * now. A part of the bar can begin to fade between this and the press, which is the race
+ * the bar must win.
+ */
 const aim = (page: Page, turn: number) =>
-  page.evaluate((index) => {
-    const shown = [...document.querySelectorAll<HTMLElement>('.drawer button')].filter((node) => {
+  page.evaluate(
+    (part) => {
+      const node = [...document.querySelectorAll<HTMLElement>(`.drawer ${part} button`)].find(
+        (each) => {
+          const { x, y, width, height } = each.getBoundingClientRect()
+          if (width === 0 || height === 0) return false
+          const hit = document.elementFromPoint(x + width / 2, y + height / 2)
+          return hit !== null && (each === hit || each.contains(hit))
+        },
+      )
+      if (!node) return null
       const { x, y, width, height } = node.getBoundingClientRect()
-      if (width === 0 || height === 0) return false
-      const hit = document.elementFromPoint(x + width / 2, y + height / 2)
-      return hit !== null && (node === hit || node.contains(hit))
-    })
-    const node = shown[index % shown.length]
-    if (!node) return null
-    const { x, y, width, height } = node.getBoundingClientRect()
-    return { x: x + width / 2, y: y + height / 2 }
-  }, turn)
+      return { x: x + width / 2, y: y + height / 2 }
+    },
+    // Two turns to a part, so that each is pressed once with the wheel landed and once
+    // with it on its way.
+    PARTS[Math.floor(turn / 2) % PARTS.length],
+  )
 
 /**
  * Down through the head and on, then back through it. Every other press is aimed once the
@@ -219,9 +241,10 @@ async function pressWhileScrolling(page: Page, body: Locator, count: number) {
 }
 
 /**
- * A press belongs to what was under the pointer when it went down. Forty of them, on
- * whatever control stands in the card at that moment, each started as soon as a wheel
- * has moved the card: every press that went down on a control gets its click there.
+ * A press belongs to what was under the pointer when it went down. Forty of them, at each
+ * part of the card in turn, each started as soon as a wheel has moved the card: every
+ * press that went down on a control gets its click there, the bar's fading in and out
+ * under them included.
  * The page hears both ends and keeps them from the controls, so that the card stays
  * the same card for the next press; the last press is left alone and does its work.
  */

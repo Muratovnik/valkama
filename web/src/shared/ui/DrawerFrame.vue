@@ -44,6 +44,34 @@ const content = ref<HTMLElement | null>(null)
 const titleAway = useScrolledPast(name, body)
 const actionAway = useScrolledPast(() => props.actionAnchor, body)
 
+/**
+ * What a press went down on stays until the press ends. A fade that began under it took
+ * the click away: `visibility` waits for the fade to end, so the release landed on the
+ * bar and the press did nothing. The bar keeps where it stood when the press went down
+ * and answers the scroller once the press is over. Both ends are heard on the window
+ * before anything under it can stop them, or one stopped release would hold the bar.
+ */
+const pressedAs = ref<{ actionAway: boolean; titleAway: boolean } | null>(null)
+const away = computed(
+  () => pressedAs.value ?? { titleAway: titleAway.value, actionAway: actionAway.value },
+)
+useEventListener(
+  window,
+  'pointerdown',
+  ({ target }: PointerEvent) => {
+    if (target instanceof Node && bar.value?.contains(target))
+      pressedAs.value = { titleAway: titleAway.value, actionAway: actionAway.value }
+  },
+  { capture: true },
+)
+const pressOver = () => {
+  pressedAs.value = null
+}
+useEventListener(window, ['pointerup', 'pointercancel'], pressOver, { capture: true })
+// The window's own blur, a release it will never hear; not an element's, which the
+// press itself causes when it takes focus.
+useEventListener(window, 'blur', pressOver)
+
 /** Whatever is scrolled into view comes to rest under the tabs, not behind them. */
 const tabsHeight = ref(0)
 useResizeObserver(tabs, (entries) => {
@@ -125,7 +153,7 @@ defineExpose({ holdFocus, position, restore, scrollToContent })
     <header
       ref="bar"
       class="drawer-frame-bar"
-      :class="{ 'title-away': titleAway, 'action-away': actionAway }"
+      :class="{ 'title-away': away.titleAway, 'action-away': away.actionAway }"
     >
       <!-- The controls come first in the document and stand at the row's end: focus
            going in reaches Back or Close, and not a fact. -->
@@ -262,8 +290,10 @@ defineExpose({ holdFocus, position, restore, scrollToContent })
 }
 
 /* The fades, and the only things the scroller's position decides. What is out of sight
-   is out of reach too. A control the keyboard holds stays where it is until the keyboard
-   moves on, and what would stand over it waits. */
+   is out of reach too, and from the moment it starts to go: `visibility` holds until the
+   fade has ended, and a press went down on what was already leaving. A
+   control the keyboard holds stays where it is until the keyboard moves on, one a press
+   holds until the press ends, and what would stand over it waits. */
 .drawer-frame-identity,
 .drawer-frame-pinned-title,
 .drawer-frame-action {
@@ -276,6 +306,7 @@ defineExpose({ holdFocus, position, restore, scrollToContent })
 .drawer-frame-action,
 .title-away .drawer-frame-identity {
   opacity: 0;
+  pointer-events: none;
   visibility: hidden;
 }
 
@@ -284,6 +315,7 @@ defineExpose({ holdFocus, position, restore, scrollToContent })
 .drawer-frame-identity:has(:focus-visible),
 .drawer-frame-action:has(:focus-visible) {
   opacity: 1;
+  pointer-events: auto;
   visibility: visible;
 }
 
@@ -291,6 +323,7 @@ defineExpose({ holdFocus, position, restore, scrollToContent })
   .drawer-frame-pinned-title,
   .drawer-frame-action {
     opacity: 0;
+    pointer-events: none;
     visibility: hidden;
   }
 }
