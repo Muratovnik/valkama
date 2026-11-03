@@ -10,6 +10,8 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+## [2.4.0](https://github.com/Muratovnik/valkama/compare/v2.3.0...v2.4.0) - 2026-11-03
+
 ### Added
 
 - **A question is answered in the task's discussion.** It reads as a comment: one still
