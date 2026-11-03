@@ -38,6 +38,9 @@ OUTCOMES = (
     "partial",
     "complete",
 )
+#: The outcomes that are a failure of the launch itself. A client that exits non-zero
+#: without a result is `refused`, so `launch_failed` alone would miss every crash.
+FAILED_OUTCOMES = frozenset({"launch_failed", "refused"})
 #: What the packet asked the attempt to do, which is what makes a no-op either
 #: a delivery or a miss. Repeated back by the client so the two can disagree
 #: visibly instead of silently.

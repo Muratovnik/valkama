@@ -12,6 +12,7 @@ import sys
 import threading
 import time
 
+from .alerts import emit as alert_emit
 from .executions.lifecycle import reap_launches
 from .store import connect
 
@@ -86,11 +87,13 @@ class Watchers:
         self._reported_reap_failure = text
         print(f"warning: reaping finished launches failed: {text}", file=sys.stderr)  # noqa: T201
 
-    def run(self, interval: float = 0.4, cycles: int | None = None) -> None:
+    def run(self, interval: float = 0.4, cycles: int | None = None, *, alerts: bool = True) -> None:
         """Watch for change until the process ends.
 
         `cycles` bounds the loop so a test can run it to completion; the server
-        passes nothing and this never returns.
+        passes nothing and this never returns. `alerts` is whether a launch that
+        ended tells the owner: not from a second listener on another port, whose
+        store and links are not the ones the owner's toast would lead to.
         """
 
         conn = connect()
@@ -114,6 +117,11 @@ class Watchers:
                 else:
                     self._reported_reap_failure = ""
                     if reaped:
+                        if alerts:
+                            try:
+                                alert_emit.after_reap(conn, reaped)
+                            except Exception as failure:  # noqa: BLE001 -- an alert must not stop the reaper
+                                self._report_reap_failure(failure)
                         version = conn.execute("PRAGMA data_version").fetchone()[0]
                         self.publish("changed")
                         continue

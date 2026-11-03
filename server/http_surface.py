@@ -42,7 +42,7 @@ from .executions import lifecycle as execution_lifecycle
 from .executions import service as execution_service
 from .federation import federated_search, federated_spaces
 from .memory import api as memory_api
-from .ops import desktop_app, doctor
+from .ops import configuration, desktop_app, doctor
 from .planning import agents as planning_agents
 from .planning import api as planning_api
 from .planning import calls as planning_calls
@@ -1312,7 +1312,11 @@ def serve_main(
     server = PlatformHTTPServer(
         ("127.0.0.1", port), Handler, development_origin=development_origin, adopted=adopted
     )
-    threading.Thread(target=watchers.WATCHERS.run, daemon=True).start()
+    threading.Thread(
+        target=watchers.WATCHERS.run,
+        kwargs={"alerts": server.server_port == configuration.listener_port()},
+        daemon=True,
+    ).start()
     # Handler reads only this immutable startup capture. The mutable dist tree
     # can be rebuilt for the next process without changing this listener.
     server.runtime_snapshot = runtime_snapshot

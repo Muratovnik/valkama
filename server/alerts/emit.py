@@ -48,6 +48,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from urllib.parse import urlencode
 
+from ..executions import results as execution_results
 from ..ops import configuration, toast
 from ..planning import calls, read_model, requests
 from . import messages
@@ -240,6 +241,39 @@ def due_after_write(conn: sqlite3.Connection) -> list[Due]:
     except Exception as error:  # noqa: BLE001 -- nothing about an alert may break a write
         toast.log(f"alert not decided: {type(error).__name__}: {error}")
         return []
+
+
+def _reap_dues(conn: sqlite3.Connection, ended: list[dict]) -> list[Due]:
+    settings = alert_settings.read(conn)
+    dues: list[Due] = []
+    for launch in ended:
+        if launch.get("moved_to_review"):
+            event = _REVIEW
+        elif launch["result"]["outcome"] in execution_results.FAILED_OUTCOMES:
+            event = "launchFailed"
+        else:
+            continue
+        if alert_settings.wants(settings, event):
+            reference = str(launch["reference"])
+            dues.append(_plain(event, read_model.item_row(conn, reference), reference, settings))
+    return dues
+
+
+def after_reap(conn: sqlite3.Connection, ended: list[dict]) -> None:
+    """Tell the owner what the launches that just ended owe them. Never raises.
+
+    The reaper writes outside any bound call, and hands over each launch once, so a
+    later pass has nothing to repeat.
+    """
+
+    if not toast.active() or not ended:
+        return
+    try:
+        dues = _reap_dues(conn, ended)
+    except Exception as error:  # noqa: BLE001 -- nothing about an alert may stop the reaper
+        toast.log(f"alert not decided after a launch: {type(error).__name__}: {error}")
+        return
+    send(dues)
 
 
 def listener_sees(work_item_id: str, *, question: bool) -> bool:

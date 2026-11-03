@@ -549,11 +549,11 @@ class ReapLoopTests(unittest.TestCase):
         stream = registry.subscribe()
         calls: list[int] = []
 
-        def reap(conn: sqlite3.Connection) -> bool:  # noqa: ARG001
+        def reap(conn: sqlite3.Connection) -> list[dict]:  # noqa: ARG001
             calls.append(1)
             if len(calls) == 1:
                 raise sqlite3.OperationalError("database is locked")
-            return True
+            return [{"reference": "TST-1"}]
 
         with (
             mock.patch.object(watchers, "reap_finished_launches", side_effect=reap),

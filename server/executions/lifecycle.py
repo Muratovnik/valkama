@@ -29,6 +29,7 @@ from .. import runner
 from ..planning import model as planning_model
 from ..planning import service as planning_service
 from ..sessions import op_ingest_session_event
+from . import results
 from . import service as execution_service
 from .drivers import capabilities_for
 
@@ -300,7 +301,7 @@ def _record_ending(conn: sqlite3.Connection, item: dict) -> None:
 
     result = item["result"]
     reference = str(item["reference"])
-    failed = result["outcome"] in ("launch_failed", "refused")
+    failed = result["outcome"] in results.FAILED_OUTCOMES
     accepted = result["outcome"] in ("complete", "expected_no_change")
     session_identity = item["client_session_id"] or item["launch_id"]
     op_ingest_session_event(
@@ -365,9 +366,10 @@ def _record_ending(conn: sqlite3.Connection, item: dict) -> None:
                 "SELECT 1 FROM executions WHERE work_item_id = ? AND ended_at IS NULL LIMIT 1",
                 (str(work_item["work_item_id"]),),
             ).fetchone()
-            if newer_open is None:
-                _move_to_review(conn, reference)
+            moved = newer_open is None and _move_to_review(conn, reference)
             conn.commit()  # finish this attempt before the next session-end ingest
+            if moved:
+                item["moved_to_review"] = True
         except Exception:
             conn.rollback()
             raise
@@ -565,24 +567,26 @@ def _note(item: dict, result: dict, failed: bool) -> str:
     return note
 
 
-def _move_to_review(conn: sqlite3.Connection, reference: str) -> None:
+def _move_to_review(conn: sqlite3.Connection, reference: str) -> bool:
     """Move an item the launch was working on into review, if the workflow allows.
 
     The state is asked of the workflow by category rather than named, so a space
     that calls its review state something else still receives the move, and a
-    workflow with no review state at all simply gets none.
+    workflow with no review state at all simply gets none. Whether it moved is the
+    answer: only that move tells the owner anything new.
     """
 
     record = planning_service.get_work_item(conn, reference)
     if record["state"]["category"] != _ACTIVE_CATEGORY:
-        return
+        return False
     target = _first_state(conn, record, _REVIEW_CATEGORY)
     if target is None:
-        return
+        return False
     try:
         planning_service.transition_work_item(conn, reference, target, author="runner")
     except planning_model.WorkflowGuardError:
-        pass  # a guard knows better than the runner does
+        return False  # a guard knows better than the runner does
+    return True
 
 
 def _first_state(conn: sqlite3.Connection, record: dict, category: str) -> str | None:
