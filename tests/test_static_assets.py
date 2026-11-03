@@ -264,7 +264,15 @@ class StaticAssetTests(unittest.TestCase):
                 headers = captured["headers"]
                 return int(captured["code"]), str(headers["Content-Type"]), handler.wfile.getvalue()
 
-            for path in ("/modules/whatever", "/foo/bar", "/modules/analytics", "/nowhere/"):
+            for path in (
+                "/modules/whatever",
+                "/foo/bar",
+                "/modules/analytics",
+                "/nowhere/",
+                "/docs",
+                "/doc/",
+                "/doc/plan",
+            ):
                 with self.subTest(path=path):
                     self.assertEqual(
                         (404, "text/html; charset=utf-8", b"<html>shell</html>"), request(path)
@@ -275,6 +283,12 @@ class StaticAssetTests(unittest.TestCase):
                     self.assertEqual((404, "text/plain"), (code, content_type))
                     self.assertNotIn(b"<html", body)
             self.assertEqual(200, request("/modules/planning/global")[0])
+            # The page of one document: what it names is read and refused by its own route.
+            for path in ("/doc", "/doc?project=demo&path=docs%2Fplan.md", "/doc?path=..%2Fa.md"):
+                with self.subTest(path=path):
+                    self.assertEqual(
+                        (200, "text/html; charset=utf-8", b"<html>shell</html>"), request(path)
+                    )
             self.assertEqual(
                 (200, b"js"), (request("/assets/app.js")[0], request("/assets/app.js")[2])
             )

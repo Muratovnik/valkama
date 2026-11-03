@@ -266,6 +266,11 @@ def _is_spa_route(path: str) -> bool:
     return isinstance(path, str) and _SPA_ROUTE.fullmatch(path) is not None
 
 
+#: The page of one Markdown document, in a window of its own. What it names is not read
+#: here: `GET /api/documents/read` checks that, and the page says what it refused.
+_DOCUMENT_PAGE = "/doc"
+
+
 #: The short address of one work item, as an agent writes it to the owner.
 _WORK_ITEM_LINK = "/open"
 #: Where `/open/questions` leads: the shell, with the panel of open questions up. The
@@ -1037,7 +1042,7 @@ class Handler(BaseHTTPRequestHandler):
         if boundary is not None:
             self._dispatch(boundary, url.path, query=url.query, parameters=parameters)
             return
-        if url.path in ("/", "/index.html") or _is_spa_route(url.path):
+        if url.path in ("/", "/index.html", _DOCUMENT_PAGE) or _is_spa_route(url.path):
             self._send_index()
         elif _is_page_path(url.path) and not self._has_asset(url.path):
             self._send_index(404)
