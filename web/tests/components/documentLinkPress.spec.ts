@@ -16,6 +16,7 @@ import { EMPTY_DRAFT } from '@/features/input-requests/utils/validateAnswers.ts'
 
 import { resolveDocuments } from '@/shared/api/documentApi.ts'
 import type { ResolvedPath } from '@/shared/api/documentApi.ts'
+import type { InputRequestEntry, InputRequestField } from '@/shared/api/inputRequestModel.ts'
 import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { provideReferenceLinks } from '@/shared/lib/referenceLinks.ts'
 import type { RichInline } from '@/shared/lib/richText.ts'
@@ -35,7 +36,7 @@ import {
   unmountAll,
   weak,
 } from '../support/documentLinks.ts'
-import { requestEntry } from '../support/inputRequests.ts'
+import { firstAnswer, requestEntry } from '../support/inputRequests.ts'
 
 vi.mock('@/shared/api/documentApi.ts', async (original) => ({
   ...(await original<typeof import('@/shared/api/documentApi.ts')>()),
@@ -289,5 +290,70 @@ describe('where the layer stands', () => {
       { space: planningSpaceEntity(entry.target.space_ref).resource_id },
       ['docs/a.md', 'docs/a.md.'],
     )
+  })
+})
+
+/** A question whose options say where their plans are, in one line each. */
+const route: InputRequestField = {
+  id: 'route',
+  label: 'Route',
+  type: 'choice',
+  required: true,
+  options: [
+    { id: 'keep', label: 'Keep', description: 'The plan is docs/a.md' },
+    { id: 'merge', label: 'Merge', description: 'See [the merge plan](docs/b.md)' },
+  ],
+}
+
+function question(answered: boolean): InputRequestEntry {
+  const entry = requestEntry()
+  entry.request.fields = [route]
+  if (answered)
+    entry.request = {
+      ...entry.request,
+      ...firstAnswer,
+      status: 'answered',
+      answers: { route: 'keep' },
+      answered_by: 'user',
+      by_person: true,
+      resolved_at: '2026-10-24T12:00:00Z',
+      revision: 2,
+    }
+  return entry
+}
+
+describe('a path in an option of a question', () => {
+  // A control inside the option's label would both choose the option and act on the path.
+  it('is text inside the label, and opens on the chevron, outside it', async () => {
+    server()
+    const { wrapper } = underShell({
+      render: () => h(RequestCard, { entry: question(false), draft: EMPTY_DRAFT }),
+    })
+    await flushPromises()
+    for (const label of wrapper.findAll('label'))
+      expect(label.find('button').exists(), label.text()).toBe(false)
+    const toggles = wrapper.findAll('button.request-option-toggle')
+    expect(toggles).toHaveLength(2)
+    for (const toggle of toggles) await toggle.trigger('click')
+    await flushPromises()
+    const details = wrapper.findAll('.request-option-detail button.rich-reference')
+    expect(details.map((button) => button.text())).toEqual(['docs/a.md', 'the merge plan'])
+    expect(details.every((button) => !button.element.closest('label'))).toBe(true)
+    const asked = resolve.mock.calls.flatMap(([, paths]) => paths)
+    expect(asked).toEqual(expect.arrayContaining(['docs/a.md', 'docs/b.md']))
+  })
+
+  it('in an answered question opens on the same chevron, as a link in a description does', async () => {
+    server()
+    const { wrapper } = underShell({
+      render: () => h(RequestCard, { entry: question(true), draft: EMPTY_DRAFT }),
+    })
+    await flushPromises()
+    expect(wrapper.find('label').exists()).toBe(false)
+    const toggle = wrapper.find('.request-option button.request-option-toggle')
+    await toggle.trigger('click')
+    await flushPromises()
+    const paths = wrapper.findAll('.request-option-detail button.rich-reference')
+    expect(paths.map((button) => button.text())).toEqual(['docs/a.md'])
   })
 })

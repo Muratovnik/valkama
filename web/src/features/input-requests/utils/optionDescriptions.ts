@@ -13,7 +13,8 @@ import type { RichInline } from '@/shared/lib/richText.ts'
  *
  * A line stands inside the option's `<label>`, where a link has no place: a press on it
  * neither selects nor reads as selecting, and its words join the option's name. So a line
- * holding a link opens like one that runs on, and the link works where it opened.
+ * holding a link opens like one that runs on, and the link works where it opened. A path
+ * that is a control whatever the server answers, to open or to copy, counts as a link.
  */
 export type DescriptionView = 'excerpt' | 'folded' | 'line' | 'none'
 
@@ -22,10 +23,15 @@ const LINE_LENGTH = 120
 /** Six rows with a line under the label are what a laptop's drawer holds beside a prompt. */
 const DESCRIBED_ON_SCREEN = 6
 
+/** A link, or a path that is a control whatever the server answers. */
+const isControl = (node: RichInline): boolean =>
+  node.kind === 'link' ||
+  (node.kind === 'reference' &&
+    node.reference.kind === 'document' &&
+    node.reference.strength !== 'weak')
+
 function holdsLink(nodes: readonly RichInline[]): boolean {
-  return nodes.some(
-    (node) => node.kind === 'link' || ('children' in node && holdsLink(node.children)),
-  )
+  return nodes.some((node) => isControl(node) || ('children' in node && holdsLink(node.children)))
 }
 
 function isLine(description: string) {
