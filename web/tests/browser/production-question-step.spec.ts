@@ -322,6 +322,8 @@ test('a deadline passing while the step stands takes focus to the line that says
   await raise(page, top)
   const line = top.getByText(/The deadline has passed/u)
   await expect(line).toBeFocused({ timeout: 6000 })
+  // Ringed, though a press of the pointer came before: the ring is where focus was taken.
+  await expect(line).toHaveCSS('outline-style', 'solid')
   await expect(asking(top)).toHaveCount(0)
   await expect(top.getByRole('button', { name: 'Check status', exact: true })).toBeVisible()
   expect(writesTo(requests)).toEqual([])
