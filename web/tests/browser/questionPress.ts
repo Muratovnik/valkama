@@ -152,6 +152,8 @@ export async function inTheList(
   await expect(opened.drawer).toHaveCount(0)
   await page.getByRole('button', { name: new RegExp(`^${title}`, 'u') }).click()
   const dialog = page.getByRole('dialog', { name: title, exact: true })
+  // Settled, since a step of declining taken while its buttons still move ends at once.
+  await expect(dialog).toHaveCSS('transform', 'none')
   const card = dialog.locator('.request-card')
   return {
     card,

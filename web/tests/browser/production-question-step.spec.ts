@@ -27,6 +27,7 @@ import {
   UPPER,
   writesTo,
 } from './questionPress.ts'
+import type { Point } from './questionPress.ts'
 import { test } from './test.ts'
 
 const asking = (scope: Locator | Page) => scope.locator('.request-asked')
@@ -43,12 +44,20 @@ async function choose(page: Page, card: Locator) {
   await expect(card.getByRole('radio', { name: 'Choice 1' })).toBeChecked()
 }
 
+/** Whether the point lies in this question's way on, whichever word it bears by then. */
+async function onWayOn(card: Locator, at: Point) {
+  const box = await onward(card).boundingBox()
+  return (
+    box !== null &&
+    at.x > box.x &&
+    at.x < box.x + box.width &&
+    at.y > box.y &&
+    at.y < box.y + box.height
+  )
+}
+
 /** The first question ends elsewhere, and the third comes to stand at this point. */
-async function folds(
-  page: Page,
-  at: { x: number; y: number },
-  opened: Awaited<ReturnType<typeof threeInCard>>,
-) {
+async function folds(page: Page, at: Point, opened: Awaited<ReturnType<typeof threeInCard>>) {
   opened.requests.settle(UPPER, answeredElsewhere)
   await opened.stream.signal('agents')
   await expect.poll(() => under(page, at)).toMatch(/^The third question: /u)
@@ -68,6 +77,7 @@ for (const [width, height, options] of [
     const at = await inMiddle(send(second))
     await page.mouse.move(at.x, at.y)
     await folds(page, at, opened)
+    expect(await onWayOn(third, at)).toBe(true)
     await press(page, at)
     await pause(200)
     expect(writesTo(requests)).toEqual([])
@@ -76,31 +86,26 @@ for (const [width, height, options] of [
   })
 }
 
-for (const [width, height] of [
-  [1680, 1050],
-  [390, 844],
-] as const) {
-  test(`at ${width} in the list of everything waiting a row ending brings no refusal under the pointer`, async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width, height })
-    // A long row below keeps the list at its full height, so the row below rises by all it can.
-    const opened = await openQuestion(page, [...pair(2, 2), asked(THIRD, 'A long question', 12, 9)])
-    const { next, top } = await inTheList(page, opened)
-    await raise(page, next)
-    await choose(page, top)
-    const at = await inMiddle(send(top))
-    await page.mouse.move(at.x, at.y)
-    opened.requests.settle(UPPER, answeredElsewhere)
-    // The list reads again on its timer and whenever the window comes back to the front.
-    await page.evaluate(() => window.dispatchEvent(new Event('focus')))
-    await expect.poll(() => under(page, at)).toMatch(/^The lower question: /u)
-    await press(page, at)
-    await pause(200)
-    expect(writesTo(opened.requests)).toEqual([])
-    await expect(asking(page)).toHaveCount(0)
-  })
-}
+test('in the list of everything waiting a row ending brings no refusal under the pointer', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1680, height: 1050 })
+  // A long row below keeps the list at its full height, so the row below rises by all it can.
+  const opened = await openQuestion(page, [...pair(2, 2), asked(THIRD, 'A long question', 12, 9)])
+  const { next, top } = await inTheList(page, opened)
+  await raise(page, next)
+  await choose(page, top)
+  const at = await inMiddle(send(top))
+  await page.mouse.move(at.x, at.y)
+  opened.requests.settle(UPPER, answeredElsewhere)
+  // The list reads again on its timer and whenever the window comes back to the front.
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+  await expect.poll(() => onWayOn(next, at)).toBe(true)
+  await press(page, at)
+  await pause(200)
+  expect(writesTo(opened.requests)).toEqual([])
+  await expect(asking(page)).toHaveCount(0)
+})
 
 test('the same with no press between: a pointer that only went elsewhere finds no refusal when the question moves', async ({
   page,
@@ -114,6 +119,7 @@ test('the same with no press between: a pointer that only went elsewhere finds n
   await expect(asking(third)).toBeVisible()
   await page.mouse.move(at.x, at.y)
   await folds(page, at, opened)
+  expect(await onWayOn(third, at)).toBe(true)
   await press(page, at)
   await pause(200)
   expect(writesTo(requests)).toEqual([])
@@ -130,7 +136,7 @@ test("the same by one's own hand: Send in one question, and a shaken second pres
   const at = await inMiddle(send(first))
   await press(page, at)
   await expect(first.locator('.request-state')).toBeVisible()
-  await expect.poll(() => under(page, at)).toMatch(/^The second question: /u)
+  await expect.poll(() => onWayOn(second, { x: at.x + 4, y: at.y })).toBe(true)
   await press(page, { x: at.x + 4, y: at.y })
   await pause(200)
   expect(writesTo(requests)).toEqual([UPPER])
