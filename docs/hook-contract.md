@@ -320,9 +320,9 @@ Codex proves its session in every call.
   replies in threads its subagents started and answers to their questions.
 - **A subagent**, a hook input with `agent_id`, is told about the items where it
   holds the claim or a step itself and, since 2.5, about replies in threads it
-  started and answers to questions it asked, wherever it holds nothing. A
-  subagent that holds nothing and started nothing is told nothing: give the
-  work you hand out a step it claims.
+  started and answers to questions it asked, even on items where it holds
+  nothing. A subagent that holds nothing and started nothing is told nothing:
+  give the work you hand out a step it claims.
 - **An item that stopped being held** by the last write, a person cancelling it
   or taking the claim, is told once more and then dropped.
 

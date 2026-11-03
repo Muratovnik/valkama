@@ -1260,7 +1260,8 @@ question is not an answer, and neither is a reply in its thread.
 | `field_notes` | `{field: text}`, at most 2000 characters each | a comment on a field with options; refused on a `text` field, whose text is its own comment |
 | `note` | text, at most 8000 characters | a comment on the whole question |
 
-A required field is answered when it has a value or an own variant. **The note no
+A required field is answered when it has a value or an own variant, and every
+part that is given is checked against its field. **The note no
 longer stands in for required fields**: an answer that leaves one out is refused,
 naming it, with `answer <field> is required; give an option or your own variant in
 own; a note no longer stands in for a field`. An answer given before 2.5 with a note
@@ -1278,7 +1279,8 @@ A question stays a request and writes no comment. The answer in force is kept in
  "_note": "A comment on the whole question"}
 ```
 
-Every read gives the parts apart, as `answers`, `own`, `field_notes` and `note`. A
+Every read gives the parts apart, as `answers`, `own`, `field_notes` and `note`,
+with `note: null` when there is none. A
 reader that opens `answers_json` itself, or a build from before 2.5, sees those
 keys among the answers.
 
