@@ -22,7 +22,10 @@ checkouts are therefore distinguishable even at the same version.
   about the items where it holds the claim or a step. `claude watch`, registered with
   `asyncRewake`, wakes an orchestrator that is idle, for example while it waits for a
   background subagent. Codex is told at its next prompt or tool call. The `notify`
-  setting (`VALKAMA_NOTIFY=off`) switches this off.
+  setting (`VALKAMA_NOTIFY=off`) switches this off. Beside the holders, whoever started
+  a thread hears the replies in it and whoever asked a question hears its answer, a
+  changed one too, and so does their orchestrator, even on an item they hold nothing of;
+  a resolved mark reaches only the holders.
 - **A card's read says who each holder is.** `GET /api/modules/planning/work-item` gives
   the claim, each step and each agent an `executor`: the session a click would open, the
   agent inside it, where that session was last opened, and whether it is live, ended,

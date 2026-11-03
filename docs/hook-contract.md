@@ -382,11 +382,13 @@ Codex proves its session in every call.
   nothing. A subagent that holds nothing and started nothing is told nothing:
   give the work you hand out a step it claims.
 - **An item that stopped being held** by the last write, a person cancelling it
-  or taking the claim, is told once more and then dropped.
+  or taking the claim, is told once more in full, and after that only what is
+  addressed to the recipient.
 
 **Since 2.5**, the author of a thread's root and the agent that asked a question
-are told too, beside the holders. The author is read from the call that wrote
-the root, or the call that wrote the question's `request_created` event:
+are told too, beside the holders. The author is read from the confirmed call
+that wrote the root, or the one that wrote the question's `request_created`
+event, never from a name it signed. A root a person wrote has no author to tell:
 
 | Event | The item's holders | The author of the root or question | The author's orchestrator |
 | --- | --- | --- | --- |
@@ -443,16 +445,24 @@ fit in 2400 characters and counts the rest.
 **Since 2.5**, a notice's head says it is about "work this session holds or
 threads it started", and a reply's line says whose thread it is: to the author of
 the root, and to the orchestrator of another agent's thread, which passes it on
-with `SendMessage`:
+with `SendMessage`. The agent is named by its id, as a holder label carries it. A
+holder of the item reading someone else's thread gets the same line, without
+`your` and with no agent when the root is the orchestrator's or a person's. The
+id and not the label an agent's card shows, because that label is the coordinating
+model's own description and is kept to the one place the store holds it:
 
 ```text
 - reply at 2026-11-03T10:12:00Z in your thread #41: «Agreed, take the second option.»
 - reply at 2026-11-03T10:12:00Z in thread #41 of agent reviewer-2: «Agreed, take the second option.»
+- reply at 2026-11-03T10:12:00Z in your thread on question 7d1c2a9e-3f4b-4c5d-8e6f-0a1b2c3d4e5f: «Why do you ask?»
+- thread_resolved at 2026-11-03T11:00:00Z on thread #41: «Not now.»
+- thread_reopened at 2026-11-03T11:05:00Z on thread #41
+- question_changed at 2026-11-03T12:00:00Z: «route: Threads; was: route: Flat»
 ```
 
-The other new kinds read as the earlier ones do: `thread_resolved` quotes the
-decision, `thread_reopened` names the root, and `question_changed` quotes the new
-answer and the one it replaced.
+`thread_resolved` quotes the decision, and `question_changed` quotes the new answer
+and the one it replaced, each cut to fit when both are long. A subagent's notice
+says "work you hold or threads you started".
 
 ### The watcher
 
@@ -499,15 +509,17 @@ exists, as `spool/` is:
 
 | File | What it holds |
 | --- | --- |
-| `<session>.marks`, `<session>--<agent>.marks` | per item, the last call read and the item's revision, newest event and newest comment at that read |
+| `<session>.marks`, `<session>--<agent>.marks` | per item the recipient wrote to, the last call read, the item's revision, newest event and newest comment at that read, and whether it held the item then |
 | `<…>.lock` | held while one hook of that recipient reads and records, so parallel tool calls tell the news once |
 | `<session>.watch` | the watcher's lock |
 | `<session>.idle` | written by a `Stop` that told nothing, removed by `UserPromptSubmit` |
 | `<session>.end` | written by `SessionEnd`; it stops that session's watcher |
 
 A file that cannot be read counts as empty, so the worst a damaged one does is
-tell the current news once more. `SessionEnd` removes its session's places; a
-session resumed later starts again from its own last writes. Files of sessions
+tell the current news once more. A file a build from before threads wrote, headed
+`v1`, holds only items its recipient held, and reads as that. `SessionEnd` removes
+its session's places; a session resumed later starts again from its own last
+writes. Files of sessions
 gone without a `SessionEnd` are removed by a later one: places after 30 days,
 the rest after a day.
 
@@ -521,7 +533,7 @@ events are still recorded, and a write still answers with `from_person`.
 
 `PostToolUse` runs on every tool call. The notice path imports nothing beyond
 the standard library's C parts, reads the input with the C scanner `json` is
-built on, opens the store read-only, and answers after one indexed query when
+built on, opens the store read-only, and answers after two indexed queries when
 nothing changed. Measured on Windows against a store of 1500 items and 200 000
 events, from process start to exit, 60 calls each:
 
@@ -540,6 +552,15 @@ also keeps the hook inside the client's process tree: a hook started through
 `cmd.exe` outlives a client killed with `taskkill /F`. The shim starts a hook
 without `runpy` and `pathlib`, which alone cost as much as the rest.
 
+On a call with nothing new, threads add no query and no join: a place is kept for
+every item the recipient wrote to, and those items were already read. Who wrote a
+root or asked a question is read only for an item that changed: on an item the
+recipient does not hold, for what could be addressed to it, and on one it holds,
+for a reply, to say whose thread it is. An item it does not hold skips the scan of
+the call rows for edits, which address nobody. What a wider place does cost is a
+read of the changed item once, when anybody writes on an item the recipient only
+wrote to.
+
 ### Limits
 
 - A `PostToolUse` input over 1 MiB, which a large tool answer can reach, is not
@@ -547,7 +568,10 @@ without `runpy` and `pathlib`, which alone cost as much as the rest.
 - A subagent that is idle cannot be woken directly; the orchestrator is, and
   passes the news on.
 - A session that holds more than 200 items is told about the 200 it wrote to
-  last.
+  last, and hears replies and answers only on those.
+- A thread or a question that a merge moved keeps its author's call, but that
+  author reads the item it wrote to, not the survivor. Only the survivor's holders
+  are sure to hear what follows there.
 
 ## The transcript archive
 

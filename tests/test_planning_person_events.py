@@ -179,6 +179,91 @@ class WhatCountsTests(Harness):
                 self.assertEqual(asked["request_id"], event["request_id"])
                 self.assertEqual("Which road do we take?", event["text"])
 
+    def test_a_reply_says_it_is_one_and_under_which_root(self) -> None:
+        root = self.agent("comment_work_item", id=self.ref, body="Root")["comment_id"]
+        reply = self.person(
+            "/api/planning/work-item/comment", id=self.ref, body="On that", reply_to=root
+        )
+        self.assertEqual(
+            {
+                "kind": "reply",
+                "comment_id": reply["comment_id"],
+                "reply_to": root,
+                "text": "On that",
+            },
+            {key: value for key, value in self.window()[0].items() if key not in ("via", "at")},
+        )
+
+    def test_a_reply_to_a_question_names_the_question(self) -> None:
+        request = self.ask()["request_id"]
+        reply = self.person(
+            "/api/planning/work-item/comment", id=self.ref, body="On that", reply_to_request=request
+        )
+        event = self.window()[-1]
+        self.assertEqual(
+            ("reply", reply["comment_id"], request),
+            (event["kind"], event["comment_id"], event["reply_to_request"]),
+        )
+
+    def test_a_reply_is_a_comment_a_close_must_not_pass(self) -> None:
+        root = self.agent("comment_work_item", id=self.ref, body="Root")["comment_id"]
+        self.agent("claim_work_item", id=self.ref)
+        self.summary()
+        self.person(
+            "/api/planning/work-item/comment", id=self.ref, body="Wait for me", reply_to=root
+        )
+        message = self.refused_agent("transition_work_item", id=self.ref, state="done")
+        self.assertIn("[person_spoke]", message)
+        self.assertIn("Wait for me", message)
+
+    def test_the_resolved_mark_names_its_root_and_quotes_the_decision(self) -> None:
+        root = self.agent("comment_work_item", id=self.ref, body="Root")["comment_id"]
+        path = "/api/planning/work-item/comment/resolve"
+        self.person(path, id=self.ref, comment_id=root, resolution="Not now: later")
+        self.person(path, id=self.ref, comment_id=root, reopen=True)
+        self.person(path, id=self.ref, comment_id=root)
+        marked, reopened, bare = self.window()
+        self.assertEqual(("thread_resolved", root), (marked["kind"], marked["comment_id"]))
+        self.assertEqual("Not now: later", marked["text"], "a colon in the decision stays")
+        self.assertEqual(("thread_reopened", root), (reopened["kind"], reopened["comment_id"]))
+        self.assertNotIn("text", reopened)
+        self.assertNotIn("text", bare, "a mark with no decision has nothing to quote")
+
+    def changed(self, first: str, then: str) -> dict:
+        request = self.agent(
+            "create_work_item_request",
+            id=self.ref,
+            kind="question",
+            prompt="Say it",
+            fields=[{"id": "say", "label": "Say", "type": "text", "required": True, "options": []}],
+        )["request_id"]
+        answer = "/api/planning/request/answer"
+        self.person(answer, id=request, answers={"say": first}, expected_revision=0)
+        self.person(
+            "/api/planning/request/change", id=request, answers={"say": then}, expected_revision=1
+        )
+        return self.window()[-1]
+
+    def test_a_changed_answer_quotes_the_new_one_and_the_one_it_replaced(self) -> None:
+        event = self.changed("Flat", "Threads")
+        self.assertEqual("question_changed", event["kind"])
+        self.assertEqual("Say: Threads; was: Say: Flat", event["text"])
+
+    def test_long_answers_keep_both_sides_of_a_change_within_the_limit(self) -> None:
+        cases = {
+            "both long": ("A" * 2000, "B" * 2000),
+            "the new one long": ("A" * 20, "B" * 2000),
+            "the old one long": ("A" * 2000, "B" * 20),
+        }
+        for name, (first, then) in cases.items():
+            with self.subTest(name):
+                text = self.changed(first, then)["text"]
+                self.assertLessEqual(len(text), person_events.MAX_TEXT)
+                new, was = text.split("; was: ")
+                self.assertIn("B" * 20, new)
+                self.assertIn("A" * 15, was)
+                self.assertGreater(len(text), person_events.MAX_TEXT - 5, "the room is used")
+
     def test_each_thing_a_person_does_to_the_item_is_told(self) -> None:
         steps = self.agent("set_work_item_checklist", id=self.ref, items=["One", "Two"])
         one = steps["checklist"][0]["item_id"]

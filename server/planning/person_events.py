@@ -109,7 +109,7 @@ _LAST_AGENT_COMMENT = (
     " AND c.identity_source NOT IN (?,?) AND c.id <> ?"
 )
 _PERSON_COMMENTS = (
-    "SELECT m.id, m.body, m.report, m.created_at, m.call_id"
+    "SELECT m.id, m.body, m.report, m.created_at, m.call_id, m.reply_to, m.reply_to_request"
     " FROM work_item_comments m JOIN execution_events c ON c.id = m.call_id"
     " WHERE m.work_item_id = ? AND m.call_id > ? AND c.identity_source = ?"
     " AND c.tool LIKE '/api/planning/%' ORDER BY m.id"
@@ -120,6 +120,20 @@ _PERSON_EVENTS = (
     " WHERE e.work_item_id = ? AND e.call_id > ? AND c.identity_source = ?"
     " AND c.tool LIKE '/api/planning/%' ORDER BY e.id"
 )
+#: Who wrote a thread's root and who asked a question, by the call that did it. Only
+#: a confirmed call says: a session an unconfirmed one names was never proved.
+_ROOT_AUTHOR = (
+    "SELECT c.session_id, c.agent_id FROM work_item_comments m"
+    " JOIN execution_events c ON c.id = m.call_id"
+    " WHERE m.id = ? AND c.identity_state = 'confirmed'"
+)
+_ASKER = (
+    "SELECT c.session_id, c.agent_id FROM work_item_events e"
+    " JOIN execution_events c ON c.id = e.call_id"
+    " WHERE e.work_item_id = ? AND e.action = 'request_created' AND e.detail = ?"
+    " AND c.identity_state = 'confirmed' ORDER BY e.id LIMIT 1"
+)
+_WAS = "; was: "
 
 
 def since_last_agent_write(
@@ -141,21 +155,51 @@ def since_last_agent_write(
     return [entry for _call, entry in _window(conn, work_item_id, boundary, edits)]
 
 
-def since_call(conn: sqlite3.Connection, work_item_id: str, after: int) -> list[tuple[int, dict]]:
+def since_call(
+    conn: sqlite3.Connection, work_item_id: str, after: int, *, with_edits: bool = True
+) -> list[tuple[int, dict]]:
     """The person's events on one item whose call came after `after`, oldest first.
 
     Each comes with the id of its call row, so a reader that keeps its own place
     can remember how far it has read. The entries are the ones
     `since_last_agent_write` gives; only where the window starts differs.
+
+    Edits are found on the call rows, which have no index by item, so a reader
+    with no use for them passes `with_edits=False` and stays on the item's indexes.
     """
 
-    edits = conn.execute(
-        "SELECT id, identity_source, tool, reason, received_at FROM execution_events"
-        " WHERE id > ? AND work_item_id = ? AND kind = ? AND identity_source = ?"
-        " AND tool = ? AND reason <> '' ORDER BY id",
-        (after, work_item_id, KIND, BROWSER, _EDIT_TOOL),
-    ).fetchall()
+    edits = (
+        conn.execute(
+            "SELECT id, identity_source, tool, reason, received_at FROM execution_events"
+            " WHERE id > ? AND work_item_id = ? AND kind = ? AND identity_source = ?"
+            " AND tool = ? AND reason <> '' ORDER BY id",
+            (after, work_item_id, KIND, BROWSER, _EDIT_TOOL),
+        ).fetchall()
+        if with_edits
+        else []
+    )
     return _window(conn, work_item_id, after, edits)
+
+
+def author_of(
+    conn: sqlite3.Connection, work_item_id: str, entry: dict
+) -> tuple[str, str | None] | None:
+    """The session and agent a reply or a question's event answers, or None.
+
+    The author of the thread's root, or whoever asked the question: read from the
+    call that wrote it, never from a name it signed. None for a person's root, a
+    row no confirmed call wrote, and a question a merge moved here, whose
+    `request_created` stayed on the item it was asked on.
+    """
+
+    if "reply_to" in entry:
+        row = conn.execute(_ROOT_AUTHOR, (entry["reply_to"],)).fetchone()
+    else:
+        question = entry.get("reply_to_request", entry.get("request_id"))
+        row = conn.execute(_ASKER, (work_item_id, question)).fetchone()
+    if row is None or row[0] is None:
+        return None
+    return str(row[0]), None if row[1] is None else str(row[1])
 
 
 def _window(
@@ -237,11 +281,16 @@ def _edit_entries(
 
 def _comment_entry(row: tuple) -> dict:
     report = str(row[2])
+    at, said = str(row[3]), str(row[1])
+    if row[5] is not None:
+        return _entry("reply", at, comment_id=int(row[0]), reply_to=int(row[5]), text=said)
+    if row[6] is not None:
+        return _entry("reply", at, comment_id=int(row[0]), reply_to_request=str(row[6]), text=said)
     if not report:
-        return _entry("comment", str(row[3]), comment_id=int(row[0]), text=str(row[1]))
+        return _entry("comment", at, comment_id=int(row[0]), text=said)
     done = _json(report)
     text = str(done.get("done", "")) if isinstance(done, dict) else ""
-    return _entry("report", str(row[3]), comment_id=int(row[0]), text=text)
+    return _entry("report", at, comment_id=int(row[0]), text=text)
 
 
 def _event_entry(conn: sqlite3.Connection, row: tuple) -> dict:
@@ -251,11 +300,19 @@ def _event_entry(conn: sqlite3.Connection, row: tuple) -> dict:
         return _entry(kind, at, request_id=detail, text=_question_text(conn, action, detail))
     if action == "checklist_replaced":
         return _entry(kind, at, text=f"{detail} steps")
+    if action in ("comment_resolved", "comment_reopened"):
+        # `<id>: <decision>` or `<id>`, as `service.resolve_comment` logs it.
+        root, _colon, decision = detail.partition(": ")
+        return _entry(kind, at, comment_id=int(root), text=decision)
     return _entry(kind, at, text=detail)
 
 
 def _question_text(conn: sqlite3.Connection, action: str, request_id: str) -> str:
-    """What came back when a person answered, and otherwise what was asked."""
+    """What came back when a person answered, and otherwise what was asked.
+
+    An answer reads as it stands now, as an edit does: a change quotes the current
+    answer and the version it replaced, whichever change of a window it is.
+    """
 
     row = conn.execute(
         "SELECT prompt, fields_json, answers_json FROM work_item_requests WHERE request_id = ?",
@@ -263,7 +320,7 @@ def _question_text(conn: sqlite3.Connection, action: str, request_id: str) -> st
     ).fetchone()
     if row is None:
         return ""
-    if action != "request_answered":
+    if action not in ("request_answered", "request_changed"):
         return str(row[0])
     fields = _json(str(row[1]))
     stored = _json(str(row[2]))
@@ -271,7 +328,33 @@ def _question_text(conn: sqlite3.Connection, action: str, request_id: str) -> st
         return ""
     from . import request_model
 
-    return request_model.answer_text(fields, stored)
+    answer = request_model.answer_text(fields, stored)
+    if action == "request_answered":
+        return answer
+    replaced = conn.execute(
+        "SELECT answers_json FROM work_item_request_answers WHERE request_id = ?"
+        " ORDER BY version DESC LIMIT 1",
+        (request_id,),
+    ).fetchone()
+    was = _json(str(replaced[0])) if replaced is not None else None
+    if not isinstance(was, dict):
+        return answer
+    return _changed_text(answer, request_model.answer_text(fields, was))
+
+
+def _changed_text(new: str, old: str) -> str:
+    """Both answers within `MAX_TEXT`, so a long new one cannot push out what it replaced."""
+
+    joined = f"{new}{_WAS}{old}"
+    if len(joined) <= MAX_TEXT:
+        return joined
+    room = MAX_TEXT - len(_WAS)
+    for_new = max(room // 2, room - len(old))
+    return f"{_cut(new, for_new)}{_WAS}{_cut(old, room - min(len(new), for_new))}"
+
+
+def _cut(text: str, limit: int) -> str:
+    return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
 def _json(text: str) -> object:
@@ -288,7 +371,7 @@ def _json(text: str) -> object:
 def _entry(kind: str, at: str, *, text: str, **identity: object) -> dict:
     entry: dict = {"kind": kind, "via": "interface", "at": at, **identity}
     if text:
-        entry["text"] = text if len(text) <= MAX_TEXT else text[: MAX_TEXT - 1] + "…"
+        entry["text"] = _cut(text, MAX_TEXT)
     return entry
 
 
