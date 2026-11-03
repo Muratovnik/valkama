@@ -15,6 +15,7 @@ import {
   workItem,
   workItemRef,
 } from './planningFixtures.ts'
+import { pressWhereItStands } from './stuckPress.ts'
 import { test } from './test.ts'
 
 for (const width of [1440, 390]) {
@@ -198,6 +199,12 @@ async function heightOf(locator: Locator): Promise<number> {
   return box?.height ?? 0
 }
 
+/**
+ * The drawer has stopped sliding in, so that a place read on it stays its place: a section
+ * pressed while it still moves is pressed somewhere else.
+ */
+const settledIn = (drawer: Locator) => expect(drawer).toHaveCSS('transform', 'none')
+
 for (const width of [1440, 390]) {
   test(`the card's head goes with the text, 1:1, and the sections stay in reach at ${width}px`, async ({
     page,
@@ -264,11 +271,12 @@ for (const width of [1440, 390]) {
     const body = drawer.locator('.drawer-frame-body')
     const tabs = drawer.locator('.drawer-frame-tabs')
     await expect(drawer.locator('.card-facts')).toBeVisible()
+    await settledIn(drawer)
     const edge = await topOf(body)
     await body.evaluate((node) => node.scrollTo({ top: node.scrollHeight }))
     await expect.poll(() => topOf(tabs)).toBeCloseTo(edge, 0)
 
-    await tabs.getByRole('button', { name: 'System events', exact: true }).click()
+    await pressWhereItStands(page, tabs.getByRole('button', { name: 'System events', exact: true }))
     await expect(drawer.locator('.overview')).toBeHidden()
     expect(await topOf(tabs)).toBeCloseTo(edge, 0)
     const start = await topOf(drawer.locator('.drawer-frame-content'))
@@ -286,9 +294,10 @@ for (const width of [1440, 390]) {
     const body = drawer.locator('.drawer-frame-body')
     const tabs = drawer.locator('.drawer-frame-tabs')
     await expect(drawer.locator('.card-facts')).toBeVisible()
+    await settledIn(drawer)
     await body.evaluate((node) => node.scrollTo({ top: node.scrollHeight }))
 
-    await tabs.getByRole('button', { name: /Memory/iu }).click()
+    await pressWhereItStands(page, tabs.getByRole('button', { name: /Memory/iu }))
     await expect(drawer.locator('.overview')).toBeHidden()
     const start = await topOf(drawer.locator('.drawer-frame-content'))
     expect(start).toBeCloseTo((await topOf(tabs)) + (await heightOf(tabs)), 0)
