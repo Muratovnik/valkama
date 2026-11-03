@@ -23,7 +23,6 @@ import type { RequestDraft } from '@/features/input-requests/utils/validateAnswe
 
 import type { InputRequestEntry, InputRequestField } from '@/shared/api/inputRequestModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
-import { isWebAuthor } from '@/shared/api/webAuthor.ts'
 import { actorName, actorSession } from '@/shared/lib/actor.ts'
 import { projectTitle, useProjectTitles } from '@/shared/lib/projectTitles.ts'
 import { revealFrame } from '@/shared/lib/revealFrame.ts'
@@ -118,10 +117,8 @@ const context = computed(() => {
     ? `${project} · ${reference}`
     : `${project} · ${space.space_key} · ${reference}`
 })
-/** This app signs its writes with one technical name, and the person reading wrote them. */
-const authorName = computed(() =>
-  isWebAuthor(request.value.author) ? t('requests.you') : actorName(request.value.author),
-)
+/** An agent asks, whatever name it signs with: this interface asks nothing. */
+const authorName = computed(() => actorName(request.value.author))
 const authorSession = computed(() => actorSession(request.value.author))
 
 function edit(field: InputRequestField, value: string | boolean | string[]) {
@@ -270,12 +267,14 @@ defineExpose({ focus, focusOutcome, reveal })
         >
         <VButton
           v-if="canRefresh"
+          :aria-disabled="busyMark"
           @click="refresh"
           >{{ t('requests.checkStatus') }}</VButton
         >
         <VButton
           v-if="waiting"
           variant="ghost"
+          :aria-disabled="busyMark"
           :disabled="sendDisabled"
           @click="resolve('decline')"
           >{{ t('requests.decline') }}</VButton
@@ -283,6 +282,7 @@ defineExpose({ focus, focusOutcome, reveal })
         <VButton
           v-if="waiting"
           variant="primary"
+          :aria-disabled="busyMark"
           :disabled="sendDisabled"
           @click="resolve('answer')"
           >{{ t('requests.answer') }}</VButton
@@ -320,11 +320,12 @@ defineExpose({ focus, focusOutcome, reveal })
 :is(.request-card, .request-title, .request-error):focus {
   border-radius: var(--radius-control);
   outline: 2px solid var(--color-focus-ring);
-  outline-offset: var(--space-half);
+  outline-offset: var(--space-1);
 }
 
 .request-card:focus {
   border-radius: var(--radius-card);
+  outline-offset: var(--space-half);
 }
 
 .request-meta {

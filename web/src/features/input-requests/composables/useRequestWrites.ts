@@ -82,9 +82,11 @@ export function useRequestWrites(host: {
   )
   /**
    * Only a write the server refused or could not confirm, or a deadline that has passed
-   * here, needs the request read again.
+   * here, needs the request read again; a question that has closed has nothing left to read.
    */
-  const canRefresh = computed(() => error.value !== '' || pastDue.value)
+  const canRefresh = computed(
+    () => request.value.status === 'pending' && (error.value !== '' || pastDue.value),
+  )
 
   async function fail(code: 'conflict' | 'mutationError', blocking: boolean) {
     error.value = code

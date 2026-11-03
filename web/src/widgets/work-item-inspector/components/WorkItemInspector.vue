@@ -138,9 +138,11 @@ async function load() {
   await loadResource()
 }
 
+const holdFocus = () => frame.value?.holdFocus()
+
 /** The Retry pressed goes with the failure it answers, and focus must not go with it. */
 function retryRead() {
-  frame.value?.holdFocus()
+  holdFocus()
   void load()
 }
 
@@ -421,6 +423,7 @@ defineExpose({ close })
             :target="target"
             :writable="writable && !busy"
             @changed="reloaded"
+            @hold-focus="holdFocus"
             @refresh="load"
             @resume="moveTo"
             @tick="tick"

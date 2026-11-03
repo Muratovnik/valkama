@@ -13,10 +13,14 @@ import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
  * whenever the card's stream says something moved.
  */
 export function useItemQuestions(target: () => PlanningTarget | undefined, stream: () => unknown) {
-  const { entries, failed, partial, refresh, changed } = useInputRequests(() => target() ?? null)
+  const { entries, failed, partial, refresh, result, changed } = useInputRequests(
+    () => target() ?? null,
+  )
   const waiting = computed(() => entries.value.some((entry) => entry.request.status === 'pending'))
   /** Not knowing is not the same as there being none, so the discussion says it. */
   const unread = computed(() => failed.value || partial.value)
+  /** More of them than one read brings: those waiting are all here, but not those ended. */
+  const cut = computed(() => result.value?.has_more ?? false)
   watch(stream, () => void refresh())
-  return { changed, entries, refresh, unread, waiting }
+  return { changed, cut, entries, refresh, unread, waiting }
 }

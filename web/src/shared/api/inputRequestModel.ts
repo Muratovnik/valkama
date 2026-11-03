@@ -46,6 +46,11 @@ const requestSchema = strictObject({
   status: z.enum(['pending', 'answered', 'declined', 'expired']),
   author: text(200),
   answered_by: text(200),
+  /**
+   * Whether the call that closed this was this interface's own write. It is the server's
+   * fact about the call and null while none has; `answered_by` is text its caller wrote.
+   */
+  by_person: z.boolean().nullable(),
   execution_id: text(200).nullable(),
   session_id: text(512).nullable(),
   expires_at: boundedText(ISO, 96).nullable(),

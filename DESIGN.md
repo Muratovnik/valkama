@@ -881,7 +881,9 @@ from under the person who has just answered it. The discussion takes the questio
 list of entries and does not know where they are stored. They are read at their own
 half-minute, whenever the window comes back and whenever the card's record is read again,
 and a read that failed or could not reach every source is said over the thread with the
-way to read again, because not knowing is not the same as there being none.
+way to read again, because not knowing is not the same as there being none. A card with more
+questions than one read brings reads those still waiting on their own, and says that not
+all of them are shown.
 One form answers every kind of field, here and in «Needs my answer», which adds whose
 task it is and the way there. Selecting does nothing but select, nothing is chosen for
 the person, recommended or not, and Send is what sends. Every choice is a full-width row
@@ -904,8 +906,12 @@ Tab reaches Send.
 Words of one's own are always one quiet press away, in the shared editor under the options,
 and with text in them no field is required; declining is as quiet. A selection or a note
 held is a draft the guard asks about. A send that fails keeps all of it with the reason in
-the foot, and does not look sent. Answered, the question folds to its prompt with the reply
-under it, its author and its time; declined or closed, to its prompt and a quiet line. An
+the foot, and does not look sent; while a write is out, the buttons read as busy and keep
+focus. Answered, the question folds to its prompt with the reply under it, its author and its
+time; declined or closed, to its prompt and a quiet line. It says "you" only when the server
+says the call that closed it came through this interface, because a name is only what the
+caller signed. An option's label stays the text it was in the form, while words written in
+a field or a note are markdown. An
 answer arriving from elsewhere folds it the same way, and a note still in the form stays in
 view, saying it was not sent, until the person leaves. While a question waits, the card's
 facts carry a mark that brings it into view under the tabs from any section.

@@ -29,11 +29,11 @@ const button = (wrapper: Wrapper, name: string) =>
     wrapper.findAll('button').find((control) => control.text() === name),
     name,
   )
-function card(entry = requestEntry()) {
+function card(entry = requestEntry(), draft = EMPTY_DRAFT) {
   const wrapper = mount(RequestCard, {
     props: {
       entry,
-      'draft': EMPTY_DRAFT,
+      draft,
       'onUpdate:draft': (draft) => {
         void wrapper.setProps({ draft })
       },
@@ -56,6 +56,12 @@ afterEach(async () => {
 })
 
 describe('a text answer to a question', () => {
+  // The form comes back with the words of a draft the host kept, which nobody asked to open.
+  it('stands open from the start around words already written', () => {
+    const wrapper = card(requestEntry(), { ...EMPTY_DRAFT, note: 'Something' })
+    expect(wrapper.get('textarea').element.value).toBe('Something')
+  })
+
   // The answered request draws a text answer as markdown, so it is written in
   // the markdown editor: previewed as it will read, sent with Ctrl+Enter.
   it('writes a text answer as markdown, previews it and sends it on Ctrl+Enter', async () => {

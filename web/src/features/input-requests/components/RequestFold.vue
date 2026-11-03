@@ -13,7 +13,6 @@ import { useI18n } from 'vue-i18n'
 import { displayAnswer } from '@/features/input-requests/utils/answerDisplay.ts'
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
-import { isWebAuthor } from '@/shared/api/webAuthor.ts'
 import { actorName } from '@/shared/lib/actor.ts'
 import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
 import RichText from '@/shared/ui/RichText.vue'
@@ -29,30 +28,39 @@ const when = computed(() => {
   const at = props.request.resolved_at
   return at ? d(new Date(at), 'activity') : ''
 })
+/** "You" is the server's word about the call that closed this: a name is only what it signed. */
 const replier = computed(() => {
-  const by = props.request.answered_by
-  if (isWebAuthor(by)) return t('requests.youAnswered')
-  return by ? actorName(by) : t('requests.answered')
+  const { answered_by: by, by_person: person } = props.request
+  if (person) return t('requests.youAnswered')
+  return by ? t('requests.agentAnswered', { actor: actorName(by) }) : t('requests.answered')
 })
-/** The fields that have an answer, as the reader reads them. */
+/**
+ * The fields that have an answer, as the reader reads them. Words written are markdown; a
+ * label chosen is the text the form showed, whatever characters it happens to hold.
+ */
 const replies = computed(() =>
   props.request.fields
     .filter((field) => props.request.answers?.[field.id] !== undefined)
     .map((field) => ({
       id: field.id,
       label: field.label,
+      rich: field.type === 'text',
       value: displayAnswer(field, props.request.answers?.[field.id], t),
     })),
 )
-const onlyReply = computed(() =>
-  replies.value.length === 1 && props.request.fields.length === 1 ? replies.value[0].value : '',
-)
+const onlyReply = computed(() => {
+  const [first] = replies.value
+  return replies.value.length === 1 && props.request.fields.length === 1 && first?.value
+    ? first
+    : null
+})
 const labelled = computed(() => (onlyReply.value ? [] : replies.value))
 const note = computed(() => props.request.note ?? '')
 const closing = computed(() => {
-  const { status, answered_by: by } = props.request
+  const { status, answered_by: by, by_person: person } = props.request
   if (status === 'answered') return ''
-  if (isWebAuthor(by) && status === 'declined') return t('requests.youDeclined')
+  if (status === 'declined' && person) return t('requests.youDeclined')
+  if (status === 'declined' && by) return t('requests.agentDeclined', { actor: actorName(by) })
   const state = t(`requests.${status}`)
   return by ? `${state} · ${t('requests.resolvedBy', { actor: actorName(by) })}` : state
 })
@@ -77,11 +85,19 @@ const closing = computed(() => {
         <span>{{ replier }}</span>
         <span>{{ when }}</span>
       </div>
-      <RichText
-        v-if="onlyReply"
-        class="request-reply-text"
-        :source="onlyReply"
-      />
+      <template v-if="onlyReply">
+        <RichText
+          v-if="onlyReply.rich"
+          class="request-reply-text"
+          :source="onlyReply.value"
+        />
+        <p
+          v-else
+          class="request-reply-text request-reply-chosen"
+        >
+          {{ onlyReply.value }}
+        </p>
+      </template>
       <dl
         v-if="labelled.length"
         class="request-outcome"
@@ -91,8 +107,14 @@ const closing = computed(() => {
           v-for="reply in labelled"
           :key="reply.id"
           ><dt class="request-term">{{ reply.label }}</dt>
-          <dd class="request-value"><RichText :source="reply.value" /></dd
-        ></template>
+          <dd class="request-value">
+            <RichText
+              v-if="reply.rich"
+              :source="reply.value"
+            />
+            <template v-else>{{ reply.value }}</template>
+          </dd></template
+        >
       </dl>
       <RichText
         v-if="note"
@@ -151,6 +173,11 @@ const closing = computed(() => {
   font: var(--font-editor);
 }
 
+.request-reply-chosen {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .request-outcome {
   display: grid;
   gap: var(--space-half);
@@ -175,11 +202,12 @@ const closing = computed(() => {
 }
 
 /* Only the app moves focus to how a question ended, and Tab never stops here, so the
-   ring shows whenever it holds focus: it is the one sign of where the reader was taken. */
+   ring shows whenever it holds focus: it is the one sign of where the reader was taken.
+   These words run to both edges of the line, so the ring stands clear of them. */
 .request-state:focus {
   border-radius: var(--radius-control);
   outline: 2px solid var(--color-focus-ring);
-  outline-offset: var(--space-half);
+  outline-offset: var(--space-1);
 }
 
 .request-unsent {

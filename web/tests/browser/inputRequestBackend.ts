@@ -59,6 +59,7 @@ export async function installInputRequestBackend(page: Page) {
     entry.request.status = 'answered'
     entry.request.answers = body.answers as Record<string, boolean>
     entry.request.answered_by = 'user'
+    entry.request.by_person = true
     entry.request.resolved_at = '2026-10-24T10:05:00Z'
     entry.request.revision++
     return route.fulfill({ json: { interface_version: 'valkama-planning-requests', ...entry } })

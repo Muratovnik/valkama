@@ -31,11 +31,13 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  changed: []
-  refresh: []
+  'changed': []
+  /** What was pressed is about to go, and focus must not go with it. */
+  'hold-focus': []
+  'refresh': []
   /** The move the outcome was asked for, now that it has one. */
-  resume: [stateKey: string]
-  tick: [itemId: string, done: boolean]
+  'resume': [stateKey: string]
+  'tick': [itemId: string, done: boolean]
 }>()
 
 const { t } = useI18n()
@@ -51,6 +53,12 @@ const asking = defineModel<boolean>('asking', { default: false })
 watch(questions.waiting, (now) => (asking.value = now), { immediate: true })
 const questionEntries = questions.entries
 const questionsUnread = questions.unread
+const questionsCut = questions.cut
+/** The Refresh pressed goes with the failure it answers. */
+function readQuestions() {
+  emit('hold-focus')
+  void questions.refresh()
+}
 function answered(entry: InputRequestEntry) {
   questions.changed(entry)
   emit('changed')
@@ -258,10 +266,11 @@ defineExpose({ askOutcome, revealChecklist, revealQuestion })
       ref="discussion"
       :item="item"
       :questions="questionEntries"
+      :questions-cut="questionsCut"
       :questions-unread="questionsUnread"
       :writable="writable"
       @answered="answered"
-      @read-questions="questions.refresh"
+      @read-questions="readQuestions"
       @changed="emit('changed')"
       @refresh="emit('refresh')"
       @resume="(stateKey) => emit('resume', stateKey)"

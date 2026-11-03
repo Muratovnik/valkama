@@ -297,6 +297,9 @@ describe('human input requests', () => {
     expect(answerInputRequest).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('Declined')
     expect(wrapper.find('input').exists()).toBe(false)
+    // A read begun before that write still says the question waits, and must not be believed.
+    await wrapper.setProps({ entry: structuredClone(entry) })
+    expect(wrapper.find('input').exists()).toBe(false)
   })
 
   it('prevents overlapping polls and aborts outstanding reads on unmount', async () => {
@@ -386,7 +389,7 @@ describe('human input requests', () => {
     expect(own.get('.request-state').text()).toMatch(/^You answered/u)
     expect(own.text()).not.toContain('user')
     const byAgent = card(answered(requestEntry(), 'codex-session-1'))
-    expect(byAgent.get('.request-state').text()).toMatch(/^codex-session-1/u)
+    expect(byAgent.get('.request-state').text()).toMatch(/^Answered by agent codex-session-1/u)
   })
 
   it('names why each skipped source was not read, as the task finder does', async () => {

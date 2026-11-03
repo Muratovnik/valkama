@@ -81,13 +81,23 @@ export function useInputRequests(source: () => PlanningTarget | 'all' | null) {
         signal: controller.signal,
       })
       if (generation !== current) return
+      // A read is cut at its limit, newest first, and a question still waiting belongs
+      // under the form however old it is, so past the cut those are read on their own.
+      const older =
+        selected && response.has_more
+          ? await fetchInputRequests({
+              target: selected,
+              status: 'pending',
+              signal: controller.signal,
+            })
+          : null
+      if (generation !== current) return
+      const items = [...response.items, ...(older?.items ?? [])]
       result.value = {
         ...response,
         items: selected
-          ? response.items.filter(
-              (entry) => targetIdentity(entry.target) === targetIdentity(selected),
-            )
-          : response.items,
+          ? items.filter((entry) => targetIdentity(entry.target) === targetIdentity(selected))
+          : items,
       }
       failed.value = false
     } catch {

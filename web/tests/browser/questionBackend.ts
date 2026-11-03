@@ -89,6 +89,9 @@ export const mixedField: InputRequestField = {
   ],
 }
 
+/** How many questions one read of the list brings, as the server's limit does. */
+const READ_LIMIT = 100
+
 /**
  * The questions' side of the server. The answer is the existing endpoint, and it may
  * come with `note`; `settle` changes a question the way another window would.
@@ -97,6 +100,7 @@ async function installQuestions(page: Page, entries: InputRequestEntry[]) {
   const writes: { action: string; body: Record<string, unknown> }[] = []
   const reads: string[] = []
   let failure: number | 'abort' | null = null
+  let held: Promise<unknown> = Promise.resolve()
   await page.route('**/api/modules/planning/request**', async (route) => {
     const request = route.request()
     const url = new URL(request.url())
@@ -105,14 +109,17 @@ async function installQuestions(page: Page, entries: InputRequestEntry[]) {
       if (url.pathname.endsWith('/requests')) {
         const status = url.searchParams.get('status')
         const reference = url.searchParams.get('reference')
-        const items = entries.filter(
-          (entry) =>
-            (!status || entry.request.status === status) &&
-            (!reference || entry.request.reference === reference),
-        )
+        const items = entries
+          .filter(
+            (entry) =>
+              (!status || entry.request.status === status) &&
+              (!reference || entry.request.reference === reference),
+          )
+          .sort((a, b) => b.request.created_at.localeCompare(a.request.created_at))
         return route.fulfill({
           json: {
-            ...requestList(structuredClone(items)),
+            ...requestList(structuredClone(items.slice(0, READ_LIMIT))),
+            has_more: items.length > READ_LIMIT,
             coverage: [
               { project_id: projectId, space_ref: spaceRef, status: 'searched', reason: null },
             ],
@@ -127,6 +134,7 @@ async function installQuestions(page: Page, entries: InputRequestEntry[]) {
     const body = request.postDataJSON() as Record<string, unknown>
     const action = url.pathname.split('/').at(-1) ?? ''
     writes.push({ action, body })
+    await held
     if (failure === 'abort') {
       failure = null
       return route.abort('connectionfailed')
@@ -146,6 +154,7 @@ async function installQuestions(page: Page, entries: InputRequestEntry[]) {
       answers: action === 'answer' ? (body.answers as Request['answers']) : null,
       note: (body.note as string | undefined) ?? null,
       answered_by: 'user',
+      by_person: true,
       resolved_at: '2026-10-24T10:05:00Z',
       revision: entry.request.revision + 1,
     }
@@ -156,6 +165,10 @@ async function installQuestions(page: Page, entries: InputRequestEntry[]) {
     writes,
     reads,
     failNext: (next: number | 'abort') => (failure = next),
+    /** A write the server does not answer until this settles. */
+    holdWrites(until: Promise<unknown>) {
+      held = until
+    },
     /** A question moved on somewhere else: another window, an agent, its deadline. */
     settle(id: string, change: Partial<Request>) {
       const entry = entries.find((candidate) => candidate.request.request_id === id)

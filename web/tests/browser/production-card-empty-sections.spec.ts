@@ -179,6 +179,8 @@ test.describe('a section with nothing in it', () => {
     card.failing = false
     await unread.getByRole('button', { name: 'Refresh', exact: true }).click()
     await expect(unread).toHaveCount(0)
+    // The button goes with the failure it answers, and focus must not go with it.
+    await expect(page.locator('.drawer .drawer-frame-body')).toBeFocused()
   })
 })
 

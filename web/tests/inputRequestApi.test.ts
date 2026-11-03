@@ -67,6 +67,7 @@ describe('input request wire contract', () => {
         revision: 2,
         resolved_at: '2026-10-24T10:01:00Z',
         answered_by: 'user',
+        by_person: true,
       },
     }
     const fetchMock = serve({ interface_version: 'valkama-planning-requests', ...answered })
@@ -106,6 +107,7 @@ describe('input request wire contract', () => {
         answers: {},
         note: 'In my own words',
         answered_by: 'user',
+        by_person: true,
         resolved_at: '2026-10-24T12:00:00Z',
         revision: 2,
       },
@@ -171,6 +173,12 @@ describe('input request wire contract', () => {
       validateInputRequestDetail({
         ...envelope,
         request: { ...entry.request, status: 'answered', answers: null, note: 'Words' },
+      }),
+    ).toThrow()
+    expect(() =>
+      validateInputRequestDetail({
+        ...envelope,
+        request: { ...entry.request, by_person: undefined },
       }),
     ).toThrow()
     expect(() => validateInputRequestList({ ...requestList(), unknown: true })).toThrow()

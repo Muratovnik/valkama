@@ -49,10 +49,12 @@ const props = withDefaults(
     item: WorkItem
     writable: boolean
     questions?: readonly InputRequestEntry[]
+    /** There are more than one read brings, so some that have ended are not here. */
+    questionsCut?: boolean
     /** The questions could not be read, or not all of them. */
     questionsUnread?: boolean
   }>(),
-  { questions: () => [], questionsUnread: false },
+  { questions: () => [], questionsCut: false, questionsUnread: false },
 )
 const emit = defineEmits<{
   'answered': [entry: InputRequestEntry]
@@ -332,6 +334,13 @@ defineExpose({ askOutcome, discussStep, revealQuestion })
         </template>
       </MarkdownEditor>
     </form>
+    <p
+      v-if="questionsCut"
+      class="questions-unread"
+      role="status"
+    >
+      {{ t('requests.truncated') }}
+    </p>
     <p
       v-if="questionsUnread"
       class="questions-unread"

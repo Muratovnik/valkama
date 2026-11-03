@@ -92,6 +92,7 @@ test('a pending question stands under the form however old, a closed one takes i
       fields: [routeField],
       status: 'declined',
       answered_by: 'user',
+      by_person: true,
       resolved_at: '2020-01-03T10:00:00Z',
       created_at: '2020-01-02T10:00:00Z',
     }),
@@ -204,6 +205,7 @@ test('declining is the quiet way out, and an expired question folds the same way
       fields: [routeField],
       status: 'expired',
       expired_reason: 'deadline',
+      expires_at: '2026-10-24T09:30:00Z',
       resolved_at: '2026-10-24T09:30:00Z',
       created_at: '2026-10-24T09:00:00Z',
     }),
@@ -266,6 +268,7 @@ test('an answer from another window folds it and keeps the note without pretendi
     status: 'answered',
     answers: { route: 'keep' },
     answered_by: 'claude',
+    by_person: false,
     resolved_at: '2026-10-24T10:30:00Z',
   })
   await stream.signal('agents')
