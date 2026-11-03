@@ -640,12 +640,13 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   text.
 - **Writing free text:** `MarkdownEditor` owns the field, and draws it as one
   object: a slim toolbar, the text and a foot inside one hairline and one radius,
-  told apart by tone, with the focus ring on that hairline while the text has
-  focus. The toolbar links a task and marks the text up (bold, italic, code, a
-  link, a list; Ctrl+B and Ctrl+I by the key's place, so a Russian layout has them
-  too) and switches between writing and a preview drawn by `RichText`, which lies
-  over the text so that switching moves nothing. Its buttons go through the
-  browser's own editing, so Ctrl+Z takes them back like typing. The field starts
+  told apart by tone; while the text has focus the hairline itself takes the focus
+  colour, with no ring around it. The toolbar links a task and marks the text up
+  (bold, italic, code, a link, a list; Ctrl+B and Ctrl+I by the key's place, so a
+  Russian layout has them too) and switches between writing and a preview drawn
+  by `RichText`, which lies over the text so that switching moves nothing. Its
+  buttons go through the browser's own editing, so Ctrl+Z takes them back like
+  typing. The field starts
   at the lines its host asks for with `rows`, grows with its text to
   `--size-text-area-max-height`, and then scrolls inside. A `#` opens the list of
   tasks, whether it was typed or written by the button; the field stays a
@@ -982,6 +983,14 @@ The target is WCAG 2.1 AA: full keyboard reach, a visible focus ring, semantic
 headings and controls, a text equivalent for every chart, honored
 reduced-motion, and correct behavior when text is scaled. Color is always
 doubled by text or shape and is never the only carrier of a state.
+
+The focus ring is drawn on `:focus-visible` alone: where the keyboard put focus,
+and where the interface moved it in answer to something — how a question ended,
+the next question, why a send failed — which asks for the ring whatever was used
+before (`moveFocus`). A press of the pointer rings nothing it lands on, including
+an element only the interface focuses. A text field shows focus by turning its own
+edge the focus colour, for a press as for Tab, and that colour holds 3:1 on every
+ground and fill it stands against.
 
 Russian and English are equal layout cases, not a base language and a
 translation: a rule that only holds while the shorter string is on screen does

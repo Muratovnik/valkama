@@ -401,8 +401,10 @@ defineExpose({
 /* The one frame: the hairline and the radius a text field has, around all three
    rows. The text is on the fill a field has, and the rows above and below it a
    step toward the ground, where the fill of a button still shows; that step is
-   what parts them, with no rule. The ring answers the text alone, because a button
-   in a row has a ring of its own and two at once say focus is in two places. */
+   what parts them, with no rule. Focus in the text turns the hairline itself the focus
+   colour, for a press as for Tab, as any field's edge does (`VTextInput`); no ring stands
+   around it. It answers the text alone, because a button in a row has a ring of its own
+   and two at once say focus is in two places. */
 .markdown-surface {
   display: grid;
   min-width: 0;
@@ -416,8 +418,7 @@ defineExpose({
   }
 
   &:has(.markdown-body:focus-within) {
-    outline: 2px solid var(--color-focus-ring);
-    outline-offset: 2px;
+    border-color: var(--color-focus-ring);
   }
 
   &.disabled {
@@ -447,7 +448,7 @@ defineExpose({
   font: var(--font-editor);
   overflow-y: auto;
 
-  /* The frame's ring is the one that answers focus here too. */
+  /* The frame's edge is what answers focus here too. */
   &:focus-visible {
     outline: 0;
   }

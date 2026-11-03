@@ -22,6 +22,7 @@ import { agentFacts, AGENTS_SHOWN } from '@/widgets/work-item-inspector/utils/ag
 import type { TimeWords } from '@/widgets/work-item-inspector/utils/agentFacts.ts'
 
 import type { WorkItemAgent } from '@/shared/api/planningModel.ts'
+import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import RichText from '@/shared/ui/RichText.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import VButton from '@/shared/ui/VButton.vue'
@@ -119,9 +120,12 @@ async function toggle() {
   const target = opening
     ? list.value?.querySelectorAll<HTMLElement>('.agent')[AGENTS_SHOWN]
     : (toggler.value?.$el as HTMLElement | undefined)
+  // The first row revealed is where the press took the reader, so it is ringed; closing
+  // leaves focus on the toggle that was pressed, which a press does not ring.
+  if (opening) moveFocus(target, { preventScroll: true })
+  else target?.focus({ preventScroll: true })
   // The toggle keeps its element while the list shrinks above it, so focusing it
   // again scrolls nothing; it is brought back into view here.
-  target?.focus({ preventScroll: true })
   target?.scrollIntoView({ block: 'nearest' })
 }
 </script>

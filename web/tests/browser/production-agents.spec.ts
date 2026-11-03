@@ -107,12 +107,16 @@ for (const width of [1440, 390]) {
       await expect(section.locator('.agent')).toHaveCount(94)
       await expect(section.locator('.agent').nth(3)).toBeFocused()
       await expect(section.locator('.agent').nth(3)).toBeInViewport()
+      // The row the press opened to is where it took the reader: ringed after the mouse too.
+      await expect(section.locator('.agent').nth(3)).toHaveCSS('outline-style', 'solid')
 
       // The toggle stands at the end of the list, so a reader closing it is far down.
       await toggle.scrollIntoViewIfNeeded()
       await press(toggle)
       await expect(section.locator('.agent')).toHaveCount(3)
       await expect(toggle).toBeFocused()
+      // Back on the toggle that was pressed, which only the keyboard rings.
+      await expect(toggle).toHaveCSS('outline-style', input === 'mouse' ? 'none' : 'solid')
       // An observer of the viewport sees the drawer's own clip as well as the window's.
       await expect(toggle).toBeInViewport({ ratio: 1 })
       const uncovered = await toggle.evaluate((button) => {

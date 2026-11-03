@@ -410,7 +410,7 @@ usePlatformEntryRestore({
 
 /* Focus lands here when a press named no control to go back to. A ring around the whole
    workspace says nothing about where the reader is. */
-.module-stage:focus {
+.module-stage:focus-visible {
   outline: none;
 }
 </style>

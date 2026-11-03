@@ -35,6 +35,7 @@ import { descriptionViews } from '@/features/input-requests/utils/optionDescript
 import { moveRadioChoice } from '@/features/input-requests/utils/radioArrows.ts'
 
 import type { InputRequestField, InputRequestOption } from '@/shared/api/inputRequestModel.ts'
+import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import { plainText } from '@/shared/lib/richText.ts'
 import MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
 import RichText from '@/shared/ui/RichText.vue'
@@ -159,7 +160,7 @@ const toggleStop = (option: string) => (standing.value === option ? 0 : -1)
 const radioStop = (option: string) =>
   chosenOption.value || standing.value === option ? undefined : -1
 
-/** Moves focus to the field's control: the chosen radio, or the first one. */
+/** Moves focus, ringed, to the field's control: the chosen radio, or the first one. */
 function focus() {
   if (editor.value) {
     editor.value.focus()
@@ -168,7 +169,7 @@ function focus() {
   const target =
     root.value?.querySelector<HTMLElement>('input:checked') ??
     root.value?.querySelector<HTMLElement>('input')
-  target?.focus()
+  moveFocus(target)
 }
 defineExpose({ focus })
 </script>

@@ -124,12 +124,13 @@ input:is([type='checkbox'], [type='radio']) {
   accent-color: var(--color-action-primary);
 }
 
-button:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible,
-a:focus-visible,
-[tabindex='0']:focus-visible {
+/* The one focus ring, on whatever holds focus, drawn only where the browser says focus
+   should be seen: after the keyboard, or where the app moved it and asked (`moveFocus`).
+   A press of the pointer rings nothing, not even an element only the app focuses: rings on
+   `:focus` showed around headings and answers nobody had tabbed to. A component may move
+   this ring clear of its words or draw focus its own way, and does that on
+   `:focus-visible` too; a field shows focus by its own edge (`VTextInput`). */
+:focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
 }
@@ -186,6 +187,8 @@ a:focus-visible,
   border-radius: var(--radius-control);
   transform: translateY(-150%);
 
+  /* Revealed whenever it holds focus, which is not a ring. */
+  /* stylelint-disable-next-line selector-pseudo-class-disallowed-list */
   &:focus {
     transform: translateY(0);
   }

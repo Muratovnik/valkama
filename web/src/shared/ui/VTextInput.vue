@@ -250,6 +250,15 @@ defineExpose({
   background: var(--color-control-surface);
   border-radius: var(--radius-control);
 
+  /* A field says it holds focus with its own edge, for a press as for Tab, since a
+     press into a field is where typing starts: the base ring around it read as a second
+     frame standing off the first. The focus colour holds 3:1 on every ground a field
+     stands on (`designTokens.test.ts`). */
+  &:focus-visible {
+    border-color: var(--color-focus-ring);
+    outline: 0;
+  }
+
   &:not(textarea) {
     block-size: var(--size-control-height);
   }
@@ -277,16 +286,12 @@ textarea.control {
   resize: none;
 }
 
-/* Inside a frame the host draws: that frame is the one edge and the one ring. */
+/* Inside a frame the host draws: that frame is the one edge, and it answers focus. */
 textarea.control.bare {
   min-height: calc(var(--text-area-rows) * 1lh + var(--space-4));
   border: 0;
   background: transparent;
   border-radius: 0;
-
-  &:focus-visible {
-    outline: 0;
-  }
 }
 
 /* The whole placeholder, drawn to be measured: no room, no pointer, nothing
@@ -307,7 +312,7 @@ textarea.control.bare {
   white-space: nowrap;
 }
 
-.control:hover:not(:disabled) {
+.control:hover:not(:disabled, :focus-visible) {
   border-color: var(--color-action-primary);
 }
 

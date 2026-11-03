@@ -371,6 +371,14 @@ test('every colour that carries meaning reads as text on a card and as a mark on
   )
 })
 
+test('focus reads as a ring on every ground and as a field edge on its fill', () => {
+  // WCAG 1.4.11 on the lightest grounds; a field's one-pixel edge in it alone says focus.
+  for (const ground of ['surface', 'surface-sheet', 'surface-hover', 'control-surface']) {
+    const ratio = between('--color-focus-ring', `--color-${ground}`)
+    assert.ok(ratio >= 3, `focus on ${ground} is ${ratio.toFixed(2)}:1`)
+  }
+})
+
 /**
  * The grounds and control fills that each name a palette step of their own.
  *

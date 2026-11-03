@@ -39,6 +39,16 @@ export const linesTall = (field: Locator) =>
     const inset = Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom)
     return (element.clientHeight - inset) / Number.parseFloat(style.lineHeight)
   })
+/** The focus colour as the page resolves it, to compare an edge against. */
+export const focusColour = (page: Page) =>
+  page.evaluate(() => {
+    const probe = document.createElement('span')
+    probe.style.color = 'var(--color-focus-ring)'
+    document.body.append(probe)
+    const colour = getComputedStyle(probe).color
+    probe.remove()
+    return colour
+  })
 export async function box(locator: Locator) {
   const bounds = await locator.boundingBox()
   if (!bounds) throw new Error('not laid out')

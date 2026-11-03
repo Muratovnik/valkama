@@ -203,12 +203,10 @@ const closing = computed(() => {
   font: var(--font-detail);
 }
 
-/* Only the app moves focus to how a question ended, and Tab never stops here, so the
-   ring shows whenever it holds focus: it is the one sign of where the reader was taken.
-   These words run to both edges of the line, so the ring stands clear of them. */
-.request-state:focus {
+/* The app moves focus to how a question ended and rings it (`moveFocus`); a press here
+   rings nothing. These words run to both edges of the line, so the ring stands clear of them. */
+.request-state:focus-visible {
   border-radius: var(--radius-control);
-  outline: 2px solid var(--color-focus-ring);
   outline-offset: var(--space-1);
 }
 

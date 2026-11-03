@@ -27,6 +27,7 @@ import type { RequestDraft } from '@/features/input-requests/utils/validateAnswe
 import type { InputRequestEntry, InputRequestList } from '@/shared/api/inputRequestModel.ts'
 import { skippedSourceReason } from '@/shared/api/planningTarget.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
+import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import { projectTitle, useProjectTitles } from '@/shared/lib/projectTitles.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import VButton from '@/shared/ui/VButton.vue'
@@ -115,7 +116,7 @@ watch(
     asked.value = false
     if (!props.failed) return
     await nextTick()
-    errorLine.value?.focus()
+    moveFocus(errorLine.value)
   },
 )
 function draftFor(entry: InputRequestEntry) {
@@ -238,11 +239,9 @@ async function updated(entry: InputRequestEntry) {
   color: var(--color-danger);
 }
 
-/* Focus is moved here when a refresh the reader asked for fails; Tab never
-   stops here, so the ring shows whenever it holds focus. */
-.request-error:focus {
+/* Focus is moved here, ringed, when a refresh the reader asked for fails. */
+.request-error:focus-visible {
   border-radius: var(--radius-control);
-  outline: 2px solid var(--color-focus-ring);
   outline-offset: var(--space-half);
 }
 

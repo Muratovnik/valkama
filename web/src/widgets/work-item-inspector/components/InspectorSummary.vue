@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import InspectorReport from '@/widgets/work-item-inspector/components/InspectorReport.vue'
 
 import type { WorkItem } from '@/shared/api/planningModel.ts'
+import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import RichText from '@/shared/ui/RichText.vue'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
 import VButton from '@/shared/ui/VButton.vue'
@@ -16,7 +17,7 @@ function viewReport() {
     `#work-report-${props.item.summary_comment_id}`,
   )
   report?.scrollIntoView({ block: 'start' })
-  report?.focus({ preventScroll: true })
+  moveFocus(report, { preventScroll: true })
 }
 </script>
 

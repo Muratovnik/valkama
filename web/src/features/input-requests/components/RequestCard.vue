@@ -30,6 +30,7 @@ import type { RequestDraft } from '@/features/input-requests/utils/validateAnswe
 import type { InputRequestEntry, InputRequestField } from '@/shared/api/inputRequestModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { actorName, actorSession } from '@/shared/lib/actor.ts'
+import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import { projectTitle, useProjectTitles } from '@/shared/lib/projectTitles.ts'
 import { revealFrame } from '@/shared/lib/revealFrame.ts'
 import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
@@ -80,7 +81,7 @@ const {
   entry: () => props.entry,
   failed: async () => {
     await nextTick()
-    errorLine.value?.focus()
+    moveFocus(errorLine.value)
   },
   refuse: async (field) => {
     await answerFields.value?.focusField(field)
@@ -105,7 +106,7 @@ watch(waiting, async (now) => {
 watch(pastDue, async (past) => {
   if (!past || !card.value?.contains(document.activeElement)) return
   await nextTick()
-  deadlineLine.value?.focus()
+  moveFocus(deadlineLine.value)
 })
 const hasFoot = computed(
   () => waiting.value || canRefresh.value || props.standalone || Boolean(error.value),
@@ -177,12 +178,12 @@ function writeNote(note: string) {
 }
 /** Moves focus to this question's heading, or to the question where it has none. */
 function focus() {
-  ;(card.value?.querySelector<HTMLElement>('.request-title') ?? card.value)?.focus()
+  moveFocus(card.value?.querySelector<HTMLElement>('.request-title') ?? card.value)
 }
 /** Moves focus to how this question ended, or to the question while it still waits. */
 function focusOutcome() {
   const line = card.value?.querySelector<HTMLElement>('.request-state')
-  if (line) line.focus()
+  if (line) moveFocus(line)
   else focus()
 }
 /**
@@ -342,16 +343,16 @@ defineExpose({ focus, focusOutcome, reveal })
   overflow-wrap: anywhere;
 }
 
-/* Only the app moves focus to these, to the next question and to why a write did not
-   go through or no longer can, and Tab never stops on them, so the ring shows whenever they
-   hold focus: it is the one sign of where the reader was taken. */
-:is(.request-card, .request-title, .request-error, .request-deadline):focus {
+/* The app moves focus to these, to the next question and to why a write did not go
+   through or no longer can, and rings them as it does (`moveFocus`): it is the one sign of
+   where the reader was taken. A press on one takes focus too, and rings nothing. The ring
+   itself is the base one; here it only stands clear of the words. */
+:is(.request-card, .request-title, .request-error, .request-deadline):focus-visible {
   border-radius: var(--radius-control);
-  outline: 2px solid var(--color-focus-ring);
   outline-offset: var(--space-1);
 }
 
-.request-card:focus {
+.request-card:focus-visible {
   border-radius: var(--radius-card);
   outline-offset: var(--space-half);
 }

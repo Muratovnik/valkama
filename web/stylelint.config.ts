@@ -228,6 +228,19 @@ export default {
       { ignorePseudoClasses: ['deep', 'slotted', 'global'] },
     ],
     'selector-class-pattern': '^[a-z][a-z0-9]*([-_]{1,2}[a-z0-9]+)*$',
+    /*
+     * Focus is styled on `:focus-visible`, never on `:focus`. A press of the
+     * pointer focuses even an element only the app means to focus — a heading, how
+     * a question ended — and three rings on `:focus` stood around whatever a reader
+     * clicked. `:focus-visible` holds after the keyboard and after a move the app
+     * asks to show (`moveFocus`); a field matches it on a press as well, which is
+     * what its edge wants. `:focus-within` stays allowed: it asks whether focus is
+     * inside, not how it got there.
+     */
+    'selector-pseudo-class-disallowed-list': [
+      ['focus'],
+      { message: 'Style focus on :focus-visible; a press of the pointer must not draw it.' },
+    ],
     'custom-property-pattern': '^[a-z][a-z0-9]*(-[a-z0-9]+)*$',
     'at-rule-no-unknown': [true, { ignoreAtRules: ['import', 'apply', 'theme'] }],
     'declaration-property-value-allowed-list': {

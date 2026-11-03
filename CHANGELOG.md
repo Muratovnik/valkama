@@ -55,6 +55,12 @@ checkouts are therefore distinguishable even at the same version.
   refusal. The buttons are now compared when the press goes down as well: one that finds
   them moved ends the step, and if it went down on them it reaches neither, so it writes
   nothing, not even what Send would. Keys on a button in focus work as before.
+- **A click no longer rings what it lands on.** A question's heading, how it ended, the
+  question itself and the comment field took a focus ring from a plain mouse press. The
+  ring now shows only where the keyboard put focus or where the interface moved it — to
+  how a question ended, to the next question, to why a send failed — whatever was used
+  before. A text field shows focus by turning its own edge blue, for a click as for Tab,
+  with no ring around it.
 
 ## [2.4.0](https://github.com/Muratovnik/valkama/compare/v2.3.0...v2.4.0) - 2026-11-03
 

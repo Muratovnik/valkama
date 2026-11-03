@@ -1,6 +1,14 @@
 import { expect } from '@playwright/test'
 
-import { box, linesTall, openCard, select, selection, settledBox } from './editorPage.ts'
+import {
+  box,
+  focusColour,
+  linesTall,
+  openCard,
+  select,
+  selection,
+  settledBox,
+} from './editorPage.ts'
 import { planningSpace } from './planningFixtures.ts'
 import { test } from './test.ts'
 
@@ -97,12 +105,15 @@ for (const width of [1680, 1024, 390]) {
     expect(frame.x + frame.width - (send.x + send.width)).toBeLessThanOrEqual(6)
     expect(Math.abs(field.width - (frame.width - 2))).toBeLessThan(1)
 
-    // The ring is on the frame while the text has focus, and only then.
+    // The frame's own edge takes the focus colour while the text has focus, and only
+    // then, with no ring around the frame or the text.
+    const resting = await surface.evaluate((node) => getComputedStyle(node).borderTopColor)
     await comment.focus()
-    await expect(surface).toHaveCSS('outline-style', 'solid')
+    await expect(surface).toHaveCSS('border-top-color', await focusColour(page))
+    await expect(surface).toHaveCSS('outline-style', 'none')
     await expect(comment).toHaveCSS('outline-style', 'none')
     await surface.getByRole('button', { name: 'Preview', exact: true }).focus()
-    await expect(surface).toHaveCSS('outline-style', 'none')
+    await expect(surface).toHaveCSS('border-top-color', resting)
   })
 }
 

@@ -28,6 +28,7 @@ import type { ChainMember } from '@/shared/api/planningChainApi.ts'
 import { CHAIN_GROUPS } from '@/shared/api/planningChainGroups.ts'
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 import { holderName } from '@/shared/lib/actor.ts'
+import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import { semanticStatePresentation } from '@/shared/lib/uiSystem.ts'
 import SemanticState from '@/shared/ui/SemanticState.vue'
 import VButton from '@/shared/ui/VButton.vue'
@@ -89,7 +90,10 @@ async function toggle(group: ChainGroup) {
   const target = opening
     ? within(group)?.querySelectorAll<HTMLElement>('.chain-row')[LIMIT]
     : within(group)?.querySelector<HTMLElement>('.chain-more')
-  target?.focus({ preventScroll: true })
+  // The first row revealed is where the press took the reader, so it is ringed; closing
+  // leaves focus on the toggle that was pressed, which a press does not ring.
+  if (opening) moveFocus(target, { preventScroll: true })
+  else target?.focus({ preventScroll: true })
   target?.scrollIntoView({ block: 'nearest' })
 }
 
