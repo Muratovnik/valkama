@@ -1,0 +1,46 @@
+{
+  "interface_version": "valkama-planning-requests",
+  "target": {
+    "project_id": "example-project",
+    "space_ref": {
+      "data_scope_id": "00000000-0000-4000-8000-000000000001",
+      "space_key": "MAIN"
+    },
+    "reference": "MAIN-1",
+    "writable": true
+  },
+  "request": {
+    "request_id": "00000000-0000-4000-8000-000000000006",
+    "work_item_id": "00000000-0000-4000-8000-000000000002",
+    "reference": "MAIN-1",
+    "title": "Contract card",
+    "kind": "question",
+    "prompt": "Why does the card read flat?",
+    "fields": [
+      {
+        "id": "why",
+        "label": "Why",
+        "options": [],
+        "required": false,
+        "type": "text"
+      }
+    ],
+    "answers": null,
+    "own": null,
+    "field_notes": null,
+    "note": null,
+    "answer_version": 0,
+    "status": "pending",
+    "author": "asking-agent",
+    "answered_by": "",
+    "execution_id": null,
+    "session_id": null,
+    "expires_at": null,
+    "created_at": "2026-01-02T03:04:05.000000Z",
+    "resolved_at": null,
+    "revision": 0,
+    "expired_reason": null,
+    "by_person": null,
+    "history": []
+  }
+}

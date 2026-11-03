@@ -6,3 +6,5 @@ playwright-report/
 src/assets/
 public/
 package-lock.json
+# Written by tests/test_web_contract_fixtures.py from the server, byte for byte.
+tests/fixtures/server/

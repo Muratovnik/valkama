@@ -1,0 +1,168 @@
+{
+  "interface_version": "valkama-planning-requests",
+  "items": [
+    {
+      "target": {
+        "project_id": "example-project",
+        "space_ref": {
+          "data_scope_id": "00000000-0000-4000-8000-000000000001",
+          "space_key": "MAIN"
+        },
+        "reference": "MAIN-1",
+        "writable": true
+      },
+      "request": {
+        "request_id": "00000000-0000-4000-8000-000000000006",
+        "work_item_id": "00000000-0000-4000-8000-000000000002",
+        "reference": "MAIN-1",
+        "title": "Contract card",
+        "kind": "question",
+        "prompt": "Why does the card read flat?",
+        "fields": [
+          {
+            "id": "why",
+            "label": "Why",
+            "options": [],
+            "required": false,
+            "type": "text"
+          }
+        ],
+        "answers": null,
+        "own": null,
+        "field_notes": null,
+        "note": null,
+        "answer_version": 0,
+        "status": "pending",
+        "author": "asking-agent",
+        "answered_by": "",
+        "execution_id": null,
+        "session_id": null,
+        "expires_at": null,
+        "created_at": "2026-01-02T03:04:05.000000Z",
+        "resolved_at": null,
+        "revision": 0,
+        "expired_reason": null,
+        "by_person": null,
+        "history": []
+      }
+    },
+    {
+      "target": {
+        "project_id": "example-project",
+        "space_ref": {
+          "data_scope_id": "00000000-0000-4000-8000-000000000001",
+          "space_key": "MAIN"
+        },
+        "reference": "MAIN-1",
+        "writable": true
+      },
+      "request": {
+        "request_id": "00000000-0000-4000-8000-000000000005",
+        "work_item_id": "00000000-0000-4000-8000-000000000002",
+        "reference": "MAIN-1",
+        "title": "Contract card",
+        "kind": "decision",
+        "prompt": "Which path do the comments take?",
+        "fields": [
+          {
+            "id": "path",
+            "label": "Which path",
+            "options": [
+              {
+                "description": "**Costs** nothing now.\n\nA second paragraph.",
+                "id": "keep",
+                "label": "Keep it",
+                "recommended": true
+              },
+              {
+                "id": "drop",
+                "label": "Drop it"
+              }
+            ],
+            "required": true,
+            "type": "choice"
+          },
+          {
+            "id": "areas",
+            "label": "Areas",
+            "options": [
+              {
+                "id": "api",
+                "label": "The API"
+              },
+              {
+                "id": "web",
+                "label": "The web"
+              }
+            ],
+            "required": false,
+            "type": "multi_choice"
+          },
+          {
+            "id": "sure",
+            "label": "Sure",
+            "options": [],
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "answers": {
+          "areas": [
+            "api",
+            "web"
+          ],
+          "path": "keep"
+        },
+        "own": {
+          "sure": "Once the export carries them"
+        },
+        "field_notes": {
+          "path": "It costs nothing now"
+        },
+        "note": "The owner asked for the change.",
+        "answer_version": 2,
+        "status": "answered",
+        "author": "asking-agent",
+        "answered_by": "codex",
+        "execution_id": null,
+        "session_id": null,
+        "expires_at": null,
+        "created_at": "2026-01-02T03:04:05.000000Z",
+        "resolved_at": "2026-01-02T03:04:05.000000Z",
+        "revision": 2,
+        "expired_reason": null,
+        "by_person": false,
+        "history": [
+          {
+            "version": 1,
+            "own": {},
+            "field_notes": {},
+            "note": "For now.",
+            "answers": {
+              "areas": [
+                "api"
+              ],
+              "path": "drop"
+            },
+            "answered_by": "user",
+            "answered_at": "2026-01-02T03:04:05.000000Z",
+            "by_person": true
+          }
+        ]
+      }
+    }
+  ],
+  "coverage": [
+    {
+      "project_id": "example-project",
+      "space_ref": {
+        "data_scope_id": "00000000-0000-4000-8000-000000000001",
+        "space_key": "MAIN"
+      },
+      "status": "searched",
+      "reason": null
+    }
+  ],
+  "limit": 100,
+  "has_more": false
+}
