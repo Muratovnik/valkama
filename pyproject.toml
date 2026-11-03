@@ -298,6 +298,8 @@ extend-exclude = [
   # web/dist is committed on purpose so a clone opens the built UI with no
   # build step first. It is minified output, not authored text.
   "web/dist",
+  # Third-party legal text is kept exactly as its owner wrote it, Dutch names included.
+  "server/licenses",
 ]
 
 [tool.typos.default]
