@@ -385,10 +385,18 @@ def create_space(
 
     space_name = model.text_field(name, "planning_space.name")
     project = model.text_field(project_id, "planning_space.project_id", limit=160)
+    # The lock comes before the read of the keys in use: otherwise two spaces
+    # deriving one key both find it free, and the second dies on its UNIQUE.
+    if not conn.in_transaction:
+        conn.execute("BEGIN IMMEDIATE")
     taken = frozenset(row[0] for row in conn.execute("SELECT key FROM planning_spaces"))
     chosen = model.space_key(key) if key else model.derive_space_key(space_name, taken)
     if chosen in taken:
         raise model.PlanningError(f"planning space key {chosen} is already in use")
+    if conn.execute(
+        "SELECT 1 FROM planning_spaces WHERE project_id = ? AND name = ?", (project, space_name)
+    ).fetchone():
+        raise model.PlanningError(f"project {project} already has a planning space {space_name}")
     identifier = (
         model.identifier(space_id, "planning_space.planning_space_id")
         if space_id
@@ -544,18 +552,25 @@ def next_number(conn: sqlite3.Connection, planning_space_id: str) -> int:
     A counter on the space rather than `MAX(number) + 1`: deleting the newest
     item must not hand its identifier to the next one, because that identifier
     is already in a commit message somewhere.
+
+    The write comes first and adds to what the row holds at that moment. It used
+    to read the counter and then write the value it read plus one: a read takes no
+    lock, so two agents both read 5, and the second's write and insert landed
+    after the first committed, as a raw UNIQUE failure on the number. The UPDATE
+    holds the write lock until the caller commits, so the number read back here
+    is this caller's alone.
     """
 
-    row = conn.execute(
-        "SELECT next_number FROM planning_spaces WHERE planning_space_id = ?",
-        (planning_space_id,),
-    ).fetchone()
-    if row is None:
-        raise model.PlanningError("planning space does not exist")
-    number = int(row[0])
-    conn.execute(
-        "UPDATE planning_spaces SET next_number = ?, updated_at ="
+    changed = conn.execute(
+        "UPDATE planning_spaces SET next_number = next_number + 1, updated_at ="
         " strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE planning_space_id = ?",
-        (number + 1, planning_space_id),
+        (planning_space_id,),
     )
-    return number
+    if changed.rowcount != 1:
+        raise model.PlanningError("planning space does not exist")
+    return int(
+        conn.execute(
+            "SELECT next_number - 1 FROM planning_spaces WHERE planning_space_id = ?",
+            (planning_space_id,),
+        ).fetchone()[0]
+    )

@@ -1503,8 +1503,11 @@ def report_work_item(
     identity = str(row["work_item_id"])
     # Keep the report and the guarded current-outcome write indivisible even
     # when a caller catches a refusal and commits its surrounding transaction.
+    # Immediate, because finding the call's row reads before the first write, and
+    # a read in a deferred transaction cannot be upgraded once somebody else has
+    # committed: SQLite refuses that at once, whatever the busy timeout.
     if not conn.in_transaction:
-        conn.execute("BEGIN")
+        conn.execute("BEGIN IMMEDIATE")
     conn.execute("SAVEPOINT planning_report")
     try:
         inserted = conn.execute(

@@ -22,10 +22,12 @@ import sqlite3
 import tempfile
 import threading
 import unittest
+from collections.abc import Callable
 from unittest import mock
 
 from server import store
-from server.planning import model, read_model, service
+from server.planning import calls, model, read_model, service
+from server.planning import store as planning_store
 
 
 class PlanningConcurrencyTests(unittest.TestCase):
@@ -342,6 +344,168 @@ class PlanningConcurrencyTests(unittest.TestCase):
         self.assertIsNone(
             service.claim_ready_work_item(self.conn, space=self.space["key"], author="agent-two")
         )
+
+
+class ReadThenWriteTests(unittest.TestCase):
+    """A number, a key or a call row decided before the write lock is held.
+
+    Each test puts another writer's whole commit into the one gap a real pair of
+    agents can hit: `set_trace_callback` runs when SQLite starts a statement and
+    before that statement takes any lock, so the other writer lands between what
+    the caller read and what it writes, every time rather than now and then. A
+    writer the caller already locks out is refused at once and retried after the
+    caller commits, which is the correct outcome of a write that holds its lock
+    before it reads.
+    """
+
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.path = os.path.join(directory.name, "valkama.sqlite3")
+        patch = mock.patch.dict(os.environ, {"VALKAMA_DB": self.path})
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.conn = self.open()
+        self.other = self.open()
+        self.other.execute("PRAGMA busy_timeout=0")
+        self.space = service.create_planning_space(
+            self.conn, project_id="example-workspace", name="Quality Assurance"
+        )
+        self.conn.commit()
+
+    def open(self) -> sqlite3.Connection:
+        conn = store.connect()
+        self.addCleanup(conn.close)
+        return conn
+
+    def before(self, statement: str, other_write: Callable[[], object]) -> list[bool]:
+        """Run `other_write` on `self.other` the first time `self.conn` starts `statement`.
+
+        The list says whether it landed: empty until the statement started, then
+        one entry, false when the caller's lock kept the other writer out.
+        """
+
+        landed: list[bool] = []
+
+        def race(sql: str) -> None:
+            if landed or statement not in sql:
+                return
+            try:
+                other_write()
+                self.other.commit()
+                landed.append(True)
+            except sqlite3.OperationalError:
+                self.other.rollback()
+                landed.append(False)
+
+        self.conn.set_trace_callback(race)
+        self.addCleanup(self.conn.set_trace_callback, None)
+        return landed
+
+    def test_a_number_read_before_another_writer_commits_is_not_handed_out_twice(self) -> None:
+        def other_create() -> None:
+            service.create_work_item(self.other, space=self.space["key"], title="Theirs")
+
+        landed = self.before("UPDATE planning_spaces", other_create)
+        mine = service.create_work_item(self.conn, space=self.space["key"], title="Mine")
+        self.conn.commit()
+        self.conn.set_trace_callback(None)
+        self.assertEqual([True], landed)
+        self.assertEqual("QA-2", mine["reference"])
+        self.assertEqual(
+            {1: "Theirs", 2: "Mine"},
+            {
+                row["number"]: row["title"]
+                for row in self.conn.execute("SELECT number, title FROM work_items")
+            },
+        )
+        self.assertEqual(
+            3,
+            self.conn.execute(
+                "SELECT next_number FROM planning_spaces WHERE key = ?", (self.space["key"],)
+            ).fetchone()[0],
+        )
+
+    def test_four_writers_creating_at_once_take_every_number_once(self) -> None:
+        """The reproduction the review ran: four agents, thirty items each, no retry."""
+
+        start = threading.Barrier(4)
+        failures: list[str] = []
+        lock = threading.Lock()
+
+        def agent() -> None:
+            conn = sqlite3.connect(self.path, timeout=30)
+            conn.row_factory = sqlite3.Row
+            try:
+                start.wait()
+                for index in range(30):
+                    service.create_work_item(conn, space=self.space["key"], title=f"Item {index}")
+                    conn.commit()
+            except sqlite3.Error as error:
+                with lock:
+                    failures.append(f"{type(error).__name__}: {error}")
+            finally:
+                conn.close()
+
+        threads = [threading.Thread(target=agent) for _ in range(4)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        self.assertEqual([], failures)
+        numbers = [row[0] for row in self.conn.execute("SELECT number FROM work_items")]
+        self.assertEqual(list(range(1, 121)), sorted(numbers))
+
+    def test_a_missing_space_is_refused_when_a_number_is_asked_for(self) -> None:
+        with self.assertRaisesRegex(model.PlanningError, "planning space does not exist"):
+            planning_store.next_number(self.conn, model.new_id())
+        self.conn.rollback()
+
+    def test_two_spaces_deriving_one_key_at_once_get_two_keys(self) -> None:
+        def other_space() -> None:
+            service.create_planning_space(self.other, project_id="theirs", name="Valkama")
+
+        landed = self.before("INSERT INTO planning_spaces", other_space)
+        mine = service.create_planning_space(self.conn, project_id="mine", name="Valkama")
+        self.conn.commit()
+        self.conn.set_trace_callback(None)
+        self.assertEqual(1, len(landed))
+        if not landed[0]:
+            other_space()
+            self.other.commit()
+        keys = {row[0] for row in self.conn.execute("SELECT key FROM planning_spaces")}
+        self.assertEqual({"QA", "VAL", "VAL2"}, keys)
+        self.assertIn(mine["key"], keys)
+
+    def test_one_project_taking_one_space_name_twice_is_refused_in_words(self) -> None:
+        with self.assertRaisesRegex(model.PlanningError, "already has a planning space"):
+            service.create_planning_space(
+                self.conn, project_id="example-workspace", name="Quality Assurance"
+            )
+        self.conn.rollback()
+
+    def test_a_summary_takes_its_lock_before_it_reads_its_call(self) -> None:
+        """A read inside a deferred transaction cannot be upgraded after another commit.
+
+        SQLite answers that with `database is locked` at once, whatever the busy
+        timeout, so an agent got a raw error for a summary nothing was wrong with.
+        """
+
+        service.create_work_item(self.conn, space=self.space["key"], title="Report on me")
+        self.conn.commit()
+
+        def other_comment() -> None:
+            service.comment_work_item(self.other, "QA-1", "Theirs", author="other")
+
+        landed = self.before("INSERT INTO execution_events", other_comment)
+        with calls.bind(calls.verify_mcp({}, None), "set_work_item_summary"):
+            answer = service.set_summary(
+                self.conn, "QA-1", {"done": "Done it", "next": "Nothing"}, author="agent"
+            )
+        self.conn.commit()
+        self.conn.set_trace_callback(None)
+        self.assertEqual(1, len(landed))
+        self.assertTrue(answer["summary"])
 
 
 if __name__ == "__main__":
