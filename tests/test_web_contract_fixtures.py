@@ -462,12 +462,13 @@ def generate() -> dict[str, str]:
 
 
 def write() -> None:
-    """Refresh the committed fixtures from the server as it answers now."""
+    """Refresh the committed fixtures; a generation that fails leaves them as they are."""
 
+    fresh = generate()
     FIXTURES.mkdir(parents=True, exist_ok=True)
     for stale in FIXTURES.glob("*.json"):
         stale.unlink()
-    for name, text in generate().items():
+    for name, text in fresh.items():
         (FIXTURES / name).write_bytes(text.encode())
 
 
