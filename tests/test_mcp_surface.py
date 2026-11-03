@@ -1543,7 +1543,11 @@ class ApplyWorkItemChangesTests(WireCallTestCase):
                 ],
                 "refs": 1,
                 "links": 1,
-                "comment": {"comment_id": comment["id"]},
+                "comment": {
+                    "comment_id": comment["id"],
+                    "reply_to": None,
+                    "reply_to_request": None,
+                },
                 "summary": {"summary_comment_id": item["summary_comment_id"]},
                 "transition": {"state": "done", "released": "one"},
             },
