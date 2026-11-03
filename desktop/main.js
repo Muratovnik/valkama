@@ -26,7 +26,7 @@ const {
   validateLauncherBootstrap,
 } = require('./runtime_contract')
 const { contextMenuTemplate, pageLocale } = require('./context_menu')
-const { howToOpen, openPathFromArgv, openPathUrl } = require('./open_path')
+const { howToOpen, openPathFromArgv, openPathUrl, refusesLaunch } = require('./open_path')
 const { discoverSupportedOpeners, resolveSupportedOpener } = require('./opener_catalog')
 const { establishServer, verifyStartedOwnership } = require('./server_startup')
 const { openSessionRequest } = require('./session_opener')
@@ -536,7 +536,10 @@ function createWindow() {
   })
 }
 
-if (!app.requestSingleInstanceLock()) {
+if (refusesLaunch(process.argv)) {
+  log('address-refused', {})
+  app.quit()
+} else if (!app.requestSingleInstanceLock()) {
   log('second-launch', { outcome: 'handed to the running window' })
   app.quit()
 } else {

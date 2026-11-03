@@ -53,6 +53,69 @@ async function openInDesktop(page: Page, reference: string) {
   }
 }
 
+const PANEL_ROUTE = '/modules/planning/global?panel=questions'
+const panel = (page: Page) => page.getByRole('dialog', { name: 'Needs my answer' })
+
+test('an address opens the panel on first load, once, and a reload does not bring it back', async ({
+  page,
+}) => {
+  await installBackend(page)
+  await page.goto(PANEL_ROUTE)
+  await expect(panel(page)).toBeVisible()
+  // The order is taken out of the address, and no part of it reads as a dropped query.
+  await expect(page).toHaveURL('/modules/planning/global')
+  await expect(page.getByText('Part of the address', { exact: false })).toHaveCount(0)
+
+  await panel(page).getByRole('button', { name: 'Close questions' }).click()
+  await expect(panel(page)).toHaveCount(0)
+  await page.reload()
+  await expect(page.getByRole('navigation').first()).toBeVisible()
+  await expect(panel(page)).toHaveCount(0)
+})
+
+test('a page that is up opens the panel over what it shows, without moving or reloading', async ({
+  page,
+}) => {
+  const app = await openInDesktop(page, workItemRef.reference)
+  const before = page.url()
+  await app.handOver(PANEL_ROUTE)
+  await expect(panel(page)).toBeVisible()
+  expect(page.url()).toBe(before)
+  expect(await app.sameDocument()).toBe(true)
+  expect(app.documents).toHaveLength(1)
+
+  // A second ask while it is closed opens it again; the first close did not spend it.
+  await panel(page).getByRole('button', { name: 'Close questions' }).click()
+  await expect(panel(page)).toHaveCount(0)
+  await app.handOver(PANEL_ROUTE)
+  await expect(panel(page)).toBeVisible()
+})
+
+test('a toast for an item reaches its card through the redirect, without reloading', async ({
+  page,
+}) => {
+  const app = await openInDesktop(page, workItemRef.reference)
+  const reference = blockedWorkItem.reference
+  await page.route(`**/open/${reference}?in=browser`, (route) =>
+    route.fulfill({ status: 302, headers: { Location: cardRoute(reference) } }),
+  )
+  await app.handOver(`/open/${reference}?in=browser`)
+  await expect(app.drawer.locator('.head-reference')).toHaveText(reference)
+  await expect(page).toHaveURL(cardRoute(reference))
+  expect(await app.sameDocument()).toBe(true)
+  expect(app.documents).toHaveLength(1)
+})
+
+test('a toast for an item that is gone leaves the shell to say so', async ({ page }) => {
+  const app = await openInDesktop(page, workItemRef.reference)
+  await page.route('**/open/MAIN-999?in=browser', (route) =>
+    route.fulfill({ status: 404, contentType: 'text/html', body: '<!doctype html>' }),
+  )
+  await app.handOver('/open/MAIN-999?in=browser')
+  await expect(page).toHaveURL(/\/open\/MAIN-999\?in=browser$/)
+  expect(await app.sameDocument()).toBe(true)
+})
+
 test('a route handed over with no draft opens the card without reloading the page', async ({
   page,
 }) => {

@@ -1,29 +1,69 @@
 'use strict'
 
-// The address a launch asks the window to show. The listener starts the app with
-// a card's route when a person follows a link to a work item, at first start or
-// on top of a running window. A command line is untrusted: anything on this
-// machine can write one, so only the one shape the listener issues is taken, and
-// everything else leaves the window where it was.
+// The address a launch asks the window to show. Two callers ask. The listener starts
+// the app with a route when a person follows a link to a work item, and Windows starts
+// it with `valkama://open/<number>` when a person clicks a toast, at first start or on
+// top of a running window. A command line is untrusted: anything on this machine can
+// write one, and any page can call the scheme, whose address Windows may split into
+// more arguments than it was. So only the shapes these two issue are taken. Any other
+// switch value leaves the window where it was, and a scheme address of any other shape
+// does not even raise it (`refusesLaunch`).
 //
 // The route, not the short `/open/<number>`: this window's own navigation carries
 // the same fetch metadata as an address opened from outside, so loading the short
-// one would have the listener start the app again.
+// one would have the listener start the app again. A toast knows only the number, so
+// its address becomes the short one with `in=browser`, which starts nothing: the
+// listener answers it with the redirect, and a page that is up follows that itself.
 
 const OPEN_PATH_SWITCH = '--open-path='
 
 // `_CARD_ROUTE` in server/http_surface.py; tests/test_work_item_link.py compares them.
-const CARD_ROUTE = /^\/modules\/planning\/project\/[a-z][a-z0-9-]{0,159}\?entity=[A-Za-z0-9_-]+$/
+const CARD_ROUTE = /^(?:\/modules\/planning\/project\/[a-z][a-z0-9-]{0,159}\?entity=[A-Za-z0-9_-]+|\/modules\/planning\/global\?panel=questions)$/
+
+// `_QUESTIONS_ROUTE` in server/http_surface.py, compared with it by the same test.
+const QUESTIONS_ROUTE = '/modules/planning/global?panel=questions'
+
+const ANY_SCHEME_ADDRESS = /^valkama:/i
+
+// `messages.QUESTIONS` and `_HUMAN_ID` in server/, compared by the same test. Nothing
+// else: no other host, path, query, fragment, percent escape or lower-case spelling.
+const SCHEME_ADDRESS = /^valkama:\/\/open\/(questions|[A-Z][A-Z0-9]{1,7}-[1-9][0-9]{0,8})$/
+
+function isAddress(argument) {
+  return (
+    typeof argument === 'string' &&
+    (argument.startsWith(OPEN_PATH_SWITCH) || ANY_SCHEME_ADDRESS.test(argument))
+  )
+}
+
+function routeOf(argument) {
+  if (argument.startsWith(OPEN_PATH_SWITCH)) {
+    const route = argument.slice(OPEN_PATH_SWITCH.length)
+    return CARD_ROUTE.test(route) ? route : null
+  }
+  const named = SCHEME_ADDRESS.exec(argument)
+  if (named === null) return null
+  return named[1] === 'questions' ? QUESTIONS_ROUTE : `/open/${named[1]}?in=browser`
+}
 
 /** The route one command line asks for, or null. Two answers are no answer. */
 function openPathFromArgv(argv) {
   if (!Array.isArray(argv)) return null
-  const asked = argv.filter(
-    (argument) => typeof argument === 'string' && argument.startsWith(OPEN_PATH_SWITCH),
+  const asked = argv.filter(isAddress)
+  return asked.length === 1 ? routeOf(asked[0]) : null
+}
+
+/**
+ * Whether this launch came through the scheme with an address it does not take.
+ * Windows starts the app before anything can read the address, so all that is left
+ * to refuse is the rest: no window, no raised window, no hand-over to a running one.
+ */
+function refusesLaunch(argv) {
+  return (
+    Array.isArray(argv) &&
+    argv.some((argument) => typeof argument === 'string' && ANY_SCHEME_ADDRESS.test(argument)) &&
+    openPathFromArgv(argv) === null
   )
-  if (asked.length !== 1) return null
-  const route = asked[0].slice(OPEN_PATH_SWITCH.length)
-  return CARD_ROUTE.test(route) ? route : null
 }
 
 /** The route on this window's own origin; `appUrl` ends in the root's slash. */
@@ -48,4 +88,4 @@ function howToOpen({ showingValkama, pageListens }) {
   return pageListens ? 'hand-over' : 'load'
 }
 
-module.exports = { howToOpen, openPathFromArgv, openPathUrl }
+module.exports = { howToOpen, openPathFromArgv, openPathUrl, refusesLaunch }

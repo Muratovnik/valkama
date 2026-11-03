@@ -268,10 +268,17 @@ def _is_spa_route(path: str) -> bool:
 
 #: The short address of one work item, as an agent writes it to the owner.
 _WORK_ITEM_LINK = "/open"
-#: All a work item link may redirect to: one card, on this origin. Spelled whole
-#: rather than parsed, because a URL parser quietly drops the line breaks a
-#: response header must never carry.
-_CARD_ROUTE = re.compile(r"/modules/planning/project/[a-z][a-z0-9-]{0,159}\?entity=[A-Za-z0-9_-]+")
+#: Where `/open/questions` leads: the shell, with the panel of open questions up. The
+#: page takes the parameter out of the address as it opens the panel, so a reload after
+#: the panel was closed does not bring it back.
+_QUESTIONS_ROUTE = "/modules/planning/global?panel=questions"
+#: All a work item link may redirect to: one card, or the panel of questions, on this
+#: origin. Spelled whole rather than parsed, because a URL parser quietly drops the line
+#: breaks a response header must never carry.
+_CARD_ROUTE = re.compile(
+    r"(?:/modules/planning/project/[a-z][a-z0-9-]{0,159}\?entity=[A-Za-z0-9_-]+"
+    r"|/modules/planning/global\?panel=questions)"
+)
 
 
 def _is_page_path(path: str) -> bool:
@@ -928,7 +935,7 @@ class Handler(BaseHTTPRequestHandler):
 
         if "browser" in parse_qs(query).get("in", []):
             return False
-        reference = planning_model.exact_reference(text)
+        reference = text if text == desktop_app.QUESTIONS else planning_model.exact_reference(text)
         if reference is None or not http_security.is_person_navigation(self.headers):
             return False
         if not desktop_app.open_card(location, port=self.server.server_port):
@@ -957,6 +964,9 @@ class Handler(BaseHTTPRequestHandler):
         """
 
         text = unquote(path[len(_WORK_ITEM_LINK) + 1 :])
+        if text == desktop_app.QUESTIONS:
+            self._lead_to(text, _QUESTIONS_ROUTE, query)
+            return
         try:
             conn = connect()
             try:
@@ -971,6 +981,9 @@ class Handler(BaseHTTPRequestHandler):
         if location is None or _CARD_ROUTE.fullmatch(location) is None:
             self._send_index(404)
             return
+        self._lead_to(text, location, query)
+
+    def _lead_to(self, text: str, location: str, query: str) -> None:
         if self._opened_in_app(text, location, query):
             return
         self._send(

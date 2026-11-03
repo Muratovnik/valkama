@@ -5,7 +5,7 @@ const { readFileSync } = require('node:fs')
 const path = require('node:path')
 const test = require('node:test')
 
-const { howToOpen, openPathFromArgv, openPathUrl } = require('./open_path')
+const { howToOpen, openPathFromArgv, openPathUrl, refusesLaunch } = require('./open_path')
 
 // A route worked out by hand from the grammar; tests/test_work_item_link.py holds
 // the same literal and web/tests/platformRoute.test.ts reads it with the browser's
@@ -63,6 +63,123 @@ test('anything but one card route on this origin is ignored', () => {
 test('two addresses in one command line are no answer rather than a guess', () => {
   assert.equal(openPathFromArgv(['Valkama.exe', `--open-path=${ROUTE}`, '--open-path=/x']), null)
   assert.equal(openPathFromArgv(['Valkama.exe', `--open-path=${ROUTE}`, `--open-path=${ROUTE}`]), null)
+})
+
+test('the listener may also send the window to the panel of questions', () => {
+  const route = '/modules/planning/global?panel=questions'
+  assert.equal(openPathFromArgv(['Valkama.exe', `--open-path=${route}`]), route)
+  for (const refused of [`${route}&x=1`, `${route}2`, '/modules/planning/global?panel=other']) {
+    assert.equal(openPathFromArgv(['Valkama.exe', `--open-path=${refused}`]), null, refused)
+  }
+})
+
+test('a toast names an item or the panel, and either reaches the window as a route', () => {
+  assert.equal(
+    openPathFromArgv(['Valkama.exe', 'valkama://open/MAIN-12']),
+    '/open/MAIN-12?in=browser',
+  )
+  assert.equal(
+    openPathFromArgv(['Valkama.exe', 'valkama://open/questions']),
+    '/modules/planning/global?panel=questions',
+  )
+  // Electron documents that a second instance's argv may be reordered and extended.
+  assert.equal(
+    openPathFromArgv(['Valkama.exe', '--no-sandbox', 'valkama://open/MAIN-12', '--flag']),
+    '/open/MAIN-12?in=browser',
+  )
+  // A space may be called QUESTION and keep its items.
+  assert.equal(
+    openPathFromArgv(['Valkama.exe', 'valkama://open/QUESTION-1']),
+    '/open/QUESTION-1?in=browser',
+  )
+  assert.equal(refusesLaunch(['Valkama.exe', 'valkama://open/MAIN-12']), false)
+  assert.equal(refusesLaunch(['Valkama.exe', 'valkama://open/questions']), false)
+})
+
+test('any other scheme address opens nothing, and the launch does not touch the window', () => {
+  for (const address of [
+    'valkama:',
+    'valkama://',
+    'valkama://open',
+    'valkama://open/',
+    'valkama://evil.example/MAIN-12', // a foreign host
+    'valkama://evil.example/open/MAIN-12',
+    'valkama://open.evil.example/MAIN-12',
+    'valkama://user@open/MAIN-12',
+    'valkama://open:80/MAIN-12',
+    'valkama:///open/MAIN-12',
+    'valkama:open/MAIN-12',
+    'valkama://open/MAIN-12/', // an extra path
+    'valkama://open/MAIN-12/x',
+    'valkama://open/questions/x',
+    'valkama://open//MAIN-12',
+    'valkama://open/../open/MAIN-12',
+    'valkama://open/MAIN-12?x=1', // a query
+    'valkama://open/questions?in=browser',
+    'valkama://open/MAIN-12#x', // a fragment
+    'valkama://open/questions#x',
+    'valkama://open/MAIN-0',
+    'valkama://open/MAIN',
+    'valkama://open/main-12',
+    'valkama://open/QUESTIONS',
+    'valkama://open/Questions',
+    'valkama://open/MAIN%2D12',
+    'valkama://open/MAIN-12%0d%0a',
+    'valkama://open/MAIN-12\n',
+    'valkama://open/https:%2F%2Fevil.example',
+    'VALKAMA://open/MAIN-12',
+    'valkama://open/MAIN-12 ',
+  ]) {
+    assert.equal(openPathFromArgv(['Valkama.exe', address]), null, address)
+    assert.equal(refusesLaunch(['Valkama.exe', address]), true, address)
+  }
+})
+
+test('other schemes are no business of this launch', () => {
+  for (const argument of ['https://evil.example/MAIN-12', 'file:///C:/x', 'valkamax://open/MAIN-1']) {
+    assert.equal(openPathFromArgv(['Valkama.exe', argument]), null, argument)
+    assert.equal(refusesLaunch(['Valkama.exe', argument]), false, argument)
+  }
+  assert.equal(refusesLaunch(['Valkama.exe']), false)
+  assert.equal(refusesLaunch(undefined), false)
+  assert.equal(refusesLaunch([`--open-path=${ROUTE}`]), false)
+})
+
+test('an address that was split or doubled is no answer rather than a guess', () => {
+  // Windows can split an address with a quote in it, which is how a page adds a switch.
+  for (const argv of [
+    ['Valkama.exe', 'valkama://open/MAIN-1', `--open-path=${ROUTE}`],
+    ['Valkama.exe', 'valkama://open/MAIN-1', 'valkama://open/MAIN-2'],
+    ['Valkama.exe', 'valkama://open/MAIN-1', 'valkama://open/MAIN-1'],
+    ['Valkama.exe', 'valkama://open/MAIN-1', '--open-path=/x'],
+  ]) {
+    assert.equal(openPathFromArgv(argv), null, argv.join(' '))
+    assert.equal(refusesLaunch(argv), true, argv.join(' '))
+  }
+})
+
+test('the installer registers the scheme for this user and an uninstall removes it', () => {
+  const builder = JSON.parse(readFileSync(path.join(__dirname, 'package.json'), 'utf8')).build
+  // electron-builder 26 reads `protocols` for macOS, AppX and Linux, never for NSIS.
+  assert.equal(builder.nsis.include, 'build/installer.nsh')
+  assert.equal(builder.nsis.perMachine, false)
+  const script = readFileSync(path.join(__dirname, builder.nsis.include), 'utf8')
+  const root = 'HKCU "Software\\Classes\\valkama'
+  assert.ok(script.includes(`WriteRegStr ${root}" "URL Protocol" ""`))
+  // Quoted, or a space in the address becomes another argument of the app's own making.
+  assert.ok(
+    script.includes(
+      `WriteRegStr ${root}\\shell\\open\\command" "" '"$INSTDIR\\\${APP_EXECUTABLE_FILENAME}" "%1"'`,
+    ),
+  )
+  assert.match(script, /!macro customUnInstall[\s\S]*DeleteRegKey HKCU "Software\\Classes\\valkama"/)
+})
+
+test('a refused launch stops before it can reach a running window', () => {
+  const main = readFileSync(path.join(__dirname, 'main.js'), 'utf8')
+  const refused = main.indexOf('refusesLaunch(process.argv)')
+  assert.notEqual(refused, -1)
+  assert.ok(refused < main.indexOf('app.requestSingleInstanceLock()'))
 })
 
 test('a route stays on the origin the window already serves', () => {

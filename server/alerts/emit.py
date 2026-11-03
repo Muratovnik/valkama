@@ -377,6 +377,7 @@ class Emitter:
                 toast.show(
                     messages.summary(
                         [due.tag for due in unseen],
+                        questions=sum(due.question for due in unseen),
                         settings=unseen[-1].settings,
                         logo=toast.logo_uri(),
                     )

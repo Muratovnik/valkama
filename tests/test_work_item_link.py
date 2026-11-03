@@ -21,8 +21,10 @@ from unittest import mock
 from urllib.parse import parse_qs, urlsplit
 
 from server import http_surface, mcp_surface, processes, store
+from server.alerts import messages
 from server.ops import configuration, desktop_app
 from server.planning import api as planning_api
+from server.planning import model as planning_model
 from server.planning import service
 from server.projects import project_registry, scopes
 from server.store_identity.metadata import read_store_metadata
@@ -185,6 +187,33 @@ class WorkItemLinkTests(LinkedStoreCase):
         self.assert_leads_to("/open/main-1", "example-project", self.main, "MAIN-1")
         self.assert_leads_to("/open/Main-1?from=chat", "example-project", self.main, "MAIN-1")
         self.assert_leads_to("/open/docs-1", "docs-project", self.docs, "DOCS-1")
+
+    def test_the_reserved_word_leads_to_the_panel_of_questions(self) -> None:
+        response = self.get("/open/questions")
+        response.read()
+        self.assertEqual(302, response.status)
+        self.assertEqual("/modules/planning/global?panel=questions", response.getheader("Location"))
+        self.assertEqual("no-store", response.getheader("Cache-Control"))
+        landed = self.get(response.getheader("Location") or "")
+        self.assertEqual(200, landed.status)
+        self.assertIn(b'<div id="app"', landed.read())
+
+    def test_the_reserved_word_is_one_exact_spelling(self) -> None:
+        for path in ("/open/QUESTIONS", "/open/Questions", "/open/questions/x", "/open/question"):
+            self.assert_shell_says_why(path)
+
+    def test_the_reserved_word_cannot_hide_a_real_item(self) -> None:
+        # The word has no `-<number>`, and at nine letters it is too long to be a key.
+        self.assertIsNone(planning_model.exact_reference("questions"))
+        self.assertIsNone(planning_model.exact_reference("questions-1"))
+        near = self.seed(self.primary, "QUESTION", items=1)
+        self.bind({"example-project": self.main, "near-project": near})
+        self.assert_leads_to("/open/question-1", "near-project", near, "QUESTION-1")
+        self.assert_leads_to("/open/QUESTION-1", "near-project", near, "QUESTION-1")
+        self.assert_shell_says_why("/open/question")
+        response = self.get("/open/questions")
+        response.read()
+        self.assertEqual("/modules/planning/global?panel=questions", response.getheader("Location"))
 
     def test_the_redirect_is_never_cached(self) -> None:
         # A number missing now may be filed a minute later, and a binding can move.
@@ -361,6 +390,25 @@ class WorkItemLinkInAppTests(LinkedStoreCase):
         assert isinstance(environment, dict)
         self.assertNotIn("ELECTRON_RUN_AS_NODE", environment)
         self.assertEqual(str(self.server.server_port), environment["VALKAMA_PORT"])
+
+    @unittest.skipUnless(sys.platform == "win32", "the app is looked for only on Windows")
+    def test_a_person_s_click_on_the_panel_address_starts_the_app_on_the_panel(self) -> None:
+        response = self.get("/open/questions", headers=PERSON)
+        body = response.read().decode("utf-8")
+        self.assertEqual(200, response.status)
+        self.assertIn('href="/open/questions?in=browser"', body)
+        self.assertNotIn("questions opened", body, "the word is not an item's name")
+        self.assertIn("Questions waiting for your answer", body)
+        [(argv, _options)] = self.started
+        self.assertEqual(
+            [str(self.app), "--open-path=/modules/planning/global?panel=questions"], argv
+        )
+
+    def test_in_browser_the_panel_address_stays_a_redirect(self) -> None:
+        response = self.get("/open/questions?in=browser", headers=PERSON)
+        response.read()
+        self.assertEqual(302, response.status)
+        self.assertEqual([], self.started)
 
     @unittest.skipUnless(sys.platform == "win32", "the app is looked for only on Windows")
     def test_the_page_may_run_the_one_script_it_carries_and_nothing_else(self) -> None:
@@ -555,6 +603,20 @@ class DesktopContractTests(unittest.TestCase):
         found = re.search(r"const CARD_ROUTE = /\^(.*)\$/\n", source)
         assert found is not None
         self.assertEqual(http_surface._CARD_ROUTE.pattern, found.group(1).replace(r"\/", "/"))
+        self.assertIn(f"const QUESTIONS_ROUTE = '{http_surface._QUESTIONS_ROUTE}'", source)
+        self.assertIsNotNone(http_surface._CARD_ROUTE.fullmatch(http_surface._QUESTIONS_ROUTE))
+
+    def test_the_app_takes_the_addresses_a_toast_is_written_with(self) -> None:
+        source = (ROOT / "desktop" / "open_path.js").read_text(encoding="utf-8")
+        found = re.search(r"const SCHEME_ADDRESS = /\^(.*)\$/\n", source)
+        assert found is not None
+        pattern = found.group(1).replace(r"\/", "/")
+        spelled = planning_model._HUMAN_ID.pattern.strip("^$").replace("(", "").replace(")", "")
+        self.assertEqual(
+            f"{messages.launch_uri('')}({messages.QUESTIONS}|{spelled})",
+            pattern,
+        )
+        self.assertEqual(desktop_app.QUESTIONS, messages.QUESTIONS)
 
 
 class WorkItemUrlTests(unittest.TestCase):

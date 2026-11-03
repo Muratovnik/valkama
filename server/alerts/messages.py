@@ -14,7 +14,8 @@ XML 1.0 cannot carry at all are dropped rather than left to fail the load.
 A click opens the item through `valkama://open/<REF>`, the scheme the desktop
 app registers, as a protocol activation: it works after the process that showed
 the toast has exited, which is the usual case, since that process is an agent's
-session or a short-lived reaper pass.
+session or a short-lived reaper pass. A toast that stands for several questions,
+and the trial, open `valkama://open/questions`, the panel that lists them.
 
 `Tag` is the item's reference and `Group` is `valkama`, so a newer toast about
 the same item replaces the older one in the action centre and either can be
@@ -34,6 +35,10 @@ from ..ops.toast import AUMID
 GROUP = "valkama"
 #: The tag of a toast that stands for several items at once.
 SUMMARY_TAG = "summary"
+#: The word after `open/` that names the panel of open questions, and the id of the
+#: header a summary carries. `desktop/open_path.js` takes it and no reference can be
+#: spelled this way, because every reference ends in `-<number>`.
+QUESTIONS = "questions"
 #: The tag of the toast the settings screen sends to try the channel.
 TRIAL_TAG = "trial"
 TITLE_LIMIT = 80
@@ -51,6 +56,8 @@ _HEADINGS = {
         "review": "Valkama: задача на проверке",
         "launchFailed": "Valkama: запуск не удался",
         "summary": "Valkama: ждут вашего ответа: {count}",
+        "attention": "Valkama: ждут вашего внимания: {count}",
+        "panel": "Ждут моего ответа",
         "open": "Открытых вопросов по задаче: {count}",
         "trial": "Valkama: проверка оповещений",
         "trialLine": "Так выглядит оповещение Valkama.",
@@ -61,6 +68,8 @@ _HEADINGS = {
         "review": "Valkama: work is ready for review",
         "launchFailed": "Valkama: a launch failed",
         "summary": "Valkama: waiting for your answer: {count}",
+        "attention": "Valkama: waiting for your attention: {count}",
+        "panel": "Needs my answer",
         "open": "Open questions on this item: {count}",
         "trial": "Valkama: alert check",
         "trialLine": "This is what a Valkama alert looks like.",
@@ -127,11 +136,18 @@ def _attribute(value: str) -> str:
     return f'"{html.escape(value, quote=True)}"'
 
 
-def _toast(launch: str, lines: Sequence[str], logo: str | None) -> str:
+def _toast(launch: str, lines: Sequence[str], logo: str | None, header: str | None = None) -> str:
     image = f'<image placement="appLogoOverride" src={_attribute(logo)}/>' if logo else ""
     text = "".join(f"<text>{html.escape(line, quote=False)}</text>" for line in lines)
+    # The schema gives a header's own click the same two kinds of activation a toast has.
+    head = (
+        f"<header id={_attribute(QUESTIONS)} title={_attribute(header)}"
+        f' arguments={_attribute(launch)} activationType="protocol"/>'
+        if header
+        else ""
+    )
     return (
-        f'<toast launch={_attribute(launch)} activationType="protocol">'
+        f'<toast launch={_attribute(launch)} activationType="protocol">{head}'
         f'<visual><binding template="ToastGeneric">{text}{image}</binding></visual>'
         "</toast>"
     )
@@ -188,30 +204,38 @@ def build(
 
 
 def trial(settings: Mapping[str, object], logo: str | None = None) -> Message:
-    """The toast that tries the channel. A click opens the app, on no item in particular."""
+    """The toast that tries the channel. A click opens the panel: it is about no item."""
 
     phrases = _phrases(settings)
     return {
         "aumid": AUMID,
         "tag": TRIAL_TAG,
         "group": GROUP,
-        "xml": _toast(launch_uri(""), [phrases["trial"], phrases["trialLine"]], logo),
+        "xml": _toast(launch_uri(QUESTIONS), [phrases["trial"], phrases["trialLine"]], logo),
         "expires_at": None,
     }
 
 
 def summary(
-    references: Sequence[str], *, settings: Mapping[str, object], logo: str | None = None
+    references: Sequence[str],
+    *,
+    questions: int,
+    settings: Mapping[str, object],
+    logo: str | None = None,
 ) -> Message:
     """One toast for several items that came due together, oldest first.
 
-    A click opens the newest. Under `content: generic` the items go unnamed.
+    `questions` counts those that wait on a question. With any, a click opens the panel
+    that lists them; a toast for work on review or a failed launch has nothing to show
+    there, so it opens the newest item and says attention rather than an answer. Under
+    `content: generic` the items go unnamed.
     """
 
     if not references:
         raise ValueError("a summary needs at least one item")
     phrases = _phrases(settings)
-    lines = [phrases["summary"].format(count=len(references))]
+    every_question = questions == len(references)
+    lines = [phrases["summary" if every_question else "attention"].format(count=len(references))]
     if settings.get("content") != "generic":
         lines.append(
             _cut(", ".join(_clean(reference) for reference in references), _REFERENCES_LIMIT)
@@ -220,6 +244,11 @@ def summary(
         "aumid": AUMID,
         "tag": SUMMARY_TAG,
         "group": GROUP,
-        "xml": _toast(launch_uri(references[-1]), lines, logo),
+        "xml": _toast(
+            launch_uri(QUESTIONS if questions else references[-1]),
+            lines,
+            logo,
+            header=phrases["panel"] if questions else None,
+        ),
         "expires_at": None,
     }

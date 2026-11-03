@@ -409,6 +409,19 @@ export function workItemLinkText(path: string): string | null {
 }
 
 /**
+ * What is left of an address that asks for the panel of open questions, or null when
+ * it does not ask. `?panel=questions` is an order rather than part of a route: the shell
+ * takes it out as it opens the panel, so neither a reload nor Back repeats it, and the
+ * canonical grammar above never sees it.
+ */
+export function withoutQuestionsAsk(url: URL): string | null {
+  if (url.searchParams.getAll('panel').join(',') !== 'questions') return null
+  const rest = new URL(url)
+  rest.searchParams.delete('panel')
+  return `${rest.pathname}${rest.search}`
+}
+
+/**
  * The short address of one work item on this origin, `<origin>/open/<number>`.
  *
  * The same address an agent hands a person, which the server spells in

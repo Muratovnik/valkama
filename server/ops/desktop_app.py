@@ -28,14 +28,20 @@ _INSTALLED_APP = ("Programs", "valkama-desktop", "Valkama.exe")
 #: address opened from outside, so loading the short address would start the app again.
 _OPEN_PATH_SWITCH = "--open-path="
 
+#: The word after `/open/` that names the panel of open questions rather than an item.
+#: Every reference ends in `-<number>`, so none can be spelled this way.
+QUESTIONS = "questions"
+
 _MESSAGES = {
     "en": {
         "opened": "{reference} opened in the Valkama app",
+        "questions": "Questions waiting for your answer opened in the Valkama app",
         "close": "You can close this tab.",
         "here": "Open it here instead",
     },
     "ru": {
         "opened": "{reference} открыта в приложении Valkama",
+        "questions": "Вопросы, ждущие вашего ответа, открыты в приложении Valkama",
         "close": "Эту вкладку можно закрыть.",
         "here": "Открыть здесь, в браузере",
     },
@@ -118,11 +124,15 @@ def _language(accept_language: str | None) -> str:
 
 
 def opened_page(reference: str, accept_language: str | None) -> tuple[bytes, str]:
-    """The page answered for an item the app was started on, and its content policy."""
+    """The page answered for what the app was started on, and its content policy.
+
+    `reference` is an item's reference, or `QUESTIONS` for the panel.
+    """
 
     language = _language(accept_language)
     text = _MESSAGES[language]
     name = html.escape(reference)
+    heading = text["questions"] if reference == QUESTIONS else text["opened"].format(reference=name)
     page = f"""<!doctype html>
 <html lang="{language}">
 <head>
@@ -133,7 +143,7 @@ def opened_page(reference: str, accept_language: str | None) -> tuple[bytes, str
 <body>
 <main>
 <p class="brand">Valkama</p>
-<h1>{text["opened"].format(reference=name)}</h1>
+<h1>{heading}</h1>
 <p>{text["close"]}</p>
 <p><a href="/open/{name}?in=browser">{text["here"]}</a></p>
 </main>
@@ -146,4 +156,4 @@ def opened_page(reference: str, accept_language: str | None) -> tuple[bytes, str
     return page.encode("utf-8"), policy
 
 
-__all__ = ["installed_path", "open_card", "opened_page"]
+__all__ = ["QUESTIONS", "installed_path", "open_card", "opened_page"]

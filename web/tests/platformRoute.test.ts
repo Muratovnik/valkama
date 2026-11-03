@@ -7,7 +7,27 @@ import {
   resolvePlatformRoute,
   roundTripPlatformRoute,
   serializePlatformRoute,
+  withoutQuestionsAsk,
 } from '@/shared/api/platformRoute.ts'
+
+const ask = (address: string) => withoutQuestionsAsk(new URL(address, 'http://127.0.0.1:8642'))
+
+test('an address asks for the panel of questions in one spelling, and leaves the rest', () => {
+  // The address the listener and the desktop app send, spelled by hand from their copies.
+  assert.equal(ask('/modules/planning/global?panel=questions'), '/modules/planning/global')
+  assert.equal(
+    ask('/modules/planning/global?panel=questions&state=e30'),
+    '/modules/planning/global?state=e30',
+  )
+  for (const other of [
+    '/modules/planning/global',
+    '/modules/planning/global?panel=other',
+    '/modules/planning/global?panel=',
+    '/modules/planning/global?panel=questions&panel=questions',
+    '/modules/planning/global?state=panel',
+  ])
+    assert.equal(ask(other), null, other)
+})
 
 test('canonical route round-trips every built-in at global and project scope', () => {
   const modules = [

@@ -1,4 +1,5 @@
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import type { Ref } from 'vue'
 
 import type { PendingCount } from '@/features/input-requests/composables/useInputRequests.ts'
 
@@ -6,7 +7,10 @@ import { planningTargetRoute } from '@/shared/api/planningTarget.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 
-export function useGlobalWorkActions(writeRoute: (route: PlatformRoute) => void) {
+export function useGlobalWorkActions(
+  writeRoute: (route: PlatformRoute) => void,
+  questionsAsked: Readonly<Ref<number>>,
+) {
   const finderOpen = ref(false)
   const requestsOpen = ref(false)
   const pendingRequestCount = ref<PendingCount | null>(null)
@@ -16,6 +20,17 @@ export function useGlobalWorkActions(writeRoute: (route: PlatformRoute) => void)
     finderOpen.value = false
     requestsOpen.value = false
   }
+
+  // Asked before this ran, on the load the address came in with, or any time later.
+  watch(
+    questionsAsked,
+    (asked) => {
+      if (asked === 0) return
+      finderOpen.value = false
+      requestsOpen.value = true
+    },
+    { immediate: true },
+  )
 
   function findShortcut(event: KeyboardEvent) {
     if (

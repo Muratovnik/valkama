@@ -21,6 +21,7 @@ import {
   recoverWorkRoute,
   resolvePlatformRoute,
   serializePlatformRoute,
+  withoutQuestionsAsk,
   workItemLinkText,
 } from '@/shared/api/platformRoute.ts'
 import type {
@@ -28,6 +29,7 @@ import type {
   PlatformRoute,
   PlatformRouteUnavailable,
 } from '@/shared/api/platformRoute.ts'
+import { secureFetch } from '@/shared/api/secureFetch.ts'
 
 export const DEFAULT_ROUTE: PlatformRoute = { module_id: 'planning', scope: { kind: 'global' } }
 const CLEAN_ENTRY_PATHS = new Set(['/', '/index.html'])
@@ -91,8 +93,17 @@ export function usePlatformNavigation(
   const workItemLink = ref<string | null>(null)
   const entryRestorePending = ref(false)
   const pendingSession = ref('')
+  /** How many times an address has asked for the panel of questions, which the shell holds. */
+  const questionsAsked = ref(0)
 
   function applyLocation() {
+    const rest = withoutQuestionsAsk(new URL(router.currentRoute.value.fullPath, location.origin))
+    if (rest !== null) {
+      questionsAsked.value += 1
+      // This moves the address, and the move comes back here without the ask.
+      void router.replace(rest)
+      return
+    }
     routeFailure.value = ''
     workItemLink.value = workItemLinkText(router.currentRoute.value.path)
     if (workItemLink.value !== null) {
@@ -200,14 +211,44 @@ export function usePlatformNavigation(
   }
 
   /**
+   * A toast knows an item's number and not its route, which only the server can work
+   * out. Its redirect says where the card is. An address it does not redirect is left
+   * to the shell, which reads it and says what is wrong, as it does on any other load.
+   */
+  async function followWorkItemAddress(address: URL) {
+    try {
+      const response = await secureFetch(address)
+      const resolved =
+        response.ok && response.redirected ? resolvePlatformRoute(new URL(response.url)) : null
+      if (resolved !== null && !isPlatformRouteUnavailable(resolved)) {
+        writeRoute(resolved)
+        return
+      }
+    } catch {
+      // The shell asks again below, and says what it finds.
+    }
+    void router.push(`${address.pathname}${address.search}`)
+  }
+
+  /**
    * A card the desktop app was asked for from outside while this page is up. It is
    * a navigation like any other here, so the leave check asks before a draft goes
-   * and the page never reloads. The app checks the route's shape first; one this
-   * page cannot read leaves it where it is.
+   * and the page never reloads. The panel of questions opens over whatever is on
+   * screen and moves nothing. The app checks the route's shape first; one this page
+   * cannot read leaves it where it is.
    */
   window.valkamaDesktop?.onOpenRoute?.((href) => {
     try {
-      const resolved = resolvePlatformRoute(new URL(href, location.origin))
+      const address = new URL(href, location.origin)
+      if (withoutQuestionsAsk(address) !== null) {
+        questionsAsked.value += 1
+        return
+      }
+      if (workItemLinkText(address.pathname) !== null) {
+        void followWorkItemAddress(address)
+        return
+      }
+      const resolved = resolvePlatformRoute(address)
       if (!isPlatformRouteUnavailable(resolved)) writeRoute(resolved)
     } catch {
       // Nothing to show for an address nobody here asked for.
@@ -224,6 +265,7 @@ export function usePlatformNavigation(
     openProject,
     operatingScope,
     pendingSession,
+    questionsAsked,
     route,
     routeBlocked,
     routeFailure,

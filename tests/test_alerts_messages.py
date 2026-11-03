@@ -194,22 +194,56 @@ class EnvelopeTests(unittest.TestCase):
 
 
 class SummaryTests(unittest.TestCase):
-    def test_several_items_become_one_toast_that_opens_the_newest(self) -> None:
-        message = messages.summary(["MAIN-12", "MAIN-15", "MAIN-20"], settings=TITLE_RU)
+    def test_several_questions_become_one_toast_that_opens_their_panel(self) -> None:
+        message = messages.summary(
+            ["MAIN-12", "MAIN-15", "MAIN-20"], questions=3, settings=TITLE_RU
+        )
         self.assertEqual(
             ["Valkama: ждут вашего ответа: 3", "MAIN-12, MAIN-15, MAIN-20"], texts(message)
         )
-        self.assertEqual("valkama://open/MAIN-20", parsed(message).get("launch"))
+        self.assertEqual("valkama://open/questions", parsed(message).get("launch"))
+        self.assertEqual("protocol", parsed(message).get("activationType"))
         self.assertEqual(messages.SUMMARY_TAG, message["tag"])
         self.assertEqual("valkama", message["group"])
 
+    def test_the_summary_header_opens_the_panel_too_and_stands_before_the_visual(self) -> None:
+        # Microsoft's sample order, and the schema's two activation kinds for a header.
+        root = parsed(messages.summary(["MAIN-12", "MAIN-15"], questions=2, settings=TITLE_RU))
+        self.assertEqual(["header", "visual"], [child.tag for child in root])
+        self.assertEqual(
+            {
+                "id": "questions",
+                "title": "Ждут моего ответа",
+                "arguments": "valkama://open/questions",
+                "activationType": "protocol",
+            },
+            root.find("./header").attrib,
+        )
+
+    def test_a_summary_with_no_question_opens_the_newest_and_promises_no_question(self) -> None:
+        # The panel would be empty, and nobody is waiting for an answer.
+        root = messages.summary(["MAIN-12", "MAIN-15"], questions=0, settings=TITLE_RU)
+        self.assertEqual("valkama://open/MAIN-15", parsed(root).get("launch"))
+        self.assertIsNone(parsed(root).find("./header"))
+        self.assertEqual("Valkama: ждут вашего внимания: 2", texts(root)[0])
+
+    def test_a_summary_of_a_question_and_a_review_opens_the_panel(self) -> None:
+        message = messages.summary(["MAIN-12", "MAIN-15"], questions=1, settings=TITLE_RU)
+        self.assertEqual("valkama://open/questions", parsed(message).get("launch"))
+        self.assertEqual("Valkama: ждут вашего внимания: 2", texts(message)[0])
+
+    def test_the_trial_opens_an_address_the_app_takes(self) -> None:
+        self.assertEqual("valkama://open/questions", parsed(messages.trial(TITLE_RU)).get("launch"))
+
     def test_generic_summary_names_no_item(self) -> None:
-        message = messages.summary(["MAIN-12", "MAIN-15"], settings={**GENERIC_RU, "locale": "en"})
+        message = messages.summary(
+            ["MAIN-12", "MAIN-15"], questions=2, settings={**GENERIC_RU, "locale": "en"}
+        )
         self.assertEqual(["Valkama: waiting for your answer: 2"], texts(message))
 
     def test_a_summary_needs_items(self) -> None:
         with self.assertRaises(ValueError):
-            messages.summary([], settings=TITLE_RU)
+            messages.summary([], questions=0, settings=TITLE_RU)
 
 
 if __name__ == "__main__":

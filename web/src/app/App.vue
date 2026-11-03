@@ -60,6 +60,7 @@ const {
   openProject,
   operatingScope,
   pendingSession,
+  questionsAsked,
   route,
   routeBlocked,
   routeFailure,
@@ -78,8 +79,10 @@ const {
 // The destination an address names starts downloading before the module list settles.
 watch(activeModule, prefetchModule, { immediate: true })
 
-const { finderOpen, requestsOpen, pendingRequestCount, openTarget } =
-  useGlobalWorkActions(writeRoute)
+const { finderOpen, requestsOpen, pendingRequestCount, openTarget } = useGlobalWorkActions(
+  writeRoute,
+  questionsAsked,
+)
 const mainContent = ref<HTMLElement | null>(null)
 function focusMainContent() {
   mainContent.value?.focus()

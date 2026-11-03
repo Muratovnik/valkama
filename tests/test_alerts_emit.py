@@ -225,9 +225,7 @@ class CoalescingTests(EmitHarness):
         self.assertEqual(messages.SUMMARY_TAG, message["tag"])
         for reference in references:
             self.assertIn(reference, message["xml"])
-        self.assertIn(
-            f"valkama://open/{references[-1]}", message["xml"], "a click opens the newest"
-        )
+        self.assertIn("valkama://open/questions", message["xml"], "a click opens the panel")
         self.assertIn(": 3<", message["xml"], "the heading counts them")
 
     def test_two_questions_on_one_item_are_its_one_toast_counting_both(self) -> None:

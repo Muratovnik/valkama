@@ -150,6 +150,8 @@ class ReviewAfterALaunchTests(ReaperHarness):
         self.assertEqual(messages.SUMMARY_TAG, message["tag"])
         self.assertIn(first, message["xml"])
         self.assertIn(second, message["xml"])
+        self.assertIn(f"valkama://open/{second}", message["xml"], "no question: the newest")
+        self.assertNotIn("<header", message["xml"])
 
 
 class AFailedLaunchTests(ReaperHarness):
