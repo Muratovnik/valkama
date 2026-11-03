@@ -82,3 +82,25 @@ test('nothing outside the package is read when packaged', () => {
     assert.match(line, /app\.isPackaged \? undefined :/, `reachable when packaged: ${line.trim()}`)
   }
 })
+
+test('a launch address never reaches the session opener', () => {
+  // What starts a program is the page's own request over the bridge, checked
+  // there against the server's plan. An address the app was launched with only
+  // ever names a route for the window, and a refused one ends the process before
+  // a window, and so a page that could ask, exists.
+  const calls = [...main.matchAll(/openSessionRequest\(/g)]
+  assert.equal(calls.length, 1, 'the session opener has one caller')
+  const handler = main.indexOf("ipcMain.handle('valkama:open-session'")
+  const handlerEnd = main.indexOf('\n})\n', handler)
+  assert.ok(handler > 0 && calls[0].index > handler && calls[0].index < handlerEnd)
+  const body = main.slice(handler, handlerEnd)
+  assert.doesNotMatch(body, /argv|requestedPath|openPath/, 'a launch address reaches the opener')
+
+  const refusal = main.indexOf('if (refusesLaunch(process.argv))')
+  assert.ok(refusal > 0, 'a refused address is checked at launch')
+  const lock = main.indexOf('app.requestSingleInstanceLock()')
+  assert.ok(refusal < lock, 'the refusal comes before the single-instance hand-over')
+  for (const window of main.matchAll(/^\s+createWindow\(\)/gm)) {
+    assert.ok(window.index > lock, 'a window opens only after the launch was accepted')
+  }
+})
