@@ -408,7 +408,7 @@ test('inspector facts and section headings keep a shared spacing rhythm', async 
   const gaps = await drawer.evaluate((element) =>
     [
       ['.description-heading h3', '.description-copy'],
-      ['.discussion .section-header h3', '.discussion-form'],
+      ['.discussion .section-header h3', '.thread-filter'],
     ].map(([heading, content]) => {
       const title = element.querySelector(heading)
       const next = element.querySelector(content)

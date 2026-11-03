@@ -96,8 +96,12 @@ export async function inReach(control: Locator) {
   return centre(control)
 }
 
-/** Two questions in a card, with their foot in reach of the mouse. */
-export async function inCard(page: Page, upper = 5, lower = 2) {
+/**
+ * Two questions in a card, with their foot in reach of the mouse. The reply row under the
+ * upper one keeps what rises from reaching the pointer by about one option, so the upper
+ * one holds one more option than the list's scenes do.
+ */
+export async function inCard(page: Page, upper = 6, lower = 2) {
   await page.setViewportSize({ width: 1680, height: 1050 })
   const opened = await openQuestion(page, pair(upper, lower))
   const top = opened.card.filter({ hasText: 'The upper question' })

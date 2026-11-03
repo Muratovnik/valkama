@@ -184,7 +184,7 @@ for (const gap of [180, 350]) {
     expect(writesTo(requests)).toEqual([])
     await expect(decline(top)).toBeFocused()
     await expect(top.getByText(ASKED, { exact: true })).toHaveCount(0)
-    await expect(top.getByRole('radio')).toHaveCount(6)
+    await expect(top.getByRole('radio')).toHaveCount(7)
   })
 }
 
@@ -373,7 +373,7 @@ async function reportUnder(page: Page, options: number) {
   return { ...opened, at: { x: (box?.x ?? 0) + 10, y }, top }
 }
 
-const OUTCOME_OPTIONS = 2
+const OUTCOME_OPTIONS = 3
 
 test('a second press lands on nothing in the thread, such as a report rising under it on a phone', async ({
   page,

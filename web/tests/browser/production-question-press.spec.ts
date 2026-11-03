@@ -32,7 +32,7 @@ const LOWER_SEND = 'The lower question: Send'
 const held = (scope: Locator) => scope.getByRole('radio', { name: 'Choice 1', exact: true })
 
 /** The upper question asked whether to decline, the lower holding a choice, the mouse free. */
-async function aboutToDecline(page: Page, upper = 5, lower = 2) {
+async function aboutToDecline(page: Page, upper = 6, lower = 2) {
   const scene = await inCard(page, upper, lower)
   await held(scene.next).click()
   await page.locator('.drawer-frame-body').evaluate((node) => node.scrollTo({ top: 0 }))
@@ -48,8 +48,8 @@ async function riseUnder(page: Page, at: Point, top: Locator) {
 }
 
 for (const [upper, lower] of [
-  [5, 2],
-  [6, 3],
+  [6, 2],
+  [7, 3],
 ] as const) {
   for (const gap of [180, 350]) {
     test(`a second press ${gap} ms on leaves alone what rose under it, ${upper} options over ${lower}`, async ({

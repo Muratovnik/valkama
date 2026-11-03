@@ -129,7 +129,7 @@ export async function installDiscussionBackend(page: Page) {
       const report =
         (body.report as { done: string; next: string; why?: string } | undefined) ?? null
       const saved = {
-        id: nextId(item),
+        id: item.comments.length + 1,
         author: 'user',
         at: now,
       }
