@@ -439,3 +439,60 @@ test("the owner's own command runs with the plan's session and folder", async ()
   )
   assert.equal(tooLong.reason, 'no-command')
 })
+
+/** A session in a terminal, long silent: the plan the server answers, by what it was told. */
+function silentPlans(query) {
+  const explain = { kind: 'explain', reason: 'live-in-terminal' }
+  const look = [{ kind: 'desktop-resume', session: ID }]
+  if (query.liveness === 'live') return plan([explain, ...look], { state: 'live' })
+  return plan(
+    [
+      { ...explain, silent_since: '2026-11-01T10:00:00Z' },
+      ...look,
+      { kind: 'resume-in-terminal', client: 'claude', session: ID, folder: FOLDER },
+    ],
+    { state: 'live' },
+  )
+}
+
+test('a plan that offers to resume a silent session is taken, and its step runs only when named', async () => {
+  const box = machine({ plans: silentPlans })
+  const told = await openSessionRequest(
+    box.options({ request: { session: ID }, liveness: () => '' }),
+  )
+  assert.equal(told.mode, 'explained')
+  assert.equal(told.silent_since, '2026-11-01T10:00:00Z')
+  assert.equal(told.next, 1)
+  assert.deepEqual(box.timeline, ['fetch'])
+
+  const resumed = await openSessionRequest(
+    box.options({ request: { session: ID, step: 2 }, liveness: () => '' }),
+  )
+  assert.equal(resumed.mode, 'opened')
+  assert.equal(box.timeline.at(-1).spawn, WT)
+})
+
+test('the registry saying the process is alive leaves no step to resume it with', async () => {
+  const box = machine({ plans: silentPlans })
+  const result = await openSessionRequest(
+    box.options({ request: { session: ID, step: 2 }, liveness: registryWith(true) }),
+  )
+  assert.equal(result.mode, 'refused')
+  assert.equal(result.reason, 'invalid-step')
+  assert.equal(
+    box.timeline.some((effect) => effect.spawn),
+    false,
+  )
+  assert.deepEqual(
+    box.queries.map((query) => query.liveness),
+    [undefined, 'live'],
+  )
+})
+
+test('a silence that is no time is refused with the rest of its plan', async () => {
+  const box = machine({
+    plans: plan([{ kind: 'explain', reason: 'live-in-terminal', silent_since: 'yesterday' }]),
+  })
+  const result = await openSessionRequest(box.options({ request: { session: ID } }))
+  assert.equal(result.reason, 'invalid-plan')
+})

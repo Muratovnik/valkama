@@ -1625,7 +1625,7 @@ answer.
 | `unsupported-client` | A client other than Claude Code or Codex |
 | `gone` | The session ended and its client deleted the transcript. `archived` says whether Valkama keeps a copy. No link is offered, because one would start an empty conversation |
 | `live-headless` | It runs without a window. Stopping it is the attempt's business |
-| `live-in-terminal` | It runs in a terminal Valkama cannot raise, and a second process would write to the same transcript. Steps after this one look at it elsewhere |
+| `live-in-terminal` | It runs in a terminal Valkama cannot raise, and a second process would write to the same transcript. Steps after this one look at it elsewhere. `silent_since` is present when the row's last signal is more than a day old and the caller's `liveness` did not say `live`: the client may have crashed with no end signal. The plan's last step then resumes it (`resume-in-terminal`, or in a browser `copy` of the command), which is an offer for the person to press on its own, with a warning about two processes on one transcript; it is not one of the steps that look at it |
 | `live-elsewhere` | It runs somewhere else, and no route here is safe for a live session |
 | `no-folder` | No folder is known for the session, and a link without a window opens an empty conversation |
 | `not-installed` | `host` is not installed: its scheme has no live handler, or its editor lacks the extension |

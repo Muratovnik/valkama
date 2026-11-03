@@ -62,6 +62,8 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'open-plan-no-session.json': validateOpenPlan,
   'open-plan-refused.json': validateOpenPlan,
   'open-plan-session-desktop.json': validateOpenPlan,
+  'open-plan-silent-desktop.json': validateOpenPlan,
+  'open-plan-silent.json': validateOpenPlan,
   'open-plan-session.json': validateOpenPlan,
   'request-answered.json': validateInputRequestDetail,
   'request-pending.json': validateInputRequestDetail,

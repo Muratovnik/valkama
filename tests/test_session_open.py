@@ -17,6 +17,8 @@ import os
 import tempfile
 import threading
 import unittest
+from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from unittest import mock
@@ -25,7 +27,7 @@ from urllib.parse import quote, urlencode
 from server import http_surface, processes, session_open, store
 from server.ops import url_schemes
 from server.ops.url_schemes import Installed
-from server.planning import service
+from server.planning import leases, service
 from server.projects import project_registry
 from server.session_open import PathTarget, SessionTarget
 from server.store_identity.metadata import read_store_metadata
@@ -33,6 +35,7 @@ from server.store_identity.refs import planning_space_entity
 from tests.registry_fixtures import project_entry, registry_bytes
 
 UID = "00000000-0000-4000-8000-0000000000a1"
+OTHER_UID = "00000000-0000-4000-8000-0000000000a2"
 DESKTOP_ID = "local_0d1e2f3a-4b5c-4d6e-8f70-81920a1b2c3d"
 EDITORS = tuple(url_schemes.EDITOR_HOMES)
 EVERYTHING = Installed(
@@ -321,6 +324,110 @@ class EveryRowOfTheClickTableTests(PlanCase):
         self.assertEqual(["resume-in-terminal"], kinds(self.plan(fallback="terminal")))
         plan = self.plan(fallback="cursor")
         self.assertEqual("cursor", plan["opens"]["opened_host"])
+
+
+class ASessionLongSilentTests(PlanCase):
+    """A client that crashed sends no end: its row says it runs, and only silence hints otherwise."""
+
+    NOW = datetime(2026, 11, 4, 12, 0, tzinfo=UTC)
+    JUST_OVER = "2026-11-03T11:59:00Z"
+    JUST_UNDER = "2026-11-03T12:01:00Z"
+
+    def setUp(self) -> None:
+        super().setUp()
+        clock = mock.patch.object(leases, "utc_now", return_value=self.NOW)
+        clock.start()
+        self.addCleanup(clock.stop)
+
+    def silent(self, last_seen: str = JUST_OVER, **columns: str) -> None:
+        self.session(opened_in="terminal", status="active", last_seen=last_seen, **columns)
+
+    def test_a_minute_past_the_day_it_says_since_when_and_offers_to_resume_last(self) -> None:
+        self.silent()
+        plan = self.plan()
+        self.assertEqual("live", plan["state"], "silence proves nothing about the process")
+        self.assertEqual(
+            {"kind": "explain", "reason": "live-in-terminal", "silent_since": self.JUST_OVER},
+            plan["steps"][0],
+        )
+        self.assertEqual(
+            ["explain", "focus-folder", "open-link", "resume-in-terminal"], kinds(plan)
+        )
+        self.assertEqual(
+            {
+                "kind": "resume-in-terminal",
+                "client": "claude",
+                "session": UID,
+                "folder": str(self.folder),
+            },
+            plan["steps"][-1],
+        )
+        self.assertFalse(plan["one_action"], "nothing runs without its own press")
+
+    def test_a_minute_short_of_the_day_there_is_no_offer(self) -> None:
+        self.silent(self.JUST_UNDER)
+        plan = self.plan()
+        self.assertEqual(["explain", "focus-folder", "open-link"], kinds(plan))
+        self.assertNotIn("silent_since", plan["steps"][0])
+
+    def test_a_browser_is_offered_the_command_to_copy(self) -> None:
+        self.silent()
+        plan = self.plan(surface="browser")
+        self.assertEqual({"kind": "copy", "text": f"claude --resume {UID}"}, plan["steps"][-1])
+
+    def test_a_codex_session_gets_its_own_command(self) -> None:
+        self.silent(client="codex")
+        self.assertEqual(
+            {"kind": "copy", "text": f"codex resume {UID}"},
+            self.plan(surface="browser", fallback="codex-app")["steps"][-1],
+        )
+
+    def test_the_app_without_a_terminal_or_a_folder_offers_the_command(self) -> None:
+        self.silent()
+        plan = self.plan(schemes=replace(EVERYTHING, terminal=False))
+        self.assertEqual("copy", plan["steps"][-1]["kind"])
+
+    def test_a_process_the_client_saw_alive_gets_no_offer(self) -> None:
+        self.silent()
+        plan = self.plan(liveness="live")
+        self.assertEqual(["explain", "focus-folder", "open-link"], kinds(plan))
+        self.assertNotIn("silent_since", plan["steps"][0])
+
+    def test_a_process_the_client_saw_gone_is_simply_ended(self) -> None:
+        self.silent()
+        plan = self.plan(liveness="ended")
+        self.assertEqual(["resume-in-terminal"], kinds(plan))
+        self.assertEqual("ended", plan["state"])
+
+    def test_no_last_signal_or_an_unreadable_one_gets_no_offer(self) -> None:
+        for session, last_seen in ((UID, ""), (OTHER_UID, "not a time")):
+            with self.subTest(last_seen=last_seen):
+                self.silent(last_seen, id=session)
+                plan = self.plan(session)
+                self.assertNotIn("silent_since", plan["steps"][0])
+                self.assertNotIn("resume-in-terminal", kinds(plan))
+
+    def test_a_session_in_an_editors_terminal_or_its_tab_gets_no_offer(self) -> None:
+        for session, place in (
+            (UID, {"opened_in": "ide-terminal", "opened_host": "vscode"}),
+            (OTHER_UID, {"opened_in": "ide", "opened_host": "vscode"}),
+        ):
+            with self.subTest(place=place):
+                self.session(session, status="active", last_seen=self.JUST_OVER, **place)
+                plan = self.plan(session)
+                self.assertNotIn("resume-in-terminal", kinds(plan))
+                self.assertFalse(any("silent_since" in step for step in plan["steps"]))
+
+    def test_the_offer_stands_where_looking_elsewhere_was_not_seen_to_be_safe(self) -> None:
+        self.silent()
+        plan = self.plan(seen=ALL_SEEN - {url_schemes.ELSEWHERE_NOTICE})
+        self.assertEqual(["explain", "resume-in-terminal"], kinds(plan))
+
+    def test_the_offer_stands_when_there_is_nowhere_to_look(self) -> None:
+        self.silent()
+        plan = self.plan(schemes=replace(EVERYTHING, schemes=frozenset(), extensions=frozenset()))
+        self.assertEqual(["explain", "resume-in-terminal"], kinds(plan))
+        self.assertEqual("live-in-terminal", plan["steps"][0]["reason"])
 
 
 class WithoutWhatWasNotSeenTests(PlanCase):

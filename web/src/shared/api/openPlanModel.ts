@@ -123,6 +123,8 @@ const explain = strictObject({
   host: enumField(NOT_INSTALLED_HOSTS).optional(),
   archived: z.boolean().optional(),
   code: enumField(PATH_REFUSALS).optional(),
+  /** A session long silent that may have crashed: when it last gave a sign of life. */
+  silent_since: boundedText(/^\d{4}-\d{2}-\d{2}T[\dZ:.+-]{1,30}$/u, 64).optional(),
 })
 
 const stepSchema = z.union([
@@ -299,6 +301,7 @@ const bridgeAnswerSchema = strictObject({
   host: z.string().max(32).optional(),
   archived: z.boolean().optional(),
   code: z.string().max(32).optional(),
+  silent_since: z.string().max(64).optional(),
   /** What was copied, for a `copied` answer. */
   command: z.string().max(400).optional(),
   /** The step the person's next action takes, or none. */

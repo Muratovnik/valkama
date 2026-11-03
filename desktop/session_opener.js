@@ -62,6 +62,7 @@ const DETAIL = Object.freeze({
   host: (value) => typeof value === 'string' && /^[a-z][a-z-]{0,31}$/.test(value),
   archived: (value) => typeof value === 'boolean',
   code: (value) => typeof value === 'string' && /^[a-z_]{1,32}$/.test(value),
+  silent_since: (value) => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T[\dZ:.+-]{1,30}$/.test(value),
 })
 const CONTROL = /[\u0000-\u001f\u007f]/
 const MAX_STEPS = 8
@@ -330,9 +331,20 @@ async function fetchPlan(context, query) {
   }
 }
 
+/** Whether a plan offers to resume a session on the strength of its silence alone. */
+function offersResume(plan) {
+  return (
+    Array.isArray(plan.steps) &&
+    plan.steps.some((step) => plainObject(step) && step.silent_since !== undefined)
+  )
+}
+
 /**
  * The plan, asked again with the process's own state when Claude Code's
- * registry of running sessions says otherwise than the server's row (D3).
+ * registry of running sessions says otherwise than the server's row (D3). A row
+ * that agrees still gets asked when the plan offers to resume on silence alone:
+ * the server offers that only because it has not heard the process is alive, and
+ * the plan it then answers has no such step, so the click names one that is not there.
  */
 async function planWithLiveness(context, parsed) {
   const plan = await fetchPlan(context, parsed.query)
@@ -342,7 +354,7 @@ async function planWithLiveness(context, parsed) {
   if (!sessionId(session)) return plan
   const verdict = context.liveness(session)
   if (verdict !== 'live' && verdict !== 'ended') return plan
-  if (verdict === plan.state) return plan
+  if (verdict === plan.state && !offersResume(plan)) return plan
   return fetchPlan(context, { ...parsed.query, liveness: verdict })
 }
 

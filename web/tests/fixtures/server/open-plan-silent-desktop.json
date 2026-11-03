@@ -1,0 +1,31 @@
+{
+  "target": {
+    "kind": "session",
+    "session": "00000000-0000-4000-8000-000000000013",
+    "agent": ""
+  },
+  "surface": "desktop",
+  "client": "claude",
+  "state": "live",
+  "place": {
+    "opened_in": "terminal",
+    "opened_host": "",
+    "source": "recorded",
+    "first_open": false
+  },
+  "opens": null,
+  "one_action": false,
+  "steps": [
+    {
+      "kind": "explain",
+      "reason": "live-in-terminal",
+      "silent_since": "2026-01-02T03:04:05Z"
+    },
+    {
+      "kind": "resume-in-terminal",
+      "client": "claude",
+      "session": "00000000-0000-4000-8000-000000000013",
+      "folder": "/workspace"
+    }
+  ]
+}

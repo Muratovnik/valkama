@@ -265,6 +265,7 @@ class _Scenario:
 
         session = "6f1c2a8e-0000-4000-8000-000000000001"
         finished = "6f1c2a8e-0000-4000-8000-000000000002"
+        silent = "6f1c2a8e-0000-4000-8000-000000000003"
         conn = store.connect()
         try:
             sessions.record_place(
@@ -275,6 +276,12 @@ class _Scenario:
                 opened_folder=str(self.root),
                 host_session_id="",
                 current=True,
+            )
+            # A client that crashed long ago: its row still says it runs.
+            conn.execute(
+                "INSERT INTO sessions(id, client, status, opened_in, opened_folder, cwd, last_seen)"
+                " VALUES (?, 'claude', 'active', 'terminal', ?, ?, '2020-01-02T03:04:05Z')",
+                (silent, str(self.root), str(self.root)),
             )
             conn.commit()
         finally:
@@ -290,6 +297,8 @@ class _Scenario:
             "open-plan-session": plan(target="session", session=session, surface="browser"),
             "open-plan-session-desktop": plan(target="session", session=session, surface="desktop"),
             "open-plan-copy": plan(target="session", session=finished, surface="browser"),
+            "open-plan-silent": plan(target="session", session=silent, surface="browser"),
+            "open-plan-silent-desktop": plan(target="session", session=silent, surface="desktop"),
             "open-plan-no-session": plan(target="session", session="absent", surface="browser"),
             "open-plan-file": plan(**note, surface="browser"),
             "open-plan-file-desktop": plan(**note, surface="desktop"),

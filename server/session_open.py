@@ -23,13 +23,14 @@ import re
 import sqlite3
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from datetime import timedelta
 
 from . import documents, query_params, sessions, transcripts
 from .hooks import place as places
 from .hooks.place import Place
 from .ops import url_schemes
 from .ops.url_schemes import Installed
-from .planning import executors
+from .planning import executors, leases
 
 SURFACES = ("desktop", "browser")
 TARGETS = ("session", "file", "folder")
@@ -109,6 +110,10 @@ _SESSION_UUID = re.compile(
 
 #: A line a page can name; what no document reaches is no line.
 _LINE = re.compile(r"[1-9][0-9]{0,8}")
+
+#: A client that crashed sends no end, so its row says `active` for good. Silence this
+#: long is no proof either, so it only earns the person an offer, never a route.
+SILENCE_BEFORE_RESUME_OFFER = timedelta(days=1)
 
 _TAIL_BYTES = 64 * 1024
 _HEAD_BYTES = 256 * 1024
@@ -450,6 +455,35 @@ def _serves(place: Place, family: str) -> bool:
     return place.opened_in != "app" or _APP_OF_FAMILY.get(family) == place.opened_host
 
 
+def _silent_since(row: sqlite3.Row, liveness: str) -> str:
+    """The last signal of a session gone quiet for long, unless the client saw its process."""
+
+    last_seen = leases.moment(row["last_seen"])
+    if liveness == "live" or last_seen is None:
+        return ""
+    return (
+        str(row["last_seen"]) if leases.utc_now() - last_seen > SILENCE_BEFORE_RESUME_OFFER else ""
+    )
+
+
+def _resume_offer(family: str, session: str, folder: str, ask: _Ask) -> dict[str, object]:
+    """The step that resumes a session that may have crashed: the app's, or a command to copy.
+
+    It is always the plan's last, so a click that names it after the process has been seen
+    alive, when the plan has none, names a step that is not there.
+    """
+
+    if ask.surface == "desktop" and ask.installed.terminal and folder:
+        return {
+            "kind": "resume-in-terminal",
+            "client": family,
+            "session": session,
+            "folder": folder,
+        }
+    verb = "claude --resume" if family == "claude" else "codex resume"
+    return {"kind": "copy", "text": f"{verb} {session}"}
+
+
 def _plan(
     target: Mapping[str, object],
     surface: str,
@@ -551,23 +585,30 @@ def _place_plan(
     terminal_only = _in_a_terminal(recorded)
     holding = live and (terminal_only or recorded.opened_in == "ide-terminal")
     chain = _chain(recorded, source, ask.fallback, family)
+    folder = _window_folder(conn, row)
     leading: list[dict[str, object]] = []
+    offered: list[dict[str, object]] = []
     override = _PLACE_OF[ask.always] if ask.always else None
     if override and _serves(override, family) and not (live and _in_a_terminal(override)):
         chain = [(override, "always")]
     elif holding:
         # What keeps a second process off one transcript: say where the session runs,
-        # and offer a way to look at it only where that was seen to be safe.
+        # and offer a way to look at it only where that was seen to be safe. A session long
+        # silent may have crashed, which only the person can see, so resuming it is theirs
+        # to press: it stands outside the route, and the warning is the page's to give.
+        silent = _silent_since(row, ask.liveness) if terminal_only else ""
+        explained = _explain("live-in-terminal", **({"silent_since": silent} if silent else {}))
+        offered = [_resume_offer(family, str(row["id"]), folder, ask)] if silent else []
         if url_schemes.ELSEWHERE_NOTICE not in ask.seen:
-            return answer(state, [_explain("live-in-terminal")])
+            return answer(state, [explained, *offered])
         if terminal_only:
-            leading = [_explain("live-in-terminal")]
+            leading = [explained]
             chain = [(place, how) for place, how in chain if not _in_a_terminal(place)]
 
     planner = _Planner(
         session=str(row["id"]),
         family=family,
-        folder=_window_folder(conn, row),
+        folder=folder,
         live=live,
         recorded=recorded,
         holding=holding,
@@ -588,7 +629,11 @@ def _place_plan(
         # so two steps take two actions until that race was seen not to happen.
         unattended = ask.surface == "desktop" and url_schemes.WINDOW_THEN_LINK in ask.seen
         one_action = not leading and (len(route.steps) == 1 or unattended)
-        return answer(state, [*leading, *route.steps], opens, one_action)
+        return answer(state, [*leading, *route.steps, *offered], opens, one_action)
+    if offered:
+        # Nowhere to look at it says nothing against the offer, and an explanation after
+        # the first would take its place in what the page reads.
+        return answer(state, [*leading, *offered])
     failure = planner.failure or _explain("not-installed", host="vscode")
     return answer(state, [*leading, failure] if failure not in leading else leading)
 

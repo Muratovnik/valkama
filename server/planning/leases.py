@@ -106,7 +106,7 @@ class Lease:
         }
 
 
-def _moment(value: object) -> datetime | None:
+def moment(value: object) -> datetime | None:
     """A stored UTC time to the second, or None when it is not one."""
 
     if not isinstance(value, str) or len(value) < len("YYYY-MM-DDTHH:MM:SS"):
@@ -134,7 +134,7 @@ def _stale_reason(call: sqlite3.Row, seen: datetime | None) -> str:
 def _in_grace(call: sqlite3.Row) -> bool:
     """Whether this ended session may still come back before Valkama releases its leases."""
 
-    ended = _moment(call["ended_at"])
+    ended = moment(call["ended_at"])
     return call["status"] == "ended" and ended is not None and utc_now() < ended + ENDED_GRACE
 
 
@@ -169,7 +169,7 @@ def lease(conn: sqlite3.Connection, row: sqlite3.Row) -> Lease | None:
     if call["identity_state"] != calls.CONFIRMED or session_id is None:
         return Lease(state=UNCONFIRMED, last_seen=None, expires_at=None, **described)
     last_seen = call["last_seen"] if call["session_row"] is not None else None
-    seen = _moment(last_seen)
+    seen = moment(last_seen)
     reason = _stale_reason(call, seen)
     if seen is None or reason:
         return Lease(
