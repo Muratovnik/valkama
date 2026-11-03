@@ -654,7 +654,10 @@ def _parser() -> argparse.ArgumentParser:
         nargs="?",
         const="",
         metavar="SOURCE",
-        help="serve a read-only copy of SOURCE, by default the store this user runs on",
+        help=(
+            "serve a copy of SOURCE, by default the store this user runs on: SOURCE is"
+            " only read, and the copy is written to and migrated like a real store"
+        ),
     )
     commands.add_parser("stop", help="stop that server and remove its profile")
     supervise_command = commands.add_parser(SUPERVISE)
