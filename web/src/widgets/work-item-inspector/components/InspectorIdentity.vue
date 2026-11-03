@@ -172,9 +172,11 @@ const sourceLabel = computed(() => `${t('source.open')}: ${props.item?.source ??
   align-items: center;
 }
 
+/* When the line is short, the date shortens before a note does: a note is what just
+   happened, and the date stands whole in the record's history. */
 .identity-updated {
   display: block;
-  flex: 0 1 auto;
+  flex: 0 1000 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

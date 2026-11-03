@@ -95,6 +95,38 @@ describe('copying the link to an item', () => {
   })
 })
 
+/** The words' box at `room` px and their length at `length`, as a browser would measure. */
+function measured(room: number, length: number) {
+  const words = (node: HTMLElement) => node.classList.contains('identity-note-words')
+  const box = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    return new DOMRect(0, 0, words(this) ? room : 0, 16)
+  })
+  const scroll = vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    return words(this) ? length : 0
+  })
+  return () => {
+    box.mockRestore()
+    scroll.mockRestore()
+  }
+}
+
+async function copiedLinkWith(room: number, length: number) {
+  clipboard(async () => {})
+  const restore = measured(room, length)
+  try {
+    const wrapper = identity()
+    await linkButton(wrapper).trigger('click')
+    await flushPromises()
+    return wrapper
+  } finally {
+    restore()
+  }
+}
+
 describe('a note on the identity line', () => {
   it('shows nothing and keeps its status region empty but present before a press', () => {
     const wrapper = identity()
@@ -103,30 +135,17 @@ describe('a note on the identity line', () => {
   })
 
   it('drops words that would be cut, and keeps the glyph and the whole sentence', async () => {
-    clipboard(async () => {})
-    // The line leaves 40px for words 120px long.
-    const room = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (
-      this: HTMLElement,
-    ) {
-      return this.classList.contains('identity-note-words') ? 40 : 0
-    })
-    const length = vi
-      .spyOn(HTMLElement.prototype, 'scrollWidth', 'get')
-      .mockImplementation(function (this: HTMLElement) {
-        return this.classList.contains('identity-note-words') ? 120 : 0
-      })
-    try {
-      const wrapper = identity()
-      await linkButton(wrapper).trigger('click')
-      await flushPromises()
+    const wrapper = await copiedLinkWith(40.4, 120)
 
-      expect(wrapper.find('.identity-note-words').exists()).toBe(false)
-      expect(glyph(wrapper)).toBe('check')
-      expect(wrapper.get('.identity-note').attributes('title')).toBe('Link copied')
-      expect(note(wrapper).text()).toBe('Link copied')
-    } finally {
-      room.mockRestore()
-      length.mockRestore()
-    }
+    expect(wrapper.find('.identity-note-words').exists()).toBe(false)
+    expect(glyph(wrapper)).toBe('check')
+    expect(wrapper.get('.identity-note').attributes('title')).toBe('Link copied')
+    expect(note(wrapper).text()).toBe('Link copied')
+  })
+
+  it('keeps words given their own fractional length, which the browser rounds up', async () => {
+    const wrapper = await copiedLinkWith(119.6, 120)
+
+    expect(wrapper.get('.identity-note-words').text()).toBe('Link copied')
   })
 })

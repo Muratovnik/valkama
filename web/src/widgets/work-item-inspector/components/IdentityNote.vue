@@ -25,6 +25,8 @@ const props = defineProps<{
 
 const shown = useTemplateRef<HTMLElement>('shown')
 const words = useTemplateRef<HTMLElement>('words')
+/** The identity line, whose width is the drawer's and never the note's. */
+const line = computed(() => shown.value?.parentElement ?? null)
 /** Whether the words fit beside the glyph; measured, never assumed. */
 const whole = ref(true)
 const glyph = computed(() => (props.failed ? 'alert' : 'check'))
@@ -33,12 +35,14 @@ async function measure() {
   whole.value = true
   await nextTick()
   const node = words.value
-  if (node) whole.value = node.scrollWidth <= node.clientWidth
+  // Against the box's own fractional width: words given exactly their length are whole.
+  if (node) whole.value = node.scrollWidth <= Math.ceil(node.getBoundingClientRect().width)
 }
 
 watch(() => props.text, measure, { flush: 'post' })
-// The note takes the room the line leaves, so its width changes only with the line.
-useResizeObserver(shown, () => void measure())
+// The note's own width follows its words, so the line is what is watched: watching the
+// note would hide the words, shrink it, show them again and never settle.
+useResizeObserver(line, () => void measure())
 </script>
 
 <template>
@@ -69,11 +73,11 @@ useResizeObserver(shown, () => void measure())
 </template>
 
 <style scoped>
-/* Whatever room the facts and controls leave, and no more: its own words never
-   widen it, so whether they fit is a question about the line alone. */
+/* As long as its words, in the room the facts and controls leave: the date gives way
+   first (its own rule says how), and what is still too long loses its words. */
 .identity-note {
   display: flex;
-  flex: 1 1 0;
+  flex: 0 1 auto;
   gap: var(--space-1);
   align-items: center;
   min-width: 0;
