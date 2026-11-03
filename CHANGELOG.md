@@ -10,6 +10,37 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+### Added
+
+- **The agent working an item hears what a person did there.** Any write to an item
+  answers with `from_person` when a person acted on it in the interface since an agent
+  last wrote there: a comment, an answer, a status change, an edit, a cancel. Each event
+  is told once, the newest 20 with a count of the rest.
+- **Client hooks bring the same news on their own.** Claude Code's `post-tool-use`,
+  `user-prompt-submit` and `stop` answer with a short "Valkama notice" when there is
+  news on the work the session holds: the orchestrator hears about all of it, a subagent
+  about the items where it holds the claim or a step. `claude watch`, registered with
+  `asyncRewake`, wakes an orchestrator that is idle, for example while it waits for a
+  background subagent. Codex is told at its next prompt or tool call. The `notify`
+  setting (`VALKAMA_NOTIFY=off`) switches this off.
+
+### Changed
+
+- **An agent cannot close past what a person said.** Its move to a completed or
+  cancelled state is refused with `person_spoke` while a person acted on the item since
+  an agent last wrote there, and the refusal quotes what they did. A comment sent in the
+  same call does not lift it; `force` still does and is recorded.
+- **A client hook starts faster.** The launcher starts it without importing `runpy` and
+  `pathlib`, which took about as long as the rest of the hook. Every other command starts
+  as before.
+
+### Fixed
+
+- **One failing stage of a hook costs no other.** A notice that raised no longer takes
+  the lifecycle event of the same hook with it, and a session end writes the marker that
+  stops its watcher first, so the watcher no longer outlives a `/clear` when the store
+  write fails.
+
 ## [2.4.0](https://github.com/Muratovnik/valkama/compare/v2.3.0...v2.4.0) - 2026-11-03
 
 ### Added
