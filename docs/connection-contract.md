@@ -1291,11 +1291,12 @@ the neutral boundary). The body is the answer's, with the request's
 ```json
 {"project_id": "example-project", "data_scope_id": "…", "space_key": "MAIN",
  "id": "7d1c2a9e-3f4b-4c5d-8e6f-0a1b2c3d4e5f", "expected_revision": 2,
- "author": "user", "answers": {"route": "threads"}, "own": {},
- "field_notes": {"route": "Threads serve the digest too"}, "note": ""}
+ "author": "user", "answers": {"route": "threads"},
+ "field_notes": {"route": "Threads serve the digest too"}}
 ```
 
-A change keeps the replaced answer as a version, writes the new one in its place,
+A change gives the whole new answer: a part it leaves out, an own variant or a
+comment, is not carried over from the answer it replaces. A change keeps the replaced answer as a version, writes the new one in its place,
 raises `answer_version` and the request's `revision`, moves `resolved_at` to the
 time of the change and writes the history event `request_changed` with the
 request's id as its detail. A reader that asks with `answered_after` therefore
