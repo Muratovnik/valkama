@@ -2011,11 +2011,23 @@ class CompactWorkItemReadTests(WireCallTestCase):
 
     def test_the_default_answer_carries_the_newest_history_and_its_totals(self) -> None:
         answer = self.answer("get_work_item", {"id": self.reference})
-        self.assertEqual(self.complete["comments"][-5:], answer["comments"])
+        # Seven threads with no replies: the newest five roots, each saying so.
+        self.assertEqual(
+            [
+                {**comment, "replies": 0, "last_reply": None}
+                for comment in self.complete["comments"][-5:]
+            ],
+            answer["comments"],
+        )
         self.assertEqual(self.complete["events"][-10:], answer["events"])
         self.assertEqual(
-            (7, 25, True),
-            (answer["comments_total"], answer["events_total"], answer["history_truncated"]),
+            (7, 7, 25, True),
+            (
+                answer["comments_total"],
+                answer["threads_total"],
+                answer["events_total"],
+                answer["history_truncated"],
+            ),
         )
         for key, value in self.complete.items():
             if key not in ("comments", "events"):
@@ -2100,7 +2112,7 @@ class CompactWorkItemReadTests(WireCallTestCase):
         )
 
     def test_a_link_names_its_other_ends_state_and_the_tool_schema_is_unchanged(self) -> None:
-        """The read gained fields on its links; what an agent sends stayed the same."""
+        """The read gained fields on its links; what an agent sends is pinned here."""
 
         blocker = planning_service.create_work_item(self.conn, space=SPACE_KEY, title="Blocker")
         planning_service.link_work_items(self.conn, blocker["reference"], self.reference, "blocks")
@@ -2146,6 +2158,13 @@ class CompactWorkItemReadTests(WireCallTestCase):
                         "minimum": 0,
                         "description": "A comment id: answer with every comment after it,"
                         " oldest first, instead of the newest ones. Not together with full.",
+                    },
+                    "thread": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "A comment id: answer with its thread, the root and"
+                        " every reply oldest first; a reply's id reads its root's thread. Not"
+                        " together with full or comments_after.",
                     },
                 },
                 "required": ["id"],

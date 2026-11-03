@@ -108,6 +108,15 @@ works on.
 decision and its reason, evidence, a handoff. `checklist_item_id` ties a
 comment to a step.
 
+Comments form threads one level deep. A comment without a parent is a root;
+`reply_to` (a comment id) or `reply_to_request` (a question id) makes it a reply
+under that root. A reply to a reply stands under that reply's root, and the
+acknowledgement names the root it joined in `reply_to` or `reply_to_request`. A
+reply carries no `checklist_item_id`: its root does. Carry a conversation on as
+replies in its thread rather than as new roots. A worker writes its report as
+the root of its own thread, posts what follows as replies there, and hands the
+root's `comment_id` back to the agent that delegated.
+
 **Links.** `link_work_items` takes `kind`:
 
 - `blocks` carries readiness: an item that something unfinished blocks is not
@@ -125,10 +134,17 @@ Steps of the same change stay on the checklist; a link is for separate work.
 `after:MAIN-12`, naming an item in the same state. Placing an item first is
 what makes it next; priority only breaks a tie.
 
-**Reading.** `get_work_item` returns the item with its newest comments and
-events and the sessions that wrote to it; `full: true` returns all of its
-history, and `comments_after: <id>` only the comments after one you have read,
-which is the way through an item too long to read whole.
+**Reading.** `get_work_item` returns the item with the 5 threads that saw the
+newest activity, its newest events and the sessions that wrote to it. Each root
+carries `replies`, how many it has, and `last_reply`, the newest one, so a reply
+in an old thread lifts it into that read. `thread: <comment id>` returns one
+thread whole, root first; a reply's id reads its root's thread. `comments_after:
+<id>` returns every comment after one you have read, roots and replies flat,
+each naming its parent in `reply_to` or `reply_to_request`: the way through an
+item too long to read whole. `full: true` returns all of its history. Every
+comment carries `by_person`, true when it came through Valkama's interface. A
+reply to a question belongs to the question's thread, which
+`get_work_item_request` reads.
 `get_work_item_chain` shows what an item's work grew into and whether it
 converges. Read the history before assuming who did what.
 
@@ -194,9 +210,10 @@ come first.
 When two items turn out to be one change — the same finding filed twice, one
 cause found from two places — `merge_work_items` folds them into the item that
 survives (`id`), with `items` the ones that fold in and a `reason`. The
-survivor takes their steps (ids, ticks and step claims kept), discussion,
-questions, refs and links; each merged item is linked `duplicates` to it, gets a summary
-naming it and closes in its cancelled state. It is refused, writing nothing,
+survivor takes their steps (ids, ticks and step claims kept), discussion
+threads whole, questions with their replies, refs and links; a report's thread
+stays on the merged item with the report. Each merged item is linked
+`duplicates` to it, gets a summary naming it and closes in its cancelled state. It is refused, writing nothing,
 for an item another session holds (unless `force`), a closed item, an item in
 another space or a merged item with children. Merge before handing the work to
 anyone.
@@ -243,8 +260,9 @@ never have existed, and it refuses while the item has children.
 
 ## Delegating
 
-A worker writes to its own item: it claims it, ticks its steps, attaches refs
-and comments. The agent that delegated files the new items a worker reports
+A worker writes to its own item: it claims it, ticks its steps, attaches refs,
+writes its report as the root of its own thread and replies in that thread
+afterwards. The agent that delegated files the new items a worker reports
 and closes them, after grouping the findings by cause, so two workers' reports
 of one cause become one item. Hand one agent several items only as the
 [work model](references/work-model.md#one-agent-several-items) allows.
@@ -259,6 +277,8 @@ the delegating agent to record:
   and where it belongs: a step of this item, a new item linked
   `discovered-from` this one, or the same change as an existing item;
 - what blocked it, and any question for the owner with its options.
+
+The delegating agent writes that report as the root of a thread on the item.
 
 ## When a call is refused
 

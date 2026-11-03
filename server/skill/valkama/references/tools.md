@@ -30,11 +30,13 @@ full item instead; it carries `url` too.
 | `transition_work_item` | `warnings`, and `overridden` when `force` carried a guard (`person_spoke` among them) |
 | `set_work_item_checklist` | `checklist`: each step's `item_id`, `text`, `done` |
 | `claim_work_item_checklist_item`, `tick_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by` |
-| `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim and transition |
+| `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim and transition; `applied.comment` as `comment_work_item` answers |
 | `merge_work_items` | `merged`: for each item, its `reference`, `state` and what it `moved` (`steps`, `comments`, `refs`, `links`) |
 
 `claim_ready_work_item` answers with the item it took, or nothing when no item
-is ready.
+is ready. `comment_work_item` answers with `work_item`, `comment_count`,
+`comment_id`, and `reply_to` and `reply_to_request`: the root a reply joined,
+both null for a new root.
 
 Any write to an item also answers with `from_person` when a person acted on it
 in Valkama's interface since an agent last wrote there, and has no such key
@@ -79,7 +81,7 @@ and any of these groups, applied in this order:
 | `checklist_ticks` | `[{"item_id": "…", "done": true}]` | `tick_work_item_checklist_item` |
 | `refs` | `[{"kind": "commit", "value": "…", "label": "…"}]` | `attach_work_item_ref` |
 | `links` | `[{"other": "MAIN-20", "kind": "blocks", "remove": false}]` | `link_work_items` |
-| `comment` | `{"body": "…", "checklist_item_id": "…"}` | `comment_work_item` |
+| `comment` | `{"body": "…", "checklist_item_id": "…", "reply_to": 12, "reply_to_request": "…"}` | `comment_work_item` |
 | `summary` | `{"done": "…", "next": "…", "why": "…"}` | `set_work_item_summary` |
 | `transition` | `{"state": "completed", "reason": "…", "force": false, "rank": "first"}` | `transition_work_item` |
 
@@ -99,6 +101,41 @@ A typical close, in one call:
              "next": "Nothing; MAIN-14 covers the CLI message."},
  "transition": {"state": "completed"}}
 ```
+
+## Comments and threads
+
+`comment_work_item` takes `id`, `body` (at most 8000 characters), and
+optionally `author`, `checklist_item_id`, and one parent: `reply_to`, the id of
+a comment, or `reply_to_request`, the id of a question on the same item. A
+comment with no parent is the root of a thread; a report is one too. Threads
+are one level deep: a reply to a reply is written under that reply's root, and
+a reply to a reply of a question under the question. Refused, writing nothing:
+both parents at once, a parent that is not on the item, and a reply with a
+`checklist_item_id`. `report_work_item` takes no parent.
+
+## Reading an item
+
+`get_work_item` takes `id` and at most one of `full`, `comments_after` and
+`thread`:
+
+| Read | `comments` holds |
+| --- | --- |
+| none of them | the roots of the 5 threads with the newest activity, the most recent last; a thread's activity is its newest row, so a new reply lifts an old thread |
+| `thread: <id>` | one thread, the root and every reply oldest first; a reply's id reads its root's thread, and a reply to a question is refused |
+| `comments_after: <id>` | every comment after that id, roots and replies flat, oldest first |
+| `full: true` | every comment, flat |
+
+Every comment has `id`, `kind` (`comment` or `report`), `report`,
+`checklist_item_id`, `checklist_item_text`, `author`, `body`, `at`,
+`reply_to` and `reply_to_request` (both null on a root), `by_person`: true
+when the interface wrote it, false for another call, null for a row written
+with no call, and `resolution`: a root's resolved mark as `at`, `by`,
+`by_person` and `text`, or null, and always null on a reply. In the default read each root adds `replies`, how many it has,
+and `last_reply`, its newest reply as `id`, `author`, `by_person`, `at` and
+`body`, the body cut at 500 characters with `clipped: true`, or null. All but
+`full` add `comments_total` (every row), `threads_total` (the roots),
+`events_total` and `history_truncated`, true when fewer threads, comments or
+events are shown than there are.
 
 ## Placement
 
@@ -199,9 +236,10 @@ holding the interface's credentials counts as the interface.
 
 `merge_work_items` takes `id` (the survivor), `items` (1 to 20), and optionally
 `reason`, `force`, `expected_revision` (the survivor's) and `author`. What
-moves: steps, discussion comments, questions, refs the survivor lacks, and links
-in their own direction. What stays on a merged item: its history, reports,
-description, labels and parent. Each merged item is linked `duplicates` to the
+moves: steps, discussion threads whole, questions with their replies, refs the
+survivor lacks, and links in their own direction; `moved.comments` counts the
+comment rows, replies included. What stays on a merged item: its history,
+reports with their threads, description, labels and parent. Each merged item is linked `duplicates` to the
 survivor, summarised, released and closed in its cancelled state. Refused,
 writing nothing: the survivor in `items`, an item named twice, another space,
 a closed item, a merged item with children, more than 100 steps in all, a

@@ -258,6 +258,8 @@ def _work_item(conn: sqlite3.Connection, parameters: Mapping[str, list[str]]) ->
             _required(parameters, "id"),
             comments=_count(parameters, "comments"),
             comments_after=_count(parameters, "comments_after") or 0,
+            threads=_count(parameters, "threads"),
+            thread=_count(parameters, "thread"),
             events=_count(parameters, "events"),
             sessions=_switch(parameters, "sessions"),
         ),
@@ -518,6 +520,8 @@ def _comment(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
         _text(payload, "body"),
         author=_author(payload),
         checklist_item_id=_optional_text(payload, "checklist_item_id"),
+        reply_to=_optional_int(payload, "reply_to"),
+        reply_to_request=_optional_text(payload, "reply_to_request"),
     )
 
 
@@ -647,7 +651,7 @@ APPLY_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
     ("checklist_ticks", frozenset({"item_id", "done"})),
     ("refs", frozenset({"kind", "value", "label"})),
     ("links", frozenset({"other", "kind", "remove"})),
-    ("comment", frozenset({"body", "checklist_item_id"})),
+    ("comment", frozenset({"body", "checklist_item_id", "reply_to", "reply_to_request"})),
     ("summary", frozenset({"done", "next", "why"})),
     ("transition", frozenset({"state", "reason", "force", "rank"})),
 )
@@ -747,7 +751,9 @@ def _apply_step(
         _link(conn, {**entry, **base})
         return {}, 1
     if group == "comment":
-        return {}, {"comment_id": _comment(conn, {**entry, **base})["comment_id"]}
+        written = _comment(conn, {**entry, **base})
+        # The root a reply joined, as the single tool's answer says it.
+        return {}, {name: written[name] for name in ("comment_id", "reply_to", "reply_to_request")}
     if group == "summary":
         answer = _summary(conn, {**base, "summary": dict(entry)})
         return {}, {"summary_comment_id": answer["summary_comment_id"]}

@@ -112,6 +112,17 @@ _OFFSET = {
     "description": "How many items to skip, for the next page: pass the next_offset"
     " of the previous answer with the same filters.",
 }
+#: The two parents a reply may name, one at a time.
+_REPLY_TO = {
+    "type": "integer",
+    "minimum": 1,
+    "description": "The id of the comment this replies to; a reply to a reply stands under"
+    " its root. Not together with reply_to_request.",
+}
+_REPLY_TO_REQUEST = {
+    "type": "string",
+    "description": "The id of the question this replies to. Not together with reply_to.",
+}
 #: The most open members one page of get_work_item_chain carries.
 CHAIN_PAGE = 200
 #: How many of a chain's newest series entries get_work_item_chain carries.
@@ -235,12 +246,16 @@ TOOLS = [
     _tool(
         "get_work_item",
         "Read a work item",
-        "One item: its fields, checklist, links, refs and summary, the newest"
-        f" {RECENT_COMMENTS} comments and {RECENT_EVENTS} history events with"
-        " comments_total, events_total and history_truncated, and sessions: the"
-        " agent sessions whose confirmed calls wrote to it. full=true returns every"
-        " comment and event; comments_after returns only the comments that came after"
-        " one you have read. questions gives its questions in compact form: total, open, at most"
+        "One item: its fields, checklist, links, refs and summary, the"
+        f" {RECENT_COMMENTS} discussion threads with the newest activity, each root with"
+        " replies (how many) and last_reply, the newest"
+        f" {RECENT_EVENTS} history events with comments_total, threads_total,"
+        " events_total and history_truncated, and sessions: the agent sessions whose"
+        " confirmed calls wrote to it. thread returns one thread whole; full=true every"
+        " comment and event; comments_after only the comments that came after one you"
+        " have read, roots and replies alike. Each comment names its parent in reply_to"
+        " or reply_to_request (null on a root) and by_person."
+        " questions gives its questions in compact form: total, open, at most"
         f" {requests.ITEM_QUESTIONS} items with the open ones first and then the newest closed,"
         " and truncated when there are more.",
         READ_ONLY,
@@ -256,6 +271,13 @@ TOOLS = [
                 "minimum": 0,
                 "description": "A comment id: answer with every comment after it, oldest"
                 " first, instead of the newest ones. Not together with full.",
+            },
+            "thread": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "A comment id: answer with its thread, the root and every"
+                " reply oldest first; a reply's id reads its root's thread. Not together"
+                " with full or comments_after.",
             },
         },
         ["id"],
@@ -509,10 +531,11 @@ TOOLS = [
         "Merge work items into one",
         "Fold items that are one change — one cause, one fix — into the item that"
         " survives (id), all or nothing. Their checklist steps, keeping ids, ticks"
-        " and step claims, their discussion comments, refs and links move to it;"
-        " each merged item is linked duplicates to it, gets a summary naming it, is"
-        " released and closes in its cancelled state. Their history, reports,"
-        " description and parent stay on them. Refused before anything is written:"
+        " and step claims, their discussion threads whole, questions with their"
+        " replies, refs and links move to it; each merged item is linked duplicates"
+        " to it, gets a summary naming it, is released and closes in its cancelled"
+        " state. Their history, reports with their threads, description and parent"
+        " stay on them. Refused before anything is written:"
         " an item in another space, a closed item, a merged item with children,"
         f" more than {model.MAX_CHECKLIST} steps in all, or an item another session"
         " holds unless force. The answer lists what each item moved.",
@@ -620,9 +643,21 @@ TOOLS = [
     _tool(
         "comment_work_item",
         "Comment on a work item",
-        "A note on the record, for anything the fields have no place for.",
+        "A note on the record, for anything the fields have no place for. Without a"
+        " parent it is the root of a thread; reply_to (a comment id) or"
+        " reply_to_request (a question id) makes it a reply under that root. Threads"
+        " are one level deep: a reply to a reply stands under that reply's root, and"
+        " the answer names the root it joined in reply_to or reply_to_request. A"
+        " reply carries no checklist_item_id; its root does.",
         WRITES,
-        {"id": _REFERENCE, "body": _STR, "author": _AUTHOR, "checklist_item_id": _STR},
+        {
+            "id": _REFERENCE,
+            "body": _STR,
+            "author": _AUTHOR,
+            "checklist_item_id": _STR,
+            "reply_to": _REPLY_TO,
+            "reply_to_request": _REPLY_TO_REQUEST,
+        },
         ["id", "body"],
     ),
     _tool(
@@ -698,7 +733,12 @@ TOOLS = [
             },
             "comment": {
                 "type": "object",
-                "properties": {"body": _STR, "checklist_item_id": _STR},
+                "properties": {
+                    "body": _STR,
+                    "checklist_item_id": _STR,
+                    "reply_to": _REPLY_TO,
+                    "reply_to_request": _REPLY_TO_REQUEST,
+                },
                 "required": ["body"],
             },
             "summary": {
@@ -1008,12 +1048,20 @@ def _work_item(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> obj
     parameters = {"id": [str(arguments["id"])], "sessions": ["true"]}
     full = _is_verbose(arguments, "full")
     after = arguments.get("comments_after")
+    thread = arguments.get("thread")
     if after is not None:
         if full:
             raise model.PlanningError("full and comments_after exclude each other")
         parameters["comments_after"] = [str(model.count_field(after, "comments_after"))]
-    elif not full:
-        parameters["comments"] = [str(RECENT_COMMENTS)]
+    if thread is not None:
+        if full:
+            raise model.PlanningError("full and thread exclude each other")
+        if after is not None:
+            # Here as well as at the boundary, which reads comments_after=0 as absent.
+            raise model.PlanningError("thread and comments_after exclude each other")
+        parameters["thread"] = [str(model.count_field(thread, "thread"))]
+    if after is None and thread is None and not full:
+        parameters["threads"] = [str(RECENT_COMMENTS)]
     if not full:
         parameters["events"] = [str(RECENT_EVENTS)]
     answer = api.handle_get(conn, "/api/planning/work-item", parameters)

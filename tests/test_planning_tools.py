@@ -526,7 +526,12 @@ class PlanningAcknowledgementTests(unittest.TestCase):
         ref = self.call("attach_work_item_ref", id=self.ref, kind="commit", value="def5678")
         self.assertEqual({"work_item", "kind", "value"}, set(ref))
         comment = self.call("comment_work_item", id=self.ref, body="again")
-        self.assertEqual({"work_item", "comment_count", "comment_id"}, set(comment))
+        self.assertEqual(
+            {"work_item", "comment_count", "comment_id", "reply_to", "reply_to_request"},
+            set(comment),
+        )
+        # A new root names no parent; a reply names the root it joined.
+        self.assertEqual((None, None), (comment["reply_to"], comment["reply_to_request"]))
 
     def test_the_reads_and_the_take_next_queue_still_answer_in_full(self) -> None:
         full = self.call("get_work_item", id=self.ref)

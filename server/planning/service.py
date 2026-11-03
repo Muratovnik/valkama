@@ -80,16 +80,20 @@ def get_work_item(
     *,
     comments: int | None = None,
     comments_after: int = 0,
+    threads: int | None = None,
+    thread: int | None = None,
     events: int | None = None,
     sessions: bool = False,
     agents: bool = False,
 ) -> dict:
     """One item in full; `comments` and `events` keep only the newest of each.
 
-    `comments_after` keeps only the comments after that id. `sessions` adds the
-    agent sessions whose confirmed calls wrote to it, and `agents` the agents
-    standing on it, which only the card asks for. Without any of these the answer
-    is the complete record a screen draws from.
+    `comments_after` keeps only the comments after that id. `threads` keeps the
+    threads with the newest activity and `thread` one thread whole, as
+    `read_model.present` says. `sessions` adds the agent sessions whose
+    confirmed calls wrote to it, and `agents` the agents standing on it, which
+    only the card asks for. Without any of these the answer is the complete
+    record a screen draws from.
     """
 
     record = read_model.present(
@@ -98,6 +102,8 @@ def get_work_item(
         full=True,
         comments=comments,
         comments_after=comments_after,
+        threads=threads,
+        thread=thread,
         events=events,
     )
     if sessions:
@@ -1120,11 +1126,12 @@ def merge_work_items(
     change, and closing the extras as duplicates by hand lost what they held:
     the steps someone ticked, the discussion, the commits, the links that made
     other work wait. Here the survivor takes all of that — the steps with their
-    ids, ticks and step claims, the discussion comments, the refs, and the links
-    in their own direction — and each merged item is linked `duplicates` to it,
-    given a summary naming it, released and closed in its cancelled state. What
-    describes the merged item itself stays with it: its history, its reports,
-    its description, its parent, a ref the survivor already has, and the links
+    ids, ticks and step claims, the discussion threads whole, the questions with
+    their replies, the refs, and the links in their own direction — and each
+    merged item is linked `duplicates` to it, given a summary naming it,
+    released and closed in its cancelled state. What describes the merged item
+    itself stays with it: its history, its reports with their threads, its
+    description, its parent, a ref the survivor already has, and the links
     that would now tie the survivor to itself.
 
     Each write is one a single tool makes, with that tool's event, so a build
@@ -1312,11 +1319,7 @@ def _fold(
         )
         moved = {
             "steps": len(found),
-            "comments": conn.execute(
-                "UPDATE work_item_comments SET work_item_id = ? WHERE work_item_id = ?"
-                " AND report = ''",
-                (survivor_id, identity),
-            ).rowcount,
+            "comments": _move_threads(conn, identity, survivor_id),
             "refs": conn.execute(
                 "UPDATE OR IGNORE work_item_refs SET work_item_id = ? WHERE work_item_id = ?",
                 (survivor_id, identity),
@@ -1387,6 +1390,36 @@ def _fold(
     if forced:
         answer["overridden"] = forced
     return answer
+
+
+def _move_threads(conn: sqlite3.Connection, identity: str, survivor_id: str) -> int:
+    """Move a merged item's discussion threads whole, and say how many rows moved.
+
+    A comment's thread goes with its replies; a report's thread stays, report
+    and replies, because the report describes the merged item. Replies to the
+    questions go too, since the questions moved before this. One statement, so
+    no reply is ever on another item than its root, and the roots are chosen
+    before it runs rather than by a subquery over the rows it changes.
+    """
+
+    roots = [
+        int(found[0])
+        for found in conn.execute(
+            "SELECT id FROM work_item_comments WHERE work_item_id = ? AND report = ''"
+            " AND reply_to IS NULL AND reply_to_request IS NULL",
+            (identity,),
+        )
+    ]
+    listed = json.dumps(roots)
+    return int(
+        conn.execute(
+            "UPDATE work_item_comments SET work_item_id = ? WHERE work_item_id = ?"
+            " AND (id IN (SELECT value FROM json_each(?))"
+            " OR reply_to IN (SELECT value FROM json_each(?))"
+            " OR reply_to_request IS NOT NULL)",
+            (survivor_id, identity, listed, listed),
+        ).rowcount
+    )
 
 
 def _repoint_links(
@@ -1473,18 +1506,31 @@ def comment_work_item(
     *,
     author: str | None = None,
     checklist_item_id: str | None = None,
+    reply_to: int | None = None,
+    reply_to_request: str | None = None,
 ) -> dict:
+    """A comment: the root of a thread, or a reply under one when it names a parent.
+
+    A reply answers a comment (`reply_to`) or a question (`reply_to_request`) of
+    the same item. Threads are one level deep, so a reply to a reply stands under
+    that reply's root, and the answer names the root it joined.
+    """
+
     if not conn.in_transaction:
         conn.execute("BEGIN IMMEDIATE")
     row = read_model.item_row(conn, reference)
+    parent = _thread_parent(conn, row, reply_to, reply_to_request)
+    if parent is not None and checklist_item_id is not None:
+        raise model.PlanningError("a reply carries no checklist step; its root does")
     step = (
         _step(model.checklist(row["checklist"]), checklist_item_id, conn, row)
         if checklist_item_id is not None
         else None
     )
+    root, question = parent if parent is not None else (None, None)
     inserted = conn.execute(
         "INSERT INTO work_item_comments(work_item_id,author,body,checklist_item_id,"
-        "checklist_item_text,call_id) VALUES(?,?,?,?,?,?)",
+        "checklist_item_text,call_id,reply_to,reply_to_request) VALUES(?,?,?,?,?,?,?,?)",
         (
             str(row["work_item_id"]),
             model.actor(author),
@@ -1492,13 +1538,61 @@ def comment_work_item(
             step["id"] if step else None,
             step["text"] if step else None,
             calls.call_id(conn, str(row["work_item_id"])),
+            root,
+            question,
         ),
     )
+    # Both parents always: the root a reply joined, and null for a new root.
     return {
         "work_item": read_model.reference(conn, row),
         "comment_count": read_model.comment_count(conn, row),
         "comment_id": inserted.lastrowid,
+        "reply_to": root,
+        "reply_to_request": question,
     }
+
+
+def _thread_parent(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    reply_to: int | None,
+    reply_to_request: str | None,
+) -> tuple[int | None, str | None] | None:
+    """The root a reply stands under, as (comment, question); None for a new root.
+
+    Refused here, before the store's trigger would, so the caller reads which
+    parent was wrong rather than a constraint.
+    """
+
+    if reply_to is None and reply_to_request is None:
+        return None
+    if reply_to is not None and reply_to_request is not None:
+        raise model.PlanningError("reply_to and reply_to_request exclude each other")
+    identity = str(row["work_item_id"])
+    if reply_to_request is not None:
+        question = model.text_field(reply_to_request, "reply_to_request", limit=64)
+        found = conn.execute(
+            "SELECT 1 FROM work_item_requests WHERE request_id = ? AND work_item_id = ?",
+            (question, identity),
+        ).fetchone()
+        if found is None:
+            raise model.PlanningError(
+                f"question {question} is not on {read_model.reference(conn, row)}"
+            )
+        return None, question
+    if not isinstance(reply_to, int) or isinstance(reply_to, bool) or reply_to < 1:
+        raise model.PlanningError("reply_to must be a positive integer")
+    parent = conn.execute(
+        "SELECT reply_to, reply_to_request FROM work_item_comments"
+        " WHERE id = ? AND work_item_id = ?",
+        (reply_to, identity),
+    ).fetchone()
+    if parent is None:
+        raise model.PlanningError(f"comment {reply_to} is not on {read_model.reference(conn, row)}")
+    # One level deep: a reply to a reply joins the root that reply stands under.
+    if parent["reply_to_request"] is not None:
+        return None, str(parent["reply_to_request"])
+    return int(parent["reply_to"] or reply_to), None
 
 
 def set_summary(

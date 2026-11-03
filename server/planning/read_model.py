@@ -255,6 +255,160 @@ def _closed(row: sqlite3.Row, found: _Closed) -> tuple[str, str | None]:
     return closed_at, holder or None
 
 
+#: How much of a thread's newest reply its root carries; `thread` reads it whole.
+LAST_REPLY_LIMIT = 500
+
+#: Every comment column, and the sources of the calls that wrote the row and its
+#: resolved mark, which are what the two `by_person` values are read from.
+_COMMENT_ROWS = (
+    "SELECT m.*, c.identity_source AS call_source, k.identity_source AS resolved_source"
+    " FROM work_item_comments m"
+    " LEFT JOIN execution_events c ON c.id = m.call_id"
+    " LEFT JOIN execution_events k ON k.id = m.resolved_call_id"
+)
+
+
+def comment_record(row: sqlite3.Row) -> dict:
+    """One comment as every read shows it, selected through `_COMMENT_ROWS`.
+
+    A root names no parent; a reply names the comment or the question it stands
+    under. `by_person` is true when the interface wrote it, false for any other
+    call, and null for a row no call wrote: one older than identity, or the
+    runner's. `resolution` is the resolved mark a root carries, or null: never
+    on a reply, which the store refuses to mark.
+    """
+
+    return {
+        "id": row["id"],
+        "kind": "report" if row["report"] else "comment",
+        "report": model.summary(row["report"], required=False),
+        "checklist_item_id": row["checklist_item_id"],
+        "checklist_item_text": row["checklist_item_text"],
+        "author": row["author"],
+        "body": row["body"],
+        "at": row["created_at"] or None,
+        "reply_to": row["reply_to"],
+        "reply_to_request": row["reply_to_request"],
+        "by_person": _by_person(row["call_id"], row["call_source"]),
+        "resolution": None
+        if row["resolved_at"] is None
+        else {
+            "at": row["resolved_at"],
+            "by": row["resolved_by"],
+            "by_person": _by_person(row["resolved_call_id"], row["resolved_source"]),
+            "text": row["resolution"],
+        },
+    }
+
+
+def _by_person(call: object, source: object) -> bool | None:
+    """Whether a call came through the interface; null when no call wrote the row."""
+
+    return None if call is None else source == calls.BROWSER
+
+
+def last_reply(reply: Mapping[str, object] | None) -> dict | None:
+    """The newest reply of a thread as its root carries it, from the reply's record.
+
+    The body is cut at `LAST_REPLY_LIMIT` characters, and `clipped: true` says
+    so; the key is absent when nothing was cut.
+    """
+
+    if reply is None:
+        return None
+    body = str(reply["body"])
+    found = {name: reply[name] for name in ("id", "author", "by_person", "at")}
+    found["body"] = body[:LAST_REPLY_LIMIT]
+    if len(body) > LAST_REPLY_LIMIT:
+        found["clipped"] = True
+    return found
+
+
+def _thread_counts(conn: sqlite3.Connection, identity: str) -> dict[str, int]:
+    """Every comment row of an item, and how many of them are the roots of threads."""
+
+    found = conn.execute(
+        "SELECT COUNT(*), COALESCE(SUM(reply_to IS NULL AND reply_to_request IS NULL), 0)"
+        " FROM work_item_comments WHERE work_item_id = ?",
+        (identity,),
+    ).fetchone()
+    return {"comments_total": int(found[0]), "threads_total": int(found[1])}
+
+
+def _newest_threads(conn: sqlite3.Connection, identity: str, limit: int) -> list[dict]:
+    """The roots of the `limit` threads with the newest activity, the most recent last.
+
+    A thread's activity is its newest row, root or reply, so a reply in an old
+    thread lifts it past newer roots. A reply to a question is no thread here:
+    the question is its root, and `get_work_item_request` reads it.
+    """
+
+    roots = conn.execute(
+        "SELECT t.*, c.identity_source AS call_source, k.identity_source AS resolved_source"
+        " FROM ("
+        "  SELECT m.*,"
+        "   (SELECT COUNT(*) FROM work_item_comments r WHERE r.reply_to = m.id) AS replies,"
+        "   (SELECT MAX(r.id) FROM work_item_comments r WHERE r.reply_to = m.id) AS newest"
+        "  FROM work_item_comments m WHERE m.work_item_id = ?"
+        "  AND m.reply_to IS NULL AND m.reply_to_request IS NULL"
+        "  ORDER BY COALESCE(newest, m.id) DESC LIMIT ?"
+        " ) t LEFT JOIN execution_events c ON c.id = t.call_id"
+        " LEFT JOIN execution_events k ON k.id = t.resolved_call_id"
+        " ORDER BY COALESCE(t.newest, t.id)",
+        (identity, limit),
+    ).fetchall()
+    newest = {
+        int(row["id"]): comment_record(row)
+        for row in conn.execute(
+            _COMMENT_ROWS + " JOIN json_each(?) w ON w.value = m.id",
+            (json.dumps([row["newest"] for row in roots if row["newest"] is not None]),),
+        )
+    }
+    return [
+        {
+            **comment_record(row),
+            "replies": int(row["replies"]),
+            "last_reply": last_reply(newest.get(row["newest"])),
+        }
+        for row in roots
+    ]
+
+
+def _one_thread(
+    conn: sqlite3.Connection, identity: str, reference_text: str, comment_id: int
+) -> list[dict]:
+    """The thread a comment belongs to, root first and its replies oldest first."""
+
+    if comment_id < 1:
+        raise model.PlanningError("thread must be a positive integer")
+    named = conn.execute(
+        "SELECT work_item_id, reply_to, reply_to_request FROM work_item_comments WHERE id = ?",
+        (comment_id,),
+    ).fetchone()
+    if named is None or str(named["work_item_id"]) != identity:
+        raise model.PlanningError(f"comment {comment_id} is not on {reference_text}")
+    if named["reply_to_request"] is not None:
+        raise model.PlanningError(
+            f"comment {comment_id} answers question {named['reply_to_request']};"
+            " get_work_item_request reads that thread"
+        )
+    root = int(named["reply_to"] or comment_id)
+    return [
+        comment_record(row)
+        for row in conn.execute(
+            _COMMENT_ROWS + " WHERE m.id = ? OR m.reply_to = ? ORDER BY m.id", (root, root)
+        )
+    ]
+
+
+def _exclusive(**cuts: object) -> None:
+    """Refuse two ways of cutting the comments that cannot hold together."""
+
+    named = [name for name, value in cuts.items() if value is not None]
+    if len(named) > 1:
+        raise model.PlanningError(f"{named[0]} and {named[1]} exclude each other")
+
+
 def present(
     conn: sqlite3.Connection,
     row: sqlite3.Row,
@@ -262,6 +416,8 @@ def present(
     full: bool = False,
     comments: int | None = None,
     comments_after: int = 0,
+    threads: int | None = None,
+    thread: int | None = None,
     events: int | None = None,
     closed: Mapping[str, tuple[str | None, str | None]] | None = None,
 ) -> dict:
@@ -270,10 +426,14 @@ def present(
     `comments` and `events` cut a full record's history to that many of the
     newest entries, still oldest first, and add the totals and whether anything
     was left out; `comments_after` does the same with the comments up to that
-    id, so a reader takes only what came since. None given is the whole history,
-    which is what every write answers with and what a screen draws from. `closed`
-    is what `closings` loaded for a read of many items; absent, the item asks
-    `closing` itself.
+    id, so a reader takes only what came since. Those reads are flat: every
+    row, root or reply, in the order written. `threads` instead keeps the roots
+    of that many threads with the newest activity, each carrying how many
+    replies it has and the newest one, and `thread` one thread whole, named by
+    any of its comments. None given is the whole history, which is what every
+    write answers with and what a screen draws from. `closed` is what
+    `closings` loaded for a read of many items; absent, the item asks `closing`
+    itself.
     """
 
     state = state_by_id(conn, str(row["state_id"]))
@@ -347,25 +507,30 @@ def present(
             (str(row["work_item_id"]),),
         )
     ]
-    record["comments"] = [
-        {
-            "id": item["id"],
-            "kind": "report" if item["report"] else "comment",
-            "report": model.summary(item["report"], required=False),
-            "checklist_item_id": item["checklist_item_id"],
-            "checklist_item_text": item["checklist_item_text"],
-            "author": item["author"],
-            "body": item["body"],
-            "at": item["created_at"] or None,
-        }
-        for item in _newest(
-            conn,
-            "SELECT * FROM work_item_comments WHERE work_item_id = ? AND id > ?",
-            "id",
-            (identity, comments_after),
-            comments,
-        )
-    ]
+    # A count may narrow `comments_after`; a thread read takes neither.
+    after = comments_after or None
+    if thread is not None:
+        _exclusive(thread=thread, threads=threads, comments=comments, comments_after=after)
+    if threads is not None:
+        _exclusive(threads=threads, comments=comments, comments_after=after)
+    shown_threads: int | None = None
+    if thread is not None:
+        record["comments"] = _one_thread(conn, identity, record["reference"], thread)
+        shown_threads = 1
+    elif threads is not None:
+        record["comments"] = _newest_threads(conn, identity, threads)
+        shown_threads = len(record["comments"])
+    else:
+        record["comments"] = [
+            comment_record(item)
+            for item in _newest(
+                conn,
+                _COMMENT_ROWS + " WHERE m.work_item_id = ? AND m.id > ?",
+                "m.id",
+                (identity, comments_after),
+                comments,
+            )
+        ]
     record["events"] = [
         {
             "action": event["action"],
@@ -385,18 +550,21 @@ def present(
             events,
         )
     ]
-    if comments is not None or comments_after or events is not None:
-        comments_total = comment_count(conn, row)
+    if shown_threads is not None or comments is not None or comments_after or events is not None:
+        counts = _thread_counts(conn, identity)
         events_total = int(
             conn.execute(
                 "SELECT COUNT(*) FROM work_item_events WHERE work_item_id = ?", (identity,)
             ).fetchone()[0]
         )
-        record["comments_total"] = comments_total
+        record.update(counts)
         record["events_total"] = events_total
+        # A thread read leaves out the threads it does not show; a flat read the rows.
         record["history_truncated"] = (
-            len(record["comments"]) < comments_total or len(record["events"]) < events_total
-        )
+            shown_threads < counts["threads_total"]
+            if shown_threads is not None
+            else len(record["comments"]) < counts["comments_total"]
+        ) or len(record["events"]) < events_total
     return record
 
 
