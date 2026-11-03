@@ -50,6 +50,17 @@ function key(element: HTMLElement, value: string, shiftKey = false) {
   )
 }
 
+/** The stops either side of a surface, where a Tab past its last control lands. */
+function stopsOf(control: HTMLElement) {
+  return control.closest('.overlay-host')?.querySelectorAll<HTMLElement>(':scope > [tabindex="0"]')
+}
+
+/** A Tab past the end, as the browser carries it: on to the stop beyond the surface. */
+function tabPast(control: HTMLElement, shiftKey = false) {
+  key(control, 'Tab', shiftKey)
+  stopsOf(control)?.[shiftKey ? 0 : 1]?.focus()
+}
+
 afterEach(async () => {
   for (const wrapper of mounted.splice(0)) wrapper.unmount()
   await flushPromises()
@@ -74,10 +85,12 @@ describe('shared nested overlay ownership', () => {
     expect(document.activeElement).toBe(button('.command-first'))
     expect(document.body.style.overflow).toBe('hidden')
 
+    // Only the top surface has stops: the drawer under it holds none.
+    expect(stopsOf(button('.drawer-first'))).toHaveLength(0)
     button('.command-last').focus()
-    key(button('.command-last'), 'Tab')
+    tabPast(button('.command-last'))
     expect(document.activeElement).toBe(button('.command-first'))
-    key(button('.command-first'), 'Tab', true)
+    tabPast(button('.command-first'), true)
     expect(document.activeElement).toBe(button('.command-last'))
 
     key(button('.command-last'), 'Escape')
@@ -89,7 +102,7 @@ describe('shared nested overlay ownership', () => {
     expect(document.activeElement).toBe(trigger)
     expect(document.body.style.overflow).toBe('hidden')
     button('.drawer-last').focus()
-    key(button('.drawer-last'), 'Tab')
+    tabPast(button('.drawer-last'))
     expect(document.activeElement).toBe(button('.drawer-first'))
     key(button('.drawer-first'), 'Escape')
     await flushPromises()

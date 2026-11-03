@@ -135,9 +135,13 @@ function focusable(): HTMLElement[] {
   return surface.value
     ? Array.from(
         surface.value.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          'button:not([disabled]), a[href], summary, input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
         ),
-      ).filter((item) => !item.closest('[inert], [aria-hidden="true"]'))
+      ).filter(
+        (item) =>
+          !item.closest('[inert], [aria-hidden="true"]') &&
+          item.checkVisibility({ visibilityProperty: true }),
+      )
     : []
 }
 
@@ -171,31 +175,29 @@ async function focusSurface() {
   ;(firstControl() ?? surface.value)?.focus()
 }
 
+/**
+ * A Tab is the browser's to move, from where the reader is, and the trap holds only the
+ * ends: a stop either side of the surface sends focus round to the far end. The browser
+ * goes on from a press too, from the very place pressed, but focus outranks that place, and
+ * a press on text gives focus to the nearest ancestor that holds it: the scroller, or the
+ * surface itself in the bar. Every Tab then started from the head of that ancestor, the
+ * first fact or the far end of the card. Let go, focus goes on from the press.
+ */
 function trapFocus(event: KeyboardEvent) {
-  if (event.key !== 'Tab' || !active.value) return
-  const controls = focusable()
-  const first = controls[0]
-  const last = controls.at(-1)
-  // Nothing to trap between when the surface holds no focusable control, and
-  // asking for both ends is the same check the length test was standing in for.
-  if (!first || !last) {
-    event.preventDefault()
-    surface.value?.focus()
-    return
-  }
+  if (event.key !== 'Tab' || event.defaultPrevented || !active.value) return
   const focused = document.activeElement
-  if (focused === surface.value || focused === waitingOn) {
+  if (focused === waitingOn) {
     event.preventDefault()
     waitingOn = null
-    ;(event.shiftKey ? last : (firstControl() ?? first)).focus()
-  } else if (event.shiftKey && (focused === first || !surface.value?.contains(focused))) {
-    event.preventDefault()
-    last.focus()
-  } else if (!event.shiftKey && (focused === last || !surface.value?.contains(focused))) {
-    event.preventDefault()
-    first.focus()
+    if (event.shiftKey) roundToLast()
+    else (firstControl() ?? focusable()[0] ?? surface.value)?.focus()
+  } else if (focused instanceof HTMLElement && focused.tabIndex < 0) {
+    focused.blur()
   }
 }
+
+const roundToFirst = () => (focusable()[0] ?? surface.value)?.focus()
+const roundToLast = () => (focusable().at(-1) ?? surface.value)?.focus()
 
 function release() {
   releaseOverlayOwnership(ownership.value)
@@ -265,6 +267,14 @@ onUnmounted(release)
           @click="pressOnScrim"
           @mousedown.prevent
         />
+        <!-- The stops at the ends, where a Tab that has run out of controls lands. -->
+        <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -->
+        <span
+          v-if="active"
+          class="visually-hidden"
+          tabindex="0"
+          @focus="roundToLast"
+        />
         <!-- The role is inside `modality`, which the a11y rule cannot look into: it
              reads the attributes written on the element and this one carries a
              computed object. An interactive surface here is `role="dialog"` with a
@@ -309,6 +319,13 @@ onUnmounted(release)
           >
           <slot />
         </section>
+        <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -->
+        <span
+          v-if="active"
+          class="visually-hidden"
+          tabindex="0"
+          @focus="roundToFirst"
+        />
       </div>
     </Transition>
   </Teleport>

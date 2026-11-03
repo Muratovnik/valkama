@@ -13,8 +13,10 @@ const CARD = serializePlatformRoute({
   scope: projectScope,
   entity: planningWorkItemEntity(workItemRef),
 })
+const BOARD = serializePlatformRoute({ module_id: 'planning', scope: projectScope })
 
 async function cardBeingRead(page: Page) {
+  await page.goto(CARD)
   const drawer = page.locator('.drawer')
   await expect(drawer.locator('.card-facts')).toBeVisible()
   await expect(drawer).toHaveCSS('transform', 'none')
@@ -22,7 +24,6 @@ async function cardBeingRead(page: Page) {
 }
 
 const placeOf = (body: Locator) => body.evaluate((node) => node.scrollTop)
-const bottomOf = (body: Locator) => body.evaluate((node) => node.scrollHeight - node.clientHeight)
 
 /**
  * The body's place once it has stopped moving. The keys that read scroll smoothly, so a
@@ -46,89 +47,173 @@ const restingPlace = (body: Locator) =>
       }),
   )
 
-/** Whether focus stands in the card and before its scroller: the stop a Shift+Tab goes back to. */
-const focusIsBefore = (body: Locator) =>
-  body.evaluate((node) => {
-    const inOrder = [...(node.closest('.drawer')?.querySelectorAll('*') ?? [])]
-    const focused = document.activeElement
-    const at = focused ? inOrder.indexOf(focused) : -1
-    return at !== -1 && at < inOrder.indexOf(node)
-  })
-
-test('a press on plain text far down leaves Tab and Shift+Tab where they were', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1440, height: 700 })
+const openLongRead = async (page: Page, width = 1440) => {
+  await page.setViewportSize({ width, height: 700 })
   await installBackend(page, { longRead: true })
-  await page.goto(CARD)
-  const drawer = await cardBeingRead(page)
-  const body = drawer.locator('.drawer-frame-body')
-  const box = await body.boundingBox()
-  await page.mouse.move((box?.x ?? 0) + 200, (box?.y ?? 0) + 300)
-  await page.mouse.wheel(0, 400)
-  await expect.poll(() => placeOf(body)).toBe(400)
-  const text = drawer.getByText('Paragraph 12 of a description').first()
-  const line = await text.boundingBox()
-  await page.mouse.click((line?.x ?? 0) + 20, (line?.y ?? 0) + 6)
-  await page.keyboard.press('PageDown')
-  await expect.poll(() => placeOf(body)).toBeGreaterThan(400)
-  const read = await restingPlace(body)
-  await page.keyboard.press('PageUp')
-  await expect.poll(() => placeOf(body)).toBeLessThan(read)
-  const place = await restingPlace(body)
-  await page.keyboard.press('Shift+Tab')
-  await expect.poll(() => focusIsBefore(body)).toBe(true)
-  // Nowhere near the end of the card, where the trap's last control is.
-  const end = await bottomOf(body)
-  expect(await placeOf(body)).toBeLessThan(end - 200)
-  expect(await placeOf(body)).toBeLessThanOrEqual(place)
-})
+  return cardBeingRead(page)
+}
 
-/**
- * A press on text gives focus to the scroller, wherever in it the press lands, and the next
- * stops are its neighbours in the document: what stands before it, the body's own after. A
- * press whose focus fell to the surface sent the trap to either end of the card from here.
- */
-const TEXT_IN_THE_BODY = [
-  { where: 'top', scrollTo: 0, text: (drawer: Locator) => drawer.locator('.drawer-frame-name') },
+interface Press {
+  scrollTo: number
+  where: string
+  /** Reads on with the keys after the press: where the keys left it is not where it was. */
+  readOn?: boolean
+  /** Brings up what is pressed, when it is not there from the start. */
+  bringUp?: (drawer: Locator) => Promise<void>
+  text: (drawer: Locator) => Locator
+}
+
+const BODY_TEXT = (drawer: Locator) => drawer.getByText('Paragraph 12 of a description').first()
+const PRESSES: Press[] = [
+  { where: 'a fact in the bar', scrollTo: 0, text: (d) => d.locator('.identity-fact').first() },
   {
-    where: 'middle',
+    where: "the bar's title, read down",
     scrollTo: 400,
-    text: (drawer: Locator) => drawer.getByText('Paragraph 12 of a description').first(),
+    text: (d) => d.locator('.drawer-frame-pinned-title'),
   },
   {
-    where: 'bottom',
-    scrollTo: Number.MAX_SAFE_INTEGER,
-    text: (drawer: Locator) => drawer.getByText('No comments or reports yet.'),
+    where: 'a notice',
+    scrollTo: 0,
+    text: (d) => d.locator('.confirm-message'),
+    bringUp: async (d) => d.locator('.card-action').getByRole('button').click(),
   },
+  { where: 'the title', scrollTo: 0, text: (d) => d.locator('.drawer-frame-name') },
+  { where: 'the facts', scrollTo: 0, text: (d) => d.locator('.card-facts .facet-word').first() },
+  { where: 'the text, read down', scrollTo: 400, text: BODY_TEXT },
+  { where: 'the text, read on with the keys', scrollTo: 400, readOn: true, text: BODY_TEXT },
 ]
 
-/** Whether focus stands inside the scroller, on what it holds: the stop a Tab goes on to. */
-const focusIsInside = (body: Locator) =>
-  body.evaluate((node) => {
+/** Where a key goes after a press: the stop it reaches, and where the card then stands. */
+async function afterPress(page: Page, press: Press, key: string, holdersTakeFocus: boolean) {
+  const drawer = await cardBeingRead(page)
+  const body = drawer.locator('.drawer-frame-body')
+  await press.bringUp?.(drawer)
+  await body.evaluate((node, top) => node.scrollTo({ top }), press.scrollTo)
+  await restingPlace(body)
+  // What the bar shows has finished arriving, or a stop would depend on the moment of the key.
+  await drawer.evaluate(() => Promise.all(document.getAnimations().map((run) => run.finished)))
+  // Nothing here can hold a press on text, which is the page the card is measured against.
+  if (!holdersTakeFocus)
+    await drawer.evaluate((node) => {
+      for (const holder of [node, ...node.querySelectorAll('[tabindex="-1"]')])
+        holder.removeAttribute('tabindex')
+    })
+  const line = await press.text(drawer).boundingBox()
+  await page.mouse.click((line?.x ?? 0) + 4, (line?.y ?? 0) + 6)
+  if (press.readOn) {
+    await page.keyboard.press('PageDown')
+    await expect.poll(() => placeOf(body)).toBeGreaterThan(press.scrollTo)
+    const read = await restingPlace(body)
+    await page.keyboard.press('PageUp')
+    await expect.poll(() => placeOf(body)).toBeLessThan(read)
+    await restingPlace(body)
+  }
+  await page.keyboard.press(key)
+  const stop = await drawer.evaluate((node) => {
     const focused = document.activeElement
-    return focused !== node && node.contains(focused)
+    const label = focused?.getAttribute('aria-label') ?? focused?.textContent
+    return `${String(focused && [...node.querySelectorAll('*')].indexOf(focused))} ${String(label)}`
   })
+  return { stop, place: await restingPlace(body) }
+}
 
-for (const { where, scrollTo, text } of TEXT_IN_THE_BODY) {
-  for (const { key, reached } of [
-    { key: 'Shift+Tab', reached: focusIsBefore },
-    { key: 'Tab', reached: focusIsInside },
-  ]) {
-    test(`a press on plain text at the ${where} of a card sends ${key} on to its neighbour`, async ({
+for (const press of PRESSES) {
+  for (const key of ['Tab', 'Shift+Tab']) {
+    test(`after a press on ${press.where}, ${key} goes on from there as on a page with no trap`, async ({
       page,
     }) => {
       await page.setViewportSize({ width: 1440, height: 700 })
       await installBackend(page, { longRead: true })
-      await page.goto(CARD)
-      const drawer = await cardBeingRead(page)
-      const body = drawer.locator('.drawer-frame-body')
-      await body.evaluate((node, top) => node.scrollTo({ top }), scrollTo)
-      const line = await text(drawer).boundingBox()
-      await page.mouse.click((line?.x ?? 0) + 20, (line?.y ?? 0) + 6)
-      await expect(body).toBeFocused()
-      await page.keyboard.press(key)
-      await expect.poll(() => reached(body)).toBe(true)
+      const plainPage = await afterPress(page, press, key, false)
+      expect(await afterPress(page, press, key, true)).toEqual(plainPage)
     })
   }
 }
+
+const THE_END = (drawer: Locator) => drawer.getByText('No comments or reports yet.')
+
+test('a press on the last text sends Shift+Tab to the control before it', async ({ page }) => {
+  const drawer = await openLongRead(page)
+  const body = drawer.locator('.drawer-frame-body')
+  await body.evaluate((node) => node.scrollTo({ top: node.scrollHeight }))
+  const line = await THE_END(drawer).boundingBox()
+  await page.mouse.click((line?.x ?? 0) + 20, (line?.y ?? 0) + 6)
+  const place = await placeOf(body)
+  await page.keyboard.press('Shift+Tab')
+  await expect(drawer.getByRole('textbox', { name: 'Comment' })).toBeFocused()
+  expect(await placeOf(body)).toBe(place)
+})
+
+for (const [width, first] of [
+  [1440, '.overlay-resizer'],
+  [390, '.drawer-frame-close'],
+] as const) {
+  test(`past the last text a Tab comes round to the first control at ${width}px`, async ({
+    page,
+  }) => {
+    const drawer = await openLongRead(page, width)
+    await drawer
+      .locator('.drawer-frame-body')
+      .evaluate((node) => node.scrollTo({ top: node.scrollHeight }))
+    const line = await THE_END(drawer).boundingBox()
+    await page.mouse.click((line?.x ?? 0) + 20, (line?.y ?? 0) + 6)
+    await page.keyboard.press('Tab')
+    await expect(drawer.locator(first)).toBeFocused()
+    // And back round the other way, from the real edge.
+    await page.keyboard.press('Shift+Tab')
+    await expect(drawer.getByRole('textbox', { name: 'Comment' })).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(drawer.locator(first)).toBeFocused()
+  })
+}
+
+/** Where focus goes over every stop there is and a few more, in one direction. */
+async function roundTheTrap(page: Page, surface: Locator, key: string) {
+  const inside: boolean[] = []
+  for (let press = 0; press < 40; press += 1) {
+    await page.keyboard.press(key)
+    inside.push(await surface.evaluate((node) => node.contains(document.activeElement)))
+  }
+  return inside.filter((held) => !held)
+}
+
+for (const key of ['Tab', 'Shift+Tab']) {
+  test(`${key} from a press stays in the card, all the way round`, async ({ page }) => {
+    const drawer = await openLongRead(page)
+    const line = await drawer.locator('.drawer-frame-name').boundingBox()
+    await page.mouse.click((line?.x ?? 0) + 4, (line?.y ?? 0) + 6)
+    expect(await roundTheTrap(page, drawer, key)).toEqual([])
+  })
+
+  test(`${key} from a press stays in a dialog, all the way round`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 700 })
+    await installBackend(page)
+    await page.goto(BOARD)
+    await page.keyboard.press('Control+k')
+    const dialog = page.getByRole('dialog', { name: 'Find a task', exact: true })
+    await expect(dialog.getByRole('combobox')).toBeFocused()
+    const box = await dialog.boundingBox()
+    await page.mouse.click((box?.x ?? 0) + 6, (box?.y ?? 0) + (box?.height ?? 0) - 6)
+    expect(await roundTheTrap(page, dialog, key)).toEqual([])
+  })
+}
+
+/** A surface may hold more than one scroller, and each holds a press on its own text. */
+test('a press in a second pane goes on from there, and not from the first', async ({ page }) => {
+  const drawer = await openLongRead(page)
+  await drawer.evaluate((node) => {
+    const pane = document.createElement('div')
+    pane.tabIndex = -1
+    pane.style.cssText = 'position: fixed; inset: 0 auto auto 0; z-index: 9; width: 200px;'
+    pane.innerHTML =
+      '<button id="ahead">Ahead</button><p id="said">Said</p><button id="after">After</button>'
+    node.append(pane)
+  })
+  const said = page.locator('#said')
+  await said.click()
+  await page.keyboard.press('Tab')
+  await expect(page.locator('#after')).toBeFocused()
+  await said.click()
+  await page.keyboard.press('Shift+Tab')
+  await expect(page.locator('#ahead')).toBeFocused()
+})

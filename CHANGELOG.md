@@ -105,6 +105,11 @@ checkouts are therefore distinguishable even at the same version.
   means in both languages with no retry to press, and the short address leads to
   the card. A store old enough that its whole space cannot be read answers the same
   code where it used to drop the connection.
+- **Tab goes on from where a card was pressed.** A press on plain text in a card or a
+  dialog left Tab starting from the top of what held it: Shift+Tab after a press in the
+  bar went to the comment field and scrolled the card to its end, and Tab after a press
+  far down went back to the first fact at the top. Tab and Shift+Tab now go on from the
+  place pressed, as on a page, and still come round at the ends of the card.
 - **A transition's reason is checked before the item moves.** A reason long enough to
   overflow the history entry, which reads `<state key>: <reason>`, used to move the item
   and then fail on that entry, naming `event.detail`, a field the caller never sent. The
