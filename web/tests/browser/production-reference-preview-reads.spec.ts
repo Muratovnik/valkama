@@ -133,12 +133,11 @@ test('leaving while the read is out cancels it and shows nothing', async ({ page
   page.on('requestfailed', (request) => {
     if (request.url().includes('brief=true')) failed.push(request.failure()?.errorText ?? '')
   })
-  reads.answer(() => new Promise(() => {}))
-  const link = reference(dialog, 'MAIN-12')
-  await rest(page, link)
-  await expect.poll(() => reads.asked.length).toBe(1)
-  // Pressed in the moment the card is held back for the answer.
-  await page.mouse.move(5, 5)
+  // The pointer leaves as the read goes out, while the card is held back for the answer.
+  reads.answer(async () => {
+    await page.mouse.move(5, 5)
+  })
+  await rest(page, reference(dialog, 'MAIN-12'))
   await expect.poll(() => failed).toEqual(['net::ERR_ABORTED'])
   expect(await cardsAfterTheDelay(page)).toBe(0)
 })

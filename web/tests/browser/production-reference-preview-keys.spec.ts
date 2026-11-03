@@ -11,6 +11,7 @@ import type { Locator, Page } from '@playwright/test'
 import {
   card,
   cardsAfterTheDelay,
+  coolDown,
   HUB_PROMPT,
   middle,
   openHub,
@@ -242,6 +243,18 @@ test('focus given back to a reference the pointer rests on does not bring the ca
   expect(await cardsAfterTheDelay(page)).toBe(0)
 })
 
+test('a surface opening over a card the pointer holds up closes it', async ({ page }) => {
+  const { drawer, entry } = await openReported(page)
+  // Focus is in the draft, so nothing about focus tells the card; the pointer has not moved.
+  await drawer.locator('.discussion-form').getByRole('textbox').focus()
+  await rest(page, reference(entry, 'MAIN-12'))
+  const shown = card(page)
+  await expect(shown).toBeVisible()
+  await page.keyboard.press('Control+k')
+  await expect(page.getByRole('dialog', { name: 'Find', exact: false })).toBeVisible()
+  await expect(shown).toHaveCount(0)
+})
+
 test('a surface opening while the card still waits calls it off', async ({ page }) => {
   const { entry } = await openReported(page)
   await rest(page, reference(entry, 'MAIN-12'))
@@ -250,9 +263,20 @@ test('a surface opening while the card still waits calls it off', async ({ page 
   expect(await cardsAfterTheDelay(page)).toBe(0)
 })
 
-test('a focus move that is not a Tab shows no card', async ({ page }) => {
+test('a focus move that is not a Tab shows no card, under the pointer or not', async ({ page }) => {
   const { entry } = await openReported(page)
-  await reference(entry, 'MAIN-12').focus()
+  const link = reference(entry, 'MAIN-12')
+  await link.focus()
+  expect(await cardsAfterTheDelay(page)).toBe(0)
+
+  // Dismissed under the pointer, then given focus by a script: still dismissed.
+  await page.keyboard.press('Tab')
+  await coolDown()
+  await rest(page, link)
+  await expect(card(page)).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(card(page)).toHaveCount(0)
+  await link.focus()
   expect(await cardsAfterTheDelay(page)).toBe(0)
 })
 
