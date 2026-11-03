@@ -146,6 +146,12 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- **Creating work items from several agents at once no longer fails** with a raw
+  `UNIQUE constraint failed` on the item number: the counter is taken under the write lock.
+  Two planning spaces whose names derive the same key, created at once, get two keys instead
+  of a constraint error, and a project naming a second space alike is refused in words.
+  Recording a summary or report while another writer commits no longer fails with
+  `database is locked`.
 - **A press on the board no longer crashes the tab.** Chromium 156 crashes the renderer on
   a press that takes focus out of a `content-visibility: auto` element just back in view,
   in Chrome and in the desktop app. A tile out of sight is now laid out like any other, and
