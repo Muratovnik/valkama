@@ -273,6 +273,7 @@ def resolve_paths(
     paths: Sequence[str],
     *,
     project: str | None = None,
+    exact: bool = False,
     reader: project_registry.RegistryReader | None = None,
 ) -> list[dict[str, object]]:
     """What each written path is, from `stat` alone: no file is opened.
@@ -287,7 +288,9 @@ def resolve_paths(
     whose links the page has already read from the document's folder into paths
     from that project's root. The root is the registry's for that id, and the
     boundary is still every registered root, as from a space. A page names one
-    base or none.
+    base or none. `exact` is for those links: an author wrote them from the
+    document's folder, so what is not under the root is not there, and a project
+    registered inside the root is not asked.
     """
 
     if not paths or len(paths) > MAX_RESOLVE_PATHS or (space is not None and project is not None):
@@ -304,7 +307,7 @@ def resolve_paths(
             raise DocumentError("invalid_request")
         if mapping["status"] == "mapped":
             base = os.path.realpath(str(mapping["canonical_root"]))
-    nested = nested_roots(base, roots) if base is not None else ()
+    nested = nested_roots(base, roots) if base is not None and not exact else ()
     return [_resolved(raw, locate(raw, base=base, roots=roots, nested=nested)) for raw in paths]
 
 

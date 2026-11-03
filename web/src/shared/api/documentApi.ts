@@ -18,8 +18,12 @@ const RESOLVE_ADDRESS_LIMIT = 65_000
 
 const PATH_LIMIT = 1024
 
-/** What a relative path is taken from: a planning space's identity, or an open document's project. */
-export type DocumentBase = { space?: string } | { project: string }
+/**
+ * What a relative path is taken from: a planning space's identity, or an open document's
+ * project. `exact` is for a link read from the document's own folder, which names that
+ * path under that root and nothing registered inside it.
+ */
+export type DocumentBase = { space?: string } | { project: string; exact?: boolean }
 
 const sent = z.string().max(PATH_LIMIT)
 const project = z.string().min(1).max(240)
@@ -120,8 +124,10 @@ async function read(input: string): Promise<unknown> {
 
 function resolveAddress(base: DocumentBase, paths: readonly string[]): string {
   const parameters = new URLSearchParams()
-  if ('project' in base) parameters.set('project', base.project)
-  else if (base.space) parameters.set('space', base.space)
+  if ('project' in base) {
+    parameters.set('project', base.project)
+    if (base.exact) parameters.set('exact', '1')
+  } else if (base.space) parameters.set('space', base.space)
   for (const path of paths) parameters.append('path', path)
   return `/api/documents/resolve?${parameters.toString()}`
 }

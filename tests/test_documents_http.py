@@ -245,6 +245,20 @@ class ResolveTests(DocumentRoutesHarness):
             {"path": "../outside/secret.md", "status": "refused", "code": "outside_root"}, outside
         )
 
+    def test_a_link_from_a_document_s_folder_is_not_looked_for_in_a_nested_project(self) -> None:
+        # The same path, as a path in the document's text and as a link in it.
+        query = urlencode([("project", "workspace"), ("path", "src/only-one.md")])
+        status, body, _ = self.request(f"/api/documents/resolve?{query}")
+        self.assertEqual((200, "file"), (status, body["paths"][0]["status"]))
+        status, body, _ = self.request(f"/api/documents/resolve?{query}&exact=1")
+        self.assertEqual(
+            (200, [{"path": "src/only-one.md", "status": "missing"}]), (status, body["paths"])
+        )
+        # Under the root itself it is found all the same.
+        query = urlencode([("project", "workspace"), ("path", "docs/plan.md"), ("exact", "1")])
+        status, body, _ = self.request(f"/api/documents/resolve?{query}")
+        self.assertEqual((200, "file"), (status, body["paths"][0]["status"]))
+
     def test_a_project_base_is_the_registry_s_root_for_that_id(self) -> None:
         # A nested project's base is its own root, not its parent's.
         status, body = self.resolve_from("one", "src/only-one.md", "docs/plan.md")

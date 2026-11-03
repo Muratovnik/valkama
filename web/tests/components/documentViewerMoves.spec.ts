@@ -78,7 +78,7 @@ describe('moving between documents', () => {
     expect(heading()).toBe('Two')
     await leave(120, 'the next')
     expect(heading()).toBe('Three')
-    expect(resolve).toHaveBeenCalledWith({ project: 'demo' }, ['docs/sub/two.md'])
+    expect(resolve).toHaveBeenCalledWith({ project: 'demo', exact: true }, ['docs/sub/two.md'])
 
     const backTo = vi.spyOn(HTMLElement.prototype, 'scrollTo')
     control('Back to docs/sub/two.md')?.click()
@@ -146,6 +146,14 @@ describe('moving between documents', () => {
     await flushPromises()
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('gone.md')
     expect(status()).toBe('Path copied')
+  })
+
+  it('a path in the words is taken as in a card, and a link only from the document', async () => {
+    disk['docs/plan.md'] = file('docs/plan.md', 'See `src/a.ts` and [the note](note.md).\n')
+    await opened()
+    await flushPromises()
+    expect(resolve).toHaveBeenCalledWith({ project: 'demo', exact: false }, ['src/a.ts'])
+    expect(resolve).toHaveBeenCalledWith({ project: 'demo', exact: true }, ['docs/note.md'])
   })
 
   it('the head copies the path from the project root', async () => {

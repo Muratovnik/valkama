@@ -89,15 +89,15 @@ function runs(reference: DocumentReference, covered: string) {
  * second `provide` in one component would replace the first; one that provides
  * nothing else uses `provideDocumentLinks`.
  */
-export function useDocumentLinks(base: () => DocumentBase) {
+export function useDocumentLinks(base: (reference: DocumentReference) => DocumentBase) {
   const { t } = useI18n()
   const opener = useDocumentOpener()
   const memories = new Map<string, ReturnType<typeof pathMemory>>()
   /** Written runs being acted on, so a second press while waiting does not act twice. */
   const pressing = new Set<string>()
 
-  function memory() {
-    const current = base()
+  function memory(reference: DocumentReference) {
+    const current = base(reference)
     const key = JSON.stringify(current)
     const known = memories.get(key)
     if (known) return known
@@ -140,7 +140,7 @@ export function useDocumentLinks(base: () => DocumentBase) {
     if (pressing.has(reference.value)) return
     pressing.add(reference.value)
     try {
-      const current = memory()
+      const current = memory(reference)
       const decision = await current.decided(query)
       if (decision.state === 'confirmed') {
         await act(decision.answer, query, reference.value)
@@ -169,7 +169,7 @@ export function useDocumentLinks(base: () => DocumentBase) {
   }
 
   return (reference: DocumentReference): ReferenceLink | null => {
-    const current = memory()
+    const current = memory(reference)
     const query = documentParts(reference)
     for (const path of query.paths) current.ask(path)
     const decision = current.decide(query)
@@ -199,7 +199,7 @@ export function useDocumentLinks(base: () => DocumentBase) {
 }
 
 /** Add a layer of document links for everything rendered below this component. */
-export function provideDocumentLinks(base: () => DocumentBase): void {
+export function provideDocumentLinks(base: (reference: DocumentReference) => DocumentBase): void {
   const documents = useDocumentLinks(base)
   provideReferenceLinks((reference, parent) =>
     reference.kind === 'document' ? documents(reference) : parent(reference),

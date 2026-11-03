@@ -27,7 +27,10 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ leave: [] }>()
 
-const documents = useDocumentLinks(() => ({ project: props.project }))
+const documents = useDocumentLinks((reference) => ({
+  project: props.project,
+  exact: reference.linkFrom !== undefined,
+}))
 provideReferenceLinks((reference, parent) => {
   if (reference.kind === 'document') return documents(reference)
   const link = parent(reference)

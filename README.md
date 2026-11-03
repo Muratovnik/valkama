@@ -694,7 +694,9 @@ that document's project instead: `project=<id>` in place of `space`, the id
 project registered inside it is asked after it, as from a space, and the boundary
 stays every registered root. The page has already read a link in the document
 from the document's folder into a path from the project's root, so no folder is
-sent. A `project` the registry does not know is `project_unknown` for the whole
+sent, and it adds `exact=1` for those links: a project registered inside the root
+is not asked for them, since their author wrote them from that folder. A `project`
+the registry does not know is `project_unknown` for the whole
 request, and naming both `space` and `project` is `invalid_request`. Each path is sent as written, without its
 `:42` or `#...` suffix, and comes back unchanged in `path`, so an answer is matched
 without parsing it. A request line may not pass 64 KiB (the listener answers 414),

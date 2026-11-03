@@ -335,6 +335,7 @@ def _document_answer(path: str, parameters: Mapping[str, list[str]]) -> tuple[in
                 _first_value(parameters, "space"),
                 paths,
                 project=_first_value(parameters, "project"),
+                exact=_first_value(parameters, "exact") == "1",
             )
             return 200, {"paths": answers}
         project = _first_value(parameters, "project")
