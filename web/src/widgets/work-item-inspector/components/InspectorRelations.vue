@@ -4,6 +4,8 @@ import { useI18n } from 'vue-i18n'
 
 import RelatedWorkPicker from '@/widgets/work-item-inspector/components/RelatedWorkPicker.vue'
 
+import OpenAction from '@/features/session-open/OpenAction.vue'
+
 import { linkWorkItems, planningRefusal } from '@/shared/api/planningApi.ts'
 import { LINK_KINDS } from '@/shared/api/planningModel.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
@@ -24,7 +26,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   changed: []
   open: [reference: string]
-  session: [id: string, family: string]
 }>()
 const { t, d } = useI18n()
 type Link = WorkItem['links'][number]
@@ -226,14 +227,13 @@ function when(value: string): string {
           class="ref-row"
         >
           <span class="ref-kind">{{ t(`reference.${reference.kind}`) }}</span>
-          <button
+          <OpenAction
             v-if="reference.kind === 'session'"
-            type="button"
-            class="ref-value"
-            @click="emit('session', reference.value, '')"
-          >
-            {{ reference.label || reference.value }}</button
-          ><RichText
+            class="ref-session"
+            :session="reference.value"
+            :name="reference.label || reference.value"
+            :detail="reference.value"
+          /><RichText
             v-else
             class="ref-value"
             :source="reference.label || reference.value"
@@ -373,6 +373,10 @@ function when(value: string): string {
 .ref-kind {
   color: var(--color-text-tertiary);
   font: var(--font-detail);
+}
+
+.ref-session {
+  justify-self: start;
 }
 
 .ref-value {

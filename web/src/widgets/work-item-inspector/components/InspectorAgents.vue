@@ -21,6 +21,8 @@ import { useI18n } from 'vue-i18n'
 import { agentFacts, AGENTS_SHOWN } from '@/widgets/work-item-inspector/utils/agentFacts.ts'
 import type { TimeWords } from '@/widgets/work-item-inspector/utils/agentFacts.ts'
 
+import OpenAction from '@/features/session-open/OpenAction.vue'
+
 import type { WorkItemAgent } from '@/shared/api/planningModel.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import RichText from '@/shared/ui/RichText.vue'
@@ -229,6 +231,14 @@ async function toggle() {
           >
           <span class="agent-fact">{{ link }}</span>
         </p>
+        <OpenAction
+          v-if="agent.executor?.session"
+          class="agent-open"
+          :session="agent.executor.session"
+          :executor="agent.executor"
+          :action="t('open.action.parent')"
+          :detail="t('open.hint.parent')"
+        />
       </li>
     </ul>
     <VButton
@@ -329,6 +339,11 @@ async function toggle() {
 
 .agent-id {
   font-family: var(--font-family-mono);
+}
+
+/* Its own line, under the facts: on a phone it would break their line anywhere else. */
+.agent-open {
+  justify-self: start;
 }
 
 .agents-more {

@@ -21,8 +21,11 @@ import {
   matchesRecorded,
 } from '@/widgets/work-item-inspector/utils/historyRecords.ts'
 
+import OpenAction from '@/features/session-open/OpenAction.vue'
+
 import type { Execution } from '@/shared/api/executionModel.ts'
 import { actorName } from '@/shared/lib/actor.ts'
+import { sessionFamilyOf } from '@/shared/lib/settings.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import RichText from '@/shared/ui/RichText.vue'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
@@ -40,7 +43,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   launch: []
-  session: [sessionId: string, clientFamily: string]
   stop: [reference: string]
 }>()
 
@@ -300,14 +302,12 @@ function evidence(attempt: Execution): string {
                 v-for="entry in attempt.sessions"
                 :key="entry.session_id"
               >
-                <button
-                  class="attempt-session"
-                  type="button"
-                  :title="entry.session_id"
-                  @click="emit('session', entry.session_id, entry.client)"
-                >
-                  {{ t(`execution.relation.${entry.relation}`) }} · {{ actorName(entry.client) }}
-                </button>
+                <OpenAction
+                  :session="entry.session_id"
+                  :family="sessionFamilyOf(entry.client)"
+                  :name="`${t(`execution.relation.${entry.relation}`)} · ${actorName(entry.client)}`"
+                  :detail="entry.session_id"
+                />
               </li>
             </ul>
           </li>
@@ -428,20 +428,5 @@ function evidence(attempt: Execution): string {
   padding: 0;
   margin: 0;
   list-style: none;
-}
-
-.attempt-session {
-  padding: 0;
-  border: 0;
-  color: var(--color-text-muted);
-  font: var(--font-detail);
-  overflow-wrap: anywhere;
-  background: none;
-  cursor: pointer;
-
-  &:is(:hover, :focus-visible) {
-    color: var(--color-text);
-    text-decoration: underline;
-  }
 }
 </style>

@@ -25,6 +25,7 @@ import DocumentViewer from '@/widgets/document-viewer/components/DocumentViewer.
 
 import GlobalWorkFinder from '@/features/global-find/GlobalWorkFinder.vue'
 import InputRequestsHub from '@/features/input-requests/components/InputRequestsHub.vue'
+import { provideOpenNotice } from '@/features/session-open/openNotice.ts'
 import SessionContext from '@/features/session-open/SessionContext.vue'
 import { resolveSessionWorkItemRoute } from '@/features/session-open/sessionWorkItemRoute.ts'
 import WorkItemLinkPanel from '@/features/work-item-link/WorkItemLinkPanel.vue'
@@ -199,7 +200,7 @@ function openEntity(entity?: EntityRef) {
   })
 }
 
-async function openSession(sessionId: string, _clientFamily: string, navigate = false) {
+async function openSession(sessionId: string, navigate = false) {
   try {
     const context = await fetchSessionContext(sessionId)
     if (navigate && context.resolved && context.work_item && context.space_root?.resource_ref) {
@@ -228,19 +229,20 @@ const { documentView, openDocument } = useAppDocuments([
 ])
 // What a path written in free text can do from here: see the composable.
 useDocumentOpening(say, openDocument)
+provideOpenNotice(say)
 // References written in free text, anywhere in the shell: see the composable.
 useAppReferenceLinks({
   projects: () => contextReady.value?.projects ?? [],
   primaryScope: () => contextReady.value?.primary.data_scope_id,
   openTarget,
-  openSession: (id) => void openSession(id, ''),
+  openSession: (id) => void openSession(id),
   say,
 })
 watch([pendingSession, modulesSettled, contextReady], () => {
   if (!pendingSession.value || !modulesSettled.value || !contextReady.value) return
   const id = pendingSession.value
   pendingSession.value = ''
-  void openSession(id, '', true)
+  void openSession(id, true)
 })
 function selectLocale(requested: string) {
   const value = requested === 'ru' ? 'ru' : 'en'
@@ -333,7 +335,6 @@ usePlatformEntryRestore({
           :locale="locale"
           @connection="(state) => (planningConnection = state)"
           @entity="openEntity"
-          @open-session="openSession"
           @notice="(message) => (notice = message)"
           @open-project="openProject"
           @switch-scope="switchScope"

@@ -126,11 +126,19 @@
 
 /* The holder sits under the step's own text, so a name never competes with the
    step it belongs to. */
+
+/* A line of one height whether the holder can be pressed or not, so a list of steps keeps
+   its rhythm; what it says beside the holder is never cut, and the holder gives way. */
 .step-holder {
-  display: block;
+  display: flex;
   grid-column: 2;
+  gap: var(--space-1);
+  align-items: baseline;
+  min-width: 0;
+  min-height: var(--size-control-inline);
   padding-bottom: var(--space-1);
   margin-top: calc(-1 * var(--space-1));
   color: var(--color-text-tertiary);
   font: var(--font-detail);
+  white-space: nowrap;
 }

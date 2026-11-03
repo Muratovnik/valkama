@@ -71,6 +71,10 @@ type BackendOptions = {
   uiPrefs?: unknown
   /** The agents the card's read answers with, read again at each read. */
   agents?: () => unknown[]
+  /** What the card's read answers once everything above has had its say. */
+  card?: (read: Record<string, unknown>) => object
+  /** What `GET /api/open-plan` answers; an empty object by default, which no plan reads as. */
+  openPlan?: (query: URLSearchParams) => object
 }
 
 /** Paragraphs enough to scroll a drawer body well past any head. */
@@ -183,6 +187,7 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
           fulfill({ interface_version: 'valkama-planning-api', activity: activityRows() }),
         '/api/sessions': () => fulfill({ sessions: structuredClone(monitorSessions), inbox: [] }),
         '/api/session': () => fulfill(sessionContextFor(url.searchParams.get('id'))),
+        '/api/open-plan': () => fulfill(options.openPlan?.(url.searchParams) ?? {}),
         '/api/open-places': () =>
           fulfill({
             places: {
@@ -342,7 +347,7 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
             closedWith === undefined
               ? told
               : { ...told, state: doneState, summary: { done: closedWith, next: '' } }
-          const answered =
+          const stepped =
             stepText === undefined
               ? read
               : {
@@ -351,6 +356,8 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
                     index === 0 ? { ...step, text: stepText } : step,
                   ),
                 }
+          const answered = (options.card?.(stepped as Record<string, unknown>) ??
+            stepped) as typeof stepped
           platformReads.push(`${path}?${url.searchParams.toString()}`)
           return fulfill({
             interface_version: 'valkama-planning-work-item',

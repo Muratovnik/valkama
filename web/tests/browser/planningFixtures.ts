@@ -30,7 +30,7 @@ export const globalScope = { kind: 'global' as const }
 export const workItemRef = { space_ref: spaceRef, reference: 'MAIN-264' }
 export const attachedWorkItemRef = { space_ref: attachedSpaceRef, reference: workItemRef.reference }
 export const now = '2026-08-13T09:00:00Z'
-const identity = (id: number) => `00000000-0000-4000-8000-${String(id).padStart(12, '0')}`
+export const identity = (id: number) => `00000000-0000-4000-8000-${String(id).padStart(12, '0')}`
 
 const STATES = [
   { key: 'backlog', name: 'Backlog', category: 'backlog', terminal: false },

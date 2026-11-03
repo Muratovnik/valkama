@@ -92,10 +92,21 @@ test('the memory section offers exactly what the provider says it can do', async
   await expect(drawer).toContainText('A ratchet only tightens.')
 })
 
-test('an old exact session link resolves its work and opens compact native context', async ({
+test('an old exact session link resolves its work, and its attempt opens the session', async ({
   page,
 }) => {
-  await installBackend(page)
+  await installBackend(page, {
+    openPlan: () => ({
+      target: { kind: 'session', session: launchedSessionId, agent: '' },
+      surface: 'browser',
+      client: 'codex',
+      state: 'ended',
+      place: { opened_in: 'app', opened_host: 'codex-app', source: 'recorded', first_open: false },
+      opens: { opened_in: 'app', opened_host: 'codex-app', source: 'recorded', missed: '' },
+      one_action: true,
+      steps: [{ kind: 'open-link', scheme: 'codex', link: `codex://threads/${launchedSessionId}` }],
+    }),
+  })
   await page.goto(
     serializePlatformRoute({
       module_id: 'sessions',
@@ -107,11 +118,10 @@ test('an old exact session link resolves its work and opens compact native conte
   await expect(drawer).toBeVisible()
   await expect(drawer).toContainText(workItemRef.reference)
   await drawer.getByRole('button', { name: /^Execution$/i }).click()
-  await drawer.getByRole('button', { name: /launched session/i }).click()
-  const context = page.getByRole('dialog', { name: 'Session', exact: true })
-  await expect(context).toBeVisible()
-  await expect(context).toContainText(launchedSessionId)
-  await expect(context.getByRole('button', { name: 'Open session' })).toBeVisible()
+  await drawer.getByRole('button', { name: /launched session.* in Codex/i }).click()
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { __opened?: string[] }).__opened))
+    .toEqual([`codex://threads/${launchedSessionId}`])
   await expect(page).toHaveURL(/modules\/planning/)
 })
 

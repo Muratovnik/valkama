@@ -75,6 +75,8 @@ export interface Refusal {
   code?: ExplainStep['code']
   /** What is not installed, for `not-installed`. */
   host?: (typeof NOT_INSTALLED)[number]
+  /** The last sign of a session long silent, which may have crashed; see `OpenAction.offer`. */
+  silent_since?: string
 }
 
 /** One click's worth of a plan: the steps it carries out together. */
@@ -89,6 +91,8 @@ export interface PreparedOpen {
   actions: OpenAction[]
   /** What the plan says first or only: why it runs, why it opens nothing. */
   notice: Refusal | null
+  /** What only its own press may run, whatever else was taken; see `offerIndex`. */
+  offer: OpenAction | null
   plan: OpenPlan | null
 }
 
@@ -96,8 +100,14 @@ export type Outcome =
   | { notice: Refusal | null; opens: PlanOpens | null; status: 'opened' }
   | { notice: Refusal | null; status: 'copied'; text: string }
   /** An action ran or a notice was given; `next` waits for the person's next click. */
-  | { next: OpenAction; notice: Refusal | null; opens: PlanOpens | null; status: 'next' }
-  | { refusal: Refusal; status: 'refused' }
+  | {
+      next: OpenAction
+      notice: Refusal | null
+      opens: PlanOpens | null
+      status: 'next'
+      offer?: OpenAction
+    }
+  | { refusal: Refusal; status: 'refused'; offer?: OpenAction; opens?: PlanOpens | null }
 
 /** The owner's choices one click needs; read from the settings unless given. */
 export interface OpenChoices {
@@ -121,6 +131,7 @@ function refusalOf(detail: {
   code?: string
   host?: string
   reason?: string
+  silent_since?: string
 }): Refusal {
   const reason = detail.reason ?? ''
   if (!KNOWN_REASONS.has(reason)) return { reason: 'bridge-failed' }
@@ -130,6 +141,7 @@ function refusalOf(detail: {
   if (detail.code !== undefined && KNOWN_CODES.has(detail.code))
     refusal.code = detail.code as Refusal['code']
   if (detail.archived !== undefined) refusal.archived = detail.archived
+  if (detail.silent_since !== undefined) refusal.silent_since = detail.silent_since
   return refusal
 }
 
@@ -137,7 +149,7 @@ function refused(reason: RefusalReason): Outcome {
   return { status: 'refused', refusal: { reason } }
 }
 
-function currentSettings(choices: OpenChoices): PlatformSettings {
+export function currentSettings(choices: OpenChoices = {}): PlatformSettings {
   if (choices.settings) return choices.settings
   try {
     return useSettingsStore().settings
@@ -147,14 +159,14 @@ function currentSettings(choices: OpenChoices): PlatformSettings {
   }
 }
 
-function appCall(): AppCall | null {
+export function appCall(): AppCall | null {
   const desktop = window.valkamaDesktop
   return desktop?.openSession
     ? (request) => desktop.openSession?.(request) ?? Promise.resolve(null)
     : null
 }
 
-function queryFor(target: OpenTarget, on: Surface, places: Places): PlanQuery {
+export function queryFor(target: OpenTarget, on: Surface, places: Places): PlanQuery {
   if (target.kind === 'session')
     return { target: 'session', session: target.session, surface: on, ...places }
   if (target.kind === 'file')
@@ -242,6 +254,35 @@ async function ask(app: AppCall, request: BridgeOpenRequest): Promise<BridgeOpen
 }
 
 /**
+ * The step of a plan that is no part of its route: a session long silent may have
+ * crashed, and the plan's last step resumes it. Only the person can tell whether its
+ * window is still open, so nothing reaches it by following from the step before.
+ */
+function offerIndex(plan: OpenPlan): number {
+  const silent = plan.steps.some((step) => step.kind === 'explain' && step.silent_since)
+  const kind = plan.steps.at(-1)?.kind
+  return silent && (kind === 'copy' || kind === 'resume-in-terminal') ? plan.steps.length - 1 : -1
+}
+
+/** Where an offer took it, since the plan's `opens` names where the route would have gone. */
+const IN_A_TERMINAL: PlanOpens = {
+  opened_in: 'terminal',
+  opened_host: '',
+  source: 'recorded',
+  missed: '',
+}
+
+function asOffer(action: OpenAction): OpenAction {
+  return {
+    steps: action.steps,
+    async run() {
+      const outcome = await action.run()
+      return outcome.status === 'opened' ? { ...outcome, opens: IN_A_TERMINAL } : outcome
+    },
+  }
+}
+
+/**
  * What the app's answer means to the person. `follow` builds the action for the
  * step the answer names as `next`, which runs only on the next click.
  */
@@ -251,7 +292,9 @@ function answered(
 ): Outcome {
   if (answer === null) return refused('bridge-failed')
   const opens = answer.plan?.opens ?? null
-  const next = answer.next === null || !follow ? null : follow(answer.next, answer.plan)
+  const offered = answer.plan && follow ? offerIndex(answer.plan) : -1
+  const step = answer.next === offered ? null : answer.next
+  const next = step === null || !follow ? null : follow(step, answer.plan)
   if (answer.mode === 'copied')
     return { status: 'copied', text: answer.command ?? '', notice: null }
   if (answer.mode === 'opened')
@@ -259,7 +302,10 @@ function answered(
       ? { status: 'next', opens, notice: null, next }
       : { status: 'opened', opens, notice: null }
   const refusal = refusalOf(answer)
-  return next ? { status: 'next', opens, notice: refusal, next } : { status: 'refused', refusal }
+  const offer = follow && offered >= 0 ? { offer: asOffer(follow(offered, answer.plan)) } : null
+  return next
+    ? { status: 'next', opens, notice: refusal, next, ...offer }
+    : { status: 'refused', refusal, ...(offer ? { ...offer, opens } : {}) }
 }
 
 /** Who the app is asked about and with which places, the same for every action of a click. */
@@ -337,7 +383,8 @@ async function runInBrowser(
 
 /** A browser plan's actions, in order: one per step unless one action may run them all. */
 function browserActions(plan: OpenPlan): OpenAction[] {
-  const steps = plan.steps.filter((step) => step.kind !== 'explain')
+  const offered = plan.steps[offerIndex(plan)]
+  const steps = plan.steps.filter((step) => step.kind !== 'explain' && step !== offered)
   const explained = plan.steps.find((step) => step.kind === 'explain')
   const notice = explained ? refusalOf(explained) : null
   const groups = plan.one_action ? [steps] : steps.map((step) => [step])
@@ -355,8 +402,14 @@ function browserActions(plan: OpenPlan): OpenAction[] {
   return actions.filter((action) => action.steps.length > 0)
 }
 
+/** What a browser's plan offers apart from its route, ready for its own press. */
+function browserOffer(plan: OpenPlan): OpenAction | null {
+  const step = plan.steps[offerIndex(plan)]
+  return step ? { steps: [step], run: () => runInBrowser([step], plan.opens, null) } : null
+}
+
 /** Why a plan with nothing to carry out opens nothing: its last explanation. */
-function planRefusal(plan: OpenPlan): Refusal {
+export function planRefusal(plan: OpenPlan): Refusal {
   const explained = plan.steps.filter((step) => step.kind === 'explain')
   const last = explained.at(-1)
   return last ? refusalOf(last) : { reason: 'no-session' }
@@ -374,7 +427,7 @@ function customAction(session: string, command: string): OpenAction {
  * name is planned once without them, which names its client; that plan is kept
  * when the family's places are the defaults.
  */
-async function placesFor(
+export async function placesFor(
   target: OpenTarget,
   settings: PlatformSettings,
   on: Surface,
@@ -409,19 +462,26 @@ export async function prepareOpen(
     const chosen = await placesFor(target, settings, app ? 'desktop' : 'browser')
     if ('custom' in chosen) {
       const session = target.kind === 'session' ? target.session : ''
-      return { actions: [customAction(session, chosen.custom)], notice: null, plan: null }
+      const actions = [customAction(session, chosen.custom)]
+      return { actions, notice: null, offer: null, plan: null }
     }
     if (app) {
       const asked = { app, target, places: chosen.places }
-      return { actions: [appAction(asked, undefined, [])], notice: null, plan: chosen.plan }
+      const actions = [appAction(asked, undefined, [])]
+      return { actions, notice: null, offer: null, plan: chosen.plan }
     }
     const plan = chosen.plan ?? (await fetchOpenPlan(queryFor(target, 'browser', chosen.places)))
     const actions = browserActions(plan)
     const explained = plan.steps.some((step) => step.kind === 'explain')
-    return { actions, notice: explained ? planRefusal(plan) : null, plan }
+    return {
+      actions,
+      notice: explained ? planRefusal(plan) : null,
+      offer: browserOffer(plan),
+      plan,
+    }
   } catch (error) {
     const reason = error instanceof OpenPlanRequestError ? error.code : 'request-failed'
-    return { actions: [], notice: { reason }, plan: null }
+    return { actions: [], notice: { reason }, offer: null, plan: null }
   }
 }
 

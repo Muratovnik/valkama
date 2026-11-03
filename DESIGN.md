@@ -1011,6 +1011,29 @@ stand whole, since a toggle for one row costs more than the row. An open card re
 the list again on the stream's own `agents` event, which leaves the board and the
 graph as they are. A wrapped line of facts starts without a dot, because the dot
 stands in the room each fact's margin takes from the line, which the line clips.
+A holder with a session behind them is the way to it, in the card's head, on its steps
+and in «Agents», and in an attempt, a link and the session dialog the same button does
+it: the holder's name, which gives way, and where the session opens, which does not. A
+terminal has its glyph and no product has a logo; a running session says so («Терминал ·
+идёт»), and while the owner's "always open in" decides, the place says that too
+(«VS Code · по настройке»), because a setting that overrides the rule must not hide it.
+A name too long for the line ends in an ellipsis at twelve characters or takes a line of
+its own, and an action's own words are never cut. What the button says is the server's
+plan, read before any press and run by none, once for all the buttons of one session,
+since only the plan knows what a row older than the place record comes to, what is
+installed here and whether the client still keeps the session; the card's own read paints
+first, so nothing waits and a failed read leaves that standing. A session nothing can open
+is no button: why stands in the quiet ink, its reason a press of a small mark away so that
+neither a finger nor the keyboard is left without it. One press opens. A plan of two steps,
+or one that must explain itself first, opens a panel: focus stands on the first action, the
+next is offered once the one before it has run and takes focus then, and Escape goes back
+to the button. A button keeps focus while it works, marked busy and taking no second press.
+What came of a press is said in the shell's notice. A session in a terminal that has said
+nothing for more than a day, and whose process nobody saw alive, may have crashed with its
+row still saying it runs. Silence proves nothing, so it still says it runs; its panel says
+since when, warns about two processes on one transcript, and offers to resume apart from
+the actions, with no focus and on no press but its own.
+
 The related work/session/evidence context is one grouped relationship region,
 not a decorative sequence. Execution history and native session opening stay
 inside work-item context; Memory is a typed reference there.

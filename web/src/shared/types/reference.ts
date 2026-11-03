@@ -43,5 +43,7 @@ export interface ResolvedRef {
   session?: string
   session_cwd?: string
   space_root?: SpaceRootResolution
+  /** A session's state: `active`, `ended`, `failed`; `missing` or `ambiguous` when unresolved. */
+  status?: string
   work_item?: string | null
 }

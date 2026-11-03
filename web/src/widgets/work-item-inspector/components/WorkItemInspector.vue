@@ -101,7 +101,6 @@ const emit = defineEmits<{
   filter: [token: WorkFilterToken]
   /** Another card opened from this one, and where this one was left. */
   open: [reference: string, from: InspectorReturn]
-  session: [sessionId: string, clientFamily: string]
 }>()
 
 const { t } = useI18n()
@@ -449,7 +448,6 @@ defineExpose({ close })
             :item="payload"
             :writable="writable && !busy"
             @changed="reloaded"
-            @session="(id, family) => emit('session', id, family)"
             @open="openFrom"
           />
           <InspectorExecution
@@ -462,7 +460,6 @@ defineExpose({ close })
             :writable="writable"
             @launch="running.openLaunch"
             @stop="running.stop"
-            @session="(id, family) => emit('session', id, family)"
           />
           <InspectorMemory
             v-else-if="section === 'memory'"

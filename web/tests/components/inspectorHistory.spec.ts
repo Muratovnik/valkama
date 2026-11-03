@@ -1,7 +1,7 @@
 import { createI18n } from 'vue-i18n'
 
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import InspectorActivity from '@/widgets/work-item-inspector/components/InspectorActivity.vue'
 import InspectorExecution from '@/widgets/work-item-inspector/components/InspectorExecution.vue'
@@ -9,6 +9,8 @@ import {
   groupHistory,
   matchesRecorded,
 } from '@/widgets/work-item-inspector/utils/historyRecords.ts'
+
+import OpenAction from '@/features/session-open/OpenAction.vue'
 
 import { validateHistory } from '@/shared/api/executionModel.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
@@ -20,6 +22,10 @@ import VTextInput from '@/shared/ui/VTextInput.vue'
 import { executionHistory } from '../browser/executionFixtures.ts'
 import { workItemFixture } from '../fixtures/workItem.ts'
 import { present } from '../support/present.ts'
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 function plugins() {
   return [
@@ -144,6 +150,11 @@ describe('recorded history', () => {
   })
 
   it('filters execution records while retaining launch, stop, session and error behavior', async () => {
+    // Its session's button asks the server where it would open.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}', { status: 200 })),
+    )
     const attempt = present(validateHistory(executionHistory).executions[0], 'execution')
     attempt.presence = 'live'
     const wrapper = mount(InspectorExecution, {
@@ -161,11 +172,9 @@ describe('recorded history', () => {
       .getComponent(VTextInput)
       .setValue(present(attempt.sessions[0], 'session').session_id)
     expect(wrapper.findAll('.attempt')).toHaveLength(1)
-    await wrapper.get('.attempt-session').trigger('click')
-    expect(wrapper.emitted('session')?.[0]).toEqual([
-      present(attempt.sessions[0], 'session').session_id,
-      present(attempt.sessions[0], 'session').client,
-    ])
+    const action = wrapper.getComponent(OpenAction)
+    expect(action.props('session')).toBe(present(attempt.sessions[0], 'session').session_id)
+    expect(action.props('family')).toBe('claude')
     await wrapper.getComponent(VTextInput).setValue('absent')
     expect(wrapper.text()).toContain('No matching records')
     expect(

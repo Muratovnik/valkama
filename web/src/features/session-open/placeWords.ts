@@ -7,7 +7,7 @@
 
 import type { OpenAction, Outcome, Refusal } from '@/features/session-open/openPlan.ts'
 
-type Translate = (key: string, values?: Record<string, unknown>) => string
+export type Translate = (key: string, values?: Record<string, unknown>) => string
 
 /** A place as the server names one: the host when there is one, else how it is open. */
 export interface PlaceName {
@@ -22,8 +22,8 @@ export function placeKey(place: PlaceName): string {
 }
 
 /** The phrase for being there, which a sentence takes: "in a terminal", «в терминале». */
-function whereKey(place: PlaceName): string {
-  return `open.where.${place.opened_host || place.opened_in}`
+export function whereWords(t: Translate, place: PlaceName): string {
+  return t(`open.where.${place.opened_host || place.opened_in}`)
 }
 
 /**
@@ -39,7 +39,7 @@ export function actionKey(action: OpenAction): string {
     : 'open.action.open-link-in-window'
 }
 
-function refusalWords(t: Translate, refusal: Refusal): string {
+export function refusalWords(t: Translate, refusal: Refusal): string {
   if (refusal.reason === 'path-refused' && refusal.code)
     return t(`open.pathRefused.${refusal.code}`)
   if (refusal.reason === 'not-installed' && refusal.host) {
@@ -58,6 +58,6 @@ export function outcomeWords(t: Translate, outcome: Outcome): string {
   if (outcome.status === 'next')
     return outcome.notice ? refusalWords(t, outcome.notice) : t('open.outcome.next')
   return outcome.opens?.opened_in
-    ? t('open.outcome.opened', { where: t(whereKey(outcome.opens)) })
+    ? t('open.outcome.opened', { where: whereWords(t, outcome.opens) })
     : t('open.outcome.openedPlain')
 }

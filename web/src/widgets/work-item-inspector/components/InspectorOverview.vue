@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useId, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
+import { Translation, useI18n } from 'vue-i18n'
 
 import InspectorAgents from '@/widgets/work-item-inspector/components/InspectorAgents.vue'
 import InspectorDescription from '@/widgets/work-item-inspector/components/InspectorDescription.vue'
@@ -11,11 +11,11 @@ import { openBlockers } from '@/widgets/work-item-inspector/utils/openBlockers.t
 import type { StateMove } from '@/widgets/work-item-inspector/utils/useInspectorWrites.ts'
 
 import { useItemQuestions } from '@/features/input-requests/composables/useItemQuestions.ts'
+import ExecutorLink from '@/features/session-open/ExecutorLink.vue'
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
-import { holderName } from '@/shared/lib/actor.ts'
 import { plainText } from '@/shared/lib/richText.ts'
 import { semanticStatePresentation, statePresentation } from '@/shared/lib/uiSystem.ts'
 import RichText from '@/shared/ui/RichText.vue'
@@ -96,6 +96,11 @@ function stepState(done: boolean) {
 /** The step's box, which its text labels; one card is open at a time, its ids its own. */
 const checklistId = useId()
 const stepBox = (stepId: string) => `${checklistId}-${stepId}`
+/** Who a step names: its holder while it is open, whoever did it once it is done. */
+const stepHolder = (step: WorkItem['checklist'][number]) =>
+  step.done ? step.done_by : step.claimed_by
+const stepHolderKey = (step: WorkItem['checklist'][number]) =>
+  step.done ? 'workItem.stepDoneBy' : 'workItem.stepHeldBy'
 /** A blocker as the facet registry words a wait: «Ждёт MAIN-12», then what it is. */
 const blockerTone = semanticStatePresentation({
   dimension: 'work-item-readiness',
@@ -242,16 +247,19 @@ defineExpose({ askOutcome, revealChecklist, revealQuestion })
               :size="16"
             />
           </VButton>
-          <span
-            v-if="step.claimed_by && !step.done"
+          <Translation
+            v-if="stepHolder(step)"
             class="step-holder"
-            >{{ t('workItem.stepHeldBy', { agent: holderName(step.claimed_by) }) }}</span
+            tag="span"
+            :keypath="stepHolderKey(step)"
           >
-          <span
-            v-else-if="step.done && step.done_by"
-            class="step-holder"
-            >{{ t('workItem.stepDoneBy', { agent: holderName(step.done_by) }) }}</span
-          >
+            <template #agent>
+              <ExecutorLink
+                :holder="stepHolder(step)"
+                :executor="step.executor"
+              />
+            </template>
+          </Translation>
         </li>
       </ul>
     </section>

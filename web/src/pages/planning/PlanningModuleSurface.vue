@@ -80,7 +80,6 @@ const emit = defineEmits<{
   'entity': [entity?: EntityRef]
   'notice': [message: string]
   'open-project': [projectId: string]
-  'open-session': [sessionId: string, clientFamily: string]
   'state': [state: Record<string, string | number | boolean>]
 }>()
 
@@ -462,7 +461,6 @@ defineExpose({ refresh, selectedId })
         @close="closeItem"
         @filter="filterFromCard"
         @open="(reference, left) => openItem(reference, true, left)"
-        @session="(id, family) => emit('open-session', id, family)"
       />
     </ResizableInspector>
   </div>

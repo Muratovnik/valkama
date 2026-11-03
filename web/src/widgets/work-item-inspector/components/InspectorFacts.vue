@@ -14,7 +14,8 @@
  * Every mark is the facet registry's, so priority carries its glyph and its
  * hue here as it does on a tile. The holder's lease is a tooltip and, when
  * nobody is behind it any more, a warning dot: it is a detail of the holder,
- * not a fact of its own.
+ * not a fact of its own. A holder with a session behind them is the way to it,
+ * on finished work too, where resuming whoever held it is often the point.
  *
  * Every fact stands in a row of one height, the height of the state's own chip,
  * so a line of them reads as one line whichever are present and however they wrap.
@@ -24,9 +25,11 @@
  * buttons that add themselves to the Work filter.
  */
 import { computed, ref } from 'vue'
-import { useI18n } from 'vue-i18n'
+import { Translation, useI18n } from 'vue-i18n'
 
 import InspectorWriteActions from '@/widgets/work-item-inspector/components/InspectorWriteActions.vue'
+
+import ExecutorLink from '@/features/session-open/ExecutorLink.vue'
 
 import FacetMarks from '@/entities/work-item/components/FacetMarks.vue'
 import LabelChip from '@/entities/work-item/components/LabelChip.vue'
@@ -137,6 +140,11 @@ const holderTitle = computed(() =>
  */
 const spokenOwner = computed(() => (props.item.state.is_terminal ? '' : `${ownerLabel.value}:`))
 
+/** The session behind the holder: its claim's, or on finished work its last claim's. */
+const holderExecutor = computed(() =>
+  props.item.state.is_terminal ? props.item.last_claim_executor : props.item.claim?.executor,
+)
+
 function when(value: string): string {
   const date = new Date(value)
   return Number.isNaN(date.valueOf()) ? value : d(date, 'activity')
@@ -207,7 +215,34 @@ defineExpose({ actionCell })
           class="visually-hidden"
           >{{ spokenOwner }}</span
         >
+        <template v-if="holderExecutor?.session">
+          <Translation
+            v-if="item.state.is_terminal"
+            class="card-holder-past"
+            keypath="workItem.previousHolder"
+            tag="span"
+          >
+            <template #holder>
+              <ExecutorLink
+                size="compact"
+                variant="ghost"
+                :holder="holderRef(item)"
+                :executor="holderExecutor"
+                :detail="ownerLabel"
+              />
+            </template>
+          </Translation>
+          <ExecutorLink
+            v-else
+            size="compact"
+            variant="ghost"
+            :holder="holderRef(item)"
+            :executor="holderExecutor"
+            :detail="leaseText || ownerLabel"
+          />
+        </template>
         <FacetMarks
+          v-else
           surface="card"
           :item="item"
           :facets="['holder']"
@@ -309,6 +344,17 @@ defineExpose({ actionCell })
 
 .card-holder-stale {
   flex: none;
+}
+
+/* «Ранее отвечал:» and the holder it names read as one fact, however the name is cut. */
+.card-holder-past {
+  display: inline-flex;
+  gap: var(--space-2);
+  align-items: center;
+  min-width: 0;
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+  white-space: nowrap;
 }
 
 .card-action {
