@@ -274,7 +274,6 @@ class ProjectRegistryTests(unittest.TestCase):
             root / "desktop" / "project_registry.js",
             root / "desktop" / "session_opener.js",
             root / "web" / "src" / "features" / "session-open" / "openPlan.ts",
-            root / "web" / "src" / "shared" / "lib" / "sourceReference.ts",
         ]
         identity_aliases = (
             "_project_for_board",

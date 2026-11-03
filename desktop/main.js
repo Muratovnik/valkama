@@ -32,7 +32,6 @@ const { discoverSupportedOpeners } = require('./opener_catalog')
 const { fetchOpenPlan } = require('./open_plan_request')
 const { establishServer, verifyStartedOwnership } = require('./server_startup')
 const { openSessionRequest } = require('./session_opener')
-const { openSourceRequest } = require('./source_opener')
 const { createStartupLog } = require('./startup_log')
 const { resolveLocale, startupAction, startupPageUrl } = require('./startup_page')
 
@@ -112,11 +111,6 @@ function isValkamaSender(event) {
   const senderUrl = event.senderFrame?.url || event.sender.getURL()
   return typeof senderUrl === 'string' && senderUrl.startsWith(URL)
 }
-
-ipcMain.handle('valkama:open-source', async (event, request) => {
-  const senderUrl = event.senderFrame?.url || event.sender.getURL()
-  return openSourceRequest({ senderUrl, appUrl: URL, request, shell })
-})
 
 ipcMain.on('valkama:open-route-ready', (event) => {
   if (isValkamaSender(event)) pageListens = true

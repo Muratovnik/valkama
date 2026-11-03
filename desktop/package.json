@@ -6,7 +6,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "test": "node --test context_menu.test.js live_sessions.test.js open_path.test.js open_plan_request.test.js opener_catalog.test.js preload.test.js project_registry.test.js runtime_contract.test.js server_startup.test.js session_opener.test.js shell_hardening.test.js source_reference.test.js source_opener.test.js startup_log.test.js startup_page.test.js",
+    "test": "node --test context_menu.test.js live_sessions.test.js open_path.test.js open_plan_request.test.js opener_catalog.test.js preload.test.js project_registry.test.js runtime_contract.test.js server_startup.test.js session_opener.test.js shell_hardening.test.js startup_log.test.js startup_page.test.js",
     "dist": "electron-builder"
   },
   "devDependencies": {
@@ -28,8 +28,6 @@
       "runtime_contract.js",
       "server_startup.js",
       "session_opener.js",
-      "source_opener.js",
-      "source_reference.js",
       "startup_log.js",
       "startup_page.js",
       "package.json"

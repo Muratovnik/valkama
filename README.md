@@ -913,14 +913,6 @@ npm run dist     # build the installer into release/
 Rebuild and reinstall after changing `desktop/main.js`; UI-only changes just
 need `npm run build` in `web/`.
 
-The window can open a Markdown source at an exact `#kb:` anchor through VS Code's
-URL handler. Each click carries only `{source, resource_ref}`; Electron re-reads
-the fixed project registry and accepts only the exact existing `canonical_root`
-mapped to that Planning-space resource. An absent, malformed, unavailable or
-ambiguous mapping is refused, and renderer paths, process directories, launcher
-paths, titles and environment overrides never choose another root. Plain browser
-mode has no local-file authority and copies the source pointer instead.
-
 **The tray icon** appears while an agent holds an MCP session and disappears when
 the last one ends, so it answers "is anybody working here right now?". Clicking
 it always does something visible. With the desktop app installed it starts the

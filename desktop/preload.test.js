@@ -44,36 +44,15 @@ function loadBridge() {
   return { bridge, calls, handlers, sent }
 }
 
-test('preload forwards only the exact source request object', async () => {
+test('preload hands an open request to the app as it is', async () => {
   const { bridge, calls } = loadBridge()
-  const request = {
-    source: 'docs/plans/source.md#kb:source',
-    resource_ref: { kind: 'planning-space', resource_id: 'canonical-resource' },
-  }
-  const result = await bridge.openSource(request)
+  const request = { path: { kind: 'file', project: 'demo', path: 'src/a.ts', line: 42 } }
 
-  assert.equal(result.ok, true)
+  await bridge.openSession(request)
+
   assert.equal(calls.length, 1)
-  assert.equal(calls[0].channel, 'valkama:open-source')
+  assert.equal(calls[0].channel, 'valkama:open-session')
   assert.equal(calls[0].request, request)
-})
-
-test('preload rejects legacy strings and objects carrying path authority', async () => {
-  const { bridge, calls } = loadBridge()
-  for (const request of [
-    'docs/plans/source.md#kb:source',
-    { source: 'docs/plans/source.md#kb:source' },
-    {
-      source: 'docs/plans/source.md#kb:source',
-      resource_ref: { kind: 'planning-space', resource_id: 'canonical-resource' },
-      root: 'C:\\renderer-root',
-    },
-  ]) {
-    const result = await bridge.openSource(request)
-    assert.equal(result.ok, false)
-    assert.equal(result.error, 'invalid-source-request')
-  }
-  assert.equal(calls.length, 0)
 })
 
 test('a page that listens for routes gets the route alone, and says so only once it listens', () => {
