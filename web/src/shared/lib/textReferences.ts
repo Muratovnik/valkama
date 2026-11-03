@@ -25,7 +25,7 @@ type DocumentStrength = 'copy-only' | 'strong' | 'weak'
 
 export type TextReference =
   | { kind: IdentifierKind; value: string }
-  | { kind: 'document'; value: string; strength: DocumentStrength }
+  | { kind: 'document'; strength: DocumentStrength; value: string }
 
 /** One run of a text: either plain text or a candidate reference. */
 export type TextRun = string | TextReference

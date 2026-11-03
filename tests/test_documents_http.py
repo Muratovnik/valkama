@@ -308,7 +308,7 @@ class ReadTests(DocumentRoutesHarness):
 
     def test_what_is_not_utf8_text_is_refused(self) -> None:
         write(self.workspace / "zero.md", b"a\0b")
-        write(self.workspace / "latin.md", b"caf\xff")
+        write(self.workspace / "latin.md", b"text \xff")
         self.assertEqual((415, {"error": {"code": "binary"}}), self.read("workspace", "zero.md"))
         self.assertEqual((415, {"error": {"code": "not_utf8"}}), self.read("workspace", "latin.md"))
 
