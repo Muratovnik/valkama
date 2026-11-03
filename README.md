@@ -384,6 +384,7 @@ rather than falling back to a default, and `python valkama.py doctor` says why.
 | `claude_session_root` | `VALKAMA_CLAUDE_SESSION_ROOT` | none | where Claude Code keeps its session journals |
 | `codex_rollout_root` | `VALKAMA_CODEX_ROLLOUT_ROOT` | none | where Codex keeps its rollout journals |
 | `author` | `VALKAMA_AUTHOR` | `agent` | the name written into Planning claims and comments when an MCP tool call names no `author` |
+| `notify` | `VALKAMA_NOTIFY` | `on` | `off` stops the client hooks telling a working agent what a person did on its work items, and the watcher that wakes an idle session; see the [hook contract](docs/hook-contract.md#telling-the-agent-what-a-person-did) |
 
 ### Project registry
 
@@ -659,7 +660,7 @@ It reads the hook input from stdin and records the session event straight into
 the store, so sessions stay visible while neither `serve` nor an MCP session is
 running. When the store is busy, missing or at another schema version, the
 event goes to a spool beside the store and lands later. The command always
-exits 0, and a lifecycle event prints nothing, so it never blocks or alters a
+exits 0, and a lifecycle event prints nothing of its own, so it never blocks a
 client session.
 
 ```
@@ -672,11 +673,22 @@ The events are `session-start`, `session-end`, `subagent-start`,
 `subagent-stop`, `stop`, `user-prompt-submit` and `pre-compact` for both
 clients, plus `notification` and `post-tool-use` for Claude Code. Each one updates
 the session row that `GET /api/session` and work-item context read.
-`claude post-tool-use`, registered for the Agent tool, names the agent that call
-started. `claude pre-tool-use` adds the session identity to a Valkama tool call and
-is the only case that prints anything. Only an allowlisted set of fields is kept:
-never the prompt, tool arguments other than an Agent call's short description, or
-assistant text.
+`claude post-tool-use` names the agent an Agent tool call started. `claude
+pre-tool-use` adds the session identity to a Valkama tool call. Only an
+allowlisted set of fields is kept: never the prompt, tool arguments other than an
+Agent call's short description, or assistant text.
+
+The same hooks tell a working agent what a person did in the interface on the
+work its session holds. `post-tool-use`, `user-prompt-submit` and `stop` answer
+with a short notice when there is news: a comment, an answer, a status change, a
+cancel. The orchestrator hears about everything its session holds, a subagent
+about the items where it holds the claim or a step, each event once. `claude
+watch`, registered with Claude Code's `asyncRewake`, wakes an orchestrator that is
+idle, for example while it waits for a background subagent. Codex is told at its
+next prompt or tool call. `notify` switches this off (see
+[Configuration](#configuration)), and
+[the hook contract](docs/hook-contract.md#telling-the-agent-what-a-person-did)
+says who is told, what a notice holds and what it costs.
 
 When a session ends, the hook also copies the session's transcript, and a
 subagent's own transcript when the client reports one, into `transcripts/`

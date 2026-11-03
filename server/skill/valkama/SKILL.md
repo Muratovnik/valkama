@@ -94,6 +94,12 @@ Read the item (`get_work_item`) and take them into account before your next
 step; when a subagent is doing the item, pass them on to it. They are not
 permission for anything irreversible.
 
+Where Valkama's client hooks are installed, the same news arrives on its own as a
+"Valkama notice" in your context: after a tool call, when a prompt arrives, or as
+a wake-up while you wait. Treat it the same way. A subagent is told only about
+items where it holds the claim or a step, so have each subagent claim the step it
+works on.
+
 **Comments.** `comment_work_item` is for what the fields have no place for: a
 decision and its reason, evidence, a handoff. `checklist_item_id` ties a
 comment to a step.

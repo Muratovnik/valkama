@@ -431,7 +431,10 @@ class TheWindowTests(Harness):
         self.assertNotIn("text", self.window()[0])
 
     def test_importing_it_stays_light(self) -> None:
-        """A hook starts a process per event, so this may not pull the server in."""
+        """A hook starts a process per tool call, so this may not pull the server in.
+
+        Not even the request model: it is needed only to word an answer.
+        """
 
         code = (
             "import sys; import server.planning.person_events;"
@@ -444,13 +447,7 @@ class TheWindowTests(Harness):
             check=True,
         ).stdout.decode()
         self.assertEqual(
-            {
-                "server",
-                "server.planning",
-                "server.planning.model",
-                "server.planning.person_events",
-                "server.planning.request_model",
-            },
+            {"server", "server.planning", "server.planning.person_events"},
             set(loaded.split()),
         )
 

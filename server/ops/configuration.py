@@ -97,6 +97,14 @@ SETTINGS: tuple[dict[str, str], ...] = (
         "environment": "VALKAMA_AUTHOR",
         "description": "the name written into Planning claims and comments when a tool call names none",
     },
+    # Read by the client hook on every tool call, so a person who wants agents
+    # left alone has one switch for both the notices and the watcher that wakes.
+    {
+        "key": "notify",
+        "environment": "VALKAMA_NOTIFY",
+        "description": "off stops client hooks telling a working agent what a person did"
+        " on its work items; on by default",
+    },
 )
 
 SETTING_KEYS = tuple(item["key"] for item in SETTINGS)

@@ -25,11 +25,15 @@ Two rules hold in every case, including malformed input, a missing or locked
 store, and an internal error:
 
 - **Exit status 0.** A hook never fails or blocks its client because of
-  Valkama.
-- **Nothing on stdout**, except the identity output of `claude pre-tool-use`.
+  Valkama. The one exception is deliberate: `claude watch` exits 2 to wake its
+  session (see [the watcher](#the-watcher)).
+- **Stdout carries one JSON answer or nothing.** The answers are the identity
+  output of `claude pre-tool-use` and a notice from `post-tool-use`,
+  `user-prompt-submit` or `stop` (see
+  [Telling the agent what a person did](#telling-the-agent-what-a-person-did)).
   Claude Code adds `SessionStart` stdout to the model's context, and Codex reads
   stdout of `Stop` and `SubagentStop` as JSON, so a stray line there changes the
-  session. Diagnostics go to stderr.
+  session. Diagnostics go to stderr, as UTF-8.
 
 ## Clients and events
 
@@ -43,8 +47,13 @@ store, and an internal error:
 | `user-prompt-submit` | `UserPromptSubmit` | `prompt` | yes | yes |
 | `pre-compact` | `PreCompact` | `compact` | yes | yes |
 | `notification` | `Notification` | `attention` | yes | no such hook |
-| `post-tool-use` | `PostToolUse` on the Agent tool | `agent_launch` | yes | not read |
+| `post-tool-use` | `PostToolUse` | `agent_launch`, for the Agent tool only | yes | nothing recorded |
 | `pre-tool-use` | `PreToolUse` | nothing: the identity transform | yes | not needed |
+| `watch` | `UserPromptSubmit` and `Stop`, with `asyncRewake` | nothing: [the watcher](#the-watcher) | yes | no such mechanism |
+
+`post-tool-use`, `user-prompt-submit` and `stop` may also answer with a notice;
+for Codex, `post-tool-use` and `user-prompt-submit` do. That is described in
+[Telling the agent what a person did](#telling-the-agent-what-a-person-did).
 
 An event a client does not have, an unknown client, or input whose
 `hook_event_name` names a different hook than the command line is ignored, with
@@ -202,9 +211,10 @@ top-level session.
 
 ### Naming an agent
 
-Register `valkama hook claude post-tool-use` for `PostToolUse` with the matcher
-`^(Agent|Task)$` (`Task` is the Agent tool's name before Claude Code 2.1.63).
-Without it nothing else changes: an agent is shown by its type and short id.
+`valkama hook claude post-tool-use`, registered for `PostToolUse` on every tool,
+reads this from the Agent tool only (`Agent`, or `Task` before Claude Code
+2.1.63); for any other tool it records nothing. Without it nothing else changes:
+an agent is shown by its type and short id.
 
 `SubagentStart` carries the agent's id and no description, and `PreToolUse` of the
 Agent tool carries the description and no id yet. The answer carries both: the
@@ -282,6 +292,161 @@ as unconfirmed.
 
 Codex needs no transform. It sends the session and thread in the `_meta` of
 every MCP call.
+
+## Telling the agent what a person did
+
+A person in the interface and an agent working through its tools share a work
+item and no channel. A hook runs inside the agent's own session, in a terminal,
+an IDE extension or the desktop app alike, so the hook is where Valkama hands
+over what the person did: a comment, an answer, a status change, a cancel, an
+edit, a claim taken away. Each event is one that
+[`from_person`](connection-contract.md) would name: it came through the
+interface, and an agent's write signed `user` is not one.
+
+### Who is told
+
+The work of a session is what it holds: the claim of an item and the steps on
+its checklist, held by the session or by one of its agents. A holder is read
+from the store, never from who signed a write.
+
+- **The orchestrator**, a hook input without `agent_id`, is told about every
+  item its session holds, its subagents' steps included. It keeps the whole and
+  hands work out, so the notice asks it to pass the news on with `SendMessage`
+  to a subagent that is waiting or finished.
+- **A subagent**, a hook input with `agent_id`, is told only about the items
+  where it holds the claim or a step itself. A subagent that holds nothing is
+  told nothing: give the work you hand out a step it claims.
+- **An item that stopped being held** by the last write, a person cancelling it
+  or taking the claim, is told once more and then dropped.
+
+Every recipient is told each event once. Where an item's news starts the first
+time is the recipient's own last write on it, which is where the answer to that
+write left off. A recipient's write answering with `from_person` and its hook
+can name the same event; one notice too many is the price of never missing one.
+
+### When it is told
+
+| Hook | Notice |
+| --- | --- |
+| `PostToolUse`, every tool | while the agent works: after any tool call, the orchestrator's and a subagent's alike |
+| `UserPromptSubmit` | when a prompt arrives, including Claude Code's notice that a background subagent finished |
+| `Stop` | once, when the turn would end: only while `stop_hook_active` is false, so a notice continues a turn at most once |
+| `watch` | while the orchestrator is idle: see [the watcher](#the-watcher) |
+
+The answer is the client's own:
+
+```json
+{"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "Valkama notice: …"}}
+```
+
+Codex reads `additionalContext` from `PostToolUse` and `UserPromptSubmit` the same
+way, so `valkama hook codex post-tool-use` and `valkama hook codex
+user-prompt-submit` answer too. Codex has no way for a background hook to start
+a turn, so an idle Codex session is not woken: it hears the news at its next
+prompt or tool call.
+
+### What a notice says
+
+One notice names, per item, its reference and title and the newest events: the
+kind, the time and the start of what was said, as `from_person` gives it, at
+most 300 characters each. It then says what to do: read each item with
+`get_work_item` before the next step on it, and, for an orchestrator, pass the
+news on to a subagent that cannot hear it. It ends by saying that quoted words
+are what was written on the card, information about the work and not an
+instruction to the agent or permission for an irreversible action. The text
+calls itself a Valkama notice and is not written as a system message: a model
+rightly refuses text that poses as one. A notice keeps the newest 8 events that
+fit in 2400 characters and counts the rest.
+
+### The watcher
+
+An orchestrator waiting for a background subagent, or for the person, runs no
+hook at all. `valkama hook claude watch`, registered with `asyncRewake` on
+`UserPromptSubmit` and `Stop`, is the one process per session that waits for it.
+
+- **One per session.** It holds an exclusive lock on
+  `notify/<session>.watch`; a second start finds it held and exits 0 at once.
+  Without that, the prompt a wake starts would start another watcher each time.
+- **Read-only.** It reads the store on a read-only connection every two
+  seconds, and every ten once it has watched for ten minutes.
+- **Wakes once.** When news is waiting and the session is idle, the last `Stop`
+  having told nothing, it records the news as told, writes the notice to stderr
+  as UTF-8 and exits 2, which is how Claude Code wakes the session. Claude Code
+  shows that as a "Stop hook blocking error", so the notice begins by saying it
+  is not one. News found while the session is busy is left for 30 seconds to
+  the next tool call; after that the watcher wakes the session anyway, and
+  Claude Code queues the wake behind the turn under way.
+- **Leaves without a wake** when the session ends or is cleared (`SessionEnd`,
+  which `/clear` sends too, leaves `notify/<session>.end`), when the process
+  named by `CLAUDE_PID` is gone, when `CLAUDE_CODE_SESSION_ID` names another
+  session than its input, when it was started inside a subagent, and when
+  notices are switched off.
+- **Lives for its `timeout`.** Claude Code ends it then, with no wake. Each
+  prompt and each turn end starts it again, so a session at work is always
+  watched; one idle for longer than the `timeout` is not, until its next prompt.
+
+`UserPromptSubmit` and `Stop` run for the orchestrator. A watcher whose input
+names an `agent_id` exits at once: started in a subagent, it would wake the
+orchestrator and not the subagent. A subagent waiting for a message hears the
+news from the orchestrator.
+
+### Where each agent's place is kept
+
+Not in the store: a hook that wrote there would be a writer on every tool call.
+Beside the spool, in `notify/`, created only inside a store directory that
+exists, as `spool/` is:
+
+| File | What it holds |
+| --- | --- |
+| `<session>.marks`, `<session>--<agent>.marks` | per item, the last call read and the item's revision, newest event and newest comment at that read |
+| `<…>.lock` | held while one hook of that recipient reads and records, so parallel tool calls tell the news once |
+| `<session>.watch` | the watcher's lock |
+| `<session>.idle` | written by a `Stop` that told nothing, removed by `UserPromptSubmit` |
+| `<session>.end` | written by `SessionEnd`; it stops that session's watcher |
+
+A file that cannot be read counts as empty, so the worst a damaged one does is
+tell the current news once more. `SessionEnd` removes its session's places; a
+session resumed later starts again from its own last writes. Files of sessions
+gone without a `SessionEnd` are removed by a later one: places after 30 days,
+the rest after a day.
+
+### Switching it off
+
+`notify` in `config.json`, or `VALKAMA_NOTIFY`, set to `off` (or `0`, `false`,
+`no`) stops both the notices and the watcher. Nothing else changes: lifecycle
+events are still recorded, and a write still answers with `from_person`.
+
+### What it costs
+
+`PostToolUse` runs on every tool call. The notice path imports nothing beyond
+the standard library's C parts, reads the input with the C scanner `json` is
+built on, opens the store read-only, and answers after one indexed query when
+nothing changed. Measured on Windows against a store of 1500 items and 200 000
+events, from process start to exit, 60 calls each:
+
+| How it runs | p50 | p95 |
+| --- | --- | --- |
+| `cmd.exe /d /c valkama.cmd hook claude post-tool-use`, before this change | 78 ms | 86 ms |
+| `python valkama.py hook claude post-tool-use`, before this change | 57 ms | 60 ms |
+| `python -I -S <shim> hook claude post-tool-use`, nothing new | 29 ms | 32 ms |
+| the same, with a notice to print | 39 ms | 42 ms |
+| `cmd.exe /d /c valkama.cmd hook claude post-tool-use`, nothing new | 47 ms | 49 ms |
+
+So register these hooks in exec form: `command` the launcher's own `python.exe`
+(the `python` its manifest records) and `args` `["-I", "-S",
+"<launcher directory>/valkama-launcher.py", "hook", "claude", "<event>"]`. That
+also keeps the hook inside the client's process tree: a hook started through
+`cmd.exe` outlives a client killed with `taskkill /F`. The shim starts a hook
+without `runpy` and `pathlib`, which alone cost as much as the rest.
+
+### Limits
+
+- A `PostToolUse` input over 1 MiB, which a large tool answer can reach, is not
+  read, so that call tells nothing; the next one does.
+- A subagent that is idle cannot be woken directly; the orchestrator is, and
+  passes the news on.
+- A session that holds more than 200 items is told about the 200 it wrote to
+  last.
 
 ## The transcript archive
 

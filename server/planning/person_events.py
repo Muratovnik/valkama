@@ -25,18 +25,21 @@ so only Planning's own paths do. An edit logs no event, so its call row names wh
 it edited (`calls.call_id`), which is also what keeps a card dragged within its
 column, an edit of nothing but `rank`, from reading as somebody speaking.
 
-Nothing here imports past `request_model` and `model`: a client hook is meant to
-call this on a read-only connection of its own, in a process that starts for one
-event. The rows are read by position for the same reason, since such a connection
-sets no factory.
+A client hook keeps its own place instead (`since_call`): it tells the agents of
+one session, and an item's window ends at any agent's write, so a subagent's tick
+would end it before the session's orchestrator was told. The hook remembers the
+last call it has read for each item and asks for what came after that.
+
+Nothing here is imported at module level past `sqlite3`: a client hook calls this
+on a read-only connection of its own, in a process that starts for one tool call,
+where every module loaded is paid on every call. `json` and `request_model` are
+needed only for a report or an answer, so they are loaded there. The rows are
+read by position for the same reason, since such a connection sets no factory.
 """
 
 from __future__ import annotations
 
-import json
 import sqlite3
-
-from . import request_model
 
 #: What `execution_events.identity_source` says about a call; `calls` publishes these.
 BROWSER = "browser"
@@ -132,6 +135,31 @@ def since_last_agent_write(
     """
 
     boundary, edits = _boundary_and_edits(conn, work_item_id, own_call)
+    return [entry for _call, entry in _window(conn, work_item_id, boundary, edits)]
+
+
+def since_call(conn: sqlite3.Connection, work_item_id: str, after: int) -> list[tuple[int, dict]]:
+    """The person's events on one item whose call came after `after`, oldest first.
+
+    Each comes with the id of its call row, so a reader that keeps its own place
+    can remember how far it has read. The entries are the ones
+    `since_last_agent_write` gives; only where the window starts differs.
+    """
+
+    edits = conn.execute(
+        "SELECT id, identity_source, tool, reason, received_at FROM execution_events"
+        " WHERE id > ? AND work_item_id = ? AND kind = ? AND identity_source = ?"
+        " AND tool = ? AND reason <> '' ORDER BY id",
+        (after, work_item_id, KIND, BROWSER, _EDIT_TOOL),
+    ).fetchall()
+    return _window(conn, work_item_id, after, edits)
+
+
+def _window(
+    conn: sqlite3.Connection, work_item_id: str, boundary: int, edits: list[tuple]
+) -> list[tuple[int, dict]]:
+    """Every entry after `boundary`, with its call, in the order the calls were made."""
+
     found: list[tuple[tuple[int, int, int], dict]] = []
     if edits:
         found.extend(_edit_entries(conn, work_item_id, edits))
@@ -146,7 +174,7 @@ def since_last_agent_write(
         if action not in KINDS or (action == "summarized" and int(row[4]) in reports):
             continue
         found.append(((int(row[4]), 2, int(row[0])), _event_entry(conn, row)))
-    return [entry for _order, entry in sorted(found, key=lambda pair: pair[0])]
+    return [(order[0], entry) for order, entry in sorted(found, key=lambda pair: pair[0])]
 
 
 def _boundary_and_edits(
@@ -238,11 +266,15 @@ def _question_text(conn: sqlite3.Connection, action: str, request_id: str) -> st
     stored = _json(str(row[2]))
     if not isinstance(fields, list) or not isinstance(stored, dict):
         return ""
+    from . import request_model
+
     return request_model.answer_text(fields, stored)
 
 
 def _json(text: str) -> object:
     """A stored value, or nothing: telling an agent is no place to refuse a stored row."""
+
+    import json
 
     try:
         return json.loads(text)

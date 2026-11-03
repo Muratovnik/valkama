@@ -47,11 +47,6 @@ CLIENT_EVENTS: dict[str, frozenset[str]] = {
 AGENT_TOOLS = frozenset({"Agent", "Task"})
 AGENT_LAUNCH = "agent_launch"
 
-#: The identity transform's event, and the clients it is for. Codex carries the
-#: same identity in every call's `_meta`, so it needs no transform.
-IDENTITY_EVENT = "pre-tool-use"
-IDENTITY_CLIENTS = frozenset({"claude"})
-
 #: The kind each client hook name records, for a reader that validates a stored line.
 _KIND_OF_HOOK = dict(LIFECYCLE_EVENTS.values())
 

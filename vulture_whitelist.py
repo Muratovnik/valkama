@@ -43,3 +43,13 @@ _.msg  # unused variable (server\platform\transports.py)
 _.req  # unused variable (server\platform	ransports.py)
 _.fp  # unused variable (server\platform	ransports.py)
 _.newurl  # unused variable (server\platform	ransports.py)
+
+# The C scanner behind `json` reads these from the context object it is built
+# with, as it reads them from a `json.JSONDecoder`; nothing here names them.
+_.strict  # unused variable (server\hooks\notify.py)
+_.object_hook  # unused variable (server\hooks\notify.py)
+_.object_pairs_hook  # unused variable (server\hooks\notify.py)
+_.array_hook  # unused variable (server\hooks\notify.py)
+_.parse_float  # unused variable (server\hooks\notify.py)
+_.parse_int  # unused variable (server\hooks\notify.py)
+_.parse_constant  # unused method (server\hooks\notify.py)
