@@ -34,6 +34,8 @@ from ..ops.toast import AUMID
 GROUP = "valkama"
 #: The tag of a toast that stands for several items at once.
 SUMMARY_TAG = "summary"
+#: The tag of the toast the settings screen sends to try the channel.
+TRIAL_TAG = "trial"
 TITLE_LIMIT = 80
 PROMPT_LIMIT = 120
 _REFERENCES_LIMIT = 120
@@ -50,6 +52,8 @@ _HEADINGS = {
         "launchFailed": "Valkama: запуск не удался",
         "summary": "Valkama: ждут вашего ответа: {count}",
         "open": "Открытых вопросов по задаче: {count}",
+        "trial": "Valkama: проверка оповещений",
+        "trialLine": "Так выглядит оповещение Valkama.",
     },
     "en": {
         "question": "Valkama: your answer is needed",
@@ -58,6 +62,8 @@ _HEADINGS = {
         "launchFailed": "Valkama: a launch failed",
         "summary": "Valkama: waiting for your answer: {count}",
         "open": "Open questions on this item: {count}",
+        "trial": "Valkama: alert check",
+        "trialLine": "This is what a Valkama alert looks like.",
     },
 }
 _EVENTS = ("question", "review", "launchFailed")
@@ -178,6 +184,19 @@ def build(
         "group": GROUP,
         "xml": _toast(launch_uri(reference), lines, logo),
         "expires_at": _expiry(expires_at),
+    }
+
+
+def trial(settings: Mapping[str, object], logo: str | None = None) -> Message:
+    """The toast that tries the channel. A click opens the app, on no item in particular."""
+
+    phrases = _phrases(settings)
+    return {
+        "aumid": AUMID,
+        "tag": TRIAL_TAG,
+        "group": GROUP,
+        "xml": _toast(launch_uri(""), [phrases["trial"], phrases["trialLine"]], logo),
+        "expires_at": None,
     }
 
 

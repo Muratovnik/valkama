@@ -57,6 +57,8 @@ SETTINGS = {
     3: "disabled-by-group-policy",
     4: "disabled-by-manifest",
 }
+#: The shortcut the desktop installer puts in the Start menu, under `%APPDATA%`.
+_SHORTCUT = ("Microsoft", "Windows", "Start Menu", "Programs", "Valkama.lnk")
 #: The WinRT metadata the helper is compiled against, and the .NET Framework
 #: assemblies that project it.
 _WINMD = ("Windows.Data.winmd", "Windows.Foundation.winmd", "Windows.UI.winmd")
@@ -162,6 +164,35 @@ def _cache() -> Path:
             "LOCALAPPDATA is not set, so there is nowhere to build the helper"
         )
     return Path(local) / "Valkama" / "toast"
+
+
+def buildable() -> bool:
+    """Whether this machine has what the helper is compiled with. Compiles nothing."""
+
+    if sys.platform != "win32":
+        return False
+    try:
+        _cache()
+        return _framework()[1].is_dir()
+    except HelperUnavailableError:
+        return False
+
+
+def shortcut_found() -> bool:
+    """Whether the Start menu has Valkama's shortcut, carrying the identity toasts name.
+
+    Windows drops a toast for an identity no shortcut carries, without an error. A
+    shortcut keeps that identity as a UTF-16 string in its property store, so finding
+    the string says what asking the shell would, with no COM and no process.
+    """
+
+    roaming = os.environ.get("APPDATA")
+    if sys.platform != "win32" or not roaming:
+        return False
+    try:
+        return AUMID.encode("utf-16-le") in Path(roaming, *_SHORTCUT).read_bytes()
+    except OSError:
+        return False
 
 
 def helper(root: str | None = None) -> str:

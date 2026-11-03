@@ -33,6 +33,10 @@ from . import (
     ui_state,
     watchers,
 )
+from .alerts import emit as alert_emit
+from .alerts import presence as alert_presence
+from .alerts import readiness as alert_readiness
+from .alerts import settings as alert_settings
 from .executions import api as execution_api
 from .executions import lifecycle as execution_lifecycle
 from .executions import service as execution_service
@@ -245,6 +249,8 @@ class _Boundary(NamedTuple):
     exact: frozenset[str] = frozenset()
     prefix: str | None = None
     notify: _Notify | None = None
+    #: Runs once the write is committed, with the call still bound.
+    after_commit: Callable[[_Call], None] | None = None
 
 
 #: Only an extensionless canonical Platform route shape receives `index.html`.
@@ -403,6 +409,45 @@ def _ingest_write(call: _Call) -> _Answer | None:
     return _Raw(200, json.dumps(result).encode("utf-8"), "application/json")
 
 
+def _alerts_after_write(call: _Call) -> None:
+    alert_emit.after_write(call.store())
+
+
+def _alert_settings_read(call: _Call) -> _Answer | None:
+    return 200, dict(alert_settings.read(call.store()))
+
+
+def _alert_settings_write(call: _Call) -> _Answer | None:
+    return 200, dict(alert_settings.write(call.store(), call.payload))
+
+
+def _alert_status_read(_call: _Call) -> _Answer | None:
+    return 200, dict(alert_readiness.status())
+
+
+def _alert_trial_write(call: _Call) -> _Answer | None:
+    return 200, dict(alert_readiness.send_trial(call.store()))
+
+
+def _alert_presence_read(call: _Call) -> _Answer | None:
+    work_item = _first_value(call.parameters, "work_item")
+    if not work_item:
+        raise alert_presence.PresenceError("work_item is required")
+    hub = _first_value(call.parameters, "hub") == "1"
+    return 200, {"visible": alert_presence.PRESENCE.visible(work_item, hub=hub)}
+
+
+def _alert_presence_write(call: _Call) -> _Answer | None:
+    alert_presence.PRESENCE.report(call.payload)
+    return 200, {"ok": True}
+
+
+def _alerts_error(error: Exception) -> _Answer:
+    if isinstance(error, (alert_settings.SettingsError, alert_presence.PresenceError)):
+        return 400, {"error": {"code": "invalid_request", "message": str(error)}}
+    return _generic_failure(500)
+
+
 def _execution_lifecycle_write(call: _Call) -> _Answer | None:
     conn = call.store()
     if call.path == "/api/execution/launch":
@@ -496,6 +541,26 @@ _GET_BOUNDARIES: tuple[_Boundary, ...] = (
         errors=_exact_error,
         commit=_Commit.READ_ONLY,
     ),
+    _Boundary(
+        exact=frozenset({"/api/alerts/settings"}),
+        handler=_alert_settings_read,
+        errors=_alerts_error,
+        commit=_Commit.READ_ONLY,
+    ),
+    _Boundary(
+        exact=frozenset({"/api/alerts/status"}),
+        handler=_alert_status_read,
+        errors=_alerts_error,
+        commit=_Commit.NO_STORE,
+    ),
+    # Asked by an agent's session, which holds no browser credential: like
+    # `/api/runtime`, under the `Host` rule alone, and it answers one boolean.
+    _Boundary(
+        exact=frozenset({"/api/alerts/presence"}),
+        handler=_alert_presence_read,
+        errors=_alerts_error,
+        commit=_Commit.NO_STORE,
+    ),
 )
 
 _POST_BOUNDARIES: tuple[_Boundary, ...] = (
@@ -511,6 +576,7 @@ _POST_BOUNDARIES: tuple[_Boundary, ...] = (
         handler=_planning_write,
         errors=planning_api.error_response,
         commit=_Commit.SURFACE,
+        after_commit=_alerts_after_write,
     ),
     _Boundary(
         exact=planning_exact_api.WRITE_PATHS,
@@ -518,6 +584,19 @@ _POST_BOUNDARIES: tuple[_Boundary, ...] = (
         errors=_exact_error,
         commit=_Commit.DOMAIN,
         notify=_Notify(),
+        after_commit=_alerts_after_write,
+    ),
+    _Boundary(
+        exact=frozenset({"/api/alerts/presence"}),
+        handler=_alert_presence_write,
+        errors=_alerts_error,
+        commit=_Commit.NO_STORE,
+    ),
+    _Boundary(
+        exact=frozenset({"/api/alerts/test"}),
+        handler=_alert_trial_write,
+        errors=_alerts_error,
+        commit=_Commit.READ_ONLY,
     ),
     _Boundary(
         exact=app_shell.WRITE_PATHS,
@@ -542,7 +621,14 @@ _POST_BOUNDARIES: tuple[_Boundary, ...] = (
     ),
 )
 
-_PUT_BOUNDARIES: tuple[_Boundary, ...] = ()
+_PUT_BOUNDARIES: tuple[_Boundary, ...] = (
+    _Boundary(
+        exact=frozenset({"/api/alerts/settings"}),
+        handler=_alert_settings_write,
+        errors=_alerts_error,
+        commit=_Commit.DOMAIN,
+    ),
+)
 
 
 class PlatformHTTPServer(ThreadingHTTPServer):
@@ -733,6 +819,8 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 if boundary.commit is _Commit.SURFACE and conn is not None:
                     conn.commit()
+                if boundary.after_commit is not None:
+                    boundary.after_commit(call)
                 publishes = _publishes(boundary.notify, path)
                 after_answer = boundary.notify is not None and boundary.notify.after_answer
                 if publishes and not after_answer:
