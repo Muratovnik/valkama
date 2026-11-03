@@ -27,7 +27,7 @@ full item instead; it carries `url` too.
 | --- | --- |
 | `create_work_item` | `title`, `kind`, `priority`; `applied` when it took `claim`, `checklist` or `links`; `started` |
 | `claim_work_item` | `started` when the claim moved the item to its active state; `requeued` when a release moved it back; `warnings` |
-| `transition_work_item` | `warnings`, and `overridden` when `force` carried a guard |
+| `transition_work_item` | `warnings`, and `overridden` when `force` carried a guard (`person_spoke` among them) |
 | `set_work_item_checklist` | `checklist`: each step's `item_id`, `text`, `done` |
 | `claim_work_item_checklist_item`, `tick_work_item_checklist_item` | `step`: `item_id`, `done`, `claimed_by`, `done_by` |
 | `apply_work_item_changes` | `applied`, what each group changed, and the findings of its claim and transition |
@@ -35,6 +35,15 @@ full item instead; it carries `url` too.
 
 `claim_ready_work_item` answers with the item it took, or nothing when no item
 is ready.
+
+Any write to an item also answers with `from_person` when a person acted on it
+in Valkama's interface since an agent last wrote there, and has no such key
+otherwise. Each entry has `kind` (`comment`, `report`, `status`, `edited`,
+`question_answered` and the rest), `via: "interface"`, `at`, `comment_id`,
+`request_id` or `fields` when it has one, and `text`, cut at 300 characters;
+`get_work_item` has the whole text. It lists the newest 20, and
+`from_person_omitted` counts the earlier ones. Each event is told once, to
+whichever agent writes to the item next.
 
 ## Creating an item
 
@@ -111,6 +120,10 @@ priority only breaks a tie.
 | any state | a transition the workflow allows from where the item stands |
 
 A move to review without a session or commit ref warns but is not refused.
+An agent's move to a completed or cancelled state is also refused with
+`person_spoke` while a person acted on the item since an agent last wrote to it;
+the refusal names what they did. A `comment` sent in the same
+`apply_work_item_changes` call does not lift it.
 `force: true` carries a refusal through and records an `overridden` event.
 
 ## Claims

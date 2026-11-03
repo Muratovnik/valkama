@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from . import calls, leases, model, states
+from . import calls, leases, model, person_events, states
 
 Finding = tuple[str, str]
 
@@ -110,6 +110,9 @@ def findings(
                     " comes next before closing it",
                 )
             )
+        spoke = person_spoke(conn, item, reference)
+        if spoke:
+            refusals.append(("person_spoke", spoke))
     if target["category"] == "blocked" and entering:
         blocker = conn.execute(
             "SELECT 1 FROM work_item_links l"
@@ -127,6 +130,30 @@ def findings(
                 )
             )
     return refusals, warnings
+
+
+def person_spoke(conn: sqlite3.Connection, item: sqlite3.Row, reference: str) -> str:
+    """What a person did that the agent closing this item has not been told.
+
+    Only an agent answers to this: a person closes as they see fit, and the runner
+    is not deciding anything. What this call itself wrote is left out, so a batch's
+    comment does not clear the way for its own transition.
+    """
+
+    if not calls.from_agent():
+        return ""
+    own = calls.written(conn)
+    events = person_events.since_last_agent_write(
+        conn, str(item["work_item_id"]), own_call=None if own is None else own[0]
+    )
+    if not events:
+        return ""
+    return (
+        f"a person acted on {reference} through the interface since an agent last wrote to it:"
+        f" {person_events.describe(events)}. Read the item with get_work_item and take that"
+        " into account; once you have written what you did about it, close again, or pass"
+        " force to close over it"
+    )
 
 
 def _lease_warning(conn: sqlite3.Connection, item: sqlite3.Row, reference: str) -> str:

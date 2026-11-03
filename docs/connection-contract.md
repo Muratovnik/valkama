@@ -98,6 +98,15 @@ is described in [The address of a work item](#the-address-of-a-work-item).
 | `apply_work_item_changes` | `applied`, what each group changed, with `released` in `applied.transition` when a close released a claim; `started` from its claim, `overridden` from its transition, and the `warnings` of both, when there are any |
 | `merge_work_items` | `merged`, what each item moved (see [Merging items that are one change](#merging-items-that-are-one-change)); `warnings` and `overridden` when there are any |
 
+Every tool that writes to a work item and leaves it standing -- all of the above,
+`claim_ready_work_item`, `link_work_items`, `attach_work_item_ref`,
+`comment_work_item`, `report_work_item`, `select_work_item_summary` and the
+question tools -- also carries `from_person` when a person acted on that item
+through the interface since an agent last wrote to it, and only then; see
+[What a person did reaches the agent](#what-a-person-did-reaches-the-agent).
+A `verbose` answer carries it too. `delete_work_item` and `create_planning_space`
+never do.
+
 Each of these tools takes an optional boolean `verbose`, false by default. With
 `verbose: true` the answer is the full item with its whole history, as
 `get_work_item` returns it with `full: true` but without `sessions`. The
@@ -478,7 +487,10 @@ these groups, and applies them in this order:
 
 Each step is the write its single tool makes, with the same guards, events,
 revision bumps and refusals, so a closing transition is judged after the ticks
-and the summary sent with it.
+and the summary sent with it. The call is still one write: what its earlier
+groups wrote does not count as the agent having read what a person did, so a
+`comment` sent beside a closing `transition` does not lift the
+[`person_spoke` guard](#a-close-over-what-a-person-did).
 
 `checklist` sets the steps, as `set_work_item_checklist` does. A step sent
 with the text of a step the item has is that step: it keeps its `item_id`, its
@@ -722,6 +734,13 @@ makes on its own account, which today is only releasing an expired lease, is
 `confirmed` with source `valkama`, client `valkama` and tool `lease-expiry`, and
 its events are signed `valkama`.
 
+A call row of an edit (`update_work_item`, `POST /api/planning/work-item/update`)
+names in `reason` the fields it changed, comma-separated, as the columns are
+named: `title`, `description`, `source`, `priority`, `labels`, `kind`,
+`parent_id`. An edit logs no event, so this is the record that a person edited
+an item rather than only moved it within its state; an edit that changed no
+field, or only `rank`, leaves it null. Other Planning call rows leave it null.
+
 A confirmed call with a session is also a sign of life of that session. The
 first write of the call moves `last_seen` of the session row forward, creating
 the row when it is missing, exactly as a hook event does. Inside a subagent the
@@ -962,6 +981,74 @@ rule closed with its claim left live; otherwise the holder named by the newest
 wrote, or a separate release sent after an older close, including a lease that
 expired then. A release before the close is not the holder at the close, and
 the field is `null`.
+
+### What a person did reaches the agent
+
+A person works in the interface and an agent through its tools, on the same item
+and with no channel between them. So the next agent write to an item says what a
+person did there that no agent has been told yet, and an agent cannot close the
+item over it without saying so.
+
+**Who is a person.** A write is a person's when its call came through the
+interface: its call row's `identity_source` is `browser` and it went to a
+Planning path (`/api/planning/...`). That is a fact about the call, not about the
+name it is signed with, so an agent signing `author: "user"` is still an agent,
+and a person's write signed with any name is still the person's. A launch writes
+under the interface's credential too, but what it writes is the launch's, not
+the person's words, and it is not counted.
+
+**The window.** A person's writes count from the last write an agent made to the
+item: any call row on that item that is neither `browser` nor `valkama`, found
+through the item's events and comments, or through the call rows themselves for
+a write that logs neither, an edit or a ref. A claim is such a write, so after a
+claim only what came later counts, and before any agent wrote, everything a
+person did since the item was made. The window keeps no state: an agent's write
+moves it by being written, a refused write is rolled back and moves nothing, and
+whichever agent writes next -- an orchestrator or its subagent -- is the one told,
+once. Valkama's own release of a lapsed claim and a write made outside any call
+are on neither side. An agent's write to another item -- the far end of a link --
+does not move this item's window. Order is the call rows' ids.
+
+**What is told.** Each event, oldest first:
+
+| Field | Meaning |
+| --- | --- |
+| `kind` | `comment`; `report` (a person recorded a summary); `status` (a state change, `text` the new key and any reason); `claimed`, `released`, `taken_over`; `edited`; `steps_edited`, `step_claimed`, `step_taken_over`, `step_released`, `step_completed`, `step_reopened`; `linked`, `unlinked`; `summary_selected` (an earlier report made current); `question_asked`, `question_answered`, `question_declined`, `question_withdrawn` |
+| `via` | always `interface`: the one thing the store proves about who did it |
+| `at` | when, as the row records it |
+| `comment_id` | for `comment` and `report` |
+| `request_id` | for the question kinds |
+| `fields` | for `edited`: the fields it changed |
+| `text` | what it said, at most 300 characters, the last one `…` when cut: a comment's body, a report's `done`, an answer as `label: choice` pairs and its note, the prompt of a question asked, declined or withdrawn, an edit's fields as they read now, a step's or a link's detail; absent when there is nothing to quote |
+
+The whole text is in `get_work_item` and `get_work_item_request`. Filing an item,
+attaching a session and a recorded override are never told. A drag within a
+state, or an edit that changed nothing, says nothing.
+
+**On every agent write.** The answer carries the window as it stood before that
+write, as `from_person`, and no key at all when it is empty. It holds the newest
+20 events, and `from_person_omitted` counts the earlier ones it left out. It is
+read inside the write's own transaction, so a person's write that lands while the
+call runs is either in this answer or in the next window, never in neither. An
+HTTP write answers without it, and no schema of the interface changed.
+
+### A close over what a person did
+
+An agent's transition into a terminal state, by `is_terminal`, is refused while
+the window is not empty, with the guard `person_spoke`. The refusal names the
+events, newest 20, with their text, so the agent can act on them. Writing
+anything to the item first -- a comment saying what it did about them -- empties
+the window and the close goes through; `force: true` carries it through as it
+does every guard and records `overridden` with `person_spoke`, and the answer
+still carries `from_person`. A `transition` group is judged the same way, with
+the window counted from before the batch.
+
+A person closing an item is not guarded, nor is a write made outside any call. An
+item a person closed or cancelled is told to the agent by its next write's
+`from_person`; writing to a closed item behaves as before. `merge_work_items`
+judges each merged item before anything moves, because the merge moves its
+comments to the survivor: a merged item with a non-empty window refuses the
+merge with `person_spoke`, and `force` records it on that item once.
 
 ### Questions and decisions
 

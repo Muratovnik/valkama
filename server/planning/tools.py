@@ -17,7 +17,17 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Callable, Mapping
 
-from . import acknowledgements, api, model, read_model, request_model, requests, service
+from . import (
+    acknowledgements,
+    api,
+    calls,
+    model,
+    person_events,
+    read_model,
+    request_model,
+    requests,
+    service,
+)
 
 READ_ONLY = {"readOnlyHint": True, "idempotentHint": True, "openWorldHint": False}
 WRITES = {"readOnlyHint": False, "destructiveHint": False, "openWorldHint": False}
@@ -367,7 +377,10 @@ TOOLS = [
         " any step claim, in the same write and whoever holds them; the history"
         " records the release, the answer names the holder as released, and"
         " last_claim_ref keeps reading it. Reopening restores no claim. The item"
-        " goes last in its new state unless rank places it.",
+        " goes last in its new state unless rank places it. An agent's close is"
+        " refused with person_spoke while a person acted on the item in the"
+        " interface since an agent last wrote to it; the refusal quotes it. Any"
+        " write to an item answers with from_person when there is such news, once.",
         WRITES,
         {
             "id": _REFERENCE,
@@ -395,7 +408,9 @@ TOOLS = [
         " state. Releasing an active item puts it back in the first queued state"
         " (or the backlog), named in requeued, unless one of its checklist steps is"
         " still claimed. Closing an item releases it already: no release is needed"
-        " after a transition to a terminal state.",
+        " after a transition to a terminal state. The answer carries from_person when"
+        " a person acted on the item in the interface since an agent last wrote to it:"
+        " their words about this work, to read before the next step.",
         WRITES,
         {
             "id": _REFERENCE,
@@ -622,7 +637,9 @@ TOOLS = [
         " transition releases the claim, so no release call follows. A refused step"
         " writes nothing and names the step and the refusal's code. Name at least"
         " one group. Answers with the acknowledgement and applied, what each group"
-        " changed.",
+        " changed, and from_person when a person acted on the item since an agent"
+        " last wrote. The call is one write: its comment does not lift a closing"
+        " transition's person_spoke refusal.",
         WRITES,
         {
             "id": _REFERENCE,
@@ -914,6 +931,39 @@ def _acknowledged(
     return run
 
 
+def _told(
+    write: Callable[[sqlite3.Connection, Mapping[str, object]], object],
+) -> Callable[[sqlite3.Connection, Mapping[str, object]], object]:
+    """A write that also says what a person did on its item since an agent last wrote there.
+
+    Read after the write and inside its transaction, leaving its own call out,
+    which is what "before this write" has to mean: the write lock is held, so
+    nothing a person commits can fall between what this answer tells and the
+    boundary this write sets, and the item is the one the call recorded, whether
+    the tool named it, named a request, or took it from the queue. A refused
+    write answers with its refusal and moves nothing. The key is absent when
+    there is nothing to tell.
+    """
+
+    def run(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
+        answer = write(conn, arguments)
+        own = calls.written(conn) if calls.from_agent() else None
+        if own is None or own[1] is None or not isinstance(answer, dict):
+            return answer
+        events = person_events.since_last_agent_write(conn, own[1], own_call=own[0])
+        if not events:
+            return answer
+        shown = events[-person_events.MOST_SHOWN :]
+        omitted = len(events) - len(shown)
+        return {
+            **answer,
+            "from_person": shown,
+            **({"from_person_omitted": omitted} if omitted else {}),
+        }
+
+    return run
+
+
 def _claim_ready(conn: sqlite3.Connection, arguments: Mapping[str, object]) -> object:
     """The item the queue handed over, whole: the agent needs the item it just took."""
 
@@ -1174,3 +1224,7 @@ OPS: dict[str, Callable[[sqlite3.Connection, Mapping[str, object]], object]] = {
     "decline_work_item_request": _post("/api/planning/request/decline"),
     "expire_work_item_request": _post("/api/planning/request/expire"),
 }
+for _write_tool in TOOLS:
+    # Every write that leaves its item standing: a deleted one has nobody to tell.
+    if _write_tool["annotations"].get("destructiveHint") is False:
+        OPS[_write_tool["name"]] = _told(OPS[_write_tool["name"]])

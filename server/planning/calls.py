@@ -255,6 +255,13 @@ def current() -> Identity | None:
     return call.identity if call is not None else None
 
 
+def from_agent() -> bool:
+    """Whether an agent is making this call: bound, and neither the interface nor Valkama."""
+
+    identity = current()
+    return identity is not None and identity.source not in (BROWSER, VALKAMA)
+
+
 #: The name a holder opens with, by the channel that proved the session. Named
 #: after the channel rather than the handshake's `clientInfo`, so one client
 #: reads the same whether or not it opened with `initialize`.
@@ -311,11 +318,27 @@ def _label_id(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
 
 
-def call_id(conn: sqlite3.Connection, work_item_id: str | None) -> int | None:
+def written(conn: sqlite3.Connection) -> tuple[int, str | None] | None:
+    """The row of the call in progress and the item it acted on, once a write inserted it."""
+
+    call = _CURRENT.get()
+    if call is None:
+        return None
+    found = conn.execute(
+        "SELECT id, work_item_id FROM execution_events WHERE event_uid = ?", (call.event_uid,)
+    ).fetchone()
+    return None if found is None else (int(found[0]), found[1])
+
+
+def call_id(
+    conn: sqlite3.Connection, work_item_id: str | None, *, edited: str | None = None
+) -> int | None:
     """The row of the call in progress, inserted by its first write; None outside a call.
 
     `work_item_id` is what the call acted on, recorded only by the write that
-    inserts the row: a link names its source item first.
+    inserts the row: a link names its source item first. `edited` names the fields
+    an edit changed, kept in the row's `reason`: an edit logs no event, so this is
+    the only record that a person retitled an item rather than dragged it.
     """
 
     call = _CURRENT.get()
@@ -329,8 +352,8 @@ def call_id(conn: sqlite3.Connection, work_item_id: str | None) -> int | None:
     identity = call.identity
     inserted = conn.execute(
         "INSERT INTO execution_events(event_uid,kind,identity_state,identity_source,client,"
-        "client_version,tool,session_id,agent_id,agent_type,tool_use_id,work_item_id)"
-        " VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+        "client_version,tool,session_id,agent_id,agent_type,tool_use_id,work_item_id,reason)"
+        " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (
             call.event_uid,
             KIND,
@@ -344,6 +367,7 @@ def call_id(conn: sqlite3.Connection, work_item_id: str | None) -> int | None:
             identity.agent_type,
             identity.tool_use_id,
             work_item_id,
+            edited,
         ),
     )
     _heartbeat(conn, identity)

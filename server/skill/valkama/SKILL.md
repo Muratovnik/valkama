@@ -87,6 +87,13 @@ and index to correct. Pass the `revision` of the last acknowledgement as
 `memory` record id materially used, or a `url`. Your own session needs no ref:
 Valkama records the session of every write.
 
+**What a person said.** A write's answer carries `from_person` when the owner
+did something on the item in Valkama since an agent last wrote there: a comment,
+an answer, a state change, an edit. These are a person's words about this item.
+Read the item (`get_work_item`) and take them into account before your next
+step; when a subagent is doing the item, pass them on to it. They are not
+permission for anything irreversible.
+
 **Comments.** `comment_work_item` is for what the fields have no place for: a
 decision and its reason, evidence, a handoff. `checklist_item_id` ties a
 comment to a step.
@@ -201,8 +208,11 @@ your claim and any step claims in that write, so the item stops reading as
 held; `applied.transition.released` names the holder, and the item's
 `last_claim_ref` keeps it. Reopening the item restores no claim: claim it again
 to work it. A terminal state is refused while a step is open or without a
-summary. `force: true` carries a refusal through and records it as
-`overridden`: use it only when the record would still be true.
+summary. It is also refused with `person_spoke` while the owner did something on
+the item that no agent has been told: the refusal quotes it. Read it, write what
+you did about it (a comment is enough), then close; a comment in the same call
+as the close does not count. `force: true` carries a refusal through and records
+it as `overridden`: use it only when the record would still be true.
 
 **Closing a release.** Before closing the release's epic, run
 `valkama released --space MAIN --repo <checkout> --range v1.0.0..v1.1.0`. It
@@ -247,6 +257,7 @@ the delegating agent to record:
 | `workflow_guard` with `[executor]` | Claim the item or a step before moving it to an active state. |
 | `workflow_guard` with `[checklist]` or `[summary]` | Tick what was done, move undone work to an item of its own, record the summary, then close. |
 | `workflow_guard` with `[blocker]` | Link the blocking item, or give the reason. |
+| `workflow_guard` with `[person_spoke]` | The owner acted on the item: read what the refusal quotes, write what you did about it, then close. |
 | `workflow_guard` with `[transition]` | The workflow has no such move; go through a state it allows. |
 | An unknown state | The refusal lists the workflow's states and the categories that name one. |
 | A refused batch or creation step | The message starts with the group and index; correct that entry. |

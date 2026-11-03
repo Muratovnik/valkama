@@ -476,6 +476,10 @@ def update_work_item(
         )
         updates.append("parent_id = ?")
         parameters.append(str(parent_row["work_item_id"]) if parent_row is not None else None)
+    edited = _edited(row, updates, parameters)
+    if edited is not None:
+        # Before the placement, which may write first: the row is inserted once.
+        calls.call_id(conn, str(row["work_item_id"]), edited=edited)
     if placement is not None:
         # Last, because it is the one step that may write before `_write` does:
         # every refusal above has had its chance to leave the store untouched.
@@ -492,6 +496,16 @@ def update_work_item(
     return read_model.present(
         conn, read_model.item_by_id(conn, str(row["work_item_id"])), full=True
     )
+
+
+def _edited(row: sqlite3.Row, updates: list[str], parameters: list[object]) -> str | None:
+    """The fields an edit changes, for its call row; one sent with its own value is not."""
+
+    columns = (update.split(" ", 1)[0] for update in updates)
+    changed = [
+        column for column, value in zip(columns, parameters, strict=True) if row[column] != value
+    ]
+    return ",".join(changed) or None
 
 
 def delete_work_item(conn: sqlite3.Connection, reference: str) -> dict:
@@ -1129,6 +1143,7 @@ def merge_work_items(
     _require_revision(survivor, expected_revision)
     merged = _merged_rows(conn, survivor, items)
     overridden = _merge_claims(conn, [survivor, *merged], author, force)
+    spoke = _merge_spoke(conn, merged, force)
     steps = model.checklist(survivor["checklist"])
     moving = [model.checklist(row["checklist"]) for row in merged]
     total = len(steps) + sum(len(found) for found in moving)
@@ -1157,6 +1172,7 @@ def merge_work_items(
             steps,
             list(zip(merged, moving, closing, strict=True)),
             overridden=overridden,
+            spoke=spoke,
             note=note,
             force=force,
             author=author,
@@ -1239,6 +1255,27 @@ def _merge_claims(
     return overridden
 
 
+def _merge_spoke(conn: sqlite3.Connection, merged: list[sqlite3.Row], force: bool) -> set[str]:
+    """The merged items a person acted on that no agent has been told of, by item id.
+
+    Judged before anything moves. Each merged item closes, and the close guard
+    would judge it too, but only after its comments have moved to the survivor,
+    where they can sit behind that item's own boundary and reach nobody. So the
+    refusal comes first, naming what was said; with `force` each such item is
+    recorded as overridden once, however much of it the close still sees.
+    """
+
+    spoke: set[str] = set()
+    for row in merged:
+        message = transitions.person_spoke(conn, row, read_model.reference(conn, row))
+        if not message:
+            continue
+        if not force:
+            raise model.WorkflowGuardError(f"[person_spoke] {message}")
+        spoke.add(str(row["work_item_id"]))
+    return spoke
+
+
 def _fold(
     conn: sqlite3.Connection,
     survivor: sqlite3.Row,
@@ -1246,6 +1283,7 @@ def _fold(
     merging: list[tuple[sqlite3.Row, list[dict], sqlite3.Row]],
     *,
     overridden: dict[str, str],
+    spoke: set[str],
     note: str,
     force: bool,
     author: str | None,
@@ -1319,7 +1357,11 @@ def _fold(
             author=author,
         )
         warnings.extend(closed["warnings"])
-        forced.extend(f"{reference}: {guard}" for guard in closed.get("overridden", []))
+        guards = closed.get("overridden", [])
+        forced.extend(f"{reference}: {guard}" for guard in guards)
+        if identity in spoke and "person_spoke" not in guards:
+            _log(conn, identity, "overridden", "person_spoke", author)
+            forced.append(f"{reference}: person_spoke")
         parent = row["parent_id"]
         if parent and parent not in (survivor["parent_id"], survivor_id):
             warnings.append(

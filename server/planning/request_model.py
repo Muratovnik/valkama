@@ -202,6 +202,19 @@ def _answer_rows(descriptors: list[dict], given: dict | None) -> tuple[list[dict
     return rows, clipped
 
 
+def answer_text(descriptors: list[dict], stored: dict) -> str:
+    """What came back as one line: each answered field by its label, then the note."""
+
+    given, note = split_answers(stored)
+    labels = {field["id"]: field["label"] for field in descriptors}
+    rows, _clipped = _answer_rows(descriptors, given)
+    parts = [
+        f"{labels[row['field']]}: {row['label'] if row['label'] is not None else row['value']}"
+        for row in rows
+    ]
+    return "; ".join([*parts, note] if note else parts)
+
+
 def _fits(item: dict) -> bool:
     """Whether a compact question is within its size, its `clipped` key counted.
 
