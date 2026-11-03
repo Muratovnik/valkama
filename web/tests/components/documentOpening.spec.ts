@@ -1,7 +1,8 @@
 /**
  * The shell's document opener: a file or a folder a text names goes to the
  * editor by the open plan, and the result is said; a refused plan answers false,
- * which leaves the links to copy the path.
+ * which leaves the links to copy the path. A Markdown document goes to the
+ * window's viewer and never to the plan.
  */
 import { createPinia } from 'pinia'
 import { defineComponent } from 'vue'
@@ -28,11 +29,11 @@ vi.mock('@/features/session-open/openPlan.ts', () => ({ openTarget }))
 
 const renderNothing = () => null
 
-function mountOpening(say: (message: string) => void) {
+function mountOpening(say: (message: string) => void, openDocument = vi.fn(() => true)) {
   const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages })
   const Host = defineComponent({
     setup() {
-      useDocumentOpening(say)
+      useDocumentOpening(say, openDocument)
       return renderNothing
     },
   })
@@ -66,6 +67,15 @@ describe('the shell document opener', () => {
     })
     expect(say).toHaveBeenCalledWith('Opened in VS Code')
     expect(opener.editor).toBe('VS Code')
+  })
+
+  it('hands a Markdown document to the viewer, not to the plan', async () => {
+    const openDocument = vi.fn(() => true)
+    const opener = mountOpening(vi.fn(), openDocument)
+    const target = { project: 'example-project', path: 'docs/a.md', line: null, suffix: '' }
+    expect(await opener.openDocument?.(target)).toBe(true)
+    expect(openDocument).toHaveBeenCalledWith(target)
+    expect(openTarget).not.toHaveBeenCalled()
   })
 
   it('answers false for a refused folder, so the links copy the path', async () => {
