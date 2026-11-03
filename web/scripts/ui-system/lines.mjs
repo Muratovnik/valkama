@@ -56,6 +56,7 @@ export const LINE_BUDGET = new Map([
   ['shared/ui/InfoTip.vue', 1],
   ['shared/ui/OverlayHeader.vue', 1],
   ['shared/ui/OverlayHost.vue', 1],
+  ['shared/ui/ReferencePreview.vue', 1], // Overlay edge of the card a reference shows on hover.
   ['shared/ui/SemanticState.vue', 1],
   // Markdown in free text: a quote's edge (the step quote's own), a thematic
   // break and a table's row dividers, which is what a reader expects of each.

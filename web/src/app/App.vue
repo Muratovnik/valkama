@@ -41,6 +41,7 @@ import { failureMessage } from '@/shared/api/typedFailure.ts'
 import type { TypedFailure } from '@/shared/api/typedFailure.ts'
 import { provideProjectTitles } from '@/shared/lib/projectTitles.ts'
 import type { ResolvedRef } from '@/shared/types/reference.ts'
+import ReferencePreview from '@/shared/ui/ReferencePreview.vue'
 
 const { t, te, locale } = useI18n()
 const {
@@ -273,6 +274,7 @@ useDocumentOpening(say, openDocument)
 // References written in free text, anywhere in the shell: see the composable.
 useAppReferenceLinks({
   projects: () => contextReady.value?.projects ?? [],
+  primaryScope: () => contextReady.value?.primary.data_scope_id,
   openTarget,
   openSession: (id) => void openSession(id, ''),
   say,
@@ -410,6 +412,7 @@ usePlatformEntryRestore({
     @act="actOnNotice"
     @dismiss="dismissNotice"
   />
+  <ReferencePreview />
 </template>
 
 <style scoped>

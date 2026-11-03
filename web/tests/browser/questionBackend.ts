@@ -127,7 +127,7 @@ function nextVersions(was: Request, action: string): Pick<Request, 'answer_versi
  * The questions' side of the server. The answer is the existing endpoint, and it may
  * come with `note`; `settle` changes a question the way another window would.
  */
-async function installQuestions(page: Page, entries: InputRequestEntry[]) {
+export async function installQuestions(page: Page, entries: InputRequestEntry[]) {
   const writes: { action: string; body: Record<string, unknown> }[] = []
   const reads: string[] = []
   let failure: number | 'abort' | null = null

@@ -40,6 +40,31 @@ function underLayer(source: string, resolve: Resolve) {
 }
 
 describe('RichText', () => {
+  it('leaves a link with no preview as it was, and gives one with a preview no title', () => {
+    const preview = { describe: () => 'Described', render: () => null }
+    const wrapper = underLayer('See MAIN-12 and MAIN-13.', (reference) =>
+      reference.kind === 'work-item'
+        ? {
+            title: `Open ${reference.value}`,
+            open: () => {},
+            ...(reference.value === 'MAIN-12' ? { preview } : {}),
+          }
+        : null,
+    )
+    const [held, plain] = wrapper.findAll('button')
+    expect(held?.attributes('title')).toBeUndefined()
+    expect(held?.attributes('aria-description')).toBe('Open MAIN-12')
+    expect(held?.attributes()).toHaveProperty('data-reference-preview')
+    expect(held?.attributes()).toHaveProperty('data-grace-area-trigger')
+
+    expect(plain?.attributes('title')).toBe('Open MAIN-13')
+    expect(plain?.attributes('aria-description')).toBeUndefined()
+    expect(plain?.attributes()).not.toHaveProperty('data-reference-preview')
+    expect(plain?.attributes()).not.toHaveProperty('data-grace-area-trigger')
+    // Its name is still its text: the preview adds no node to the line.
+    expect(wrapper.text()).toBe('See MAIN-12 and MAIN-13.')
+  })
+
   it('draws each construct as its element, and a heading below the section heading', () => {
     const wrapper = mount(RichText, {
       props: {

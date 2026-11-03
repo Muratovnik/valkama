@@ -114,6 +114,9 @@ export function ownsOverlay(lease: OverlayOwnership | null): boolean {
   return lease !== null && owners.value.at(-1)?.id === lease.id
 }
 
+/** The surface on top now, or null with none open: it changes whenever one opens or closes. */
+export const overlayTop = () => owners.value.at(-1)?.id ?? null
+
 /** Remove only this lease; stale releases cannot dismiss or unlock another host. */
 export function releaseOverlayOwnership(lease: OverlayOwnership | null): void {
   if (!lease) return

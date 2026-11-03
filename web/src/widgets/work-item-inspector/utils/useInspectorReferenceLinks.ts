@@ -19,7 +19,8 @@ type Ref = WorkItem['refs'][number]
  *
  * - Another item of the card's own space opens the way a related item does,
  *   through the card's departure: the draft guard asks first and Back returns
- *   here. The card's own reference is text; a link to where the reader already
+ *   here. Only its opening is the card's: what it shows on hover is the layer's
+ *   above. The card's own reference is text; a link to where the reader already
  *   is says nothing.
  * - A commit or a memory id is a link when this card carries it as a ref, the
  *   one record Valkama holds of either: opening it shows that record — who
@@ -45,7 +46,7 @@ export function useInspectorReferenceLinks(options: {
     const own = options.item()?.reference ?? ''
     if (value === own) return null
     if (!above || referenceSpaceKey(value) !== referenceSpaceKey(own)) return above
-    return { title: above.title, open: () => options.openFrom(value) }
+    return { ...above, open: () => options.openFrom(value) }
   }
 
   function record({ kind, value }: TextReference): ReferenceLink | null {

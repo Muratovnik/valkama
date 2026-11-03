@@ -11,9 +11,24 @@
  * candidate is plain text, which is the safe answer.
  */
 import { inject, provide } from 'vue'
-import type { InjectionKey } from 'vue'
+import type { InjectionKey, VNodeChild } from 'vue'
 
 import type { TextReference } from '@/shared/lib/textReferences.ts'
+
+/**
+ * What a reference shows while the pointer rests on it, drawn by the layer that
+ * knows the data: this module does not know what kind of thing it links to.
+ */
+export interface ReferencePreview {
+  /** What a screen reader hears while it shows, in place of the drawing. */
+  describe: () => string
+  /**
+   * Read what it draws; absent where the page already holds it. The card waits for
+   * this a moment before showing, and closing it aborts the signal.
+   */
+  prepare?: (signal: AbortSignal) => Promise<void>
+  render: () => VNodeChild
+}
 
 export interface ReferenceLink {
   /** What the link opens, for its accessible name and tooltip. */
@@ -26,6 +41,8 @@ export interface ReferenceLink {
   copies?: boolean
   /** The part of the written run the control covers, when that is not all of it. */
   label?: string
+  /** Hover text of its own: where there is one, the link has no native `title`. */
+  preview?: ReferencePreview
   open: () => void
 }
 

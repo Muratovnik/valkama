@@ -214,6 +214,7 @@ const shellText = () => h({ render: () => h(RichInlines, { nodes: [strong('docs/
 const ShellAlone = {
   setup() {
     useAppReferenceLinks({
+      primaryScope: vi.fn(),
       projects: () => [],
       openTarget: vi.fn(),
       openSession: vi.fn(),

@@ -17,6 +17,7 @@ import { useReferenceLinks } from '@/shared/lib/referenceLinks.ts'
 import { inlineWords } from '@/shared/lib/richText.ts'
 import type { RichInline } from '@/shared/lib/richText.ts'
 import type { TextReference } from '@/shared/lib/textReferences.ts'
+import { vReferencePreview } from '@/shared/ui/referencePreviewAnchors.ts'
 
 defineProps<{ nodes: readonly RichInline[] }>()
 defineOptions({ name: 'RichInlines' })
@@ -27,6 +28,12 @@ const resolve = useReferenceLinks()
 /** What a reference links to here, or null where it is text. */
 const linkFor = (reference: TextReference) => resolve(reference)
 const titleFor = (reference: TextReference) => resolve(reference)?.title
+const previewFor = (reference: TextReference) => resolve(reference)?.preview
+/** A link with a preview has that for its one hover text: its title only describes it. */
+const hoverTitle = (reference: TextReference) =>
+  previewFor(reference) ? undefined : titleFor(reference)
+const describedAs = (reference: TextReference) =>
+  previewFor(reference) ? titleFor(reference) : undefined
 const isId = ({ caption, code, reference }: ReferenceNode) =>
   reference.kind === 'document' ? code && !caption : reference.kind !== 'work-item'
 const isWeak = ({ reference }: ReferenceNode) =>
@@ -83,6 +90,7 @@ function open(reference: TextReference) {
       >{{ node.text }}</code
     ><template v-else-if="linkFor(node.reference)"
       ><button
+        v-reference-preview="previewFor(node.reference)"
         type="button"
         class="rich-reference"
         :class="{
@@ -90,7 +98,8 @@ function open(reference: TextReference) {
           'identifier': isId(node),
           'copies': linkFor(node.reference)?.copies,
         }"
-        :title="titleFor(node.reference)"
+        :title="hoverTitle(node.reference)"
+        :aria-description="describedAs(node.reference)"
         :aria-label="nameOf(node)"
         :aria-busy="busyOf(node.reference)"
         @click="open(node.reference)"

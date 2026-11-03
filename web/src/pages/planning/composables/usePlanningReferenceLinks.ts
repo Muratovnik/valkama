@@ -2,6 +2,9 @@ import { computed, toValue } from 'vue'
 import type { MaybeRefOrGetter } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { useWorkItemReferencePreview } from '@/entities/work-item/composables/useWorkItemReferencePreview.ts'
+import { waitingOn } from '@/entities/work-item/utils/waiting.ts'
+
 import type { PlanningReadModel } from '@/shared/api/planningModel.ts'
 import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import { provideReferenceLinks, referenceSpaceKey } from '@/shared/lib/referenceLinks.ts'
@@ -14,6 +17,9 @@ import { provideReferenceLinks, referenceSpaceKey } from '@/shared/lib/reference
  * space and a number missing from it is missing. Another space's reference,
  * and everything that is not a work item, is the shell's to answer. While the
  * space is still loading, the shell answers for it too.
+ *
+ * What a reference shows on hover is what the model holds, read afresh each time
+ * it is drawn, so it needs no request and follows the stream while it is open.
  */
 export function usePlanningReferenceLinks(
   space: MaybeRefOrGetter<PlanningSpaceRef | undefined>,
@@ -21,9 +27,14 @@ export function usePlanningReferenceLinks(
   open: (reference: string) => void,
 ) {
   const { t } = useI18n()
+  const previewOf = useWorkItemReferencePreview()
   const held = computed(
-    () => new Set(toValue(model)?.work_items.map((item) => item.reference) ?? []),
+    () => new Map(toValue(model)?.work_items.map((item) => [item.reference, item]) ?? []),
   )
+  const waiting = computed(() => {
+    const read = toValue(model)
+    return read ? waitingOn(read.links, read.work_items) : new Map<string, string>()
+  })
   provideReferenceLinks((reference, parent) => {
     const bound = toValue(space)
     const owned =
@@ -36,6 +47,14 @@ export function usePlanningReferenceLinks(
     return {
       title: t('textLinks.openItem', { reference: reference.value }),
       open: () => open(reference.value),
+      preview: previewOf(() => {
+        const item = held.value.get(reference.value) ?? null
+        return {
+          reference: reference.value,
+          item,
+          waitingOn: item ? waiting.value.get(item.work_item_id) : null,
+        }
+      }),
     }
   })
 }

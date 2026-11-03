@@ -680,13 +680,15 @@ export default ts.config(
     },
   },
   {
-    // The one component whose styles cannot be scoped. `SelectPortal` renders
+    // The two components whose styles cannot be scoped. `SelectPortal` renders
     // the popup at the end of `<body>`, outside this component's subtree, so
     // the data attribute `scoped` adds never reaches ten of the fifteen classes
     // in the block — the search field, the viewport, the options and their
     // icons. Splitting the block in two would scope the trigger and leave the
     // popup global, which is the same exception written twice.
-    files: ['src/shared/ui/ChoiceSelect.vue'],
+    // `TooltipPortal` does the same to the reference preview, whose whole block
+    // is that one popup's surface.
+    files: ['src/shared/ui/ChoiceSelect.vue', 'src/shared/ui/ReferencePreview.vue'],
     rules: { 'vue/enforce-style-attribute': 'off' },
   },
   {

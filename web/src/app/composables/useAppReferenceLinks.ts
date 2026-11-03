@@ -1,12 +1,43 @@
 import { computed, reactive } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import type { PreviewCandidate } from '@/entities/work-item/composables/useWorkItemPreviewReads.ts'
+import { useReadWorkItemPreview } from '@/entities/work-item/composables/useWorkItemReferencePreview.ts'
+
 import { fetchSessionContext } from '@/shared/api/api.ts'
 import { searchGlobalPlanningWorkItems } from '@/shared/api/planningGlobalSearchApi.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import type { PlatformContextReady } from '@/shared/api/platformApiTypes.ts'
 import { planningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import { provideReferenceLinks, referenceSpaceKey } from '@/shared/lib/referenceLinks.ts'
+
+type Project = PlatformContextReady['projects'][number]
+
+/** A resource's planning space, or nothing for one that is not mapped to a space. */
+function mappedSpace(resource: Project['resources'][number]) {
+  if (resource.state !== 'mapped') return null
+  try {
+    return planningSpaceRef(resource.resource_ref) ?? null
+  } catch {
+    return null
+  }
+}
+
+/** Every planning space a known project maps, by its key, where a press looks first leading. */
+function spacesByKey(projects: readonly Project[], primary: string | undefined) {
+  const keys = new Map<string, PreviewCandidate[]>()
+  for (const project of projects)
+    for (const resource of project.resources) {
+      const space = mappedSpace(resource)
+      if (!space) continue
+      const found = keys.get(space.space_key) ?? []
+      const candidate = { project_id: project.project_id, space_ref: space }
+      if (space.data_scope_id === primary) found.unshift(candidate)
+      else found.push(candidate)
+      keys.set(space.space_key, found)
+    }
+  return keys
+}
 
 /**
  * The top layer of reference links: what the shell can answer from anywhere.
@@ -15,7 +46,9 @@ import { provideReferenceLinks, referenceSpaceKey } from '@/shared/lib/reference
  *   this installation knows; `SHA-256` names none and stays text. Opening it
  *   asks the global search for that exact reference — the finder's own path —
  *   and opens what it finds, or says it found nothing. The open space answers
- *   for its own references below this layer, from the items it holds.
+ *   for its own references below this layer, from the items it holds. Resting
+ *   on it reads the item from the spaces that key names, the primary store first
+ *   because that is where a press would find it.
  * - A session id is a link once the server's session table knows it; it is
  *   asked once per id and remembered for as long as the app runs.
  * - A path means nothing without the space its text belongs to, so it is text
@@ -24,6 +57,8 @@ import { provideReferenceLinks, referenceSpaceKey } from '@/shared/lib/reference
 export function useAppReferenceLinks(options: {
   openSession: (id: string) => void
   openTarget: (target: PlanningTarget) => void
+  /** The store whose space a press finds first when two stores hold one key. */
+  primaryScope: () => string | undefined
   projects: () => readonly PlatformContextReady['projects'][number][]
   say: (message: string) => void
 }) {
@@ -33,21 +68,11 @@ export function useAppReferenceLinks(options: {
   /** Ids already asked about, so a render asks once and never writes what it reads. */
   const asked = new Set<string>()
 
-  /** The keys of every planning space a known project maps. */
-  const spaceKeys = computed(() => {
-    const keys = new Set<string>()
-    for (const project of options.projects())
-      for (const resource of project.resources) {
-        if (resource.state !== 'mapped') continue
-        try {
-          const space = planningSpaceRef(resource.resource_ref)
-          if (space) keys.add(space.space_key)
-        } catch {
-          // A resource that is not a planning space names no key.
-        }
-      }
-    return keys
-  })
+  const previewRead = useReadWorkItemPreview(
+    (id) => options.projects().find((project) => project.project_id === id)?.title ?? null,
+  )
+
+  const spaces = computed(() => spacesByKey(options.projects(), options.primaryScope()))
 
   function knownSession(id: string): boolean {
     if (!asked.has(id)) {
@@ -72,13 +97,16 @@ export function useAppReferenceLinks(options: {
 
   provideReferenceLinks((reference) => {
     const { kind, value } = reference
-    if (kind === 'work-item')
-      return spaceKeys.value.has(referenceSpaceKey(value))
+    if (kind === 'work-item') {
+      const candidates = spaces.value.get(referenceSpaceKey(value))
+      return candidates
         ? {
             title: t('textLinks.openItem', { reference: value }),
             open: () => void openReference(value),
+            preview: previewRead(value, candidates),
           }
         : null
+    }
     if (kind === 'session')
       return knownSession(value)
         ? { title: t('textLinks.openSession'), open: () => options.openSession(value) }

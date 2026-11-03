@@ -37,6 +37,7 @@ function mountShell(source: string) {
       props: { source: { type: String, required: true } },
       setup() {
         useAppReferenceLinks({
+          primaryScope: () => space.data_scope_id,
           projects: () => [
             {
               project_id: 'example',
@@ -97,7 +98,9 @@ describe('the shell layer of reference links', () => {
     const { wrapper, openTarget, say } = mountShell('MAIN-12 and SHA-256 and OTHER-3')
     const buttons = wrapper.findAll('button')
     expect(buttons.map((button) => button.text())).toEqual(['MAIN-12'])
-    expect(buttons[0]?.attributes('title')).toBe('Open task MAIN-12')
+    // Its hover text is its card; its old words are what it says it does.
+    expect(buttons[0]?.attributes('title')).toBeUndefined()
+    expect(buttons[0]?.attributes('aria-description')).toBe('Open task MAIN-12')
     vi.mocked(searchGlobalPlanningWorkItems).mockResolvedValueOnce(
       search([found('MAIN-120'), found('MAIN-12')]),
     )

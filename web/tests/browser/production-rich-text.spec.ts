@@ -131,6 +131,8 @@ test('a long markdown report holds on a whole line, opens, and links what resolv
   await notes.focus()
   await expect(entry.getByRole('button', { name: 'Show less', exact: true })).toBeVisible()
   expect(await held.evaluate((element) => element.scrollTop)).toBe(0)
+  // Opened, the text has moved the link; the reader's place goes with it.
+  await expect(notes).toBeInViewport()
   await expectNoSilentClipping(page, 'Markdown report at 1440px')
 
   // A commit the card carries opens its record; the dialog closes back onto the card.
@@ -224,6 +226,13 @@ test('a line that holds a reference is as tall as a line of plain text', async (
   expect(control.height).toBeCloseTo(3 * control.line, 0)
   expect(withReference.height).toBeCloseTo(control.height, 0)
   // Every pointer target, prose and monospace alike, stays at least 24px tall.
+  // A reference with a hover card is the same box as one without: the card is not in the text.
+  await expect(referenced.locator('.rich-reference').first()).toHaveAttribute(
+    'data-reference-preview',
+  )
+  await expect(referenced.locator('.rich-reference').nth(1)).not.toHaveAttribute(
+    'data-reference-preview',
+  )
   expect(withReference.targets).toHaveLength(2)
   for (const target of withReference.targets) expect(target).toBeGreaterThanOrEqual(24)
 })
