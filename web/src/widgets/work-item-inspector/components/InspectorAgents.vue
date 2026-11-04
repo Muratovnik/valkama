@@ -241,7 +241,7 @@ async function toggle() {
       v-if="long"
       ref="toggler"
       class="agents-more"
-      variant="ghost"
+      variant="text"
       size="inline"
       :aria-controls="listId"
       :aria-expanded="expanded"
@@ -342,8 +342,11 @@ async function toggle() {
   justify-self: start;
 }
 
+/* The rest of the list, as a chain's lists open theirs: bare, its words where the rows
+   start, the margin taking back the inset its fill keeps under the pointer. */
 .agents-more {
   justify-self: start;
+  margin-inline-start: calc(-1 * var(--space-2));
   scroll-margin-block: var(--space-2);
 }
 </style>

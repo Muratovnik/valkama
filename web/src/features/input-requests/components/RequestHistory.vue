@@ -39,7 +39,7 @@ function who({ by_person: person, answered_by: by }: Request['history'][number])
   <div class="request-history">
     <VButton
       class="request-history-toggle"
-      variant="ghost"
+      variant="text"
       size="inline"
       :aria-expanded="open"
       @click="open = !open"
@@ -84,8 +84,11 @@ function who({ by_person: person, answered_by: by }: Request['history'][number])
   min-width: 0;
 }
 
+/* Earlier answers are read, not acted on: bare, its words where the answer's lines start,
+   the margin taking back the inset its fill keeps under the pointer. */
 .request-history-toggle {
   justify-self: start;
+  margin-inline-start: calc(-1 * var(--space-2));
 }
 
 .request-history-list {

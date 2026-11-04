@@ -45,7 +45,7 @@ defineExpose({ open })
   <div class="request-note">
     <VButton
       class="request-note-toggle"
-      variant="ghost"
+      variant="text"
       size="inline"
       :disabled="disabled"
       :aria-expanded="open"
@@ -77,7 +77,10 @@ defineExpose({ open })
   min-width: 0;
 }
 
+/* A comment is one quiet press away: bare, its words where the fields start, the margin
+   taking back the inset its fill keeps under the pointer. */
 .request-note-toggle {
   justify-self: start;
+  margin-inline-start: calc(-1 * var(--space-2));
 }
 </style>

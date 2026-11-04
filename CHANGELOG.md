@@ -269,6 +269,12 @@ checkouts are therefore distinguishable even at the same version.
   agent that asked and the one that answered still pushed the time under a name too long for
   the line, to its start, as threads and earlier answers no longer do. Both now keep the time
   at the end of the first line and wrap the name whole beside it.
+- **What shows more of something reads apart from what acts.** «Previous answers», a
+  question's «Comment on this field» and «Comment on the question», a card's «Show all» under
+  its agents and «Show all» under the threads a view hides still wore the filled weight of
+  an action, level with Send and Change answer beside them. They are now bare at rest, with
+  their words where the lines they open start, as a thread's and a text's own toggles are;
+  an option's chevron takes the same weight.
 - **Memory stands whole on the frame it is chosen.** A card read Memory's knowledge source
   only once the section was shown, so the section appeared with a line saying it was being
   checked and then grew by the provider and its path; on a phone the card's sections, stuck

@@ -285,7 +285,8 @@ defineExpose({ revealQuestion })
   >
     {{ t('threads.hidden', hiddenCount) }}
     <VButton
-      variant="ghost"
+      class="thread-hidden-show"
+      variant="text"
       size="inline"
       @click="showAll"
       >{{ t('threads.showAll') }}</VButton
@@ -361,5 +362,11 @@ defineExpose({ revealQuestion })
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-detail);
+}
+
+/* Bringing back what the view hides is reading: bare, its words one gap after the count,
+   the margin taking back the inset its fill keeps under the pointer. */
+.thread-hidden-show {
+  margin-inline-start: calc(-1 * var(--space-2));
 }
 </style>

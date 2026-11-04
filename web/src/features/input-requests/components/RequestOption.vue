@@ -81,7 +81,7 @@ const describedBy = computed(() => {
     <VButton
       v-if="opens"
       class="request-option-toggle"
-      variant="ghost"
+      variant="text"
       size="compact"
       :tabindex="toggleStop"
       :title="toggleLabel"
