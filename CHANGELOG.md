@@ -328,6 +328,10 @@ checkouts are therefore distinguishable even at the same version.
 - **What a dialog is about reads as a note under its title.** The line under the title of
   the session panel and of other dialogs, a session's client and id or a task's number,
   stood flush under it in bold; it now stands a step lower in the weight of ordinary text.
+- **A failed read stands out from what it failed in.** In a card or a document the panel
+  that says a read failed was the ground's own tone, so only its red edge showed, bent by
+  the corners into a bracket. The panel now lies a step above the ground
+  with a straight edge, and the dots of a read under way start where the content will.
 
 ### Removed
 

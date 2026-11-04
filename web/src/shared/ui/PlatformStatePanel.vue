@@ -162,6 +162,9 @@ const failed = computed(
 </template>
 
 <style scoped>
+/* What failed or was refused is a panel lying on the ground, a step above it. In the
+   ground's own tone, which a drawer and a document stand on, it drew no box at all, and
+   its status edge stood alone, bent by the corners into a bracket. */
 .platform-state-panel {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -171,12 +174,20 @@ const failed = computed(
   min-height: 180px;
   padding: var(--space-6);
   color: var(--color-text);
-  background: var(--color-surface);
+  background: var(--color-surface-sheet);
   border-radius: var(--radius-card);
 
   &.compact {
     min-height: 96px;
     padding: var(--space-4);
+  }
+
+  /* A read under way is no message to set apart: its dots stand on the ground at the
+     column the content will take. As a box of the ground's tone they stood a panel's
+     inset inside it, 24 px right of where everything else in the drawer starts. */
+  &[aria-busy='true'] {
+    padding-inline: 0;
+    background: transparent;
   }
 }
 
@@ -193,9 +204,12 @@ const failed = computed(
 }
 
 /* A failure names itself the way the degraded banner does: a status edge on
-   the panel's own ground, not a colored outline drawn around the whole box. */
+   the panel's own ground, not a colored outline drawn around the whole box. The edge is
+   a straight line, so the corners on its side are square. */
 .platform-state-panel[data-tone='danger'] {
   border-inline-start: 3px solid var(--color-danger);
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
 }
 
 /* A filled danger disc in the icon's 22px column, so the title keeps the place an
