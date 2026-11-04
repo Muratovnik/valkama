@@ -1012,7 +1012,10 @@ an item now. A card says it at its foot as the working dots and a word: «раб
 (`working`), «у сессии» (`held`), «ждёт» (`waiting`) or «молчит с <date>»
 (`quiet`). The word is the one mark of the state that is not a colour, so it never
 gives way: the holder's name beside it is cut first, and the card's accessible name
-says that name whole. Only `working` moves: an item a session at work (its turn running, or a
+says that name whole. Beside live work the foot drops «Закреплено за», which the
+word already implies, so the word, the name and a priority share the line and some
+of the name always stays. «молчит с» names the day alone: a session is called
+silent only after a day without a sign, so the hour tells a reader nothing. Only `working` moves: an item a session at work (its turn running, or a
 subagent of it) wrote to since the last message a person sent it — a claim, a step,
 a comment, a link from it — whether or not it holds the item, by itself or through
 a subagent; an item one of its subagents holds a step of; and an item Valkama runs

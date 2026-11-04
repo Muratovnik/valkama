@@ -27,6 +27,13 @@ export type GraphMotion = 'paused' | 'reduced' | 'running'
 
 const STORAGE_KEY = 'valkama-graph-motion'
 
+/**
+ * «Silent since» names the day alone: a session is called silent only after a
+ * day without a sign, so the hour adds nothing a reader acts on, and it made
+ * the word too long to stand beside a holder's name on a card.
+ */
+const QUIET_DAY = { month: 'short', day: '2-digit' } as const
+
 /** Whether an item's live work is the kind that moves: worked on in a turn running now. */
 export function movesOn(live: LiveWork | undefined): boolean {
   return live?.state === 'working'
@@ -41,7 +48,7 @@ export function useLiveWord() {
   const { d, t } = useI18n()
   return (live: LiveWork): string =>
     live.state === 'quiet'
-      ? t('graph.live.quiet', { since: d(new Date(live.quiet_since), 'day') })
+      ? t('graph.live.quiet', { since: d(new Date(live.quiet_since), QUIET_DAY) })
       : t(`graph.live.${live.state}`)
 }
 

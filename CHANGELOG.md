@@ -36,7 +36,8 @@ checkouts are therefore distinguishable even at the same version.
   line are offered only while something on the field moves, so work a filter or a chain
   leaves out brings neither, and a refresh that makes a line live or still changes it at
   once. A card's live word is never cut: a long holder's name beside it gives way, and the
-  card's accessible name says the holder whole. The switch answers a pointer across 44px.
+  card's accessible name says the holder whole. Beside live work the foot drops «Claimed
+  by», so some of the holder's name always stays, and «silent since» names the day alone. The switch answers a pointer across 44px.
 - **The graph draws an epic as a frame round its work.** The frame's header names the epic,
   its state once it has moved, and how its work stands in words — «8 of 21 done · 2 in
   progress · 1 blocked» — over a 3px edge of the same counts in the board's hues. The

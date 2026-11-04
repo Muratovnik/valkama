@@ -70,9 +70,19 @@ describe('a card with live work', () => {
     i18n.global.locale.value = 'ru'
     const wrapper = card(QUIET)
     const word = wrapper.get('.graph-live-word').text()
-    expect(word).toMatch(/^молчит с 02 нояб\./u)
+    // The day alone: silence is only called after a day, so the hour says nothing.
+    expect(word).toBe('молчит с 02 нояб.')
     expect(wrapper.get('.graph-live .work-dots').classes()).toContain('still')
     expect(wrapper.get('.flow-node-card').attributes('aria-label')).toContain(word)
+  })
+
+  it('drops «Claimed by» from the foot beside live work, and keeps it in the name', () => {
+    const wrapper = card({ state: 'working' })
+    expect(wrapper.find('.flow-node-owner-state').exists()).toBe(false)
+    expect(wrapper.get('.flow-node-owner-name').text()).toBe('agent-1')
+    expect(wrapper.get('.flow-node-card').attributes('aria-label')).toContain('Assigned to agent-1')
+    // Without live work the foot still says who holds it and how.
+    expect(card(null).get('.flow-node-owner-state').text()).toBe('Assigned to')
   })
 
   it('holds even a running turn still when the field is paused', () => {

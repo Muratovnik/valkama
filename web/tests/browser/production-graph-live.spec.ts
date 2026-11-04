@@ -15,19 +15,23 @@ import { graphRoute } from './chainFixtures.ts'
 import { planningReadFor } from './planningReadFixture.ts'
 import { test } from './test.ts'
 
-/** A holder's name far longer than a card's foot holds. */
-const LONG_HOLDER = 'an-agent-whose-name-runs-on-past-any-card'
+/** Holders a live card meets: a name longer than a card, a short one, and a session's. */
+const HOLDERS = {
+  long: 'an-agent-whose-name-runs-on-past-any-card',
+  short: 'codex',
+  session: 'claude (session 3f2a9c1e-5b7d-4e2a-9c1f-0a1b2c3d4e5f)',
+} as const
 
 /**
  * The suite's space, holding the broad space's work and its live work; with
- * `longHolders`, every live claim is held under a name longer than a card.
+ * `holder`, every live claim is held under that name.
  */
-async function serveLiveSpace(page: Page, { longHolders = false } = {}) {
+async function serveLiveSpace(page: Page, { holder = '' } = {}) {
   const { model } = broadSpace()
   const live = liveWorkFor(model)
-  const items = longHolders
+  const items = holder
     ? model.work_items.map((item) =>
-        item.work_item_id in live ? { ...item, claim_ref: LONG_HOLDER } : item,
+        item.work_item_id in live ? { ...item, claim_ref: holder } : item,
       )
     : model.work_items
   await installBackend(page)
@@ -99,38 +103,56 @@ test('under reduced motion live work stands still and no switch is offered', asy
 })
 
 for (const width of [1500, 390]) {
-  test(`a live word stands whole beside a long holder's name at ${width}px`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 900 })
-    await serveLiveSpace(page, { longHolders: true })
-    await page.goto(graphRoute({}))
-    await expect(page.locator('.graph-canvas.settled')).toBeVisible()
-    const owners = page.locator('.graph-flow .flow-node-owner').filter({
-      has: page.locator('.graph-live'),
+  for (const [kind, holder] of Object.entries(HOLDERS)) {
+    test(`every live word stands whole beside a ${kind} holder's name at ${width}px`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 900 })
+      await serveLiveSpace(page, { holder })
+      await page.goto(graphRoute({}))
+      await expect(page.locator('.graph-canvas.settled')).toBeVisible()
+      const owners = page.locator('.graph-flow .flow-node-owner').filter({
+        has: page.locator('.graph-live'),
+      })
+      await expect(owners.first()).toBeVisible()
+      const rows = await owners.evaluateAll((elements) =>
+        elements.map((owner) => {
+          const row = owner.getBoundingClientRect()
+          const live = owner.querySelector<HTMLElement>('.graph-live')
+          const word = owner.querySelector<HTMLElement>('.graph-live-word')
+          const name = owner.querySelector<HTMLElement>('.flow-node-owner-name')
+          const box = word?.getBoundingClientRect()
+          return {
+            state: live?.dataset.live ?? '',
+            word: word?.textContent ?? '',
+            // The word is whole in its own box and inside the row, which clips.
+            wordWhole:
+              word !== null &&
+              box !== undefined &&
+              word.scrollWidth <= word.clientWidth &&
+              box.left >= row.left - 0.5 &&
+              box.right <= row.right + 0.5,
+            // Nothing is cut by the row without an ellipsis of its own.
+            rowWhole: owner.scrollWidth <= owner.clientWidth,
+            nameShown: name === null ? 0 : name.getBoundingClientRect().width,
+          }
+        }),
+      )
+      expect(new Set(rows.map((row) => row.state))).toEqual(
+        new Set(['working', 'held', 'waiting', 'quiet']),
+      )
+      expect(rows.filter((row) => !row.wordWhole || !row.rowWhole)).toEqual([])
+      // Some of the holder's name stays, enough to know them by.
+      expect(Math.min(...rows.map((row) => row.nameShown))).toBeGreaterThan(40)
+      // The whole name is still said to a reader.
+      await expect(
+        page
+          .locator('.graph-flow .flow-node-card')
+          .filter({ has: page.locator('.graph-live[data-live="quiet"]') })
+          .first(),
+      ).toHaveAccessibleName(new RegExp(holder.split(' ')[0], 'u'))
     })
-    await expect(owners.first()).toBeVisible()
-    const rows = await owners.evaluateAll((elements) =>
-      elements.map((owner) => {
-        const word = owner.querySelector<HTMLElement>('.graph-live-word')
-        const name = owner.querySelector<HTMLElement>('.flow-node-owner-name')
-        return {
-          word: word?.textContent ?? '',
-          wordWhole: word !== null && word.scrollWidth <= word.clientWidth,
-          nameCut: name !== null && name.scrollWidth > name.clientWidth,
-        }
-      }),
-    )
-    // The holder's name gives way: it is cut, and the word it stands beside never is.
-    expect(rows.length).toBeGreaterThan(0)
-    expect(rows.filter((row) => !row.wordWhole)).toEqual([])
-    expect(rows.every((row) => row.nameCut)).toBe(true)
-    // The whole name is still said to a reader.
-    await expect(
-      page
-        .locator('.graph-flow .flow-node-card')
-        .filter({ has: page.locator('.graph-live') })
-        .first(),
-    ).toHaveAccessibleName(new RegExp(LONG_HOLDER, 'u'))
-  })
+  }
 }
 
 for (const width of [1500, 390]) {

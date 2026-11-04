@@ -212,7 +212,11 @@ const accessibleName = computed(() =>
         class="flow-node-owner"
       >
         <template v-if="holder">
-          <span class="flow-node-owner-state">{{ ownerLabel }}</span>
+          <span
+            v-if="!live"
+            class="flow-node-owner-state"
+            >{{ ownerLabel }}</span
+          >
           <span class="flow-node-owner-name">{{ holderName(holder) }}</span>
         </template>
         <GraphLiveMark
@@ -354,7 +358,11 @@ const accessibleName = computed(() =>
   color: var(--color-text-muted);
 }
 
-/* Who holds it, and at the far end a priority that asks for attention. */
+/* Who holds it, and at the far end a priority that asks for attention. Beside
+   live work the row drops «Claimed by»: the live word already says a session is
+   at the item, and the word, the name and the priority have one line of a card
+   between them. Only the name gives way, so whatever the four words, some of it
+   stays; the accessible name keeps the label and the whole name. */
 .flow-node-priority {
   flex: 0 0 auto;
   margin-inline-start: auto;
