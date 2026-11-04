@@ -150,7 +150,7 @@ defineExpose({ askOutcome, revealChecklist, revealQuestion })
         level="panel"
         >{{ t('workItem.summaryNext') }}</SectionHeading
       >
-      <p>
+      <p class="next-step">
         <RichText
           :source="nextStep.text"
           inline

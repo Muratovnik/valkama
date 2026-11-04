@@ -250,6 +250,9 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- **«What comes next» is set as the text under a heading.** The step's words took the page's
+  16px, larger than the 15px heading over them; they now take the size and leading of a
+  description.
 - **A long name leaves an entry's time where it stands.** Above a thread's root, a reply and
   an answer a change replaced, a name too long for the line pushed the time under it, to the
   line's start, while the entry beside it showed the time at the end. The time now keeps the

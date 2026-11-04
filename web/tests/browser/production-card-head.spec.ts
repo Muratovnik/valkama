@@ -420,3 +420,24 @@ for (const width of [1440, 390]) {
     expect(Math.min(...widths)).toBeGreaterThan(0)
   })
 }
+
+/** The type a line is set in, read as the browser resolved it. */
+const typeOf = (target: Locator) =>
+  target.evaluate((node) => {
+    const style = getComputedStyle(node)
+    return { size: Number.parseFloat(style.fontSize), weight: style.fontWeight, font: style.font }
+  })
+
+test('what comes next reads as the text under a heading, no larger than the heading', async ({
+  page,
+}) => {
+  const drawer = await openLongCard(page, 1440)
+  const next = drawer.locator('.overview-section').filter({ hasText: 'Что дальше' })
+  const heading = await typeOf(next.getByRole('heading', { name: 'Что дальше' }))
+  const step = await typeOf(next.locator('p'))
+  const description = await typeOf(drawer.locator('.description-copy .collapsible-text'))
+  // The step's words stood at the page's 16px, over a 15px heading.
+  expect(step.size).toBeLessThanOrEqual(heading.size)
+  expect(step.weight).not.toBe(heading.weight)
+  expect(step.font).toBe(description.font)
+})

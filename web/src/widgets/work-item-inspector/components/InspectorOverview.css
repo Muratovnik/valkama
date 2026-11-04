@@ -8,6 +8,15 @@
   gap: var(--space-heading-content);
 }
 
+/* The step's words are the text of the section, as a description's are under its heading:
+   left to the page, they stood at 16px under a 15px heading and outranked it. */
+.next-step {
+  margin: 0;
+  color: var(--color-text);
+  font: var(--font-editor);
+  overflow-wrap: anywhere;
+}
+
 .blockers {
   display: grid;
   gap: var(--space-1);
