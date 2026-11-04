@@ -53,6 +53,23 @@ export function versionLines(
       said('requests.ownVariantSaid', version.own[field.id]),
       said('requests.fieldNoteSaid', version.field_notes[field.id]),
     ].filter(Boolean)
-    return parts.length ? [{ id: field.id, text: `${field.label}: ${parts.join('; ')}` }] : []
+    return parts.length ? [{ id: field.id, text: `${field.label}: ${clauses(parts)}` }] : []
   })
+}
+
+/** A stop, a question mark or an ellipsis, with any closing quotes or brackets after it. */
+const SENTENCE_END = /[.!?…]["'»”’)\]]*$/u
+
+/**
+ * Parts of one line, a semicolon between them. A part that ends its own sentence, as an own
+ * variant or a comment in a person's words often does, is followed by the next as a new
+ * sentence instead: a semicolon after its stop read as `.;`.
+ */
+function clauses([first = '', ...rest]: string[]) {
+  let line = first
+  for (const part of rest) {
+    const sentence = `${part.charAt(0).toLocaleUpperCase()}${part.slice(1)}`
+    line = SENTENCE_END.test(line) ? `${line} ${sentence}` : `${line}; ${part}`
+  }
+  return line
 }

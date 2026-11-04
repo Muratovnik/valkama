@@ -17,6 +17,7 @@ import {
 import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
 import type { InputRequestField } from '@/shared/api/inputRequestModel.ts'
+import { inputRequestMessages } from '@/shared/i18n/inputRequestMessages.ts'
 
 import { firstAnswer, requestEntry } from './support/inputRequests.ts'
 
@@ -256,6 +257,42 @@ test('a replaced answer reads as a line per field that said something', () => {
     { id: 'branch', text: 'Branch: requests.ownVariantSaid(In a week)' },
     { id: 'extra', text: 'Extra: Keep, Merge' },
   ])
+})
+
+/** The real words of a language, filled in as vue-i18n fills a named value. */
+const wordsOf = (locale: 'en' | 'ru') => (key: string, values?: Record<string, unknown>) => {
+  const text = String(
+    (inputRequestMessages[locale].requests as Record<string, unknown>)[key.slice(9)],
+  )
+  return text.replaceAll(/\{(\w+)\}/gu, (_, name: string) => String(values?.[name]))
+}
+
+test('a part that ends its own sentence is not glued to the next by a semicolon', () => {
+  const version = {
+    answers: { proceed: false },
+    own: { branch: 'An own variant (a probe).' },
+    field_notes: { branch: 'A note on the field.', proceed: 'Because' },
+  }
+  expect(versionLines(fields, version, wordsOf('ru'))).toEqual([
+    { id: 'proceed', text: 'Proceed: Нет; комментарий: Because' },
+    {
+      id: 'branch',
+      text: 'Branch: свой вариант: An own variant (a probe). Комментарий: A note on the field.',
+    },
+  ])
+  expect(versionLines(fields, version, wordsOf('en'))[1]).toEqual({
+    id: 'branch',
+    text: 'Branch: own option: An own variant (a probe). Comment: A note on the field.',
+  })
+  // A question mark, an ellipsis or a closing quote after the stop end a sentence as well.
+  for (const own of ['Why not?', 'Perhaps…', '“Keep it.”'])
+    expect(
+      versionLines(
+        fields,
+        { answers: {}, own: { branch: own }, field_notes: { branch: 'N' } },
+        wordsOf('en'),
+      )[0]?.text,
+    ).toBe(`Branch: own option: ${own} Comment: N`)
 })
 
 test('a line of description holding a link opens on its own press, outside the label', () => {
