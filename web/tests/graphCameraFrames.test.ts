@@ -37,6 +37,38 @@ test('a field of frames too large to read opens on its first header at the top-l
   assert.equal(first.id, foldTarget(first.frameId))
   assert.ok(Math.abs(first.x * camera.zoom + camera.x - 32) < 0.5)
   assert.ok(Math.abs(first.y * camera.zoom + camera.y - 16) < 0.5)
+  // In sight at the top-left, it is where the keyboard enters too.
+  assert.equal(graphAnchor(placed, {}, { camera, dimensions })?.id, first.id)
+})
+
+test('the keyboard enters where the camera looks: the first target in sight as the field is read', async () => {
+  const placed = await space()
+  const phone = { width: 302, height: 640 }
+  const camera = graphCameraView(placed, phone)
+  assert.ok(camera)
+  const [first] = walkTargets(placed).sort(readingOrder)
+  // The field's first target is out of this camera's sight.
+  const centre = (target: { height: number; width: number; x: number; y: number }) => ({
+    x: (target.x + target.width / 2) * camera.zoom + camera.x,
+    y: (target.y + target.height / 2) * camera.zoom + camera.y,
+  })
+  const shown = (target: Parameters<typeof centre>[0]) => {
+    const { x, y } = centre(target)
+    return x >= 0 && y >= 0 && x <= phone.width && y <= phone.height
+  }
+  assert.equal(shown(first), false)
+  const anchor = graphAnchor(placed, {}, { camera, dimensions: phone })
+  assert.ok(anchor)
+  assert.ok(shown(anchor), anchor.id)
+  assert.equal(
+    anchor.id,
+    walkTargets(placed)
+      .sort(readingOrder)
+      .find((target) => shown(target))?.id,
+  )
+  // With nothing in sight it falls back to the field's first target.
+  const away = { x: 10_000, y: 10_000, zoom: camera.zoom }
+  assert.equal(graphAnchor(placed, {}, { camera: away, dimensions: phone })?.id, first.id)
 })
 
 for (const field of [

@@ -95,16 +95,29 @@ const cardTarget = (node: PlacedNode): WalkTarget => ({
  * then — for a chain — the root the chain grew from, so a reload or a link
  * lands on the same place the card's «Show on graph» does; else the field's
  * first target as it is read, a frame's header or a card.
+ *
+ * Given where the camera stands (`sight`), the keyboard enters where the
+ * operator is looking: that card when it is in sight, else the first target in
+ * sight as the field is read; only with nothing in sight does it fall back to
+ * the card or the field's first target, which a press then brings into view.
  */
 export function graphAnchor(
   graph: GraphLayout,
   options: AnchorOptions = {},
+  sight: { camera: ViewportTransform; dimensions: Dimensions } | null = null,
 ): WalkTarget | undefined {
   const [head] = branchWork(graph, options)
   const selected = graph.nodes.find((node) => node.work_item_id === options.selectedId)
   const root = graph.nodes.find((node) => node.work_item_id === options.rootId)
   const card = head ?? selected ?? root
-  return card ? cardTarget(card) : walkTargets(graph).sort(readingOrder)[0]
+  const chosen = card ? cardTarget(card) : undefined
+  const targets = walkTargets(graph).sort(readingOrder)
+  if (sight) {
+    const inSight = (target: WalkTarget) => seen(target, sight.camera, sight.dimensions)
+    const looked = chosen && inSight(chosen) ? chosen : targets.find((target) => inSight(target))
+    if (looked) return looked
+  }
+  return chosen ?? targets[0]
 }
 
 /**

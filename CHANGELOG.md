@@ -214,7 +214,9 @@ checkouts are therefore distinguishable even at the same version.
   empty middle not counting.
   The arrows also reach each heading's two buttons, fold or open on its left and the epic
   across the rest (the work under no epic has only the first), and once a fold hides the item
-  the keyboard stood on, the field's Tab stop is that block's fold button.
+  the keyboard stood on, the field's Tab stop is that block's fold button. Otherwise Tab
+  enters the field where the camera looks: on the first heading or card in sight as the
+  field is read, so the field does not jump to a block out of sight.
 - **The graph's first layout no longer waits for its worker to load.** The worker starts
   when the page knows the graph is coming — the address names it, or the pointer or focus
   rests on the switch to it — and loads ELK while the space is read. A worker nobody takes

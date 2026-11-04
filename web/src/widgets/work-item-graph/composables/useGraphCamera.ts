@@ -179,7 +179,10 @@ export function useGraphCamera(input: CameraInput) {
 
   return {
     fitted,
-    /** The node a framing is placed around, which the keyboard enters the field on. */
+    /**
+     * The target the keyboard enters the field on: once the camera is placed,
+     * the one in sight where the operator is looking (`graphAnchor`).
+     */
     anchorId: computed(() => {
       const placed = input.placed.value
       if (!placed) return null
@@ -188,7 +191,8 @@ export function useGraphCamera(input: CameraInput) {
         selectedId: input.selectedId(),
         rootId: input.rootId(),
       }
-      return graphAnchor(placed, options)?.id ?? null
+      const sight = fitted.value ? { camera: viewport.value, dimensions: dimensions.value } : null
+      return graphAnchor(placed, options, sight)?.id ?? null
     }),
     /** «Fit whole graph». */
     fitOptions: graphFitViewOptions(),

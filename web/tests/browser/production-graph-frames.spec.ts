@@ -224,3 +224,33 @@ for (const width of [1500, 390]) {
       .not.toEqual([])
   })
 }
+
+/** Press Tab until the focus is inside the field, and say where it stands. */
+async function tabIntoField(page: Page) {
+  for (let step = 0; step < 8; step += 1) {
+    const at = await focused(page)
+    if (at) return at
+    await page.keyboard.press('Tab')
+  }
+  return focused(page)
+}
+
+test('Tab from the row above the field enters on a target in sight, and the camera stays at 390px', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 900 })
+  await serveBroadSpace(page)
+  await page.goto(graphRoute({}))
+  await expect(page.locator('.graph-canvas.settled')).toBeVisible()
+  const pane = page.locator('.vue-flow__transformationpane')
+  const camera = await pane.getAttribute('style')
+  // The field's first target as it is read is out of sight at this width.
+  const [first] = await walkTargets(page, false)
+  expect(await walkTargets(page, true)).not.toContain(first)
+  // From the row's last control, Tab moves into the field.
+  await page.locator('.graph [role="radio"][aria-checked="true"]').focus()
+  const at = await tabIntoField(page)
+  expect(at).not.toBeNull()
+  expect(await walkTargets(page, true)).toContain(at?.target)
+  await expect(pane).toHaveAttribute('style', camera ?? '')
+})
