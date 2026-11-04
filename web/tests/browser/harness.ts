@@ -22,6 +22,7 @@ import VIcon from '@/shared/ui/VIcon.vue'
 import '@/app/styles/index.css'
 
 import { DocumentLinksSurface } from './documentLinksSurface.ts'
+import { GraphSurface } from './graphSurface.ts'
 import { marksSurface } from './marksSurface.ts'
 import { now } from './planningFixtures.ts'
 import { previewSurface } from './previewSurface.ts'
@@ -169,6 +170,7 @@ const Harness = defineComponent({
       surfaceDialog.value = true
     }
     const selectedRuntime = ref('codex')
+    if (requestedSurface === 'graph') return () => h(GraphSurface)
     if (requestedSurface === 'marks') return marksSurface
     if (requestedSurface === 'preview') return previewSurface
     if (contextHarness) {

@@ -172,7 +172,7 @@ export default {
       // `<pattern>` of `<circle>`s inside its background layer, and there is no
       // class to hand an element this product does not render. Every other
       // selector in that file names a class.
-      files: ['src/widgets/work-item-graph/components/GraphView.vue'],
+      files: ['src/widgets/work-item-graph/components/GraphField.vue'],
       rules: { 'selector-max-type': null },
     },
     {

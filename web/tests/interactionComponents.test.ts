@@ -33,6 +33,10 @@ const graphControls = readFileSync(
   new URL('../src/widgets/work-item-graph/components/GraphControls.vue', import.meta.url),
   'utf8',
 )
+const graphField = readFileSync(
+  new URL('../src/widgets/work-item-graph/components/GraphField.vue', import.meta.url),
+  'utf8',
+)
 const graphNode = readFileSync(
   new URL('../src/widgets/work-item-graph/components/GraphNodeCard.vue', import.meta.url),
   'utf8',
@@ -102,18 +106,22 @@ test('GraphView delegates camera behavior to Vue Flow and keeps graph nodes non-
   assert.match(graphProjection, /from '@\/widgets\/work-item-graph\/utils\/graphFocus\.ts'/)
   assert.match(graph, /useGraphProjection/)
   assert.match(graph, /applyFocus\(\{ type: 'pointer-enter'/)
-  assert.match(graph, /<VueFlow/)
+  // The flow is its own component, which the view hands the nodes and the
+  // drawings; Vue Flow is configured there, once.
+  assert.match(graphField, /<VueFlow/)
   // The camera controls are their own component, in the strip under the flow
   // rather than on it, so they find the field's camera by its id.
-  assert.match(graph, /<\/VueFlow>\s*<GraphControls/)
+  assert.match(graph, /<\/GraphField>\s*<GraphControls/)
   assert.match(graphControls, /<ControlButton/)
   assert.match(graphControls, /useVueFlow\(\{ id: GRAPH_FLOW_ID \}\)/)
-  assert.match(graph, /<Background/)
-  assert.match(graph, /:pan-on-drag="true"/)
-  assert.match(graph, /zoom-activation-key-code="Control"/)
-  assert.match(graph, /:nodes-draggable="false"/)
-  assert.match(graph, /@node-click="onFlowNodeClick"/)
+  assert.match(graphField, /<Background/)
+  assert.match(graphField, /:pan-on-drag="true"/)
+  assert.match(graphField, /zoom-activation-key-code="Control"/)
+  assert.match(graphField, /:nodes-draggable="false"/)
+  assert.match(graphField, /@node-click="\(\{ node \}\) => emit\('node-click', node\.id\)"/)
+  assert.match(graph, /@node-click="onNodeClick"/)
   assert.doesNotMatch(graph, /stepGraphZoom|zoom-surface|transform: `scale/)
+  assert.doesNotMatch(graphField, /stepGraphZoom|zoom-surface|transform: `scale/)
 })
 
 test('the inspector exposes its emits, related navigation, and shared focus ownership', () => {

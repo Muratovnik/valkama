@@ -104,6 +104,9 @@ export const LINE_BUDGET = new Map([
   ['widgets/work-item-graph/components/GraphControls.vue', 2],
   // The graph's key draws its two line glyphs; the border is the drawing itself.
   ['widgets/work-item-graph/components/GraphLegend.vue', 1],
+  // A frame's progress in a forced palette, where hues are gone: work begun is a
+  // dashed run of the edge (status edge), told from the filled run of work done.
+  ['widgets/work-item-graph/components/GraphFrameProgress.vue', 1],
 ])
 
 /**

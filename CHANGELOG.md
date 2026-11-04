@@ -20,6 +20,14 @@ checkouts are therefore distinguishable even at the same version.
   (silent for over a day, with `quiet_since`). It is read from the sessions behind the
   item's claim and its open steps and from what sessions in a turn wrote, in five reads
   whatever the size of the space, and no MCP tool answer carries it. See [Work-item context](docs/product-model.md#work-item-context).
+- **The graph draws an epic as a frame round its work.** The frame's header names the epic,
+  its state once it has moved, and how its work stands in words — «8 of 21 done · 2 in
+  progress · 1 blocked» — over a 3px edge of the same counts in the board's hues. The
+  chevron folds a frame to its header alone, the rest of the header opens the epic, and the
+  work under no epic stands in a frame of its own. Lines run over the frames and end on a
+  frame where the work they reach is folded inside it. Zoomed out, a header keeps the epic's
+  reference and its edge; in a forced palette the frame is outlined and its edge fills what
+  is finished and dashes what has begun.
 - **A work item's number in a text shows its card.** Rest the pointer on the number for half
   a second, or reach it with Tab, to see its state, title, holder and steps without leaving
   what you are reading. A press still opens the item, Escape closes only the card, and a tap

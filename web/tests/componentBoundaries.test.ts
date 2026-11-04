@@ -81,7 +81,7 @@ test('the declared owners are files that still exist and still reach', () => {
       `${file}: declared in scopeEscapeOwners but its source no longer contains a scope escape`,
     )
   }
-  assert.ok(scopeEscapeOwners.has('widgets/work-item-graph/components/GraphView.vue'))
+  assert.ok(scopeEscapeOwners.has('widgets/work-item-graph/components/GraphField.vue'))
 })
 
 test('a stylesheet outside a component is not the subject', () => {

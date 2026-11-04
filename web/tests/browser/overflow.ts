@@ -18,9 +18,12 @@ import type { Page } from '@playwright/test'
  * that something was left out. What is left is the case with no affordance at
  * all: a box that quietly clips, which is how a lane 30px narrower than someone
  * assumed turns into a word with its last letter missing.
+ *
+ * `within` narrows the reading to what a selector holds, for a page whose own
+ * frame clips by design: the graph's flow is a camera onto a larger field.
  */
-export async function expectNoSilentClipping(page: Page, where: string) {
-  const clipped = await page.evaluate(() => {
+export async function expectNoSilentClipping(page: Page, where: string, within = 'body') {
+  const clipped = await page.evaluate((root) => {
     const findings: { overflow: number; selector: string; text: string }[] = []
     // This body is serialized and evaluated in the page, so a module-scope
     // helper would not be in scope here.
@@ -30,7 +33,7 @@ export async function expectNoSilentClipping(page: Page, where: string) {
       const name = typeof classes === 'string' && classes ? `.${classes.split(/\s+/)[0]}` : ''
       return `${element.tagName.toLowerCase()}${name}`
     }
-    for (const element of document.querySelectorAll<HTMLElement>('body *')) {
+    for (const element of document.querySelectorAll<HTMLElement>(`${root} *`)) {
       const overflow = element.scrollWidth - element.clientWidth
       if (overflow <= 1) continue
       const style = getComputedStyle(element)
@@ -50,7 +53,7 @@ export async function expectNoSilentClipping(page: Page, where: string) {
       })
     }
     return findings
-  })
+  }, within)
   expect(
     clipped,
     `${where}: ${clipped.length} element(s) clip their own content with no ellipsis, clamp or scroll — ${clipped

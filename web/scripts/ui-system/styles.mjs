@@ -332,8 +332,12 @@ function tintedSurfaces(file, source) {
 export const FILL_BUDGET = new Map([
   ['shared/ui/PlatformStatePanel.vue', 1], // dot: the failure mark's 12px disc.
   ['widgets/app-nav/components/NavConnectionButton.vue', 2], // dot: live and reconnecting.
-  // edge: the chain bar, four tones; block: the zoomed-out node, four tones.
-  ['widgets/work-item-graph/components/GraphNodeCard.vue', 8],
+  // edge: the chain bar, four tones.
+  ['widgets/work-item-graph/components/GraphNodeCard.vue', 4],
+  // block: the zoomed-out node, four tones.
+  ['widgets/work-item-graph/components/GraphNodeBlock.vue', 4],
+  // edge: a frame's progress, its 3px edge in four tones, one part per group.
+  ['widgets/work-item-graph/components/GraphFrameProgress.vue', 4],
   ['widgets/work-item-inspector/components/InspectorOverview.css', 1], // check: a done step.
 ])
 

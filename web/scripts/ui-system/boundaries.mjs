@@ -33,7 +33,7 @@
  *
  * `SkillPreview` renders a skill's Markdown through `v-html`, so the headings,
  * code blocks and tables it styles are `markdown-it`'s output and appear in no
- * template. `GraphView` styles Vue Flow's pane, background, nodes and edges,
+ * template. `GraphField` styles Vue Flow's pane, background, nodes and edges,
  * which the library renders and names.
  *
  * `ImprovementProfileDialog` uses `:global()` rather than `:deep()`: the overlay
@@ -42,7 +42,7 @@
  */
 const scopeEscapeOwners = new Set([
   'app/components/AppContextBar.vue',
-  'widgets/work-item-graph/components/GraphView.vue',
+  'widgets/work-item-graph/components/GraphField.vue',
 ])
 
 const SCOPE_ESCAPE = /(?:::v-deep|:deep)\s*\(|(?:::v-global|:global)\s*\(/

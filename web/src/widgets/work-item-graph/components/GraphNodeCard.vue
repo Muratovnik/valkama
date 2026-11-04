@@ -11,6 +11,7 @@ import { useI18n } from 'vue-i18n'
 
 import { Handle, Position } from '@vue-flow/core'
 
+import GraphNodeBlock from '@/widgets/work-item-graph/components/GraphNodeBlock.vue'
 import type { PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 
 import FacetMarks from '@/entities/work-item/components/FacetMarks.vue'
@@ -25,6 +26,7 @@ const {
   node,
   ready,
   chainGroup,
+  framed = false,
   marked = false,
   overview = false,
   root = false,
@@ -36,6 +38,8 @@ const {
   recessed: boolean
   /** Where the node stands in the chain the field is scoped to, marked on its edge. */
   chainGroup?: ChainGroup
+  /** It stands in a frame, a step above the frame's ground as the frame is above the field's. */
+  framed?: boolean
   /** In the branch of the chain the card chose, which the field frames and lights. */
   marked?: boolean
   /** The field is zoomed out past reading: the card is its state's colour and its reference. */
@@ -127,6 +131,7 @@ const accessibleName = computed(() =>
     :data-tone="statePresentation('work-item-node-marker', markerState).tone"
     :class="{
       ready,
+      framed,
       'is-terminal': node.state.is_terminal,
       recessed,
       root,
@@ -134,26 +139,18 @@ const accessibleName = computed(() =>
       marked,
     }"
     :aria-label="accessibleName"
+    :data-walk-target="node.work_item_id"
     :tabindex="tabIndex"
     @focus="emit('focus', node.work_item_id)"
     @blur="emit('blur', node.work_item_id)"
   >
-    <span
+    <GraphNodeBlock
       v-if="overview"
-      class="flow-node-overview"
-    >
-      <i
-        v-if="chainGroup"
-        class="flow-node-dot"
-        :data-tone="statePresentation('work-item-chain-group', chainGroup).tone"
-      />
-      <i
-        v-else
-        class="flow-node-dot"
-        :data-tone="statePresentation('work-item-node-marker', markerState).tone"
-      />
-      <span class="flow-node-overview-reference">{{ node.reference }}</span>
-    </span>
+      :reference="node.reference"
+      :marker-state="markerState"
+      :chain-group="chainGroup"
+      :root="root"
+    />
     <template v-else>
       <span
         v-if="chainGroup"
@@ -237,6 +234,10 @@ const accessibleName = computed(() =>
   border-radius: var(--radius-status);
   transition: background-color var(--duration-quick) var(--ease-out);
   cursor: pointer;
+
+  &.framed {
+    background: var(--color-surface-sheet);
+  }
 
   &.is-terminal {
     background: var(--color-surface-recess);
@@ -424,50 +425,6 @@ const accessibleName = computed(() =>
   &.root {
     background: var(--color-text);
   }
-}
-
-.flow-node-overview {
-  display: contents;
-}
-
-.flow-node-dot {
-  position: absolute;
-  inset: 0;
-  background: var(--color-text-tertiary);
-  border-radius: var(--radius-status);
-
-  .flow-node-card.root & {
-    inset: var(--space-2);
-  }
-
-  &[data-tone='success'] {
-    background: var(--color-success);
-  }
-
-  &[data-tone='warning'] {
-    background: var(--color-warning);
-  }
-
-  &[data-tone='info'] {
-    background: var(--color-info);
-  }
-
-  &[data-tone='danger'] {
-    background: var(--color-danger);
-  }
-}
-
-/* Drawn in the field's own space, which the camera scales down: the type ramp's
-   largest step, scaled with the drawing rather than set off the ramp. */
-.flow-node-overview-reference {
-  position: relative;
-  color: var(--color-text-on-action);
-  font: var(--font-drawer-title);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  transform: scale(2.2);
-  transform-origin: left center;
 }
 
 @media (prefers-reduced-motion: reduce) {

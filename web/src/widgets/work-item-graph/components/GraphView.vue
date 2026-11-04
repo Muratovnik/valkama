@@ -1,19 +1,22 @@
 <script setup lang="ts">
-/** Shared planning data supplies the field; Vue Flow owns camera and interaction. */
+/**
+ * Shared planning data supplies the field; Vue Flow owns camera and interaction.
+ *
+ * A drawn node is a place the layout gave an id. What it says — the item's
+ * brief, a frame's counts — is read here by that id from what the host sent
+ * last, so a frame of the stream that changes only those redraws the words and
+ * leaves the places where they were.
+ */
 import { computed, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { Background } from '@vue-flow/background'
-import { PanOnScrollMode, VueFlow } from '@vue-flow/core'
-
-import '@vue-flow/core/dist/style.css'
-import '@vue-flow/core/dist/theme-default.css'
-import '@vue-flow/controls/dist/style.css'
 import GraphBar from '@/widgets/work-item-graph/components/GraphBar.vue'
 import GraphControls from '@/widgets/work-item-graph/components/GraphControls.vue'
 import GraphEdge from '@/widgets/work-item-graph/components/GraphEdge.vue'
 import GraphEmptyState from '@/widgets/work-item-graph/components/GraphEmptyState.vue'
+import GraphField from '@/widgets/work-item-graph/components/GraphField.vue'
 import GraphFieldCorner from '@/widgets/work-item-graph/components/GraphFieldCorner.vue'
+import GraphFrame from '@/widgets/work-item-graph/components/GraphFrame.vue'
 import GraphLayoutStatus from '@/widgets/work-item-graph/components/GraphLayoutStatus.vue'
 import GraphLegend from '@/widgets/work-item-graph/components/GraphLegend.vue'
 import GraphNodeCard from '@/widgets/work-item-graph/components/GraphNodeCard.vue'
@@ -23,9 +26,9 @@ import { useGraphKeyboard } from '@/widgets/work-item-graph/composables/useGraph
 import { useGraphNodeMarks } from '@/widgets/work-item-graph/composables/useGraphNodeMarks.ts'
 import { useGraphProjection } from '@/widgets/work-item-graph/composables/useGraphProjection.ts'
 import { GRAPH_FLOW_ID } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
-import type { PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
-import { GRAPH_ZOOM_MAX, GRAPH_ZOOM_MIN } from '@/widgets/work-item-graph/utils/graphLayout.ts'
+import type { PlacedFrame, PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { GraphScope } from '@/widgets/work-item-graph/utils/graphLayout.ts'
+import { foldTarget, frameTarget } from '@/widgets/work-item-graph/utils/graphWalk.ts'
 
 import { waitingOn } from '@/entities/work-item/utils/waiting.ts'
 
@@ -75,6 +78,7 @@ const {
   retry,
   ready,
   showDone,
+  toggle: toggleFrame,
 } = useGraphProjection(
   () => ({
     edges: props.edges,
@@ -126,6 +130,29 @@ function isReady(node: PlacedNode): boolean {
 const waiting = computed(() => waitingOn(props.edges, props.items))
 const waitingFor = (node: PlacedNode) => waiting.value.get(node.work_item_id) ?? null
 
+/** What each drawn place says now: the projection lays today's briefs and counts on it by id. */
+const cardById = computed(
+  () => new Map(drawnField.value?.nodes.map((node) => [node.work_item_id, node]) ?? []),
+)
+const frameById = computed(
+  () => new Map(drawnField.value?.frames.map((frame) => [frame.id, frame])),
+)
+
+/** The card drawn at a place: none, or one. */
+function cardAt(id: string): PlacedNode[] {
+  const node = cardById.value.get(id)
+  return node ? [node] : []
+}
+
+/** The frame drawn at a place: none, or one. */
+function frameAt(id: string): PlacedFrame[] {
+  const frame = frameById.value.get(id)
+  return frame ? [frame] : []
+}
+
+/** A card standing in a drawn frame: the frame names its epic, so the card does not. */
+const isFramed = (node: PlacedNode) => frameById.value.has(node.frameId)
+
 const {
   chainLegend,
   chainLegendNames,
@@ -143,6 +170,11 @@ const {
   placed: drawnField,
   scopeKind: () => props.scopeKind,
 })
+
+/** The epic chip, on a card no frame round it names. */
+function chipFor(node: PlacedNode): string | undefined {
+  return isFramed(node) ? undefined : parentReference(node)
+}
 
 // Vue Flow owns the camera and all viewport math. The store is keyed so the
 // controls in the strip below and this field share one camera instance.
@@ -174,7 +206,6 @@ const chainChip = computed(() =>
 const { nodes: flowNodes, edges: flowEdges } = useGraphFlowElements({
   focusSet,
   placed: drawnField,
-  isChainRoot,
 })
 
 const {
@@ -190,17 +221,19 @@ const {
   reveal,
 })
 
-function onFlowNodeMouseEnter(event: { node: { id: string } }) {
-  applyFocus({ type: 'pointer-enter', id: event.node.id })
+/** A pointer over a card lights its lineage; a frame is ground and lights nothing. */
+function onNodeEnter(id: string) {
+  if (cardById.value.has(id)) applyFocus({ type: 'pointer-enter', id })
 }
 
-function onFlowNodeMouseLeave(event: { node: { id: string } }) {
-  applyFocus({ type: 'pointer-leave', id: event.node.id })
+function onNodeLeave(id: string) {
+  if (cardById.value.has(id)) applyFocus({ type: 'pointer-leave', id })
 }
 
-function onFlowNodeClick(event: { node: { id: string } }) {
-  // Mouse and keyboard activation both arrive once through Vue Flow.
-  const reference = referenceById.value.get(event.node.id)
+function onNodeClick(id: string) {
+  // Mouse and keyboard activation both arrive once through Vue Flow. A frame's
+  // header holds its own two buttons, so a press on a frame opens nothing here.
+  const reference = cardById.value.has(id) ? referenceById.value.get(id) : undefined
   if (reference) emit('open', reference)
 }
 
@@ -210,6 +243,16 @@ function onNodeFocus(id: string) {
 
 function onNodeBlur(id: string) {
   applyFocus({ type: 'blur', id })
+}
+
+/** Which of a frame's two header buttons is the field's Tab stop, if either is. */
+function frameStop(frame: PlacedFrame): string | null {
+  return [foldTarget(frame.id), frameTarget(frame.id)].find((id) => isTabStop(id)) ?? null
+}
+
+/** A header button took focus: the keyboard stands on it; a frame lights no lineage. */
+function onFrameFocus(target: string) {
+  keyboardFocus(target)
 }
 
 function onFieldPointerLeave() {
@@ -283,67 +326,55 @@ function onFieldPointerLeave() {
           :ready-count="ready.length"
         />
       </div>
-      <VueFlow
-        :id="GRAPH_FLOW_ID"
-        class="graph-flow"
-        zoom-activation-key-code="Control"
-        no-pan-class-name="nopan"
-        no-wheel-class-name="nowheel"
+      <GraphField
         :nodes="flowNodes"
         :edges="flowEdges"
-        :nodes-draggable="false"
-        :nodes-connectable="false"
-        :nodes-focusable="false"
-        :disable-keyboard-a11y="true"
-        :elements-selectable="false"
-        :select-nodes-on-drag="false"
-        :selection-key-code="false"
-        :pan-on-drag="true"
-        :pan-on-scroll="false"
-        :pan-on-scroll-mode="PanOnScrollMode.Free"
-        :zoom-on-scroll="true"
-        :zoom-on-pinch="true"
-        :zoom-on-double-click="false"
-        :prevent-scrolling="true"
-        :min-zoom="GRAPH_ZOOM_MIN"
-        :max-zoom="GRAPH_ZOOM_MAX"
-        :apply-default="false"
+        :settled="fitted"
         @init="onFlowInit"
-        @node-mouse-enter="onFlowNodeMouseEnter"
-        @node-mouse-leave="onFlowNodeMouseLeave"
-        @node-click="onFlowNodeClick"
-        @pane-mouse-leave="onFieldPointerLeave"
+        @node-enter="onNodeEnter"
+        @node-leave="onNodeLeave"
+        @node-click="onNodeClick"
+        @pane-leave="onFieldPointerLeave"
       >
-        <template #edge-routed="edgeProps">
+        <template #edge="edgeProps">
           <GraphEdge
             :id="edgeProps.id"
             :data="edgeProps.data"
             :marker-end="edgeProps.markerEnd"
           />
         </template>
-        <template #node-card="{ data }">
-          <GraphNodeCard
-            :node="data"
-            :ready="isReady(data)"
-            :recessed="isRecessed(data)"
-            :marked="inBranch(data)"
-            :chain-group="nodeChainGroup(data)"
-            :parent-reference="parentReference(data)"
-            :root="isChainRoot(data)"
+        <template #frame="{ data }">
+          <GraphFrame
+            v-for="frame in frameAt(data.id)"
+            :key="frame.id"
+            :frame="frame"
             :overview="overview"
-            :tabbable="isTabStop(data.work_item_id)"
-            :waiting-on="waitingFor(data)"
+            :tab-stop="frameStop(frame)"
+            @focus="onFrameFocus"
+            @toggle="toggleFrame"
+            @open="(reference) => emit('open', reference)"
+          />
+        </template>
+        <template #card="{ data }">
+          <GraphNodeCard
+            v-for="node in cardAt(data.id)"
+            :key="node.work_item_id"
+            :node="node"
+            :ready="isReady(node)"
+            :recessed="isRecessed(node)"
+            :marked="inBranch(node)"
+            :framed="isFramed(node)"
+            :chain-group="nodeChainGroup(node)"
+            :parent-reference="chipFor(node)"
+            :root="isChainRoot(node)"
+            :overview="overview"
+            :tabbable="isTabStop(node.work_item_id)"
+            :waiting-on="waitingFor(node)"
             @focus="onNodeFocus"
             @blur="onNodeBlur"
           />
         </template>
-        <Background
-          variant="dots"
-          color="var(--color-rule)"
-          :gap="24"
-          :size="1"
-        />
-      </VueFlow>
+      </GraphField>
       <GraphControls :fit-options="fitOptions" />
     </div>
   </section>
@@ -368,18 +399,6 @@ function onFieldPointerLeave() {
   background: var(--color-surface-recess);
   overflow: hidden;
   border-radius: var(--radius-card);
-
-  /* The field, the dots and the frame are drawn immediately; only the nodes wait
-     for the camera, so opening the graph shows an empty field settling into a
-     graph rather than a flash of oversized cards. */
-  :deep(.vue-flow__transformationpane) {
-    opacity: 0;
-    transition: opacity var(--duration-surface) var(--ease-out);
-  }
-
-  &.settled :deep(.vue-flow__transformationpane) {
-    opacity: 1;
-  }
 }
 
 .graph-legend-place {
@@ -392,71 +411,5 @@ function onFieldPointerLeave() {
      neither does the layout's own status, which stands at its start. */
   min-height: calc(24px + 2 * var(--space-2));
   padding: var(--space-2) var(--space-3);
-}
-
-.graph-flow {
-  width: 100%;
-  height: 100%;
-  min-height: 360px;
-  background: var(--color-surface-recess);
-  overflow: hidden;
-}
-
-:deep(.vue-flow__background pattern circle) {
-  fill: color-mix(in srgb, var(--color-rule) 70%, transparent);
-}
-
-/* Vue Flow draws its own box around a node; the card inside is the whole
-   drawing, so the box gets out of its way. */
-:deep(.vue-flow__node.graph-node) {
-  border: 0;
-  background: transparent;
-  overflow: visible;
-  border-radius: var(--radius-status);
-}
-
-:deep(.vue-flow__edge.graph-edge) {
-  transition: opacity var(--duration-quick) var(--ease-out);
-}
-
-:deep(.vue-flow__edge.graph-edge .vue-flow__edge-path) {
-  fill: none;
-  stroke: var(--color-graph-line);
-  stroke-width: 1.6;
-  transition:
-    opacity var(--duration-quick) var(--ease-out),
-    stroke var(--duration-quick) var(--ease-out);
-}
-
-/* Only a block is a hard dependency. Everything else the model can link —
-   a discovery, a duplicate, a loose relation — is context, and reads as a
-   dashed quieter line rather than as structure. */
-:deep(.vue-flow__edge.graph-edge:not(.blocks) .vue-flow__edge-path) {
-  stroke: var(--color-graph-line-muted);
-  stroke-dasharray: 4 4;
-}
-
-:deep(.vue-flow__edge.graph-edge.lit .vue-flow__edge-path) {
-  stroke: var(--color-action-primary);
-  stroke-width: 1.9;
-}
-
-:deep(.vue-flow__edge.graph-edge.recessed) {
-  opacity: 0.16;
-}
-
-@container workspace (width <= 586px) {
-  /* The field is whatever the column leaves it. A floor taller than that would
-     run the flow out of its box, and the camera controls with it. */
-  .graph-flow {
-    min-height: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .graph-canvas :deep(.vue-flow__transformationpane),
-  :deep(.vue-flow__edge.graph-edge .vue-flow__edge-path) {
-    transition: none;
-  }
 }
 </style>
