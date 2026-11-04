@@ -98,7 +98,10 @@ test('in the list of everything waiting a row ending brings no refusal under the
 }) => {
   await page.setViewportSize({ width: 1680, height: 1050 })
   // A long row below keeps the list at its full height, so the row below rises by all it can.
-  const opened = await openQuestion(page, [...pair(2, 1), asked(THIRD, 'A long question', 12, 9)])
+  // The two rows are as tall as each other, so the lower one's Send comes to stand exactly
+  // where the upper one's stood: with a second option above, it stopped one row short, and
+  // only the dialog scrolling inside itself, which it no longer does, brought it back.
+  const opened = await openQuestion(page, [...pair(1, 1), asked(THIRD, 'A long question', 12, 9)])
   const { next, top } = await inTheList(page, opened)
   await raise(page, next)
   await choose(page, top)
