@@ -147,6 +147,13 @@ for (const { fields, form, says } of FORMS) {
     expect(writesTo(requests)).toEqual([])
     await expect(card.getByText(says, { exact: true })).toBeVisible()
     await expect(card.locator('.request-state')).toHaveCount(0)
+    // A mark tells it from the text around it where a forced palette paints both one colour.
+    await page.emulateMedia({ forcedColors: 'active' })
+    const message = card.locator('.field-error').filter({ hasText: says }).first()
+    await expect(message.locator('.field-error-glyph')).toBeVisible()
+    const id = await message.getAttribute('id')
+    // Still named by what it refuses.
+    await expect(card.locator(`[aria-describedby~="${id}"]`)).not.toHaveCount(0)
   })
 }
 

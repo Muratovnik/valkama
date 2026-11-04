@@ -275,6 +275,11 @@ checkouts are therefore distinguishable even at the same version.
   an action, level with Send and Change answer beside them. They are now bare at rest, with
   their words where the lines they open start, as a thread's and a text's own toggles are;
   an option's chevron takes the same weight.
+- **A refused choice in a question is marked, not only red.** «Choose one of the options.»,
+  «Tick at least one option.» and «Choose Yes or No.» under a question's field differed from
+  the text around them by colour alone, which a forced palette paints over. They now carry
+  the alert mark a refused text field already has. A text answer and your own option's words
+  keep the doubled edge they already showed; the choices themselves have no edge to double.
 - **Memory stands whole on the frame it is chosen.** A card read Memory's knowledge source
   only once the section was shown, so the section appeared with a line saying it was being
   checked and then grew by the provider and its path; on a phone the card's sections, stuck

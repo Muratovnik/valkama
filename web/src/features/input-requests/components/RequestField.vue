@@ -30,8 +30,9 @@
  * answers, and Ctrl+Enter sends the answer (`submit`). It takes no own variant and no
  * comment, being its author's own words already.
  *
- * A refused field says why under itself, and its control carries `aria-invalid` and
- * names that message with `aria-describedby`. The group is a `radiogroup` rather than a
+ * A refused field says why under itself, with the mark that tells a refusal from the text
+ * around it where colour does not show (`FieldError`), and its control carries
+ * `aria-invalid` and names that message with `aria-describedby`. The group is a `radiogroup` rather than a
  * `group` because that is a role `aria-invalid` is defined on. It is named by the
  * question it answers, which is what anyone hearing it needs first. An empty own variant
  * is said on its own editor, which is where it can be fixed.
@@ -49,6 +50,7 @@ import type { FieldEdit } from '@/features/input-requests/utils/validateAnswers.
 
 import type { InputRequestField, InputRequestOption } from '@/shared/api/inputRequestModel.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
+import FieldError from '@/shared/ui/FieldError.vue'
 import MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
 
 type EditorSuggest = InstanceType<typeof MarkdownEditor>['$props']['suggest']
@@ -289,11 +291,10 @@ defineExpose({ focus })
       @submit="emit('submit')"
     />
     <RequestChosen :entries="chosenFolded" />
-    <small
+    <FieldError
       v-if="error"
       :id="errorId"
-      class="request-field-error"
-      >{{ error }}</small
+      >{{ error }}</FieldError
     >
     <RequestNote
       v-model:preview="preview"
@@ -343,10 +344,5 @@ defineExpose({ focus })
   margin: 0;
   font: inherit;
   translate: 0 calc((1lh - var(--font-size-interface)) / 2);
-}
-
-.request-field-error {
-  color: var(--color-danger);
-  font: var(--font-detail);
 }
 </style>
