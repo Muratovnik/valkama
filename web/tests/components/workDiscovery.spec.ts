@@ -71,6 +71,8 @@ function button(wrapper: ReturnType<typeof workspace>, text: string) {
 }
 
 describe('work discovery', () => {
+  // The list draws all 1201 rows twice, which is the point and is heavy: 0.6 s alone, 2 s
+  // beside the rest of the suite, and past the 5 s default on a busy machine.
   it('finds late work by trimmed case-insensitive reference and title, then clears', async () => {
     const wrapper = workspace('en', true)
     const input = wrapper.get('input[aria-label="Filter work"]')
@@ -83,7 +85,7 @@ describe('work discovery', () => {
     await button(wrapper, 'Clear the text').trigger('click')
     expect(wrapper.findAll('tbody tr')).toHaveLength(1201)
     expect(wrapper.emitted('view')).toBeUndefined()
-  })
+  }, 15_000)
   it('intersects the text with a preset and resets a filtered empty result', async () => {
     const wrapper = workspace()
     await button(wrapper, 'Workable').trigger('click')

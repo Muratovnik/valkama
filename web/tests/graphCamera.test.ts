@@ -141,13 +141,15 @@ test('selected work and direct neighbours take precedence over the start of a lo
   assert.ok(camera.zoom >= 0.75)
   for (const number of [109, 110, 111]) inCamera(placed, number, camera)
 })
+// ELK lays out the 214-card fanout for real, which is heavy: 0.6 s alone, 2 s beside the
+// rest of the suite, and past the 5 s default on a busy machine.
 test('a crowded fanout keeps its selected anchor readable', async () => {
   const placed = await graph(214, true)
   const camera = graphCameraView(placed, SIZE, { selectedId: nodeId(1) })
   assert.ok(camera)
   assert.equal(camera.zoom, 1)
   inCamera(placed, 1, camera)
-})
+}, 15_000)
 test('small graphs fit naturally and missing selections use an existing root', async () => {
   const small = await graph(3)
   const camera = graphCameraView(small, SIZE)
