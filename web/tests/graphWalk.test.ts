@@ -154,3 +154,35 @@ test("Home goes to the first target as the field is read: the first frame's fold
   assert.equal(graphWalk(framed, 'Q', 'Home'), foldTarget('E'))
   assert.equal(graphWalk(framed, foldTarget('E'), 'End'), foldTarget(NO_EPIC_FRAME))
 })
+
+// A frame as wide as a long row of work: its open target's centre stands far to
+// the right of its fold, further than the first card under the fold.
+const wide = walkTargets({
+  frames: [frame('W', { x: 0, y: 0, width: 1248, height: 948 })],
+  nodes: [{ ...at('R', 0, 0), x: 16, y: 72, frameId: 'W' }],
+})
+
+test('along a header the arrows go from fold to open and back, however wide the header', () => {
+  assert.equal(graphWalk(wide, foldTarget('W'), 'ArrowRight'), frameTarget('W'))
+  assert.equal(graphWalk(wide, frameTarget('W'), 'ArrowLeft'), foldTarget('W'))
+  // Down from the fold is still the card under it.
+  assert.equal(graphWalk(wide, foldTarget('W'), 'ArrowDown'), 'R')
+})
+
+test('zoomed out to the overview, a header has no fold target: it is hidden there', () => {
+  const graph = {
+    frames: [
+      frame('E', { x: 0, y: 0, width: 640, height: 200 }),
+      frame(NO_EPIC_FRAME, { x: 700, y: 0, width: 288, height: 72 }, true),
+    ],
+    nodes: [{ ...at('P', 0, 0), x: 16, y: 72, frameId: 'E' }],
+  }
+  assert.deepEqual(
+    walkTargets(graph, { overview: true }).map((target) => target.id),
+    [frameTarget('E'), 'P'],
+  )
+  assert.deepEqual(
+    walkTargets(graph, { overview: false }).map((target) => target.id),
+    walkTargets(graph).map((target) => target.id),
+  )
+})

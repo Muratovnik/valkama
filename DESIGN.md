@@ -948,9 +948,15 @@ field out again, and the camera follows across, at the operator's zoom, so the
 frame's header stays where it stood on the screen and what was pressed does not
 move from under the hand (`toggled`). The arrows reach a header's two buttons as
 they reach cards, the fold on its left (`frame:<id>:fold`) and the epic across the
-rest (`frame:<id>`); the work under no epic has only the first. Once a fold hides
+rest (`frame:<id>`); the work under no epic has only the first. Right from the fold
+is the epic's button beside it and Left from that button is the fold, however wide
+the header, since measured from centres a wide header's second button stands further
+off than the first card under the fold. Once a fold hides
 the target the keyboard stood on, the field's Tab stop is the fold button of the
-innermost frame round it that is still drawn.
+innermost frame round it that is still drawn. Zoomed out past reading the fold is
+hidden and is no target at all: the arrows, the Tab stop and the way in read one
+list of the targets the field draws at its zoom, so Tab never rests on a button
+that takes no focus and the field stays one stop at any zoom.
 
 Open work comes first as the field is read, finished frames after it. The field's
 pieces are the frames no drawn line joins, each alone, and the frames lines join,

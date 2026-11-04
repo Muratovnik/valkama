@@ -199,3 +199,19 @@ for (const [what, camera] of [
     assert.ok(x >= 0 && x <= dimensions.width && y >= 0 && y <= dimensions.height)
   })
 }
+
+test('zoomed out to the overview, the keyboard enters on a target the overview draws, never a hidden fold', async () => {
+  const placed = await space()
+  const camera = { x: 32, y: 16, zoom: 0.3 }
+  const anchor = graphAnchor(placed, {}, { camera, dimensions, overview: true })
+  assert.ok(anchor)
+  assert.doesNotMatch(anchor.id, /:fold$/u)
+  assert.ok(walkTargets(placed, { overview: true }).some((target) => target.id === anchor.id))
+  // At reading size the same camera enters on the field's first target, a fold.
+  const reading = graphAnchor(
+    placed,
+    {},
+    { camera: { ...camera, zoom: 0.75 }, dimensions, overview: false },
+  )
+  assert.match(reading?.id ?? '', /:fold$/u)
+})

@@ -63,11 +63,19 @@ export function headerBox(frame: PlacedFrame): Box {
   return { x, y, width, height: frame.folded ? frame.height : FRAME_HEADER }
 }
 
-/** Every target on a laid-out field: its cards and the buttons of each frame's header. */
-export function walkTargets(graph: {
-  frames: readonly PlacedFrame[]
-  nodes: readonly PlacedNode[]
-}): WalkTarget[] {
+/**
+ * Every target on a laid-out field: its cards and the buttons of each frame's
+ * header. Zoomed out to the overview a header is a band whose fold is hidden,
+ * so the fold is no target there: the arrows, the Tab stop and the way in all
+ * read this one list and never stand on a button the field does not show.
+ */
+export function walkTargets(
+  graph: {
+    frames: readonly PlacedFrame[]
+    nodes: readonly PlacedNode[]
+  },
+  { overview = false }: { overview?: boolean } = {},
+): WalkTarget[] {
   const cards = graph.nodes.map(({ work_item_id, frameId, x, y, width, height }) => ({
     id: work_item_id,
     frameId,
@@ -84,10 +92,11 @@ export function walkTargets(graph: {
       frameId: frame.id,
       width: FOLD_TARGET_WIDTH,
     }
-    if (frame.epic === null) return [fold]
+    const folds = overview ? [] : [fold]
+    if (frame.epic === null) return folds
     const rest = header.width - FOLD_TARGET_WIDTH
     const open = { ...header, id: frameTarget(frame.id), frameId: frame.id }
-    return [fold, { ...open, x: header.x + FOLD_TARGET_WIDTH, width: rest }]
+    return [...folds, { ...open, x: header.x + FOLD_TARGET_WIDTH, width: rest }]
   })
   return [...headers, ...cards]
 }
@@ -109,6 +118,8 @@ export function graphWalk(
   }
   const from = targets.find((target) => target.id === fromId)
   if (!from) return null
+  const pair = headerPair(targets, from, key)
+  if (pair) return pair
   const direction = DIRECTIONS[key]
   const start = nodeCentre(from)
   let best: { id: string; score: number } | null = null
@@ -125,6 +136,26 @@ export function graphWalk(
     if (best === null || score < best.score) best = { id: target.id, score }
   }
   return best?.id ?? null
+}
+
+/**
+ * Along a header, Right from the fold is the open button beside it and Left
+ * from the open button is the fold: the two are one row. Measured from centres
+ * a wide header's open button stands further off than the first card under the
+ * fold, and the walk went down instead of along.
+ */
+function headerPair(
+  targets: readonly WalkTarget[],
+  from: WalkTarget,
+  key: GraphWalkKey,
+): string | null {
+  const pairs: Partial<Record<GraphWalkKey, [string, string]>> = {
+    ArrowRight: [foldTarget(from.frameId), frameTarget(from.frameId)],
+    ArrowLeft: [frameTarget(from.frameId), foldTarget(from.frameId)],
+  }
+  const pair = pairs[key]
+  if (!pair || from.id !== pair[0]) return null
+  return targets.some((target) => target.id === pair[1]) ? pair[1] : null
 }
 
 /** The centre of a box, in the field's own space. */

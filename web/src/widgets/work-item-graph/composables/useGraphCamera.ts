@@ -177,6 +177,9 @@ export function useGraphCamera(input: CameraInput) {
   watch([() => dimensions.value.width, () => dimensions.value.height], () => place('resized'))
   watch(input.scopes, open)
 
+  /** Zoomed out past reading: cards are blocks and headers bands, their folds hidden. */
+  const overview = computed(() => (viewport?.value.zoom ?? 1) < OVERVIEW_ZOOM)
+
   return {
     fitted,
     /**
@@ -191,13 +194,15 @@ export function useGraphCamera(input: CameraInput) {
         selectedId: input.selectedId(),
         rootId: input.rootId(),
       }
-      const sight = fitted.value ? { camera: viewport.value, dimensions: dimensions.value } : null
+      const sight = fitted.value
+        ? { camera: viewport.value, dimensions: dimensions.value, overview: overview.value }
+        : null
       return graphAnchor(placed, options, sight)?.id ?? null
     }),
     /** «Fit whole graph». */
     fitOptions: graphFitViewOptions(),
     holdFrame,
-    overview: computed(() => (viewport?.value.zoom ?? 1) < OVERVIEW_ZOOM),
+    overview,
     onFlowInit: () => {
       flowReady.value = true
       place('open')

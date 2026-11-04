@@ -54,22 +54,24 @@ function field(outer: boolean, inner: boolean): GraphLayout {
   return { frames, nodes, edges: [], width: 700, height: 500 }
 }
 
-function keyboard() {
+function keyboard(anchor = foldTarget('O')) {
   const placed = ref<GraphLayout | null>(field(false, false))
+  const overview = ref(false)
   const scope = effectScope()
   scopes.push(scope)
   const keys = scope.run(() =>
     useGraphKeyboard({
-      anchorId: ref(foldTarget('O')),
+      anchorId: ref(anchor),
       canvas: ref(null),
       fitted: ref(true),
+      overview,
       placed,
       focusRequest: () => {},
       reveal: () => {},
     }),
   )
   if (!keys) throw new Error('Keyboard scope did not start')
-  return { keys, placed }
+  return { keys, overview, placed }
 }
 
 describe('the Tab stop as frames fold', () => {
@@ -105,5 +107,21 @@ describe('the Tab stop as frames fold', () => {
   it('is the anchor before the keyboard stood anywhere', () => {
     const { keys } = keyboard()
     expect(keys.isTabStop(foldTarget('O'))).toBe(true)
+  })
+
+  it('leaves a fold the overview hides for the anchor, and comes back to it at reading size', async () => {
+    const { keys, overview, placed } = keyboard(frameTarget('O'))
+    keys.onFocus('card')
+    placed.value = field(false, true)
+    await nextTick()
+    expect(keys.isTabStop(foldTarget('I'))).toBe(true)
+    // Zoomed out, the fold is hidden and takes no focus: the stop is the anchor.
+    overview.value = true
+    await nextTick()
+    expect(keys.isTabStop(foldTarget('I'))).toBe(false)
+    expect(keys.isTabStop(frameTarget('O'))).toBe(true)
+    overview.value = false
+    await nextTick()
+    expect(keys.isTabStop(foldTarget('I'))).toBe(true)
   })
 })

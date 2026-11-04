@@ -277,6 +277,7 @@ const {
   canvas: useTemplateRef<HTMLElement>('canvas'),
   fitted,
   focusRequest: () => props.focusRequest,
+  overview,
   placed,
   reveal,
 })

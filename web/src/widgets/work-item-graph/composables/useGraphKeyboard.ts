@@ -39,6 +39,8 @@ interface KeyboardInput {
   canvas: Readonly<Ref<HTMLElement | null>>
   /** The camera has framed the field. */
   fitted: Ref<boolean>
+  /** Zoomed out past reading, where a header's fold is hidden and is no target. */
+  overview: Ref<boolean>
   placed: Ref<GraphLayout | null>
   /** Moves each time the host asks the field to take focus once it is framed. */
   focusRequest: () => number | undefined
@@ -73,7 +75,9 @@ export function useGraphKeyboard(input: KeyboardInput) {
   let currentFrames: string[] = []
   /** The target the field is putting focus on itself, rather than the operator walking to it. */
   let placing: string | null = null
-  const targets = computed(() => (input.placed.value ? walkTargets(input.placed.value) : []))
+  const targets = computed(() =>
+    input.placed.value ? walkTargets(input.placed.value, { overview: input.overview.value }) : [],
+  )
   const placedNode = (id: string | null) =>
     id === null ? undefined : targets.value.find((target) => target.id === id)
 

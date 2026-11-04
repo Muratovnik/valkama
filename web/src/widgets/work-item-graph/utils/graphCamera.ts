@@ -100,18 +100,19 @@ const cardTarget = (node: PlacedNode): WalkTarget => ({
  * operator is looking: that card when it is in sight, else the first target in
  * sight as the field is read; only with nothing in sight does it fall back to
  * the card or the field's first target, which a press then brings into view.
+ * In the overview it reads the targets the overview draws (`walkTargets`).
  */
 export function graphAnchor(
   graph: GraphLayout,
   options: AnchorOptions = {},
-  sight: { camera: ViewportTransform; dimensions: Dimensions } | null = null,
+  sight: { camera: ViewportTransform; dimensions: Dimensions; overview?: boolean } | null = null,
 ): WalkTarget | undefined {
   const [head] = branchWork(graph, options)
   const selected = graph.nodes.find((node) => node.work_item_id === options.selectedId)
   const root = graph.nodes.find((node) => node.work_item_id === options.rootId)
   const card = head ?? selected ?? root
   const chosen = card ? cardTarget(card) : undefined
-  const targets = walkTargets(graph).sort(readingOrder)
+  const targets = walkTargets(graph, { overview: sight?.overview }).sort(readingOrder)
   if (sight) {
     const inSight = (target: WalkTarget) => seen(target, sight.camera, sight.dimensions)
     const looked = chosen && inSight(chosen) ? chosen : targets.find((target) => inSight(target))

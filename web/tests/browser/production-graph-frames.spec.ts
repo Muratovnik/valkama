@@ -268,3 +268,27 @@ test('Tab from the row above the field enters where the operator moved the field
   expect(await walkTargets(page, true)).toContain(at?.target)
   await expect(pane).toHaveAttribute('style', camera ?? '')
 })
+
+for (const width of [1500, 390]) {
+  test(`zoomed out to the overview, Tab from the row above the field enters it on a target it draws at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await serveBroadSpace(page)
+    await page.goto(graphRoute({}))
+    await expect(page.locator('.graph-canvas.settled')).toBeVisible()
+    const zoomOut = page.getByRole('button', { name: 'Zoom out', exact: true })
+    for (let step = 0; step < 3; step += 1) await zoomOut.click()
+    // The headers are bands now, their fold buttons hidden.
+    await expect(page.locator('.graph-frame.overview').first()).toBeVisible()
+    await page.locator('.graph [role="radio"][aria-checked="true"]').focus()
+    const at = await tabIntoField(page)
+    expect(at).not.toBeNull()
+    const shown = await page.evaluate(() => {
+      const element = document.activeElement
+      return element instanceof HTMLElement ? getComputedStyle(element).visibility : ''
+    })
+    expect(shown).toBe('visible')
+    expect(await walkTargets(page, true)).toContain(at?.target)
+  })
+}
