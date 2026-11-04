@@ -272,6 +272,13 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- **A name over a changed answer reads whole on a phone.** «changed · time» took most of a
+  narrow card's line, and the agent's name beside it stood in what was left, a word fragment
+  to a line, broken inside its words. The time stays at the end of the name's first line
+  while the name keeps at least 14 characters' width there; with less, the time takes a line
+  of its own under the name, still at the end, and the name the whole width. A name shorter
+  than that still shares the line with a time that fits beside it, and wider cards change
+  nothing.
 - **A long name over a question or its answer leaves the time at the end of the line.** The
   agent that asked and the one that answered still pushed the time under a name too long for
   the line, to its start, as threads and earlier answers no longer do. Both now keep the time
