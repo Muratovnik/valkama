@@ -336,7 +336,7 @@ describe('an answered question', () => {
       }),
     )
     const field = present(wrapper.findAll('.request-answer')[0], 'field')
-    expect(field.get('blockquote').text()).toBe('Field words')
+    expect(field.get('blockquote').text()).toBe('Comment on this fieldField words')
     expect(wrapper.get('.request-reply-note').text()).toBe('Comment on the questionQuestion words')
   })
 

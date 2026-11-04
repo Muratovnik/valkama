@@ -206,7 +206,13 @@ for (const width of [390, 1280]) {
     await expect(answers.nth(0).locator('.request-option.is-chosen')).toHaveCount(1)
     await expect(answers.nth(0).locator('.request-option.is-chosen')).toContainText('Move them')
     await expect(answers.nth(0).locator('.request-option.is-chosen')).toContainText('selected')
-    await expect(answers.nth(0).locator('blockquote')).toHaveText('Threads serve the digest too.')
+    // A comment on a field is signed as the comment on the question is, in words on screen.
+    const fieldNote = answers.nth(0).locator('blockquote')
+    await expect(fieldNote.locator('.request-answer-note-label')).toHaveText(
+      'Comment on this field',
+    )
+    await expect(fieldNote).toContainText('Threads serve the digest too.')
+    await expect(card.locator('.request-reply-note-label')).toHaveText('Comment on the question')
     await expect(answers.nth(2).locator('.request-option.is-chosen')).toContainText(
       'Only after acceptance',
     )

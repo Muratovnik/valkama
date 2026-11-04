@@ -10,8 +10,9 @@
  *
  * Your own option stands as a chosen row with its words under it, and only where it was
  * used: the row was on offer everywhere and says nothing where it was left alone. A comment
- * is a quote under the field. A field with nothing given says so, as an older answer may
- * have left one with a comment standing in for it.
+ * is a quote under the field, named on screen as the comment on the whole question is. A
+ * field with nothing given says so, as an older answer may have left one with a comment
+ * standing in for it.
  */
 import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -143,6 +144,7 @@ function toggle(option: string) {
       class="request-answer-note"
       :aria-label="t('requests.fieldNote')"
     >
+      <span class="request-answer-note-label">{{ t('requests.fieldNote') }}</span>
       <RichText :source="note" />
     </blockquote>
   </div>
@@ -191,13 +193,20 @@ function toggle(option: string) {
   font: var(--font-detail);
 }
 
-/* A quote under the field, set in as a reply to a prompt is. */
+/* A quote under the field, set in as a reply to a prompt is, and signed as the comment on
+   the whole question is: its words on screen, over the text. */
 .request-answer-note {
+  display: grid;
+  gap: var(--space-half);
   min-width: 0;
   padding-inline-start: var(--space-2);
   margin: var(--space-1) 0 0;
   border-inline-start: 1px solid var(--color-rule-strong);
   color: var(--color-text-muted);
   font: var(--font-detail);
+}
+
+.request-answer-note-label {
+  font: var(--font-field-label);
 }
 </style>
