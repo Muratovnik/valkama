@@ -95,3 +95,26 @@ test('a card loaded from its address reads each of its parts once', async ({ pag
     counts.set(read, (counts.get(read) ?? 0) + 1)
   expect([...counts].filter(([, count]) => count > 1)).toEqual([])
 })
+
+test('back from a dropped connection, the same space still reads the card again', async ({
+  page,
+}) => {
+  await installBackend(page)
+  const stream = await installStreamDouble(page)
+  const reads = recordReads(page)
+  await page.goto(
+    serializePlatformRoute({
+      module_id: 'planning',
+      scope: projectScope,
+      entity: planningWorkItemEntity(workItemRef),
+    }),
+  )
+  await expect(page.getByRole('heading', { name: workItem.title })).toBeVisible()
+  await expect.poll(() => sent(reads, '/api/documents/resolve')).toBe(1)
+  await stream.deliver(firstFrame())
+  await settle(page, reads)
+  // What the space does not carry may have moved while the page was away.
+  await stream.drop()
+  await stream.deliver(firstFrame())
+  await expect.poll(() => sent(reads, '/api/modules/planning/work-item')).toBe(2)
+})

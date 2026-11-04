@@ -219,11 +219,13 @@ const streamTarget = computed(() =>
 )
 const { connection: liveConnection, reconnect } = usePlanningSubscription(
   streamTarget,
-  (next) => {
+  (next, returning) => {
     const key = planningKey.value
     // The stream's first frame is the space as it stands when the page connects, which
     // is what the read has just answered; taken as news, it read an open card twice.
-    if (holdsResource(resource.value, key, next)) return
+    // Back from a dropped connection it is news whatever it says: what the space does
+    // not carry, a question or a history, may have moved while the page was away.
+    if (!returning && holdsResource(resource.value, key, next)) return
     resource.value = beginResource(resource.value, key)
     resource.value = resolveResource(resource.value, resource.value.generation, key, next)
     version.value += 1

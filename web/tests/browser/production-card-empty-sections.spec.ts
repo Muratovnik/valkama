@@ -119,9 +119,11 @@ test.describe('a section with nothing in it', () => {
       (answer) => new URL(answer.url()).pathname === '/api/planning',
     )
     await openCard(page)
-    // A frame of the stream is the same answer the first read had.
+    // A frame of the stream is the answer the first read had, as the store stands then.
     const answer = await read
-    const frame = await answer.text()
+    const first = (await answer.json()) as {
+      work_items: { checklist: unknown[]; reference: string }[]
+    }
     const overview = page.locator('.drawer .overview')
     await expect(overview).toBeVisible()
     await expect(overview.getByText('Description', { exact: true })).toBeVisible()
@@ -138,6 +140,13 @@ test.describe('a section with nothing in it', () => {
         done_by: '',
       },
     ]
+    // The step is in the space too, so the frame that brings it differs from the read.
+    const frame = JSON.stringify({
+      ...first,
+      work_items: first.work_items.map((item) =>
+        item.reference === workItemRef.reference ? { ...item, checklist: held.steps } : item,
+      ),
+    })
     await page.evaluate((data) => {
       ;(window as unknown as Stream).__frame(data)
     }, frame)

@@ -10,7 +10,8 @@ type Target = ({ project: string } & PlanningSpaceRef) | null
 
 export function usePlanningSubscription(
   target: Ref<Target>,
-  snapshot: (model: PlanningReadModel) => void,
+  /** `returning` is true for the first frame after the connection dropped. */
+  snapshot: (model: PlanningReadModel, returning: boolean) => void,
   agents: () => void,
 ) {
   const connection = ref<PlanningConnectionState>('connecting')
@@ -31,7 +32,7 @@ export function usePlanningSubscription(
             if (current()) connection.value = state
           },
           snapshot: (model) => {
-            if (current()) snapshot(model)
+            if (current()) snapshot(model, connection.value === 'reconnecting')
           },
         }),
       )
