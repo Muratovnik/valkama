@@ -326,6 +326,7 @@ async function copyPath() {
       <div
         v-if="panel"
         ref="refusal"
+        class="document-refusal"
         tabindex="-1"
       >
         <PlatformStatePanel
@@ -337,6 +338,7 @@ async function copyPath() {
       <DocumentText
         v-else-if="parsed"
         ref="text"
+        :centred="page"
         :document="parsed"
         :marked="marked"
         :path="path"
@@ -419,18 +421,29 @@ async function copyPath() {
   color: var(--color-warning);
 }
 
+/* On a page of its own the body spans the column a table or code may take, which is wider
+   than the head's, and its gutter is kept on both sides so that the text centred in it
+   stands under the head whether or not the text scrolls. */
 .document-body {
   flex: 1 1 auto;
   min-height: 0;
-  padding: var(--space-5) max(var(--space-6), var(--document-inset, 0px)) var(--space-8);
+  padding: var(--space-5) max(var(--space-6), var(--document-column-inset, 0px)) var(--space-8);
   overflow-y: auto;
   overscroll-behavior: contain;
   outline: none;
+  scrollbar-gutter: var(--document-scrollbar-gutter, auto);
+}
+
+/* A refusal stands where the text would, as wide as its line. */
+.document-refusal {
+  max-width: var(--document-refusal-width, none);
+  margin-inline: auto;
 }
 
 /* A narrow host gives the text more of its width. The text keeps a step more than the head,
    as on a wide one, and the mark a target gets reaches less far into that gutter: with the
-   wide reach its ring stood on the pane's edge, and now it has the room it has above. */
+   wide reach its ring stood on the pane's edge, and now it has the room it has above.
+   Nothing is centred there, so a gutter kept on the start side would only take width. */
 @container overlay (width <= 560px) {
   .document-head,
   .document-status {
@@ -441,6 +454,7 @@ async function copyPath() {
     --document-mark-reach: var(--space-2);
 
     padding-inline: var(--space-5);
+    scrollbar-gutter: auto;
   }
 }
 </style>

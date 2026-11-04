@@ -455,6 +455,12 @@ checkouts are therefore distinguishable even at the same version.
 - **A failed read keeps its disc in a forced palette.** With Windows contrast themes on, the
   palette cleared the red disc beside «Could not load this view» to the ground, and only the
   edge was left to say something failed. The disc now takes the palette's text colour.
+- **A document's page is one column in the middle of the window.** On a wide window the
+  text kept to its reading measure at the start of a 56rem column while the head ran the
+  whole column, so its actions stood about 300px past the end of every line. The head and
+  the text now stand in one column as wide as a line, in the middle; a table or a block of
+  code wider than that grows by the same on both sides, as far as the old column. A
+  document beside a card or over it is set as before.
 
 ### Removed
 

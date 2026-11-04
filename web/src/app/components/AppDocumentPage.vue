@@ -53,12 +53,29 @@ watch(place, (shown) => {
 </template>
 
 <style scoped>
+/* The text's measure as one length. A `ch` counts in the font of the element that spends
+   it, and the head, the status line and the text each have a font of their own; a
+   registered length is computed once, here, in the font the text inherits. */
+@property --document-measure {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0;
+}
+
 /* The whole window, on the ground a drawer has, so that a text looks the same in both. It
    is the container a drawer would be, so the viewer's own width rules hold here too. */
 .document-page {
-  /* One column down a wide window: the head and the status line start where the text does.
-     In rem, because each of them has a font of its own and a `ch` would differ. */
-  --document-inset: max(var(--space-6), calc((100% - 56rem) / 2));
+  /* One column down a wide window, as wide as a line of the text: the head and the status
+     line start and end where the text does. A column of 56rem with the text kept to its
+     start left the head's actions 300 px past the end of every line. */
+  --document-measure: 58ch;
+  --document-inset: max(var(--space-6), calc((100% - var(--document-measure)) / 2));
+  --document-refusal-width: var(--document-measure);
+
+  /* The column a table or a block of code may widen into, both ways from the text: the
+     one the whole page used to be, and never wider than the window. */
+  --document-column-inset: max(var(--space-6), calc((100% - 56rem) / 2));
+  --document-scrollbar-gutter: stable both-edges;
 
   display: flex;
   flex-direction: column;

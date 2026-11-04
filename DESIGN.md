@@ -681,7 +681,11 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   the document's width, kept under `valkama-document-pane-width` and shared with the drawer,
   and Enter on it folds the document and brings it back. At `/doc?project=…&path=…#…` the
   document is the whole window with nothing of the shell: the address follows the reader, a
-  work item's number is text, and there is nothing to close. The head names the project and
+  work item's number is text, and there is nothing to close. There the head and the text stand
+  in one column as wide as a line of the text, 58ch, in the middle of the window, and a table
+  or a block of code wider than that grows by the same on both sides, as far as the 56rem
+  column the page used to be and never past the window; a pane or a drawer keeps the text at
+  its start. The head names the project and
   the path, which copies itself, and offers Back to the document before, a refresh, the file
   in the owner's editor and, outside `/doc`, another window, which closes the document here.
   The editor opens at the line a link named while its block is in view, else at the first

@@ -26,6 +26,11 @@ const props = defineProps<{
   /** The file's path, for the links in it that lead back into it. */
   path: string
   project: string
+  /**
+   * The text stands centred in the window, as on a page of its own, rather than from the
+   * start of a pane; the page then says how long a line is.
+   */
+  centred?: boolean
 }>()
 const emit = defineEmits<{ leave: [] }>()
 
@@ -128,6 +133,7 @@ defineExpose({ box: (index: number) => boxes()[index] ?? null, bring, indexOf, t
   <div
     ref="root"
     class="document-text"
+    :class="{ centred }"
   >
     <p
       v-if="facts"
@@ -155,27 +161,54 @@ defineExpose({ box: (index: number) => boxes()[index] ?? null, bring, indexOf, t
 </template>
 
 <style scoped>
-/* The column a table or code may take, wider than the text's measure: a table is scanned
-   across rather than read along, and a line of code cannot wrap, so each of them uses the
-   room before it scrolls. */
+/* The text is a grid with named lines, the layout breakout of Ryan Mulligan's "Layout
+   Breakouts with CSS Grid": what is read along takes `content`, a reading measure of about
+   seventy letters, and a table or a block of code may take `full`, since a table is
+   scanned across rather than read along and a line of code cannot wrap. In a pane or a
+   drawer both start where the pane's content does, and `full` runs on to its end. A `ch`
+   is a zero, wider than the average letter: 58 of them hold 71–75 letters of English and
+   67–71 of Russian in this face. */
 .document-text {
   display: grid;
-  gap: var(--space-3);
+  grid-template-columns:
+    [full-start content-start] min(58ch, 100%)
+    [content-end] minmax(0, 1fr)
+    [full-end];
+  row-gap: var(--space-3);
   width: 100%;
   min-width: 0;
   max-width: 88ch;
   line-height: var(--line-height-reading);
+
+  /* On a page of its own the measure stands in the middle of the window under a head of
+     the same width, and `full` is the whole column the page gives: a line ran on 300 px
+     past the text's end to the head's actions. The page names the measure as a length,
+     so the head and the text are one width whatever font each is set in. */
+  &.centred {
+    grid-template-columns:
+      [full-start] minmax(0, 1fr)
+      [content-start] min(var(--document-measure), 100%)
+      [content-end] minmax(0, 1fr)
+      [full-end];
+    max-width: none;
+  }
 }
 
 .document-facts {
+  grid-column: full;
   margin: 0;
   color: var(--color-text-muted);
   font: var(--font-code);
   overflow-wrap: anywhere;
+
+  .centred > & {
+    grid-column: content;
+  }
 }
 
 /* The mark stands in the gutter, so the text it marks stays where it was. */
 .document-block {
+  grid-column: content;
   min-width: 0;
   outline: none;
 
@@ -183,17 +216,17 @@ defineExpose({ box: (index: number) => boxes()[index] ?? null, bring, indexOf, t
      less the ring touched the head's rule. */
   scroll-margin-block-start: var(--space-3);
 
-  /* What is read along keeps to a reading measure of about seventy letters. In the whole
-     column a line ran past a hundred, and the eye lost the next one coming back. A `ch` is
-     a zero, wider than the average letter: 58 of them hold 71–75 letters of English and
-     67–71 of Russian in this face. */
-  &:not(.is-wide) {
-    max-width: 58ch;
+  &.is-wide {
+    grid-column: full;
   }
 
-  /* A mark reaches into the gutter, and the text it marks keeps its lines. */
-  &.is-target:not(.is-wide) {
-    max-width: calc(58ch + var(--document-block-reach));
+  /* Centred, a table or code no wider than the text keeps the text's width and start, and
+     a wider one grows by the same on both sides, as far as the column. */
+  .centred > &.is-wide {
+    justify-self: center;
+    width: max-content;
+    min-width: min(100%, var(--document-measure));
+    max-width: 100%;
   }
 
   /* The room above a heading is what says a section begins: the gap between blocks alone
