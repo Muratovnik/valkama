@@ -16,6 +16,8 @@ import { test } from './test.ts'
 
 const GRAPH_CHUNK = /\/assets\/GraphView-[\w-]+\.js$/
 const SETTINGS_CHUNK = /\/assets\/SettingsView-[\w-]+\.js$/
+/** `LAZY_VIEW_LOADING_DELAY_MS`, which a spec cannot import: its module imports a `.vue` file. */
+const LOADING_DELAY_MS = 200
 
 function shot(info: TestInfo, name: string) {
   return { path: info.outputPath(name), animations: 'disabled' as const }
@@ -84,13 +86,22 @@ test('a slow graph download keeps the board until the loading panel takes its pl
   await page.route(GRAPH_CHUNK, (route) => {
     held = route
   })
+  await page.clock.install()
   await openBoard(page)
   const header = await page.locator('.workspace-head').boundingBox()
 
+  // From here the page's time moves only when the test moves it: the board is
+  // given its delay in one step, and no slow round trip can use it up first.
+  await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 1000)
   await page.getByRole('radio', { name: 'Graph', exact: true }).click()
   await expect.poll(() => held !== undefined).toBe(true)
-  // The stage is never blank: the board stays until the panel replaces it.
-  await expect(page.locator('.work-item-tile').first()).toBeVisible()
+  // The board stays on the stage for the whole of its delay.
+  const tiles = page.locator('.work-item-tile')
+  await expect(tiles.first()).toBeVisible()
+  await page.clock.runFor(LOADING_DELAY_MS - 1)
+  await expect(tiles.first()).toBeVisible()
+  // The board's delay runs out, and then the graph's own boundary waits its own.
+  await page.clock.runFor(LOADING_DELAY_MS + 1)
   const loading = page.locator('.workspace-stage [aria-busy="true"]')
   await expect(loading).toBeVisible()
   await expect(loading).toContainText('Loading')
@@ -98,6 +109,7 @@ test('a slow graph download keeps the board until the loading panel takes its pl
   expect(await page.locator('.workspace-head').boundingBox()).toEqual(header)
   await page.locator('.workspace').screenshot(shot(info, 'w-bundle-graph-loading.png'))
 
+  await page.clock.resume()
   await held?.continue()
   await expect(page.locator('.graph-canvas.settled')).toBeVisible()
   await expect(loading).toHaveCount(0)
