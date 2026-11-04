@@ -10,7 +10,7 @@ import { card, held, openReported, reference, rest, SPACE } from './previewPage.
 import { test } from './test.ts'
 
 /** A holder whose session is no id the product reads, so the whole of it is its name. */
-const HOLDER = 'claude-code session local_433e996b side session of a long acceptance probe'
+const HOLDER = 'claude-code session local_7f3a9c2e side session of a long probe'
 
 const LONG_HELD = held(17, 'Held under a long name', {
   claim_ref: HOLDER,
