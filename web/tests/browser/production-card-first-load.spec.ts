@@ -14,6 +14,7 @@ import {
   workItemRef,
 } from './planningFixtures.ts'
 import { planningReadFor } from './planningReadFixture.ts'
+import { installStreamDouble } from './streamDouble.ts'
 import { test } from './test.ts'
 
 /**
@@ -26,35 +27,6 @@ import { test } from './test.ts'
  * suite's quiet stream sends nothing, so it never saw it: here the stream sends
  * that first frame, as the server does.
  */
-
-/**
- * A stream whose first frame is the space as the read answered it, sent when the test
- * says: the server's frame comes once it has read the space, after the card has asked.
- */
-async function streamFirstFrame(page: Page) {
-  const query = new URLSearchParams({
-    project: projectId,
-    data_scope_id: dataScopeId,
-    space_key: spaceRef.space_key,
-  })
-  const frame = JSON.stringify(planningReadFor(query).body)
-  await page.addInitScript((data: string) => {
-    class FirstFrame extends EventTarget {
-      readonly url: string
-      readyState = 1
-      constructor(url: string | URL) {
-        super()
-        this.url = String(url)
-        const send = () => this.dispatchEvent(new MessageEvent('message', { data }))
-        if (this.url.includes('view=planning')) Object.assign(window, { sendFirstFrame: send })
-      }
-      close() {
-        this.readyState = 2
-      }
-    }
-    Object.defineProperty(window, 'EventSource', { configurable: true, value: FirstFrame })
-  }, frame)
-}
 
 /** Every GET the page sends, as `path?query`, in the order the page sent them. */
 function recordReads(page: Page): string[] {
@@ -69,14 +41,23 @@ function recordReads(page: Page): string[] {
 const sent = (reads: readonly string[], path: string) =>
   reads.filter((read) => read.startsWith(`${path}?`)).length
 
+/** The space as the read answered it: the server's first frame on a stream it opens. */
+function firstFrame() {
+  const query = new URLSearchParams({
+    project: projectId,
+    data_scope_id: dataScopeId,
+    space_key: spaceRef.space_key,
+  })
+  return JSON.stringify(planningReadFor(query).body)
+}
+
 /**
- * Send the frame and wait until whatever it starts has been sent: two frames
- * after it the page has acted on it, and a request it sends after that, which
- * Playwright reports in order, comes after anything the frame started.
+ * Wait until whatever the frame started has been sent: two frames after it the page
+ * has acted on it, and a request it sends after that, which Playwright reports in
+ * order, comes after anything the frame started.
  */
-async function sendFirstFrame(page: Page, reads: readonly string[]) {
+async function settle(page: Page, reads: readonly string[]) {
   await page.evaluate(async () => {
-    ;(window as unknown as { sendFirstFrame: () => void }).sendFirstFrame()
     await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))
     void fetch('/after-the-frame')
   })
@@ -85,7 +66,7 @@ async function sendFirstFrame(page: Page, reads: readonly string[]) {
 
 test('a card loaded from its address reads each of its parts once', async ({ page }) => {
   await installBackend(page)
-  await streamFirstFrame(page)
+  const stream = await installStreamDouble(page)
   const reads = recordReads(page)
   await page.goto(
     serializePlatformRoute({
@@ -97,7 +78,9 @@ test('a card loaded from its address reads each of its parts once', async ({ pag
   await expect(page.getByRole('heading', { name: workItem.title })).toBeVisible()
   // The card has asked for everything it shows, its paths last.
   await expect.poll(() => sent(reads, '/api/documents/resolve')).toBe(1)
-  await sendFirstFrame(page, reads)
+  // The server's frame comes once it has read the space, after the card has asked.
+  await stream.deliver(firstFrame())
+  await settle(page, reads)
   // The frame has been taken: the shell says the space is live.
   await expect(page.locator('.connection-copy')).toHaveText('Connected')
   for (const path of [
