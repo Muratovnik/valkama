@@ -154,7 +154,7 @@ describe('replying', () => {
     expect(document.activeElement?.id).toBe('thread-reply-comment-1')
   })
 
-  it('leaves a field with words in it open on Escape, and lets the key on to the card', async () => {
+  it('asks about a field with words in it on Escape, and keeps the key from the card', async () => {
     const wrapper = open(card([root(1)]))
     await inThread(wrapper, 1, 'Reply').trigger('click')
     await replyField(wrapper).setValue('Words')
@@ -162,9 +162,16 @@ describe('replying', () => {
     document.addEventListener('keydown', card$)
     key(replyField(wrapper), 'Escape')
     await flushPromises()
-    document.removeEventListener('keydown', card$)
     expect((replyField(wrapper).element as HTMLTextAreaElement).value).toBe('Words')
-    expect(card$).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('.confirm-strip').exists()).toBe(true)
+    expect(document.activeElement?.textContent?.trim()).toBe('Keep writing')
+    // Back in the field, a second Escape answers the question with keep.
+    key(replyField(wrapper), 'Escape')
+    await flushPromises()
+    document.removeEventListener('keydown', card$)
+    expect(wrapper.find('.confirm-strip').exists()).toBe(false)
+    expect((replyField(wrapper).element as HTMLTextAreaElement).value).toBe('Words')
+    expect(card$).not.toHaveBeenCalled()
   })
 
   it('asks before Cancel drops words, and answering stay keeps them', async () => {

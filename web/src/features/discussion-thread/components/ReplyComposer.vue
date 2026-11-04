@@ -3,9 +3,11 @@
  * The field a reply is written in, under the replies of its thread.
  *
  * The host owns the text and the write, so a draft outlives this form while another
- * thread's form is open. Escape closes the field only while it is empty: with text in it
- * the key goes on to the card, whose question about drafts answers it as it does for the
- * comment above. Cancel asks before it drops words, as a code review's reply does.
+ * thread's form is open. Cancel asks before it drops words, as a code review's reply does,
+ * and Escape is Cancel: it closes an empty field, and with words in it asks the same
+ * question here. The key stops at this form either way. It used to go on to the card while
+ * the field held words, and the card answered it with its own question about closing the
+ * whole card, which was not what the key was pressed for.
  */
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -46,10 +48,12 @@ function cancel() {
   else asking.value = true
 }
 useEventListener(form, 'keydown', (event: KeyboardEvent) => {
-  if (event.key !== 'Escape' || event.isComposing || asking.value || !empty.value) return
+  if (event.key !== 'Escape' || event.isComposing) return
   event.preventDefault()
   event.stopPropagation()
-  emit('cancel')
+  // A second Escape while the question stands answers it the way the strip does: keep.
+  if (asking.value) asking.value = false
+  else cancel()
 })
 </script>
 

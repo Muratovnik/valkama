@@ -53,11 +53,17 @@ for (const [size, width] of [
     await page.keyboard.press('Enter')
     await expect(field).toBeFocused()
     await page.keyboard.type('Beside it, then.')
-    // With words in it: Escape asks about them and closes nothing.
+    // With words in it: Escape asks about them where they are, and closes nothing, neither
+    // the field nor the card, whose own question about leaving it stays down.
     await page.keyboard.press('Escape')
     await expect(field).toHaveValue('Beside it, then.')
-    await drawer.getByRole('button', { name: 'Keep editing', exact: true }).click()
-    await field.focus()
+    await expect(thread.locator('.confirm-strip')).toBeVisible()
+    await expect(focused(page)).toHaveText('Keep writing')
+    await expect(drawer.getByRole('button', { name: 'Keep editing', exact: true })).toHaveCount(0)
+    await page.keyboard.press('Escape')
+    await expect(thread.locator('.confirm-strip')).toHaveCount(0)
+    await expect(field).toBeFocused()
+    await expect(drawer).toBeVisible()
 
     await page.keyboard.press('Control+Enter')
     const written = thread.locator('.reply').filter({ hasText: 'Beside it, then.' })
