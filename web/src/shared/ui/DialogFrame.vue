@@ -56,6 +56,7 @@ const busyMark = computed(() => props.busy || undefined)
       @submit.prevent="emit('submit')"
     >
       <OverlayHeader
+        class="dialog-frame-head"
         :title="title"
         :subtitle="subtitle"
         :context="context"
@@ -91,16 +92,20 @@ const busyMark = computed(() => props.busy || undefined)
 </template>
 
 <style scoped>
+/* A dialog floats inset from the window, or on a narrow one stands across all of it, and its
+   host, which this always is in, says which (`OverlayHost`): across the window it keeps no
+   corners and a smaller inset, the same for its head, its body and its foot, so that their
+   edges stay in one line. */
 .dialog-frame {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   grid-template-columns: minmax(0, 1fr);
-  max-height: calc(100dvh - 40px);
+  max-height: calc(100dvh - 2 * var(--space-dialog-gutter));
   border: 1px solid var(--color-rule-strong);
   color: var(--color-text);
   background: var(--color-surface);
   overflow: hidden;
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-dialog);
   box-shadow: var(--shadow-overlay);
 
   &.is-paired {
@@ -115,8 +120,13 @@ const busyMark = computed(() => props.busy || undefined)
   gap: var(--space-6);
   align-content: start;
   min-height: 0;
-  padding: var(--space-6);
+  padding: var(--space-dialog-inset);
   overflow-y: auto;
+}
+
+/* The head draws its own inset, the floating one; across the window it takes the body's. */
+.dialog-frame > .dialog-frame-head {
+  padding: var(--space-dialog-inset);
 }
 
 .dialog-frame-error {
@@ -131,7 +141,7 @@ const busyMark = computed(() => props.busy || undefined)
   gap: var(--space-3);
   justify-content: flex-end;
   align-items: center;
-  padding: var(--space-4) var(--space-6);
+  padding: var(--space-4) var(--space-dialog-inset);
   border-top: 1px solid var(--color-rule);
 }
 </style>

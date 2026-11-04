@@ -95,3 +95,16 @@ export function stopStrayPresses(region: HTMLElement | null) {
   region?.addEventListener('mousedown', stop, { capture: true })
   region?.addEventListener('click', stop, { capture: true })
 }
+
+/**
+ * What is on its way out takes nothing more, and the page has nothing yet: a press on
+ * what is still on screen ends on the scrim or the host, which no longer answer. The
+ * second press of a double click on Close opened whatever stood under Close. Nor does
+ * that press take focus from where the close has just given it back. `host` is the
+ * overlay host as it begins to leave, holding its surface.
+ */
+export function outOfReach(host: Element) {
+  const leaving = host.querySelector<HTMLElement>('.overlay-surface')
+  if (leaving) leaving.inert = true
+  host.addEventListener('mousedown', (event) => event.preventDefault())
+}

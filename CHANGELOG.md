@@ -357,6 +357,11 @@ checkouts are therefore distinguishable even at the same version.
   chosen; only words were kept and shown. It now says «Not sent. This is what you had
   chosen:» with a line per field, and the words of a text answer join the words kept, which
   a closing used to drop.
+- **A dialog on a phone takes the whole width.** A dialog kept a 20px gutter from the window
+  and a 24px inset inside it at every width, so on a phone the questions waiting for an
+  answer gave an option's text 184px of 390. In a window 620px wide or narrower, where the
+  card already takes the whole width, a dialog does too, with no corners and a 16px inset
+  shared by its head, body and foot; the finder still stands just under the top.
 
 ### Removed
 

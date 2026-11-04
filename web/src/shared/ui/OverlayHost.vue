@@ -18,7 +18,7 @@ import {
   releaseOverlayOwnership,
 } from '@/shared/ui/overlayStack.ts'
 import type { OverlayOwnership } from '@/shared/ui/overlayStack.ts'
-import { isStrayPress } from '@/shared/ui/strayPress.ts'
+import { isStrayPress, outOfReach } from '@/shared/ui/strayPress.ts'
 import { useDrawerWidth } from '@/shared/ui/useDrawerWidth.ts'
 import { useOverlayFocus } from '@/shared/ui/useOverlayFocus.ts'
 
@@ -118,8 +118,9 @@ const { focusSurface, roundToFirst, roundToLast, stopWaiting, trapFocus } = useO
 })
 
 // 4px under the window's top edge, above the first chrome label at every width
-// (9px at 390), so the edge crosses no label; the dialog padding above is cancelled.
-const TOP_EDGE = 'calc(4px - var(--space-5))'
+// (9px at 390), so the edge crosses no label; the dialog's gutter above is cancelled,
+// whatever the window leaves of it.
+const TOP_EDGE = 'calc(4px - var(--space-dialog-gutter))'
 const TOP_PLACEMENT = { alignSelf: 'start', marginBlockStart: TOP_EDGE, maxHeight: '86dvh' }
 const surfaceStyle = computed(() => {
   if (props.placement === 'top') return TOP_PLACEMENT
@@ -175,18 +176,6 @@ function pressOnScrim(event: MouseEvent) {
 function release() {
   releaseOverlayOwnership(ownership.value)
   ownership.value = null
-}
-
-/**
- * What is on its way out takes nothing more, and the page has nothing yet: a press on
- * what is still on screen ends on the scrim or the host, which no longer answer. The
- * second press of a double click on Close opened whatever stood under Close. Nor does
- * that press take focus from where the close has just given it back.
- */
-function outOfReach(host: Element) {
-  const leaving = host.querySelector<HTMLElement>('.overlay-surface')
-  if (leaving) leaving.inert = true
-  host.addEventListener('mousedown', (event) => event.preventDefault())
 }
 
 watch(
@@ -257,6 +246,14 @@ onUnmounted(release)
  *
  * What the surface holds stands in one box whether or not a pane stands beside it, or
  * opening one would mount it again and take any draft in it away.
+ *
+ * A dialog floats with a gutter round it, and on a window as narrow as one where the drawer
+ * takes the whole width, it takes the whole width too. The 20px gutter and the inset of the
+ * dialog's own body inside it took a phone's column twice over: with a question's sheet and
+ * an option row inside them, an option's text had 184px of 390. What the dialog holds learns
+ * which edge it stands at from `--space-dialog-gutter`, `--space-dialog-inset` and
+ * `--radius-dialog`, which the tokens give for a floating dialog and this re-points across
+ * the window (`DialogFrame` reads them).
  */
 </script>
 
@@ -426,7 +423,7 @@ onUnmounted(release)
 .overlay-dialog {
   display: grid;
   place-items: center;
-  padding: var(--space-5);
+  padding: var(--space-dialog-gutter);
 }
 
 /* What the surface holds is its own measure and its own scroller. A dialog stops growing
@@ -446,8 +443,8 @@ onUnmounted(release)
 .overlay-surface-dialog {
   display: flex;
   flex-direction: column;
-  width: min(640px, calc(100vw - 40px));
-  max-height: calc(100dvh - 40px);
+  width: min(640px, calc(100vw - 2 * var(--space-dialog-gutter)));
+  max-height: calc(100dvh - 2 * var(--space-dialog-gutter));
 }
 
 /* Two panes side by side, the first at the surface's own width. A dialog and its pane
@@ -462,10 +459,10 @@ onUnmounted(release)
   }
 
   &.overlay-surface-dialog {
-    height: calc(100dvh - 40px);
+    height: calc(100dvh - 2 * var(--space-dialog-gutter));
 
     & .overlay-pane-main {
-      width: min(640px, calc(100vw - 40px));
+      width: min(640px, calc(100vw - 2 * var(--space-dialog-gutter)));
     }
   }
 }
@@ -495,12 +492,17 @@ onUnmounted(release)
   }
 }
 
-/* The one viewport question left in the overlay: how wide the drawer itself
-   should be. A container cannot answer that without asking itself. */
+/* The one viewport question left in the overlay: how wide a surface stands. A container cannot. */
 @media (width <= 620px) {
   .overlay-surface-drawer {
     width: 100vw;
     box-shadow: none;
+  }
+
+  .overlay-dialog {
+    --radius-dialog: 0;
+    --space-dialog-gutter: 0px;
+    --space-dialog-inset: var(--space-4);
   }
 }
 </style>

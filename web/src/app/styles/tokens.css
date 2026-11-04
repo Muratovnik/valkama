@@ -464,6 +464,13 @@
      rhythm, so it is named rather than spelled. */
   --size-column-gutter: 24px;
 
+  /* A dialog floating in the window: what it keeps clear of the window's edge, the inset of
+     its head, body and foot, and its corners. A window too narrow for it to float takes the
+     dialog across its whole width, and the overlay host re-points these there. */
+  --space-dialog-gutter: var(--space-5);
+  --space-dialog-inset: var(--space-6);
+  --radius-dialog: var(--radius-card);
+
   /* The control tier: how tall a control stands, and how large a pointer has to
      be able to hit it. One token used to answer both — `--size-control-target`, the
      44px accessibility target — so every control was drawn at the size of its
