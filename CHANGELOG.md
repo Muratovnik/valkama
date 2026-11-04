@@ -250,6 +250,10 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- **A step's holder stands as far from its dot as the words before it.** «завершил ·» put a
+  word's space before the dot and twelve pixels after it; the dot now has the same room on
+  both sides, as the dots of a card's identity line do. On finished work «Ранее отвечал:» is
+  followed by a word's space to the holder, not the wider gap that parts two facts.
 - **«What comes next» is set as the text under a heading.** The step's words took the page's
   16px, larger than the 15px heading over them; they now take the size and leading of a
   description.

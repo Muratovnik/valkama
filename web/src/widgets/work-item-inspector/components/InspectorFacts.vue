@@ -346,10 +346,13 @@ defineExpose({ actionCell })
   flex: none;
 }
 
-/* «Ранее отвечал:» and the holder it names read as one fact, however the name is cut. */
+/* «Ранее отвечал:» and the holder it names read as one fact, however the name is cut: the
+   colon is followed by a word's space to the edge of the holder's chip, as a word would be.
+   The gap between two facts stood there, so the label stood as far from its holder as from
+   the fact before it. */
 .card-holder-past {
   display: inline-flex;
-  gap: var(--space-2);
+  gap: var(--space-1);
   align-items: center;
   min-width: 0;
   color: var(--color-text-muted);

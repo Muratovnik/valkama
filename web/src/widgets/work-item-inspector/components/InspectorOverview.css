@@ -141,7 +141,6 @@
 .step-holder {
   display: flex;
   grid-column: 2;
-  gap: var(--space-1);
   align-items: baseline;
   min-width: 0;
   min-height: var(--size-control-inline);
@@ -150,4 +149,13 @@
   color: var(--color-text-tertiary);
   font: var(--font-detail);
   white-space: nowrap;
+}
+
+/* The dot stands as far from the words before it as the holder's words stand after it,
+   which is the inset of the holder's own control: the dot was a character of the phrase,
+   a word's space from «завершил» and twelve pixels from the name, the flex gap and that
+   inset added together. As in the identity line, it is room on both sides of a dot. */
+.step-holder-dot {
+  flex: none;
+  margin-inline-start: var(--space-2);
 }

@@ -28,6 +28,7 @@ import {
 } from './openSessionFixtures.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { globalScope, projectScope, workItemRef } from './planningFixtures.ts'
+import { separatorRoom } from './separators.ts'
 import { test } from './test.ts'
 
 const CARD = serializePlatformRoute({
@@ -225,6 +226,33 @@ test('on finished work whoever last held it is the way back to the session', asy
     new RegExp(IN_VSCODE.slice(0, 8), 'u'),
   )
 })
+
+for (const locale of ['en', 'ru'] as const)
+  test(`a holder stands as far from its separator as the words before it, in ${locale}`, async ({
+    page,
+  }) => {
+    await openCard(page, { locale })
+    const holders = page.locator('.drawer .step-holder')
+    await expect(holders).toHaveCount(8)
+    for (const line of await holders.all()) {
+      const room = await separatorRoom(line)
+      // «завершил ·» stood 3.6px from its dot and the holder 12px after it.
+      expect(room?.separator).toBe('·')
+      expect(Math.abs((room?.before ?? 0) - (room?.after ?? 99))).toBeLessThanOrEqual(0.5)
+    }
+  })
+
+for (const locale of ['en', 'ru'] as const)
+  test(`the last holder of finished work follows its colon by a space, in ${locale}`, async ({
+    page,
+  }) => {
+    await openCard(page, { closed: true, locale })
+    const room = await separatorRoom(page.locator('.drawer .card-holder-past'))
+    expect(room?.separator).toBe(':')
+    expect(room?.before ?? 99).toBeLessThanOrEqual(0.5)
+    // A word's space at this size, to the edge of the holder's chip: it stood 8px off.
+    expect(room?.after ?? 99).toBeLessThanOrEqual(4.5)
+  })
 
 test('the card with its holders passes the accessibility rules, panel open or not', async ({
   page,

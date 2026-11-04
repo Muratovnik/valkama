@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useId, watch } from 'vue'
-import { Translation, useI18n } from 'vue-i18n'
+import { useI18n } from 'vue-i18n'
 
 import InspectorAgents from '@/widgets/work-item-inspector/components/InspectorAgents.vue'
 import InspectorDescription from '@/widgets/work-item-inspector/components/InspectorDescription.vue'
@@ -247,19 +247,18 @@ defineExpose({ askOutcome, revealChecklist, revealQuestion })
               :size="16"
             />
           </VButton>
-          <Translation
+          <span
             v-if="stepHolder(step)"
             class="step-holder"
-            tag="span"
-            :keypath="stepHolderKey(step)"
-          >
-            <template #agent>
-              <ExecutorLink
-                :holder="stepHolder(step)"
-                :executor="step.executor"
-              />
-            </template>
-          </Translation>
+            >{{ t(stepHolderKey(step))
+            }}<span
+              class="step-holder-dot"
+              aria-hidden="true"
+              >·</span
+            ><ExecutorLink
+              :holder="stepHolder(step)"
+              :executor="step.executor"
+          /></span>
         </li>
       </ul>
     </section>
