@@ -5,50 +5,35 @@
  * only a few dozen pixels are left for it.
  *
  * A glyph says it at any width — a check for done, a circle with a mark for
- * failed, told apart by shape in the note's own ink — and the words stand beside it only where the line holds them whole.
- * They used to be cut to an ellipsis, which on a phone left «Ссылка скопиров…»:
- * a sentence nobody can finish is no confirmation. Assistive technology hears the
- * whole sentence either way, from a status region that is always there, so that
- * a note arriving in it is announced rather than appearing with its region.
+ * failed, told apart by shape in the note's own ink — and the words stand beside
+ * it whenever the line can give them room: the line decides, and lets its date and
+ * the item's kind step aside first (`InspectorIdentity`). They used to be cut to
+ * an ellipsis, which on a phone left «Ссылка скопиров…»: a sentence nobody can
+ * finish is no confirmation. Assistive technology hears the whole sentence either
+ * way, from a status region that is always there, so that a note arriving in it
+ * is announced rather than appearing with its region.
  */
-import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
-
-import { useResizeObserver } from '@vueuse/core'
+import { computed } from 'vue'
 
 import VIcon from '@/shared/ui/VIcon.vue'
 
-const props = defineProps<{
-  failed: boolean
-  /** The sentence; empty when there is nothing to say. */
-  text: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    failed: boolean
+    /** The sentence; empty when there is nothing to say. */
+    text: string
+    /** Whether the line has room for the words beside the glyph. */
+    words?: boolean
+  }>(),
+  { words: true },
+)
 
-const shown = useTemplateRef<HTMLElement>('shown')
-const words = useTemplateRef<HTMLElement>('words')
-/** The identity line, whose width is the drawer's and never the note's. */
-const line = computed(() => shown.value?.parentElement ?? null)
-/** Whether the words fit beside the glyph; measured, never assumed. */
-const whole = ref(true)
 const glyph = computed(() => (props.failed ? 'alert' : 'check'))
-
-async function measure() {
-  whole.value = true
-  await nextTick()
-  const node = words.value
-  // Against the box's own fractional width: words given exactly their length are whole.
-  if (node) whole.value = node.scrollWidth <= Math.ceil(node.getBoundingClientRect().width)
-}
-
-watch(() => props.text, measure, { flush: 'post' })
-// The note's own width follows its words, so the line is what is watched: watching the
-// note would hide the words, shrink it, show them again and never settle.
-useResizeObserver(line, () => void measure())
 </script>
 
 <template>
   <span
     v-if="text"
-    ref="shown"
     class="identity-note"
     aria-hidden="true"
     :title="text"
@@ -59,8 +44,7 @@ useResizeObserver(line, () => void measure())
       :size="14"
     />
     <span
-      v-if="whole"
-      ref="words"
+      v-if="words"
       class="identity-note-words"
       >{{ text }}</span
     >
@@ -73,25 +57,17 @@ useResizeObserver(line, () => void measure())
 </template>
 
 <style scoped>
-/* As long as its words, in the room the facts and controls leave: the date gives way
-   first (its own rule says how), and what is still too long loses its words. */
+/* As long as its words: the line gives it room by taking things out whole, never by
+   cutting into one. */
 .identity-note {
   display: flex;
-  flex: 0 1 auto;
+  flex: none;
   gap: var(--space-1);
   align-items: center;
-  min-width: 0;
   color: var(--color-text-muted);
 }
 
 .identity-note-glyph {
   flex: none;
-}
-
-/* No ellipsis: words that do not fit are not shown at all, the glyph says it. */
-.identity-note-words {
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
 }
 </style>

@@ -14,13 +14,22 @@
  * happened at the end of the line, by the one rule `IdentityNote` keeps for both.
  * The note for the link names no number: the reference stands right before it.
  *
+ * Nothing on the line is ever cut: a date shortened to «04 нояб.,…» is no date.
+ * Short of room, things step aside whole, in this order: the date, which stands in
+ * the record's history; then the item's kind and the plan anchor, whose path stands
+ * in Relations too; and last the note's words, whose glyph stays. Each is measured,
+ * never assumed. A note says what a press just did and goes after a few seconds, and
+ * what stepped aside for it comes back.
+ *
  * The anchor is a path like any other in the card, so the document layer decides
  * what it does: open what the server confirmed, or copy it and say why, as the
  * opener says everything. Its whole path stands in Relations with the item's other
  * references, whose layer this line is outside of, so it asks for its own.
  */
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+
+import { useResizeObserver, useTimeoutFn } from '@vueuse/core'
 
 import IdentityNote from '@/widgets/work-item-inspector/components/IdentityNote.vue'
 
@@ -56,6 +65,15 @@ const sourceGlyph = computed(() =>
 )
 const copyNote = ref('')
 const copyFailed = ref(false)
+/** Long enough to read the longest note twice; then the line is the item's again. */
+const NOTE_SHOWN_MS = 5000
+const { start: expireNote } = useTimeoutFn(
+  () => {
+    copyNote.value = ''
+  },
+  NOTE_SHOWN_MS,
+  { immediate: false },
+)
 
 /** Put `text` on the clipboard and say beside the line whether it got there. */
 async function copy(text: string, done: string, failed: string) {
@@ -68,6 +86,7 @@ async function copy(text: string, done: string, failed: string) {
     copyFailed.value = true
     copyNote.value = t(failed, words)
   }
+  expireNote()
 }
 
 const copyReference = () =>
@@ -84,6 +103,31 @@ function pressSource() {
   sourceLink.value?.open()
 }
 
+const line = useTemplateRef<HTMLElement>('line')
+/** How much has stepped aside: nothing, the date, then the kind, the anchor, the note's words. */
+const yielded = ref(0)
+
+/** Give back everything, then take out one thing at a time while the line overflows. */
+async function fit() {
+  yielded.value = 0
+  await nextTick()
+  const box = line.value
+  while (box && box.scrollWidth > box.clientWidth && yielded.value < 4) {
+    yielded.value += 1
+    await nextTick()
+  }
+}
+
+const dateShown = computed(() => yielded.value < 1)
+const kindShown = computed(() => yielded.value < 2)
+const anchorShown = computed(() => yielded.value < 3)
+const noteWords = computed(() => yielded.value < 4)
+
+watch(copyNote, fit, { flush: 'post' })
+// The line's width is the drawer's and never its own content's, so what steps aside
+// does not move the width this watches.
+useResizeObserver(line, () => void fit())
+
 /** This year's dates without the year, as the board's own dates read. */
 const updated = computed(() => {
   const value = props.item?.updated_at
@@ -95,10 +139,13 @@ const updated = computed(() => {
 </script>
 
 <template>
-  <div class="card-identity">
+  <div
+    ref="line"
+    class="card-identity"
+  >
     <span
-      v-if="item"
-      class="identity-fact"
+      v-if="item && kindShown"
+      class="identity-fact identity-kind"
     >
       <FacetMarks
         surface="card"
@@ -130,12 +177,12 @@ const updated = computed(() => {
       </button>
     </span>
     <span
-      v-if="updated"
+      v-if="updated && dateShown"
       class="identity-fact identity-updated"
       >{{ t('workItem.head.updated', { date: updated }) }}</span
     >
     <button
-      v-if="sourceLink"
+      v-if="sourceLink && anchorShown"
       class="identity-source"
       type="button"
       :title="sourceLink.title"
@@ -151,13 +198,14 @@ const updated = computed(() => {
     <IdentityNote
       :text="copyNote"
       :failed="copyFailed"
+      :words="noteWords"
     />
   </div>
 </template>
 
 <style scoped>
-/* One line of small facts, in a bar that has one height: what does not fit shortens,
-   and the kind and the reference are the last to go. The middle dot between two of them
+/* One line of small facts, in a bar that has one height: nothing shortens, and what does
+   not fit steps aside whole (the script says in which order). The middle dot between two of them
    belongs to the second one's box and not to a control inside it, so a focus ring holds
    only the reference, and a fact that is absent leaves no stray dot behind. */
 .card-identity {
@@ -174,16 +222,6 @@ const updated = computed(() => {
   display: inline-flex;
   flex: none;
   align-items: center;
-}
-
-/* When the line is short, the date shortens before a note does: a note is what just
-   happened, and the date stands whole in the record's history. */
-.identity-updated {
-  display: block;
-  flex: 0 1000 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .identity-fact + .identity-fact::before {

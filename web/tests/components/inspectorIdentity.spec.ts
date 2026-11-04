@@ -24,6 +24,13 @@ function clipboard(writeText: (text: string) => Promise<void>) {
   return spy
 }
 
+/** The two date forms the line uses, so it has a date to give way. */
+const DAY = { month: 'short', day: '2-digit' } as const
+const DATES = {
+  en: { day: DAY, activity: { ...DAY, year: 'numeric' } },
+  ru: { day: DAY, activity: { ...DAY, year: 'numeric' } },
+} as const
+
 function identity(locale: 'en' | 'ru' = 'en') {
   return mount(InspectorIdentity, {
     props: {
@@ -32,7 +39,7 @@ function identity(locale: 'en' | 'ru' = 'en') {
       resourceRef: { kind: 'planning-space', resource_id: 'space' },
     },
     global: {
-      plugins: [createI18n({ legacy: false, locale, messages })],
+      plugins: [createI18n({ legacy: false, locale, messages, datetimeFormats: DATES })],
       stubs: { VIcon: true },
     },
   })
@@ -67,7 +74,7 @@ describe('copying the link to an item', () => {
     await linkButton(wrapper).trigger('click')
     await flushPromises()
 
-    expect(note(wrapper).text()).toBe('Could not copy the link')
+    expect(note(wrapper).text()).toBe('Link not copied')
     expect(glyph(wrapper)).toBe('alert')
   })
 
@@ -95,30 +102,43 @@ describe('copying the link to an item', () => {
   })
 })
 
-/** The words' box at `room` px and their length at `length`, as a browser would measure. */
-function measured(room: number, length: number) {
-  const words = (node: HTMLElement) => node.classList.contains('identity-note-words')
-  const box = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
-    this: HTMLElement,
-  ) {
-    return new DOMRect(0, 0, words(this) ? room : 0, 16)
-  })
+/** What each part of the line takes, in px, as a browser would lay them out unshrunk. */
+const TAKES = { kind: 60, rest: 100, date: 150, glyph: 20, words: 120 }
+
+/**
+ * The line at `room` px: it overflows by whatever its parts present take beyond that,
+ * so the component's own measure sees what a browser would.
+ */
+function lineOf(room: number) {
+  const width = (line: HTMLElement) =>
+    TAKES.rest +
+    (line.querySelector('.identity-kind') ? TAKES.kind : 0) +
+    (line.querySelector('.identity-updated') ? TAKES.date : 0) +
+    (line.querySelector('.identity-note') ? TAKES.glyph : 0) +
+    (line.querySelector('.identity-note-words') ? TAKES.words : 0)
+  const isLine = (node: HTMLElement) => node.classList.contains('card-identity')
   const scroll = vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function (
     this: HTMLElement,
   ) {
-    return words(this) ? length : 0
+    return isLine(this) ? width(this) : 0
+  })
+  const client = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    return isLine(this) ? room : 0
   })
   return () => {
-    box.mockRestore()
     scroll.mockRestore()
+    client.mockRestore()
   }
 }
 
-async function copiedLinkWith(room: number, length: number) {
+async function copiedLinkWith(room: number) {
   clipboard(async () => {})
-  const restore = measured(room, length)
+  const restore = lineOf(room)
   try {
     const wrapper = identity()
+    await flushPromises()
     await linkButton(wrapper).trigger('click')
     await flushPromises()
     return wrapper
@@ -127,6 +147,13 @@ async function copiedLinkWith(room: number, length: number) {
   }
 }
 
+/** What the line still shows: the date, the kind, the note's words. */
+const shown = (wrapper: Awaited<ReturnType<typeof copiedLinkWith>>) => ({
+  date: wrapper.find('.identity-updated').exists(),
+  kind: wrapper.find('.identity-kind').exists(),
+  words: wrapper.find('.identity-note-words').exists(),
+})
+
 describe('a note on the identity line', () => {
   it('shows nothing and keeps its status region empty but present before a press', () => {
     const wrapper = identity()
@@ -134,18 +161,31 @@ describe('a note on the identity line', () => {
     expect(note(wrapper).text()).toBe('')
   })
 
-  it('drops words that would be cut, and keeps the glyph and the whole sentence', async () => {
-    const wrapper = await copiedLinkWith(40.4, 120)
+  it('keeps everything while the line holds it all', async () => {
+    const wrapper = await copiedLinkWith(1000)
 
-    expect(wrapper.find('.identity-note-words').exists()).toBe(false)
+    expect(shown(wrapper)).toEqual({ date: true, kind: true, words: true })
+    expect(wrapper.get('.identity-note-words').text()).toBe('Link copied')
+  })
+
+  it('takes the date out whole before it would cut a word of the note', async () => {
+    const wrapper = await copiedLinkWith(TAKES.rest + TAKES.kind + TAKES.glyph + TAKES.words)
+
+    expect(shown(wrapper)).toEqual({ date: false, kind: true, words: true })
+  })
+
+  it('takes the kind out next, so a phone-wide line still says the whole sentence', async () => {
+    const wrapper = await copiedLinkWith(TAKES.rest + TAKES.glyph + TAKES.words)
+
+    expect(shown(wrapper)).toEqual({ date: false, kind: false, words: true })
+  })
+
+  it('drops the words last, and keeps the glyph and the whole sentence', async () => {
+    const wrapper = await copiedLinkWith(TAKES.rest + TAKES.glyph)
+
+    expect(shown(wrapper)).toEqual({ date: false, kind: false, words: false })
     expect(glyph(wrapper)).toBe('check')
     expect(wrapper.get('.identity-note').attributes('title')).toBe('Link copied')
     expect(note(wrapper).text()).toBe('Link copied')
-  })
-
-  it('keeps words given their own fractional length, which the browser rounds up', async () => {
-    const wrapper = await copiedLinkWith(119.6, 120)
-
-    expect(wrapper.get('.identity-note-words').text()).toBe('Link copied')
   })
 })
