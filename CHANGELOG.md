@@ -17,9 +17,9 @@ checkouts are therefore distinguishable even at the same version.
   in a turn wrote to it since its last prompt or a subagent of it holds one of its steps,
   or an attempt is running), `held` (a session in a turn holds it but is not seen working
   on it), `waiting` (the session is live and its turn ended or has not begun) or `quiet`
-  (silent for over a day, with `quiet_since`). It is read from the sessions behind the item's claim
-  and its open steps, in five reads whatever the size of the space, and no MCP tool answer
-  carries it. See [Work-item context](docs/product-model.md#work-item-context).
+  (silent for over a day, with `quiet_since`). It is read from the sessions behind the
+  item's claim and its open steps and from what sessions in a turn wrote, in five reads
+  whatever the size of the space, and no MCP tool answer carries it. See [Work-item context](docs/product-model.md#work-item-context).
 - **A work item's number in a text shows its card.** Rest the pointer on the number for half
   a second, or reach it with Tab, to see its state, title, holder and steps without leaving
   what you are reading. A press still opens the item, Escape closes only the card, and a tap

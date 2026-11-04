@@ -287,6 +287,24 @@ def _attempt(status: str) -> _Build:
     return build
 
 
+def _unheld_comment(*events: str, comment_after: int) -> _Build:
+    """A session that holds nothing here comments on the item among its own events.
+
+    `comment_after` is how many of `events` come before the comment.
+    """
+
+    def build(case: LiveWorkCase, reference: str) -> None:
+        session = _session()
+        for index, event in enumerate(events):
+            if index == comment_after:
+                case.comment(reference, session)
+            case.hook(session, event, ago(minutes=(len(events) - index) * 10))
+        if comment_after >= len(events):
+            case.comment(reference, session)
+
+    return build
+
+
 def _nothing(_case: LiveWorkCase, _reference: str) -> None:
     pass
 
@@ -304,6 +322,24 @@ CASES: list[tuple[str, list[str] | None, _Build, dict | None]] = [
     ),
     ("a comment after the prompt", None, _written_after_the_prompt(), WORKING),
     ("a subagent's comment after the prompt", None, _written_after_the_prompt("a1"), WORKING),
+    (
+        "a comment on an item nobody holds, after the prompt",
+        None,
+        _unheld_comment("session-start", "user-prompt-submit", comment_after=2),
+        WORKING,
+    ),
+    (
+        "a comment on an item nobody holds, before the prompt",
+        None,
+        _unheld_comment("session-start", "user-prompt-submit", comment_after=1),
+        None,
+    ),
+    (
+        "a comment on an item nobody holds, then the turn ended",
+        None,
+        _unheld_comment("user-prompt-submit", "stop", comment_after=1),
+        None,
+    ),
     ("a claim after the turn ended", None, _claimed_then("user-prompt-submit", "stop"), WAITING),
     (
         "a claim after a notification",
@@ -394,12 +430,14 @@ class RuleTests(LiveWorkCase):
         reference = self.item(["step"])
         session = _session()
         self.hold_step(reference, session)
-        self.hook(session, "user-prompt-submit", ago(minutes=1))
+        self.hook(session, "user-prompt-submit", ago(minutes=2))
         self.assertEqual(HELD, self.state_of(reference))
         (step,) = service.get_work_item(self.conn, reference)["checklist"]
         with calls.bind(confirmed(session), "tick_work_item_checklist_item"):
             service.tick_checklist_item(self.conn, reference, step["id"])
-        self.assertIsNone(self.state_of(reference))
+        self.assertEqual(WORKING, self.state_of(reference), "the tick is a write of this turn")
+        self.hook(session, "user-prompt-submit", ago(minutes=1))
+        self.assertIsNone(self.state_of(reference), "the next turn finds nothing behind it")
 
     def test_one_session_moves_the_item_it_wrote_to_and_holds_the_other(self) -> None:
         written, other = self.item(), self.item()

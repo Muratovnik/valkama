@@ -201,11 +201,11 @@ A session is at work when its last lifecycle event of its own is a prompt, so a 
 is running, or when one of its subagents is active and started since the session last
 started. Then:
 
-- `working`: the session is at work and is seen working on this item. Since its last
-  prompt it wrote to the item through Planning, itself or through a subagent (a claim, a
-  step, a comment, a link, which names its source item), or one of its subagents holds an
-  open step of the item. An attempt Valkama runs on the item, starting or running, is
-  `working` with no session.
+- `working`: a session at work is seen working on this item. Since its last prompt it
+  wrote to the item through Planning, itself or through a subagent (a claim, a step, a
+  comment, a link, which names its source item), whether or not it holds the item; or one
+  of its subagents holds an open step of the item. An attempt Valkama runs on the item,
+  starting or running, is `working` with no session.
 - `held`: the session is at work, but not on this item as far as the record shows. A
   session holding several items moves only the ones it is working on.
 - `waiting`: any other live session. Its turn ended, it waits for a person, or it was
@@ -218,8 +218,8 @@ An item takes the strongest of its sessions and attempts, `working` before `held
 state changes, not on every event. What the map cannot see: a client that died in the
 middle of a turn reads as at work for a day and `quiet` after it, because only a check of
 the process could tell more. A long turn that writes nothing leaves its items `held`
-until its first write, and an agent that writes to an item without holding it or one of
-its steps puts nothing in the map. A store an earlier build wrote, without the columns the
+until its first write, and a session whose turn has ended puts nothing in the map for an
+item it only wrote to. A store an earlier build wrote, without the columns the
 map is read from, gives an empty map.
 
 **Opening the executor** is the action a holder offers. A press asks the server for a

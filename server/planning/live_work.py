@@ -20,6 +20,11 @@ An item takes its state from the sessions behind it:
 | at work, and neither | `held` |
 | otherwise: the turn ended, it waits for a person, or it was opened with no prompt | `waiting` |
 
+A session at work that wrote to an item since its last `prompt` moves that item
+too when it holds neither its claim nor a step: what it writes to is what it is
+working on. Those writers are found among the active sessions heard from within
+`LIVE_QUIET`, since only such a session can be at work.
+
 A session is at work when its last lifecycle event is a `prompt`, so a turn is
 running, or when a subagent row of it is `active` and started since its last
 `session_start`. A write is any Planning write call this session confirmed and
@@ -27,6 +32,7 @@ that names the item: a claim, a step, a comment, a link (which names its source
 item). A session at work moves only the items it is seen working on; the others
 it holds stand still, so a coordinator holding many items does not move them all
 on every turn. A session with no prompt recorded has written nothing since one.
+Only the items the caller passes are mapped, whatever else a session wrote to.
 
 An item takes the strongest state of its sessions and attempts, `working`
 before `held` before `waiting` before `quiet`, and an item with none stands in
@@ -45,8 +51,9 @@ last start is taken to run.
 What the rule cannot see: a client that died in the middle of a turn reads as
 at work for a day and `quiet` after it, since only a check of the process could
 tell more. A long turn that writes nothing moves nothing: its items read `held`
-until its first write. An agent that writes to an item without holding it or a
-step is not seen either; finding it (`agents`) costs several reads per item.
+until its first write. A link moves only its source item, the one its call
+names. A session that is not at work puts nothing in the map for an item it only
+wrote to.
 
 The map is five reads, whatever the number of items. A store an earlier build
 wrote may lack what they ask for, and then the map is empty rather than an error.
@@ -93,15 +100,21 @@ _CLAIMS = (
     " AND COALESCE(c.session_id, '') != ''"
 )
 
-#: The rows of these sessions, then the running subagents under them. One read,
-#: so the map stays at five; the second half is the `sessions_parent` index.
+#: The rows of these sessions and of every active top-level session heard from
+#: since the second given, which may have written to an item without holding it;
+#: then the running subagents under all of them. One read, so the map stays at
+#: five. The subagents are the `sessions_parent` index; the recent sessions are a
+#: scan of the session rows, which no index orders by time.
 _SESSIONS = (
-    "SELECT id, '' AS parent, status, last_seen, started_at FROM sessions"
-    " WHERE id IN (SELECT value FROM json_each(?1))"
+    "WITH top AS (SELECT value AS id FROM json_each(?1)"
+    " UNION SELECT id FROM sessions"
+    "  WHERE status = 'active' AND parent_session_id = '' AND last_seen >= ?2)"
+    " SELECT id, '' AS parent, status, last_seen, started_at FROM sessions"
+    " WHERE id IN (SELECT id FROM top)"
     " UNION ALL"
     " SELECT id, parent_session_id, status, last_seen, started_at FROM sessions"
     " WHERE parent_session_id != '' AND status = 'active'"
-    " AND parent_session_id IN (SELECT value FROM json_each(?1))"
+    " AND parent_session_id IN (SELECT id FROM top)"
 )
 
 #: One row per session: its last lifecycle event of its own and when it last
@@ -166,19 +179,19 @@ def _behind(
 def _states(
     conn: sqlite3.Connection, named: set[str]
 ) -> tuple[dict[str, dict], dict[str, set[str]]]:
-    """The state of every named session that is live, and what each wrote to since its prompt.
+    """The state of every live session, named or recently heard from, and its writes.
 
-    A session at work reads `working` here; which of its items move is the item's
-    question, answered in `live_work`.
+    A session at work reads `working` here; which items it moves is the item's
+    question, answered in `live_work`. Its writes are the items it wrote to since
+    its last prompt.
     """
 
     written: dict[str, set[str]] = {}
-    if not named:
-        return {}, written
     now = leases.utc_now()
+    recent = (now - LIVE_QUIET).strftime(_STAMP)
     live: dict[str, dict] = {}
     started: dict[str, list[str]] = {}
-    for row in conn.execute(_SESSIONS, (json.dumps(sorted(named)),)):
+    for row in conn.execute(_SESSIONS, (json.dumps(sorted(named)), recent)):
         if row["parent"]:
             started.setdefault(str(row["parent"]), []).append(str(row["started_at"])[:_SECOND])
             continue
@@ -233,11 +246,15 @@ def live_work(conn: sqlite3.Connection, items: Iterable[Mapping]) -> dict[str, d
             state = states.get(session)
             if state is None:
                 continue
-            if state["state"] == WORKING and not (
-                by_subagent or identity in written.get(session, set())
-            ):
+            if state["state"] == WORKING and not by_subagent:
                 state = {"state": HELD}
             found[identity] = _stronger(found.get(identity), state)
+    # What a session at work wrote to moves, whether it holds the item or not.
+    mapped = set(order)
+    for session, items_written in written.items():
+        if states[session]["state"] == WORKING:
+            for identity in items_written & mapped:
+                found[identity] = {"state": WORKING}
     for row in conn.execute(_ATTEMPTS, (identities,)):
         found[str(row["work_item_id"])] = {"state": WORKING}
     # In the items' order, so an unchanged map is an unchanged frame of the stream.
