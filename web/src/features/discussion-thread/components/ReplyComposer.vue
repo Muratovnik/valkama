@@ -12,7 +12,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { useEventListener } from '@vueuse/core'
+import { useAskedCancel } from '@/features/discussion-thread/composables/useAskedCancel.ts'
 
 import ConfirmStrip from '@/shared/ui/ConfirmStrip.vue'
 import MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
@@ -36,25 +36,17 @@ const { t } = useI18n()
 const form = ref<HTMLFormElement | null>(null)
 const editor = ref<InstanceType<typeof MarkdownEditor> | null>(null)
 const previewing = ref(false)
-const asking = ref(false)
 const empty = computed(() => !text.value.trim())
+const { asking, cancel } = useAskedCancel(
+  form,
+  () => empty.value,
+  () => emit('cancel'),
+)
 onMounted(() => editor.value?.focusAtTop())
 
 function send() {
   if (!props.pending && !empty.value) emit('submit')
 }
-function cancel() {
-  if (empty.value) emit('cancel')
-  else asking.value = true
-}
-useEventListener(form, 'keydown', (event: KeyboardEvent) => {
-  if (event.key !== 'Escape' || event.isComposing) return
-  event.preventDefault()
-  event.stopPropagation()
-  // A second Escape while the question stands answers it the way the strip does: keep.
-  if (asking.value) asking.value = false
-  else cancel()
-})
 </script>
 
 <template>

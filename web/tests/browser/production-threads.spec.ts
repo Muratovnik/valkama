@@ -99,13 +99,35 @@ for (const [size, width] of [
     const field = thread.getByRole('textbox', { name: 'Decision (optional)' })
     await expect(field).toBeFocused()
 
-    await page.keyboard.type('half a thought')
+    // Empty: Escape closes the line and comes back to the way in.
     await page.keyboard.press('Escape')
     await expect(field).toBeHidden()
     await expect(drawer).toBeVisible()
     await expect(focused(page)).toHaveText('Resolve')
 
+    // With words in it, Escape asks as a reply's field does, and a second one keeps them.
     await page.keyboard.press('Enter')
+    await page.keyboard.type('half a thought')
+    await page.keyboard.press('Escape')
+    const question = thread.locator('.confirm-strip')
+    await expect(question).toContainText('Discard this draft decision?')
+    await expect(focused(page)).toHaveText('Keep writing')
+    await expect(field).toHaveValue('half a thought')
+    await expect(drawer.getByRole('button', { name: 'Keep editing', exact: true })).toHaveCount(0)
+    await page.keyboard.press('Escape')
+    await expect(question).toHaveCount(0)
+    await expect(field).toBeFocused()
+    await expect(field).toHaveValue('half a thought')
+
+    // Cancel asks the same, and the draft goes only on the answer that drops it.
+    await thread.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await expect(focused(page)).toHaveText('Keep writing')
+    await thread.getByRole('button', { name: 'Discard draft', exact: true }).click()
+    await expect(field).toBeHidden()
+    await expect(focused(page)).toHaveText('Resolve')
+
+    await page.keyboard.press('Enter')
+    await expect(field).toHaveValue('')
     await page.keyboard.type('Beside it')
     await page.keyboard.press('Enter')
     const folded = drawer.getByRole('article', { name: /^Resolved · you · .* · Beside it/u })

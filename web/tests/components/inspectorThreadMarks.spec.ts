@@ -145,7 +145,20 @@ describe('marking', () => {
     )
   })
 
-  it('goes back on Escape to Resolve, keeping the card and dropping the line', async () => {
+  it('goes back on Escape to Resolve from an empty line, keeping the card', async () => {
+    const wrapper = open(card([root(1)]))
+    await inThread(wrapper, 1, 'Resolve').trigger('click')
+    const card$ = vi.fn()
+    document.addEventListener('keydown', card$)
+    key(wrapper.get('.resolve-form input'), 'Escape')
+    await flushPromises()
+    document.removeEventListener('keydown', card$)
+    expect(card$).not.toHaveBeenCalled()
+    expect(wrapper.find('.resolve-form').exists()).toBe(false)
+    expect(document.activeElement?.id).toBe('thread-resolve-comment-1')
+  })
+
+  it('asks on Escape before it drops a decision, and drops it only on that answer', async () => {
     const wrapper = open(card([root(1)]))
     await inThread(wrapper, 1, 'Resolve').trigger('click')
     await wrapper.get('.resolve-form input').setValue('Half a decision')
@@ -155,6 +168,14 @@ describe('marking', () => {
     await flushPromises()
     document.removeEventListener('keydown', card$)
     expect(card$).not.toHaveBeenCalled()
+    expect(wrapper.get('.resolve-form .confirm-strip').text()).toContain(
+      'Discard this draft decision?',
+    )
+    expect((wrapper.get('.resolve-form input').element as HTMLInputElement).value).toBe(
+      'Half a decision',
+    )
+    await wrapper.get('.resolve-form .confirm-go').trigger('click')
+    await flushPromises()
     expect(wrapper.find('.resolve-form').exists()).toBe(false)
     expect(document.activeElement?.id).toBe('thread-resolve-comment-1')
     await inThread(wrapper, 1, 'Resolve').trigger('click')

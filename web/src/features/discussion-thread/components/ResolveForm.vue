@@ -2,9 +2,11 @@
 /**
  * The one line that marks a thread resolved: an optional decision and the way on or back.
  *
- * The mark can be taken back, so nothing here asks twice. Enter sends, as a one-line form
- * does; Escape goes back, and takes only this form with it, not the card around it. A write
- * disables the field, which drops focus on the page, so a refused one gives it back there.
+ * The mark can be taken back, so sending asks nothing. The decision cannot: Escape and
+ * Cancel close an empty line at once and ask, as a reply's field does, before they drop
+ * words written in it (`useAskedCancel`), and neither reaches the card around it. Enter
+ * sends, as a one-line form does. A write disables the field, which drops focus on the page,
+ * so a refused one gives it back there.
  *
  * The hint names the card's own space and no number in it: a fixed example key read as a
  * task of whatever space the card was in.
@@ -12,8 +14,9 @@
 import { nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { useEventListener } from '@vueuse/core'
+import { useAskedCancel } from '@/features/discussion-thread/composables/useAskedCancel.ts'
 
+import ConfirmStrip from '@/shared/ui/ConfirmStrip.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VTextInput from '@/shared/ui/VTextInput.vue'
 
@@ -47,12 +50,11 @@ watch(
 function send() {
   if (!props.pending) emit('submit')
 }
-useEventListener(form, 'keydown', (event: KeyboardEvent) => {
-  if (event.key !== 'Escape' || event.isComposing) return
-  event.preventDefault()
-  event.stopPropagation()
-  emit('cancel')
-})
+const { asking, cancel } = useAskedCancel(
+  form,
+  () => !text.value.trim(),
+  () => emit('cancel'),
+)
 </script>
 
 <template>
@@ -79,7 +81,7 @@ useEventListener(form, 'keydown', (event: KeyboardEvent) => {
       >
       <VButton
         :disabled="pending"
-        @click="emit('cancel')"
+        @click="cancel"
         >{{ t('threads.cancel') }}</VButton
       >
     </div>
@@ -97,6 +99,16 @@ useEventListener(form, 'keydown', (event: KeyboardEvent) => {
         >{{ t('workItem.refreshDraft') }}</VButton
       >
     </p>
+    <ConfirmStrip
+      v-if="asking"
+      class="resolve-question"
+      tone="danger"
+      :message="t('threads.dropDecision')"
+      :cancel-label="t('threads.keepReply')"
+      :confirm-label="t('threads.confirmDrop')"
+      @cancel="asking = false"
+      @confirm="emit('cancel')"
+    />
   </form>
 </template>
 
@@ -122,7 +134,8 @@ useEventListener(form, 'keydown', (event: KeyboardEvent) => {
   gap: var(--space-2);
 }
 
-.resolve-error {
+.resolve-error,
+.resolve-question {
   flex: 1 0 100%;
   margin: 0;
   color: var(--color-danger);

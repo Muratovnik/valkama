@@ -245,6 +245,11 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- **Escape keeps a thread's decision until you say to drop it.** In a card, Escape or Cancel
+  in the line that marks a thread resolved closed it and dropped what was typed in it. With
+  words in it they now ask «Discard this draft decision?», as a reply's field does, and a
+  second Escape keeps them; an empty line still closes at once and gives focus back to
+  Resolve.
 - **A long card and a large space open.** The interface refused a card with more than
   500 comments or 1000 history events, and any module answer of more than 16384 values
   or 1 MiB of JSON, which took the Planning directory of a space past about 1170 items
