@@ -192,6 +192,77 @@ class BoundaryTests(LocateHarness):
         self.assertEqual(DocumentRefused("outside_root"), answer)
 
 
+class CaseExactTests(LocateHarness):
+    """After `realpath` a path is inside only where the disk spells its root the same.
+
+    Windows can make a directory case-sensitive, and WSL makes them so: there `proj`
+    and `Proj` are two siblings, and a check that folds case takes one for the other.
+    """
+
+    def test_the_real_path_is_compared_as_the_disk_spells_it(self) -> None:
+        base = os.path.join(os.path.abspath(os.sep), "work")
+        root = os.path.join(base, "Proj")
+        cases = {
+            os.path.join(root, "docs", "a.md"): "docs/a.md",
+            root: ".",
+            os.path.join(base, "proj", "secret.md"): None,
+            os.path.join(base, "PROJ"): None,
+            os.path.join(base, "Project", "a.md"): None,
+            os.path.join(base, "other.md"): None,
+        }
+        for real, expected in cases.items():
+            with self.subTest(real):
+                self.assertEqual(expected, documents._relative_in(root, real))
+
+    def test_a_root_that_realpath_spells_otherwise_does_not_hold_the_path(self) -> None:
+        # What a case-sensitive folder does, on any disk: the written path passes the
+        # check by spelling, and `realpath` lands in a sibling named in another case.
+        sibling = self.scratch / self.workspace.name.upper() / "docs" / "plan.md"
+        with mock.patch.object(documents.os.path, "realpath", return_value=str(sibling)):
+            self.assertEqual("outside_root", self.refused("docs/plan.md"))
+
+    @unittest.skipUnless(os.name == "nt", "a folder is made case-sensitive by fsutil on Windows")
+    def test_a_case_sensitive_sibling_is_outside(self) -> None:
+        folder = self.scratch / "case-sensitive"
+        folder.mkdir()
+        enabled = processes.run_text(
+            ["fsutil.exe", "file", "setCaseSensitiveInfo", str(folder), "enable"],
+            # The console's code page: read only to name a skip to a person.
+            encoding="utf-8",
+            errors="replace",
+        )
+        if enabled.returncode != 0:
+            self.skipTest(f"fsutil cannot make a folder case-sensitive here: {enabled.stdout}")
+        upper, lower = folder / "Proj", folder / "proj"
+        upper.mkdir()
+        try:
+            lower.mkdir()
+        except FileExistsError:
+            self.skipTest("the folder stayed case-insensitive")
+        write(upper / "ok.md", "# ok\n")
+        write(lower / "secret.md", "# sibling\n")
+        root = Root("upper", os.path.realpath(upper))
+        raw_paths = (
+            str(lower / "secret.md"),
+            (lower / "secret.md").as_posix(),
+            "../proj/secret.md",
+        )
+        for raw in raw_paths:
+            with self.subTest(raw):
+                answer = documents.locate(raw, base=root.path, roots=(root,))
+                self.assertEqual(DocumentRefused("outside_root"), answer)
+        found = documents.locate("ok.md", base=root.path, roots=(root,))
+        self.assertEqual(("upper", "ok.md"), (found.project, found.relative))
+        registry = registry_bytes([project_entry("upper", upper)])
+        with self.assertRaises(documents.DocumentError) as refused:
+            documents.read_markdown("upper", "../proj/secret.md", reader=lambda: registry)
+        self.assertEqual("outside_root", refused.exception.code)
+        answered = documents.resolve_paths(
+            None, ["../proj/secret.md"], project="upper", reader=lambda: registry
+        )
+        self.assertEqual("outside_root", answered[0].get("code"))
+
+
 class RedirectionTests(LocateHarness):
     """`os.path.realpath` is what these exercise, on real reparse points."""
 

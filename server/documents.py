@@ -128,13 +128,34 @@ def nested_roots(base: str, roots: Sequence[Root]) -> tuple[str, ...]:
 
 
 def _inside(path: str, root: str) -> bool:
-    """Whether a path lies under a root, by spelling alone: no disk is touched."""
+    """Whether a path lies under a root, by spelling alone: no disk is touched.
+
+    Case is folded, which is right only before the disk is asked: it lets a path
+    written in any case through to `realpath`, and `_relative_in` decides after it.
+    """
 
     folded = os.path.normcase(root)
     try:
         return os.path.commonpath([folded, os.path.normcase(path)]) == folded
     except ValueError:  # another drive, or an absolute path against a relative one
         return False
+
+
+def _relative_in(root: str, real: str) -> str | None:
+    """`real` from `root` in POSIX form, or None when it is not under it.
+
+    Both come from `realpath`, which spells an existing path as the disk does, so
+    they are compared exactly. A folder can be case-sensitive on Windows, where
+    `proj` beside `Proj` is a sibling and not the root: `commonpath` and `relpath`
+    fold case there, so neither may decide this.
+    """
+
+    if real == root:
+        return "."
+    head = root if root.endswith(os.sep) else root + os.sep
+    if not real.startswith(head):
+        return None
+    return real[len(head) :].replace(os.sep, "/")
 
 
 def _written_form(raw: str) -> tuple[bool, str] | None:
@@ -170,7 +191,11 @@ def _classified(path: str, roots: Sequence[Root]) -> Located | DocumentRefused:
     if not any(_inside(path, root.path) for root in roots):
         return DocumentRefused("outside_root")
     real = os.path.realpath(path)
-    holders = [root for root in roots if _inside(real, root.path)]
+    holders = [
+        (root, relative)
+        for root in roots
+        if (relative := _relative_in(root.path, real)) is not None
+    ]
     if not holders:
         return DocumentRefused("outside_root")
     try:
@@ -185,8 +210,7 @@ def _classified(path: str, roots: Sequence[Root]) -> Located | DocumentRefused:
         kind = "directory"
     else:
         return DocumentRefused("not_a_file")
-    holder = max(holders, key=lambda root: len(root.path))
-    relative = os.path.relpath(real, holder.path).replace("\\", "/")
+    holder, relative = max(holders, key=lambda held: len(held[0].path))
     markdown = kind == "file" and real.lower().endswith(DOC_SUFFIXES)
     return Located(kind, holder.project, relative, markdown, real)
 
@@ -224,7 +248,8 @@ def locate(
         if _inside(candidate, root):
             answer = _classified(candidate, roots)
             if isinstance(answer, Located):
-                located[os.path.normcase(answer.absolute)] = answer
+                # Spelled as the disk spells it: two siblings in two cases are two files.
+                located[answer.absolute] = answer
     if len(located) > 1:
         return DocumentRefused("ambiguous")
     return next(iter(located.values()), found)

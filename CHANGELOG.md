@@ -330,6 +330,12 @@ checkouts are therefore distinguishable even at the same version.
   gave Windows Terminal a folder holding a `;`, which it reads as the start of another
   command. An id now starts with a letter or a digit, as every Claude Code and Codex id does,
   and a resume whose folder holds a semicolon is refused with the rest of its plan.
+- **A folder named like a project in another case is no longer read as that project.**
+  Windows can keep a folder case-sensitive, and WSL makes its folders so; there `proj` beside
+  a registered `Proj` is a sibling, but the document routes and the opener compared paths with
+  case folded and read, resolved and opened files in it as the project's own. The path a link
+  leads to is now compared with the root as the disk spells both, and the sibling is
+  `outside_root`.
 
 ## [2.4.0](https://github.com/Muratovnik/valkama/compare/v2.3.0...v2.4.0) - 2026-11-03
 

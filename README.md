@@ -707,8 +707,10 @@ A path in a work item's text is a candidate on the page, and the server says
 what it is. `web/tests/fixtures/document-path-samples.json` is the table of what
 a text becomes: strong, weak, copy-only or nothing, and what a click copies when
 the path cannot be opened. A path is opened only when it lies inside the root of
-a registered project, after `..`, symbolic links and junctions are followed.
-Anything else the page only copies, and a network path never reaches the server.
+a registered project, after `..`, symbolic links and junctions are followed,
+and the path that comes out is compared with the root as the disk spells both: in
+a folder Windows keeps case-sensitive, `proj` beside `Proj` is a sibling and
+outside. Anything else the page only copies, and a network path never reaches the server.
 
 Both routes are `GET`, read files and write nothing. Unlike the other reads they
 require the request to come from the page itself: an `Origin`, when there is one,
