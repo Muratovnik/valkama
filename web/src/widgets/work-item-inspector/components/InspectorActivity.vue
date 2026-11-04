@@ -70,7 +70,9 @@ function title(entry: ActivityEntry) {
 }
 /** The row's second line in words; the recorded line stays in the entry for the search. */
 function detail(entry: ActivityEntry) {
-  return entry.kind === 'event' ? eventWords(entry, props.item.comments, t, props.questions) : entry.detail
+  return entry.kind === 'event'
+    ? eventWords(entry, props.item.comments, t, props.questions)
+    : entry.detail
 }
 const groups = computed(() => {
   const { category, author } = selected.value
