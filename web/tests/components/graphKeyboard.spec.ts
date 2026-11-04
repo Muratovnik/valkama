@@ -124,4 +124,19 @@ describe('the Tab stop as frames fold', () => {
     await nextTick()
     expect(keys.isTabStop(foldTarget('I'))).toBe(true)
   })
+
+  it('gives way from a fold the overview hides to the epic button beside it, and back', async () => {
+    const { keys, overview } = keyboard(frameTarget('I'))
+    keys.onFocus(foldTarget('O'))
+    await nextTick()
+    expect(keys.isTabStop(foldTarget('O'))).toBe(true)
+    overview.value = true
+    await nextTick()
+    // Not the anchor: the same header's other button.
+    expect(keys.isTabStop(frameTarget('O'))).toBe(true)
+    expect(keys.isTabStop(frameTarget('I'))).toBe(false)
+    overview.value = false
+    await nextTick()
+    expect(keys.isTabStop(foldTarget('O'))).toBe(true)
+  })
 })

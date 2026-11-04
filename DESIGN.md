@@ -959,7 +959,9 @@ innermost frame round it that is still drawn. Zoomed out past reading the fold i
 hidden and is no target, except over the work under no epic, whose header has no
 other button and keeps it (`foldIsTarget`): the arrows, the Tab stop and the way in read one
 list of the targets the field draws at its zoom, so Tab never rests on a button
-that takes no focus and the field stays one stop at any zoom.
+that takes no focus and the field stays one stop at any zoom. Focus on a fold the zoom
+hides moves to the epic's button beside it before the fold goes, whatever changed
+the zoom, and the camera stays; at reading size the stop is the fold again.
 
 Open work comes first as the field is read, finished frames after it. The field's
 pieces are the frames no drawn line joins, each alone, and the frames lines join,

@@ -22,7 +22,9 @@ import type { Ref } from 'vue'
 
 import type { GraphLayout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import {
+  foldOf,
   foldTarget,
+  frameTarget,
   graphWalk,
   isGraphWalkKey,
   walkTargets,
@@ -81,14 +83,43 @@ export function useGraphKeyboard(input: KeyboardInput) {
   const placedNode = (id: string | null) =>
     id === null ? undefined : targets.value.find((target) => target.id === id)
 
+  /** The epic's button beside a header's fold, while the fold itself is not drawn. */
+  function besideFold(id: string | null): string | null {
+    const frameId = id === null ? null : foldOf(id)
+    const epic = frameId === null ? null : frameTarget(frameId)
+    return epic !== null && placedNode(epic) ? epic : null
+  }
+
   /**
-   * The stop: the target the keyboard stood on, while drawn; once a fold hid it,
-   * the fold button of the innermost frame round it still drawn; else the anchor.
+   * The stop: the target the keyboard stood on, while drawn; a header's fold the
+   * overview hides gives way to the epic's button beside it, and comes back at
+   * reading size; once a fold hid the target, the fold button of the innermost
+   * frame round it still drawn; else the anchor.
    */
   const tabStop = computed(() => {
     if (placedNode(current.value)) return current.value
+    const beside = besideFold(current.value)
+    if (beside) return beside
     const fold = currentFrames.map((frameId) => foldTarget(frameId)).find((id) => placedNode(id))
     return fold ?? input.anchorId.value
+  })
+
+  /** The stop focus was handed to when its own target stopped being drawn. */
+  let handed: string | null = null
+  /**
+   * Focus on a target the field stops drawing — a fold the zoom hides, by the
+   * wheel, «Zoom out» or «Fit whole graph» alike — moves to the stop before the
+   * field hides it, and so never drops to the page. It is the field's own move:
+   * the keyboard still stands where it stood, and the camera stays.
+   */
+  watch(targets, () => {
+    const id = current.value
+    if (id === null || placedNode(id)) return
+    const button = nodeButton(id)
+    const stop = tabStop.value
+    if (!button || document.activeElement !== button || stop === null || stop === id) return
+    handed = stop
+    nodeButton(stop)?.focus({ preventScroll: true })
   })
 
   /** Remember where the keyboard stands, and the frames round it. */
@@ -145,6 +176,10 @@ export function useGraphKeyboard(input: KeyboardInput) {
    * lights no lineage over what they asked to see.
    */
   function onFocus(id: string): boolean {
+    if (handed === id) {
+      handed = null
+      return false
+    }
     standOn(id)
     const node = placedNode(id)
     if (node && nodeButton(id)?.matches(':focus-visible')) input.reveal(node, 0)

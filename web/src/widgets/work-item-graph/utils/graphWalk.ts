@@ -42,6 +42,8 @@ const FOLD_TARGET_WIDTH = 44
 export const foldTarget = (frameId: string) => `frame:${frameId}:fold`
 /** The header button that opens frame `frameId`'s epic. */
 export const frameTarget = (frameId: string) => `frame:${frameId}`
+/** The frame whose fold button `id` is, or null when it is no fold. */
+export const foldOf = (id: string): string | null => /^frame:(.+):fold$/u.exec(id)?.[1] ?? null
 
 const DIRECTIONS: Record<string, { x: number; y: number }> = {
   ArrowDown: { x: 0, y: 1 },
