@@ -206,7 +206,9 @@ checkouts are therefore distinguishable even at the same version.
   filter, a choice that matches the block's default is forgotten. Under a filter a block
   still counts all of its epic's work.
 - **The graph's camera and keyboard know the epic blocks.** The field opens on its first
-  heading or card as it is read, every framing measures the blocks as drawn, and folding or
+  heading or card as it is read — or, when that first screen holds only finished blocks, on
+  its first open work, so a phone never opens on finished work alone. Every framing
+  measures the blocks as drawn, and folding or
   opening a block moves the camera only across, so its heading stays where it was pressed.
   A resize brings the drawing back when no heading or card is left in sight, a block's
   empty middle not counting.

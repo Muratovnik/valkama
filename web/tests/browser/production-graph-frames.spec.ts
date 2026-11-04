@@ -160,3 +160,67 @@ test('a header’s counts, wrapped to a second line, stay clear of its edge', as
   expect(gaps.length).toBeGreaterThan(2)
   expect(Math.min(...gaps)).toBeGreaterThanOrEqual(2)
 })
+
+/** The broad space's frames and cards that hold open work, by the walk's target ids. */
+function openTargets(): Set<string> {
+  const { model } = broadSpace()
+  const byId = new Map(model.work_items.map((item) => [item.work_item_id, item]))
+  const isFrame = (id: string) => {
+    const item = byId.get(id)
+    return Boolean(item && (item.container || item.kind === 'epic'))
+  }
+  const open = new Set<string>()
+  for (const item of model.work_items) {
+    if (item.state.is_terminal || isFrame(item.work_item_id)) continue
+    open.add(item.work_item_id)
+    for (let at = item.parent_id; at !== null && isFrame(at); at = byId.get(at)?.parent_id ?? null)
+      open.add(`frame:${at}`).add(`frame:${at}:fold`)
+  }
+  // The work under no epic: its frame holds the open loose items.
+  open.add('frame:none:fold')
+  return open
+}
+
+/** The field's targets in reading order: all of them, or those whose centre is in sight. */
+async function walkTargets(page: Page, inSight: boolean) {
+  return page.locator('.graph-flow').evaluate((flow, sight) => {
+    const field = flow.getBoundingClientRect()
+    return [...flow.querySelectorAll<HTMLElement>('[data-walk-target]')]
+      .map((element) => ({
+        id: element.dataset.walkTarget ?? '',
+        box: element.getBoundingClientRect(),
+      }))
+      .filter(({ box }) => {
+        const x = box.x + box.width / 2
+        const y = box.y + box.height / 2
+        return (
+          !sight || (x >= field.left && x <= field.right && y >= field.top && y <= field.bottom)
+        )
+      })
+      .sort((left, right) => left.box.y - right.box.y || left.box.x - right.box.x)
+      .map(({ id }) => id)
+  }, inSight)
+}
+
+for (const width of [1500, 390]) {
+  test(`the space's graph opens with open work in sight, though its first frame is finished, at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await serveBroadSpace(page)
+    await page.goto(graphRoute({}))
+    await expect(page.locator('.graph-canvas.settled')).toBeVisible()
+    const open = openTargets()
+    // The field as it is read begins with a frame that holds nothing open.
+    const [first] = await walkTargets(page, false)
+    expect(first).toMatch(/^frame:.+:fold$/u)
+    expect(open.has(first)).toBe(false)
+    // Yet the first screen shows open work: an open card, or a frame header holding some.
+    await expect
+      .poll(async () => {
+        const seen = await walkTargets(page, true)
+        return seen.filter((id) => open.has(id))
+      })
+      .not.toEqual([])
+  })
+}

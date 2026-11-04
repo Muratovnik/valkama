@@ -15,7 +15,7 @@ import {
   headerOnScreen,
 } from '@/widgets/work-item-graph/utils/graphCamera.ts'
 import { layout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
-import { foldTarget } from '@/widgets/work-item-graph/utils/graphWalk.ts'
+import { foldTarget, readingOrder, walkTargets } from '@/widgets/work-item-graph/utils/graphWalk.ts'
 
 import { broadSpace } from './fixtures/graphSpaces.ts'
 
@@ -38,6 +38,38 @@ test('a field of frames too large to read opens on its first header at the top-l
   assert.ok(Math.abs(first.x * camera.zoom + camera.x - 32) < 0.5)
   assert.ok(Math.abs(first.y * camera.zoom + camera.y - 16) < 0.5)
 })
+
+for (const field of [
+  { width: 302, height: 640 },
+  { width: 1175, height: 600 },
+]) {
+  test(`a field that begins with finished frames opens with open work in sight at ${field.width}px`, async () => {
+    const placed = await space()
+    const cards = new Map(placed.nodes.map((node) => [node.work_item_id, node]))
+    const frames = new Map(placed.frames.map((frame) => [frame.id, frame]))
+    const holdsOpen = (id: string, frameId: string) => {
+      const card = cards.get(id)
+      const frame = frames.get(frameId)
+      return card
+        ? !card.state.is_terminal
+        : Boolean(frame && frame.progress.total > frame.progress.done)
+    }
+    const targets = walkTargets(placed).sort(readingOrder)
+    // The broad space's field begins with a frame holding nothing open.
+    assert.equal(holdsOpen(targets[0].id, targets[0].frameId), false)
+    const camera = graphCameraView(placed, field)
+    assert.ok(camera)
+    const inSight = targets.filter((target) => {
+      const x = (target.x + target.width / 2) * camera.zoom + camera.x
+      const y = (target.y + target.height / 2) * camera.zoom + camera.y
+      return x >= 0 && y >= 0 && x <= field.width && y <= field.height
+    })
+    assert.ok(
+      inSight.some((target) => holdsOpen(target.id, target.frameId)),
+      JSON.stringify(inSight.map((target) => target.id)),
+    )
+  })
+}
 
 for (const [what, fold] of [
   ['folding an open frame', true],

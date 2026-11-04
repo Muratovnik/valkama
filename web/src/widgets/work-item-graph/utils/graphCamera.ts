@@ -179,6 +179,34 @@ function keptOnDrawing(
   }
 }
 
+/** Whether a target stands for open work: an open card, or a header of a frame holding some. */
+function holdsOpenWork(graph: GraphLayout): (target: WalkTarget) => boolean {
+  const cards = new Map(graph.nodes.map((node) => [node.work_item_id, node]))
+  const frames = new Map(graph.frames.map((frame) => [frame.id, frame]))
+  return (target) => {
+    const card = cards.get(target.id)
+    if (card) return !card.state.is_terminal
+    const frame = frames.get(target.frameId)
+    return frame !== undefined && frame.progress.total > frame.progress.done
+  }
+}
+
+/**
+ * The field from its beginning, as it is read. Frames are placed by their
+ * size, not by what they hold, so the field can begin with finished frames
+ * folded to their headers; when that first screen holds no open work, the
+ * field begins at its first open work instead, the finished frames before it
+ * a pan away.
+ */
+function openingView(graph: GraphLayout, dimensions: Dimensions): ViewportTransform {
+  const targets = walkTargets(graph)
+  const start = keptOnDrawing(beginningView(targets, dimensions), graph, dimensions)
+  const open = targets.filter(holdsOpenWork(graph))
+  return open.length === 0 || open.some((target) => seen(target, start, dimensions))
+    ? start
+    : keptOnDrawing(beginningView(open, dimensions), graph, dimensions)
+}
+
 /**
  * Where the camera starts: the branch the card chose, from its beginning; else
  * the whole field when it reads at that size and no card is open; else the
@@ -198,8 +226,7 @@ export function graphCameraView(
   const selected = graph.nodes.some((node) => node.work_item_id === options.selectedId)
   if (!selected && whole.zoom >= READABLE_ZOOM) return whole
   const anchor = graphAnchor(graph, options)
-  if (!anchor || (!selected && anchor.id !== options.rootId))
-    return keptOnDrawing(beginningView(walkTargets(graph), dimensions), graph, dimensions)
+  if (!anchor || (!selected && anchor.id !== options.rootId)) return openingView(graph, dimensions)
 
   const contextIds = new Set([anchor.id])
   for (const edge of graph.edges) {
