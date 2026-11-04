@@ -192,7 +192,10 @@ function retryMark() {
 }
 
 /* A reply takes focus from the press that showed it or the write that made it, and
-   rings as it does. */
+   rings as it does. Its words run to both edges of the reply, so the ring stands clear of
+   them, as it does around how a question ended; at two pixels it lay on the letters. The
+   inset before the replies' line is wider than the ring at every width, so the two never
+   cross. */
 .reply {
   display: grid;
   gap: var(--space-1);
@@ -201,7 +204,7 @@ function retryMark() {
 
   &:focus-visible {
     border-radius: var(--radius-control);
-    outline-offset: var(--space-half);
+    outline-offset: var(--space-1);
   }
 }
 

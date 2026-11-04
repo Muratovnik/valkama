@@ -77,6 +77,18 @@ for (const [size, width] of [
     })
     await expect(written.locator('.reply-meta')).toContainText('you')
     await expect(thread).not.toContainText('New reply')
+    // The ring stands clear of the words and inside the replies' line, not on either.
+    const ring = await written.evaluate((node) => {
+      const style = getComputedStyle(node)
+      const reach = Number.parseFloat(style.outlineOffset) + Number.parseFloat(style.outlineWidth)
+      const line = node.parentElement?.getBoundingClientRect().left ?? 0
+      return {
+        gap: Number.parseFloat(style.outlineOffset),
+        left: node.getBoundingClientRect().left - reach - line,
+      }
+    })
+    expect(ring.gap).toBeGreaterThanOrEqual(4)
+    expect(ring.left).toBeGreaterThanOrEqual(1)
   })
 
   test(`a mark goes from the keyboard and comes off again at ${size}`, async ({ page }) => {
