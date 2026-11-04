@@ -159,6 +159,11 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Changed
 
+- **What opens more of a text is lighter than what acts on it.** «Show all» under a long
+  text, «Show N more replies» and a resolved thread's Expand stood as chips of the same
+  height and fill as Reply and Resolve, three rows of them between a thread's root and its
+  replies. They now rest bare, as a chain's and a lane's «show more» do, with their words in
+  line with the text they open; the actions keep their fill.
 - **A segmented choice is a radio group.** The work view switch, the card's sections,
   Settings' sections, the graph filter, a chain's scope, an editor's Write and Preview and
   the discussion's thread filter take one Tab stop, on the chosen segment, and the arrow

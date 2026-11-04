@@ -179,6 +179,46 @@ test('the button for held replies stands before them and opens them on the first
   await expect(thread.locator('.reply').first()).toContainText('First reply')
 })
 
+test('what opens more of a thread is lighter than what acts on it, and starts where its text does', async ({
+  page,
+}) => {
+  const { backend, drawer } = await openTalkedOn(page)
+  const long = Array.from({ length: 14 }, (_, at) => `Line ${at + 1} of a long root.`).join('\n\n')
+  backend.item.comments.push(
+    root(40, long),
+    ...[41, 42, 43, 44].map((id) => reply(id, 40, `Reply ${id}.`)),
+  )
+  await page.reload()
+  const thread = threadOf(drawer, 'Line 1 of a long root.')
+  await expect(thread.locator('.reply')).toHaveCount(2)
+  // Measured across several reads, so not while the drawer is still sliding in.
+  await expect(drawer).toHaveCSS('transform', 'none')
+  const look = (name: string) =>
+    thread.getByRole('button', { name, exact: true }).evaluate((button) => {
+      const range = document.createRange()
+      range.selectNodeContents(button)
+      const words = [...range.getClientRects()].find((rect) => rect.width > 0)
+      return { ground: getComputedStyle(button).backgroundColor, words: words?.left ?? 0 }
+    })
+  const startOf = (selector: string) =>
+    thread
+      .locator(selector)
+      .first()
+      .evaluate((node) => node.getBoundingClientRect().left)
+  const bare = 'rgba(0, 0, 0, 0)'
+  // Raising the rest of a text or of a thread is a reading step; Reply and Resolve change it.
+  const more = await look('Show all')
+  const earlier = await look('Show 2 more replies')
+  const replying = await look('Reply')
+  const resolving = await look('Resolve')
+  expect(more.ground).toBe(bare)
+  expect(earlier.ground).toBe(bare)
+  expect(replying.ground).not.toBe(bare)
+  expect(resolving.ground).not.toBe(bare)
+  expect(Math.abs(more.words - (await startOf('.thread-text')))).toBeLessThanOrEqual(1)
+  expect(Math.abs(earlier.words - (await startOf('.thread-actions')))).toBeLessThanOrEqual(1)
+})
+
 test('a reply set aside for another thread comes back with its words', async ({ page }) => {
   const { drawer } = await openTalkedOn(page)
   const one = threadOf(drawer, 'Should the second report')

@@ -148,7 +148,7 @@ const toggleLabel = computed(() =>
       v-if="overflowing"
       class="collapsible-toggle"
       size="inline"
-      variant="ghost"
+      variant="text"
       :aria-expanded="expanded"
       @click="expanded = !expanded"
       >{{ toggleLabel }}</VButton
@@ -182,11 +182,15 @@ const toggleLabel = computed(() =>
   }
 }
 
-/* The toggle starts where the text starts, so it reads as the text's own end
-   rather than as an action of the section around it. Its edge is the column's:
-   a labelled ghost rests on its own fill now, and the margin that once pulled
-   a bare label into line with the text pulled that fill 8px out of it. */
+/* Opening the rest of a text is reading, not acting on it, so the toggle takes the weight
+   the app gives what shows more of something — a chain's lists, a lane, a chain's details —
+   and not the ghost's fill its actions wear. Under a thread's root it stood as a third chip
+   of one height and one fill beside Reply and Resolve and Show more replies, and nothing said
+   which of them changed the thread. Bare at rest, its words start where the text starts, so
+   it reads as the text's own end: the margin takes back the inset its fill keeps under the
+   pointer. */
 .collapsible-toggle {
   justify-self: start;
+  margin-inline-start: calc(-1 * var(--space-2));
 }
 </style>

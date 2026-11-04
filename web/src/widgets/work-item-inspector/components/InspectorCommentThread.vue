@@ -184,7 +184,7 @@ function sendMark() {
       </p>
       <VButton
         v-if="!formOpen"
-        variant="ghost"
+        variant="text"
         size="inline"
         :aria-expanded="expandedMark"
         @click="pressFold"

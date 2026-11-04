@@ -107,7 +107,7 @@ function retryMark() {
     <VButton
       v-if="held"
       class="replies-toggle"
-      variant="ghost"
+      variant="text"
       size="inline"
       :aria-expanded="showingAll"
       :aria-controls="listId"
@@ -177,8 +177,11 @@ function retryMark() {
   min-width: 0;
 }
 
+/* Showing earlier replies is reading, as a text's own toggle is: bare, its words in line
+   with the actions above it rather than one more chip among them. */
 .replies-toggle {
   justify-self: start;
+  margin-inline-start: calc(-1 * var(--space-2));
 }
 
 .replies {

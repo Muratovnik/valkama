@@ -286,11 +286,15 @@ for (const width of [1440, 390]) {
     const description = drawer.locator('.description-copy')
     const toggle = description.locator('.collapsible-toggle')
     await expect(toggle).toBeVisible()
-    // Read in one frame: the drawer may still be sliding in.
+    // Read in one frame: the drawer may still be sliding in. The toggle is bare at rest, so
+    // what has to line up is its words, not the fill it takes under the pointer.
     const offset = await description.evaluate((node) => {
-      const left = (selector: string) =>
-        node.querySelector(selector)?.getBoundingClientRect().left ?? Number.NaN
-      return left('.collapsible-toggle') - left('.collapsible-text')
+      const toggle = node.querySelector('.collapsible-toggle')
+      const range = document.createRange()
+      if (toggle) range.selectNodeContents(toggle)
+      const words = [...range.getClientRects()].find((rect) => rect.width > 0)
+      const text = node.querySelector('.collapsible-text')?.getBoundingClientRect().left
+      return (words?.left ?? Number.NaN) - (text ?? Number.NaN)
     })
     expect(offset).toBeCloseTo(0, 0)
   })
