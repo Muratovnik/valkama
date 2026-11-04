@@ -1,11 +1,13 @@
 import { expect } from '@playwright/test'
 
+import { aCardAsking, linkIn, NAMED_PATH } from './documentBackend.ts'
+import { paneOf, settled } from './documentBeside.ts'
 import { openPage } from './documentPageSurface.ts'
 import { test } from './test.ts'
 
 /**
  * How a document's text is set, apart from where it lands: the length of its lines on a
- * wide page.
+ * wide page, and what a frame of code is called.
  */
 
 test('on a wide page the text keeps a reading measure, and a table takes the column', async ({
@@ -38,4 +40,16 @@ test('on a wide page the text keeps a reading measure, and a table takes the col
   expect(letters).toBeLessThanOrEqual(76)
   // A table is scanned across, not read along, and keeps the column's width.
   expect(table).toBeGreaterThan(text * 1.4)
+})
+
+test('a frame of code is named by the language its fence gives', async ({ page }) => {
+  await page.setViewportSize({ width: 1500, height: 900 })
+  const { drawer } = await aCardAsking(page, `Read \`${NAMED_PATH}\` first.`)
+  await linkIn(drawer, NAMED_PATH).click()
+  const { pane } = paneOf(page)
+  await settled(drawer)
+  const code = pane.locator('.rich-pre')
+  // Too narrow for the line, so the frame is a stop on the keyboard's way, and named.
+  await expect(code).toHaveAttribute('tabindex', '0')
+  await expect(code).toHaveAccessibleName('Code block: ts')
 })

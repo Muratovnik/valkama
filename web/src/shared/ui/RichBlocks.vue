@@ -33,7 +33,10 @@ const { t } = useI18n()
 const tableFrame = (table: Table) =>
   props.document &&
   t('textFrames.table', { columns: table.header.map((cell) => inlineWords(cell)).join(', ') })
-const codeFrame = () => props.document && t('textFrames.code')
+type Code = Extract<RichBlock, { kind: 'code' }>
+/** A fence that names its language names the frame too. */
+const codeFrame = ({ language }: Code) =>
+  props.document && (language ? t('textFrames.codeIn', { language }) : t('textFrames.code'))
 
 const vKeyScroll = keyScroll
 const id = useId()
@@ -77,7 +80,7 @@ const headingTag = (heading: Heading) => `h${heading.level ?? 2}`
       </p>
       <pre
         v-else-if="block.kind === 'code'"
-        v-key-scroll="codeFrame()"
+        v-key-scroll="codeFrame(block)"
         class="rich-pre"
         >{{ block.text }}</pre>
       <blockquote

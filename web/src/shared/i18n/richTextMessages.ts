@@ -32,6 +32,7 @@ export const richTextMessages = {
     textFrames: {
       table: 'Table: {columns}',
       code: 'Code block',
+      codeIn: 'Code block: {language}',
     },
     textLinks: {
       openItem: 'Open task {reference}',
@@ -72,6 +73,7 @@ export const richTextMessages = {
     textFrames: {
       table: 'Таблица: {columns}',
       code: 'Фрагмент кода',
+      codeIn: 'Фрагмент кода: {language}',
     },
     textLinks: {
       openItem: 'Открыть задачу {reference}',

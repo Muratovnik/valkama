@@ -76,8 +76,17 @@ describe('markdown constructs', () => {
 
   it('reads a fenced code block as written, markup included', () => {
     expect(parseRichText('```html\n<b>bold</b>\n  indented\n```')).toEqual([
-      { kind: 'code', text: '<b>bold</b>\n  indented' },
+      { kind: 'code', text: '<b>bold</b>\n  indented', language: 'html' },
     ])
+  })
+
+  it('names a code block by the first word of its fence, and only where it names a language', () => {
+    expect(parseRichText('```ts title="a.ts"\nconst a = 1\n```')).toEqual([
+      { kind: 'code', text: 'const a = 1', language: 'ts' },
+    ])
+    // No fence word, a word that says plain text, and an indented block, which has no fence.
+    for (const source of ['```\na\n```', '```text\na\n```', '```TXT\na\n```', '    a'])
+      expect(parseRichText(source)).toEqual([{ kind: 'code', text: 'a' }])
   })
 
   it('reads quotes, rules and tables with their column alignment', () => {

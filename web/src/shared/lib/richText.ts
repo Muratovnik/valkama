@@ -65,7 +65,8 @@ export type RichAlign = 'center' | 'left' | 'right' | null
 type RichHeadingLevel = 2 | 3 | 4 | 5 | 6
 
 export type RichBlock =
-  | { kind: 'code'; text: string }
+  /** `language` is the fence's first word, where it names one. */
+  | { kind: 'code'; text: string; language?: string }
   /** `level` and `slug` come only from `parseRichDocument`. */
   | { children: RichInline[]; kind: 'heading'; level?: RichHeadingLevel; slug?: string }
   | { children: RichInline[]; kind: 'paragraph' }
@@ -312,6 +313,16 @@ function heading(token: Tokens.Heading, reading: DocumentReading | null): RichBl
   return { kind: 'heading', children, level, slug }
 }
 
+/** A fence's words that say only that the code is plain text, which names nothing. */
+const PLAIN_FENCES = new Set(['', 'plain', 'plaintext', 'text', 'txt'])
+
+function codeBlock(token: Tokens.Code): RichBlock {
+  const [language = ''] = (token.lang ?? '').trim().split(/\s/u)
+  return PLAIN_FENCES.has(language.toLowerCase())
+    ? { kind: 'code', text: token.text }
+    : { kind: 'code', text: token.text, language }
+}
+
 function block(token: Token, reading: DocumentReading | null): RichBlock[] {
   switch (token.type) {
     case 'paragraph': {
@@ -331,7 +342,7 @@ function block(token: Token, reading: DocumentReading | null): RichBlock[] {
       return [heading(token as Tokens.Heading, reading)]
     }
     case 'code': {
-      return [{ kind: 'code', text: (token as Tokens.Code).text }]
+      return [codeBlock(token as Tokens.Code)]
     }
     case 'blockquote': {
       return [{ kind: 'quote', children: blocks((token as Tokens.Blockquote).tokens, reading) }]

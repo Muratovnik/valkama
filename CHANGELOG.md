@@ -338,6 +338,9 @@ checkouts are therefore distinguishable even at the same version.
 - **A long identifier in a document's table stays whole.** A word longer than a column's
   measure, plain or written as code, was broken in the middle; it now widens its column, and
   the table scrolls in its frame as a wide table already did.
+- **A frame of code says its language.** A block of code too wide for the document, which
+  the keyboard can reach and scroll, is announced as «Code block: ts» when its fence names a
+  language, rather than only «Code block».
 
 ### Removed
 
