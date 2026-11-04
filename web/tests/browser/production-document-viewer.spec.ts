@@ -106,13 +106,18 @@ test('a line leads to its block, and links lead on and back to the same place', 
   await expect(viewer.getByRole('button', { name: /^Back to/u })).toHaveCount(0)
 
   await body.evaluate((node) => node.scrollTo({ top: 240 }))
-  await linkIn(viewer, 'notes.md').evaluate((node: HTMLElement) => node.click())
+  // Pressed by the keyboard where it stands, so nothing scrolls it into view on the way.
+  const notes = linkIn(viewer, 'notes.md')
+  await notes.evaluate((node: HTMLElement) => node.focus({ preventScroll: true }))
+  await page.keyboard.press('Enter')
   await expect(title).toHaveText('The notes')
   const back = viewer.getByRole('button', { name: 'Back to docs/plan.md' })
   await expect(back).toBeVisible()
   await back.click()
   await expect(title).toHaveText('The migration plan')
   await expect.poll(() => body.evaluate((node) => node.scrollTop)).toBe(240)
+  // Back to the link it left by, as a browser's Back does, and not to the head.
+  await expect(notes).toBeFocused()
   await expect(viewer.getByRole('button', { name: /^Back to/u })).toHaveCount(0)
 })
 

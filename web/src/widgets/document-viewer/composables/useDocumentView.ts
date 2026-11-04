@@ -37,8 +37,17 @@ type Staleness = { at: string; kind: 'changed' } | { kind: 'deleted' } | { kind:
  * place left for a link. `serial` makes the same request twice two requests.
  */
 export type Placement =
-  | { kind: 'scroll'; serial: number; top: number }
+  | { kind: 'scroll'; link: HeldLink | null; serial: number; top: number }
   | { kind: 'suffix'; serial: number; suffix: string }
+
+/**
+ * A control in the text by where it stands, since the element goes with the text: the top
+ * block that holds it and its place among that block's controls.
+ */
+export interface HeldLink {
+  block: number
+  nth: number
+}
 
 /** What one host's viewer gives the next: the reader's place, as the text itself knows it. */
 export interface ReaderPlace {
@@ -60,14 +69,23 @@ export interface DocumentReader {
   hold: () => () => void
   /** Says where the reader is, for the viewer about to take over in another host. */
   leave: () => ReaderPlace | null
+  /** The control in the text that holds focus, if one does. */
+  link: () => HeldLink | null
   /** Where the text is scrolled to. */
   position: () => number
 }
 
 const NOTHING_HELD = () => {}
-const NOBODY: DocumentReader = { hold: () => NOTHING_HELD, leave: () => null, position: () => 0 }
+const NOBODY: DocumentReader = {
+  hold: () => NOTHING_HELD,
+  leave: () => null,
+  link: () => null,
+  position: () => 0,
+}
 
 interface Visit {
+  /** The link that took the reader on, which Back gives focus to again. */
+  link: HeldLink | null
   place: DocumentPlace
   /** Where the reader had scrolled it to when a link took them on. */
   top: number
@@ -110,7 +128,7 @@ export function useDocumentView() {
   const staleness = shallowRef<Staleness | null>(null)
   const loading = ref(false)
   const visits = shallowRef<readonly Visit[]>([])
-  const placement = shallowRef<Placement>({ kind: 'scroll', serial: 0, top: 0 })
+  const placement = shallowRef<Placement>({ kind: 'scroll', link: null, serial: 0, top: 0 })
   let reader = NOBODY
   let handedOver: ReaderPlace | null = null
   /** The link a document was opened from, which focus goes back to when it closes. */
@@ -160,7 +178,11 @@ export function useDocumentView() {
       toSuffix(target.suffix)
       return
     }
-    if (current) visits.value = [...visits.value, { place: current, top: reader.position() }]
+    if (current)
+      visits.value = [
+        ...visits.value,
+        { link: reader.link(), place: current, top: reader.position() },
+      ]
     void read(target, () => toSuffix(target.suffix))
   }
 
@@ -169,7 +191,8 @@ export function useDocumentView() {
     if (!visit) return
     visits.value = visits.value.slice(0, -1)
     void read(visit.place, () => {
-      placement.value = { kind: 'scroll', serial: placement.value.serial + 1, top: visit.top }
+      const serial = placement.value.serial + 1
+      placement.value = { kind: 'scroll', link: visit.link, serial, top: visit.top }
     })
   }
 

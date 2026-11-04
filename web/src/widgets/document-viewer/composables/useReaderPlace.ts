@@ -8,6 +8,7 @@ import type { Ref, ShallowRef } from 'vue'
 
 import type {
   DocumentView,
+  HeldLink,
   ReaderPlace,
 } from '@/widgets/document-viewer/composables/useDocumentView.ts'
 
@@ -22,6 +23,12 @@ interface DocumentBlocks {
 }
 
 const nothing = () => {}
+
+/** What in a block takes focus by itself: the links and the copy buttons of its text. */
+const CONTROLS = 'a[href], button'
+const controlsOf = (box: HTMLElement | null | undefined) => [
+  ...(box?.querySelectorAll<HTMLElement>(CONTROLS) ?? []),
+]
 
 /** Whether any of a box stands in the scroller's window. */
 function inView(box: HTMLElement | null, scroller: HTMLElement): boolean {
@@ -104,9 +111,27 @@ export function useReaderPlace(options: {
       text.value?.box(place.focus)?.focus({ preventScroll: true })
   }
 
+  /** The control in the text that holds focus, by its block and its place in it. */
+  function heldLink(): HeldLink | null {
+    const active = document.activeElement
+    const blocks = text.value
+    if (!(active instanceof HTMLElement) || !blocks || !root.value?.contains(active)) return null
+    const block = blocks.indexOf(active)
+    const nth = block === -1 ? -1 : controlsOf(blocks.box(block)).indexOf(active)
+    return nth === -1 ? null : { block, nth }
+  }
+
+  /** Focus back on a control the reader left by; false when the text no longer has it. */
+  function focusLink(link: HeldLink): boolean {
+    const control = controlsOf(text.value?.box(link.block))[link.nth]
+    control?.focus({ preventScroll: true, focusVisible: true })
+    return control !== undefined && document.activeElement === control
+  }
+
   const detach = view.attachReader({
     hold: holdPlace,
     leave: leavePlace,
+    link: heldLink,
     position: () => scroller.value?.scrollTop ?? 0,
   })
   onBeforeUnmount(detach)
@@ -137,5 +162,5 @@ export function useReaderPlace(options: {
     return (shown.blocks[read] ?? shown.blocks[top])?.firstLine ?? null
   }
 
-  return { lineAt }
+  return { focusLink, lineAt }
 }

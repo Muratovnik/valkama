@@ -188,11 +188,11 @@ watch(placement, async (aim) => {
     anchorMissing.value = ''
     marked.value = new Set()
     scroller.value?.scrollTo({ top: aim.top })
-    land(null)
+    if (!aim.link || !focusLink(aim.link)) land(null)
   }
 })
 
-const { lineAt } = useReaderPlace({
+const { focusLink, lineAt } = useReaderPlace({
   anchorMissing,
   focusHead: () => header.value?.focusTitle(),
   marked,

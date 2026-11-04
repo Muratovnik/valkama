@@ -32,6 +32,7 @@ const mounted: ReturnType<typeof mount>[] = []
 const NOTHING = () => {}
 const NOTHING_HELD = () => NOTHING
 const AT_NOTHING = () => 0
+const NO_LINK = () => null
 const CARD_TITLE = () => 'The card'
 const NOTHING_BELOW = () => null
 
@@ -146,7 +147,7 @@ describe('a host handed over', () => {
     await flushPromises()
     const place = { block: 4, focus: 2, marked: [2], missing: '', within: 0.5 }
     const leave = vi.fn(() => place)
-    view.attachReader({ hold: NOTHING_HELD, leave, position: AT_NOTHING })
+    view.attachReader({ hold: NOTHING_HELD, leave, link: NO_LINK, position: AT_NOTHING })
 
     panes.stand('card', { active: true, fits: false })
     await nextTick()
@@ -165,11 +166,13 @@ describe('a host handed over', () => {
     const old = view.attachReader({
       hold: NOTHING_HELD,
       leave: () => ({ ...leavingPlace, block: 1 }),
+      link: NO_LINK,
       position: AT_NOTHING,
     })
     view.attachReader({
       hold: NOTHING_HELD,
       leave: () => ({ ...leavingPlace, block: 2 }),
+      link: NO_LINK,
       position: AT_NOTHING,
     })
     old()
@@ -181,7 +184,7 @@ describe('a host handed over', () => {
   it('does not ask on an open or a close, which leave nobody to tell', async () => {
     const { panes, view } = shell()
     const leave = vi.fn(() => null)
-    view.attachReader({ hold: NOTHING_HELD, leave, position: AT_NOTHING })
+    view.attachReader({ hold: NOTHING_HELD, leave, link: NO_LINK, position: AT_NOTHING })
     panes.stand('card', FITS)
     panes.open(TARGET)
     await flushPromises()
