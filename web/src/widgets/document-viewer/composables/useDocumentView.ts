@@ -293,6 +293,8 @@ export function useDocumentView() {
     refresh,
     staleness,
     canGoBack: computed(() => visits.value.length > 0),
+    /** Focus still stands on the link the document was opened from, where nothing took it. */
+    atOpener: () => openedFrom !== null && globalThis.document.activeElement === openedFrom,
     /**
      * The viewer answers for the reader, for a place a link or a new text leaves behind.
      * Gives back how to stop: the next host's viewer may have taken over by then.

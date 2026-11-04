@@ -8,11 +8,15 @@
  *
  * With what it sizes folded away it is all that is left of it, so it stands as a strip with
  * that thing's name on it, says it is folded in its value text, and a press brings it back:
- * a 12px line with nothing on it was a pane gone without a trace.
+ * a 12px line with nothing on it was a pane gone without a trace. The name it shows is then
+ * its name, as a window splitter is named by the pane it sizes, so a voice command that
+ * says what is on the strip finds it; what it sizes moves to its description.
  */
+import { computed, useId } from 'vue'
+
 import VIcon from '@/shared/ui/VIcon.vue'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     label: string
     maximum: number
@@ -31,8 +35,12 @@ withDefaults(
   }>(),
   { at: 'across', controls: undefined, folded: undefined },
 )
-
 const emit = defineEmits<{ keydown: [event: KeyboardEvent]; pointerdown: [event: PointerEvent] }>()
+
+const descriptionId = `overlay-resizer-purpose-${useId()}`
+/** Folded, the words it shows name it, and what it does describes it. */
+const name = computed(() => props.folded?.name ?? props.label)
+const describedBy = computed(() => (props.folded ? descriptionId : undefined))
 </script>
 
 <template>
@@ -44,7 +52,8 @@ const emit = defineEmits<{ keydown: [event: KeyboardEvent]; pointerdown: [event:
     aria-orientation="vertical"
     tabindex="0"
     :class="[`at-${at}`, { 'is-folded': folded }]"
-    :aria-label="label"
+    :aria-label="name"
+    :aria-describedby="describedBy"
     :aria-valuetext="folded?.state"
     :title="folded?.state"
     :aria-controls="controls"
@@ -55,17 +64,23 @@ const emit = defineEmits<{ keydown: [event: KeyboardEvent]; pointerdown: [event:
     @pointerdown="emit('pointerdown', $event)"
     @keydown="emit('keydown', $event)"
   >
-    <span
-      v-if="folded"
-      class="overlay-resizer-folded"
-      aria-hidden="true"
-    >
-      <VIcon
-        name="chevron-left"
-        :size="16"
-      />
-      <span class="overlay-resizer-name">{{ folded.name }}</span>
-    </span>
+    <template v-if="folded">
+      <span
+        class="overlay-resizer-folded"
+        aria-hidden="true"
+      >
+        <VIcon
+          name="chevron-left"
+          :size="16"
+        />
+        <span class="overlay-resizer-name">{{ folded.name }}</span>
+      </span>
+      <span
+        :id="descriptionId"
+        hidden
+        >{{ label }}</span
+      >
+    </template>
     <span
       v-else
       class="overlay-resizer-grip"

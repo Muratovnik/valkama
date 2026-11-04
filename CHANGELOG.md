@@ -500,6 +500,15 @@ checkouts are therefore distinguishable even at the same version.
 - **A long identifier in a document's table stays whole.** A word longer than a column's
   measure, plain or written as code, was broken in the middle; it now widens its column, and
   the table scrolls in its frame as a wide table already did.
+- **Escape closes a refused document, not the card.** A document opened beside a card that
+  could not be shown — over 512 KiB, a read the server failed, a file no longer there — left
+  focus on the card's link, so Escape closed the card and dropped focus on the page. Focus
+  now goes into the document whatever its read comes to, and Escape closes the document
+  alone and gives focus back to the link.
+- **The folded document strip answers to what it says.** Folded beside a card, the strip
+  shows «Document: <title>» but was named «Document width», so a voice command naming what
+  is on it found nothing. It is now named by those words, with «Document width» as its
+  description.
 - **Code in a document's list widens as other code does.** A block of code inside a list item
   was held to the text's end and scrolled there, while a table beside it took the wider
   column. It now reaches past the text as far as that column, from the item's own start, and

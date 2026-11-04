@@ -73,6 +73,17 @@ const FILES: Record<string, string> = {
   [NESTED_PATH]: NESTED,
 }
 
+/** A file past what Valkama shows, and one whose read the server fails. */
+export const HUGE_PATH = 'docs/huge.md'
+export const BROKEN_PATH = 'docs/broken.md'
+const REFUSALS: Record<string, { json: object; status: number }> = {
+  [HUGE_PATH]: {
+    status: 413,
+    json: { error: { code: 'too_large', size: 986 * 1024, limit: 512 * 1024 } },
+  },
+  [BROKEN_PATH]: { status: 500, json: { error: { code: 'internal' } } },
+}
+
 const confirmed = (relative: string) => ({
   status: 'file',
   project: 'demo',
@@ -87,6 +98,8 @@ const KNOWN: Record<string, object> = {
   [LONG_PATH]: confirmed(LONG_PATH),
   [NAMED_PATH]: confirmed(NAMED_PATH),
   [NESTED_PATH]: confirmed(NESTED_PATH),
+  [HUGE_PATH]: confirmed(HUGE_PATH),
+  [BROKEN_PATH]: confirmed(BROKEN_PATH),
   'src/a.ts': { status: 'file', project: 'demo', relative: 'src/a.ts', markdown: false },
 }
 
@@ -101,7 +114,7 @@ async function installDocuments(page: Page) {
     const path = new URL(route.request().url()).searchParams.get('path') ?? ''
     const markdown = FILES[path]
     await (markdown === undefined
-      ? route.fulfill({ status: 404, json: { error: { code: 'not_found' } } })
+      ? route.fulfill(REFUSALS[path] ?? { status: 404, json: { error: { code: 'not_found' } } })
       : route.fulfill({
           json: {
             project: 'demo',

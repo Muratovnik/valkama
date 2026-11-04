@@ -234,8 +234,12 @@ describe.each([
     const edge = separator()
     expect(edge.getAttribute('aria-valuetext')).toBe(NAMES.folded)
     expect(edge.getAttribute('title')).toBe(NAMES.folded)
-    // Seen as well as heard: the strip carries the pane's name.
-    expect(edge.textContent?.trim()).toBe(NAMES.label)
+    // Seen as well as heard: the strip carries the pane's name, and is named by it, so a
+    // voice command saying what it shows finds it; what it sizes is its description.
+    expect(edge.querySelector('.overlay-resizer-name')?.textContent).toBe(NAMES.label)
+    expect(edge.getAttribute('aria-label')).toBe(NAMES.label)
+    const purpose = edge.getAttribute('aria-describedby') ?? ''
+    expect(document.querySelector(`[id="${purpose}"]`)?.textContent).toBe(NAMES.resize)
 
     edge.dispatchEvent(new PointerEvent('pointerdown', { button: 0, bubbles: true }))
     window.dispatchEvent(new PointerEvent('pointerup', { button: 0 }))

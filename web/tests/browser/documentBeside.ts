@@ -17,7 +17,8 @@ export function paneOf(page: Page) {
     body: pane.locator('.document-body'),
     title: pane.locator('.overlay-header-name'),
     target: pane.locator('.document-block.is-target'),
-    edge: page.getByRole('separator', { name: 'Document width' }),
+    // Folded, the edge is named by the document's name it shows.
+    edge: page.getByRole('separator', { name: /^Document(?: width$|: )/u }),
     close: pane.getByRole('button', { name: 'Close the document' }),
   }
 }

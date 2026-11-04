@@ -8,7 +8,7 @@
  * text says, a path copied or why not, sounds in this viewer's own status line and not
  * in the corner of the window behind it.
  */
-import { computed, nextTick, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useTitle } from '@vueuse/core'
@@ -205,17 +205,19 @@ const { focusLink, lineAt } = useReaderPlace({
 
 /**
  * Beside what it was opened from nothing else takes focus as it opens, so it comes in here
- * as the read starts: from then on Escape closes this and not the card, whatever the read
- * comes to. A drawer has its own first control to go to.
+ * from the link that opened it, once there is a viewer to come to and whatever the read
+ * comes to — a text, a refusal, a failed read: from then on Escape closes this and not the
+ * card. One rule for every outcome, since a refusal sets no place for the text's own
+ * landing to act on; focus the reader moved elsewhere stays there. A drawer has its own
+ * first control to go to.
  */
-watch(
-  loading,
-  (reading) => {
-    if (reading && props.beside && !root.value?.contains(document.activeElement))
-      header.value?.focusTitle()
-  },
-  { flush: 'post', immediate: true },
-)
+function comeIn() {
+  if (!props.beside || !props.view.atOpener()) return
+  if (failure.value && refusal.value) refusal.value.focus({ preventScroll: true })
+  else header.value?.focusTitle()
+}
+onMounted(comeIn)
+watch(loading, comeIn, { flush: 'post' })
 
 /** What held focus went with the state: a refusal is what to read now, else the title. */
 useFocusKeeper(root, () => {

@@ -687,11 +687,15 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   on the command layer over them, at full width on a window of 620 px or less. The card stays
   mounted under either with any draft, and a document goes with the surface it was opened
   from. The pane and its surface are one dialog with one Tab trap and two named regions: F6
-  and Shift+F6 go between them, to where focus last stood in each; the first Escape inside the
-  document closes it alone and hands focus back to the link that opened it, the next closes
-  the card or the questions, and an Escape in the card closes both. The edge between them is
-  the document's width, kept under `valkama-document-pane-width` and shared with the drawer,
-  and Enter on it folds the document and brings it back. At `/doc?project=…&path=…#…` the
+  and Shift+F6 go between them, to where focus last stood in each. Focus goes from the link
+  into the document whatever its read comes to — its text, a file too large to show, a failed
+  read, no file — so the first Escape is the document's: it closes it alone and hands focus
+  back to the link that opened it, the next closes the card or the questions, and an Escape
+  in the card closes both. The edge between them is the document's width, kept under
+  `valkama-document-pane-width` and shared with the drawer, and Enter on it folds the
+  document and brings it back. Folded, the strip it leaves is named by the words it shows,
+  «Document: <title>», as a window splitter is named by its pane; «Document width» is its
+  description and that it is folded its value. At `/doc?project=…&path=…#…` the
   document is the whole window with nothing of the shell: the address follows the reader, a
   work item's number is text, and there is nothing to close. There the head and the text stand
   in one column as wide as a line of the text, 58ch, in the middle of the window, and a table

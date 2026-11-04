@@ -38,7 +38,8 @@ test('the edge folds the document on Enter and brings it back where it was', asy
     'aria-valuetext',
     'Folded. Enter or a click shows the document again',
   )
-  await expect(edge).toHaveText('Document: The migration plan')
+  await expect(edge.locator('.overlay-resizer-name')).toHaveText('Document: The migration plan')
+  await expect(edge).toHaveAccessibleName('Document: The migration plan')
   const strip = await inWindow(page, edge)
   expect(strip?.width).toBe(32)
   expect(strip?.height).toBe(WINDOW.height)
