@@ -350,7 +350,7 @@ describe('a path in an option of a question', () => {
     })
     await flushPromises()
     for (const label of wrapper.findAll('label'))
-      expect(label.find('button').exists(), label.text()).toBe(false)
+      expect(label.find('button, a, [role="button"]').exists(), label.text()).toBe(false)
     const toggles = wrapper.findAll('button.request-option-toggle')
     expect(toggles).toHaveLength(2)
     for (const toggle of toggles) await toggle.trigger('click')

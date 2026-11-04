@@ -304,6 +304,7 @@ test('a new task is described in the markdown editor, inside the dialog that own
   // A reference stays text here: opening a card from a modal put it behind the dialog.
   await expect(dialog.locator('.markdown-preview')).toContainText(blockedWorkItem.reference)
   await expect(dialog.getByRole('button', { name: blockedWorkItem.reference })).toHaveCount(0)
+  await expect(dialog.getByRole('link', { name: blockedWorkItem.reference })).toHaveCount(0)
   await dialog.getByRole('tab', { name: 'Write', exact: true }).click()
 
   // Ctrl+Enter is the dialog's Create.
