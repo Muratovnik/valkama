@@ -6,6 +6,7 @@ import {
   beginResource,
   cancelResource,
   createResource,
+  holdsResource,
   rejectResource,
   resolveResource,
   resourceSelection,
@@ -84,4 +85,21 @@ test('cancelling a switched key invalidates callbacks without restoring abandone
   assert.equal(cancelled.pendingKey, null)
   assert.equal(cancelled.data, null)
   assert.strictEqual(resolveResource(cancelled, refreshing.generation, 'beta', ['late']), cancelled)
+})
+
+test('a push of what is already held, settled under its key, is no news', () => {
+  const held = resolveResource(
+    beginResource(createResource<{ a: number[] }>(), 'alpha'),
+    1,
+    'alpha',
+    {
+      a: [1],
+    },
+  )
+  assert.equal(holdsResource(held, 'alpha', { a: [1] }), true)
+  assert.equal(holdsResource(held, 'alpha', { a: [2] }), false)
+  assert.equal(holdsResource(held, 'beta', { a: [1] }), false)
+  // A read on the way may bring something else: the push is taken.
+  assert.equal(holdsResource(beginResource(held, 'alpha'), 'alpha', { a: [1] }), false)
+  assert.equal(holdsResource(createResource<{ a: number[] }>(), 'alpha', { a: [1] }), false)
 })

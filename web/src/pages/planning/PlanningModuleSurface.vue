@@ -58,6 +58,7 @@ import {
   beginResource,
   cancelResource,
   createResource,
+  holdsResource,
   rejectResource,
   resolveResource,
 } from '@/shared/api/resourceState.ts'
@@ -220,6 +221,9 @@ const { connection: liveConnection, reconnect } = usePlanningSubscription(
   streamTarget,
   (next) => {
     const key = planningKey.value
+    // The stream's first frame is the space as it stands when the page connects, which
+    // is what the read has just answered; taken as news, it read an open card twice.
+    if (holdsResource(resource.value, key, next)) return
     resource.value = beginResource(resource.value, key)
     resource.value = resolveResource(resource.value, resource.value.generation, key, next)
     version.value += 1

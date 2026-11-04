@@ -92,6 +92,20 @@ export function resolveResource<T>(
   }
 }
 
+/**
+ * Whether the state already holds `data` for `key`, settled, with nothing on the way:
+ * a push of what was just read is then no news. Payloads are compared as JSON, which
+ * is how they arrived.
+ */
+export function holdsResource<T>(state: ResourceState<T>, key: string, data: T): boolean {
+  return (
+    state.status === 'ready' &&
+    state.pendingKey === null &&
+    state.key === key &&
+    JSON.stringify(state.data) === JSON.stringify(data)
+  )
+}
+
 /** Keep stale data visible when a refresh fails; only the pending intent is reverted. */
 export function rejectResource<T>(
   state: ResourceState<T>,
