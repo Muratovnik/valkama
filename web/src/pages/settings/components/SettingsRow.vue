@@ -7,11 +7,19 @@ defineProps<{
   hint?: string
   /** For a control that takes its name from this row's label. */
   labelId?: string
+  /**
+   * The control column is a stack of several things, as a caption over each of two
+   * places or a list of checkboxes: the name stands at its top, on the line of the first.
+   */
+  stack?: boolean
 }>()
 </script>
 
 <template>
-  <div class="settings-row">
+  <div
+    class="settings-row"
+    :class="{ stack }"
+  >
     <span class="settings-row-identity">
       <strong
         :id="labelId"
@@ -46,6 +54,15 @@ defineProps<{
   min-width: 0;
   padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--color-rule);
+
+  /* Centred, a name hung half way down a stack, beside nothing it names. On the first
+     baseline it stands on the line of the stack's first words, wherever they start in it:
+     a caption at the very top, a checkbox's words under the padding of its line. A single
+     control stays centred, because a select drawn with a glyph first gives the glyph's foot
+     as its baseline, and the name would sink by it. */
+  &.stack {
+    align-items: baseline;
+  }
 }
 
 .settings-row-identity {

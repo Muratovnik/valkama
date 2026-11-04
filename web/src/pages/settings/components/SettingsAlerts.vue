@@ -124,6 +124,7 @@ function readinessDetail(answer: AlertReadiness): string {
           :hint="t('alerts.eventsHint')"
           :label-id="EVENTS_LABEL_ID"
           :failure="failureOf('events')"
+          stack
         >
           <div
             class="settings-alerts-control settings-alerts-events"

@@ -417,6 +417,9 @@ checkouts are therefore distinguishable even at the same version.
 - **Settings tells an editor from an app.** The places a session or a file opens in drew
   one monitor for VS Code, Claude Desktop and Codex alike. An editor now draws code
   brackets, and Claude Desktop and Codex a glyph each of their own.
+- **A setting over several controls is named at their top.** «Claude Code», «Codex»,
+  «Other clients» and the notification events stood half way down the places and
+  checkboxes they name; each now stands on the line of the first of them.
 
 ### Removed
 

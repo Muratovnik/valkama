@@ -3,6 +3,7 @@ import type { Page } from '@playwright/test'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
+import { installAlerts } from './alertsFixtures.ts'
 import { installBackend } from './backend.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { projectScope } from './planningFixtures.ts'
@@ -191,4 +192,52 @@ test('Settings diagnostic actions stay readable at working widths', async ({ pag
     expect(spacing.actionGap).toBeGreaterThanOrEqual(10)
     await expectNoSilentClipping(page, `Readable diagnostics at ${width}px`)
   }
+})
+
+// A setting whose control column is a stack — a caption over each of two places, a list of
+// checkboxes — is named on the line of the first thing in it, not half way down: «Claude
+// Code» stood 49px below the first place it names. A row of one control stays centred on it.
+test('a setting is named at the top of a stack and beside a single control', async ({ page }) => {
+  await installBackend(page)
+  await installAlerts(page)
+  await page.setViewportSize({ width: 1500, height: 1800 })
+  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
+  await expect(page.locator('.settings-row').first()).toBeVisible()
+  const rows = await page.locator('.settings-row').evaluateAll((all) =>
+    all.map((row) => {
+      const label = row.querySelector('.settings-row-label')
+      const identity = row.querySelector('.settings-row-identity')?.getBoundingClientRect()
+      const control = row.querySelector('.settings-row-control')
+      const column = control?.getBoundingClientRect()
+      if (!label || !identity || !control || !column) throw new Error('Expected a whole row')
+      // The foot of the first line of words the control column shows.
+      let first = Number.NaN
+      const walker = document.createTreeWalker(control, NodeFilter.SHOW_TEXT)
+      for (let at = walker.nextNode(); at && Number.isNaN(first); at = walker.nextNode()) {
+        const range = document.createRange()
+        range.selectNodeContents(at)
+        const [rect] = range.getClientRects()
+        if (at.textContent?.trim() && rect && rect.height > 0) first = rect.bottom
+      }
+      const words = document.createRange()
+      words.selectNodeContents(label)
+      return {
+        label: label.textContent ?? '',
+        // One control stands at most 44px high; a caption over it, or a second one, is a stack.
+        stack: column.height > 60,
+        fromFirstLine: Math.round(words.getClientRects()[0].bottom - first),
+        fromMiddle: Math.round(identity.top + identity.height / 2 - column.top - column.height / 2),
+      }
+    }),
+  )
+  const stacks = rows.filter(({ stack }) => stack)
+  expect(stacks.map(({ label }) => label)).toEqual([
+    'Events',
+    'Claude Code',
+    'Codex',
+    'Other clients',
+  ])
+  expect(stacks.filter(({ fromFirstLine }) => Math.abs(fromFirstLine) > 3)).toEqual([])
+  const single = rows.filter(({ stack }) => !stack)
+  expect(single.filter(({ fromMiddle }) => Math.abs(fromMiddle) > 2)).toEqual([])
 })

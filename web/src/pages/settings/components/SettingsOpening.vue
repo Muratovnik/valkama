@@ -176,6 +176,7 @@ function selectEditor(value: string) {
       :key="family"
       :label="t(`open.settings.family.${family}`)"
       :hint="t(`open.settings.familyHint.${family}`)"
+      stack
     >
       <span class="settings-opening-lanes">
         <span
