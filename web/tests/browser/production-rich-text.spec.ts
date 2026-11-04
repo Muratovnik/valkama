@@ -294,12 +294,12 @@ test('a new task is described in the markdown editor, inside the dialog that own
   await page.keyboard.type('**first**')
 
   // The preview is the text as the card will draw it, and Write returns to it.
-  await dialog.getByRole('button', { name: 'Preview', exact: true }).click()
+  await dialog.getByRole('radio', { name: 'Preview', exact: true }).click()
   await expect(dialog.locator('.markdown-preview strong')).toHaveText('first')
   // A reference stays text here: opening a card from a modal put it behind the dialog.
   await expect(dialog.locator('.markdown-preview')).toContainText(blockedWorkItem.reference)
   await expect(dialog.getByRole('button', { name: blockedWorkItem.reference })).toHaveCount(0)
-  await dialog.getByRole('button', { name: 'Write', exact: true }).click()
+  await dialog.getByRole('radio', { name: 'Write', exact: true }).click()
 
   // Ctrl+Enter is the dialog's Create.
   await description.focus()

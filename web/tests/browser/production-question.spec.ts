@@ -340,7 +340,7 @@ test('the mark brings the question back from another section', async ({ page }) 
   const { drawer, card } = await openQuestion(page, [asked()])
   await drawer
     .locator('.inspector-tabs')
-    .getByRole('button', { name: 'Relations', exact: true })
+    .getByRole('radio', { name: 'Relations', exact: true })
     .click()
   await expect(card).toBeHidden()
   await drawer.getByRole('button', { name: 'Waiting for an answer', exact: true }).click()

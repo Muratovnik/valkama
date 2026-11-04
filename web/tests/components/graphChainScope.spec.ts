@@ -157,7 +157,7 @@ describe('the whole-space graph and its unlinked items', () => {
     expect(await drawn(graph)).toEqual(['MAIN-3', 'MAIN-4', 'MAIN-5', 'MAIN-6', 'MAIN-7', 'MAIN-8'])
     expect(graph.get('[role="switch"]').attributes('aria-checked')).toBe('true')
     // The open/all filter still works beside it.
-    await graph.get('button[aria-pressed="false"]').trigger('click')
+    await graph.get('[role="radio"][aria-checked="false"]').trigger('click')
     expect(await drawn(graph)).toContain('MAIN-2')
     // The whole space has no root to mark.
     expect(graph.find('.flow-node-root').exists()).toBe(false)

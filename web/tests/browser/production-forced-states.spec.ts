@@ -134,11 +134,14 @@ for (const colorScheme of ['dark', 'light'] as const) {
     await installBackend(page)
     await page.goto(SETTINGS)
 
-    const segment = page.getByRole('group', { name: 'Settings section' }).getByRole('button').nth(1)
-    await expect(segment).toHaveAttribute('aria-pressed', 'false')
+    const segment = page
+      .getByRole('radiogroup', { name: 'Settings section' })
+      .getByRole('radio')
+      .nth(1)
+    await expect(segment).toHaveAttribute('aria-checked', 'false')
     const released = await drawn(page, segment)
     await segment.click()
-    await expect(segment).toHaveAttribute('aria-pressed', 'true')
+    await expect(segment).toHaveAttribute('aria-checked', 'true')
     const pressed = await drawn(page, segment)
     expect(await apartOutsideWords(page, released, pressed), 'a pressed segment').toBeGreaterThan(
       DRAWN,

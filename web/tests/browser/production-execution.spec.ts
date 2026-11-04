@@ -30,7 +30,7 @@ test('the execution section shows the attempt and the launch form is built per c
   await page.locator('.work-item-list .list-open').first().click()
   const drawer = page.locator('.drawer')
   await expect(drawer).toBeVisible()
-  await drawer.getByRole('button', { name: /^Execution$/i }).click()
+  await drawer.getByRole('radio', { name: /^Execution$/i }).click()
 
   // What the client claimed and what the checkout shows, side by side. The
   // second is the half a delivery is checked against, so it has to be there.
@@ -78,7 +78,7 @@ test('the memory section offers exactly what the provider says it can do', async
   )
   await page.locator('.work-item-list .list-open').first().click()
   const drawer = page.locator('.drawer')
-  await drawer.getByRole('button', { name: /^Memory$/i }).click()
+  await drawer.getByRole('radio', { name: /^Memory$/i }).click()
 
   await drawer.getByLabel(/Search knowledge/i).fill('ratchet')
   await drawer.getByRole('button', { name: /^Search$/i }).click()
@@ -117,7 +117,7 @@ test('an old exact session link resolves its work, and its attempt opens the ses
   const drawer = page.locator('.drawer')
   await expect(drawer).toBeVisible()
   await expect(drawer).toContainText(workItemRef.reference)
-  await drawer.getByRole('button', { name: /^Execution$/i }).click()
+  await drawer.getByRole('radio', { name: /^Execution$/i }).click()
   await drawer.getByRole('button', { name: /launched session.* in Codex/i }).click()
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __opened?: string[] }).__opened))

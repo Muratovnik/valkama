@@ -8,7 +8,14 @@
  * nothing owned the answer. A pressed segment is a lighter ground and a heavier
  * label, never the accent color: the accent means selection of an object, and
  * spending it on a view preference makes both meanings weaker.
+ *
+ * To the keyboard and a screen reader it is a radio group, the pattern for one choice of
+ * a few (WAI-ARIA APG): Tab reaches the group once, on the chosen segment, and the arrows,
+ * Home and End move focus and the choice together. It was a group of pressed buttons
+ * before, each its own Tab stop, and the arrows a radio group answers to did nothing.
  */
+import { computed } from 'vue'
+
 // The segment shape stays inline: naming it would have to be exported for the
 // generic component's own declaration, and an export nothing imports is dead
 // weight the dead-code gate is right to reject.
@@ -25,7 +32,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{ 'update:modelValue': [value: T] }>()
 
-/** The segment the model is currently on, which three things ask about. */
+/** The segment the model is currently on, which the marks, the Tab stop and the keys ask about. */
 function isCurrent(option: { value: T }) {
   return option.value === props.modelValue
 }
@@ -34,12 +41,59 @@ function select(option: { value: T; disabled?: boolean }) {
   if (option.disabled || isCurrent(option)) return
   emit('update:modelValue', option.value)
 }
+
+/** The one Tab stop: the chosen segment, or the first that can be chosen when it cannot. */
+const stop = computed(() => {
+  const current = props.options.find((option) => isCurrent(option) && !option.disabled)
+  return (current ?? props.options.find((option) => !option.disabled))?.value
+})
+function tabStop(option: { value: T }) {
+  return option.value === stop.value ? 0 : -1
+}
+
+const STEPS: Record<string, (at: number, last: number) => number> = {
+  ArrowRight: (at) => at + 1,
+  ArrowDown: (at) => at + 1,
+  ArrowLeft: (at) => at - 1,
+  ArrowUp: (at) => at - 1,
+  Home: () => 0,
+  End: (_, last) => last,
+}
+
+/** The next segment that can be chosen in the key's direction, around the ends. */
+function step(key: string, from: number) {
+  const last = props.options.length - 1
+  const forward = key === 'ArrowRight' || key === 'ArrowDown' || key === 'Home'
+  let at = STEPS[key]?.(from, last) ?? from
+  for (let tried = 0; tried <= last; tried += 1) {
+    at = (at + last + 1) % (last + 1)
+    if (!props.options[at]?.disabled) return at
+    at += forward ? 1 : -1
+  }
+  return from
+}
+
+function move(event: KeyboardEvent) {
+  if (!Object.hasOwn(STEPS, event.key) || event.altKey || event.ctrlKey || event.metaKey) return
+  const segment = event.currentTarget as HTMLButtonElement
+  const segments = [...(segment.parentElement?.querySelectorAll('button') ?? [])]
+  const from = segments.indexOf(segment)
+  if (from < 0) return
+  event.preventDefault()
+  const to = step(event.key, from)
+  // Without a scroll: a host that scrolls the row (the card's sections) brings the segment
+  // into it, and a browser asked to show a segment stuck to the top of its scroller moves
+  // the scroller to where the segment would stand unstuck.
+  segments[to]?.focus({ preventScroll: true })
+  const option = props.options[to]
+  if (option) select(option)
+}
 </script>
 
 <template>
   <div
     class="segmented"
-    role="group"
+    role="radiogroup"
     :class="`size-${size}`"
     :aria-label="label"
   >
@@ -48,11 +102,14 @@ function select(option: { value: T; disabled?: boolean }) {
       :key="option.value"
       type="button"
       class="segmented-option"
+      role="radio"
       :class="{ active: isCurrent(option) }"
-      :aria-pressed="isCurrent(option)"
+      :aria-checked="isCurrent(option)"
+      :tabindex="tabStop(option)"
       :disabled="option.disabled"
       :title="option.title"
       @click="select(option)"
+      @keydown="move"
     >
       {{ option.label }}
     </button>

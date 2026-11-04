@@ -43,7 +43,9 @@ describe('the card composer', () => {
     expect(labels(wrapper)).toEqual(['Comment'])
     expect(wrapper.text()).not.toContain('Work report')
     expect(wrapper.find('form input[type="checkbox"]').exists()).toBe(false)
-    expect(wrapper.findAll('form [role="group"][aria-label="What to publish"]')).toHaveLength(0)
+    expect(wrapper.findAll('form [role="radiogroup"][aria-label="What to publish"]')).toHaveLength(
+      0,
+    )
     // The section's heading names the field, so the label is left to a reader.
     expect(wrapper.find('form label[for]').exists()).toBe(false)
     expect(wrapper.get('button[type="submit"]').text()).toBe('Add note')

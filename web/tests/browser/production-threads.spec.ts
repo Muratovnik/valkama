@@ -238,26 +238,28 @@ test('the unresolved view counts, hides and brings back, and is the same after a
   const { drawer } = await openTalkedOn(page)
   const heading = drawer.locator('.section-header').filter({ hasText: 'Discussion' })
   await expect(heading).toContainText('3 unresolved')
-  const view = drawer.getByRole('group', { name: 'Threads to show' })
-  await view.getByRole('button', { name: 'Unresolved 3' }).click()
+  const view = drawer.getByRole('radiogroup', { name: 'Threads to show' })
+  const all = view.getByRole('radio', { name: 'All', exact: true })
+  const open = view.getByRole('radio', { name: 'Unresolved 3' })
+  // One Tab stop, on the choice, and the arrows move focus and the choice together.
+  await expect(all).toHaveAttribute('tabindex', '0')
+  await expect(open).toHaveAttribute('tabindex', '-1')
+  await all.focus()
+  await page.keyboard.press('ArrowRight')
+  await expect(open).toBeFocused()
+  await expect(open).toHaveAttribute('aria-checked', 'true')
   await expect(drawer.getByRole('article', { name: /^Resolved/u })).toHaveCount(0)
   await expect(drawer.locator('.thread-hidden')).toContainText('Hidden as resolved: 1')
   await expect(heading).toContainText('3 unresolved')
 
   await page.reload()
-  await expect(view.getByRole('button', { name: 'Unresolved 3' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  )
+  await expect(open).toHaveAttribute('aria-checked', 'true')
   await expect(drawer.locator('.thread-hidden')).toBeVisible()
 
   await drawer.getByRole('button', { name: 'Show all', exact: true }).click()
   const back = drawer.getByRole('article', { name: /^Resolved/u })
   await expect(back).toBeFocused()
-  await expect(view.getByRole('button', { name: 'All', exact: true })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  )
+  await expect(all).toHaveAttribute('aria-checked', 'true')
 })
 
 test('a question keeps its answer apart from what is said under it', async ({ page }) => {
@@ -290,7 +292,7 @@ test.describe('on a phone in Russian', () => {
       reply(31, 30, 'ответ-без-пробелов'.repeat(12)),
     )
     await page.reload()
-    await expect(drawer.getByRole('group', { name: 'Какие ветки показывать' })).toBeVisible()
+    await expect(drawer.getByRole('radiogroup', { name: 'Какие ветки показывать' })).toBeVisible()
     const thread = threadOf(drawer, 'Должно-раздвинуть'.toLowerCase()).first()
     const fits = async (where: string) => {
       await expectNoSilentClipping(page, where)
@@ -305,7 +307,7 @@ test.describe('on a phone in Russian', () => {
     const form = await thread.locator('.resolve-form').boundingBox()
     const box = await thread.boundingBox()
     expect(form?.width ?? 0).toBeLessThanOrEqual(box?.width ?? 0)
-    await drawer.getByRole('button', { name: /^Неразобранные/u }).click()
+    await drawer.getByRole('radio', { name: /^Неразобранные/u }).click()
     await fits('the unresolved view')
     await expect(drawer.locator('.thread-hidden')).toContainText('Скрыто разобранных: 1')
     await drawer.getByRole('button', { name: 'Показать все', exact: true }).click()

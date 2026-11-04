@@ -5,11 +5,17 @@ import { present } from './present.ts'
 
 type Wrapper = Pick<VueWrapper, 'findAll'>
 
-/** The radio buttons of one single-answer group, in the order they are drawn. */
+/**
+ * The radio buttons of one single-answer group, in the order they are drawn. A group of
+ * them, not any radio group: an editor's Write or Preview is one as well.
+ */
 export const radios = (wrapper: Wrapper, index = 0) =>
-  present(wrapper.findAll('[role="radiogroup"]')[index], `radio group ${index + 1}`).findAll(
-    'input[type="radio"]',
-  )
+  present(
+    wrapper
+      .findAll('[role="radiogroup"]')
+      .filter((group) => group.find('input[type="radio"]').exists())[index],
+    `radio group ${index + 1}`,
+  ).findAll('input[type="radio"]')
 
 /** A radio's visible label: the text of the label element that wraps it. */
 export const radioLabel = (input: { element: Element }) => input.element.parentElement?.textContent

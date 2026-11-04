@@ -53,13 +53,13 @@ describe('the work bar', () => {
   it('holds the view, the grouping, one filter field and the action in one row', () => {
     const wrapper = bar()
     const row = wrapper.get('.workspace-tools')
-    expect(row.find('[role="group"][aria-label="View"]').exists()).toBe(true)
+    expect(row.find('[role="radiogroup"][aria-label="View"]').exists()).toBe(true)
     expect(row.get('input[role="combobox"]').attributes('aria-label')).toBe('Filter work')
     // The grouping arranges the view, so it stands by the view and ahead of the
     // field, whose neighbours narrow the work instead.
     const grouping = row.get(GROUPING).element
     const field = row.get('input[role="combobox"]').element
-    const view = row.get('[role="group"][aria-label="View"]').element
+    const view = row.get('[role="radiogroup"][aria-label="View"]').element
     expect(view.compareDocumentPosition(grouping)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
     expect(grouping.compareDocumentPosition(field)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
     // The one primary action ends the row, not the line of state under it.

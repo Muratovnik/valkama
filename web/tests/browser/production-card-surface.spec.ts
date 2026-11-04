@@ -49,7 +49,7 @@ for (const width of [1440, 390]) {
       node.dataset.firstSurface = ''
     })
 
-    await drawer.getByRole('button', { name: /Relations/iu }).click()
+    await drawer.getByRole('radio', { name: /Relations/iu }).click()
     await drawer.locator('.link-open').first().click()
     const back = drawer.locator('.head-back')
     await expect(back).toBeVisible()
@@ -104,7 +104,7 @@ test('every way out of a card with a draft asks first, and the panel stays while
   await drawer.locator('.drawer-frame-close').click()
   await keep()
 
-  await drawer.getByRole('button', { name: /Relations/iu }).click()
+  await drawer.getByRole('radio', { name: /Relations/iu }).click()
   await drawer.locator('.link-open').first().click()
   await strip.getByRole('button', { name: 'Discard', exact: true }).click()
   await expect(drawer.locator('.head-back')).toBeVisible()
@@ -363,7 +363,7 @@ async function framesOfLink(page: Page, readDelay: number, during?: () => Promis
   const drawer = page.locator('.drawer')
   await expect(drawer.locator('.card-facts')).toBeVisible()
   await expect(drawer).toHaveCSS('transform', 'none')
-  await drawer.getByRole('button', { name: /Relations/iu }).click()
+  await drawer.getByRole('radio', { name: /Relations/iu }).click()
   const left = await drawer.locator('.drawer-frame-name').textContent()
   await page.route('**/api/modules/planning/work-item?*', async (route) => {
     await new Promise((done) => setTimeout(done, readDelay))

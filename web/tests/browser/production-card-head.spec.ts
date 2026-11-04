@@ -264,8 +264,8 @@ for (const width of [1440, 1024, 390]) {
     await expect(pinnedAction).toHaveText('Забрать себе')
     await expect(drawer.locator('.card-facts')).not.toBeInViewport()
 
-    // The sections keep one row, and each one the keyboard reaches is brought into view.
-    const tabs = drawer.locator('.inspector-tabs').getByRole('button')
+    // The sections keep one row, and each one the arrows reach is brought into view.
+    const tabs = drawer.locator('.inspector-tabs').getByRole('radio')
     const tops = await tabs.evaluateAll((nodes) =>
       nodes.map((node) => Math.round(node.getBoundingClientRect().top)),
     )
@@ -273,7 +273,7 @@ for (const width of [1440, 1024, 390]) {
     await tabs.first().focus()
     const count = await tabs.count()
     for (let index = 1; index < count; index += 1) {
-      await page.keyboard.press('Tab')
+      await page.keyboard.press('ArrowRight')
       await expect(tabs.nth(index)).toBeFocused()
       await expect(tabs.nth(index)).toBeInViewport({ ratio: 0.99 })
     }

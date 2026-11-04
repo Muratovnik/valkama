@@ -150,7 +150,7 @@ test('a lane shows its epic’s chain on the board, in every view, and the chip 
     .poll(() => routeState(page))
     .toEqual({ view: 'kanban', chain: 'MAIN-401', chain_scope: 'chain' })
   await expect(tiles(page.locator('.work-item-board'))).resolves.toHaveLength(6)
-  await page.getByRole('button', { name: 'List', exact: true }).click()
+  await page.getByRole('radio', { name: 'List', exact: true }).click()
   await expect(page.locator('tbody tr')).toHaveCount(6)
   await expect(chip).toHaveText('Chain MAIN-401 · 6')
   await chip.click()

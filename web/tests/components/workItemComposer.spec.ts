@@ -101,7 +101,7 @@ describe('WorkItemComposer description', () => {
     const wrapper = mountComposer('ru')
     await typeDescription(wrapper, 'Нужно **срочно**')
     const preview = wrapper
-      .findAll('button[aria-pressed]')
+      .findAll('button[role="radio"]')
       .find((option) => option.text() === 'Просмотр')
     expect(preview).toBeDefined()
     await preview?.trigger('click')
@@ -114,7 +114,7 @@ describe('WorkItemComposer description', () => {
     const wrapper = mountComposer()
     await typeDescription(wrapper, 'draft')
     const preview = wrapper
-      .findAll('button[aria-pressed]')
+      .findAll('button[role="radio"]')
       .find((option) => option.text() === 'Preview')
     await preview?.trigger('click')
     await wrapper.setProps({ open: false })

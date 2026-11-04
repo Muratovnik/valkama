@@ -9,7 +9,10 @@ import { projectScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 async function openSettingsSection(page: Page, name: 'Diagnostics' | 'General') {
-  await page.getByRole('group', { name: 'Settings section' }).getByRole('button', { name }).click()
+  await page
+    .getByRole('radiogroup', { name: 'Settings section' })
+    .getByRole('radio', { name })
+    .click()
 }
 
 test('Settings sections share one measure and one compact control lane', async ({ page }) => {
@@ -24,7 +27,7 @@ test('Settings sections share one measure and one compact control lane', async (
   expect(generalBox).not.toBeNull()
   expect(Math.abs((generalBox?.width ?? 0) - (pageBox?.width ?? 0))).toBeLessThan(2)
 
-  const sectionControl = page.getByRole('group', { name: 'Settings section' })
+  const sectionControl = page.getByRole('radiogroup', { name: 'Settings section' })
   const sectionIntro = page.locator('.settings-page-intro')
   const sectionControlBox = await sectionControl.boundingBox()
   const sectionIntroBox = await sectionIntro.boundingBox()
@@ -72,7 +75,7 @@ test('Settings has nothing to switch modules with and nothing the registry used 
   await expect(page.getByRole('heading', { name: 'Windows notifications' })).toBeVisible()
 
   // The module list is the build's, so there is no section that changes it.
-  const sections = page.getByRole('group', { name: 'Settings section' }).getByRole('button')
+  const sections = page.getByRole('radiogroup', { name: 'Settings section' }).getByRole('radio')
   await expect(sections).toHaveText(['General', 'Diagnostics'])
   for (const section of ['General', 'Diagnostics'] as const) {
     await openSettingsSection(page, section)
@@ -98,10 +101,7 @@ test('a link to the retired Workspace section opens General', async ({ page }) =
       state: { section: 'workspace' },
     }),
   )
-  await expect(page.getByRole('button', { name: 'General' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  )
+  await expect(page.getByRole('radio', { name: 'General' })).toHaveAttribute('aria-checked', 'true')
   await expect(page.getByRole('heading', { name: 'Interface', exact: true })).toBeVisible()
   await expect(page.locator('.route-recovery')).toHaveCount(0)
 })

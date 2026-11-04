@@ -34,9 +34,11 @@ const selectionOwners = new Set([
   'shared/ui/VTextInput.vue',
 ])
 /**
- * Files allowed to author `aria-pressed`. `ToggleChip` is one toggle on its own
- * — a preset that is on or off beside others that are too — rather than one of
- * a row of exclusive choices, which stays the segmented control's.
+ * Files allowed to author `aria-pressed` or a `radio` role. `ToggleChip` is one
+ * toggle on its own — a preset that is on or off beside others that are too —
+ * rather than one of a row of exclusive choices, which stays the segmented
+ * control's: a radio group, each segment a `radio`. A native radio input is a
+ * form's own control and is not counted.
  */
 const segmentedOwners = new Set(['shared/ui/SegmentedControl.vue', 'shared/ui/ToggleChip.vue'])
 /**
@@ -141,7 +143,8 @@ const SOURCE_RULES = [
     // what "pressed" looks like.
     component: true,
     owners: segmentedOwners,
-    when: ({ markup }) => /\baria-pressed\b/.test(markup),
+    when: ({ markup }) =>
+      /\baria-pressed\b/.test(markup) || /\brole\s*=\s*["']radio["']/i.test(markup),
     message: 'a pressed-button group belongs to SegmentedControl',
   },
   {

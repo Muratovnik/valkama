@@ -378,14 +378,14 @@ test('the chain is held in the address: a reload keeps it, and leaving removes i
 
   // Another view keeps the chain: the board draws only its members and root,
   // and carries the same chip to leave it.
-  await page.getByRole('button', { name: 'Kanban', exact: true }).click()
+  await page.getByRole('radio', { name: 'Kanban', exact: true }).click()
   const kept = { view: 'kanban', chain: 'MAIN-264', chain_scope: 'chain' }
   await expect.poll(() => routeState(page)).toEqual(kept)
   await expect(page.locator('.workspace-chip')).toHaveText('Chain MAIN-264 · 17')
   await expect(page.locator('.work-item-board [data-reference]')).toHaveCount(17)
   await page.locator('.workspace-chip').click()
   await expect.poll(() => routeState(page)).toEqual({ view: 'kanban' })
-  await page.getByRole('button', { name: 'Graph', exact: true }).click()
+  await page.getByRole('radio', { name: 'Graph', exact: true }).click()
   await expect(page.locator('.graph')).toHaveAttribute('aria-busy', 'false')
   await expect(chip).toHaveCount(0)
 

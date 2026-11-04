@@ -351,12 +351,19 @@ test('the recurrence gate rejects self-justifying UI disclaimers and generic cla
 })
 
 test('the recurrence gate rejects a locally rebuilt segmented control', () => {
-  const violations = scanFixture(
-    'future/ViewSwitch.vue',
+  for (const source of [
     '<template><button :aria-pressed="active">Board</button></template>',
+    '<template><button role="radio" :aria-checked="active">Board</button></template>',
+  ]) {
+    const violations = scanFixture('future/ViewSwitch.vue', source)
+    assert.equal(violations.length, 1, source)
+    assert.match(violations[0], /belongs to SegmentedControl/)
+  }
+  // A radio input is a form's own control, as a question's choices are.
+  assert.deepEqual(
+    scanFixture('future/Choice.vue', '<template><input type="radio" name="one" /></template>'),
+    [],
   )
-  assert.equal(violations.length, 1)
-  assert.match(violations[0], /belongs to SegmentedControl/)
 })
 
 test('the recurrence gate rejects a locally rebuilt text field but not a checkbox', () => {
@@ -482,7 +489,10 @@ test('layout asks its container, not the window', () => {
 test('the narrow primitive owners remain explicit exceptions', () => {
   const sources = [
     ['shared/ui/VIcon.vue', '<template><svg /></template>'],
-    ['shared/ui/SegmentedControl.vue', '<template><button :aria-pressed="on" /></template>'],
+    [
+      'shared/ui/SegmentedControl.vue',
+      '<template><button role="radio" :aria-checked="on" /></template>',
+    ],
     ['shared/ui/VTextInput.vue', '<template><input type="text" /><textarea /></template>'],
     [
       'shared/ui/DialogFrame.vue',

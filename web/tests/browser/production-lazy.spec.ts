@@ -67,10 +67,10 @@ test('the board downloads neither the graph nor Settings, and reaching for eithe
   // Awaited below, and started here: a response that arrives before anyone is
   // waiting for it is never reported, and the wait runs out the test's time.
   const downloaded = page.waitForResponse(GRAPH_CHUNK)
-  await page.getByRole('group', { name: 'View', exact: true }).hover()
+  await page.getByRole('radiogroup', { name: 'View', exact: true }).hover()
   await expect.poll(() => graph.length).toBe(1)
   await downloaded
-  await page.getByRole('button', { name: 'Graph', exact: true }).click()
+  await page.getByRole('radio', { name: 'Graph', exact: true }).click()
   await expect(page.locator('.graph-canvas.settled')).toBeVisible()
   // Downloaded on intent, so the switch itself had nothing to wait for.
   expect(await panelSeen()).toBe(false)
@@ -87,7 +87,7 @@ test('a slow graph download keeps the board until the loading panel takes its pl
   await openBoard(page)
   const header = await page.locator('.workspace-head').boundingBox()
 
-  await page.getByRole('button', { name: 'Graph', exact: true }).click()
+  await page.getByRole('radio', { name: 'Graph', exact: true }).click()
   await expect.poll(() => held !== undefined).toBe(true)
   // The stage is never blank: the board stays until the panel replaces it.
   await expect(page.locator('.work-item-tile').first()).toBeVisible()
@@ -112,7 +112,7 @@ test('a failed graph download says so in the stage, and Retry downloads it again
   await openBoard(page)
   const header = await page.locator('.workspace-head').boundingBox()
 
-  await page.getByRole('button', { name: 'Graph', exact: true }).click()
+  await page.getByRole('radio', { name: 'Graph', exact: true }).click()
   const failure = page.locator('.workspace-stage [role="alert"]')
   await expect(failure).toContainText('Could not load this view')
   await expect(failure).toContainText('This part of the interface did not download.')

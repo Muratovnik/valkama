@@ -209,12 +209,12 @@ describe('MarkdownEditor', () => {
 
   it('switches between writing and preview from its own toolbar, which the host can bind', async () => {
     const { wrapper } = mountEditor()
-    const switcher = wrapper.get('[role="group"][aria-label="Write or preview"]')
-    expect(switcher.get('[aria-pressed="true"]').text()).toBe('Write')
+    const switcher = wrapper.get('[role="radiogroup"][aria-label="Write or preview"]')
+    expect(switcher.get('[aria-checked="true"]').text()).toBe('Write')
     await switcher.findAll('button')[1]?.trigger('click')
     expect(wrapper.emitted('update:preview')).toEqual([[true]])
     expect(wrapper.find('.markdown-preview').exists()).toBe(true)
-    expect(switcher.get('[aria-pressed="true"]').text()).toBe('Preview')
+    expect(switcher.get('[aria-checked="true"]').text()).toBe('Preview')
   })
 
   it('has no foot without a host’s action or a refusal', () => {

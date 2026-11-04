@@ -81,7 +81,7 @@ describe('a text answer to a question', () => {
     const wrapper = card(entry)
     const view = (name: string) =>
       present(
-        wrapper.findAll('button[aria-pressed]').find((control) => control.text() === name),
+        wrapper.findAll('[role="radio"]').find((control) => control.text() === name),
         name,
       )
     // Asked while the answer is shown as a preview, the empty answer is
@@ -107,6 +107,6 @@ describe('a text answer to a question', () => {
   })
 
   it('offers no write-or-preview switch for a question without a text answer', () => {
-    expect(card().find('button[aria-pressed]').exists()).toBe(false)
+    expect(card().find('button[role="radio"]').exists()).toBe(false)
   })
 })
