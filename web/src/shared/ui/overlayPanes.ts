@@ -76,10 +76,9 @@ export function useSurfaceGlide(surface: Ref<HTMLElement | null>, change: WatchS
   )
 }
 
+/** A pane folded away is inert, so focus sent there stays where it was. */
 const reachable = (element: HTMLElement | undefined | null): element is HTMLElement =>
-  Boolean(element?.isConnected) &&
-  !element?.closest('[inert]') &&
-  Boolean(element?.checkVisibility({ visibilityProperty: true }))
+  Boolean(element?.isConnected) && Boolean(element?.checkVisibility({ visibilityProperty: true }))
 
 /**
  * F6 and Shift+F6 go to the other pane, to where focus last was in it, else to its title,
