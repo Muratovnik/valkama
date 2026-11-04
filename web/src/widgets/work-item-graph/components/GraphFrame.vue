@@ -309,14 +309,16 @@ function onOpenBlur() {
   }
 }
 
-/* The header is the row and the edge under it. Folded, it is the whole frame. */
+/* The header is the row and the edge under it. Folded, it is the whole frame.
+   The edge keeps a gap above it, so counts wrapped to a second line never sit
+   on it. */
 .graph-frame-head {
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 0 var(--space-1);
+  gap: var(--space-1);
   align-items: center;
-  padding: var(--space-1) var(--space-3) var(--space-2) var(--space-1);
+  padding: 0 var(--space-3) var(--space-2) var(--space-1);
   color: var(--color-text-muted);
   font: var(--font-line);
   pointer-events: auto;

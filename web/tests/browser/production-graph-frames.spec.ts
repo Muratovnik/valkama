@@ -142,3 +142,21 @@ for (const width of [1500, 390]) {
     await expect(fold).toBeInViewport()
   })
 }
+
+test('a header’s counts, wrapped to a second line, stay clear of its edge', async ({ page }) => {
+  await page.setViewportSize({ width: 1500, height: 900 })
+  await serveBroadSpace(page)
+  await page.goto(graphRoute({}))
+  await expect(page.locator('.graph-canvas.settled')).toBeVisible()
+  const gaps = await page.locator('.graph-frame:not(.folded)').evaluateAll((frames) =>
+    frames.map((frame) => {
+      const texts = [...frame.querySelectorAll('.graph-frame-head .graph-frame-count')]
+      const edge = frame.querySelector('.frame-progress')?.getBoundingClientRect()
+      const lowest = Math.max(...texts.map((text) => text.getBoundingClientRect().bottom))
+      return edge ? edge.top - lowest : Number.NaN
+    }),
+  )
+  // The broad space's narrow open frames wrap their counts under the name.
+  expect(gaps.length).toBeGreaterThan(2)
+  expect(Math.min(...gaps)).toBeGreaterThanOrEqual(2)
+})
