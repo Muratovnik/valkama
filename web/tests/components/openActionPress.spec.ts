@@ -224,7 +224,7 @@ describe('a session long silent', () => {
     const panel = document.querySelector('[role="dialog"]')?.textContent ?? ''
     expect(panel).toContain('Last sign of it:')
     // In the units every span of the app takes; the exact span is the browser spec's, on its clock.
-    expect(panel).toMatch(/\d+\u{A0}d(?: \d+\u{A0}h)? ago\./u)
+    expect(panel).toMatch(/\d+\u{A0}d(?:\u{A0}\d+\u{A0}h)? ago\./u)
     expect(panel).toContain('a second process would write to the same transcript')
     expect(panel.indexOf('a second process')).toBeLessThan(panel.indexOf(COPY_LABEL))
     expect(opened).not.toHaveBeenCalled()
