@@ -313,4 +313,12 @@
   .label-chip[data-active] & {
     background: var(--color-chip-face-raised);
   }
+
+  /* A forced palette clears that ground, which was the chip's whole boundary, and a label
+     read as one more word of the line, a filter to press as plain text. The outline takes
+     no room, so the chip keeps its size; the word inside keeps its padding from it. */
+  @media (forced-colors: active) {
+    outline: 1px solid;
+    outline-offset: -1px;
+  }
 }

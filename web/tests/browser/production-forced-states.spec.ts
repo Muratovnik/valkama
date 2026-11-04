@@ -225,3 +225,32 @@ for (const colorScheme of ['dark', 'light'] as const) {
     )
   })
 }
+
+for (const colorScheme of ['dark', 'light'] as const) {
+  test(`in the ${colorScheme} forced palette a card's label keeps the edge of its chip`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme, forcedColors: 'active' })
+    await page.setViewportSize({ width: 1500, height: 900 })
+    await installDiscussionBackend(page)
+    await page.goto(BOARD)
+    await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
+    const drawer = page.locator('.drawer')
+    await expect(drawer).toHaveCSS('transform', 'none')
+    const chip = drawer.locator('.card-labels .label-chip').first()
+    await expect(chip).toContainText('platform')
+    // The palette clears the chip's ground, which was its whole boundary: the label read as a
+    // word beside the others. Taken away again, whatever draws the edge must change pixels.
+    // Nothing is left out as words: its words are the same in both pictures, and the face
+    // they are read from is the chip itself, edge and all.
+    const whole = { bottom: 0, left: 0, right: 0, top: 0 }
+    const kept = { ...(await drawn(page, chip)), words: whole }
+    // Through the style object: the app's policy refuses a style element.
+    await chip.locator('.chip-face').evaluate((face) => {
+      face.style.setProperty('outline', 'none', 'important')
+      face.style.setProperty('border-color', 'transparent', 'important')
+    })
+    const bare = { ...(await drawn(page, chip)), words: whole }
+    expect(await apartOutsideWords(page, kept, bare), 'the chip edge').toBeGreaterThan(DRAWN)
+  })
+}

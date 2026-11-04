@@ -250,6 +250,9 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- **A label stays a chip in a forced palette.** High-contrast modes clear the ground that
+  was a label chip's only boundary, so a card's and a tile's labels read as plain words, a
+  filter to press with nothing showing it could be pressed. A chip now draws its edge there.
 - **A step's holder stands as far from its dot as the words before it.** «завершил ·» put a
   word's space before the dot and twelve pixels after it; the dot now has the same room on
   both sides, as the dots of a card's identity line do. On finished work «Ранее отвечал:» is
