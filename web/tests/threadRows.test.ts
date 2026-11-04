@@ -127,11 +127,26 @@ describe('where a thread stands', () => {
 })
 
 describe('the unresolved view', () => {
-  it('counts comment and report roots with no mark, and neither replies nor questions', () => {
+  it('counts comment and report roots with no mark, and no reply as a thread of its own', () => {
     const report = root(3, 3, { kind: 'report', body: '', report: { done: 'd', next: 'n' } })
-    expect(
-      threadCounts([root(1, 1), root(2, 2, { resolution: MARK }), report, reply(4, 1, 4)]),
-    ).toEqual({ threads: 3, unresolved: 2 })
+    const rows = threadGroups(
+      [root(1, 1), root(2, 2, { resolution: MARK }), report, reply(4, 1, 4)],
+      [],
+    )
+    expect(threadCounts(rows)).toEqual({ markable: 3, threads: 3, unresolved: 2 })
+  })
+
+  it('counts what the view keeps: a waiting question and replies with nothing over them', () => {
+    // The view showed a waiting question among the unresolved while its count left it out,
+    // so «Unresolved 1» stood over two threads.
+    const rows = threadGroups(
+      [root(1, 1), reply(2, 0, 2, { reply_to: null, reply_to_request: 'unread' })],
+      [asked('waits', 1, 'pending'), asked('closed', 1)],
+    )
+    expect(threadCounts(rows)).toEqual({ markable: 1, threads: 4, unresolved: 3 })
+    expect(threadCounts(rows).unresolved).toBe(
+      rows.filter((row) => isUnresolved(row, new Set())).length,
+    )
   })
 
   it('keeps open threads, waiting questions and replies with nothing to read them under', () => {

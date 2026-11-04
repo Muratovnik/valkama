@@ -283,9 +283,10 @@ describe('the filter', () => {
   })
 
   it('counts threads in the heading, both numbers in one unit and each named', () => {
-    // Two threads hold four entries: a reply is not a thread, and a question is one.
+    // Two threads hold four entries: a reply is not a thread, and a question is one, and
+    // while it waits, an unresolved one, as the unresolved view shows it.
     const replied = card([root(1), reply(2, 1), root(3, { resolution: MARK })])
-    expect(count(open(replied, { questions: [asked()] }))).toBe('3 threads · 1 unresolved')
+    expect(count(open(replied, { questions: [asked()] }))).toBe('3 threads · 2 unresolved')
     expect(count(open(card([root(1, { resolution: MARK }), reply(2, 1)])))).toBe('1')
   })
 
@@ -313,7 +314,7 @@ describe('the filter', () => {
     const wrapper = open(card(talked()))
     await unresolved(wrapper).trigger('click')
     expect(entryIds(wrapper)).toEqual(['work-report-3', 'work-report-1'])
-    expect(wrapper.get('.thread-hidden').text()).toContain('Hidden as resolved: 1')
+    expect(wrapper.get('.thread-hidden').text()).toContain('1 resolved thread hidden')
     await getButton(wrapper, 'Show all').trigger('click')
     await flushPromises()
     expect(entryIds(wrapper)).toEqual(['work-report-3', 'work-report-2', 'work-report-1'])
@@ -325,7 +326,7 @@ describe('the filter', () => {
     const wrapper = open(card([root(1, { resolution: MARK })]))
     await getButton(wrapper, 'Unresolved 0').trigger('click')
     expect(wrapper.get('.thread-empty').text()).toBe('No unresolved threads.')
-    expect(wrapper.get('.thread-hidden').text()).toContain('Hidden as resolved: 1')
+    expect(wrapper.get('.thread-hidden').text()).toContain('1 resolved thread hidden')
   })
 
   it('remembers the choice for the window', async () => {
@@ -375,7 +376,7 @@ describe('the filter', () => {
     // 1 has the open form and 3 the words set aside, so neither goes; only 2 is hidden.
     expect(entryIds(wrapper)).toEqual(['work-report-3', 'work-report-1'])
     expect(thread(wrapper, 3).text()).toContain('Draft')
-    expect(wrapper.get('.thread-hidden').text()).toContain('Hidden as resolved: 1')
+    expect(wrapper.get('.thread-hidden').text()).toContain('1 resolved thread hidden')
   })
 
   it('never hides the report the card names as its outcome', async () => {

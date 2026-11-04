@@ -271,7 +271,7 @@ test('the unresolved view counts, hides and brings back, and is the same after a
   await expect(open).toBeFocused()
   await expect(open).toHaveAttribute('aria-checked', 'true')
   await expect(drawer.getByRole('article', { name: /^Resolved/u })).toHaveCount(0)
-  await expect(drawer.locator('.thread-hidden')).toContainText('Hidden as resolved: 1')
+  await expect(drawer.locator('.thread-hidden')).toContainText('1 resolved thread hidden')
   await expect(heading).toContainText('3 unresolved')
 
   await page.reload()
@@ -282,6 +282,22 @@ test('the unresolved view counts, hides and brings back, and is the same after a
   const back = drawer.getByRole('article', { name: /^Resolved/u })
   await expect(back).toBeFocused()
   await expect(all).toHaveAttribute('aria-checked', 'true')
+})
+
+test('the unresolved count is what the view shows, a waiting question among it', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  const { backend, card, drawer } = await openQuestion(page, [asked()])
+  backend.item.comments.push(...talkedOn())
+  await page.reload()
+  await expect(card).toBeVisible()
+  const heading = drawer.locator('.section-header').filter({ hasText: 'Discussion' })
+  await expect(heading).toContainText('5 threads · 4 unresolved')
+  const open = drawer.getByRole('radio', { name: 'Unresolved 4' })
+  await open.click()
+  await expect(drawer.locator('.thread > li')).toHaveCount(4)
+  await expect(drawer.locator('.thread-hidden')).toContainText('1 resolved thread hidden')
 })
 
 test('a question keeps its answer apart from what is said under it', async ({ page }) => {
@@ -331,7 +347,7 @@ test.describe('on a phone in Russian', () => {
     expect(form?.width ?? 0).toBeLessThanOrEqual(box?.width ?? 0)
     await drawer.getByRole('radio', { name: /^Неразобранные/u }).click()
     await fits('the unresolved view')
-    await expect(drawer.locator('.thread-hidden')).toContainText('Скрыто разобранных: 1')
+    await expect(drawer.locator('.thread-hidden')).toContainText('Скрыта 1 разобранная ветка')
     await drawer.getByRole('button', { name: 'Показать все', exact: true }).click()
     await fits('a folded thread')
     await expect(

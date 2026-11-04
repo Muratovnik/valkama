@@ -245,6 +245,11 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- **A card's unresolved count is what the unresolved view shows.** «Unresolved N» and the
+  heading counted comment threads only, while the view also kept a question still waiting
+  for its answer, so the number stood one short of the rows under it. A waiting question
+  now counts, and the line under the view says what it hides in threads: «1 resolved thread
+  hidden», «Скрыто 5 разобранных веток».
 - **Escape keeps a thread's decision until you say to drop it.** In a card, Escape or Cancel
   in the line that marks a thread resolved closed it and dropped what was typed in it. With
   words in it they now ask «Discard this draft decision?», as a reply's field does, and a

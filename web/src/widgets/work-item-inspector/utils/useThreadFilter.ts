@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useStorage } from '@vueuse/core'
 
 import { threadCounts } from '@/widgets/work-item-inspector/utils/threadRows.ts'
-import type { ThreadComment, ThreadFilter } from '@/widgets/work-item-inspector/utils/threadRows.ts'
+import type { ThreadFilter, ThreadRow } from '@/widgets/work-item-inspector/utils/threadRows.ts'
 
 /**
  * How many threads are still open, and which of them to show.
@@ -14,9 +14,9 @@ import type { ThreadComment, ThreadFilter } from '@/widgets/work-item-inspector/
  * that refuses it keeps the choice for as long as the page. With no thread to filter there
  * is no filter, whatever was chosen on the last card.
  */
-export function useThreadFilter(comments: () => readonly ThreadComment[]) {
+export function useThreadFilter(rows: () => readonly ThreadRow[]) {
   const { t } = useI18n()
-  const counts = computed(() => threadCounts(comments()))
+  const counts = computed(() => threadCounts(rows()))
   const chosen = useStorage<ThreadFilter>(
     'valkama-thread-filter',
     'all',
@@ -28,7 +28,7 @@ export function useThreadFilter(comments: () => readonly ThreadComment[]) {
     },
   )
   const filter = computed<ThreadFilter>(() =>
-    counts.value.threads > 0 && chosen.value === 'unresolved' ? 'unresolved' : 'all',
+    counts.value.markable > 0 && chosen.value === 'unresolved' ? 'unresolved' : 'all',
   )
   const options = computed(() => [
     { label: t('threads.filterAll'), value: 'all' as const },

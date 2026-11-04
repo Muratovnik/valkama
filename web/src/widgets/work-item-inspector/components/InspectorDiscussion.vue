@@ -101,10 +101,9 @@ const {
   counts,
   filter: threadFilter,
   options: filterOptions,
-} = useThreadFilter(() => props.item.comments)
+} = useThreadFilter(() => threadGroups(props.item.comments, props.questions))
 const headingCount = computed(() => {
-  const threads = threadGroups(props.item.comments, props.questions).length
-  const open = counts.value.unresolved
+  const { threads, unresolved: open } = counts.value
   if (!threads) return ''
   return open
     ? `${t('threads.threadCount', threads)} · ${t('threads.unresolvedCount', open)}`
@@ -273,7 +272,7 @@ defineExpose({ askOutcome, discussStep, revealQuestion })
       :count="headingCount"
     />
     <SegmentedControl
-      v-if="counts.threads"
+      v-if="counts.markable"
       v-model="chosenFilter"
       class="thread-filter"
       size="compact"

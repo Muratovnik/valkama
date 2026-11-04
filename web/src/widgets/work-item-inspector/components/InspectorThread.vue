@@ -283,7 +283,7 @@ defineExpose({ revealQuestion })
     v-if="hiddenCount"
     class="thread-hidden"
   >
-    {{ t('threads.hidden', { n: hiddenCount }) }}
+    {{ t('threads.hidden', hiddenCount) }}
     <VButton
       variant="ghost"
       size="inline"

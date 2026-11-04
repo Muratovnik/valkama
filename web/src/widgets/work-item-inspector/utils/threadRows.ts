@@ -133,14 +133,23 @@ export function threadRows(
   ]
 }
 
-/** How many threads can carry the mark, and how many carry none: reports and comments. */
-export function threadCounts(comments: readonly ThreadComment[]) {
-  const roots = comments.filter((comment) => isRoot(comment))
+/**
+ * How many threads there are, and how many the unresolved view keeps by their own standing:
+ * a question counts as a thread, and while it waits as an open one. The count used to read
+ * the comments alone, so «Unresolved 3» stood over four threads whenever a question waited.
+ * What the view keeps for the reader's hands — a thread marked or answered while it stands,
+ * a form still open — is not counted: it is settled, and stays only until the view changes.
+ */
+export function threadCounts(rows: readonly ThreadRow[]) {
   return {
-    threads: roots.length,
-    unresolved: roots.filter((root) => root.resolution === null).length,
+    /** Threads that can carry the mark: the filter stands only where one does. */
+    markable: rows.filter((row) => row.kind === 'comment').length,
+    threads: rows.length,
+    unresolved: rows.filter((row) => isUnresolved(row, NONE_KEPT)).length,
   }
 }
+
+const NONE_KEPT: ReadonlySet<string> = new Set()
 
 /**
  * Whether the unresolved view shows a thread: a comment or report with no mark, a question
