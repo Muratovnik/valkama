@@ -180,12 +180,15 @@ defineExpose({ box: (index: number) => boxes()[index] ?? null, bring, indexOf, t
     margin-block-start: var(--space-4);
   }
 
-  /* The mark is a line, not only a tone, so a forced palette keeps it. */
+  /* The mark is a line, not only a tone, so a forced palette keeps it. How far it reaches
+     into the gutter is the host's to say, which knows how wide the gutter is. */
   &.is-target {
+    --document-block-reach: var(--document-mark-reach, var(--space-3));
+
     padding-block: var(--space-1);
-    padding-inline-start: calc(var(--space-3) - 2px);
+    padding-inline-start: calc(var(--document-block-reach) - 2px);
     margin-block: calc(-1 * var(--space-1));
-    margin-inline-start: calc(-1 * var(--space-3));
+    margin-inline-start: calc(-1 * var(--document-block-reach));
     border-inline-start: 2px solid var(--color-rule-strong);
     background: var(--color-surface-active);
     border-inline-start-color: var(--color-accent);

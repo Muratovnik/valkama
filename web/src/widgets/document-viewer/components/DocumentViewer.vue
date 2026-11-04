@@ -451,11 +451,19 @@ async function copyPath() {
   outline: none;
 }
 
+/* A narrow host gives the text more of its width. The text keeps a step more than the head,
+   as on a wide one, and the mark a target gets reaches less far into that gutter: with the
+   wide reach its ring stood on the pane's edge, and now it has the room it has above. */
 @container overlay (width <= 560px) {
   .document-head,
-  .document-status,
-  .document-body {
+  .document-status {
     padding-inline: var(--space-4);
+  }
+
+  .document-body {
+    --document-mark-reach: var(--space-2);
+
+    padding-inline: var(--space-5);
   }
 }
 </style>
