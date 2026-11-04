@@ -10,8 +10,10 @@
  * `InspectorThread`, which takes the questions as a list and stands them among the
  * comments, so a read of them that failed is said here: not knowing is not none.
  *
- * How many threads are still open stands in the heading whichever way the list is
- * filtered (`useThreadFilter`).
+ * How many threads there are and how many are still open stand in the heading whichever
+ * way the list is filtered (`useThreadFilter`), both counted in threads: a question is one,
+ * a reply is part of one. The first number used to count every entry, replies included,
+ * beside a second that counted threads, so «11 · 5 unresolved» compared two units.
  *
  * A person writes comments here, in the shared markdown editor. Work reports are
  * how agents write, through their tools, and the thread shows them. The form
@@ -31,6 +33,7 @@ import { useI18n } from 'vue-i18n'
 import InspectorOutcomeForm from '@/widgets/work-item-inspector/components/InspectorOutcomeForm.vue'
 import InspectorThread from '@/widgets/work-item-inspector/components/InspectorThread.vue'
 import { anchorState } from '@/widgets/work-item-inspector/utils/checklistAnchor.ts'
+import { threadGroups } from '@/widgets/work-item-inspector/utils/threadRows.ts'
 import { useDraftSource } from '@/widgets/work-item-inspector/utils/useDraftGuard.ts'
 import { useInspectorMutation } from '@/widgets/work-item-inspector/utils/useInspectorMutation.ts'
 import type { StateMove } from '@/widgets/work-item-inspector/utils/useInspectorWrites.ts'
@@ -99,11 +102,13 @@ const {
   filter: threadFilter,
   options: filterOptions,
 } = useThreadFilter(() => props.item.comments)
-const entryCount = computed(() => {
-  const entries = props.item.comments.length + props.questions.length || ''
-  return counts.value.unresolved
-    ? `${entries} · ${t('threads.unresolvedCount', counts.value.unresolved)}`
-    : entries
+const headingCount = computed(() => {
+  const threads = threadGroups(props.item.comments, props.questions).length
+  const open = counts.value.unresolved
+  if (!threads) return ''
+  return open
+    ? `${t('threads.threadCount', threads)} · ${t('threads.unresolvedCount', open)}`
+    : threads
 })
 
 const suggest = workItemSuggest(
@@ -265,7 +270,7 @@ defineExpose({ askOutcome, discussStep, revealQuestion })
   <section class="discussion">
     <SectionHeader
       :title="t('workItem.discussion')"
-      :count="entryCount"
+      :count="headingCount"
     />
     <SegmentedControl
       v-if="counts.threads"

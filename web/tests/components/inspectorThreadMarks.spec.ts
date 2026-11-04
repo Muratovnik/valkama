@@ -2,13 +2,14 @@
  * The mark on a thread, the thread of a question and the filter that reads by the mark.
  */
 import { nextTick } from 'vue'
+import { createI18n } from 'vue-i18n'
 
 import { flushPromises } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { replyInThread, resolveThread } from '@/shared/api/planningApi.ts'
-import { messages } from '@/shared/i18n/index.ts'
+import { messages, pluralRules } from '@/shared/i18n/index.ts'
 
 import { getButton } from '../fixtures/workItem.ts'
 import { requestEntry } from '../support/inputRequests.ts'
@@ -48,6 +49,7 @@ function asked() {
 }
 const talked = () => [root(1), root(2, { resolution: MARK }), root(3)]
 const unresolved = (wrapper: VueWrapper) => getButton(wrapper, 'Unresolved 2')
+const count = (wrapper: VueWrapper) => wrapper.get('.section-header-count').text()
 
 describe('a question has a thread too', () => {
   it('replies under the question, shows the replies there, and offers no mark', async () => {
@@ -257,6 +259,27 @@ describe('the filter', () => {
     expect(wrapper.get('.section-header').text()).toContain('2 unresolved')
     await unresolved(wrapper).trigger('click')
     expect(wrapper.get('.section-header').text()).toContain('2 unresolved')
+  })
+
+  it('counts threads in the heading, both numbers in one unit and each named', () => {
+    // Two threads hold four entries: a reply is not a thread, and a question is one.
+    const replied = card([root(1), reply(2, 1), root(3, { resolution: MARK })])
+    expect(count(open(replied, { questions: [asked()] }))).toBe('3 threads · 1 unresolved')
+    expect(count(open(card([root(1, { resolution: MARK }), reply(2, 1)])))).toBe('1')
+  })
+
+  it.each([
+    ['en', 1, '1 thread · 1 unresolved'],
+    ['en', 5, '5 threads · 5 unresolved'],
+    ['ru', 1, '1 ветка · 1 неразобранная'],
+    ['ru', 2, '2 ветки · 2 неразобранных'],
+    ['ru', 5, '5 веток · 5 неразобранных'],
+    ['ru', 11, '11 веток · 11 неразобранных'],
+    ['ru', 21, '21 ветка · 21 неразобранная'],
+  ] as const)('words the heading in %s for %i threads', (locale, n, words) => {
+    const i18n = createI18n({ legacy: false, locale, messages, pluralRules })
+    const { t } = i18n.global
+    expect(`${t('threads.threadCount', n)} · ${t('threads.unresolvedCount', n)}`).toBe(words)
   })
 
   it('does not stand on a card with no comment thread', () => {
