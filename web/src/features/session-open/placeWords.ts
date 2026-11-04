@@ -26,17 +26,36 @@ export function whereWords(t: Translate, place: PlaceName): string {
   return t(`open.where.${place.opened_host || place.opened_in}`)
 }
 
+/** Where a link of each scheme opens: an editor is its own place, a client's link its app's. */
+const PLACE_OF_SCHEME: Record<string, PlaceName> = {
+  'claude': { opened_in: 'app', opened_host: 'claude-desktop' },
+  'codex': { opened_in: 'app', opened_host: 'codex-app' },
+  // A link that resumes the CLI opens a terminal on the session's folder.
+  'claude-cli': { opened_in: 'terminal', opened_host: '' },
+}
+
+/** Where one step leads, when the step says; a copy or the app's own opening names none. */
+function placeOfStep(step: OpenAction['steps'][number]): PlaceName | null {
+  if (step.kind === 'focus-folder' || step.kind === 'open-file')
+    return { opened_in: 'ide', opened_host: step.ide }
+  if (step.kind === 'open-link')
+    return PLACE_OF_SCHEME[step.scheme] ?? { opened_in: 'ide', opened_host: step.scheme }
+  return null
+}
+
 /**
- * What a button for one action says. An editor's link follows the window just
- * opened; an action whose steps the app alone knows is the opening itself.
+ * What a button for one action says, standing on its own: where it leads, as the panel
+ * offers actions one at a time and a later one is read without the one before it. An
+ * action whose steps the app alone knows is the opening itself; one that names its place
+ * in its own words (a terminal, Claude Desktop) or opens none (a copy) says no more.
  */
-export function actionKey(action: OpenAction): string {
+export function actionWords(t: Translate, action: OpenAction): string {
   const step = action.steps.find(({ kind }) => kind !== 'explain')
-  if (!step) return 'session.open'
-  if (step.kind !== 'open-link') return `open.action.${step.kind}`
-  return ['claude', 'claude-cli', 'codex'].includes(step.scheme)
-    ? 'open.action.open-link'
-    : 'open.action.open-link-in-window'
+  if (!step) return t('session.open')
+  const place = placeOfStep(step)
+  return place
+    ? t(`open.action.${step.kind}`, { where: whereWords(t, place) })
+    : t(`open.action.${step.kind}`)
 }
 
 export function refusalWords(t: Translate, refusal: Refusal): string {

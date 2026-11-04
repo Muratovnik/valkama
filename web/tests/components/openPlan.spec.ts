@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { openTarget, prepareOpen, REFUSAL_REASONS } from '@/features/session-open/openPlan.ts'
 import type { Outcome } from '@/features/session-open/openPlan.ts'
-import { actionKey, outcomeWords, placeKey } from '@/features/session-open/placeWords.ts'
+import { actionWords, outcomeWords, placeKey } from '@/features/session-open/placeWords.ts'
 
 import {
   APP_REFUSALS,
@@ -188,11 +188,11 @@ describe('opening in a browser', () => {
     expect(opened).not.toHaveBeenCalled()
     expect(outcome).toMatchObject({ status: 'next', notice: { reason: 'live-in-terminal' } })
     if (outcome.status !== 'next') return
-    expect(actionKey(outcome.next)).toBe('open.action.focus-folder')
+    expect(actionWords(i18n.global.t, outcome.next)).toBe('Open the project window in VS Code')
     const window = await outcome.next.run()
     expect(opened.mock.calls.map(([link]) => link)).toEqual([FOLDER_LINK])
     if (window.status !== 'next') throw new Error('expected the session after the window')
-    expect(actionKey(window.next)).toBe('open.action.open-link-in-window')
+    expect(actionWords(i18n.global.t, window.next)).toBe('Open the session in VS Code')
   })
 
   it('hands a panel the plan’s actions in order with none of them run', async () => {

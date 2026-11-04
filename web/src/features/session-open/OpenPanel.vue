@@ -19,7 +19,7 @@ import { useI18n } from 'vue-i18n'
 
 import type { OpenAction, Outcome, Refusal } from '@/features/session-open/openPlan.ts'
 import {
-  actionKey,
+  actionWords,
   outcomeWords,
   refusalWords,
   whereWords,
@@ -68,7 +68,7 @@ const look = computed(() =>
 /** The actions as the panel offers them: the next to take leads, what lies ahead waits. */
 const steps = computed(() =>
   actions.value.map((action, index) => ({
-    label: t(actionKey(action)),
+    label: actionWords(t, action),
     variant: index === reached.value ? ('primary' as const) : ('secondary' as const),
     waiting: index > reached.value,
   })),

@@ -172,9 +172,9 @@ describe('SessionContext', () => {
     await flushPromises()
     expect(opened).not.toHaveBeenCalled()
 
-    await press('Open the project window')
+    await press('Open the project window in VS Code')
     expect(opened.mock.calls.map(([link]) => link)).toEqual([FOLDER_LINK])
-    await press('Open the session in it')
+    await press('Open the session in VS Code')
     expect(opened.mock.calls.map(([link]) => link)).toEqual([FOLDER_LINK, SESSION_LINK])
     wrapper.unmount()
   })

@@ -116,8 +116,8 @@ test('two steps stand in order, the second after the first, and focus goes with 
   await openCard(page)
   await page.locator('.drawer .card-holder button.open-action').click()
   const panel = page.getByRole('dialog', { name: 'Open session' })
-  const first = panel.getByRole('button', { name: 'Open the project window' })
-  const second = panel.getByRole('button', { name: 'Open the session in it' })
+  const first = panel.getByRole('button', { name: 'Open the project window in VS Code' })
+  const second = panel.getByRole('button', { name: 'Open the session in VS Code' })
   await expect(first).toBeFocused()
   await expect(second).toBeDisabled()
   expect(await openedLinks(page)).toEqual([])
@@ -147,7 +147,7 @@ test('Escape closes the panel of a running session and gives focus back to its b
   const panel = page.getByRole('dialog', { name: 'The session is running' })
   await expect(panel).toContainText('a second copy would write to the same session')
   await expect(panel).toContainText('See it in VS Code')
-  const first = panel.getByRole('button', { name: 'Open the project window' })
+  const first = panel.getByRole('button', { name: 'Open the project window in VS Code' })
   await expect(first).toBeFocused()
 
   // The panel keeps Tab inside it while it stands.
@@ -179,7 +179,9 @@ test('a session long silent warns first, and resumes only on its own press', asy
   const resume = panel.getByRole('button', { name: 'Copy the command, if the window is closed' })
   await expect(resume).toBeVisible()
   // Focus stands on the way to look at it, and walking those steps never reaches the offer.
-  await expect(panel.getByRole('button', { name: 'Open the project window' })).toBeFocused()
+  await expect(
+    panel.getByRole('button', { name: 'Open the project window in VS Code' }),
+  ).toBeFocused()
   await page.keyboard.press('Enter')
   await page.keyboard.press('Enter')
   await expect(panel).toBeHidden()

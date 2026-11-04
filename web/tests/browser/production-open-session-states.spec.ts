@@ -176,3 +176,18 @@ for (const [locale, silent] of [
     await page.locator(`.step-holder button.open-action[title*="${CRASHED}"]`).click()
     await expect(page.locator('.open-panel')).toContainText(silent)
   })
+
+for (const [locale, look, first, second] of [
+  ['en', 'See it in VS Code:', 'Open the project window in VS Code', 'Open the session in VS Code'],
+  ['ru', 'Посмотреть в VS Code:', 'Открыть окно проекта в VS Code', 'Открыть сессию в VS Code'],
+] as const)
+  test(`each action of a running session's panel names where it leads, in ${locale}`, async ({
+    page,
+  }) => {
+    await openCard(page, { locale })
+    await page.locator('.step-holder button.open-action').nth(1).click()
+    const panel = page.locator('.open-panel')
+    await expect(panel).toContainText(look)
+    await expect(panel.getByRole('button')).toHaveText([first, second])
+    await expect(page.getByRole('button', { name: first, exact: true })).toBeFocused()
+  })

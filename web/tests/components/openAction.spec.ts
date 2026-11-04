@@ -139,7 +139,7 @@ describe('what stands before any press', () => {
     expect(panel?.textContent).toContain('See it in VS Code')
     // Nothing runs on the press that only explains, and focus waits on the first action.
     expect(opened).not.toHaveBeenCalled()
-    expect(document.activeElement?.textContent?.trim()).toBe('Open the project window')
+    expect(document.activeElement?.textContent?.trim()).toBe('Open the project window in VS Code')
 
     document.activeElement?.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
