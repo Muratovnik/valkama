@@ -250,6 +250,10 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- **A long name leaves an entry's time where it stands.** Above a thread's root, a reply and
+  an answer a change replaced, a name too long for the line pushed the time under it, to the
+  line's start, while the entry beside it showed the time at the end. The time now keeps the
+  end of the first line, and the name wraps whole in the room left to it.
 - **A card's unresolved count is what the unresolved view shows.** «Unresolved N» and the
   heading counted comment threads only, while the view also kept a question still waiting
   for its answer, so the number stood one short of the rows under it. A waiting question

@@ -22,6 +22,7 @@ import { actorName, actorSession } from '@/shared/lib/actor.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
 import type MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
+import MetaLine from '@/shared/ui/MetaLine.vue'
 import VButton from '@/shared/ui/VButton.vue'
 
 const props = withDefaults(
@@ -128,13 +129,12 @@ function retryMark() {
         class="reply"
         tabindex="-1"
       >
-        <div class="reply-meta">
-          <span>
-            {{ authorOf(reply) }}
-            <span v-if="sessionOf(reply)">{{ sessionOf(reply) }}</span>
-          </span>
-          <span>{{ when(reply.at) }}</span>
-        </div>
+        <MetaLine
+          class="reply-meta"
+          :when="when(reply.at)"
+          >{{ authorOf(reply) }}
+          <span v-if="sessionOf(reply)">{{ sessionOf(reply) }}</span></MetaLine
+        >
         <CollapsibleText
           class="reply-text"
           :text="reply.body"
@@ -209,15 +209,6 @@ function retryMark() {
     border-radius: var(--radius-control);
     outline-offset: var(--space-1);
   }
-}
-
-.reply-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  justify-content: space-between;
-  color: var(--color-text-tertiary);
-  font: var(--font-detail);
 }
 
 .reply-text {

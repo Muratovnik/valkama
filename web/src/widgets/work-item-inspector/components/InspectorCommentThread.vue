@@ -31,6 +31,7 @@ import { referenceSpaceKey } from '@/shared/lib/referenceLinks.ts'
 import { plainText } from '@/shared/lib/richText.ts'
 import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
 import type MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
+import MetaLine from '@/shared/ui/MetaLine.vue'
 import VButton from '@/shared/ui/VButton.vue'
 
 const props = withDefaults(
@@ -218,15 +219,12 @@ function sendMark() {
       </div>
     </template>
     <template v-else>
-      <div
+      <MetaLine
         :id="metaId"
         class="thread-meta"
+        :when="when(root.at)"
+        >{{ authorName }} <span v-if="authorSession">{{ authorSession }}</span></MetaLine
       >
-        <span
-          >{{ authorName }} <span v-if="authorSession">{{ authorSession }}</span></span
-        >
-        <span>{{ when(root.at) }}</span>
-      </div>
       <template v-if="root.kind === 'report' && root.report">
         <strong class="thread-label">{{ reportLabel }}</strong>
         <CollapsibleText
@@ -339,15 +337,6 @@ function sendMark() {
       outline-offset: -1px;
     }
   }
-}
-
-.thread-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  justify-content: space-between;
-  color: var(--color-text-tertiary);
-  font: var(--font-detail);
 }
 
 .thread-label {

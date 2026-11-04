@@ -12,6 +12,7 @@ import { versionLines } from '@/features/input-requests/utils/answerDisplay.ts'
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import { actorName } from '@/shared/lib/actor.ts'
 import { plainText } from '@/shared/lib/richText.ts'
+import MetaLine from '@/shared/ui/MetaLine.vue'
 import VButton from '@/shared/ui/VButton.vue'
 
 type Request = InputRequestEntry['request']
@@ -53,10 +54,11 @@ function who({ by_person: person, answered_by: by }: Request['history'][number])
         :key="version.version"
         class="request-history-version"
       >
-        <div class="request-history-meta">
-          <span>{{ version.who }}</span>
-          <span>{{ version.when }}</span>
-        </div>
+        <MetaLine
+          class="request-history-meta"
+          :when="version.when"
+          >{{ version.who }}</MetaLine
+        >
         <p
           v-for="line in version.lines"
           :key="line.id"
@@ -101,15 +103,6 @@ function who({ by_person: person, answered_by: by }: Request['history'][number])
   min-width: 0;
   padding-inline-start: var(--space-2);
   border-inline-start: 1px solid var(--color-rule-strong);
-}
-
-.request-history-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0 var(--space-2);
-  justify-content: space-between;
-  color: var(--color-text-tertiary);
-  font: var(--font-detail);
 }
 
 .request-history-line {

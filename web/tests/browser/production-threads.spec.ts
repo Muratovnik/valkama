@@ -8,6 +8,7 @@ import type { Locator, Page } from '@playwright/test'
 
 import { drawnColours } from './contrast.ts'
 import { openCard } from './editorPage.ts'
+import { expectDateHeld } from './metaLine.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { asked, openQuestion, QUESTION_ID } from './questionBackend.ts'
 import { test } from './test.ts'
@@ -218,6 +219,25 @@ test('what opens more of a thread is lighter than what acts on it, and starts wh
   expect(Math.abs(more.words - (await startOf('.thread-text')))).toBeLessThanOrEqual(1)
   expect(Math.abs(earlier.words - (await startOf('.thread-actions')))).toBeLessThanOrEqual(1)
 })
+
+for (const width of [1500, 390]) {
+  test(`a long name leaves the date where it stands on the line beside it at ${width}`, async ({
+    page,
+  }) => {
+    const { backend, drawer } = await openTalkedOn(page, width)
+    const long = 'an-agent-with-a-remarkably-long-working-name-that-runs-past-the-line'
+    backend.item.comments.push(
+      root(40, 'Who wrote this?', { author: `${long} (session 019a2b3c-4d5e)` }),
+      reply(41, 40, 'And this?', { author: `${long}-again (session 019a2b3c-4d5e)` }),
+    )
+    await page.reload()
+    const thread = threadOf(drawer, 'Who wrote this?')
+    await expect(thread.locator('.reply')).toHaveCount(1)
+    await expect(drawer).toHaveCSS('transform', 'none')
+    await expectDateHeld(thread.locator('.thread-meta'), 'the root')
+    await expectDateHeld(thread.locator('.reply-meta'), 'the reply')
+  })
+}
 
 test('a reply set aside for another thread comes back with its words', async ({ page }) => {
   const { drawer } = await openTalkedOn(page)

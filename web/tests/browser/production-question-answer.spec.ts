@@ -7,6 +7,7 @@ import { expect } from '@playwright/test'
 
 import type { InputRequestField } from '@/shared/api/inputRequestModel.ts'
 
+import { expectDateHeld } from './metaLine.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import {
   asked,
@@ -238,6 +239,23 @@ for (const width of [390, 1280]) {
     await card.getByRole('button', { name: 'Cancel', exact: true }).click()
     await expect(card.getByRole('button', { name: 'Continue', exact: true })).toBeInViewport()
     await expectNoSilentClipping(page, `The asking at ${width}px`)
+  })
+}
+
+for (const width of [1500, 390]) {
+  test(`a long name in the previous answers leaves the date in its place at ${width}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+    const [first] = whole.history ?? []
+    const long = 'an-agent-with-a-remarkably-long-working-name-that-runs-past-the-line'
+    const { card } = await openQuestion(page, [
+      asked({ ...whole, history: [{ ...first, answered_by: long } as NonNullable<typeof first>] }),
+    ])
+    await card.getByRole('button', { name: 'Previous answers (1)', exact: true }).click()
+    const meta = card.locator('.request-history-meta')
+    await expect(meta).toContainText(long)
+    await expectDateHeld(meta, 'a previous answer')
   })
 }
 
