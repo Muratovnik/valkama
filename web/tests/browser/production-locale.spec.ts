@@ -5,6 +5,8 @@ import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
+import { answerFilePlans, copiedIn, keepCopies, noticeOf } from './documentEditorPlan.ts'
+import { openPage, shot } from './documentPageSurface.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { globalScope, projectScope, spaceRef } from './planningFixtures.ts'
 import { test } from './test.ts'
@@ -255,4 +257,25 @@ for (const [shape, fail, reason] of [
       await expect(panel).not.toContainText('{code}')
     })
   }
+}
+
+for (const width of [1280, 390]) {
+  test(`a Russian document's head opens it in the editor, and says why it could not at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 800 })
+    await keepCopies(page)
+    await openPage(page, 'docs/plan.md', '#kb:a7f3')
+    await answerFilePlans(page, true)
+    const editor = page.getByRole('button', { name: 'Открыть в VS Code', exact: true })
+    await expect(editor).toHaveAttribute(
+      'title',
+      'Открыть этот файл в VS Code на строке, которую вы читаете',
+    )
+    await editor.click()
+    await expect(noticeOf(page)).toHaveText('Там ничего нет. Путь скопирован')
+    expect(await copiedIn(page)).toEqual(['docs/plan.md'])
+    await expectNoSilentClipping(page, `Russian document page at ${width}px`)
+    await shot(page, `doc-${width}-ru`)
+  })
 }

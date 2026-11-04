@@ -74,7 +74,7 @@ test.describe('over a card', () => {
     await expect(viewer).toBeVisible()
   })
 
-  test('on a phone the ring has room at the drawer’s edge, and the head keeps its title', async ({
+  test('on a phone the ring has room at the drawer’s edge, and the head keeps its words', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 390, height: 800 })
@@ -86,10 +86,18 @@ test.describe('over a card', () => {
     const target = viewer.locator('.document-block.is-target')
     await expect(target).toBeFocused()
     expect(await ringRoom(target)).toEqual({ start: 8, end: 16 })
-    await expect(viewer.getByRole('button', { name: EDITOR, exact: true })).toBeInViewport()
+    // The title and its path keep the first row whole; the actions take the next.
+    const editor = viewer.getByRole('button', { name: EDITOR, exact: true })
+    await expect(editor).toBeInViewport()
     const title = viewer.locator('.overlay-header-name')
-    // The title gives way, and still says which document this is.
-    expect(await title.evaluate((node) => node.getBoundingClientRect().width)).toBeGreaterThan(80)
+    const path = viewer.locator('.document-path')
+    for (const words of [title, path])
+      expect(await words.evaluate((node) => node.scrollWidth - node.clientWidth)).toBe(0)
+    const titleBox = await title.boundingBox()
+    const pathBox = await path.boundingBox()
+    const editorBox = await editor.boundingBox()
+    expect(editorBox?.y).toBeGreaterThanOrEqual((pathBox?.y ?? 0) + (pathBox?.height ?? 0))
+    expect(titleBox?.width).toBeGreaterThan(250)
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
     await shot(page, 'drawer-390-en')
   })

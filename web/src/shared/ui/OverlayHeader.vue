@@ -44,7 +44,10 @@ defineExpose({ focusTitle: () => name.value?.focus({ preventScroll: true }) })
 </script>
 
 <template>
-  <header class="overlay-header">
+  <header
+    class="overlay-header"
+    :class="{ 'has-actions': $slots.actions }"
+  >
     <slot name="start" />
     <div class="overlay-header-title">
       <component
@@ -152,6 +155,22 @@ defineExpose({ focusTitle: () => name.value?.focus({ preventScroll: true }) })
   gap: var(--space-4);
   align-items: center;
   min-height: var(--size-control-target);
+}
+
+/* A narrow head gives its row to the title and what it is about: the actions take a row of
+   their own under the way out. Beside four icons a phone's title kept one word, and the
+   path under it only its last few letters. */
+@container (width <= 440px) {
+  .overlay-header.has-actions {
+    flex-wrap: wrap;
+    row-gap: var(--space-2);
+
+    .overlay-header-actions {
+      flex-basis: 100%;
+      justify-content: flex-end;
+      order: 1;
+    }
+  }
 }
 
 /* The head already draws the rule under itself; a second outline around the
