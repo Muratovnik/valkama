@@ -108,9 +108,12 @@ const busyMark = computed(() => props.busy || undefined)
   }
 }
 
+/* Its rows stand at the top: beside a pane the frame is as tall as the window, and rows
+   stretched to fill it opened a hole between the head and the first of them. */
 .dialog-frame-body {
   display: grid;
   gap: var(--space-6);
+  align-content: start;
   min-height: 0;
   padding: var(--space-6);
   overflow-y: auto;
