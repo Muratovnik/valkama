@@ -181,6 +181,34 @@ describe('the whole-space graph and the items no link touches', () => {
     const hidden = openGraph({ live: { [id(2)]: { state: 'held' } } })
     await drawn(hidden)
     expect(keys(hidden).map((key) => key.held)).toEqual([false, false])
+    // Work moving under a drawn frame moves on the field, card or no card: the
+    // frame counts it.
+    const underFrame = openGraph({ live: { [id(2)]: { state: 'working' } } })
+    await drawn(underFrame)
+    expect(keys(underFrame).map((key) => key.moving)).toEqual([true, true])
+  })
+
+  it('says nothing of motion for work the chain leaves off the field', async () => {
+    const chain = { members: [id(2), id(3), id(4)], reference: 'MAIN-1', total: 3 }
+    const moving = (work: number) =>
+      openGraph({
+        scopeKind: 'chain',
+        epicId: id(1),
+        chain,
+        live: { [id(work)]: { state: 'working' } },
+      })
+    const outside = moving(7)
+    expect(await drawn(outside)).not.toContain('MAIN-7')
+    expect(outside.findAllComponents(GraphLegend).map((key) => key.props('moving'))).toEqual([
+      false,
+      false,
+    ])
+    const inside = moving(3)
+    await drawn(inside)
+    expect(inside.findAllComponents(GraphLegend).map((key) => key.props('moving'))).toEqual([
+      true,
+      true,
+    ])
   })
 })
 

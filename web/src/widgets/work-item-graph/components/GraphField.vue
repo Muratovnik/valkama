@@ -152,13 +152,15 @@ const emit = defineEmits<{
   transition: opacity var(--duration-quick) var(--ease-out);
 }
 
+/* A line's hue and width change at once: a read can make it live or stop it
+   being live, and a background update is never animated. Only its fading back
+   while the pointer or the keyboard lights another lineage is eased, which the
+   reader's own hand starts. */
 :deep(.vue-flow__edge.graph-edge .vue-flow__edge-path) {
   fill: none;
   stroke: var(--color-graph-line);
   stroke-width: 1.6;
-  transition:
-    opacity var(--duration-quick) var(--ease-out),
-    stroke var(--duration-quick) var(--ease-out);
+  transition: opacity var(--duration-quick) var(--ease-out);
 }
 
 /* Only a block is a hard dependency. Everything else the model can link —

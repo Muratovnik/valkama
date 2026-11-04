@@ -990,9 +990,11 @@ of a session whose turn ended and that waits for a person stand still with «ж�
 motion that also meant holding or waiting would no longer tell work from rest. The
 words say what the session's events show, as a card's «Agents» section does, and
 never that a process was seen alive. A frame counts the items under it that move,
-so a folded one still shows the work inside it moving. The key names the live line
-while some live work moves, and the still dots of held work while a card on the
-field shows them.
+so a folded one still shows the work inside it moving. The key names the live line,
+and the strip offers the switch that stops it, only while something on the field moves: a
+drawn card being worked on, or a frame, folded or open, that counts work moving
+under it. Work the filter or the chain leaves off the field moves nothing there.
+The key names the still dots of held work while a card on the field shows them.
 
 Moving work starts by itself and lasts as long as the work, so the reader can stop
 it (WCAG 2.2.2): one button in the strip above the flow, «Остановить движение» and

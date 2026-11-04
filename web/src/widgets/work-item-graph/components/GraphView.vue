@@ -161,20 +161,29 @@ function frameAt(id: string): PlacedFrame[] {
 
 /**
  * The items whose live work moves: worked on in a turn running now. A line runs when one
- * of its links reaches one, and a frame counts those under it.
+ * of its links reaches one, and a frame counts those under it. It stays the whole space's
+ * set: a drawn line folded onto a frame reaches items no card shows.
  */
 const moving = computed(
   () => new Set(Object.keys(live.value).filter((id) => movesOn(live.value[id]))),
 )
 const { motion, toggle: toggleMotion } = useGraphMotion()
 const still = computed(() => motion.value !== 'running')
-const anyMoving = computed(() => moving.value.size > 0)
+const workingIn = (frame: PlacedFrame) => frame.members.filter((id) => moving.value.has(id)).length
+/**
+ * Something on the field moves: a drawn card being worked on, or a drawn frame, folded or
+ * open, that counts work moving under it. Only then do the key and the switch speak of motion.
+ */
+const anyMoving = computed(
+  () =>
+    [...cardById.value.keys()].some((id) => moving.value.has(id)) ||
+    [...frameById.value.values()].some((frame) => workingIn(frame) > 0),
+)
 /** A drawn card is held by a session not working on it now: the key names its still dots. */
 const anyHeld = computed(() =>
   [...cardById.value.keys()].some((id) => live.value[id]?.state === 'held'),
 )
 const liveOf = (node: PlacedNode) => live.value[node.work_item_id] ?? null
-const workingIn = (frame: PlacedFrame) => frame.members.filter((id) => moving.value.has(id)).length
 
 /** A card standing in a drawn frame: the frame names its epic, so the card does not. */
 const isFramed = (node: PlacedNode) => frameById.value.has(node.frameId)

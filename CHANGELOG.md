@@ -32,7 +32,10 @@ checkouts are therefore distinguishable even at the same version.
   still shows the work moving inside it. «Stop the motion» in the strip above the field
   stops all of it at once and is remembered in this browser for every space; stopped, or
   under reduced motion, a live line is held still and wider. In a forced palette a live
-  line takes the palette's colour for what is picked out.
+  line takes the palette's colour for what is picked out. The switch and the key's live
+  line are offered only while something on the field moves, so work a filter or a chain
+  leaves out brings neither, and a refresh that makes a line live or still changes it at
+  once.
 - **The graph draws an epic as a frame round its work.** The frame's header names the epic,
   its state once it has moved, and how its work stands in words — «8 of 21 done · 2 in
   progress · 1 blocked» — over a 3px edge of the same counts in the board's hues. The
