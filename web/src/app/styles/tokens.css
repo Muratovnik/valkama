@@ -206,9 +206,11 @@
 
      A looping indicator's period is not one of these and must not be made into
      one. A spinner's 0.7s and the working pulse's 1.15s are rhythms chosen so
-     the eye reads them as waiting rather than as urgency; spending a transition
-     duration on them made the spinner turn three times as fast, which is a
-     different message about how the system is doing.
+     the eye reads them as waiting rather than as urgency, and the graph's comet
+     runs its line once in 2.4s; spending a transition duration on them made the
+     spinner turn three times as fast, which is a different message about how
+     the system is doing. Why the comet, which the live stream turns on and off,
+     keeps the rule below is said in DESIGN.md, under Work.
 
      One rule the tokens cannot state: a background refresh is never animated.
      Motion belongs to what the operator did, and a screen that moves on its

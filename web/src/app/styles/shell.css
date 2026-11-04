@@ -40,9 +40,10 @@
   container: main / inline-size;
 }
 
-/* Four components render this — a card's presence mark, the platform state
-   panel, the drawer and a graph node — so it is a recipe that belongs to no one
-   of them and stays here, as the owner order in DESIGN.md has it.
+/* Five components render this — the platform state panel while it loads, and on
+   the graph a card's live mark, a zoomed-out card, a frame's header and the
+   key — so it is a recipe that belongs to no one of them and stays here, as the
+   owner order in DESIGN.md has it.
 
    Three dots at a fixed size: a squashed pulse reads as a rendering fault
    rather than as a narrower one, so this is the one part of a presence block

@@ -223,5 +223,5 @@ pre,
 
 /* `refresh-spin` was here beside it. One control spins, the connection button on
    the rail, and a scoped block names its own keyframes — so the animation went
-   home with the rule that plays it. `work-pulse` stays because four components
-   render `.work-dots`. */
+   home with the rule that plays it. `work-pulse` stays because `.work-dots`
+   plays it, and five components render that (shell.css names them). */
