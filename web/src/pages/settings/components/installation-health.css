@@ -1,4 +1,7 @@
 .installation-health {
+  /* The section lies on the workspace panel, so a step above it is the ground. */
+  --color-state-panel-surface: var(--color-surface);
+
   display: grid;
   gap: var(--space-section);
   width: 100%;

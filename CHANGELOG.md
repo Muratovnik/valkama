@@ -446,6 +446,12 @@ checkouts are therefore distinguishable even at the same version.
   took the sheet's tone it lay flush under the group's head, in the same tone, and ran into
   it, and its round corners stood out of the group's edge. It now stands inside the group
   with the rows' inset on every side.
+- **A failed read on the workspace lies one step above it.** Where the panel that says a
+  read failed stands on the workspace panel itself — the Work module, every project's work,
+  installation health, the shell's recovery and a task's link — it took the sheet's tone,
+  two steps up, and stood off the page at 1.41 instead of lying on it at 1.16. Those hosts
+  now give it the ground's tone; in a card, a document and a settings group it keeps the
+  sheet.
 
 ### Removed
 

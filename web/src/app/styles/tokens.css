@@ -429,6 +429,13 @@
      `tests/designTokens.test.ts` now fails if two roles land on one tone. */
   --color-surface-sheet: var(--color-surface-muted);
   --color-surface-recess: var(--color-canvas);
+
+  /* The fill of the panel that says a read failed, which lies one step above whatever
+     it stands on. Most of its hosts are a drawer, a document or a group on the ground,
+     where the sheet is that step; a host on the workspace panel itself names the
+     ground instead, or the panel stands two steps up. Read the way
+     `--color-count-badge-ring` is: the panel falls back to the sheet. */
+  --color-state-panel-surface: var(--color-surface-sheet);
   --color-text-disabled: var(--color-gray-450);
   --color-graph-line: var(--color-cyan-400);
   --color-graph-line-muted: var(--color-slate-450);

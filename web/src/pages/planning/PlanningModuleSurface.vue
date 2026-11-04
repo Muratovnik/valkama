@@ -501,24 +501,9 @@ defineExpose({ refresh, selectedId })
   />
 </template>
 
+<style scoped src="./planning-frame.css"></style>
+
 <style scoped>
-.planning-frame {
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-  color: var(--color-text);
-  background: var(--color-canvas);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
-.planning-frame-content {
-  width: min(var(--size-module-column), 100%);
-  min-height: 100%;
-  padding: var(--space-6) var(--size-page-gutter) var(--space-12);
-  margin: 0 auto;
-}
-
 .planning-workspace-shell {
   position: relative;
   display: flex;

@@ -168,6 +168,9 @@ const findVariant = computed(() => (missedIn.value ? 'secondary' : 'primary'))
 
 <style scoped>
 .work-item-link {
+  /* The page lies on the workspace panel, so a step above it is the ground. */
+  --color-state-panel-surface: var(--color-surface);
+
   display: grid;
   gap: var(--space-4);
   align-content: start;

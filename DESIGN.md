@@ -192,7 +192,11 @@ chrome.
   standing on another rung may re-point one to stay a step above itself — the
   drawer stands on `--color-surface`, the rung the default sheet already sits
   above, so it re-points nothing — and a rule that must be one exact tone
-  wherever it renders names the palette step instead. A rung that names the
+  wherever it renders names the palette step instead. The panel that says a read
+  failed reads its fill from `--color-state-panel-surface`, which falls back to the
+  sheet; a host lying on the workspace panel itself — the Work module's frame, every
+  project's work, installation health, the shell's recovery, a task's link — names
+  the ground there instead, because the sheet stood two steps up, 1.41 to the panel. A rung that names the
   same palette step as another rung is a duplicate and fails
   `designTokens.test.ts`, which reads the rungs out of the palette; a role names
   the rung it stands on (`--color-surface-hover` is the resting control's rung,

@@ -5,7 +5,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { openPage } from './documentPageSurface.ts'
-import { projectScope } from './planningFixtures.ts'
+import { globalScope, projectScope, spaceRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 /**
@@ -136,14 +136,66 @@ test('a failed read of the alerts lies inside its settings group, apart from the
   expect(await seam(panel)).toBeGreaterThanOrEqual(1.2)
 })
 
-test('a failed read of the module stands off the workspace it lies on', async ({ page }) => {
-  await page.setViewportSize({ width: 1500, height: 900 })
-  await installBackend(page)
-  await page.route('**/api/planning?*', (route) =>
-    route.fulfill({ status: 503, json: { error: { code: 'busy' } } }),
-  )
-  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
-  const panel = page.locator('.planning-frame .platform-state-panel')
-  await expect(panel).toBeVisible()
-  expect(await seam(panel)).toBeGreaterThanOrEqual(1.15)
-})
+const BUSY = { status: 503, json: { error: { code: 'busy' } } }
+
+/**
+ * Where a failed read lies on the workspace panel itself, and how each is brought about.
+ * The sheet stands two steps above that panel, 1.41 to it, which reads as a panel lifted
+ * off the page rather than lying on it.
+ */
+const ON_THE_WORKSPACE: { name: string; open: (page: Page) => Promise<Locator> }[] = [
+  {
+    name: 'the module',
+    open: async (page) => {
+      await page.route('**/api/planning?*', (route) => route.fulfill(BUSY))
+      await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+      return page.locator('.planning-frame .platform-state-panel')
+    },
+  },
+  {
+    name: 'every project’s work',
+    open: async (page) => {
+      await page.route('**/api/platform/planning?*', (route) => route.fulfill(BUSY))
+      await page.goto(serializePlatformRoute({ module_id: 'planning', scope: globalScope }))
+      return page.locator('.planning-frame .platform-state-panel')
+    },
+  },
+  {
+    name: 'the installation’s health',
+    open: async (page) => {
+      await page.route('**/api/doctor', (route) => route.fulfill(BUSY))
+      await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
+      await page.locator('.settings-page-sections').getByRole('tab').nth(1).click()
+      return page.locator('.installation-health .platform-state-panel')
+    },
+  },
+  {
+    name: 'the sections',
+    open: async (page) => {
+      await page.route('**/api/modules', (route) => route.fulfill(BUSY))
+      await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+      return page.locator('.route-recovery .platform-state-panel')
+    },
+  },
+  {
+    name: 'a task’s link',
+    open: async (page) => {
+      await page.route('**/api/modules/planning/search?*', (route) =>
+        route.fulfill({ status: 500, json: { error: { code: 'request_failed' } } }),
+      )
+      await page.goto(`/open/${spaceRef.space_key}-7`)
+      return page.locator('.work-item-link .platform-state-panel')
+    },
+  },
+]
+
+for (const { name, open } of ON_THE_WORKSPACE)
+  test(`a failed read of ${name} lies one step above the workspace, not two`, async ({ page }) => {
+    await page.setViewportSize({ width: 1500, height: 900 })
+    await installBackend(page)
+    const panel = await open(page)
+    await expect(panel).toBeVisible()
+    const ratio = await seam(panel)
+    expect(ratio).toBeGreaterThanOrEqual(1.15)
+    expect(ratio).toBeLessThan(1.3)
+  })

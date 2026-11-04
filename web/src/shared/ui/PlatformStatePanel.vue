@@ -164,7 +164,9 @@ const failed = computed(
 <style scoped>
 /* What failed or was refused is a panel lying on the ground, a step above it. In the
    ground's own tone, which a drawer and a document stand on, it drew no box at all, and
-   its status edge stood alone, bent by the corners into a bracket. */
+   its status edge stood alone, bent by the corners into a bracket. A host that is not a
+   ground says which step is one above it through `--color-state-panel-surface`: on the
+   workspace panel the sheet stood two steps up. */
 .platform-state-panel {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -174,7 +176,7 @@ const failed = computed(
   min-height: 180px;
   padding: var(--space-6);
   color: var(--color-text);
-  background: var(--color-surface-sheet);
+  background: var(--color-state-panel-surface, var(--color-surface-sheet));
   border-radius: var(--radius-card);
 
   &.compact {

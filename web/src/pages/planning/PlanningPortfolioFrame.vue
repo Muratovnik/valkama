@@ -62,24 +62,4 @@ const missingState = computed(() =>
   </main>
 </template>
 
-<style scoped>
-.planning-frame {
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-  color: var(--color-text);
-  background: var(--color-canvas);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
-.planning-frame-content {
-  display: grid;
-  gap: var(--space-4);
-  align-content: start;
-  width: min(var(--size-module-column), 100%);
-  min-height: 100%;
-  padding: var(--space-6) var(--size-page-gutter) var(--space-12);
-  margin: 0 auto;
-}
-</style>
+<style scoped src="./planning-frame.css"></style>

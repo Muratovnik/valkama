@@ -118,6 +118,9 @@ const unavailableState = computed(() =>
 
 <style scoped>
 .route-recovery {
+  /* The recovery lies on the workspace panel, so a step above it is the ground. */
+  --color-state-panel-surface: var(--color-surface);
+
   display: grid;
   gap: var(--space-4);
   align-content: start;
