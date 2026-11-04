@@ -51,6 +51,11 @@ const singles = computed(() => props.document.blocks.map((entry) => [entry.block
 const facts = computed(() => props.document.facts.join(' · '))
 const isMarked = (index: number) => props.marked.has(index)
 const startsSection = (index: number) => props.document.blocks[index]?.block.kind === 'heading'
+/** A table or a block of code is scanned, not read along, and takes the column's width. */
+const isWide = (index: number) => {
+  const kind = props.document.blocks[index]?.block.kind
+  return kind === 'table' || kind === 'code'
+}
 
 const root = ref<HTMLElement | null>(null)
 
@@ -135,7 +140,11 @@ defineExpose({ box: (index: number) => boxes()[index] ?? null, bring, indexOf, t
       :key="index"
       class="document-block"
       tabindex="-1"
-      :class="{ 'is-target': isMarked(index), 'starts-section': startsSection(index) }"
+      :class="{
+        'is-target': isMarked(index),
+        'is-wide': isWide(index),
+        'starts-section': startsSection(index),
+      }"
     >
       <RichBlocks
         :blocks="blocks"
@@ -146,8 +155,9 @@ defineExpose({ box: (index: number) => boxes()[index] ?? null, bring, indexOf, t
 </template>
 
 <style scoped>
-/* The text's own measure: a plan wraps near a hundred characters, and a line much
-   longer than that is hard to come back from to the next one. */
+/* The column a table or code may take, wider than the text's measure: a table is scanned
+   across rather than read along, and a line of code cannot wrap, so each of them uses the
+   room before it scrolls. */
 .document-text {
   display: grid;
   gap: var(--space-3);
@@ -172,6 +182,19 @@ defineExpose({ box: (index: number) => boxes()[index] ?? null, bring, indexOf, t
   /* Room above a block a link sent the reader to, for its mark and its ring: at a step
      less the ring touched the head's rule. */
   scroll-margin-block-start: var(--space-3);
+
+  /* What is read along keeps to a reading measure of about seventy letters. In the whole
+     column a line ran past a hundred, and the eye lost the next one coming back. A `ch` is
+     a zero, wider than the average letter: 58 of them hold 71–75 letters of English and
+     67–71 of Russian in this face. */
+  &:not(.is-wide) {
+    max-width: 58ch;
+  }
+
+  /* A mark reaches into the gutter, and the text it marks keeps its lines. */
+  &.is-target:not(.is-wide) {
+    max-width: calc(58ch + var(--document-block-reach));
+  }
 
   /* The room above a heading is what says a section begins: the gap between blocks alone
      set it as close to the text before as to the text it heads. It stands outside the

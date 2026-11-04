@@ -328,6 +328,9 @@ checkouts are therefore distinguishable even at the same version.
 - **What a dialog is about reads as a note under its title.** The line under the title of
   the session panel and of other dialogs, a session's client and id or a task's number,
   stood flush under it in bold; it now stands a step lower in the weight of ordinary text.
+- **A document's page keeps its lines to a reading length.** On a wide window a paragraph
+  ran to the page's whole column, over a hundred characters a line. Text now keeps to about
+  seventy, while a table or a block of code still takes the column.
 - **A failed read stands out from what it failed in.** In a card or a document the panel
   that says a read failed was the ground's own tone, so only its red edge showed, bent by
   the corners into a bracket. The panel now lies a step above the ground

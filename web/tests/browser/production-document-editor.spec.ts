@@ -45,8 +45,11 @@ test.describe('over a card', () => {
     await settled(viewer)
     const target = viewer.locator('.document-block.is-target')
     await expect(target).toBeFocused()
-    // Room for the ring at each side, as there is above it.
-    expect(await ringRoom(target)).toEqual({ start: 8, end: 20 })
+    // Room for the ring at each side, as there is above it. The block keeps to the text's
+    // measure, so at its end there is the gutter's room or more.
+    const room = await ringRoom(target)
+    expect(room?.start).toBe(8)
+    expect(room?.end).toBeGreaterThanOrEqual(20)
     await shot(page, 'drawer-1100-en')
 
     // Refresh holds no place of its own to lose; the walk to it is the keyboard spec's.
