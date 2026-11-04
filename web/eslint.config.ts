@@ -69,6 +69,9 @@ export default ts.config(
   {
     ignores: ['dist/**', 'node_modules/**', 'test-results/**', 'playwright-report/**'],
   },
+  // What the stylelint config's loader leaves when a process stops before it is done: it
+  // compiles the config to a file beside it and removes that file afterwards.
+  { ignores: ['stylelint.config.ts.*.mjs', 'stylelint.config.ts.*.cjs'] },
   js.configs.recommended,
   ts.configs.recommended,
   vue.configs['flat/recommended'],

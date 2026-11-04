@@ -3,6 +3,9 @@ node_modules/
 .impeccable/
 test-results/
 playwright-report/
+# What the config's loader leaves when a process stops before it is done.
+stylelint.config.ts.*.mjs
+stylelint.config.ts.*.cjs
 src/assets/
 public/
 package-lock.json

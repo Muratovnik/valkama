@@ -9,6 +9,10 @@ node_modules/
 *.tsbuildinfo
 test-results/
 playwright-report/
+# The config's loader compiles stylelint.config.ts to a file beside it and
+# removes it when it is done; a process stopped before that leaves it behind.
+/web/stylelint.config.ts.*.mjs
+/web/stylelint.config.ts.*.cjs
 /.playwright-mcp/
 .eslintcache
 .pytest_cache/
