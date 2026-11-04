@@ -84,3 +84,18 @@ test('on a phone the finder takes the width too, and still stands just under the
   const bounds = await dialog.boundingBox()
   expect(Math.round(bounds?.y ?? -1)).toBe(4)
 })
+
+test('on a phone two fields side by side keep their inputs level, whatever their hints', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await installBackend(page)
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  await page.getByRole('button', { name: 'New work item' }).click()
+  const dialog = page.getByRole('dialog', { name: 'New work' })
+  await expect(dialog).toHaveCSS('transform', 'none')
+  // The epic's hint takes two lines at this width and the labels' one.
+  const labels = await dialog.getByRole('textbox', { name: 'Labels' }).boundingBox()
+  const epic = await dialog.getByRole('textbox', { name: 'Epic' }).boundingBox()
+  expect(Math.round(labels?.y ?? -1)).toBe(Math.round(epic?.y ?? -2))
+})

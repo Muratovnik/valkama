@@ -64,9 +64,12 @@ const describedBy = computed(() => (props.error ? errorId : undefined))
 </template>
 
 <style scoped>
+/* Its rows stand at the top. Beside a field whose hint takes two lines the cell is taller, and
+   rows stretched to fill it moved this field's input down from its neighbour's. */
 .field {
   display: grid;
   gap: var(--space-label-value);
+  align-content: start;
   min-width: 0;
 }
 
