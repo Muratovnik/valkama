@@ -412,9 +412,10 @@ for (const width of [1440, 390]) {
   }) => {
     const drawer = await openLongCard(page, width)
     // This item stands in no epic. An empty cell still takes a gap, and where the row is
-    // full it wraps to a row of its own, which reads as a blank line under the facts.
+    // full it wraps to a row of its own, which reads as a blank line under the facts. The
+    // state and priority stand beside the action, the holder on the line under them.
     const widths = await drawer
-      .locator('.card-facts > *')
+      .locator('.card-facts > *, .card-held-line > *')
       .evaluateAll((facts) => facts.map((fact) => fact.getBoundingClientRect().width))
     expect(widths).toHaveLength(3)
     expect(Math.min(...widths)).toBeGreaterThan(0)
