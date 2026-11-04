@@ -134,7 +134,11 @@ test('a frame is a stop only while there is something in it to scroll', async ({
   await expect.poll(() => code.evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(true)
 
   // Grown to the width the code needs, the frame stops being a stop, with nothing else moved.
+  // The page hears of a new window on its next frame, after `setViewportSize` has returned,
+  // and End takes the most the window it has heard of leaves.
+  const narrow = await edge.getAttribute('aria-valuemax')
   await page.setViewportSize({ width: 2400, height: 900 })
+  await expect(edge).not.toHaveAttribute('aria-valuemax', narrow ?? '')
   await edge.focus()
   await page.keyboard.press('End')
   await expect(code).not.toHaveAttribute('tabindex')
