@@ -341,6 +341,10 @@ checkouts are therefore distinguishable even at the same version.
 - **A frame of code says its language.** A block of code too wide for the document, which
   the keyboard can reach and scroll, is announced as «Code block: ts» when its fence names a
   language, rather than only «Code block».
+- **A path before a tag is a path again.** A path with a tag written against it, as
+  `docs/a.md<br>` where a table cell breaks its line, was read as a template and stayed
+  text. A name in angle brackets is still a template where the path goes on around it —
+  `tmp/<task>/`, `docs/<name>.md` — and anywhere else a tag only ends the path.
 
 ### Removed
 

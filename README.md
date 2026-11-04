@@ -708,7 +708,8 @@ what it is. `web/tests/fixtures/document-path-samples.json` is the table of what
 a text becomes: strong, weak, copy-only or nothing, and what a click copies when
 the path cannot be opened. Three shapes stay text: a run holding a character no
 Windows name can hold (`tmp/<task>/`, `docs/*.md`) is a template, neither it nor
-any part of it a path; a drive's root alone (`C:\`) names nothing; and two
+any part of it a path, though a tag the path does not go on through (`docs/a.md<br>`)
+only ends it; a drive's root alone (`C:\`) names nothing; and two
 backslashes are a network path only before a server and a share
 (`\\server\share`), never in `\\n`. A path is opened only when it lies inside the root of
 a registered project, after `..`, symbolic links and junctions are followed,

@@ -118,6 +118,13 @@ class SampleTableTests(unittest.TestCase):
         # A run holding what no Windows name holds is a template, whole and in part.
         for text in ("tmp/<задача>/", "tmp/<task>/", "C:/Users/<user>/x.md", "docs/*.md"):
             self.assertEqual("none", self.lookup(text)["form"], text)
+        # A name in angle brackets is a template where a path goes on around it.
+        for text in ("docs/<name>.md", "<task>/notes.md"):
+            self.assertEqual("none", self.lookup(text)["form"], text)
+        # A tag beside a path is markup around it: the path stays one, and the tag is not sent.
+        for text in ("docs/a.md<br>", "docs/a.md<br />", "<br>docs/a.md", "<sub>docs/a.md</sub>"):
+            self.assertEqual("strong", self.lookup(text)["form"], text)
+            self.assertEqual(["docs/a.md"], self.lookup(text)["paths"], text)
         # A question mark after a path ends the sentence and keeps the path.
         self.assertEqual("strong", self.lookup("docs/x.md?")["form"])
         # What stays text.

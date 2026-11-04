@@ -307,13 +307,36 @@ export interface Around {
 
 const NOTHING_AROUND: Around = { after: '', before: '' }
 const RUN_END = /[\s,;]/u
+const ANGLED = /<[^<>\n]*>/gu
+/** What goes on with a path after a name in angle brackets: a separator or an extension. */
+const PATH_GOES_ON = /^(?:[/\\]|\.\p{L})/u
 
-/** Whether the run of the line a candidate stands in, up to a space or `,;`, is a template. */
+/**
+ * Where the tags of a line stand, as [start, end) pairs. A name in angle brackets is a
+ * placeholder where a path goes on around it — right after a separator, or before a
+ * separator or an extension: `tmp/<task>/`, `<name>.md`. Anywhere else it is markup an
+ * agent wrote beside a path, as `<br>` ending a table cell's line, and it bounds the run
+ * like a space instead of making the path a template.
+ */
+function tagsIn(line: string): [number, number][] {
+  const tags: [number, number][] = []
+  for (const { 0: angled, index } of line.matchAll(ANGLED)) {
+    const end = index + angled.length
+    const placeholder = /[/\\]/u.test(line.charAt(index - 1)) || PATH_GOES_ON.test(line.slice(end))
+    if (!placeholder) tags.push([index, end])
+  }
+  return tags
+}
+
+/** Whether the run of the line a candidate stands in, up to a space, `,;` or a tag, is a template. */
 function inTemplate(line: string, start: number, end: number): boolean {
+  const tags = tagsIn(line)
+  const endsTag = (at: number) => tags.some(([, tagEnd]) => tagEnd === at)
+  const startsTag = (at: number) => tags.some(([tagStart]) => tagStart === at)
   let from = start
-  while (from > 0 && !RUN_END.test(line.charAt(from - 1))) from -= 1
+  while (from > 0 && !RUN_END.test(line.charAt(from - 1)) && !endsTag(from)) from -= 1
   let to = end
-  while (to < line.length && !RUN_END.test(line.charAt(to))) to += 1
+  while (to < line.length && !RUN_END.test(line.charAt(to)) && !startsTag(to)) to += 1
   return TEMPLATE.test(line.slice(from, to).replaceAll(RUN_EDGES, ''))
 }
 

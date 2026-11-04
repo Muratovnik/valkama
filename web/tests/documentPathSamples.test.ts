@@ -37,6 +37,9 @@ const { rows } = JSON.parse(
 const ALSO_FOUND: Record<string, string[]> = {
   // In prose the path ends at the space, and what follows it has a shape of its own.
   [String.raw`D:\x y\z.txt`]: [String.raw`y\z.txt`],
+  // A tag between two paths ends the first and starts the second.
+  'docs/a.md<br>docs/b.md': ['docs/b.md'],
+  '| Read | docs/a.md<br>docs/b.md |\n| --- | --- |': ['docs/b.md'],
 }
 
 function inlineDocuments(nodes: readonly RichInline[]): DocumentReference[] {

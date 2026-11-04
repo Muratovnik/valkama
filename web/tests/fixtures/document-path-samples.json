@@ -536,6 +536,101 @@
       "caption": null
     },
     {
+      "text": "docs/<name>.md",
+      "where": "text",
+      "form": "none",
+      "candidate": null,
+      "paths": [],
+      "suffix": "",
+      "copy": null,
+      "caption": null,
+      "note": "a name in angle brackets with an extension after it stands for a file name"
+    },
+    {
+      "text": "<task>/notes.md",
+      "where": "text",
+      "form": "none",
+      "candidate": null,
+      "paths": [],
+      "suffix": "",
+      "copy": null,
+      "caption": null,
+      "note": "a name in angle brackets with a separator after it stands for a folder"
+    },
+    {
+      "text": "docs/a.md<br>",
+      "where": "text",
+      "form": "strong",
+      "candidate": "docs/a.md",
+      "paths": ["docs/a.md"],
+      "suffix": "",
+      "copy": "docs/a.md",
+      "caption": null,
+      "note": "a tag that ends a path, as a line break in a table cell does, leaves the path a path"
+    },
+    {
+      "text": "docs/a.md<br/>",
+      "where": "text",
+      "form": "strong",
+      "candidate": "docs/a.md",
+      "paths": ["docs/a.md"],
+      "suffix": "",
+      "copy": "docs/a.md",
+      "caption": null
+    },
+    {
+      "text": "docs/a.md<br />",
+      "where": "text",
+      "form": "strong",
+      "candidate": "docs/a.md",
+      "paths": ["docs/a.md"],
+      "suffix": "",
+      "copy": "docs/a.md",
+      "caption": null
+    },
+    {
+      "text": "<br>docs/a.md",
+      "where": "text",
+      "form": "strong",
+      "candidate": "docs/a.md",
+      "paths": ["docs/a.md"],
+      "suffix": "",
+      "copy": "docs/a.md",
+      "caption": null
+    },
+    {
+      "text": "docs/a.md<br>docs/b.md",
+      "where": "text",
+      "form": "strong",
+      "candidate": "docs/a.md",
+      "paths": ["docs/a.md"],
+      "suffix": "",
+      "copy": "docs/a.md",
+      "caption": null,
+      "note": "a tag between two paths is a boundary of both"
+    },
+    {
+      "text": "<sub>docs/a.md</sub>",
+      "where": "text",
+      "form": "strong",
+      "candidate": "docs/a.md",
+      "paths": ["docs/a.md"],
+      "suffix": "",
+      "copy": "docs/a.md",
+      "caption": null
+    },
+    {
+      "text": "| Read | docs/a.md<br>docs/b.md |\n| --- | --- |",
+      "where": "text",
+      "form": "strong",
+      "candidate": "docs/a.md",
+      "paths": ["docs/a.md"],
+      "suffix": "",
+      "copy": "docs/a.md",
+      "caption": null,
+      "note": "the table cell agents write"
+    },
+    {
       "text": "docs/x.md?raw=1",
       "where": "text",
       "form": "none",
