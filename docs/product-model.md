@@ -132,10 +132,10 @@ the [README](../README.md#local-http-security).
 `GET /api/session?id=<id>` resolves an exact stored identity or unique prefix
 and returns its work item, client family, and project-root resolution; it exposes
 no event feed. Missing or ambiguous identities fail resolution. A session linked
-across Planning spaces also fails as ambiguous. An observed session directory
-never grants root authority: native opening resolves the exact Planning-space
-binding again through the project registry. Missing, malformed, unavailable, or
-ambiguous bindings cannot supply an effective project root. Session refs, native
+across Planning spaces also fails as ambiguous. A session's folder never grants
+access to files: a file or folder opens only inside a project the registry holds,
+and a session opens in the folder it last started in, its `cwd` or its space's
+root, only when that is an existing absolute local folder. Session refs, native
 opening, and execution launch, stop, resume, history, and typed results remain
 supported.
 
@@ -174,8 +174,11 @@ an agent, so an open card reads its list again without a frame of the whole spac
 The same read gives the claim, each step and each agent an `executor`: `session`, the
 session a click on that holder would open, which for an agent is its parent because a
 subagent cannot be opened from outside; `agent`; `opened_in` and `opened_host`, where
-that session was last opened, empty when unknown; and `state`. No MCP tool answer
-carries it either. The state is what the record shows:
+that session was last opened, empty when unknown; `family`, whose settings cover it
+(`claude`, `codex` or `other`, empty for `none`); and `state`. The record itself
+carries `last_claim_executor`, the same for the holder `last_claim_ref` names, since
+a close ends the claim and that holder may be the one to resume. No MCP tool answer
+carries any of them. The state is what the record shows:
 
 - `none`: no session to open. A person or the browser holds it, nobody does, or the
   holder's label replaced a long session id with its digest. Every other field is empty.
@@ -185,6 +188,19 @@ carries it either. The state is what the record shows:
 - `ended`: the row says ended or failed.
 - `gone`: ended, and the transcript file the client named is no longer there. Only the
   file's status is read, and a live session whose file is not written yet stays `live`.
+
+**Opening the executor** is the action a holder offers. A press asks the server for a
+plan (`GET /api/open-plan`, described in
+[What a click opens](connection-contract.md#what-a-click-opens)) and opens the session
+where it was last open: the Claude Code extension in its IDE, Claude Desktop, the Codex
+app or a terminal, then the owner's fallback place and VS Code when that place is
+unknown or not installed, unless the owner set one place to always open in. A Codex
+session last open in the IDE extension opens in the Codex app, because the extension's
+route has not been seen working yet. A subagent opens through its parent. A session
+live in a terminal is not started a second time, a session the client no longer keeps
+is not opened at all, and the plan says why instead. The desktop app runs the plan's
+steps; a browser follows one per press. Apart from a command of the owner's own, which
+the app runs as set, neither the page nor the app decides where a session goes.
 
 Memory reads through its own provider API. A work item keeps a typed `memory`
 pointer and its stored label, including when the provider is unavailable. Retiring

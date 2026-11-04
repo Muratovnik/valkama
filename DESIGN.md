@@ -622,20 +622,37 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   description, a comment, a report section, a question, an attempt's result, a
   ref's label. It reads markdown (paragraphs, lists, code, links, emphasis,
   quotes, tables) into a tree that carries no markup: raw HTML is shown as the
-  text it was, an image is a link to it, and a link keeps only an `http`,
-  `https` or `mailto` address and opens outside the app. Nothing reaches
-  `v-html`. A single line break stays one, because these texts were `pre-wrap`
-  before and agents write one fact per line. A markdown heading is an emphasised
-  paragraph: the section the text stands in owns the outline. Code, hashes and
+  text it was, an image is a link to it, and a link with an `http`, `https` or
+  `mailto` address opens outside the app. A link with no scheme names a file or
+  folder of the project, as a path written in the text or in a code span does,
+  and a link of any other scheme keeps its words and loses its address. Nothing
+  reaches `v-html`. A single line break stays one, because these texts were `pre-wrap`
+  before and agents write one fact per line. In a card a markdown heading is an
+  emphasised paragraph: the section the text stands in owns the outline. A
+  document the viewer shows keeps its headings as headings. Code, hashes and
   ids are set in the metadata font.
 - **References in free text** link only where they resolve, and each owner of
   that knowledge answers for its own: the open space for its items, the card for
   its own space (through its draft guard and Back) and for the commits and
   memory ids it carries as refs, the shell for another known space and for
-  session ids the server knows. Whatever no layer claims — `SHA-256`, a number
-  missing from the space — is the text it was. A modal dialog that could only
-  open a card behind itself — the new task's preview — claims every reference as
-  text.
+  session ids the server knows, and the documents layer for paths, which the
+  server resolves from the space's root or from the document they stand in.
+  Whatever no layer claims — `SHA-256`, a number missing from the space — is the
+  text it was. A path that is surely one but opens nothing copies itself instead,
+  with a dotted underline that tells it from a link without colour; one that only
+  looks like a path (`client/server`) stays text until the server confirms it. A
+  modal dialog that could only open a card behind itself — the new task's preview
+  — claims every reference as text.
+- **A project's document:** `DocumentViewer` shows one Markdown file of a project,
+  read-only, in a drawer on the command layer: over a card, which stays mounted
+  under it with any draft, and over the panel of open questions, at full width on a
+  window of 620 px or less, its width kept under `valkama-document-pane-width`. Its
+  head names the project and the path, which copies itself, and offers Back to the
+  document before and a refresh. A `#…` or `:42` brings that block to the top and
+  marks it; an anchor the file no longer has is said in the head's status line. A
+  link to another Markdown file opens in the same drawer, and a file read again when
+  the window returns keeps the reader's place by the heading above it. Escape closes
+  the drawer alone and hands focus back to the link that opened it.
 - **A reference's card:** `ReferencePreview` owns the one card per window shown
   for a work item's number in free text, half a second after the pointer rests on
   it or at once on Tab: number and state on a line, the title, the holder and the
@@ -846,7 +863,8 @@ and then jumps to another without a reason to. The bar has one height: on
 its left the item
 in one tertiary line — the kind (glyph and word), the reference (it copies itself),
 when it last changed and, where the item has one, its plan anchor as an icon, whose
-whole path stands in Relations with the item's other references — and on its right
+whole path stands in Relations with the item's other references, both opening the
+document at the anchor — and on its right
 Back and Close. The scroller holds the rest and moves it 1:1: the title, one line of
 facts in the registry's marks, the labels, the tabs, the content. The state is its
 own transition menu: said once, and a move the server refuses leaves the chip naming
@@ -1049,7 +1067,10 @@ the rule first — a session opens where it was last open — then, per client f
 where it falls back and an explicit "always open in" that says beside the family
 when it replaces the rule. Places a family's sessions cannot open in, and places
 not installed here, are omitted rather than displayed as unusable choices; one
-already chosen stays shown, with what it comes to beside it.
+already chosen stays shown, with what it comes to beside it. Windows notifications
+holds the switch, the events, how much a notification's text reveals, a readiness row
+that says what Windows will do with one and how to change it, and a trial that sends
+a real notification; turning the switch off keeps the events chosen.
 
 ## Accessibility
 

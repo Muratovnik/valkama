@@ -828,6 +828,29 @@ Host Runtime registers the hook from that. After the listener's port changes, th
 old address stops answering and messages show as they were until the installer is run
 again; whatever else listens on that old port would receive the text.
 
+## What a client update can change
+
+Beyond the hook input, Valkama depends on these details of its clients, and a
+client update can change any of them without notice. They are listed here so
+that after an update there is one place to check. Each fails toward a path that
+does not depend on it: a session whose place is unknown opens in the fallback
+place, and a plan that cannot open a session says why instead of opening an
+empty conversation.
+
+| Detail | Read by | When it stops answering |
+| --- | --- | --- |
+| `CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_CODE_SESSION_KIND`, `CLAUDE_CODE_HOST_SESSION_ID`, `CODEX_INTERNAL_ORIGINATOR_OVERRIDE` | a session start and the identity transform ([Where a session is open](#where-a-session-is-open)) | the session is not placed and opens in the fallback place |
+| The executable names above the hook: `Code.exe` and its forks, a JetBrains `…64.exe`, `WindowsTerminal.exe`, `OpenConsole.exe`, `ChatGPT.exe` | a session start on Windows | the IDE is taken for VS Code, and a Codex app session is not placed |
+| The last `entrypoint` in a Claude Code transcript, and `payload.originator` on the first line of a Codex rollout | the open plan, for a session recorded before places were | the session is not placed |
+| `<config>/sessions/<pid>.json` of Claude Code, its `sessionId` and `pid` only | the desktop app, at a click, to see whether the process runs | the session's row decides whether it runs |
+| `CLAUDE_PID` and `CLAUDE_CODE_SESSION_ID` | [the watcher](#the-watcher) | a watcher whose client is gone, or that runs for another session, is ended by the session's end or its `timeout` alone |
+| `claude://code/continue?session=<id>`, `claude-cli://open?cwd=<folder>&q=/resume <id>`, `vscode://openai.chatgpt/local/<id>`, a link landing in the window just opened, and the extension's "still open somewhere else" notice holding its input | the open plan, only once each has been watched working and named in `url_schemes.SEEN_LIVE`, which no build names yet | nothing: until then the plan takes the way round described in [What a click opens](connection-contract.md#what-a-click-opens) |
+
+The four variables, Claude Code's session files and the two routes
+`claude://code/continue` and `vscode://openai.chatgpt/local/` are not in their
+client's documentation. Each link the open plan writes is built in one function of
+`server/ops/url_schemes.py`, so a route a client changes is one line to replace.
+
 ## What `doctor` shows
 
 Under Installation → Store:

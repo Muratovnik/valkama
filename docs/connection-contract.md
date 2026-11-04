@@ -1646,7 +1646,8 @@ a link landing in the window just opened, `claude://code/continue`, `/resume`
 through `claude-cli://`, the extension's "still open somewhere else" notice holding
 its input, and `vscode://openai.chatgpt/local/<id>`. Until then the plan takes the
 documented way round: two actions, `desktop-resume`, a command to copy, only the
-explanation, and the Codex app.
+explanation, and the Codex app. Every client detail a plan depends on is listed in
+[What a client update can change](hook-contract.md#what-a-client-update-can-change).
 
 ### Server identity
 

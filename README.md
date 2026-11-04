@@ -26,7 +26,8 @@ directory, and the MCP server only exists while a client is talking to it.
   exact store and space; unavailable sources and truncated results stay visible.
 - **Questions and decisions** in the task's discussion and a shared inbox. Agents
   create typed requests; the owner answers, in their own words if they prefer, or
-  declines the exact request. Expired requests stop accepting
+  declines the exact request, and can change an answer while the task is open.
+  Expired requests stop accepting
   answers, and sending an answer does not automatically resume an execution.
 - **Memory that points rather than copies.** Each project's knowledge is
   searched through whichever provider answers for it, and what is attached to
@@ -498,8 +499,13 @@ shows the lease and when it expires. The exact rules are in
 [the connection contract](docs/connection-contract.md#claims-are-leases).
 
 The inspector keeps editable descriptions and a shared discussion. A comment can
-target a checklist step. Work reports are what agents publish with
-`report_work_item`; they show in the discussion with “What was done / Why / What
+target a checklist step, and a reply stands under the comment, report or question
+it answers, one level deep. A thread can be marked resolved with a one-line
+decision, by a person in the card or by an agent with `resolve_work_item_comment`,
+and `get_work_item` with `unresolved: true` reads the threads still open
+([details](docs/connection-contract.md#threads-and-the-resolved-mark)). Work
+reports are what agents publish with `report_work_item`; they show in the
+discussion with “What was done / Why / What
 comes next”, and any of them can be selected as the task outcome. Closing a task
 that has no outcome asks a person for one: what was done and what comes next. System
 and execution history have filters, date groups and expandable details. Their
@@ -512,9 +518,13 @@ a boolean. Optional execution and session bindings must belong to the task.
 `answer_work_item_request`, `decline_work_item_request` and
 `expire_work_item_request` require that request's `expected_revision`. A terminal
 task, ended execution or elapsed deadline closes the pending request. An option
-can explain itself in a `description` and be `recommended`, and an answer can be
-chosen options, a note in the person's own words, or both. Answers are stored
-separately from comments and do not change the task's workflow.
+can explain itself in a `description` and be `recommended`. A field with options
+is answered with an option or the person's own variant, and may carry a comment;
+a note comments on the whole question and does not answer a required field. While
+the task is open, a given answer can be changed, in the card or with
+`answer_work_item_request` and `change: true`, and the answers it replaced are
+kept ([details](docs/connection-contract.md#questions-and-decisions)). Answers are
+stored separately from comments and do not change the task's workflow.
 
 Work items relate to each other the way
 [beads](https://github.com/steveyegge/beads) proved useful for agents. A
@@ -564,20 +574,21 @@ starts its own server, and the first to open the store upgrades it. Schema 9
 dropped the extension registry's tables, the module rows and the integration
 switches; its snapshot is labelled `preschema9`. Schema 10 lets a comment be a
 reply under another one or under a question and carry a resolve mark, numbers a
-question's answer and keeps the answers it replaced, and records where a session
-was last opened; its snapshot is labelled `preschema10`. A store older than 9
-takes both steps in one open, under the `preschema9` (or `preproductmodel`)
-snapshot.
+question's answer and keeps the answers it replaced, records where a session
+was last opened, and adds the owner's Windows notification settings
+(`owner_alert_settings`, empty until they are saved); its snapshot is labelled
+`preschema10`. A store older than 9 takes both steps in one open, under the
+`preschema9` (or `preproductmodel`) snapshot.
 
-The order of work needs no migration. A placement is written to the item's
-`position`, a column every schema-9 store already has, so the schema stays 9, no
-snapshot is taken for it, and an earlier schema-9 build opens the same store and
-lists its states in the placed order. Such a build still puts a moved item last
-in its new state, and a later placement works from there.
+The order of work took no migration of its own. A placement is written to the
+item's `position`, a column every schema-9 store already has, so no snapshot was
+taken for it, and an earlier schema-9 build opens a schema-9 store that holds
+placements and lists its states in the placed order. Such a build still puts a
+moved item last in its new state, and a later placement works from there.
 
-Notes on answers and option descriptions need no migration either, and the store
-stays at 9. A build from before them opens the same store and its tools read and
-answer those questions, with the note among the `answers` as `_note`. Its web
+Notes on answers and option descriptions took no migration either. A schema-9
+build from before them opens a schema-9 store that holds them, and its tools read
+and answer those questions, with the note among the `answers` as `_note`. Its web
 interface is strict about what it reads, so it reports that it could not update
 the questions: on the card of a question with a note or a described option, and for
 the whole "waiting for my answer" list while a pending question has a described
@@ -602,6 +613,13 @@ refuses the store that is still at 10, so the board disappears from all of
 them. Everything written since the upgrade is lost. Stamping the store back to
 9 is not a way back here: a schema-9 build would show a reply as a comment of
 its own and misread the new keys in an answer.
+
+The hook spool changed in the same release. A session start that has to wait in
+the spool is written as spool version 2, which carries where the session is open;
+every other event keeps version 1. After going back, the earlier build delivers a
+version-1 file left in the spool and sets a version-2 one aside as `*.rejected`,
+which `doctor` counts until the file is deleted. That session start belonged to
+the upgraded store going back discards, so nothing more is lost.
 
 A store that still contains the Board-era model refuses to open until you
 authorize its one-way conversion. Inspect the conversion first, then apply it:
@@ -669,6 +687,16 @@ and the Skills catalogue and activation API are also retired. This does not
 change installed skill files or agent-client settings.
 
 ## Project documents
+
+A path to a project's file or folder in a work item's text, or a Markdown link to
+one, can be pressed. A Markdown file opens in Valkama's document viewer, over the
+card or the panel of open questions, read-only and at the `#kb:…` anchor, heading or
+`:42` line the path names; a link in it to another Markdown file opens in the same
+place, and Back returns. Any other file opens in the editor Settings names, at its
+line, and a folder in that editor, through the open plan described below. A path
+that cannot be opened is copied. A work item's `source`, its plan anchor, opens in
+the viewer at the anchor, from the mark in the card's head and from its row in
+Relations, in a browser and in the desktop app alike.
 
 A path in a work item's text is a candidate on the page, and the server says
 what it is. `web/tests/fixtures/document-path-samples.json` is the table of what
@@ -831,7 +859,14 @@ The events are `session-start`, `session-end`, `subagent-start`,
 clients, plus `notification` and `post-tool-use` for Claude Code. Each one updates
 the session row that `GET /api/session` and work-item context read.
 `claude post-tool-use` names the agent an Agent tool call started. `claude
-pre-tool-use` adds the session identity to a Valkama tool call. Only an
+pre-tool-use` adds the session identity to a Valkama tool call. `session-start`
+also records where the session is open — an IDE extension, its terminal, a
+terminal, Claude Desktop or the Codex app — from a few named environment
+variables and, on Windows, the names of the programs above the hook, which is
+where a click on the session opens it. What is kept is the kind of place, the
+product, the folder the session started in and Claude Desktop's own id for it,
+never a variable's value
+([details](docs/hook-contract.md#where-a-session-is-open)). Only an
 allowlisted set of fields is kept: never the prompt, tool arguments other than an
 Agent call's short description, or assistant text.
 
