@@ -1,7 +1,7 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import { LINK, linkIn } from './documentBackend.ts'
+import { aCardAsking, IDENTIFIERS, LINK, linkIn, NAMED_PATH } from './documentBackend.ts'
 import { openBesideCard, paneOf, settled } from './documentBeside.ts'
 import { test } from './test.ts'
 
@@ -60,6 +60,38 @@ test('the frame is a named region, draws its edge where more is hidden, and foll
   await expect(frame).toHaveAttribute('data-more', 'start')
   await expect(frame).toHaveCSS('border-inline-start-width', '2px')
   await expect(frame).toHaveCSS('border-inline-end-width', '0px')
+})
+
+test('a word longer than a column’s measure widens the column and stays whole, plain or as code', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1500, height: 900 })
+  const { drawer } = await aCardAsking(page, `Read \`${NAMED_PATH}\` first.`)
+  await linkIn(drawer, NAMED_PATH).click()
+  const { pane } = paneOf(page)
+  await settled(drawer)
+  const frame = pane.locator('.rich-table-frame')
+  for (const word of IDENTIFIERS) {
+    const cell = frame.locator('td', { hasText: word })
+    const { lines, overrun } = await cell.evaluate((node) => {
+      const range = document.createRange()
+      const tops = new Set<number>()
+      const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT)
+      for (let words = walker.nextNode(); words; words = walker.nextNode()) {
+        range.selectNodeContents(words)
+        for (const rect of range.getClientRects()) tops.add(Math.round(rect.top))
+      }
+      const words = node.querySelector('.rich-cell-words')?.getBoundingClientRect()
+      return {
+        lines: tops.size,
+        overrun: (words?.right ?? 0) - node.getBoundingClientRect().right,
+      }
+    })
+    // Broken at the measure it read as two words; spilled past its cell it covered the next.
+    expect(lines).toBe(1)
+    expect(overrun).toBeLessThanOrEqual(0)
+  }
+  await expect(frame).toHaveAttribute('data-more', 'end')
 })
 
 test.describe('in a forced palette', () => {

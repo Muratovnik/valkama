@@ -266,7 +266,9 @@ const headingTag = (heading: Heading) => `h${heading.level ?? 2}`
    holds its words whole and scrolls sooner: a table squeezed to fit broke them mid-word. Each
    column there is as wide as its words ask, up to a measure a line of prose reads at: one
    floor for every column set them all equal, short ones with room to spare and long ones
-   wrapped into rows of empty space. Only a word longer than the measure breaks. */
+   wrapped into rows of empty space. A word longer than the measure — an identifier, a
+   name — widens its column instead of breaking, as a table on a code host does: broken
+   mid-word it read as two words and copied as none, and the frame scrolls already. */
 .rich-table-frame {
   max-width: 100%;
   overflow-x: auto;
@@ -275,10 +277,12 @@ const headingTag = (heading: Heading) => `h${heading.level ?? 2}`
     overflow-wrap: normal;
 
     & .rich-cell-words {
+      --rich-inline-wrap: normal;
+
       display: block;
       width: max-content;
+      min-width: min-content;
       max-width: 32ch;
-      overflow-wrap: break-word;
     }
   }
 }

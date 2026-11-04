@@ -335,6 +335,9 @@ checkouts are therefore distinguishable even at the same version.
   that says a read failed was the ground's own tone, so only its red edge showed, bent by
   the corners into a bracket. The panel now lies a step above the ground
   with a straight edge, and the dots of a read under way start where the content will.
+- **A long identifier in a document's table stays whole.** A word longer than a column's
+  measure, plain or written as code, was broken in the middle; it now widens its column, and
+  the table scrolls in its frame as a wide table already did.
 
 ### Removed
 

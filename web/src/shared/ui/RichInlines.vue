@@ -150,20 +150,21 @@ function open(reference: TextReference) {
 .rich-code {
   padding: 0 var(--space-1);
   font-size: var(--font-size-dense);
-  overflow-wrap: anywhere;
+  overflow-wrap: var(--rich-inline-wrap, anywhere);
   background: var(--color-surface-recess);
   border-radius: var(--radius-status);
 }
 
 /* A link in prose is underlined as well as coloured, so it is not told apart by
-   colour alone. */
+   colour alone. A path or an identifier breaks anywhere so that it never widens the
+   text, unless what holds it, a document's table, would rather widen. */
 .rich-link,
 .rich-reference {
   color: var(--color-accent);
   text-decoration-line: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 0.2em;
-  overflow-wrap: anywhere;
+  overflow-wrap: var(--rich-inline-wrap, anywhere);
 }
 
 /* An in-app reference is a button, because what it does is open something here
