@@ -72,6 +72,9 @@ export const LINE_BUDGET = new Map([
   // GraphView keeps the pan viewport frame, the floating flow controls and a
   // legend glyph whose border is the drawing itself.
   ['features/input-requests/components/RequestFold.vue', 1], // A reply's rule, as a quote's.
+  // The rule that sets a question's own comment and buttons apart from its fields, whose
+  // comment toggles were otherwise the same step away and read as the last field's.
+  ['features/input-requests/components/RequestAnswerFields.vue', 1],
   ['features/input-requests/components/RequestFieldAnswer.vue', 1], // A comment's rule, as a quote's.
   ['features/input-requests/components/RequestHistory.vue', 1], // A replaced answer's, the same.
   // Settings General uses one earned divider between its preference groups

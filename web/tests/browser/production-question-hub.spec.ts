@@ -38,8 +38,9 @@ async function openList(page: Page, entries: InputRequestEntry[]) {
   const opened = await openQuestion(page, entries)
   await page.keyboard.press('Escape')
   await expect(opened.drawer).toHaveCount(0)
-  await page.getByRole('button', { name: /^Needs my answer/ }).click()
-  const dialog = page.getByRole('dialog', { name: 'Needs my answer', exact: true })
+  // In either language, for the tests that set one.
+  await page.getByRole('button', { name: /^(?:Needs my answer|Ждут моего ответа)/u }).click()
+  const dialog = page.getByRole('dialog', { name: /^(?:Needs my answer|Ждут моего ответа)$/u })
   const card = (prompt: string) => dialog.locator('.request-card').filter({ hasText: prompt })
   return { ...opened, dialog, card }
 }
@@ -217,3 +218,29 @@ test('a refresh that fails rings its sentence clear of the words, as the list ri
   // The 4px a question's own lines keep their ring at (`.request-state`); 2px touched the letters.
   await expect(failure).toHaveCSS('outline-offset', '4px')
 })
+
+for (const locale of ['en', 'ru'] as const) {
+  test(`in ${locale} the comment on the question stands apart from the fields, with the buttons`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1500, height: 900 })
+    await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
+    const { card } = await openList(page, [
+      listed(TOUCHED, 'The touched question', '2026-10-24T10:02:00Z'),
+    ])
+    const touched = card('The touched question')
+    // Every part open: the own option's text, the field's comment and the question's.
+    await touched.getByRole('radio').last().check()
+    await touched.locator('.request-note-toggle').first().click()
+    await touched.locator('.request-note-toggle').last().click()
+    const field = await touched.locator('.request-field').boundingBox()
+    const note = touched.locator('.request-fields > .request-note')
+    const zone = await note.boundingBox()
+    const held = await touched.locator('.request-held').first().boundingBox()
+    // A rule sets the question's own comment off from the field above, further than a step.
+    await expect(note).toHaveCSS('border-top-width', '1px')
+    expect((zone?.y ?? 0) - (field?.y ?? 0) - (field?.height ?? 0)).toBeGreaterThan(12)
+    // The buttons follow it at the card's own step, with no room left empty between.
+    expect(Math.round((held?.y ?? 0) - (zone?.y ?? 0) - (zone?.height ?? 0))).toBe(12)
+  })
+}

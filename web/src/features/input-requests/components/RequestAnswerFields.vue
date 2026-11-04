@@ -91,6 +91,7 @@ defineExpose({ focusField, noteOpen })
     <RequestNote
       ref="questionNote"
       v-model:preview="previewing"
+      class="request-question-note"
       :disabled="disabled"
       :label="t('requests.questionNote')"
       :maxlength="8000"
@@ -108,5 +109,14 @@ defineExpose({ focusField, noteOpen })
   display: grid;
   gap: var(--space-3);
   min-width: 0;
+}
+
+/* The comment on the whole question is the question's, as the buttons under it are, and not
+   the last field's: a rule sets it apart from the fields, with more room above it than a field
+   keeps from the next. At the fields' own step it read as one more comment on the last one. */
+.request-question-note {
+  padding-top: var(--space-3);
+  margin-top: var(--space-1);
+  border-top: 1px solid var(--color-rule);
 }
 </style>

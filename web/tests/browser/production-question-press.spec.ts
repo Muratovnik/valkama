@@ -186,7 +186,10 @@ test('in the list of everything waiting a second press selects nothing of the ne
   const at = await centre(decline(top))
   await press(page, at)
   await expect(top.locator('.request-state')).toBeVisible()
-  await expect.poll(() => under(page, at)).toMatch(/^The lower question: Choice/u)
+  // An option row of the next question stands where the press was, whichever of them it is.
+  await expect
+    .poll(() => under(page, at))
+    .toMatch(/^The lower question: (?:Choice|Your own option)/u)
   await press(page, at, 2)
   await pause(150)
   expect(writesTo(opened.requests)).toEqual([UPPER])

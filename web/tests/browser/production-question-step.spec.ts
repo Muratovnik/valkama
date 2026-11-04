@@ -350,6 +350,15 @@ test('a deadline passing while the step stands takes focus to the line that says
   await expect(asking(top)).toHaveCount(0)
 })
 
+type Box = { height: number; width: number; x: number; y: number } | null
+
+/** Whether two boxes share any of the window. */
+function overlap(one: Box, other: Box) {
+  if (!one || !other) return false
+  const across = one.x < other.x + other.width && other.x < one.x + one.width
+  return across && one.y < other.y + other.height && other.y < one.y + one.height
+}
+
 /** What the foot would otherwise lie on, and the buttons that must not move for it. */
 async function layout(card: Locator) {
   return {
@@ -380,7 +389,9 @@ for (const [width, height] of [
       const asked = await asking(lower).boundingBox()
       expect(await layout(lower)).toEqual(before)
       expect(asked?.y).toBeGreaterThanOrEqual((before.own?.y ?? 0) + (before.own?.height ?? 0))
-      expect((asked?.y ?? 0) + (asked?.height ?? 0)).toBeLessThanOrEqual(before.wayOut?.y ?? 0)
+      // Beside the buttons where their row has room, above them where it has none: on neither.
+      expect(overlap(asked, before.wayOut)).toBe(false)
+      expect(overlap(asked, before.onward)).toBe(false)
       await expect(asking(lower)).toBeInViewport({ ratio: 1 })
       await page.keyboard.press('Escape')
       expect(await layout(lower)).toEqual(before)

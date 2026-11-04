@@ -362,6 +362,12 @@ checkouts are therefore distinguishable even at the same version.
   answer gave an option's text 184px of 390. In a window 620px wide or narrower, where the
   card already takes the whole width, a dialog does too, with no corners and a 16px inset
   shared by its head, body and foot; the finder still stands just under the top.
+- **A question's own comment stands apart from its fields.** «Comment on the question» was the
+  same press, the same step away, as the comment on the field above it, and read as one more
+  comment on that field. A rule now sets it off with the buttons under it. With that comment
+  open, the room kept for «Don't answer» to ask in stood as an empty band of about 45px above
+  the buttons; it now stands in the buttons' row beside the two answers, and on a row of its
+  own only where that row has no room.
 
 ### Removed
 
