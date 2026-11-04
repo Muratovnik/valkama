@@ -287,6 +287,7 @@ defineExpose({ toggleFilter })
         :scope-kind="graphScopeKind"
         :space="model.planning_space?.planning_space_id ?? ''"
         :items="visibleItems"
+        :space-items="model.work_items"
         :selected-id="selectedId"
         :edges="graphEdges"
         :epic-id="chain?.root.work_item_id ?? null"

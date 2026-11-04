@@ -221,31 +221,6 @@ export function workNodes(
 }
 
 /**
- * The drawn items no drawn link touches. A parent is a chip on its children and
- * not a link, so an item related to nothing but its epic counts as unlinked: in
- * a real space those are most of the items, and laid out as a grid they push
- * the graph's actual structure off the screen.
- *
- * When nothing in view is linked there is no structure for them to crowd out,
- * so none is reported and the field draws every item rather than none.
- */
-export function unlinkedIds(
-  source: GraphSource,
-  showDone: boolean,
-  scope: GraphScope = WHOLE_SPACE,
-): Set<string> {
-  const drawn = workNodes(source, showDone, scope).map((node) => node.work_item_id)
-  const present = new Set(drawn)
-  const linked = new Set<string>()
-  for (const edge of source.edges) {
-    if (edge.kind === 'parent' || !present.has(edge.from) || !present.has(edge.to)) continue
-    linked.add(edge.from)
-    linked.add(edge.to)
-  }
-  return linked.size ? new Set(drawn.filter((id) => !linked.has(id))) : new Set<string>()
-}
-
-/**
  * How many finished items the "show done" control is currently hiding.
  *
  * Counted as what showing them would add rather than as the closed items in

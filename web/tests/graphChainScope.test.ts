@@ -3,12 +3,7 @@ import assert from 'node:assert/strict'
 import ELK from 'elkjs/lib/elk.bundled.js'
 import { test } from 'vitest'
 
-import {
-  doneCount,
-  layout,
-  unlinkedIds,
-  workNodes,
-} from '@/widgets/work-item-graph/utils/graphLayout.ts'
+import { doneCount, layout, workNodes } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import type { GraphScope, GraphSource } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 
 import { chainGroup } from '@/shared/api/planningChainGroups.ts'
@@ -107,21 +102,6 @@ test('the chain is laid out with only its own nodes, and a link to outside work 
     ['MAIN-1', 'MAIN-2', 'MAIN-3', 'MAIN-4'],
   )
   assert.equal(placed.edges.length, 1)
-})
-
-test('an item no drawn link touches is unlinked, and a parent edge is not a link', () => {
-  // Open view: 3 and 5 are linked by a block; 4's only link is to closed 2.
-  assert.deepEqual(
-    [...unlinkedIds(space, false)].sort((left, right) => left.localeCompare(right)),
-    [id(4), id(6)],
-  )
-  // All view: 4 is linked to 2, so only 6 is left.
-  assert.deepEqual([...unlinkedIds(space, true)], [id(6)])
-})
-
-test('when nothing in view is linked, nothing is called unlinked and every item is drawn', () => {
-  const loose: GraphSource = { nodes: [item(7), item(8)], edges: [] }
-  assert.equal(unlinkedIds(loose, false).size, 0)
 })
 
 /** The group of an item in this category, ready to take or not. */

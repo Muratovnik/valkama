@@ -7,14 +7,22 @@
  * screen; the neutral read model is fetched once above and all three views
  * project from that same answer.
  *
- * What remains here is the one race that is still real: every projection swap
- * resets the focus, because a hover id that survived one would light an
- * unrelated node.
+ * A layout runs only when the field's structure changes — what is drawn, in
+ * which frame, folded or not, and which lines join it (`graphFrames`). Every
+ * agent's turn arrives as a new frame of the stream, and laying the field out
+ * for each one moved nothing and cost a layout; so a state, a holder, live work
+ * or a title is laid on the placed field by id instead (`drawn`), and `placed`
+ * keeps the geometry the last layout gave.
+ *
+ * Focus is kept while what it lights is drawn: a hover that survived a change
+ * of scope would light an unrelated node, so a new scope clears it, and a new
+ * layout clears it only when its node is gone.
  */
 
 import { computed, onScopeDispose, ref, shallowRef, watch } from 'vue'
 import type { ComputedRef, Ref } from 'vue'
 
+import { useGraphFrames } from '@/widgets/work-item-graph/composables/useGraphFrames.ts'
 import {
   activeGraphFocus,
   createGraphFocus,
@@ -24,12 +32,14 @@ import type {
   GraphFocusContext,
   GraphFocusEvent,
 } from '@/widgets/work-item-graph/utils/graphFocus.ts'
+import { frameProjection } from '@/widgets/work-item-graph/utils/graphFrames.ts'
+import type { FrameProjection } from '@/widgets/work-item-graph/utils/graphFrames.ts'
+import type { LiveWork, PlacedFrame } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import {
   doneCount,
   frontier,
   layout,
   neighborhood,
-  unlinkedIds,
   workNodes,
 } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import type {
@@ -38,6 +48,7 @@ import type {
   GraphSource,
 } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import { createGraphLayoutRunner } from '@/widgets/work-item-graph/utils/graphLayoutRunner.ts'
+import { layoutFrames } from '@/widgets/work-item-graph/utils/graphLayoutTree.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 
@@ -45,31 +56,75 @@ import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 type ProjectionInput = () => {
   edges: GraphSource['edges']
   epicId: string | null
+  /** What the field draws from: the whole space, or what a queue or search let through. */
   nodes: GraphSource['nodes']
   open: boolean
   scopeKind: GraphScope['kind']
   space: string
   version: number
+  /** The server's `live_work`: the items an agent's session is working on now. */
+  live?: Readonly<Record<string, LiveWork>>
   /** The chain's member ids, in chain scope. */
   members?: readonly string[]
+  /**
+   * The whole space, when `nodes` is what a filter let through: a frame counts
+   * its epic's work, not the filter's.
+   */
+  spaceItems?: GraphSource['nodes']
 }
 
 export type GraphProjection = {
+  /** The placed field with today's items, frames and links laid on it by id. */
+  drawn: ComputedRef<GraphLayout | null>
   emptyOpen: ComputedRef<boolean>
   emptySpace: ComputedRef<boolean>
   failed: Ref<boolean>
   focusSet: ComputedRef<ReturnType<typeof neighborhood> | null>
+  /** The drawn frames, with today's counts. */
+  frames: ComputedRef<PlacedFrame[]>
   hiddenDone: ComputedRef<number>
+  live: ComputedRef<Readonly<Record<string, LiveWork>>>
   openTotal: ComputedRef<number>
   pending: Ref<boolean>
+  /** The geometry of the last layout; it changes only when a layout lands. */
   placed: Ref<GraphLayout | null>
   ready: ComputedRef<WorkItemBrief[]>
   showDone: Ref<boolean>
-  showUnlinked: Ref<boolean>
-  /** Items with no drawn link, which the field leaves out unless asked. */
-  unlinked: ComputedRef<number>
   applyFocus: (event: GraphFocusEvent) => void
+  /** Whether a drawn frame is folded now. */
+  folded: (frameId: string) => boolean
   retry: () => void
+  /** Fold a drawn frame or open it; the choice is kept for the space. */
+  toggle: (frameId: string) => void
+}
+
+/** Today's items, frames and links laid on a placed field by id; its geometry stays. */
+function decorate(
+  geometry: GraphLayout,
+  items: ReadonlyMap<string, WorkItemBrief>,
+  projection: FrameProjection | null,
+): GraphLayout {
+  const frames = new Map(projection?.frames.map((frame) => [frame.id, frame]))
+  const lines = new Map(projection?.edges.map((edge) => [edge.id, edge]))
+  return {
+    ...geometry,
+    nodes: geometry.nodes.map((node) => {
+      const item = items.get(node.work_item_id)
+      if (!item) return node
+      const { x, y, width, height, frameId } = node
+      return { ...item, x, y, width, height, frameId }
+    }),
+    frames: geometry.frames.map((frame) => {
+      const now = frames.get(frame.id)
+      return now
+        ? { ...frame, epic: now.epic, progress: now.progress, members: now.members }
+        : frame
+    }),
+    edges: geometry.edges.map((edge) => ({
+      ...edge,
+      links: lines.get(edge.id)?.links ?? edge.links,
+    })),
+  }
 }
 
 export function useGraphProjection(
@@ -95,10 +150,10 @@ export function useGraphProjection(
       else spaceShowDone.value = value
     },
   })
-  const showUnlinked = ref(false)
   const focus = ref<ReturnType<typeof createGraphFocus>>(
     createGraphFocus({ ...input(), showDone: false }),
   )
+  const frameChoices = useGraphFrames(() => input().space)
 
   const source = computed<GraphSource | null>(() => {
     const now = input()
@@ -114,42 +169,49 @@ export function useGraphProjection(
       : { kind: now.scopeKind, epicId: now.epicId }
   })
 
-  // A chain is drawn whole, and the whole space stands in frames round its
-  // epics, so neither has anything to leave out.
-  const unlinkedSet = computed(() =>
-    source.value && scope.value.kind !== 'chain' && scope.value.kind !== 'all'
-      ? unlinkedIds(source.value, showDone.value, scope.value)
-      : new Set<string>(),
+  /**
+   * What the filter let through, when the host named the whole space beside it.
+   * The host hands a fresh array either way, so a filter is known by what it
+   * left out; one that left nothing out narrows nothing.
+   */
+  const shown = computed(() => {
+    const { nodes, spaceItems } = input()
+    return spaceItems && spaceItems.length !== nodes.length
+      ? new Set(nodes.map((node) => node.work_item_id))
+      : null
+  })
+  const itemsById = computed(
+    () => new Map((input().spaceItems ?? input().nodes).map((item) => [item.work_item_id, item])),
   )
-  /** What ELK is given: the source, less the unlinked items unless they were asked for. */
-  const drawn = computed<GraphSource | null>(() => {
-    const data = source.value
-    if (!data || showUnlinked.value || unlinkedSet.value.size === 0) return data
-    return {
-      nodes: data.nodes.filter((node) => !unlinkedSet.value.has(node.work_item_id)),
-      edges: data.edges,
-    }
+
+  /** The whole space as frames; none in a chain, which keeps its flat drawing. */
+  const projection = computed<FrameProjection | null>(() => {
+    if (!source.value || scope.value.kind !== 'all') return null
+    return frameProjection({
+      items: input().spaceItems ?? source.value.nodes,
+      links: source.value.edges,
+      showDone: showDone.value,
+      shown: shown.value,
+      choices: frameChoices.choices.value,
+    })
   })
 
-  const focusContext = computed<GraphFocusContext>(() => ({
-    ...input(),
-    showDone: showDone.value,
-  }))
+  /** What a flat drawing depends on: its cards and the lines among them. */
+  const flatKey = computed(() => {
+    if (!source.value || projection.value) return ''
+    const cards = workNodes(source.value, showDone.value, scope.value).map((n) => n.work_item_id)
+    const present = new Set(cards)
+    const lines = source.value.edges
+      .filter((edge) => edge.kind !== 'parent' && present.has(edge.from) && present.has(edge.to))
+      .map((edge) => `${edge.from}>${edge.to}:${edge.kind}`)
+    return JSON.stringify([cards.sort(), lines.sort()])
+  })
 
-  watch(
-    () =>
-      [
-        focusContext.value.open,
-        focusContext.value.space,
-        focusContext.value.version,
-        focusContext.value.scopeKind,
-        focusContext.value.epicId,
-        focusContext.value.showDone,
-        showUnlinked.value,
-      ] as const,
-    () => {
-      focus.value = reduceGraphFocus(focus.value, { type: 'reset', context: focusContext.value })
-    },
+  /** The scope a layout belongs to: a new one leaves nothing of the last drawn. */
+  const context = computed(() => JSON.stringify([input().space, scope.value, showDone.value]))
+  /** Everything the geometry depends on; a layout runs when, and only when, it changes. */
+  const structure = computed(() =>
+    source.value ? `${context.value}|${projection.value?.key ?? flatKey.value}` : '',
   )
 
   const placed = shallowRef<GraphLayout | null>(null)
@@ -157,7 +219,7 @@ export function useGraphProjection(
   const failed = ref(false)
   const attempt = ref(0)
   let request = 0
-  let context = ''
+  let placedContext = ''
   // One worker for as long as the field is drawn, and a layout that never answers
   // is stopped, which ends that worker rather than leaving it running.
   const runner = createGraphLayoutRunner()
@@ -169,26 +231,23 @@ export function useGraphProjection(
   })
 
   watch(
-    [drawn, scope, showDone, attempt],
+    [structure, attempt],
     async () => {
       const current = ++request
       clearTimeout(timeout)
       runner.stop()
-      const data = drawn.value
-      const nextContext = JSON.stringify([
-        input().space,
-        scope.value,
-        showDone.value,
-        showUnlinked.value,
-      ])
-      if (!data || context !== nextContext) placed.value = null
-      context = nextContext
+      const data = source.value
+      if (!data || placedContext !== context.value) placed.value = null
+      placedContext = context.value
       pending.value = Boolean(data)
       failed.value = false
       if (!data) return
       timeout = setTimeout(() => runner.stop(), 30_000)
+      const frames = projection.value
       try {
-        const result = await layout(data, runner, showDone.value, scope.value)
+        const result = frames
+          ? await layoutFrames(frames, runner)
+          : await layout(data, runner, showDone.value, scope.value)
         if (request === current) placed.value = result
       } catch {
         if (request === current) failed.value = true
@@ -201,6 +260,35 @@ export function useGraphProjection(
     },
     { immediate: true },
   )
+
+  const drawn = computed(() =>
+    placed.value ? decorate(placed.value, itemsById.value, projection.value) : null,
+  )
+  const frames = computed(() => drawn.value?.frames ?? [])
+
+  const focusContext = computed<GraphFocusContext>(() => ({
+    ...input(),
+    showDone: showDone.value,
+  }))
+  const resetFocus = () => {
+    focus.value = reduceGraphFocus(focus.value, { type: 'reset', context: focusContext.value })
+  }
+  // A different field: whatever was lit belongs to the last one. Each part is
+  // a source of its own: one getter returning a fresh array would count every
+  // new frame of the stream as a change.
+  watch(
+    [() => input().open, () => input().space, () => input().scopeKind, () => input().epicId],
+    resetFocus,
+  )
+  // A new layout of the same field keeps what is lit while it is still drawn.
+  watch(placed, (geometry) => {
+    const lit = [focus.value.hovered, focus.value.focused].filter((id) => id !== null)
+    const ids = new Set([
+      ...(geometry?.nodes.map((node) => node.work_item_id) ?? []),
+      ...(geometry?.frames.map((frame) => frame.id) ?? []),
+    ])
+    if (lit.some((id) => !ids.has(id))) resetFocus()
+  })
 
   function retry() {
     attempt.value += 1
@@ -245,26 +333,34 @@ export function useGraphProjection(
   const emptyOpen = computed(
     () => Boolean(source.value) && !emptySpace.value && !showDone.value && openTotal.value === 0,
   )
-  const unlinked = computed(() => unlinkedSet.value.size)
 
   function applyFocus(event: GraphFocusEvent) {
     focus.value = reduceGraphFocus(focus.value, event)
   }
 
+  const frameNow = (frameId: string) =>
+    projection.value?.frames.find((frame) => frame.id === frameId)
+
   return {
     applyFocus,
+    drawn,
     emptyOpen,
     emptySpace,
-    focusSet,
-    hiddenDone,
-    openTotal,
-    placed,
-    pending,
     failed,
-    retry,
+    focusSet,
+    folded: (frameId) => frameNow(frameId)?.folded ?? false,
+    frames,
+    hiddenDone,
+    live: computed(() => input().live ?? {}),
+    openTotal,
+    pending,
+    placed,
     ready,
+    retry,
     showDone,
-    showUnlinked,
-    unlinked,
+    toggle: (frameId) => {
+      const frame = frameNow(frameId)
+      if (frame) frameChoices.toggle(frame, shown.value !== null)
+    },
   }
 }

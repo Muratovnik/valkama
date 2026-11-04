@@ -202,7 +202,8 @@ describe('graph worker lifecycle', () => {
     finish(0)
     await settle()
     const previous = projection.placed.value
-    input.nodes = [{ ...item, title: 'Changed title' }]
+    // A new card changes what is drawn, so the field is laid out again.
+    input.nodes = [item, second]
     await nextTick()
     expect(projection.placed.value).toBe(previous)
     expect(workers).toHaveLength(1)
@@ -219,7 +220,7 @@ describe('graph worker lifecycle', () => {
     finish(1)
     await settle()
     expect(projection.failed.value).toBe(false)
-    expect(projection.placed.value?.nodes[0].title).toBe('Changed title')
+    expect(drawnIds(projection)).toEqual(['work-1', 'work-2'])
     scope.stop()
   })
 

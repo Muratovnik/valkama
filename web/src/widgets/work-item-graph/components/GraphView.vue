@@ -51,6 +51,8 @@ const props = defineProps<{
   /** Moves each time the host asks the field to take focus once it is framed. */
   focusRequest?: number
   selectedId?: string | null
+  /** The whole space, when `items` is what a filter let through: frames count their epic's work. */
+  spaceItems?: WorkItemBrief[]
 }>()
 
 const emit = defineEmits<{ 'exit-branch': []; 'exit-chain': []; 'open': [reference: string] }>()
@@ -61,6 +63,7 @@ const { t } = useI18n()
 
 const {
   applyFocus,
+  drawn: drawnField,
   emptyOpen,
   emptySpace,
   focusSet,
@@ -72,8 +75,6 @@ const {
   retry,
   ready,
   showDone,
-  showUnlinked,
-  unlinked,
 } = useGraphProjection(
   () => ({
     edges: props.edges,
@@ -83,6 +84,7 @@ const {
     open: props.open,
     scopeKind: props.scopeKind,
     space: props.space,
+    spaceItems: props.spaceItems,
     version: props.version,
   }),
   () => props.selectedId ?? null,
@@ -138,7 +140,7 @@ const {
   focusSet,
   items: () => props.items,
   members: () => props.chain?.members,
-  placed,
+  placed: drawnField,
   scopeKind: () => props.scopeKind,
 })
 
@@ -156,7 +158,7 @@ const { anchorId, fitted, fitOptions, overview, onFlowInit, reveal } = useGraphC
     () => props.epicId,
     () => props.branch?.reference,
   ],
-  narrowings: [() => props.filter, showDone, showUnlinked],
+  narrowings: [() => props.filter, showDone],
 })
 
 /** The chain has closed members, so the key keeps the place «Done» comes and goes from. */
@@ -171,7 +173,7 @@ const chainChip = computed(() =>
 
 const { nodes: flowNodes, edges: flowEdges } = useGraphFlowElements({
   focusSet,
-  placed,
+  placed: drawnField,
   isChainRoot,
 })
 
@@ -224,13 +226,13 @@ function onFieldPointerLeave() {
   >
     <GraphBar
       v-model:show-done="showDone"
-      v-model:show-unlinked="showUnlinked"
+      :show-unlinked="false"
       :chain="chainChip"
       :branch="branchChip"
       :open-total="openTotal"
       :hidden-done="hiddenDone"
       :ready-count="ready.length"
-      :unlinked="unlinked"
+      :unlinked="0"
       :keyed="keyed"
       @exit-chain="emit('exit-chain')"
       @exit-branch="emit('exit-branch')"
