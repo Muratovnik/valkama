@@ -15,11 +15,14 @@
  *
  * Being atomic, a reference would let a line break right after it, before the comma
  * written against it. So it is drawn with what touches it (`glueReferences`), in a
- * box of its own that moves to the next line whole.
+ * box of its own that moves to the next line whole. A code span is inline and breaks
+ * like words, so it needs no box; what touches it narrows the inset of its ground on
+ * that side, which otherwise read as a space before the comma.
  */
 import { computed } from 'vue'
 
 import { glueReferences } from '@/shared/lib/inlineGlue.ts'
+import type { GluedInline } from '@/shared/lib/inlineGlue.ts'
 import { useReferenceLinks } from '@/shared/lib/referenceLinks.ts'
 import { inlineWords } from '@/shared/lib/richText.ts'
 import type { RichInline } from '@/shared/lib/richText.ts'
@@ -60,6 +63,13 @@ function nameOf({ caption, reference }: ReferenceNode) {
   const named = caption ? `${inlineWords(caption)} — ${titleFor(reference)}` : titleFor(reference)
   return reference.kind === 'document' ? named : undefined
 }
+type Glued = Extract<GluedInline, { kind: 'glued' }>
+/** Whether a piece stands in a box of its own: a reference does, being atomic, with what touches it. */
+const boxed = (piece: Glued) => piece.glued && piece.node.kind === 'reference'
+/** Which sides of a piece's ground something is written against, with no space between. */
+function tight(piece: Glued, after = '') {
+  return { 'tight-start': Boolean(piece.before), 'tight-end': Boolean(piece.after || after) }
+}
 /** Absent rather than false: a control that is not waiting makes no claim about it. */
 const busyOf = (reference: TextReference) => resolve(reference)?.busy || undefined
 function open(reference: TextReference) {
@@ -93,20 +103,22 @@ function open(reference: TextReference) {
       rel="noopener noreferrer"
       :href="node.href"
       ><RichInlines :nodes="node.children" /></a
-    ><code
-      v-else-if="node.kind === 'code'"
-      class="rich-code"
-      >{{ node.text }}</code
     ><span
       v-else
-      :class="{ 'rich-glue': node.glued }"
+      :class="{ 'rich-glue': boxed(node) }"
       >{{ node.before
-      }}<template v-if="linkFor(node.node.reference)"
+      }}<code
+        v-if="node.node.kind === 'code'"
+        class="rich-code"
+        :class="tight(node)"
+        >{{ node.node.text }}</code
+      ><template v-else-if="linkFor(node.node.reference)"
         ><button
           v-reference-preview="previewFor(node.node.reference)"
           type="button"
           class="rich-reference"
           :class="{
+            ...tight(node, afterOf(node.node)),
             'rich-code': node.node.code,
             'identifier': isId(node.node),
             'copies': linkFor(node.node.reference)?.copies,
@@ -130,7 +142,7 @@ function open(reference: TextReference) {
       /><code
         v-else-if="node.node.code"
         class="rich-code"
-        :class="{ 'rich-atom': isWeak(node.node) }"
+        :class="{ ...tight(node), 'rich-atom': isWeak(node.node) }"
         >{{ node.node.reference.value }}</code
       ><span
         v-else-if="isWeak(node.node)"
@@ -218,6 +230,16 @@ function open(reference: TextReference) {
   &:hover {
     text-decoration-thickness: 2px;
   }
+}
+
+/* A ground is inset from its words, and beside a comma or a bracket written against it
+   that inset read as a space. On a side something touches, it narrows to a sliver. */
+.rich-code.tight-start {
+  padding-inline-start: var(--space-half);
+}
+
+.rich-code.tight-end {
+  padding-inline-end: var(--space-half);
 }
 
 /* A reference and what is written against it, with no space between, move to the next

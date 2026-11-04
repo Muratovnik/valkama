@@ -345,6 +345,9 @@ checkouts are therefore distinguishable even at the same version.
   `docs/a.md<br>` where a table cell breaks its line, was read as a template and stayed
   text. A name in angle brackets is still a template where the path goes on around it —
   `tmp/<task>/`, `docs/<name>.md` — and anywhere else a tag only ends the path.
+- **No space before a comma after code.** A code span stands on a ground inset from its
+  words, and beside a comma, a bracket or a quote written against it that inset read as a
+  space: «`App.vue` , both». On a side something touches, the inset narrows to 2 px.
 
 ### Removed
 

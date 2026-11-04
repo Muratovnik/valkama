@@ -57,3 +57,46 @@ for (const width of [1500, 390]) {
     expect(split).toEqual([])
   })
 }
+
+/**
+ * A code span stands on a ground inset from its words, and the inset beside a comma or a
+ * bracket written against it read as a space before the comma. Where something touches the
+ * ground, the gap from the span's last letter to it is narrower than the inset it keeps on a
+ * side a space parts; where a space parts them, the inset is whole.
+ */
+test('a comma written against code stands close to it, as after a word', async ({ page }) => {
+  await page.setViewportSize({ width: 1500, height: 900 })
+  const { entry } = await openReported(page, 'in `App.vue`, then (`a.ts`) and `free` here.')
+  const gaps = await entry.evaluate((element) => {
+    const texts: Text[] = []
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+    for (let node = walker.nextNode(); node; node = walker.nextNode())
+      if (node.textContent) texts.push(node as Text)
+    /** From the edge of the span's words to the edge of the character written beside them. */
+    function gap(code: Element, side: 'after' | 'before') {
+      const words = document.createRange()
+      words.selectNodeContents(code)
+      const inside = texts.filter((text) => code.contains(text))
+      const edge = side === 'after' ? inside.at(-1) : inside[0]
+      const text = texts[texts.indexOf(edge as Text) + (side === 'after' ? 1 : -1)]
+      if (!text?.textContent) return null
+      const beside = document.createRange()
+      const at = side === 'after' ? 0 : text.textContent.length - 1
+      beside.setStart(text, at)
+      beside.setEnd(text, at + 1)
+      const [inner, outer] = [words.getBoundingClientRect(), beside.getBoundingClientRect()]
+      return Math.round(side === 'after' ? outer.left - inner.right : inner.left - outer.right)
+    }
+    return [...element.querySelectorAll('code.rich-code')].map((code) => ({
+      inset: getComputedStyle(code).paddingInlineEnd,
+      after: gap(code, 'after'),
+      before: gap(code, 'before'),
+    }))
+  })
+  const [comma, bracketed, free] = gaps
+  expect(comma?.after).toBeLessThanOrEqual(2)
+  expect(bracketed?.before).toBeLessThanOrEqual(2)
+  expect(bracketed?.after).toBeLessThanOrEqual(2)
+  // Parted by spaces, the span keeps the inset its ground is drawn with.
+  expect(free?.inset).toBe('4px')
+})

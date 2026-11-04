@@ -1,6 +1,6 @@
 /**
- * What a reference holds on to: the characters written against it, never a word a
- * space keeps apart, and never the text itself, which reads as it was written.
+ * What a reference or a code span holds on to: the characters written against it, never a
+ * word a space keeps apart, and never the text itself, which reads as it was written.
  */
 import { describe, expect, it } from 'vitest'
 
@@ -12,8 +12,11 @@ import { parseRichInline } from '@/shared/lib/richText.ts'
 function written(pieces: readonly GluedInline[]): string {
   return pieces
     .map((piece) => {
-      if (piece.kind === 'glued')
-        return `${piece.before}[${piece.node.reference.value}]${piece.after}`
+      if (piece.kind === 'glued') {
+        const { node } = piece
+        const inner = node.kind === 'code' ? `{${node.text}}` : node.reference.value
+        return `${piece.before}[${inner}]${piece.after}`
+      }
       return piece.kind === 'text' ? piece.text : `<${piece.kind}>`
     })
     .join('|')
@@ -28,6 +31,10 @@ describe('a reference and what is written against it', () => {
     ['the whole text', 'MAIN-12', '[MAIN-12]'],
     ['two with a comma between', 'MAIN-12,MAIN-13 done', '[MAIN-12],|[MAIN-13]| done'],
     ['a path and its tail', 'see docs/plans/x.md: here', 'see |[docs/plans/x.md:]| here'],
+    // A code span stands on a ground of its own, so it takes what touches it as well.
+    ['a comma after code', 'in `App.vue`, both', 'in |[{App.vue}],| both'],
+    ['code in brackets', 'see (`a.ts`) here', 'see |([{a.ts}])| here'],
+    ['code with spaces around', 'a `b` c', 'a |[{b}]| c'],
   ])('%s', (_name, source, expected) => {
     expect(written(glueReferences(parseRichInline(source)))).toBe(expected)
   })
