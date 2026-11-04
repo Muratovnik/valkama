@@ -350,6 +350,13 @@ checkouts are therefore distinguishable even at the same version.
   command may start Windows Terminal itself, which would run what follows the `;` as another
   command. Such a folder is now passed over, and a command that needs `{cwd}` with no other
   folder is refused as `no-folder`.
+- **A resume in a terminal no longer runs a program the repository holds.** The desktop app
+  started Windows Terminal in the session's folder with `cmd.exe /k claude --resume <id>`,
+  and `cmd` looks for a bare name in its current folder first, so a `claude.cmd` committed to
+  that repository ran in the client's place. `cmd.exe` and the client's CLI now go by their
+  full paths, the CLI as the app finds it (`claude.exe`, or `codex.exe` beside the Codex app),
+  and only the tab starts in the folder. Without the CLI the resume is refused as not
+  installed.
 
 ## [2.4.0](https://github.com/Muratovnik/valkama/compare/v2.3.0...v2.4.0) - 2026-11-03
 

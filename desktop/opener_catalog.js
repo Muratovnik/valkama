@@ -13,7 +13,7 @@ const { execFileSync } = require('node:child_process')
 // (`server/ops/url_schemes.py`). `commandExecutable` is the counterpart of
 // `url_schemes.command_executable`, and both read the samples in
 // `tests/fixtures/scheme-command-samples.json`, so the two cannot drift apart.
-// Windows Terminal and the Claude CLI have no scheme to read and are found by name.
+// Windows Terminal and the Claude and Codex CLIs have no scheme to read and are found by name.
 
 const SUPPORTED_OPENERS = Object.freeze(['vscode', 'codex-app', 'terminal', 'cursor', 'custom'])
 /** The editors, whose product name is also their scheme. */
@@ -23,6 +23,10 @@ const NAMED = Object.freeze({
   'wt.exe': (env) => [path.join(env.LOCALAPPDATA || '', 'Microsoft', 'WindowsApps', 'wt.exe')],
   'claude.exe': (env) => [
     path.join(env.USERPROFILE || os.homedir(), '.local', 'bin', 'claude.exe'),
+  ],
+  // The Codex app installs its CLI beside itself.
+  'codex.exe': (env) => [
+    path.join(env.LOCALAPPDATA || '', 'Programs', 'OpenAI', 'Codex', 'bin', 'codex.exe'),
   ],
 })
 

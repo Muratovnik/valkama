@@ -14,6 +14,8 @@ const FOLDER = 'C:\\work\\repo'
 const CODE = 'C:\\Apps\\VS Code\\Code.exe'
 const WT = 'C:\\WindowsApps\\wt.exe'
 const CLI = 'C:\\work\\bin\\claude.exe'
+const CODEX = 'C:\\work\\bin\\codex.exe'
+const CMD = 'C:\\Windows\\System32\\cmd.exe'
 const EXTENSION_LINK = `vscode://anthropic.claude-code/open?session=${ID}`
 
 function plan(steps, extra = {}) {
@@ -86,10 +88,10 @@ function machine({ plans, exits = true, spawnError = '' } = {}) {
         timeline.push(`sleep ${ms}`)
       },
       editorExecutable: (ide) => (ide === 'vscode' ? CODE : ''),
-      findExecutable: (name) => ({ 'wt.exe': WT, 'claude.exe': CLI })[name] || '',
+      findExecutable: (name) => ({ 'wt.exe': WT, 'claude.exe': CLI, 'codex.exe': CODEX })[name] || '',
       isDirectory: (dir) => dir === FOLDER || dir === 'C:\\work\\my;folder',
       isFile: (file) => file === 'C:\\work\\repo\\docs\\plan.md',
-      env: { ELECTRON_RUN_AS_NODE: '1', PATH: 'C:\\Windows' },
+      env: { ELECTRON_RUN_AS_NODE: '1', PATH: 'C:\\Windows', SystemRoot: 'C:\\Windows' },
       home: 'C:\\work\\home',
       log: (event, fields) => logged.push({ event, fields }),
       windowWaitMs: 2000,
@@ -315,8 +317,27 @@ test('a dead pid makes a crashed terminal session resumable in a new terminal', 
   )
   const started = effects(box.timeline)[0]
   assert.equal(started.spawn, WT)
-  assert.deepEqual(started.args, ['-d', FOLDER, 'cmd.exe', '/k', 'claude', '--resume', ID])
-  assert.equal(started.options.cwd, FOLDER)
+  // Every program by its full path, and none started in the session's folder: cmd
+  // looks for a bare name there first, so a claude.cmd in that repository would run.
+  assert.deepEqual(started.args, ['-d', FOLDER, CMD, '/k', CLI, '--resume', ID])
+  assert.equal(started.options.cwd, 'C:\\work\\home')
+})
+
+test('a resume runs the client found by its full path, or nothing', async () => {
+  const codexPlan = plan([{ kind: 'resume-in-terminal', client: 'codex', session: ID, folder: FOLDER }], {
+    client: 'codex',
+    one_action: true,
+  })
+  const codex = machine({ plans: codexPlan })
+  await openSessionRequest(codex.options({ request: { session: ID } }))
+  assert.deepEqual(effects(codex.timeline)[0].args, ['-d', FOLDER, CMD, '/k', CODEX, 'resume', ID])
+
+  const missing = machine({ plans: codexPlan })
+  const refused = await openSessionRequest(
+    missing.options({ request: { session: ID }, findExecutable: (name) => (name === 'wt.exe' ? WT : '') }),
+  )
+  assert.deepEqual([refused.reason, refused.host], ['not-installed', 'codex-app'])
+  assert.deepEqual(effects(missing.timeline), [])
 })
 
 test('a live pid starts no second process on the same transcript', async () => {

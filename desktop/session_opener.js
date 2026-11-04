@@ -53,9 +53,10 @@ const REFUSALS = Object.freeze([
   'no-folder',
   'no-command',
 ])
+/** Each client's CLI, found by name; `host` is what a refusal says is not installed. */
 const RESUME = Object.freeze({
-  claude: (id) => ['claude', '--resume', id],
-  codex: (id) => ['codex', 'resume', id],
+  claude: { program: 'claude.exe', host: 'claude-cli', args: (id) => ['--resume', id] },
+  codex: { program: 'codex.exe', host: 'codex-app', args: (id) => ['resume', id] },
 })
 const COPY_TEXT = /^(?:claude --resume|codex resume|claude --desktop --resume) [0-9A-Za-z][0-9A-Za-z._:-]{3,127}$/
 const DETAIL = Object.freeze({
@@ -305,8 +306,16 @@ async function runStep(step, context, linkFollows) {
   if (step.kind === 'resume-in-terminal') {
     const terminal = context.findExecutable('wt.exe')
     if (!terminal) throw new Refusal('not-installed', { host: 'terminal' })
-    const argv = ['-d', step.folder, 'cmd.exe', '/k', ...RESUME[step.client](step.session)]
-    await launch(context, terminal, argv, { cwd: step.folder })
+    const resume = RESUME[step.client]
+    const client = context.findExecutable(resume.program)
+    if (!client) throw new Refusal('not-installed', { host: resume.host })
+    // `cmd` looks for a bare name in its current folder before the PATH, and that folder
+    // is the session's repository, where a `claude.cmd` would run in the client's place.
+    // So each program goes by its full path, and nothing starts in the folder but the tab,
+    // which `-d` names.
+    const shell = path.win32.join(context.env.SystemRoot || 'C:\\Windows', 'System32', 'cmd.exe')
+    const argv = ['-d', step.folder, shell, '/k', client, ...resume.args(step.session)]
+    await launch(context, terminal, argv, { cwd: context.home })
     return
   }
   // desktop-resume: the CLI hands the session to Claude Desktop, with no window of its own.

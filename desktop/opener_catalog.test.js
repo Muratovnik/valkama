@@ -103,6 +103,8 @@ test('a program is found by name only from the allowlist, its usual place first'
   )
   const cli = path.join(env.USERPROFILE, '.local', 'bin', 'claude.exe')
   assert.equal(findExecutable('claude.exe', { env, isFile: (file) => file === cli, execFileSync: run }), cli)
+  const codex = path.join(env.LOCALAPPDATA, 'Programs', 'OpenAI', 'Codex', 'bin', 'codex.exe')
+  assert.equal(findExecutable('codex.exe', { env, isFile: (file) => file === codex, execFileSync: run }), codex)
 })
 
 test('the settings catalog keeps its ids and availability and names no path', () => {
