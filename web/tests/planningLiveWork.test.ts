@@ -29,6 +29,7 @@ describe('live work on the read model', () => {
     const map = {
       [boardId(1)]: { state: 'working' },
       [boardId(2)]: { state: 'waiting' },
+      [boardId(4)]: { state: 'held' },
       [boardId(3)]: { state: 'quiet', quiet_since: '2026-11-03T10:00:00Z' },
     }
     expect(read(map)().live_work).toEqual(map)
@@ -40,6 +41,10 @@ describe('live work on the read model', () => {
 
   it.each([
     ['a quiet item without its time', { [boardId(1)]: { state: 'quiet' } }],
+    [
+      'a time on a held item',
+      { [boardId(1)]: { state: 'held', quiet_since: '2026-11-03T10:00:00Z' } },
+    ],
     [
       'a time on a state that carries none',
       { [boardId(1)]: { state: 'working', quiet_since: '2026-11-03T10:00:00Z' } },

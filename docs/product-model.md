@@ -197,19 +197,28 @@ and the ones its open steps' holders name; a subagent's claim or step names its 
 session. A session counts while its row says active and its last sign of life is no older
 than a claim's lease, fourteen days. Then:
 
-- `working`: the session's last lifecycle event of its own is a prompt, so a turn is
-  running, or one of its subagents is active and started since the session last started.
-  An attempt Valkama runs on the item, starting or running, is `working` with no session.
+A session is at work when its last lifecycle event of its own is a prompt, so a turn
+is running, or when one of its subagents is active and started since the session last
+started. Then:
+
+- `working`: the session is at work and is seen working on this item. Since its last
+  prompt it wrote to the item through Planning, itself or through a subagent (a claim, a
+  step, a comment, a link, which names its source item), or one of its subagents holds an
+  open step of the item. An attempt Valkama runs on the item, starting or running, is
+  `working` with no session.
+- `held`: the session is at work, but not on this item as far as the record shows. A
+  session holding several items moves only the ones it is working on.
 - `waiting`: any other live session. Its turn ended, it waits for a person, or it was
   opened or resumed with no prompt yet.
 - `quiet`: no sign of life for more than a day, with `quiet_since`, the last one. A
   silent session is not called ended: silence proves nothing.
 
-An item takes the strongest of its sessions and attempts, `working` before `waiting`
-before `quiet`. Only `quiet` carries a time, so the stream writes a frame when a state
-changes, not on every event. What the map cannot see: a client that died in the middle
-of a turn reads `working` for a day and `quiet` after it, because only a check of the
-process could tell more, and an agent that writes to an item without holding it or one of
+An item takes the strongest of its sessions and attempts, `working` before `held` before
+`waiting` before `quiet`. Only `quiet` carries a time, so the stream writes a frame when a
+state changes, not on every event. What the map cannot see: a client that died in the
+middle of a turn reads as at work for a day and `quiet` after it, because only a check of
+the process could tell more. A long turn that writes nothing leaves its items `held`
+until its first write, and an agent that writes to an item without holding it or one of
 its steps puts nothing in the map. A store an earlier build wrote, without the columns the
 map is read from, gives an empty map.
 

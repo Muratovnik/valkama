@@ -4,8 +4,10 @@ The rule under test, from `live_work`: an item takes the strongest state of the
 sessions behind it (its claim, its open steps) and of the attempts running on
 it. A session that is not active, or silent past the lease period, stands for
 nothing; one silent past a day is `quiet`; one whose last lifecycle event is a
-prompt, or with a subagent running since it last started, is `working`; any
-other is `waiting`.
+prompt, or with a subagent running since it last started, is at work; any
+other is `waiting`. A session at work makes an item `working` only when it wrote
+there since its last prompt, itself or through a subagent, or when one of its
+subagents holds an open step there; its other items are `held`.
 
 Every case reads `planning_payload`, so the key is checked where views take it.
 Hook events go through the real ingest path and claims through the real write
@@ -115,6 +117,10 @@ class LiveWorkCase(unittest.TestCase):
         with calls.bind(confirmed(session, agent), "claim_work_item_checklist_item"):
             service.claim_checklist_item(self.conn, reference, step["id"])
 
+    def comment(self, reference: str, session: str, agent: str | None = None) -> None:
+        with calls.bind(confirmed(session, agent), "comment_work_item"):
+            service.comment_work_item(self.conn, reference, "a note")
+
     def seen(self, session: str, when: str) -> None:
         self.conn.execute("UPDATE sessions SET last_seen = ? WHERE id = ?", (when, session))
 
@@ -155,6 +161,30 @@ def _claimed_then(*events: str, agent_events: tuple[str, ...] = ()) -> _Build:
     return build
 
 
+def _written_after_the_prompt(agent: str | None = None) -> _Build:
+    """A claim, a prompt, then a comment by the session or by one of its subagents."""
+
+    def build(case: LiveWorkCase, reference: str) -> None:
+        session = _session()
+        case.claim(reference, session)
+        case.hook(session, "session-start", ago(minutes=20))
+        case.hook(session, "user-prompt-submit", ago(minutes=10))
+        case.comment(reference, session, agent)
+
+    return build
+
+
+def _written_beside_waiting(case: LiveWorkCase, reference: str) -> None:
+    """A claim taken after one session's prompt, and a step another holds after its turn."""
+
+    claimer, stepper = _session(), _session()
+    case.hook(claimer, "user-prompt-submit", ago(minutes=30))
+    case.claim(reference, claimer)
+    case.hold_step(reference, stepper)
+    case.hook(stepper, "user-prompt-submit", ago(minutes=20))
+    case.hook(stepper, "stop", ago(minutes=10))
+
+
 def _silent_for(delta: timedelta, last: str) -> _Build:
     def build(case: LiveWorkCase, reference: str) -> None:
         session = _session()
@@ -183,10 +213,22 @@ def _subagent(started_after_restart: bool) -> _Build:
 
 
 def _step_held_by_a_subagent(case: LiveWorkCase, reference: str) -> None:
+    """Its step taken before the prompt, so only the holder can make it move."""
+
     session = _session()
+    case.hold_step(reference, session, agent="a1")
     case.hook(session, "session-start", ago(minutes=20))
     case.hook(session, "user-prompt-submit", ago(minutes=10))
-    case.hold_step(reference, session, agent="a1")
+
+
+def _held_beside_written(case: LiveWorkCase, reference: str) -> None:
+    """A claim from before one session's prompt, and a step another wrote after its own."""
+
+    claimer, stepper = _session(), _session()
+    case.claim(reference, claimer)
+    case.hook(claimer, "user-prompt-submit", ago(minutes=30))
+    case.hook(stepper, "user-prompt-submit", ago(minutes=20))
+    case.hold_step(reference, stepper)
 
 
 def _step_held_by_a_person(case: LiveWorkCase, reference: str) -> None:
@@ -250,10 +292,18 @@ def _nothing(_case: LiveWorkCase, _reference: str) -> None:
 
 
 WORKING = {"state": "working"}
+HELD = {"state": "held"}
 WAITING = {"state": "waiting"}
 
 CASES: list[tuple[str, list[str] | None, _Build, dict | None]] = [
-    ("a claim after a prompt", None, _claimed_then("session-start", "user-prompt-submit"), WORKING),
+    (
+        "a claim taken before the prompt",
+        None,
+        _claimed_then("session-start", "user-prompt-submit"),
+        HELD,
+    ),
+    ("a comment after the prompt", None, _written_after_the_prompt(), WORKING),
+    ("a subagent's comment after the prompt", None, _written_after_the_prompt("a1"), WORKING),
     ("a claim after the turn ended", None, _claimed_then("user-prompt-submit", "stop"), WAITING),
     (
         "a claim after a notification",
@@ -275,9 +325,9 @@ CASES: list[tuple[str, list[str] | None, _Build, dict | None]] = [
             "user-prompt-submit",
             agent_events=("subagent-start", "subagent-stop", "stop"),
         ),
-        WORKING,
+        HELD,
     ),
-    ("a waiting session with a subagent started since", None, _subagent(True), WORKING),
+    ("a waiting session with a subagent started since", None, _subagent(True), HELD),
     ("a waiting session with a subagent from before a restart", None, _subagent(False), WAITING),
     ("a step a subagent holds", ["step"], _step_held_by_a_subagent, WORKING),
     ("an attempt running with no session", None, _attempt("running"), WORKING),
@@ -287,7 +337,7 @@ CASES: list[tuple[str, list[str] | None, _Build, dict | None]] = [
         "silent exactly a day, after a prompt",
         None,
         _silent_for(timedelta(days=1), "user-prompt-submit"),
-        WORKING,
+        HELD,
     ),
     ("silent exactly a day, after a stop", None, _silent_for(timedelta(days=1), "stop"), WAITING),
     (
@@ -308,9 +358,11 @@ CASES: list[tuple[str, list[str] | None, _Build, dict | None]] = [
         _silent_for(leases.LEASE_PERIOD + timedelta(seconds=1), "user-prompt-submit"),
         None,
     ),
-    ("working beside quiet", ["step"], _two_sessions(True, "user-prompt-submit"), WORKING),
+    ("held beside quiet", ["step"], _two_sessions(True, "user-prompt-submit"), HELD),
     ("waiting beside quiet", ["step"], _two_sessions(True, "stop"), WAITING),
-    ("waiting beside working", ["step"], _two_sessions(False, "user-prompt-submit"), WORKING),
+    ("waiting beside held", ["step"], _two_sessions(False, "user-prompt-submit"), HELD),
+    ("held beside working", ["step"], _held_beside_written, WORKING),
+    ("working beside waiting", ["step"], _written_beside_waiting, WORKING),
     (
         "two quiet sessions",
         ["step"],
@@ -343,11 +395,29 @@ class RuleTests(LiveWorkCase):
         session = _session()
         self.hold_step(reference, session)
         self.hook(session, "user-prompt-submit", ago(minutes=1))
-        self.assertEqual(WORKING, self.state_of(reference))
+        self.assertEqual(HELD, self.state_of(reference))
         (step,) = service.get_work_item(self.conn, reference)["checklist"]
         with calls.bind(confirmed(session), "tick_work_item_checklist_item"):
             service.tick_checklist_item(self.conn, reference, step["id"])
         self.assertIsNone(self.state_of(reference))
+
+    def test_one_session_moves_the_item_it_wrote_to_and_holds_the_other(self) -> None:
+        written, other = self.item(), self.item()
+        session = _session()
+        self.claim(written, session)
+        self.claim(other, session)
+        self.hook(session, "user-prompt-submit", ago(minutes=10))
+        self.comment(written, session)
+        self.assertEqual(WORKING, self.state_of(written))
+        self.assertEqual(HELD, self.state_of(other))
+        self.hook(session, "stop", ago(minutes=5))
+        self.assertEqual((WAITING, WAITING), (self.state_of(written), self.state_of(other)))
+        self.hook(session, "user-prompt-submit", ago(minutes=1))
+        self.assertEqual(
+            (HELD, HELD),
+            (self.state_of(written), self.state_of(other)),
+            "a new prompt starts the count again",
+        )
 
     def test_the_map_follows_the_items_order(self) -> None:
         references = [self.item() for _ in range(3)]
@@ -388,7 +458,7 @@ class StoreAgeTests(unittest.TestCase):
             f"CREATE TABLE work_items(work_item_id TEXT, claim_ref TEXT{claim});"
             f"CREATE TABLE sessions(id TEXT, status TEXT, last_seen TEXT, started_at TEXT{parent});"
             "CREATE TABLE execution_events(id INTEGER, kind TEXT, session_id TEXT, agent_id TEXT,"
-            " identity_state TEXT, occurred_at TEXT, received_at TEXT);"
+            " identity_state TEXT, occurred_at TEXT, received_at TEXT, work_item_id TEXT);"
             "CREATE TABLE executions(work_item_id TEXT, status TEXT);"
             "INSERT INTO work_items(work_item_id, claim_ref) VALUES ('w', '');"
         )
@@ -445,6 +515,7 @@ class CostTests(LiveWorkCase):
         self.hook(working, "session-start", ago(minutes=30))
         self.hook(working, "subagent-start", ago(minutes=20), agent="a1")
         self.hook(working, "user-prompt-submit", ago(minutes=10))
+        self.comment(claimed, working, "a1")
         self.hold_step(stepped, waiting)
         self.hook(waiting, "stop", ago(minutes=10))
         self.attempt(stepped, "running")
