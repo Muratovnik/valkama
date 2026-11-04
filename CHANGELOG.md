@@ -159,6 +159,15 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Changed
 
+- **A segmented choice is a radio group.** The work view switch, the card's sections,
+  Settings' sections, the graph filter, a chain's scope, an editor's Write and Preview and
+  the discussion's thread filter take one Tab stop, on the chosen segment, and the arrow
+  keys, Home and End move the choice. Each segment was its own Tab stop before, and the
+  arrows did nothing.
+- **The history says what a record id stood for.** A thread's mark names the thread by its
+  first words and its decision instead of the comment's id, a link reads from the card's
+  side («Led to MAIN-7» rather than «discovered-from from MAIN-7»), and a question's id no
+  longer stands in the row. The search still finds the recorded line.
 - **Breaking for every running client: store schema 10.** The first open by this build
   takes a verified snapshot labelled `preschema10` beside the store, then, in one
   transaction, gives every comment an empty parent and resolve mark (`reply_to`,

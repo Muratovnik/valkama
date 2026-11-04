@@ -604,9 +604,11 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   further from the ground; disabled is one look for every weight, a step toward
   the ground with a quieter label that still reads at 4.5:1.
 - **Segmented choice:** `SegmentedControl` owns "pick one of a few visible
-  alternatives" — view switches, chart encodings, ledger filters. A row of
-  `aria-pressed` buttons styled locally is the same control built again, and
-  `check:ui-system` rejects one.
+  alternatives" — view switches, chart encodings, ledger filters, a card's
+  sections. It is a radio group: Tab reaches it once, on the chosen segment, and
+  the arrows, Home and End move focus and the choice together. A row of
+  `aria-pressed` buttons or `radio` roles styled locally is the same control built
+  again, and `check:ui-system` rejects one.
 - **Fields:** `VField` owns the frame around a labelled control — label,
   control, optional hint — and `VTextInput` owns the control itself for one
   line or several. A button beside a field lines up with its control, so that
