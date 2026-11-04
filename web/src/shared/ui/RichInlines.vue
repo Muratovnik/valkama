@@ -218,16 +218,17 @@ function releaseKey(event: KeyboardEvent, reference: TextReference) {
   overflow-wrap: var(--rich-inline-wrap, anywhere);
 }
 
-/* The pointer target is 24px tall around the words (WCAG 2.5.8): padding on an inline
-   box widens what a pointer hits and takes no room in the line, so a line holding a
-   reference stands as tall as one without. It reaches 2px under the words, which stay
-   inside a 24px line, and the rest above them: what a box overflows below lengthens what
+/* The pointer target is the line and a little more (WCAG 2.5.8 asks 24px; a line of
+   reading text is 24px): padding on an inline box widens what a pointer hits and takes no
+   room in the line, so a line holding a reference stands as tall as one without. It
+   reaches 2px under the words, which stay inside the line, and the rest above them, up
+   to the words of the line before and no further, whatever the size: the words' own box
+   is a little over 1.2em. Not below, because what a box overflows below lengthens what
    its scroller scrolls, and on a text's last line a pixel of it showed «Show all» a pixel
-   short; above, nothing scrolls. The words' own box is about 1.1875em, so the band is about
-   25px at any size. Each line of a wrapped reference is drawn whole, with its own padding
-   and focus ring. */
+   short; above, nothing scrolls. Each line of a wrapped reference is drawn whole, with
+   its own padding and focus ring. */
 .rich-reference {
-  padding-block: calc(24px - 1.1875em - 1px) var(--space-half);
+  padding-block: calc(1lh - 1.2em - 1px) var(--space-half);
   cursor: pointer;
   box-decoration-break: clone;
 

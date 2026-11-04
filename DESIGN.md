@@ -667,7 +667,8 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   the next line whole, left the line before a long path half empty and could leave the
   comma after it alone on a line. So it breaks with the words, a path also after each
   `/`, which a browser does not offer by itself, and what is written against it stays
-  on its last line; padding, not the line, gives its words a 24px pointer target. One
+  on its last line; padding that takes no room in the line gives its words a pointer
+  target as tall as their line, 24px in reading text, without reaching the words above. One
   that leads to a card or a document is a link to that address (`/open/<number>`, the
   document's page): a plain press opens it in place through its owner, and a press with
   a modifier or the middle button is the browser's, as on any link. The desktop app has

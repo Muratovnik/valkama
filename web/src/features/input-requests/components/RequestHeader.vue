@@ -11,8 +11,9 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
+import { planningTargetRoute } from '@/shared/api/planningTarget.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
-import { workItemLinkAddress } from '@/shared/api/platformRoute.ts'
+import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { projectTitle, useProjectTitles } from '@/shared/lib/projectTitles.ts'
 import { provideReferenceLinks } from '@/shared/lib/referenceLinks.ts'
 import RichText from '@/shared/ui/RichText.vue'
@@ -35,10 +36,9 @@ provideReferenceLinks((reference, parent) => {
   if (reference.kind !== 'work-item' || reference.value !== request.value.reference)
     return parent(reference)
   return {
-    ...(parent(reference) ?? {
-      title: t('textLinks.openItem', { reference: reference.value }),
-      href: workItemLinkAddress('', reference.value),
-    }),
+    ...(parent(reference) ?? { title: t('textLinks.openItem', { reference: reference.value }) }),
+    // The card's own route, not the number's short address: that one is found by a search.
+    href: serializePlatformRoute(planningTargetRoute(props.entry.target)),
     open: () => emit('select', props.entry.target),
   }
 })

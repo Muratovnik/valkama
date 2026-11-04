@@ -195,6 +195,8 @@ test('the task number above a question opens that task, as a number does everywh
   await expect(context).toHaveText('Example Project · MAIN-264')
   const number = context.getByRole('link', { name: 'MAIN-264', exact: true })
   await expect(number).toHaveClass(/rich-reference/u)
+  // The route of the very task the question came with, as a press opens it.
+  await expect(number).toHaveAttribute('href', /^\/modules\/planning\/project\//u)
   // The project stays words: only the number is the way to the task.
   await expect(context.getByRole('link')).toHaveCount(1)
   await expect(context.getByRole('button')).toHaveCount(0)
