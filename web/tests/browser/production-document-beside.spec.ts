@@ -1,8 +1,19 @@
-import AxeBuilder from '@axe-core/playwright'
 import { expect } from '@playwright/test'
-import type { Locator, Page } from '@playwright/test'
 
-import { aCardAsking, HUB_TITLE, LINK, linkIn, LONG_PATH } from './documentBackend.ts'
+import { aCardAsking, HUB_TITLE, LINK, linkIn } from './documentBackend.ts'
+import {
+  CARD_EDGE,
+  CARD_TITLE,
+  inWindow,
+  leading,
+  openBesideCard,
+  paneOf,
+  samePlace,
+  settled,
+  shot,
+  tabRound,
+  WINDOW,
+} from './documentBeside.ts'
 import { test } from './test.ts'
 
 /**
@@ -10,77 +21,6 @@ import { test } from './test.ts'
  * window the desktop app opens at, then either side of the width it needs. Where it stands
  * is measured, and what the keys do is what they do in the browser.
  */
-
-const WINDOW = { width: 1500, height: 900 }
-const CARD_TITLE = /^Valkama platform execution/u
-const CARD_EDGE = 'Resize the work item'
-
-/** The pane, by the name it is announced with. */
-function paneOf(page: Page) {
-  const pane = page.getByRole('region', { name: /^Document: / })
-  return {
-    pane,
-    body: pane.locator('.document-body'),
-    title: pane.locator('.overlay-header-name'),
-    target: pane.locator('.document-block.is-target'),
-    edge: page.getByRole('separator', { name: 'Document width' }),
-    close: pane.getByRole('button', { name: 'Close the document' }),
-  }
-}
-
-/** Where a shot goes when a person asks for shots: with whatever was moving at rest. */
-async function shot(page: Page, name: string) {
-  const folder = process.env.VALKAMA_SHOT_DIR
-  if (!folder) return
-  await page.waitForFunction(() =>
-    document.getAnimations().every(({ playState }) => playState !== 'running'),
-  )
-  await page.screenshot({ path: `${folder}/${name}.png` })
-}
-
-async function settled(surface: Locator) {
-  await expect(surface).toHaveCSS('transform', 'none')
-}
-
-/** Every box is measured against the window it must stay inside. */
-async function inWindow(page: Page, target: Locator) {
-  const box = await target.boundingBox()
-  const { width } = page.viewportSize() ?? WINDOW
-  expect(box?.x).toBeGreaterThanOrEqual(0)
-  expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(width)
-  return box
-}
-
-/** The text of the block at the top of what is read, whichever width it wraps at. */
-const leading = (scroller: Locator) =>
-  scroller.evaluate((node) => {
-    const top = node.getBoundingClientRect().top
-    const blocks = [...node.querySelectorAll<HTMLElement>('.document-block')]
-    return blocks.find((block) => block.getBoundingClientRect().bottom > top + 1)?.textContent
-  })
-
-/** Tab until the card holds focus again, and where focus stood on the way. */
-async function tabRound(page: Page) {
-  const seen = new Set<string>()
-  for (let press = 0; press < 40 && !seen.has('card'); press++) {
-    await page.keyboard.press('Tab')
-    seen.add(
-      await page.evaluate(() => {
-        const active = document.activeElement
-        if (active?.closest('.overlay-pane-main')) return 'card'
-        if (active?.closest('.overlay-pane')) return 'pane'
-        return active?.closest('.overlay-host') ? 'surface' : 'out'
-      }),
-    )
-  }
-  return seen
-}
-
-async function openBesideCard(page: Page, prompt = `Read \`${LINK}\` first.`) {
-  await page.setViewportSize(WINDOW)
-  const { drawer, comment } = await aCardAsking(page, prompt)
-  return { drawer, comment }
-}
 
 test('from a card: beside it, at the anchor, F6 between them, and Escape one at a time', async ({
   page,
@@ -155,6 +95,32 @@ test('Escape in the card closes the card and takes the document with it', async 
   await page.keyboard.press('Escape')
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await expect(pane).toHaveCount(0)
+})
+
+test('a new window takes the document from beside the card, and focus goes back to the link', async ({
+  page,
+}) => {
+  const { drawer, comment } = await openBesideCard(page)
+  await comment.fill('Half a thought')
+  const link = linkIn(drawer, LINK)
+  await link.click()
+  const { pane, target } = paneOf(page)
+  await expect(target).toBeFocused()
+  // The tab itself is the page journey's to follow; here what it was asked for is enough.
+  await page.evaluate(() => {
+    const opened: unknown[][] = []
+    Object.assign(window, { opened })
+    window.open = (...args: unknown[]) => (opened.push(args), null)
+  })
+  await pane.getByRole('button', { name: 'Open in a new window' }).click()
+  const asked = await page.evaluate(() => (window as unknown as { opened: string[][] }).opened)
+  expect(asked).toHaveLength(1)
+  expect(asked[0]?.[0]).toContain('/doc?')
+  expect(asked[0]?.[2]).toBe('noopener')
+  await expect(pane).toHaveCount(0)
+  await expect(link).toBeFocused()
+  await expect(comment).toHaveValue('Half a thought')
+  await expect(drawer).toBeVisible()
 })
 
 test('one Tab trap goes through both panes and comes round', async ({ page }) => {
@@ -244,7 +210,7 @@ test('the window narrowed past the threshold takes the document over the card, a
   await settled(over)
   await expect(pane).toHaveCount(0)
   await expect(over.locator('.overlay-header-name')).toHaveText('The migration plan')
-  expect(await leading(over.locator('.document-body'))).toBe(before)
+  await samePlace(over.locator('.document-body'), before)
   await expect(over.locator('.document-block.is-target')).toContainText('The target')
   await expect(over.locator('.document-block.is-target')).toBeFocused()
   // Over the card, which stays mounted under it, its draft in it.
@@ -261,7 +227,7 @@ test('the window narrowed past the threshold takes the document over the card, a
   await page.setViewportSize(WINDOW)
   await expect(title).toHaveText('The migration plan')
   await expect(page.getByRole('dialog')).toHaveCount(1)
-  await expect.poll(() => leading(body)).toBe(before)
+  await samePlace(body, before)
   await expect(target).toBeFocused()
   await expect(comment).toHaveValue('Half a thought')
 
@@ -325,135 +291,4 @@ test('a drag on the card’s edge moves the document only when it ends', async (
   await page.mouse.up()
   await expect(page.locator('.document-drawer')).toBeVisible()
   await expect(pane).toHaveCount(0)
-})
-
-test('the edge folds the document on Enter and brings it back where it was', async ({ page }) => {
-  const { drawer } = await openBesideCard(page)
-  await linkIn(drawer, LINK).click()
-  const { pane, body, edge, target } = paneOf(page)
-  await expect(target).toBeFocused()
-  const top = await body.evaluate((node) => node.scrollTop)
-  const width = await edge.getAttribute('aria-valuenow')
-
-  await edge.focus()
-  await page.keyboard.press('Enter')
-  await expect(pane).toBeHidden()
-  await expect(edge).toHaveAttribute('aria-valuenow', '0')
-  await expect(edge).toBeFocused()
-  await settled(drawer)
-  await inWindow(page, edge)
-  await shot(page, 'beside-card-folded')
-
-  await page.keyboard.press('Enter')
-  await expect(pane).toBeVisible()
-  await expect(edge).toHaveAttribute('aria-valuenow', width ?? '')
-  expect(await body.evaluate((node) => node.scrollTop)).toBe(top)
-  await page.keyboard.press('Escape')
-  await expect(pane).toHaveCount(0)
-  await expect(drawer).toBeVisible()
-})
-
-test('a long path gives up its start, at the narrowest the pane stands', async ({ page }) => {
-  await page.setViewportSize({ width: 1460, height: 900 })
-  const { drawer } = await aCardAsking(page, `Read \`${LONG_PATH}\` first.`)
-  await linkIn(drawer, LONG_PATH).click()
-  const { pane, title } = paneOf(page)
-  await expect(title).toHaveText('The long way down')
-  await settled(drawer)
-  const path = pane.getByRole('button', { name: `Copy the path ${LONG_PATH}` })
-  await expect(path).toBeVisible()
-  await expect(path).toHaveAttribute('title', `Copy the path ${LONG_PATH}`)
-  await inWindow(page, path)
-  expect(await path.evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(true)
-  await shot(page, 'beside-card-threshold-long-path')
-})
-
-test('a card’s width and a document’s are kept apart, each by its own edge', async ({ page }) => {
-  const { drawer } = await openBesideCard(page)
-  await linkIn(drawer, LINK).click()
-  const { edge } = paneOf(page)
-  await expect(edge).toBeVisible()
-  const card = page.getByRole('separator', { name: CARD_EDGE })
-  const cardWidth = await card.getAttribute('aria-valuenow')
-  // Beside a card of 620 at 1500 the document has 480: the threshold's leftover.
-  await expect(edge).toHaveAttribute('aria-valuenow', '480')
-  await expect(edge).toHaveAttribute('aria-valuemax', '480')
-  await edge.focus()
-  await page.keyboard.press('Home')
-  await expect(edge).toHaveAttribute('aria-valuenow', '440')
-  await expect(card).toHaveAttribute('aria-valuenow', cardWidth ?? '')
-  expect(await page.evaluate(() => localStorage.getItem('valkama-document-pane-width'))).toBe('440')
-})
-
-test('a link in the document goes to the card beside it through the card’s own guard', async ({
-  page,
-}) => {
-  const { drawer, comment } = await openBesideCard(page, 'Read `docs/plan.md` and write.')
-  await linkIn(drawer, 'docs/plan.md').click()
-  const { pane, title } = paneOf(page)
-  await expect(title).toHaveText('The migration plan')
-  await comment.fill('A draft the card asks about')
-  await pane.getByRole('button', { name: 'MAIN-265', exact: true }).click()
-  // The guard asks where the card answers for itself, and the document stays.
-  await expect(drawer.getByRole('button', { name: 'Discard', exact: true })).toBeVisible()
-  await expect(pane).toBeVisible()
-  await expect(comment).toHaveValue('A draft the card asks about')
-})
-
-test('the two panes hold to the accessibility rules, with their frames', async ({ page }) => {
-  const { drawer } = await openBesideCard(page)
-  await linkIn(drawer, LINK).click()
-  const { target } = paneOf(page)
-  await expect(target).toBeVisible()
-  const { violations } = await new AxeBuilder({ page }).include('.overlay-surface').analyze()
-  expect(violations.map(({ id, nodes }) => [id, nodes[0]?.target])).toEqual([])
-})
-
-test('a frame is a stop only while there is something in it to scroll', async ({ page }) => {
-  const { drawer } = await openBesideCard(page)
-  await linkIn(drawer, LINK).click()
-  const { edge, pane, target } = paneOf(page)
-  await expect(target).toBeFocused()
-  const code = pane.locator('.rich-pre')
-  // 480 is too narrow for the line of code, so the keyboard can reach and scroll it.
-  await expect(code).toHaveAttribute('tabindex', '0')
-  await expect.poll(() => code.evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(true)
-
-  // Grown to the width the code needs, the frame stops being a stop, with nothing else moved.
-  await page.setViewportSize({ width: 2400, height: 900 })
-  await edge.focus()
-  await page.keyboard.press('End')
-  await expect(code).not.toHaveAttribute('tabindex')
-  await page.setViewportSize(WINDOW)
-  await expect(code).toHaveAttribute('tabindex', '0')
-})
-
-test.describe('in Russian', () => {
-  test.use({ locale: 'ru-RU' })
-
-  test('the pair takes the longer words', async ({ page }) => {
-    await page.setViewportSize(WINDOW)
-    const { drawer } = await aCardAsking(page, `Read \`${LINK}\` first.`)
-    await drawer.getByRole('button', { name: `Открыть документ в Valkama: ${LINK}` }).click()
-    const pane = page.getByRole('region', { name: /^Документ: / })
-    await expect(pane.locator('.document-block.is-target')).toBeFocused()
-    await expect(
-      pane.getByRole('button', { name: 'Перейти к #part-two в этом документе' }),
-    ).toBeAttached()
-    await shot(page, 'beside-card-1500-ru')
-  })
-})
-
-test.describe('in a forced palette', () => {
-  test.use({ forcedColors: 'active' })
-
-  test('the line between the panes stays', async ({ page }) => {
-    const { drawer } = await openBesideCard(page)
-    await linkIn(drawer, LINK).click()
-    const { pane, target } = paneOf(page)
-    await expect(target).toBeVisible()
-    await expect(pane).toHaveCSS('border-inline-start-style', 'solid')
-    await expect(pane).toHaveCSS('border-inline-start-width', '1px')
-    await shot(page, 'beside-card-forced')
-  })
 })
