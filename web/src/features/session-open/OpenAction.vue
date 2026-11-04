@@ -13,6 +13,7 @@
 import { computed, nextTick, ref, shallowRef, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { reportMissingPlace } from '@/features/session-open/missingPlaces.ts'
 import { useOpenNotice } from '@/features/session-open/openNotice.ts'
 import OpenPanel from '@/features/session-open/OpenPanel.vue'
 import { currentSettings, prepareOpen } from '@/features/session-open/openPlan.ts'
@@ -111,6 +112,14 @@ const tooltip = computed(() =>
 )
 /** Nothing to press, so nothing to name it by: why, and who it is. */
 const standing = computed(() => [view.value.hint, props.detail].filter(Boolean).join('\n'))
+/**
+ * A program this computer lacks, which the surface says once: the row then says only who
+ * it is, or what a press would have done, and its mark says why.
+ */
+const told = reportMissingPlace(() => view.value.missing)
+const marked = computed(() => told && Boolean(view.value.missing))
+/** What a session that opens nothing is called on its row: the holder, or the action it would be. */
+const stillName = computed(() => props.name ?? (marked.value ? props.action : undefined))
 /** The light fill of the dialog's one action carries its own ink; a quiet weight lifts the place. */
 const placeLit = computed(() => props.variant !== 'primary')
 /** An action's words are never cut; a holder's name is, with the whole of it in the tooltip. */
@@ -235,32 +244,40 @@ function finished(outcome: Outcome) {
     >
       <span class="open-action-words">
         <span
-          v-if="name"
+          v-if="stillName"
           class="open-action-name"
-          >{{ name }}</span
+          :class="{ who: !nameWhole }"
+          >{{ stillName }}</span
         >
-        <span class="open-action-place">{{ marks }}</span>
-      </span>
-      <InfoTip :label="view.hint">
-        {{ view.hint }}
-        <template #trigger="{ toggle, popup }">
-          <VButton
-            class="open-action-why"
-            variant="ghost"
-            size="inline"
-            :aria-label="view.hint"
-            :aria-controls="popup.controls"
-            :aria-expanded="popup.expanded"
-            icon
-            @click="toggle"
+        <!-- The why follows the last word, on its line, however the words wrap. -->
+        <span
+          class="open-action-place standing"
+          :class="{ bare: marked }"
+          ><template v-if="!marked">{{ marks }}</template
+          ><InfoTip
+            class="open-action-tip"
+            :label="view.hint"
           >
-            <VIcon
-              name="info"
-              :size="14"
-            />
-          </VButton>
-        </template>
-      </InfoTip>
+            {{ view.hint }}
+            <template #trigger="{ toggle, popup }">
+              <VButton
+                class="open-action-why"
+                variant="ghost"
+                size="inline"
+                :aria-label="view.hint"
+                :aria-controls="popup.controls"
+                :aria-expanded="popup.expanded"
+                icon
+                @click="toggle"
+              >
+                <VIcon
+                  name="info"
+                  :size="14"
+                />
+              </VButton>
+            </template> </InfoTip
+        ></span>
+      </span>
     </span>
     <OpenPanel
       v-if="panel"
@@ -334,23 +351,54 @@ function finished(outcome: Outcome) {
   margin-block-start: var(--space-half);
 }
 
-/* Nothing to press, so it stands as text in the quiet ink: out of reach, and why beside it. */
+/* Nothing to press, so it stands as text in the quiet ink: out of reach, and why after it.
+   A holder's name keeps the ink a name has, so who it is and what keeps it shut read as two
+   things rather than one run of grey. */
 .open-action-still {
   display: inline-flex;
-  gap: var(--space-1);
-  align-items: center;
   min-width: 0;
   max-width: 100%;
   color: var(--color-text-tertiary);
   font: var(--font-detail);
+
+  .open-action-name.who {
+    color: var(--color-text-muted);
+  }
+
+  /* The why's target is taller than a line of these words: the name stands level with it. */
+  .open-action-words {
+    align-items: center;
+  }
+}
+
+/* The words and the why are one run of text, so the why stands after the last word wherever
+   the words break, never at the far end of a line they no longer fill. */
+.open-action-place.standing {
+  display: block;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Off the last word, so the target's edge, which a forced palette draws, never touches a
+   letter; its own inset makes the rest of the room before the glyph. */
+.open-action-tip {
+  margin-inline-start: var(--space-1);
+}
+
+/* With no words before it, the glyph follows the name closer than a second fact would;
+   where the name leaves it no room, it starts the next line as a place's words do, and the
+   name is not cut for it. */
+.open-action-place.standing.bare {
+  margin-inline-start: calc(-1 * var(--space-1));
+
+  .open-action-tip {
+    margin-inline-start: 0;
+  }
 }
 
 /* A holder's words start where a pressable holder's do, beside them on a card. */
 .open-action-still.named {
   padding-inline-start: var(--space-2);
-}
-
-.open-action-why {
-  flex: none;
 }
 </style>

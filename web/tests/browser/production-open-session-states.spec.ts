@@ -32,11 +32,27 @@ interface Opening {
   /** Where the page's clock starts, installed before the page loads. */
   clock?: string
   locale?: 'en' | 'ru'
+  /** A program this computer lacks, where every session that has not ended for good opens. */
+  missing?: string
   width?: number
 }
 
+/** The plan of a session whose place is a program this computer lacks. */
+const lacking = (answer: Record<string, unknown>, host: string) =>
+  answer.state === 'gone' || answer.state === 'headless'
+    ? answer
+    : {
+        ...answer,
+        opens: null,
+        one_action: false,
+        steps: [{ kind: 'explain', reason: 'not-installed', host }],
+      }
+
 /** The card, with its holder and one agent for each state; `lost` makes one session gone. */
-async function openCard(page: Page, { always, clock, locale = 'en', width = 1280 }: Opening = {}) {
+async function openCard(
+  page: Page,
+  { always, clock, locale = 'en', missing, width = 1280 }: Opening = {},
+) {
   await page.setViewportSize({ width, height: 1200 })
   await page.addInitScript(
     ({ language, place }) => {
@@ -54,7 +70,8 @@ async function openCard(page: Page, { always, clock, locale = 'en', width = 1280
     agents: agentsInEveryState,
     card: shortHolderCard,
     openPlan: (query) => {
-      const answer = openPlanFor(query)
+      const planned = openPlanFor(query) as Record<string, unknown>
+      const answer = missing ? lacking(planned, missing) : planned
       return lost.has(query.get('session') ?? '')
         ? {
             ...answer,
@@ -68,7 +85,8 @@ async function openCard(page: Page, { always, clock, locale = 'en', width = 1280
   })
   if (clock) await page.clock.install({ time: new Date(clock) })
   await page.goto(CARD)
-  await expect(page.locator('.drawer .card-holder button.open-action')).toBeVisible()
+  const holder = page.locator('.drawer .card-holder')
+  await expect(holder.locator(missing ? '.open-action-still' : 'button.open-action')).toBeVisible()
   await page.locator('.drawer .agents-more').click()
   return { lost }
 }
@@ -228,4 +246,107 @@ for (const [locale, look, first, second] of [
     await expect(panel).toContainText(look)
     await expect(panel.getByRole('button')).toHaveText([first, second])
     await expect(page.getByRole('button', { name: first, exact: true })).toBeFocused()
+  })
+
+// VS Code missing from this computer is one reason for every session that would open in
+// it. It was said beside the holder, every agent and every step; it is said once, and each
+// session it stops is marked, the reason in the mark's name.
+for (const [locale, said, parent] of [
+  ['en', 'VS Code is not installed', 'Open the parent session'],
+  ['ru', 'VS Code не установлен', 'Открыть родительскую сессию'],
+] as const)
+  test(`a program this computer lacks is said once and marked on each session, in ${locale}`, async ({
+    page,
+  }) => {
+    await openCard(page, { locale, missing: 'vscode', width: 1500 })
+    const drawer = page.locator('.drawer')
+    await expect(drawer.getByText(said, { exact: false })).toHaveCount(1)
+    // The holder, six agents and five steps whose sessions have not ended for good.
+    await expect(
+      drawer.locator(`.open-action-still .open-action-why[aria-label="${said}."]`),
+    ).toHaveCount(12)
+    // What a session alone is stays said in its row.
+    expect(await agentRows(page)).toEqual([
+      parent,
+      parent,
+      parent,
+      locale === 'en' ? 'session gone' : 'сессии нет',
+      locale === 'en' ? 'No window · running' : 'Без окна · идёт',
+      parent,
+      parent,
+      parent,
+    ])
+  })
+
+/**
+ * How far the glyph of each session's why stands from the end of the words before it, or,
+ * where those words leave it no room, from the start of the line it begins.
+ */
+const whyGaps = (page: Page) =>
+  page.locator('.drawer .open-action-still').evaluateAll((all) =>
+    all.map((still) => {
+      const glyph = still.querySelector('.open-action-why svg')?.getBoundingClientRect()
+      const walker = document.createTreeWalker(still, NodeFilter.SHOW_TEXT)
+      let last: DOMRect | undefined
+      for (let at = walker.nextNode(); at; at = walker.nextNode()) {
+        if (!at.textContent?.trim() || at.parentElement?.closest('.info-tip')) continue
+        const range = document.createRange()
+        range.selectNodeContents(at)
+        last = [...range.getClientRects()].at(-1) ?? last
+      }
+      if (!glyph || !last) return Number.NaN
+      const level = Math.abs(glyph.top + glyph.height / 2 - (last.top + last.height / 2)) <= 4
+      if (level) return Math.round(glyph.left - last.right)
+      const below = glyph.top >= last.bottom - 1
+      return below ? Math.round(glyph.left - still.getBoundingClientRect().left) : Number.NaN
+    }),
+  )
+
+for (const locale of ['en', 'ru'] as const)
+  for (const width of [1500, 390])
+    test(`the why of a session that opens nothing stands after its words, ${width}px in ${locale}`, async ({
+      page,
+    }) => {
+      await openCard(page, { locale, missing: 'vscode', width })
+      const gaps = await whyGaps(page)
+      expect(gaps.length).toBeGreaterThan(10)
+      expect(gaps.filter((gap) => !(gap >= 0 && gap <= 12))).toEqual([])
+    })
+
+test('a holder’s name and what keeps it from opening are told apart', async ({ page }) => {
+  await openCard(page)
+  const lost = page
+    .locator('.drawer .step-holder .open-action-still')
+    .filter({ hasText: 'session gone' })
+  const inks = await lost.evaluate((still) =>
+    ['.open-action-name', '.open-action-place'].map(
+      (part) => getComputedStyle(still.querySelector(part) ?? still).color,
+    ),
+  )
+  expect(inks[0]).not.toBe(inks[1])
+})
+
+// A holder too long for the facts beside the action wrapped under it and kept the width it
+// had before: air stood to the right of its first line. It takes the line under them.
+for (const locale of ['en', 'ru'] as const)
+  test(`the holder is as wide as its words at 1500px, in ${locale}`, async ({ page }) => {
+    await openCard(page, { always: 'claude-desktop', locale, width: 1500 })
+    const head = page.locator('.drawer .card-holder button.open-action')
+    const fit = await head.evaluate((button) => {
+      const rects: DOMRect[] = []
+      const walker = document.createTreeWalker(button, NodeFilter.SHOW_TEXT)
+      for (let at = walker.nextNode(); at; at = walker.nextNode()) {
+        const range = document.createRange()
+        range.selectNodeContents(at)
+        if (at.textContent?.trim()) rects.push(...range.getClientRects())
+      }
+      const box = button.getBoundingClientRect()
+      const middles = rects.map((rect) => rect.top + rect.height / 2)
+      return {
+        lines: Math.max(...middles) - Math.min(...middles) > 4 ? 2 : 1,
+        air: Math.round(box.right - Math.max(...rects.map((rect) => rect.right))),
+      }
+    })
+    expect(fit.lines).toBe(1)
+    expect(fit.air).toBeLessThanOrEqual(12)
   })

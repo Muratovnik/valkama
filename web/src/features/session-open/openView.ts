@@ -13,6 +13,7 @@
  * | the owner's "always open in" | the place and "by your setting" | opens there |
  * | running in a terminal | «Терминал · идёт» | shows why, and where to look |
  * | running with no window | «Без окна · идёт» | is no button |
+ * | a program this computer lacks, on a surface that says so once | a mark, why in its name | is no button |
  * | a client that lost it, or anything else that opens nothing | why, in the quiet ink | is no button |
  */
 
@@ -37,6 +38,11 @@ export interface OpenFacts {
 export interface OpenView {
   /** Why it opens there or does not open; empty where the place says it all. */
   hint: string
+  /**
+   * The program this computer lacks, where that alone keeps the session from opening: a
+   * reason every session that would open there shares (`missingPlaces`).
+   */
+  missing: string
   /** Whether a press does anything. */
   pressable: boolean
   /** A press shows where it runs and what can be done, rather than opening it. */
@@ -55,6 +61,7 @@ export interface OpenView {
 
 const NO_VIEW = {
   hint: '',
+  missing: '',
   pressable: true,
   running: false,
   setting: false,
@@ -77,8 +84,8 @@ function atPlace(t: Translate, place: PlaceName, live: boolean, extra: Partial<O
 }
 
 /** No button: the words instead of a place, and the reason as its hint. */
-function stands(text: string, hint: string): OpenView {
-  return { ...NO_VIEW, hint, pressable: false, text }
+function stands(text: string, hint: string, missing = ''): OpenView {
+  return { ...NO_VIEW, hint, missing, pressable: false, text }
 }
 
 /** Short enough to stand where a place's word would. */
@@ -116,7 +123,8 @@ function fromPlan(t: Translate, plan: OpenPlan, live: boolean): OpenView {
     return atPlace(t, place, live, { hint: refusalWords(t, explained), running: true })
   if (!opens) {
     const refusal = explained ?? { reason: 'no-session' as const }
-    return stands(cannotWords(t, refusal), refusalWords(t, refusal))
+    const missing = refusal.reason === 'not-installed' ? (refusal.host ?? '') : ''
+    return stands(cannotWords(t, refusal), refusalWords(t, refusal), missing)
   }
   if (opens.source === 'always') return bySetting(t, opens, live)
   const where = whereWords(t, opens)

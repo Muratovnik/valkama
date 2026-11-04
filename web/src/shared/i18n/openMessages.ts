@@ -89,6 +89,8 @@ export const openMessages = {
         attachFailed: 'Could not link the session to this item. Check the number and try again.',
       },
       notInstalled: '{place} is not installed.',
+      missing:
+        '{place} is not installed, so the sessions that open in it cannot be opened from here. Another place can be chosen in Settings.',
       state: {
         live: 'running',
         ended: 'ended',
@@ -272,6 +274,8 @@ export const openMessages = {
           'Не удалось связать сессию с этой задачей. Проверьте номер и попробуйте снова.',
       },
       notInstalled: '{place} не установлен.',
+      missing:
+        '{place} не установлен, поэтому сессии, которые открываются в нём, отсюда не открыть. Другое место можно выбрать в настройках.',
       state: {
         live: 'идёт',
         ended: 'закончилась',

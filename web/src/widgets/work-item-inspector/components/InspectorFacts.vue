@@ -1,8 +1,9 @@
 <script setup lang="ts">
 /**
- * What holds for an item, under its title: its state, priority, holder and
- * epic on one line, its labels under them, and the one thing to do about it.
- * A question waiting for its answer is a fact too, and pressing it goes there.
+ * What holds for an item, under its title: its state and priority beside the one
+ * thing to do about it, its holder and epic on the whole line under them, and its
+ * labels last. A question waiting for its answer is a fact too, and pressing it
+ * goes there.
  *
  * The state is said once, by the control that moves it: the chip is the
  * transition menu. It used to be a fact in a five-cell grid of equal-weight
@@ -30,6 +31,7 @@ import { Translation, useI18n } from 'vue-i18n'
 import InspectorWriteActions from '@/widgets/work-item-inspector/components/InspectorWriteActions.vue'
 
 import ExecutorLink from '@/features/session-open/ExecutorLink.vue'
+import MissingPlaces from '@/features/session-open/MissingPlaces.vue'
 
 import FacetMarks from '@/entities/work-item/components/FacetMarks.vue'
 import LabelChip from '@/entities/work-item/components/LabelChip.vue'
@@ -206,72 +208,6 @@ defineExpose({ actionCell })
           :facets="['priority']"
         />
       </span>
-      <span
-        class="card-fact card-holder"
-        :title="holderTitle"
-      >
-        <span
-          v-if="spokenOwner"
-          class="visually-hidden"
-          >{{ spokenOwner }}</span
-        >
-        <template v-if="holderExecutor?.session">
-          <Translation
-            v-if="item.state.is_terminal"
-            class="card-holder-past"
-            keypath="workItem.previousHolder"
-            tag="span"
-          >
-            <template #holder>
-              <ExecutorLink
-                size="compact"
-                variant="ghost"
-                :holder="holderRef(item)"
-                :executor="holderExecutor"
-                :detail="ownerLabel"
-              />
-            </template>
-          </Translation>
-          <ExecutorLink
-            v-else
-            size="compact"
-            variant="ghost"
-            :holder="holderRef(item)"
-            :executor="holderExecutor"
-            :detail="leaseText || ownerLabel"
-          />
-        </template>
-        <FacetMarks
-          v-else
-          surface="card"
-          :item="item"
-          :facets="['holder']"
-        />
-        <SemanticState
-          v-if="lease?.state === 'stale'"
-          class="card-holder-stale"
-          dimension="claim-lease"
-          state="stale"
-          variant="dot"
-          :label="t('workItem.lease.mark')"
-        />
-        <span
-          v-if="leaseText"
-          class="visually-hidden"
-          >{{ leaseText }}</span
-        >
-      </span>
-      <span
-        v-if="inEpic"
-        class="card-fact"
-      >
-        <FacetMarks
-          surface="card"
-          :item="item"
-          :facets="['parent']"
-          :context="context"
-        />
-      </span>
     </div>
     <div
       v-if="writable"
@@ -285,6 +221,78 @@ defineExpose({ actionCell })
         @release="emit('release')"
         @take-over="emit('take-over')"
       />
+    </div>
+    <!-- Under the first row and the action both, so a holder has the line to itself. -->
+    <div class="card-held">
+      <div class="card-held-line">
+        <span
+          class="card-fact card-holder"
+          :title="holderTitle"
+        >
+          <span
+            v-if="spokenOwner"
+            class="visually-hidden"
+            >{{ spokenOwner }}</span
+          >
+          <template v-if="holderExecutor?.session">
+            <Translation
+              v-if="item.state.is_terminal"
+              class="card-holder-past"
+              keypath="workItem.previousHolder"
+              tag="span"
+            >
+              <template #holder>
+                <ExecutorLink
+                  size="compact"
+                  variant="ghost"
+                  :holder="holderRef(item)"
+                  :executor="holderExecutor"
+                  :detail="ownerLabel"
+                />
+              </template>
+            </Translation>
+            <ExecutorLink
+              v-else
+              size="compact"
+              variant="ghost"
+              :holder="holderRef(item)"
+              :executor="holderExecutor"
+              :detail="leaseText || ownerLabel"
+            />
+          </template>
+          <FacetMarks
+            v-else
+            surface="card"
+            :item="item"
+            :facets="['holder']"
+          />
+          <SemanticState
+            v-if="lease?.state === 'stale'"
+            class="card-holder-stale"
+            dimension="claim-lease"
+            state="stale"
+            variant="dot"
+            :label="t('workItem.lease.mark')"
+          />
+          <span
+            v-if="leaseText"
+            class="visually-hidden"
+            >{{ leaseText }}</span
+          >
+        </span>
+        <span
+          v-if="inEpic"
+          class="card-fact"
+        >
+          <FacetMarks
+            surface="card"
+            :item="item"
+            :facets="['parent']"
+            :context="context"
+          />
+        </span>
+      </div>
+      <MissingPlaces />
     </div>
     <ul
       v-if="item.labels.length"
@@ -306,7 +314,7 @@ defineExpose({ actionCell })
 <style scoped>
 .card-facts-block {
   display: grid;
-  grid-template-areas: 'facts action' 'labels labels';
+  grid-template-areas: 'facts action' 'held held' 'labels labels';
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-1) var(--space-4);
   align-items: start;
@@ -317,6 +325,25 @@ defineExpose({ actionCell })
   display: flex;
   flex-wrap: wrap;
   grid-area: facts;
+  gap: 0 var(--space-3);
+  align-items: center;
+  min-width: 0;
+}
+
+/* The holder and the epic take the whole width under the action, and what keeps the card's
+   sessions from opening, said once, stands under them. Beside the action a holder too long
+   for what was left wrapped its place onto a second line, and its plate kept the width of
+   the first: no box narrows to the longest of the lines it wrapped into. */
+.card-held {
+  display: grid;
+  grid-area: held;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.card-held-line {
+  display: flex;
+  flex-wrap: wrap;
   gap: 0 var(--space-3);
   align-items: center;
   min-width: 0;
@@ -383,7 +410,7 @@ defineExpose({ actionCell })
    action stands under both at the full width a thumb reaches. */
 @container drawer (width < 520px) {
   .card-facts-block {
-    grid-template-areas: 'facts' 'labels' 'action';
+    grid-template-areas: 'facts' 'held' 'labels' 'action';
     grid-template-columns: minmax(0, 1fr);
     row-gap: var(--space-2);
   }

@@ -60,6 +60,7 @@ import { useWorkItemChain } from '@/widgets/work-item-inspector/utils/useWorkIte
 import { useWorkItemExecutions } from '@/widgets/work-item-inspector/utils/useWorkItemExecutions.ts'
 import { useWorkItemResource } from '@/widgets/work-item-inspector/utils/useWorkItemResource.ts'
 
+import { provideMissingPlaces } from '@/features/session-open/missingPlaces.ts'
 import LaunchDialog from '@/features/work-item-launch/LaunchDialog.vue'
 
 import type { WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
@@ -120,6 +121,8 @@ const overview = ref<InstanceType<typeof InspectorOverview> | null>(null)
 const questionWaits = ref(false)
 const questions = ref<readonly InputRequestEntry[]>([])
 const { asking, discard, keep: keepEditing, leave, unsaved } = provideDraftGuard()
+// A program this computer lacks is said once for the card, under its facts.
+provideMissingPlaces()
 
 const failureText = useFailureText()
 

@@ -424,6 +424,17 @@ checkouts are therefore distinguishable even at the same version.
   Settings, an error differed from the hint beside it only by its red, which a forced
   palette paints like any other text. It now carries a warning mark, and a refused field
   or text doubles its edge, which a forced palette keeps.
+- **A program this computer lacks is said once on a card.** Where every session would open
+  in VS Code and VS Code is not installed, «VS Code is not installed» stood beside the
+  holder, every agent and every step, in the ink of the name before it. The card now says
+  it once under its facts, with where to choose another place; each of those sessions keeps
+  a mark whose name gives the reason, and an agent's row says what a press would have done.
+  What a session alone is, such as gone or running without a window, is still said on its
+  row, its holder's name now in its own ink and the mark right after the last word.
+- **A card's holder has the line under its facts to itself.** Beside the action a holder
+  too long for what was left wrapped its place onto a second line, and its plate kept the
+  width of the first. The holder and the epic now take the whole width under the state,
+  priority and action, where most holders read on one line.
 
 ### Removed
 
