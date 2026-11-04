@@ -17,6 +17,20 @@ checkouts are therefore distinguishable even at the same version.
   what you are reading. A press still opens the item, Escape closes only the card, and a tap
   opens the item with no card. A number in the open space costs no request; any other reads
   the item's brief record once.
+- **A session opens where it was last open.** The holder in a card's head, a step's holder, an
+  agent, an attempt and a link name the place before the click, and a press opens the session
+  there: the VS Code extension, Claude Desktop, the Codex app or a terminal, with VS Code when the
+  place is unknown. A subagent opens through its parent. A session live in a terminal is not
+  started a second time: the button says where it runs, and once it has been silent for a day
+  offers, on a press of its own, to resume it if its window is closed. A session its client no
+  longer keeps says so instead of opening an empty one. Settings → Opening sessions and files
+  sets the place to fall back to for each client family, or one to always open in, and the
+  editor files and folders open in. `GET /api/open-plan` answers the steps a press takes and
+  `GET /api/open-places` what this machine can open; the desktop app runs the steps, a browser
+  takes one press for each.
+- **An item's plan anchor opens in Valkama.** The mark beside a card's source and its row in
+  Relations open the plan in the document viewer at the anchor, in a browser and in the desktop
+  app alike. A source Valkama cannot find is copied as written, and the notice says why.
 - **A Markdown file named in a text opens in Valkama.** A press on a path to a `.md` file in
   a card or a question opens the document over them, read-only: headings, lists, tables and
   code drawn, at the `#kb:…`, heading or `:42` the path names, with a link to another document
@@ -203,6 +217,9 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Removed
 
+- **The desktop app's own way to open a plan anchor in VS Code.** The `valkama:open-source`
+  bridge, its path check and the desktop app's reader of the project projection are gone; the
+  anchor opens in the document viewer, and a file in the editor through the open plan.
 - **The notification settings no code obeyed.** The browser-stored `notify` and
   `notifyEnabled` fields, their seven events and their strings in both languages are gone,
   and a stored value drops them when it is next read. Settings → Windows notifications
