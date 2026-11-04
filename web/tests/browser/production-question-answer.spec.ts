@@ -257,6 +257,22 @@ for (const width of [1500, 390]) {
     await expect(meta).toContainText(long)
     await expectDateHeld(meta, 'a previous answer')
   })
+
+  test(`a long name over a question and over its answer leaves the date in its place at ${width}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+    const long = 'an-agent-with-a-remarkably-long-working-name-that-runs-past-the-line'
+    const { card } = await openQuestion(page, [
+      asked({ ...whole, answered_by: long, by_person: false, author: long }),
+    ])
+    const reply = card.locator('.request-reply-meta')
+    await expect(reply).toContainText(long)
+    await expectDateHeld(reply, 'the answer in force')
+    const asking = card.locator('.request-meta')
+    await expect(asking).toContainText(long)
+    await expectDateHeld(asking, 'the question')
+  })
 }
 
 test('a chosen row keeps its mark in a forced palette, and the others read at full contrast', async ({

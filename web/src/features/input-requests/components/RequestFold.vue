@@ -23,6 +23,7 @@ import RequestHistory from '@/features/input-requests/components/RequestHistory.
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import { actorName } from '@/shared/lib/actor.ts'
 import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
+import MetaLine from '@/shared/ui/MetaLine.vue'
 import RichText from '@/shared/ui/RichText.vue'
 
 const props = defineProps<{
@@ -81,14 +82,13 @@ const closing = computed(() => {
       v-if="answered"
       class="request-reply"
     >
-      <div
+      <MetaLine
         class="request-reply-meta request-state"
         role="status"
         tabindex="-1"
+        :when="answerTime"
+        >{{ replier }}</MetaLine
       >
-        <span>{{ replier }}</span>
-        <span>{{ answerTime }}</span>
-      </div>
       <RequestFieldAnswer
         v-for="field in request.fields"
         :key="field.id"
@@ -159,15 +159,6 @@ const closing = computed(() => {
   min-width: 0;
   padding-inline-start: var(--space-3);
   border-inline-start: 1px solid var(--color-rule-strong);
-}
-
-.request-reply-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0 var(--space-2);
-  justify-content: space-between;
-  color: var(--color-text-tertiary);
-  font: var(--font-detail);
 }
 
 .request-reply-note {

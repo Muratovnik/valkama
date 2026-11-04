@@ -50,6 +50,7 @@ import { revealFrame } from '@/shared/lib/revealFrame.ts'
 import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
 import ConfirmStrip from '@/shared/ui/ConfirmStrip.vue'
 import type MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
+import MetaLine from '@/shared/ui/MetaLine.vue'
 import RichText from '@/shared/ui/RichText.vue'
 import { stopStrayPresses } from '@/shared/ui/strayPress.ts'
 
@@ -268,12 +269,11 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
       :entry="entry"
       @select="emit('select', $event)"
     />
-    <div class="request-meta">
-      <span
-        >{{ authorName }} <span v-if="authorSession">{{ authorSession }}</span></span
-      >
-      <span>{{ stamp(request.created_at) }}</span>
-    </div>
+    <MetaLine
+      class="request-meta"
+      :when="stamp(request.created_at)"
+      >{{ authorName }} <span v-if="authorSession">{{ authorSession }}</span></MetaLine
+    >
     <template v-if="inForm">
       <CollapsibleText
         class="request-prompt"
@@ -408,15 +408,6 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
 .request-card:focus-visible {
   border-radius: var(--radius-card);
   outline-offset: var(--space-half);
-}
-
-.request-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  justify-content: space-between;
-  color: var(--color-text-tertiary);
-  font: var(--font-detail);
 }
 
 .request-fact {

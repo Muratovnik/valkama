@@ -265,6 +265,10 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- **A long name over a question or its answer leaves the time at the end of the line.** The
+  agent that asked and the one that answered still pushed the time under a name too long for
+  the line, to its start, as threads and earlier answers no longer do. Both now keep the time
+  at the end of the first line and wrap the name whole beside it.
 - **Memory stands whole on the frame it is chosen.** A card read Memory's knowledge source
   only once the section was shown, so the section appeared with a line saying it was being
   checked and then grew by the provider and its path; on a phone the card's sections, stuck
