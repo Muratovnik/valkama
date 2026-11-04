@@ -166,8 +166,8 @@ export function graphCameraView(
 
   const contextIds = new Set([anchor.work_item_id])
   for (const edge of graph.edges) {
-    if (edge.from === anchor.work_item_id) contextIds.add(edge.to)
-    if (edge.to === anchor.work_item_id) contextIds.add(edge.from)
+    if (edge.source === anchor.work_item_id) contextIds.add(edge.target)
+    if (edge.target === anchor.work_item_id) contextIds.add(edge.source)
   }
   const context = fitNodes(
     graph.nodes.filter((node) => contextIds.has(node.work_item_id)),

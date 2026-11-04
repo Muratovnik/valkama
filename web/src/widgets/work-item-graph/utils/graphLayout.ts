@@ -10,11 +10,12 @@ import type { ElkNode, ElkPoint } from 'elkjs/lib/elk-api'
 
 import {
   MARGIN,
+  NO_EPIC_FRAME,
   NODE_HEIGHT,
   NODE_WIDTH,
   rowOrder,
 } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
-import type { PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+import type { PlacedFrame, PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 
 import { readyIds } from '@/shared/api/planningModel.ts'
 import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
@@ -25,16 +26,28 @@ export interface GraphSource {
   nodes: WorkItemBrief[]
 }
 
-export interface RoutedEdge extends PlanningEdge {
+/**
+ * One drawn line. Its ends are what is drawn — a card, or the frame a link's
+ * end stands for — so several links between one pair of drawn ends are one line,
+ * and it keeps the links it stands for.
+ */
+export interface RoutedEdge {
+  id: string
+  /** `blocks` when any link behind it blocks. */
+  kind: PlanningEdge['kind']
+  /** The links it stands for. */
+  links: readonly { from: string; to: string }[]
   points: ElkPoint[]
+  /** The drawn ends: a card's id or a frame's id. */
+  source: string
+  target: string
 }
 
 export interface GraphLayout {
   edges: RoutedEdge[]
+  frames: PlacedFrame[]
   height: number
-  isolatedCount: number
   nodes: PlacedNode[]
-  ranks: number
   width: number
 }
 
@@ -109,9 +122,9 @@ export function flowEdge(
   const lit = options.lit ?? false
   const recessed = options.recessed ?? false
   return {
-    id: edgeKey(edge),
-    source: edge.from,
-    target: edge.to,
+    id: edge.id,
+    source: edge.source,
+    target: edge.target,
     sourceHandle: 'source',
     targetHandle: 'target',
     type: GRAPH_EDGE_TYPE,
@@ -247,16 +260,8 @@ export async function layout(
   const visible = source.edges
     .filter((edge) => edge.kind !== 'parent' && present.has(edge.from) && present.has(edge.to))
     .sort((left, right) => edgeKey(left).localeCompare(edgeKey(right)))
-  const connected = new Set(visible.flatMap((edge) => [edge.from, edge.to]))
   if (!nodes.length) {
-    return {
-      nodes: [],
-      edges: [],
-      width: MARGIN * 2,
-      height: MARGIN * 2,
-      ranks: 0,
-      isolatedCount: 0,
-    }
+    return { nodes: [], frames: [], edges: [], width: MARGIN * 2, height: MARGIN * 2 }
   }
   const graph: ElkNode = {
     id: 'work-graph',
@@ -302,13 +307,24 @@ export async function layout(
     const position = positions.get(node.work_item_id)
     if (position?.x === undefined || position.y === undefined)
       throw new Error('Incomplete graph layout')
-    return { ...node, x: position.x, y: position.y, isolated: !connected.has(node.work_item_id) }
+    return {
+      ...node,
+      x: position.x,
+      y: position.y,
+      width: NODE_WIDTH,
+      height: NODE_HEIGHT,
+      frameId: node.parent_id ?? NO_EPIC_FRAME,
+    }
   })
-  const edges = visible.map((edge) => {
+  const edges = visible.map((edge): RoutedEdge => {
     const sections = routes.get(edgeKey(edge))?.sections
     if (!sections?.length) throw new Error('Incomplete graph route')
     return {
-      ...edge,
+      id: edgeKey(edge),
+      source: edge.from,
+      target: edge.to,
+      kind: edge.kind,
+      links: [{ from: edge.from, to: edge.to }],
       points: sections.flatMap((section) => [
         section.startPoint,
         ...(section.bendPoints ?? []),
@@ -318,11 +334,10 @@ export async function layout(
   })
   return {
     nodes: placed,
+    frames: [],
     edges,
     width: result.width ?? MARGIN * 2,
     height: result.height ?? MARGIN * 2,
-    ranks: new Set(placed.filter((node) => !node.isolated).map((node) => node.x)).size,
-    isolatedCount: placed.filter((node) => node.isolated).length,
   }
 }
 
@@ -332,7 +347,7 @@ export function frontier(source: GraphSource): WorkItemBrief[] {
   return source.nodes.filter((node) => ready.has(node.work_item_id))
 }
 
-export function edgeKey(edge: PlanningEdge): string {
+function edgeKey(edge: PlanningEdge): string {
   return `${edge.from}-${edge.to}-${edge.kind}`
 }
 
@@ -343,13 +358,13 @@ export function edgeKey(edge: PlanningEdge): string {
  * makes branches and cycles deterministic and bounded.
  */
 export function neighborhood(
-  edges: PlanningEdge[],
+  edges: readonly Pick<RoutedEdge, 'id' | 'source' | 'target'>[],
   id: string,
 ): { edges: Set<string>; ids: Set<string> } {
   const adjacency = new Map<string, string[]>()
   for (const edge of edges) {
-    adjacency.set(edge.from, [...(adjacency.get(edge.from) ?? []), edge.to])
-    adjacency.set(edge.to, [...(adjacency.get(edge.to) ?? []), edge.from])
+    adjacency.set(edge.source, [...(adjacency.get(edge.source) ?? []), edge.target])
+    adjacency.set(edge.target, [...(adjacency.get(edge.target) ?? []), edge.source])
   }
 
   const ids = new Set<string>([id])
@@ -367,7 +382,7 @@ export function neighborhood(
 
   const keys = new Set<string>()
   for (const edge of edges) {
-    if (ids.has(edge.from) && ids.has(edge.to)) keys.add(edgeKey(edge))
+    if (ids.has(edge.source) && ids.has(edge.target)) keys.add(edge.id)
   }
   return { ids, edges: keys }
 }

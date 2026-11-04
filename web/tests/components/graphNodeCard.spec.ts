@@ -10,6 +10,11 @@ import { mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import GraphNodeCard from '@/widgets/work-item-graph/components/GraphNodeCard.vue'
+import {
+  NO_EPIC_FRAME,
+  NODE_HEIGHT,
+  NODE_WIDTH,
+} from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 
 import { chainGroup } from '@/shared/api/planningChainGroups.ts'
@@ -27,9 +32,11 @@ const node = (
   overrides: Partial<PlacedNode> = {},
 ): PlacedNode => ({
   ...boardItem(4, state),
-  isolated: false,
   x: 0,
   y: 0,
+  width: NODE_WIDTH,
+  height: NODE_HEIGHT,
+  frameId: NO_EPIC_FRAME,
   ...overrides,
 })
 

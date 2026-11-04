@@ -15,7 +15,7 @@ import type { Edge as FlowEdge, Node as FlowNode } from '@vue-flow/core'
 
 import { NODE_HEIGHT, NODE_WIDTH } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
-import { edgeKey, flowEdge } from '@/widgets/work-item-graph/utils/graphLayout.ts'
+import { flowEdge } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import type { GraphLayout, neighborhood } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 
 import type { PlanningEdge } from '@/shared/api/planningModel.ts'
@@ -63,8 +63,7 @@ export function useGraphFlowElements(input: FlowElementsInput) {
     if (!input.placed.value) return []
     const focusedEdges = input.focusSet.value?.edges
     return input.placed.value.edges.map((edge) => {
-      const key = edgeKey(edge)
-      const lit = focusedEdges?.has(key) ?? false
+      const lit = focusedEdges?.has(edge.id) ?? false
       const recessed = focusedEdges != null && !lit
       const markerColor = edgeMarkerColor(lit, edge.kind)
       const descriptor = flowEdge(edge, { markerColor, lit, recessed })

@@ -26,7 +26,6 @@ import type {
 } from '@/widgets/work-item-graph/utils/graphFocus.ts'
 import {
   doneCount,
-  edgeKey,
   frontier,
   layout,
   neighborhood,
@@ -229,9 +228,9 @@ export function useGraphProjection(
     const pinned = branch()
     if (pinned && focus.value.active !== 'hover') {
       const edges = placed.value.edges.filter(
-        (edge) => pinned.has(edge.from) && pinned.has(edge.to),
+        (edge) => pinned.has(edge.source) && pinned.has(edge.target),
       )
-      return { ids: new Set(pinned), edges: new Set(edges.map((edge) => edgeKey(edge))) }
+      return { ids: new Set(pinned), edges: new Set(edges.map((edge) => edge.id)) }
     }
     const selection = selected()
     const selectedVisible = placed.value.nodes.some((node) => node.work_item_id === selection)

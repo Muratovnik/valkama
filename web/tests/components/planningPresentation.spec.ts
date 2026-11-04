@@ -45,7 +45,7 @@ function workItem(overrides: Partial<WorkItemBrief> = {}): WorkItemBrief {
 }
 
 function placedNode(overrides: Partial<PlacedNode> = {}): PlacedNode {
-  return { ...workItem(), isolated: false, x: 0, y: 0, ...overrides }
+  return { ...workItem(), x: 0, y: 0, width: 264, height: 112, frameId: 'none', ...overrides }
 }
 
 function fullWorkItem(overrides: Partial<WorkItem> = {}): WorkItem {

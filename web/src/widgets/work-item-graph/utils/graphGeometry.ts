@@ -2,9 +2,62 @@
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 
-/** A visible work item placed by the layout engine. */
+/**
+ * What an agent's session behind an item is doing now, as the server's
+ * `live_work` names it: a turn running, a turn finished and waiting for a
+ * person, or a session alive by its lease that has said nothing for a day.
+ * An item without live work is absent from that map. `quiet_since` is the
+ * time of the session's last sign of life.
+ */
+export type LiveWork = { quiet_since: string; state: 'quiet' } | { state: 'waiting' | 'working' }
+
+/** The frame of the work filed under no epic. */
+export const NO_EPIC_FRAME = 'none'
+
+/**
+ * A visible work item placed by the layout engine, as a box in the field's own
+ * space: every reader measures the box it was given rather than a card size.
+ */
 export interface PlacedNode extends WorkItemBrief {
-  isolated: boolean
+  /** The frame that holds it: an epic's id or `NO_EPIC_FRAME`. */
+  frameId: string
+  height: number
+  width: number
+  x: number
+  y: number
+}
+
+/**
+ * How the work under a frame stands, by the groups a chain is read in. It
+ * counts every item under the frame, open and closed, whatever the field draws
+ * or a filter lets through: the counts describe the epic, not the view.
+ */
+export interface FrameProgress {
+  active: number
+  /** Queued and backlog. */
+  ahead: number
+  blocked: number
+  done: number
+  review: number
+  total: number
+}
+
+/**
+ * An epic, an item that grew children, or the work under none, drawn as a
+ * frame round its work — or, folded, as its header alone.
+ */
+export interface PlacedFrame {
+  epic: WorkItemBrief | null
+  folded: boolean
+  height: number
+  /** An epic's or container's `work_item_id`, or `NO_EPIC_FRAME`. */
+  id: string
+  /** Open and closed work under it, nested frames' included, for live counts. */
+  members: readonly string[]
+  /** The frame a nested one stands in. */
+  parentId: string | null
+  progress: FrameProgress
+  width: number
   x: number
   y: number
 }

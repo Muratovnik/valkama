@@ -2,7 +2,11 @@ import assert from 'node:assert/strict'
 
 import { test } from 'vitest'
 
-import { NODE_HEIGHT, NODE_WIDTH } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+import {
+  NO_EPIC_FRAME,
+  NODE_HEIGHT,
+  NODE_WIDTH,
+} from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import { graphWalk, isGraphWalkKey } from '@/widgets/work-item-graph/utils/graphWalk.ts'
 
@@ -17,7 +21,15 @@ const ROW = NODE_HEIGHT + 36
 
 /** One node at a grid place: column `c`, row `r`. */
 function at(id: string, c: number, r: number): PlacedNode {
-  return { ...base, work_item_id: id, isolated: false, x: c * COLUMN, y: r * ROW }
+  return {
+    ...base,
+    work_item_id: id,
+    x: c * COLUMN,
+    y: r * ROW,
+    width: NODE_WIDTH,
+    height: NODE_HEIGHT,
+    frameId: NO_EPIC_FRAME,
+  }
 }
 
 // A  B  .  D

@@ -7,7 +7,6 @@ import { MARGIN, NODE_HEIGHT, NODE_WIDTH } from '@/widgets/work-item-graph/utils
 import {
   layout as computeLayout,
   doneCount,
-  edgeKey,
   flowEdge,
   frontier,
   GRAPH_EDGE_MARKER_SIZE,
@@ -142,8 +141,8 @@ function assertClearGeometry(graph: GraphLayout) {
         `every segment is orthogonal: ${JSON.stringify([a, b])}`,
       )
       for (const node of graph.nodes) {
-        if (node.work_item_id === edge.from || node.work_item_id === edge.to) continue
-        assert.equal(crossesNode(a, b, node), false, `${edgeKey(edge)} crosses ${node.reference}`)
+        if (node.work_item_id === edge.source || node.work_item_id === edge.target) continue
+        assert.equal(crossesNode(a, b, node), false, `${edge.id} crosses ${node.reference}`)
       }
     }
   }
@@ -156,9 +155,9 @@ test('blockers and context preserve source/target direction with routed geometry
   })
   const byId = placedById(placed)
   assert.ok(byId(1).x < byId(2).x && byId(2).x < byId(3).x)
-  assert.equal(placed.ranks, 3)
+  assert.equal(new Set(placed.nodes.map((item) => item.x)).size, 3)
   assert.deepEqual(
-    placed.edges.map(({ from, to }) => [numberFor(from), numberFor(to)]),
+    placed.edges.map(({ source, target }) => [numberFor(source), numberFor(target)]),
     [
       [1, 2],
       [2, 3],
@@ -189,12 +188,12 @@ test('cycles, parallel context and long links route around unrelated cards', asy
   assert.equal(placed.edges.length, edges.length)
   assertClearGeometry(placed)
   const parallel = placed.edges.filter(
-    (item) => item.from === identity(1) && item.to === identity(9),
+    (item) => item.source === identity(1) && item.target === identity(9),
   )
   assert.notDeepEqual(parallel[0].points, parallel[1].points)
   for (const edge of placed.edges) {
-    const source = placed.nodes.find((node) => node.work_item_id === edge.from)
-    const target = placed.nodes.find((node) => node.work_item_id === edge.to)
+    const source = placed.nodes.find((node) => node.work_item_id === edge.source)
+    const target = placed.nodes.find((node) => node.work_item_id === edge.target)
     assert.ok(source && target)
     assert.equal(edge.points[0].x, source.x + NODE_WIDTH)
     assert.equal(edge.points.at(-1)?.x, target.x)
@@ -211,7 +210,8 @@ test('large disconnected work and context pack across both axes without dropping
     edges,
   })
   assert.equal(placed.nodes.length, 1119)
-  assert.equal(placed.isolatedCount, 1029)
+  const linked = new Set(placed.edges.flatMap((item) => [item.source, item.target]))
+  assert.equal(placed.nodes.filter((item) => !linked.has(item.work_item_id)).length, 1029)
   assert.equal(placed.edges.length, 60)
   assert.ok(new Set(placed.nodes.map((node) => node.x)).size > 10)
   assert.ok(placed.width / placed.height > 0.8 && placed.width / placed.height < 3)
@@ -311,7 +311,7 @@ test('flow descriptors retain exact ELK points and closed arrow markers', async 
 test('empty geometry is drawable and whole-graph fit has no clipping zoom floor', async () => {
   const placed = await layout({ nodes: [], edges: [] })
   assert.equal(placed.nodes.length, 0)
-  assert.equal(placed.ranks, 0)
+  assert.equal(placed.frames.length, 0)
   assert.equal(placed.width, MARGIN * 2)
   assert.equal(placed.height, MARGIN * 2)
   assert.equal('minZoom' in graphFitViewOptions(), false)
