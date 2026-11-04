@@ -607,10 +607,22 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   the ground with a quieter label that still reads at 4.5:1.
 - **Segmented choice:** `SegmentedControl` owns "pick one of a few visible
   alternatives" — view switches, chart encodings, ledger filters, a card's
-  sections. It is a radio group: Tab reaches it once, on the chosen segment, and
-  the arrows, Home and End move focus and the choice together. A row of
-  `aria-pressed` buttons or `radio` roles styled locally is the same control built
-  again, and `check:ui-system` rejects one.
+  sections. Picking a value — the board's view, the graph's filter, a chain's
+  scope, the threads to show — is a radio group: Tab reaches it once, on the
+  chosen segment, and the arrows, Home and End move focus and the choice
+  together. Switching what a panel shows — a card's sections, Settings' sections,
+  an editor's Write and Preview — is tabs over that panel (WAI-ARIA APG): the
+  same row given tab ids from `useTabIds`, and `TabPanel` around what it shows,
+  naming the tab back. Only Left, Right, Home and End walk a row of tabs; the
+  arrows show a panel as they reach its tab where it shows at once, and only
+  move focus where showing it starts slow work, as Settings' diagnostics do. A
+  row of `aria-pressed` buttons, `radio` or `tab` roles styled locally is the
+  same control built again, and `check:ui-system` rejects one.
+- **Disclosure:** what shows more of something — the rest of a long text,
+  earlier replies, a chain's or a lane's further rows, a folded thread — is the
+  bare `text` weight, its words in line with what it opens. The ghost's fill is
+  for actions; a disclosure in the same fill stood level with the actions beside
+  it.
 - **Fields:** `VField` owns the frame around a labelled control — label,
   control, optional hint — and `VTextInput` owns the control itself for one
   line or several. A button beside a field lines up with its control, so that
