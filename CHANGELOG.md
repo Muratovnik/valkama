@@ -12,6 +12,13 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Added
 
+- **The space's read model says which items an agent is at work on now.** `live_work` in
+  `GET /api/planning` and its event stream maps each such item to `working` (a turn is
+  running, a subagent started since the session last started, or an attempt is running),
+  `waiting` (the session is live and its turn ended or has not begun) or `quiet` (silent
+  for over a day, with `quiet_since`). It is read from the sessions behind the item's claim
+  and its open steps, in five reads whatever the size of the space, and no MCP tool answer
+  carries it. See [Work-item context](docs/product-model.md#work-item-context).
 - **A work item's number in a text shows its card.** Rest the pointer on the number for half
   a second, or reach it with Tab, to see its state, title, holder and steps without leaving
   what you are reading. A press still opens the item, Escape closes only the card, and a tap

@@ -189,6 +189,30 @@ carries any of them. The state is what the record shows:
 - `gone`: ended, and the transcript file the client named is no longer there. Only the
   file's status is read, and a live session whose file is not written yet stays `live`.
 
+**Live work on the space read model.** The space's read model (`GET /api/planning` and
+its event stream) carries `live_work`: the items an agent is at work on now, by id, each
+with a `state`. An item with no live work is not in the map, and no MCP tool answer
+carries it. The sessions behind an item are the one whose confirmed call took its claim
+and the ones its open steps' holders name; a subagent's claim or step names its parent's
+session. A session counts while its row says active and its last sign of life is no older
+than a claim's lease, fourteen days. Then:
+
+- `working`: the session's last lifecycle event of its own is a prompt, so a turn is
+  running, or one of its subagents is active and started since the session last started.
+  An attempt Valkama runs on the item, starting or running, is `working` with no session.
+- `waiting`: any other live session. Its turn ended, it waits for a person, or it was
+  opened or resumed with no prompt yet.
+- `quiet`: no sign of life for more than a day, with `quiet_since`, the last one. A
+  silent session is not called ended: silence proves nothing.
+
+An item takes the strongest of its sessions and attempts, `working` before `waiting`
+before `quiet`. Only `quiet` carries a time, so the stream writes a frame when a state
+changes, not on every event. What the map cannot see: a client that died in the middle
+of a turn reads `working` for a day and `quiet` after it, because only a check of the
+process could tell more, and an agent that writes to an item without holding it or one of
+its steps puts nothing in the map. A store an earlier build wrote, without the columns the
+map is read from, gives an empty map.
+
 **Opening the executor** is the action a holder offers. A press asks the server for a
 plan (`GET /api/open-plan`, described in
 [What a click opens](connection-contract.md#what-a-click-opens)) and opens the session

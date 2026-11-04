@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from . import calls, leases, model, read_model, service, store
+from . import calls, leases, live_work, model, read_model, service, store
 
 READ_MODEL_INTERFACE = f"{model.PLANNING_INTERFACE}-read-model"
 
@@ -30,6 +30,7 @@ def planning_payload(conn: sqlite3.Connection, *, space: str | None = None) -> d
             "work_items": [],
             "links": [],
             "stale_claims": [],
+            "live_work": {},
         }
     chosen = service.get_planning_space(conn, space or spaces[0]["planning_space_id"])
     space_id = str(chosen["planning_space_id"])
@@ -48,6 +49,9 @@ def planning_payload(conn: sqlite3.Connection, *, space: str | None = None) -> d
         "work_items": items,
         "links": _links(conn, space_id),
         "stale_claims": stale_claims(conn, space=space_id),
+        # Which items an agent is at work on now: by `live_work`'s rule, and
+        # only for the items that have some.
+        "live_work": live_work.live_work(conn, items),
     }
 
 

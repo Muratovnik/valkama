@@ -1,0 +1,479 @@
+"""Which items of a space an agent is at work on now, as the read model says.
+
+The rule under test, from `live_work`: an item takes the strongest state of the
+sessions behind it (its claim, its open steps) and of the attempts running on
+it. A session that is not active, or silent past the lease period, stands for
+nothing; one silent past a day is `quiet`; one whose last lifecycle event is a
+prompt, or with a subagent running since it last started, is `working`; any
+other is `waiting`.
+
+Every case reads `planning_payload`, so the key is checked where views take it.
+Hook events go through the real ingest path and claims through the real write
+path under a bound identity. The clock is `leases.utc_now`, set years ahead, so
+every event the cases record is newer than the moment a claim call touched its
+session and applies to the row.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sqlite3
+import tempfile
+import unittest
+import uuid
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from unittest import mock
+
+from server import store
+from server.hooks import ingest, normalize
+from server.http_surface import EventFrames
+from server.planning import calls, leases, live_work, service, views
+from tests.planning_fixtures import bulk_items
+
+NOW = datetime(2030, 1, 1, 12, 0, 0, tzinfo=UTC)
+SPACE = "LW"
+
+
+def ago(**delta: float) -> str:
+    """A hook's time: `delta` before the clock, with the milliseconds a hook sends."""
+
+    return (NOW - timedelta(**delta)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+
+def second(**delta: float) -> str:
+    """A session row's time: `delta` before the clock, to the second."""
+
+    return (NOW - timedelta(**delta)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def confirmed(session: str, agent: str | None = None) -> calls.Identity:
+    return calls.Identity(
+        state=calls.CONFIRMED,
+        source=calls.CLAUDE_HOOK,
+        session_id=session,
+        agent_id=agent,
+        agent_type="Explore" if agent else None,
+        tool_use_id="t",
+        client="claude",
+    )
+
+
+class LiveWorkCase(unittest.TestCase):
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(directory.cleanup)
+        environment = mock.patch.dict(
+            os.environ, {"VALKAMA_DB": os.path.join(directory.name, "valkama.sqlite3")}
+        )
+        environment.start()
+        self.addCleanup(environment.stop)
+        clock = mock.patch.object(leases, "utc_now", return_value=NOW)
+        clock.start()
+        self.addCleanup(clock.stop)
+        self.conn = store.connect()
+        self.addCleanup(self.conn.close)
+        service.create_planning_space(self.conn, project_id="live", name="Live", key=SPACE)
+        self._uid = 0
+
+    # -- what the cases are made of --------------------------------------------
+
+    def item(self, steps: list[str] | None = None) -> str:
+        created = service.create_work_item(self.conn, space=SPACE, title="Work")
+        if steps:
+            service.set_checklist(self.conn, created["reference"], steps)
+        return str(created["reference"])
+
+    def identity(self, reference: str) -> str:
+        return str(service.get_work_item(self.conn, reference)["work_item_id"])
+
+    def hook(self, session: str, event: str, when: str, agent: str | None = None) -> None:
+        self._uid += 1
+        payload: dict[str, object] = {"session_id": session}
+        if agent is not None:
+            payload["agent_id"] = agent
+        record = normalize.lifecycle_event(
+            "claude",
+            event,
+            payload,
+            event_uid=f"00000000-0000-4000-8000-{self._uid:012d}",
+            occurred_at=when,
+        )
+        assert record is not None
+        ingest.record(self.conn, record, delivery="direct")
+
+    def claim(self, reference: str, session: str, agent: str | None = None) -> None:
+        with calls.bind(confirmed(session, agent), "claim_work_item"):
+            service.claim_work_item(self.conn, reference, move_state=False)
+
+    def hold_step(self, reference: str, session: str | None, agent: str | None = None) -> None:
+        (step, *_) = service.get_work_item(self.conn, reference)["checklist"]
+        if session is None:
+            service.claim_checklist_item(self.conn, reference, step["id"], author="user")
+            return
+        with calls.bind(confirmed(session, agent), "claim_work_item_checklist_item"):
+            service.claim_checklist_item(self.conn, reference, step["id"])
+
+    def seen(self, session: str, when: str) -> None:
+        self.conn.execute("UPDATE sessions SET last_seen = ? WHERE id = ?", (when, session))
+
+    def attempt(self, reference: str, status: str) -> None:
+        self.conn.execute(
+            "INSERT INTO executions(execution_id, work_item_id, client_family, role,"
+            " environment, expected_effect, status) VALUES (?,?,?,?,?,?,?)",
+            (str(uuid.uuid4()), self.identity(reference), "claude", "r", "e", "x", status),
+        )
+
+    def live(self) -> dict[str, dict]:
+        return views.planning_payload(self.conn, space=SPACE)["live_work"]
+
+    def state_of(self, reference: str) -> dict | None:
+        return self.live().get(self.identity(reference))
+
+
+def _session() -> str:
+    return str(uuid.uuid4())
+
+
+#: One case per row: what happened to a fresh item, and what the map says of it.
+#: Each builder takes the case and the item's reference.
+_Build = Callable[[LiveWorkCase, str], None]
+
+
+def _claimed_then(*events: str, agent_events: tuple[str, ...] = ()) -> _Build:
+    """A claim by one session, then its own lifecycle events, a minute apart, oldest first."""
+
+    def build(case: LiveWorkCase, reference: str) -> None:
+        session = _session()
+        case.claim(reference, session)
+        for index, event in enumerate(events):
+            case.hook(session, event, ago(minutes=(len(events) - index) * 10))
+        for event in agent_events:
+            case.hook(session, event, ago(minutes=1), agent="a1")
+
+    return build
+
+
+def _silent_for(delta: timedelta, last: str) -> _Build:
+    def build(case: LiveWorkCase, reference: str) -> None:
+        session = _session()
+        case.claim(reference, session)
+        case.hook(session, "session-start", ago(minutes=30))
+        case.hook(session, last, ago(minutes=20))
+        case.seen(session, (NOW - delta).strftime("%Y-%m-%dT%H:%M:%SZ"))
+
+    return build
+
+
+def _subagent(started_after_restart: bool) -> _Build:
+    def build(case: LiveWorkCase, reference: str) -> None:
+        session = _session()
+        case.claim(reference, session)
+        case.hook(session, "session-start", ago(minutes=50))
+        if started_after_restart:
+            case.hook(session, "session-start", ago(minutes=40))
+            case.hook(session, "subagent-start", ago(minutes=30), agent="a1")
+        else:
+            case.hook(session, "subagent-start", ago(minutes=40), agent="a1")
+            case.hook(session, "session-start", ago(minutes=30))
+        case.hook(session, "stop", ago(minutes=10))
+
+    return build
+
+
+def _step_held_by_a_subagent(case: LiveWorkCase, reference: str) -> None:
+    session = _session()
+    case.hook(session, "session-start", ago(minutes=20))
+    case.hook(session, "user-prompt-submit", ago(minutes=10))
+    case.hold_step(reference, session, agent="a1")
+
+
+def _step_held_by_a_person(case: LiveWorkCase, reference: str) -> None:
+    case.hold_step(reference, None)
+
+
+def _two_sessions(first_quiet: bool, second_event: str) -> _Build:
+    """A claim by one session and a step by another."""
+
+    def build(case: LiveWorkCase, reference: str) -> None:
+        claimer, stepper = _session(), _session()
+        case.claim(reference, claimer)
+        case.hook(claimer, "session-start", ago(minutes=30))
+        case.hook(claimer, "stop", ago(minutes=25))
+        if first_quiet:
+            case.seen(claimer, second(days=2))
+        case.hold_step(reference, stepper)
+        case.hook(stepper, "session-start", ago(minutes=20))
+        case.hook(stepper, second_event, ago(minutes=10))
+
+    return build
+
+
+def _two_quiet(case: LiveWorkCase, reference: str) -> None:
+    claimer, stepper = _session(), _session()
+    case.claim(reference, claimer)
+    case.hold_step(reference, stepper)
+    case.seen(claimer, second(days=3))
+    case.seen(stepper, second(days=2))
+
+
+def _session_marked(status: str) -> _Build:
+    def build(case: LiveWorkCase, reference: str) -> None:
+        session = _session()
+        case.claim(reference, session)
+        case.hook(session, "user-prompt-submit", ago(minutes=10))
+        case.conn.execute("UPDATE sessions SET status = ? WHERE id = ?", (status, session))
+
+    return build
+
+
+def _session_without_a_row(case: LiveWorkCase, reference: str) -> None:
+    session = _session()
+    case.claim(reference, session)
+    case.conn.execute("DELETE FROM sessions WHERE id = ?", (session,))
+
+
+def _claim_nobody_confirmed(case: LiveWorkCase, reference: str) -> None:
+    service.claim_work_item(case.conn, reference, author="someone", move_state=False)
+
+
+def _attempt(status: str) -> _Build:
+    def build(case: LiveWorkCase, reference: str) -> None:
+        case.attempt(reference, status)
+
+    return build
+
+
+def _nothing(_case: LiveWorkCase, _reference: str) -> None:
+    pass
+
+
+WORKING = {"state": "working"}
+WAITING = {"state": "waiting"}
+
+CASES: list[tuple[str, list[str] | None, _Build, dict | None]] = [
+    ("a claim after a prompt", None, _claimed_then("session-start", "user-prompt-submit"), WORKING),
+    ("a claim after the turn ended", None, _claimed_then("user-prompt-submit", "stop"), WAITING),
+    (
+        "a claim after a notification",
+        None,
+        _claimed_then("user-prompt-submit", "notification"),
+        WAITING,
+    ),
+    (
+        "a resumed session with a claim and no prompt",
+        None,
+        _claimed_then("user-prompt-submit", "stop", "session-start"),
+        WAITING,
+    ),
+    (
+        "a subagent's own stop after its parent's prompt",
+        None,
+        _claimed_then(
+            "session-start",
+            "user-prompt-submit",
+            agent_events=("subagent-start", "subagent-stop", "stop"),
+        ),
+        WORKING,
+    ),
+    ("a waiting session with a subagent started since", None, _subagent(True), WORKING),
+    ("a waiting session with a subagent from before a restart", None, _subagent(False), WAITING),
+    ("a step a subagent holds", ["step"], _step_held_by_a_subagent, WORKING),
+    ("an attempt running with no session", None, _attempt("running"), WORKING),
+    ("an attempt starting", None, _attempt("starting"), WORKING),
+    ("an attempt that finished", None, _attempt("complete"), None),
+    (
+        "silent exactly a day, after a prompt",
+        None,
+        _silent_for(timedelta(days=1), "user-prompt-submit"),
+        WORKING,
+    ),
+    ("silent exactly a day, after a stop", None, _silent_for(timedelta(days=1), "stop"), WAITING),
+    (
+        "silent a day and a second",
+        None,
+        _silent_for(timedelta(days=1, seconds=1), "user-prompt-submit"),
+        {"state": "quiet", "quiet_since": second(days=1, seconds=1)},
+    ),
+    (
+        "silent exactly the lease period",
+        None,
+        _silent_for(leases.LEASE_PERIOD, "user-prompt-submit"),
+        {"state": "quiet", "quiet_since": second(days=14)},
+    ),
+    (
+        "silent the lease period and a second",
+        None,
+        _silent_for(leases.LEASE_PERIOD + timedelta(seconds=1), "user-prompt-submit"),
+        None,
+    ),
+    ("working beside quiet", ["step"], _two_sessions(True, "user-prompt-submit"), WORKING),
+    ("waiting beside quiet", ["step"], _two_sessions(True, "stop"), WAITING),
+    ("waiting beside working", ["step"], _two_sessions(False, "user-prompt-submit"), WORKING),
+    (
+        "two quiet sessions",
+        ["step"],
+        _two_quiet,
+        {"state": "quiet", "quiet_since": second(days=2)},
+    ),
+    ("a session that ended", None, _session_marked("ended"), None),
+    ("a session that failed", None, _session_marked("failed"), None),
+    ("a session with no row", None, _session_without_a_row, None),
+    ("a claim no session confirmed", None, _claim_nobody_confirmed, None),
+    ("a step a person holds", ["step"], _step_held_by_a_person, None),
+    ("nothing at all", None, _nothing, None),
+]
+
+
+class RuleTests(LiveWorkCase):
+    def test_each_case_reads_as_the_rule_says(self) -> None:
+        built = []
+        for _name, steps, build, _expected in CASES:
+            reference = self.item(steps)
+            build(self, reference)
+            built.append(reference)
+        found = self.live()
+        for (name, _steps, _build, expected), reference in zip(CASES, built, strict=True):
+            with self.subTest(name):
+                self.assertEqual(expected, found.get(self.identity(reference)))
+
+    def test_a_finished_step_stands_for_nobody(self) -> None:
+        reference = self.item(["step"])
+        session = _session()
+        self.hold_step(reference, session)
+        self.hook(session, "user-prompt-submit", ago(minutes=1))
+        self.assertEqual(WORKING, self.state_of(reference))
+        (step,) = service.get_work_item(self.conn, reference)["checklist"]
+        with calls.bind(confirmed(session), "tick_work_item_checklist_item"):
+            service.tick_checklist_item(self.conn, reference, step["id"])
+        self.assertIsNone(self.state_of(reference))
+
+    def test_the_map_follows_the_items_order(self) -> None:
+        references = [self.item() for _ in range(3)]
+        for reference in reversed(references):
+            self.attempt(reference, "running")
+        self.assertEqual([self.identity(reference) for reference in references], list(self.live()))
+
+    def test_a_space_with_no_live_session_reads_no_lifecycle(self) -> None:
+        reference = self.item()
+        session = _session()
+        self.claim(reference, session)
+        self.seen(session, second(days=2))
+        statements: list[str] = []
+        self.conn.set_trace_callback(statements.append)
+        self.addCleanup(self.conn.set_trace_callback, None)
+        found = live_work.live_work(self.conn, [service.get_work_item(self.conn, reference)])
+        self.assertEqual(
+            {"state": "quiet", "quiet_since": second(days=2)}, found[self.identity(reference)]
+        )
+        self.assertFalse(any("session_start" in statement for statement in statements))
+
+    def test_no_items_and_no_space_read_an_empty_map(self) -> None:
+        self.assertEqual({}, live_work.live_work(self.conn, []))
+        self.conn.execute("DELETE FROM planning_spaces")
+        self.assertEqual({}, views.planning_payload(self.conn)["live_work"])
+
+
+class StoreAgeTests(unittest.TestCase):
+    """A store an earlier build wrote lacks what the map asks for, and reads empty."""
+
+    def old_store(self, *, claim_column: bool, parent_column: bool) -> sqlite3.Connection:
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        self.addCleanup(conn.close)
+        claim = ", claim_call_id INTEGER" if claim_column else ""
+        parent = ", parent_session_id TEXT NOT NULL DEFAULT ''" if parent_column else ""
+        conn.executescript(
+            f"CREATE TABLE work_items(work_item_id TEXT, claim_ref TEXT{claim});"
+            f"CREATE TABLE sessions(id TEXT, status TEXT, last_seen TEXT, started_at TEXT{parent});"
+            "CREATE TABLE execution_events(id INTEGER, kind TEXT, session_id TEXT, agent_id TEXT,"
+            " identity_state TEXT, occurred_at TEXT, received_at TEXT);"
+            "CREATE TABLE executions(work_item_id TEXT, status TEXT);"
+            "INSERT INTO work_items(work_item_id, claim_ref) VALUES ('w', '');"
+        )
+        conn.execute("INSERT INTO executions VALUES ('w', 'running')")
+        return conn
+
+    def test_a_store_without_the_claim_call_or_the_parent_session_reads_empty(self) -> None:
+        items = [{"work_item_id": "w", "checklist": []}]
+        for claim_column, parent_column in ((False, False), (False, True), (True, False)):
+            with self.subTest(claim=claim_column, parent=parent_column):
+                conn = self.old_store(claim_column=claim_column, parent_column=parent_column)
+                self.assertEqual({}, live_work.live_work(conn, items))
+
+    def test_the_same_store_with_both_columns_reads_its_attempt(self) -> None:
+        conn = self.old_store(claim_column=True, parent_column=True)
+        items = [{"work_item_id": "w", "checklist": []}]
+        self.assertEqual({"w": {"state": "working"}}, live_work.live_work(conn, items))
+
+    def test_a_store_without_attempts_reads_empty(self) -> None:
+        conn = self.old_store(claim_column=True, parent_column=True)
+        conn.execute("DROP TABLE executions")
+        items = [{"work_item_id": "w", "checklist": []}]
+        self.assertEqual({}, live_work.live_work(conn, items))
+
+
+class StreamTests(LiveWorkCase):
+    def test_a_frame_is_written_when_the_map_changes_and_only_then(self) -> None:
+        reference = self.item()
+        session = _session()
+        self.claim(reference, session)
+        self.hook(session, "session-start", ago(minutes=30))
+        frames = EventFrames(clock=lambda: 0.0)
+
+        def frame() -> bytes | None:
+            return frames.frame(json.dumps(views.planning_payload(self.conn, space=SPACE)))
+
+        self.assertIsNotNone(frame())
+        self.hook(session, "pre-compact", ago(minutes=20))
+        self.assertIsNone(frame(), "an event that changes no state writes no frame")
+        self.hook(session, "user-prompt-submit", ago(minutes=10))
+        written = frame()
+        self.assertIsNotNone(written)
+        self.assertIn(b'"live_work": {"', written or b"")
+        self.hook(session, "pre-compact", ago(minutes=5))
+        self.assertIsNone(frame(), "a working session's heartbeat writes no frame")
+
+
+class CostTests(LiveWorkCase):
+    def test_a_space_of_1400_items_costs_five_reads(self) -> None:
+        bulk_items(self.conn, SPACE, 1400)
+        claimed, stepped = self.item(), self.item(["step"])
+        working, waiting = _session(), _session()
+        self.claim(claimed, working)
+        self.hook(working, "session-start", ago(minutes=30))
+        self.hook(working, "subagent-start", ago(minutes=20), agent="a1")
+        self.hook(working, "user-prompt-submit", ago(minutes=10))
+        self.hold_step(stepped, waiting)
+        self.hook(waiting, "stop", ago(minutes=10))
+        self.attempt(stepped, "running")
+        inside: list[bool] = [False]
+        statements: list[str] = []
+        original = live_work.live_work
+
+        def measured(conn: sqlite3.Connection, items: object) -> dict[str, dict]:
+            inside[0] = True
+            try:
+                return original(conn, items)  # type: ignore[arg-type]
+            finally:
+                inside[0] = False
+
+        def trace(text: str) -> None:
+            # SQLite traces what one statement runs inside it, such as the
+            # table a `pragma_table_info` reads, as `-- ...`: part of that read.
+            if inside[0] and not text.startswith("--"):
+                statements.append(text)
+
+        self.conn.set_trace_callback(trace)
+        self.addCleanup(self.conn.set_trace_callback, None)
+        with mock.patch.object(live_work, "live_work", measured):
+            found = views.planning_payload(self.conn, space=SPACE)["live_work"]
+
+        self.assertEqual({self.identity(claimed): WORKING, self.identity(stepped): WORKING}, found)
+        self.assertLessEqual(len(statements), 5, statements)
+        self.assertTrue(any("'session_start'" in text for text in statements), statements)
+
+
+if __name__ == "__main__":
+    unittest.main()
