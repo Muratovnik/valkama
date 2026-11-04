@@ -12,15 +12,24 @@
  * may change then, so it also holds the box a button will be, which is atomic
  * in a line. A path that copies rather than opens has a dotted underline, which
  * is what tells the two apart without colour, in forced colours as well.
+ *
+ * Being atomic, a reference would let a line break right after it, before the comma
+ * written against it. So it is drawn with what touches it (`glueReferences`), in a
+ * box of its own that moves to the next line whole.
  */
+import { computed } from 'vue'
+
+import { glueReferences } from '@/shared/lib/inlineGlue.ts'
 import { useReferenceLinks } from '@/shared/lib/referenceLinks.ts'
 import { inlineWords } from '@/shared/lib/richText.ts'
 import type { RichInline } from '@/shared/lib/richText.ts'
 import type { TextReference } from '@/shared/lib/textReferences.ts'
 import { vReferencePreview } from '@/shared/ui/referencePreviewAnchors.ts'
 
-defineProps<{ nodes: readonly RichInline[] }>()
+const props = defineProps<{ nodes: readonly RichInline[] }>()
 defineOptions({ name: 'RichInlines' })
+
+const pieces = computed(() => glueReferences(props.nodes))
 
 type ReferenceNode = Extract<RichInline, { kind: 'reference' }>
 
@@ -60,7 +69,7 @@ function open(reference: TextReference) {
 
 <template>
   <template
-    v-for="(node, index) in nodes"
+    v-for="(node, index) in pieces"
     :key="index"
     ><template v-if="node.kind === 'text'">{{ node.text }}</template
     ><br v-else-if="node.kind === 'break'" /><strong
@@ -88,42 +97,48 @@ function open(reference: TextReference) {
       v-else-if="node.kind === 'code'"
       class="rich-code"
       >{{ node.text }}</code
-    ><template v-else-if="linkFor(node.reference)"
-      ><button
-        v-reference-preview="previewFor(node.reference)"
-        type="button"
-        class="rich-reference"
-        :class="{
-          'rich-code': node.code,
-          'identifier': isId(node),
-          'copies': linkFor(node.reference)?.copies,
-        }"
-        :title="hoverTitle(node.reference)"
-        :aria-description="describedAs(node.reference)"
-        :aria-label="nameOf(node)"
-        :aria-busy="busyOf(node.reference)"
-        @click="open(node.reference)"
-      >
-        <span
-          ><RichInlines
-            v-if="node.caption"
-            :nodes="node.caption"
-          /><template v-else>{{ labelOf(node.reference) }}</template></span
-        ></button
-      >{{ afterOf(node) }}</template
-    ><RichInlines
-      v-else-if="node.caption"
-      :nodes="node.caption"
-    /><code
-      v-else-if="node.code"
-      class="rich-code"
-      :class="{ 'rich-atom': isWeak(node) }"
-      >{{ node.reference.value }}</code
     ><span
-      v-else-if="isWeak(node)"
-      class="rich-atom"
-      >{{ node.reference.value }}</span
-    ><template v-else>{{ node.reference.value }}</template></template
+      v-else
+      :class="{ 'rich-glue': node.glued }"
+      >{{ node.before
+      }}<template v-if="linkFor(node.node.reference)"
+        ><button
+          v-reference-preview="previewFor(node.node.reference)"
+          type="button"
+          class="rich-reference"
+          :class="{
+            'rich-code': node.node.code,
+            'identifier': isId(node.node),
+            'copies': linkFor(node.node.reference)?.copies,
+          }"
+          :title="hoverTitle(node.node.reference)"
+          :aria-description="describedAs(node.node.reference)"
+          :aria-label="nameOf(node.node)"
+          :aria-busy="busyOf(node.node.reference)"
+          @click="open(node.node.reference)"
+        >
+          <span
+            ><RichInlines
+              v-if="node.node.caption"
+              :nodes="node.node.caption"
+            /><template v-else>{{ labelOf(node.node.reference) }}</template></span
+          ></button
+        >{{ afterOf(node.node) }}</template
+      ><RichInlines
+        v-else-if="node.node.caption"
+        :nodes="node.node.caption"
+      /><code
+        v-else-if="node.node.code"
+        class="rich-code"
+        :class="{ 'rich-atom': isWeak(node.node) }"
+        >{{ node.node.reference.value }}</code
+      ><span
+        v-else-if="isWeak(node.node)"
+        class="rich-atom"
+        >{{ node.node.reference.value }}</span
+      ><template v-else>{{ node.node.reference.value }}</template
+      >{{ node.after }}</span
+    ></template
   >
 </template>
 
@@ -202,6 +217,13 @@ function open(reference: TextReference) {
   &:hover {
     text-decoration-thickness: 2px;
   }
+}
+
+/* A reference and what is written against it, with no space between, move to the next
+   line together: the box breaks inside only when it is wider than the line. */
+.rich-glue {
+  display: inline-block;
+  vertical-align: baseline;
 }
 
 /* A weak path as text: laid out as the button it may become, and read as prose. */
