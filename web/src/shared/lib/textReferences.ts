@@ -126,8 +126,19 @@ const MAX_PATH = 1024
 const SUFFIX_AT_END = new RegExp(String.raw`(?:${SUFFIX})$`, 'u')
 const TAIL_AT_END = new RegExp(`${TAIL}+$`, 'u')
 const LINE_AT_END = /:\d+(?:-\d+|:\d+)?$/u
-const NETWORK = /^\\\\[^\\/]/u
+/** A server and a share: `\\n` is an escaped line break and `\\server` alone opens nothing. */
+const NETWORK = /^\\\\[^\\/]+[\\/][^\\/]/u
 const DRIVE = /^[A-Za-z]:[/\\]/u
+/** A drive's root alone, which names no file or folder anyone means: `диски C:/ и D:/`. */
+const DRIVE_ROOT = /^[A-Za-z]:[/\\]+$/u
+/**
+ * What no Windows name holds, so a run holding one is a template — `tmp/<task>/`,
+ * `docs/*.md` — and neither it nor a part of it is a path. A quote counts only
+ * inside the run: around it, it is the prose quoting a path.
+ */
+const TEMPLATE = /[<>|*?"]/u
+/** Punctuation around a run that belongs to the sentence and not to the path. */
+const RUN_EDGES = /^[(["'«“„‘]+|[.,;:!?)\]»"'”’…]+$/gu
 const FROM_HOME_OR_HERE = /^(?:~|\.\.?)[/\\]/u
 /** A backslash Markdown would read as an escape, as written. */
 const ESCAPE = /\\[!-/:-@[-`{-~]/u
@@ -143,7 +154,7 @@ const MARKDOWN_FILE = /\.(?:md|markdown)$/iu
  */
 function strengthOf(path: string, separators: number): DocumentStrength | null {
   if (NETWORK.test(path)) return 'copy-only'
-  if (ROOTED.test(path)) return null
+  if (ROOTED.test(path) || DRIVE_ROOT.test(path)) return null
   if (DRIVE.test(path) || FROM_HOME_OR_HERE.test(path)) return 'strong'
   const segments = path.split(/[/\\]/u)
   const count = segments.length - 1
@@ -270,6 +281,8 @@ export function documentLink(address: string, from = ''): DocumentReference | nu
   // A tab or a line end is dropped by a URL's parser, so it can hide a scheme.
   if (/\p{Cc}/u.test(value)) return null
   if (value.startsWith('//') || value.startsWith('/\\')) return null
+  // Two backslashes are a network path or nothing: never a path from the root.
+  if (decoded(value).startsWith('\\\\') && !NETWORK.test(decoded(value))) return null
   const drive = DRIVE.test(value)
   const fileAndLine = /^[^/\\:]+\.[^/\\:]*:\d+(?:-\d+|:\d+)?(?:[?#]|$)/u.test(value)
   if (!drive && !fileAndLine && /^[A-Za-z][A-Za-z0-9+.-]*:/u.test(value)) return null
@@ -282,13 +295,38 @@ export function documentLink(address: string, from = ''): DocumentReference | nu
   return reference.strength === 'strong' && !addressParts(value, from).bare ? null : reference
 }
 
+/**
+ * What stands right before and after a text in the line it was written in, where
+ * the Markdown lexer cut it off: `<task>` in `tmp/<task>/` is an HTML token of
+ * its own, and the text it was cut from is `tmp/`.
+ */
+export interface Around {
+  after: string
+  before: string
+}
+
+const NOTHING_AROUND: Around = { after: '', before: '' }
+const RUN_END = /[\s,;]/u
+
+/** Whether the run of the line a candidate stands in, up to a space or `,;`, is a template. */
+function inTemplate(line: string, start: number, end: number): boolean {
+  let from = start
+  while (from > 0 && !RUN_END.test(line.charAt(from - 1))) from -= 1
+  let to = end
+  while (to < line.length && !RUN_END.test(line.charAt(to))) to += 1
+  return TEMPLATE.test(line.slice(from, to).replaceAll(RUN_EDGES, ''))
+}
+
 /** Every path in a prose text. */
-function pathsIn(text: string): Found[] {
+function pathsIn(text: string, around: Around): Found[] {
   const found: Found[] = []
+  const line = around.before + text + around.after
   for (const match of text.matchAll(PROSE_PATH)) {
     const { path = '', suffix = '', tail = '' } = match.groups ?? {}
     const value = suffix ? path + suffix : path + tail
     if (match[0].length > MAX_PATH) continue
+    const at = around.before.length + match.index
+    if (inTemplate(line, at, at + match[0].length)) continue
     const { bare } = writtenParts(value)
     const strength = strengthOf(bare, 2)
     if (strength === null || (strength === 'weak' && isAllIdentifiers(bare))) continue
@@ -332,10 +370,10 @@ export function splitIdentifiers(text: string): TextRun[] {
  * The text cut into plain runs and candidate references, in order. A path takes
  * what it covers, so `docs/MAIN-12-notes.md` is one candidate and not an item
  * inside a path; a shape that turns out to be no path leaves `MAIN-12/MAIN-13`
- * to the identifiers.
+ * to the identifiers. `around` is what the lexer cut off either side of it.
  */
-export function splitReferences(text: string): TextRun[] {
-  const paths = pathsIn(text)
+export function splitReferences(text: string, around: Around = NOTHING_AROUND): TextRun[] {
+  const paths = pathsIn(text, around)
   if (paths.length === 0) return splitIdentifiers(text)
   const outside = identifiersIn(text).filter((identifier) =>
     paths.every(({ end, start }) => identifier.end <= start || identifier.start >= end),

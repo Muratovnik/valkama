@@ -39,7 +39,7 @@ import {
   wholeDocument,
   wholeReference,
 } from '@/shared/lib/textReferences.ts'
-import type { TextReference, TextRun } from '@/shared/lib/textReferences.ts'
+import type { Around, TextReference, TextRun } from '@/shared/lib/textReferences.ts'
 
 export type RichInline =
   | { kind: 'break' }
@@ -126,9 +126,9 @@ function runNodes(runs: readonly TextRun[]): RichInline[] {
   )
 }
 
-/** Plain text with its candidate references cut out. */
-function textRuns(text: string): RichInline[] {
-  return runNodes(splitReferences(text))
+/** Plain text with its candidate references cut out; `around` is what the lexer cut off it. */
+function textRuns(text: string, around?: Around): RichInline[] {
+  return runNodes(splitReferences(text, around))
 }
 
 const ESCAPED = /\\([!-/:-@[-`{-~])/gu
@@ -140,9 +140,9 @@ const ESCAPED = /\\([!-/:-@[-`{-~])/gu
  * around it keep what Markdown made of them, and with no such path this is null
  * and every token reads as it always did.
  */
-function pathsAcrossEscapes(tokens: readonly Token[]): RichInline[] | null {
+function pathsAcrossEscapes(tokens: readonly Token[], outside: Around): RichInline[] | null {
   if (!tokens.some((token) => token.type === 'escape')) return null
-  const runs = splitReferences(tokens.map((token) => token.raw).join(''))
+  const runs = splitReferences(tokens.map((token) => token.raw).join(''), outside)
   if (!runs.some((run) => crossesEscape(run))) return null
   const nodes: RichInline[] = []
   let around = ''
@@ -181,11 +181,21 @@ function inlines(
   reading: DocumentReading | null,
   inLink = false,
 ): RichInline[] {
-  return wordStretches(tokens ?? []).flatMap(
-    (stretch): RichInline[] =>
-      (inLink ? null : pathsAcrossEscapes(stretch)) ??
-      stretch.flatMap((token) => inline(token, reading, inLink)),
-  )
+  const all = tokens ?? []
+  /** The raw tokens either side of `count` tokens from `at`: what a path there is glued to. */
+  const around = (at: number, count: number): Around => ({
+    before: all[at - 1]?.raw ?? '',
+    after: all[at + count]?.raw ?? '',
+  })
+  let first = 0
+  return wordStretches(all).flatMap((stretch): RichInline[] => {
+    const at = first
+    first += stretch.length
+    return (
+      (inLink ? null : pathsAcrossEscapes(stretch, around(at, stretch.length))) ??
+      stretch.flatMap((token, offset) => inline(token, reading, inLink, around(at + offset, 1)))
+    )
+  })
 }
 
 /** A comment out of raw HTML, with its anchor taken down when it names one. */
@@ -197,9 +207,14 @@ function withoutComments(raw: string, reading: DocumentReading): string {
   })
 }
 
-function inline(token: Token, reading: DocumentReading | null, inLink: boolean): RichInline[] {
+function inline(
+  token: Token,
+  reading: DocumentReading | null,
+  inLink: boolean,
+  around: Around,
+): RichInline[] {
   const text = (value: string): RichInline[] =>
-    inLink ? [{ kind: 'text', text: value }] : textRuns(value)
+    inLink ? [{ kind: 'text', text: value }] : textRuns(value, around)
   switch (token.type) {
     case 'text': {
       const node = token as Tokens.Text

@@ -407,6 +407,157 @@
       "note": "a leading slash outside a link is not a path"
     },
     {
+      "text": "\\\\server\\share",
+      "where": "text",
+      "form": "copy-only",
+      "candidate": "\\\\server\\share",
+      "paths": [],
+      "suffix": "",
+      "copy": "\\\\server\\share",
+      "caption": null,
+      "note": "a network path is a server and a share"
+    },
+    {
+      "text": "\\\\server",
+      "where": "text",
+      "form": "none",
+      "candidate": null,
+      "paths": [],
+      "suffix": "",
+      "copy": null,
+      "caption": null,
+      "note": "a server with no share is no network path"
+    },
+    {
+      "text": "with \\\\n, then",
+      "where": "text",
+      "form": "none",
+      "candidate": null,
+      "paths": [],
+      "suffix": "",
+      "copy": null,
+      "caption": null,
+      "note": "two backslashes before a word are an escape, not a network path"
+    },
+    {
+      "text": "`\\\\n`",
+      "where": "text",
+      "form": "none",
+      "candidate": null,
+      "paths": [],
+      "suffix": "",
+      "copy": null,
+      "caption": null,
+      "note": "the same in a code span"
+    },
+    {
+      "text": "C:/",
+      "where": "text",
+      "form": "none",
+      "candidate": null,
+      "paths": [],
+      "suffix": "",
+      "copy": null,
+      "caption": null,
+      "note": "a drive's root alone names no file or folder"
+    },
+    {
+      "text": "C:\\",
+      "where": "text",
+      "form": "none",
+      "candidate": null,
+      "paths": [],
+      "suffix": "",
+      "copy": null,
+      "caption": null,
+      "note": "a drive's root alone names no file or folder"
+    },
+    {
+      "text": "`C:\\`",
+      "where": "text",
+      "form": "none",
+      "candidate": null,
+      "paths": [],
+      "suffix": "",
+      "copy": null,
+      "caption": null,
+      "note": "a drive's root alone names no file or folder"
+    },
+    {
+      "text": "drives C:/ and C:\\ here",
+      "where": "text",
+      "form": "none",
+      "candidate": null,
+      "paths": [],
+      "suffix": "",
+      "copy": null,
+      "caption": null
+    },
+    {
+      "text": "tmp/<задача>/",
+      "where": "text",
+      "form": "none",
+      "candidate": null,
+      "paths": [],
+      "suffix": "",
+      "copy": null,
+      "caption": null,
+      "note": "a character Windows refuses in a name makes the run a template, neither it nor a part of it is a path"
+    },
+    {
+      "text": "tmp/<task>/",
+      "where": "text",
+      "form": "none",
+      "candidate": null,
+      "paths": [],
+      "suffix": "",
+      "copy": null,
+      "caption": null,
+      "note": "the lexer reads <task> as HTML, and the run is still a template"
+    },
+    {
+      "text": "C:/Users/<user>/x.md",
+      "where": "text",
+      "form": "none",
+      "candidate": null,
+      "paths": [],
+      "suffix": "",
+      "copy": null,
+      "caption": null
+    },
+    {
+      "text": "docs/*.md",
+      "where": "text",
+      "form": "none",
+      "candidate": null,
+      "paths": [],
+      "suffix": "",
+      "copy": null,
+      "caption": null
+    },
+    {
+      "text": "docs/x.md?raw=1",
+      "where": "text",
+      "form": "none",
+      "candidate": null,
+      "paths": [],
+      "suffix": "",
+      "copy": null,
+      "caption": null,
+      "note": "a query belongs to an address, and ? is no character of a name"
+    },
+    {
+      "text": "docs/x.md?",
+      "where": "text",
+      "form": "strong",
+      "candidate": "docs/x.md",
+      "paths": ["docs/x.md"],
+      "suffix": "",
+      "copy": "docs/x.md",
+      "caption": null,
+      "note": "a question mark after a path ends the sentence"
+    },
+    {
       "text": "~/.valkama/config.json",
       "where": "text",
       "form": "strong",

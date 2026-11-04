@@ -150,6 +150,21 @@ class WrittenFormTests(LocateHarness):
                     else:
                         self.assertEqual("workspace", answer.project)
 
+    def test_what_the_page_reads_as_no_path_the_server_refuses_too(self) -> None:
+        # The page shows these as text; were one sent, the server would say the same.
+        rows = {row["text"]: row for row in load_rows()}
+        for text, raw in (
+            ("tmp/<задача>/", "tmp/<задача>/"),
+            ("C:/Users/<user>/x.md", "C:/Users/<user>/x.md"),
+            ("docs/*.md", "docs/*.md"),
+            ("docs/x.md?raw=1", "docs/x.md?raw=1"),
+            ("`\\\\n`", "\\\\n"),
+            ("\\\\server", "\\\\server"),
+        ):
+            with self.subTest(raw):
+                self.assertEqual("none", rows[text]["form"])
+                self.assertEqual("invalid_path", self.refused(raw))
+
     def test_a_tail_of_a_dot_or_a_colon_cannot_land_so_two_variants_are_safe(self) -> None:
         tailed = [
             row["paths"][1]

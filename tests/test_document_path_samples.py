@@ -76,6 +76,13 @@ class SampleTableTests(unittest.TestCase):
                 for path in row["paths"]:
                     self.assertNotIn(row["suffix"], path)
 
+    def test_no_path_sent_bare_holds_a_character_no_name_holds(self) -> None:
+        # The server refuses such a name (`documents._isreservedname`); the page does not ask.
+        for row in self.rows:
+            if row["paths"]:
+                with self.subTest(text=row["text"]):
+                    self.assertFalse(set('<>|*?"') & set(row["paths"][0]))
+
     def test_a_tail_gives_two_variants_and_the_copy_has_none(self) -> None:
         rows = [row for row in self.rows if len(row["paths"]) == 2]
         self.assertGreaterEqual(len(rows), 8)
@@ -101,6 +108,18 @@ class SampleTableTests(unittest.TestCase):
         self.assertEqual("strong", self.lookup("~/.valkama/config.json")["form"])
         self.assertEqual("strong", self.lookup("docs/plans/")["form"])
         self.assertEqual("weak", self.lookup("`web/src`")["form"])
+        # A network path is a server and a share; two backslashes before a word are not one.
+        self.assertEqual("copy-only", self.lookup("\\\\server\\share")["form"])
+        for text in ("\\\\server", "with \\\\n, then", "`\\\\n`"):
+            self.assertEqual("none", self.lookup(text)["form"], text)
+        # A drive's root alone names nothing.
+        for text in ("C:/", "C:\\", "`C:\\`", "drives C:/ and C:\\ here"):
+            self.assertEqual("none", self.lookup(text)["form"], text)
+        # A run holding what no Windows name holds is a template, whole and in part.
+        for text in ("tmp/<задача>/", "tmp/<task>/", "C:/Users/<user>/x.md", "docs/*.md"):
+            self.assertEqual("none", self.lookup(text)["form"], text)
+        # A question mark after a path ends the sentence and keeps the path.
+        self.assertEqual("strong", self.lookup("docs/x.md?")["form"])
         # What stays text.
         for text in ("AGENTS.md", "/api/documents/read", "`python tools/workbench.py check`"):
             self.assertEqual("none", self.lookup(text)["form"], text)
