@@ -203,3 +203,6 @@ browser and desktop launch plans refuse an unbound or ambiguous session, so
 neither can inherit a renderer, session, or process cwd. Custom opener
 templates stay within the existing user-configured trust seam; arguments
 remain an argv array without a shell and sender validation still runs first.
+The desktop app gives `{cwd}` only a folder that holds no `;`, as it does a resume
+in Windows Terminal, since the owner's command may start Windows Terminal itself;
+with no other folder, a template that names `{cwd}` is refused as `no-folder`.

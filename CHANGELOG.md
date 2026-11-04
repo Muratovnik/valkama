@@ -345,6 +345,11 @@ checkouts are therefore distinguishable even at the same version.
   holding a `;`, and a file in a project on a network share, and the desktop app refused each
   plan entire as `invalid-plan`. The server now applies the app's own rule: such a session
   explains `no-folder` or resumes another way, and such a file is `invalid_path`.
+- **The owner's own command gets no folder holding a `;` either.** A resume in Windows
+  Terminal already refused one, but `{cwd}` in the owner's command took it, and that
+  command may start Windows Terminal itself, which would run what follows the `;` as another
+  command. Such a folder is now passed over, and a command that needs `{cwd}` with no other
+  folder is refused as `no-folder`.
 
 ## [2.4.0](https://github.com/Muratovnik/valkama/compare/v2.3.0...v2.4.0) - 2026-11-03
 

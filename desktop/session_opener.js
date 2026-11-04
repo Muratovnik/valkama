@@ -395,10 +395,11 @@ async function runCustom(context, parsed, checks) {
       : refused('invalid-plan')
   }
   const steps = Array.isArray(plan.steps) ? plan.steps : []
+  // Held to the terminal's rule: the owner's command may start Windows Terminal itself.
   const folder =
     steps
       .map((step) => (plainObject(step) ? step.folder : ''))
-      .find((candidate) => usableFolder(candidate, checks.isDirectory)) || ''
+      .find((candidate) => usableFolder(candidate, checks.isDirectory, { terminal: true })) || ''
   if (!folder && /\{(?:session_)?cwd\}/.test(template)) return refused('no-folder')
   const argv = customArgv(template, { session, folder })
   if (!argv.length) return refused('no-command')

@@ -469,6 +469,22 @@ test("the owner's own command runs with the plan's session and folder", async ()
   assert.equal(tooLong.reason, 'no-command')
 })
 
+test("the owner's command gets no folder Windows Terminal would split into two commands", async () => {
+  // The owner's command may well be `wt`, which reads `;` as the start of another command.
+  const folder = 'C:\\work\\my;folder'
+  const box = machine({ plans: plan([{ ...FOCUS, folder }, LINK]) })
+  const result = await openSessionRequest(
+    box.options({ request: { session: ID, command: 'wt -d "{cwd}" cmd /k claude --resume {session}' } }),
+  )
+  assert.equal(result.reason, 'no-folder')
+  assert.deepEqual(effects(box.timeline), [])
+  const without = await openSessionRequest(
+    box.options({ request: { session: ID, command: 'tool --session {session}' } }),
+  )
+  assert.equal(without.ok, true, 'a command that names no folder still runs')
+  assert.equal(effects(box.timeline)[0].options.cwd, 'C:\\work\\home')
+})
+
 /** A session in a terminal, long silent: the plan the server answers, by what it was told. */
 function silentPlans(query) {
   const explain = { kind: 'explain', reason: 'live-in-terminal' }
