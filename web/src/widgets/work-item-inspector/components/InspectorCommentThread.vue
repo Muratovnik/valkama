@@ -27,6 +27,7 @@ import ResolveForm from '@/features/discussion-thread/components/ResolveForm.vue
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { actorName, actorSession } from '@/shared/lib/actor.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
+import { referenceSpaceKey } from '@/shared/lib/referenceLinks.ts'
 import { plainText } from '@/shared/lib/richText.ts'
 import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
 import type MarkdownEditor from '@/shared/ui/MarkdownEditor.vue'
@@ -296,6 +297,7 @@ function sendMark() {
         v-model:text="decision"
         :error="resolveError"
         :pending="busy"
+        :space-key="referenceSpaceKey(item.reference)"
         @cancel="cancel"
         @refresh="emit('refresh')"
         @submit="sendMark"

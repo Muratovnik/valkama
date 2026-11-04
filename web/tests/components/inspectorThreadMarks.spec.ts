@@ -135,6 +135,14 @@ describe('marking', () => {
     })
   })
 
+  it("hints at a task in this card's own space, and names no number in it", async () => {
+    const wrapper = open({ ...card([root(1)]), reference: 'DOCS-3' })
+    await inThread(wrapper, 1, 'Resolve').trigger('click')
+    expect(wrapper.get('.resolve-form input').attributes('placeholder')).toBe(
+      'to DOCS-…, postponed, declined',
+    )
+  })
+
   it('goes back on Escape to Resolve, keeping the card and dropping the line', async () => {
     const wrapper = open(card([root(1)]))
     await inThread(wrapper, 1, 'Resolve').trigger('click')

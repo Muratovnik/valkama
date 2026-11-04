@@ -5,6 +5,9 @@
  * The mark can be taken back, so nothing here asks twice. Enter sends, as a one-line form
  * does; Escape goes back, and takes only this form with it, not the card around it. A write
  * disables the field, which drops focus on the page, so a refused one gives it back there.
+ *
+ * The hint names the card's own space and no number in it: a fixed example key read as a
+ * task of whatever space the card was in.
  */
 import { nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -14,7 +17,12 @@ import { useEventListener } from '@vueuse/core'
 import VButton from '@/shared/ui/VButton.vue'
 import VTextInput from '@/shared/ui/VTextInput.vue'
 
-const props = defineProps<{ error: string; pending: boolean }>()
+const props = defineProps<{
+  error: string
+  pending: boolean
+  /** The key of the card's space, for the hint. */
+  spaceKey: string
+}>()
 const emit = defineEmits<{ cancel: []; refresh: []; submit: [] }>()
 const text = defineModel<string>('text', { required: true })
 const { t } = useI18n()
@@ -58,7 +66,7 @@ useEventListener(form, 'keydown', (event: KeyboardEvent) => {
       v-model="text"
       class="resolve-field"
       :label="t('threads.decision')"
-      :placeholder="t('threads.decisionHint')"
+      :placeholder="t('threads.decisionHint', { key: spaceKey })"
       :maxlength="280"
       :disabled="pending"
     />
