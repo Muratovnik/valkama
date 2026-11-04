@@ -88,3 +88,57 @@ test('a frame header’s buttons are the field’s Tab stop once the keyboard st
   await expect(open).toHaveAttribute('tabindex', '0')
   await expect(stops).toHaveCount(1)
 })
+
+/** Where the focused element stands on the screen, and what it stands for. */
+async function focused(page: Page) {
+  return page.evaluate(() => {
+    const element = document.activeElement
+    if (!(element instanceof HTMLElement) || !element.closest('.graph-flow')) return null
+    const box = element.getBoundingClientRect()
+    return { target: element.dataset.walkTarget ?? '', x: box.x, y: box.y }
+  })
+}
+
+/** Walk left from the focused target to the nearest fold button, and say where it stands. */
+async function walkToFold(page: Page) {
+  for (let step = 0; step < 40; step += 1) {
+    const at = await focused(page)
+    if (at?.target.endsWith(':fold')) return at
+    await page.keyboard.press('ArrowLeft')
+  }
+  throw new Error('no fold button to the left of the last target')
+}
+
+for (const width of [1500, 390]) {
+  test(`Tab reaches a frame header, and folding holds it where it was pressed at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await serveBroadSpace(page)
+    await page.goto(graphRoute({}))
+    await expect(page.locator('.graph-canvas.settled')).toBeVisible()
+    // From the zoom controls back, Shift+Tab lands on the field's one stop.
+    await page.getByRole('button', { name: 'Zoom in', exact: true }).focus()
+    await page.keyboard.press('Shift+Tab')
+    await expect.poll(() => focused(page).then((at) => at?.target ?? '')).toMatch(/^frame:/u)
+    // The frame at the top left keeps its place whatever folds; the last one
+    // moves when it does, so its header is the one a fold could lose.
+    await page.keyboard.press('End')
+    const before = await walkToFold(page)
+    expect(before.target).toMatch(/^frame:.+:fold$/u)
+    const fold = page.locator(`[data-walk-target="${before.target}"]`)
+    const expanded = await fold.getAttribute('aria-expanded')
+    await page.keyboard.press('Enter')
+    await expect(fold).not.toHaveAttribute('aria-expanded', expanded ?? '')
+    await expect(page.locator('.graph-canvas.settled')).toBeVisible()
+    // The header stays under the hand: focus kept, and the button where it was.
+    await expect(fold).toBeFocused()
+    await expect
+      .poll(async () => {
+        const after = await focused(page)
+        return Math.max(Math.abs((after?.x ?? 0) - before.x), Math.abs((after?.y ?? 0) - before.y))
+      })
+      .toBeLessThan(2)
+    await expect(fold).toBeInViewport()
+  })
+}

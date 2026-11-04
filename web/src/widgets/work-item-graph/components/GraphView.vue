@@ -86,7 +86,7 @@ const {
   retry,
   ready,
   showDone,
-  toggle: toggleFrame,
+  toggle,
 } = useGraphProjection(
   () => ({
     edges: props.edges,
@@ -200,7 +200,7 @@ function chipFor(node: PlacedNode): string | undefined {
 
 // Vue Flow owns the camera and all viewport math. The store is keyed so the
 // controls in the strip below and this field share one camera instance.
-const { anchorId, fitted, fitOptions, overview, onFlowInit, reveal } = useGraphCamera({
+const { anchorId, fitted, fitOptions, holdFrame, overview, onFlowInit, reveal } = useGraphCamera({
   branch: () => branchFrame.value,
   flowId: GRAPH_FLOW_ID,
   placed,
@@ -298,6 +298,12 @@ function frameStop(frame: PlacedFrame): string | null {
 /** A header button took focus: the keyboard stands on it; a frame lights no lineage. */
 function onFrameFocus(target: string) {
   keyboardFocus(target)
+}
+
+/** Fold or open a frame with its header held where it was pressed. */
+function toggleFrame(frameId: string) {
+  holdFrame(frameId)
+  toggle(frameId)
 }
 
 function onFieldPointerLeave() {
