@@ -317,8 +317,9 @@ test('Show on graph draws the open part of the chain, its root marked, and the r
 
   await chip.click()
   await expect(chip).toHaveCount(0)
-  // The whole space again: its items, with the unlinked ones left out.
-  await expect(page.getByRole('switch', { name: 'Draw items with no links' })).toBeVisible()
+  // The whole space again: every open item in its frame, so nothing is left out
+  // and there is no switch to draw what is.
+  await expect(page.getByRole('switch', { name: 'Draw items with no links' })).toHaveCount(0)
   await expect(page.locator('.graph')).toHaveAttribute('aria-busy', 'false')
   await expect(page.locator('.graph-canvas')).toHaveClass(/settled/u)
   await expect(page.locator('.flow-node-root')).toHaveCount(0)

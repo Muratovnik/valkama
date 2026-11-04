@@ -27,9 +27,11 @@ import { chainGroup } from '@/shared/api/planningChainGroups.ts'
 import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
 
 /**
- * A frame holding more open work than this starts folded, and so does one
+ * A frame holding more open work than this starts folded, and so does an epic
  * holding none: the field opens on the links of the epics in between, and a
- * large frame shows its progress in its header instead.
+ * large frame shows its progress in its header instead. The work under none
+ * with nothing open folds only past this many drawn cards, so «All» on a space
+ * with a few finished items draws them.
  */
 export const FOLD_ABOVE = 20
 
@@ -146,7 +148,10 @@ function frameCandidates(
       ? visible.length > 0
       : openWork > 0 || input.showDone || (epic !== null && open(epic))
     if (!wanted) continue
-    const defaultFolded = openWork === 0 || openWork > FOLD_ABOVE
+    // An epic with nothing open folds; the work under none is no epic to
+    // summarise, so in «All» it folds only when its finished work is large too.
+    const idle = epic !== null || visible.length === 0 || visible.length > FOLD_ABOVE
+    const defaultFolded = openWork > FOLD_ABOVE || (openWork === 0 && idle)
     candidates.set(id, {
       id,
       epic,

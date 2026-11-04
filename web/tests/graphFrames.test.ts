@@ -207,6 +207,29 @@ describe('frames and what they count', () => {
   })
 })
 
+/** `count` finished items under no epic. */
+const finished = (count: number) =>
+  Array.from({ length: count }, (_, index) => item(`f${index}`, 200 + index, { state: 'done' }))
+
+/** Whether the frame of the work under none is folded; undefined when it is not drawn. */
+const noneFolded = (count: number, showDone: boolean) =>
+  frameProjection({
+    items: [...space(), ...finished(count)].filter((entry) => entry.work_item_id !== 'l1'),
+    links: [],
+    showDone,
+  }).frames.find((frame) => frame.id === NO_EPIC_FRAME)?.folded
+
+describe('the work under none with nothing open', () => {
+  it('is drawn open in «All» while its finished work is small, and folds past the threshold', () => {
+    expect(noneFolded(3, true)).toBe(false)
+    expect(noneFolded(FOLD_ABOVE + 1, true)).toBe(true)
+  })
+
+  it('is not drawn in «Open» at all', () => {
+    expect(noneFolded(3, false)).toBeUndefined()
+  })
+})
+
 describe('the structural key', () => {
   const base = () => frameProjection({ items: space(), links: [link('a1', 'b1')], showDone: false })
   const change = (

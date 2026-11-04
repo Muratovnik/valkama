@@ -1,22 +1,49 @@
 import { expect } from '@playwright/test'
+import type { Page } from '@playwright/test'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { projectScope } from './planningFixtures.ts'
+import { planningReadFor } from './planningReadFixture.ts'
 import { test } from './test.ts'
 
+/** From now on every read of the space carries one more open item, under no epic. */
+async function arriveWithOneMore(page: Page) {
+  await page.route('**/api/planning?*', async (route) => {
+    const response = planningReadFor(new URL(route.request().url()).searchParams)
+    if (response.status === 200 && 'work_items' in response.body) {
+      const model = response.body
+      const extra = {
+        ...model.work_items[0],
+        work_item_id: '00000000-0000-4000-8000-000000005001',
+        number: 5001,
+        reference: 'MAIN-5001',
+        title: 'Arrived with the refresh',
+        parent_id: null,
+      }
+      model.work_items = [...model.work_items, extra]
+      model.planning_spaces[0] = {
+        ...model.planning_spaces[0],
+        work_items: model.planning_spaces[0].work_items + 1,
+        open: model.planning_spaces[0].open + 1,
+      }
+    }
+    await route.fulfill({
+      status: response.status,
+      contentType: 'application/json',
+      body: JSON.stringify(response.body),
+    })
+  })
+}
+
 /**
- * A refresh lays the graph out again in the background, and work in the
- * background takes no room while a drawing is on the field. The field used to
- * be pushed down by a line announcing the new layout and pulled back when it
- * landed, on every refresh; the line could live for one frame and still move
- * the field, so the geometry is recorded at every change of the graph's tree
- * and every resize of its field, not sampled.
+ * The graph opened on the space, with every change of its busy state and every
+ * position and size of its field recorded from now on — at every change of the
+ * graph's tree and every resize of its field, not sampled, since a line that
+ * lives one frame can still move the field.
  */
-test('a background refresh of the graph moves neither the field nor the camera', async ({
-  page,
-}) => {
+async function openRecorded(page: Page) {
   await page.setViewportSize({ width: 1440, height: 900 })
   await installBackend(page)
   await page.goto(
@@ -29,7 +56,7 @@ test('a background refresh of the graph moves neither the field nor the camera',
   await expect(page.locator('.graph-canvas.settled')).toBeVisible()
   await expect(page.locator('.flow-node-card').first()).toBeVisible()
   const pane = page.locator('.vue-flow__transformationpane')
-  const camera = await pane.getAttribute('style')
+  const camera = (await pane.getAttribute('style')) ?? ''
   await page.locator('.graph').evaluate((graph) => {
     const record = { busy: [] as string[], field: [] as string[] }
     const measure = () => {
@@ -51,9 +78,29 @@ test('a background refresh of the graph moves neither the field nor the camera',
       () =>
         (window as unknown as { __graphRecord: { busy: string[]; field: string[] } }).__graphRecord,
     )
+  return { camera, pane, recorded }
+}
 
-  // The rail's refresh: one button whose name is the connection state it shows.
+/** The rail's refresh, until the space's read it sends has answered. */
+async function refresh(page: Page) {
+  const read = page.waitForResponse((response) => response.url().includes('/api/planning?'))
+  // One button whose name is the connection state it shows.
   await page.locator('.nav-refresh').click()
+  await read
+}
+
+/**
+ * A refresh that changes what is drawn lays the graph out again in the
+ * background, and work in the background takes no room while a drawing is on
+ * the field. The field used to be pushed down by a line announcing the new
+ * layout and pulled back when it landed, on every refresh.
+ */
+test('a background refresh that brings an item moves neither the field nor the camera', async ({
+  page,
+}) => {
+  const { camera, pane, recorded } = await openRecorded(page)
+  await arriveWithOneMore(page)
+  await refresh(page)
   // The refresh reached the graph: it laid the field out again, and finished.
   await expect
     .poll(async () => {
@@ -61,9 +108,21 @@ test('a background refresh of the graph moves neither the field nor the camera',
       return busy
     })
     .toEqual(['true', 'false'])
+  await expect(page.locator('.flow-node-card').filter({ hasText: 'MAIN-5001' })).toHaveCount(1)
   const { field } = await recorded()
   expect(new Set(field)).toEqual(new Set([field[0]]))
-  await expect(pane).toHaveAttribute('style', camera ?? '')
+  await expect(pane).toHaveAttribute('style', camera)
+})
+
+/** A refresh that changes nothing drawn lays nothing out at all. */
+test('a background refresh that changes nothing drawn lays nothing out', async ({ page }) => {
+  const { camera, pane, recorded } = await openRecorded(page)
+  await refresh(page)
+  await expect(page.locator('.graph')).toHaveAttribute('aria-busy', 'false')
+  const { busy, field } = await recorded()
+  expect(busy).toEqual([])
+  expect(new Set(field)).toEqual(new Set([field[0]]))
+  await expect(pane).toHaveAttribute('style', camera)
 })
 
 /**

@@ -75,3 +75,37 @@ test('a fold the camera holds nothing for moves nothing', async () => {
   const gone = { frameId: 'no-such-frame', screen: { x: 10, y: 10 } }
   assert.equal(graphCameraMove('toggled', placed, { camera, dimensions, held: gone }), null)
 })
+
+/** One open frame much larger than the field, its one card at its top-left. */
+async function vastFrame() {
+  const placed = await space()
+  const open = placed.frames.find((entry) => !entry.folded && entry.epic)
+  assert.ok(open)
+  const card = placed.nodes.find((node) => node.frameId === open.id)
+  assert.ok(card)
+  return {
+    ...placed,
+    frames: [{ ...open, x: 0, y: 0, width: 4000, height: 4000 }],
+    nodes: [{ ...card, x: 16, y: 56 }],
+    edges: [],
+  }
+}
+
+for (const [what, camera] of [
+  // The frame's own centre is in sight, yet neither its header nor its card is.
+  ['only a frame’s empty ground', { x: dimensions.width / 2 - 2000, y: -1660, zoom: 1 }],
+  // The header's fold button stands at the field's right edge, the card past it.
+  ['only a frame’s fold button', { x: dimensions.width - 40, y: 100, zoom: 1 }],
+] as const) {
+  test(`a resize that leaves ${what} in sight brings the drawing back`, async () => {
+    const graph = await vastFrame()
+    const moved = graphCameraMove('resized', graph, { camera, dimensions })
+    assert.ok(moved, 'the camera stayed where nothing is seen')
+    assert.equal(moved.zoom, camera.zoom)
+    // The card the field starts with is now in sight.
+    const [card] = graph.nodes
+    const x = (card.x + card.width / 2) * moved.zoom + moved.x
+    const y = (card.y + card.height / 2) * moved.zoom + moved.y
+    assert.ok(x >= 0 && x <= dimensions.width && y >= 0 && y <= dimensions.height)
+  })
+}

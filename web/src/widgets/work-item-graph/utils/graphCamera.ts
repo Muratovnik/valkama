@@ -267,7 +267,9 @@ function panOnto(
     (right - left) * camera.zoom <=
       dimensions.width - pixels(padding.left) - pixels(padding.right) &&
     (bottom - top) * camera.zoom <= dimensions.height - pixels(padding.top) - pixels(padding.bottom)
-  const [first] = walkTargets(graph).sort(readingOrder)
+  // A card before a header: a header is as wide as its frame, so centring on
+  // it can leave the frame's first card cut at the field's edge.
+  const [first] = [...(graph.nodes.length ? graph.nodes : walkTargets(graph))].sort(readingOrder)
   const centre = fits ? { x: (left + right) / 2, y: (top + bottom) / 2 } : nodeCentre(first)
   return {
     x: dimensions.width / 2 - centre.x * camera.zoom,
@@ -307,7 +309,11 @@ export function graphCameraMove(
       zoom: camera.zoom,
     }
   }
-  return drawing(graph).some((box) => seen(box, camera, dimensions))
+  // A frame's own centre can be empty ground, and its fold button alone at the
+  // field's edge shows nothing of it; what the operator sees is a header as a
+  // whole or a card, so those are what count as in sight.
+  const sights = [...graph.frames.map((frame) => headerBox(frame)), ...graph.nodes]
+  return sights.some((box) => seen(box, camera, dimensions))
     ? null
     : panOnto(graph, camera, dimensions)
 }

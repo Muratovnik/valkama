@@ -277,19 +277,22 @@ test('a container is a frame round its work, and closed work returns only on dem
   )
   assert.equal(open.nodes[0].frameId, identity(10))
   assert.equal(open.edges.length, 0)
-  // In «All» the finished item's frame holds no open work, so it is folded and
-  // the link from it lands on that frame.
+  // In «All» the finished item stands in the frame of the work under none.
   const full = await layout(payload, true)
   assert.deepEqual(
     full.frames.map((frame) => [frame.id, frame.folded]),
     [
       [identity(10), false],
-      [NO_EPIC_FRAME, true],
+      [NO_EPIC_FRAME, false],
     ],
   )
   assert.deepEqual(
+    full.nodes.map((item) => numberOf(item)),
+    [1, 2],
+  )
+  assert.deepEqual(
     full.edges.map((item) => [item.source, item.target]),
-    [[NO_EPIC_FRAME, identity(1)]],
+    [[identity(2), identity(1)]],
   )
   assertClearGeometry(full)
 })

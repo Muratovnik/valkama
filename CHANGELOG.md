@@ -169,9 +169,11 @@ checkouts are therefore distinguishable even at the same version.
 - **The space's graph is laid out by epic.** Each epic, and each item that grew children,
   holds its work in a block of its own, and the work under no epic holds the rest, so every
   open item is on the field and the «Unlinked» switch is gone. A block with no open work or
-  more than twenty open items starts folded to its heading. A link to an epic is drawn to
-  that epic's block rather than dropped, and several links between the same two blocks or
-  cards are one line, solid when any of them blocks. A chain's graph is drawn as before.
+  more than twenty open items starts folded to its heading, except that the work under no
+  epic with nothing open folds only past twenty drawn items, so «All» shows a few finished
+  ones without a press. A link to an epic is drawn to that epic's block rather than dropped,
+  and several links between the same two blocks or cards are one line, solid when any of
+  them blocks. A chain's graph is drawn as before.
 - **The graph is laid out again only when what it draws changes.** A refresh that changes
   a state, a holder or a title is laid on the drawn graph without a new layout, and a line
   lit by the pointer or the keyboard stays lit while its item is drawn. A block the operator
@@ -181,6 +183,8 @@ checkouts are therefore distinguishable even at the same version.
 - **The graph's camera and keyboard know the epic blocks.** The field opens on its first
   heading or card as it is read, every framing measures the blocks as drawn, and folding or
   opening a block moves the camera only across, so its heading stays where it was pressed.
+  A resize brings the drawing back when no heading or card is left in sight, a block's
+  empty middle not counting.
   The arrows also reach each heading's two buttons, fold or open on its left and the epic
   across the rest (the work under no epic has only the first), and once a fold hides the item
   the keyboard stood on, the field's Tab stop is that block's fold button.
