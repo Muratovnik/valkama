@@ -10,19 +10,20 @@
  * The button keeps focus while it works, so it is marked busy rather than disabled and
  * a second press is not taken; once it has answered it can be pressed again.
  */
-import { computed, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, ref, shallowRef, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useOpenNotice } from '@/features/session-open/openNotice.ts'
 import OpenPanel from '@/features/session-open/OpenPanel.vue'
 import { currentSettings, prepareOpen } from '@/features/session-open/openPlan.ts'
 import type { OpenAction, OpenTarget, Outcome, Refusal } from '@/features/session-open/openPlan.ts'
-import { previewOpen } from '@/features/session-open/openPreview.ts'
+import { heardOfSession, previewOpen, sessionNews } from '@/features/session-open/openPreview.ts'
 import { openName, openView } from '@/features/session-open/openView.ts'
 import { outcomeWords } from '@/features/session-open/placeWords.ts'
 
 import type { Executor } from '@/shared/api/executorModel.ts'
 import type { OpenPlan, PlanOpens } from '@/shared/api/openPlanModel.ts'
+import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import type { SessionFamily } from '@/shared/lib/settings.ts'
 import InfoTip from '@/shared/ui/InfoTip.vue'
 import VButton from '@/shared/ui/VButton.vue'
@@ -68,9 +69,8 @@ const target = computed<OpenTarget>(() => ({
 }))
 const settings = computed(() => currentSettings())
 
-/** The plan as the server last answered it; a refused press asks again. */
+/** The plan as the server last answered it; a refused press on any button of the session asks again. */
 const plan = shallowRef<OpenPlan | null>(null)
-const asked = ref(0)
 let latest = 0
 watch(
   () => props.session,
@@ -87,7 +87,7 @@ watch(
       props.executor?.state,
       props.executor?.opened_in,
       props.executor?.opened_host,
-      asked.value,
+      sessionNews(props.session),
     ]),
   async () => {
     latest += 1
@@ -135,8 +135,24 @@ const panel = shallowRef<Panel | null>(null)
 
 function report(outcome: Outcome) {
   say(outcomeWords(t, outcome))
-  if (outcome.status === 'refused') asked.value += 1
+  if (outcome.status === 'refused') heardOfSession(props.session)
 }
+
+/**
+ * A press that finds the session cannot be opened turns this button into words that
+ * stand, and the button it took focus with leaves the page. Focus stays with this
+ * holder: on the way to why it opens nothing now, which is what the press found out.
+ */
+const root = useTemplateRef<HTMLElement>('root')
+watch(
+  () => view.value.pressable,
+  async (pressable, was) => {
+    const held = root.value?.contains(document.activeElement) ?? false
+    if (pressable || !was || !held) return
+    await nextTick()
+    moveFocus(root.value?.querySelector<HTMLElement>('.open-action-why'))
+  },
+)
 
 async function press() {
   if (busy.value) return
@@ -175,7 +191,10 @@ function finished(outcome: Outcome) {
 </script>
 
 <template>
-  <span class="open-action-root">
+  <span
+    ref="root"
+    class="open-action-root"
+  >
     <VButton
       v-if="view.pressable"
       class="open-action"

@@ -11,7 +11,12 @@ import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
-import { agentsInEveryState, openPlanFor, shortHolderCard } from './openSessionFixtures.ts'
+import {
+  agentsInEveryState,
+  IN_VSCODE,
+  openPlanFor,
+  shortHolderCard,
+} from './openSessionFixtures.ts'
 import { projectScope, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
 
@@ -106,4 +111,30 @@ test('under "always open in" an agent row says the setting chose the place', asy
     'aria-label',
     'Открыть родительскую сессию в Cursor — по настройке',
   )
+})
+
+test('a press that finds the session gone tells every button of it, and keeps focus', async ({
+  page,
+}) => {
+  const { lost } = await openCard(page)
+  const head = page.locator('.drawer .card-holder')
+  const firstAgent = page.locator('.drawer .agents .agent').first()
+  await expect(firstAgent.locator('button.open-action')).toContainText('VS Code · running')
+  lost.add(IN_VSCODE)
+
+  await head.locator('button.open-action').focus()
+  await page.keyboard.press('Enter')
+  await expect(
+    page.getByRole('status').filter({ hasText: 'The client no longer has this session.' }),
+  ).toHaveCount(1)
+  // The holder and the agent whose parent is the same session say it at once.
+  await expect(head.locator('.open-action-still')).toContainText('session gone')
+  await expect(firstAgent.locator('.open-action-still')).toContainText('session gone')
+  await expect(firstAgent.locator('button.open-action')).toHaveCount(0)
+  // Another session's row is left as it was.
+  await expect(page.locator('.drawer .agents .agent').nth(1)).toContainText('Claude Desktop')
+  // Focus stays on the holder, now on the way to why it opens nothing.
+  await expect(head.locator('.open-action-why')).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('tooltip')).toContainText('The client no longer has this session.')
 })

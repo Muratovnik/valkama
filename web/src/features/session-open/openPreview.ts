@@ -3,6 +3,8 @@
  * carries a plan out.
  */
 
+import { reactive } from 'vue'
+
 import { appCall, currentSettings, placesFor, queryFor } from '@/features/session-open/openPlan.ts'
 import type { OpenChoices, OpenTarget } from '@/features/session-open/openPlan.ts'
 
@@ -12,6 +14,24 @@ import type { PlatformSettings } from '@/shared/lib/settings.ts'
 
 /** The reads under way, so the buttons of one session on a card ask once between them. */
 const previews = new Map<string, Promise<OpenPlan | null>>()
+
+/**
+ * How often a press has found a session other than its buttons said, by session. A
+ * holder, a step and the agents of one session are separate buttons over one session,
+ * and what a press on one of them learns is true of all: each reads this beside its own
+ * facts, so every button of that session asks again, together and once between them.
+ */
+const news = reactive(new Map<string, number>())
+
+/** What a button of this session reads, so it asks again when a press learned more. */
+export function sessionNews(session: string): number {
+  return news.get(session) ?? 0
+}
+
+/** A press found the session not as its buttons said: every one of them asks again. */
+export function heardOfSession(session: string): void {
+  news.set(session, sessionNews(session) + 1)
+}
 
 async function readPreview(
   target: OpenTarget,
