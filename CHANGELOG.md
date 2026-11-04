@@ -362,6 +362,10 @@ checkouts are therefore distinguishable even at the same version.
   a `file:` or `ms-settings:` address asked Windows to start the program that claims it. Only
   `http:`, `https:` and `mailto:`, the schemes the page links, now leave the app; the rest
   open nowhere. The links of an open plan go through the session opener as before.
+- **No page of Valkama can be shown in a frame.** The app's pages, the document page and the
+  page a click on a card answers carried no framing policy, so another site could frame one
+  and lay its own page over a click on Valkama. Each now carries
+  `Content-Security-Policy: frame-ancestors 'none'` and `X-Frame-Options: DENY`.
 
 ## [2.4.0](https://github.com/Muratovnik/valkama/compare/v2.3.0...v2.4.0) - 2026-11-03
 

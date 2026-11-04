@@ -247,6 +247,27 @@ class WorkItemLinkTests(LinkedStoreCase):
             with self.subTest(path=path):
                 self.assert_shell_says_why(path)
 
+    def test_no_page_may_be_framed_by_another(self) -> None:
+        # A frame could lay another site's page over a click on Valkama.
+        for path in (
+            "/",
+            "/index.html",
+            "/doc?project=example-project&path=docs/plan.md",
+            "/modules/planning/global",
+            "/open/MAIN-99",
+        ):
+            with self.subTest(path=path):
+                response = self.get(path)
+                response.read()
+                self.assertIn("text/html", response.getheader("Content-Type") or "")
+                self.assertEqual("DENY", response.getheader("X-Frame-Options"))
+                self.assertEqual(
+                    "frame-ancestors 'none'", response.getheader("Content-Security-Policy")
+                )
+        script = self.get("/api/runtime")
+        script.read()
+        self.assertIsNone(script.getheader("X-Frame-Options"), "only a page is framed")
+
     def test_nothing_in_the_address_becomes_a_redirect(self) -> None:
         # MAIN-1 exists, so only the text around it separates these from a hit.
         for path in (
@@ -420,6 +441,9 @@ class WorkItemLinkInAppTests(LinkedStoreCase):
         digest = base64.b64encode(hashlib.sha256(script.encode("utf-8")).digest()).decode("ascii")
         self.assertIn(f"script-src 'sha256-{digest}'", policy)
         self.assertIn("default-src 'none'", policy)
+        # `default-src` says nothing about who may frame the page.
+        self.assertIn("frame-ancestors 'none'", policy)
+        self.assertEqual("DENY", response.getheader("X-Frame-Options"))
 
     @unittest.skipUnless(sys.platform == "win32", "the app is looked for only on Windows")
     def test_the_page_speaks_the_language_the_app_falls_back_on(self) -> None:

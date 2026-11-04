@@ -118,6 +118,12 @@ CONTENT_TYPES = {
     ".md": "text/markdown; charset=utf-8",
 }
 
+#: Every page goes out with these: no page of Valkama is framed, by its own pages or
+#: any other site's, where a frame could lay that site over a click on Valkama.
+#: `on_demand` spells the same two for the page it answers before this module loads.
+_FRAME_ANCESTORS = "frame-ancestors 'none'"
+_NOT_FRAMED = {"Content-Security-Policy": _FRAME_ANCESTORS, "X-Frame-Options": "DENY"}
+
 #: The views an event stream can carry, each Planning's own.
 _SSE_VIEWS = frozenset({"planning", "spaces", "activity"})
 
@@ -922,6 +928,9 @@ class Handler(BaseHTTPRequestHandler):
         if policy is not None:
             self.send_header("Cache-Control", str(policy["cache_control"]))
             self.send_header("ETag", str(policy["etag"]))
+        if extension == ".html":
+            for name, value in _NOT_FRAMED.items():
+                self.send_header(name, value)
         self.end_headers()
         self.wfile.write(body)
 
@@ -956,7 +965,11 @@ class Handler(BaseHTTPRequestHandler):
             200,
             page,
             CONTENT_TYPES[".html"],
-            headers={"Content-Security-Policy": policy, "Cache-Control": "no-store"},
+            headers={
+                **_NOT_FRAMED,
+                "Content-Security-Policy": f"{policy}; {_FRAME_ANCESTORS}",
+                "Cache-Control": "no-store",
+            },
         )
         return True
 

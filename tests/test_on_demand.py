@@ -70,6 +70,15 @@ class AgreementTests(unittest.TestCase):
         self.assertEqual(launcher.LAUNCHER_ENV, on_demand._LAUNCHER_ENV)
         self.assertEqual(launcher.MANIFEST_NAME, on_demand._MANIFEST_NAME)
 
+    def test_its_failure_page_may_not_be_framed_any_more_than_the_app_s(self) -> None:
+        from server import http_surface
+
+        head = on_demand._LOAD_FAILED.split(b"\r\n\r\n", 1)[0].decode("ascii")
+        fields = dict(line.split(": ", 1) for line in head.split("\r\n")[1:])
+        self.assertTrue(http_surface._NOT_FRAMED)
+        for name, value in http_surface._NOT_FRAMED.items():
+            self.assertEqual(value, fields.get(name), name)
+
     def test_only_its_exact_command_line_is_answered_here(self) -> None:
         with mock.patch.object(on_demand, "run", return_value=0) as run:
             self.assertEqual(0, on_demand.main(["--on-demand"]))

@@ -76,7 +76,10 @@ _LOAD_FAILED = (
     b"HTTP/1.1 503 Service Unavailable\r\n"
     b"Content-Type: text/html; charset=utf-8\r\n"
     b"Content-Length: " + str(len(_LOAD_FAILED_BODY)).encode() + b"\r\n"
-    b"Retry-After: 5\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n" + _LOAD_FAILED_BODY
+    b"Retry-After: 5\r\nCache-Control: no-store\r\n"
+    # `http_surface._NOT_FRAMED`, which this module may not import; a test compares them.
+    b"Content-Security-Policy: frame-ancestors 'none'\r\nX-Frame-Options: DENY\r\n"
+    b"Connection: close\r\n\r\n" + _LOAD_FAILED_BODY
 )
 
 _PRESENCE_PATH = b"/api/alerts/presence"

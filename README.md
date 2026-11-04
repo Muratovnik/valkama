@@ -1057,6 +1057,11 @@ environment variables, and every write must be an explicitly framed UTF-8 JSON
 object. Vite development is the only extra browser origin and must be enabled by
 the exact `--development-origin http://127.0.0.1:5173` flag shown above.
 
+Every page the listener answers, the app's own and the document page alike, carries
+`Content-Security-Policy: frame-ancestors 'none'` and `X-Frame-Options: DENY`: no
+site, Valkama included, may show one in a frame, where another page could be laid
+over a click.
+
 `POST /api/hooks/message-display`, Claude Code's display hook, writes nothing and
 takes neither credential: it answers a local process, and refuses any request with
 `Origin` or `Sec-Fetch-Site`, which a browser cannot leave out. See
