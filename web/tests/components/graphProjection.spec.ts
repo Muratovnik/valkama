@@ -88,15 +88,34 @@ function run(index: number, which = -1): Run {
   return found
 }
 
+/**
+ * Every node placed, however deep the frames nest it, and every line given a
+ * route: a frame or a block of cards takes the size of the field.
+ */
+function placeAll(node: ElkNode): ElkNode {
+  return {
+    ...node,
+    x: 24,
+    y: 24,
+    width: node.width ?? 400,
+    height: node.height ?? 200,
+    children: node.children?.map((child) => placeAll(child)),
+    edges: node.edges?.map((edge) => ({
+      ...edge,
+      sections: [{ id: `${edge.id}:route`, startPoint: { x: 0, y: 0 }, endPoint: { x: 1, y: 0 } }],
+    })),
+  }
+}
+
 /** Answers a worker's request with every node placed. */
 function finish(index: number, which = -1) {
   const { graph, resolve } = run(index, which)
-  resolve({
-    ...graph,
-    width: 400,
-    height: 200,
-    children: graph.children?.map((node) => ({ ...node, x: 24, y: 24 })),
-  })
+  resolve(placeAll(graph))
+}
+
+/** The cards a request asks to place: the nodes that hold nothing. */
+function cardIds(node: ElkNode): string[] {
+  return node.children?.length ? node.children.flatMap((child) => cardIds(child)) : [node.id]
 }
 
 async function settle() {
@@ -141,7 +160,7 @@ describe('graph worker lifecycle', () => {
     // already on a fresh worker while the stale one has not answered.
     expect(workers[0].terminateWorker).toHaveBeenCalledOnce()
     expect(workers).toHaveLength(2)
-    expect(run(1).graph.children?.map((node) => node.id)).toEqual(['work-2'])
+    expect(cardIds(run(1).graph)).toEqual(['work-2'])
     // An answer the ended worker still gives never reaches the field.
     finish(0)
     await settle()

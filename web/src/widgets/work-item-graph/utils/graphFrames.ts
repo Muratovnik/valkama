@@ -110,7 +110,7 @@ function frameTree(items: readonly WorkItemBrief[]) {
     return chain
   }
   const members = new Map<string, WorkItemBrief[]>()
-  for (const item of items) {
+  for (const item of [...items].sort(byNumber)) {
     if (isFrame(item)) continue
     for (const frameId of lineage(home(item))) {
       const list = members.get(frameId)

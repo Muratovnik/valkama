@@ -22,6 +22,17 @@ const base = { ...validateWorkItemRecord(workItem), comment_count: 0 }
 const engine = new ELK()
 const dimensions = { width: 1200, height: 680 }
 
+/**
+ * These cases measure the camera over cards, so they lay the cards out flat, as
+ * a chain is drawn; the whole space stands in frames, and the camera over
+ * frames has cases of its own.
+ */
+const flat = (nodes: readonly { work_item_id: string }[]) => ({
+  kind: 'chain' as const,
+  epicId: null,
+  members: nodes.map((node) => node.work_item_id),
+})
+
 function chain(count: number) {
   const nodes = Array.from({ length: count }, (_, index) => ({
     ...base,
@@ -38,7 +49,7 @@ function chain(count: number) {
     to: node.work_item_id,
     kind: 'blocks',
   }))
-  return layout({ nodes, edges }, engine)
+  return layout({ nodes, edges }, engine, false, flat(nodes))
 }
 
 /** The screen point of a node's centre at a camera. */

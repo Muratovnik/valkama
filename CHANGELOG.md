@@ -166,6 +166,12 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Changed
 
+- **The space's graph is laid out by epic.** Each epic, and each item that grew children,
+  holds its work in a block of its own, and the work under no epic holds the rest, so every
+  open item is on the field and the «Unlinked» switch is gone. A block with no open work or
+  more than twenty open items starts folded to its heading. A link to an epic is drawn to
+  that epic's block rather than dropped, and several links between the same two blocks or
+  cards are one line, solid when any of them blocks. A chain's graph is drawn as before.
 - **The graph keeps one layout worker while it is open.** Every layout started a worker of
   its own, which loaded ELK again before it could begin: about a tenth of a second on each
   change of filter, scope or data on an idle machine, and seconds on a busy one. The graph

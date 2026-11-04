@@ -114,9 +114,10 @@ export function useGraphProjection(
       : { kind: now.scopeKind, epicId: now.epicId }
   })
 
-  // A chain is drawn whole, so it has nothing to leave out.
+  // A chain is drawn whole, and the whole space stands in frames round its
+  // epics, so neither has anything to leave out.
   const unlinkedSet = computed(() =>
-    source.value && scope.value.kind !== 'chain'
+    source.value && scope.value.kind !== 'chain' && scope.value.kind !== 'all'
       ? unlinkedIds(source.value, showDone.value, scope.value)
       : new Set<string>(),
   )

@@ -66,6 +66,14 @@ export const NODE_WIDTH = 264
 export const NODE_HEIGHT = 112
 export const MARGIN = 24
 
+/** An open frame's header: one row as tall as a state chip, its progress edge under it. */
+export const FRAME_HEADER = 56
+/** The air between an open frame's edge and the work inside it. */
+export const FRAME_PADDING = 16
+/** A folded frame is its header alone, a little wider than a card so its counts fit. */
+export const FOLDED_WIDTH = 288
+export const FOLDED_HEIGHT = 72
+
 /**
  * The field's Vue Flow store. The canvas and the camera controls beside it are
  * not parent and child, so the controls find the field's camera by this id.

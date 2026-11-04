@@ -8,6 +8,8 @@
 
 import type { ElkNode, ElkPoint } from 'elkjs/lib/elk-api'
 
+import { frameProjection } from '@/widgets/work-item-graph/utils/graphFrames.ts'
+import type { FrameProjectionInput } from '@/widgets/work-item-graph/utils/graphFrames.ts'
 import {
   MARGIN,
   NO_EPIC_FRAME,
@@ -16,6 +18,7 @@ import {
   rowOrder,
 } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { PlacedFrame, PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+import { layoutFrames } from '@/widgets/work-item-graph/utils/graphLayoutTree.ts'
 
 import { readyIds } from '@/shared/api/planningModel.ts'
 import type { PlanningEdge, WorkItemBrief } from '@/shared/api/planningModel.ts'
@@ -150,6 +153,11 @@ export function flowEdge(
 export interface GraphScope {
   epicId: string | null
   kind: 'all' | 'chain' | 'epic' | 'none'
+  /**
+   * What the operator folded and a filter let through, read only in the
+   * whole space, which stands in frames.
+   */
+  frames?: Pick<FrameProjectionInput, 'choices' | 'shown'>
   /** The chain's member ids; read only in chain scope. */
   members?: readonly string[]
 }
@@ -248,13 +256,28 @@ export function doneCount(source: GraphSource, scope: GraphScope = WHOLE_SPACE):
   return workNodes(source, true, scope).length - workNodes(source, false, scope).length
 }
 
-/** ELK owns ranking, cycle handling, component packing and obstacle routing. */
+/**
+ * ELK owns ranking, cycle handling, component packing and obstacle routing.
+ *
+ * The whole space is drawn as frames round its epics (`graphFrames`,
+ * `graphLayoutTree`); a chain keeps its flat drawing, its root and epics as
+ * nodes, because its progress is the card's map and not the field's.
+ */
 export async function layout(
   source: GraphSource,
   engine: GraphLayoutEngine,
   showDone = false,
   scope: GraphScope = WHOLE_SPACE,
 ): Promise<GraphLayout> {
+  if (scope.kind === 'all') {
+    const projection = frameProjection({
+      items: source.nodes,
+      links: source.edges,
+      showDone,
+      ...scope.frames,
+    })
+    return layoutFrames(projection, engine)
+  }
   const nodes = workNodes(source, showDone, scope).sort(rowOrder)
   const present = new Set(nodes.map((node) => node.work_item_id))
   const visible = source.edges

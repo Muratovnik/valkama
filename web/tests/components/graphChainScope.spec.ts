@@ -1,7 +1,7 @@
 /**
- * The graph field scoped to a chain, and the whole-space field without the
- * unlinked grid: what is drawn, how closed work reads, and the controls that
- * change either.
+ * The graph field scoped to a chain, and the whole-space field that draws
+ * every open item in its frame: what is drawn, how closed work reads, and the
+ * controls that change either.
  */
 import { ref } from 'vue'
 import { createI18n } from 'vue-i18n'
@@ -145,18 +145,14 @@ async function drawn(graph: ReturnType<typeof openGraph>) {
     .sort((left, right) => left.localeCompare(right))
 }
 
-describe('the whole-space graph and its unlinked items', () => {
-  it('leaves unlinked items out by default and draws them when the toggle is thrown', async () => {
+describe('the whole-space graph and the items no link touches', () => {
+  it('draws every open item in its frame, with no switch to leave the unlinked out', async () => {
     const graph = openGraph()
-    // 3 is tied to nothing but its epic, and 4 only to closed work hidden here.
-    expect(await drawn(graph)).toEqual(['MAIN-5', 'MAIN-6'])
-    const toggle = graph.get('[role="switch"]')
-    expect(toggle.text()).toBe('Unlinked · 4')
-    expect(toggle.attributes('aria-checked')).toBe('false')
-    await toggle.trigger('click')
+    // 3 is tied to nothing but its epic, 4 only to closed work hidden here, and
+    // 7 and 8 to nothing: each still stands in its frame.
     expect(await drawn(graph)).toEqual(['MAIN-3', 'MAIN-4', 'MAIN-5', 'MAIN-6', 'MAIN-7', 'MAIN-8'])
-    expect(graph.get('[role="switch"]').attributes('aria-checked')).toBe('true')
-    // The open/all filter still works beside it.
+    expect(graph.find('[role="switch"]').exists()).toBe(false)
+    // The open/all filter still works.
     await graph.get('[role="radio"][aria-checked="false"]').trigger('click')
     expect(await drawn(graph)).toContain('MAIN-2')
     // The whole space has no root to mark.

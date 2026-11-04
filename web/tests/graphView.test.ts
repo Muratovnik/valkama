@@ -3,7 +3,12 @@ import assert from 'node:assert/strict'
 import ELK from 'elkjs/lib/elk.bundled.js'
 import { test } from 'vitest'
 
-import { MARGIN, NODE_HEIGHT, NODE_WIDTH } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+import {
+  MARGIN,
+  NO_EPIC_FRAME,
+  NODE_HEIGHT,
+  NODE_WIDTH,
+} from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import {
   layout as computeLayout,
   doneCount,
@@ -25,6 +30,12 @@ const layout = (
   showDone = false,
   scope = { kind: 'all' as const, epicId: null } as Parameters<typeof computeLayout>[3],
 ) => computeLayout(source, engine, showDone, scope)
+/** The work under none drawn open, however much of it there is. */
+const UNFOLDED = {
+  kind: 'all' as const,
+  epicId: null,
+  frames: { choices: { [NO_EPIC_FRAME]: false } },
+}
 /**
  * A stable identity per number, so the cases below can keep naming items 1, 2,
  * 3 while the layout keys on the identity the store actually hands out.
@@ -183,7 +194,12 @@ test('cycles, parallel context and long links route around unrelated cards', asy
     edge(23, 24),
     edge(24, 22, 'relates-to'),
   ]
-  const placed = await layout({ nodes, edges })
+  const chain = {
+    kind: 'chain' as const,
+    epicId: null,
+    members: nodes.map((item) => item.work_item_id),
+  }
+  const placed = await layout({ nodes, edges }, false, chain)
   assert.equal(placed.nodes.length, 38)
   assert.equal(placed.edges.length, edges.length)
   assertClearGeometry(placed)
@@ -205,16 +221,23 @@ test('large disconnected work and context pack across both axes without dropping
     edge(index * 3 + 1, index * 3 + 2),
     edge(index * 3 + 2, index * 3 + 3, 'discovered-from'),
   ]).flat()
-  const placed = await layout({
-    nodes: Array.from({ length: 1119 }, (_, index) => node(index + 1)),
-    edges,
-  })
+  const placed = await layout(
+    {
+      nodes: Array.from({ length: 1119 }, (_, index) => node(index + 1)),
+      edges,
+    },
+    false,
+    UNFOLDED,
+  )
   assert.equal(placed.nodes.length, 1119)
   const linked = new Set(placed.edges.flatMap((item) => [item.source, item.target]))
   assert.equal(placed.nodes.filter((item) => !linked.has(item.work_item_id)).length, 1029)
   assert.equal(placed.edges.length, 60)
   assert.ok(new Set(placed.nodes.map((node) => node.x)).size > 10)
-  assert.ok(placed.width / placed.height > 0.8 && placed.width / placed.height < 3)
+  assert.ok(
+    placed.width / placed.height > 0.8 && placed.width / placed.height < 3,
+    `${placed.width}x${placed.height}`,
+  )
   assertClearGeometry(placed)
 }, 20_000)
 
@@ -229,7 +252,7 @@ test('small disconnected chains stay compact with consistent card geometry', asy
   assertClearGeometry(placed)
 })
 
-test('containers remain grouping and closed nodes return only on demand', async () => {
+test('a container is a frame round its work, and closed work returns only on demand', async () => {
   const payload = {
     nodes: [
       node(10, { container: true }),
@@ -248,10 +271,26 @@ test('containers remain grouping and closed nodes return only on demand', async 
     open.nodes.map((item) => numberOf(item)),
     [1],
   )
+  assert.deepEqual(
+    open.frames.map((frame) => frame.id),
+    [identity(10)],
+  )
+  assert.equal(open.nodes[0].frameId, identity(10))
   assert.equal(open.edges.length, 0)
+  // In «All» the finished item's frame holds no open work, so it is folded and
+  // the link from it lands on that frame.
   const full = await layout(payload, true)
-  assert.equal(full.nodes.length, 2)
-  assert.equal(full.edges.length, 1)
+  assert.deepEqual(
+    full.frames.map((frame) => [frame.id, frame.folded]),
+    [
+      [identity(10), false],
+      [NO_EPIC_FRAME, true],
+    ],
+  )
+  assert.deepEqual(
+    full.edges.map((item) => [item.source, item.target]),
+    [[NO_EPIC_FRAME, identity(1)]],
+  )
   assertClearGeometry(full)
 })
 

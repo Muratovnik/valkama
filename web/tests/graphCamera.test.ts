@@ -18,6 +18,17 @@ const base = { ...validateWorkItemRecord(workItem), comment_count: 0 }
 const engine = new ELK()
 const SIZE = { width: 1200, height: 680 }
 const nodeId = (number: number) => `work-${number}`
+
+/**
+ * These cases measure the camera over cards, so they lay the cards out flat, as
+ * a chain is drawn; the whole space stands in frames, and the camera over
+ * frames has cases of its own.
+ */
+const flat = (nodes: readonly { work_item_id: string }[]) => ({
+  kind: 'chain' as const,
+  epicId: null,
+  members: nodes.map((node) => node.work_item_id),
+})
 function graph(count: number, fanout = false) {
   const nodes = Array.from({ length: count }, (_, index) => ({
     ...base,
@@ -34,7 +45,7 @@ function graph(count: number, fanout = false) {
     to: nodeId(index + 2),
     kind: 'blocks',
   }))
-  return layout({ nodes, edges }, engine)
+  return layout({ nodes, edges }, engine, false, flat(nodes))
 }
 function inCamera(
   placed: Awaited<ReturnType<typeof graph>>,
@@ -107,7 +118,7 @@ test('a narrowed field of unlinked work opens on its first node, with no empty g
     ready: true,
     state: { ...base.state, is_terminal: false },
   }))
-  const placed = await layout({ nodes, edges: [] }, engine)
+  const placed = await layout({ nodes, edges: [] }, engine, false, flat(nodes))
   // Where the grid reads whole, it is framed whole.
   const whole = graphCameraView(placed, SIZE)
   assert.ok(whole)
