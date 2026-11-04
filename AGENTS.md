@@ -230,7 +230,7 @@ the store's path is not in a module the store imports.
 
 The project inventory and its schema-v3 projection are Valkama-owned user state,
 managed through `valkama.py projects`. Keep one writer, a fixed projection path
-for server and desktop consumers, atomic writes, and exact-byte rollback.
+for every reader, atomic writes, and exact-byte rollback.
 Host Runtime may invoke the public command for compatibility but must not write
 the projection independently. Do not add a path override or infer a Planning
 binding from a project name or directory.
