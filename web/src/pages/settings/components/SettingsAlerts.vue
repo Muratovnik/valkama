@@ -98,132 +98,145 @@ function readinessDetail(answer: AlertReadiness): string {
         >{{ failureOf('locale') }}</FieldError
       >
     </template>
-    <PlatformStatePanel
-      :state="panelState"
-      compact
-      @retry="load"
+    <!-- In place of the rows, the panel lies inside the group as a thing of its own: flush
+         under the head it took the head's tone and ran into it, and its round corners
+         stood out of the group's edge. -->
+    <div
+      v-if="!settings"
+      class="settings-alerts-panel"
     >
-      <template v-if="settings">
-        <SettingsRow
+      <PlatformStatePanel
+        :state="panelState"
+        compact
+        @retry="load"
+      />
+    </div>
+    <template v-else>
+      <SettingsRow
+        :label="t('alerts.enabled')"
+        :hint="t('alerts.enabledHint')"
+        :failure="failureOf('enabled')"
+      >
+        <ToggleSwitch
+          class="settings-alerts-control settings-alerts-switch"
+          :model-value="settings.enabled"
           :label="t('alerts.enabled')"
-          :hint="t('alerts.enabledHint')"
-          :failure="failureOf('enabled')"
-        >
-          <ToggleSwitch
-            class="settings-alerts-control settings-alerts-switch"
-            :model-value="settings.enabled"
-            :label="t('alerts.enabled')"
-            :on-label="t('alerts.on')"
-            :off-label="t('alerts.off')"
-            @update:model-value="update('enabled', { enabled: $event })"
-          />
-        </SettingsRow>
+          :on-label="t('alerts.on')"
+          :off-label="t('alerts.off')"
+          @update:model-value="update('enabled', { enabled: $event })"
+        />
+      </SettingsRow>
 
-        <SettingsRow
-          :label="t('alerts.events')"
-          :hint="t('alerts.eventsHint')"
-          :label-id="EVENTS_LABEL_ID"
-          :failure="failureOf('events')"
-          stack
+      <SettingsRow
+        :label="t('alerts.events')"
+        :hint="t('alerts.eventsHint')"
+        :label-id="EVENTS_LABEL_ID"
+        :failure="failureOf('events')"
+        stack
+      >
+        <div
+          class="settings-alerts-control settings-alerts-events"
+          role="group"
+          :aria-labelledby="EVENTS_LABEL_ID"
         >
-          <div
-            class="settings-alerts-control settings-alerts-events"
-            role="group"
-            :aria-labelledby="EVENTS_LABEL_ID"
+          <label
+            v-for="event in ALERT_EVENTS"
+            :key="event"
+            class="settings-alerts-event"
+            :class="{ muted: !settings.enabled }"
           >
-            <label
-              v-for="event in ALERT_EVENTS"
-              :key="event"
-              class="settings-alerts-event"
-              :class="{ muted: !settings.enabled }"
-            >
-              <input
-                class="settings-alerts-box"
-                type="checkbox"
-                :checked="eventChecked(event)"
-                :disabled="!settings.enabled"
-                @change="setEvent(event, ($event.target as HTMLInputElement).checked)"
-              />
-              {{ t(`alerts.event.${event}`) }}
-            </label>
-          </div>
-        </SettingsRow>
+            <input
+              class="settings-alerts-box"
+              type="checkbox"
+              :checked="eventChecked(event)"
+              :disabled="!settings.enabled"
+              @change="setEvent(event, ($event.target as HTMLInputElement).checked)"
+            />
+            {{ t(`alerts.event.${event}`) }}
+          </label>
+        </div>
+      </SettingsRow>
 
-        <SettingsRow
+      <SettingsRow
+        :label="t('alerts.contentLabel')"
+        :hint="contentHint"
+        :failure="failureOf('content')"
+      >
+        <SelectionControl
+          class="settings-alerts-control"
+          mode="combobox"
+          :model-value="settings.content"
+          :options="contentOptions"
           :label="t('alerts.contentLabel')"
-          :hint="contentHint"
-          :failure="failureOf('content')"
-        >
-          <SelectionControl
-            class="settings-alerts-control"
-            mode="combobox"
-            :model-value="settings.content"
-            :options="contentOptions"
-            :label="t('alerts.contentLabel')"
-            @update:model-value="selectContent"
-          />
-        </SettingsRow>
+          @update:model-value="selectContent"
+        />
+      </SettingsRow>
 
-        <SettingsRow :label="t('alerts.readinessLabel')">
-          <div class="settings-alerts-control settings-alerts-line">
-            <div
-              class="settings-alerts-readiness"
-              role="status"
-            >
-              <SemanticState
-                class="settings-alerts-state"
-                dimension="integration-health"
-                :state="readinessState"
-                :label="readinessText"
-              />
-              <span
-                v-if="readinessNote"
-                class="settings-alerts-detail"
-                >{{ readinessNote }}</span
-              >
-            </div>
-            <VButton
-              v-if="readiness"
-              class="settings-alerts-recheck"
-              size="compact"
-              variant="ghost"
-              :aria-disabled="checkingMark"
-              @click="recheck"
-              >{{ recheckLabel }}</VButton
+      <SettingsRow :label="t('alerts.readinessLabel')">
+        <div class="settings-alerts-control settings-alerts-line">
+          <div
+            class="settings-alerts-readiness"
+            role="status"
+          >
+            <SemanticState
+              class="settings-alerts-state"
+              dimension="integration-health"
+              :state="readinessState"
+              :label="readinessText"
+            />
+            <span
+              v-if="readinessNote"
+              class="settings-alerts-detail"
+              >{{ readinessNote }}</span
             >
           </div>
-        </SettingsRow>
-
-        <SettingsRow
-          :label="t('alerts.testLabel')"
-          :hint="t('alerts.testHint')"
-        >
           <VButton
-            class="settings-alerts-control settings-alerts-test"
-            :aria-disabled="sendingMark"
-            :aria-busy="sendingMark"
-            @click="sendTest"
-            >{{ testLabel }}</VButton
+            v-if="readiness"
+            class="settings-alerts-recheck"
+            size="compact"
+            variant="ghost"
+            :aria-disabled="checkingMark"
+            @click="recheck"
+            >{{ recheckLabel }}</VButton
           >
-          <span
-            v-if="testOutcome?.code === 'ready'"
-            class="settings-alerts-detail"
-            role="status"
-            >{{ t('alerts.testSent') }}</span
-          >
-          <FieldError
-            v-else-if="testRefusal"
-            class="settings-alerts-failure"
-            role="alert"
-            >{{ testRefusal }}</FieldError
-          >
-        </SettingsRow>
-      </template>
-    </PlatformStatePanel>
+        </div>
+      </SettingsRow>
+
+      <SettingsRow
+        :label="t('alerts.testLabel')"
+        :hint="t('alerts.testHint')"
+      >
+        <VButton
+          class="settings-alerts-control settings-alerts-test"
+          :aria-disabled="sendingMark"
+          :aria-busy="sendingMark"
+          @click="sendTest"
+          >{{ testLabel }}</VButton
+        >
+        <span
+          v-if="testOutcome?.code === 'ready'"
+          class="settings-alerts-detail"
+          role="status"
+          >{{ t('alerts.testSent') }}</span
+        >
+        <FieldError
+          v-else-if="testRefusal"
+          class="settings-alerts-failure"
+          role="alert"
+          >{{ testRefusal }}</FieldError
+        >
+      </SettingsRow>
+    </template>
   </SettingsGroup>
 </template>
 
 <style scoped>
+/* The rows' own inset, so the panel stands on the group's ground with air on every side,
+   and a read under way puts its dots where the rows' labels will start. */
+.settings-alerts-panel {
+  padding: var(--space-4);
+}
+
 .settings-alerts-control {
   width: 100%;
   min-width: 0;

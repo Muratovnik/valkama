@@ -103,6 +103,39 @@ test('a refused read on a document’s page is a panel a step above the page', a
   expect(await seam(panel)).toBeGreaterThanOrEqual(1.2)
 })
 
+test('a failed read of the alerts lies inside its settings group, apart from the head', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await installBackend(page)
+  await page.route('**/api/alerts/settings', (route) =>
+    route.fulfill({ status: 503, json: { error: { code: 'busy' } } }),
+  )
+  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
+  const group = page.locator('.settings-group').filter({ hasText: 'Windows notifications' })
+  const panel = group.locator('.platform-state-panel')
+  await expect(panel).toBeVisible()
+  const room = await panel.evaluate((node) => {
+    const box = node.getBoundingClientRect()
+    const head = node.closest('.settings-group')?.querySelector('.settings-group-head')
+    const sheet = node.closest('.settings-general-sheet')
+    const headBox = head?.getBoundingClientRect()
+    const sheetBox = sheet?.getBoundingClientRect()
+    if (!headBox || !sheetBox) return null
+    return {
+      above: box.top - headBox.bottom,
+      start: box.left - sheetBox.left,
+      end: sheetBox.right - box.right,
+    }
+  })
+  // Flush under the head it was the head's tone running on, and its round corners stood
+  // on the group's edge.
+  expect(room?.above).toBeGreaterThanOrEqual(12)
+  expect(room?.start).toBeGreaterThanOrEqual(12)
+  expect(room?.end).toBeGreaterThanOrEqual(12)
+  expect(await seam(panel)).toBeGreaterThanOrEqual(1.2)
+})
+
 test('a failed read of the module stands off the workspace it lies on', async ({ page }) => {
   await page.setViewportSize({ width: 1500, height: 900 })
   await installBackend(page)

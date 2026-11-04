@@ -442,6 +442,10 @@ checkouts are therefore distinguishable even at the same version.
   too long for what was left wrapped its place onto a second line, and its plate kept the
   width of the first. The holder and the epic now take the whole width under the state,
   priority and action, where most holders read on one line.
+- **A failed read of the Windows notifications stands apart in its group.** Once the panel
+  took the sheet's tone it lay flush under the group's head, in the same tone, and ran into
+  it, and its round corners stood out of the group's edge. It now stands inside the group
+  with the rows' inset on every side.
 
 ### Removed
 
