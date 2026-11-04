@@ -17,6 +17,7 @@ import {
   z,
 } from '@/shared/api/contract.ts'
 import { executorSchema } from '@/shared/api/executorModel.ts'
+import { liveWorkMapSchema } from '@/shared/api/liveWorkModel.ts'
 import { enumField, ID, invalid, ISO, PROJECT_ID, UUID } from '@/shared/api/platformApiGuards.ts'
 
 const PLANNING_READ_MODEL = 'valkama-planning-read-model' as const
@@ -433,6 +434,8 @@ const readModelSchema = strictObject({
   work_items: z.array(workItemBriefSchema),
   links: z.array(edgeSchema),
   stale_claims: z.array(staleClaimSchema),
+  // Only the items with live work, by id; optional, as a server older than it sends none.
+  live_work: liveWorkMapSchema.optional(),
 })
   .refine((payload) => (payload.planning_space === null) === (payload.workflow === null), {
     message: 'a space and its workflow arrive together or not at all',
