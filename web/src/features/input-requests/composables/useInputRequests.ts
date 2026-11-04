@@ -2,7 +2,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 
 import { requestIdentity, targetIdentity } from '@/features/input-requests/utils/requestIdentity.ts'
 
-import { fetchInputRequests } from '@/shared/api/inputRequestApi.ts'
+import { fetchInputRequest, fetchInputRequests } from '@/shared/api/inputRequestApi.ts'
 import type { InputRequestEntry, InputRequestList } from '@/shared/api/inputRequestModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 
@@ -20,8 +20,20 @@ export type PendingCount = { incomplete: boolean; value: number } | 'unknown'
  */
 const confirmedWrites = ref(0)
 
-/** What to read: one card's questions, those waiting everywhere, or nothing at all. */
-export function useInputRequests(source: () => PlanningTarget | 'all' | null) {
+/**
+ * What to read: one card's questions, those waiting everywhere, or nothing at all.
+ *
+ * `keep` names a question the host holds something in — words, a choice, the keyboard.
+ * A read that no longer brings such a question, because it was answered or closed
+ * somewhere else, does not take it off the screen: it stays where it was, is read on its
+ * own to say how it ended, and leaves only through `dismiss`. A read of what waits
+ * everywhere drops every question that stopped waiting, and it used to drop the one being
+ * written in with the draft and the focus inside it.
+ */
+export function useInputRequests(
+  source: () => PlanningTarget | 'all' | null,
+  keep: (entry: InputRequestEntry) => boolean = () => false,
+) {
   const result = ref<InputRequestList | null>(null)
   const loading = ref(false)
   const failed = ref(false)
@@ -93,6 +105,7 @@ export function useInputRequests(source: () => PlanningTarget | 'all' | null) {
           : null
       if (generation !== current) return
       const items = [...response.items, ...(older?.items ?? [])]
+      hold(items)
       result.value = {
         ...response,
         items: selected
@@ -105,6 +118,38 @@ export function useInputRequests(source: () => PlanningTarget | 'all' | null) {
     } finally {
       if (generation === current) loading.value = false
     }
+  }
+
+  /**
+   * Keeps what the host holds of the questions this read no longer brings, as they last
+   * stood, and asks each how it stands now. Should that fail, the last copy stays: a
+   * question that cannot be read is no reason to take away what was written in it.
+   */
+  function hold(items: InputRequestEntry[]) {
+    const read = new Set(items.map((entry) => requestIdentity(entry)))
+    const gone = entries.value.filter(
+      (entry) =>
+        entry.request.status === 'pending' &&
+        !(requestIdentity(entry) in resolved.value) &&
+        !read.has(requestIdentity(entry)) &&
+        keep(entry),
+    )
+    for (const entry of gone) {
+      const key = requestIdentity(entry)
+      resolved.value[key] = entry
+      fetchInputRequest(entry.target, entry.request.request_id)
+        .then((now) => {
+          const held = resolved.value[key]
+          if (held && requestIdentity(now) === key && now.request.revision >= held.request.revision)
+            resolved.value[key] = now
+        })
+        .catch(() => {})
+    }
+  }
+
+  /** The person is done with a question that no longer waits: it leaves the list. */
+  function dismiss(entry: InputRequestEntry) {
+    delete resolved.value[requestIdentity(entry)]
   }
 
   /** A response started before a write must not replace what the write confirmed. */
@@ -157,5 +202,5 @@ export function useInputRequests(source: () => PlanningTarget | 'all' | null) {
     window.removeEventListener('focus', refresh)
     document.removeEventListener('visibilitychange', refresh)
   })
-  return { result, loading, failed, partial, entries, count, refresh, changed }
+  return { result, loading, failed, partial, entries, count, refresh, changed, dismiss }
 }

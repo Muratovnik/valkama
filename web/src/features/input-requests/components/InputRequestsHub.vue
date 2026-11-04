@@ -5,8 +5,11 @@ import { useI18n } from 'vue-i18n'
 import RequestList from '@/features/input-requests/components/RequestList.vue'
 import { useInputRequests } from '@/features/input-requests/composables/useInputRequests.ts'
 import type { PendingCount } from '@/features/input-requests/composables/useInputRequests.ts'
+import { holdsDraft } from '@/features/input-requests/utils/answerChange.ts'
+import { requestIdentity } from '@/features/input-requests/utils/requestIdentity.ts'
 import type { RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
+import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { DIALOG_ROOM_BESIDE_DOCUMENT } from '@/shared/lib/shellLayout.ts'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
@@ -21,10 +24,18 @@ const emit = defineEmits<{
   'select': [target: PlanningTarget]
 }>()
 const { t } = useI18n()
-const { result, loading, failed, partial, entries, count, refresh, changed } = useInputRequests(
-  () => 'all',
-)
 const drafts = ref<Record<string, RequestDraft>>({})
+const list = ref<InstanceType<typeof RequestList> | null>(null)
+/** A question answered elsewhere stays while it holds something typed, chosen or focused here. */
+const holding = (entry: InputRequestEntry) =>
+  holdsDraft(entry.request, drafts.value[requestIdentity(entry)]) ||
+  (list.value?.holdsFocus(entry) ?? false)
+const { result, loading, failed, partial, entries, count, refresh, changed, dismiss } =
+  useInputRequests(() => 'all', holding)
+function remove(entry: InputRequestEntry) {
+  delete drafts.value[requestIdentity(entry)]
+  dismiss(entry)
+}
 watch(count, (value) => emit('count', value), { immediate: true })
 watch(
   () => props.open,
@@ -47,6 +58,7 @@ watch(
     @pane-fit="(fit) => emit('pane-fit', fit)"
   >
     <RequestList
+      ref="list"
       :entries="entries"
       :result="result"
       :loading="loading"
@@ -55,6 +67,7 @@ watch(
       :drafts="drafts"
       @refresh="refresh"
       @updated="changed"
+      @dismiss="remove"
       @draft="(key, value) => (drafts[key] = value)"
       @select="emit('select', $event)"
     />

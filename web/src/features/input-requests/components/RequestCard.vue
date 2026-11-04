@@ -64,6 +64,7 @@ const props = withDefaults(
   { itemClosed: false, standalone: false, suggest: undefined },
 )
 const emit = defineEmits<{
+  'dismiss': [entry: InputRequestEntry]
   'select': [target: PlanningTarget]
   'update:draft': [draft: RequestDraft]
   'updated': [entry: InputRequestEntry]
@@ -247,7 +248,8 @@ function reveal() {
   ;(control ?? root)?.focus({ preventScroll: true })
   revealFrame(root)
 }
-defineExpose({ focus, focusOutcome, reveal })
+const holdsFocus = () => card.value?.contains(document.activeElement) ?? false
+defineExpose({ focus, focusOutcome, holdsFocus, reveal })
 </script>
 
 <template>
@@ -359,11 +361,13 @@ defineExpose({ focus, focusOutcome, reveal })
         :changing="changing"
         :declining="declining"
         :disabled="sendDisabled"
+        :dismissable="standalone && !inForm"
         :noting="noting && !changing"
         :refreshable="canRefresh"
         :standalone="standalone"
         :waiting="waiting"
         @start-change="change.start"
+        @dismiss="emit('dismiss', entry)"
         @onward="pressOnward"
         @open="emit('select', entry.target)"
         @refresh="refresh"

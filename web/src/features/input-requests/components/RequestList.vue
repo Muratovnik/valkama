@@ -15,6 +15,9 @@
  *
  * A refresh the reader asked for that fails puts focus on the sentence saying
  * so; one the poll started leaves focus where it is.
+ *
+ * A question that stopped waiting can be removed from here. Focus goes to the question
+ * after it, or the one before, and with none left to the way to read the list again.
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -42,6 +45,7 @@ const props = defineProps<{
   result: InputRequestList | null
 }>()
 const emit = defineEmits<{
+  dismiss: [entry: InputRequestEntry]
   draft: [key: string, value: RequestDraft]
   refresh: []
   select: [target: PlanningTarget]
@@ -99,9 +103,10 @@ const skipped = computed(() =>
       }
     }),
 )
-type CardHandle = { focus: () => void; focusOutcome: () => void }
+type CardHandle = { focus: () => void; focusOutcome: () => void; holdsFocus: () => boolean }
 const cards: Record<string, CardHandle | null> = {}
 const errorLine = ref<HTMLElement | null>(null)
+const emptyRefresh = ref<InstanceType<typeof VButton> | null>(null)
 /** A refresh the reader pressed is still running; its failure is theirs to hear about. */
 const asked = ref(false)
 function askRefresh() {
@@ -118,6 +123,20 @@ watch(
     moveFocus(errorLine.value)
   },
 )
+async function dismiss(entry: InputRequestEntry) {
+  const at = props.entries.findIndex(
+    (candidate) => requestIdentity(candidate) === requestIdentity(entry),
+  )
+  const neighbour = props.entries[at + 1] ?? props.entries[at - 1]
+  emit('dismiss', entry)
+  await nextTick()
+  if (neighbour) cards[requestIdentity(neighbour)]?.focus()
+  else moveFocus(emptyRefresh.value?.$el as HTMLElement | undefined)
+}
+/** Whether the keyboard is inside this question, which the list must not take away. */
+function holdsFocus(entry: InputRequestEntry) {
+  return cards[requestIdentity(entry)]?.holdsFocus() ?? false
+}
 function draftFor(entry: InputRequestEntry) {
   return props.drafts[requestIdentity(entry)] ?? EMPTY_DRAFT
 }
@@ -138,6 +157,7 @@ async function updated(entry: InputRequestEntry) {
   if (next) cards[requestIdentity(next)]?.focus()
   else cards[key]?.focusOutcome()
 }
+defineExpose({ holdsFocus })
 </script>
 
 <template>
@@ -196,7 +216,11 @@ async function updated(entry: InputRequestEntry) {
       compact
     >
       <template #action>
-        <VButton @click="askRefresh">{{ t('requests.refresh') }}</VButton>
+        <VButton
+          ref="emptyRefresh"
+          @click="askRefresh"
+          >{{ t('requests.refresh') }}</VButton
+        >
       </template>
     </DataEmptyState>
     <RequestCard
@@ -208,6 +232,7 @@ async function updated(entry: InputRequestEntry) {
       standalone
       @update:draft="emit('draft', requestIdentity(entry), $event)"
       @updated="updated"
+      @dismiss="dismiss"
       @select="emit('select', $event)"
     />
   </div>

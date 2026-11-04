@@ -102,9 +102,12 @@ test('in the list of everything waiting a row ending brings no refusal under the
   // where the upper one's stood: with a second option above, it stopped one row short, and
   // only the dialog scrolling inside itself, which it no longer does, brought it back.
   const opened = await openQuestion(page, [...pair(1, 1), asked(THIRD, 'A long question', 12, 9)])
-  const { next, top } = await inTheList(page, opened)
+  const { dialog, next, top } = await inTheList(page, opened)
   await raise(page, next)
-  await choose(page, top)
+  // A press outside both ends the step and leaves nothing in the upper row, which is what
+  // lets it leave the list: a row with a choice or the keyboard in it stays (below).
+  await press(page, await inMiddle(dialog.locator('.request-status')))
+  await expect(asking(next)).toHaveCount(0)
   const at = await inMiddle(send(top))
   await page.mouse.move(at.x, at.y)
   opened.requests.settle(UPPER, closedElsewhere)
@@ -112,6 +115,25 @@ test('in the list of everything waiting a row ending brings no refusal under the
   await page.evaluate(() => window.dispatchEvent(new Event('focus')))
   await expect.poll(() => onWayOn(next, at)).toBe(true)
   await expect.poll(() => under(page, at)).toBe('The lower question: Send')
+  await press(page, at)
+  await pause(200)
+  expect(writesTo(opened.requests)).toEqual([])
+  await expect(asking(page)).toHaveCount(0)
+})
+
+test('in the list a row kept because something was chosen in it folds, and lifts no refusal', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1680, height: 1050 })
+  const opened = await openQuestion(page, [...pair(1, 1), asked(THIRD, 'A long question', 12, 9)])
+  const { next, top } = await inTheList(page, opened)
+  await raise(page, next)
+  await choose(page, top)
+  const at = await inMiddle(send(top))
+  await page.mouse.move(at.x, at.y)
+  opened.requests.settle(UPPER, closedElsewhere)
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+  await expect(top.locator('.request-state')).toBeVisible()
   await press(page, at)
   await pause(200)
   expect(writesTo(opened.requests)).toEqual([])

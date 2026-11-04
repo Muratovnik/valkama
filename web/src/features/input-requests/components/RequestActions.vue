@@ -17,6 +17,9 @@
  * An answered question offers to change its answer here, where a question offers everything
  * else, and while that form is open the same two places hold Cancel and Save. Cancel is
  * always there to press: whatever else is wrong, the way out of the form is not.
+ *
+ * In the list of everything waiting, a question that no longer waits stays until it is
+ * removed, so it offers that, last, where the next step of a question stands.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -32,6 +35,8 @@ const props = defineProps<{
   /** Whether declining was asked for, and the next word on it decides. */
   declining: boolean
   disabled: boolean
+  /** It stopped waiting, in a list it can be taken out of. */
+  dismissable: boolean
   /** A comment on the question stands open above the foot. */
   noting: boolean
   refreshable: boolean
@@ -39,6 +44,7 @@ const props = defineProps<{
   waiting: boolean
 }>()
 const emit = defineEmits<{
+  'dismiss': []
   'onward': []
   'open': []
   'refresh': []
@@ -141,6 +147,12 @@ defineExpose({ focusChange, focusWayOut })
       :variant="onward.variant"
       @click="emit('onward')"
       >{{ onward.word }}</VButton
+    >
+    <VButton
+      v-if="dismissable"
+      variant="ghost"
+      @click="emit('dismiss')"
+      >{{ t('requests.dismiss') }}</VButton
     >
   </div>
 </template>
