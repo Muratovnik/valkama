@@ -30,8 +30,12 @@ export interface DocumentTarget {
   suffix: string
 }
 
-/** Whether it opened. False means the page copies the path and says so. */
-type OpenAttempt = (target: DocumentTarget) => boolean | Promise<boolean>
+/**
+ * Whether it opened: true, or else false or the words for why not. Either way the page
+ * copies the path, and says why when it was told.
+ */
+export type OpenAnswer = boolean | string
+type OpenAttempt = (target: DocumentTarget) => OpenAnswer | Promise<OpenAnswer>
 
 export interface DocumentOpener {
   /** The editor's name for a link's tooltip, once `openFile` or `openFolder` exist. */
@@ -63,8 +67,8 @@ function lineOf(suffix: string): number | null {
   return target?.kind === 'lines' ? target.first : null
 }
 
-/** A refused or thrown attempt comes to the same: it did not open. */
-async function opens(attempt: OpenAttempt, target: DocumentTarget): Promise<boolean> {
+/** A thrown attempt did not open, and nobody said why. */
+export async function opens(attempt: OpenAttempt, target: DocumentTarget): Promise<OpenAnswer> {
   try {
     return await attempt(target)
   } catch {
@@ -137,7 +141,13 @@ export function useDocumentLinks(
       suffix: query.suffix,
       line: lineOf(query.suffix),
     }
-    if (!(await opens(attempt, target))) await copy(written, t('documentLinks.openFailed'))
+    const opened = await opens(attempt, target)
+    if (opened === true) return
+    const why = typeof opened === 'string' && opened
+    await copy(
+      written,
+      why ? t('documentLinks.openRefused', { reason: why }) : t('documentLinks.openFailed'),
+    )
   }
 
   async function press(reference: DocumentReference, query: DocumentParts) {

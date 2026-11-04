@@ -1,8 +1,8 @@
 /**
  * The shell's document opener: a file or a folder a text names goes to the
- * editor by the open plan, and the result is said; a refused plan answers false,
- * which leaves the links to copy the path. A Markdown document goes to the
- * window's viewer and never to the plan.
+ * editor by the open plan, and the result is said; a refused plan answers why in
+ * the dictionary's words, which leaves the links to copy the path and say so. A
+ * Markdown document goes to the window's viewer and never to the plan.
  */
 import { createPinia } from 'pinia'
 import { defineComponent } from 'vue'
@@ -78,12 +78,15 @@ describe('the shell document opener', () => {
     expect(openTarget).not.toHaveBeenCalled()
   })
 
-  it('answers false for a refused folder, so the links copy the path', async () => {
+  it('answers why a folder is refused, so the links copy the path and say it', async () => {
     const say = vi.fn()
-    openTarget.mockResolvedValue({ status: 'refused', refusal: { reason: 'path-refused' } })
+    openTarget.mockResolvedValue({
+      status: 'refused',
+      refusal: { reason: 'path-refused', code: 'not_a_folder' },
+    })
     const opener = mountOpening(say)
     const target = { project: 'example-project', path: 'docs', line: null, suffix: '' }
-    expect(await opener.openFolder?.(target)).toBe(false)
+    expect(await opener.openFolder?.(target)).toBe('This is not a folder.')
     expect(openTarget).toHaveBeenCalledWith({
       kind: 'folder',
       project: 'example-project',

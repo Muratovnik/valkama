@@ -59,6 +59,7 @@ import {
   Search,
   Settings,
   SquareKanban,
+  SquarePen,
   SquareTerminal,
   TableProperties,
   Terminal,
@@ -91,6 +92,8 @@ const ICONS: Record<string, Component> = {
   'cursor': MousePointer2,
   'database': Database,
   'document': FileText,
+  // The owner's editor, where a document the viewer only reads can be changed.
+  'edit': SquarePen,
   // Another window: a document's own page, which the viewer's head opens.
   'external-link': ExternalLink,
   'filters': Filter,

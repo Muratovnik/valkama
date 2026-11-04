@@ -198,6 +198,24 @@ describe('what a press does', () => {
     expect(writeText).toHaveBeenCalledExactlyOnceWith('src/a.ts')
     expect(status(wrapper)).toBe('Не удалось открыть — путь скопирован')
   })
+
+  it('copies a confirmed path the plan refuses, and says why in its words', async () => {
+    const writeText = clipboard()
+    server({ 'src/a.ts': CODE, 'docs/': FOLDER })
+    const openFile = vi.fn(() => 'Там ничего нет.')
+    const openFolder = vi.fn(() => Promise.resolve('Это не папка.'))
+    const { wrapper, spoken } = drawn([strong('src/a.ts:42'), strong('docs/')], {
+      openFile,
+      openFolder,
+    })
+    await flushPromises()
+    for (const link of wrapper.findAll('button.rich-reference')) {
+      await link.trigger('click')
+      await flushPromises()
+    }
+    expect(spoken()).toEqual(['Там ничего нет. Путь скопирован', 'Это не папка. Путь скопирован'])
+    expect(writeText.mock.calls).toEqual([['src/a.ts:42'], ['docs/']])
+  })
 })
 
 /** A layer that says everything is text, the way a new task's preview does. */

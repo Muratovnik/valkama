@@ -14,6 +14,7 @@ export const documentLinkMessages = {
       copied: 'Path copied',
       copyFailed: 'Could not copy. Select the path by hand',
       openFailed: 'Could not open it, so the path was copied',
+      openRefused: '{reason} The path was copied',
       viewer: {
         label: 'Document: {title}',
         backTo: 'Back to {path}',
@@ -21,6 +22,8 @@ export const documentLinkMessages = {
         refreshTitle: 'Read the file again from disk',
         close: 'Close the document',
         newWindow: 'Open in a new window',
+        editor: 'Open in {editor}',
+        editorTitle: 'Open this file in {editor} at the line you are reading',
         resize: 'Document width',
         copyPath: 'Copy the path {path}',
         anchorMissing: 'There is no {anchor} in this document, so it opens at the start',
@@ -63,6 +66,7 @@ export const documentLinkMessages = {
       copied: 'Путь скопирован',
       copyFailed: 'Не удалось скопировать — выделите путь вручную',
       openFailed: 'Не удалось открыть — путь скопирован',
+      openRefused: '{reason} Путь скопирован',
       viewer: {
         label: 'Документ: {title}',
         backTo: 'Назад к {path}',
@@ -70,6 +74,8 @@ export const documentLinkMessages = {
         refreshTitle: 'Перечитать файл с диска',
         close: 'Закрыть документ',
         newWindow: 'Открыть в новом окне',
+        editor: 'Открыть в {editor}',
+        editorTitle: 'Открыть этот файл в {editor} на строке, которую вы читаете',
         resize: 'Ширина документа',
         copyPath: 'Скопировать путь {path}',
         anchorMissing: 'Якоря {anchor} в документе нет — он открыт с начала',

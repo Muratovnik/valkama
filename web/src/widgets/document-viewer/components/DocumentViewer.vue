@@ -13,6 +13,7 @@ import { useI18n } from 'vue-i18n'
 
 import { useTimeoutFn, useTitle } from '@vueuse/core'
 
+import DocumentEditorButton from '@/widgets/document-viewer/components/DocumentEditorButton.vue'
 import DocumentText from '@/widgets/document-viewer/components/DocumentText.vue'
 import DocumentWindowButton from '@/widgets/document-viewer/components/DocumentWindowButton.vue'
 import type {
@@ -225,7 +226,7 @@ watch(placement, async (aim) => {
   }
 })
 
-useReaderPlace({
+const { lineAt } = useReaderPlace({
   anchorMissing,
   focusHead: () => header.value?.focusTitle(),
   marked,
@@ -319,6 +320,10 @@ async function copyPath() {
         >
           <VIcon name="refresh" />
         </VButton>
+        <DocumentEditorButton
+          :view="view"
+          :line="lineAt"
+        />
         <DocumentWindowButton
           v-if="canOpenWindow && place"
           :place="place"
