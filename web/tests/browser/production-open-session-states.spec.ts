@@ -13,6 +13,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { installBackend } from './backend.ts'
 import {
   agentsInEveryState,
+  CRASHED,
   IN_VSCODE,
   openPlanFor,
   shortHolderCard,
@@ -28,12 +29,14 @@ const CARD = serializePlatformRoute({
 
 interface Opening {
   always?: string
+  /** Where the page's clock starts, installed before the page loads. */
+  clock?: string
   locale?: 'en' | 'ru'
   width?: number
 }
 
 /** The card, with its holder and one agent for each state; `lost` makes one session gone. */
-async function openCard(page: Page, { always, locale = 'en', width = 1280 }: Opening = {}) {
+async function openCard(page: Page, { always, clock, locale = 'en', width = 1280 }: Opening = {}) {
   await page.setViewportSize({ width, height: 1200 })
   await page.addInitScript(
     ({ language, place }) => {
@@ -63,6 +66,7 @@ async function openCard(page: Page, { always, locale = 'en', width = 1280 }: Ope
         : answer
     },
   })
+  if (clock) await page.clock.install({ time: new Date(clock) })
   await page.goto(CARD)
   await expect(page.locator('.drawer .card-holder button.open-action')).toBeVisible()
   await page.locator('.drawer .agents-more').click()
@@ -158,3 +162,17 @@ for (const locale of ['en', 'ru'] as const)
       })
       expect(edges.right).toBeLessThanOrEqual(edges.edge)
     })
+
+// The session fell silent at 09:15 on the 10th: 2 days 23 hours before the clock's 08:30
+// on the 13th, which is 2.97 days and no «2 days».
+for (const [locale, silent] of [
+  ['en', ', 2\u{A0}d 23\u{A0}h ago. It may have crashed'],
+  ['ru', ', 2\u{A0}дн. 23\u{A0}ч назад. Возможно, она упала'],
+] as const)
+  test(`a silent session says how long ago in the units the agents use, in ${locale}`, async ({
+    page,
+  }) => {
+    await openCard(page, { clock: '2026-08-13T08:30:00Z', locale })
+    await page.locator(`.step-holder button.open-action[title*="${CRASHED}"]`).click()
+    await expect(page.locator('.open-panel')).toContainText(silent)
+  })

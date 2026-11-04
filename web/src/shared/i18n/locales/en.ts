@@ -13,6 +13,7 @@ import { openMessages } from '@/shared/i18n/openMessages.ts'
 /* English copy; tests/i18n.test.ts enforces parity with Russian keys. */
 import { platformIntegrationMessages } from '@/shared/i18n/platformIntegrationMessages.ts'
 import { richTextMessages } from '@/shared/i18n/richTextMessages.ts'
+import { timeMessages } from '@/shared/i18n/timeMessages.ts'
 import { workFilterMessages } from '@/shared/i18n/workFilterMessages.ts'
 import { workItemAgentMessages } from '@/shared/i18n/workItemAgentMessages.ts'
 import { workItemFacetMessages } from '@/shared/i18n/workItemFacetMessages.ts'
@@ -25,6 +26,7 @@ export const en = {
   history: activityMessages.en.history,
   alerts: alertMessages.en.alerts,
   open: openMessages.en.open,
+  time: timeMessages.en.time,
   checklistComment: checklistCommentMessages.en.checklistComment,
   threads: discussionThreadMessages.en.threads,
   finder: globalFinderMessages.en.finder,

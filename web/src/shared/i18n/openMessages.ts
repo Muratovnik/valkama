@@ -55,8 +55,7 @@ export const openMessages = {
       panel: {
         running: 'The session is running',
         look: 'See it {where}:',
-        silent: 'Last sign of it: {when}, {time} ago. It may have crashed without saying so.',
-        days: '{count} day | {count} days',
+        silent: 'Last sign of it: {when}, {ago}. It may have crashed without saying so.',
         twoWriters:
           'If its window is still open, a second process would write to the same transcript, and the two would spoil each other’s work.',
         offer: {
@@ -238,9 +237,7 @@ export const openMessages = {
       panel: {
         running: 'Сессия идёт',
         look: 'Посмотреть {where}:',
-        silent:
-          'Последний сигнал: {when}, {time} назад. Возможно, она упала, не успев об этом сказать.',
-        days: '{count} день | {count} дня | {count} дней',
+        silent: 'Последний сигнал: {when}, {ago}. Возможно, она упала, не успев об этом сказать.',
         twoWriters:
           'Если её окно ещё открыто, второй процесс начнёт писать в тот же транскрипт, и они испортят работу друг другу.',
         offer: {

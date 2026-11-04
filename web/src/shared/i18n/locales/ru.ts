@@ -13,6 +13,7 @@ import { openMessages } from '@/shared/i18n/openMessages.ts'
 /* Русский каталог; tests/i18n.test.ts проверяет совпадение ключей. */
 import { platformIntegrationMessages } from '@/shared/i18n/platformIntegrationMessages.ts'
 import { richTextMessages } from '@/shared/i18n/richTextMessages.ts'
+import { timeMessages } from '@/shared/i18n/timeMessages.ts'
 import { workFilterMessages } from '@/shared/i18n/workFilterMessages.ts'
 import { workItemAgentMessages } from '@/shared/i18n/workItemAgentMessages.ts'
 import { workItemFacetMessages } from '@/shared/i18n/workItemFacetMessages.ts'
@@ -25,6 +26,7 @@ export const ru = {
   history: activityMessages.ru.history,
   alerts: alertMessages.ru.alerts,
   open: openMessages.ru.open,
+  time: timeMessages.ru.time,
   checklistComment: checklistCommentMessages.ru.checklistComment,
   threads: discussionThreadMessages.ru.threads,
   finder: globalFinderMessages.ru.finder,

@@ -27,6 +27,7 @@ import {
 
 import type { PlanOpens } from '@/shared/api/openPlanModel.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
+import { agoWords, spanWordsOf } from '@/shared/lib/timeSpan.ts'
 import DialogFrame from '@/shared/ui/DialogFrame.vue'
 import { isStrayPress } from '@/shared/ui/strayPress.ts'
 import VButton from '@/shared/ui/VButton.vue'
@@ -73,16 +74,16 @@ const steps = computed(() =>
   })),
 )
 
-const DAY_MS = 24 * 60 * 60 * 1000
-
-/** How long the session has said nothing: read when the panel opens, and it holds still. */
+/**
+ * How long the session has said nothing, read when the panel opens, and it holds still.
+ * In the units the agents' rows on the same card use, so the two never disagree.
+ */
 const silence = computed(() => {
   const since = new Date(props.notice?.silent_since ?? '')
   if (Number.isNaN(since.valueOf())) return ''
-  const days = Math.max(1, Math.floor((Date.now() - since.valueOf()) / DAY_MS))
   return t('open.panel.silent', {
     when: d(since, 'activity'),
-    time: t('open.panel.days', { count: days }, days),
+    ago: agoWords(since.valueOf(), Date.now(), spanWordsOf(t)),
   })
 })
 const offerLabel = computed(() => {

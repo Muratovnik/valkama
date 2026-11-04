@@ -25,6 +25,7 @@ import OpenAction from '@/features/session-open/OpenAction.vue'
 
 import type { WorkItemAgent } from '@/shared/api/planningModel.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
+import { spanWordsOf } from '@/shared/lib/timeSpan.ts'
 import RichText from '@/shared/ui/RichText.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
 import VButton from '@/shared/ui/VButton.vue'
@@ -78,15 +79,10 @@ watch(
 )
 
 const words = computed<TimeWords>(() => ({
+  ...spanWordsOf(t),
   clock: (date) => d(date, 'clock'),
   day: (date) => d(date, 'day'),
   year: (date) => d(date, 'activity'),
-  lessThanMinute: t('workItem.agents.lessThanMinute'),
-  minutes: (count) => t('workItem.agents.minutes', { count }),
-  hours: (count) => t('workItem.agents.hours', { count }),
-  days: (count) => t('workItem.agents.days', { count }),
-  ago: (time) => t('workItem.agents.ago', { time }),
-  justNow: t('workItem.agents.justNow'),
 }))
 
 function linkWords(agent: WorkItemAgent): string {

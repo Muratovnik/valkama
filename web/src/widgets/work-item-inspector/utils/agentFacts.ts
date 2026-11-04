@@ -1,4 +1,6 @@
 import type { WorkItemAgent } from '@/shared/api/planningModel.ts'
+import { agoWords, spanWords } from '@/shared/lib/timeSpan.ts'
+import type { SpanWords } from '@/shared/lib/timeSpan.ts'
 
 /** How many rows a folded list shows: a parent can have dozens of agents on one item. */
 export const AGENTS_SHOWN = 3
@@ -6,20 +8,10 @@ export const AGENTS_SHOWN = 3
 /** Enough of an agent's id to tell it from its siblings and to find it in a holder. */
 const SHORT_ID = 8
 
-const MINUTE = 60_000
-const HOUR = 60 * MINUTE
-const DAY = 24 * HOUR
-
 /** The catalog's words and the locale's dates, handed in so this stays pure. */
-export interface TimeWords {
-  justNow: string
-  lessThanMinute: string
-  ago: (time: string) => string
+export interface TimeWords extends SpanWords {
   clock: (date: Date) => string
   day: (date: Date) => string
-  days: (count: number) => string
-  hours: (count: number) => string
-  minutes: (count: number) => string
   year: (date: Date) => string
 }
 
@@ -44,24 +36,6 @@ interface AgentFacts {
   quiet: string
   shortId: string
   started: AgentMoment
-}
-
-/** A span in its two largest units: `2 h 5 min`, `3 d 1 h`, `29 min`. */
-function spanWords(milliseconds: number, words: TimeWords): string {
-  if (milliseconds < MINUTE) return words.lessThanMinute
-  const days = Math.floor(milliseconds / DAY)
-  const hours = Math.floor((milliseconds % DAY) / HOUR)
-  const minutes = Math.floor((milliseconds % HOUR) / MINUTE)
-  if (days > 0) return [words.days(days), hours > 0 ? words.hours(hours) : ''].join(' ').trim()
-  if (hours > 0) {
-    return [words.hours(hours), minutes > 0 ? words.minutes(minutes) : ''].join(' ').trim()
-  }
-  return words.minutes(minutes)
-}
-
-function agoWords(at: number, now: number, words: TimeWords): string {
-  const span = now - at
-  return span < MINUTE ? words.justNow : words.ago(spanWords(span, words))
 }
 
 function shortMoment(date: Date, today: Date, words: TimeWords): string {
