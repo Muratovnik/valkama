@@ -123,7 +123,11 @@ const kindShown = computed(() => yielded.value < 2)
 const anchorShown = computed(() => yielded.value < 3)
 const noteWords = computed(() => yielded.value < 4)
 
-watch(copyNote, fit, { flush: 'post' })
+// Anything that can arrive after the line was fitted: a note, the anchor once its path
+// is read, the date and the kind once the item is.
+watch([copyNote, () => Boolean(sourceLink.value), () => props.item?.updated_at], fit, {
+  flush: 'post',
+})
 // The line's width is the drawer's and never its own content's, so what steps aside
 // does not move the width this watches.
 useResizeObserver(line, () => void fit())
