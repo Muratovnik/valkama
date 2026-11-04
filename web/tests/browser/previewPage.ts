@@ -95,10 +95,10 @@ const REPORT = [
 ].join('\n')
 
 /** The card `MAIN-264` open on `body`, with the space under it and the stream in the test's hand. */
-export async function openReported(page: Page, body = REPORT) {
+export async function openReported(page: Page, body = REPORT, items: readonly Brief[] = SPACE) {
   const backend = await installDiscussionBackend(page)
   const stream = await installStreamDouble(page)
-  await page.route('**/api/planning?*', (route) => route.fulfill({ json: spaceModel(SPACE) }))
+  await page.route('**/api/planning?*', (route) => route.fulfill({ json: spaceModel(items) }))
   backend.item.comments.push({
     id: 1,
     kind: 'comment',

@@ -220,6 +220,20 @@
   --color-state-label: var(--color-text-muted);
 }
 
+/* The card is where an item is read in full, and a word there is read whole: a long
+   holder wraps under its glyph instead of ending in an ellipsis that only a screen
+   reader could see past. The glyph stays with the first line. */
+.facet-marks[data-surface='preview'] .facet-mark {
+  align-items: first baseline;
+}
+
+.facet-marks[data-surface='preview'] .facet-word:not(.facet-word-hidden) {
+  overflow-wrap: anywhere;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
 /* A glyph is tertiary ink unless its tone says more. Kind never does: a type
    is not a state, and a coloured kind would read as one more alarm. */
 .facet-glyph {
