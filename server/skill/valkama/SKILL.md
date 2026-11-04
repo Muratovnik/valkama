@@ -37,7 +37,8 @@ splitting one, or handing items to other agents.
 3. **File it only when none does.** `create_work_item` with `space`, `title`
    and a `description` that is the brief: goal, context, constraints, the
    "done when" and its verify command. A plan in the repository is referenced
-   by `source` (`docs/plan.md#kb:a7f3`), not copied. Umbrella work is
+   by `source` (`docs/plan.md#kb:a7f3`), not copied, and a file the
+   description names is written as Naming a file says. Umbrella work is
    `kind: epic`, its children name it as `parent`; the hierarchy is one level
    deep. Pass `claim: true` and `checklist` when you take it at once. Link the
    related items your search found (`relates-to`, `blocks`) and name the epic
@@ -173,6 +174,21 @@ you only saw there, take the port from any `url` or from the server's
 instructions and put the number after `/open/`. Do not do this in a Valkama
 comment, description or summary: Valkama links the numbers it shows by itself, and
 an address there is one more thing to go stale.
+
+**Naming a file.** In a description, a comment, a report, a summary, a question or
+an option's description, name a file or folder of the project as a Markdown link
+to its path from the root of the space's project, with a label that says what it
+is: `docs/plan.md#kb:a7f3`, `src/parse.ts:42`, `docs/plans/`. Valkama opens a
+Markdown file in its own viewer at the `#kb:…` anchor, heading or `:42` line the
+link names, another file in the owner's editor at that line, and a folder in the
+editor. A whole path in backticks works too; a label reads better.
+Write a path from that root, not from your working folder or another repository:
+a relative path is looked for there first, and in the projects registered inside
+it only when the root has nothing there. Use an absolute path only where there
+is no relative one, such as a file of another project. A path with spaces goes
+in `<…>` inside a link; in backticks only an absolute path may hold one. A path
+outside every project registered with Valkama does not open, and a press copies
+it: link it, but do not promise it opens.
 
 ## Blocked work
 
