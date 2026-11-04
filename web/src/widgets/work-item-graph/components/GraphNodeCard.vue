@@ -11,8 +11,10 @@ import { useI18n } from 'vue-i18n'
 
 import { Handle, Position } from '@vue-flow/core'
 
+import GraphLiveMark from '@/widgets/work-item-graph/components/GraphLiveMark.vue'
 import GraphNodeBlock from '@/widgets/work-item-graph/components/GraphNodeBlock.vue'
-import type { PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+import { useLiveWord } from '@/widgets/work-item-graph/composables/useGraphMotion.ts'
+import type { LiveWork, PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 
 import FacetMarks from '@/entities/work-item/components/FacetMarks.vue'
 import { holderRef, printsFacet } from '@/entities/work-item/utils/facets.ts'
@@ -27,9 +29,11 @@ const {
   ready,
   chainGroup,
   framed = false,
+  live = null,
   marked = false,
   overview = false,
   root = false,
+  still = false,
   tabbable = false,
   waitingOn = null,
 } = defineProps<{
@@ -40,6 +44,8 @@ const {
   chainGroup?: ChainGroup
   /** It stands in a frame, a step above the frame's ground as the frame is above the field's. */
   framed?: boolean
+  /** What an agent's session behind it is doing now; none when no session is live. */
+  live?: LiveWork | null
   /** In the branch of the chain the card chose, which the field frames and lights. */
   marked?: boolean
   /** The field is zoomed out past reading: the card is its state's colour and its reference. */
@@ -47,6 +53,8 @@ const {
   parentReference?: string
   /** The item the chain the field is scoped to grew from. */
   root?: boolean
+  /** The field's motion does not run, so live work holds still. */
+  still?: boolean
   /** The field's one Tab stop; the arrows reach every other node. */
   tabbable?: boolean
   /** The reference of an open item that blocks this one, wherever it lives. */
@@ -99,12 +107,15 @@ const leadsKind = computed(() => printsFacet('kind', 'graph', node))
 /** The field's one Tab stop takes Tab; the arrows reach the rest. */
 const tabIndex = computed(() => (tabbable ? 0 : -1))
 
-/** What a reader hears for the card: the same facts it shows, the root's mark included. */
+const liveWord = useLiveWord()
+
+/** What a reader hears for the card: the same facts it shows, the root's mark and live work included. */
 const accessibleName = computed(() =>
   [
     `${node.reference} ${node.title}`,
     node.state.name,
     ...(readinessLabel.value ? [readinessLabel.value] : []),
+    ...(live ? [liveWord(live)] : []),
     ...(root ? [t('graph.rootLabel')] : []),
   ].join(' · '),
 )
@@ -150,6 +161,8 @@ const accessibleName = computed(() =>
       :marker-state="markerState"
       :chain-group="chainGroup"
       :root="root"
+      :live="live"
+      :still="still"
     />
     <template v-else>
       <span
@@ -194,13 +207,18 @@ const accessibleName = computed(() =>
         >{{ node.title }}</span
       >
       <span
-        v-if="holder || asksAttention"
+        v-if="holder || asksAttention || live"
         class="flow-node-owner"
       >
         <template v-if="holder">
           <span class="flow-node-owner-state">{{ ownerLabel }}</span>
           <span class="flow-node-owner-name">{{ holderName(holder) }}</span>
         </template>
+        <GraphLiveMark
+          v-if="live"
+          :live="live"
+          :still="still"
+        />
         <FacetMarks
           class="flow-node-priority"
           surface="graph"

@@ -57,6 +57,45 @@ describe("the field's Vue Flow nodes", () => {
   })
 })
 
+/** Each line of a layout, and whether it runs, while the work in `moving` moves. */
+const live = (layout: GraphLayout, moving: string[]) =>
+  useGraphFlowElements({
+    focusSet: shallowRef(null),
+    placed: shallowRef(layout),
+    moving: shallowRef(new Set(moving)),
+  }).edges.value.map((edge) => ({
+    id: edge.id,
+    live: (edge.data as { live: boolean }).live,
+    marked: (edge.class as string[]).includes('live'),
+  }))
+
+describe('the lines live work runs along', () => {
+  it('runs a line whose card is being worked on, and no other', () => {
+    const layout = placedSample()
+    const [inside, folded] = layout.edges
+    expect(live(layout, [layout.nodes[0].work_item_id])).toEqual([
+      { id: inside.id, live: true, marked: true },
+      { id: folded.id, live: false, marked: false },
+    ])
+  })
+
+  it('runs a line folded onto a frame when work inside the frame moves', () => {
+    const layout = placedSample()
+    const folded = layout.edges[1]
+    // The line ends on the folded frame, and stands for links to work inside it.
+    const inside = folded.links[1].to
+    expect(live(layout, [inside]).find((edge) => edge.id === folded.id)).toEqual({
+      id: folded.id,
+      live: true,
+      marked: true,
+    })
+  })
+
+  it('runs nothing while nothing moves', () => {
+    expect(live(placedSample(), []).some((edge) => edge.live)).toBe(false)
+  })
+})
+
 describe("the field's Vue Flow edges", () => {
   it('ends a line on a frame where the layout ended it on one', () => {
     const layout = placedSample()

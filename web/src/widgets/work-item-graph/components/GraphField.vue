@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { Background } from '@vue-flow/background'
+import { PanOnScrollMode, VueFlow } from '@vue-flow/core'
+import type { Edge as FlowEdge, Node as FlowNode } from '@vue-flow/core'
+
 /**
  * The flow itself: Vue Flow, held to a field that is read and never edited, and
  * the look of what the library renders round the field's own drawings.
@@ -8,10 +12,12 @@
  * header hold the controls. What each node draws comes in through the slots, so
  * the host decides what a card or a frame says and this file how the flow holds
  * them: frames under the lines, cards over them.
+ *
+ * `motion` is the field's one switch for live work moving (`useGraphMotion`),
+ * written on the flow as `data-motion`: a paused field, or one under reduced
+ * motion, holds a live line still and wider instead of running a comet on it.
  */
-import { Background } from '@vue-flow/background'
-import { PanOnScrollMode, VueFlow } from '@vue-flow/core'
-import type { Edge as FlowEdge, Node as FlowNode } from '@vue-flow/core'
+import type { GraphMotion } from '@/widgets/work-item-graph/composables/useGraphMotion.ts'
 
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
@@ -21,6 +27,7 @@ import { GRAPH_ZOOM_MAX, GRAPH_ZOOM_MIN } from '@/widgets/work-item-graph/utils/
 
 defineProps<{
   edges: FlowEdge[]
+  motion: GraphMotion
   nodes: FlowNode[]
   /** The camera has framed the field, so its drawing may show. */
   settled: boolean
@@ -43,6 +50,7 @@ const emit = defineEmits<{
     no-pan-class-name="nopan"
     no-wheel-class-name="nowheel"
     :class="{ settled }"
+    :data-motion="motion"
     :nodes="nodes"
     :edges="edges"
     :nodes-draggable="false"
@@ -161,6 +169,15 @@ const emit = defineEmits<{
   stroke-dasharray: 4 4;
 }
 
+/* A line live work runs along, held still: the field is paused or asked for
+   less motion. It keeps its stroke — solid for a block, dashed for context —
+   and says «work is going on» by the hue and the width alone. */
+.graph-flow:not([data-motion='running'])
+  :deep(.vue-flow__edge.graph-edge.live .vue-flow__edge-path) {
+  stroke: var(--color-info);
+  stroke-width: 2.4;
+}
+
 :deep(.vue-flow__edge.graph-edge.lit .vue-flow__edge-path) {
   stroke: var(--color-action-primary);
   stroke-width: 1.9;
@@ -182,6 +199,17 @@ const emit = defineEmits<{
   .graph-flow :deep(.vue-flow__transformationpane),
   :deep(.vue-flow__edge.graph-edge .vue-flow__edge-path) {
     transition: none;
+  }
+}
+
+/* A forced palette draws every line in its one ink, so a live line is told
+   apart by the colour the palette keeps for what is picked out, and a width,
+   whether it moves or not. */
+@media (forced-colors: active) {
+  :deep(.vue-flow__edge.graph-edge.live .vue-flow__edge-path) {
+    stroke: Highlight;
+    stroke-width: 3;
+    forced-color-adjust: none;
   }
 }
 </style>

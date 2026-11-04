@@ -203,6 +203,7 @@ export const en = {
     showDone: 'Show done · {count}',
     edgeBlocks: 'blocks',
     edgeDiscovered: 'context',
+    edgeLive: 'work going on',
     zoom: 'Graph zoom',
     zoomIn: 'Zoom in',
     zoomOut: 'Zoom out',
@@ -242,6 +243,16 @@ export const en = {
       review: 'in review',
       active: 'in progress',
       blocked: 'blocked',
+      working: 'working',
+    },
+    live: {
+      working: 'working',
+      waiting: 'waiting',
+      quiet: 'silent since {since}',
+    },
+    motion: {
+      pause: 'Stop the motion',
+      resume: 'Start the motion',
     },
   },
   launch: {

@@ -20,6 +20,15 @@ checkouts are therefore distinguishable even at the same version.
   (silent for over a day, with `quiet_since`). It is read from the sessions behind the
   item's claim and its open steps and from what sessions in a turn wrote, in five reads
   whatever the size of the space, and no MCP tool answer carries it. See [Work-item context](docs/product-model.md#work-item-context).
+- **The graph shows the work an agent is doing now.** A card whose item a live session
+  holds says «working» with the pulsing working dots while a turn runs, «waiting» with still
+  dots once the turn is over, and «silent since» the session's last sign of life after a
+  day of quiet. A line that reaches work being done now carries a short comet running to
+  its arrow, and a frame says how many items under it are being worked on, so a folded one
+  still shows the work moving inside it. «Stop the motion» in the strip above the field
+  stops all of it at once and is remembered in this browser for every space; stopped, or
+  under reduced motion, a live line is held still and wider. In a forced palette a live
+  line takes the palette's colour for what is picked out.
 - **The graph draws an epic as a frame round its work.** The frame's header names the epic,
   its state once it has moved, and how its work stands in words — «8 of 21 done · 2 in
   progress · 1 blocked» — over a 3px edge of the same counts in the board's hues. The

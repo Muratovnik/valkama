@@ -23,10 +23,15 @@ import GraphNodeCard from '@/widgets/work-item-graph/components/GraphNodeCard.vu
 import { useGraphCamera } from '@/widgets/work-item-graph/composables/useGraphCamera.ts'
 import { useGraphFlowElements } from '@/widgets/work-item-graph/composables/useGraphFlowElements.ts'
 import { useGraphKeyboard } from '@/widgets/work-item-graph/composables/useGraphKeyboard.ts'
+import { movesOn, useGraphMotion } from '@/widgets/work-item-graph/composables/useGraphMotion.ts'
 import { useGraphNodeMarks } from '@/widgets/work-item-graph/composables/useGraphNodeMarks.ts'
 import { useGraphProjection } from '@/widgets/work-item-graph/composables/useGraphProjection.ts'
 import { GRAPH_FLOW_ID } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
-import type { PlacedFrame, PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+import type {
+  LiveWork,
+  PlacedFrame,
+  PlacedNode,
+} from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { GraphScope } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import { foldTarget, frameTarget } from '@/widgets/work-item-graph/utils/graphWalk.ts'
 
@@ -53,6 +58,8 @@ const props = defineProps<{
   filter?: string
   /** Moves each time the host asks the field to take focus once it is framed. */
   focusRequest?: number
+  /** What an agent's session is doing now on each item that has live work, by id. */
+  live?: Readonly<Record<string, LiveWork>>
   selectedId?: string | null
   /** The whole space, when `items` is what a filter let through: frames count their epic's work. */
   spaceItems?: WorkItemBrief[]
@@ -71,6 +78,7 @@ const {
   emptySpace,
   focusSet,
   hiddenDone,
+  live,
   openTotal,
   placed,
   pending,
@@ -83,6 +91,7 @@ const {
   () => ({
     edges: props.edges,
     epicId: props.epicId,
+    live: props.live,
     members: props.chain?.members,
     nodes: props.items,
     open: props.open,
@@ -150,6 +159,19 @@ function frameAt(id: string): PlacedFrame[] {
   return frame ? [frame] : []
 }
 
+/**
+ * The items whose live work moves: a turn running now. A line runs when one
+ * of its links reaches one, and a frame counts those under it.
+ */
+const moving = computed(
+  () => new Set(Object.keys(live.value).filter((id) => movesOn(live.value[id]))),
+)
+const { motion, toggle: toggleMotion } = useGraphMotion()
+const still = computed(() => motion.value !== 'running')
+const anyMoving = computed(() => moving.value.size > 0)
+const liveOf = (node: PlacedNode) => live.value[node.work_item_id] ?? null
+const workingIn = (frame: PlacedFrame) => frame.members.filter((id) => moving.value.has(id)).length
+
 /** A card standing in a drawn frame: the frame names its epic, so the card does not. */
 const isFramed = (node: PlacedNode) => frameById.value.has(node.frameId)
 
@@ -206,6 +228,7 @@ const chainChip = computed(() =>
 const { nodes: flowNodes, edges: flowEdges } = useGraphFlowElements({
   focusSet,
   placed: drawnField,
+  moving,
 })
 
 const {
@@ -324,12 +347,16 @@ function onFieldPointerLeave() {
           :has-edges="hasEdges"
           :keep-done="keepDone"
           :ready-count="ready.length"
+          :motion="motion"
+          :moving="anyMoving"
+          @toggle-motion="toggleMotion"
         />
       </div>
       <GraphField
         :nodes="flowNodes"
         :edges="flowEdges"
         :settled="fitted"
+        :motion="motion"
         @init="onFlowInit"
         @node-enter="onNodeEnter"
         @node-leave="onNodeLeave"
@@ -341,6 +368,7 @@ function onFieldPointerLeave() {
             :id="edgeProps.id"
             :data="edgeProps.data"
             :marker-end="edgeProps.markerEnd"
+            :motion="motion"
           />
         </template>
         <template #frame="{ data }">
@@ -350,6 +378,8 @@ function onFieldPointerLeave() {
             :frame="frame"
             :overview="overview"
             :tab-stop="frameStop(frame)"
+            :working="workingIn(frame)"
+            :still="still"
             @focus="onFrameFocus"
             @toggle="toggleFrame"
             @open="(reference) => emit('open', reference)"
@@ -370,6 +400,8 @@ function onFieldPointerLeave() {
             :overview="overview"
             :tabbable="isTabStop(node.work_item_id)"
             :waiting-on="waitingFor(node)"
+            :live="liveOf(node)"
+            :still="still"
             @focus="onNodeFocus"
             @blur="onNodeBlur"
           />

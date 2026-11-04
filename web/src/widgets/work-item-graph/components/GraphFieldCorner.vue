@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * What stands in the strip above the field's flow: the key, or in a
- * phone-wide workspace the frontier count.
+ * phone-wide workspace the frontier count, and at every width the switch that
+ * stops live work moving.
  *
  * Narrow, the bar has no room for the count and opens the key under its
  * options button instead, so the count takes the key's place and stays in
@@ -10,6 +11,8 @@
 import { useI18n } from 'vue-i18n'
 
 import GraphLegend from '@/widgets/work-item-graph/components/GraphLegend.vue'
+import GraphMotionToggle from '@/widgets/work-item-graph/components/GraphMotionToggle.vue'
+import type { GraphMotion } from '@/widgets/work-item-graph/composables/useGraphMotion.ts'
 
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 
@@ -17,10 +20,14 @@ defineProps<{
   groups: readonly ChainGroup[]
   hasEdges: boolean
   keepDone: boolean
+  motion: GraphMotion
+  /** Something on the field is live work that moves. */
+  moving: boolean
   /** The one state a group's members share, which the key says in the group's place. */
   names: Readonly<Record<ChainGroup, string | null>>
   readyCount: number
 }>()
+const emit = defineEmits<{ 'toggle-motion': [] }>()
 const { t } = useI18n()
 </script>
 
@@ -32,6 +39,12 @@ const { t } = useI18n()
     :names="names"
     :has-edges="hasEdges"
     :keep-done="keepDone"
+    :moving="moving"
+  />
+  <GraphMotionToggle
+    :motion="motion"
+    :moving="moving"
+    @toggle="emit('toggle-motion')"
   />
 </template>
 

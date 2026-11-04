@@ -12,6 +12,8 @@
  * It names only what the field draws. «Done» is the one entry the closed switch
  * adds, so while the chain has closed members its place is kept, unseen, before
  * the others: the switch never moves a word of the key.
+ *
+ * A line live work runs along is named only while some work on the field moves.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -30,6 +32,8 @@ const props = defineProps<{
    * card's chain section and the board's column say it; null keeps the group's word.
    */
   names: Readonly<Record<ChainGroup, string | null>>
+  /** Some live work on the field moves, so its line is drawn. */
+  moving?: boolean
 }>()
 const { t } = useI18n()
 
@@ -47,7 +51,7 @@ const entries = computed(() => {
 
 <template>
   <div
-    v-if="entries.length || hasEdges"
+    v-if="entries.length || hasEdges || moving"
     class="graph-legend"
     aria-hidden="true"
   >
@@ -66,6 +70,11 @@ const entries = computed(() => {
         ><i class="stroke dashed" />{{ t('graph.edgeDiscovered') }}</span
       >
     </template>
+    <span
+      v-if="moving"
+      class="graph-legend-item"
+      ><i class="stroke live" />{{ t('graph.edgeLive') }}</span
+    >
   </div>
 </template>
 
@@ -102,6 +111,12 @@ const entries = computed(() => {
 
   &.dashed {
     border-top-style: dashed;
+  }
+
+  /* A live line as it stands still: wider, in the hue of work under way. */
+  &.live {
+    border-top-width: 3px;
+    border-top-color: var(--color-info);
   }
 }
 </style>

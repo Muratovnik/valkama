@@ -53,6 +53,7 @@ import {
   MessageSquare,
   Monitor,
   MousePointer2,
+  Pause,
   Play,
   Plus,
   RadioTower,
@@ -112,6 +113,8 @@ const ICONS: Record<string, Component> = {
   'language': Languages,
   'menu': Menu,
   'message-square': MessageSquare,
+  // The graph's one switch for live work moving: stop it, or let it run.
+  'pause': Pause,
   'play': Play,
   'plus': Plus,
   'refresh': RefreshCw,

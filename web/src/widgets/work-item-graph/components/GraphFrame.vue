@@ -37,13 +37,22 @@ import VIcon from '@/shared/ui/VIcon.vue'
 const {
   frame,
   overview = false,
+  still = false,
   tabStop = null,
+  working = 0,
 } = defineProps<{
   frame: PlacedFrame
   /** The field is zoomed out past reading: the header is the reference and the edge. */
   overview?: boolean
+  /** The field's motion does not run, so the working dots hold still. */
+  still?: boolean
   /** The walk target that takes Tab, when it is one of this frame's. */
   tabStop?: string | null
+  /**
+   * How many items under it, nested frames' included, an agent is working on
+   * now: for a folded frame the one sign of the work moving inside it.
+   */
+  working?: number
 }>()
 const emit = defineEmits<{
   blur: [target: string]
@@ -92,7 +101,8 @@ const openLabel = computed(() => {
     const word = t(`graph.frame.${group}`, count)
     return `${count} ${word}`
   })
-  return [head, done, ...groups].join(' · ')
+  const live = working > 0 ? [`${working} ${t('graph.frame.working', working)}`] : []
+  return [head, done, ...groups, ...live].join(' · ')
 })
 
 /**
@@ -100,26 +110,19 @@ const openLabel = computed(() => {
  * work under no epic the same row is plain text.
  */
 const openTag = computed(() => (epic.value ? 'button' : 'span'))
-const openAttributes = computed(() =>
-  epic.value
-    ? {
-        'type': 'button',
-        'aria-label': openLabel.value,
-        'data-walk-target': openTarget.value,
-        'tabindex': tabIndex(openTarget.value),
-      }
-    : {},
-)
+/** What only the button carries: plain text has no type, name, walk target or stop. */
+const asButton = <T,>(value: T): T | undefined => (epic.value ? value : undefined)
+const openType = computed(() => asButton('button'))
+const openName = computed(() => asButton(openLabel.value))
+const openWalk = computed(() => asButton(openTarget.value))
+const openTab = computed(() => asButton(tabIndex(openTarget.value)))
 
 /** The epic's state, said once it has moved, as a board's lane says it. */
 const stateShown = computed(() => (epic.value ? printsFacet('state', 'lane', epic.value) : false))
 const closedEpic = computed(() => epic.value?.state.is_terminal ?? false)
 
-const frameClass = computed(() => ({
-  folded: frame.folded,
-  nested: frame.parentId !== null,
-  overview,
-}))
+/** A frame inside a frame is a well cut into the one it stands in. */
+const nested = computed(() => frame.parentId !== null)
 const headStyle = computed(() => (frame.folded ? undefined : { height: `${FRAME_HEADER}px` }))
 
 function tabIndex(target: string): number {
@@ -134,6 +137,11 @@ function countWord(group: (typeof counts.value)[number]['group'], count: number)
   const word = t(`graph.frame.${group}`, count)
   return ` ${word}`
 }
+
+const workingWord = computed(() => {
+  const word = t('graph.frame.working', working)
+  return ` ${word}`
+})
 
 function onOpen() {
   if (epic.value) emit('open', epic.value.reference)
@@ -151,7 +159,7 @@ function onOpenBlur() {
 <template>
   <section
     class="graph-frame"
-    :class="frameClass"
+    :class="{ folded: frame.folded, nested, overview }"
     :data-frame="frame.id"
   >
     <Handle
@@ -191,7 +199,10 @@ function onOpenBlur() {
       <component
         :is="openTag"
         class="graph-frame-open"
-        v-bind="openAttributes"
+        :type="openType"
+        :aria-label="openName"
+        :data-walk-target="openWalk"
+        :tabindex="openTab"
         @click="onOpen"
         @focus="onOpenFocus"
         @blur="onOpenBlur"
@@ -254,6 +265,20 @@ function onOpenBlur() {
             />{{ countWord(group, count) }}</span
           >
         </template>
+        <span
+          v-if="working"
+          class="graph-frame-count graph-frame-working"
+          ><span
+            class="work-dots"
+            aria-hidden="true"
+            :class="{ still }"
+            ><i /><i /><i /></span
+          ><CountBadge
+            placement="inline"
+            :limit="WHOLE"
+            :value="working"
+          /><template v-if="!overview">{{ workingWord }}</template></span
+        >
       </component>
       <GraphFrameProgress
         class="graph-frame-progress"
@@ -293,7 +318,7 @@ function onOpenBlur() {
   align-items: center;
   padding: var(--space-1) var(--space-3) var(--space-2) var(--space-1);
   color: var(--color-text-muted);
-  font: var(--font-detail);
+  font: var(--font-line);
   pointer-events: auto;
 
   .graph-frame.folded & {
@@ -340,7 +365,7 @@ function onOpenBlur() {
 .graph-frame-open {
   display: flex;
   flex-wrap: wrap;
-  gap: 0 var(--space-3);
+  gap: 0 var(--space-2);
   align-content: center;
   align-items: center;
   align-self: stretch;
@@ -352,7 +377,7 @@ function onOpenBlur() {
   flex: 1 1 0;
   gap: var(--space-1);
   align-items: center;
-  min-width: 96px;
+  min-width: 80px;
   color: var(--color-text);
   overflow: hidden;
 }
@@ -422,6 +447,32 @@ function onOpenBlur() {
   .graph-frame-progress {
     height: 12px;
   }
+
+  /* «● 2» at the band's far end, grown as the reference is. */
+  .graph-frame-working {
+    font: var(--font-drawer-title);
+    font-weight: 700;
+    transform: scale(2.2);
+    transform-origin: right center;
+  }
+}
+
+/* Folded, the work moving inside is the one sign of it, so it rides the name's
+   row, and the counts take the two rows under it. */
+.graph-frame.folded {
+  .graph-frame-name {
+    order: -2;
+  }
+
+  .graph-frame-working {
+    order: -1;
+  }
+}
+
+/* The work moving under the frame, in the hue of work under way. */
+.graph-frame-working {
+  align-items: center;
+  color: var(--color-info);
 }
 
 /* A forced palette clears the ground, so the frame is outlined instead. */

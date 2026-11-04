@@ -202,6 +202,7 @@ export const ru = {
     showDone: 'Показать готовые · {count}',
     edgeBlocks: 'блокирует',
     edgeDiscovered: 'контекст',
+    edgeLive: 'работа идёт',
     zoom: 'Масштаб графа',
     zoomIn: 'Приблизить',
     zoomOut: 'Отдалить',
@@ -241,6 +242,16 @@ export const ru = {
       review: 'на проверке',
       active: 'в работе',
       blocked: 'заблокирована | заблокированы | заблокировано',
+      working: 'работает | работают | работают',
+    },
+    live: {
+      working: 'работает',
+      waiting: 'ждёт',
+      quiet: 'молчит с {since}',
+    },
+    motion: {
+      pause: 'Остановить движение',
+      resume: 'Пустить движение',
     },
   },
   launch: {

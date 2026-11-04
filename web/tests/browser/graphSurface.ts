@@ -1,16 +1,20 @@
 /**
  * The harness page for the graph's own drawings: a laid-out field of frames,
  * cards and lines, drawn with the product's components on a field the size the
- * browser gives it, before the whole-space projection lays frames out.
+ * browser gives it, with live work on it and the switch that stops it moving.
  *
  * The field is the sample layout (`placedSample`): the epic with the long
  * title open round two cards, the largest epic and the work under no epic
- * folded, a line inside the open frame and one folded onto a frame. Folding a
- * frame here turns its header and nothing else: the layout is the projection's.
+ * folded, a line inside the open frame and one folded onto a frame. The first
+ * card is being worked on and the second has fallen silent, so the line
+ * between them runs and the one folded onto the largest epic does not.
+ * `?live=folded` also puts an agent to work inside the largest epic, which
+ * runs that line too. Folding a frame here turns its header and nothing else.
  *
- * `?zoom=out` opens the field zoomed out past reading.
+ * `?zoom=read` opens the field from its top-left at reading size and
+ * `?zoom=out` far out, past reading.
  */
-import { defineComponent, h, ref, shallowRef } from 'vue'
+import { computed, defineComponent, h, ref, shallowRef } from 'vue'
 
 import { useVueFlow } from '@vue-flow/core'
 
@@ -20,7 +24,9 @@ import GraphFieldCorner from '@/widgets/work-item-graph/components/GraphFieldCor
 import GraphFrame from '@/widgets/work-item-graph/components/GraphFrame.vue'
 import GraphNodeCard from '@/widgets/work-item-graph/components/GraphNodeCard.vue'
 import { useGraphFlowElements } from '@/widgets/work-item-graph/composables/useGraphFlowElements.ts'
+import { movesOn, useGraphMotion } from '@/widgets/work-item-graph/composables/useGraphMotion.ts'
 import { GRAPH_FLOW_ID } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+import type { LiveWork } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { GraphLayout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
@@ -31,16 +37,32 @@ const NO_NAMES = Object.fromEntries(
   ['active', 'review', 'queued', 'backlog', 'blocked', 'done'].map((group) => [group, null]),
 ) as Record<ChainGroup, string | null>
 
+/** Who is at work on the sample, as the server's `live_work` would say it. */
+function liveOn(layout: GraphLayout, folded: boolean): Record<string, LiveWork> {
+  const [first, second] = layout.nodes
+  const live: Record<string, LiveWork> = {
+    [first.work_item_id]: { state: 'working' },
+    [second.work_item_id]: { state: 'quiet', quiet_since: '2026-11-02T08:00:00Z' },
+  }
+  const inside = layout.edges[1].links[0].to
+  if (folded) live[inside] = { state: 'working' }
+  return live
+}
+
 export const GraphSurface = defineComponent({
   setup() {
-    const zoom = new URLSearchParams(location.search).get('zoom')
+    const query = new URLSearchParams(location.search)
+    const zoom = query.get('zoom')
     const zoomedOut = zoom === 'out'
     const placed = shallowRef<GraphLayout | null>(placedSample())
-    const { nodes, edges } = useGraphFlowElements({ focusSet: ref(null), placed })
+    const live = liveOn(placedSample(), query.get('live') === 'folded')
+    const moving = computed(() => new Set(Object.keys(live).filter((id) => movesOn(live[id]))))
+    const { motion, toggle: toggleMotion } = useGraphMotion()
+    const still = computed(() => motion.value !== 'running')
+    const { nodes, edges } = useGraphFlowElements({ focusSet: ref(null), placed, moving })
     const { fitView, setViewport, zoomTo } = useVueFlow({ id: GRAPH_FLOW_ID })
 
     const settled = ref(false)
-    /** Whole by default; `?zoom=read` from the top-left at reading size; `?zoom=out` far out. */
     async function onInit() {
       await fitView({ padding: 0.1, maxZoom: 1 })
       if (zoomedOut) await zoomTo(0.3)
@@ -74,17 +96,37 @@ export const GraphSurface = defineComponent({
               hasEdges: true,
               keepDone: false,
               readyCount: 3,
+              motion: motion.value,
+              moving: moving.value.size > 0,
+              onToggleMotion: toggleMotion,
             }),
           ]),
           h(
             GraphField,
-            { nodes: nodes.value, edges: edges.value, settled: settled.value, onInit },
+            {
+              nodes: nodes.value,
+              edges: edges.value,
+              motion: motion.value,
+              settled: settled.value,
+              onInit,
+            },
             {
               edge: (edge: { data: never; id: string; markerEnd: string }) =>
-                h(GraphEdge, { id: edge.id, data: edge.data, markerEnd: edge.markerEnd }),
+                h(GraphEdge, {
+                  id: edge.id,
+                  data: edge.data,
+                  markerEnd: edge.markerEnd,
+                  motion: motion.value,
+                }),
               frame: ({ data }: { data: { id: string } }) =>
                 frameAt(data.id).map((frame) =>
-                  h(GraphFrame, { frame, overview: zoomedOut, onToggle: toggle }),
+                  h(GraphFrame, {
+                    frame,
+                    overview: zoomedOut,
+                    still: still.value,
+                    working: frame.members.filter((id) => moving.value.has(id)).length,
+                    onToggle: toggle,
+                  }),
                 ),
               card: ({ data }: { data: { id: string } }) =>
                 cardAt(data.id).map((node) =>
@@ -94,6 +136,8 @@ export const GraphSurface = defineComponent({
                     recessed: false,
                     framed: framed(node.frameId),
                     overview: zoomedOut,
+                    live: live[node.work_item_id] ?? null,
+                    still: still.value,
                   }),
                 ),
             },

@@ -33,6 +33,8 @@ export interface GraphNodeRef {
 interface FlowElementsInput {
   focusSet: Ref<ReturnType<typeof neighborhood> | null>
   placed: Ref<GraphLayout | null>
+  /** The items whose live work moves now; a line any of its links touches runs. */
+  moving?: Ref<ReadonlySet<string>>
 }
 
 /** Every frame lies below the lines, which Vue Flow draws at zero. */
@@ -96,13 +98,19 @@ export function useGraphFlowElements(input: FlowElementsInput) {
   const edges = computed<FlowEdge[]>(() => {
     if (!input.placed.value) return []
     const focusedEdges = input.focusSet.value?.edges
+    const moving = input.moving?.value ?? new Set<string>()
     return input.placed.value.edges.map((edge) => {
       const lit = focusedEdges?.has(edge.id) ?? false
       const recessed = focusedEdges != null && !lit
       const markerColor = edgeMarkerColor(lit, edge.kind)
       const descriptor = flowEdge(edge, { markerColor, lit, recessed })
+      // A line stands for every link drawn into it, folded ones too: it runs
+      // when any of them reaches work that moves.
+      const live = edge.links.some((link) => moving.has(link.from) || moving.has(link.to))
       return {
         ...descriptor,
+        class: live ? [...descriptor.class, 'live'] : descriptor.class,
+        data: { ...descriptor.data, live },
         markerEnd: { ...descriptor.markerEnd, type: MarkerType.ArrowClosed },
         sourcePosition: Position.Right,
         targetPosition: Position.Left,

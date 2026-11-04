@@ -6,6 +6,10 @@
  * the card survives. The root is framed in the text colour, so it is found
  * without its word.
  */
+import { computed } from 'vue'
+
+import type { LiveWork } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+
 import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 import { statePresentation } from '@/shared/lib/uiSystem.ts'
 import type { SemanticStatePair } from '@/shared/lib/uiSystem.ts'
@@ -14,15 +18,24 @@ const {
   markerState,
   reference,
   chainGroup,
+  live = null,
   root = false,
+  still = false,
 } = defineProps<{
   /** The card's marker, which colours the block outside a chain. */
   markerState: Extract<SemanticStatePair, { dimension: 'work-item-node-marker' }>['state']
   reference: string
   /** Where the card stands in the chain the field is scoped to, which colours it there. */
   chainGroup?: ChainGroup
+  /** Live work on the card, which the block says with the working dots after its reference. */
+  live?: LiveWork | null
   root?: boolean
+  /** The field does not move: the dots hold still. */
+  still?: boolean
 }>()
+
+/** Only a turn running moves, and only while the field's motion runs. */
+const resting = computed(() => still || live?.state !== 'working')
 </script>
 
 <template>
@@ -39,7 +52,15 @@ const {
       :class="{ root }"
       :data-tone="statePresentation('work-item-node-marker', markerState).tone"
     />
-    <span class="flow-node-overview-reference">{{ reference }}</span>
+    <span class="flow-node-overview-reference"
+      >{{ reference
+      }}<span
+        v-if="live"
+        class="work-dots flow-node-overview-live"
+        aria-hidden="true"
+        :class="{ still: resting }"
+        ><i /><i /><i /></span
+    ></span>
   </span>
 </template>
 
@@ -86,5 +107,10 @@ const {
   white-space: nowrap;
   transform: scale(2.2);
   transform-origin: left center;
+}
+
+/* After the reference, grown with it. */
+.flow-node-overview-live {
+  margin-inline-start: var(--space-1);
 }
 </style>

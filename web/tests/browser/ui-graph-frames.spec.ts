@@ -144,7 +144,9 @@ test('zoomed out, a header is its reference over a thicker edge', async ({ page 
   const open = page.locator('.graph-frame:not(.folded)')
   await expect(open.locator('.graph-frame-reference')).toBeVisible()
   await expect(open.locator('.graph-frame-title')).toBeHidden()
-  await expect(open.locator('.graph-frame-count')).toHaveCount(0)
+  // The counts give way to the reference; work going on now is still said.
+  await expect(open.locator('.graph-frame-count:not(.graph-frame-working)')).toHaveCount(0)
+  await expect(open.locator('.graph-frame-working')).toBeVisible()
   const thickness = await open
     .locator('.frame-progress')
     .evaluate((edge) => edge.getBoundingClientRect().height)
