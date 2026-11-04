@@ -203,7 +203,7 @@ async function walkTargets(page: Page, inSight: boolean) {
 }
 
 for (const width of [1500, 390]) {
-  test(`the space's graph opens with open work in sight, though its first frame is finished, at ${width}px`, async ({
+  test(`the space's graph begins with open work and opens with it in sight at ${width}px`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 900 })
@@ -211,11 +211,11 @@ for (const width of [1500, 390]) {
     await page.goto(graphRoute({}))
     await expect(page.locator('.graph-canvas.settled')).toBeVisible()
     const open = openTargets()
-    // The field as it is read begins with a frame that holds nothing open.
+    // The broad space's smallest frames are finished epics' folded ones; the
+    // field as it is read still begins with open work.
     const [first] = await walkTargets(page, false)
-    expect(first).toMatch(/^frame:.+:fold$/u)
-    expect(open.has(first)).toBe(false)
-    // Yet the first screen shows open work: an open card, or a frame header holding some.
+    expect(open.has(first)).toBe(true)
+    // And the first screen shows it: an open card, or a frame header holding some.
     await expect
       .poll(async () => {
         const seen = await walkTargets(page, true)
@@ -235,18 +235,32 @@ async function tabIntoField(page: Page) {
   return focused(page)
 }
 
-test('Tab from the row above the field enters on a target in sight, and the camera stays at 390px', async ({
+/** Drag the field by `dx`, `dy` from near its bottom-right corner, where it is empty. */
+async function dragField(page: Page, dx: number, dy: number) {
+  const flow = await page.locator('.graph-flow').boundingBox()
+  const from = {
+    x: (flow?.x ?? 0) + (flow?.width ?? 0) - 20,
+    y: (flow?.y ?? 0) + (flow?.height ?? 0) - 120,
+  }
+  await page.mouse.move(from.x, from.y)
+  await page.mouse.down()
+  await page.mouse.move(from.x + dx, from.y + dy, { steps: 12 })
+  await page.mouse.up()
+}
+
+test('Tab from the row above the field enters where the operator moved the field, and the camera stays at 390px', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 900 })
   await serveBroadSpace(page)
   await page.goto(graphRoute({}))
   await expect(page.locator('.graph-canvas.settled')).toBeVisible()
+  // The operator drags the field to the left, past its first target.
+  await dragField(page, -320, -40)
+  const [first] = await walkTargets(page, false)
+  await expect.poll(() => walkTargets(page, true)).not.toContain(first)
   const pane = page.locator('.vue-flow__transformationpane')
   const camera = await pane.getAttribute('style')
-  // The field's first target as it is read is out of sight at this width.
-  const [first] = await walkTargets(page, false)
-  expect(await walkTargets(page, true)).not.toContain(first)
   // From the row's last control, Tab moves into the field.
   await page.locator('.graph [role="radio"][aria-checked="true"]').focus()
   const at = await tabIntoField(page)

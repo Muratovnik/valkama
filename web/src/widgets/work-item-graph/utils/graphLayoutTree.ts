@@ -7,7 +7,8 @@
  * the cards nothing links in another. So the space is cut into components
  * before ELK sees it — the top-level frames joined by a drawn line, and every
  * other frame alone — each laid out hierarchically and packed by `box` at the
- * root; inside a frame, the cards no line touches are packed by `box` too.
+ * root, those holding open work first; inside a frame, the cards no line touches
+ * are packed by `box` too.
  *
  * The hierarchical pass fails outright on options the flat one takes in its
  * stride: `considerModelOrder` and `wrapping` each end it with a TypeError.
@@ -169,6 +170,14 @@ function components(projection: FrameProjection): Frame[][] {
   return [...groups.values()].sort((left, right) => rank(left[0].id) - rank(right[0].id))
 }
 
+/**
+ * The priority of a component holding open work at the root. `box` places a
+ * higher priority first and, within one, the smaller first; without it the
+ * small folded frames of finished epics lead the field, and the open work
+ * stands a pan away from where the field is read.
+ */
+const OPEN_FIRST = 1
+
 /** The ELK graph of a space's frames: one component per node of the root. */
 export function frameGraph(projection: FrameProjection): ElkNode {
   const touched = new Set(projection.edges.flatMap((edge) => [edge.source, edge.target]))
@@ -186,7 +195,10 @@ export function frameGraph(projection: FrameProjection): ElkNode {
       for (const child of node.children ?? []) mark(child)
     }
     for (const node of nodes) mark(node)
-    return { id: `component:${index}`, layoutOptions: { ...HIERARCHY_OPTIONS }, children: nodes }
+    const layoutOptions = group.some((frame) => frame.open > 0)
+      ? { ...HIERARCHY_OPTIONS, 'elk.priority': String(OPEN_FIRST) }
+      : { ...HIERARCHY_OPTIONS }
+    return { id: `component:${index}`, layoutOptions, children: nodes }
   })
   for (const edge of projection.edges) {
     const component = children[home.get(edge.source) ?? -1] as ElkNode | undefined

@@ -128,6 +128,46 @@ describe.each(spaces)('the %s space laid out as frames', (_, make) => {
   })
 })
 
+describe('the order the root packs components in', () => {
+  // The broad space draws finished epics' frames apart from the open work; the
+  // deep one joins all it draws into one component.
+  it('puts a component holding open work before the finished ones', async () => {
+    const { model } = broadSpace()
+    const projection = frameProjection({
+      items: model.work_items,
+      links: model.links,
+      showDone: false,
+    })
+    const open = new Map(projection.frames.map((frame) => [frame.id, frame.open > 0]))
+    const holdsOpen = (component: ElkNode) =>
+      (component.children ?? []).some((child) => open.get(child.id))
+    const placed = await engine.layout(frameGraph(projection))
+    const read = [...(placed.children ?? [])].sort(
+      (left, right) => (left.y ?? 0) - (right.y ?? 0) || (left.x ?? 0) - (right.x ?? 0),
+    )
+    expect(read.some((component) => !holdsOpen(component))).toBe(true)
+    // The field as it is read begins with open work, not with finished frames.
+    expect(holdsOpen(read[0]), read[0].id).toBe(true)
+  })
+
+  it('gives a component with open work the higher priority, and a finished one none', () => {
+    const { model } = broadSpace()
+    const projection = frameProjection({
+      items: model.work_items,
+      links: model.links,
+      showDone: false,
+    })
+    const open = new Map(projection.frames.map((frame) => [frame.id, frame.open > 0]))
+    const graph = frameGraph(projection)
+    for (const component of graph.children ?? []) {
+      const holdsOpen = (component.children ?? []).some((child) => open.get(child.id))
+      expect(component.layoutOptions?.['elk.priority'], component.id).toBe(
+        holdsOpen ? '1' : undefined,
+      )
+    }
+  })
+})
+
 describe('lines to an epic', () => {
   it('route a link from open work to another epic up to that epic’s frame', async () => {
     const { model, epics } = broadSpace()

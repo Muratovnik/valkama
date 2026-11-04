@@ -5,6 +5,7 @@
  */
 import assert from 'node:assert/strict'
 
+import type { ElkNode } from 'elkjs/lib/elk-api'
 import ELK from 'elkjs/lib/elk.bundled.js'
 import { test } from 'vitest'
 
@@ -15,6 +16,7 @@ import {
   headerOnScreen,
 } from '@/widgets/work-item-graph/utils/graphCamera.ts'
 import { layout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
+import type { GraphLayoutEngine } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import { foldTarget, readingOrder, walkTargets } from '@/widgets/work-item-graph/utils/graphWalk.ts'
 
 import { broadSpace } from './fixtures/graphSpaces.ts'
@@ -25,6 +27,20 @@ const { model, epics } = broadSpace()
 const source = { nodes: model.work_items, edges: model.links }
 const space = (choices: Record<string, boolean> = {}) =>
   layout(source, engine, false, { kind: 'all', epicId: null, frames: { choices } })
+
+/**
+ * The same space packed without the priority that puts open work first: its
+ * small finished frames lead the field. A field begins that way still when the
+ * first component holding open work begins with a finished frame linked to it,
+ * which the camera and the keyboard must handle all the same.
+ */
+const unordered: GraphLayoutEngine = {
+  layout: (graph: ElkNode) => {
+    for (const component of graph.children ?? []) delete component.layoutOptions?.['elk.priority']
+    return engine.layout(graph)
+  },
+}
+const finishedFirst = () => layout(source, unordered, false, { kind: 'all', epicId: null })
 
 test('a field of frames too large to read opens on its first header at the top-left', async () => {
   const placed = await space()
@@ -42,7 +58,7 @@ test('a field of frames too large to read opens on its first header at the top-l
 })
 
 test('the keyboard enters where the camera looks: the first target in sight as the field is read', async () => {
-  const placed = await space()
+  const placed = await finishedFirst()
   const phone = { width: 302, height: 640 }
   const camera = graphCameraView(placed, phone)
   assert.ok(camera)
@@ -76,7 +92,7 @@ for (const field of [
   { width: 1175, height: 600 },
 ]) {
   test(`a field that begins with finished frames opens with open work in sight at ${field.width}px`, async () => {
-    const placed = await space()
+    const placed = await finishedFirst()
     const cards = new Map(placed.nodes.map((node) => [node.work_item_id, node]))
     const frames = new Map(placed.frames.map((frame) => [frame.id, frame]))
     const holdsOpen = (id: string, frameId: string) => {
@@ -102,6 +118,16 @@ for (const field of [
     )
   })
 }
+
+test('a field that begins with finished frames still opens on its beginning when open work is in sight there', async () => {
+  const placed = await finishedFirst()
+  const camera = graphCameraView(placed, dimensions)
+  assert.ok(camera)
+  // The finished frame the field begins with stands at the top-left, where it is read.
+  const [first] = walkTargets(placed).sort(readingOrder)
+  assert.ok(Math.abs(first.x * camera.zoom + camera.x - 32) < 0.5)
+  assert.ok(Math.abs(first.y * camera.zoom + camera.y - 16) < 0.5)
+})
 
 for (const [what, fold] of [
   ['folding an open frame', true],
