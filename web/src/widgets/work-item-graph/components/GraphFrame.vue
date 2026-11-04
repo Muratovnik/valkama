@@ -27,6 +27,7 @@ import { Handle, Position } from '@vue-flow/core'
 import GraphFrameProgress from '@/widgets/work-item-graph/components/GraphFrameProgress.vue'
 import { FRAME_HEADER, NO_EPIC_FRAME } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { PlacedFrame } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+import { foldIsTarget } from '@/widgets/work-item-graph/utils/graphWalk.ts'
 
 import { printsFacet } from '@/entities/work-item/utils/facets.ts'
 
@@ -68,6 +69,8 @@ const WHOLE = Number.MAX_SAFE_INTEGER
 /** The epic to open; the work under no epic has none. */
 const epic = computed(() => (frame.id === NO_EPIC_FRAME ? null : frame.epic))
 const foldTarget = computed(() => `frame:${frame.id}:fold`)
+/** The keyboard's rule: hidden in the overview where the epic's button stands beside it. */
+const foldShown = computed(() => foldIsTarget(frame, overview))
 const openTarget = computed(() => `frame:${frame.id}`)
 
 /** An epic says it is one; an item that grew children says it is an item. */
@@ -183,6 +186,7 @@ function onOpenBlur() {
       <button
         class="graph-frame-fold"
         type="button"
+        :class="{ concealed: !foldShown }"
         :aria-label="foldLabel"
         :aria-expanded="!frame.folded"
         :data-walk-target="foldTarget"
@@ -426,12 +430,13 @@ function onOpenBlur() {
 
 /* Zoomed out, the header is a band that still reads: the reference grown with
    the field, as a zoomed-out card's is, over a thicker edge. The work under no
-   epic has no reference, and keeps its name instead. */
-.graph-frame.overview {
-  .graph-frame-fold {
-    visibility: hidden;
-  }
+   epic has no reference, and keeps its name instead, and its fold, the one
+   button its header has (`foldIsTarget`). */
+.graph-frame-fold.concealed {
+  visibility: hidden;
+}
 
+.graph-frame.overview {
   .graph-frame-kind,
   .graph-frame-reference + .graph-frame-title {
     display: none;

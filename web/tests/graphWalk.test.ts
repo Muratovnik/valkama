@@ -169,7 +169,7 @@ test('along a header the arrows go from fold to open and back, however wide the 
   assert.equal(graphWalk(wide, foldTarget('W'), 'ArrowDown'), 'R')
 })
 
-test('zoomed out to the overview, a header has no fold target: it is hidden there', () => {
+test('zoomed out to the overview, an epic header has no fold target, and the work under none keeps it', () => {
   const graph = {
     frames: [
       frame('E', { x: 0, y: 0, width: 640, height: 200 }),
@@ -177,9 +177,11 @@ test('zoomed out to the overview, a header has no fold target: it is hidden ther
     ],
     nodes: [{ ...at('P', 0, 0), x: 16, y: 72, frameId: 'E' }],
   }
+  // The work under none has no other button in its header: it keeps its fold,
+  // or a field of it alone would take no focus at all.
   assert.deepEqual(
     walkTargets(graph, { overview: true }).map((target) => target.id),
-    [frameTarget('E'), 'P'],
+    [frameTarget('E'), foldTarget(NO_EPIC_FRAME), 'P'],
   )
   assert.deepEqual(
     walkTargets(graph, { overview: false }).map((target) => target.id),

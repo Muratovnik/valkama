@@ -64,10 +64,22 @@ export function headerBox(frame: PlacedFrame): Box {
 }
 
 /**
+ * Whether a frame's fold button is drawn and is a target. Zoomed out to the
+ * overview a header is a band, and its fold is hidden where the epic's own
+ * button stands beside it; a header with no other button — the work under
+ * none — keeps it, or a field of that frame alone would take no focus at all.
+ * The header's view reads this, so what is drawn and what the keyboard can
+ * reach are one rule.
+ */
+export function foldIsTarget(frame: Pick<PlacedFrame, 'epic'>, overview: boolean): boolean {
+  return !overview || frame.epic === null
+}
+
+/**
  * Every target on a laid-out field: its cards and the buttons of each frame's
- * header. Zoomed out to the overview a header is a band whose fold is hidden,
- * so the fold is no target there: the arrows, the Tab stop and the way in all
- * read this one list and never stand on a button the field does not show.
+ * header, the fold only where it is drawn (`foldIsTarget`). The arrows, the Tab
+ * stop and the way in all read this one list and never stand on a button the
+ * field does not show.
  */
 export function walkTargets(
   graph: {
@@ -92,7 +104,7 @@ export function walkTargets(
       frameId: frame.id,
       width: FOLD_TARGET_WIDTH,
     }
-    const folds = overview ? [] : [fold]
+    const folds = foldIsTarget(frame, overview) ? [fold] : []
     if (frame.epic === null) return folds
     const rest = header.width - FOLD_TARGET_WIDTH
     const open = { ...header, id: frameTarget(frame.id), frameId: frame.id }

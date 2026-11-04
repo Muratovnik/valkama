@@ -954,7 +954,8 @@ the header, since measured from centres a wide header's second button stands fur
 off than the first card under the fold. Once a fold hides
 the target the keyboard stood on, the field's Tab stop is the fold button of the
 innermost frame round it that is still drawn. Zoomed out past reading the fold is
-hidden and is no target at all: the arrows, the Tab stop and the way in read one
+hidden and is no target, except over the work under no epic, whose header has no
+other button and keeps it (`foldIsTarget`): the arrows, the Tab stop and the way in read one
 list of the targets the field draws at its zoom, so Tab never rests on a button
 that takes no focus and the field stays one stop at any zoom.
 

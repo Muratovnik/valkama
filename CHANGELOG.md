@@ -221,7 +221,8 @@ checkouts are therefore distinguishable even at the same version.
   enters the field where the camera looks: on the first heading or card in sight as the
   field is read, so the field does not jump to a block out of sight. Right from a heading's
   fold button is its epic's button, and Left goes back. Zoomed out past reading, where the
-  fold buttons are hidden, Tab still enters the field on a heading or card it draws.
+  fold buttons are hidden, Tab still enters the field on a heading or card it draws; the
+  work under no epic keeps its fold button there, its heading's one button.
 - **The graph's first layout no longer waits for its worker to load.** The worker starts
   when the page knows the graph is coming — the address names it, or the pointer or focus
   rests on the switch to it — and loads ELK while the space is read. A worker nobody takes

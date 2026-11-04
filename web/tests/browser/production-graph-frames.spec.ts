@@ -292,3 +292,57 @@ for (const width of [1500, 390]) {
     expect(await walkTargets(page, true)).toContain(at?.target)
   })
 }
+
+/** The suite's space holding only open work under no epic, too much of it to start open. */
+async function serveLooseSpace(page: Page) {
+  const { model } = broadSpace()
+  const loose = model.work_items
+    .filter((item) => item.parent_id === null && !item.container && item.kind !== 'epic')
+    .filter((item) => !item.state.is_terminal)
+    .slice(0, 25)
+  await installBackend(page)
+  await page.route('**/api/planning?*', async (route) => {
+    const response = planningReadFor(new URL(route.request().url()).searchParams)
+    if (response.status === 200 && 'work_items' in response.body) {
+      const body = response.body as unknown as Record<string, unknown>
+      body.workflow = model.workflow
+      body.work_items = loose
+      body.links = []
+    }
+    await route.fulfill({
+      status: response.status,
+      contentType: 'application/json',
+      body: JSON.stringify(response.body),
+    })
+  })
+}
+
+/** Press «Zoom out» until the field draws its overview. */
+async function zoomOutToOverview(page: Page) {
+  const zoomOut = page.getByRole('button', { name: 'Zoom out', exact: true })
+  for (let step = 0; step < 16; step += 1) {
+    if ((await page.locator('.graph-frame.overview').count()) > 0) return
+    await zoomOut.click()
+  }
+}
+
+test('a field of the work under none alone, folded, still takes Tab in the overview at 390px', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 900 })
+  await serveLooseSpace(page)
+  await page.goto(graphRoute({}))
+  await expect(page.locator('.graph-canvas.settled')).toBeVisible()
+  await expect(page.locator('.graph-flow .graph-frame')).toHaveCount(1)
+  await expect(page.locator('.graph-flow .graph-frame.folded')).toHaveCount(1)
+  await zoomOutToOverview(page)
+  await expect(page.locator('.graph-frame.overview')).toHaveCount(1)
+  await page.locator('.graph [role="radio"][aria-checked="true"]').focus()
+  const at = await tabIntoField(page)
+  expect(at?.target).toBe('frame:none:fold')
+  const shown = await page.evaluate(() => {
+    const element = document.activeElement
+    return element instanceof HTMLElement ? getComputedStyle(element).visibility : ''
+  })
+  expect(shown).toBe('visible')
+})
