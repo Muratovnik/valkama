@@ -921,7 +921,9 @@ the field. A frame is told by tone and draws no line: it is ground a step above 
 field and its cards a step above it, and a frame inside a frame is a well cut a
 step below the one it stands in. Without a filter the field draws every frame with
 open work and every open epic, and in «All» every epic; under a filter, as on the
-board, only a frame the filter found something in. A frame has three readings.
+board, only a frame the filter found something in. So every item is on the field,
+as a card or as the frame it heads, and the open-or-all switch counts the items the
+counts line above it counts. A frame has three readings.
 Open, it is its header over its cards. Folded, it is the header alone, a little
 wider than a card so its counts fit. Zoomed out past reading, the header is the
 epic's reference grown with the field, as a zoomed-out card's is, with the count of
@@ -981,7 +983,7 @@ which the press then brings into view; the camera does not move for a target
 already in sight.
 
 A header says how its work stands in words, a number beside each word and never
-rounded to «99+»: «8 из 21 готово», then how many are in review, in progress and
+rounded to «99+»: «8 из 21 выполнено», then how many are in review, in progress and
 blocked, each only when it is not zero, and how many are being worked on now. The
 epic's state is said once it has moved, and quietly on a closed epic that still
 holds open work. Only the title gives way when the row is short; the counts are
@@ -992,7 +994,8 @@ share, in the board's hues, and a part too short to see still a dot. The counts
 describe the epic and not the view: every item under the frame, open and closed,
 nested frames' included, whatever is drawn or a filter lets through. Over the whole
 space the key names the parts the frames' edges draw, «Впереди» for queued and
-backlog together.
+backlog together, and finished work by the board's word, «Выполнено», which the
+header's count says too.
 
 A link is drawn between the drawn ends it reaches: a card, an epic's frame, or the
 outermost folded frame the card stands in. So a link to an epic ends on its frame
@@ -1007,7 +1010,9 @@ block is the one hard dependency, and dashed as context otherwise.
 Live work is what the read model's `live_work` says an agent's session is doing on
 an item now. A card says it at its foot as the working dots and a word: «работает»
 (`working`), «у сессии» (`held`), «ждёт» (`waiting`) or «молчит с <date>»
-(`quiet`). Only `working` moves: an item a session at work (its turn running, or a
+(`quiet`). The word is the one mark of the state that is not a colour, so it never
+gives way: the holder's name beside it is cut first, and the card's accessible name
+says that name whole. Only `working` moves: an item a session at work (its turn running, or a
 subagent of it) wrote to since the last message a person sent it — a claim, a step,
 a comment, a link from it — whether or not it holds the item, by itself or through
 a subagent; an item one of its subagents holds a step of; and an item Valkama runs
@@ -1025,6 +1030,9 @@ and the strip offers the switch that stops it, only while something on the field
 drawn card being worked on, or a frame, folded or open, that counts work moving
 under it. Work the filter or the chain leaves off the field moves nothing there.
 The key names the still dots of held work while a card on the field shows them.
+In a forced palette the dots keep their fill in the palette's text colour, wherever
+they are drawn, the loading panel's included: a palette clears every fill to its
+ground, and three dots made of a fill would vanish with it.
 
 Moving work starts by itself and lasts as long as the work, so the reader can stop
 it (WCAG 2.2.2): one button in the strip above the flow, «Остановить движение» and

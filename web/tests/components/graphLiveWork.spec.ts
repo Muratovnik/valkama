@@ -46,7 +46,7 @@ describe('a card with live work', () => {
     expect(wrapper.get('.graph-live-word').text()).toBe('working')
     expect(wrapper.get('.graph-live .work-dots').classes()).not.toContain('still')
     expect(wrapper.get('.flow-node-card').attributes('aria-label')).toBe(
-      'MAIN-7 Item 7 · Dev · working',
+      'MAIN-7 Item 7 · Dev · Assigned to agent-1 · working',
     )
   })
 
@@ -62,7 +62,7 @@ describe('a card with live work', () => {
     expect(wrapper.get('.graph-live-word').text()).toBe('у сессии')
     expect(wrapper.get('.graph-live .work-dots').classes()).toContain('still')
     expect(wrapper.get('.flow-node-card').attributes('aria-label')).toBe(
-      'MAIN-7 Item 7 · Dev · у сессии',
+      'MAIN-7 Item 7 · Dev · Закреплено за agent-1 · у сессии',
     )
   })
 
@@ -84,7 +84,9 @@ describe('a card with live work', () => {
     const wrapper = card(null)
     expect(wrapper.find('.graph-live').exists()).toBe(false)
     expect(wrapper.find('.work-dots').exists()).toBe(false)
-    expect(wrapper.get('.flow-node-card').attributes('aria-label')).toBe('MAIN-7 Item 7 · Dev')
+    expect(wrapper.get('.flow-node-card').attributes('aria-label')).toBe(
+      'MAIN-7 Item 7 · Dev · Assigned to agent-1',
+    )
   })
 
   it('zoomed out, carries the dots after its reference', () => {
@@ -122,7 +124,7 @@ describe('a frame with live work under it', () => {
     const wrapper = frame(2)
     expect(wrapper.get('.graph-frame-working').text().replaceAll(/\s+/gu, ' ')).toBe('2 работают')
     expect(wrapper.get('button.graph-frame-open').attributes('aria-label')).toBe(
-      'Эпик MAIN-12 «Frames» · 1 из 3 готово · 2 в работе · 2 работают',
+      'Эпик MAIN-12 «Frames» · 1 из 3 выполнено · 2 в работе · 2 работают',
     )
   })
 

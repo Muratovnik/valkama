@@ -346,3 +346,17 @@ test('a field of the work under none alone, folded, still takes Tab in the overv
   })
   expect(shown).toBe('visible')
 })
+
+test('the open-or-all switch counts the items the counts line counts', async ({ page }) => {
+  await page.setViewportSize({ width: 1500, height: 900 })
+  await serveBroadSpace(page)
+  await page.goto(graphRoute({}))
+  await expect(page.locator('.graph-canvas.settled')).toBeVisible()
+  // «352 open of 1397»: every item, an epic heading its frame among them.
+  const line = await page.locator('.workspace-figures').textContent()
+  const figures = /(\d+) open of (\d+)/u.exec(line ?? '')
+  expect(figures).not.toBeNull()
+  const [, open, total] = figures ?? []
+  await expect(page.getByRole('radio', { name: `Open · ${open}`, exact: true })).toBeVisible()
+  await expect(page.getByRole('radio', { name: `All · ${total}`, exact: true })).toBeVisible()
+})

@@ -220,3 +220,22 @@ for (const colorScheme of ['dark', 'light'] as const)
     expect(paint.disc).not.toBe('')
     expect(paint.disc).not.toBe(paint.ground)
   })
+
+for (const colorScheme of ['dark', 'light'] as const)
+  test(`in the ${colorScheme} forced palette a read under way keeps its dots`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme, forcedColors: 'active' })
+    const panel = await cardReading(page, 'waits')
+    await expect(panel).toHaveAttribute('aria-busy', 'true')
+    const paint = await panel.evaluate((node) => ({
+      dots: [...node.querySelectorAll('.work-dots i')].map(
+        (dot) => getComputedStyle(dot).backgroundColor,
+      ),
+      ground: getComputedStyle(document.body).backgroundColor,
+    }))
+    // The palette cleared a fill drawn in the text's colour to the ground, and the dots with it.
+    expect(paint.dots).toHaveLength(3)
+    for (const dot of paint.dots) {
+      expect(dot).not.toBe('rgba(0, 0, 0, 0)')
+      expect(dot).not.toBe(paint.ground)
+    }
+  })

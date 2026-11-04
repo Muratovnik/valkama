@@ -148,16 +148,10 @@ const frameById = computed(
 )
 
 /** The card drawn at a place: none, or one. */
-function cardAt(id: string): PlacedNode[] {
-  const node = cardById.value.get(id)
-  return node ? [node] : []
-}
+const cardAt = (id: string) => [cardById.value.get(id)].filter((node) => node !== undefined)
 
 /** The frame drawn at a place: none, or one. */
-function frameAt(id: string): PlacedFrame[] {
-  const frame = frameById.value.get(id)
-  return frame ? [frame] : []
-}
+const frameAt = (id: string) => [frameById.value.get(id)].filter((frame) => frame !== undefined)
 
 /**
  * The items whose live work moves: worked on in a turn running now. A line runs when one
@@ -230,6 +224,16 @@ const { anchorId, fitted, fitOptions, holdFrame, overview, onFlowInit, reveal } 
 
 /** The chain has closed members, so the key keeps the place «Done» comes and goes from. */
 const keepDone = computed(() => inChain.value && hiddenDone.value > 0)
+/**
+ * What the open-or-all switch counts. The whole space draws every item, as a card or as
+ * the frame it heads, so the switch counts the items the counts line above counts; a
+ * chain counts the nodes it draws.
+ */
+const switchCounts = computed(() => {
+  if (props.scopeKind !== 'all') return { open: openTotal.value, done: hiddenDone.value }
+  const open = props.items.filter((item) => !item.state.is_terminal).length
+  return { open, done: props.items.length - open }
+})
 const hasEdges = computed(() => Boolean(placed.value?.edges.length))
 /** A frame's edge parts, in the order an edge runs, and the group whose key names each. */
 const FRAME_PARTS = [
@@ -338,8 +342,8 @@ function onFieldPointerLeave() {
       v-model:show-done="showDone"
       :chain="chainChip"
       :branch="branchChip"
-      :open-total="openTotal"
-      :hidden-done="hiddenDone"
+      :open-total="switchCounts.open"
+      :hidden-done="switchCounts.done"
       :ready-count="ready.length"
       :keyed="keyed"
       @exit-chain="emit('exit-chain')"
@@ -485,8 +489,10 @@ function onFieldPointerLeave() {
 
   /* The key's row is one line tall whether or not it draws anything yet, so a
      switch that brings the first link or state into it moves no node — and
-     neither does the layout's own status, which stands at its start. */
-  min-height: calc(24px + 2 * var(--space-2));
+     neither does the layout's own status, which stands at its start. It is as
+     tall as a pointer target, so the motion switch's target fits inside it:
+     shorter, the flow under it and the field's edge above took its ends. */
+  min-height: var(--size-control-target);
   padding: var(--space-2) var(--space-3);
 }
 </style>

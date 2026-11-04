@@ -194,3 +194,25 @@ test('with the switch not offered, the strip keeps the switch’s place', async 
   const withdrawn = await page.locator('.graph-harness-strip').boundingBox()
   expect(withdrawn).toEqual(offered)
 })
+
+for (const colorScheme of ['dark', 'light'] as const)
+  test(`in the ${colorScheme} forced palette the working dots stay drawn, on a card and in the key`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme, forcedColors: 'active' })
+    await page.goto(surface('held'))
+    await settled(page)
+    const paint = await page.evaluate(() => {
+      const ground = getComputedStyle(document.body).backgroundColor
+      const dots = [
+        ...document.querySelectorAll('.graph-live .work-dots i, .graph-legend-held .work-dots i'),
+      ]
+      return { ground, dots: dots.map((dot) => getComputedStyle(dot).backgroundColor) }
+    })
+    // Two cards' marks and the key's sample, three dots each.
+    expect(paint.dots).toHaveLength(9)
+    for (const dot of paint.dots) {
+      expect(dot).not.toBe('rgba(0, 0, 0, 0)')
+      expect(dot).not.toBe(paint.ground)
+    }
+  })

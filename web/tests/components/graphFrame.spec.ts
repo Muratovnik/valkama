@@ -73,13 +73,13 @@ describe("a frame's header", () => {
 
   it('takes the Russian plural of each word from its own number', () => {
     const one = header({ frame: frame({ progress: progress({ done: 1, blocked: 1 }) }) }, 'ru')
-    expect(countsOf(one)).toEqual(['1 из 2 готово', '1 заблокирована'])
+    expect(countsOf(one)).toEqual(['1 из 2 выполнено', '1 заблокирована'])
     one.unmount()
     const few = header({ frame: frame({ progress: progress({ review: 3, blocked: 4 }) }) }, 'ru')
-    expect(countsOf(few)).toEqual(['0 из 7 готово', '3 на проверке', '4 заблокированы'])
+    expect(countsOf(few)).toEqual(['0 из 7 выполнено', '3 на проверке', '4 заблокированы'])
     few.unmount()
     const many = header({ frame: frame({ progress: progress({ blocked: 15 }) }) }, 'ru')
-    expect(countsOf(many)).toEqual(['0 из 15 готово', '15 заблокировано'])
+    expect(countsOf(many)).toEqual(['0 из 15 выполнено', '15 заблокировано'])
   })
 
   it('stands each number beside its word rather than inside the translated words', () => {
@@ -120,7 +120,7 @@ describe("a frame's header", () => {
     expect(fold.attributes('aria-label')).toBe('Развернуть эпик MAIN-12 «Frames on the graph»')
     expect(fold.attributes('aria-expanded')).toBe('false')
     expect(wrapper.get('.graph-frame').classes()).toContain('folded')
-    expect(countsOf(wrapper)).toEqual(['8 из 21 готово', '2 в работе', '1 заблокирована'])
+    expect(countsOf(wrapper)).toEqual(['8 из 21 выполнено', '2 в работе', '1 заблокирована'])
     expect(wrapper.findAll('.frame-progress-part')).toHaveLength(4)
   })
 

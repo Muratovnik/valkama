@@ -115,6 +115,7 @@ const accessibleName = computed(() =>
     `${node.reference} ${node.title}`,
     node.state.name,
     ...(readinessLabel.value ? [readinessLabel.value] : []),
+    ...(holder.value ? [`${ownerLabel.value} ${holderName(holder.value)}`] : []),
     ...(live ? [liveWord(live)] : []),
     ...(root ? [t('graph.rootLabel')] : []),
   ].join(' · '),
@@ -380,7 +381,11 @@ const accessibleName = computed(() =>
   text-overflow: ellipsis;
 }
 
+/* The holder's name gives way to the live word beside it; the card's
+   accessible name keeps it whole. */
 .flow-node-owner-name {
+  flex: 1 1 auto;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

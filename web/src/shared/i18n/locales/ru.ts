@@ -238,7 +238,7 @@ export const ru = {
       unfoldParent: 'Развернуть задачу {reference} «{title}»',
       foldNone: 'Свернуть работу без эпика',
       unfoldNone: 'Развернуть работу без эпика',
-      doneOf: '{done} из {total} готово',
+      doneOf: '{done} из {total} выполнено',
       review: 'на проверке',
       active: 'в работе',
       blocked: 'заблокирована | заблокированы | заблокировано',

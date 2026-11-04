@@ -77,6 +77,15 @@
   }
 }
 
+/* A forced palette clears every fill to its ground, and a dot is a fill, so it
+   would vanish. It is painted in the palette's own text colour instead. */
+@media (forced-colors: active) {
+  .work-dots i {
+    background: CanvasText;
+    forced-color-adjust: none;
+  }
+}
+
 .sortable-ghost {
   opacity: 0.35;
 }

@@ -39,18 +39,17 @@ const resting = computed(() => still || live.state !== 'working')
 </template>
 
 <style scoped>
+/* The word is the one mark of the state that is not a colour, so it never
+   gives way: whatever stands beside it does. */
 .graph-live {
   display: inline-flex;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   gap: var(--space-1);
   align-items: center;
-  min-width: 0;
   color: var(--color-info);
 }
 
 .graph-live-word {
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 </style>

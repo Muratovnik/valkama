@@ -35,7 +35,8 @@ checkouts are therefore distinguishable even at the same version.
   line takes the palette's colour for what is picked out. The switch and the key's live
   line are offered only while something on the field moves, so work a filter or a chain
   leaves out brings neither, and a refresh that makes a line live or still changes it at
-  once.
+  once. A card's live word is never cut: a long holder's name beside it gives way, and the
+  card's accessible name says the holder whole. The switch answers a pointer across 44px.
 - **The graph draws an epic as a frame round its work.** The frame's header names the epic,
   its state once it has moved, and how its work stands in words — «8 of 21 done · 2 in
   progress · 1 blocked» — over a 3px edge of the same counts in the board's hues. The
@@ -191,6 +192,10 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Changed
 
+- **The graph's open-or-all switch counts what the counts line counts.** Over the whole
+  space every item is on the field, as a card or as the frame it heads, so «Open» and «All»
+  now count epics and parent items too, and agree with «N open of M» above them rather
+  than counting cards alone.
 - **The space's graph is laid out by epic.** Each epic, and each item that grew children,
   holds its work in a block of its own, and the work under no epic holds the rest, so every
   open item is on the field and the «Unlinked» switch is gone. A block with no open work or
@@ -333,6 +338,9 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- **The working dots stay drawn in a forced palette.** They are a fill in the text's colour,
+  which a forced palette clears to its ground, so a loading panel, a card's live mark, a
+  frame's count and the graph's key all lost them; they now keep the palette's text colour.
 - **A name over a changed answer reads whole on a phone.** «changed · time» took most of a
   narrow card's line, and the agent's name beside it stood in what was left, a word fragment
   to a line, broken inside its words. The time stays at the end of the name's first line
