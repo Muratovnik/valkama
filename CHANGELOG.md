@@ -336,6 +336,10 @@ checkouts are therefore distinguishable even at the same version.
   case folded and read, resolved and opened files in it as the project's own. The path a link
   leads to is now compared with the root as the disk spells both, and the sibling is
   `outside_root`.
+- **A document is read only from the file the check passed.** `GET /api/documents/read`
+  checked where a path leads and then opened it by name, so a folder on the way swapped for a
+  junction in that moment had a file outside every project read. The path of the open file
+  is now checked again before anything is read, and one outside is `outside_root`.
 
 ## [2.4.0](https://github.com/Muratovnik/valkama/compare/v2.3.0...v2.4.0) - 2026-11-03
 

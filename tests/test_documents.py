@@ -263,9 +263,7 @@ class CaseExactTests(LocateHarness):
         self.assertEqual("outside_root", answered[0].get("code"))
 
 
-class RedirectionTests(LocateHarness):
-    """`os.path.realpath` is what these exercise, on real reparse points."""
-
+class JunctionHarness(LocateHarness):
     def make_junction(self, link: Path, target: Path) -> None:
         made = processes.run_text(
             ["cmd.exe", "/d", "/c", "mklink", "/J", str(link), str(target)],
@@ -276,6 +274,10 @@ class RedirectionTests(LocateHarness):
         self.assertEqual(0, made.returncode, made.stdout + made.stderr)
         # Removing a junction must leave what it points at alone.
         self.addCleanup(os.rmdir, link)
+
+
+class RedirectionTests(JunctionHarness):
+    """`os.path.realpath` is what these exercise, on real reparse points."""
 
     @unittest.skipUnless(os.name == "nt", "a junction is a Windows reparse point")
     def test_a_junction_out_of_a_root_is_outside_with_or_without_a_file_behind_it(self) -> None:
@@ -301,6 +303,63 @@ class RedirectionTests(LocateHarness):
         dangling = self.workspace / "dangling.md"
         dangling.symlink_to(self.outside / "absent.md")
         self.assertEqual("outside_root", self.refused("dangling.md"))
+
+
+class SwappedAfterTheCheckTests(JunctionHarness):
+    """A folder replaced by a junction between `locate` and the read.
+
+    `locate` answers from `realpath`, and the read opens the path by name a moment
+    later; what is checked then is where the open file really is.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.swapped = self.workspace / "swap"
+        self.swapped.mkdir()
+        (self.swapped / "s.md").write_bytes(b"# inside\n")
+        (self.outside / "s.md").write_bytes(b"# outside\n")
+        self.registry = registry_bytes([project_entry("workspace", self.workspace)])
+
+    def read_after(self, change) -> dict[str, object]:
+        """`read_markdown`, with `change` made once the path was checked."""
+
+        checked = documents.locate
+
+        def then_changed(*args, **kwargs):
+            answer = checked(*args, **kwargs)
+            change()
+            return answer
+
+        with mock.patch.object(documents, "locate", side_effect=then_changed):
+            return documents.read_markdown("workspace", "swap/s.md", reader=lambda: self.registry)
+
+    def swap_to(self, target: Path) -> None:
+        for child in self.swapped.iterdir():
+            child.unlink()
+        self.swapped.rmdir()
+        self.make_junction(self.swapped, target)
+
+    @unittest.skipUnless(os.name == "nt", "a junction is a Windows reparse point")
+    def test_a_folder_swapped_for_a_junction_out_is_not_read(self) -> None:
+        with self.assertRaises(documents.DocumentError) as refused:
+            self.read_after(lambda: self.swap_to(self.outside))
+        self.assertEqual("outside_root", refused.exception.code)
+
+    @unittest.skipUnless(os.name == "nt", "a junction is a Windows reparse point")
+    def test_a_folder_swapped_for_a_junction_that_stays_inside_is_read(self) -> None:
+        (self.workspace / "elsewhere").mkdir()
+        (self.workspace / "elsewhere" / "s.md").write_bytes(b"# moved inside\n")
+        read = self.read_after(lambda: self.swap_to(self.workspace / "elsewhere"))
+        self.assertEqual(("swap/s.md", "# moved inside\n"), (read["path"], read["markdown"]))
+
+    def test_the_file_opened_is_compared_with_the_root(self) -> None:
+        # Where no junction can be made, the same decision on the opened path alone.
+        elsewhere = str(self.outside / "s.md")
+        with mock.patch.object(documents, "_opened_path", return_value=elsewhere):
+            with self.assertRaises(documents.DocumentError) as refused:
+                self.read_after(lambda: None)
+        self.assertEqual("outside_root", refused.exception.code)
+        self.assertEqual("# inside\n", self.read_after(lambda: None)["markdown"])
 
 
 class AnswerTests(LocateHarness):

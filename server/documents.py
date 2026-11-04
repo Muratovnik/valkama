@@ -336,10 +336,64 @@ def resolve_paths(
     return [_resolved(raw, locate(raw, base=base, roots=roots, nested=nested)) for raw in paths]
 
 
-def _read_bounded(path: str) -> tuple[bytes, os.stat_result]:
-    """At most one byte over the limit, so a file that grew after `stat` cannot pass."""
+if sys.platform == "win32":
+
+    def _opened_path(descriptor: int, _path: str) -> str:
+        """Where an open file is, as the system names it now; "" when it cannot say."""
+
+        import ctypes
+        import msvcrt
+        from ctypes import wintypes
+
+        final_path = ctypes.WinDLL("kernel32", use_last_error=True).GetFinalPathNameByHandleW
+        final_path.argtypes = (wintypes.HANDLE, wintypes.LPWSTR, wintypes.DWORD, wintypes.DWORD)
+        final_path.restype = wintypes.DWORD
+        handle = msvcrt.get_osfhandle(descriptor)
+        size = 512
+        while True:
+            buffer = ctypes.create_unicode_buffer(size)
+            # 0 is FILE_NAME_NORMALIZED with VOLUME_NAME_DOS, what `realpath` asks for too.
+            length = final_path(handle, buffer, size, 0)
+            if length == 0:
+                return ""
+            if length < size:
+                break
+            size = length + 1
+        name = buffer.value
+        if name.startswith("\\\\?\\UNC\\"):
+            return "\\\\" + name[len("\\\\?\\UNC\\") :]
+        return name.removeprefix("\\\\?\\")
+
+else:
+
+    def _opened_path(descriptor: int, path: str) -> str:
+        """Where an open file is: its descriptor's link, or the path if it is that file now."""
+
+        try:
+            return os.readlink(f"/proc/self/fd/{descriptor}")
+        except OSError:
+            pass
+        real = os.path.realpath(path)
+        try:
+            now = os.stat(real)
+        except OSError:
+            return ""
+        opened = os.fstat(descriptor)
+        return real if (now.st_dev, now.st_ino) == (opened.st_dev, opened.st_ino) else ""
+
+
+def _read_bounded(path: str, root: str) -> tuple[bytes, os.stat_result]:
+    """The file at `path` if it is still under `root` once open, read to one byte past the limit.
+
+    `locate` checked the path, and `open` takes it by name a moment later: a folder
+    on the way swapped for a junction in between would open a file outside. So the
+    open file's own path is checked, and nothing is read from one outside. One byte
+    over the limit is enough to tell a file that grew after `stat`.
+    """
 
     with open(path, "rb") as handle:
+        if _relative_in(root, _opened_path(handle.fileno(), path)) is None:
+            raise DocumentError("outside_root")
         return handle.read(MAX_DOC_BYTES + 1), os.fstat(handle.fileno())
 
 
@@ -362,7 +416,7 @@ def read_markdown(
     if not located.markdown:
         raise DocumentError("not_markdown")
     try:
-        data, status = _read_bounded(located.absolute)
+        data, status = _read_bounded(located.absolute, root.path)
     except OSError as error:
         print(f"Valkama could not read a document: {error}", file=sys.stderr)  # noqa: T201
         raise DocumentError("unreadable") from error

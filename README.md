@@ -774,7 +774,8 @@ absolute one `outside_root`.
 
 `GET /api/documents/read?project=<id>&path=<relative>` reads one Markdown file,
 taking `project` and `relative` from `resolve`. The path is checked again, inside
-that project and no other:
+that project and no other, and once more on the file it opened, before a byte is
+read: a folder on the way swapped for a junction out in between is `outside_root`.
 
 ```json
 {"project": "example-project", "path": "docs/plan.md", "markdown": "...", "size": 65145,

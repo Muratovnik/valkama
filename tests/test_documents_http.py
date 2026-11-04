@@ -382,7 +382,7 @@ class ReadTests(DocumentRoutesHarness):
     def test_a_read_takes_one_byte_past_the_limit_and_no_more(self) -> None:
         limit = documents.MAX_DOC_BYTES
         path = write(self.workspace / "huge.md", b"a" * (limit + 4096))
-        data, status = documents._read_bounded(str(path))
+        data, status = documents._read_bounded(str(path), str(self.workspace))
         self.assertEqual(limit + 1, len(data))
         self.assertEqual(limit + 4096, status.st_size)
 
