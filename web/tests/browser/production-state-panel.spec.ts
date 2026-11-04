@@ -138,20 +138,20 @@ test('a failed read of the alerts lies inside its settings group, apart from the
 
 const BUSY = { status: 503, json: { error: { code: 'busy' } } }
 
+/** The Work module whose read failed: the panel on the workspace panel, in the module's frame. */
+async function openModule(page: Page) {
+  await page.route('**/api/planning?*', (route) => route.fulfill(BUSY))
+  await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
+  return page.locator('.planning-frame .platform-state-panel')
+}
+
 /**
  * Where a failed read lies on the workspace panel itself, and how each is brought about.
  * The sheet stands two steps above that panel, 1.41 to it, which reads as a panel lifted
  * off the page rather than lying on it.
  */
 const ON_THE_WORKSPACE: { name: string; open: (page: Page) => Promise<Locator> }[] = [
-  {
-    name: 'the module',
-    open: async (page) => {
-      await page.route('**/api/planning?*', (route) => route.fulfill(BUSY))
-      await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
-      return page.locator('.planning-frame .platform-state-panel')
-    },
-  },
+  { name: 'the module', open: openModule },
   {
     name: 'every project’s work',
     open: async (page) => {
@@ -198,4 +198,25 @@ for (const { name, open } of ON_THE_WORKSPACE)
     const ratio = await seam(panel)
     expect(ratio).toBeGreaterThanOrEqual(1.15)
     expect(ratio).toBeLessThan(1.3)
+  })
+
+for (const colorScheme of ['dark', 'light'] as const)
+  test(`in the ${colorScheme} forced palette a failed read keeps the disc that says so`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme, forcedColors: 'active' })
+    await page.setViewportSize({ width: 1500, height: 900 })
+    await installBackend(page)
+    const panel = await openModule(page)
+    await expect(panel).toBeVisible()
+    const paint = await panel.evaluate((node) => {
+      const mark = node.querySelector('.platform-state-mark')
+      return {
+        disc: mark ? getComputedStyle(mark, '::before').backgroundColor : '',
+        ground: getComputedStyle(node).backgroundColor,
+      }
+    })
+    // The palette cleared the disc's red to the ground, and only the edge was left.
+    expect(paint.disc).not.toBe('')
+    expect(paint.disc).not.toBe(paint.ground)
   })

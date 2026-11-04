@@ -1129,6 +1129,12 @@ an element only the interface focuses. A text field shows focus by turning its o
 edge the focus colour, for a press as for Tab, and that colour holds 3:1 on every
 ground and fill it stands against.
 
+A forced palette clears every background, so a mark drawn as a fill — a status disc,
+a switch's knob, a grip — names a system colour itself and stands out of the palette's
+reach with `forced-color-adjust: none`: `CanvasText` for a mark that says a state,
+`Highlight` for what is chosen. The palette has no colour for danger; a failure keeps
+its disc and its edge in the palette's ink, and its words say the rest.
+
 Russian and English are equal layout cases, not a base language and a
 translation: a rule that only holds while the shorter string is on screen does
 not hold.

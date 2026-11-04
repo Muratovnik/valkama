@@ -231,6 +231,18 @@ const failed = computed(
   border-radius: 50%;
 }
 
+/* A forced palette clears every background, and the disc with it, which left the edge
+   alone to say something failed. The palette has no colour for danger, so the disc takes
+   its ink, as a drawn mark does elsewhere, out of the palette's reach. Written outside the
+   rule above, because a nested rule names its parent through `&`, which cannot stand for
+   a pseudo-element. */
+@media (forced-colors: active) {
+  .platform-state-mark::before {
+    background: CanvasText;
+    forced-color-adjust: none;
+  }
+}
+
 .platform-state-banner {
   display: flex;
   gap: var(--space-3);

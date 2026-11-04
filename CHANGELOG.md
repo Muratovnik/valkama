@@ -452,6 +452,9 @@ checkouts are therefore distinguishable even at the same version.
   two steps up, and stood off the page at 1.41 instead of lying on it at 1.16. Those hosts
   now give it the ground's tone; in a card, a document and a settings group it keeps the
   sheet.
+- **A failed read keeps its disc in a forced palette.** With Windows contrast themes on, the
+  palette cleared the red disc beside «Could not load this view» to the ground, and only the
+  edge was left to say something failed. The disc now takes the palette's text colour.
 
 ### Removed
 
