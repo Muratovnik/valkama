@@ -16,33 +16,95 @@ checkouts are therefore distinguishable even at the same version.
   a second, or reach it with Tab, to see its state, title, holder and steps without leaving
   what you are reading. A press still opens the item, Escape closes only the card, and a tap
   opens the item with no card. A number in the open space costs no request; any other reads
-  the item's brief record once.
-- **A session opens where it was last open.** The holder in a card's head, a step's holder, an
-  agent, an attempt and a link name the place before the click, and a press opens the session
-  there: the VS Code extension, Claude Desktop, the Codex app or a terminal, with VS Code when the
-  place is unknown. A subagent opens through its parent. A session live in a terminal is not
-  started a second time: the button says where it runs, and once it has been silent for a day
-  offers, on a press of its own, to resume it if its window is closed. A session its client no
-  longer keeps says so instead of opening an empty one. Settings → Opening sessions and files
-  sets the place to fall back to for each client family, or one to always open in, and the
-  editor files and folders open in. `GET /api/open-plan` answers the steps a press takes and
-  `GET /api/open-places` what this machine can open; the desktop app runs the steps, a browser
-  takes one press for each.
-- **An item's plan anchor opens in Valkama.** The mark beside a card's source and its row in
-  Relations open the plan in the document viewer at the anchor, in a browser and in the desktop
-  app alike. A source Valkama cannot find is copied as written, and the notice says why.
+  the item's brief record once, which the card's read gives with `brief=true`.
+- **Comments form threads.** A reply stands under the comment, report or question it
+  answers, one level deep. In a card a question has replies of its own, with the field for
+  the next one in the same place, and threads open by their latest activity and hold still
+  while the card is open: a thread with news says «New reply» rather than moving. An agent
+  replies with `reply_to`, a comment's id, or `reply_to_request`, a question's id, on
+  `comment_work_item`, the `comment` group of `apply_work_item_changes` and
+  `POST /api/planning/work-item/comment`; a reply to a reply stands under its root, and the
+  answer names the root it joined. `get_work_item` takes `thread` to read one thread whole,
+  every comment in every read names its parent and carries `by_person` and `resolution`, and
+  `get_work_item_request` carries a question's replies. An export carries the new keys under
+  the same `interface_version`. See
+  [Threads and the resolved mark](docs/connection-contract.md#threads-and-the-resolved-mark).
+- **A thread can be marked resolved.** A mark holds who, when and a one-line decision; in a
+  card it folds the thread to one line and can be taken back, the heading counts what is
+  still open, and a filter shows only that. `resolve_work_item_comment`,
+  `POST /api/planning/work-item/comment/resolve` and the `resolutions` group of
+  `apply_work_item_changes`, up to 100 roots in one call, set it, and `reopen` takes it off.
+  The history records both as `comment_resolved` and `comment_reopened`, and no revision
+  changes. `get_work_item` with `unresolved: true` reads the roots without a mark, 20 at a
+  time, continuing with `comments_after`, and its counted reads add `unresolved_total`. A
+  search also finds an item by a mark's decision.
+- **An answer can carry an own option and comments, and be changed.** Every field with
+  options has «Your own option» as its last row, and a comment on a field or on the question
+  goes beside the choice; an agent sends them as `own` and `field_notes` beside `note` on
+  `answer_work_item_request`. An answered question shows every option of every field with
+  the chosen one set apart, and while its task is open it offers «Change answer»: the same
+  form on the answer in force, Save off until it differs, and Cancel asking before it
+  discards anything. An agent changes an answer with `change: true`, and the interface
+  through `POST /api/modules/planning/request/change`; a change that alters nothing and a
+  51st version are refused. The replaced answers are kept, behind «Previous answers» in the
+  card: the reads add `answer_version`, the compact form `previous` and the whole form
+  `history`, a changed answer comes again to a reader that passes `answered_after`, and a
+  person's change reaches the agent as `question_changed`. An export carries the new keys.
+  See [Questions and decisions](docs/connection-contract.md#questions-and-decisions).
+- **A path in a text opens what it names.** A path to a project's file or folder in a card or
+  a question, written in the text, in a code span or as a Markdown link, can be pressed: a
+  Markdown file opens in Valkama, another file in the editor Settings names at its line, and a
+  folder in that editor. A path that is surely one but opens nothing copies itself instead,
+  with a dotted underline; one that only looks like a path stays text until the server
+  confirms it. The page asks `GET /api/documents/resolve` what each path is, from the space's
+  root and then from the projects registered inside it, and nothing outside a registered
+  project's root is opened. See [Project documents](README.md#project-documents).
 - **A Markdown file named in a text opens in Valkama.** A press on a path to a `.md` file in
   a card or a question opens the document over them, read-only: headings, lists, tables and
   code drawn, at the `#kb:…`, heading or `:42` the path names, with a link to another document
   opening in the same place and Back returning to where it was read. Escape comes back to the
   link, and a draft under it stays. The file is read again when the window returns.
-- **A question's answer can be changed and its options stay in view.** An answered question
-  shows every option of every field with the chosen one set apart, and while its task is open
-  it offers «Change answer»: the same form on the answer in force, Save off until it differs,
-  and Cancel asking before it discards anything. The replaced answers stay behind «Previous
-  answers». Every field with options now has «Your own option» as its last row, and a comment
-  on a field or on the question goes beside the choice. A comment no longer stands in for a
-  required field: that field needs an option or an own option.
+  `GET /api/documents/read` serves it, up to 512 KiB, from inside one registered project.
+- **An item's plan anchor opens in Valkama.** The mark beside a card's source and its row in
+  Relations open the plan in the document viewer at the anchor, in a browser and in the desktop
+  app alike. A source Valkama cannot find is copied as written, and the notice says why.
+- **A session opens where it was last open.** The session-start hook records where each
+  session is open — an IDE extension, its terminal, a terminal, Claude Desktop or the Codex
+  app — from a few named environment variables and, on Windows, the names of the programs
+  above it, and keeps none of their values. The holder in a card's head, a step's holder, an
+  agent, an attempt and a link name that place before the click, and a press opens the session
+  there: the Claude Code extension in its folder's window, Claude Desktop, the Codex app, or a
+  terminal that resumes it. Where only a program can start it, a browser offers the command to
+  copy. A session recorded before places opens where its transcript says, and one with no
+  place in the owner's fallback and then VS Code; a Codex session from the IDE extension opens
+  in the Codex app. A subagent opens through its parent. A session live in a terminal is not
+  started a second time: the button says where it runs, and once it has been silent for a day
+  offers, on a press of its own, to resume it if its window is closed. A session its client no
+  longer keeps says so instead of opening an empty one. `GET /api/open-plan` answers the steps
+  a press takes and `GET /api/open-places` what this machine can open; the desktop app runs the
+  steps, a browser takes one press for each.
+- **A card's read says who each holder is.** `GET /api/modules/planning/work-item` gives
+  the claim, each step and each agent an `executor`: the session a click would open, the
+  agent inside it, where that session was last opened, its client `family`, and whether it is
+  live, ended, gone, headless or none. The record adds `last_claim_executor` for whoever held
+  a closed item last. It costs the read one more statement, however many holders the card has,
+  and no MCP answer carries it.
+- **The agent working an item hears what a person did there.** Any write to an item
+  answers with `from_person` when a person acted on it in the interface since an agent
+  last wrote there: a comment or a reply, an answer or a changed one, a resolved mark set or
+  removed, a status change, an edit, a cancel. Each event is told once, the newest 20 with a
+  count of the rest.
+- **Client hooks bring the same news on their own.** Claude Code's `post-tool-use`,
+  `user-prompt-submit` and `stop` answer with a short "Valkama notice" when there is
+  news on the work the session holds: the orchestrator hears about all of it, a subagent
+  about the items where it holds the claim or a step. `claude watch`, registered with
+  `asyncRewake`, wakes an orchestrator that is idle, for example while it waits for a
+  background subagent. Codex is told at its next prompt or tool call. The `notify`
+  setting (`VALKAMA_NOTIFY=off`) switches this off. Beside the holders, whoever started
+  a thread hears the replies in it and whoever asked a question hears its answer, a
+  changed one too, and so does their orchestrator, even on an item they hold nothing of;
+  a resolved mark reaches only the holders. A notice that fails costs its hook's
+  lifecycle event nothing.
 - **Work item numbers show as links in Claude Code without the agent writing the address.**
   `POST /api/hooks/message-display` answers Claude Code's `MessageDisplay` hook: a number
   whose `/open` address leads to a card comes back as a link, on the screen only, and code,
@@ -56,44 +118,11 @@ checkouts are therefore distinguishable even at the same version.
   that stops being true is taken away. A click opens the item, or the panel of open
   questions for a notification about several, through the `valkama:` scheme the desktop
   installer now registers. Settings → Windows notifications chooses the events and the
-  text and sends a trial. They need the desktop app; `doctor` reports the shortcut, the
-  helper and autostart in one line. See
+  text, says whether Windows will show them, and sends a trial. They need the desktop app;
+  `doctor` reports the shortcut, the helper and autostart in one line. See
   [Windows notifications](README.md#windows-notifications).
 - **The panel of open questions has an address.** `/open/questions` opens it in the desktop
   app or the browser, as `/open/<number>` opens a card.
-- **A card's discussion reads in threads.** A reply stands under its root and a question
-  has replies of its own, with the field for the next one in the same place. Threads open
-  by their latest activity and hold still while the card is open: a thread with news says
-  «New reply» rather than moving. A thread can be marked resolved with a short decision,
-  which folds it to one line and can be taken back; the heading counts what is still open,
-  and a filter shows only that.
-- **The agent working an item hears what a person did there.** Any write to an item
-  answers with `from_person` when a person acted on it in the interface since an agent
-  last wrote there: a comment, an answer, a status change, an edit, a cancel. Each event
-  is told once, the newest 20 with a count of the rest.
-- **Client hooks bring the same news on their own.** Claude Code's `post-tool-use`,
-  `user-prompt-submit` and `stop` answer with a short "Valkama notice" when there is
-  news on the work the session holds: the orchestrator hears about all of it, a subagent
-  about the items where it holds the claim or a step. `claude watch`, registered with
-  `asyncRewake`, wakes an orchestrator that is idle, for example while it waits for a
-  background subagent. Codex is told at its next prompt or tool call. The `notify`
-  setting (`VALKAMA_NOTIFY=off`) switches this off. Beside the holders, whoever started
-  a thread hears the replies in it and whoever asked a question hears its answer, a
-  changed one too, and so does their orchestrator, even on an item they hold nothing of;
-  a resolved mark reaches only the holders.
-- **A card's read says who each holder is.** `GET /api/modules/planning/work-item` gives
-  the claim, each step and each agent an `executor`: the session a click would open, the
-  agent inside it, where that session was last opened, and whether it is live, ended,
-  gone, headless or none. It costs the read one more statement, however many holders the
-  card has, and no MCP answer carries it.
-- **A thread can be marked resolved.** `resolve_work_item_comment`,
-  `POST /api/planning/work-item/comment/resolve` and the `resolutions` group of
-  `apply_work_item_changes`, up to 100 roots in one call, mark the root of a thread
-  with who, when and a one-line decision, and `reopen` takes the mark off. The history
-  records both as `comment_resolved` and `comment_reopened`, and no revision changes.
-  `get_work_item` with `unresolved: true` reads the roots without a mark, 20 at a time,
-  continuing with `comments_after`, and its counted reads add `unresolved_total`. A
-  search also finds an item by a mark's decision.
 - **A card copies the link to its item.** The link button beside the reference in the
   card's head puts the item's short address, `/open/<number>` on the address Valkama is
   served from, on the clipboard and says in the same line whether the copy happened. The address
@@ -111,16 +140,58 @@ checkouts are therefore distinguishable even at the same version.
   `reply_to_request`, `resolved_at`, `resolved_by`, `resolution`, `resolved_call_id`),
   numbers each question's answer (`answer_version`, 1 for one already answered), adds
   the table of replaced answers (`work_item_request_answers`), widens the history's
-  actions with `comment_resolved`, `comment_reopened` and `request_changed`, and gives
+  actions with `comment_resolved`, `comment_reopened` and `request_changed`, gives
   every session an empty place (`opened_in`, `opened_host`, `opened_folder`,
-  `host_session_id`). Every existing row keeps its values. Triggers refuse a reply with
-  two parents, a reply to a reply, a reply on another item than its parent, and a
-  resolve mark on a reply. A store older than 9 takes the schema-9 and schema-10 steps
-  in one open under its `preschema9` or `preproductmodel` snapshot. A schema-9 build
-  refuses the upgraded store with `StoreTooNewError` and leaves the file unchanged, so
-  restart every agent client after pinning this release with `launcher install`. Going
-  back is described in the README under "Migrating an older store": the snapshot goes
-  back in place before the earlier release is pinned.
+  `host_session_id`), and adds the owner's notification settings
+  (`owner_alert_settings`, empty until saved). Every existing row keeps its values.
+  Triggers refuse a comment with two parents, a reply whose parent is itself a reply, a
+  reply on another item than its parent, and a resolve mark on a reply; the tools place
+  a reply to a reply under its root before they write. A store older than 9 takes the
+  schema-9 and schema-10 steps in one open under its `preschema9` or `preproductmodel`
+  snapshot. A schema-9 build refuses the upgraded store with `StoreTooNewError` and
+  leaves the file unchanged, so restart every agent client after pinning this release
+  with `launcher install`. To go back, stop every process that holds the store, delete
+  the `-wal` and `-shm` files beside it, put the `preschema10` snapshot in its place, and
+  only then pin the earlier release; everything written since the upgrade is lost.
+  Pinned first, the earlier release reaches every running session within seconds and
+  refuses the store still at 10. The README's "Migrating an older store" has the
+  details.
+- **Breaking for an agent that answers a question: a note no longer stands in for a
+  required field.** `answer_work_item_request` and the interface's answer refuse an
+  answer that leaves a required field without a value or an own variant, naming the
+  field: `answer <field> is required; give an option or your own variant in own; a note
+  no longer stands in for a field`. The note is a comment on the whole question. An
+  answer given earlier with a note in place of a field stays as it was written and
+  reads as that field unanswered with a comment on the question.
+- **`get_work_item` reads the threads with the newest activity.** Its default read gives
+  the roots of the 5 threads with the latest activity, each with `replies` and
+  `last_reply`, where it gave the 5 newest comments, so a reply in an old thread lifts
+  that thread into the read. `comments_after` still gives every comment after an id,
+  roots and replies flat, and `full` every one. The counted reads add `threads_total`
+  and `unresolved_total`. `merge_work_items` moves a comment with its thread and leaves a
+  report's thread with the report on the merged item. The HTTP read of a card stays
+  flat, each comment naming its parent.
+- **An attached store another build wrote says why its card cannot be read.** An
+  attached store is never migrated, so one a schema-9 build wrote lacks what this build
+  reads on a card. That card's read answers 409 `store_schema_mismatch`, the page says
+  what that means in both languages with no retry to press, and `/open/<reference>`
+  still leads to the card. A store old enough that its whole space cannot be read
+  answers the same code where it used to drop the connection.
+- **The hook spool writes a session start as version 2.** The line carries where the
+  session is open; every other event keeps version 1, and this build reads both. An
+  earlier build sets a version-2 file aside as `*.rejected`, which `doctor` counts until
+  the file is deleted, so after going back a session start still waiting in the spool
+  is not recorded. It belonged to the upgraded store that going back discards, so
+  nothing more is lost.
+- **Opening a session follows the server's plan.** Settings → Opening sessions and files
+  replaces the one opener per client family with a place to fall back to, an optional
+  place to always open in, and the editor files and folders open in. A stored opener
+  becomes the fallback it named, so VS Code and Cursor now open the session in their
+  extension rather than its folder; Codex's stored terminal, which earlier builds saved
+  by default, gives way to VS Code, and an own command becomes the place to always open
+  in. The desktop app takes only the target and the owner's settings from the page and
+  fetches the plan itself, and a session no longer needs its space bound to a project to
+  be opened.
 - **An agent cannot close past what a person said.** Its move to a completed or
   cancelled state is refused with `person_spoke` while a person acted on the item since
   an agent last wrote there, and the refusal quotes what they did. A comment sent in the
@@ -140,22 +211,35 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
-- **A card in an attached store another build wrote says so.** An attached store is
-  never migrated, so since the threads migration a store the previous release wrote
-  listed its items and then answered 500 on opening one, and `/open/<reference>` a
-  503. The card now answers 409 `store_schema_mismatch`, the page says what that
-  means in both languages with no retry to press, and the short address leads to
-  the card. A store old enough that its whole space cannot be read answers the same
-  code where it used to drop the connection.
+- **A long card and a large space open.** The interface refused a card with more than
+  500 comments or 1000 history events, and any module answer of more than 16384 values
+  or 1 MiB of JSON, which took the Planning directory of a space past about 1170 items
+  with it. It now reads an answer of any size the server sends, and holds each list and
+  text only to a bound the server itself keeps.
+- **A launch from Valkama that ended is recorded.** The listener's reaper held a
+  transaction open around each pass, inside which recording an ending could not start
+  its own, so an ended launch got a closed attempt and a warning but no session status,
+  no comment and no move to review. It now gets all three, and the reaper no longer
+  takes the store's write lock every two seconds with nothing to write.
 - **Tab goes on from where a card was pressed.** A press on plain text in a card or a
   dialog left Tab starting from the top of what held it: Shift+Tab after a press in the
   bar went to the comment field and scrolled the card to its end, and Tab after a press
   far down went back to the first fact at the top. Tab and Shift+Tab now go on from the
   place pressed, as on a page, and still come round at the ends of the card.
-- **A switch, a button and a select stay legible in a forced palette.** Windows' contrast
-  themes cleared the fills they are drawn with, which left a switch showing nothing of which
-  way it was thrown and a button reading as text. Each now keeps an outline, and a switch
-  its own colours.
+- **A link Tab reaches in a long text stays in sight.** Tab to a link below the cut of a
+  folded text opens the text, which moved the link away from where the browser had
+  scrolled, so focus sat on a link below the window. The link is brought back into view.
+- **A forced palette keeps controls legible and what is chosen.** Windows' contrast
+  themes, or any forced colour palette, cleared the fills controls are drawn with: a
+  switch showed nothing of which way it was thrown, a button read as text, and the
+  pressed segment of a segmented control, the current page in the navigation and the
+  suggestion Enter takes could not be told apart, while a button waiting on its answer
+  looked ready to press. Each now keeps an outline and a switch its own colours; the
+  pressed segment and the current page take the palette's colours for a selection, the
+  suggestion an edge, and the waiting button the palette's colour for unavailable text.
+- **A state word on the branch map's tip reads.** The active group's blue stood at
+  4.10:1 on the tip's ground; the word now takes the muted ink, at 5.41:1, and the dot
+  keeps the tone.
 - **A transition's reason is checked before the item moves.** A reason long enough to
   overflow the history entry, which reads `<state key>: <reason>`, used to move the item
   and then fail on that entry, naming `event.detail`, a field the caller never sent. The
@@ -170,19 +254,13 @@ checkouts are therefore distinguishable even at the same version.
   window's corner lay under every open card and dialog, so what a press there said reached
   nobody. It now lies above them, and its status region is always in the page, so a screen
   reader announces a notice instead of meeting it with its region, a repeated one too.
-- **A press no longer lands on what the card's bar is fading out.** Scrolling a card
-  fades the reference line or the action out of its bar, and for the length of the fade
-  they still took a press: a press could go down on something already leaving, and lose
-  its click when the fade ended, so it did nothing. What has begun to fade takes no press
-  now, and a part a press went down on stays until the press ends.
-- **A press no longer lands on what the card's bar is still fading in.** The action and
-  the title coming into the bar took a press from the first instant of their fade, while
-  nothing of them could be seen yet, so a tap on an empty-looking place could start a
-  takeover. They now take a press once they are half there.
-- **One failing stage of a hook costs no other.** A notice that raised no longer takes
-  the lifecycle event of the same hook with it, and a session end writes the marker that
-  stops its watcher first, so the watcher no longer outlives a `/clear` when the store
-  write fails.
+- **A press no longer lands on what the card's bar is fading in or out.** Scrolling a
+  card fades the reference line or the action out of its bar and the title or the action
+  into it, and for the length of a fade they took a press: a press could go down on
+  something already leaving and lose its click when the fade ended, or a tap on an
+  empty-looking place could start a takeover. What has begun to fade out takes no press
+  now, what fades in takes one once it is half there, and a part a press went down on
+  stays until the press ends.
 - **A write that names no revision is no longer refused for one.** Agents writing to one
   item at once got `revision_conflict` ("work item is at revision 30, not 0") on ordinary
   reports, summaries, edits, transitions, claims and checklist writes that passed no
@@ -204,12 +282,6 @@ checkouts are therefore distinguishable even at the same version.
   how a question ended, to the next question, to why a send failed — whatever was used
   before. A text field shows focus by turning its own edge blue, for a click as for Tab,
   with no ring around it.
-- **A forced palette keeps what is chosen.** With Windows contrast themes, or any forced
-  colour palette, the pressed segment of a segmented control, the current page in the
-  navigation and the suggestion Enter takes were told apart by a ground the palette clears,
-  and a button waiting on its answer looked like one ready to press. The first two now take
-  the palette's colours for a selection, the suggestion an edge, and the waiting button
-  the palette's colour for unavailable text.
 - **A note in a card's head is never cut.** What copying the reference, the link or the
   plan anchor did is shown as a check, or a mark when it failed, with its words beside it
   where they fit whole; the date shortens first to make room. A phone-wide card used to
@@ -224,6 +296,15 @@ checkouts are therefore distinguishable even at the same version.
   `notifyEnabled` fields, their seven events and their strings in both languages are gone,
   and a stored value drops them when it is next read. Settings → Windows notifications
   replaces them, and keeps its choices in the store.
+
+### Security
+
+- **A session id or a folder can no longer put a flag or a command on a terminal's command
+  line.** The desktop app passed a session id that began with `-`, such as
+  `--dangerously-skip-permissions`, to `claude --resume` and `codex resume` as a flag, and
+  gave Windows Terminal a folder holding a `;`, which it reads as the start of another
+  command. An id now starts with a letter or a digit, as every Claude Code and Codex id does,
+  and a resume whose folder holds a semicolon is refused with the rest of its plan.
 
 ## [2.4.0](https://github.com/Muratovnik/valkama/compare/v2.3.0...v2.4.0) - 2026-11-03
 
