@@ -6,7 +6,7 @@ import {
   holdsDraft,
   unsentWords,
 } from '@/features/input-requests/utils/answerChange.ts'
-import { versionLines } from '@/features/input-requests/utils/answerDisplay.ts'
+import { unsentChoices, versionLines } from '@/features/input-requests/utils/answerDisplay.ts'
 import { descriptionViews } from '@/features/input-requests/utils/optionDescriptions.ts'
 import {
   checkAnswers,
@@ -221,8 +221,8 @@ test('a change differs by any part of the answer, and ticks in another order are
 test('opening a change keeps words a closing left behind', () => {
   const request = answeredRequest()
   const left = draft({ note: 'Still mine', own: { extra: 'And this' } })
-  expect(unsentWords(left)).toBe('Still mine\n\nAnd this')
-  const seeded = draftFromAnswer(request, unsentWords(left))
+  expect(unsentWords(request, left)).toBe('Still mine\n\nAnd this')
+  const seeded = draftFromAnswer(request, unsentWords(request, left))
   expect(seeded.note).toBe('On the whole\n\nStill mine\n\nAnd this')
   expect(differsFromAnswer(request, seeded)).toBe(true)
 })
@@ -236,6 +236,35 @@ test('what a leaving asks about follows how the question stands', () => {
   expect(holdsDraft(closed, answers({ proceed: true }))).toBe(false)
   expect(holdsDraft(closed, draft({ own: { branch: 'Words' } }))).toBe(true)
   expect(holdsDraft(closed, { ...draftFromAnswer(closed), note: 'New' })).toBe(true)
+  // A text field's answer is words like any other: a closing used to leave it unsaid.
+  expect(holdsDraft(closed, answers({ note: 'Typed out' }))).toBe(true)
+})
+
+test('a closing leaves the words of a text answer among the words not sent', () => {
+  const closed = answeredRequest()
+  const left = draft({ answers: { note: 'Typed out', branch: 'keep' }, note: 'And a comment' })
+  // A choice's option id is no one's words: it is said with the choices.
+  expect(unsentWords(closed, left)).toBe('Typed out\n\nAnd a comment')
+})
+
+/** A key's last word, and «own» for the own variant: enough to read the lines by. */
+const lastWord = (key: string) =>
+  key === 'requests.ownVariant' ? 'own' : (key.split('.').at(-1) ?? '')
+
+test('what a closing left chosen reads as a line per field, by the labels shown', () => {
+  const t = lastWord
+  const left = draft({
+    answers: { proceed: false, branch: 'merge', extra: ['keep', 'merge'], note: 'Words' },
+    ownChosen: ['extra'],
+  })
+  expect(unsentChoices(fields, left, t)).toEqual([
+    'Proceed: no',
+    'Branch: Merge',
+    'Extra: Keep, Merge, own',
+  ])
+  // An own variant chosen alone is a choice too, and a field with nothing chosen says nothing.
+  expect(unsentChoices(fields, draft({ ownChosen: ['branch'] }), t)).toEqual(['Branch: own'])
+  expect(unsentChoices(fields, EMPTY_DRAFT, t)).toEqual([])
 })
 
 const echo = (key: string, values?: Record<string, unknown>) =>

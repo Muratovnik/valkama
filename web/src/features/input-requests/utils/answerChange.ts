@@ -9,9 +9,20 @@ type Value = InputAnswers[string] | undefined
 /** The server keeps this many versions of an answer and refuses the next. */
 export const ANSWER_VERSION_LIMIT = 50
 
-/** The words in a draft that are nowhere else once its question has closed some other way. */
-export function unsentWords(draft: RequestDraft): string {
-  return [draft.note, ...Object.values(draft.own), ...Object.values(draft.fieldNotes)]
+/**
+ * The words in a draft that are nowhere else once its question has closed some other way:
+ * a text field's answer as well as the own variants and the comments.
+ */
+export function unsentWords(request: Request, draft: RequestDraft): string {
+  const answers = request.fields
+    .filter((field) => field.type === 'text')
+    .map((field) => draft.answers[field.id])
+  return [
+    ...answers.filter((value): value is string => typeof value === 'string'),
+    draft.note,
+    ...Object.values(draft.own),
+    ...Object.values(draft.fieldNotes),
+  ]
     .map((text) => text.trim())
     .filter(Boolean)
     .join('\n\n')
@@ -60,10 +71,11 @@ export function differsFromAnswer(request: Request, draft: RequestDraft): boolea
 /**
  * Whether leaving a question would lose something: anything in a question still waiting,
  * a change that says something new, or words a closing left behind. A change's form seeded
- * with the answer in force holds nothing of its own until it differs.
+ * with the answer in force holds nothing of its own until it differs. A choice a closing
+ * left behind is said on the question, but it is no one's words to ask about keeping.
  */
 export function holdsDraft(request: Request, draft: RequestDraft | undefined): boolean {
   if (!draft) return false
   if (draft.changing !== null) return differsFromAnswer(request, draft)
-  return request.status === 'pending' ? hasDraft(draft) : Boolean(unsentWords(draft))
+  return request.status === 'pending' ? hasDraft(draft) : Boolean(unsentWords(request, draft))
 }

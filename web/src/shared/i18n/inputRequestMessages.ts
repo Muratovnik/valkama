@@ -86,6 +86,8 @@ export const inputRequestMessages = {
       session: 'Session: {id}',
       noAnswer: 'No answer',
       draftKept: 'Not sent. This is what you had written:',
+      draftKeptChosen: 'Not sent. This is what you had chosen:',
+      draftKeptBoth: 'Not sent. This is what you had chosen and written:',
     },
   },
   ru: {
@@ -174,6 +176,8 @@ export const inputRequestMessages = {
       session: 'Сессия: {id}',
       noAnswer: 'Нет ответа',
       draftKept: 'Не отправлено. Вот что вы написали:',
+      draftKeptChosen: 'Не отправлено. Вот что вы выбрали:',
+      draftKeptBoth: 'Не отправлено. Вот что вы выбрали и написали:',
     },
   },
 }

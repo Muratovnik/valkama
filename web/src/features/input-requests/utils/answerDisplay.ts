@@ -57,6 +57,26 @@ export function versionLines(
   })
 }
 
+/**
+ * What a form had chosen when its question closed some other way, one line per field:
+ * the options by their labels, Yes or No, and «Your own option» where its row was chosen.
+ * A text field's answer is words, so it is not here but among them (`unsentWords`).
+ */
+export function unsentChoices(
+  fields: readonly InputRequestField[],
+  draft: { answers: InputAnswers; ownChosen: readonly string[] },
+  t: Translate,
+): string[] {
+  return fields.flatMap((field) => {
+    if (field.type === 'text') return []
+    const parts = [
+      displayAnswer(field, draft.answers[field.id], t),
+      draft.ownChosen.includes(field.id) ? t('requests.ownVariant') : '',
+    ].filter(Boolean)
+    return parts.length ? [`${field.label}: ${parts.join(', ')}`] : []
+  })
+}
+
 /** A stop, a question mark or an ellipsis, with any closing quotes or brackets after it. */
 const SENTENCE_END = /[.!?…]["'»”’)\]]*$/u
 

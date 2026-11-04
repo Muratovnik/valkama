@@ -31,6 +31,7 @@ import { useAnswerChange } from '@/features/input-requests/composables/useAnswer
 import { useRequestWrites } from '@/features/input-requests/composables/useRequestWrites.ts'
 import { useStepAttention } from '@/features/input-requests/composables/useStepAttention.ts'
 import { ANSWER_VERSION_LIMIT, unsentWords } from '@/features/input-requests/utils/answerChange.ts'
+import { unsentChoices } from '@/features/input-requests/utils/answerDisplay.ts'
 import {
   editField,
   EMPTY_DRAFT,
@@ -161,8 +162,11 @@ const errorText = computed(() => {
   const kept = hasDraft(props.draft) ? '' : 'Bare'
   return error.value ? t(`requests.${error.value}${kept}`) : ''
 })
-/** What the form still held when the question closed some other way. */
-const unsent = computed(() => (inForm.value ? '' : unsentWords(props.draft)))
+/** What the form still held when the question closed some other way: words, and what was chosen. */
+const unsent = computed(() => (inForm.value ? '' : unsentWords(request.value, props.draft)))
+const unsentChosen = computed(() =>
+  inForm.value ? [] : unsentChoices(request.value.fields, props.draft, t),
+)
 const change = useAnswerChange({
   busy,
   focusCancel: () => actions.value?.focusWayOut(),
@@ -324,6 +328,7 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
       v-else
       :request="request"
       :unsent="unsent"
+      :unsent-chosen="unsentChosen"
     />
     <p
       v-if="changeFact"

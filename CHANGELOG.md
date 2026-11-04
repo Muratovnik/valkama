@@ -352,6 +352,11 @@ checkouts are therefore distinguishable even at the same version.
   that closed while this window held something in it stays in «Needs my answer» to say how
   it ended, and the line above it read «No questions need your answer». It reads «Waiting
   for an answer: 0 — the questions below have closed» now.
+- **A choice not sent is said when its question closes elsewhere.** A question answered in
+  another window while this one had an option chosen in it folded as if nothing had been
+  chosen; only words were kept and shown. It now says «Not sent. This is what you had
+  chosen:» with a line per field, and the words of a text answer join the words kept, which
+  a closing used to drop.
 
 ### Removed
 

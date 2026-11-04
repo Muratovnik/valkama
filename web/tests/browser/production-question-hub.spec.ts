@@ -70,10 +70,14 @@ test('a question answered elsewhere while this window wrote in it stays, saying 
   await expect(touched).toHaveCount(1)
   await expect(touched.locator('.request-state')).toContainText('You answered')
   await expect(touched.locator('.request-option.is-chosen')).toContainText('Move them')
-  await expect(touched.locator('.request-unsent')).toContainText(
-    'Not sent. This is what you had written:',
+  // What was chosen and what was written, neither of which was sent.
+  await expect(touched.locator('.request-unsent-note')).toHaveText(
+    'Not sent. This is what you had chosen and written:',
   )
-  await expect(touched.locator('.request-unsent')).toContainText(WRITTEN)
+  await expect(touched.locator('.request-unsent-text')).toHaveText([
+    'Route: Keep the comments',
+    WRITTEN,
+  ])
   // Focus went with the form to how it ended, never to the page.
   await expect(touched.locator('.request-state')).toBeFocused()
   expect(await activeTag(page)).not.toBe('BODY')
@@ -82,6 +86,30 @@ test('a question answered elsewhere while this window wrote in it stays, saying 
   await expect(dialog.locator('.request-status')).toHaveText(
     'Waiting for an answer: 0 — the questions below have closed.',
   )
+  // It stays across the next read too, until the person removes it.
+  await page.clock.runFor(POLL)
+  await expect(touched).toHaveCount(1)
+})
+
+test('a choice made here and never sent is said when the question closes elsewhere', async ({
+  page,
+}) => {
+  const { card, dialog, requests } = await openList(page, [
+    listed(TOUCHED, 'The touched question', '2026-10-24T10:02:00Z'),
+  ])
+  const touched = card('The touched question')
+  await touched.getByRole('radio', { name: 'Keep the comments', exact: true }).check()
+  // Away from the question, so what holds it is the choice and not the keyboard.
+  await dialog.getByRole('button', { name: 'Refresh', exact: true }).focus()
+  requests.settle(TOUCHED, answeredThere)
+  await page.clock.runFor(POLL)
+
+  await expect(touched.locator('.request-state')).toContainText('You answered')
+  const unsent = touched.locator('.request-unsent')
+  await expect(unsent.locator('.request-unsent-note')).toHaveText(
+    'Not sent. This is what you had chosen:',
+  )
+  await expect(unsent.locator('.request-unsent-text')).toHaveText(['Route: Keep the comments'])
   // It stays across the next read too, until the person removes it.
   await page.clock.runFor(POLL)
   await expect(touched).toHaveCount(1)

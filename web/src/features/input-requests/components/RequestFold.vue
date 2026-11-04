@@ -10,7 +10,9 @@
  * of them out each time an answer arrived.
  *
  * Words still in the form when the question closed some other way are the only copy of
- * what was written. They stay in view under their own words, and never join the reply.
+ * what was written. They stay in view under their own words, and never join the reply. A
+ * choice made there was never sent either, so it is said too, one line per field, ahead of
+ * the words; a form that held only a choice used to fold as if it had held nothing.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -27,6 +29,8 @@ const props = defineProps<{
   request: InputRequestEntry['request']
   /** What was still being written when the question closed. */
   unsent: string
+  /** What was chosen and not sent when it closed, a line per field. */
+  unsentChosen: readonly string[]
 }>()
 const { t, d } = useI18n()
 const answered = computed(() => props.request.status === 'answered')
@@ -47,6 +51,11 @@ const replier = computed(() => {
 /** One text field reads as the sentence it is, with nothing to tell it from. */
 const bareText = computed(() => props.request.fields.length === 1)
 const note = computed(() => props.request.note ?? '')
+/** What the note over the unsent part says it is: what was chosen, written, or both. */
+const unsentNote = computed(() => {
+  if (!props.unsentChosen.length) return t('requests.draftKept')
+  return t(props.unsent ? 'requests.draftKeptBoth' : 'requests.draftKeptChosen')
+})
 const closing = computed(() => {
   const { status, answered_by: by, by_person: person } = props.request
   if (status === 'answered') return ''
@@ -111,11 +120,23 @@ const closing = computed(() => {
       {{ closing }}<template v-if="when"> · {{ when }}</template>
     </p>
     <div
-      v-if="unsent"
+      v-if="unsent || unsentChosen.length"
       class="request-unsent"
     >
-      <p class="request-unsent-note">{{ t('requests.draftKept') }}</p>
-      <p class="request-unsent-text">{{ unsent }}</p>
+      <p class="request-unsent-note">{{ unsentNote }}</p>
+      <p
+        v-for="line in unsentChosen"
+        :key="line"
+        class="request-unsent-text"
+      >
+        {{ line }}
+      </p>
+      <p
+        v-if="unsent"
+        class="request-unsent-text"
+      >
+        {{ unsent }}
+      </p>
     </div>
   </div>
 </template>
