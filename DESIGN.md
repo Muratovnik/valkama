@@ -569,7 +569,9 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   local popovers must not reappear in feature code.
 - **Dialogs and drawers:** one overlay host owns focus, Escape, stacking, body
   lock, and restoration. A command dialog layers above an open drawer instead
-  of unmounting it.
+  of unmounting it. In a window 620px wide or narrower a dialog takes the whole
+  width as the drawer does, without corners, its head, body and foot sharing a
+  16px inset in place of the floating dialog's 24px.
 - **Inspectors:** persistent right-side detail uses the shared resizable
   inspector. Width is bounded by the actual workspace, not the viewport. The
   panel lives while any item is open and only its content changes with the item:
@@ -992,8 +994,10 @@ its question: a press or focus landing outside it ends it, so a page holds one s
 so does its buttons moving for any reason, a question folding above or a scroll, since what the
 person pressed no longer stands where they left it. What is asked lies over what is above the
 buttons, taking no height, because any height would move them, and in a dialog, which stands
-centred, from either side. A comment on the question open is never lain on: its room above the buttons is
-kept for as long as it stays open, so that a person refuses seeing the end of what will not go.
+centred, from either side. A comment on the question open is never lain on: its room is kept
+for as long as it stays open, in the buttons' row just before the two answers, or on a row of
+its own above them where that row has none, so that a person refuses seeing the end of what will
+not go, and no empty band stands between the comment and the buttons.
 Send with nothing chosen or written writes nothing on any question, required
 fields or not, and says at the first field what it wants; a question always has a field.
 A press following another can still do harm where something is held: folding lifts the next
