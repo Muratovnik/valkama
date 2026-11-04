@@ -50,6 +50,19 @@ const tabOwners = new Set(['shared/ui/SegmentedControl.vue', 'shared/ui/TabPanel
 /** `role="tab"`, and a bound role that may come out as one: `:role="on ? 'tab' : …"`. */
 const TAB_ROLE = /\brole\s*=\s*(["'])(?:(?!\1).)*?\btab(?:list|panel)?\b/i
 /**
+ * A tab role handed over as data rather than written on the element: `v-bind="{ role:
+ * 'tab' }"`, an attribute bag in a script or a composable, or a variable a `:role` reads.
+ * Any quoted `tab`, `tablist` or `tabpanel` counts, in the lower case a role is written in,
+ * so the `Tab` key and `tabular-nums` do not; a `role:` key counts in any case. Read with
+ * comments removed, since a comment may name the role it describes. What no pattern can see
+ * is a role assembled while the page runs — joined from parts or passed in as data — which
+ * only evaluating the code would reveal; the browser suite's role and axe checks are what
+ * meet that one.
+ */
+const TAB_VALUE = /(["'`])tab(?:list|panel)?\1/
+const TAB_KEY = /\brole["'`]?\s*:\s*(["'`])tab(?:list|panel)?\1/i
+const HTML_COMMENT = /<!--[\s\S]*?-->/g
+/**
  * Files allowed to author a text control.
  *
  * Checkboxes, radios and the search box are excluded: the first two are a
@@ -156,9 +169,12 @@ const SOURCE_RULES = [
     message: 'a pressed-button group belongs to SegmentedControl',
   },
   {
-    component: true,
+    // Not only components: a composable can hand a template the role as an object.
     owners: tabOwners,
-    when: ({ markup }) => TAB_ROLE.test(markup),
+    when: ({ interfaceCopy }) => {
+      const code = interfaceCopy.replaceAll(HTML_COMMENT, '')
+      return TAB_ROLE.test(code) || TAB_VALUE.test(code) || TAB_KEY.test(code)
+    },
     message: 'tabs and their panels belong to SegmentedControl and TabPanel',
   },
   {

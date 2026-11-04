@@ -280,6 +280,10 @@ checkouts are therefore distinguishable even at the same version.
   the text around them by colour alone, which a forced palette paints over. They now carry
   the alert mark a refused text field already has. A text answer and your own option's words
   keep the doubled edge they already showed; the choices themselves have no edge to double.
+- **The interface check sees a tab role passed as an object.** `check:ui-system` kept tab,
+  tablist and tabpanel roles to the shared segmented control and tab panel only where the
+  role was written on an element; one handed over through `v-bind`, from a script, a
+  composable or a variable a `:role` reads, went through. It now refuses those as well.
 - **Memory stands whole on the frame it is chosen.** A card read Memory's knowledge source
   only once the section was shown, so the section appeared with a line saying it was being
   checked and then grew by the provider and its path; on a phone the card's sections, stuck
