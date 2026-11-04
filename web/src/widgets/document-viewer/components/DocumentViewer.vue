@@ -11,7 +11,7 @@
 import { computed, nextTick, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { useTimeoutFn, useTitle } from '@vueuse/core'
+import { useTitle } from '@vueuse/core'
 
 import DocumentEditorButton from '@/widgets/document-viewer/components/DocumentEditorButton.vue'
 import DocumentText from '@/widgets/document-viewer/components/DocumentText.vue'
@@ -20,7 +20,9 @@ import type {
   DocumentFailure,
   DocumentView,
 } from '@/widgets/document-viewer/composables/useDocumentView.ts'
+import { useFocusKeeper } from '@/widgets/document-viewer/composables/useFocusKeeper.ts'
 import { useReaderPlace } from '@/widgets/document-viewer/composables/useReaderPlace.ts'
+import { useViewerStatus } from '@/widgets/document-viewer/composables/useViewerStatus.ts'
 
 import {
   provideDocumentOpener,
@@ -46,10 +48,7 @@ const props = defineProps<{
   page?: boolean
 }>()
 
-/** How long what a press said stays, before the line goes back to what stands. */
-const SAID_FOR_MS = 5000
-
-const { t, d } = useI18n()
+const { t } = useI18n()
 // One view for the window's life, so its parts can stand here unwrapped for the template.
 const {
   back,
@@ -68,21 +67,7 @@ const {
   title,
 } = props.view
 
-const said = ref('')
-const quiet = useTimeoutFn(
-  () => {
-    said.value = ''
-  },
-  SAID_FOR_MS,
-  { immediate: false },
-)
-/** Emptied first, so that the same words said twice are announced twice. */
-async function say(message: string) {
-  said.value = ''
-  await nextTick()
-  said.value = message
-  quiet.start()
-}
+const { anchorMissing, isQuiet, said, say, status, warns } = useViewerStatus(props.view)
 const outer = useDocumentOpener()
 provideDocumentOpener({
   // Read through, not copied: the editor's name follows the setting and the language.
@@ -144,30 +129,11 @@ const canOpenWindow = computed(
     !props.page && shownFile.value !== null && (staleness.value?.kind ?? 'changed') === 'changed',
 )
 
-const anchorMissing = ref('')
-const staleWords = computed(() => {
-  const stale = staleness.value
-  if (!stale) return ''
-  if (stale.kind === 'changed') {
-    const at = new Date(stale.at)
-    const time = Number.isNaN(at.valueOf()) ? stale.at : d(at, 'clock')
-    return t('documentLinks.viewer.changed', { time })
-  }
-  return stale.kind === 'deleted'
-    ? t('documentLinks.viewer.deleted')
-    : t('documentLinks.viewer.rereadFailed')
-})
-const status = computed(() => said.value || staleWords.value || anchorMissing.value)
-const isQuiet = computed(() => status.value === '')
-/** A text that may no longer be the file's is a warning; anything else is a report. */
-const warns = computed(
-  () => !said.value && staleWords.value !== '' && staleness.value?.kind !== 'changed',
-)
-
 const root = ref<HTMLElement | null>(null)
 const header = ref<InstanceType<typeof OverlayHeader> | null>(null)
 const scroller = ref<HTMLElement | null>(null)
 const text = ref<InstanceType<typeof DocumentText> | null>(null)
+const refusal = ref<HTMLElement | null>(null)
 const marked = shallowRef<ReadonlySet<number>>(new Set())
 
 /** Where a suffix leads: the first block to land on and every block to mark. */
@@ -250,6 +216,12 @@ watch(
   },
   { flush: 'post', immediate: true },
 )
+
+/** What held focus went with the state: a refusal is what to read now, else the title. */
+useFocusKeeper(root, () => {
+  if (failure.value && refusal.value) refusal.value.focus({ preventScroll: true })
+  else header.value?.focusTitle()
+})
 
 /** A link leaves a document over the card for what it opens; beside, both stand. */
 function leaveForLink() {
@@ -351,12 +323,17 @@ async function copyPath() {
       tabindex="-1"
       data-overlay-scroller
     >
-      <PlatformStatePanel
+      <div
         v-if="panel"
-        :state="panel"
-        :retryable="false"
-        compact
-      />
+        ref="refusal"
+        tabindex="-1"
+      >
+        <PlatformStatePanel
+          :state="panel"
+          :retryable="false"
+          compact
+        />
+      </div>
       <DocumentText
         v-else-if="parsed"
         ref="text"

@@ -260,6 +260,54 @@ describe('reading a file again', () => {
     expect(status()).toBe('')
   })
 
+  it('Refresh to a file grown past the limit: focus on the refusal, no line of a change', async () => {
+    disk['docs/plan.md'] = file('docs/plan.md', PLAN)
+    await opened()
+    disk['docs/plan.md'] = file('docs/plan.md', `${PLAN}\nMore.\n`, 'c'.repeat(16))
+    await comeBack()
+    expect(status()).toMatch(/^The file changed/u)
+
+    disk['docs/plan.md'] = refused(413, 'too_large', { size: 986 * 1024 })
+    const refresh = refreshControl()
+    // A press by the pointer focuses the button first; jsdom's click does not.
+    refresh?.focus()
+    refresh?.click()
+    await flushPromises()
+    await nextTick()
+    expect(surface()?.textContent).toContain('The document is over 512 KiB')
+    expect(refreshControl()).toBeUndefined()
+    expect(status()).toBe('')
+    expect(document.activeElement).not.toBe(document.body)
+    expect(document.activeElement?.textContent).toContain('It has 986 KiB')
+  })
+
+  it('Refresh to a deleted file: focus on the title, under the line that says so', async () => {
+    disk['docs/plan.md'] = file('docs/plan.md', PLAN)
+    await opened()
+    delete disk['docs/plan.md']
+    const refresh = refreshControl()
+    refresh?.focus()
+    refresh?.click()
+    await flushPromises()
+    await nextTick()
+    expect(status()).toBe('The file was deleted from disk. This is the last text read')
+    expect(refreshControl()).toBeUndefined()
+    expect(document.activeElement?.classList).toContain('overlay-header-name')
+  })
+
+  it('a return of the window to a refusal leaves focus where it was', async () => {
+    disk['docs/plan.md'] = file('docs/plan.md', PLAN)
+    await opened()
+    const outside = document.createElement('button')
+    document.body.append(outside)
+    outside.focus()
+    disk['docs/plan.md'] = refused(413, 'too_large', { size: 986 * 1024 })
+    await comeBack()
+    expect(surface()?.textContent).toContain('The document is over 512 KiB')
+    expect(document.activeElement).toBe(outside)
+    outside.remove()
+  })
+
   it('an answer to a read since replaced is dropped', async () => {
     disk['docs/note.md'] = file('docs/note.md', '# Note\n')
     let answerLate: (value: ProjectDocument) => void = vi.fn()

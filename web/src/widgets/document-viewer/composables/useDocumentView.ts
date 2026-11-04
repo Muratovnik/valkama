@@ -235,7 +235,9 @@ export function useDocumentView() {
       if (failed.kind === 'missing') staleness.value = { kind: 'deleted' }
       else if (failed.kind === 'unreachable') staleness.value = { kind: 'unreachable' }
       else {
+        // The text a line of change spoke of is gone with it: what stands now is the refusal.
         document.value = null
+        staleness.value = null
         failure.value = failed
       }
     }
