@@ -36,7 +36,12 @@ afterEach(async () => {
   document.body.style.overflow = ''
 })
 
-const NAMES = { label: 'Document: The plan', main: 'The card', resize: 'Document width' }
+const NAMES = {
+  folded: 'Folded. Enter or a click shows it again',
+  label: 'Document: The plan',
+  main: 'The card',
+  resize: 'Document width',
+}
 
 const CARD = `
   <ResizableInspector
@@ -216,6 +221,28 @@ describe.each([
     await flushPromises()
     expect(value()).toBe(before)
     expect(element('.overlay-pane-region')).toContain(control)
+  })
+
+  it('folded, says so and shows whose edge it is, and a press of the pointer brings it back', async () => {
+    host(template)
+    await flushPromises()
+    const before = value()
+    expect(separator().hasAttribute('aria-valuetext')).toBe(false)
+
+    press(separator(), 'Enter')
+    await flushPromises()
+    const edge = separator()
+    expect(edge.getAttribute('aria-valuetext')).toBe(NAMES.folded)
+    expect(edge.getAttribute('title')).toBe(NAMES.folded)
+    // Seen as well as heard: the strip carries the pane's name.
+    expect(edge.textContent?.trim()).toBe(NAMES.label)
+
+    edge.dispatchEvent(new PointerEvent('pointerdown', { button: 0, bubbles: true }))
+    window.dispatchEvent(new PointerEvent('pointerup', { button: 0 }))
+    await flushPromises()
+    expect(value()).toBe(before)
+    expect(separator().hasAttribute('aria-valuetext')).toBe(false)
+    expect(separator().textContent?.trim()).toBe('')
   })
 
   it('says what it sizes, and takes the keys as the width of the pane', async () => {

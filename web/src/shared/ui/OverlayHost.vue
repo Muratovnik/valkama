@@ -336,6 +336,7 @@ onUnmounted(release)
             v-if="pane"
             :active="active"
             :label="pane.label"
+            :folded-label="pane.folded"
             :resize-label="pane.resize"
             :variant="variant"
             :widest="paneWidest"

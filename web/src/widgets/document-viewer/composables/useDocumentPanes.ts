@@ -98,6 +98,7 @@ export function useDocumentPane(surface: DocumentSurface, main: () => string) {
   const pane = computed<OverlayPaneNames | null>(() =>
     panes?.where.value === surface
       ? {
+          folded: t('documentLinks.viewer.folded'),
           label: t('documentLinks.viewer.label', { title: panes.view.title.value }),
           main: main(),
           resize: t('documentLinks.viewer.resize'),

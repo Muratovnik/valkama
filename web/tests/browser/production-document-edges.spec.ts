@@ -33,13 +33,29 @@ test('the edge folds the document on Enter and brings it back where it was', asy
   await expect(edge).toHaveAttribute('aria-valuenow', '0')
   await expect(edge).toBeFocused()
   await settled(drawer)
-  await inWindow(page, edge)
+  // What is left is a strip that says what it holds, and that it is folded.
+  await expect(edge).toHaveAttribute(
+    'aria-valuetext',
+    'Folded. Enter or a click shows the document again',
+  )
+  await expect(edge).toHaveText('Document: The migration plan')
+  const strip = await inWindow(page, edge)
+  expect(strip?.width).toBe(32)
+  expect(strip?.height).toBe(WINDOW.height)
   await shot(page, 'beside-card-folded')
 
   await page.keyboard.press('Enter')
   await expect(pane).toBeVisible()
   await expect(edge).toHaveAttribute('aria-valuenow', width ?? '')
+  await expect(edge).not.toHaveAttribute('aria-valuetext')
   expect(await body.evaluate((node) => node.scrollTop)).toBe(top)
+
+  // A press of the pointer on the strip brings it back as well.
+  await page.keyboard.press('Enter')
+  await expect(pane).toBeHidden()
+  await edge.click()
+  await expect(pane).toBeVisible()
+  await expect(edge).toHaveAttribute('aria-valuenow', width ?? '')
   await page.keyboard.press('Escape')
   await expect(pane).toHaveCount(0)
   await expect(drawer).toBeVisible()

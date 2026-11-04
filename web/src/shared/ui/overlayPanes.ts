@@ -6,6 +6,8 @@ import { DIALOG_WIDTH, documentFitsBeside, documentPaneRoom } from '@/shared/lib
 
 /** The panes of a surface, each named for a screen reader, and the edge between them. */
 export interface OverlayPaneNames {
+  /** What the pane's edge says of it while it is folded away. */
+  folded: string
   /** The name of the pane beside what the surface holds. */
   label: string
   /** The name of what the surface holds, as one of the two. */

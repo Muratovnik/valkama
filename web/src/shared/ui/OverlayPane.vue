@@ -22,6 +22,8 @@ import { useDrawerWidth } from '@/shared/ui/useDrawerWidth.ts'
 
 const props = defineProps<{
   active: boolean
+  /** What its edge says while the pane is folded away. */
+  foldedLabel: string
   label: string
   resizeLabel: string
   variant: 'dialog' | 'drawer'
@@ -55,14 +57,20 @@ const {
 restoreDrawerWidth()
 watch(resizing, (moving) => emit('resizing', moving))
 
-const paneSize = computed(() => ({ inlineSize: collapsed.value ? '0' : `${drawerWidth.value}px` }))
+/** Folded it keeps a strip, its edge, with its name on it and a press to bring it back. */
+const paneSize = computed(() => ({
+  inlineSize: collapsed.value ? 'var(--space-8)' : `${drawerWidth.value}px`,
+}))
+const folded = computed(() =>
+  collapsed.value ? { name: props.label, state: props.foldedLabel } : undefined,
+)
 const regionSize = computed(() => ({ inlineSize: `${drawerWidth.value}px` }))
 /** Folded it has no width at all, and a range that says so. */
 const edgeMinimum = computed(() => (collapsed.value ? 0 : drawerMinimum.value))
 const edgeNow = computed(() => (collapsed.value ? 0 : drawerWidth.value))
 const resizerPlace = computed(() => {
-  if (props.variant === 'dialog') return 'gap'
-  return collapsed.value ? 'end' : 'inside'
+  if (collapsed.value) return 'end'
+  return props.variant === 'dialog' ? 'gap' : 'inside'
 })
 
 function dismiss(event: KeyboardEvent) {
@@ -88,6 +96,7 @@ function dismiss(event: KeyboardEvent) {
       :minimum="edgeMinimum"
       :maximum="drawerMaximum"
       :now="edgeNow"
+      :folded="folded"
       @pointerdown="beginResize"
       @keydown="resizeFromKeyboard"
     />
