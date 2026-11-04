@@ -57,6 +57,12 @@ test('a long path gives up its start, at the narrowest the pane stands', async (
   await expect(path).toHaveAttribute('title', `Copy the path ${LONG_PATH}`)
   await inWindow(page, path)
   expect(await path.evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(true)
+  // Two rows however long the path: the way out beside the title, the actions under it.
+  const close = await pane.getByRole('button', { name: 'Close the document' }).boundingBox()
+  const pathBox = await path.boundingBox()
+  const refresh = await pane.getByRole('button', { name: 'Refresh' }).boundingBox()
+  expect(close?.y).toBeLessThan((pathBox?.y ?? 0) + (pathBox?.height ?? 0))
+  expect(refresh?.y).toBeGreaterThanOrEqual((close?.y ?? 0) + (close?.height ?? 0))
   await shot(page, 'beside-card-threshold-long-path')
 })
 

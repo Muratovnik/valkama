@@ -165,6 +165,12 @@ defineExpose({ focusTitle: () => name.value?.focus({ preventScroll: true }) })
     flex-wrap: wrap;
     row-gap: var(--space-2);
 
+    /* From nothing, so that a path longer than the row does not push the way out to a row
+       of its own: the title takes what the first row leaves and gives up its words. */
+    .overlay-header-title {
+      flex-basis: 0;
+    }
+
     .overlay-header-actions {
       flex-basis: 100%;
       justify-content: flex-end;
