@@ -33,7 +33,7 @@ vi.mock('@/widgets/work-item-graph/utils/graphLayoutEngine.ts', () => ({
   createGraphLayoutEngine: () => {
     const elk = new ELK()
     return {
-      layout: (...args: Parameters<ELK['layout']>) => {
+      layout: (...args: Parameters<typeof elk.layout>) => {
         const running = elk.layout(...args)
         layouts.add(running)
         const done = () => layouts.delete(running)
@@ -55,7 +55,7 @@ vi.mock('@/widgets/work-item-graph/utils/graphLayoutEngine.ts', () => ({
 async function laidOut() {
   await flushPromises()
   while (layouts.size > 0) {
-    await Promise.allSettled([...layouts])
+    await Promise.allSettled(layouts)
     await flushPromises()
   }
 }
