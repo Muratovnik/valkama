@@ -5,7 +5,13 @@ const { readFileSync } = require('node:fs')
 const path = require('node:path')
 const test = require('node:test')
 
-const { howToOpen, openPathFromArgv, openPathUrl, refusesLaunch } = require('./open_path')
+const {
+  howToOpen,
+  openPathFromArgv,
+  openPathUrl,
+  refusesLaunch,
+  saysItListens,
+} = require('./open_path')
 
 // A route worked out by hand from the grammar; tests/test_work_item_link.py holds
 // the same literal and web/tests/platformRoute.test.ts reads it with the browser's
@@ -198,9 +204,45 @@ test('a route waits for the page, goes to a page that listens, and loads otherwi
   assert.equal(howToOpen({ showingValkama: true, pageListens: false }), 'load')
 })
 
+test('only the page of the main window can say it listens for routes', () => {
+  const APP = 'http://127.0.0.1:8642/'
+  const top = (url) => ({ parent: null, url })
+  const contents = (url) => ({ getURL: () => url, mainFrame: top(url) })
+  const mainContents = contents(`${APP}modules/planning/global`)
+  const said = (sender, senderFrame) =>
+    saysItListens({ sender, senderFrame }, { appUrl: APP, mainContents })
+
+  assert.equal(said(mainContents, top(`${APP}modules/planning/global`)), true)
+  // A frame whose own address is unknown yet is read by its window's.
+  assert.equal(said(mainContents, top('')), true)
+
+  // A document's own window, on the very same origin.
+  const documentWindow = contents(`${APP}doc?project=demo&path=a.md`)
+  assert.equal(said(documentWindow, top(`${APP}doc?project=demo&path=a.md`)), false)
+  // A frame inside the main page, and a frame that is already gone.
+  assert.equal(said(mainContents, { parent: top(APP), url: `${APP}inner` }), false)
+  assert.equal(said(mainContents, null), false)
+  // The starting page, or anything not Valkama, in the main window.
+  assert.equal(said(mainContents, top('data:text/html,starting')), false)
+  assert.equal(said(mainContents, top('https://example.com/')), false)
+  // Before there is a main window at all.
+  assert.equal(
+    saysItListens(
+      { sender: documentWindow, senderFrame: top(APP) },
+      { appUrl: APP, mainContents: undefined },
+    ),
+    false,
+  )
+})
+
 test('the window hands a route over only to the page that said it listens', () => {
   const main = readFileSync(path.join(__dirname, 'main.js'), 'utf8')
   assert.match(main, /ipcMain\.on\('valkama:open-route-ready'/)
+  // Only the main window's own page: `saysItListens` decides, with the main window.
+  assert.match(
+    main,
+    /saysItListens\(event, \{ appUrl: URL, mainContents: mainWindow\?\.webContents \}\)/,
+  )
   // A page that navigated away or died no longer listens, whatever it said.
   assert.match(main, /'did-start-navigation'/)
   assert.match(main, /'render-process-gone'/)

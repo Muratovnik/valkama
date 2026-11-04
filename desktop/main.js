@@ -26,7 +26,13 @@ const {
   validateLauncherBootstrap,
 } = require('./runtime_contract')
 const { contextMenuTemplate, pageLocale } = require('./context_menu')
-const { howToOpen, openPathFromArgv, openPathUrl, refusesLaunch } = require('./open_path')
+const {
+  howToOpen,
+  openPathFromArgv,
+  openPathUrl,
+  refusesLaunch,
+  saysItListens,
+} = require('./open_path')
 const { claudeLiveness } = require('./live_sessions')
 const { discoverSupportedOpeners } = require('./opener_catalog')
 const { fetchOpenPlan } = require('./open_plan_request')
@@ -114,7 +120,9 @@ function isValkamaSender(event) {
 }
 
 ipcMain.on('valkama:open-route-ready', (event) => {
-  if (isValkamaSender(event)) pageListens = true
+  if (saysItListens(event, { appUrl: URL, mainContents: mainWindow?.webContents })) {
+    pageListens = true
+  }
 })
 
 function protocolAvailability(protocol) {

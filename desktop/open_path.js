@@ -88,4 +88,20 @@ function howToOpen({ showingValkama, pageListens }) {
   return pageListens ? 'hand-over' : 'load'
 }
 
-module.exports = { howToOpen, openPathFromArgv, openPathUrl, refusesLaunch }
+/**
+ * Whether the page that says it listens for routes is the one a route is handed to.
+ *
+ * `howToOpen` decides for the main window alone, so only the top frame of its own web
+ * contents, on Valkama's origin, may say so. A document's window on the same origin, or
+ * a frame inside a page, saying it would make the next route go over the bridge to a main
+ * page that is reloading and has not said so yet, and the route would be lost.
+ */
+function saysItListens(event, { appUrl, mainContents }) {
+  if (!mainContents || event?.sender !== mainContents) return false
+  const frame = event.senderFrame
+  if (!frame || frame.parent !== null) return false
+  const url = frame.url || mainContents.getURL()
+  return typeof url === 'string' && url.startsWith(appUrl)
+}
+
+module.exports = { howToOpen, openPathFromArgv, openPathUrl, refusesLaunch, saysItListens }
