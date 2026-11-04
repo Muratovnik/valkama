@@ -159,6 +159,13 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Changed
 
+- **The graph keeps one layout worker while it is open.** Every layout started a worker of
+  its own, which loaded ELK again before it could begin: about a tenth of a second on each
+  change of filter, scope or data on an idle machine, and seconds on a busy one. The graph
+  now lays out on one worker for as long as it is drawn and ends it when the view closes. A
+  layout asked for while a superseded one still runs ends that worker and starts on a fresh
+  one at once, so the new drawing never waits behind the old; a layout that fails or does
+  not answer within 30 seconds ends its worker too, and Retry starts a fresh one.
 - **The history names the question an event is about.** A question asked, answered,
   changed, declined or expired is named by its title — «Question “Where do the comments
   go”» — from the questions the card has already read for its discussion, so the history

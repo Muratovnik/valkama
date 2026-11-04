@@ -7,34 +7,28 @@ import { useGraphProjection } from '@/widgets/work-item-graph/composables/useGra
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 
+/** One request a worker was given, answered when the test says so. */
+type Run = {
+  graph: ElkNode
+  reject: (error: Error) => void
+  resolve: (graph: ElkNode) => void
+}
+
+/** Every worker started, in order, each with the layouts it was asked for. */
 const workers = vi.hoisted(
-  () =>
-    [] as Array<{
-      graph: ElkNode | null
-      terminateWorker: ReturnType<typeof vi.fn>
-      reject: (error: Error) => void
-      resolve: (graph: ElkNode) => void
-    }>,
+  () => [] as Array<{ runs: Run[]; terminateWorker: ReturnType<typeof vi.fn> }>,
 )
 
 vi.mock('@/widgets/work-item-graph/utils/graphLayoutEngine.ts', () => ({
   createGraphLayoutEngine: () => {
-    const worker = {
-      graph: null as ElkNode | null,
-      resolve: (_graph: ElkNode) => {},
-      reject: (_error: Error) => {},
-      terminateWorker: vi.fn(),
-    }
+    const worker = { runs: [] as Run[], terminateWorker: vi.fn() }
     workers.push(worker)
     return {
       terminateWorker: worker.terminateWorker,
-      layout: (graph: ElkNode) => {
-        worker.graph = graph
-        return new Promise<ElkNode>((resolve, reject) => {
-          worker.resolve = resolve
-          worker.reject = reject
-        })
-      },
+      layout: (graph: ElkNode) =>
+        new Promise<ElkNode>((resolve, reject) => {
+          worker.runs.push({ graph, resolve, reject })
+        }),
     }
   },
 }))
@@ -62,6 +56,9 @@ const item: WorkItemBrief = {
   comment_count: 0,
 }
 
+const second = { ...item, work_item_id: 'work-2', reference: 'TEST-2' }
+const third = { ...item, work_item_id: 'work-3', reference: 'TEST-3' }
+
 function openProjection() {
   const scope = effectScope()
   const input = reactive({
@@ -84,11 +81,17 @@ function openProjection() {
   return { scope, input, projection, selected }
 }
 
-function finish(index: number) {
-  const worker = workers[index]
-  const graph = worker.graph
-  if (!graph) throw new Error('Worker received no graph')
-  worker.resolve({
+/** The worker's latest request, or the one named. */
+function run(index: number, which = -1): Run {
+  const found = workers[index]?.runs.at(which)
+  if (!found) throw new Error(`Worker ${index} received no graph`)
+  return found
+}
+
+/** Answers a worker's request with every node placed. */
+function finish(index: number, which = -1) {
+  const { graph, resolve } = run(index, which)
+  resolve({
     ...graph,
     width: 400,
     height: 200,
@@ -102,26 +105,60 @@ async function settle() {
   await nextTick()
 }
 
+const drawnIds = (projection: ReturnType<typeof openProjection>['projection']) =>
+  projection.placed.value?.nodes.map((node) => node.work_item_id)
+
 describe('graph worker lifecycle', () => {
   beforeEach(() => {
     workers.length = 0
   })
   afterEach(() => vi.useRealTimers())
 
-  it('releases superseded workers and rejects stale scope results', async () => {
+  it('lays out one graph after another on the one worker it keeps', async () => {
+    const { input, projection, scope } = openProjection()
+    finish(0)
+    await settle()
+    expect(drawnIds(projection)).toEqual(['work-1'])
+    input.nodes = [second]
+    await nextTick()
+    // The second layout goes to the worker that drew the first: no new worker loads ELK.
+    expect(workers).toHaveLength(1)
+    expect(workers[0].runs).toHaveLength(2)
+    finish(0)
+    await settle()
+    expect(drawnIds(projection)).toEqual(['work-2'])
+    expect(projection.pending.value).toBe(false)
+    expect(workers[0].terminateWorker).not.toHaveBeenCalled()
+    scope.stop()
+  })
+
+  it('ends a worker busy with a superseded layout and starts the new one at once', async () => {
     const { input, projection, scope } = openProjection()
     input.space = 'space-2'
-    input.nodes = [{ ...item, work_item_id: 'work-2', reference: 'TEST-2' }]
+    input.nodes = [second]
     await nextTick()
-    expect(workers[0].terminateWorker).toHaveBeenCalled()
+    // The stale layout is not finished first: its worker ends, and the new layout is
+    // already on a fresh worker while the stale one has not answered.
+    expect(workers[0].terminateWorker).toHaveBeenCalledOnce()
+    expect(workers).toHaveLength(2)
+    expect(run(1).graph.children?.map((node) => node.id)).toEqual(['work-2'])
+    // An answer the ended worker still gives never reaches the field.
     finish(0)
     await settle()
     expect(projection.placed.value).toBeNull()
+    expect(projection.pending.value).toBe(true)
     finish(1)
     await settle()
-    expect(projection.placed.value?.nodes[0].work_item_id).toBe('work-2')
+    expect(drawnIds(projection)).toEqual(['work-2'])
     expect(projection.pending.value).toBe(false)
-    expect(workers[1].terminateWorker).toHaveBeenCalled()
+    // The fresh worker is the one kept: the next layout reuses it.
+    input.nodes = [third]
+    await nextTick()
+    expect(workers).toHaveLength(2)
+    expect(workers[1].terminateWorker).not.toHaveBeenCalled()
+    finish(1)
+    await settle()
+    expect(drawnIds(projection)).toEqual(['work-3'])
     scope.stop()
   })
 
@@ -135,12 +172,13 @@ describe('graph worker lifecycle', () => {
     projection.applyFocus({ type: 'pointer-leave', id: item.work_item_id })
     expect(projection.focusSet.value?.ids.has(item.work_item_id)).toBe(true)
     expect(workers).toHaveLength(1)
+    expect(workers[0].runs).toHaveLength(1)
     selected.value = 'missing'
     expect(projection.focusSet.value).toBeNull()
     scope.stop()
   })
 
-  it('keeps a same-scope projection during refresh and reports a failed refresh', async () => {
+  it('keeps a same-scope projection when a refresh fails, and retries on a fresh worker', async () => {
     const { input, projection, scope } = openProjection()
     finish(0)
     await settle()
@@ -148,33 +186,68 @@ describe('graph worker lifecycle', () => {
     input.nodes = [{ ...item, title: 'Changed title' }]
     await nextTick()
     expect(projection.placed.value).toBe(previous)
-    workers[1].reject(new Error('worker failed'))
+    expect(workers).toHaveLength(1)
+    run(0).reject(new Error('worker failed'))
     await settle()
     expect(projection.failed.value).toBe(true)
     expect(projection.pending.value).toBe(false)
     expect(projection.placed.value).toBe(previous)
-    expect(workers[1].terminateWorker).toHaveBeenCalled()
+    // The worker that failed is not trusted with the retry.
+    expect(workers[0].terminateWorker).toHaveBeenCalledOnce()
+    projection.retry()
+    await nextTick()
+    expect(workers).toHaveLength(2)
+    finish(1)
+    await settle()
+    expect(projection.failed.value).toBe(false)
+    expect(projection.placed.value?.nodes[0].title).toBe('Changed title')
     scope.stop()
   })
 
-  it('bounds a stalled worker, supports explicit retry, and releases pending work on disposal', async () => {
+  it('ends a stalled worker after 30 s and lets retry start a fresh one', async () => {
     vi.useFakeTimers()
     const { projection, scope } = openProjection()
-    await vi.advanceTimersByTimeAsync(30_000)
+    await vi.advanceTimersByTimeAsync(29_999)
+    expect(projection.pending.value).toBe(true)
+    expect(workers[0].terminateWorker).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
     expect(projection.pending.value).toBe(false)
     expect(projection.failed.value).toBe(true)
-    expect(workers[0].terminateWorker).toHaveBeenCalled()
+    expect(workers[0].terminateWorker).toHaveBeenCalledOnce()
+    // The stalled worker's late answer lands nowhere.
+    finish(0)
+    await settle()
+    expect(projection.placed.value).toBeNull()
     projection.retry()
     await nextTick()
     expect(projection.pending.value).toBe(true)
     expect(projection.failed.value).toBe(false)
+    expect(workers).toHaveLength(2)
     finish(1)
     await settle()
     expect(projection.placed.value?.nodes).toHaveLength(1)
-    projection.retry()
-    await nextTick()
-    scope.stop()
-    expect(workers[2].terminateWorker).toHaveBeenCalled()
     expect(vi.getTimerCount()).toBe(0)
+    scope.stop()
+  })
+
+  it('ends the kept worker when the field goes, idle or busy, and leaves no timer', async () => {
+    vi.useFakeTimers()
+    const idle = openProjection()
+    finish(0)
+    await settle()
+    // Idle between layouts, the worker stays for the next one ...
+    expect(workers[0].terminateWorker).not.toHaveBeenCalled()
+    idle.scope.stop()
+    // ... and goes with the field.
+    expect(workers[0].terminateWorker).toHaveBeenCalledOnce()
+
+    const busy = openProjection()
+    expect(vi.getTimerCount()).toBe(1)
+    busy.scope.stop()
+    expect(workers[1].terminateWorker).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(0)
+    finish(1)
+    await settle()
+    expect(busy.projection.placed.value).toBeNull()
   })
 })

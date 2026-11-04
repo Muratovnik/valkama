@@ -38,7 +38,7 @@ import type {
   GraphScope,
   GraphSource,
 } from '@/widgets/work-item-graph/utils/graphLayout.ts'
-import { createGraphLayoutEngine } from '@/widgets/work-item-graph/utils/graphLayoutEngine.ts'
+import { createGraphLayoutRunner } from '@/widgets/work-item-graph/utils/graphLayoutRunner.ts'
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 
@@ -158,17 +158,22 @@ export function useGraphProjection(
   const attempt = ref(0)
   let request = 0
   let context = ''
-  let stopLayout: (() => void) | undefined
+  // One worker for as long as the field is drawn, and a layout that never answers
+  // is stopped, which ends that worker rather than leaving it running.
+  const runner = createGraphLayoutRunner()
+  let timeout: ReturnType<typeof setTimeout> | undefined
   onScopeDispose(() => {
     request += 1
-    stopLayout?.()
+    clearTimeout(timeout)
+    runner.dispose()
   })
 
   watch(
     [drawn, scope, showDone, attempt],
     async () => {
       const current = ++request
-      stopLayout?.()
+      clearTimeout(timeout)
+      runner.stop()
       const data = drawn.value
       const nextContext = JSON.stringify([
         input().space,
@@ -181,28 +186,17 @@ export function useGraphProjection(
       pending.value = Boolean(data)
       failed.value = false
       if (!data) return
-      let engine: ReturnType<typeof createGraphLayoutEngine> | undefined
-      let timeout: ReturnType<typeof setTimeout> | undefined
-      const dispose = () => {
-        clearTimeout(timeout)
-        engine?.terminateWorker()
-      }
-      stopLayout = dispose
+      timeout = setTimeout(() => runner.stop(), 30_000)
       try {
-        engine = createGraphLayoutEngine()
-        const expired = new Promise<never>((_, reject) => {
-          timeout = setTimeout(() => reject(new Error('Graph layout timed out')), 30_000)
-        })
-        const result = await Promise.race([
-          layout(data, engine, showDone.value, scope.value),
-          expired,
-        ])
+        const result = await layout(data, runner, showDone.value, scope.value)
         if (request === current) placed.value = result
       } catch {
         if (request === current) failed.value = true
       } finally {
-        dispose()
-        if (request === current) pending.value = false
+        if (request === current) {
+          clearTimeout(timeout)
+          pending.value = false
+        }
       }
     },
     { immediate: true },

@@ -6,7 +6,7 @@
  * passes its orthogonal routes to Vue Flow.
  */
 
-import type { ELK, ElkNode, ElkPoint } from 'elkjs/lib/elk-api'
+import type { ElkNode, ElkPoint } from 'elkjs/lib/elk-api'
 
 import {
   MARGIN,
@@ -38,7 +38,8 @@ export interface GraphLayout {
   width: number
 }
 
-export type GraphLayoutEngine = Pick<ELK, 'layout'>
+/** What lays a graph out: ELK itself, or the worker a graph field keeps. */
+export type GraphLayoutEngine = { layout: (graph: ElkNode) => Promise<ElkNode> }
 
 /** Keep the interaction floor low enough for wide spaces to fit without clipping. */
 export const GRAPH_ZOOM_MIN = 0.01
