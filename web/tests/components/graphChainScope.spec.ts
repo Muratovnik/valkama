@@ -10,6 +10,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import ELK from 'elkjs/lib/elk.bundled.js'
 import { describe, expect, it, vi } from 'vitest'
 
+import GraphLegend from '@/widgets/work-item-graph/components/GraphLegend.vue'
 import GraphNodeCard from '@/widgets/work-item-graph/components/GraphNodeCard.vue'
 import GraphView from '@/widgets/work-item-graph/components/GraphView.vue'
 
@@ -157,6 +158,29 @@ describe('the whole-space graph and the items no link touches', () => {
     expect(await drawn(graph)).toContain('MAIN-2')
     // The whole space has no root to mark.
     expect(graph.find('.flow-node-root').exists()).toBe(false)
+  })
+
+  it('names live work in both keys, the strip’s and the narrow bar’s, only while a drawn card shows it', async () => {
+    const keys = (graph: ReturnType<typeof openGraph>) =>
+      graph
+        .findAllComponents(GraphLegend)
+        .map((key) => ({ held: key.props('held'), moving: key.props('moving') }))
+    const quiet = openGraph()
+    await drawn(quiet)
+    expect(keys(quiet)).toEqual([
+      { held: false, moving: false },
+      { held: false, moving: false },
+    ])
+    const live = openGraph({ live: { [id(5)]: { state: 'held' }, [id(6)]: { state: 'working' } } })
+    await drawn(live)
+    expect(keys(live)).toEqual([
+      { held: true, moving: true },
+      { held: true, moving: true },
+    ])
+    // Held work hidden with the closed items is not on the field, so the key says nothing of it.
+    const hidden = openGraph({ live: { [id(2)]: { state: 'held' } } })
+    await drawn(hidden)
+    expect(keys(hidden).map((key) => key.held)).toEqual([false, false])
   })
 })
 

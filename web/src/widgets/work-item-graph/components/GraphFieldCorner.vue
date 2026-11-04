@@ -19,6 +19,8 @@ import type { ChainGroup } from '@/shared/api/planningChainGroups.ts'
 defineProps<{
   groups: readonly ChainGroup[]
   hasEdges: boolean
+  /** A card on the field is held by a session that is not working on it now. */
+  held: boolean
   keepDone: boolean
   motion: GraphMotion
   /** Something on the field is live work that moves. */
@@ -40,6 +42,7 @@ const { t } = useI18n()
     :has-edges="hasEdges"
     :keep-done="keepDone"
     :moving="moving"
+    :held="held"
   />
   <GraphMotionToggle
     :motion="motion"

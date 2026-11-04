@@ -79,8 +79,9 @@ describe("the graph's motion", () => {
     field.stop()
   })
 
-  it('moves only a turn running now, not a session waiting or fallen silent', () => {
+  it('moves only a turn running now, not an item held aside, a session waiting or fallen silent', () => {
     expect(movesOn({ state: 'working' })).toBe(true)
+    expect(movesOn({ state: 'held' })).toBe(false)
     expect(movesOn({ state: 'waiting' })).toBe(false)
     expect(movesOn({ state: 'quiet', quiet_since: '2026-11-02T08:00:00Z' })).toBe(false)
     expect(movesOn(undefined)).toBe(false)

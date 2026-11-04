@@ -60,6 +60,34 @@ test('a comet runs only on a line that reaches work being done now', async ({ pa
   expect(await fieldAnimations(page)).toBeGreaterThan(0)
 })
 
+test('an item a session holds without working on it stands still, and the key says so', async ({
+  page,
+}) => {
+  await page.goto(surface())
+  await settled(page)
+  await expect(page.locator('.graph-legend-held')).toHaveCount(0)
+  await page.goto(surface('held'))
+  await settled(page)
+  const held = page.locator('.graph-live[data-live="held"]')
+  await expect(held).toHaveText('held')
+  // Its dots stand still while the card being worked on pulses beside it.
+  const dots = (live: string) =>
+    page
+      .locator(`.graph-live[data-live="${live}"] .work-dots i`)
+      .first()
+      .evaluate((dot) => dot.getAnimations().length)
+  expect(await dots('held')).toBe(0)
+  expect(await dots('working')).toBeGreaterThan(0)
+  // The line it reaches carries no comet, and the key names the still dots.
+  expect(await comets(page)).toEqual([
+    { live: true, comet: true },
+    { live: false, comet: false },
+  ])
+  await expect(page.locator('.graph-legend-on-field .graph-legend-held')).toHaveText(
+    'held by a session, not worked on now',
+  )
+})
+
 test('the switch stops all motion at once and the stop survives a reload', async ({ page }) => {
   await page.goto(surface('folded'))
   await settled(page)

@@ -56,6 +56,16 @@ describe('a card with live work', () => {
     expect(wrapper.get('.graph-live .work-dots').classes()).toContain('still')
   })
 
+  it('says «у сессии» with still dots for an item its session holds but does not work on now', () => {
+    i18n.global.locale.value = 'ru'
+    const wrapper = card({ state: 'held' })
+    expect(wrapper.get('.graph-live-word').text()).toBe('у сессии')
+    expect(wrapper.get('.graph-live .work-dots').classes()).toContain('still')
+    expect(wrapper.get('.flow-node-card').attributes('aria-label')).toBe(
+      'MAIN-7 Item 7 · Dev · у сессии',
+    )
+  })
+
   it('says since when a silent session has said nothing, still, and never «ended»', () => {
     i18n.global.locale.value = 'ru'
     const wrapper = card(QUIET)

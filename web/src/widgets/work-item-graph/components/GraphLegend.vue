@@ -13,7 +13,9 @@
  * adds, so while the chain has closed members its place is kept, unseen, before
  * the others: the switch never moves a word of the key.
  *
- * A line live work runs along is named only while some work on the field moves.
+ * A line live work runs along is named only while some work on the field moves,
+ * and the still dots of an item a session holds without working on it only
+ * while a card on the field shows them.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -32,6 +34,8 @@ const props = defineProps<{
    * card's chain section and the board's column say it; null keeps the group's word.
    */
   names: Readonly<Record<ChainGroup, string | null>>
+  /** A card on the field is held by a session that is not working on it now. */
+  held?: boolean
   /** Some live work on the field moves, so its line is drawn. */
   moving?: boolean
 }>()
@@ -51,7 +55,7 @@ const entries = computed(() => {
 
 <template>
   <div
-    v-if="entries.length || hasEdges || moving"
+    v-if="entries.length || hasEdges || moving || held"
     class="graph-legend"
     aria-hidden="true"
   >
@@ -74,6 +78,11 @@ const entries = computed(() => {
       v-if="moving"
       class="graph-legend-item"
       ><i class="stroke live" />{{ t('graph.edgeLive') }}</span
+    >
+    <span
+      v-if="held"
+      class="graph-legend-item graph-legend-held"
+      ><span class="work-dots still"><i /><i /><i /></span>{{ t('graph.legendHeld') }}</span
     >
   </div>
 </template>
@@ -103,6 +112,11 @@ const entries = computed(() => {
   align-items: center;
   min-height: 24px;
   white-space: nowrap;
+}
+
+/* The dots as a held card shows them: still, in the hue of live work. */
+.graph-legend-held .work-dots {
+  color: var(--color-info);
 }
 
 .stroke {

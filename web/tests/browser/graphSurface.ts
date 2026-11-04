@@ -9,7 +9,9 @@
  * card is being worked on and the second has fallen silent, so the line
  * between them runs and the one folded onto the largest epic does not.
  * `?live=folded` also puts an agent to work inside the largest epic, which
- * runs that line too. Folding a frame here turns its header and nothing else.
+ * runs that line too, and `?live=held` has the second card held by a session
+ * that is working on something else. Folding a frame here turns its header and
+ * nothing else.
  *
  * `?zoom=read` opens the field from its top-left at reading size and
  * `?zoom=out` far out, past reading.
@@ -38,14 +40,15 @@ const NO_NAMES = Object.fromEntries(
 ) as Record<ChainGroup, string | null>
 
 /** Who is at work on the sample, as the server's `live_work` would say it. */
-function liveOn(layout: GraphLayout, folded: boolean): Record<string, LiveWork> {
+function liveOn(layout: GraphLayout, kind: string | null): Record<string, LiveWork> {
   const [first, second] = layout.nodes
   const live: Record<string, LiveWork> = {
     [first.work_item_id]: { state: 'working' },
     [second.work_item_id]: { state: 'quiet', quiet_since: '2026-11-02T08:00:00Z' },
   }
   const inside = layout.edges[1].links[0].to
-  if (folded) live[inside] = { state: 'working' }
+  if (kind === 'folded') live[inside] = { state: 'working' }
+  if (kind === 'held') live[second.work_item_id] = { state: 'held' }
   return live
 }
 
@@ -55,7 +58,7 @@ export const GraphSurface = defineComponent({
     const zoom = query.get('zoom')
     const zoomedOut = zoom === 'out'
     const placed = shallowRef<GraphLayout | null>(placedSample())
-    const live = liveOn(placedSample(), query.get('live') === 'folded')
+    const live = liveOn(placedSample(), query.get('live'))
     const moving = computed(() => new Set(Object.keys(live).filter((id) => movesOn(live[id]))))
     const { motion, toggle: toggleMotion } = useGraphMotion()
     const still = computed(() => motion.value !== 'running')
@@ -98,6 +101,7 @@ export const GraphSurface = defineComponent({
               readyCount: 3,
               motion: motion.value,
               moving: moving.value.size > 0,
+              held: Object.values(live).some((work) => work.state === 'held'),
               onToggleMotion: toggleMotion,
             }),
           ]),

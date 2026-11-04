@@ -205,6 +205,7 @@ export const en = {
     edgeDiscovered: 'context',
     legendAhead: 'Ahead',
     edgeLive: 'work going on',
+    legendHeld: 'held by a session, not worked on now',
     zoom: 'Graph zoom',
     zoomIn: 'Zoom in',
     zoomOut: 'Zoom out',
@@ -246,6 +247,7 @@ export const en = {
     },
     live: {
       working: 'working',
+      held: 'held',
       waiting: 'waiting',
       quiet: 'silent since {since}',
     },

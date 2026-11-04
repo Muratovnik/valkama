@@ -169,6 +169,10 @@ const moving = computed(
 const { motion, toggle: toggleMotion } = useGraphMotion()
 const still = computed(() => motion.value !== 'running')
 const anyMoving = computed(() => moving.value.size > 0)
+/** A drawn card is held by a session not working on it now: the key names its still dots. */
+const anyHeld = computed(() =>
+  [...cardById.value.keys()].some((id) => live.value[id]?.state === 'held'),
+)
 const liveOf = (node: PlacedNode) => live.value[node.work_item_id] ?? null
 const workingIn = (frame: PlacedFrame) => frame.members.filter((id) => moving.value.has(id)).length
 
@@ -241,7 +245,9 @@ const legend = computed(() => {
   return { groups, names: { ...chainLegendNames.value, queued: t('graph.legendAhead') } }
 })
 /** Whether the field has a key to draw: the bar offers it on a narrow workspace. */
-const keyed = computed(() => legend.value.groups.length > 0 || hasEdges.value || anyMoving.value)
+const keyed = computed(
+  () => legend.value.groups.length > 0 || hasEdges.value || anyMoving.value || anyHeld.value,
+)
 
 const chainChip = computed(() =>
   props.chain ? { reference: props.chain.reference, total: props.chain.total } : null,
@@ -335,6 +341,8 @@ function onFieldPointerLeave() {
           :names="legend.names"
           :has-edges="hasEdges"
           :keep-done="keepDone"
+          :moving="anyMoving"
+          :held="anyHeld"
         />
       </template>
     </GraphBar>
@@ -375,6 +383,7 @@ function onFieldPointerLeave() {
           :ready-count="ready.length"
           :motion="motion"
           :moving="anyMoving"
+          :held="anyHeld"
           @toggle-motion="toggleMotion"
         />
       </div>

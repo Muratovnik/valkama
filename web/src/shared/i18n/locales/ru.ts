@@ -204,6 +204,7 @@ export const ru = {
     edgeDiscovered: 'контекст',
     legendAhead: 'Впереди',
     edgeLive: 'работа идёт',
+    legendHeld: 'у сессии, сейчас не в работе',
     zoom: 'Масштаб графа',
     zoomIn: 'Приблизить',
     zoomOut: 'Отдалить',
@@ -245,6 +246,7 @@ export const ru = {
     },
     live: {
       working: 'работает',
+      held: 'у сессии',
       waiting: 'ждёт',
       quiet: 'молчит с {since}',
     },
