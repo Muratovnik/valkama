@@ -2,16 +2,8 @@
 
 import type { WorkItemBrief } from '@/shared/api/planningModel.ts'
 
-/**
- * What an agent's session behind an item is doing now, as the server's
- * `live_work` names it: a turn running on this item, a turn finished and
- * waiting for a person, an item the session holds while its turn is about
- * other work, or a session alive by its lease that has said nothing for a day.
- * An item without live work is absent from that map. `quiet_since` is the
- * time of the session's last sign of life.
- */
-export type LiveWork =
-  { quiet_since: string; state: 'quiet' } | { state: 'held' | 'waiting' | 'working' }
+/** What an agent's session behind an item is doing now: the read model's contract, as it is. */
+export type { LiveWork } from '@/shared/api/liveWorkModel.ts'
 
 /** The frame of the work filed under no epic. */
 export const NO_EPIC_FRAME = 'none'

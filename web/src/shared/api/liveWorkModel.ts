@@ -17,3 +17,6 @@ const liveWorkSchema = z.union([
 ])
 
 export const liveWorkMapSchema = z.record(boundedText(UUID, 36), liveWorkSchema)
+
+/** One item's live work, as the read model's `live_work` carries it. */
+export type LiveWork = z.infer<typeof liveWorkSchema>

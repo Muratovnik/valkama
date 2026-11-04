@@ -288,6 +288,7 @@ defineExpose({ toggleFilter })
         :space="model.planning_space?.planning_space_id ?? ''"
         :items="visibleItems"
         :space-items="model.work_items"
+        :live="model.live_work"
         :selected-id="selectedId"
         :edges="graphEdges"
         :epic-id="chain?.root.work_item_id ?? null"

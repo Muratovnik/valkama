@@ -160,7 +160,7 @@ function frameAt(id: string): PlacedFrame[] {
 }
 
 /**
- * The items whose live work moves: a turn running now. A line runs when one
+ * The items whose live work moves: worked on in a turn running now. A line runs when one
  * of its links reaches one, and a frame counts those under it.
  */
 const moving = computed(

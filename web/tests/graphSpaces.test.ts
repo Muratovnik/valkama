@@ -114,12 +114,12 @@ describe('the spaces the graph of frames is tested on', () => {
     expect(broadSpace().model).toEqual(broadSpace().model)
   })
 
-  it('live work names every live claim, in all three states', () => {
+  it('live work names every live claim, in all four states', () => {
     const { model } = broadSpace()
     const live = liveWorkFor(model)
     expect(Object.keys(live)).toHaveLength(16)
     expect(new Set(Object.values(live).map((entry) => entry.state))).toEqual(
-      new Set(['working', 'waiting', 'quiet']),
+      new Set(['working', 'held', 'waiting', 'quiet']),
     )
   })
 
