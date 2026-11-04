@@ -49,9 +49,6 @@ const lines = computed(() => [props.holder, props.detail].filter(Boolean).join('
 <style scoped>
 /* As high in its line as a button's words stand in theirs, so a step's holder reads at one
    height whether it can be pressed or not. */
-
-/* As high in its line as a button's words stand in theirs, so a step's holder reads at one
-   height whether it can be pressed or not. */
 .executor-link-name {
   min-width: 0;
   padding: calc(var(--space-1) - var(--space-hair)) 0 var(--space-1) var(--space-2);

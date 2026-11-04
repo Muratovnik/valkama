@@ -290,8 +290,10 @@ function finished(outcome: Outcome) {
   text-align: start;
 }
 
-/* One line while the name keeps twelve characters beside the place, and two after that. A
-   name squeezed to a letter says nothing, and the place is what the button is for. */
+/* One line while the name and the place both fit whole, and two after that: the place takes
+   a line of its own before the name gives a letter. A holder's name is already its short
+   form, the client and the start of its session, so cutting it again leaves two holders
+   that read alike; it is cut only where it alone is wider than the line, as on a phone. */
 .open-action-words {
   display: flex;
   flex-wrap: wrap;
@@ -301,14 +303,13 @@ function finished(outcome: Outcome) {
 }
 
 .open-action-name {
-  flex: 1 1 12ch;
+  flex: 0 1 auto;
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 
   &.whole {
-    flex-basis: auto;
     white-space: normal;
   }
 }

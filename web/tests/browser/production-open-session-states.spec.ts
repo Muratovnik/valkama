@@ -138,3 +138,23 @@ test('a press that finds the session gone tells every button of it, and keeps fo
   await page.keyboard.press('Enter')
   await expect(page.getByRole('tooltip')).toContainText('The client no longer has this session.')
 })
+
+for (const locale of ['en', 'ru'] as const)
+  for (const width of [1500, 390])
+    test(`the holder reads whole beside a place the setting chose, ${width}px in ${locale}`, async ({
+      page,
+    }) => {
+      await openCard(page, { always: 'claude-desktop', locale, width })
+      const head = page.locator('.drawer .card-holder button.open-action')
+      await expect(head).toContainText(locale === 'en' ? 'by your setting' : 'по настройке')
+      const name = head.locator('.open-action-name')
+      await expect(name).toHaveText('claude · 6f1c2a8e-0000')
+      const cut = await name.evaluate((node) => node.scrollWidth > node.clientWidth)
+      expect(cut, 'the holder’s name is cut').toBe(false)
+      // Nothing of the card reaches past the drawer's edge on a phone either.
+      const edges = await head.evaluate((node) => {
+        const drawer = node.closest('.drawer')?.getBoundingClientRect()
+        return { right: node.getBoundingClientRect().right, edge: drawer?.right ?? 0 }
+      })
+      expect(edges.right).toBeLessThanOrEqual(edges.edge)
+    })
