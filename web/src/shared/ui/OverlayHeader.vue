@@ -141,11 +141,12 @@ defineExpose({ focusTitle: () => name.value?.focus({ preventScroll: true }) })
   text-overflow: ellipsis;
 }
 
-/* As tall as the way out, so that the icons of the row stand on one line. */
+/* As tall as the way out, so that the icons of the row stand on one line, and as far
+   apart as the head stands them from it, so that the row keeps one rhythm. */
 .overlay-header-actions {
   display: flex;
   flex: 0 0 auto;
-  gap: var(--space-1);
+  gap: var(--space-4);
   align-items: center;
   min-height: var(--size-control-target);
 }
