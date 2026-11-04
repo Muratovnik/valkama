@@ -216,9 +216,9 @@ function goToSuffix(suffix: string) {
   const shown = parsed.value
   const { first, marks } = shown ? blocksFor(shown, suffix) : { first: -1, marks: [] }
   marked.value = new Set(marks)
-  const box = first === -1 ? null : (text.value?.box(first) ?? null)
-  if (box) box.scrollIntoView({ block: 'start' })
-  else scroller.value?.scrollTo({ top: 0 })
+  const body = scroller.value
+  const box = first === -1 || !body ? null : (text.value?.bring(first, body) ?? null)
+  if (!box) body?.scrollTo({ top: 0 })
   land(box)
 }
 

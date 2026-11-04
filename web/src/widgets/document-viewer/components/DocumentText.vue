@@ -80,7 +80,38 @@ function topIndex(scroller: HTMLElement): number {
   return list.length ? Math.max(found, 0) : -1
 }
 
-defineExpose({ box: (index: number) => boxes()[index] ?? null, topIndex })
+/** What a reader does to move the text, which a late correction must not undo. */
+const READER_MOVES = ['keydown', 'pointerdown', 'touchstart', 'wheel'] as const
+/** Each bringing is numbered, so a font arriving late only finishes the newest. */
+let bringing = 0
+
+/**
+ * Brings a block to the scroller's top. A text drawn before its font arrived reflows when
+ * it does, and the block would then stand under the head or below the top: it is brought
+ * there again, unless the reader has moved the text by then or been sent somewhere else.
+ */
+function bring(index: number, scroller: HTMLElement): HTMLElement | null {
+  const box = boxes()[index] ?? null
+  box?.scrollIntoView({ block: 'start' })
+  const fonts = globalThis.document.fonts as FontFaceSet | undefined
+  if (!box || fonts?.status !== 'loading') return box
+  const mine = ++bringing
+  const controller = new AbortController()
+  for (const kind of READER_MOVES)
+    scroller.addEventListener(kind, () => controller.abort(), {
+      once: true,
+      passive: true,
+      signal: controller.signal,
+    })
+  void fonts.ready.then(() => {
+    if (!controller.signal.aborted && mine === bringing && box.isConnected)
+      box.scrollIntoView({ block: 'start' })
+    controller.abort()
+  })
+  return box
+}
+
+defineExpose({ box: (index: number) => boxes()[index] ?? null, bring, topIndex })
 </script>
 
 <template>
