@@ -17,7 +17,9 @@
 import { computed, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { fetchMemoryProviders, searchMemory } from '@/shared/api/memoryApi.ts'
+import { useMemorySource } from '@/widgets/work-item-inspector/utils/memorySource.ts'
+
+import { searchMemory } from '@/shared/api/memoryApi.ts'
 import type { MemoryResult } from '@/shared/api/memoryApi.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { actorName } from '@/shared/lib/actor.ts'
@@ -46,9 +48,12 @@ const capabilities = ref<readonly string[]>([])
 const health = ref('')
 const reason = ref('')
 const searched = ref(false)
-const sourceLoading = ref(false)
-const sourceFailed = ref(false)
-const located = ref<Awaited<ReturnType<typeof fetchMemoryProviders>>['providers'][number]>()
+const {
+  failed: sourceFailed,
+  load: loadSource,
+  loading: sourceLoading,
+  located,
+} = useMemorySource(() => props.projectId)
 const activeProvider = computed(() => provider.value || located.value?.provider_id || '')
 const providerName = computed(() =>
   activeProvider.value === 'markdown-knowledge'
@@ -59,39 +64,15 @@ const sourceUnavailable = computed(
   () => (searched.value ? health.value : located.value?.health) === 'unavailable',
 )
 
-let sourceRequest = 0
-
-async function loadSource(projectId = props.projectId) {
-  const request = ++sourceRequest
-  sourceFailed.value = false
-  sourceLoading.value = Boolean(projectId)
-  if (!projectId) return
-  try {
-    const answer = await fetchMemoryProviders()
-    if (request === sourceRequest)
-      located.value = answer.providers.find((entry) => entry.project_id === projectId)
-  } catch {
-    if (request === sourceRequest) sourceFailed.value = true
-  } finally {
-    if (request === sourceRequest) sourceLoading.value = false
-  }
-}
-
 watch(
   () => props.projectId,
-  (projectId, _previous, onCleanup) => {
-    onCleanup(() => {
-      sourceRequest += 1
-    })
-    located.value = undefined
+  () => {
     searched.value = false
     results.value = []
     provider.value = ''
     source.value = ''
     failure.value = ''
-    void loadSource(projectId)
   },
-  { immediate: true },
 )
 
 /** What is already attached, which is the record rather than the search. */

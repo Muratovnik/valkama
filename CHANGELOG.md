@@ -254,6 +254,11 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- **Memory stands whole on the frame it is chosen.** A card read Memory's knowledge source
+  only once the section was shown, so the section appeared with a line saying it was being
+  checked and then grew by the provider and its path; on a phone the card's sections, stuck
+  above it, settled a frame later. The card now reads the source as it opens, as it reads
+  its attempts.
 - **A label stays a chip in a forced palette.** High-contrast modes clear the ground that
   was a label chip's only boundary, so a card's and a tile's labels read as plain words, a
   filter to press with nothing showing it could be pressed. A chip now draws its edge there.

@@ -308,3 +308,22 @@ test('sections below the fold of a short window are still brought into view for 
   await expect(sections.first()).toBeFocused()
   await expect(sections.first()).toBeInViewport()
 })
+
+for (const width of [1440, 390]) {
+  test(`a section stands whole on the frame it is chosen, Execution to Memory at ${width}px`, async ({
+    page,
+  }) => {
+    const { drawer, sections, tabs } = await cardReadDown(page, width, 700)
+    await pressWhereItStands(page, sections.nth(1))
+    await expect(drawer.locator('.overview')).toBeHidden()
+    const memory = drawer.locator('.memory-source')
+    const frames = await framesOfTabs(tabs, async () => {
+      await pressWhereItStands(page, sections.nth(2))
+      await expect(memory).toContainText('C:/projects/sample/docs')
+    })
+    // The sections may move once, to where Memory leaves them; they stood at 180px for a frame
+    // and then at 155px, Memory filling in its source after it was shown.
+    const moves = frames.filter((top, at) => at > 0 && top !== frames[at - 1])
+    expect(moves.length, JSON.stringify(frames)).toBeLessThanOrEqual(1)
+  })
+}

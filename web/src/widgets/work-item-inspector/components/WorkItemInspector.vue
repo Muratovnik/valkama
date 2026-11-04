@@ -112,6 +112,7 @@ const facts = ref<InstanceType<typeof InspectorFacts> | null>(null)
 const { leaveUnreadable, section, sections, shownSection } = useInspectorSections(
   () => props.writable,
   () => frame.value?.scrollToContent(),
+  () => props.projectId,
 )
 const overview = ref<InstanceType<typeof InspectorOverview> | null>(null)
 /** Whether a question on the card waits for its answer, and what they are; the discussion knows. */

@@ -1,6 +1,8 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { provideMemorySource } from '@/widgets/work-item-inspector/utils/memorySource.ts'
+
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 
 export type InspectorSection = 'activity' | 'execution' | 'memory' | 'overview' | 'relations'
@@ -11,10 +13,19 @@ export type InspectorSection = 'activity' | 'execution' | 'memory' | 'overview' 
  *
  * Execution exists only for an item of the primary store, so the strip offers it
  * only there, and a card that stops being writable steps off it.
+ *
+ * A section shows the moment it is chosen, which is what lets the arrows choose as they
+ * move: what one reads is read with the card, as its attempts are, and Memory's source
+ * with them (`memorySource`).
  */
-export function useInspectorSections(writable: () => boolean, scrollToStart: () => void) {
+export function useInspectorSections(
+  writable: () => boolean,
+  scrollToStart: () => void,
+  projectId: () => string,
+) {
   const { t } = useI18n()
   const section = ref<InspectorSection>('overview')
+  provideMemorySource(projectId)
 
   // Every tab starts at its own top. The body is one scroller, so a tab opened
   // after reading far down another used to open at that same depth.

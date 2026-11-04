@@ -46,7 +46,7 @@ export interface MemorySearch {
 }
 
 /** One project's knowledge provider, and whether it can be asked at all. */
-interface MemoryProvider {
+export interface MemoryProvider {
   capabilities: string[]
   health: string
   project_id: string
