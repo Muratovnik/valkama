@@ -356,6 +356,8 @@ describe('SettingsAlerts test notification', () => {
     expect(wrapper.get('.settings-alerts-failure').text()).toBe(
       'The check failed: csc.exe was not found',
     )
+    // A mark beside the words, so the failure is not told from a detail by its colour alone.
+    expect(wrapper.get('[role="alert"].settings-alerts-failure').find('svg').exists()).toBe(true)
 
     await testButton(wrapper).trigger('click')
     await flushPromises()

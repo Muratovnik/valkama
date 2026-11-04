@@ -420,6 +420,10 @@ checkouts are therefore distinguishable even at the same version.
 - **A setting over several controls is named at their top.** «Claude Code», «Codex»,
   «Other clients» and the notification events stood half way down the places and
   checkboxes they name; each now stands on the line of the first of them.
+- **An error reads as one without colour.** Under a field, in a text editor's foot and in
+  Settings, an error differed from the hint beside it only by its red, which a forced
+  palette paints like any other text. It now carries a warning mark, and a refused field
+  or text doubles its edge, which a forced palette keeps.
 
 ### Removed
 

@@ -29,6 +29,7 @@ import { useI18n } from 'vue-i18n'
 import { markdownEdit } from '@/shared/lib/markdownEdits.ts'
 import type { MarkdownTool, TextEdit } from '@/shared/lib/markdownEdits.ts'
 import { revealFrame } from '@/shared/lib/revealFrame.ts'
+import FieldError from '@/shared/ui/FieldError.vue'
 import MarkdownSuggestions from '@/shared/ui/MarkdownSuggestions.vue'
 import MarkdownToolbar from '@/shared/ui/MarkdownToolbar.vue'
 import RichText from '@/shared/ui/RichText.vue'
@@ -296,7 +297,7 @@ defineExpose({
     <div
       ref="surface"
       class="markdown-surface"
-      :class="{ disabled }"
+      :class="{ disabled, invalid }"
     >
       <MarkdownToolbar
         v-if="!hideTools"
@@ -363,12 +364,12 @@ defineExpose({
         v-if="$slots.actions || error"
         class="markdown-foot"
       >
-        <small
+        <FieldError
           v-if="error"
           :id="errorId"
           class="markdown-error"
           :role="errorRole"
-          >{{ error }}</small
+          >{{ error }}</FieldError
         >
         <small
           v-else
@@ -438,6 +439,16 @@ defineExpose({
     border-color: var(--color-focus-ring);
   }
 
+  /* Refused text doubles the frame's edge inside it, as a refused field does (`VTextInput`). */
+  &.invalid {
+    outline: 1px solid var(--color-danger);
+    outline-offset: -2px;
+
+    &:not(:has(.markdown-body:focus-within)) {
+      border-color: var(--color-danger);
+    }
+  }
+
   &.disabled {
     border-color: var(--color-rule);
 
@@ -486,23 +497,17 @@ defineExpose({
   padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
 }
 
-.markdown-hint,
-.markdown-error {
-  min-width: 0;
-  font: var(--font-detail);
-}
-
 /* One short line: what gives way next to a wide action is the row, not this. */
 .markdown-hint {
   flex: 1 1 auto;
+  min-width: 0;
   color: var(--color-text-muted);
+  font: var(--font-detail);
   white-space: nowrap;
 }
 
 .markdown-error {
   flex: 1 1 8rem;
-  color: var(--color-danger);
-  overflow-wrap: anywhere;
 }
 
 .markdown-actions {

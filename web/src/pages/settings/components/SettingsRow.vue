@@ -1,5 +1,7 @@
 <script setup lang="ts">
 /** A setting as the screen reads it: what it is on the left, its control on the right. */
+import FieldError from '@/shared/ui/FieldError.vue'
+
 defineProps<{
   label: string
   /** Why the last change to this row did not hold; it stands under the control. */
@@ -34,13 +36,11 @@ defineProps<{
     </span>
     <div class="settings-row-control">
       <slot />
-      <p
+      <FieldError
         v-if="failure"
-        class="settings-row-failure"
         role="alert"
+        >{{ failure }}</FieldError
       >
-        {{ failure }}
-      </p>
     </div>
   </div>
 </template>
@@ -84,13 +84,6 @@ defineProps<{
   display: grid;
   gap: var(--space-2);
   min-width: 0;
-}
-
-.settings-row-failure {
-  margin: 0;
-  color: var(--color-danger);
-  font: var(--font-detail);
-  overflow-wrap: anywhere;
 }
 
 @container workspace (width <= 696px) {

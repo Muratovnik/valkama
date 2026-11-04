@@ -123,3 +123,30 @@ test('the section keeps its edges and its words in a forced palette', async ({ p
   expect(await trigger.evaluate((node) => getComputedStyle(node).outlineStyle)).toBe('solid')
   await group.screenshot({ path: info.outputPath('opening-forced.png') })
 })
+
+// A forced palette paints the danger ink and the muted one alike, so a refused command has
+// to read as refused by its shape: a mark beside its words, which the hint has not, and an
+// edge on the field that its empty, untouched self has not.
+test('a refused command is told from its hint without colour', async ({ page }) => {
+  await page.emulateMedia({ forcedColors: 'active' })
+  await page.setViewportSize({ width: 1280, height: 1400 })
+  const group = await openSection(page, 'Opening sessions and files')
+  await group.getByRole('combobox', { name: 'Claude Code: Always open in' }).click()
+  await page.getByRole('option', { name: 'Your own command' }).click()
+  const command = group.getByRole('textbox', { name: 'Command' })
+  // Away from the field, so that neither look is its hover.
+  await page.mouse.move(0, 0)
+  const untouched = await command.screenshot()
+
+  await command.focus()
+  await page.keyboard.press('Tab')
+  await expect(command).toHaveAttribute('aria-invalid', 'true')
+  const refused = await command.screenshot()
+  expect(refused.equals(untouched), 'the refused field looks untouched').toBe(false)
+  const message = page.locator(`#${await command.getAttribute('aria-describedby')}`)
+  await expect(message).toHaveText('Enter a command to open sessions with.')
+  await expect(message.locator('svg')).toHaveCount(1)
+  const hint = group.getByText('Runs instead of opening the session', { exact: false })
+  await expect(hint).toBeVisible()
+  await expect(hint.locator('svg')).toHaveCount(0)
+})

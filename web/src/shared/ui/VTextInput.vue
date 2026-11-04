@@ -269,6 +269,21 @@ defineExpose({
     block-size: var(--size-control-height-compact);
     min-block-size: var(--size-control-height-compact);
   }
+
+  /* A refused value doubles the field's edge, inside it so nothing moves, and keeps it
+     while the field has focus. The danger ink says it once more where colour shows; a
+     forced palette paints every edge one colour, and the width is what is left to say it.
+     A bare text area has no edge: the frame its host draws doubles its own. */
+  &[aria-invalid='true']:not(.bare) {
+    border-color: var(--color-danger);
+    outline: 1px solid var(--color-danger);
+    outline-offset: -2px;
+
+    /* Focus still turns the outer edge, as on any field. */
+    &:focus-visible {
+      border-color: var(--color-focus-ring);
+    }
+  }
 }
 
 textarea.control {

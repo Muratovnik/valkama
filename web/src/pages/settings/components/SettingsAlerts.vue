@@ -16,6 +16,7 @@ import type { AlertReadiness } from '@/pages/settings/utils/alertReadiness.ts'
 import { ALERT_CONTENTS, ALERT_EVENTS } from '@/shared/api/alertsApi.ts'
 import type { AlertEvent } from '@/shared/api/alertsApi.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
+import FieldError from '@/shared/ui/FieldError.vue'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 import SelectionControl from '@/shared/ui/SelectionControl.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
@@ -91,12 +92,11 @@ function readinessDetail(answer: AlertReadiness): string {
       v-if="failureOf('locale')"
       #note
     >
-      <p
+      <FieldError
         class="settings-alerts-failure"
         role="alert"
+        >{{ failureOf('locale') }}</FieldError
       >
-        {{ failureOf('locale') }}
-      </p>
     </template>
     <PlatformStatePanel
       :state="panelState"
@@ -211,13 +211,12 @@ function readinessDetail(answer: AlertReadiness): string {
             role="status"
             >{{ t('alerts.testSent') }}</span
           >
-          <p
+          <FieldError
             v-else-if="testRefusal"
             class="settings-alerts-failure"
             role="alert"
+            >{{ testRefusal }}</FieldError
           >
-            {{ testRefusal }}
-          </p>
         </SettingsRow>
       </template>
     </PlatformStatePanel>
@@ -288,13 +287,6 @@ function readinessDetail(answer: AlertReadiness): string {
 
 .settings-alerts-detail {
   color: var(--color-text-muted);
-  font: var(--font-detail);
-  overflow-wrap: anywhere;
-}
-
-.settings-alerts-failure {
-  margin: 0;
-  color: var(--color-danger);
   font: var(--font-detail);
   overflow-wrap: anywhere;
 }

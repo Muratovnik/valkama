@@ -246,6 +246,7 @@ describe('MarkdownEditor', () => {
     const { wrapper } = mountEditor({ slots: { actions: '<button>Send</button>' } })
     const foot = wrapper.get('.markdown-foot')
     expect(foot.get('.markdown-hint').text()).toBe('Markdown · Ctrl+Enter')
+    expect(foot.get('.markdown-hint').find('svg').exists()).toBe(false)
     expect(foot.get('.markdown-actions button').text()).toBe('Send')
     expect(foot.element.lastElementChild?.classList.contains('markdown-actions')).toBe(true)
   })
@@ -258,6 +259,8 @@ describe('MarkdownEditor', () => {
     expect(wrapper.find('.markdown-hint').exists()).toBe(false)
     const message = wrapper.get('[role="alert"]')
     expect(message.text()).toBe('Too long')
+    // A mark the hint has not, so it reads as a refusal where colour does not show.
+    expect(message.find('svg').exists()).toBe(true)
     const field = wrapper.get('textarea')
     expect(field.attributes('aria-invalid')).toBe('true')
     expect(field.attributes('aria-describedby')).toBe(message.attributes('id'))

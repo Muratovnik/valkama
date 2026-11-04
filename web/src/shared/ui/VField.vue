@@ -15,9 +15,11 @@
  * An error is part of the field too: it stands under the control, and its id
  * goes to the slot so the control can name it with `aria-describedby`. A form
  * that only says "fill in the required fields" at its foot leaves the reader to
- * find which field it meant.
+ * find which field it meant. It carries a mark the hint has not (`FieldError`).
  */
 import { computed, useId } from 'vue'
+
+import FieldError from '@/shared/ui/FieldError.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -49,11 +51,10 @@ const describedBy = computed(() => (props.error ? errorId : undefined))
       >{{ label }}</span
     >
     <slot :error-id="describedBy" />
-    <small
+    <FieldError
       v-if="error"
       :id="errorId"
-      class="field-error"
-      >{{ error }}</small
+      >{{ error }}</FieldError
     >
     <small
       v-if="hint"
@@ -80,11 +81,6 @@ const describedBy = computed(() => (props.error ? errorId : undefined))
 
 .field-hint {
   color: var(--color-text-muted);
-  font: var(--font-detail);
-}
-
-.field-error {
-  color: var(--color-danger);
   font: var(--font-detail);
 }
 </style>
