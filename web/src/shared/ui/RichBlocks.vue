@@ -7,22 +7,33 @@
  * weight: the section this text stands in owns the outline (see `richText.ts`).
  *
  * `document` is a whole Markdown file read on its own, which owns its outline: a
- * heading is a heading there, at the level `parseRichDocument` gave it, and a frame too
- * wide for its content is a stop on the keyboard's way (`keyScroll`). A card never passes
- * it, and nothing it draws changes.
+ * heading is a heading there, at the level `parseRichDocument` gave it, a frame too
+ * wide for its content is a named stop on the keyboard's way (`keyScroll`), and a table's
+ * columns take the width their words ask for. A card never passes it, and nothing it draws
+ * changes.
  */
 import { useId } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { keyScroll } from '@/shared/lib/keyScroll.ts'
+import { inlineWords } from '@/shared/lib/richText.ts'
 import type { RichAlign, RichBlock, RichListItem } from '@/shared/lib/richText.ts'
 import RichInlines from '@/shared/ui/RichInlines.vue'
 
 type List = Extract<RichBlock, { kind: 'list' }>
 
-withDefaults(defineProps<{ blocks: readonly RichBlock[]; document?: boolean }>(), {
+const props = withDefaults(defineProps<{ blocks: readonly RichBlock[]; document?: boolean }>(), {
   document: false,
 })
 defineOptions({ name: 'RichBlocks' })
+
+type Table = Extract<RichBlock, { kind: 'table' }>
+const { t } = useI18n()
+/** A Markdown table has no caption, so its head names it. */
+const tableFrame = (table: Table) =>
+  props.document &&
+  t('textFrames.table', { columns: table.header.map((cell) => inlineWords(cell)).join(', ') })
+const codeFrame = () => props.document && t('textFrames.code')
 
 const vKeyScroll = keyScroll
 const id = useId()
@@ -66,7 +77,7 @@ const headingTag = (heading: Heading) => `h${heading.level ?? 2}`
       </p>
       <pre
         v-else-if="block.kind === 'code'"
-        v-key-scroll="document"
+        v-key-scroll="codeFrame()"
         class="rich-pre"
         >{{ block.text }}</pre>
       <blockquote
@@ -112,7 +123,7 @@ const headingTag = (heading: Heading) => `h${heading.level ?? 2}`
       />
       <div
         v-else-if="block.kind === 'table'"
-        v-key-scroll="document"
+        v-key-scroll="tableFrame(block)"
         class="rich-table-frame"
         :class="{ 'keeps-words': document }"
       >
@@ -125,7 +136,7 @@ const headingTag = (heading: Heading) => `h${heading.level ?? 2}`
                 class="rich-cell rich-head"
                 :class="alignClass(block.align[column] ?? null)"
               >
-                <RichInlines :nodes="cell" />
+                <span class="rich-cell-words"><RichInlines :nodes="cell" /></span>
               </th>
             </tr>
           </thead>
@@ -140,7 +151,7 @@ const headingTag = (heading: Heading) => `h${heading.level ?? 2}`
                 class="rich-cell"
                 :class="alignClass(block.align[column] ?? null)"
               >
-                <RichInlines :nodes="cell" />
+                <span class="rich-cell-words"><RichInlines :nodes="cell" /></span>
               </td>
             </tr>
           </tbody>
@@ -252,7 +263,10 @@ const headingTag = (heading: Heading) => `h${heading.level ?? 2}`
 }
 
 /* A wide table scrolls inside its own frame rather than widening the card. A document's
-   holds its words whole and scrolls sooner: a table squeezed to fit broke them mid-word. */
+   holds its words whole and scrolls sooner: a table squeezed to fit broke them mid-word. Each
+   column there is as wide as its words ask, up to a measure a line of prose reads at: one
+   floor for every column set them all equal, short ones with room to spare and long ones
+   wrapped into rows of empty space. Only a word longer than the measure breaks. */
 .rich-table-frame {
   max-width: 100%;
   overflow-x: auto;
@@ -260,9 +274,26 @@ const headingTag = (heading: Heading) => `h${heading.level ?? 2}`
   &.keeps-words {
     overflow-wrap: normal;
 
-    & .rich-cell {
-      min-width: 16ch;
+    & .rich-cell-words {
+      display: block;
+      width: max-content;
+      max-width: 32ch;
+      overflow-wrap: break-word;
     }
+  }
+}
+
+/* A frame that scrolls has its edge drawn where more of it is hidden, so a column cut there
+   reads as one that goes on, at the top of a tall table too, far from its scrollbar. A line
+   and not a shade, so a forced palette keeps it. */
+.rich-table-frame,
+.rich-pre {
+  &[data-more~='start'] {
+    border-inline-start: 2px solid var(--color-rule-strong);
+  }
+
+  &[data-more~='end'] {
+    border-inline-end: 2px solid var(--color-rule-strong);
   }
 }
 

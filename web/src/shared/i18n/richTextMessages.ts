@@ -29,6 +29,10 @@ export const richTextMessages = {
       noSuggestions: 'No tasks match “{query}”.',
       queryPrompt: 'Type a number or a word from the title.',
     },
+    textFrames: {
+      table: 'Table: {columns}',
+      code: 'Code block',
+    },
     textLinks: {
       openItem: 'Open task {reference}',
       openSession: 'Open session',
@@ -64,6 +68,10 @@ export const richTextMessages = {
       found: 'Найдена {count} задача | Найдено {count} задачи | Найдено {count} задач',
       noSuggestions: 'Задач по «{query}» нет.',
       queryPrompt: 'Введите номер или слово из названия.',
+    },
+    textFrames: {
+      table: 'Таблица: {columns}',
+      code: 'Фрагмент кода',
     },
     textLinks: {
       openItem: 'Открыть задачу {reference}',

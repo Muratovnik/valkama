@@ -6,6 +6,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { i18n } from '@/shared/i18n/index.ts'
 import type { RichBlock } from '@/shared/lib/richText.ts'
 import RichBlocks from '@/shared/ui/RichBlocks.vue'
 
@@ -60,8 +61,19 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-const drawn = (blocks: RichBlock[], document = true) =>
-  mount(RichBlocks, { props: { blocks, document }, attachTo: globalThis.document.body })
+const drawn = (blocks: RichBlock[], document = true) => {
+  i18n.global.locale.value = 'en'
+  return mount(RichBlocks, {
+    props: { blocks, document },
+    attachTo: globalThis.document.body,
+    global: { plugins: [i18n] },
+  })
+}
+
+const scrolledTo = (frame: Element, left: number) => {
+  Object.defineProperty(frame, 'scrollLeft', { configurable: true, value: left })
+  frame.dispatchEvent(new Event('scroll'))
+}
 
 describe('a frame in a document', () => {
   it('watches frames and nothing else', async () => {
@@ -106,7 +118,46 @@ describe('a frame in a document', () => {
       frame.setAttribute = (name: string, value: string) => (order.push('mark'), set(name, value))
     }
     resized()
-    expect(order).toEqual(['measure', 'measure', 'measure', 'mark', 'mark', 'mark'])
+    const firstMark = order.indexOf('mark')
+    expect(order.filter((step) => step === 'measure')).toHaveLength(3)
+    expect(firstMark).toBeGreaterThan(order.lastIndexOf('measure'))
+    wrapper.unmount()
+  })
+
+  it.each([
+    ['a table, by its head', TABLE, '.rich-table-frame', 'Table: Head'],
+    ['code, by what it is', CODE, 'pre', 'Code block'],
+  ])('while it is a stop it is a region named for %s', async (_name, block, part, name) => {
+    const wrapper = drawn([block])
+    await flushPromises()
+    const frame = wrapper.get(part).element
+    measure(frame, 900, 400)
+    resized()
+    expect(frame.getAttribute('role')).toBe('region')
+    expect(frame.getAttribute('aria-label')).toBe(name)
+
+    measure(frame, 900, 900)
+    resized()
+    expect(frame.hasAttribute('role')).toBe(false)
+    expect(frame.hasAttribute('aria-label')).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('says at which edge more of it is hidden, as the reader scrolls it', async () => {
+    const wrapper = drawn([TABLE])
+    await flushPromises()
+    const frame = wrapper.get<HTMLElement>('.rich-table-frame').element
+    measure(frame, 900, 400)
+    scrolledTo(frame, 0)
+    resized()
+    expect(frame.dataset.more).toBe('end')
+    scrolledTo(frame, 200)
+    expect(frame.dataset.more).toBe('start end')
+    scrolledTo(frame, 500)
+    expect(frame.dataset.more).toBe('start')
+    measure(frame, 900, 900)
+    resized()
+    expect(frame.dataset.more).toBeUndefined()
     wrapper.unmount()
   })
 

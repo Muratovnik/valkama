@@ -31,6 +31,7 @@ export const en = {
   requests: inputRequestMessages.en.requests,
   editor: richTextMessages.en.editor,
   textLinks: richTextMessages.en.textLinks,
+  textFrames: richTextMessages.en.textFrames,
   documentLinks: richTextMessages.en.documentLinks,
   ...connectionMessages.en,
   app: {

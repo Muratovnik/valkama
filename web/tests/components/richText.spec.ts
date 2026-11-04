@@ -22,6 +22,10 @@ const i18n = () => createI18n({ legacy: false, locale: 'en', messages })
 
 type Resolve = Parameters<typeof provideReferenceLinks>[0]
 
+/** A text drawn on its own, with the words every page of the app has. */
+const drawn = (source: string) =>
+  mount(RichText, { props: { source }, global: { plugins: [i18n()] } })
+
 /** One layer of reference links, as a page provides it, around whatever it holds. */
 const Layer = defineComponent({
   props: { resolve: { type: Function as PropType<Resolve>, required: true } },
@@ -67,6 +71,7 @@ describe('RichText', () => {
 
   it('draws each construct as its element, and a heading below the section heading', () => {
     const wrapper = mount(RichText, {
+      global: { plugins: [i18n()] },
       props: {
         source: [
           '# Title',
@@ -101,14 +106,14 @@ describe('RichText', () => {
   })
 
   it('keeps a line break written as one', () => {
-    const wrapper = mount(RichText, { props: { source: 'first line\nsecond line' } })
+    const wrapper = drawn('first line\nsecond line')
     expect(wrapper.findAll('p')).toHaveLength(1)
     expect(wrapper.findAll('br')).toHaveLength(1)
   })
 
   it('never renders raw HTML, and shows it as the text it was', () => {
     const source = '<img src=x onerror="alert(1)"> <script>alert(1)</script> <b>bold</b>'
-    const wrapper = mount(RichText, { props: { source } })
+    const wrapper = drawn(source)
     expect(wrapper.find('img').exists()).toBe(false)
     expect(wrapper.find('script').exists()).toBe(false)
     expect(wrapper.find('b').exists()).toBe(false)
@@ -117,6 +122,7 @@ describe('RichText', () => {
 
   it('neutralises javascript: and data: links and opens a safe one outside the app', () => {
     const wrapper = mount(RichText, {
+      global: { plugins: [i18n()] },
       props: {
         source:
           '[bad](javascript:alert(1)) [worse](data:text/html,x) [good](https://example.org/a)',
@@ -133,7 +139,7 @@ describe('RichText', () => {
   })
 
   it('is plain text for every reference when nothing above resolves one', () => {
-    const wrapper = mount(RichText, { props: { source: 'MAIN-12 at a1b2c3d' } })
+    const wrapper = drawn('MAIN-12 at a1b2c3d')
     expect(wrapper.find('button').exists()).toBe(false)
     expect(wrapper.text()).toBe('MAIN-12 at a1b2c3d')
   })

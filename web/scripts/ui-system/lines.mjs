@@ -62,8 +62,10 @@ export const LINE_BUDGET = new Map([
   ['shared/ui/ReferencePreview.vue', 1], // Overlay edge of the card a reference shows on hover.
   ['shared/ui/SemanticState.vue', 1],
   // Markdown in free text: a quote's edge (the step quote's own), a thematic
-  // break and a table's row dividers, which is what a reader expects of each.
-  ['shared/ui/RichBlocks.vue', 3],
+  // break and a table's row dividers, which is what a reader expects of each;
+  // and in a document, the start and end edges of a frame that scrolls, drawn
+  // only on the side where more of it is hidden (status edges of the frame).
+  ['shared/ui/RichBlocks.vue', 5],
 
   // Widgets and pages: row and section dividers, table header rules, sticky
   // edges, timeline spines — plus status edges where a state names itself.

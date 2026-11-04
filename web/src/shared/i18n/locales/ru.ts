@@ -31,6 +31,7 @@ export const ru = {
   requests: inputRequestMessages.ru.requests,
   editor: richTextMessages.ru.editor,
   textLinks: richTextMessages.ru.textLinks,
+  textFrames: richTextMessages.ru.textFrames,
   documentLinks: richTextMessages.ru.documentLinks,
   ...connectionMessages.ru,
   app: {
