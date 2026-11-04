@@ -42,6 +42,14 @@ const selectionOwners = new Set([
  */
 const segmentedOwners = new Set(['shared/ui/SegmentedControl.vue', 'shared/ui/ToggleChip.vue'])
 /**
+ * Files allowed to author a tab role. A row that switches panels is the same segmented row
+ * with tab semantics, and its panel has to name the tab that shows it: two halves of one
+ * contract, so a screen that wrote either half for itself would let the two disagree.
+ */
+const tabOwners = new Set(['shared/ui/SegmentedControl.vue', 'shared/ui/TabPanel.vue'])
+/** `role="tab"`, and a bound role that may come out as one: `:role="on ? 'tab' : …"`. */
+const TAB_ROLE = /\brole\s*=\s*(["'])(?:(?!\1).)*?\btab(?:list|panel)?\b/i
+/**
  * Files allowed to author a text control.
  *
  * Checkboxes, radios and the search box are excluded: the first two are a
@@ -146,6 +154,12 @@ const SOURCE_RULES = [
     when: ({ markup }) =>
       /\baria-pressed\b/.test(markup) || /\brole\s*=\s*["']radio["']/i.test(markup),
     message: 'a pressed-button group belongs to SegmentedControl',
+  },
+  {
+    component: true,
+    owners: tabOwners,
+    when: ({ markup }) => TAB_ROLE.test(markup),
+    message: 'tabs and their panels belong to SegmentedControl and TabPanel',
   },
   {
     component: true,

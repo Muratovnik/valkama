@@ -35,6 +35,7 @@ import { computed, ref, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import InspectorActivity from '@/widgets/work-item-inspector/components/InspectorActivity.vue'
+import InspectorBack from '@/widgets/work-item-inspector/components/InspectorBack.vue'
 import InspectorChain from '@/widgets/work-item-inspector/components/InspectorChain.vue'
 import InspectorExecution from '@/widgets/work-item-inspector/components/InspectorExecution.vue'
 import InspectorFacts from '@/widgets/work-item-inspector/components/InspectorFacts.vue'
@@ -72,8 +73,8 @@ import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import DrawerFrame from '@/shared/ui/DrawerFrame.vue'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
+import TabPanel from '@/shared/ui/TabPanel.vue'
 import VButton from '@/shared/ui/VButton.vue'
-import VIcon from '@/shared/ui/VIcon.vue'
 
 const props = defineProps<{
   /** True while a related item was opened from inside this drawer. */
@@ -109,7 +110,7 @@ const { t } = useI18n()
 const busy = ref(false)
 const frame = ref<InstanceType<typeof DrawerFrame> | null>(null)
 const facts = ref<InstanceType<typeof InspectorFacts> | null>(null)
-const { leaveUnreadable, section, sections, shownSection } = useInspectorSections(
+const { leaveUnreadable, section, sections, shownSection, tabs } = useInspectorSections(
   () => props.writable,
   () => frame.value?.scrollToContent(),
   () => props.projectId,
@@ -295,20 +296,10 @@ defineExpose({ close, openFrom })
     </template>
 
     <template #controls>
-      <VButton
+      <InspectorBack
         v-if="canGoBack"
-        class="head-back"
-        size="compact"
-        variant="ghost"
-        :aria-label="t('workItem.back')"
-        @click="void leave(() => emit('back'))"
-      >
-        <VIcon
-          name="chevron-left"
-          :size="16"
-        />
-        <span class="head-back-word">{{ t('workItem.back') }}</span>
-      </VButton>
+        @back="void leave(() => emit('back'))"
+      />
     </template>
 
     <template
@@ -386,6 +377,7 @@ defineExpose({ close, openFrom })
         v-model="shownSection"
         :label="t('workItem.sections')"
         :sections="sections"
+        :tabs="tabs"
       />
     </template>
 
@@ -417,66 +409,72 @@ defineExpose({ close, openFrom })
               {{ t('platform.actions.retry') }}
             </VButton>
           </div>
-          <InspectorOverview
-            v-show="section === 'overview'"
-            ref="overview"
-            v-model:asking="questionWaits"
-            v-model:questions="questions"
-            :item="payload"
-            :target="target"
-            :writable="writable && !busy"
-            @changed="reloaded"
-            @hold-focus="holdFocus"
-            @refresh="load"
-            @resume="moveTo"
-            @tick="tick"
+          <TabPanel
+            class="inspector-panel"
+            :tabs="tabs"
+            :value="section"
           >
-            <template #composition>
-              <InspectorChain
-                ref="chainSection"
-                :chain="chain.chain.value"
-                :container="payload.container"
-                :failed="chain.failed.value"
-                :loading="chain.loading.value"
-                :readable="writable"
-                :scope="chain.scope.value"
-                @scope="chain.setScope"
-                @retry="chain.load"
-                @graph="(shown, branch) => emit('chain', shown, branch)"
-                @open="openFrom"
-              />
-            </template>
-          </InspectorOverview>
-          <InspectorRelations
-            v-if="section === 'relations'"
-            :item="payload"
-            :writable="writable && !busy"
-            @changed="reloaded"
-            @open="openFrom"
-          />
-          <InspectorExecution
-            v-else-if="section === 'execution'"
-            :busy="busy"
-            :error="running.error.value"
-            :executions="running.executions.value"
-            :identity="`${projectId}:${resourceRef.resource_id}:${reference}`"
-            :loading="running.loading.value"
-            :writable="writable"
-            @launch="running.openLaunch"
-            @stop="running.stop"
-          />
-          <InspectorMemory
-            v-else-if="section === 'memory'"
-            :item="payload"
-            :project-id="projectId"
-            :writable="writable && !busy"
-            @attach="attachMemory"
-          />
-          <InspectorActivity
-            v-else-if="section === 'activity'"
-            :item="payload"
-            :questions="questions"
-          />
+            <InspectorOverview
+              v-show="section === 'overview'"
+              ref="overview"
+              v-model:asking="questionWaits"
+              v-model:questions="questions"
+              :item="payload"
+              :target="target"
+              :writable="writable && !busy"
+              @changed="reloaded"
+              @hold-focus="holdFocus"
+              @refresh="load"
+              @resume="moveTo"
+              @tick="tick"
+            >
+              <template #composition>
+                <InspectorChain
+                  ref="chainSection"
+                  :chain="chain.chain.value"
+                  :container="payload.container"
+                  :failed="chain.failed.value"
+                  :loading="chain.loading.value"
+                  :readable="writable"
+                  :scope="chain.scope.value"
+                  @scope="chain.setScope"
+                  @retry="chain.load"
+                  @graph="(shown, branch) => emit('chain', shown, branch)"
+                  @open="openFrom"
+                />
+              </template>
+            </InspectorOverview>
+            <InspectorRelations
+              v-if="section === 'relations'"
+              :item="payload"
+              :writable="writable && !busy"
+              @changed="reloaded"
+              @open="openFrom"
+            />
+            <InspectorExecution
+              v-else-if="section === 'execution'"
+              :busy="busy"
+              :error="running.error.value"
+              :executions="running.executions.value"
+              :identity="`${projectId}:${resourceRef.resource_id}:${reference}`"
+              :loading="running.loading.value"
+              :writable="writable"
+              @launch="running.openLaunch"
+              @stop="running.stop"
+            />
+            <InspectorMemory
+              v-else-if="section === 'memory'"
+              :item="payload"
+              :project-id="projectId"
+              :writable="writable && !busy"
+              @attach="attachMemory"
+            />
+            <InspectorActivity
+              v-else-if="section === 'activity'"
+              :item="payload"
+              :questions="questions"
+            />
+          </TabPanel>
         </template>
       </PlatformStatePanel>
     </InspectorReferenceScope>

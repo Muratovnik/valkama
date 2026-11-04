@@ -366,6 +366,23 @@ test('the recurrence gate rejects a locally rebuilt segmented control', () => {
   )
 })
 
+test('the recurrence gate rejects tabs rebuilt outside the shared tab list and panel', () => {
+  for (const source of [
+    '<template><div role="tablist"><button role="tab">One</button></div></template>',
+    '<template><section role="tabpanel" aria-labelledby="one" /></template>',
+    `<template><button :role="tabs ? 'tab' : 'button'">One</button></template>`,
+  ]) {
+    const violations = scanFixture('future/Sections.vue', source)
+    assert.equal(violations.length, 1, source)
+    assert.match(violations[0], /belong to SegmentedControl and TabPanel/)
+  }
+  for (const owner of ['shared/ui/SegmentedControl.vue', 'shared/ui/TabPanel.vue'])
+    assert.deepEqual(
+      scanFixture(owner, `<template><div :role="tabs ? 'tabpanel' : undefined" /></template>`),
+      [],
+    )
+})
+
 test('the recurrence gate rejects a locally rebuilt text field but not a checkbox', () => {
   for (const source of [
     '<template><input v-model="q" type="text" /></template>',

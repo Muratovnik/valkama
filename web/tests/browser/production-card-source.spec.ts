@@ -66,7 +66,7 @@ async function openCard(
 }
 
 async function toRelations(drawer: Locator, name = 'Relations') {
-  await drawer.getByRole('radio', { name, exact: true }).click()
+  await drawer.getByRole('tab', { name, exact: true }).click()
   return drawer.locator('.ref-row').first()
 }
 

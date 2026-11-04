@@ -13,8 +13,18 @@
  * a few (WAI-ARIA APG): Tab reaches the group once, on the chosen segment, and the arrows,
  * Home and End move focus and the choice together. It was a group of pressed buttons
  * before, each its own Tab stop, and the arrows a radio group answers to did nothing.
+ *
+ * A row that switches what a panel shows — a card's sections, Settings' sections, an
+ * editor's Write and Preview — is tabs in that pattern, not a value: given `tabs`, the row is
+ * a tab list, each segment a tab naming the panel it shows (`TabPanel` names it back), and
+ * only Left, Right, Home and End move along it. Where a panel shows at once the arrows show
+ * it as they reach its tab; where showing one starts work that takes a while (`manual`),
+ * they move focus only, and Enter or Space shows it. A filter or a view of the same content
+ * stays a radio group: picking one changes a value and no panel takes the tab's name.
  */
 import { computed } from 'vue'
+
+import type { TabIds } from '@/shared/ui/tabIds.ts'
 
 // The segment shape stays inline: naming it would have to be exported for the
 // generic component's own declaration, and an export nothing imports is dead
@@ -24,10 +34,14 @@ const props = withDefaults(
     label: string
     modelValue: T
     options: readonly { label: string; value: T; disabled?: boolean; title?: string }[]
+    /** Whether the arrows show a tab's panel as they reach it, or Enter does. */
+    activation?: 'automatic' | 'manual'
     /** `inline` rides a row of icon buttons: an editor's toolbar, at their 28px. */
     size?: 'default' | 'compact' | 'inline'
+    /** The ids that make the row a tab list over the panel it shows. */
+    tabs?: TabIds | null
   }>(),
-  { size: 'default' },
+  { size: 'default', tabs: null, activation: 'automatic' },
 )
 
 const emit = defineEmits<{ 'update:modelValue': [value: T] }>()
@@ -40,6 +54,23 @@ function isCurrent(option: { value: T }) {
 function select(option: { value: T; disabled?: boolean }) {
   if (option.disabled || isCurrent(option)) return
   emit('update:modelValue', option.value)
+}
+
+/** A tab list over a panel, or a radio group of values. */
+const groupRole = computed(() => (props.tabs ? 'tablist' : 'radiogroup'))
+
+/** What a segment is to a screen reader: a tab naming the panel it shows, or a radio. */
+function segmentRole(option: { value: T }) {
+  const { tabs } = props
+  if (!tabs) return { 'role': 'radio', 'aria-checked': isCurrent(option) }
+  // Only the panel shown is in the page, so only its tab points at it.
+  const shown = isCurrent(option)
+  return {
+    'id': tabs.tab(option.value),
+    'role': 'tab',
+    'aria-selected': shown,
+    'aria-controls': shown ? tabs.panel(option.value) : undefined,
+  }
 }
 
 /** The one Tab stop: the chosen segment, or the first that can be chosen when it cannot. */
@@ -59,6 +90,8 @@ const STEPS: Record<string, (at: number, last: number) => number> = {
   Home: () => 0,
   End: (_, last) => last,
 }
+/** A row of tabs is walked along the row; Up and Down are the page's. */
+const ACROSS = new Set(['ArrowDown', 'ArrowUp'])
 
 /** The next segment that can be chosen in the key's direction, around the ends. */
 function step(key: string, from: number) {
@@ -75,6 +108,7 @@ function step(key: string, from: number) {
 
 function move(event: KeyboardEvent) {
   if (!Object.hasOwn(STEPS, event.key) || event.altKey || event.ctrlKey || event.metaKey) return
+  if (props.tabs && ACROSS.has(event.key)) return
   const segment = event.currentTarget as HTMLButtonElement
   const segments = [...(segment.parentElement?.querySelectorAll('button') ?? [])]
   const from = segments.indexOf(segment)
@@ -86,25 +120,24 @@ function move(event: KeyboardEvent) {
   // the scroller to where the segment would stand unstuck.
   segments[to]?.focus({ preventScroll: true })
   const option = props.options[to]
-  if (option) select(option)
+  if (option && !(props.tabs && props.activation === 'manual')) select(option)
 }
 </script>
 
 <template>
   <div
     class="segmented"
-    role="radiogroup"
+    :role="groupRole"
     :class="`size-${size}`"
     :aria-label="label"
   >
     <button
       v-for="option in options"
+      v-bind="segmentRole(option)"
       :key="option.value"
       type="button"
       class="segmented-option"
-      role="radio"
       :class="{ active: isCurrent(option) }"
-      :aria-checked="isCurrent(option)"
       :tabindex="tabStop(option)"
       :disabled="option.disabled"
       :title="option.title"

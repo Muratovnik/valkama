@@ -6,6 +6,8 @@ import InstallationHealth from '@/pages/settings/components/InstallationHealth.v
 import SettingsGeneral from '@/pages/settings/components/SettingsGeneral.vue'
 
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
+import { useTabIds } from '@/shared/ui/tabIds.ts'
+import TabPanel from '@/shared/ui/TabPanel.vue'
 
 type SettingsSection = 'general' | 'diagnostics'
 
@@ -27,6 +29,12 @@ const activeSection = computed<SettingsSection>(() =>
 const sectionOptions = computed(() =>
   sectionIds.map((value) => ({ value, label: t(`settings.section.${value}`) })),
 )
+/**
+ * The sections are tabs over the page. Diagnostics runs the installation's checks when it is
+ * shown and takes a while to answer, and a section is an address too, so the arrows only walk
+ * the tabs and Enter or Space opens one (WAI-ARIA APG, manual activation).
+ */
+const tabs = useTabIds()
 
 function selectSection(section: SettingsSection) {
   emit('state', { section })
@@ -41,21 +49,28 @@ function selectSection(section: SettingsSection) {
     <header class="settings-page-head">
       <SegmentedControl
         class="settings-page-sections"
+        activation="manual"
         :model-value="activeSection"
         :options="sectionOptions"
         :label="t('settings.sectionLabel')"
+        :tabs="tabs"
         @update:model-value="selectSection"
       />
       <p class="settings-page-intro">{{ t(`settings.sectionIntro.${activeSection}`) }}</p>
     </header>
 
-    <SettingsGeneral
-      v-if="activeSection === 'general'"
-      :locale="locale"
-      @locale="(value) => emit('locale', value)"
-    />
-
-    <InstallationHealth v-else />
+    <TabPanel
+      class="settings-page-panel"
+      :tabs="tabs"
+      :value="activeSection"
+    >
+      <SettingsGeneral
+        v-if="activeSection === 'general'"
+        :locale="locale"
+        @locale="(value) => emit('locale', value)"
+      />
+      <InstallationHealth v-else />
+    </TabPanel>
   </section>
 </template>
 
@@ -83,6 +98,10 @@ function selectSection(section: SettingsSection) {
     color: var(--color-text-muted);
     font: var(--font-note);
   }
+}
+
+.settings-page-panel {
+  min-width: 0;
 }
 
 .settings-page-sections {

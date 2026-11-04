@@ -201,7 +201,7 @@ for (const width of [390, 1440]) {
     const drawer = page.locator('.drawer')
     await drawer
       .locator('.drawer-frame-tabs')
-      .getByRole('radio', { name: /Memory/iu })
+      .getByRole('tab', { name: /Memory/iu })
       .click()
     const form = drawer.locator('.memory-form')
     const input = form.getByRole('textbox')

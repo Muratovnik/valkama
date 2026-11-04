@@ -12,6 +12,7 @@ import { useI18n } from 'vue-i18n'
 
 import type { MarkdownTool } from '@/shared/lib/markdownEdits.ts'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
+import type { TabIds } from '@/shared/ui/tabIds.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -20,6 +21,8 @@ const props = defineProps<{
   disabled: boolean
   /** Whether the host offers tasks to link: a mention with no list to open is a lie. */
   mentions: boolean
+  /** Write and Preview are tabs over the text and its preview, which name them back. */
+  views: TabIds
 }>()
 const emit = defineEmits<{ format: [tool: MarkdownTool]; mention: [] }>()
 const preview = defineModel<boolean>('preview', { required: true })
@@ -64,7 +67,7 @@ const view = computed({
     preview.value = value === 'preview'
   },
 })
-const views = computed(() => [
+const viewOptions = computed(() => [
   { value: 'write' as const, label: t('editor.write') },
   { value: 'preview' as const, label: t('editor.preview') },
 ])
@@ -99,7 +102,8 @@ const views = computed(() => [
       v-model="view"
       size="inline"
       :label="t('editor.view')"
-      :options="views"
+      :options="viewOptions"
+      :tabs="views"
     />
   </div>
 </template>

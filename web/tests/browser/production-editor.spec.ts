@@ -112,7 +112,7 @@ for (const width of [1680, 1024, 390]) {
     await expect(surface).toHaveCSS('border-top-color', await focusColour(page))
     await expect(surface).toHaveCSS('outline-style', 'none')
     await expect(comment).toHaveCSS('outline-style', 'none')
-    await surface.getByRole('radio', { name: 'Preview', exact: true }).focus()
+    await surface.getByRole('tab', { name: 'Preview', exact: true }).focus()
     await expect(surface).toHaveCSS('border-top-color', resting)
   })
 }
@@ -166,12 +166,12 @@ test('switching to preview moves nothing, and the caret and the history are ther
   await select(comment, 2, 7)
   const before = await settledBox(surface)
 
-  await surface.getByRole('radio', { name: 'Preview', exact: true }).click()
+  await surface.getByRole('tab', { name: 'Preview', exact: true }).click()
   await expect(surface.locator('.markdown-preview li')).toHaveCount(2)
   await expect(drawer.getByRole('textbox', { name: 'Comment', exact: true })).toHaveCount(0)
   expect(await settledBox(surface)).toEqual(before)
 
-  await surface.getByRole('radio', { name: 'Write', exact: true }).click()
+  await surface.getByRole('tab', { name: 'Write', exact: true }).click()
   await expect(comment).toBeVisible()
   expect(await settledBox(surface)).toEqual(before)
   expect(await selection(comment)).toEqual([2, 7])
@@ -187,7 +187,7 @@ test('a long preview scrolls inside the height the text had', async ({ page }) =
   // Short to write and tall to read: every line of a table is a row of its own.
   await comment.fill(['| a |', '| - |', ...Array.from({ length: 12 }, () => '| 1 |')].join('\n'))
   const before = await settledBox(surface)
-  await surface.getByRole('radio', { name: 'Preview', exact: true }).click()
+  await surface.getByRole('tab', { name: 'Preview', exact: true }).click()
   const preview = surface.locator('.markdown-preview')
   await expect(preview.locator('tr')).toHaveCount(13)
   expect(await settledBox(surface)).toEqual(before)
@@ -406,9 +406,9 @@ test('the buttons are off in preview and while the text is being sent', async ({
   await comment.fill('A note')
   for (const tool of await tools.all()) await expect(tool).toBeEnabled()
 
-  await form.getByRole('radio', { name: 'Preview', exact: true }).click()
+  await form.getByRole('tab', { name: 'Preview', exact: true }).click()
   for (const tool of await tools.all()) await expect(tool).toBeDisabled()
-  await form.getByRole('radio', { name: 'Write', exact: true }).click()
+  await form.getByRole('tab', { name: 'Write', exact: true }).click()
 
   const release: (() => void)[] = []
   const held = new Promise<void>((resolve) => release.push(resolve))

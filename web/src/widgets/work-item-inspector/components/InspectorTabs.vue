@@ -8,15 +8,21 @@
  * two sections read as the whole strip. The one shown is brought into the row whenever
  * it changes, and so is each one the keyboard reaches, which the browser leaves where
  * it is while a sliver of it shows.
+ *
+ * They are tabs over the card's body, and every section shows the moment it is chosen —
+ * what one reads is read with the card — so the arrows show a section as they reach it.
  */
 import { nextTick, onMounted, ref, watch } from 'vue'
 
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
+import type { TabIds } from '@/shared/ui/tabIds.ts'
 
 const props = defineProps<{
   label: string
   sections: readonly ChoiceOption[]
+  /** The ids its sections share with the panel that shows the chosen one. */
+  tabs: TabIds
 }>()
 const shown = defineModel<string>({ required: true })
 const strip = ref<HTMLElement | null>(null)
@@ -58,6 +64,7 @@ function focused(event: FocusEvent) {
       size="compact"
       :label="label"
       :options="sections"
+      :tabs="tabs"
     />
   </div>
 </template>

@@ -44,7 +44,7 @@ test('a press rings nothing it lands on: a button, how a question ended, its she
   const sheet = card.filter({ hasText: 'Where should the comments go?' })
   const { comment, frame } = composer(page, drawer)
   // Each takes focus from the press, so the absent ring is not an absent focus.
-  const tab = drawer.getByRole('radio', { name: 'Overview', exact: true })
+  const tab = drawer.getByRole('tab', { name: 'Overview', exact: true })
   await tab.click()
   await expect(tab).toBeFocused()
   expect(await outline(tab)).toBe('none')

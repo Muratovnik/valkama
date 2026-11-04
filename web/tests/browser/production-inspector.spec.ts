@@ -68,7 +68,7 @@ test('Russian relations keep one hierarchy, aligned controls, and narrow content
   await expect(result).toHaveCSS('font-size', '15px')
   const resultBox = await result.boundingBox()
   expect(resultBox?.height).toBeGreaterThanOrEqual(140)
-  await drawer.getByRole('radio', { name: 'Связи', exact: true }).click()
+  await drawer.getByRole('tab', { name: 'Связи', exact: true }).click()
   await expect(drawer.getByRole('heading', { name: /^Связанная работа/ })).toHaveCount(1)
   await expect(drawer.getByRole('heading', { name: 'Свидетельства', exact: true })).toHaveCount(1)
   await expect(drawer.getByRole('heading', { name: 'Внешние ресурсы', exact: true })).toHaveCount(0)
@@ -220,16 +220,16 @@ for (const width of [1440, 390]) {
 
     // Every section is on the one row, or a scroll of that row away.
     const tabs = drawer.locator('.inspector-tabs')
-    const sections = tabs.getByRole('radio')
+    const sections = tabs.getByRole('tab')
     await expect(sections).toHaveCount(5)
     const tops = await sections.evaluateAll((nodes) =>
       nodes.map((node) => Math.round(node.getBoundingClientRect().top)),
     )
     expect(new Set(tops).size).toBe(1)
-    await tabs.getByRole('radio', { name: 'Системные события', exact: true }).focus()
-    await expect(
-      tabs.getByRole('radio', { name: 'Системные события', exact: true }),
-    ).toBeInViewport({ ratio: 0.99 })
+    await tabs.getByRole('tab', { name: 'Системные события', exact: true }).focus()
+    await expect(tabs.getByRole('tab', { name: 'Системные события', exact: true })).toBeInViewport({
+      ratio: 0.99,
+    })
 
     // Read down: the title, the facts and the text all move by the distance scrolled.
     const body = drawer.locator('.drawer-frame-body')
@@ -276,7 +276,7 @@ for (const width of [1440, 390]) {
     await body.evaluate((node) => node.scrollTo({ top: node.scrollHeight }))
     await expect.poll(() => topOf(tabs)).toBeCloseTo(edge, 0)
 
-    await pressWhereItStands(page, tabs.getByRole('radio', { name: 'System events', exact: true }))
+    await pressWhereItStands(page, tabs.getByRole('tab', { name: 'System events', exact: true }))
     await expect(drawer.locator('.overview')).toBeHidden()
     expect(await topOf(tabs)).toBeCloseTo(edge, 0)
     const start = await topOf(drawer.locator('.drawer-frame-content'))
@@ -297,7 +297,7 @@ for (const width of [1440, 390]) {
     await settledIn(drawer)
     await body.evaluate((node) => node.scrollTo({ top: node.scrollHeight }))
 
-    await pressWhereItStands(page, tabs.getByRole('radio', { name: /Memory/iu }))
+    await pressWhereItStands(page, tabs.getByRole('tab', { name: /Memory/iu }))
     await expect(drawer.locator('.overview')).toBeHidden()
     const start = await topOf(drawer.locator('.drawer-frame-content'))
     expect(start).toBeCloseTo((await topOf(tabs)) + (await heightOf(tabs)), 0)

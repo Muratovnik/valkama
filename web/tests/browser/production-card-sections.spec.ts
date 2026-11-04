@@ -62,7 +62,7 @@ for (const width of [1440, 390]) {
     await expect(drawer).toHaveCSS('transform', 'none')
     const body = drawer.locator('.drawer-frame-body')
     const tabs = drawer.locator('.drawer-frame-tabs')
-    const sections = tabs.getByRole('radio')
+    const sections = tabs.getByRole('tab')
     const edge = Math.round(await topOf(body))
     const atRest = Math.round(await topOf(tabs))
     const bodyBox = await body.boundingBox()
@@ -131,7 +131,7 @@ for (const width of [1440, 390]) {
     // The sections are one Tab stop, on the one shown.
     const frames = await framesOfTabs(tabs, async () => {
       await page.keyboard.press('Shift+Tab')
-      await expect(tabs.getByRole('radio', { checked: true })).toBeFocused()
+      await expect(tabs.getByRole('tab', { selected: true })).toBeFocused()
     })
     expect([...new Set(frames)]).toEqual([edge])
     expect(await body.evaluate((node) => node.scrollTop)).toBe(place)
@@ -159,7 +159,7 @@ test('a refused move answered from another section brings the checklist into vie
   await expect(drawer).toHaveCSS('transform', 'none')
   await drawer
     .locator('.drawer-frame-tabs')
-    .getByRole('radio', { name: 'Relations', exact: true })
+    .getByRole('tab', { name: 'Relations', exact: true })
     .click()
   await drawer.locator('.card-state').first().click()
   await page.locator('[role="option"]').last().click()
@@ -189,7 +189,7 @@ async function cardReadDown(page: Page, width: number, height: number) {
   await page.mouse.wheel(0, 1500)
   await expect.poll(() => topOf(tabs)).toBeCloseTo(edge, 0)
   const place = await body.evaluate((node) => node.scrollTop)
-  return { atRest, body, drawer, edge, place, sections: tabs.getByRole('radio'), tabs }
+  return { atRest, body, drawer, edge, place, sections: tabs.getByRole('tab'), tabs }
 }
 
 const placeOf = (body: Locator) => body.evaluate((node) => node.scrollTop)
@@ -230,7 +230,7 @@ for (const [width, height] of [
       const frames = await framesOfTabs(tabs, async () => {
         await page.keyboard.press(key)
         await expect(sections.nth(reached)).toBeFocused()
-        await expect(sections.nth(reached)).toHaveAttribute('aria-checked', 'true')
+        await expect(sections.nth(reached)).toHaveAttribute('aria-selected', 'true')
       })
       const room = await body.evaluate((node) => node.scrollHeight - node.clientHeight)
       const held = Math.max(before, atRest - room)
@@ -297,7 +297,7 @@ test('sections below the fold of a short window are still brought into view for 
   const drawer = page.locator('.drawer')
   await expect(drawer.locator('.card-facts')).toBeAttached()
   await expect(drawer).toHaveCSS('transform', 'none')
-  const sections = drawer.locator('.drawer-frame-tabs').getByRole('radio')
+  const sections = drawer.locator('.drawer-frame-tabs').getByRole('tab')
   await drawer
     .locator('.drawer-frame-lead')
     .locator('button')
@@ -327,3 +327,25 @@ for (const width of [1440, 390]) {
     expect(moves.length, JSON.stringify(frames)).toBeLessThanOrEqual(1)
   })
 }
+
+test('the sections are tabs over the panel they show, walked along the row', async ({ page }) => {
+  const { drawer, sections } = await cardReadDown(page, 1440, 700)
+  const strip = drawer.getByRole('tablist', { name: 'Work item sections' })
+  await expect(strip.getByRole('tab')).toHaveCount(5)
+  const panel = drawer.locator('.inspector-panel')
+  const named = async () => {
+    const shown = strip.getByRole('tab', { selected: true })
+    await expect(panel).toHaveAttribute('aria-labelledby', (await shown.getAttribute('id')) ?? '')
+    await expect(shown).toHaveAttribute('aria-controls', (await panel.getAttribute('id')) ?? '')
+  }
+  await named()
+  await sections.first().focus()
+  await page.keyboard.press('ArrowRight')
+  await expect(sections.nth(1)).toHaveAttribute('aria-selected', 'true')
+  await expect(drawer.locator('.overview')).toBeHidden()
+  await named()
+  // Up and Down are the page's: the row of tabs is walked left and right only.
+  await page.keyboard.press('ArrowDown')
+  await expect(sections.nth(1)).toBeFocused()
+  await expect(sections.nth(1)).toHaveAttribute('aria-selected', 'true')
+})

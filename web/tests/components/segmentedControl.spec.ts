@@ -1,7 +1,8 @@
 /**
  * The segmented control as a radio group (WAI-ARIA APG): one Tab stop on the chosen segment,
  * and the arrows, Home and End moving focus and the choice together, past a segment that
- * cannot be chosen and around the ends.
+ * cannot be chosen and around the ends. Given tab ids, it is a tab list over a panel: the
+ * arrows show a panel that shows at once, and only move focus over one that does not.
  */
 import { defineComponent, h, ref } from 'vue'
 
@@ -10,6 +11,8 @@ import type { VueWrapper } from '@vue/test-utils'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import SegmentedControl from '@/shared/ui/SegmentedControl.vue'
+import { useTabIds } from '@/shared/ui/tabIds.ts'
+import TabPanel from '@/shared/ui/TabPanel.vue'
 
 import { present } from '../support/present.ts'
 
@@ -102,5 +105,80 @@ describe('SegmentedControl', () => {
     board.dispatchEvent(tab)
     expect(chosen.value).toBe('board')
     expect(tab.defaultPrevented).toBe(false)
+  })
+})
+
+/** The same control switching panels: a tab list over the one panel it shows (WAI-ARIA APG). */
+function renderTabs(activation: 'automatic' | 'manual', start = 'board') {
+  const chosen = ref(start)
+  const Host = defineComponent(() => {
+    const tabs = useTabIds()
+    return () => [
+      h(SegmentedControl<string>, {
+        'label': 'Sections',
+        'modelValue': chosen.value,
+        'options': OPTIONS,
+        'tabs': tabs,
+        'activation': activation,
+        'onUpdate:modelValue': (value: string) => (chosen.value = value),
+      }),
+      h(TabPanel, { tabs, value: chosen.value }, () => `Panel ${chosen.value}`),
+    ]
+  })
+  const wrapper = mount(Host, { attachTo: document.body })
+  mounted.push(wrapper)
+  const tab = (label: string) =>
+    present(
+      wrapper.findAll('[role="tab"]').find((node) => node.text() === label),
+      label,
+    )
+  const press = async (key: string) => {
+    pressOn(document.activeElement, key)
+    await wrapper.vm.$nextTick()
+  }
+  return { chosen, press, tab, wrapper }
+}
+
+describe('SegmentedControl as tabs', () => {
+  it('is a tab list whose chosen tab is selected and controls the panel labelled by it', () => {
+    const { tab, wrapper } = renderTabs('automatic', 'graph')
+    expect(wrapper.findAll('[role="radiogroup"], [role="radio"]')).toHaveLength(0)
+    expect(wrapper.get('[role="tablist"]').attributes('aria-label')).toBe('Sections')
+    expect(tab('Graph').attributes('aria-selected')).toBe('true')
+    expect(tab('Board').attributes('aria-selected')).toBe('false')
+    expect(tab('Graph').attributes('aria-checked')).toBeUndefined()
+    const panel = wrapper.get('[role="tabpanel"]')
+    expect(tab('Graph').attributes('aria-controls')).toBe(panel.attributes('id'))
+    expect(panel.attributes('aria-labelledby')).toBe(tab('Graph').attributes('id'))
+    // Only the panel shown is in the page, so only its tab points at it.
+    expect(tab('Board').attributes('aria-controls')).toBeUndefined()
+    expect(wrapper.findAll('[tabindex="0"]').map((node) => node.text())).toEqual(['Graph'])
+  })
+
+  it('shows the panel as the arrows reach its tab when it shows at once', async () => {
+    const { chosen, press, tab, wrapper } = renderTabs('automatic')
+    ;(tab('Board').element as HTMLElement).focus()
+    await press('ArrowRight')
+    expect([focusedText(), chosen.value]).toEqual(['Graph', 'graph'])
+    expect(wrapper.get('[role="tabpanel"]').attributes('aria-labelledby')).toBe(
+      tab('Graph').attributes('id'),
+    )
+    await press('End')
+    expect([focusedText(), chosen.value]).toEqual(['Chain', 'chain'])
+    // Up and Down belong to the page: a row of tabs is walked left and right.
+    const down = new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true })
+    document.activeElement?.dispatchEvent(down)
+    expect(down.defaultPrevented).toBe(false)
+    expect(chosen.value).toBe('chain')
+  })
+
+  it('moves only focus with the arrows when a panel is slow to show, and Enter shows it', async () => {
+    const { chosen, press, tab } = renderTabs('manual')
+    ;(tab('Board').element as HTMLElement).focus()
+    await press('ArrowRight')
+    expect([focusedText(), chosen.value]).toEqual(['Graph', 'board'])
+    expect(tab('Board').attributes('tabindex')).toBe('0')
+    await tab('Graph').trigger('click')
+    expect(chosen.value).toBe('graph')
   })
 })

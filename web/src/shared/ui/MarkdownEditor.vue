@@ -32,6 +32,8 @@ import { revealFrame } from '@/shared/lib/revealFrame.ts'
 import MarkdownSuggestions from '@/shared/ui/MarkdownSuggestions.vue'
 import MarkdownToolbar from '@/shared/ui/MarkdownToolbar.vue'
 import RichText from '@/shared/ui/RichText.vue'
+import { useTabIds } from '@/shared/ui/tabIds.ts'
+import TabPanel from '@/shared/ui/TabPanel.vue'
 import { useEditorSuggestions } from '@/shared/ui/useEditorSuggestions.ts'
 import VTextInput from '@/shared/ui/VTextInput.vue'
 
@@ -95,6 +97,9 @@ const WORD_START = /(?:^|[\s([{])$/u
 const inputId = useId()
 const errorId = useId()
 const listId = useId()
+/** Write and Preview, the toolbar's tabs over the text and its preview; none without a toolbar. */
+const viewIds = useTabIds()
+const views = computed(() => (props.hideTools ? null : viewIds))
 
 /**
  * The one place this file touches the control the text is typed in. Another
@@ -298,14 +303,17 @@ defineExpose({
         v-model:preview="preview"
         :disabled="disabled"
         :mentions="Boolean(suggest)"
+        :views="viewIds"
         @format="format"
         @mention="mention"
       />
       <div class="markdown-body">
         <!-- A row is pressed without moving focus, so leaving this means leaving the field. -->
         <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -->
-        <div
+        <TabPanel
           class="markdown-input"
+          value="write"
+          :tabs="views"
           :inert="inertMark"
           @focusout="close"
         >
@@ -328,15 +336,16 @@ defineExpose({
             @click="track"
             @keyup.left.right.home.end="track"
           />
-        </div>
+        </TabPanel>
         <!-- A long text scrolls here, and a keyboard has to be able to scroll it. -->
         <!-- eslint-disable-next-line vuejs-accessibility/no-noninteractive-tabindex -->
-        <div
+        <TabPanel
           v-if="preview"
           class="markdown-preview"
-          role="group"
           tabindex="0"
-          :aria-label="label"
+          value="preview"
+          :tabs="views"
+          :label="label"
         >
           <RichText
             v-if="hasText"
@@ -348,7 +357,7 @@ defineExpose({
           >
             {{ t('editor.empty') }}
           </p>
-        </div>
+        </TabPanel>
       </div>
       <div
         v-if="$slots.actions || error"

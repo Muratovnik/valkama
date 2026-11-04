@@ -265,7 +265,7 @@ for (const width of [1440, 1024, 390]) {
     await expect(drawer.locator('.card-facts')).not.toBeInViewport()
 
     // The sections keep one row, and each one the arrows reach is brought into view.
-    const tabs = drawer.locator('.inspector-tabs').getByRole('radio')
+    const tabs = drawer.locator('.inspector-tabs').getByRole('tab')
     const tops = await tabs.evaluateAll((nodes) =>
       nodes.map((node) => Math.round(node.getBoundingClientRect().top)),
     )

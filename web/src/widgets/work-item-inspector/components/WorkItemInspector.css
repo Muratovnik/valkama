@@ -3,12 +3,9 @@
   min-height: 0;
 }
 
-/* Back rides the bar at the height of the action beside it. A phone-wide bar keeps
-   its room for the title: the glyph says it, and the button keeps its name. */
-@container drawer (width < 520px) {
-  .head-back-word {
-    display: none;
-  }
+/* The panel of the section shown: the column's width, and no more. */
+.inspector-panel {
+  min-width: 0;
 }
 
 .inspector-read-recovery {

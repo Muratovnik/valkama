@@ -9,10 +9,7 @@ import { projectScope } from './planningFixtures.ts'
 import { test } from './test.ts'
 
 async function openSettingsSection(page: Page, name: 'Diagnostics' | 'General') {
-  await page
-    .getByRole('radiogroup', { name: 'Settings section' })
-    .getByRole('radio', { name })
-    .click()
+  await page.getByRole('tablist', { name: 'Settings section' }).getByRole('tab', { name }).click()
 }
 
 test('Settings sections share one measure and one compact control lane', async ({ page }) => {
@@ -27,7 +24,7 @@ test('Settings sections share one measure and one compact control lane', async (
   expect(generalBox).not.toBeNull()
   expect(Math.abs((generalBox?.width ?? 0) - (pageBox?.width ?? 0))).toBeLessThan(2)
 
-  const sectionControl = page.getByRole('radiogroup', { name: 'Settings section' })
+  const sectionControl = page.getByRole('tablist', { name: 'Settings section' })
   const sectionIntro = page.locator('.settings-page-intro')
   const sectionControlBox = await sectionControl.boundingBox()
   const sectionIntroBox = await sectionIntro.boundingBox()
@@ -75,7 +72,7 @@ test('Settings has nothing to switch modules with and nothing the registry used 
   await expect(page.getByRole('heading', { name: 'Windows notifications' })).toBeVisible()
 
   // The module list is the build's, so there is no section that changes it.
-  const sections = page.getByRole('radiogroup', { name: 'Settings section' }).getByRole('radio')
+  const sections = page.getByRole('tablist', { name: 'Settings section' }).getByRole('tab')
   await expect(sections).toHaveText(['General', 'Diagnostics'])
   for (const section of ['General', 'Diagnostics'] as const) {
     await openSettingsSection(page, section)
@@ -92,6 +89,33 @@ test('Settings has nothing to switch modules with and nothing the registry used 
   ).toBeVisible()
 })
 
+test('the sections are tabs that open on Enter, since Diagnostics runs the checks', async ({
+  page,
+}) => {
+  await installBackend(page)
+  await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
+  const strip = page.getByRole('tablist', { name: 'Settings section' })
+  const [general, diagnostics] = [
+    strip.getByRole('tab', { name: 'General' }),
+    strip.getByRole('tab', { name: 'Diagnostics' }),
+  ]
+  const panel = page.getByRole('tabpanel')
+  await expect(panel).toHaveAttribute('aria-labelledby', (await general.getAttribute('id')) ?? '')
+  await general.focus()
+  // The arrows walk the tabs and open nothing: opening Diagnostics reads the installation.
+  await page.keyboard.press('ArrowRight')
+  await expect(diagnostics).toBeFocused()
+  await expect(diagnostics).toHaveAttribute('aria-selected', 'false')
+  await expect(page.getByRole('heading', { name: 'Interface', exact: true })).toBeVisible()
+  await page.keyboard.press('Enter')
+  await expect(diagnostics).toHaveAttribute('aria-selected', 'true')
+  await expect(panel).toHaveAttribute(
+    'aria-labelledby',
+    (await diagnostics.getAttribute('id')) ?? '',
+  )
+  await expect(diagnostics).toHaveAttribute('aria-controls', (await panel.getAttribute('id')) ?? '')
+})
+
 test('a link to the retired Workspace section opens General', async ({ page }) => {
   await installBackend(page)
   await page.goto(
@@ -101,7 +125,7 @@ test('a link to the retired Workspace section opens General', async ({ page }) =
       state: { section: 'workspace' },
     }),
   )
-  await expect(page.getByRole('radio', { name: 'General' })).toHaveAttribute('aria-checked', 'true')
+  await expect(page.getByRole('tab', { name: 'General' })).toHaveAttribute('aria-selected', 'true')
   await expect(page.getByRole('heading', { name: 'Interface', exact: true })).toBeVisible()
   await expect(page.locator('.route-recovery')).toHaveCount(0)
 })

@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { provideMemorySource } from '@/widgets/work-item-inspector/utils/memorySource.ts'
 
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
+import { useTabIds } from '@/shared/ui/tabIds.ts'
 
 export type InspectorSection = 'activity' | 'execution' | 'memory' | 'overview' | 'relations'
 
@@ -54,5 +55,5 @@ export function useInspectorSections(
     if (!writable() && section.value === 'execution') section.value = 'overview'
   }
 
-  return { leaveUnreadable, section, sections, shownSection }
+  return { leaveUnreadable, section, sections, shownSection, tabs: useTabIds() }
 }

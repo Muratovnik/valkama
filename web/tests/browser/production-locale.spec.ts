@@ -25,19 +25,19 @@ test('Russian production shell localizes Settings without runtime failures', asy
   await page.goto(serializePlatformRoute({ module_id: 'settings', scope: projectScope }))
 
   await expect(page.getByRole('heading', { level: 1, name: 'Настройки' })).toBeVisible()
-  const sections = page.getByRole('radiogroup', { name: 'Раздел настроек' })
+  const sections = page.getByRole('tablist', { name: 'Раздел настроек' })
   for (const width of [1440, 1024, 816, 360]) {
     await page.setViewportSize({ width, height: 900 })
-    await sections.getByRole('radio', { name: 'Общие' }).click()
+    await sections.getByRole('tab', { name: 'Общие' }).click()
     await expect(
       page.getByRole('heading', { name: 'Открытие сессий и файлов', exact: true }),
     ).toBeVisible()
     await expectNoSilentClipping(page, `Russian Settings General at ${width}px`)
 
-    await expect(sections.getByRole('radio')).toHaveText(['Общие', 'Диагностика'])
+    await expect(sections.getByRole('tab')).toHaveText(['Общие', 'Диагностика'])
     await expect(page.getByRole('heading', { name: 'Интеграции', exact: true })).toHaveCount(0)
 
-    await sections.getByRole('radio', { name: 'Диагностика' }).click()
+    await sections.getByRole('tab', { name: 'Диагностика' }).click()
     await expect(page.getByRole('heading', { name: 'Диагностика установки' })).toBeVisible()
     await expect(page.locator('.health-titleline').first()).toContainText('Требует внимания')
     await expectNoSilentClipping(page, `Russian Settings Diagnostics at ${width}px`)

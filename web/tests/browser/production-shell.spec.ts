@@ -181,7 +181,7 @@ test('a related item opens over the one it came from, and Back returns to it', a
 
   const openReference = openReferenceReader(page)
 
-  await drawer.getByRole('radio', { name: /Relations/i }).click()
+  await drawer.getByRole('tab', { name: /Relations/i }).click()
   await drawer.locator('.link-open').first().click()
   await expect(drawer.locator('.head-reference')).toHaveText(blockedWorkItem.reference)
   await expect.poll(openReference).toBe(blockedWorkItem.reference)
@@ -204,7 +204,7 @@ async function openRelatedCard(page: Page, width: number) {
   await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))
   await page.locator('.work-item-column[data-state="dev"] .work-item-tile').first().click()
   const drawer = page.locator('.drawer')
-  await drawer.getByRole('radio', { name: /Relations/i }).click()
+  await drawer.getByRole('tab', { name: /Relations/i }).click()
   await drawer.locator('.link-open').first().click()
   await expect(drawer.locator('.head-reference')).toHaveText(blockedWorkItem.reference)
   return drawer
@@ -290,13 +290,13 @@ test('an attached same-key space stays readable but never reaches primary-only p
   // The state is read, not offered as a move, where nothing can be written.
   await expect(page.locator('.drawer .card-state')).toBeVisible()
   await expect(page.locator('.drawer').getByRole('combobox')).toHaveCount(0)
-  await expect(page.locator('.drawer').getByRole('radio', { name: /^Execution$/i })).toHaveCount(0)
+  await expect(page.locator('.drawer').getByRole('tab', { name: /^Execution$/i })).toHaveCount(0)
   expect(executionReads).toEqual([])
   await expect(page.locator('.drawer .discussion-form')).toHaveCount(0)
   await expect(
     page.locator('.drawer').getByRole('button', { name: 'Edit description' }),
   ).toHaveCount(0)
-  await page.locator('.drawer').getByRole('radio', { name: 'System events', exact: true }).click()
+  await page.locator('.drawer').getByRole('tab', { name: 'System events', exact: true }).click()
   await expect(page.locator('.drawer .discussion-form')).toHaveCount(0)
   expect(legacyRequests).toEqual([])
 })

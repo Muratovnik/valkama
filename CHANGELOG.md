@@ -168,10 +168,14 @@ checkouts are therefore distinguishable even at the same version.
   height and fill as Reply and Resolve, three rows of them between a thread's root and its
   replies. They now rest bare, as a chain's and a lane's «show more» do, with their words in
   line with the text they open; the actions keep their fill.
-- **A segmented choice is a radio group.** The work view switch, the card's sections,
-  Settings' sections, the graph filter, a chain's scope, an editor's Write and Preview and
-  the discussion's thread filter take one Tab stop, on the chosen segment, and the arrow
-  keys, Home and End move the choice. Each segment was its own Tab stop before, and the
+- **A segmented choice takes one Tab stop and the arrow keys.** The work view switch, the
+  graph filter, a chain's scope and the discussion's thread filter are radio groups: Tab
+  reaches the chosen segment, and the arrows, Home and End move the choice. A card's
+  sections, Settings' sections and an editor's Write and Preview are tabs over the panel
+  they show, and a screen reader hears the panel named by its tab: Left, Right, Home and
+  End walk them, showing a card's section or the preview as they go, while in Settings they
+  only move focus and Enter or Space opens the section, since Diagnostics runs the
+  installation's checks when it opens. Each segment was its own Tab stop before, and the
   arrows did nothing.
 - **The history says what a record id stood for.** A thread's mark names the thread by its
   first words and its decision instead of the comment's id, a link reads from the card's

@@ -28,6 +28,7 @@ const rows: EditorSuggestion[] = [
 interface EditorOptions {
   error?: string
   hideLabel?: boolean
+  hideTools?: boolean
   locale?: 'en' | 'ru'
   maxlength?: number
   preview?: boolean
@@ -53,6 +54,7 @@ function mountEditor(options: EditorOptions = {}) {
       'preview': options.preview ?? false,
       'error': options.error ?? '',
       'hideLabel': options.hideLabel ?? false,
+      'hideTools': options.hideTools ?? false,
       ...(options.maxlength === undefined ? {} : { maxlength: options.maxlength }),
       'suggest': options.suggest === null ? undefined : suggest,
       'onUpdate:modelValue': (value: string) => void wrapper.setProps({ modelValue: value }),
@@ -204,17 +206,36 @@ describe('MarkdownEditor', () => {
     await wrapper.setProps({ modelValue: '**bold** <b>raw</b>' })
     expect(wrapper.get('strong').text()).toBe('bold')
     expect(wrapper.find('b').exists()).toBe(false)
-    expect(wrapper.get('.markdown-preview').attributes('aria-label')).toBe('Comment')
+    // The preview is the panel its tab shows, and the tab names it.
+    const panel = wrapper.get('.markdown-preview')
+    expect(panel.attributes('role')).toBe('tabpanel')
+    const tab = wrapper.get(`#${panel.attributes('aria-labelledby') ?? ''}`)
+    expect([tab.attributes('role'), tab.text()]).toEqual(['tab', 'Preview'])
+    expect(tab.attributes('aria-controls')).toBe(panel.attributes('id'))
+  })
+
+  it('names a preview with no toolbar by its field, a group and no tab panel', () => {
+    const { wrapper } = mountEditor({ preview: true, hideTools: true })
+    const panel = wrapper.get('.markdown-preview')
+    expect(wrapper.find('[role="tablist"]').exists()).toBe(false)
+    expect([panel.attributes('role'), panel.attributes('aria-label')]).toEqual(['group', 'Comment'])
+    expect(wrapper.find('[role="tabpanel"]').exists()).toBe(false)
   })
 
   it('switches between writing and preview from its own toolbar, which the host can bind', async () => {
     const { wrapper } = mountEditor()
-    const switcher = wrapper.get('[role="radiogroup"][aria-label="Write or preview"]')
-    expect(switcher.get('[aria-checked="true"]').text()).toBe('Write')
+    // Write and Preview show the text or its preview: tabs over a panel, not a value.
+    const switcher = wrapper.get('[role="tablist"][aria-label="Write or preview"]')
+    expect(switcher.get('[aria-selected="true"]').text()).toBe('Write')
+    const writing = wrapper.get('.markdown-input')
+    expect(writing.attributes('role')).toBe('tabpanel')
+    expect(writing.attributes('aria-labelledby')).toBe(
+      switcher.get('[aria-selected="true"]').attributes('id'),
+    )
     await switcher.findAll('button')[1]?.trigger('click')
     expect(wrapper.emitted('update:preview')).toEqual([[true]])
     expect(wrapper.find('.markdown-preview').exists()).toBe(true)
-    expect(switcher.get('[aria-checked="true"]').text()).toBe('Preview')
+    expect(switcher.get('[aria-selected="true"]').text()).toBe('Preview')
   })
 
   it('has no foot without a host’s action or a refusal', () => {
