@@ -689,12 +689,17 @@ change installed skill files or agent-client settings.
 ## Project documents
 
 A path to a project's file or folder in a work item's text, or a Markdown link to
-one, can be pressed. A Markdown file opens in Valkama's document viewer, over the
-card or the panel of open questions, read-only and at the `#kb:…` anchor, heading or
-`:42` line the path names; a link in it to another Markdown file opens in the same
-place, and Back returns. Any other file opens in the editor Settings names, at its
-line, and a folder in that editor, through the open plan described below. A path
-that cannot be opened is copied. A work item's `source`, its plan anchor, opens in
+one, can be pressed. A Markdown file opens in Valkama's document viewer, read-only and
+at the `#kb:…` anchor, heading or `:42` line the path names: beside the card or the
+panel of open questions where the window has room for both, over them where it does
+not. Beside them, F6 moves between the two and the first Escape closes the document.
+A link in it to another Markdown file opens in the same place, and Back returns. The
+viewer's head opens the file in your editor at the line you are reading, and moves the
+document to a window of its own at `/doc?project=<id>&path=<relative>`, a browser tab
+or a second window of the desktop app, where a reload keeps your place. Any other file
+opens in the editor Settings names, at its line, and a folder in that editor, through
+the open plan described below. A path that cannot be opened is copied, and the notice
+says why. A work item's `source`, its plan anchor, opens in
 the viewer at the anchor, from the mark in the card's head and from its row in
 Relations, in a browser and in the desktop app alike.
 

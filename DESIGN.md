@@ -644,15 +644,34 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   modal dialog that could only open a card behind itself — the new task's preview
   — claims every reference as text.
 - **A project's document:** `DocumentViewer` shows one Markdown file of a project,
-  read-only, in a drawer on the command layer: over a card, which stays mounted
-  under it with any draft, and over the panel of open questions, at full width on a
-  window of 620 px or less, its width kept under `valkama-document-pane-width`. Its
-  head names the project and the path, which copies itself, and offers Back to the
-  document before and a refresh. A `#…` or `:42` brings that block to the top and
-  marks it; an anchor the file no longer has is said in the head's status line. A
-  link to another Markdown file opens in the same drawer, and a file read again when
-  the window returns keeps the reader's place by the heading above it. Escape closes
-  the drawer alone and hands focus back to the link that opened it.
+  read-only, in whichever host the window has room for. Where the window holds both, it is a
+  second pane inside the surface it was opened from, right of a card or of the panel of open
+  questions. The threshold is a formula in `shellLayout.ts`: the surface's width, 440 px of
+  document, a 40 px gutter and what must stay usable under the surface — 360 px of board
+  beside a card, 40 beside the modal questions — so 1460 px with a card at its opening width,
+  1200 with the narrowest and 1160 with the questions. It is measured again when the window
+  changes width and once a drag on the card's edge ends, never during one, and crossing it
+  moves the document between hosts with the reader's place. Below it the document is a drawer
+  on the command layer over them, at full width on a window of 620 px or less. The card stays
+  mounted under either with any draft, and a document goes with the surface it was opened
+  from. The pane and its surface are one dialog with one Tab trap and two named regions: F6
+  and Shift+F6 go between them, to where focus last stood in each; the first Escape inside the
+  document closes it alone and hands focus back to the link that opened it, the next closes
+  the card or the questions, and an Escape in the card closes both. The edge between them is
+  the document's width, kept under `valkama-document-pane-width` and shared with the drawer,
+  and Enter on it folds the document and brings it back. At `/doc?project=…&path=…#…` the
+  document is the whole window with nothing of the shell: the address follows the reader, a
+  work item's number is text, and there is nothing to close. The head names the project and
+  the path, which copies itself, and offers Back to the document before, a refresh, the file
+  in the owner's editor and, outside `/doc`, another window, which closes the document here.
+  The editor opens at the line a link named while its block is in view, else at the first
+  line of the top block in view, and also takes a file too large or not text for the viewer;
+  a refused plan copies the path and the shell's notice says why. Under 440 px of head the
+  actions take a row of their own, so the title and the path stay whole. A `#…` or `:42`
+  brings that block to the top and marks it in the gutter, with room for its ring above and
+  at both sides; an anchor the file no longer has is said in the head's status line. A link
+  to another Markdown file opens in the same place, and a file read again when the window
+  returns keeps the reader's place by the heading above it.
 - **A reference's card:** `ReferencePreview` owns the one card per window shown
   for a work item's number in free text, half a second after the pointer rests on
   it or at once on Tab: number and state on a line, the title, the holder and the

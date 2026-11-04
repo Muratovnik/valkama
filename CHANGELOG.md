@@ -65,6 +65,31 @@ checkouts are therefore distinguishable even at the same version.
   opening in the same place and Back returning to where it was read. Escape comes back to the
   link, and a draft under it stays. The file is read again when the window returns.
   `GET /api/documents/read` serves it, up to 512 KiB, from inside one registered project.
+- **A document stands beside what it was opened from.** Where the window holds both, a
+  Markdown file opened from a card or from the panel of open questions stands in a pane to
+  their right rather than over them: from 1460 px beside a card at its opening width, 1200 px
+  beside the narrowest card and 1160 px beside the questions. Below that it stands over them
+  as before, and a window that crosses the width moves it across with the reader's place. The
+  two panes are one dialog: Tab goes through both, F6 and Shift+F6 move between them, the
+  first Escape closes the document and gives focus back to its link, and the next closes the
+  card or the questions, whose draft stays all along. The edge between them sizes the
+  document, which keeps a width of its own, and Enter on it folds the document away and back.
+- **A document can have a window of its own.** The new-window button in the viewer's head
+  opens the document at `/doc?project=<id>&path=<relative>#<anchor>`, alone in the window
+  with nothing of the shell, and closes it where it was, so focus goes back to its link. A
+  link followed there writes over the address, so a reload stands where the reader stood; a
+  refused read is said on the page, and a work item's number or a session is plain text,
+  having no card to open in. A browser opens the page in a new tab cut off from the first by
+  `noopener`. The desktop app opens it in a second window with the main window's settings,
+  which closes with the main window; any other address a page opens still goes to the system
+  browser.
+- **A document's file opens in the editor from its head.** A button in the viewer's head, over
+  a card, beside it and on `/doc`, opens the Markdown file in the editor Settings names, by
+  the same open plan as a file named in a text: at the line a link named while the reader is
+  still there, otherwise at the first line of the block at the top of the view. A file too
+  large, not UTF-8 or not text, which the viewer does not show, still opens there. A plan that
+  refuses copies the path and the shell's notice says why. A path pressed in a text that the
+  plan refuses now says why as well, where it said only that it could not be opened.
 - **An item's plan anchor opens in Valkama.** The mark beside a card's source and its row in
   Relations open the plan in the document viewer at the anchor, in a browser and in the desktop
   app alike. A source Valkama cannot find is copied as written, and the notice says why.
