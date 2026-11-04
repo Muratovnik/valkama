@@ -165,7 +165,8 @@ async function besideTheQuestions(page: Page, width: number) {
   await page.getByRole('button', { name: /^(Needs my answer|Ждут моего ответа)/u }).click()
   const hub = page.getByRole('dialog')
   await settled(hub)
-  await hub.locator('button.rich-reference').first().click()
+  // The one in the prompt: the task's number above the question is a link as well.
+  await hub.locator('.request-prompt button.rich-reference').first().click()
   await expect(page.locator('.document-block.is-target')).toBeFocused()
   return hub
 }

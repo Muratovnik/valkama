@@ -2,32 +2,53 @@
 /**
  * What a question says about itself in the list of everything waiting, where nothing around
  * it does: whose task it is, its title, and the attempt and session that asked.
+ *
+ * The task's number is a link to it, drawn as a number is in any text, with the same card on
+ * a pointer at rest. It opens the very task the question came with rather than whatever a
+ * search finds by that number, since two stores can hold the same key.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
+import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { projectTitle, useProjectTitles } from '@/shared/lib/projectTitles.ts'
+import { provideReferenceLinks } from '@/shared/lib/referenceLinks.ts'
+import RichText from '@/shared/ui/RichText.vue'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
 
 const props = defineProps<{ entry: InputRequestEntry }>()
+const emit = defineEmits<{ select: [target: PlanningTarget] }>()
 const { t } = useI18n()
 const request = computed(() => props.entry.request)
-/** Project and task; the space key is left out where the reference already begins with it. */
+/** Project, and the space where the reference does not already begin with its key. */
 const projects = useProjectTitles()
-const context = computed(() => {
+const place = computed(() => {
   const { project_id: id, space_ref: space } = props.entry.target
   const project = projectTitle(projects.value, id)
-  const reference = request.value.reference
-  return reference.startsWith(`${space.space_key}-`)
-    ? `${project} · ${reference}`
-    : `${project} · ${space.space_key} · ${reference}`
+  return request.value.reference.startsWith(`${space.space_key}-`)
+    ? project
+    : `${project} · ${space.space_key}`
+})
+provideReferenceLinks((reference, parent) => {
+  if (reference.kind !== 'work-item' || reference.value !== request.value.reference)
+    return parent(reference)
+  return {
+    ...(parent(reference) ?? { title: t('textLinks.openItem', { reference: reference.value }) }),
+    open: () => emit('select', props.entry.target),
+  }
 })
 </script>
 
 <template>
   <header class="request-header">
-    <p class="request-context">{{ context }}</p>
+    <p class="request-context">
+      {{ place }} ·
+      <RichText
+        :source="request.reference"
+        inline
+      />
+    </p>
     <SectionHeading
       class="request-title"
       as="h3"

@@ -262,6 +262,7 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
     <RequestHeader
       v-if="standalone"
       :entry="entry"
+      @select="emit('select', $event)"
     />
     <div class="request-meta">
       <span

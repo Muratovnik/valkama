@@ -152,3 +152,20 @@ test('removing a question that stopped waiting takes focus to its neighbour, or 
   await expect(dialog.locator('.request-card')).toHaveCount(0)
   await expect(dialog.getByRole('button', { name: 'Refresh', exact: true })).toBeFocused()
 })
+
+test('the task number above a question opens that task, as a number does everywhere', async ({
+  page,
+}) => {
+  const opened = await openList(page, [
+    listed(TOUCHED, 'The touched question', '2026-10-24T10:02:00Z'),
+  ])
+  const context = opened.card('The touched question').locator('.request-context')
+  await expect(context).toHaveText('Example Project · MAIN-264')
+  const number = context.getByRole('button', { name: 'MAIN-264', exact: true })
+  await expect(number).toHaveClass(/rich-reference/u)
+  // The project stays words: only the number is the way to the task.
+  await expect(context.getByRole('button')).toHaveCount(1)
+  await number.click()
+  await expect(opened.drawer).toBeVisible()
+  await expect(opened.drawer.locator('.request-card')).toContainText('The touched question')
+})
