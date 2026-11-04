@@ -2,9 +2,11 @@
 
 const assert = require('node:assert/strict')
 const { EventEmitter } = require('node:events')
+const { readFileSync } = require('node:fs')
+const path = require('node:path')
 const test = require('node:test')
 const { claudeLiveness } = require('./live_sessions')
-const { PAUSE_MS, openSessionRequest } = require('./session_opener')
+const { PAUSE_MS, openSessionRequest, writtenFolder } = require('./session_opener')
 
 const APP = 'http://127.0.0.1:8642/'
 const ID = 'f89d66c7-f023-4169-8d1a-2e69d4b1af68'
@@ -364,6 +366,33 @@ test('a folder Windows Terminal would split into two commands is refused', async
   const result = await openSessionRequest(box.options({ request: { session: ID } }))
   assert.equal(result.reason, 'invalid-plan')
   assert.deepEqual(effects(box.timeline), [])
+})
+
+// The same samples `tests/test_session_open.py` reads for `_written_folder`: the
+// server offers a folder only where this side takes it, so the two must agree on each.
+const FOLDER_SAMPLES = JSON.parse(
+  readFileSync(path.join(__dirname, '..', 'tests', 'fixtures', 'folder-samples.json'), 'utf8'),
+).samples
+
+test('a folder is taken as the server takes it', () => {
+  assert.ok(FOLDER_SAMPLES.length > 10)
+  for (const sample of FOLDER_SAMPLES) {
+    const folder = sample.folder + 'a'.repeat(sample.pad || 0)
+    assert.equal(writtenFolder(folder), sample.opens, JSON.stringify(folder.slice(0, 60)))
+    assert.equal(writtenFolder(folder, { terminal: true }), sample.terminal, JSON.stringify(folder.slice(0, 60)))
+  }
+})
+
+test('a plan step runs only on a folder the shared rule takes', async () => {
+  const rooted = { ...FOCUS, folder: '\\work\\repo' }
+  const box = machine({ plans: plan([rooted], { one_action: true }) })
+  const result = await openSessionRequest(
+    box.options({ request: { session: ID }, isDirectory: () => true }),
+  )
+  assert.equal(result.reason, 'invalid-plan')
+  const semicolon = machine({ plans: plan([{ ...FOCUS, folder: 'C:\\work\\my;folder' }], { one_action: true }) })
+  const opened = await openSessionRequest(semicolon.options({ request: { session: ID } }))
+  assert.equal(opened.ok, true, 'a window takes the folder as an argument, where `;` starts nothing')
 })
 
 test('the remaining steps each do their one thing', async () => {

@@ -24,7 +24,7 @@ from typing import Any
 from unittest import mock
 from urllib.parse import quote, urlencode
 
-from server import http_surface, processes, session_open, store
+from server import documents, http_surface, processes, session_open, store
 from server.ops import url_schemes
 from server.ops.url_schemes import Installed
 from server.planning import leases, service
@@ -795,6 +795,41 @@ class ChoosingTheWindowTests(PlanCase):
         self.session(opened_in="terminal", opened_folder="", cwd="")
         self.assertEqual(["copy"], kinds(self.plan()))
 
+    def test_a_folder_rooted_on_no_drive_is_not_a_window(self) -> None:
+        # Python takes `\work` as absolute, and the app takes only a folder on a drive.
+        for folder in ("\\work\\repo", "/work/repo"):
+            with self.subTest(folder=folder):
+                self.conn.execute("DELETE FROM sessions")
+                self.session(opened_in="ide", opened_host="vscode", opened_folder=folder, cwd="")
+                with mock.patch.object(session_open.os.path, "isdir", return_value=True):
+                    plan = self.plan()
+                self.assertEqual([{"kind": "explain", "reason": "no-folder"}], plan["steps"])
+
+    def test_a_folder_windows_terminal_would_split_is_resumed_another_way(self) -> None:
+        folder = self.root / "my;folder"
+        folder.mkdir()
+        self.session(opened_in="terminal", opened_folder=str(folder), cwd="")
+        plan = self.plan()
+        self.assertEqual(["open-link"], kinds(plan))
+        self.assertTrue(links(plan)[0].startswith("claude-cli://open?cwd="))
+        self.assertEqual(["copy"], kinds(self.plan(seen=frozenset())))
+        # A window takes the folder as an argument, where `;` starts nothing.
+        self.conn.execute("UPDATE sessions SET opened_in = 'ide', opened_host = 'vscode'")
+        self.assertEqual(str(folder), self.plan()["steps"][0]["folder"])
+
+    def test_a_silent_session_in_such_a_folder_is_offered_the_command(self) -> None:
+        folder = self.root / "my;folder"
+        folder.mkdir()
+        self.session(
+            opened_in="terminal",
+            opened_folder=str(folder),
+            cwd="",
+            status="active",
+            last_seen="2026-01-01T00:00:00Z",
+        )
+        plan = self.plan()
+        self.assertEqual("copy", plan["steps"][-1]["kind"])
+
     def test_a_folder_with_url_characters_stays_one_path(self) -> None:
         folder = self.root / "a b#c"
         folder.mkdir()
@@ -1046,6 +1081,21 @@ class FileTargetTests(PathTargetCase):
     def test_a_folder_is_not_a_file(self) -> None:
         self.assert_refused("directory", self.path_plan("file", "docs"))
 
+    def test_a_project_on_a_network_share_is_explained_not_offered(self) -> None:
+        # The app opens only what lies on a drive, and would refuse the whole plan.
+        share = "\\\\server\\share\\repo"
+        root = documents.Root("example", share)
+        found = documents.Located("file", "example", "a.md", True, share + "\\a.md")
+        with (
+            mock.patch.object(documents, "registered_roots", return_value=(root,)),
+            mock.patch.object(documents, "locate", return_value=found),
+        ):
+            plan = self.path_plan("file", "a.md")
+        self.assertEqual(
+            [{"kind": "explain", "reason": "path-refused", "code": "invalid_path"}],
+            plan["steps"],
+        )
+
 
 class FolderTargetTests(PathTargetCase):
     def test_the_app_focuses_the_folder(self) -> None:
@@ -1067,6 +1117,25 @@ class FolderTargetTests(PathTargetCase):
 
     def test_a_folder_outside_is_refused(self) -> None:
         self.assert_refused("outside_root", self.path_plan("folder", "../neighbour"))
+
+
+FOLDER_SAMPLES = Path(__file__).resolve().parent / "fixtures" / "folder-samples.json"
+
+
+class FolderRuleTests(unittest.TestCase):
+    """The folders a plan may carry, as the app takes them: `desktop/session_opener.js`
+    reads the same samples, so neither side can take one the other refuses."""
+
+    def test_each_sample_is_taken_as_the_app_takes_it(self) -> None:
+        samples = json.loads(FOLDER_SAMPLES.read_text(encoding="utf-8"))["samples"]
+        self.assertGreater(len(samples), 10)
+        for sample in samples:
+            folder = sample["folder"] + "a" * sample.get("pad", 0)
+            with self.subTest(folder=folder[:60]):
+                self.assertEqual(sample["opens"], session_open._written_folder(folder))
+                self.assertEqual(
+                    sample["terminal"], session_open._written_folder(folder, terminal=True)
+                )
 
 
 class OverHttpTests(unittest.TestCase):

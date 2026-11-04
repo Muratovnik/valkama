@@ -1617,7 +1617,15 @@ answer.
 | `explain` | `reason`; `host`, `archived` or `code` where they apply | both |
 
 `scheme` is one of `vscode`, `vscode-insiders`, `cursor`, `windsurf`, `claude`,
-`codex` or `claude-cli`. `reason` is one of:
+`codex` or `claude-cli`. A `folder` or a `path` is on a drive (`C:\…`), with no
+`..` segment, no control character and at most 1024 characters; the folder of a
+`resume-in-terminal` also holds no `;`, which Windows Terminal reads as the start of
+another command. The app refuses a whole plan with one step it does not take, so
+the server offers no other: a session whose folder breaks the rule explains
+`no-folder` or, for a terminal, goes on to the next way to resume it, and a file
+in a project on a network share is `path-refused` with `invalid_path`.
+`tests/fixtures/folder-samples.json` holds the cases both sides are tested
+against. `reason` is one of:
 
 | `reason` | Meaning |
 | --- | --- |

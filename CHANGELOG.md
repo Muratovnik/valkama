@@ -340,6 +340,11 @@ checkouts are therefore distinguishable even at the same version.
   checked where a path leads and then opened it by name, so a folder on the way swapped for a
   junction in that moment had a file outside every project read. The path of the open file
   is now checked again before anything is read, and one outside is `outside_root`.
+- **A click no longer fails whole on a folder the app would not take.** The server offered a
+  folder rooted on no drive (`\work\repo`), a resume in Windows Terminal from a folder
+  holding a `;`, and a file in a project on a network share, and the desktop app refused each
+  plan entire as `invalid-plan`. The server now applies the app's own rule: such a session
+  explains `no-folder` or resumes another way, and such a file is `invalid_path`.
 
 ## [2.4.0](https://github.com/Muratovnik/valkama/compare/v2.3.0...v2.4.0) - 2026-11-03
 

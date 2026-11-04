@@ -145,15 +145,28 @@ function parseRequest(raw) {
   return { step, query, session: false }
 }
 
-/** An existing local folder by its drive: no network path, no way back up. */
-function usableFolder(folder, isDirectory) {
+/**
+ * Whether a folder or a file's path is taken as a plan writes it: on a drive, so no
+ * network or device path; no `..` segment; no control character; at most
+ * `MAX_TEXT` characters. A `terminal` folder also holds no `;`: Windows Terminal
+ * reads one anywhere on its command line as the start of another command, so a
+ * folder named with one would run what follows it. `server/session_open.py`
+ * (`_written_folder`) holds the same rule, and both read
+ * `tests/fixtures/folder-samples.json`, so the server offers no folder this side refuses.
+ */
+function writtenFolder(folder, { terminal = false } = {}) {
   if (!text(folder, MAX_TEXT) || !/^[A-Za-z]:[\\/]/.test(folder)) return false
-  return !folder.split(/[\\/]/).includes('..') && isDirectory(folder)
+  if (terminal && folder.includes(';')) return false
+  return !folder.split(/[\\/]/).includes('..')
+}
+
+/** An existing local folder the rule above takes. */
+function usableFolder(folder, isDirectory, options) {
+  return writtenFolder(folder, options) && isDirectory(folder)
 }
 
 function usableFile(file, isFile) {
-  if (!text(file, MAX_TEXT) || !/^[A-Za-z]:[\\/]/.test(file)) return false
-  return !file.split(/[\\/]/).includes('..') && isFile(file)
+  return writtenFolder(file) && isFile(file)
 }
 
 function exactly(step, keys) {
@@ -184,10 +197,7 @@ function validStep(step, checks) {
         exactly(step, ['kind', 'client', 'session', 'folder']) &&
         Object.hasOwn(RESUME, step.client) &&
         sessionId(step.session) &&
-        // Windows Terminal reads `;` anywhere on its command line as the start of
-        // another command, so a folder named with one would run what follows it.
-        !String(step.folder).includes(';') &&
-        usableFolder(step.folder, checks.isDirectory)
+        usableFolder(step.folder, checks.isDirectory, { terminal: true })
       )
     case 'desktop-resume':
       return exactly(step, ['kind', 'session']) && sessionId(step.session)
@@ -495,4 +505,5 @@ module.exports = {
   openSessionRequest,
   parseRequest,
   validPlan,
+  writtenFolder,
 }

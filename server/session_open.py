@@ -111,6 +111,11 @@ _SESSION_UUID = re.compile(
 #: A line a page can name; what no document reaches is no line.
 _LINE = re.compile(r"[1-9][0-9]{0,8}")
 
+#: The longest folder or file path the desktop app takes from a plan.
+MAX_PLAN_PATH = 1024
+_DRIVE_ROOTED = re.compile(r"[A-Za-z]:[\\/]")
+_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
+
 #: A client that crashed sends no end, so its row says `active` for good. Silence this
 #: long is no proof either, so it only earns the person an offer, never a route.
 SILENCE_BEFORE_RESUME_OFFER = timedelta(days=1)
@@ -231,12 +236,28 @@ def _consistent(row: sqlite3.Row, family: str) -> Place:
     return Place(opened_in, host or ("vscode" if opened_in in ("ide", "ide-terminal") else ""))
 
 
-def _usable_folder(folder: str) -> bool:
-    """An existing absolute local folder: not a network path, no way back up."""
+def _written_folder(folder: str, *, terminal: bool = False) -> bool:
+    """Whether the desktop app takes a folder or a file's path as a plan writes it.
 
-    if not folder or not os.path.isabs(folder) or folder.startswith(("\\\\", "//")):
+    On a drive (`C:\\`), so no network or device path and no folder rooted on none;
+    no `..` segment; no control character; at most `MAX_PLAN_PATH` characters. A
+    `terminal` folder also holds no `;`, which Windows Terminal reads as the start of
+    another command. `desktop/session_opener.js` (`writtenFolder`) holds the same
+    rule, and both read `tests/fixtures/folder-samples.json`: the app refuses a whole
+    plan with one step it does not take, so a folder it would refuse is not offered.
+    """
+
+    if not 0 < len(folder) <= MAX_PLAN_PATH or _CONTROL.search(folder):
         return False
-    return ".." not in folder.replace("\\", "/").split("/") and os.path.isdir(folder)
+    if not _DRIVE_ROOTED.match(folder) or (terminal and ";" in folder):
+        return False
+    return ".." not in folder.replace("\\", "/").split("/")
+
+
+def _usable_folder(folder: str, *, terminal: bool = False) -> bool:
+    """An existing folder the app takes as written, by `_written_folder`."""
+
+    return _written_folder(folder, terminal=terminal) and os.path.isdir(folder)
 
 
 def _window_folder(conn: sqlite3.Connection, row: sqlite3.Row) -> str:
@@ -377,7 +398,11 @@ class _Planner:
         if self.live and place.opened_in != "background":
             self.failure = _explain("live-in-terminal" if self.holding else "live-elsewhere")
             return None
-        if self.surface == "desktop" and self.installed.terminal and self.folder:
+        if (
+            self.surface == "desktop"
+            and self.installed.terminal
+            and _written_folder(self.folder, terminal=True)
+        ):
             step: dict[str, object] = {
                 "kind": "resume-in-terminal",
                 "client": self.family,
@@ -473,7 +498,11 @@ def _resume_offer(family: str, session: str, folder: str, ask: _Ask) -> dict[str
     alive, when the plan has none, names a step that is not there.
     """
 
-    if ask.surface == "desktop" and ask.installed.terminal and folder:
+    if (
+        ask.surface == "desktop"
+        and ask.installed.terminal
+        and _written_folder(folder, terminal=True)
+    ):
         return {
             "kind": "resume-in-terminal",
             "client": family,
@@ -672,6 +701,11 @@ def _path_plan(target: PathTarget, ask: _Ask) -> dict[str, object]:
         return refused(found.code)
     if target.kind == "file" and found.kind != "file":
         return refused("directory")
+    if target.kind == "file" and not (
+        _usable_folder(root.path) and _written_folder(found.absolute)
+    ):
+        # A project on a network share, or a path past the length the app takes.
+        return refused("invalid_path")
     if target.kind == "folder" and (
         found.kind != "directory" or not _usable_folder(found.absolute)
     ):

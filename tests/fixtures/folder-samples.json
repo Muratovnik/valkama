@@ -1,0 +1,30 @@
+{
+  "about": "Folders as a plan writes them, and whether the desktop app takes each as written: `opens` for a window or a file, `terminal` for a resume in Windows Terminal and the owner's command. server/session_open.py (_written_folder) and desktop/session_opener.js (writtenFolder) both read these, so the server offers no folder the app then refuses with the rest of its plan. `pad` appends that many `a`s, for the length limit. Whether the folder exists is asked apart and is not in these samples.",
+  "samples": [
+    {"folder": "C:\\work\\repo", "opens": true, "terminal": true},
+    {"folder": "C:/work/repo", "opens": true, "terminal": true},
+    {"folder": "c:\\work\\repo", "opens": true, "terminal": true},
+    {"folder": "C:\\", "opens": true, "terminal": true},
+    {"folder": "C:\\work\\a b#c", "opens": true, "terminal": true},
+    {"folder": "C:\\work\\a..b", "opens": true, "terminal": true},
+    {"folder": "C:\\work\\my;folder", "opens": true, "terminal": false},
+    {"folder": "C:\\work\\repo;", "opens": true, "terminal": false},
+    {"folder": "\\work\\repo", "opens": false, "terminal": false},
+    {"folder": "/work/repo", "opens": false, "terminal": false},
+    {"folder": "\\\\server\\share\\repo", "opens": false, "terminal": false},
+    {"folder": "//server/share/repo", "opens": false, "terminal": false},
+    {"folder": "\\\\?\\C:\\work\\repo", "opens": false, "terminal": false},
+    {"folder": "\\\\.\\C:\\work\\repo", "opens": false, "terminal": false},
+    {"folder": "C:", "opens": false, "terminal": false},
+    {"folder": "C:work\\repo", "opens": false, "terminal": false},
+    {"folder": "work\\repo", "opens": false, "terminal": false},
+    {"folder": "", "opens": false, "terminal": false},
+    {"folder": "C:\\work\\repo\\..\\..\\Windows", "opens": false, "terminal": false},
+    {"folder": "C:/work/../Windows", "opens": false, "terminal": false},
+    {"folder": "C:\\work\\..", "opens": false, "terminal": false},
+    {"folder": "C:\\work\\tab\there", "opens": false, "terminal": false},
+    {"folder": "C:\\work\\del\u007f", "opens": false, "terminal": false},
+    {"folder": "C:\\", "pad": 1021, "opens": true, "terminal": true},
+    {"folder": "C:\\", "pad": 1022, "opens": false, "terminal": false}
+  ]
+}
