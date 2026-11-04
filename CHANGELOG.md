@@ -357,6 +357,11 @@ checkouts are therefore distinguishable even at the same version.
   full paths, the CLI as the app finds it (`claude.exe`, or `codex.exe` beside the Codex app),
   and only the tab starts in the folder. Without the CLI the resume is refused as not
   installed.
+- **A window of the desktop app hands the system only a web or mail address.** A link a
+  window opened or followed off Valkama's origin went to the system whatever its scheme, so
+  a `file:` or `ms-settings:` address asked Windows to start the program that claims it. Only
+  `http:`, `https:` and `mailto:`, the schemes the page links, now leave the app; the rest
+  open nowhere. The links of an open plan go through the session opener as before.
 
 ## [2.4.0](https://github.com/Muratovnik/valkama/compare/v2.3.0...v2.4.0) - 2026-11-03
 

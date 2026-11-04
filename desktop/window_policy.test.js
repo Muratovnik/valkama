@@ -78,7 +78,7 @@ test('anything else goes to the system browser and opens nothing here', () => {
     'http://127.0.0.1:8643/doc?project=demo&path=a.md',
     'https://127.0.0.1:8642/doc?project=demo&path=a.md',
     'http://localhost:8642/doc?project=demo&path=a.md',
-    'http://127.0.0.1:8642.example.com/doc?project=demo&path=a.md',
+    'http://127.0.0.1.example.com:8642/doc?project=demo&path=a.md',
     'http://evil@127.0.0.1:8642/doc?project=demo&path=a.md',
     `${APP}docs`,
     `${APP}doc/`,
@@ -86,12 +86,31 @@ test('anything else goes to the system browser and opens nothing here', () => {
     `${APP}modules/planning/global`,
     APP,
     'mailto:someone@example.com',
-    'file:///C:/work/doc',
-    'not an address',
   ]) {
     const { external, options } = policy()
     assert.deepEqual(windowOpenAnswer(url, options), { action: 'deny' }, url)
     assert.deepEqual(external, [url], url)
+  }
+})
+
+test('an address of any other scheme opens nowhere, in here or out', () => {
+  // The page links only http, https and mailto; a plan's own links go through the opener,
+  // never here. Anything else would hand the system a program to start.
+  for (const url of [
+    'file:///C:/work/doc',
+    'file://server/share/run.exe',
+    'vscode://anthropic.claude-code/open?session=x',
+    'ms-settings:privacy',
+    'search-ms:query=x',
+    'javascript:alert(1)',
+    'not an address',
+  ]) {
+    const { external, options } = policy()
+    assert.deepEqual(windowOpenAnswer(url, options), { action: 'deny' }, url)
+    assert.deepEqual(external, [], url)
+    const window = contents()
+    assert.equal(window.navigate(url), true, url)
+    assert.deepEqual(window.external, [], url)
   }
 })
 
@@ -114,10 +133,10 @@ test('a navigation stays on this origin, and off it goes to the system browser',
   assert.equal(navigate(PAGE), false)
   assert.deepEqual(external, [])
 
-  for (const url of ['https://example.com/', 'http://127.0.0.1:8642.example.com/doc']) {
+  for (const url of ['https://example.com/', 'http://127.0.0.1.example.com:8642/doc']) {
     assert.equal(navigate(url), true, url)
   }
-  assert.deepEqual(external, ['https://example.com/', 'http://127.0.0.1:8642.example.com/doc'])
+  assert.deepEqual(external, ['https://example.com/', 'http://127.0.0.1.example.com:8642/doc'])
 })
 
 test('a remedy link of the starting page neither navigates nor reaches the browser', () => {
