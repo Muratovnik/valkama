@@ -200,3 +200,20 @@ test('the task number above a question opens that task, as a number does everywh
   await expect(opened.drawer).toBeVisible()
   await expect(opened.drawer.locator('.request-card')).toContainText('The touched question')
 })
+
+test('a refresh that fails rings its sentence clear of the words, as the list rings the rest', async ({
+  page,
+}) => {
+  const { dialog } = await openList(page, [
+    listed(TOUCHED, 'The touched question', '2026-10-24T10:02:00Z'),
+  ])
+  await page.route('**/api/modules/planning/requests?*', (route) =>
+    route.fulfill({ status: 500, json: {} }),
+  )
+  await dialog.locator('.request-toolbar').getByRole('button', { name: 'Refresh' }).click()
+  const failure = dialog.locator('.request-toolbar .request-error')
+  await expect(failure).toBeFocused()
+  await expect(failure).toHaveCSS('outline-style', 'solid')
+  // The 4px a question's own lines keep their ring at (`.request-state`); 2px touched the letters.
+  await expect(failure).toHaveCSS('outline-offset', '4px')
+})

@@ -270,10 +270,11 @@ defineExpose({ holdsFocus })
   color: var(--color-danger);
 }
 
-/* Focus is moved here, ringed, when a refresh the reader asked for fails. */
+/* Focus is moved here, ringed, when a refresh the reader asked for fails. The ring stands as
+   clear of the words as a question's own lines keep theirs; at half that it touched them. */
 .request-error:focus-visible {
   border-radius: var(--radius-control);
-  outline-offset: var(--space-half);
+  outline-offset: var(--space-1);
 }
 
 .request-note {
