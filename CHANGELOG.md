@@ -414,6 +414,9 @@ checkouts are therefore distinguishable even at the same version.
   between its units on a phone-wide card, in an agent's row and in a silent session's
   panel. The space between the units no longer breaks, as the one inside each unit never
   did.
+- **Settings tells an editor from an app.** The places a session or a file opens in drew
+  one monitor for VS Code, Claude Desktop and Codex alike. An editor now draws code
+  brackets, and Claude Desktop and Codex a glyph each of their own.
 
 ### Removed
 

@@ -33,6 +33,7 @@ import {
   CircleHelp,
   CircleSlash,
   Code,
+  CodeXml,
   Copy,
   CornerDownRight,
   Database,
@@ -92,6 +93,9 @@ const ICONS: Record<string, Component> = {
   'cursor': MousePointer2,
   'database': Database,
   'document': FileText,
+  // An editor, as a place a session or a file opens in: VS Code and its kin share it, and
+  // an agent's own app takes its client's glyph above.
+  'editor': CodeXml,
   // The owner's editor, where a document the viewer only reads can be changed.
   'edit': SquarePen,
   // Another window: a document's own page, which the viewer's head opens.

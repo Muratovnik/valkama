@@ -9,12 +9,14 @@ const props = defineProps<{ name: ControlIconName }>()
 
 const iconMap: Record<ControlIconName, IconName> = {
   'language': 'language',
-  'vscode': 'client',
+  // A place to open in draws its kind: an editor, an agent's app, a terminal. Every one of
+  // them drew the same monitor, so VS Code and Claude Desktop read alike in a list.
+  'vscode': 'editor',
   'terminal': 'terminal',
   'command': 'settings',
   'cursor': 'cursor',
-  'codex': 'client',
-  'claude': 'client',
+  'codex': 'codex',
+  'claude': 'claude',
   'client': 'sessions',
   // Back to where a thing last was, and a choice that does nothing.
   'last-place': 'refresh',
