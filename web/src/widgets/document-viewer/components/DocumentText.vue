@@ -163,7 +163,10 @@ defineExpose({ box: (index: number) => boxes()[index] ?? null, bring, topIndex }
 .document-block {
   min-width: 0;
   outline: none;
-  scroll-margin-block-start: var(--space-2);
+
+  /* Room above a block a link sent the reader to, for its mark and its ring: at a step
+     less the ring touched the head's rule. */
+  scroll-margin-block-start: var(--space-3);
 
   /* The room above a heading is what says a section begins: the gap between blocks alone
      set it as close to the text before as to the text it heads. It stands outside the
