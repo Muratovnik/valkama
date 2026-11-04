@@ -99,20 +99,39 @@ function missingNote(chosen: string): string {
     : ''
 }
 
-/** While a place replaces the rule, the row says so: the click will not go where the session was. */
-function overridden(family: SessionFamily): string {
-  const always = settings.value.sessions[family].always
-  if (always === '' || always === 'custom') return ''
+/**
+ * While the rule is replaced, the row says what a click does instead: it will not go
+ * where the session was, or, with the owner's command still to be entered, nowhere yet.
+ */
+function alwaysNote(family: SessionFamily): string {
+  const { always, command } = settings.value.sessions[family]
+  if (always === 'custom') return command.trim() ? '' : t('open.settings.commandMissing')
+  if (always === '') return ''
   return t('open.settings.overridden', {
     family: t(`open.settings.family.${family}`),
     where: t(`open.where.${always}`),
   })
 }
 
+/**
+ * A choice is saved the moment it is made, the command with it, so "your own command"
+ * with no command yet is what holds: a press then opens nothing and says why. The row
+ * says so at once, as a fact rather than a fault. A missing command becomes an error only
+ * once the owner has been in the field and left it empty, not the moment the field
+ * appears, before anyone could type in it; from then on it is checked as it is typed,
+ * and goes the moment there is a command.
+ */
+const left = ref(new Set<SessionFamily>())
+
 function commandError(family: SessionFamily): string {
   const opening = settings.value.sessions[family]
   const error = opening.always === 'custom' ? validateCustomCommand(opening.command) : null
-  return error === null ? '' : t(`open.settings.commandError.${error}`)
+  const unseen = error === 'required' && !left.value.has(family)
+  return error === null || unseen ? '' : t(`open.settings.commandError.${error}`)
+}
+
+function leaveCommand(family: SessionFamily) {
+  left.value.add(family)
 }
 
 function selectFallback(family: SessionFamily, value: string) {
@@ -122,6 +141,8 @@ function selectFallback(family: SessionFamily, value: string) {
 
 function selectAlways(family: SessionFamily, value: string) {
   if (!alwaysChoicesFor(family).includes(value as AlwaysChoice)) return
+  // A field that appears afresh has not been left yet.
+  if (value !== settings.value.sessions[family].always) left.value.delete(family)
   settings.value.sessions[family].always = value as AlwaysChoice
 }
 
@@ -193,10 +214,10 @@ function selectEditor(value: string) {
           >
         </span>
         <p
-          v-if="overridden(family)"
+          v-if="alwaysNote(family)"
           class="settings-opening-note"
         >
-          {{ overridden(family) }}
+          {{ alwaysNote(family) }}
         </p>
         <VTextInput
           v-if="settings.sessions[family].always === 'custom'"
@@ -208,6 +229,7 @@ function selectEditor(value: string) {
           :maxlength="MAX_CUSTOM_COMMAND_LENGTH"
           :placeholder="t('open.settings.commandPlaceholder')"
           :error="commandError(family)"
+          @focusout="leaveCommand(family)"
           @update:model-value="editCommand(family, $event)"
         />
       </span>

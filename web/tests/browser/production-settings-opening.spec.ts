@@ -77,9 +77,41 @@ test('a place that is not installed is not offered, and the command says what it
   await expect(command).toBeVisible()
   // The placeholders are named as they are typed, not filled in by the dictionary.
   await expect(group).toContainText('{session}, {cwd} and {session_cwd}')
-  await expect(group).toContainText('Enter a command before selecting it.')
   await expectNoSilentClipping(page, 'the command at 390px')
   await group.screenshot({ path: info.outputPath('opening-command.png') })
+})
+
+test('a command is asked for only once the field is left empty, and what holds is said', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 1400 })
+  const group = await openSection(page, 'Opening sessions and files')
+  const always = page.getByRole('combobox', { name: 'Claude Code: Always open in' })
+  await always.click()
+  await page.getByRole('option', { name: 'Your own command' }).click()
+  const command = group.getByRole('textbox', { name: 'Command' })
+  // Chosen and kept, with nothing to correct yet: what a press does until there is a command.
+  await expect(always).toContainText('Your own command')
+  await expect(command).not.toHaveAttribute('aria-invalid', 'true')
+  await expect(group.locator('.field-error, [role="alert"]')).toHaveCount(0)
+  await expect(group).toContainText('Until there is a command, these sessions do not open.')
+  // Saved as chosen, with no command: the choice survives a reload, still with no error.
+  await page.reload()
+  await expect(always).toContainText('Your own command')
+  await expect(command).not.toHaveAttribute('aria-invalid', 'true')
+
+  await command.focus()
+  await page.keyboard.press('Tab')
+  await expect(command).toHaveAttribute('aria-invalid', 'true')
+  await expect(command).toHaveAccessibleDescription(/Enter a command to open sessions with\./u)
+
+  await command.fill('code {cwd}')
+  await expect(command).not.toHaveAttribute('aria-invalid', 'true')
+  await expect(group).not.toContainText('Enter a command to open sessions with.')
+  await expect(group).not.toContainText('Until there is a command')
+
+  await page.reload()
+  await expect(group.getByRole('textbox', { name: 'Command' })).toHaveValue('code {cwd}')
 })
 
 test('the section keeps its edges and its words in a forced palette', async ({ page }, info) => {

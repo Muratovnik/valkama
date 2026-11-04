@@ -175,8 +175,9 @@ export const openMessages = {
         commandHint:
           "Runs instead of opening the session, with {'{session}'}, {'{cwd}'} and {'{session_cwd}'} filled in. A folder is known only for a session in an editor or a terminal: for one in an app, a command that names a folder is refused.",
         commandPlaceholder: 'Enter an opening command',
+        commandMissing: 'Until there is a command, these sessions do not open.',
         commandError: {
-          'required': 'Enter a command before selecting it.',
+          'required': 'Enter a command to open sessions with.',
           'too-long': 'Keep the command to 400 characters or fewer.',
         },
       },
@@ -359,8 +360,9 @@ export const openMessages = {
         commandHint:
           "Запускается вместо открытия сессии, с подставленными {'{session}'}, {'{cwd}'} и {'{session_cwd}'}. Папка известна только у сессии в редакторе или терминале: для сессии в приложении команда с папкой не запустится.",
         commandPlaceholder: 'Введите команду открытия',
+        commandMissing: 'Пока команды нет, эти сессии не открываются.',
         commandError: {
-          'required': 'Введите команду, прежде чем выбрать её.',
+          'required': 'Введите команду, которой открывать сессии.',
           'too-long': 'Команда должна быть не длиннее 400 символов.',
         },
       },

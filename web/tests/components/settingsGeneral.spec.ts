@@ -107,13 +107,25 @@ describe('SettingsGeneral opening sessions and files', () => {
     expect(stored.sessions.codex.always).toBe('terminal')
   })
 
-  it('validates an empty custom command beside the field', async () => {
+  it('asks for a custom command only once its field is left empty, and says what holds', async () => {
     const wrapper = mountGeneral()
     select(wrapper, 'Claude Code: Always open in').vm.$emit('update:modelValue', 'custom')
     await wrapper.vm.$nextTick()
-    expect(wrapper.getComponent(VTextInput).props('error')).toBe(
-      'Enter a command before selecting it.',
+    const field = wrapper.getComponent(VTextInput)
+    // Saved as chosen: no error before the owner could type, and the row says what a press does.
+    expect(field.props('error')).toBe('')
+    expect(wrapper.get('.settings-opening-note').text()).toBe(
+      'Until there is a command, these sessions do not open.',
     )
+    const stored = JSON.parse(localStorage.getItem('valkama-settings') ?? '{}')
+    expect(stored.sessions.claude).toMatchObject({ always: 'custom', command: '' })
+
+    await field.get('input').trigger('focusout')
+    expect(field.props('error')).toBe('Enter a command to open sessions with.')
+    field.vm.$emit('update:modelValue', 'code {cwd}')
+    await wrapper.vm.$nextTick()
+    expect(field.props('error')).toBe('')
+    expect(wrapper.find('.settings-opening-note').exists()).toBe(false)
   })
 
   it('shows what an older build stored, translated', () => {
