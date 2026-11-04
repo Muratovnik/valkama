@@ -271,12 +271,13 @@ defineExpose({
   }
 
   /* A refused value doubles the field's edge, inside it so nothing moves, and keeps it
-     while the field has focus. The danger ink says it once more where colour shows; a
-     forced palette paints every edge one colour, and the width is what is left to say it.
-     A bare text area has no edge: the frame its host draws doubles its own. */
+     while the field has focus. It is the width that says so, which a forced palette keeps
+     when it paints every edge one colour; the red stays with the message under the field,
+     the one place a state's colour is said (`FieldError`). A bare text area has no edge:
+     the frame its host draws doubles its own. */
   &[aria-invalid='true']:not(.bare) {
-    border-color: var(--color-danger);
-    outline: 1px solid var(--color-danger);
+    border-color: var(--color-text-muted);
+    outline: 1px solid var(--color-text-muted);
     outline-offset: -2px;
 
     /* Focus still turns the outer edge, as on any field. */

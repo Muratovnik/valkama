@@ -441,11 +441,11 @@ defineExpose({
 
   /* Refused text doubles the frame's edge inside it, as a refused field does (`VTextInput`). */
   &.invalid {
-    outline: 1px solid var(--color-danger);
+    outline: 1px solid var(--color-text-muted);
     outline-offset: -2px;
 
     &:not(:has(.markdown-body:focus-within)) {
-      border-color: var(--color-danger);
+      border-color: var(--color-text-muted);
     }
   }
 
