@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 import stylelint from 'stylelint'
-import { test } from 'vitest'
+import { beforeAll, test } from 'vitest'
 
 import { typeSelectorDebt } from '../stylelint.config.ts'
 
@@ -38,6 +38,13 @@ async function rejectedIndexes(declarations: string[]) {
 
 /** Every index, which is what a list of refused declarations must come back as. */
 const all = (declarations: string[]) => declarations.map((_, index) => index)
+
+// The linter loads its rules and compiles the config on its first call in a process. That
+// is this file's setup, and charged to the first test it took the whole of its budget on a
+// busy machine; each test's own lint is a fraction of it.
+beforeAll(async () => {
+  await stylelint.lint({ code: '', codeFilename: 'src/probe.css', configFile })
+})
 
 /**
  * The type ramp, enforced.
