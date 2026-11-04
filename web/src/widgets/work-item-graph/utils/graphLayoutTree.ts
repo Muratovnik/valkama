@@ -91,7 +91,7 @@ function looseAspect(linked: number, loose: number): number {
 }
 
 /** The cards in a frame no line touches, packed as a block. */
-function looseOptions(linked: number, loose: number): Record<string, string> {
+export function looseOptions(linked: number, loose: number): Record<string, string> {
   return {
     'elk.algorithm': 'box',
     'elk.hierarchyHandling': 'SEPARATE_CHILDREN',

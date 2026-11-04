@@ -14,14 +14,17 @@
 
 import type { ELK, ElkNode } from 'elkjs/lib/elk-api'
 
-import { createGraphLayoutEngine } from '@/widgets/work-item-graph/utils/graphLayoutEngine.ts'
+import {
+  dropGraphLayoutEngine,
+  takeGraphLayoutEngine,
+} from '@/widgets/work-item-graph/utils/graphLayoutWarm.ts'
 
 export function createGraphLayoutRunner() {
   let engine: ELK | undefined
   let running: { reject: (error: Error) => void } | undefined
 
   function release() {
-    engine?.terminateWorker()
+    if (engine) dropGraphLayoutEngine(engine)
     engine = undefined
   }
 
@@ -37,7 +40,7 @@ export function createGraphLayoutRunner() {
   /** Lays out `graph` on the kept worker, stopping whatever layout was still running. */
   function layout(graph: ElkNode): Promise<ElkNode> {
     stop()
-    engine ??= createGraphLayoutEngine()
+    engine ??= takeGraphLayoutEngine()
     const worker = engine
     return new Promise<ElkNode>((resolve, reject) => {
       const run = { reject }

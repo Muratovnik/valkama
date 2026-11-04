@@ -172,6 +172,10 @@ checkouts are therefore distinguishable even at the same version.
   more than twenty open items starts folded to its heading. A link to an epic is drawn to
   that epic's block rather than dropped, and several links between the same two blocks or
   cards are one line, solid when any of them blocks. A chain's graph is drawn as before.
+- **The graph's first layout no longer waits for its worker to load.** The worker starts
+  when the page knows the graph is coming — the address names it, or the pointer or focus
+  rests on the switch to it — and loads ELK while the space is read. A worker nobody takes
+  within a minute is ended.
 - **The graph keeps one layout worker while it is open.** Every layout started a worker of
   its own, which loaded ELK again before it could begin: about a tenth of a second on each
   change of filter, scope or data on an idle machine, and seconds on a busy one. The graph
