@@ -220,18 +220,38 @@ test('under reduced motion the surface and the scrim are gone at once', async ({
   expect(frames.filter(({ x }) => x > openX + 1)).toHaveLength(0)
 })
 
+/**
+ * The leave is held half way while the presses land, so they land in it however slow the
+ * machine is: the host goes on the Transition's own timer, and on a busy machine 0.6 s of
+ * it ran out between two presses, the first of which then opened the card again.
+ */
 test('a press while the surface leaves lands on nothing, and the first one after it reaches the page', async ({
   page,
 }) => {
+  await page.clock.install()
   const { drawer, opener, openX } = await openFromBoard(page, 1440)
+  // Long enough that the timer cannot end the leave before the clock is stopped below.
+  await page.evaluate(() => {
+    document.documentElement.style.setProperty('--duration-surface', '30s')
+  })
   await drawer.locator('.drawer-frame-close').click()
   await expect.poll(() => xOf(drawer)).toBeGreaterThan(openX + 20)
+  await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 1000)
+  await page.evaluate(() => {
+    for (const moving of document.getAnimations()) moving.pause()
+  })
 
   // On the scrim over the tile that opened it, and on what is still on screen of the panel.
   const tile = await opener.boundingBox()
   await page.mouse.click((tile?.x ?? 0) + 10, (tile?.y ?? 0) + 10)
   const edge = await xOf(drawer)
   await page.mouse.click(edge + 60, 400)
+  await expect(drawer).toHaveCount(1)
+  await page.clock.runFor(30_001)
+  await page.clock.resume()
+  await page.evaluate(() => {
+    document.documentElement.style.setProperty('--duration-surface', '0.6s')
+  })
   await expect(page.locator('.overlay-host')).toHaveCount(0)
   await expect(drawer).toHaveCount(0)
   await expect(opener).toBeFocused()
