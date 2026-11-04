@@ -778,8 +778,9 @@ with its root — and a view that draws fewer items says what it leaves out: the
 grouped board says how many epics it draws as rows where the line has room, and
 a filter names the closed items it let through only when no open one matched.
 Epic progress, lane state, and active work share the same semantic palette.
-Aggregate epic activity belongs only to the epic index, including its compact
-state; bundle headers on the board do not repeat a “working” label.
+Aggregate epic activity belongs to the epic index, including its compact state,
+and to an epic's frame on the graph, where it is the one sign of work moving
+inside a folded frame; bundle headers on the board do not repeat a “working” label.
 On a phone the list's folded orders are one choice in the title's heading, in the
 heading's font and with the least around it, and an order's name is never cut: the
 longest takes a line of its own under the title's sort.
@@ -884,7 +885,8 @@ empty ground beside work it cuts. The camera is the operator's. A data refresh
 and any change of queue, search or switch never moves or zooms it; it moves
 only when a different scope opens — another project, another chain, a branch
 from a card's «Show on graph» — by the opening frame above, on the explicit
-«Fit whole graph», and when after a narrowing not one drawn node is left in
+«Fit whole graph», when the operator folds or opens a frame (`toggled`, below),
+and when after a narrowing not one drawn node is left in
 sight, and then only across, at the operator's zoom: onto the whole of what is
 drawn where that fits, else onto its first node as it is read. A field that
 changes size follows the last rule, and leaving the graph for another view
@@ -909,6 +911,113 @@ those days disagree. Where the pace can say nothing that second line is not ther
 What those days added and closed, why there is no verdict yet, and the chart of
 the chain's history stand one action away, and the action's state comes back with
 the card's other reading on Back. The scope rides the heading's row.
+
+Over the whole space the graph stands in frames. An epic, and any item that grew
+children, is drawn as a frame round its work, and the work filed under no epic has
+a frame of its own, «Без эпика» (`none`), so every open item stands somewhere on
+the field. A frame is told by tone and draws no line: it is ground a step above the
+field and its cards a step above it, and a frame inside a frame is a well cut a
+step below the one it stands in. Without a filter the field draws every frame with
+open work and every open epic, and in «All» every epic; under a filter, as on the
+board, only a frame the filter found something in. A frame has three readings.
+Open, it is its header over its cards. Folded, it is the header alone, a little
+wider than a card so its counts fit. Zoomed out past reading, the header is the
+epic's reference grown with the field, as a zoomed-out card's is, with the count of
+work moving under it at the far end and a thicker edge beneath; the work under no epic
+keeps its name instead. The header is two buttons with one action each, as a card
+is one: the chevron folds or opens the frame, and the rest opens the epic's card;
+over the work under no epic the rest is plain text, with no epic to open. A card in
+a frame does not name its epic, since the frame does. A chain has no frames: it
+keeps its flat drawing, its root and its epics as nodes, because its progress is
+the card's map and not the field's.
+
+A frame starts folded by its structure alone — how much open work it holds — and
+never by who is working on it, or every agent's turn would lay the field out again.
+A frame holding more than 20 open items starts folded and shows its progress in its
+header instead, and so does an epic with nothing open; the frame of the work under
+no epic with nothing open folds only past 20 drawn cards, so «All» on a space with
+a few finished items draws them. Every frame between those starts open, so the
+links of its work are seen at once. What the operator chooses for a frame, folded or
+open, outranks that default and is kept per space in this browser (`localStorage`,
+`valkama-graph-frames`), apart from the board's folded lanes, which start from other
+defaults; outside a filter a choice that matches the frame's default is forgotten,
+so a frame left alone follows its work again. Folding or opening a frame lays the
+field out again, and the camera follows across, at the operator's zoom, so the
+frame's header stays where it stood on the screen and what was pressed does not
+move from under the hand (`toggled`). The arrows reach a header's two buttons as
+they reach cards, the fold on its left (`frame:<id>:fold`) and the epic across the
+rest (`frame:<id>`); the work under no epic has only the first. Once a fold hides
+the target the keyboard stood on, the field's Tab stop is the fold button of the
+innermost frame round it that is still drawn.
+
+A header says how its work stands in words, a number beside each word and never
+rounded to «99+»: «8 из 21 готово», then how many are in review, in progress and
+blocked, each only when it is not zero, and how many are being worked on now. The
+epic's state is said once it has moved, and quietly on a closed epic that still
+holds open work. Only the title gives way when the row is short; the counts are
+never cut, and take a row under the name before they would be. Under the row a 3px
+edge draws the same counts as a chain's lane is drawn: finished, review, under way,
+blocked, then what is ahead (queued and backlog together), each part as long as its
+share, in the board's hues, and a part too short to see still a dot. The counts
+describe the epic and not the view: every item under the frame, open and closed,
+nested frames' included, whatever is drawn or a filter lets through. Over the whole
+space the key names the parts the frames' edges draw, «Впереди» for queued and
+backlog together.
+
+A link is drawn between the drawn ends it reaches: a card, an epic's frame, or the
+outermost folded frame the card stands in. So a link to an epic ends on its frame
+rather than being dropped, and a line to work folded away ends on the frame that
+holds it. Frames lie under the lines and cards over them, so a line runs across a
+frame and into the card it ends on. A link between an item and a frame it stands in
+is not drawn, since the frame already says it, nor one whose end is hidden finished
+work or lives in another space. All the links from one drawn end to another are one
+line, its arrow keeping their direction: solid when any of them blocks, since a
+block is the one hard dependency, and dashed as context otherwise.
+
+Live work is what the read model's `live_work` says an agent's session is doing on
+an item now. A card says it at its foot as the working dots and a word: «работает»
+(`working`), «у сессии» (`held`), «ждёт» (`waiting`) or «молчит с <date>»
+(`quiet`). Only `working` moves: an item a session at work (its turn running, or a
+subagent of it) wrote to since the last message a person sent it — a claim, a step,
+a comment, a link from it — whether or not it holds the item, by itself or through
+a subagent; an item one of its subagents holds a step of; and an item Valkama runs
+an attempt on. Its dots pulse, and every line that stands for one of its links
+carries a comet: a short bright stroke in the hue of work under way, running from
+the line's start to its arrow over the line as it is drawn, solid or dashed. An
+item the session holds while it works on others stands still with «у сессии», so a
+coordinator holding many items does not move them all on every turn, and the items
+of a session whose turn ended and that waits for a person stand still with «ждёт»:
+motion that also meant holding or waiting would no longer tell work from rest. The
+words say what the session's events show, as a card's «Agents» section does, and
+never that a process was seen alive. A frame counts the items under it that move,
+so a folded one still shows the work inside it moving. The key names the live line
+while some live work moves, and the still dots of held work while a card on the
+field shows them.
+
+Moving work starts by itself and lasts as long as the work, so the reader can stop
+it (WCAG 2.2.2): one button in the strip above the flow, «Остановить движение» and
+then «Пустить движение». Its place is held whether or not it is offered, so its
+arriving with the first moving work moves nothing. The choice is one for every
+graph and every space, kept in this browser (`localStorage`, `valkama-graph-motion`)
+across reloads and never in the address a link carries; storage that refuses the
+write keeps it as long as the page. Stopped, there is no comet at all, since a
+frozen one would be a dot stuck at an arrow: a live line keeps its stroke and is
+held still and wider, in the hue of work under way, and every working dot on the
+field stands still. Reduced motion outranks the button and needs none: nothing
+moves, as when stopped, and the button is not offered. A forced palette clears the
+hues, so a live line and its comet take the palette's colour for what is picked out
+(`Highlight`) and a wider stroke, moving or not; a frame, its ground cleared, is
+outlined; and its edge fills what is finished, dashes what has begun (review and
+work under way) and leaves the rest an empty outlined track.
+
+The comet keeps the rule, stated with the motion tokens, that a background refresh
+is never animated. It is a looping indicator, as the working dots are, saying that
+work goes on for as long as it does, and not a transition of anything being read. A
+frame of the stream turns it on or off at once, with nothing easing in or out. The
+layout and the camera do not move for it: live work is laid on the placed field by
+id and takes no part in what decides the layout, and a refresh never moves the
+camera. And since it lasts as long as the work does, it has the pause above.
+
 A card is a bar that never moves and one scroller under it, and no layout in it
 depends on where that scroller stands. Its head waits for the record: going from a
 card to a card, what is shown until the read answers is Back, Close and the waiting
@@ -1108,7 +1217,10 @@ What came of a press is said in the shell's notice. A session in a terminal that
 nothing for more than a day, and whose process nobody saw alive, may have crashed with its
 row still saying it runs. Silence proves nothing, so it still says it runs; its panel says
 since when, warns about two processes on one transcript, and offers to resume apart from
-the actions, with no focus and on no press but its own.
+the actions, with no focus and on no press but its own. The graph reads any session silent
+for more than a day the same way: its items stand still and say «молчит с <date>», the date
+and time of its last sign of life, and no frame counts them as worked on. The graph does
+not call the session ended; it only stops moving its work.
 
 The related work/session/evidence context is one grouped relationship region,
 not a decorative sequence. Execution history and native session opening stay

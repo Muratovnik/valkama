@@ -20,11 +20,13 @@ checkouts are therefore distinguishable even at the same version.
   (silent for over a day, with `quiet_since`). It is read from the sessions behind the
   item's claim and its open steps and from what sessions in a turn wrote, in five reads
   whatever the size of the space, and no MCP tool answer carries it. See [Work-item context](docs/product-model.md#work-item-context).
-- **The graph shows the work an agent is doing now.** A card whose item a live session
-  holds says «working» with the pulsing working dots while the session's turn writes to it
-  or its subagent holds a step of it, «held» with still dots while the turn is about other
-  work, «waiting» with still dots once the turn is over, and «silent since» the session's
-  last sign of life after a day of quiet; the key names held work while a card shows it.
+- **The graph shows the work an agent is doing now.** A card says «working» with the
+  pulsing working dots while a session's turn writes to its item, whether or not the
+  session holds it, while the session's subagent holds a step of it, or while an attempt
+  runs on it. A card whose item a live session holds says «held» with still dots while
+  the turn is about other work, «waiting» with still dots once the turn is over, and
+  «silent since» the session's last sign of life after a day of quiet; the key names held
+  work while a card shows it.
   A line that reaches work being done now carries a short comet running to
   its arrow, and a frame says how many items under it are being worked on, so a folded one
   still shows the work moving inside it. «Stop the motion» in the strip above the field
@@ -192,14 +194,14 @@ checkouts are therefore distinguishable even at the same version.
   more than twenty open items starts folded to its heading, except that the work under no
   epic with nothing open folds only past twenty drawn items, so «All» shows a few finished
   ones without a press. A link to an epic is drawn to that epic's block rather than dropped,
-  and several links between the same two blocks or cards are one line, solid when any of
-  them blocks. A chain's graph is drawn as before.
+  and several links running the same way between two blocks or cards are one line, solid
+  when any of them blocks. A chain's graph is drawn as before.
 - **The graph is laid out again only when what it draws changes.** A refresh that changes
   a state, a holder or a title is laid on the drawn graph without a new layout, and a line
   lit by the pointer or the keyboard stays lit while its item is drawn. A block the operator
-  folds or opens is remembered per space in this browser (`valkama-graph-frames`); a choice
-  that matches the block's default is forgotten. Under a filter a block still counts all of
-  its epic's work.
+  folds or opens is remembered per space in this browser (`valkama-graph-frames`); outside a
+  filter, a choice that matches the block's default is forgotten. Under a filter a block
+  still counts all of its epic's work.
 - **The graph's camera and keyboard know the epic blocks.** The field opens on its first
   heading or card as it is read, every framing measures the blocks as drawn, and folding or
   opening a block moves the camera only across, so its heading stays where it was pressed.

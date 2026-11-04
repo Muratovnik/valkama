@@ -195,7 +195,7 @@ with a `state`. An item with no live work is not in the map, and no MCP tool ans
 carries it. The sessions behind an item are the one whose confirmed call took its claim
 and the ones its open steps' holders name; a subagent's claim or step names its parent's
 session. A session counts while its row says active and its last sign of life is no older
-than a claim's lease, fourteen days. Then:
+than a claim's lease, fourteen days.
 
 A session is at work when its last lifecycle event of its own is a prompt, so a turn
 is running, or when one of its subagents is active and started since the session last
