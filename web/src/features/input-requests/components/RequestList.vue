@@ -81,7 +81,9 @@ const statusText = computed(() => {
     return t(incomplete.value ? 'requests.countIncomplete' : 'requests.count', {
       count: waiting.value,
     })
-  if (props.entries.length) return t('requests.empty')
+  // The questions below stay to say how they ended: none of them waits, and the line says that
+  // of them rather than that there are none.
+  if (props.entries.length) return t('requests.noneWaiting')
   return ''
 })
 const projects = useProjectTitles()

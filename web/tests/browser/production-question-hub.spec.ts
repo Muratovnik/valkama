@@ -77,8 +77,11 @@ test('a question answered elsewhere while this window wrote in it stays, saying 
   // Focus went with the form to how it ended, never to the page.
   await expect(touched.locator('.request-state')).toBeFocused()
   expect(await activeTag(page)).not.toBe('BODY')
-  // Nothing waits any more, and the list says so above the question it kept.
-  await expect(dialog.locator('.request-status')).toHaveText('No questions need your answer.')
+  // Nothing waits any more, and the list says so of the question it kept, not that there is
+  // none: «No questions need your answer» stood over a question.
+  await expect(dialog.locator('.request-status')).toHaveText(
+    'Waiting for an answer: 0 — the questions below have closed.',
+  )
   // It stays across the next read too, until the person removes it.
   await page.clock.runFor(POLL)
   await expect(touched).toHaveCount(1)

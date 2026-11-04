@@ -391,7 +391,9 @@ describe('human input requests', () => {
     await flushPromises()
     expect(titles()).toEqual(['Newer question', 'Older question'])
     expect(wrapper.emitted('count')?.at(-1)).toEqual([{ value: 0, incomplete: false }])
-    expect(wrapper.get('.request-status').text()).toBe('No questions need your answer.')
+    expect(wrapper.get('.request-status').text()).toBe(
+      'Waiting for an answer: 0 — the questions below have closed.',
+    )
     // With nothing left to answer, focus stays on the card just answered, on how
     // it ended. The count line at the top took it once and scrolled the list away.
     const outcome = present(wrapper.findAll('.request-card')[1], 'older card').get('.request-state')

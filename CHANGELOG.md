@@ -348,6 +348,10 @@ checkouts are therefore distinguishable even at the same version.
 - **No space before a comma after code.** A code span stands on a ground inset from its
   words, and beside a comma, a bracket or a quote written against it that inset read as a
   space: «`App.vue` , both». On a side something touches, the inset narrows to 2 px.
+- **The waiting list no longer says there are no questions above questions.** A question
+  that closed while this window held something in it stays in «Needs my answer» to say how
+  it ended, and the line above it read «No questions need your answer». It reads «Waiting
+  for an answer: 0 — the questions below have closed» now.
 
 ### Removed
 

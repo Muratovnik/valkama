@@ -177,7 +177,9 @@ test('a required boolean remains unanswered until No is submitted and confirmed'
   const outcome = dialog.locator('.request-state')
   await expect(outcome).toBeFocused()
   await expect(outcome).toHaveCSS('outline-style', 'solid')
-  await expect(dialog.getByText('No questions need your answer.')).toBeVisible()
+  await expect(
+    dialog.getByText('Waiting for an answer: 0 — the questions below have closed.'),
+  ).toBeVisible()
   expect(requests.writes).toEqual([
     {
       project_id: projectId,
