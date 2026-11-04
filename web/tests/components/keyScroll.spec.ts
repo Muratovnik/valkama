@@ -92,6 +92,24 @@ describe('a frame in a document', () => {
     wrapper.unmount()
   })
 
+  it('measures every frame before it marks any, so one pass lays the text out once', async () => {
+    const wrapper = drawn([CODE, PARAGRAPH, TABLE, CODE])
+    await flushPromises()
+    const order: string[] = []
+    for (const frame of watching) {
+      Object.defineProperty(frame, 'scrollWidth', {
+        configurable: true,
+        get: () => (order.push('measure'), 900),
+      })
+      Object.defineProperty(frame, 'clientWidth', { configurable: true, value: 400 })
+      const set = frame.setAttribute.bind(frame)
+      frame.setAttribute = (name: string, value: string) => (order.push('mark'), set(name, value))
+    }
+    resized()
+    expect(order).toEqual(['measure', 'measure', 'measure', 'mark', 'mark', 'mark'])
+    wrapper.unmount()
+  })
+
   it('answers for a new text in the same frame, which no width announces', async () => {
     const wrapper = drawn([CODE])
     await flushPromises()

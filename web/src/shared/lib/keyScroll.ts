@@ -10,15 +10,23 @@
  */
 import type { ObjectDirective } from 'vue'
 
-function mark(frame: Element) {
-  if (frame.scrollWidth > frame.clientWidth) frame.setAttribute('tabindex', '0')
+const overflows = (frame: Element) => frame.scrollWidth > frame.clientWidth
+
+function mark(frame: Element, scrolls: boolean) {
+  if (scrolls) frame.setAttribute('tabindex', '0')
   else frame.removeAttribute('tabindex')
 }
 
+/**
+ * Every frame is measured before any is marked: a mark between two measures leaves the
+ * styles dirty, and the next measure lays the whole document out again, once per frame.
+ * Forty frames in a long plan doubled the time from the press to the first painted block.
+ */
 let observer: ResizeObserver | null = null
 function frames() {
   observer ??= new ResizeObserver((entries) => {
-    for (const { target } of entries) mark(target)
+    const measured = entries.map(({ target }) => [target, overflows(target)] as const)
+    for (const [target, scrolls] of measured) mark(target, scrolls)
   })
   return observer
 }
@@ -29,7 +37,7 @@ export const keyScroll: ObjectDirective<HTMLElement, boolean> = {
     if (value) frames().observe(frame)
   },
   updated(frame, { value }) {
-    if (value) mark(frame)
+    if (value) mark(frame, overflows(frame))
   },
   unmounted(frame) {
     observer?.unobserve(frame)
