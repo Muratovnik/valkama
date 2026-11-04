@@ -331,7 +331,7 @@ function onFieldPointerLeave() {
             :parent-reference="parentReference(data)"
             :root="isChainRoot(data)"
             :overview="overview"
-            :tabbable="isTabStop(data)"
+            :tabbable="isTabStop(data.work_item_id)"
             :waiting-on="waitingFor(data)"
             @focus="onNodeFocus"
             @blur="onNodeBlur"

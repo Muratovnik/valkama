@@ -24,16 +24,20 @@ import type { Ref, WatchSource } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 import type { ViewportTransform } from '@vue-flow/core'
 
-import { graphAnchor, graphCameraMove } from '@/widgets/work-item-graph/utils/graphCamera.ts'
+import {
+  graphAnchor,
+  graphCameraMove,
+  headerOnScreen,
+} from '@/widgets/work-item-graph/utils/graphCamera.ts'
 import type {
   GraphBranchFrame,
   GraphCameraCause,
+  HeldFrame,
 } from '@/widgets/work-item-graph/utils/graphCamera.ts'
-import { NODE_HEIGHT, NODE_WIDTH } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
-import type { PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import { FRAME_GAP, graphFitViewOptions } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import type { GraphLayout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import { nodeCentre } from '@/widgets/work-item-graph/utils/graphWalk.ts'
+import type { Box } from '@/widgets/work-item-graph/utils/graphWalk.ts'
 
 /**
  * Below this zoom a card's words are too small to read, so each node is drawn
@@ -85,7 +89,7 @@ export function useGraphCamera(input: CameraInput) {
    * cause is an opening, and the camera held for this scope, if any, is the
    * opening it returns to — moved across only if nothing is left in its sight.
    */
-  function destination(cause: GraphCameraCause, placed: GraphLayout) {
+  function destination(cause: GraphCameraCause, placed: GraphLayout, frame: HeldFrame | null) {
     const opening = !fitted.value
     const held = opening && heldCamera?.scope === scopeKey() ? heldCamera.viewport : null
     if (held)
@@ -95,19 +99,19 @@ export function useGraphCamera(input: CameraInput) {
     return graphCameraMove(
       opening ? 'open' : cause,
       placed,
-      { camera: viewport.value, dimensions: dimensions.value },
+      { camera: viewport.value, dimensions: dimensions.value, held: frame },
       { branch: input.branch(), selectedId: input.selectedId(), rootId: input.rootId() },
     )
   }
 
   /** Put the camera where `cause` sends it, once the DOM has the projection. */
-  function place(cause: GraphCameraCause) {
+  function place(cause: GraphCameraCause, frame: HeldFrame | null = null) {
     if (!flowReady.value) return
     const request = ++cameraRequest
     void nextTick(async () => {
       const placed = input.placed.value
       if (!flowReady.value || request !== cameraRequest || !placed) return
-      const target = destination(cause, placed)
+      const target = destination(cause, placed, frame)
       if (!target) return
       const positioned = await setViewport(target, { duration: 0 })
       if (request === cameraRequest && positioned) fitted.value = true
@@ -115,11 +119,11 @@ export function useGraphCamera(input: CameraInput) {
   }
 
   /**
-   * Bring one node into sight when the keyboard reaches it, at the zoom the
-   * operator chose: a node already in view, `margin` clear of the flow's
+   * Bring one target into sight when the keyboard reaches it, at the zoom the
+   * operator chose: a target already in view, `margin` clear of the flow's
    * edges, leaves the camera where it is; any other is centred.
    */
-  function reveal(node: PlacedNode, margin = FRAME_GAP) {
+  function reveal(node: Box, margin = FRAME_GAP) {
     const { x, y, zoom } = viewport.value
     const { width, height } = dimensions.value
     const left = node.x * zoom + x
@@ -127,8 +131,8 @@ export function useGraphCamera(input: CameraInput) {
     const inView =
       left >= margin &&
       top >= margin &&
-      left + NODE_WIDTH * zoom <= width - margin &&
-      top + NODE_HEIGHT * zoom <= height - margin
+      left + node.width * zoom <= width - margin &&
+      top + node.height * zoom <= height - margin
     if (inView) return
     const centre = nodeCentre(node)
     void setViewport(
@@ -148,12 +152,26 @@ export function useGraphCamera(input: CameraInput) {
   watch(input.narrowings, () => {
     narrowed = true
   })
+  /** The frame the operator is folding or opening, and where its header stood on the screen. */
+  let held: HeldFrame | null = null
+  /**
+   * Hold a frame's header where it stands on the screen while the frame folds
+   * or opens; call it before the fold. The next layout moves the camera across,
+   * at the same zoom, so the header stays under the hand that pressed it.
+   */
+  function holdFrame(frameId: string) {
+    const placed = input.placed.value
+    const screen = placed ? headerOnScreen(placed, frameId, viewport.value) : null
+    held = screen ? { frameId, screen } : null
+  }
   // A narrowing lays the field out again while the initialized Vue Flow canvas
   // stays mounted, and the projection is briefly absent while it does; neither
   // forgets where the camera stands.
   watch(input.placed, (projection) => {
     if (!projection) return
-    place(narrowed ? 'narrowed' : 'refresh')
+    if (held) place('toggled', held)
+    else place(narrowed ? 'narrowed' : 'refresh')
+    held = null
     narrowed = false
   })
   watch([() => dimensions.value.width, () => dimensions.value.height], () => place('resized'))
@@ -170,10 +188,11 @@ export function useGraphCamera(input: CameraInput) {
         selectedId: input.selectedId(),
         rootId: input.rootId(),
       }
-      return graphAnchor(placed, options)?.work_item_id ?? null
+      return graphAnchor(placed, options)?.id ?? null
     }),
     /** «Fit whole graph». */
     fitOptions: graphFitViewOptions(),
+    holdFrame,
     overview: computed(() => (viewport?.value.zoom ?? 1) < OVERVIEW_ZOOM),
     onFlowInit: () => {
       flowReady.value = true

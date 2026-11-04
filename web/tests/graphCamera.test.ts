@@ -133,7 +133,7 @@ test('a narrowed field of unlinked work opens on its first node, with no empty g
   assert.ok(Math.abs(first.x * camera.zoom + camera.x - 32) < 0.5)
   assert.ok(Math.abs(first.y * camera.zoom + camera.y - 16) < 0.5)
   onDrawing(placed, camera, field)
-  assert.equal(graphAnchor(placed)?.work_item_id, first.work_item_id)
+  assert.equal(graphAnchor(placed)?.id, first.work_item_id)
 })
 
 test("a framing on an anchor near the drawing's edge is moved onto the drawing, the anchor kept", async () => {
@@ -212,7 +212,7 @@ test('a branch the card chose is framed whole when it reads, its epic lit but no
   for (const number of work) inCamera(placed, number, camera)
   // The keyboard enters on the branch's first work as the field is read.
   assert.equal(
-    graphAnchor(placed, { branch, rootId: nodeId(150) })?.work_item_id,
+    graphAnchor(placed, { branch, rootId: nodeId(150) })?.id,
     firstRead(placed, work).work_item_id,
   )
   // A branch with nothing drawn but its epic is framed on the epic.
@@ -231,5 +231,5 @@ test('a branch too long to read at once opens on its beginning at reading size',
   assert.equal(camera.zoom, 0.75)
   const first = firstRead(placed, work)
   inCamera(placed, first.number, camera)
-  assert.equal(graphAnchor(placed, { branch })?.work_item_id, first.work_item_id)
+  assert.equal(graphAnchor(placed, { branch })?.id, first.work_item_id)
 })

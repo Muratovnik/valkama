@@ -178,6 +178,12 @@ checkouts are therefore distinguishable even at the same version.
   folds or opens is remembered per space in this browser (`valkama-graph-frames`); a choice
   that matches the block's default is forgotten. Under a filter a block still counts all of
   its epic's work.
+- **The graph's camera and keyboard know the epic blocks.** The field opens on its first
+  heading or card as it is read, every framing measures the blocks as drawn, and folding or
+  opening a block moves the camera only across, so its heading stays where it was pressed.
+  The arrows also reach each heading's two buttons, fold or open on its left and the epic
+  across the rest (the work under no epic has only the first), and once a fold hides the item
+  the keyboard stood on, the field's Tab stop is that block's fold button.
 - **The graph's first layout no longer waits for its worker to load.** The worker starts
   when the page knows the graph is coming — the address names it, or the pointer or focus
   rests on the switch to it — and loads ELK while the space is read. A worker nobody takes

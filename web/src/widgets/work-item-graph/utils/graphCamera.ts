@@ -1,22 +1,47 @@
+/**
+ * Where the field's camera goes, by cause. Every reader measures the boxes the
+ * layout placed — a card, a frame, a frame's header — rather than a card size,
+ * because a frame is as large as the work it holds.
+ */
 import { getTransformForBounds } from '@vue-flow/core'
 import type { Dimensions, ViewportTransform } from '@vue-flow/core'
 
-import { NODE_HEIGHT, NODE_WIDTH } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import { GRAPH_ZOOM_MIN, graphFitViewOptions } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import type { GraphLayout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
-import { nodeCentre, readingOrder } from '@/widgets/work-item-graph/utils/graphWalk.ts'
+import {
+  headerBox,
+  nodeCentre,
+  readingOrder,
+  walkTargets,
+} from '@/widgets/work-item-graph/utils/graphWalk.ts'
+import type { Box, WalkTarget } from '@/widgets/work-item-graph/utils/graphWalk.ts'
 
 const READABLE_ZOOM = 0.75
 
 /** A padding the fit options state in pixels, as a number. */
 const pixels = (value: string) => Number.parseFloat(value)
 
-function fitNodes(nodes: PlacedNode[], dimensions: Dimensions): ViewportTransform {
-  const left = Math.min(...nodes.map((node) => node.x))
-  const top = Math.min(...nodes.map((node) => node.y))
-  const right = Math.max(...nodes.map((node) => node.x + NODE_WIDTH))
-  const bottom = Math.max(...nodes.map((node) => node.y + NODE_HEIGHT))
+/** The smallest box round `boxes`. */
+function extent(boxes: readonly Box[]): {
+  bottom: number
+  left: number
+  right: number
+  top: number
+} {
+  return {
+    left: Math.min(...boxes.map((box) => box.x)),
+    top: Math.min(...boxes.map((box) => box.y)),
+    right: Math.max(...boxes.map((box) => box.x + box.width)),
+    bottom: Math.max(...boxes.map((box) => box.y + box.height)),
+  }
+}
+
+/** Everything drawn: the frames and the cards in them. */
+const drawing = (graph: GraphLayout): Box[] => [...graph.frames, ...graph.nodes]
+
+function fitNodes(boxes: readonly Box[], dimensions: Dimensions): ViewportTransform {
+  const { left, top, right, bottom } = extent(boxes)
   const options = graphFitViewOptions()
   return getTransformForBounds(
     { x: left, y: top, width: right - left, height: bottom - top },
@@ -54,33 +79,44 @@ function branchWork(graph: GraphLayout, options: AnchorOptions): PlacedNode[] {
   return work.length ? work : drawn
 }
 
+/** The keyboard's target for a card. */
+const cardTarget = (node: PlacedNode): WalkTarget => ({
+  id: node.work_item_id,
+  frameId: node.frameId,
+  x: node.x,
+  y: node.y,
+  width: node.width,
+  height: node.height,
+})
+
 /**
- * The node a field is placed around, and the one the keyboard enters it on:
+ * The target a field is placed around, and the one the keyboard enters it on:
  * the first work of the branch the card chose, then the open card's item,
  * then — for a chain — the root the chain grew from, so a reload or a link
  * lands on the same place the card's «Show on graph» does; else the field's
- * first node as it is read.
+ * first target as it is read, a frame's header or a card.
  */
 export function graphAnchor(
   graph: GraphLayout,
   options: AnchorOptions = {},
-): PlacedNode | undefined {
+): WalkTarget | undefined {
   const [head] = branchWork(graph, options)
   const selected = graph.nodes.find((node) => node.work_item_id === options.selectedId)
   const root = graph.nodes.find((node) => node.work_item_id === options.rootId)
-  return head ?? selected ?? root ?? [...graph.nodes].sort(readingOrder)[0]
+  const card = head ?? selected ?? root
+  return card ? cardTarget(card) : walkTargets(graph).sort(readingOrder)[0]
 }
 
 /**
- * A run of nodes from its beginning: the whole of it when that reads at its
- * size, otherwise its first node at the top-left at reading size, the rest
+ * A run of boxes from its beginning: the whole of it when that reads at its
+ * size, otherwise its first box at the top-left at reading size, the rest
  * running on to the right and below.
  */
-function beginningView(nodes: PlacedNode[], dimensions: Dimensions): ViewportTransform {
-  const whole = fitNodes(nodes, dimensions)
+function beginningView(boxes: readonly Box[], dimensions: Dimensions): ViewportTransform {
+  const whole = fitNodes(boxes, dimensions)
   if (whole.zoom >= READABLE_ZOOM) return whole
   const { padding } = graphFitViewOptions()
-  const [first] = nodes
+  const [first] = [...boxes].sort(readingOrder)
   return {
     x: pixels(padding.left) - first.x * READABLE_ZOOM,
     y: pixels(padding.top) - first.y * READABLE_ZOOM,
@@ -117,25 +153,28 @@ function keptOnDrawing(
   dimensions: Dimensions,
 ): ViewportTransform {
   const { padding } = graphFitViewOptions()
-  const across = {
-    start: Math.min(...graph.nodes.map((node) => node.x)),
-    end: Math.max(...graph.nodes.map((node) => node.x + NODE_WIDTH)),
-  }
-  const down = {
-    start: Math.min(...graph.nodes.map((node) => node.y)),
-    end: Math.max(...graph.nodes.map((node) => node.y + NODE_HEIGHT)),
-  }
+  const { left, top, right, bottom } = extent(drawing(graph))
   return {
-    x: onDrawing(camera.x, camera.zoom, across, {
-      gapStart: pixels(padding.left),
-      gapEnd: pixels(padding.right),
-      size: dimensions.width,
-    }),
-    y: onDrawing(camera.y, camera.zoom, down, {
-      gapStart: pixels(padding.top),
-      gapEnd: pixels(padding.bottom),
-      size: dimensions.height,
-    }),
+    x: onDrawing(
+      camera.x,
+      camera.zoom,
+      { start: left, end: right },
+      {
+        gapStart: pixels(padding.left),
+        gapEnd: pixels(padding.right),
+        size: dimensions.width,
+      },
+    ),
+    y: onDrawing(
+      camera.y,
+      camera.zoom,
+      { start: top, end: bottom },
+      {
+        gapStart: pixels(padding.top),
+        gapEnd: pixels(padding.bottom),
+        size: dimensions.height,
+      },
+    ),
     zoom: camera.zoom,
   }
 }
@@ -144,35 +183,34 @@ function keptOnDrawing(
  * Where the camera starts: the branch the card chose, from its beginning; else
  * the whole field when it reads at that size and no card is open; else the
  * open card's item or the chain's root with its direct links; else the field
- * from its beginning. Every framing but the whole one is kept on the drawing
- * (`keptOnDrawing`).
+ * from its beginning, its first target at the top-left. Every framing but the
+ * whole one is kept on the drawing (`keptOnDrawing`).
  */
 export function graphCameraView(
   graph: GraphLayout,
   dimensions: Dimensions,
   options: AnchorOptions = {},
 ): ViewportTransform | null {
-  if (!graph.nodes.length || !dimensions.width || !dimensions.height) return null
+  if (!drawing(graph).length || !dimensions.width || !dimensions.height) return null
   const branch = branchWork(graph, options)
   if (branch.length) return keptOnDrawing(beginningView(branch, dimensions), graph, dimensions)
-  const whole = fitNodes(graph.nodes, dimensions)
+  const whole = fitNodes(drawing(graph), dimensions)
   const selected = graph.nodes.some((node) => node.work_item_id === options.selectedId)
   if (!selected && whole.zoom >= READABLE_ZOOM) return whole
-  const anchor = graphAnchor(graph, options) ?? graph.nodes[0]
-  if (!selected && anchor.work_item_id !== options.rootId) {
-    const field = [...graph.nodes].sort(readingOrder)
-    return keptOnDrawing(beginningView(field, dimensions), graph, dimensions)
-  }
+  const anchor = graphAnchor(graph, options)
+  if (!anchor || (!selected && anchor.id !== options.rootId))
+    return keptOnDrawing(beginningView(walkTargets(graph), dimensions), graph, dimensions)
 
-  const contextIds = new Set([anchor.work_item_id])
+  const contextIds = new Set([anchor.id])
   for (const edge of graph.edges) {
-    if (edge.source === anchor.work_item_id) contextIds.add(edge.target)
-    if (edge.target === anchor.work_item_id) contextIds.add(edge.source)
+    if (edge.source === anchor.id) contextIds.add(edge.target)
+    if (edge.target === anchor.id) contextIds.add(edge.source)
   }
-  const context = fitNodes(
-    graph.nodes.filter((node) => contextIds.has(node.work_item_id)),
-    dimensions,
-  )
+  const boxes = [
+    ...graph.nodes.filter((node) => contextIds.has(node.work_item_id)),
+    ...graph.frames.filter((frame) => contextIds.has(frame.id)).map((frame) => headerBox(frame)),
+  ]
+  const context = fitNodes(boxes, dimensions)
   const framed = context.zoom >= READABLE_ZOOM ? context : fitNodes([anchor], dimensions)
   return keptOnDrawing(framed, graph, dimensions)
 }
@@ -185,12 +223,30 @@ export function graphCameraView(
  * - `narrowed`: the queue, the search or a switch changed what is drawn.
  * - `resized`: the field's box changed size under a drawing.
  * - `refresh`: the same field arrived again with new data.
+ * - `toggled`: the operator folded or opened a frame.
  */
-export type GraphCameraCause = 'narrowed' | 'open' | 'refresh' | 'resized'
+export type GraphCameraCause = 'narrowed' | 'open' | 'refresh' | 'resized' | 'toggled'
 
-/** Whether a node's centre stands inside the field at this camera. */
-function seen(node: PlacedNode, camera: ViewportTransform, dimensions: Dimensions): boolean {
-  const centre = nodeCentre(node)
+/** A frame whose header is held where it stood on the screen while it folds or opens. */
+export interface HeldFrame {
+  frameId: string
+  /** Where its header's top-left corner stood on the screen. */
+  screen: { x: number; y: number }
+}
+
+/** Where on the screen a frame's header stands at a camera; null when it is not drawn. */
+export function headerOnScreen(
+  graph: GraphLayout,
+  frameId: string,
+  camera: ViewportTransform,
+): { x: number; y: number } | null {
+  const frame = graph.frames.find((entry) => entry.id === frameId)
+  return frame ? { x: frame.x * camera.zoom + camera.x, y: frame.y * camera.zoom + camera.y } : null
+}
+
+/** Whether a box's centre stands inside the field at this camera. */
+function seen(box: Box, camera: ViewportTransform, dimensions: Dimensions): boolean {
+  const centre = nodeCentre(box)
   const x = centre.x * camera.zoom + camera.x
   const y = centre.y * camera.zoom + camera.y
   return x >= 0 && y >= 0 && x <= dimensions.width && y <= dimensions.height
@@ -198,7 +254,7 @@ function seen(node: PlacedNode, camera: ViewportTransform, dimensions: Dimension
 
 /**
  * The camera at the same zoom, moved onto the drawing: the whole of it centred
- * when it fits at this zoom, else centred on its first node as it is read.
+ * when it fits at this zoom, else centred on its first target as it is read.
  */
 function panOnto(
   graph: GraphLayout,
@@ -206,15 +262,12 @@ function panOnto(
   dimensions: Dimensions,
 ): ViewportTransform {
   const { padding } = graphFitViewOptions()
-  const left = Math.min(...graph.nodes.map((node) => node.x))
-  const top = Math.min(...graph.nodes.map((node) => node.y))
-  const right = Math.max(...graph.nodes.map((node) => node.x + NODE_WIDTH))
-  const bottom = Math.max(...graph.nodes.map((node) => node.y + NODE_HEIGHT))
+  const { left, top, right, bottom } = extent(drawing(graph))
   const fits =
     (right - left) * camera.zoom <=
       dimensions.width - pixels(padding.left) - pixels(padding.right) &&
     (bottom - top) * camera.zoom <= dimensions.height - pixels(padding.top) - pixels(padding.bottom)
-  const [first] = [...graph.nodes].sort(readingOrder)
+  const [first] = walkTargets(graph).sort(readingOrder)
   const centre = fits ? { x: (left + right) / 2, y: (top + bottom) / 2 } : nodeCentre(first)
   return {
     x: dimensions.width / 2 - centre.x * camera.zoom,
@@ -227,22 +280,34 @@ function panOnto(
  * Where the camera goes, or null to leave it where the operator put it.
  *
  * The camera is the operator's. The field places it when a scope opens, by
- * the opening frame (`graphCameraView`); a refresh never moves it; and a new
- * queue, search or switch — or a field that changed size — moves it only when
- * not one drawn node is left in sight, and then only across, at the zoom the
- * operator chose. The explicit «Fit whole graph» is the one way to change the
- * zoom besides the operator's own, and it is Vue Flow's own fit.
+ * the opening frame (`graphCameraView`); a refresh never moves it; a frame the
+ * operator folded or opened keeps its header where it stood on the screen, so
+ * what was pressed does not move from under the hand, at the same zoom; and a
+ * new queue, search or switch — or a field that changed size — moves it only
+ * when not one drawn box is left in sight, and then only across, at the zoom
+ * the operator chose. The explicit «Fit whole graph» is the one way to change
+ * the zoom besides the operator's own, and it is Vue Flow's own fit.
  */
 export function graphCameraMove(
   cause: GraphCameraCause,
   graph: GraphLayout,
-  field: { camera: ViewportTransform; dimensions: Dimensions },
+  field: { camera: ViewportTransform; dimensions: Dimensions; held?: HeldFrame | null },
   options: AnchorOptions = {},
 ): ViewportTransform | null {
   const { camera, dimensions } = field
-  if (!graph.nodes.length || !dimensions.width || !dimensions.height) return null
+  if (!drawing(graph).length || !dimensions.width || !dimensions.height) return null
   if (cause === 'open') return graphCameraView(graph, dimensions, options)
   if (cause === 'refresh') return null
-  if (graph.nodes.some((node) => seen(node, camera, dimensions))) return null
-  return panOnto(graph, camera, dimensions)
+  if (cause === 'toggled' && field.held) {
+    const now = headerOnScreen(graph, field.held.frameId, camera)
+    if (!now) return null
+    return {
+      x: camera.x + field.held.screen.x - now.x,
+      y: camera.y + field.held.screen.y - now.y,
+      zoom: camera.zoom,
+    }
+  }
+  return drawing(graph).some((box) => seen(box, camera, dimensions))
+    ? null
+    : panOnto(graph, camera, dimensions)
 }

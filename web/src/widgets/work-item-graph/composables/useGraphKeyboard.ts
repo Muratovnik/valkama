@@ -1,11 +1,16 @@
 /**
  * The field as one Tab stop, as the board is.
  *
- * The stop is the node the keyboard last stood on while it is still drawn,
- * else the node the camera is placed around. The arrows, Home and End walk the
- * rest (`graphWalk`), and the camera follows the keyboard to whatever it
- * reaches. Enter is the node's own button, so it opens the card as a click
- * does; the card hands focus back to the node it was opened from.
+ * The stop is the target the keyboard last stood on while it is still drawn —
+ * a card, or a frame header's fold or open button — and when a fold took it
+ * off the field, the fold button of the frame that hides it; else the target
+ * the camera is placed around. The arrows, Home and End walk the rest
+ * (`graphWalk`), and the camera follows the keyboard to whatever it reaches.
+ * Enter and Space are the target's own button: a card opens as a click opens
+ * it, and hands focus back to the target it was opened from.
+ *
+ * A target's button carries `data-walk-target` with the target's id; a card
+ * drawn without it is still found by its node.
  *
  * Vue Flow's own keyboard handling stays off (`disable-keyboard-a11y`): it
  * selects and moves nodes, which this field never does, and it told a screen
@@ -15,15 +20,20 @@
 import { computed, nextTick, onScopeDispose, ref, watch } from 'vue'
 import type { Ref } from 'vue'
 
-import type { PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type { GraphLayout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
-import { graphWalk, isGraphWalkKey } from '@/widgets/work-item-graph/utils/graphWalk.ts'
+import {
+  foldTarget,
+  graphWalk,
+  isGraphWalkKey,
+  walkTargets,
+} from '@/widgets/work-item-graph/utils/graphWalk.ts'
+import type { Box, WalkTarget } from '@/widgets/work-item-graph/utils/graphWalk.ts'
 
 /** How long a closing card may keep focus before the field stops waiting for it. */
 const HANDOVER_MS = 2000
 
 interface KeyboardInput {
-  /** The node the camera is placed around, which the keyboard enters on. */
+  /** The target the camera is placed around, which the keyboard enters on. */
   anchorId: Ref<string | null>
   /** The frame the field's nodes are drawn in. */
   canvas: Readonly<Ref<HTMLElement | null>>
@@ -32,24 +42,67 @@ interface KeyboardInput {
   placed: Ref<GraphLayout | null>
   /** Moves each time the host asks the field to take focus once it is framed. */
   focusRequest: () => number | undefined
-  /** Bring a node into sight, `margin` clear of the flow's edges. */
-  reveal: (node: PlacedNode, margin?: number) => void
+  /** Bring a target into sight, `margin` clear of the flow's edges. */
+  reveal: (box: Box, margin?: number) => void
+}
+
+/** The target a button in the field stands for, or null for anything else. */
+function targetOf(element: HTMLElement): string | null {
+  const marked = element.dataset.walkTarget
+  if (marked !== undefined) return marked
+  if (!element.classList.contains('flow-node-card')) return null
+  return element.closest<HTMLElement>('.vue-flow__node')?.dataset.id ?? null
+}
+
+/** The frames round a target, innermost first: where it goes when a fold hides it. */
+function lineage(graph: GraphLayout, target: WalkTarget): string[] {
+  const parents = new Map(graph.frames.map((frame) => [frame.id, frame.parentId]))
+  const chain: string[] = []
+  for (
+    let at: string | null | undefined = target.frameId;
+    at && !chain.includes(at);
+    at = parents.get(at)
+  )
+    chain.push(at)
+  return chain
 }
 
 export function useGraphKeyboard(input: KeyboardInput) {
   const current = ref<string | null>(null)
-  /** The node the field is putting focus on itself, rather than the operator walking to it. */
+  /** The frames round the target the keyboard last stood on, innermost first. */
+  let currentFrames: string[] = []
+  /** The target the field is putting focus on itself, rather than the operator walking to it. */
   let placing: string | null = null
+  const targets = computed(() => (input.placed.value ? walkTargets(input.placed.value) : []))
   const placedNode = (id: string | null) =>
-    id === null ? undefined : input.placed.value?.nodes.find((node) => node.work_item_id === id)
+    id === null ? undefined : targets.value.find((target) => target.id === id)
 
-  const tabStop = computed(() => (placedNode(current.value) ? current.value : input.anchorId.value))
+  /**
+   * The stop: the target the keyboard stood on, while drawn; once a fold hid it,
+   * the fold button of the innermost frame round it still drawn; else the anchor.
+   */
+  const tabStop = computed(() => {
+    if (placedNode(current.value)) return current.value
+    const fold = currentFrames.map((frameId) => foldTarget(frameId)).find((id) => placedNode(id))
+    return fold ?? input.anchorId.value
+  })
+
+  /** Remember where the keyboard stands, and the frames round it. */
+  function standOn(id: string) {
+    current.value = id
+    const target = placedNode(id)
+    const graph = input.placed.value
+    if (target && graph) currentFrames = lineage(graph, target)
+  }
 
   function nodeButton(id: string): HTMLElement | null {
+    const canvas = input.canvas.value
     return (
-      input.canvas.value?.querySelector<HTMLElement>(
+      canvas?.querySelector<HTMLElement>(`[data-walk-target="${CSS.escape(id)}"]`) ??
+      canvas?.querySelector<HTMLElement>(
         `.vue-flow__node[data-id="${CSS.escape(id)}"] .flow-node-card`,
-      ) ?? null
+      ) ??
+      null
     )
   }
 
@@ -59,7 +112,7 @@ export function useGraphKeyboard(input: KeyboardInput) {
    * has measured it, and a hidden node takes no focus.
    */
   async function focusNode(id: string): Promise<boolean> {
-    current.value = id
+    standOn(id)
     const node = placedNode(id)
     if (node) input.reveal(node)
     await nextTick()
@@ -72,13 +125,11 @@ export function useGraphKeyboard(input: KeyboardInput) {
   function onKeydown(event: KeyboardEvent) {
     if (!isGraphWalkKey(event.key) || event.altKey || event.ctrlKey || event.metaKey) return
     const target = event.target instanceof HTMLElement ? event.target : null
-    if (!target?.classList.contains('flow-node-card') || !input.placed.value) return
-    const wrapper = target.closest<HTMLElement>('.vue-flow__node')
-    const from = wrapper?.dataset.id
-    if (from === undefined) return
+    const from = target ? targetOf(target) : null
+    if (from === null || !input.placed.value) return
     // The keys walk the field and never reach Vue Flow, which would pan or move.
     event.preventDefault()
-    const next = graphWalk(input.placed.value.nodes, from, event.key)
+    const next = graphWalk(targets.value, from, event.key)
     if (next !== null && next !== from) void focusNode(next)
   }
 
@@ -90,7 +141,7 @@ export function useGraphKeyboard(input: KeyboardInput) {
    * lights no lineage over what they asked to see.
    */
   function onFocus(id: string): boolean {
-    current.value = id
+    standOn(id)
     const node = placedNode(id)
     if (node && nodeButton(id)?.matches(':focus-visible')) input.reveal(node, 0)
     const placed = placing === id
@@ -138,7 +189,8 @@ export function useGraphKeyboard(input: KeyboardInput) {
   })
 
   return {
-    isTabStop: (node: PlacedNode) => node.work_item_id === tabStop.value,
+    /** Whether the target with this id is the field's one Tab stop. */
+    isTabStop: (id: string) => id === tabStop.value,
     onKeydown,
     onFocus,
   }
