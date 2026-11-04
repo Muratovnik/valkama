@@ -22,6 +22,7 @@ import VTextInput from '@/shared/ui/VTextInput.vue'
 import { executionHistory } from '../browser/executionFixtures.ts'
 import { workItemFixture } from '../fixtures/workItem.ts'
 import { present } from '../support/present.ts'
+import { root } from '../support/threadCard.ts'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -129,6 +130,36 @@ describe('recorded history', () => {
     expect(wrapper.get('li').text()).toContain('needle in detail')
     await wrapper.setProps({ item: workItemFixture('Empty', 1) })
     expect(wrapper.text()).toContain(messages.en.workItem.noActivity)
+    wrapper.unmount()
+  })
+
+  it('says a mark and a link in words, finds them by those words and by the record', async () => {
+    const item = activityItem()
+    item.comments = [root(5436, { body: 'Export claims' })]
+    item.events = [
+      {
+        action: 'comment_resolved',
+        author: 'A',
+        at: '2026-10-23T12:00:00Z',
+        detail: '5436: later',
+        identity: unproved,
+      },
+      {
+        action: 'linked',
+        author: 'A',
+        at: '2026-10-23T11:30:00Z',
+        detail: 'blocks from MAIN-8',
+        identity: unproved,
+      },
+    ]
+    item.refs = []
+    const wrapper = mount(InspectorActivity, { props: { item }, global: { plugins: plugins() } })
+    const rows = () => wrapper.findAll('.entry-detail').map((entry) => entry.text())
+    expect(rows()).toEqual(['Thread “Export claims” · decision: later', 'Blocked by MAIN-8'])
+    await wrapper.getComponent(VTextInput).setValue('Export claims')
+    expect(rows()).toEqual(['Thread “Export claims” · decision: later'])
+    await wrapper.getComponent(VTextInput).setValue('5436')
+    expect(wrapper.findAll('li')).toHaveLength(1)
     wrapper.unmount()
   })
 

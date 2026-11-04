@@ -20,6 +20,9 @@ export const activityMessages = {
       unknownDate: 'Unknown date',
       unknownEvent: 'System event: {action}',
       detail: 'Recorded details',
+      thread: 'Thread “{thread}”',
+      threadDecided: 'Thread “{thread}” · decision: {decision}',
+      threadGone: 'A thread no longer on this task',
     },
   },
   ru: {
@@ -44,6 +47,9 @@ export const activityMessages = {
       unknownDate: 'Дата неизвестна',
       unknownEvent: 'Системное событие: {action}',
       detail: 'Записанные подробности',
+      thread: 'Ветка «{thread}»',
+      threadDecided: 'Ветка «{thread}» · решение: {decision}',
+      threadGone: 'Ветка, которой больше нет в этой задаче',
     },
   },
 }

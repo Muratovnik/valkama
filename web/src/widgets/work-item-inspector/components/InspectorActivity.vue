@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import HistoryFilterBar from '@/widgets/work-item-inspector/components/HistoryFilterBar.vue'
+import { eventWords } from '@/widgets/work-item-inspector/utils/eventWords.ts'
 import {
   groupHistory,
   matchesRecorded,
@@ -61,6 +62,10 @@ function title(entry: ActivityEntry) {
     ? t(entry.titleKey)
     : t('history.unknownEvent', { action: entry.action ?? entry.kind })
 }
+/** The row's second line in words; the recorded line stays in the entry for the search. */
+function detail(entry: ActivityEntry) {
+  return entry.kind === 'event' ? eventWords(entry, props.item.comments, t) : entry.detail
+}
 const groups = computed(() => {
   const { category, author } = selected.value
   return groupHistory(
@@ -68,7 +73,7 @@ const groups = computed(() => {
       (entry) =>
         (!category || entry.kind === category) &&
         (!author || entry.author === author) &&
-        matchesRecorded([entry, title(entry)], query.value),
+        matchesRecorded([entry, title(entry), detail(entry)], query.value),
     ),
     (entry) => entry.at,
   )
@@ -128,9 +133,9 @@ function referenceValue(entry: ActivityEntry) {
             <span class="entry-at">{{ when(entry.at) }}</span>
           </div>
           <RichText
-            v-if="entry.detail"
+            v-if="detail(entry)"
             class="entry-detail"
-            :source="entry.detail"
+            :source="detail(entry)"
           />
           <p
             v-if="referenceValue(entry)"
