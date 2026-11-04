@@ -138,6 +138,8 @@ test('a note goes after a few seconds, and what stepped aside for it comes back'
   await expect(kind).toBeVisible()
   await expect(anchor).toBeVisible()
 
+  // From here the page's time moves only when the test moves it.
+  await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 1000)
   await drawer.locator('.identity-link').click()
   await expectNoteWhole(page, drawer, 'Ссылка скопирована')
   // A phone-wide line made room for the whole sentence.
