@@ -11,8 +11,9 @@
  * that stands open is not to be lain on, since nobody should refuse without seeing the end of
  * what will not go, so while it is open the asking has its room kept, asked or not: in the
  * buttons' own row, just before the two it asks between, where the row has room for it, and
- * on a row of its own above them only where it has none. Kept on a row of its own at every width, the room stood as a
- * void of about 45px between the comment and the buttons, where everything else is 12px.
+ * on a row of its own above them only where it has none. Kept on a row of its own at every
+ * width, the room stood as a void of about 45px between the comment and the buttons, where
+ * everything else is 12px.
  *
  * The same buttons stay under the keyboard for the same reason, so focus has nowhere to fall.
  *
