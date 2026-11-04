@@ -498,6 +498,17 @@ checkouts are therefore distinguishable even at the same version.
 - **A long identifier in a document's table stays whole.** A word longer than a column's
   measure, plain or written as code, was broken in the middle; it now widens its column, and
   the table scrolls in its frame as a wide table already did.
+- **Code in a document's list widens as other code does.** A block of code inside a list item
+  was held to the text's end and scrolled there, while a table beside it took the wider
+  column. It now reaches past the text as far as that column, from the item's own start, and
+  only as far as its longest line asks.
+- **A phone-wide table shows the columns after its labels.** A column of labels took the
+  measure a line of prose reads at, which on a phone is the whole frame, so a table of
+  counts showed its labels and nothing else. Beside other columns a column now takes at
+  most part of the text's width; a long identifier still widens it.
+- **A table with an empty head is named without it.** A table whose head over its labels is
+  empty was announced as «Table: , MAIN, OTHER»; empty heads are now left out, and a table
+  with no words in its head is announced as «Table».
 - **A frame of code says its language.** A block of code too wide for the document, which
   the keyboard can reach and scroll, is announced as «Code block: ts» when its fence names a
   language, rather than only «Code block».

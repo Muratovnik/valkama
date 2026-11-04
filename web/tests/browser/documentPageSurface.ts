@@ -1,6 +1,7 @@
 import type { BrowserContext, Locator, Page } from '@playwright/test'
 
 import { installBackend } from './backend.ts'
+import { NESTED, NESTED_PATH } from './nestedDocumentFixture.ts'
 
 /**
  * A project's documents as the page of one of them reads them: a plan with a front
@@ -45,6 +46,7 @@ ${Array.from({ length: 30 }, (_, index) => `Closing paragraph ${index + 1}.`).jo
 const FILES: Record<string, string> = {
   'docs/plan.md': PLAN,
   'docs/notes.md': '# The notes\n\nBack to [the plan](plan.md#part-two).\n',
+  [NESTED_PATH]: NESTED,
 }
 
 const confirmed = (relative: string, markdown = true) => ({
@@ -57,6 +59,7 @@ const confirmed = (relative: string, markdown = true) => ({
 const KNOWN: Record<string, object> = {
   'docs/plan.md': confirmed('docs/plan.md'),
   'docs/notes.md': confirmed('docs/notes.md'),
+  [NESTED_PATH]: confirmed(NESTED_PATH),
   'src/a.ts': confirmed('src/a.ts', false),
 }
 

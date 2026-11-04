@@ -161,17 +161,32 @@ defineExpose({ box: (index: number) => boxes()[index] ?? null, bring, indexOf, t
 </template>
 
 <style scoped>
+@property --document-text-measure {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0;
+}
+
 /* The text is a grid with named lines, the layout breakout of Ryan Mulligan's "Layout
    Breakouts with CSS Grid": what is read along takes `content`, a reading measure of about
    seventy letters, and a table or a block of code may take `full`, since a table is
    scanned across rather than read along and a line of code cannot wrap. In a pane or a
    drawer both start where the pane's content does, and `full` runs on to its end. A `ch`
    is a zero, wider than the average letter: 58 of them hold 71–75 letters of English and
-   67–71 of Russian in this face. */
+   67–71 of Russian in this face.
+
+   Code inside a list item stands in the list's block, which is not wide; it may still reach
+   past the text's end as far as `full` runs on, and `--rich-wide-reach` tells it how far.
+   The text is a container for that, so the width it is counted from is the text's own; the
+   measure is a registered length, so its `ch` is counted in the text's font and not the
+   code's. */
 .document-text {
+  --document-text-measure: 58ch;
+  --rich-wide-reach: max(0px, 100cqi - var(--document-text-measure));
+
   display: grid;
   grid-template-columns:
-    [full-start content-start] min(58ch, 100%)
+    [full-start content-start] min(var(--document-text-measure), 100%)
     [content-end] minmax(0, 1fr)
     [full-end];
   row-gap: var(--space-3);
@@ -179,15 +194,19 @@ defineExpose({ box: (index: number) => boxes()[index] ?? null, bring, indexOf, t
   min-width: 0;
   max-width: 88ch;
   line-height: var(--line-height-reading);
+  container-type: inline-size;
 
   /* On a page of its own the measure stands in the middle of the window under a head of
      the same width, and `full` is the whole column the page gives: a line ran on 300 px
      past the text's end to the head's actions. The page names the measure as a length,
      so the head and the text are one width whatever font each is set in. */
   &.centred {
+    --document-text-measure: var(--document-measure);
+    --rich-wide-reach: max(0px, (100cqi - var(--document-text-measure)) / 2);
+
     grid-template-columns:
       [full-start] minmax(0, 1fr)
-      [content-start] min(var(--document-measure), 100%)
+      [content-start] min(var(--document-text-measure), 100%)
       [content-end] minmax(0, 1fr)
       [full-end];
     max-width: none;

@@ -1,5 +1,6 @@
 import type { Locator, Page } from '@playwright/test'
 
+import { NESTED, NESTED_PATH } from './nestedDocumentFixture.ts'
 import { asked, openQuestion } from './questionBackend.ts'
 
 /**
@@ -69,6 +70,7 @@ const FILES: Record<string, string> = {
   [LONG_PATH]: '# The long way down\n\nA document a long way down.\n',
   [NAMED_PATH]: NAMED,
   'docs/notes.md': '# The notes\n\nBack to [the plan](plan.md#part-two).\n',
+  [NESTED_PATH]: NESTED,
 }
 
 const confirmed = (relative: string) => ({
@@ -84,6 +86,7 @@ const KNOWN: Record<string, object> = {
   'docs/gone.md': confirmed('docs/gone.md'),
   [LONG_PATH]: confirmed(LONG_PATH),
   [NAMED_PATH]: confirmed(NAMED_PATH),
+  [NESTED_PATH]: confirmed(NESTED_PATH),
   'src/a.ts': { status: 'file', project: 'demo', relative: 'src/a.ts', markdown: false },
 }
 

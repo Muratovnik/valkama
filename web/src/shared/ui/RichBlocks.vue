@@ -22,17 +22,30 @@ import RichInlines from '@/shared/ui/RichInlines.vue'
 
 type List = Extract<RichBlock, { kind: 'list' }>
 
-const props = withDefaults(defineProps<{ blocks: readonly RichBlock[]; document?: boolean }>(), {
-  document: false,
-})
+const props = withDefaults(
+  defineProps<{
+    blocks: readonly RichBlock[]
+    document?: boolean
+    /** The blocks stand in a list item, which is what lets their code reach past it. */
+    inItem?: boolean
+  }>(),
+  { document: false, inItem: false },
+)
 defineOptions({ name: 'RichBlocks' })
 
 type Table = Extract<RichBlock, { kind: 'table' }>
 const { t } = useI18n()
-/** A Markdown table has no caption, so its head names it. */
-const tableFrame = (table: Table) =>
-  props.document &&
-  t('textFrames.table', { columns: table.header.map((cell) => inlineWords(cell)).join(', ') })
+/**
+ * A Markdown table has no caption, so its head names it: the heads that say something, since
+ * a table of counts leaves the one over its labels empty, and a head with none says "table".
+ */
+const tableFrame = (table: Table) => {
+  if (!props.document) return false
+  const columns = table.header.map((cell) => inlineWords(cell).trim()).filter(Boolean)
+  return columns.length
+    ? t('textFrames.table', { columns: columns.join(', ') })
+    : t('textFrames.tableBare')
+}
 type Code = Extract<RichBlock, { kind: 'code' }>
 /** A fence that names its language names the frame too. */
 const codeFrame = ({ language }: Code) =>
@@ -53,7 +66,10 @@ const headingTag = (heading: Heading) => `h${heading.level ?? 2}`
 </script>
 
 <template>
-  <div class="rich-blocks">
+  <div
+    class="rich-blocks"
+    :class="{ 'in-item': inItem }"
+  >
     <template
       v-for="(block, index) in blocks"
       :key="index"
@@ -90,6 +106,7 @@ const headingTag = (heading: Heading) => `h${heading.level ?? 2}`
         <RichBlocks
           :blocks="block.children"
           :document="document"
+          :in-item="inItem"
         />
       </blockquote>
       <component
@@ -117,6 +134,7 @@ const headingTag = (heading: Heading) => `h${heading.level ?? 2}`
             :id="itemId(index, position)"
             :blocks="item.children"
             :document="document"
+            in-item
           />
         </li>
       </component>
@@ -165,8 +183,11 @@ const headingTag = (heading: Heading) => `h${heading.level ?? 2}`
 </template>
 
 <style scoped>
+/* The one column is the container's width and no wider: code in a list item that reaches
+   past it would otherwise widen the column, and every line of the item with it. */
 .rich-blocks {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-2);
   min-width: 0;
 }
@@ -217,6 +238,17 @@ const headingTag = (heading: Heading) => `h${heading.level ?? 2}`
   background: var(--color-surface-recess);
   overflow-x: auto;
   border-radius: var(--radius-control);
+}
+
+/* Code in a list item reaches past the item's end as a top block of code does, as far as
+   the host's `--rich-wide-reach` says and only as far as its longest line asks; it starts
+   where the item does, so the list's indent holds. A card names no reach, and its code
+   keeps the item's width. */
+.rich-blocks.in-item > .rich-pre {
+  justify-self: start;
+  width: max-content;
+  min-width: 100%;
+  max-width: calc(100% + var(--rich-wide-reach, 0px));
 }
 
 /* A quote is set off by the same edge the step quote uses, and by its tone. */
@@ -286,6 +318,13 @@ const headingTag = (heading: Heading) => `h${heading.level ?? 2}`
       width: max-content;
       min-width: min-content;
       max-width: 32ch;
+    }
+
+    /* On a phone that measure is the whole frame, and a column of labels set at it hid
+       every column after it: beside others a column takes at most part of the text's
+       width. A longer word still widens it. */
+    & .rich-cell:not(:only-child) > .rich-cell-words {
+      max-width: min(32ch, 60cqi);
     }
   }
 }

@@ -17,6 +17,16 @@ const TABLE: RichBlock = {
   header: [[{ kind: 'text', text: 'Head' }]],
   rows: [[[{ kind: 'text', text: 'Cell' }]]],
 } as RichBlock
+/** A table of counts leaves the head over its labels empty, or every head. */
+const headed = (...heads: string[]) =>
+  ({
+    kind: 'table',
+    align: heads.map(() => null),
+    header: heads.map((text) => (text ? [{ kind: 'text', text }] : [])),
+    rows: [heads.map(() => [{ kind: 'text', text: '1' }])],
+  }) as RichBlock
+const COUNTS = headed('', 'Main', ' ', 'Other')
+const BARE = headed('', '')
 const PARAGRAPH: RichBlock = {
   kind: 'paragraph',
   children: [{ kind: 'text', text: 'Words' }],
@@ -126,6 +136,8 @@ describe('a frame in a document', () => {
 
   it.each([
     ['a table, by its head', TABLE, '.rich-table-frame', 'Table: Head'],
+    ['a table, by the heads that say something', COUNTS, '.rich-table-frame', 'Table: Main, Other'],
+    ['a table with nothing in its head, as a table', BARE, '.rich-table-frame', 'Table'],
     ['code, by what it is', CODE, 'pre', 'Code block'],
   ])('while it is a stop it is a region named for %s', async (_name, block, part, name) => {
     const wrapper = drawn([block])

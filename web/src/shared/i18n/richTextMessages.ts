@@ -31,6 +31,7 @@ export const richTextMessages = {
     },
     textFrames: {
       table: 'Table: {columns}',
+      tableBare: 'Table',
       code: 'Code block',
       codeIn: 'Code block: {language}',
     },
@@ -72,6 +73,7 @@ export const richTextMessages = {
     },
     textFrames: {
       table: 'Таблица: {columns}',
+      tableBare: 'Таблица',
       code: 'Фрагмент кода',
       codeIn: 'Фрагмент кода: {language}',
     },
