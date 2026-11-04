@@ -7,8 +7,10 @@ import type { ElkNode } from 'elkjs/lib/elk-api'
 import ELK from 'elkjs/lib/elk.bundled.js'
 import { describe, expect, it } from 'vitest'
 
+import { graphCameraView } from '@/widgets/work-item-graph/utils/graphCamera.ts'
 import { frameProjection } from '@/widgets/work-item-graph/utils/graphFrames.ts'
-import { NO_EPIC_FRAME } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+import type { FrameProjection } from '@/widgets/work-item-graph/utils/graphFrames.ts'
+import { MARGIN, NO_EPIC_FRAME } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import { layout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import type { GraphLayout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import {
@@ -16,6 +18,7 @@ import {
   frameGraph,
   HIERARCHY_OPTIONS,
   ROOT_OPTIONS,
+  SHELF_FROM,
 } from '@/widgets/work-item-graph/utils/graphLayoutTree.ts'
 
 import { broadSpace, deepSpace } from './fixtures/graphSpaces.ts'
@@ -52,6 +55,10 @@ function boxes(placed: GraphLayout): Map<string, Box> {
     ...placed.frames.map((frame) => [frame.id, frame] as const),
   ])
 }
+
+/** Every node of a laid-out ELK graph below its root, however deep. */
+const nodesOf = (node: ElkNode): ElkNode[] =>
+  (node.children ?? []).flatMap((child) => [child, ...nodesOf(child)])
 
 const spaces = [
   ['broad', broadSpace],
@@ -115,10 +122,23 @@ describe.each(spaces)('the %s space laid out as frames', (_, make) => {
         for (const right of members.slice(index + 1)) expect(apart(left, right), group).toBe(true)
   })
 
-  it('draws a field no narrower than 0.8 and no wider than 3 to 1', async () => {
+  it('draws a field no wider than 3 to 1, and no narrower than 0.8 unless one component is that tall', async () => {
     const field = await placed
     const ratio = field.width / field.height
-    expect(ratio, `${field.width}×${field.height}`).toBeGreaterThan(0.8)
+    // The packing stacks small components beside a tall one rather than strew
+    // them in a strip; the field is then as tall as that one component.
+    const laid = await engine.layout(
+      frameGraph(frameProjection({ items: model.work_items, links: model.links, showDone: false })),
+    )
+    const tallest = Math.max(
+      ...nodesOf(laid)
+        .filter((node) => node.id.startsWith('component:'))
+        .map((node) => node.height ?? 0),
+    )
+    expect(
+      ratio > 0.8 || field.height <= tallest + 2 * MARGIN + 1,
+      `${field.width}×${field.height}`,
+    ).toBe(true)
     expect(ratio, `${field.width}×${field.height}`).toBeLessThan(3)
   })
 
@@ -128,43 +148,83 @@ describe.each(spaces)('the %s space laid out as frames', (_, make) => {
   })
 })
 
-describe('the order the root packs components in', () => {
-  // The broad space draws finished epics' frames apart from the open work; the
-  // deep one joins all it draws into one component.
-  it('puts a component holding open work before the finished ones', async () => {
-    const { model } = broadSpace()
-    const projection = frameProjection({
-      items: model.work_items,
-      links: model.links,
-      showDone: false,
-    })
-    const open = new Map(projection.frames.map((frame) => [frame.id, frame.open > 0]))
-    const holdsOpen = (component: ElkNode) =>
-      (component.children ?? []).some((child) => open.get(child.id))
+const projectionOf = (make: typeof broadSpace) => {
+  const { model } = make()
+  return frameProjection({ items: model.work_items, links: model.links, showDone: false })
+}
+/** Whether a laid-out node stands for open work: a frame under it holds some. */
+const holdsOpen = (projection: FrameProjection, node: ElkNode) => {
+  const open = new Set(projection.frames.filter((frame) => frame.open > 0).map((frame) => frame.id))
+  return nodesOf(node).some((child) => open.has(child.id))
+}
+
+describe('the order and the shelves the root packs components on', () => {
+  it('puts open work before finished frames as the field is read', async () => {
+    const projection = projectionOf(broadSpace)
     const placed = await engine.layout(frameGraph(projection))
     const read = [...(placed.children ?? [])].sort(
       (left, right) => (left.y ?? 0) - (right.y ?? 0) || (left.x ?? 0) - (right.x ?? 0),
     )
-    expect(read.some((component) => !holdsOpen(component))).toBe(true)
-    // The field as it is read begins with open work, not with finished frames.
-    expect(holdsOpen(read[0]), read[0].id).toBe(true)
+    expect(read.some((node) => !holdsOpen(projection, node))).toBe(true)
+    expect(holdsOpen(projection, read[0]), read[0].id).toBe(true)
   })
 
-  it('gives a component with open work the higher priority, and a finished one none', () => {
-    const { model } = broadSpace()
-    const projection = frameProjection({
-      items: model.work_items,
-      links: model.links,
-      showDone: false,
-    })
-    const open = new Map(projection.frames.map((frame) => [frame.id, frame.open > 0]))
+  it('shelves a space with many lone open epics: lone open, then linked open, then finished', () => {
+    const projection = projectionOf(broadSpace)
     const graph = frameGraph(projection)
-    for (const component of graph.children ?? []) {
-      const holdsOpen = (component.children ?? []).some((child) => open.get(child.id))
-      expect(component.layoutOptions?.['elk.priority'], component.id).toBe(
-        holdsOpen ? '1' : undefined,
-      )
+    expect(
+      (graph.children ?? []).map((shelf) => [
+        shelf.id,
+        shelf.layoutOptions?.['elk.priority'],
+        shelf.layoutOptions?.['elk.box.packingMode'],
+      ]),
+    ).toEqual([
+      ['shelf:open-lone', '2', 'GROUP_MIXED'],
+      ['shelf:open-linked', '1', 'GROUP_MIXED'],
+      ['shelf:finished', '0', 'GROUP_MIXED'],
+    ])
+    const [lone, linked, finished] = graph.children ?? []
+    expect(lone.children?.length).toBeGreaterThanOrEqual(SHELF_FROM)
+    for (const component of lone.children ?? []) {
+      expect(component.children?.length, component.id).toBe(1)
+      expect(holdsOpen(projection, component), component.id).toBe(true)
     }
+    for (const component of linked.children ?? [])
+      expect(holdsOpen(projection, component), component.id).toBe(true)
+    for (const component of finished.children ?? [])
+      expect(holdsOpen(projection, component), component.id).toBe(false)
+  })
+
+  it('fills the first screen of a wide window: less than half of it is empty field', async () => {
+    const { model } = broadSpace()
+    const field = await layout({ nodes: model.work_items, edges: model.links }, engine)
+    const window = { width: 1176, height: 660 }
+    const camera = graphCameraView(field, window)
+    expect(camera).not.toBeNull()
+    const { x, y, zoom } = camera ?? { x: 0, y: 0, zoom: 1 }
+    const top = field.frames.filter((frame) => frame.parentId === null)
+    const points = Array.from(
+      { length: (window.width / 8) * Math.floor(window.height / 8) },
+      (_, index) => ({
+        x: ((index % (window.width / 8)) * 8 + 4 - x) / zoom,
+        y: (Math.floor(index / (window.width / 8)) * 8 + 4 - y) / zoom,
+      }),
+    )
+    const empty = points.filter(
+      (point) => !top.some((frame) => within({ ...point, width: 0, height: 0 }, frame)),
+    )
+    // A strip of small epics over empty field left 56 % of it empty.
+    expect(empty.length / points.length).toBeLessThan(0.5)
+  })
+
+  it('packs the components of a space with few lone open epics at the root, open work first', () => {
+    const projection = projectionOf(deepSpace)
+    const graph = frameGraph(projection)
+    expect(graph.children?.every((node) => node.id.startsWith('component:'))).toBe(true)
+    for (const component of graph.children ?? [])
+      expect(component.layoutOptions?.['elk.priority'], component.id).toBe(
+        holdsOpen(projection, component) ? '1' : undefined,
+      )
   })
 })
 

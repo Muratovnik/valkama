@@ -7,8 +7,9 @@
  * the cards nothing links in another. So the space is cut into components
  * before ELK sees it — the top-level frames joined by a drawn line, and every
  * other frame alone — each laid out hierarchically and packed by `box` at the
- * root, those holding open work first; inside a frame, the cards no line touches
- * are packed by `box` too.
+ * root, those holding open work first and, in a space with many lone epics, on
+ * shelves (`SHELF_FROM`); inside a frame, the cards no line touches are packed by
+ * `box` too.
  *
  * The hierarchical pass fails outright on options the flat one takes in its
  * stride: `considerModelOrder` and `wrapping` each end it with a TypeError.
@@ -178,6 +179,68 @@ function components(projection: FrameProjection): Frame[][] {
  */
 const OPEN_FIRST = 1
 
+/**
+ * From this many lone frames with open work — epics no drawn line joins to
+ * another — the root packs them on a shelf of their own. `box` lays its
+ * children in rows as wide as its widest child and as tall as its tallest, so a
+ * row of small lone epics beside a component of linked epics thousands of
+ * pixels wide is one thin strip with empty field under it. Its grouping modes
+ * stack small boxes to fill a row, but they ignore priorities, so each shelf is
+ * a `box` of its own and only the shelves carry a priority: lone open epics,
+ * then linked open work, then finished frames. With few lone epics the rows
+ * are already full, and the root packs the components as they are.
+ */
+export const SHELF_FROM = 5
+
+/** A shelf: a `box` that stacks its small children to fill each row. */
+const SHELF_OPTIONS: Readonly<Record<string, string>> = {
+  'elk.algorithm': 'box',
+  'elk.hierarchyHandling': 'SEPARATE_CHILDREN',
+  'elk.box.packingMode': 'GROUP_MIXED',
+  'elk.aspectRatio': '1.7',
+  'elk.padding': '[top=0,left=0,bottom=0,right=0]',
+  'elk.spacing.nodeNode': '48',
+}
+
+interface Component {
+  /** It holds a single top-level frame, which no drawn line joins to another. */
+  lone: boolean
+  node: ElkNode
+  open: boolean
+}
+
+/** The root's children: the components themselves, or the shelves they stand on. */
+function rootChildren(components: readonly Component[]): ElkNode[] {
+  const loneOpen = components.filter((component) => component.open && component.lone)
+  if (loneOpen.length < SHELF_FROM) {
+    return components.map(({ node, open }) =>
+      open
+        ? { ...node, layoutOptions: { ...node.layoutOptions, 'elk.priority': String(OPEN_FIRST) } }
+        : node,
+    )
+  }
+  const shelves = [
+    { id: 'shelf:open-lone', members: loneOpen, priority: OPEN_FIRST + 1 },
+    {
+      id: 'shelf:open-linked',
+      members: components.filter((component) => component.open && !component.lone),
+      priority: OPEN_FIRST,
+    },
+    {
+      id: 'shelf:finished',
+      members: components.filter((component) => !component.open),
+      priority: 0,
+    },
+  ]
+  return shelves
+    .filter((shelf) => shelf.members.length > 0)
+    .map((shelf) => ({
+      id: shelf.id,
+      layoutOptions: { ...SHELF_OPTIONS, 'elk.priority': String(shelf.priority) },
+      children: shelf.members.map((member) => member.node),
+    }))
+}
+
 /** The ELK graph of a space's frames: one component per node of the root. */
 export function frameGraph(projection: FrameProjection): ElkNode {
   const touched = new Set(projection.edges.flatMap((edge) => [edge.source, edge.target]))
@@ -195,10 +258,7 @@ export function frameGraph(projection: FrameProjection): ElkNode {
       for (const child of node.children ?? []) mark(child)
     }
     for (const node of nodes) mark(node)
-    const layoutOptions = group.some((frame) => frame.open > 0)
-      ? { ...HIERARCHY_OPTIONS, 'elk.priority': String(OPEN_FIRST) }
-      : { ...HIERARCHY_OPTIONS }
-    return { id: `component:${index}`, layoutOptions, children: nodes }
+    return { id: `component:${index}`, layoutOptions: { ...HIERARCHY_OPTIONS }, children: nodes }
   })
   for (const edge of projection.edges) {
     const component = children[home.get(edge.source) ?? -1] as ElkNode | undefined
@@ -206,7 +266,16 @@ export function frameGraph(projection: FrameProjection): ElkNode {
     const routed: ElkExtendedEdge = { id: edge.id, sources: [edge.source], targets: [edge.target] }
     component.edges = [...(component.edges ?? []), routed]
   }
-  return { id: 'work-graph', layoutOptions: { ...ROOT_OPTIONS }, children }
+  const packed = children.map((node, index) => ({
+    node,
+    open: groups[index].some((frame) => frame.open > 0),
+    lone: groups[index].length === 1,
+  }))
+  return {
+    id: 'work-graph',
+    layoutOptions: { ...ROOT_OPTIONS },
+    children: rootChildren(packed),
+  }
 }
 
 /** Every node of a laid-out graph by id, however deep. */

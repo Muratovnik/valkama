@@ -199,8 +199,9 @@ checkouts are therefore distinguishable even at the same version.
   ones without a press. A link to an epic is drawn to that epic's block rather than dropped,
   and several links running the same way between two blocks or cards are one line, solid
   when any of them blocks. Blocks that hold open work, with the blocks linked to them, come
-  first as the field is read, and blocks of finished work after them. A chain's graph is
-  drawn as before.
+  first as the field is read, and blocks of finished work after them. In a space with five
+  or more unlinked blocks of open work, those blocks are stacked to fill the field's rows
+  rather than strung out in one strip over empty field. A chain's graph is drawn as before.
 - **The graph is laid out again only when what it draws changes.** A refresh that changes
   a state, a holder or a title is laid on the drawn graph without a new layout, and a line
   lit by the pointer or the keyboard stays lit while its item is drawn. A block the operator

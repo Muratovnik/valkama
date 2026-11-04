@@ -881,7 +881,9 @@ keep one row, so the field keeps most of the screen and no camera control falls
 outside it. The field opens with its drawing in view: whole where it reads at
 reading size, else from its first node at the top-left at reading size; a chain
 opens on its root and an open card on its item, and no opening frame leaves
-empty ground beside work it cuts. The camera is the operator's. A data refresh
+empty ground beside work it cuts. Over the whole space the first screen holds open
+work: when the field's beginning shows none, the camera begins at its first open
+work as it is read instead (see the frames below). The camera is the operator's. A data refresh
 and any change of queue, search or switch never moves or zooms it; it moves
 only when a different scope opens — another project, another chain, a branch
 from a card's «Show on graph» — by the opening frame above, on the explicit
@@ -949,6 +951,27 @@ they reach cards, the fold on its left (`frame:<id>:fold`) and the epic across t
 rest (`frame:<id>`); the work under no epic has only the first. Once a fold hides
 the target the keyboard stood on, the field's Tab stop is the fold button of the
 innermost frame round it that is still drawn.
+
+Open work comes first as the field is read, finished frames after it. The field's
+pieces are the frames no drawn line joins, each alone, and the frames lines join,
+together; `box` packs them, a piece holding open work at a higher priority. Where
+the space has five or more lone frames with open work, they stand on a shelf of
+their own, then the linked open work on a second, then the finished frames on a
+third, and each shelf stacks its small frames to fill its rows (`GROUP_MIXED`).
+Without shelves a row is as wide as the widest piece and as tall as its tallest, so
+a dozen small epics beside one linked piece thousands of pixels wide made one thin
+strip with empty field under it, and the first screen at 1500 px was 83 % empty;
+`box` ignores priorities in its grouping modes, which is why the priority stands on
+the shelves and the grouping within them. A first open piece can still begin with a
+finished frame linked into it, so the camera does not count on the order: when the
+field's beginning shows no open card and no header of a frame with open work, it
+begins at the first open work instead, and a field whose beginning shows some opens
+on its beginning. The keyboard enters where the camera looks: once the field is
+placed, Tab from outside lands on the open card's item or the chosen branch's work
+when it is in sight, else on the first header button or card in sight as the field
+is read, and only with nothing in sight on that card or the field's first target,
+which the press then brings into view; the camera does not move for a target
+already in sight.
 
 A header says how its work stands in words, a number beside each word and never
 rounded to «99+»: «8 из 21 готово», then how many are in review, in progress and
