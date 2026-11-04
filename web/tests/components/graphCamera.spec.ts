@@ -26,12 +26,39 @@ vi.mock('@vue-flow/core', async (original) => ({
   useVueFlow: () => ({ ...camera, ...zoomLimits, dimensions, viewport }),
 }))
 
+/** The layouts under way, so a test waits for them to end rather than for a time. */
+const layouts = vi.hoisted(() => new Set<Promise<unknown>>())
+
 vi.mock('@/widgets/work-item-graph/utils/graphLayoutEngine.ts', () => ({
   createGraphLayoutEngine: () => {
     const elk = new ELK()
-    return { layout: elk.layout.bind(elk), terminateWorker: vi.fn() }
+    return {
+      layout: (...args: Parameters<ELK['layout']>) => {
+        const running = elk.layout(...args)
+        layouts.add(running)
+        const done = () => layouts.delete(running)
+        running.then(done, done)
+        return running
+      },
+      terminateWorker: vi.fn(),
+    }
   },
 }))
+
+/**
+ * Every layout started has ended, and what each set off has landed.
+ *
+ * A real ELK lays the field out, which takes a second and more on a busy machine, so the
+ * time-boxed waits ran out before it did, or returned while a second layout was still to
+ * land and move the camera after the test had counted its moves.
+ */
+async function laidOut() {
+  await flushPromises()
+  while (layouts.size > 0) {
+    await Promise.allSettled([...layouts])
+    await flushPromises()
+  }
+}
 
 const item: WorkItemBrief = {
   work_item_id: 'work-1',
@@ -86,8 +113,9 @@ async function openGraph(items = [item], space = 'space-1') {
       },
     },
   })
-  await vi.waitFor(() => expect(graph.findComponent({ name: 'VueFlow' }).exists()).toBe(true))
-  await vi.waitFor(() => expect(camera.setViewport).toHaveBeenCalled())
+  await laidOut()
+  expect(graph.findComponent({ name: 'VueFlow' }).exists()).toBe(true)
+  expect(camera.setViewport).toHaveBeenCalled()
   return graph
 }
 
@@ -108,8 +136,8 @@ describe('graph camera ownership', () => {
       items: [{ ...item, title: 'Updated work', revision: 1 }],
       selectedId: item.work_item_id,
     })
-    await flushPromises()
-    await vi.waitFor(() => expect(graph.attributes('aria-busy')).toBe('false'))
+    await laidOut()
+    expect(graph.attributes('aria-busy')).toBe('false')
     expect(camera.setViewport).toHaveBeenCalledTimes(1)
     graph.unmount()
   })
@@ -120,13 +148,13 @@ describe('graph camera ownership', () => {
     expect(camera.setViewport).toHaveBeenCalledTimes(1)
     // The queue or the search narrowed the items, and what is left stands in sight.
     await graph.setProps({ items: [other], filter: '["ready","test-2"]' })
-    await flushPromises()
-    await vi.waitFor(() => expect(graph.attributes('aria-busy')).toBe('false'))
+    await laidOut()
+    expect(graph.attributes('aria-busy')).toBe('false')
     expect(camera.setViewport).toHaveBeenCalledTimes(1)
     // The same narrowing refreshed by the stream: the camera stays.
     await graph.setProps({ items: [{ ...other, revision: 1 }], version: 2 })
-    await flushPromises()
-    await vi.waitFor(() => expect(graph.attributes('aria-busy')).toBe('false'))
+    await laidOut()
+    expect(graph.attributes('aria-busy')).toBe('false')
     expect(camera.setViewport).toHaveBeenCalledTimes(1)
     graph.unmount()
   })
@@ -137,13 +165,14 @@ describe('graph camera ownership', () => {
     // The operator zoomed and panned far from the work.
     viewport.value = { x: -40_000, y: -40_000, zoom: 0.6 }
     await graph.setProps({ items: [other], filter: '["ready","test-2"]' })
-    await vi.waitFor(() => expect(camera.setViewport).toHaveBeenCalledTimes(2))
+    await laidOut()
+    expect(camera.setViewport).toHaveBeenCalledTimes(2)
     expect(camera.setViewport.mock.calls.at(-1)?.[0]).toMatchObject({ zoom: 0.6 })
     // A switch narrows the same way: with work in sight again, it moves nothing.
     viewport.value = camera.setViewport.mock.calls.at(-1)?.[0] as typeof viewport.value
     graph.findComponent(GraphBar).vm.$emit('update:showUnlinked', true)
-    await nextTick()
-    await vi.waitFor(() => expect(graph.attributes('aria-busy')).toBe('false'))
+    await laidOut()
+    expect(graph.attributes('aria-busy')).toBe('false')
     expect(camera.setViewport).toHaveBeenCalledTimes(2)
     graph.unmount()
   })
@@ -171,18 +200,19 @@ describe('graph camera ownership', () => {
     const flow = graph.findComponent({ name: 'VueFlow' }).vm
     for (const showDone of [true, false, true, false]) {
       graph.findComponent(GraphBar).vm.$emit('update:showDone', showDone)
-      await nextTick()
-      await vi.waitFor(() => expect(graph.attributes('aria-busy')).toBe('false'))
-      await vi.waitFor(() => expect(graph.get('.graph-canvas').classes()).toContain('settled'))
+      await laidOut()
+      expect(graph.attributes('aria-busy')).toBe('false')
+      expect(graph.get('.graph-canvas').classes()).toContain('settled')
       expect(graph.findComponent({ name: 'VueFlow' }).vm).toBe(flow)
     }
     await graph.setProps({ items: [done], version: 2 })
-    await vi.waitFor(() => expect(graph.attributes('aria-busy')).toBe('false'))
+    await laidOut()
+    expect(graph.attributes('aria-busy')).toBe('false')
     expect(graph.get('.graph-canvas').attributes('style')).toContain('display: none')
     graph.findComponent(GraphBar).vm.$emit('update:showDone', true)
-    await nextTick()
-    await vi.waitFor(() => expect(graph.attributes('aria-busy')).toBe('false'))
-    await vi.waitFor(() => expect(graph.get('.graph-canvas').classes()).toContain('settled'))
+    await laidOut()
+    expect(graph.attributes('aria-busy')).toBe('false')
+    expect(graph.get('.graph-canvas').classes()).toContain('settled')
     expect(graph.get('.graph-canvas').attributes('style') ?? '').not.toContain('display: none')
     expect(graph.findComponent({ name: 'VueFlow' }).vm).toBe(flow)
     expect(camera.mounts).toHaveBeenCalledTimes(1)
@@ -198,7 +228,8 @@ describe('graph camera ownership', () => {
     expect(camera.setViewport).toHaveBeenCalledTimes(1)
     viewport.value = { x: 900, y: 0, zoom: 1 }
     dimensions.value = { width: 300, height: 300 }
-    await vi.waitFor(() => expect(camera.setViewport).toHaveBeenCalledTimes(2))
+    await laidOut()
+    expect(camera.setViewport).toHaveBeenCalledTimes(2)
     expect(camera.setViewport.mock.calls.at(-1)?.[0]).toMatchObject({ zoom: 1 })
     expect(graph.get('.graph-canvas').classes()).toContain('settled')
     expect(camera.mounts).toHaveBeenCalledTimes(1)
@@ -221,9 +252,11 @@ describe('graph camera ownership', () => {
       maxZoom: 1,
     })
     await graph.setProps({ scopeKind: 'none' })
-    await vi.waitFor(() => expect(camera.setViewport).toHaveBeenCalledTimes(2))
+    await laidOut()
+    expect(camera.setViewport).toHaveBeenCalledTimes(2)
     await graph.setProps({ space: 'space-2' })
-    await vi.waitFor(() => expect(camera.setViewport).toHaveBeenCalledTimes(3))
+    await laidOut()
+    expect(camera.setViewport).toHaveBeenCalledTimes(3)
     graph.unmount()
   })
 })
