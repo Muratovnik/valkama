@@ -169,14 +169,22 @@ export function openView(t: Translate, facts: OpenFacts): OpenView {
   return plan && opening?.always !== 'custom' ? fromPlan(t, plan, live) : fromRecord(t, facts, live)
 }
 
-/** What a button is called and what its tooltip leads with. */
+/**
+ * What a button is called and what its tooltip leads with. A button names a holder or
+ * says an action, and the two are different parts of the sentence: a holder is the
+ * session the words are about, an action is the words themselves, so an action stands
+ * first, as it does on the button, and is never put where a session's name goes.
+ */
 export function openName(
   t: Translate,
   view: OpenView,
   who: { action?: string; name?: string },
 ): string {
   const { action, name } = who
-  if (view.running) return t('open.name.running', { name: name ?? action ?? '', where: view.where })
+  if (view.running)
+    return action
+      ? t('open.name.runningAction', { action, where: view.where })
+      : t('open.name.running', { name: name ?? '', where: view.where })
   let words = action ?? t('open.name.plain', { name: name ?? '' })
   if (view.where)
     words = action ? `${action} ${view.where}` : t('open.name.at', { name, where: view.where })

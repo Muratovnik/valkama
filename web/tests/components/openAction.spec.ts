@@ -150,6 +150,29 @@ describe('what stands before any press', () => {
     wrapper.unmount()
   })
 
+  it('an action leads its own name while the session runs, never stands in for a session', async () => {
+    const running = plan(
+      terminal,
+      { ...vscode, source: 'fallback' },
+      [{ kind: 'explain', reason: 'live-in-terminal' }, ...windowSteps],
+      'live',
+    )
+    for (const [locale, action, name] of [
+      ['en', 'Open session', 'Open session — it is running in a terminal: what can be done'],
+      ['ru', 'Открыть сессию', 'Открыть сессию — она идёт в терминале: что можно сделать'],
+    ] as const) {
+      answerPlans(running)
+      const wrapper = mountAction(
+        { executor: executor(terminal, 'live'), name: undefined, action },
+        locale,
+      )
+      await flushPromises()
+      expect(read(wrapper).name).toBe(name)
+      expect(read(wrapper).title?.split('\n')[0]).toBe(name)
+      wrapper.unmount()
+    }
+  })
+
   it('says running in a terminal before any plan has answered', () => {
     answerPlans(new Promise(() => {}))
     const wrapper = mountAction({ executor: executor(terminal, 'live') })

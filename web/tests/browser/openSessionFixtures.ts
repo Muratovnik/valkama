@@ -231,3 +231,18 @@ export const threeAgents = () => [
   agent(2, executors.desktop),
   agent(3, executors.lost),
 ]
+
+/** One agent row for each state its parent session can be in, the order `executors` names them. */
+export const agentsInEveryState = () =>
+  Object.values(executors)
+    .filter((executor) => executor.session !== null)
+    .map((executor, index) => agent(index + 1, executor))
+
+/** A holder as a client proves it, short enough to read whole beside its place. */
+const SHORT_HOLDER = `claude (session ${IN_VSCODE})`
+
+/** The held card with that holder in the head, as most cards have it. */
+export const shortHolderCard = (read: Record<string, unknown>) => {
+  const card = heldCard(read)
+  return { ...card, claim_ref: SHORT_HOLDER, claim: { ...card.claim, holder: SHORT_HOLDER } }
+}
