@@ -203,6 +203,7 @@ export const en = {
     showDone: 'Show done · {count}',
     edgeBlocks: 'blocks',
     edgeDiscovered: 'context',
+    legendAhead: 'Ahead',
     edgeLive: 'work going on',
     zoom: 'Graph zoom',
     zoomIn: 'Zoom in',
@@ -225,8 +226,6 @@ export const en = {
         'Could not open chain {reference}: the server answered with an error. The whole space is shown.',
     },
     chainDismiss: 'Dismiss',
-    unlinked: 'Unlinked · {count}',
-    unlinkedToggle: 'Draw items with no links',
     closed: 'Closed · {count}',
     closedToggle: 'Draw the closed members of the chain',
     frame: {
@@ -845,8 +844,6 @@ export const en = {
     viewLabel: 'View',
     countsExclude: {
       laneHeads: '{epics} epic as a row | {epics} epics as rows',
-      graphParents:
-        '{count} parent task is drawn as a group, not a node ({open} open) | {count} parent tasks are drawn as groups, not nodes ({open} open)',
     },
     columnEmpty: 'Nothing here',
     lanes: {

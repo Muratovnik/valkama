@@ -550,6 +550,11 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Removed
 
+- **The graph's «Unlinked» switch, and the line that said how many parent tasks it drew as
+  groups.** Every open item now stands in its epic's frame, or in the frame of the work under
+  no epic, so the whole space leaves nothing out: an item linked only to its epic is no longer
+  hidden, and the line promised groups the graph never drew. The key names the parts of the
+  frames' edges that are drawn.
 - **The desktop app's own way to open a plan anchor in VS Code.** The `valkama:open-source`
   bridge, its path check and the desktop app's reader of the project projection are gone; the
   anchor opens in the document viewer, and a file in the editor through the open plan.

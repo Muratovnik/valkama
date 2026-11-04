@@ -22,8 +22,7 @@ type CensusInput = () => {
 const isOpen = (item: WorkItemBrief) => !item.state.is_terminal
 
 /** Items the view on the stage leaves out of its own counts, and why. */
-export type CensusExclusion =
-  { count: number; kind: 'graph-parents'; open: number } | { count: number; kind: 'lane-heads' }
+export type CensusExclusion = { count: number; kind: 'lane-heads' }
 
 /**
  * The one population every number above the stage counts, and what each view
@@ -80,13 +79,12 @@ export function usePlanningCensus(input: CensusInput) {
 
   /**
    * The board grouped by epic heads each lane with its epic, so its columns count
-   * every item but those. The whole-space graph draws a parent as the group chip
-   * on its children rather than as a node, so its open and all filters count every
-   * item but the parents. A chain's graph draws its parents and leaves none out.
-   * Under a filter both describe what the filter let through, as the views do.
+   * every item but those; under a filter it describes what the filter let
+   * through, as the board does. The graph leaves nothing out: the whole space
+   * draws each epic as the frame round its work, and a chain draws its parents.
    */
   const exclusion = computed<CensusExclusion | null>(() => {
-    const { chain, grouping, space, view } = input()
+    const { grouping, space, view } = input()
     const items = filtered.value ? matched.value : counted.value
     if (view === 'kanban' && grouping === 'epic') {
       const tiles = boardLanes({
@@ -97,12 +95,6 @@ export function usePlanningCensus(input: CensusInput) {
       }).reduce((sum, lane) => sum + lane.items.length, 0)
       const heads = items.length - tiles
       return heads ? { kind: 'lane-heads', count: heads } : null
-    }
-    if (view === 'graph' && !chain) {
-      const parents = items.filter((item) => item.container)
-      if (!parents.length) return null
-      const open = parents.filter((item) => !item.state.is_terminal).length
-      return { kind: 'graph-parents', count: parents.length, open }
     }
     return null
   })

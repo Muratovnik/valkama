@@ -151,11 +151,10 @@ describe('one population above the stage', () => {
     expect(figures(wrapper)).toEqual(['5 of 5 open · 1 epic as a row · Reset'])
   })
 
-  it('says how many parents the whole-space graph draws as groups rather than nodes', () => {
+  it('promises no groups for the whole-space graph, which draws its parents as frames', () => {
     const wrapper = workspace({ view: 'graph' })
-    expect(countsLine(wrapper)).toBe(
-      '5 open of 7 · 2 parent tasks are drawn as groups, not nodes (1 open)',
-    )
+    expect(countsLine(wrapper)).toBe('5 open of 7')
+    expect(wrapper.find('.workspace-left-out').exists()).toBe(false)
   })
 
   it('leaves nothing out of the flat board, the list or a chain graph', () => {

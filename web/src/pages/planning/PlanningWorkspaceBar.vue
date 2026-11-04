@@ -145,14 +145,6 @@ function focusChips() {
 function removeChip(token: WorkFilterToken) {
   filter.value = removeToken(filter.value, token)
 }
-
-/** What the graph leaves out of the counts, as a sentence of its own. */
-const exclusionText = computed(() => {
-  const left = props.exclusion
-  return left?.kind === 'graph-parents'
-    ? t('workItem.countsExclude.graphParents', { count: left.count, open: left.open }, left.count)
-    : ''
-})
 </script>
 
 <template>
@@ -247,12 +239,6 @@ const exclusionText = computed(() => {
             >{{ t('workItem.filter.reset') }}</VButton
           ></template
         >
-      </p>
-      <p
-        v-if="exclusionText"
-        class="workspace-left-out"
-      >
-        {{ exclusionText }}
       </p>
       <p
         v-if="!stored"

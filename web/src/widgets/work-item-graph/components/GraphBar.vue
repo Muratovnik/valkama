@@ -43,15 +43,12 @@ const props = defineProps<{
   openTotal: number
   readyCount: number
   showDone: boolean
-  showUnlinked: boolean
-  unlinked: number
 }>()
 
 const emit = defineEmits<{
   'exit-branch': []
   'exit-chain': []
   'update:showDone': [value: boolean]
-  'update:showUnlinked': [value: boolean]
 }>()
 const { t } = useI18n()
 const filter = computed(() => (props.showDone ? 'all' : 'open'))
@@ -73,7 +70,8 @@ function updateFilter(value: 'all' | 'open') {
 /** Only a narrow bar shows the button; a wide one lays the options out in its row. */
 const optionsOpen = ref(false)
 const optionsId = useId()
-const switchShown = computed(() => (props.chain ? props.hiddenDone > 0 : props.unlinked > 0))
+/** The one switch is a chain's, for its closed members; the whole space has none. */
+const switchShown = computed(() => props.chain !== null && props.hiddenDone > 0)
 const hasOptions = computed(() => switchShown.value || props.keyed)
 </script>
 
@@ -120,22 +118,13 @@ const hasOptions = computed(() => switchShown.value || props.keyed)
       :class="{ open: optionsOpen }"
     >
       <ToggleSwitch
-        v-if="switchShown && chain"
+        v-if="switchShown"
         class="graph-closed"
         :label="t('graph.closedToggle')"
         :model-value="showDone"
         :on-label="t('graph.closed', { count: hiddenDone })"
         :off-label="t('graph.closed', { count: hiddenDone })"
         @update:model-value="(value) => emit('update:showDone', value)"
-      />
-      <ToggleSwitch
-        v-else-if="switchShown"
-        class="graph-unlinked"
-        :label="t('graph.unlinkedToggle')"
-        :model-value="showUnlinked"
-        :on-label="t('graph.unlinked', { count: unlinked })"
-        :off-label="t('graph.unlinked', { count: unlinked })"
-        @update:model-value="(value) => emit('update:showUnlinked', value)"
       />
       <div class="graph-options-legend">
         <slot name="legend" />

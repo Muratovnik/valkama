@@ -180,17 +180,11 @@ describe('the work bar', () => {
     })
   })
 
-  it('leaves the grouped board’s epics to the lanes, and says what the graph leaves out', async () => {
+  it('leaves the grouped board’s epics to the lanes, and says nothing is left out of the graph', async () => {
     const wrapper = bar({ grouping: 'epic' })
     expect(wrapper.find('.workspace-left-out').exists()).toBe(false)
-    await wrapper.setProps({
-      grouping: null,
-      view: 'graph',
-      exclusion: { kind: 'graph-parents', count: 2, open: 1 },
-    })
-    expect(wrapper.get('.workspace-left-out').text()).toBe(
-      '2 parent tasks are drawn as groups, not nodes (1 open)',
-    )
+    await wrapper.setProps({ grouping: null, view: 'graph', exclusion: null })
+    expect(wrapper.find('.workspace-left-out').exists()).toBe(false)
   })
 
   it('says when the address cannot keep the whole filter', () => {

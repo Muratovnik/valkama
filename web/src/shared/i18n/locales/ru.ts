@@ -202,6 +202,7 @@ export const ru = {
     showDone: 'Показать готовые · {count}',
     edgeBlocks: 'блокирует',
     edgeDiscovered: 'контекст',
+    legendAhead: 'Впереди',
     edgeLive: 'работа идёт',
     zoom: 'Масштаб графа',
     zoomIn: 'Приблизить',
@@ -224,8 +225,6 @@ export const ru = {
         'Не удалось открыть цепочку {reference}: сервер ответил ошибкой. Показано всё пространство.',
     },
     chainDismiss: 'Закрыть',
-    unlinked: 'Без связей · {count}',
-    unlinkedToggle: 'Показывать работу без связей',
     closed: 'Закрытые · {count}',
     closedToggle: 'Показывать закрытые задачи цепочки',
     frame: {
@@ -845,8 +844,6 @@ export const ru = {
       // «строкой» rather than «рядами»: the singular of «рядами» reads as «рядом».
       laneHeads:
         '{epics}\u{A0}эпик строкой | {epics}\u{A0}эпика строками | {epics}\u{A0}эпиков строками',
-      graphParents:
-        '{count}\u{A0}родительская задача показана группой, а не узлом (открыто: {open}) | {count}\u{A0}родительские задачи показаны группами, а не узлами (открыто: {open}) | {count}\u{A0}родительских задач показаны группами, а не узлами (открыто: {open})',
     },
     columnEmpty: 'Пусто',
     lanes: {

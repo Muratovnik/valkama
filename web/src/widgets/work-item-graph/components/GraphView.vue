@@ -218,8 +218,30 @@ const { anchorId, fitted, fitOptions, overview, onFlowInit, reveal } = useGraphC
 /** The chain has closed members, so the key keeps the place «Done» comes and goes from. */
 const keepDone = computed(() => inChain.value && hiddenDone.value > 0)
 const hasEdges = computed(() => Boolean(placed.value?.edges.length))
+/** A frame's edge parts, in the order an edge runs, and the group whose key names each. */
+const FRAME_PARTS = [
+  ['done', 'done'],
+  ['review', 'review'],
+  ['active', 'active'],
+  ['blocked', 'blocked'],
+  ['ahead', 'queued'],
+] as const
+
+/**
+ * What the key names: in a chain, its groups as the cards are marked; over the
+ * whole space, the parts the frames' edges draw — «ahead» is queued and backlog
+ * together, as an edge draws them.
+ */
+const legend = computed(() => {
+  if (inChain.value) return { groups: chainLegend.value, names: chainLegendNames.value }
+  const frames = drawnField.value?.frames ?? []
+  const groups = FRAME_PARTS.filter(([part]) => frames.some((frame) => frame.progress[part])).map(
+    ([, group]) => group,
+  )
+  return { groups, names: { ...chainLegendNames.value, queued: t('graph.legendAhead') } }
+})
 /** Whether the field has a key to draw: the bar offers it on a narrow workspace. */
-const keyed = computed(() => chainLegend.value.length > 0 || hasEdges.value)
+const keyed = computed(() => legend.value.groups.length > 0 || hasEdges.value || anyMoving.value)
 
 const chainChip = computed(() =>
   props.chain ? { reference: props.chain.reference, total: props.chain.total } : null,
@@ -292,21 +314,19 @@ function onFieldPointerLeave() {
   >
     <GraphBar
       v-model:show-done="showDone"
-      :show-unlinked="false"
       :chain="chainChip"
       :branch="branchChip"
       :open-total="openTotal"
       :hidden-done="hiddenDone"
       :ready-count="ready.length"
-      :unlinked="0"
       :keyed="keyed"
       @exit-chain="emit('exit-chain')"
       @exit-branch="emit('exit-branch')"
     >
       <template #legend>
         <GraphLegend
-          :groups="chainLegend"
-          :names="chainLegendNames"
+          :groups="legend.groups"
+          :names="legend.names"
           :has-edges="hasEdges"
           :keep-done="keepDone"
         />
@@ -342,8 +362,8 @@ function onFieldPointerLeave() {
           @retry="retry"
         />
         <GraphFieldCorner
-          :groups="chainLegend"
-          :names="chainLegendNames"
+          :groups="legend.groups"
+          :names="legend.names"
           :has-edges="hasEdges"
           :keep-done="keepDone"
           :ready-count="ready.length"
