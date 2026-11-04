@@ -357,6 +357,12 @@ checkouts are therefore distinguishable even at the same version.
   full paths, the CLI as the app finds it (`claude.exe`, or `codex.exe` beside the Codex app),
   and only the tab starts in the folder. Without the CLI the resume is refused as not
   installed.
+- **The owner's own command runs the program on the PATH, not one in the repository.** A
+  command such as `wt -d "{cwd}" …` started in the session's folder with its program named
+  alone, and Windows looks for such a name in the current folder first, so a `wt.exe`
+  committed to that repository ran instead. A program named without a folder is now looked up
+  on the `PATH` alone, and one that is not there starts nothing; a path the owner wrote runs
+  as written.
 - **A window of the desktop app hands the system only a web or mail address.** A link a
   window opened or followed off Valkama's origin went to the system whatever its scheme, so
   a `file:` or `ms-settings:` address asked Windows to start the program that claims it. Only

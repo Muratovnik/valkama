@@ -177,6 +177,31 @@ function findExecutable(name, options = {}) {
 }
 
 /**
+ * A program the owner named without a folder, looked up on the PATH as Windows
+ * would, but never in the folder it starts in: that is a session's repository,
+ * and a program of the same name there would run instead. Only `.exe` and `.com`
+ * start without a shell, so only they are looked for; '' when none is there.
+ */
+function programOnPath(name, options = {}) {
+  if (typeof name !== 'string' || !name || /[\\/:]/.test(name)) return ''
+  const env = options.env || process.env
+  const exists = options.isFile || isFile
+  const extension = path.win32.extname(name).toLowerCase()
+  if (extension && extension !== '.exe' && extension !== '.com') return ''
+  const names = extension ? [name] : [`${name}.com`, `${name}.exe`]
+  const key = Object.keys(env).find((variable) => variable.toUpperCase() === 'PATH')
+  for (const entry of String(key ? env[key] : '').split(';')) {
+    const folder = entry.trim().replace(/^"(.*)"$/, '$1')
+    if (!path.win32.isAbsolute(folder)) continue
+    for (const candidate of names) {
+      const file = path.win32.join(folder, candidate)
+      if (exists(file)) return file
+    }
+  }
+  return ''
+}
+
+/**
  * Renderer-visible catalog for the settings page: stable ids and availability,
  * never a local path. It answers until the settings stop asking (where a
  * session opens is the server's plan now, not an opener per client).
@@ -203,6 +228,7 @@ module.exports = {
   editorExecutable,
   expandVars,
   findExecutable,
+  programOnPath,
   readRegistryValue,
   schemeCommand,
 }

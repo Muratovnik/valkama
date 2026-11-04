@@ -9,6 +9,7 @@ const {
   discoverSupportedOpeners,
   editorExecutable,
   findExecutable,
+  programOnPath,
   readRegistryValue,
   schemeCommand,
 } = require('./opener_catalog')
@@ -120,4 +121,19 @@ test('the settings catalog keeps its ids and availability and names no path', ()
     { kind: 'cursor', availability: 'unavailable' },
     { kind: 'custom', availability: 'available' },
   ])
+})
+
+test('a program named alone is found on the PATH, never in the folder it starts in', () => {
+  const files = new Set(['C:\\bin\\tool.exe', 'C:\\later\\tool.com', 'C:\\later\\other.com'])
+  const isFile = (file) => files.has(file)
+  // The current folder is not an entry; a relative entry is not one either.
+  const env = { Path: '.;repo;"C:\\bin";C:\\later' }
+  assert.equal(programOnPath('tool', { env, isFile }), 'C:\\bin\\tool.exe')
+  assert.equal(programOnPath('other', { env, isFile }), 'C:\\later\\other.com')
+  assert.equal(programOnPath('tool.exe', { env, isFile }), 'C:\\bin\\tool.exe')
+  // A script needs a shell, and a written path is not a name to look up.
+  assert.equal(programOnPath('tool.cmd', { env, isFile: () => true }), '')
+  assert.equal(programOnPath('.\\tool', { env, isFile }), '')
+  assert.equal(programOnPath('missing', { env, isFile }), '')
+  assert.equal(programOnPath('tool', { env: {}, isFile }), '')
 })

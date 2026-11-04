@@ -15,6 +15,7 @@ const CODE = 'C:\\Apps\\VS Code\\Code.exe'
 const WT = 'C:\\WindowsApps\\wt.exe'
 const CLI = 'C:\\work\\bin\\claude.exe'
 const CODEX = 'C:\\work\\bin\\codex.exe'
+const TOOL = 'C:\\tools\\tool.exe'
 const CMD = 'C:\\Windows\\System32\\cmd.exe'
 const EXTENSION_LINK = `vscode://anthropic.claude-code/open?session=${ID}`
 
@@ -89,6 +90,7 @@ function machine({ plans, exits = true, spawnError = '' } = {}) {
       },
       editorExecutable: (ide) => (ide === 'vscode' ? CODE : ''),
       findExecutable: (name) => ({ 'wt.exe': WT, 'claude.exe': CLI, 'codex.exe': CODEX })[name] || '',
+      programOnPath: (name) => ({ tool: TOOL, wt: WT })[name] || '',
       isDirectory: (dir) => dir === FOLDER || dir === 'C:\\work\\my;folder',
       isFile: (file) => file === 'C:\\work\\repo\\docs\\plan.md',
       env: { ELECTRON_RUN_AS_NODE: '1', PATH: 'C:\\Windows', SystemRoot: 'C:\\Windows' },
@@ -473,7 +475,7 @@ test("the owner's own command runs with the plan's session and folder", async ()
   )
   assert.equal(result.ok, true)
   const started = effects(box.timeline)[0]
-  assert.equal(started.spawn, 'tool')
+  assert.equal(started.spawn, TOOL)
   assert.deepEqual(started.args, ['--root', FOLDER, '--session', ID])
   assert.equal(started.options.cwd, FOLDER)
 
@@ -504,6 +506,26 @@ test("the owner's command gets no folder Windows Terminal would split into two c
   )
   assert.equal(without.ok, true, 'a command that names no folder still runs')
   assert.equal(effects(box.timeline)[0].options.cwd, 'C:\\work\\home')
+})
+
+test("the owner's command runs the program on the PATH, never one in the session's folder", async () => {
+  const box = machine({ plans: plan([FOCUS, LINK]) })
+  await openSessionRequest(box.options({ request: { session: ID, command: 'tool {session}' } }))
+  assert.equal(effects(box.timeline)[0].spawn, TOOL, 'a bare name runs from where the PATH has it')
+  assert.equal(effects(box.timeline)[0].options.cwd, FOLDER)
+
+  const missing = machine({ plans: plan([FOCUS, LINK]) })
+  const result = await openSessionRequest(
+    missing.options({ request: { session: ID, command: 'nowhere {session}' } }),
+  )
+  assert.equal(result.reason, 'launch-failed')
+  assert.deepEqual(effects(missing.timeline), [], 'nothing starts when the PATH has no such program')
+
+  const written = machine({ plans: plan([FOCUS, LINK]) })
+  await openSessionRequest(
+    written.options({ request: { session: ID, command: '"C:\\tools\\other.exe" {session}' } }),
+  )
+  assert.equal(effects(written.timeline)[0].spawn, 'C:\\tools\\other.exe', 'a path the owner wrote stands')
 })
 
 /** A session in a terminal, long silent: the plan the server answers, by what it was told. */

@@ -206,3 +206,6 @@ remain an argv array without a shell and sender validation still runs first.
 The desktop app gives `{cwd}` only a folder that holds no `;`, as it does a resume
 in Windows Terminal, since the owner's command may start Windows Terminal itself;
 with no other folder, a template that names `{cwd}` is refused as `no-folder`.
+A program the template names without a folder is looked up on `PATH` alone, as a
+`.exe` or `.com`, never in the folder the command starts in; one that is not there
+is refused as `launch-failed`, and a path the owner wrote is run as written.

@@ -3,7 +3,7 @@
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
-const { EDITORS, editorExecutable, findExecutable } = require('./opener_catalog')
+const { EDITORS, editorExecutable, findExecutable, programOnPath } = require('./opener_catalog')
 
 // Carrying out what a click on a session, a file or a folder opens.
 //
@@ -412,8 +412,17 @@ async function runCustom(context, parsed, checks) {
   if (!folder && /\{(?:session_)?cwd\}/.test(template)) return refused('no-folder')
   const argv = customArgv(template, { session, folder })
   if (!argv.length) return refused('no-command')
+  // A bare name is found on the PATH here, so the folder the command starts in,
+  // a repository, cannot supply a program of that name. A path the owner wrote stands.
+  const program = /[\\/:]/.test(argv[0])
+    ? argv[0]
+    : context.programOnPath(argv[0], { env: context.env })
+  if (!program) {
+    context.log('open-session-failed', { step: 'custom', error: 'not on the PATH' })
+    return refused('launch-failed')
+  }
   try {
-    await launch(context, argv[0], argv.slice(1), { cwd: folder || context.home })
+    await launch(context, program, argv.slice(1), { cwd: folder || context.home })
   } catch (failure) {
     context.log('open-session-failed', { step: 'custom', error: failure?.message })
     return refused('launch-failed')
@@ -453,6 +462,7 @@ async function openSessionRequest(options) {
     liveness: options.liveness || (() => ''),
     editorExecutable: options.editorExecutable || editorExecutable,
     findExecutable: options.findExecutable || findExecutable,
+    programOnPath: options.programOnPath || programOnPath,
     sleep: options.sleep || ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
     log: options.log || (() => {}),
     env: options.env || process.env,
