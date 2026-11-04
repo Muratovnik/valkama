@@ -285,7 +285,6 @@
   --font-detail: 400 var(--font-size-dense)/var(--line-height-snug) var(--font-family-interface);
   --font-line: 400 var(--font-size-dense)/var(--line-height-tight) var(--font-family-interface);
   --font-strong: 600 var(--font-size-dense)/var(--line-height-snug) var(--font-family-interface);
-  --font-context: 600 var(--font-size-dense)/var(--line-height-tight) var(--font-family-interface);
   --font-chip: 500 var(--font-size-dense)/var(--line-height-flat) var(--font-family-interface);
   --font-count: 400 var(--font-size-dense)/var(--line-height-flat) var(--font-family-interface);
 

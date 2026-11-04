@@ -320,6 +320,14 @@ checkouts are therefore distinguishable even at the same version.
   plan anchor did is shown as a check, or a mark when it failed, with its words beside it
   where they fit whole; the date shortens first to make room. A phone-wide card used to
   show «Ссылка скопиров…». Screen readers hear the whole sentence either way.
+- **A document beside a card keeps its title.** Its four icons stood 16 px apart on the
+  title's row and left a pane of 480 px about 220 px of title and the last letters of the
+  path. Its actions now stand 4 px apart as one group, the way out apart from them, and
+  under 560 px of head they take a row of their own under the way out, so the title and the
+  path have the row.
+- **What a dialog is about reads as a note under its title.** The line under the title of
+  the session panel and of other dialogs, a session's client and id or a task's number,
+  stood flush under it in bold; it now stands a step lower in the weight of ordinary text.
 
 ### Removed
 

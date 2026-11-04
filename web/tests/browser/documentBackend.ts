@@ -43,9 +43,31 @@ ${Array.from({ length: 30 }, (_, index) => `Closing paragraph ${index + 1}.`).jo
 export const LONG_PATH =
   'docs/plans/2026/the-second-half-of-the-year/a-rather-long-directory-name/the-plan-itself.md'
 
+/**
+ * A plan named as plans are, with a title longer than any head beside a card holds, the
+ * identifiers a plan's table names, and code whose fence says what language it is.
+ */
+export const NAMED_PATH = 'docs/plans/2026-11-03-document-links.md'
+export const IDENTIFIERS = [
+  'an_identifier_long_enough_that_it_cannot_wrap_in_a_narrow_column',
+  'another_identifier_long_enough_to_be_written_as_code_in_a_cell',
+]
+const NAMED = `# Document links in the card, and the window a document opens in
+
+| Step | Where |
+| --- | --- |
+| Read | ${IDENTIFIERS[0]} |
+| Write | \`${IDENTIFIERS[1]}\` |
+
+\`\`\`ts title="links.ts"
+export const aLineLongEnoughThatAPaneBesideACardScrollsIt = 'inside its own frame and nowhere else'
+\`\`\`
+`
+
 const FILES: Record<string, string> = {
   'docs/plan.md': PLAN,
   [LONG_PATH]: '# The long way down\n\nA document a long way down.\n',
+  [NAMED_PATH]: NAMED,
   'docs/notes.md': '# The notes\n\nBack to [the plan](plan.md#part-two).\n',
 }
 
@@ -61,6 +83,7 @@ const KNOWN: Record<string, object> = {
   'docs/notes.md': confirmed('docs/notes.md'),
   'docs/gone.md': confirmed('docs/gone.md'),
   [LONG_PATH]: confirmed(LONG_PATH),
+  [NAMED_PATH]: confirmed(NAMED_PATH),
   'src/a.ts': { status: 'file', project: 'demo', relative: 'src/a.ts', markdown: false },
 }
 

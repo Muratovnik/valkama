@@ -668,8 +668,9 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   in the owner's editor and, outside `/doc`, another window, which closes the document here.
   The editor opens at the line a link named while its block is in view, else at the first
   line of the top block in view, and also takes a file too large or not text for the viewer;
-  a refused plan copies the path and the shell's notice says why. Under 440 px of head the
-  actions take a row of their own, so the title and the path stay whole. A `#…` or `:42`
+  a refused plan copies the path and the shell's notice says why. The actions are one group,
+  4 px apart, and under 560 px of head they take a row of their own under the way out, so
+  the title and the path keep the row beside a card. A `#…` or `:42`
   brings that block to the top and marks it in the gutter, with room for its ring above and
   at both sides; an anchor the file no longer has is said in the head's status line. A link
   to another Markdown file opens in the same place, and a file read again when the window

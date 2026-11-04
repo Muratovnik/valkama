@@ -138,29 +138,35 @@ defineExpose({ focusTitle: () => name.value?.focus({ preventScroll: true }) })
   line-height: var(--line-height-normal);
 }
 
+/* What the overlay is about is read after the title, so it is set as the subtitle is: a
+   step under it, in the note's weight. In the context bar's bold and flush with the title
+   it read as a second title. */
 .overlay-header-context {
   display: block;
+  margin-top: var(--space-2);
   color: var(--color-text-muted);
-  font: var(--font-context);
+  font: var(--font-note);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* As tall as the way out, so that the icons of the row stand on one line, and as far
-   apart as the head stands them from it, so that the row keeps one rhythm. */
+/* As tall as the way out, so that the icons of the row stand on one line. They are one
+   group, so they stand closer to each other than to the title and the way out: at the
+   head's own gap four icons took 208 px of a 480 px pane and left the title 219. */
 .overlay-header-actions {
   display: flex;
   flex: 0 0 auto;
-  gap: var(--space-4);
+  gap: var(--space-1);
   align-items: center;
   min-height: var(--size-control-target);
 }
 
-/* A narrow head gives its row to the title and what it is about: the actions take a row of
-   their own under the way out. Beside four icons a phone's title kept one word, and the
-   path under it only its last few letters. */
-@container (width <= 440px) {
+/* A head that would leave the title less than a line's worth gives that row to the title
+   and what it is about: the actions take a row of their own under the way out. 560 px is
+   where the document's own head and text step in too; beside four icons a pane of 480 px
+   cut the title to its first two words and the path to its last letters. */
+@container (width <= 560px) {
   .overlay-header.has-actions {
     flex-wrap: wrap;
     row-gap: var(--space-2);
