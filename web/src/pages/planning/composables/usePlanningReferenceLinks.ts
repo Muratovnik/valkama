@@ -7,6 +7,7 @@ import { waitingOn } from '@/entities/work-item/utils/waiting.ts'
 
 import type { PlanningReadModel } from '@/shared/api/planningModel.ts'
 import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
+import { workItemLinkAddress } from '@/shared/api/platformRoute.ts'
 import { provideReferenceLinks, referenceSpaceKey } from '@/shared/lib/referenceLinks.ts'
 
 /**
@@ -46,6 +47,7 @@ export function usePlanningReferenceLinks(
     if (!held.value.has(reference.value)) return null
     return {
       title: t('textLinks.openItem', { reference: reference.value }),
+      href: workItemLinkAddress('', reference.value),
       open: () => open(reference.value),
       preview: previewOf(() => {
         const item = held.value.get(reference.value) ?? null

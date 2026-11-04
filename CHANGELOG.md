@@ -294,6 +294,15 @@ checkouts are therefore distinguishable even at the same version.
   words in it they now ask «Discard this draft decision?», as a reply's field does, and a
   second Escape keeps them; an empty line still closes at once and gives focus back to
   Resolve.
+- **A reference in text wraps with the text.** A work item's number, a path or a file was
+  drawn as a box that moved to the next line whole, so a long path left the line before it
+  half empty and could leave the comma after it alone on a line, worst in a question or a
+  thread on a phone. It is now a link in the line like any other: it breaks with the words,
+  a path also after each `/`, and what is written against it stays on its last line. A
+  number or a document that opens is a link to its address, `/open/<number>` or the
+  document's own page, so in a browser Ctrl+click and the middle button open it in a new
+  tab; the desktop app opens every press in place. What only copies, opens a file in the
+  editor or shows a record stays a button, with Enter and Space.
 - **A long card and a large space open.** The interface refused a card with more than
   500 comments or 1000 history events, and any module answer of more than 16384 values
   or 1 MiB of JSON, which took the Planning directory of a space past about 1170 items

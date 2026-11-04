@@ -193,10 +193,11 @@ test('the task number above a question opens that task, as a number does everywh
   ])
   const context = opened.card('The touched question').locator('.request-context')
   await expect(context).toHaveText('Example Project · MAIN-264')
-  const number = context.getByRole('button', { name: 'MAIN-264', exact: true })
+  const number = context.getByRole('link', { name: 'MAIN-264', exact: true })
   await expect(number).toHaveClass(/rich-reference/u)
   // The project stays words: only the number is the way to the task.
-  await expect(context.getByRole('button')).toHaveCount(1)
+  await expect(context.getByRole('link')).toHaveCount(1)
+  await expect(context.getByRole('button')).toHaveCount(0)
   await number.click()
   await expect(opened.drawer).toBeVisible()
   await expect(opened.drawer.locator('.request-card')).toContainText('The touched question')

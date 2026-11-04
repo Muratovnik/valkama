@@ -9,6 +9,7 @@ import { searchGlobalPlanningWorkItems } from '@/shared/api/planningGlobalSearch
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import type { PlatformContextReady } from '@/shared/api/platformApiTypes.ts'
 import { planningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
+import { workItemLinkAddress } from '@/shared/api/platformRoute.ts'
 import { provideReferenceLinks, referenceSpaceKey } from '@/shared/lib/referenceLinks.ts'
 
 type Project = PlatformContextReady['projects'][number]
@@ -45,7 +46,9 @@ function spacesByKey(projects: readonly Project[], primary: string | undefined) 
  * - A work item reference is a link when its key names a space of a project
  *   this installation knows; `SHA-256` names none and stays text. Opening it
  *   asks the global search for that exact reference — the finder's own path —
- *   and opens what it finds, or says it found nothing. The open space answers
+ *   and opens what it finds, or says it found nothing. Its address is the item's
+ *   short one, `/open/<number>`, which the server leads to the same card by the
+ *   same order of stores, for a press that goes elsewhere. The open space answers
  *   for its own references below this layer, from the items it holds. Resting
  *   on it reads the item from the spaces that key names, the primary store first
  *   because that is where a press would find it.
@@ -102,6 +105,7 @@ export function useAppReferenceLinks(options: {
       return candidates
         ? {
             title: t('textLinks.openItem', { reference: value }),
+            href: workItemLinkAddress('', value),
             open: () => void openReference(value),
             preview: previewRead(value, candidates),
           }

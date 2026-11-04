@@ -12,6 +12,7 @@ import { useI18n } from 'vue-i18n'
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
+import { workItemLinkAddress } from '@/shared/api/platformRoute.ts'
 import { projectTitle, useProjectTitles } from '@/shared/lib/projectTitles.ts'
 import { provideReferenceLinks } from '@/shared/lib/referenceLinks.ts'
 import RichText from '@/shared/ui/RichText.vue'
@@ -34,7 +35,10 @@ provideReferenceLinks((reference, parent) => {
   if (reference.kind !== 'work-item' || reference.value !== request.value.reference)
     return parent(reference)
   return {
-    ...(parent(reference) ?? { title: t('textLinks.openItem', { reference: reference.value }) }),
+    ...(parent(reference) ?? {
+      title: t('textLinks.openItem', { reference: reference.value }),
+      href: workItemLinkAddress('', reference.value),
+    }),
     open: () => emit('select', props.entry.target),
   }
 })

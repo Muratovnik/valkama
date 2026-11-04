@@ -89,7 +89,9 @@ test.describe('the page at its address', () => {
     // The shell's opener reaches the page: a file offers its editor, and is not only copied.
     await expect(paragraph.getByRole('button', { name: /^Open in .+: src\/a\.ts$/u })).toBeVisible()
     await expect(paragraph.getByRole('button', { name: /MAIN-12|session/iu })).toHaveCount(0)
-    await expect(paragraph.getByRole('link')).toHaveCount(0)
+    await expect(paragraph.getByRole('link', { name: /MAIN-12|session/iu })).toHaveCount(0)
+    // The one link is the document's: a document opens at an address of its own.
+    await expect(paragraph.getByRole('link')).toHaveCount(1)
     await expect(paragraph.locator('.rich-reference', { hasText: 'MAIN-12' })).toHaveCount(0)
 
     await linkIn(paragraph, 'notes.md').click()

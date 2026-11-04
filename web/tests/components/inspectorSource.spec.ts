@@ -63,7 +63,7 @@ const row = (source: string, opener?: Partial<DocumentOpener>) =>
 
 const controls = {
   mark: { draw: mark, selector: 'button.identity-source' },
-  row: { draw: row, selector: '.ref-row button' },
+  row: { draw: row, selector: '.ref-row .rich-reference' },
 }
 
 beforeEach(() => {
@@ -162,7 +162,7 @@ describe('a source that holds no path', () => {
     await flushPromises()
 
     expect(wrapper.get('.ref-row .ref-value').text()).toBe(WORDS)
-    expect(wrapper.find('.ref-row button').exists()).toBe(false)
+    expect(wrapper.find('.ref-row .rich-reference').exists()).toBe(false)
   })
 
   it('leaves no mark and no row for an item with no source', async () => {

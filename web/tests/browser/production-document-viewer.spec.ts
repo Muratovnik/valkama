@@ -101,7 +101,7 @@ test('a line leads to its block, and links lead on and back to the same place', 
   await expect(viewer.locator('.document-block.is-target')).toContainText('Why this plan exists')
 
   // A link to a place in the same file moves there and adds nothing to go back to.
-  await viewer.getByRole('button', { name: 'Go to #part-two in this document' }).click()
+  await viewer.getByRole('link', { name: 'Go to #part-two in this document' }).click()
   await expect(viewer.locator('.document-block.is-target')).toContainText('Part two')
   await expect(viewer.getByRole('button', { name: /^Back to/u })).toHaveCount(0)
 
@@ -218,7 +218,7 @@ test.describe('on a phone', () => {
     expect(await code.evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(true)
     // A browser takes a scroller with no control in it into the Tab order by itself.
     await code.evaluate((node: HTMLElement) => node.scrollIntoView())
-    await viewer.locator('.rich-table-frame button').last().focus()
+    await viewer.locator('.rich-table-frame .rich-reference').last().focus()
     await page.keyboard.press('Tab')
     await expect(code).toBeFocused()
   })

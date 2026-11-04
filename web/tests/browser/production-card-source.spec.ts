@@ -122,7 +122,7 @@ for (const place of ['browser', 'app'] as const) {
     test('the row of Relations opens the same place, and says what it does', async ({ page }) => {
       const drawer = await openCard(page)
       const row = await toRelations(drawer)
-      const link = row.getByRole('button', { name: `Open the document in Valkama: ${ANCHOR}` })
+      const link = row.getByRole('link', { name: `Open the document in Valkama: ${ANCHOR}` })
       await expect(link).toHaveText(ANCHOR)
 
       await link.click()
@@ -188,6 +188,7 @@ test('a source that holds no path is text: nothing to press and nothing asked', 
   const row = await toRelations(drawer)
   await expect(row.locator('.ref-value')).toHaveText(text)
   await expect(row.getByRole('button')).toHaveCount(0)
+  await expect(row.getByRole('link')).toHaveCount(0)
   expect(asked).toEqual([])
 })
 
@@ -214,7 +215,7 @@ for (const width of [1280, 390]) {
         const row = await toRelations(drawer, relations)
         await shot(page, `open-relations-${width}-${locale}`)
         await fits(page, 'the row')
-        await row.getByRole('button').click()
+        await row.getByRole('link').click()
         await expectViewerAtAnchor(page)
         await shot(page, `open-viewer-${width}-${locale}`)
       })
@@ -242,6 +243,7 @@ for (const width of [1280, 390]) {
         await shot(page, `words-head-${width}-${locale}`)
         const row = await toRelations(drawer, relations)
         await expect(row.getByRole('button')).toHaveCount(0)
+        await expect(row.getByRole('link')).toHaveCount(0)
         await shot(page, `words-relations-${width}-${locale}`)
         await fits(page, 'the words')
       })

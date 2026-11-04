@@ -188,7 +188,7 @@ test('a reference in a checklist step opens its card, and pressing the step text
   await expect.poll(() => ticks.length).toBe(1)
 
   // A reference in the text is a link of its own: it opens, and ticks nothing.
-  await step.locator('.step-text').getByRole('button', { name: 'MAIN-265' }).click()
+  await step.locator('.step-text').getByRole('link', { name: 'MAIN-265' }).click()
   await expect(drawer.locator('.head-reference')).toHaveText('MAIN-265')
   expect(ticks).toHaveLength(1)
 })

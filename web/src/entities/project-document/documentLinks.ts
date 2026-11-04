@@ -17,6 +17,7 @@ import { pathMemory } from '@/entities/project-document/pathMemory.ts'
 import type { Confirmed } from '@/entities/project-document/pathMemory.ts'
 
 import type { DocumentBase } from '@/shared/api/documentApi.ts'
+import { documentPageHref } from '@/shared/api/documentPage.ts'
 import { provideReferenceLinks } from '@/shared/lib/referenceLinks.ts'
 import type { ReferenceLink } from '@/shared/lib/referenceLinks.ts'
 import { documentParts, suffixTarget } from '@/shared/lib/textReferences.ts'
@@ -186,6 +187,17 @@ export function useDocumentLinks(
       : t('documentLinks.openFileLine', { editor, path, line })
   }
 
+  /**
+   * A document the viewer opens has a page of its own to link to. A file or a folder opens
+   * in the editor, which is an action with no address.
+   */
+  function addressOf(answer: Confirmed, query: DocumentParts): string | undefined {
+    const viewed = answer.status === 'file' && answer.markdown && opener.openDocument
+    return viewed
+      ? documentPageHref({ project: answer.project, path: answer.relative, suffix: query.suffix })
+      : undefined
+  }
+
   return (reference: DocumentReference): ReferenceLink | null => {
     const current = memory(reference)
     const query = documentParts(reference)
@@ -196,7 +208,7 @@ export function useDocumentLinks(
       const covered = runs(reference, writtenFor(decision.answer, query, reference.value))
       const title = openTitle(decision.answer, query, covered.label)
       return title
-        ? { ...covered, title, open }
+        ? { ...covered, title, href: addressOf(decision.answer, query), open }
         : {
             ...covered,
             copies: true,

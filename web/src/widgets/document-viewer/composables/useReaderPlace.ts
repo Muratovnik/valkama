@@ -24,8 +24,11 @@ interface DocumentBlocks {
 
 const nothing = () => {}
 
-/** What in a block takes focus by itself: the links and the copy buttons of its text. */
-const CONTROLS = 'a[href], button'
+/**
+ * What in a block takes focus by itself: the links and the copy buttons of its text. A
+ * reference that acts is a button by its role, being inline (`RichInlines`).
+ */
+const CONTROLS = 'a[href], button, [role="button"]'
 const controlsOf = (box: HTMLElement | null | undefined) => [
   ...(box?.querySelectorAll<HTMLElement>(CONTROLS) ?? []),
 ]

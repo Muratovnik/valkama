@@ -96,8 +96,11 @@ describe('the shell layer of reference links', () => {
   it('links an item of a known space and opens what the search finds for it exactly', async () => {
     vi.mocked(fetchSessionContext).mockResolvedValue({ resolved: false } as ResolvedRef)
     const { wrapper, openTarget, say } = mountShell('MAIN-12 and SHA-256 and OTHER-3')
-    const buttons = wrapper.findAll('button')
+    const buttons = wrapper.findAll('.rich-reference')
     expect(buttons.map((button) => button.text())).toEqual(['MAIN-12'])
+    // A link to the item's short address, which the server leads to the same card.
+    expect(buttons[0]?.element.tagName).toBe('A')
+    expect(buttons[0]?.attributes('href')).toBe('/open/MAIN-12')
     // Its hover text is its card; its old words are what it says it does.
     expect(buttons[0]?.attributes('title')).toBeUndefined()
     expect(buttons[0]?.attributes('aria-description')).toBe('Open task MAIN-12')
@@ -115,7 +118,7 @@ describe('the shell layer of reference links', () => {
     const { wrapper, openTarget, say } = mountShell('MAIN-12')
     // Text that only mentions it, and a longer number, are not it.
     vi.mocked(searchGlobalPlanningWorkItems).mockResolvedValueOnce(search([found('MAIN-120')]))
-    await wrapper.get('button').trigger('click')
+    await wrapper.get('.rich-reference').trigger('click')
     await flushPromises()
     expect(openTarget).not.toHaveBeenCalled()
     expect(say).toHaveBeenCalledExactlyOnceWith('Task MAIN-12 was not found.')
@@ -124,11 +127,13 @@ describe('the shell layer of reference links', () => {
   it('keeps a session id as text until the server knows it, then opens it', async () => {
     vi.mocked(fetchSessionContext).mockResolvedValueOnce({ resolved: true } as ResolvedRef)
     const { wrapper, openSession } = mountShell(`ran in ${session}`)
-    expect(wrapper.find('button').exists()).toBe(false)
+    expect(wrapper.find('.rich-reference').exists()).toBe(false)
     await flushPromises()
-    const link = wrapper.get('button')
+    const link = wrapper.get('.rich-reference')
     expect(link.text()).toBe(session)
     expect(link.classes()).toContain('identifier')
+    // Opening a session is an action with no address of its own.
+    expect(link.attributes('role')).toBe('button')
     await link.trigger('click')
     expect(openSession).toHaveBeenCalledExactlyOnceWith(session)
     expect(fetchSessionContext).toHaveBeenCalledTimes(1)
@@ -138,10 +143,10 @@ describe('the shell layer of reference links', () => {
     vi.mocked(fetchSessionContext).mockResolvedValueOnce({ resolved: false } as ResolvedRef)
     const unknown = mountShell(`ran in ${session}`)
     await flushPromises()
-    expect(unknown.wrapper.find('button').exists()).toBe(false)
+    expect(unknown.wrapper.find('.rich-reference').exists()).toBe(false)
     vi.mocked(fetchSessionContext).mockRejectedValueOnce(new Error('offline'))
     const failed = mountShell('ran in 1f8fad5b-d9cb-469f-a165-70867728950e')
     await flushPromises()
-    expect(failed.wrapper.find('button').exists()).toBe(false)
+    expect(failed.wrapper.find('.rich-reference').exists()).toBe(false)
   })
 })

@@ -62,7 +62,7 @@ describe('the sample table', () => {
       const asked = resolve.mock.calls.flatMap(([, paths]) => paths)
       for (const path of row.paths) expect(asked).toContain(path)
       if (row.form === 'copy-only') expect(resolve).not.toHaveBeenCalled()
-      const control = wrapper.get('button.rich-reference')
+      const control = wrapper.get('.rich-reference')
       expect(control.classes()).toContain('copies')
       await control.trigger('click')
       await flushPromises()
@@ -77,7 +77,7 @@ describe('the sample table', () => {
       server()
       const { wrapper } = drawn(row.text)
       await flushPromises()
-      expect(wrapper.find('button.rich-reference').exists()).toBe(false)
+      expect(wrapper.find('.rich-reference').exists()).toBe(false)
       expect(wrapper.text()).toContain(row.candidate)
     },
   )
@@ -88,7 +88,7 @@ describe('the sample table', () => {
       server()
       const { wrapper } = drawn(text)
       await flushPromises()
-      expect(wrapper.find('button.rich-reference').exists()).toBe(false)
+      expect(wrapper.find('.rich-reference').exists()).toBe(false)
       expect(resolve).not.toHaveBeenCalled()
     },
   )
@@ -101,7 +101,7 @@ describe('a caption, through the component', () => {
       openDocument: () => true,
     })
     await flushPromises()
-    const [open, gone] = wrapper.findAll('button.rich-reference')
+    const [open, gone] = wrapper.findAll('.rich-reference')
     expect(open?.text()).toBe('план работ')
     expect(open?.get('strong').text()).toBe('работ')
     expect(open?.attributes('aria-label')).toBe(
@@ -115,7 +115,7 @@ describe('a caption, through the component', () => {
     server()
     const { wrapper } = drawn('![схема](docs/a.png)')
     await flushPromises()
-    expect(wrapper.get('button.rich-reference').text()).toBe('схема')
+    expect(wrapper.get('.rich-reference').text()).toBe('схема')
     expect(wrapper.find('img').exists()).toBe(false)
   })
 
@@ -124,7 +124,7 @@ describe('a caption, through the component', () => {
       render: () => h(RichText, { source: '[план](docs/plan.md) и ![схема](a.png)' }),
     })
     await flushPromises()
-    expect(wrapper.find('button.rich-reference').exists()).toBe(false)
+    expect(wrapper.find('.rich-reference').exists()).toBe(false)
     expect(wrapper.text()).toContain('план и схема')
     expect(wrapper.text()).not.toContain('docs/plan.md')
   })

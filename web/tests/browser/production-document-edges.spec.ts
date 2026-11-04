@@ -107,7 +107,7 @@ test('a link in the document goes to the card beside it through the card’s own
   const { pane, title } = paneOf(page)
   await expect(title).toHaveText('The migration plan')
   await comment.fill('A draft the card asks about')
-  await pane.getByRole('button', { name: 'MAIN-265', exact: true }).click()
+  await pane.getByRole('link', { name: 'MAIN-265', exact: true }).click()
   // The guard asks where the card answers for itself, and the document stays.
   await expect(drawer.getByRole('button', { name: 'Discard', exact: true })).toBeVisible()
   await expect(pane).toBeVisible()
@@ -152,11 +152,11 @@ test.describe('in Russian', () => {
   test('the pair takes the longer words', async ({ page }) => {
     await page.setViewportSize(WINDOW)
     const { drawer } = await aCardAsking(page, `Read \`${LINK}\` first.`)
-    await drawer.getByRole('button', { name: `Открыть документ в Valkama: ${LINK}` }).click()
+    await drawer.getByRole('link', { name: `Открыть документ в Valkama: ${LINK}` }).click()
     const pane = page.getByRole('region', { name: /^Документ: / })
     await expect(pane.locator('.document-block.is-target')).toBeFocused()
     await expect(
-      pane.getByRole('button', { name: 'Перейти к #part-two в этом документе' }),
+      pane.getByRole('link', { name: 'Перейти к #part-two в этом документе' }),
     ).toBeAttached()
     await shot(page, 'beside-card-1500-ru')
   })
@@ -186,7 +186,7 @@ async function besideTheQuestions(page: Page, width: number) {
   const hub = page.getByRole('dialog')
   await settled(hub)
   // The one in the prompt: the task's number above the question is a link as well.
-  await hub.locator('.request-prompt button.rich-reference').first().click()
+  await hub.locator('.request-prompt .rich-reference').first().click()
   await expect(page.locator('.document-block.is-target')).toBeFocused()
   return hub
 }

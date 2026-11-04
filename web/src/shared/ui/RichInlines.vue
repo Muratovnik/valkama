@@ -7,22 +7,24 @@
  * because they are compared character by character; a work item reference
  * stays in the reading font, as it is everywhere else in the product.
  *
- * A path in prose keeps the reading font too, because a weak one starts as text
- * and may become a link when the server answers: only its underline and tooltip
- * may change then, so it also holds the box a button will be, which is atomic
- * in a line. A path that copies rather than opens has a dotted underline, which
- * is what tells the two apart without colour, in forced colours as well.
+ * A reference is inline, as a link in prose is, so it wraps with the words around it
+ * and what is written against it stays on its last line. One that leads to a place with
+ * an address of its own, a card or a document, is a link to that address; one that does
+ * something else — copies, opens a file in the editor, shows a record — is a button,
+ * drawn as the text it acts on (WAI-ARIA APG, button pattern: Enter and Space), an `<a>`
+ * with no address and the role of a button, since a `<button>` is a box of its own. A path
+ * that copies rather than opens has a dotted underline, which is what tells the two apart
+ * without colour, in forced colours as well.
  *
- * Being atomic, a reference would let a line break right after it, before the comma
- * written against it. So it is drawn with what touches it (`glueReferences`), in a
- * box of its own that moves to the next line whole. A code span is inline and breaks
- * like words, so it needs no box; what touches it narrows the inset of its ground on
- * that side, which otherwise read as a space before the comma.
+ * A path keeps the reading font, because a weak one starts as text and may become a link
+ * when the server answers: only its underline and tooltip may change then. A line may
+ * break after each of its `/`, which a browser does not offer on its own, so a long path
+ * fills the rest of its line rather than leaving it empty.
  */
-import { computed } from 'vue'
+import { Fragment, h } from 'vue'
+import type { FunctionalComponent } from 'vue'
 
-import { glueReferences } from '@/shared/lib/inlineGlue.ts'
-import type { GluedInline } from '@/shared/lib/inlineGlue.ts'
+import { opensInPlace } from '@/shared/lib/linkPress.ts'
 import { useReferenceLinks } from '@/shared/lib/referenceLinks.ts'
 import { inlineWords } from '@/shared/lib/richText.ts'
 import type { RichInline } from '@/shared/lib/richText.ts'
@@ -32,15 +34,31 @@ import { vReferencePreview } from '@/shared/ui/referencePreviewAnchors.ts'
 const props = defineProps<{ nodes: readonly RichInline[] }>()
 defineOptions({ name: 'RichInlines' })
 
-const pieces = computed(() => glueReferences(props.nodes))
-
 type ReferenceNode = Extract<RichInline, { kind: 'reference' }>
+
+/** A reference's words; a path's with a place to break after each `/`, which adds no character. */
+const ReferenceWords: FunctionalComponent<{ path: boolean; text: string }> = ({ path, text }) =>
+  h(
+    Fragment,
+    path
+      ? text.split(/(?<=\/)/u).flatMap((piece, index) => (index ? [h('wbr'), piece] : [piece]))
+      : [text],
+  )
 
 const resolve = useReferenceLinks()
 /** What a reference links to here, or null where it is text. */
 const linkFor = (reference: TextReference) => resolve(reference)
 const titleFor = (reference: TextReference) => resolve(reference)?.title
 const previewFor = (reference: TextReference) => resolve(reference)?.preview
+/** Where it leads, for a link to a place; a reference that acts has none and is a button. */
+const hrefOf = (reference: TextReference) => resolve(reference)?.href
+/**
+ * A button that is not a `<button>` says so and takes focus; a link does both by itself.
+ * Both are one `<a>`, with an address or without, so that a path the server answers for
+ * while it holds focus is the same element after as before, and keeps focus.
+ */
+const roleOf = (reference: TextReference) => (hrefOf(reference) ? undefined : 'button')
+const tabStopOf = (reference: TextReference) => (hrefOf(reference) ? undefined : 0)
 /** A link with a preview has that for its one hover text: its title only describes it. */
 const hoverTitle = (reference: TextReference) =>
   previewFor(reference) ? undefined : titleFor(reference)
@@ -48,8 +66,7 @@ const describedAs = (reference: TextReference) =>
   previewFor(reference) ? titleFor(reference) : undefined
 const isId = ({ caption, code, reference }: ReferenceNode) =>
   reference.kind === 'document' ? code && !caption : reference.kind !== 'work-item'
-const isWeak = ({ reference }: ReferenceNode) =>
-  reference.kind === 'document' && reference.strength === 'weak'
+const isPath = ({ reference }: ReferenceNode) => reference.kind === 'document'
 /** What a control shows without a caption: the part of the run it covers. */
 const labelOf = (reference: TextReference) => resolve(reference)?.label ?? reference.value
 /** What follows a control as prose; a caption stands for the whole run. */
@@ -63,23 +80,49 @@ function nameOf({ caption, reference }: ReferenceNode) {
   const named = caption ? `${inlineWords(caption)} — ${titleFor(reference)}` : titleFor(reference)
   return reference.kind === 'document' ? named : undefined
 }
-type Glued = Extract<GluedInline, { kind: 'glued' }>
-/** Whether a piece stands in a box of its own: a reference does, being atomic, with what touches it. */
-const boxed = (piece: Glued) => piece.glued && piece.node.kind === 'reference'
-/** Which sides of a piece's ground something is written against, with no space between. */
-function tight(piece: Glued, after = '') {
-  return { 'tight-start': Boolean(piece.before), 'tight-end': Boolean(piece.after || after) }
+/**
+ * Which sides of a code ground something is written against, with no space between. Its
+ * inset read as a space before a comma there, so on such a side it narrows.
+ */
+function tight(index: number, after = '') {
+  const previous = props.nodes[index - 1]
+  const next = props.nodes[index + 1]
+  return {
+    'tight-start': previous?.kind === 'text' && /\S$/u.test(previous.text),
+    'tight-end': Boolean(after) || (next?.kind === 'text' && /^\S/u.test(next.text)),
+  }
 }
+/** A reference written as code stands on the code's ground inside the control. */
+const groundOf = (node: ReferenceNode, index: number) =>
+  node.code ? ['rich-code', tight(index, afterOf(node))] : undefined
 /** Absent rather than false: a control that is not waiting makes no claim about it. */
 const busyOf = (reference: TextReference) => resolve(reference)?.busy || undefined
-function open(reference: TextReference) {
+
+/** A link opens in place on a plain press and leaves the rest to the browser (`linkPress`). */
+function press(event: MouseEvent, reference: TextReference) {
+  const link = resolve(reference)
+  if (!link || (link.href ? !opensInPlace(event) : event.button !== 0)) return
+  event.preventDefault()
+  link.open()
+}
+/** A button acts on Enter as it goes down and on Space as it comes up; a link has its own Enter. */
+function pressKey(event: KeyboardEvent, reference: TextReference) {
+  if (hrefOf(reference)) return
+  if (event.key === ' ') event.preventDefault()
+  if (event.key !== 'Enter') return
+  event.preventDefault()
+  if (!event.repeat) resolve(reference)?.open()
+}
+function releaseKey(event: KeyboardEvent, reference: TextReference) {
+  if (hrefOf(reference) || event.key !== ' ') return
+  event.preventDefault()
   resolve(reference)?.open()
 }
 </script>
 
 <template>
   <template
-    v-for="(node, index) in pieces"
+    v-for="(node, index) in nodes"
     :key="index"
     ><template v-if="node.kind === 'text'">{{ node.text }}</template
     ><br v-else-if="node.kind === 'break'" /><strong
@@ -103,55 +146,49 @@ function open(reference: TextReference) {
       rel="noopener noreferrer"
       :href="node.href"
       ><RichInlines :nodes="node.children" /></a
-    ><span
+    ><code
+      v-else-if="node.kind === 'code'"
+      class="rich-code"
+      :class="tight(index)"
+      >{{ node.text }}</code
+    ><template v-else-if="linkFor(node.reference)"
+      ><a
+        v-reference-preview="previewFor(node.reference)"
+        class="rich-reference"
+        :class="{ identifier: isId(node), copies: linkFor(node.reference)?.copies }"
+        :href="hrefOf(node.reference)"
+        :role="roleOf(node.reference)"
+        :tabindex="tabStopOf(node.reference)"
+        :title="hoverTitle(node.reference)"
+        :aria-description="describedAs(node.reference)"
+        :aria-label="nameOf(node)"
+        :aria-busy="busyOf(node.reference)"
+        @click="press($event, node.reference)"
+        @auxclick="press($event, node.reference)"
+        @keydown="pressKey($event, node.reference)"
+        @keyup="releaseKey($event, node.reference)"
+        ><span :class="groundOf(node, index)"
+          ><RichInlines
+            v-if="node.caption"
+            :nodes="node.caption" /><ReferenceWords
+            v-else
+            :path="isPath(node)"
+            :text="labelOf(node.reference)" /></span></a
+      >{{ afterOf(node) }}</template
+    ><RichInlines
+      v-else-if="node.caption"
+      :nodes="node.caption" /><code
+      v-else-if="node.code"
+      class="rich-code"
+      :class="tight(index)"
+      ><ReferenceWords
+        :path="isPath(node)"
+        :text="node.reference.value" /></code
+    ><ReferenceWords
       v-else
-      :class="{ 'rich-glue': boxed(node) }"
-      >{{ node.before
-      }}<code
-        v-if="node.node.kind === 'code'"
-        class="rich-code"
-        :class="tight(node)"
-        >{{ node.node.text }}</code
-      ><template v-else-if="linkFor(node.node.reference)"
-        ><button
-          v-reference-preview="previewFor(node.node.reference)"
-          type="button"
-          class="rich-reference"
-          :class="{
-            ...tight(node, afterOf(node.node)),
-            'rich-code': node.node.code,
-            'identifier': isId(node.node),
-            'copies': linkFor(node.node.reference)?.copies,
-          }"
-          :title="hoverTitle(node.node.reference)"
-          :aria-description="describedAs(node.node.reference)"
-          :aria-label="nameOf(node.node)"
-          :aria-busy="busyOf(node.node.reference)"
-          @click="open(node.node.reference)"
-        >
-          <span
-            ><RichInlines
-              v-if="node.node.caption"
-              :nodes="node.node.caption"
-            /><template v-else>{{ labelOf(node.node.reference) }}</template></span
-          ></button
-        >{{ afterOf(node.node) }}</template
-      ><RichInlines
-        v-else-if="node.node.caption"
-        :nodes="node.node.caption"
-      /><code
-        v-else-if="node.node.code"
-        class="rich-code"
-        :class="{ ...tight(node), 'rich-atom': isWeak(node.node) }"
-        >{{ node.node.reference.value }}</code
-      ><span
-        v-else-if="isWeak(node.node)"
-        class="rich-atom"
-        >{{ node.node.reference.value }}</span
-      ><template v-else>{{ node.node.reference.value }}</template
-      >{{ node.after }}</span
-    ></template
-  >
+      :path="isPath(node)"
+      :text="node.reference.value"
+  /></template>
 </template>
 
 <style scoped>
@@ -159,12 +196,14 @@ function open(reference: TextReference) {
   font-weight: 600;
 }
 
+/* A code span wraps as words do, and each of its lines keeps the ground's inset and corners. */
 .rich-code {
   padding: 0 var(--space-1);
   font-size: var(--font-size-dense);
   overflow-wrap: var(--rich-inline-wrap, anywhere);
   background: var(--color-surface-recess);
   border-radius: var(--radius-status);
+  box-decoration-break: clone;
 }
 
 /* A link in prose is underlined as well as coloured, so it is not told apart by
@@ -179,41 +218,18 @@ function open(reference: TextReference) {
   overflow-wrap: var(--rich-inline-wrap, anywhere);
 }
 
-/* An in-app reference is a button, because what it does is open something here
-   rather than go to an address; it reads as the link it is.
-
-   A button is an atomic box even where it is declared inline, and the global
-   button floor (one control row, 40px) made every line holding a reference a
-   control row tall. So the box takes the text's own line height and no floor.
-   The pointer target is a 24px band centred on the text, drawn by the
-   pseudo-element: it is positioned, so it takes no room in the line box. */
+/* The pointer target is 24px tall around the words (WCAG 2.5.8): padding on an inline
+   box widens what a pointer hits and takes no room in the line, so a line holding a
+   reference stands as tall as one without. It reaches 2px under the words, which stay
+   inside a 24px line, and the rest above them: what a box overflows below lengthens what
+   its scroller scrolls, and on a text's last line a pixel of it showed «Show all» a pixel
+   short; above, nothing scrolls. The words' own box is about 1.1875em, so the band is about
+   25px at any size. Each line of a wrapped reference is drawn whole, with its own padding
+   and focus ring. */
 .rich-reference {
-  position: relative;
-  display: inline-block;
-  vertical-align: baseline;
-  min-block-size: 0;
-  padding: 0;
-  border: 0;
-  font: inherit;
-  text-align: inherit;
-  background: none;
+  padding-block: calc(24px - 1.1875em - 1px) var(--space-half);
   cursor: pointer;
-
-  &::before {
-    content: '';
-    position: absolute;
-    inset-inline: 0;
-    top: 50%;
-    height: 24px;
-    translate: 0 -50%;
-  }
-
-  /* A code span stays one as a link: same size and ground, so nothing moves. */
-  &.rich-code {
-    padding: 0 var(--space-1);
-    font-size: var(--font-size-dense);
-    background: var(--color-surface-recess);
-  }
+  box-decoration-break: clone;
 
   &.identifier {
     font-family: var(--font-family-mono);
@@ -240,18 +256,5 @@ function open(reference: TextReference) {
 
 .rich-code.tight-end {
   padding-inline-end: var(--space-half);
-}
-
-/* A reference and what is written against it, with no space between, move to the next
-   line together: the box breaks inside only when it is wider than the line. */
-.rich-glue {
-  display: inline-block;
-  vertical-align: baseline;
-}
-
-/* A weak path as text: laid out as the button it may become, and read as prose. */
-.rich-atom {
-  display: inline-block;
-  vertical-align: baseline;
 }
 </style>

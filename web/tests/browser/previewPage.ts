@@ -122,7 +122,7 @@ export async function openReported(page: Page, body = REPORT, items: readonly Br
 export const CARD = '.reference-preview'
 export const card = (page: Page) => page.locator(CARD)
 export const reference = (scope: Locator, name: string) =>
-  scope.getByRole('button', { name, exact: true })
+  scope.getByRole('link', { name, exact: true })
 
 /** The middle of an element, as the pointer would aim at it. */
 export async function middle(locator: Locator) {

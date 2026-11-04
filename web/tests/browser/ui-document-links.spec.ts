@@ -1,6 +1,7 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
+import { pointerBand } from './pointerBand.ts'
 import { test } from './test.ts'
 
 /**
@@ -79,8 +80,7 @@ async function open(
   }
 }
 
-const control = (page: Page, name: string) =>
-  page.locator('button.rich-reference', { hasText: name })
+const control = (page: Page, name: string) => page.locator('.rich-reference', { hasText: name })
 
 /** Tab from where focus is until the named path holds it; the keyboard's own way there. */
 async function tabTo(page: Page, name: string) {
@@ -142,9 +142,11 @@ test.describe('a path as a control', () => {
     const code = page.locator('[data-paragraph="2"] code', { hasText: 'web/src' })
     const before = await code.boundingBox()
     run.answer()
-    const link = page.locator('[data-paragraph="2"] button.rich-reference', { hasText: 'web/src' })
+    const link = page.locator('[data-paragraph="2"] .rich-reference', { hasText: 'web/src' })
     await expect(link).toBeVisible()
-    const after = await link.boundingBox()
+    // What is drawn is the code's ground, which the link holds; the link's own box also
+    // holds the band a pointer presses, which the words do not take room for.
+    const after = await link.locator('.rich-code').boundingBox()
     expect(after?.x).toBeCloseTo(before?.x ?? -1, 0)
     expect(after?.y).toBeCloseTo(before?.y ?? -1, 0)
     expect(after?.width).toBeCloseTo(before?.width ?? -1, 0)
@@ -185,13 +187,10 @@ test.describe('a path as a control', () => {
     expect(box?.height ?? 0).toBeGreaterThan(40)
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
     // A 24px band to press, on a single-line path, without a taller line.
-    const band = await control(page, 'C:/work/probe').evaluate((node) => {
-      const box = node.getBoundingClientRect()
-      const before = getComputedStyle(node, '::before')
-      return { line: box.height, band: Number.parseFloat(before.height) }
-    })
-    expect(band.band).toBe(24)
-    expect(band.line).toBeLessThan(30)
+    const probe = control(page, 'C:/work/probe')
+    const line = await probe.evaluate((node) => node.getBoundingClientRect().height)
+    expect(await probe.evaluate(pointerBand)).toBeGreaterThanOrEqual(24)
+    expect(line).toBeLessThan(30)
   })
 })
 

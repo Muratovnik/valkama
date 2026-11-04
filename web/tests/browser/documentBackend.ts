@@ -120,4 +120,4 @@ export const aCardAsking = (page: Page, prompt: string) =>
 
 /** The link's name says what it opens, and nothing about how the text happens to word it. */
 export const linkIn = (scope: Locator, path: string) =>
-  scope.getByRole('button', { name: `Open the document in Valkama: ${path}` })
+  scope.getByRole('link', { name: `Open the document in Valkama: ${path}` })

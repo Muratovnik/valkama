@@ -55,7 +55,7 @@ describe('RichText', () => {
           }
         : null,
     )
-    const [held, plain] = wrapper.findAll('button')
+    const [held, plain] = wrapper.findAll('.rich-reference')
     expect(held?.attributes('title')).toBeUndefined()
     expect(held?.attributes('aria-description')).toBe('Open MAIN-12')
     expect(held?.attributes()).toHaveProperty('data-reference-preview')
@@ -140,7 +140,7 @@ describe('RichText', () => {
 
   it('is plain text for every reference when nothing above resolves one', () => {
     const wrapper = drawn('MAIN-12 at a1b2c3d')
-    expect(wrapper.find('button').exists()).toBe(false)
+    expect(wrapper.find('.rich-reference').exists()).toBe(false)
     expect(wrapper.text()).toBe('MAIN-12 at a1b2c3d')
   })
 
@@ -151,12 +151,14 @@ describe('RichText', () => {
         ? { title: `Open ${reference.value}`, open: () => open(reference.value) }
         : null,
     )
-    const buttons = wrapper.findAll('button')
+    const buttons = wrapper.findAll('.rich-reference')
     expect(buttons.map((button) => button.text())).toEqual(['MAIN-12', 'a1b2c3d'])
     expect(buttons[0]?.attributes('title')).toBe('Open MAIN-12')
     // An id is compared character by character and set in the metadata font.
     expect(buttons[0]?.classes()).not.toContain('identifier')
-    expect(buttons[1]?.classes()).toEqual(expect.arrayContaining(['identifier', 'rich-code']))
+    // Written as code, it keeps the code's ground, drawn inside the control.
+    expect(buttons[1]?.classes()).toContain('identifier')
+    expect(buttons[1]?.get('.rich-code').text()).toBe('a1b2c3d')
     expect(wrapper.text()).toBe('MAIN-12, SHA-256 and a1b2c3d with ffffff1')
     await buttons[1]?.trigger('click')
     expect(open).toHaveBeenCalledExactlyOnceWith('a1b2c3d')
@@ -195,7 +197,7 @@ describe('the card layer of reference links', () => {
         ? { title: reference.value, open: () => shellOpen(reference.value) }
         : null,
     )
-    const buttons = wrapper.findAll('button')
+    const buttons = wrapper.findAll('.rich-reference')
     // The card's own reference is not a link; a commit links only as a ref it carries.
     expect(buttons.map((button) => button.text())).toEqual(['QA-7', 'OTHER-3', 'a1b2c3d'])
     await buttons[0]?.trigger('click')

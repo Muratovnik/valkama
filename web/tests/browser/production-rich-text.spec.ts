@@ -23,6 +23,7 @@ import {
   spaceRef,
   workItem,
 } from './planningFixtures.ts'
+import { pointerBand } from './pointerBand.ts'
 import { test } from './test.ts'
 
 const steps = Array.from(
@@ -117,9 +118,11 @@ test('a long markdown report holds on a whole line, opens, and links what resolv
   await expect.poll(() => held.evaluate((element) => element.clientHeight)).toBe(box.held)
 
   // References link only where they resolve; unsafe markup stays text.
-  await expect(entry.getByRole('button', { name: 'MAIN-265' })).toHaveCount(2)
-  await expect(entry.getByRole('button', { name: 'MAIN-999' })).toHaveCount(0)
-  await expect(entry.getByRole('button', { name: 'SHA-256' })).toHaveCount(0)
+  await expect(entry.getByRole('link', { name: 'MAIN-265' })).toHaveCount(2)
+  for (const role of ['button', 'link'] as const) {
+    await expect(entry.getByRole(role, { name: 'MAIN-999' })).toHaveCount(0)
+    await expect(entry.getByRole(role, { name: 'SHA-256' })).toHaveCount(0)
+  }
   await expect(entry).toContainText('MAIN-999 and SHA-256 stay text.')
   await expect(entry.locator('a[href^="javascript"], b, img')).toHaveCount(0)
   await expect(entry).toContainText('<b>raw</b>')
@@ -149,7 +152,7 @@ test('a long markdown report holds on a whole line, opens, and links what resolv
   await expect(drawer).toHaveCount(1)
 
   // Another task of the space opens in the card, and Back returns here.
-  await entry.getByRole('button', { name: 'MAIN-265' }).first().click()
+  await entry.getByRole('link', { name: 'MAIN-265' }).first().click()
   await expect(drawer.locator('.head-reference')).toHaveText('MAIN-265')
   await drawer.getByRole('button', { name: 'Back', exact: true }).click()
   await expect(drawer.locator('.head-reference')).toHaveText('MAIN-264')
@@ -213,13 +216,16 @@ test('a line that holds a reference is as tall as a line of plain text', async (
     locator.evaluate((element) => ({
       height: element.getBoundingClientRect().height,
       line: Number.parseFloat(getComputedStyle(element).lineHeight),
-      // The pointer target is the band the reference's ::before draws, so the
-      // line box does not have to grow to hold it.
-      targets: [...element.querySelectorAll('.rich-reference')].map((reference) =>
-        Number.parseFloat(getComputedStyle(reference, '::before').height),
-      ),
     }))
   const withReference = await measure(referenced)
+  // The pointer target is what the pointer hits, so the line box does not have to grow to
+  // hold it.
+  const references = referenced.locator('.rich-reference')
+  await expect(references).toHaveCount(2)
+  const targets = [
+    await references.nth(0).evaluate(pointerBand),
+    await references.nth(1).evaluate(pointerBand),
+  ]
   const control = await measure(plain)
 
   // Three lines each: a reference must not make its line taller than the text beside it.
@@ -233,8 +239,7 @@ test('a line that holds a reference is as tall as a line of plain text', async (
   await expect(referenced.locator('.rich-reference').nth(1)).not.toHaveAttribute(
     'data-reference-preview',
   )
-  expect(withReference.targets).toHaveLength(2)
-  for (const target of withReference.targets) expect(target).toBeGreaterThanOrEqual(24)
+  for (const target of targets) expect(target).toBeGreaterThanOrEqual(24)
 })
 
 test('a new task is described in the markdown editor, inside the dialog that owns Escape', async ({

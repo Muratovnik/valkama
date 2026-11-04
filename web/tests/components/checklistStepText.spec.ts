@@ -59,9 +59,9 @@ describe('a checklist step’s text', () => {
     const wrapper = overview(true, open)
     const text = wrapper.get('.step-row .step-text')
     expect(text.get('code').text()).toBe('npm test')
-    const link = text.get('button.rich-reference')
+    const link = text.get('.rich-reference')
     expect(link.text()).toBe('MAIN-12')
-    expect(wrapper.findAll('section p button.rich-reference').map((ref) => ref.text())).toEqual([
+    expect(wrapper.findAll('section p .rich-reference').map((ref) => ref.text())).toEqual([
       'MAIN-12',
     ])
     wrapper.unmount()
@@ -80,7 +80,7 @@ describe('a checklist step’s text', () => {
     expect(box.attributes('id')).toMatch(/\S/u)
     expect(box.find('.step-text').exists()).toBe(false)
 
-    await label.get('button.rich-reference').trigger('click')
+    await label.get('.rich-reference').trigger('click')
     expect(open).toHaveBeenCalledTimes(1)
 
     await box.trigger('click')

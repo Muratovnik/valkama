@@ -64,7 +64,7 @@ describe('what a press does', () => {
     const { wrapper } = drawn([strong('docs/x.md:42')])
     expect(status(wrapper)).toBe('')
     await flushPromises()
-    const button = wrapper.get<HTMLButtonElement>('button.rich-reference')
+    const button = wrapper.get<HTMLButtonElement>('.rich-reference')
     button.element.focus()
     await button.trigger('click')
     await flushPromises()
@@ -78,7 +78,7 @@ describe('what a press does', () => {
     server()
     const { wrapper } = drawn([strong('docs/x.md.')])
     await flushPromises()
-    await wrapper.get('button.rich-reference').trigger('click')
+    await wrapper.get('.rich-reference').trigger('click')
     await flushPromises()
     expect(writeText).toHaveBeenCalledExactlyOnceWith('docs/x.md')
   })
@@ -88,7 +88,7 @@ describe('what a press does', () => {
     server()
     const { wrapper } = drawn([strong('docs/x.md')])
     await flushPromises()
-    await wrapper.get('button.rich-reference').trigger('click')
+    await wrapper.get('.rich-reference').trigger('click')
     await flushPromises()
     expect(status(wrapper)).toBe('Не удалось скопировать — выделите путь вручную')
   })
@@ -97,7 +97,7 @@ describe('what a press does', () => {
     server()
     const { wrapper, spoken } = drawn([strong('docs/x.md')])
     await flushPromises()
-    const button = wrapper.get('button.rich-reference')
+    const button = wrapper.get('.rich-reference')
     await button.trigger('click')
     await flushPromises()
     await button.trigger('click')
@@ -117,7 +117,7 @@ describe('what a press does', () => {
     const opened = vi.fn(() => true)
     const { wrapper } = drawn([strong('docs/a.md')], { openDocument: opened })
     await flushPromises()
-    const button = wrapper.get('button.rich-reference')
+    const button = wrapper.get('.rich-reference')
     expect(button.attributes('aria-busy')).toBe('true')
     expect(button.attributes('title')).toContain('ещё проверяет')
     await button.trigger('click')
@@ -128,7 +128,7 @@ describe('what a press does', () => {
     await flushPromises()
     expect(opened).toHaveBeenCalledTimes(1)
     expect(writeText).not.toHaveBeenCalled()
-    expect(wrapper.get('button.rich-reference').attributes('aria-busy')).toBeUndefined()
+    expect(wrapper.get('.rich-reference').attributes('aria-busy')).toBeUndefined()
   })
 
   it('passes each confirmed target to its opener, by the names the server gave', async () => {
@@ -141,7 +141,7 @@ describe('what a press does', () => {
       { openDocument, openFile, openFolder },
     )
     await flushPromises()
-    for (const button of wrapper.findAll('button.rich-reference')) await button.trigger('click')
+    for (const button of wrapper.findAll('.rich-reference')) await button.trigger('click')
     await flushPromises()
     expect(openDocument).toHaveBeenCalledExactlyOnceWith({
       project: 'demo',
@@ -168,7 +168,7 @@ describe('what a press does', () => {
     server({ 'src/a.ts': CODE, 'web/src': FOLDER })
     const { wrapper } = drawn([strong('src/a.ts:42'), weak('web/src')])
     await flushPromises()
-    const buttons = wrapper.findAll('button.rich-reference')
+    const buttons = wrapper.findAll('.rich-reference')
     expect(buttons[0]?.attributes('title')).toBe(
       'Скопировать путь src/a.ts:42 — Valkama пока не умеет его открыть',
     )
@@ -193,7 +193,7 @@ describe('what a press does', () => {
     server({ 'src/a.ts': CODE })
     const { wrapper } = drawn([strong('src/a.ts')], { openFile })
     await flushPromises()
-    await wrapper.get('button.rich-reference').trigger('click')
+    await wrapper.get('.rich-reference').trigger('click')
     await flushPromises()
     expect(writeText).toHaveBeenCalledExactlyOnceWith('src/a.ts')
     expect(status(wrapper)).toBe('Не удалось открыть — путь скопирован')
@@ -209,7 +209,7 @@ describe('what a press does', () => {
       openFolder,
     })
     await flushPromises()
-    for (const link of wrapper.findAll('button.rich-reference')) {
+    for (const link of wrapper.findAll('.rich-reference')) {
       await link.trigger('click')
       await flushPromises()
     }
@@ -247,7 +247,7 @@ describe('where the layer stands', () => {
     server()
     const { wrapper } = underShell(Preview)
     await flushPromises()
-    expect(wrapper.find('button.rich-reference').exists()).toBe(false)
+    expect(wrapper.find('.rich-reference').exists()).toBe(false)
     expect(wrapper.text()).toContain('docs/a.md')
     expect(resolve).not.toHaveBeenCalled()
   })
@@ -255,7 +255,7 @@ describe('where the layer stands', () => {
   it('is text under the shell alone, which knows no space', async () => {
     const { wrapper } = underShell(ShellAlone)
     await flushPromises()
-    expect(wrapper.find('button.rich-reference').exists()).toBe(false)
+    expect(wrapper.find('.rich-reference').exists()).toBe(false)
     expect(resolve).not.toHaveBeenCalled()
   })
 
@@ -286,7 +286,7 @@ describe('where the layer stands', () => {
         ),
     })
     await flushPromises()
-    const buttons = wrapper.findAll('button.rich-reference')
+    const buttons = wrapper.findAll('.rich-reference')
     expect(buttons.map((button) => button.text())).toEqual(['docs/a.md', 'a1b2c3d'])
     expect(buttons[1]?.attributes('title')).toBe('Показать коммит')
     expect(resolve).toHaveBeenCalledExactlyOnceWith({ space: SPACE }, ['docs/a.md'])
@@ -355,7 +355,7 @@ describe('a path in an option of a question', () => {
     expect(toggles).toHaveLength(2)
     for (const toggle of toggles) await toggle.trigger('click')
     await flushPromises()
-    const details = wrapper.findAll('.request-option-detail button.rich-reference')
+    const details = wrapper.findAll('.request-option-detail .rich-reference')
     expect(details.map((button) => button.text())).toEqual(['docs/a.md', 'the merge plan'])
     expect(details.every((button) => !button.element.closest('label'))).toBe(true)
     const asked = resolve.mock.calls.flatMap(([, paths]) => paths)
@@ -372,7 +372,7 @@ describe('a path in an option of a question', () => {
     const toggle = wrapper.find('.request-option button.request-option-toggle')
     await toggle.trigger('click')
     await flushPromises()
-    const paths = wrapper.findAll('.request-option-detail button.rich-reference')
+    const paths = wrapper.findAll('.request-option-detail .rich-reference')
     expect(paths.map((button) => button.text())).toEqual(['docs/a.md'])
   })
 })

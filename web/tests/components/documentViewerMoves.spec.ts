@@ -40,7 +40,7 @@ const step = (name: string, to: string) => `# ${name}\n\nOn to [the next](${to})
 
 async function press(name: string) {
   const button = [
-    ...(surface()?.querySelectorAll<HTMLButtonElement>('.document-text button') ?? []),
+    ...(surface()?.querySelectorAll<HTMLElement>('.document-text .rich-reference') ?? []),
   ].find((candidate) => candidate.textContent?.trim() === name)
   if (!button) throw new Error(`No link ${name}`)
   button.click()
@@ -48,7 +48,7 @@ async function press(name: string) {
   await nextTick()
 }
 
-const link = () => surface()?.querySelector<HTMLButtonElement>('.document-text button')
+const link = () => surface()?.querySelector<HTMLElement>('.document-text .rich-reference')
 const heading = () => surface()?.querySelector('.document-text h2')?.textContent?.trim()
 
 describe('moving between documents', () => {
@@ -218,8 +218,8 @@ describe('moving between documents', () => {
 })
 
 const linkTitles = () =>
-  [...(surface()?.querySelectorAll<HTMLElement>('.document-text button') ?? [])].map((button) =>
-    button.getAttribute('title'),
+  [...(surface()?.querySelectorAll<HTMLElement>('.document-text .rich-reference') ?? [])].map(
+    (button) => button.getAttribute('title'),
   )
 const CONFIRMED = { status: 'file', project: 'demo', markdown: true }
 

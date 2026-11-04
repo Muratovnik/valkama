@@ -663,6 +663,17 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   looks like a path (`client/server`) stays text until the server confirms it. A
   modal dialog that could only open a card behind itself — the new task's preview
   — claims every reference as text.
+  A reference is inline, as a link in prose is, never a box of its own: a box moved to
+  the next line whole, left the line before a long path half empty and could leave the
+  comma after it alone on a line. So it breaks with the words, a path also after each
+  `/`, which a browser does not offer by itself, and what is written against it stays
+  on its last line; padding, not the line, gives its words a 24px pointer target. One
+  that leads to a card or a document is a link to that address (`/open/<number>`, the
+  document's page): a plain press opens it in place through its owner, and a press with
+  a modifier or the middle button is the browser's, as on any link. The desktop app has
+  no tabs and hands such an address to the system browser, so there every press opens
+  in place. One that acts — copies, opens a file in the editor, shows a record or a
+  session — is a button, with Enter and Space.
 - **A project's document:** `DocumentViewer` shows one Markdown file of a project,
   read-only, in whichever host the window has room for. Where the window holds both, it is a
   second pane inside the surface it was opened from, right of a card or of the panel of open

@@ -39,6 +39,12 @@ export interface ReferenceLink {
   busy?: boolean
   /** It copies rather than opens, which the text says by its dotted underline. */
   copies?: boolean
+  /**
+   * The address of what it opens, on this origin, where it has one: the link is then a
+   * link, which a modified press or a middle one takes elsewhere as any link is taken.
+   * Without one, what it does is an action, and the control is a button.
+   */
+  href?: string
   /** The part of the written run the control covers, when that is not all of it. */
   label?: string
   /** Hover text of its own: where there is one, the link has no native `title`. */

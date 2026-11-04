@@ -102,7 +102,7 @@ export async function openPage(page: Page, path: string, fragment = '') {
 }
 
 export const linkIn = (scope: Locator | Page, path: string) =>
-  scope.getByRole('button', { name: `Open the document in Valkama: ${path}` })
+  scope.getByRole('link', { name: `Open the document in Valkama: ${path}` })
 
 export const target = (page: Page) => page.locator('.document-block.is-target')
 

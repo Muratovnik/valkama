@@ -373,7 +373,7 @@ describe('an answered question', () => {
       { global: { plugins: plugins() } },
     )
     wrappers.push(wrapper)
-    expect(wrapper.find('.request-option button.rich-reference').exists()).toBe(true)
+    expect(wrapper.find('.request-option .rich-reference').exists()).toBe(true)
     expect(wrapper.find('label').exists()).toBe(false)
   })
 })
