@@ -5,7 +5,7 @@
  * that reads whole where the card has room for it.
  */
 import { expect } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
@@ -166,8 +166,8 @@ for (const locale of ['en', 'ru'] as const)
 // The session fell silent at 09:15 on the 10th: 2 days 23 hours before the clock's 08:30
 // on the 13th, which is 2.97 days and no «2 days».
 for (const [locale, silent] of [
-  ['en', ', 2\u{A0}d 23\u{A0}h ago. It may have crashed'],
-  ['ru', ', 2\u{A0}дн. 23\u{A0}ч назад. Возможно, она упала'],
+  ['en', ', 2\u{A0}d\u{A0}23\u{A0}h ago. It may have crashed'],
+  ['ru', ', 2\u{A0}дн.\u{A0}23\u{A0}ч назад. Возможно, она упала'],
 ] as const)
   test(`a silent session says how long ago in the units the agents use, in ${locale}`, async ({
     page,
@@ -175,6 +175,44 @@ for (const [locale, silent] of [
     await openCard(page, { clock: '2026-08-13T08:30:00Z', locale })
     await page.locator(`.step-holder button.open-action[title*="${CRASHED}"]`).click()
     await expect(page.locator('.open-panel')).toContainText(silent)
+  })
+
+/**
+ * How many lines the first run of `words` inside `root` is laid out on, found whatever
+ * kind of space stands between its parts, so a span that can break is found broken.
+ */
+const linesOf = (root: Locator, words: string) =>
+  root.evaluate((node, parts) => {
+    const escaped = parts.map((part) => part.replaceAll('.', String.raw`\.`))
+    const pattern = new RegExp(escaped.join(String.raw`\s`), 'u')
+    const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT)
+    for (let at = walker.nextNode(); at; at = walker.nextNode()) {
+      const found = pattern.exec(at.textContent ?? '')
+      if (!found) continue
+      const range = document.createRange()
+      range.setStart(at, found.index)
+      range.setEnd(at, found.index + found[0].length)
+      return new Set([...range.getClientRects()].map((rect) => Math.round(rect.top))).size
+    }
+    return 0
+  }, words.split('\u{A0}'))
+
+// At 07:30 on the 16th the agents last showed activity 2 days 23 hours ago, and the
+// silent session fell quiet 5 days 22 hours ago: two units each, on a phone's line.
+for (const [locale, agentSpan, silentSpan] of [
+  ['en', '2\u{A0}d\u{A0}23\u{A0}h', '5\u{A0}d\u{A0}22\u{A0}h'],
+  ['ru', '2\u{A0}дн.\u{A0}23\u{A0}ч', '5\u{A0}дн.\u{A0}22\u{A0}ч'],
+] as const)
+  test(`a span of two units stays on one line at 390px, in ${locale}`, async ({ page }) => {
+    await openCard(page, { clock: '2026-08-16T07:30:00Z', locale, width: 390 })
+    const agent = page.locator('.drawer .agents .agent').first()
+    await expect(agent).toContainText(agentSpan)
+    expect(await linesOf(agent, agentSpan)).toBe(1)
+
+    await page.locator(`.step-holder button.open-action[title*="${CRASHED}"]`).click()
+    const panel = page.locator('.open-panel')
+    await expect(panel).toContainText(silentSpan)
+    expect(await linesOf(panel, silentSpan)).toBe(1)
   })
 
 for (const [locale, look, first, second] of [

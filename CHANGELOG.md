@@ -410,6 +410,10 @@ checkouts are therefore distinguishable even at the same version.
   open, the room kept for «Don't answer» to ask in stood as an empty band of about 45px above
   the buttons; it now stands in the buttons' row beside the two answers, and on a row of its
   own only where that row has no room.
+- **How long ago stays on one line.** A span of two units, such as «2 дн. 23 ч», broke
+  between its units on a phone-wide card, in an agent's row and in a silent session's
+  panel. The space between the units no longer breaks, as the one inside each unit never
+  did.
 
 ### Removed
 

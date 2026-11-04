@@ -37,16 +37,24 @@ export function spanWordsOf(
   }
 }
 
+/**
+ * What stands between two units: a space no line breaks at, as the catalog's own words
+ * keep a number with its unit, so «2 дн.» never ends a line that «23 ч» starts.
+ */
+const BETWEEN_UNITS = '\u{A0}'
+
+/** The larger unit, and the smaller one where it counts anything. */
+const units = (larger: string, smaller: string) =>
+  [larger, smaller].filter(Boolean).join(BETWEEN_UNITS)
+
 /** A span in its two largest units: `2 h 5 min`, `3 d 1 h`, `29 min`. */
 export function spanWords(milliseconds: number, words: SpanWords): string {
   if (milliseconds < MINUTE) return words.lessThanMinute
   const days = Math.floor(milliseconds / DAY)
   const hours = Math.floor((milliseconds % DAY) / HOUR)
   const minutes = Math.floor((milliseconds % HOUR) / MINUTE)
-  if (days > 0) return [words.days(days), hours > 0 ? words.hours(hours) : ''].join(' ').trim()
-  if (hours > 0) {
-    return [words.hours(hours), minutes > 0 ? words.minutes(minutes) : ''].join(' ').trim()
-  }
+  if (days > 0) return units(words.days(days), hours > 0 ? words.hours(hours) : '')
+  if (hours > 0) return units(words.hours(hours), minutes > 0 ? words.minutes(minutes) : '')
   return words.minutes(minutes)
 }
 

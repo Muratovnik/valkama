@@ -17,6 +17,9 @@ const words: SpanWords = {
   minutes: (count) => `${count} min`,
 }
 
+/** The words as read, for a check of the counting: which space joins them is checked below. */
+const read = (text: string) => text.replaceAll('\u{A0}', ' ')
+
 const SECOND = 1000
 const MINUTE = 60 * SECOND
 const HOUR = 60 * MINUTE
@@ -35,7 +38,26 @@ describe('a span in its two largest units', () => {
     [3 * DAY - SECOND, '2 d 23 h'],
     [3 * DAY, '3 d'],
   ])('%i ms reads %s', (span, expected) => {
-    expect(spanWords(span, words)).toBe(expected)
+    expect(read(spanWords(span, words))).toBe(expected)
+  })
+})
+
+describe('a span holds together on a narrow line', () => {
+  // The catalog's own unit words keep a number with its unit; the space the rule puts
+  // between two units has to hold as well, or «2 дн.» ends one line and «23 ч» starts
+  // the next.
+  const glued: SpanWords = {
+    ...words,
+    days: (count) => `${count}\u{A0}d`,
+    hours: (count) => `${count}\u{A0}h`,
+    minutes: (count) => `${count}\u{A0}min`,
+  }
+
+  it.each([
+    [2 * DAY + 23 * HOUR, '2\u{A0}d\u{A0}23\u{A0}h'],
+    [HOUR + 5 * MINUTE, '1\u{A0}h\u{A0}5\u{A0}min'],
+  ])('%i ms has no space a line may break at', (span, expected) => {
+    expect(spanWords(span, glued)).toBe(expected)
   })
 })
 
@@ -48,6 +70,6 @@ describe('how long ago', () => {
   })
 
   it('2.97 days is 2 days and 23 hours, neither 2 days nor 3', () => {
-    expect(agoWords(Date.parse('2026-08-10T09:15:00Z'), now, words)).toBe('2 d 23 h ago')
+    expect(read(agoWords(Date.parse('2026-08-10T09:15:00Z'), now, words))).toBe('2 d 23 h ago')
   })
 })
