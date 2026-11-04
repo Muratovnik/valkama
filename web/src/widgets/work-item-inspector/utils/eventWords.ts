@@ -6,7 +6,12 @@
  * from its far end, a request's UUID for a question. Those lines stay in the record, and
  * the search still reads them; what is shown are words for the events whose line has a
  * known shape, and the line itself for every other event.
+ *
+ * A question is named by its title when the card has it: the card reads its questions for
+ * the discussion anyway, so this costs no read. One the card has not read — older than the
+ * newest the read brings, or a read that failed — says nothing beyond the row's title.
  */
+import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { LINK_KINDS } from '@/shared/api/planningModel.ts'
 import { plainText } from '@/shared/lib/richText.ts'
@@ -21,12 +26,20 @@ interface RecordedEvent {
 /** As much of a thread's first words as a line of history holds. */
 const NAME_LENGTH = 60
 
+const named = (words: string) =>
+  words.length > NAME_LENGTH ? `${words.slice(0, NAME_LENGTH - 1).trimEnd()}…` : words
+
 /** The thread a mark was set on or taken from, by its first words. */
 function threadName(comments: WorkItem['comments'], id: number) {
   const root = comments.find((comment) => comment.id === id)
   if (!root) return null
-  const words = plainText(root.report ? root.report.done : root.body)
-  return words.length > NAME_LENGTH ? `${words.slice(0, NAME_LENGTH - 1).trimEnd()}…` : words
+  return named(plainText(root.report ? root.report.done : root.body))
+}
+
+/** The question an event's id names, by its title, when the card has read it. */
+function questionWords(detail: string, questions: readonly InputRequestEntry[], t: Translate) {
+  const asked = questions.find(({ request }) => request.request_id === detail.trim())
+  return asked ? t('history.question', { question: named(asked.request.title) }) : ''
 }
 
 /** `5436: decision` or `5436`, as `resolve_work_item_comment` writes it. */
@@ -48,7 +61,12 @@ function linkWords(detail: string, t: Translate) {
   return `${t(['workItem.relation', kind, side].join('.'))} ${reference}`
 }
 
-export function eventWords(event: RecordedEvent, comments: WorkItem['comments'], t: Translate) {
+export function eventWords(
+  event: RecordedEvent,
+  comments: WorkItem['comments'],
+  t: Translate,
+  questions: readonly InputRequestEntry[] = [],
+) {
   switch (event.action) {
     case 'comment_resolved':
     case 'comment_reopened': {
@@ -58,13 +76,13 @@ export function eventWords(event: RecordedEvent, comments: WorkItem['comments'],
     case 'unlinked': {
       return linkWords(event.detail, t)
     }
-    // A question's id names nothing a reader can find here: the title says what happened.
+    // A question's id names nothing a reader can find here: its title does, when it is known.
     case 'request_created':
     case 'request_answered':
     case 'request_declined':
     case 'request_expired':
     case 'request_changed': {
-      return ''
+      return questionWords(event.detail, questions, t)
     }
     default: {
       return event.detail

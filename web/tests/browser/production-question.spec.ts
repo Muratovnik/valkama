@@ -348,6 +348,28 @@ test('the mark brings the question back from another section', async ({ page }) 
   await expect(card).toBeInViewport()
 })
 
+test('the history names a question by its title, with no read of its own', async ({ page }) => {
+  const { backend, drawer } = await openQuestion(page, [
+    asked({ title: 'Where do the comments go' }),
+  ])
+  backend.item.events.push({
+    action: 'request_created',
+    author: 'claude',
+    at: '2026-08-13T08:00:00Z',
+    detail: QUESTION_ID,
+    identity: { agent_id: null, session_id: null, source: null, state: 'unconfirmed' },
+  } as (typeof backend.item.events)[number])
+  const reads: string[] = []
+  page.on('request', (request) => reads.push(new URL(request.url()).pathname))
+  await page.reload()
+  await expect(drawer.locator('.request-card')).toBeVisible()
+  const before = reads.filter((path) => path.includes('/planning/request')).length
+  await drawer.locator('.inspector-tabs').getByText('System events', { exact: true }).click()
+  // The row said what happened and not to what: the question's id was taken out of it.
+  await expect(drawer.locator('.activity')).toContainText('Question “Where do the comments go”')
+  expect(reads.filter((path) => path.includes('/planning/request'))).toHaveLength(before)
+})
+
 test('the hub shows the same widget, and an answer there reaches the card', async ({ page }) => {
   const { drawer, card } = await openQuestion(page, [asked()])
   await drawer.getByRole('button', { name: 'Close', exact: true }).click()

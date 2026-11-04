@@ -159,6 +159,10 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Changed
 
+- **The history names the question an event is about.** A question asked, answered,
+  changed, declined or expired is named by its title — «Question “Where do the comments
+  go”» — from the questions the card has already read for its discussion, so the history
+  sends no read of its own. A question older than the newest the card reads stays unnamed.
 - **What opens more of a text is lighter than what acts on it.** «Show all» under a long
   text, «Show N more replies» and a resolved thread's Expand stood as chips of the same
   height and fill as Reply and Resolve, three rows of them between a thread's root and its

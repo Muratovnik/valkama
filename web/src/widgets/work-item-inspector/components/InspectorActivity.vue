@@ -11,6 +11,7 @@ import {
 import { buildActivity } from '@/widgets/work-item-inspector/utils/inspectorActivity.ts'
 import type { ActivityEntry } from '@/widgets/work-item-inspector/utils/inspectorActivity.ts'
 
+import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { actorName, actorSession } from '@/shared/lib/actor.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
@@ -18,9 +19,14 @@ import RichText from '@/shared/ui/RichText.vue'
 import SectionHeading from '@/shared/ui/SectionHeading.vue'
 import VButton from '@/shared/ui/VButton.vue'
 
-const props = defineProps<{
-  item: WorkItem
-}>()
+const props = withDefaults(
+  defineProps<{
+    item: WorkItem
+    /** The card's questions as its discussion read them, which name a question's events. */
+    questions?: readonly InputRequestEntry[]
+  }>(),
+  { questions: () => [] },
+)
 
 const { t, te, locale } = useI18n()
 const query = ref('')
@@ -64,7 +70,7 @@ function title(entry: ActivityEntry) {
 }
 /** The row's second line in words; the recorded line stays in the entry for the search. */
 function detail(entry: ActivityEntry) {
-  return entry.kind === 'event' ? eventWords(entry, props.item.comments, t) : entry.detail
+  return entry.kind === 'event' ? eventWords(entry, props.item.comments, t, props.questions) : entry.detail
 }
 const groups = computed(() => {
   const { category, author } = selected.value

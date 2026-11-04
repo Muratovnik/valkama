@@ -10,15 +10,20 @@ import { eventWords } from '@/widgets/work-item-inspector/utils/eventWords.ts'
 
 import { messages, pluralRules } from '@/shared/i18n/index.ts'
 
+import { requestEntry } from '../support/inputRequests.ts'
 import { root } from '../support/threadCard.ts'
 
 const comments = [
   root(5436, { body: 'Should the **second** report replace the first or stand beside it?' }),
 ]
+const asked = requestEntry()
+const questions = [
+  { ...asked, request: { ...asked.request, request_id: '66666666-6666-4666-8666-666666666662' } },
+]
 
 function say(locale: 'en' | 'ru', action: string, detail: string) {
   const { t } = createI18n({ legacy: false, locale, messages, pluralRules }).global
-  return eventWords({ action, detail }, comments, t)
+  return eventWords({ action, detail }, comments, t, questions)
 }
 
 describe('eventWords', () => {
@@ -53,6 +58,25 @@ describe('eventWords', () => {
     ['ru', 'unlinked', 'blocks from MAIN-8', 'Заблокировано MAIN-8'],
     ['en', 'request_created', '66666666-6666-4666-8666-666666666661', ''],
     ['en', 'request_answered', '66666666-6666-4666-8666-666666666661', ''],
+    // A question the card has read is named by its title, which the row lacked.
+    [
+      'en',
+      'request_created',
+      '66666666-6666-4666-8666-666666666662',
+      'Question “Confirm deployment”',
+    ],
+    [
+      'ru',
+      'request_answered',
+      '66666666-6666-4666-8666-666666666662',
+      'Вопрос «Confirm deployment»',
+    ],
+    [
+      'ru',
+      'request_changed',
+      '66666666-6666-4666-8666-666666666662',
+      'Вопрос «Confirm deployment»',
+    ],
   ] as const)('words %s %s «%s»', (locale, action, detail, words) => {
     expect(say(locale, action, detail)).toBe(words)
   })

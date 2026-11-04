@@ -23,6 +23,7 @@ export const activityMessages = {
       thread: 'Thread “{thread}”',
       threadDecided: 'Thread “{thread}” · decision: {decision}',
       threadGone: 'A thread no longer on this task',
+      question: 'Question “{question}”',
     },
   },
   ru: {
@@ -50,6 +51,7 @@ export const activityMessages = {
       thread: 'Ветка «{thread}»',
       threadDecided: 'Ветка «{thread}» · решение: {decision}',
       threadGone: 'Ветка, которой больше нет в этой задаче',
+      question: 'Вопрос «{question}»',
     },
   },
 }

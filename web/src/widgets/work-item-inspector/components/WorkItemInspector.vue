@@ -63,6 +63,7 @@ import LaunchDialog from '@/features/work-item-launch/LaunchDialog.vue'
 
 import type { WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
+import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import type { PlanningWorkflow } from '@/shared/api/planningModel.ts'
 import { typedFailure } from '@/shared/api/typedFailure.ts'
@@ -113,8 +114,9 @@ const { leaveUnreadable, section, sections, shownSection } = useInspectorSection
   () => frame.value?.scrollToContent(),
 )
 const overview = ref<InstanceType<typeof InspectorOverview> | null>(null)
-/** Whether a question on the card waits for its answer; the discussion knows. */
+/** Whether a question on the card waits for its answer, and what they are; the discussion knows. */
 const questionWaits = ref(false)
+const questions = ref<readonly InputRequestEntry[]>([])
 const { asking, discard, keep: keepEditing, leave, unsaved } = provideDraftGuard()
 
 const failureText = useFailureText()
@@ -418,6 +420,7 @@ defineExpose({ close, openFrom })
             v-show="section === 'overview'"
             ref="overview"
             v-model:asking="questionWaits"
+            v-model:questions="questions"
             :item="payload"
             :target="target"
             :writable="writable && !busy"
@@ -471,6 +474,7 @@ defineExpose({ close, openFrom })
           <InspectorActivity
             v-else-if="section === 'activity'"
             :item="payload"
+            :questions="questions"
           />
         </template>
       </PlatformStatePanel>

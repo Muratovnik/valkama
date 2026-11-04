@@ -51,6 +51,9 @@ const questions = useItemQuestions(
 )
 const asking = defineModel<boolean>('asking', { default: false })
 watch(questions.waiting, (now) => (asking.value = now), { immediate: true })
+/** What was read, for the card's history to name a question by: no read of its own. */
+const read = defineModel<readonly InputRequestEntry[]>('questions', { default: () => [] })
+watch(questions.entries, (now) => (read.value = now), { immediate: true })
 const questionEntries = questions.entries
 const questionsUnread = questions.unread
 const questionsCut = questions.cut
