@@ -36,6 +36,7 @@ import {
   Copy,
   CornerDownRight,
   Database,
+  ExternalLink,
   FileText,
   Filter,
   Hash,
@@ -90,6 +91,8 @@ const ICONS: Record<string, Component> = {
   'cursor': MousePointer2,
   'database': Database,
   'document': FileText,
+  // Another window: a document's own page, which the viewer's head opens.
+  'external-link': ExternalLink,
   'filters': Filter,
   // The address of an item, to hand to someone; the editor's own link is `format-link`.
   'link': Link,
