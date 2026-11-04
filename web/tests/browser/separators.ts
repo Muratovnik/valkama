@@ -11,7 +11,10 @@ export function separatorRoom(line: Locator) {
     const glyphs: { at: Text; ch: string; left: number; right: number }[] = []
     const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT)
     for (let text = walker.nextNode(); text; text = walker.nextNode()) {
-      for (const [at, ch] of [...(text.textContent ?? '')].entries()) {
+      const value = text.textContent ?? ''
+      // By code unit, which is what a range counts in.
+      for (let at = 0; at < value.length; at += 1) {
+        const ch = value.charAt(at)
         const range = document.createRange()
         range.setStart(text, at)
         range.setEnd(text, at + 1)
