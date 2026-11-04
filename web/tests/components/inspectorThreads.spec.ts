@@ -179,10 +179,12 @@ describe('replying', () => {
     await inThread(wrapper, 1, 'Reply').trigger('click')
     await replyField(wrapper).setValue('Words')
     await getButton(wrapper, 'Cancel').trigger('click')
+    // Nothing has been sent yet: the question is about the draft, not a reply to delete.
+    expect(wrapper.get('.confirm-strip').text()).toContain('Discard this draft reply?')
     await getButton(wrapper, 'Keep writing').trigger('click')
     expect((replyField(wrapper).element as HTMLTextAreaElement).value).toBe('Words')
     await getButton(wrapper, 'Cancel').trigger('click')
-    await getButton(wrapper, 'Discard').trigger('click')
+    await getButton(wrapper, 'Discard draft').trigger('click')
     await flushPromises()
     expect(wrapper.find('textarea[aria-label="Your reply"]').exists()).toBe(false)
     expect(thread(wrapper, 1).text()).not.toContain('Draft')

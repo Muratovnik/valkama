@@ -169,7 +169,7 @@ test('Cancel asks before it drops a reply, with focus on the way back', async ({
   await page.keyboard.press('Escape')
   await expect(thread.getByRole('textbox', { name: 'Your reply' })).toHaveValue('Words')
   await thread.getByRole('button', { name: 'Cancel', exact: true }).click()
-  await thread.getByRole('button', { name: 'Discard', exact: true }).click()
+  await thread.getByRole('button', { name: 'Discard draft', exact: true }).click()
   await expect(thread.getByRole('textbox', { name: 'Your reply' })).toBeHidden()
   await expect(focused(page)).toHaveText('Reply')
 })
