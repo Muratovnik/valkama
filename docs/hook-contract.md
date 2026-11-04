@@ -529,6 +529,11 @@ the rest after a day.
 `no`) stops both the notices and the watcher. Nothing else changes: lifecycle
 events are still recorded, and a write still answers with `from_person`.
 
+The notice path reads one more variable, `VALKAMA_PROTECTED_STORE`, the guard a
+test environment sets on a store it must not touch. When it names the store the
+notices would read (`VALKAMA_DB`, `store` in `config.json`, or the default),
+there are no notices and no watcher, whatever `notify` says.
+
 ### What it costs
 
 `PostToolUse` runs on every tool call. The notice path imports nothing beyond
