@@ -88,6 +88,34 @@ describe('a lazy view downloads on demand without blanking or flickering', () =>
     expect(wrapper.find('.downloaded').exists()).toBe(true)
   })
 
+  // The delay counts from the download, not from the mount: a view drawn once its download
+  // has run that long, as the graph is after the workspace held its stage, says so at once.
+  it('a view drawn after its download has run for the delay says at once that it is loading', async () => {
+    const { calls, loader } = controlledLoader()
+    const late = lazyView(loader)
+    late.prefetch()
+    vi.advanceTimersByTime(LAZY_VIEW_LOADING_DELAY_MS)
+    const wrapper = mountView(late.component)
+    expect(wrapper.get('[aria-busy="true"]').text()).toContain('Loading')
+    calls[0]?.resolve()
+    await flushPromises()
+    expect(wrapper.find('[aria-busy="true"]').exists()).toBe(false)
+
+    // Drawn part way through, it waits only what is left of the delay.
+    const second = controlledLoader()
+    const early = lazyView(second.loader)
+    early.prefetch()
+    vi.advanceTimersByTime(LAZY_VIEW_LOADING_DELAY_MS - 50)
+    const partway = mountView(early.component)
+    expect(partway.find('[aria-busy="true"]').exists()).toBe(false)
+    vi.advanceTimersByTime(49)
+    await flushPromises()
+    expect(partway.find('[aria-busy="true"]').exists()).toBe(false)
+    vi.advanceTimersByTime(1)
+    await flushPromises()
+    expect(partway.get('[aria-busy="true"]').text()).toContain('Loading')
+  })
+
   it('reports a failed download with Retry, and Retry asks the network again', async () => {
     const { calls, loader } = controlledLoader()
     const wrapper = mountView(lazyView(loader).component)

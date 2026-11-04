@@ -51,11 +51,15 @@ export function lazyView<C extends Component>(loader: () => Promise<{ default: C
   const ready = shallowRef(false)
   let resident: Component | null = null
   let pending: Promise<Component> | null = null
+  /** When the download in flight began: the loading delay counts from here. */
+  let pendingSince = 0
 
   function load(): Promise<Component> {
     if (resident !== null) return Promise.resolve(resident)
+    if (pending !== null) return pending
+    pendingSince = Date.now()
     // A failed request is forgotten, so the next caller asks the network again.
-    pending ??= loader().then(
+    pending = loader().then(
       (module) => {
         resident = module.default
         ready.value = true
@@ -87,10 +91,17 @@ export function lazyView<C extends Component>(loader: () => Promise<{ default: C
       function attempt() {
         clearTimeout(timer)
         state.value = null
-        timer = setTimeout(() => {
-          state.value = uiLoading()
-        }, LAZY_VIEW_LOADING_DELAY_MS)
-        load()
+        const download = load()
+        // The delay is the download's, not this boundary's: one drawn after its download
+        // has already run that long, such as the graph the workspace held its stage for,
+        // says at once that it is loading instead of leaving the stage blank a second delay.
+        const waited = Date.now() - pendingSince
+        if (waited >= LAZY_VIEW_LOADING_DELAY_MS) state.value = uiLoading()
+        else
+          timer = setTimeout(() => {
+            state.value = uiLoading()
+          }, LAZY_VIEW_LOADING_DELAY_MS - waited)
+        download
           .then(
             (loaded) => {
               if (mounted) view.value = loaded

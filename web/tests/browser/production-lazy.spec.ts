@@ -100,8 +100,9 @@ test('a slow graph download keeps the board until the loading panel takes its pl
   await expect(tiles.first()).toBeVisible()
   await page.clock.runFor(LOADING_DELAY_MS - 1)
   await expect(tiles.first()).toBeVisible()
-  // The board's delay runs out, and then the graph's own boundary waits its own.
-  await page.clock.runFor(LOADING_DELAY_MS + 1)
+  // The stage is never blank: when the board's delay runs out the loading panel takes
+  // its place in the same step, with no time left to pass on the page's clock.
+  await page.clock.runFor(1)
   const loading = page.locator('.workspace-stage [aria-busy="true"]')
   await expect(loading).toBeVisible()
   await expect(loading).toContainText('Loading')
