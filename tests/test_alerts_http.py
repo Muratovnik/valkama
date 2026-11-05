@@ -18,9 +18,10 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from server import http_surface, launcher, store
+from server import http_surface, launcher, mcp_surface, store
 from server.alerts import emit, messages, presence, readiness
 from server.alerts import settings as alert_settings
+from server.hooks import notify
 from server.ops import toast
 from server.planning import requests, service
 from server.projects import project_registry
@@ -31,6 +32,8 @@ from tests.registry_fixtures import project_entry, registry_bytes
 FIELD = {"id": "answer", "label": "Answer", "type": "text", "required": True, "options": []}
 ENABLED: toast.Check = {"state": "enabled", "setting": 0, "reason": None}
 ROOT = Path(__file__).resolve().parent.parent
+#: The session of an agent on the work, proved the way Codex proves it in `_meta`.
+HOLDER = {"sessionId": "019a3c2e-5b7d-7c11-9e0f-2f4b6d8a1c3e"}
 
 
 class PresenceRecordTests(unittest.TestCase):
@@ -435,6 +438,46 @@ class AnsweredInTheInterfaceTests(Listener):
         deadline = time.monotonic() + 5
         while not self.removed and time.monotonic() < deadline:
             time.sleep(0.01)
+
+    def agent_claims(self) -> None:
+        mcp_surface.call_tool(self.conn, "claim_work_item", {"id": self.ref}, meta=HOLDER)
+        self.conn.commit()
+
+    def notice(self) -> str:
+        answer = notify.deliver(
+            "claude", "post-tool-use", {"session_id": HOLDER["sessionId"]}, dict(os.environ)
+        )
+        return (
+            "" if answer is None else json.loads(answer)["hookSpecificOutput"]["additionalContext"]
+        )
+
+    def test_the_holder_hears_each_way_a_person_settles_a_question(self) -> None:
+        self.agent_claims()
+        self.resolve("answer", self.question(), answers={"answer": "first"})
+        self.assertIn("question_answered", self.notice())
+
+        record = self.resolve("answer", self.question(), answers={"answer": "first"})["request"]
+        self.notice()
+        self.resolve("change", record, answers={"answer": "second"})
+        self.assertIn("question_changed", self.notice())
+
+        self.resolve("decline", self.question())
+        self.assertIn("question_declined", self.notice())
+
+    def test_the_holder_hears_a_person_withdrawing_a_question(self) -> None:
+        self.agent_claims()
+        self.resolve("expire", self.question())
+        self.assertIn("question_withdrawn", self.notice())
+
+    def test_the_next_write_carries_the_answer_back(self) -> None:
+        self.agent_claims()
+        self.resolve("answer", self.question(), answers={"answer": "first"})
+        answer = mcp_surface.call_tool(
+            self.conn, "comment_work_item", {"id": self.ref, "body": "Noted"}, meta=HOLDER
+        )
+        self.conn.commit()
+        assert isinstance(answer, dict)
+        self.assertEqual(["question_answered"], [event["kind"] for event in answer["from_person"]])
 
     def test_answering_the_last_question_takes_the_toast_and_a_summary_back(self) -> None:
         self.resolve("answer", self.question(), answers={"answer": "first"})

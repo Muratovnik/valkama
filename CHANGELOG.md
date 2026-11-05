@@ -186,6 +186,12 @@ checkouts are therefore distinguishable even at the same version.
   General → Task type colors picks another colour per type, applies it at once, says
   when one is hard to read and lets you keep it, and resets one type or all. The choice
   is kept on the device, so a browser and the desktop app each remember their own.
+### Fixed
+
+- An answer given in the interface now reaches the agent: a person answering, changing,
+  declining or withdrawing a question never produced a notice, a `from_person` line or the
+  `person_spoke` refusal, because the interface answers through a route those reads did not
+  count as Planning's.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 

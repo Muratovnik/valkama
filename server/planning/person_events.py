@@ -108,17 +108,22 @@ _LAST_AGENT_COMMENT = (
     " WHERE m.work_item_id = ? AND c.work_item_id = ?"
     " AND c.identity_source NOT IN (?,?) AND c.id <> ?"
 )
+#: A person's writes come through Planning's own paths, under both of its mounts: the
+#: interface answers a question through the module surface (`interactions.WRITE_PATHS`)
+#: and does the rest through `/api/planning/`. A launch writes through neither.
 _PERSON_COMMENTS = (
     "SELECT m.id, m.body, m.report, m.created_at, m.call_id, m.reply_to, m.reply_to_request"
     " FROM work_item_comments m JOIN execution_events c ON c.id = m.call_id"
     " WHERE m.work_item_id = ? AND m.call_id > ? AND c.identity_source = ?"
-    " AND c.tool LIKE '/api/planning/%' ORDER BY m.id"
+    " AND (c.tool LIKE '/api/planning/%' OR c.tool LIKE '/api/modules/planning/%')"
+    " ORDER BY m.id"
 )
 _PERSON_EVENTS = (
     "SELECT e.id, e.action, e.detail, e.created_at, e.call_id"
     " FROM work_item_events e JOIN execution_events c ON c.id = e.call_id"
     " WHERE e.work_item_id = ? AND e.call_id > ? AND c.identity_source = ?"
-    " AND c.tool LIKE '/api/planning/%' ORDER BY e.id"
+    " AND (c.tool LIKE '/api/planning/%' OR c.tool LIKE '/api/modules/planning/%')"
+    " ORDER BY e.id"
 )
 #: Who wrote a thread's root and who asked a question, by the call that did it. Only
 #: a confirmed call says: a session an unconfirmed one names was never proved.
