@@ -106,6 +106,29 @@ for (const width of WIDTHS) {
   })
 }
 
+test.describe('in Russian, whose words are the longest the form carries', () => {
+  test.use({ locale: 'ru-RU' })
+
+  for (const width of WIDTHS) {
+    test(`the review scrolls nothing sideways, at ${width}`, async ({ page }) => {
+      const { card, scroller } = await openReview(page, width)
+      await card.getByRole('button', { name: 'Принять рекомендованное', exact: true }).click()
+      await expect(card.locator('.request-review-head')).toContainText('Решено 18 из 18')
+      expect(
+        await scroller.evaluate((node) => node.scrollWidth - node.clientWidth),
+      ).toBeLessThanOrEqual(0)
+      await expectNoSilentClipping(page, `review in Russian at ${width}`, '.request-card')
+      for (const point of await card.locator('.request-point').all()) {
+        const outer = await box(point)
+        for (const control of await point.locator('button').all()) {
+          const inner = await box(control)
+          expect(inner.x + inner.width).toBeLessThanOrEqual(outer.x + outer.width + 0.5)
+        }
+      }
+    })
+  }
+})
+
 test('Accept recommended and Send post the flat answer the contract shows', async ({ page }) => {
   const { card, requests } = await openReview(page, 1280)
   await card.getByRole('button', { name: 'Accept recommended', exact: true }).click()

@@ -128,7 +128,7 @@ function leave(event: FocusEvent) {
 }
 
 const ownEditor = ref<InstanceType<typeof MarkdownEditor> | null>(null)
-const controls = ref<HTMLElement | null>(null)
+const root = ref<HTMLElement | null>(null)
 const noteEditor = ref<InstanceType<typeof RequestNote> | null>(null)
 const {
   open: noteOpen,
@@ -149,13 +149,14 @@ function focus() {
     ownEditor.value.focus()
     return
   }
-  moveFocus(controls.value?.querySelector<HTMLElement>('[role="radiogroup"] [tabindex="0"]'))
+  moveFocus(root.value?.querySelector<HTMLElement>('[role="radiogroup"] [tabindex="0"]'))
 }
 defineExpose({ focus })
 </script>
 
 <template>
   <div
+    ref="root"
     class="request-point"
     role="group"
     :aria-labelledby="labelId"
@@ -212,20 +213,17 @@ defineExpose({ focus })
           :size="16"
         />
       </VButton>
-      <div
-        ref="controls"
-        class="request-point-controls"
-      >
-        <SegmentedControl
-          class="request-point-segments"
-          size="compact"
-          :label="name"
-          :model-value="verdict"
-          :options="segments"
-          :aria-describedby="errorShown"
-          :aria-invalid="invalidMark"
-          @update:model-value="emit('verdict', $event)"
-        />
+      <SegmentedControl
+        class="request-point-segments"
+        size="compact"
+        :label="name"
+        :model-value="verdict"
+        :options="segments"
+        :aria-describedby="errorShown"
+        :aria-invalid="invalidMark"
+        @update:model-value="emit('verdict', $event)"
+      />
+      <div class="request-point-tools">
         <VButton
           class="request-point-own"
           variant="text"
@@ -322,17 +320,22 @@ defineExpose({ focus })
   }
 }
 
-/* The words, then the segments and the presses on a line of their own across its width. */
+/* The words with the presses at their end, then the three words of the verdict on a line of
+   their own across the row's width, where a phone's width has room for nothing beside them. */
 .request-point-line {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-2) var(--space-2);
+  grid-template-areas:
+    'words toggle tools'
+    'segments segments segments';
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: var(--space-2) var(--space-1);
   align-items: start;
   min-width: 0;
 }
 
 .request-point-words {
   display: grid;
+  grid-area: words;
   gap: var(--space-half);
   min-width: 0;
 }
@@ -362,23 +365,28 @@ defineExpose({ focus })
   gap: 0 var(--space-2);
 }
 
-.request-point-toggle[aria-expanded='true'] .request-point-glyph {
-  rotate: 180deg;
+.request-point-toggle {
+  grid-area: toggle;
+
+  &[aria-expanded='true'] .request-point-glyph {
+    rotate: 180deg;
+  }
 }
 
-.request-point-controls {
+.request-point-tools {
   display: flex;
-  grid-column: 1 / -1;
+  grid-area: tools;
   gap: var(--space-1);
   align-items: center;
-  min-width: 0;
 }
 
 /* The three words share the line, so each is as easy to hit as the others. */
 .request-point-segments {
   --segmented-option-grow: 1;
 
-  flex: 1 1 auto;
+  display: flex;
+  grid-area: segments;
+  min-width: 0;
 }
 
 .request-point-own.is-chosen {
@@ -386,20 +394,15 @@ defineExpose({ focus })
   background: var(--color-surface-active);
 }
 
-/* Wide enough, the words take the line's start and the controls its end, as on a page. */
+/* Wide enough, the words take the line's start and the verdict its end, as on a page. */
 @container (width >= 40rem) {
   .request-point-line {
-    grid-template-columns: minmax(0, 1fr) auto auto;
-  }
-
-  .request-point-controls {
-    grid-column: auto;
+    grid-template-areas: 'words toggle segments tools';
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
   }
 
   .request-point-segments {
     --segmented-option-grow: 0;
-
-    flex: 0 0 auto;
   }
 }
 
