@@ -54,6 +54,10 @@ LEFT_OUT = (HUMAN, SUBAGENT, EXTERNAL, GAP)
 #: none ended between 600 s and 900 s; the 17 over 900 s had a median of 264 tokens.
 MODEL_WAIT_LIMIT_SECONDS = 600.0
 LATE_SECONDS = 60.0
+#: A turn's end is written over a few records, hooks running between them. A record later
+#: than this after the end is not more of the ending: a person came back, and it may be
+#: a rollout's next turn, which need not say it started.
+_ENDING_SECONDS = 60.0
 
 _MOST_PENDING = 64
 _MOST_BACKGROUND = 64
@@ -222,11 +226,20 @@ class Clock:
                 kept.append([last, end, klass])
         self.pending = kept
 
+    def _came_back(self, at: float) -> bool:
+        """Whether a turn that said it ended has gone quiet for longer than ending takes."""
+
+        return (
+            self.phase == _FINISHING
+            and self.high is not None
+            and (at - self.high > _ENDING_SECONDS)
+        )
+
     def _on_service(self, step: Step) -> None:
         if self.phase == _IDLE:
             return
         if self.phase == _FINISHING:
-            self._to(step.at, WORK)
+            self._to(step.at, HUMAN if self._came_back(step.at) else WORK)
             self.phase = _IDLE
             return
         self._to(step.at, self._running_class(step.at))
@@ -289,7 +302,7 @@ class Clock:
         self.asking = False
 
     def _on_reply(self, step: Step) -> None:
-        if self.phase == _IDLE:
+        if self.phase == _IDLE or self._came_back(step.at):
             self._input(step, HUMAN)
         elif step.synthetic:
             self._to(step.at, EXTERNAL)

@@ -34,6 +34,21 @@ class CodexTests(Case):
         self.assertEqual(69.0, self.seconds())
         self.assertEqual(HOUR, self.run_row()["human_seconds"])
 
+    def test_a_turn_that_starts_with_no_notice_after_a_silence_is_no_work_before_it(self) -> None:
+        run = self.rollout()
+        self.ticks((0, 2 * HOUR))
+        run.settings(1)
+        run.started(1)
+        run.complete(60)
+        # The next turn writes its settings and goes straight to a call.
+        run.settings(HOUR)
+        run.call(HOUR + 1, "c1")
+        run.output(HOUR + 11, "c1")
+        run.complete(HOUR + 21)
+        self.read()
+        self.assertEqual(59 + 20, self.seconds())
+        self.assertEqual(HOUR + 1 - 60, self.run_row()["human_seconds"])
+
     def test_input_is_made_to_exclude_the_cache(self) -> None:
         run = self.rollout()
         self.ticks((0, HOUR))

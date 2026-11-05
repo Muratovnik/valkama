@@ -94,6 +94,30 @@ class PersonTests(Case):
         self.assertEqual(20.0, self.seconds())
         self.assertEqual(590, round(self.run_row()["human_seconds"]))
 
+    def test_a_record_long_after_a_turn_ended_does_not_make_the_wait_work(self) -> None:
+        run = self.session()
+        self.ticks((0, 2 * HOUR))
+        run.prompt(0)
+        run.end_turn(30)
+        # A person comes back and the client compacts before anything is asked of it.
+        run.system(HOUR, "compact_boundary")
+        run.prompt(HOUR + 10)
+        run.end_turn(HOUR + 40)
+        self.read()
+        self.assertEqual(60.0, self.seconds())
+        self.assertEqual(HOUR + 10 - 30, round(self.run_row()["human_seconds"]))
+
+    def test_a_record_just_after_a_turn_ended_is_the_turn_ending(self) -> None:
+        run = self.session()
+        self.ticks((0, 2 * HOUR))
+        run.prompt(0)
+        run.end_turn(30)
+        run.system(32, "stop_hook_summary")
+        run.prompt(HOUR)
+        self.read()
+        self.assertEqual(32.0, self.seconds())
+        self.assertEqual(HOUR - 32, round(self.run_row()["human_seconds"]))
+
     def test_a_turn_of_bookkeeping_records_adds_nothing(self) -> None:
         run = self.session()
         self.ticks((0, 300))
