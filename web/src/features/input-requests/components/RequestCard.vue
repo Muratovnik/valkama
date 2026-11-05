@@ -31,6 +31,7 @@ import RequestFold from '@/features/input-requests/components/RequestFold.vue'
 import RequestHeader from '@/features/input-requests/components/RequestHeader.vue'
 import RequestNoteToggle from '@/features/input-requests/components/RequestNoteToggle.vue'
 import { useAnswerChange } from '@/features/input-requests/composables/useAnswerChange.ts'
+import { useRequestFocus } from '@/features/input-requests/composables/useRequestFocus.ts'
 import { useRequestWrites } from '@/features/input-requests/composables/useRequestWrites.ts'
 import { useStepAttention } from '@/features/input-requests/composables/useStepAttention.ts'
 import { ANSWER_VERSION_LIMIT, unsentWords } from '@/features/input-requests/utils/answerChange.ts'
@@ -49,7 +50,6 @@ import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { actorName, actorSession } from '@/shared/lib/actor.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
-import { revealFrame } from '@/shared/lib/revealFrame.ts'
 import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
 import ConfirmStrip from '@/shared/ui/ConfirmStrip.vue'
 import EntryAction from '@/shared/ui/EntryAction.vue'
@@ -84,6 +84,7 @@ provideDocumentLinks(() => ({
 }))
 const card = ref<HTMLElement | null>(null)
 onMounted(() => stopStrayPresses(card.value))
+const { focus, focusOutcome, holdsFocus, reveal } = useRequestFocus(card)
 const errorLine = ref<HTMLElement | null>(null)
 const deadlineLine = ref<HTMLElement | null>(null)
 const answerFields = ref<InstanceType<typeof RequestAnswerFields> | null>(null)
@@ -237,30 +238,6 @@ function writeNote(note: string) {
   stepBack()
   emit('update:draft', { ...props.draft, note })
 }
-/** Moves focus to this question's heading, or to the question where it has none. */
-function focus() {
-  moveFocus(card.value?.querySelector<HTMLElement>('.request-title') ?? card.value)
-}
-/** Moves focus to how this question ended, or to the question while it still waits. */
-function focusOutcome() {
-  const line = card.value?.querySelector<HTMLElement>('.request-state')
-  if (line) moveFocus(line)
-  else focus()
-}
-/**
- * Brings the question into view, at its first line under what the scroller keeps over
- * its top, with the keyboard at its first control. Focus alone would scroll the control
- * to the far edge and leave the prompt out of sight.
- */
-function reveal() {
-  const root = card.value
-  const control =
-    root?.querySelector<HTMLElement>('input:checked:not(:disabled)') ??
-    root?.querySelector<HTMLElement>('input:not(:disabled), textarea:not(:disabled)')
-  ;(control ?? root)?.focus({ preventScroll: true })
-  revealFrame(root)
-}
-const holdsFocus = () => card.value?.contains(document.activeElement) ?? false
 defineExpose({ focus, focusOutcome, holdsFocus, reveal })
 </script>
 

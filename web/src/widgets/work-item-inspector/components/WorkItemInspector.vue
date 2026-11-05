@@ -240,16 +240,11 @@ const openFrom = (to: string) => void leave(() => emit('open', to, capture(to)))
 
 const title = computed(() => item.value?.title || props.reference)
 const target = computed(() => inspectorTarget(props))
-const {
-  ask: askTakeover,
-  confirm: confirmTakeover,
-  keep: keepHolder,
-  question: takeoverQuestion,
-} = useTakeoverQuestion(() => item.value?.claim_ref ?? '', takeOver)
+const takeover = useTakeoverQuestion(() => item.value?.claim_ref ?? '', takeOver)
 
 /** The band under the bar holds what has to be answered or read, and only while it does. */
 const notices = computed(
-  () => Boolean(notice.value || writeError.value || takeoverQuestion.value) || asking.value,
+  () => Boolean(notice.value || writeError.value || takeover.question.value) || asking.value,
 )
 
 /** The next step a guard asks for, taken where the inspector can take it. */
@@ -327,7 +322,7 @@ defineExpose({ close, openFrom })
         :reasons="false"
         @claim="claim"
         @release="release"
-        @take-over="askTakeover"
+        @take-over="takeover.ask"
       />
     </template>
 
@@ -346,7 +341,7 @@ defineExpose({ close, openFrom })
         @question="revealQuestion"
         @claim="claim"
         @release="release"
-        @take-over="askTakeover"
+        @take-over="takeover.ask"
         @move="moveTo"
         @filter="(token) => emit('filter', token)"
       />
@@ -361,15 +356,15 @@ defineExpose({ close, openFrom })
         :busy="busy"
         :error="writeError"
         :notice="notice"
-        :takeover="takeoverQuestion"
+        :takeover="takeover.question.value"
         :unsaved="unsaved"
         @discard="discard"
         @dismiss="dismissNotice"
         @force="force"
         @guard="followGuard"
         @keep="keepEditing"
-        @keep-holder="keepHolder"
-        @take-over="confirmTakeover"
+        @keep-holder="takeover.keep"
+        @take-over="takeover.confirm"
       />
     </template>
 

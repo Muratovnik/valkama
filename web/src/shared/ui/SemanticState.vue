@@ -57,9 +57,9 @@ const props = withDefaults(defineProps<Props>(), { compact: false, variant: 'inl
 .state-label {
   min-width: 0;
   color: var(--color-state-label, currentcolor);
+  text-box: trim-both ex alphabetic;
   overflow: clip visible;
   text-overflow: ellipsis;
-  text-box: trim-both ex alphabetic;
 }
 
 /* The badge variant keeps a ground so a state can sit in a dense column, but

@@ -186,23 +186,15 @@ const liveOf = (node: PlacedNode) => live.value[node.work_item_id] ?? null
 /** A card standing in a drawn frame: the frame names its epic, so the card does not. */
 const isFramed = (node: PlacedNode) => frameById.value.has(node.frameId)
 
-const {
-  chainLegend,
-  chainLegendNames,
-  inChain,
-  isChainRoot,
-  isRecessed,
-  nodeChainGroup,
-  parentReference,
-  referenceById,
-} = useGraphNodeMarks({
-  epicId: () => props.epicId,
-  focusSet,
-  items: () => props.items,
-  members: () => props.chain?.members,
-  placed: drawnField,
-  scopeKind: () => props.scopeKind,
-})
+const { inChain, isChainRoot, isRecessed, legend, nodeChainGroup, parentReference, referenceById } =
+  useGraphNodeMarks({
+    epicId: () => props.epicId,
+    focusSet,
+    items: () => props.items,
+    members: () => props.chain?.members,
+    placed: drawnField,
+    scopeKind: () => props.scopeKind,
+  })
 
 /** The epic chip, on a card no frame round it names. */
 function chipFor(node: PlacedNode): string | undefined {
@@ -249,28 +241,6 @@ const switchCounts = computed(() => {
   return { open, done: props.items.length - open }
 })
 const hasEdges = computed(() => Boolean(placed.value?.edges.length))
-/** A frame's edge parts, in the order an edge runs, and the group whose key names each. */
-const FRAME_PARTS = [
-  ['done', 'done'],
-  ['review', 'review'],
-  ['active', 'active'],
-  ['blocked', 'blocked'],
-  ['ahead', 'queued'],
-] as const
-
-/**
- * What the key names: in a chain, its groups as the cards are marked; over the
- * whole space, the parts the frames' edges draw — «ahead» is queued and backlog
- * together, as an edge draws them.
- */
-const legend = computed(() => {
-  if (inChain.value) return { groups: chainLegend.value, names: chainLegendNames.value }
-  const frames = drawnField.value?.frames ?? []
-  const groups = FRAME_PARTS.filter(([part]) => frames.some((frame) => frame.progress[part])).map(
-    ([, group]) => group,
-  )
-  return { groups, names: { ...chainLegendNames.value, queued: t('graph.legendAhead') } }
-})
 /** Whether the field has a key to draw: the bar offers it on a narrow workspace. */
 const keyed = computed(
   () => legend.value.groups.length > 0 || hasEdges.value || anyMoving.value || anyHeld.value,

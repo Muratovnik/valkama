@@ -9,6 +9,7 @@
 
 import { computed } from 'vue'
 import type { Ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import type { PlacedNode } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import type {
@@ -37,7 +38,17 @@ interface MarkInput {
   scopeKind: () => GraphScope['kind']
 }
 
+/** A frame's edge parts, in the order an edge runs, and the group whose key names each. */
+const FRAME_PARTS = [
+  ['done', 'done'],
+  ['review', 'review'],
+  ['active', 'active'],
+  ['blocked', 'blocked'],
+  ['ahead', 'queued'],
+] as const
+
 export function useGraphNodeMarks(input: MarkInput) {
+  const { t } = useI18n()
   const inChain = computed(() => input.scopeKind() === 'chain')
   // Containers are named by reference on their children.
   const referenceById = computed(
@@ -98,12 +109,25 @@ export function useGraphNodeMarks(input: MarkInput) {
     return groupStateNames(groups)
   })
 
+  /**
+   * What the key names: in a chain, its groups as the cards are marked; over the
+   * whole space, the parts the frames' edges draw — «ahead» is queued and backlog
+   * together, as an edge draws them.
+   */
+  const legend = computed(() => {
+    if (inChain.value) return { groups: chainLegend.value, names: chainLegendNames.value }
+    const frames = input.placed.value?.frames ?? []
+    const groups = FRAME_PARTS.filter(([part]) => frames.some((frame) => frame.progress[part])).map(
+      ([, group]) => group,
+    )
+    return { groups, names: { ...chainLegendNames.value, queued: t('graph.legendAhead') } }
+  })
+
   return {
-    chainLegend,
-    chainLegendNames,
     inChain,
     isChainRoot,
     isRecessed,
+    legend,
     nodeChainGroup,
     parentReference,
     referenceById,
