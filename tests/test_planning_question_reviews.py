@@ -769,6 +769,140 @@ class OldFormTests(ReviewCase):
         self.assertIs(True, compact["clipped"])
 
 
+class ChangeTests(ReviewCase):
+    def test_the_contract_s_two_answers_differ_in_three_rows(self) -> None:
+        fields = [
+            verdict("p1"),
+            verdict("p10"),
+            {
+                "id": "p10-steps",
+                "label": "Steps",
+                "type": "multi_choice",
+                "required": False,
+                "under": {"field": "p10", "option": "accept"},
+                "options": [
+                    {"id": "glob", "label": "Glob"},
+                    {"id": "scan", "label": "Scan"},
+                    {"id": "lock", "label": "Lock"},
+                ],
+            },
+            verdict("p12"),
+            verdict("p15"),
+        ]
+        old: dict[str, object] = {"p1": "accept", "p10": "accept", "p12": "later"}
+        old |= {"p10-steps": ["glob", "scan"], "p15": "reject"}
+        new = {**old, "p10-steps": ["scan", "lock"], "p12": "accept"}
+        new["_notes"] = {"p15": "Frozen until spring"}
+        self.assertEqual(
+            "changed: p10-steps +lock \N{MINUS SIGN}glob; p12 later→accept; p15 comment: Frozen until spring",
+            request_model.change_text(fields, old, new, limit=person_events.MAX_TEXT),
+        )
+
+    def test_each_part_that_differs_is_its_own_row(self) -> None:
+        fields = [
+            {**AREAS, "options": [*AREA_OPTIONS, {"id": "docs", "label": "Docs"}]},
+            {"id": "why", "label": "Why", "type": "text", "required": False, "options": []},
+            {"id": "sure", "label": "Sure", "type": "boolean", "required": False, "options": []},
+            verdict("p9"),
+            verdict("p13"),
+        ]
+        old = {"areas": ["docs", "api"], "why": "Because", "sure": True, "p13": "accept"}
+        old |= {"_own": {"p9": "Labels"}, "_notes": {"areas": "Wide"}, "_note": "Old note"}
+        new = {"areas": ["web"], "why": "Because now", "sure": False, "p9": "accept"}
+        new |= {"_notes": {"p13": "x" * 80}, "_note": "Ship it after the docs"}
+        self.assertEqual(
+            [
+                "areas +web \N{MINUS SIGN}api \N{MINUS SIGN}docs",
+                "areas comment removed",
+                "why rewritten",
+                "sure true→false",
+                "p9 —→accept",
+                "p9 own variant removed",
+                "p13 accept→—",
+                "p13 comment: " + "x" * 59 + "…",
+                "note: Ship it after the docs",
+            ],
+            request_model.difference(fields, old, new),
+        )
+        self.assertEqual(
+            ["p9 own variant: Labels only", "note removed"],
+            request_model.difference(fields, {"_note": "Gone"}, {"_own": {"p9": "Labels only"}}),
+        )
+
+    def test_rows_past_300_characters_are_left_out_and_counted(self) -> None:
+        fields = [verdict(f"p{n}{'x' * 60}") for n in range(10)]
+        old = {field["id"]: "later" for field in fields}
+        new = {field["id"]: "accept" for field in fields}
+        text = request_model.change_text(fields, old, new, limit=person_events.MAX_TEXT)
+        self.assertLessEqual(len(text), person_events.MAX_TEXT)
+        shown = text.removeprefix("changed: ").split("; ")
+        self.assertEqual(f"and {10 - len(shown) + 1} more", shown[-1])
+        self.assertEqual(
+            [f"{field['id']} later→accept" for field in fields[: len(shown) - 1]], shown[:-1]
+        )
+
+    def test_changing_an_answer_with_steps_under_it(self) -> None:
+        request = self.ask(review_case(), prompt="Decisions on the review of the checks")
+        first = self.as_person(
+            "answer", request, answers=CASE_ANSWERS, own=CASE_OWN, field_notes=CASE_NOTES
+        )
+        # p4 put off, with its steps still sent in any of their three parts.
+        later = {**CASE_ANSWERS, "p4": "later"}
+        steps_left = "answer p4-steps stands under p4=accept, and p4 is later; leave it out"
+        for others in ({}, {"own": {"p4-steps": "Mine"}}, {"field_notes": {"p4-steps": "Hm"}}):
+            with self.subTest(others=others):
+                answers = (
+                    later if not others else {k: v for k, v in later.items() if k != "p4-steps"}
+                )
+                with self.assertRaises((model.PlanningError, api.PlanningHttpError)) as caught:
+                    self.as_person("change", first, answers=answers, **others)
+                self.assertEqual(
+                    (400, {"error": {"code": "invalid_request", "message": steps_left}}),
+                    api.error_response(caught.exception),
+                )
+        self.assertEqual(
+            1, self.tool("get_work_item_request", id=first["request_id"])["answer_version"]
+        )
+        changed = {k: v for k, v in later.items() if k != "p4-steps"}
+        changed["p10-steps"] = [*CASE_ANSWERS["p10-steps"][1:], "p10m"]
+        second = self.as_person(
+            "change", first, answers=changed, own=CASE_OWN, field_notes={"p15": CASE_NOTES["p15"]}
+        )
+        self.assertEqual(2, second["answer_version"])
+        text = self.told("question_changed")["text"]
+        self.assertEqual(
+            "changed: p4 accept→later; p4-steps \N{MINUS SIGN}p4a \N{MINUS SIGN}p4b;"
+            " p10-steps +p10m \N{MINUS SIGN}p10a; p12 comment removed",
+            text,
+        )
+        compact = self.compact(request)
+        self.assertEqual(["p4", "p12"], compact["verdicts"]["later"])
+        # The answer in force stands whole, labels and all; the replaced one shares the
+        # room left and is what loses rows, its two lists whole.
+        self.assertEqual(
+            ["p5-steps", "p9", "p10-steps", "p11-way", "p13-way", "p15", "p17-steps"],
+            [row["field"] for row in compact["answer"]],
+        )
+        self.assertEqual("Retry once", compact["answer"][3]["label"])
+        previous = compact["previous"]
+        self.assertEqual(
+            ({"accept": ["p1", "p2", "p3", "p4"], "later": ["p12"]}, []),
+            (
+                {
+                    "accept": previous["verdicts"]["accept"][:4],
+                    "later": previous["verdicts"]["later"],
+                },
+                previous["undecided"],
+            ),
+        )
+        self.assertEqual(
+            {"field": "p4-steps", "under": "p4", "of": 3, "value": ["p4a", "p4b"], "label": None},
+            previous["answer"][0],
+        )
+        self.assertIs(True, compact["clipped"])
+        self.assertLessEqual(size(compact), request_model.MAX_COMPACT_JSON)
+
+
 class BatchAndSchemaTests(ReviewCase):
     def test_a_review_asked_in_a_batch_is_held_to_the_same_rules(self) -> None:
         applied = mcp_surface.run_tool_call(

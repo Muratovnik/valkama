@@ -49,6 +49,10 @@ QUESTION_PREVIEW = 160
 #: wrote at length stays one `get_work_item_request` away.
 MAX_COMPACT_TEXT = 500
 MAX_COMPACT_JSON = 2000
+#: How much of an own variant, a comment or a note the difference of a change quotes.
+MAX_CHANGE_QUOTE = 60
+#: What marks an option a change removed, as the contract writes it: U+2212, not a hyphen.
+MINUS = "\u2212"
 _KEY = re.compile(r"[a-z][a-z0-9_-]{0,63}\Z")
 _OPTION_KEYS = frozenset({"id", "label", "description", "recommended"})
 
@@ -645,6 +649,100 @@ def _under_line(field: dict, value: object, own: str | None) -> str | None:
     if value is not None and value != "":
         return f"{identity}: {_clip(str(value))}"
     return f"{identity} own variant: {_clip(own)}" if own is not None else None
+
+
+def difference(descriptors: list[dict], old: dict, new: dict) -> list[str]:
+    """What a change changed, a row for each part of a field that differs, then the note.
+
+    Field by field in the question's order, each its value, then its own variant,
+    then its comment. Ids and words read as stored; no value on one side is `—`.
+    """
+
+    before, after = split_answers(old), split_answers(new)
+    rows: list[str] = []
+    for field in descriptors:
+        identity = field["id"]
+        was, now = before["answers"].get(identity), after["answers"].get(identity)
+        if field["type"] == "multi_choice":
+            rows.extend(_options_changed(field, was, now))
+        elif field["type"] == "text":
+            if (was or "") != (now or ""):
+                rows.append(f"{identity} rewritten")
+        elif was != now:
+            rows.append(f"{identity} {_word(was)}→{_word(now)}")
+        rows.extend(
+            _said_changed(
+                f"{identity} own variant", before["own"].get(identity), after["own"].get(identity)
+            )
+        )
+        rows.extend(
+            _said_changed(
+                f"{identity} comment",
+                before["field_notes"].get(identity),
+                after["field_notes"].get(identity),
+            )
+        )
+    rows.extend(_said_changed("note", before["note"], after["note"]))
+    return rows
+
+
+def change_text(descriptors: list[dict], old: dict, new: dict, *, limit: int) -> str:
+    """`changed: ` and the rows of `difference`, within `limit`: what does not fit is counted."""
+
+    rows = difference(descriptors, old, new)
+    head = "changed: "
+    for count in range(len(rows), 0, -1):
+        left = len(rows) - count
+        text = head + "; ".join(rows[:count]) + (f"; and {left} more" if left else "")
+        if len(text) <= limit:
+            return text
+    if not rows:
+        return "changed"
+    # One row longer than the room alone: a multi_choice that swapped many long ids.
+    tail = f"; and {len(rows) - 1} more" if len(rows) > 1 else ""
+    return head + rows[0][: limit - len(head) - len(tail) - 1] + "…" + tail
+
+
+def _options_changed(field: dict, was: object, now: object) -> list[str]:
+    """`id +added`, then each removed one after a minus sign, in the order the field offers
+    its options."""
+
+    before = set(was) if isinstance(was, list) else set()
+    after = set(now) if isinstance(now, list) else set()
+    rank = {option["id"]: place for place, option in enumerate(field["options"])}
+
+    def ordered(found: set) -> list[str]:
+        return sorted(
+            (str(entry) for entry in found), key=lambda entry: (rank.get(entry, len(rank)), entry)
+        )
+
+    added, removed = ordered(after - before), ordered(before - after)
+    if not added and not removed:
+        return []
+    return [
+        f"{field['id']} "
+        + " ".join([*(f"+{entry}" for entry in added), *(f"{MINUS}{entry}" for entry in removed)])
+    ]
+
+
+def _said_changed(name: str, was: str | None, now: str | None) -> list[str]:
+    if now and now != was:
+        return [f"{name}: {_quote(now)}"]
+    if was and not now:
+        return [f"{name} removed"]
+    return []
+
+
+def _word(value: object) -> str:
+    if value is None:
+        return "—"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value)
+
+
+def _quote(text: str) -> str:
+    return text if len(text) <= MAX_CHANGE_QUOTE else text[: MAX_CHANGE_QUOTE - 1] + "…"
 
 
 def _fits(item: dict) -> bool:

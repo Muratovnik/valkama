@@ -355,7 +355,7 @@ class AddressedTests(Harness):
             told = self.hook(agent)
             assert told is not None
             self.assertEqual(1, told.count("- question_changed at"), agent)
-            self.assertIn("«Way: Short; was: Way: Long»", told)
+            self.assertIn("«changed: way a→b»", told)
             self.assertIsNone(self.hook(agent), f"once: {agent}")
         self.assertIsNone(self.hook(STRANGER), "did not ask")
 

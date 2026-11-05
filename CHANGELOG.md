@@ -66,6 +66,9 @@ checkouts are therefore distinguishable even at the same version.
 
 - **A question holds up to 40 fields instead of 12.** The 64 KiB the fields of one
   question fit in are unchanged.
+- **`question_changed` says what changed, row by row,** as `changed: p12 later→accept;
+  p10-steps +lock −glob`, instead of quoting the new answer and the old one, which do not
+  both fit in 300 characters. Rows past the limit are counted, as `; and 4 more`.
 - **A compact question past 2000 characters keeps every field it can.** It now leaves out
   the replaced answer first, then every label at once, and only then the later fields, so
   an answer with long labels shows each answered field instead of the first few.

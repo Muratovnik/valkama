@@ -139,7 +139,6 @@ _ASKER = (
     " WHERE e.work_item_id = ? AND e.action = 'request_created' AND e.detail = ?"
     " AND c.identity_state = 'confirmed' ORDER BY e.id LIMIT 1"
 )
-_WAS = "; was: "
 
 
 def since_last_agent_write(
@@ -316,8 +315,9 @@ def _event_entry(conn: sqlite3.Connection, row: tuple) -> dict:
 def _question_text(conn: sqlite3.Connection, action: str, request_id: str) -> str:
     """What came back when a person answered, and otherwise what was asked.
 
-    An answer reads as it stands now, as an edit does: a change quotes the current
-    answer and the version it replaced, whichever change of a window it is.
+    An answer reads as it stands now, as an edit does: a change says what differs
+    between the current answer and the version it replaced, row by row, whichever
+    change of a window it is. Two whole answers of a review do not fit in one event.
     """
 
     row = conn.execute(
@@ -345,18 +345,7 @@ def _question_text(conn: sqlite3.Connection, action: str, request_id: str) -> st
     was = _json(str(replaced[0])) if replaced is not None else None
     if not isinstance(was, dict):
         return answer
-    return _changed_text(answer, request_model.answer_text(fields, was))
-
-
-def _changed_text(new: str, old: str) -> str:
-    """Both answers within `MAX_TEXT`, so a long new one cannot push out what it replaced."""
-
-    joined = f"{new}{_WAS}{old}"
-    if len(joined) <= MAX_TEXT:
-        return joined
-    room = MAX_TEXT - len(_WAS)
-    for_new = max(room // 2, room - len(old))
-    return f"{_cut(new, for_new)}{_WAS}{_cut(old, room - min(len(new), for_new))}"
+    return request_model.change_text(fields, was, stored, limit=MAX_TEXT)
 
 
 def _cut(text: str, limit: int) -> str:

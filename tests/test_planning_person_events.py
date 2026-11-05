@@ -229,40 +229,52 @@ class WhatCountsTests(Harness):
         self.assertNotIn("text", reopened)
         self.assertNotIn("text", bare, "a mark with no decision has nothing to quote")
 
-    def changed(self, first: str, then: str) -> dict:
+    def changed(self, fields: list[dict], first: dict, then: dict, **parts: object) -> dict:
         request = self.agent(
-            "create_work_item_request",
-            id=self.ref,
-            kind="question",
-            prompt="Say it",
-            fields=[{"id": "say", "label": "Say", "type": "text", "required": True, "options": []}],
+            "create_work_item_request", id=self.ref, kind="question", prompt="Say it", fields=fields
         )["request_id"]
         answer = "/api/planning/request/answer"
-        self.person(answer, id=request, answers={"say": first}, expected_revision=0)
+        self.person(answer, id=request, answers=first, expected_revision=0)
         self.person(
-            "/api/planning/request/change", id=request, answers={"say": then}, expected_revision=1
+            "/api/planning/request/change",
+            id=request,
+            answers=then,
+            expected_revision=1,
+            **parts,
         )
         return self.window()[-1]
 
-    def test_a_changed_answer_quotes_the_new_one_and_the_one_it_replaced(self) -> None:
-        event = self.changed("Flat", "Threads")
+    def test_a_changed_answer_says_what_differs_row_by_row(self) -> None:
+        say = {"id": "say", "label": "Say", "type": "text", "required": True, "options": []}
+        way = {"id": "way", "label": "Way", "type": "choice", "required": False}
+        way["options"] = [{"id": "flat", "label": "Flat"}, {"id": "threads", "label": "Threads"}]
+        event = self.changed(
+            [say, way],
+            {"say": "Flat", "way": "flat"},
+            {"say": "Threads", "way": "threads"},
+            note="Ship it after the docs",
+        )
         self.assertEqual("question_changed", event["kind"])
-        self.assertEqual("Say: Threads; was: Say: Flat", event["text"])
+        self.assertEqual(
+            "changed: say rewritten; way flat\u2192threads; note: Ship it after the docs",
+            event["text"],
+        )
 
-    def test_long_answers_keep_both_sides_of_a_change_within_the_limit(self) -> None:
-        cases = {
-            "both long": ("A" * 2000, "B" * 2000),
-            "the new one long": ("A" * 20, "B" * 2000),
-            "the old one long": ("A" * 2000, "B" * 20),
-        }
-        for name, (first, then) in cases.items():
-            with self.subTest(name):
-                text = self.changed(first, then)["text"]
-                self.assertLessEqual(len(text), person_events.MAX_TEXT)
-                new, was = text.split("; was: ")
-                self.assertIn("B" * 20, new)
-                self.assertIn("A" * 15, was)
-                self.assertGreater(len(text), person_events.MAX_TEXT - 5, "the room is used")
+    def test_a_change_of_many_rows_stays_within_the_limit_and_counts_the_rest(self) -> None:
+        fields = [
+            {"id": f"p{n:02}" + "x" * 40, "label": "P", "type": "verdict", "required": False}
+            for n in range(12)
+        ]
+        for field in fields:
+            field["options"] = []
+        text = self.changed(
+            fields,
+            {field["id"]: "later" for field in fields},
+            {field["id"]: "accept" for field in fields},
+        )["text"]
+        self.assertLessEqual(len(text), person_events.MAX_TEXT)
+        self.assertTrue(text.startswith(f"changed: {fields[0]['id']} later\u2192accept; "), text)
+        self.assertRegex(text, r"; and \d+ more$")
 
     def test_each_thing_a_person_does_to_the_item_is_told(self) -> None:
         steps = self.agent("set_work_item_checklist", id=self.ref, items=["One", "Two"])
