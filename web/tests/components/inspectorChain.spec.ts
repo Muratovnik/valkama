@@ -282,7 +282,13 @@ describe('the chain section of a card', () => {
     const answer = deferred<Response>()
     vi.stubGlobal(
       'fetch',
-      vi.fn<typeof fetch>().mockImplementation(withSecurityBootstrap(() => answer.promise)),
+      vi
+        .fn<typeof fetch>()
+        .mockImplementation(
+          withSecurityBootstrap(async (input) =>
+            requestUrl(input).includes('/usage') ? Response.error() : answer.promise,
+          ),
+        ),
     )
     const wrapper = await open()
     expect(section(wrapper).attributes('aria-busy')).toBe('true')

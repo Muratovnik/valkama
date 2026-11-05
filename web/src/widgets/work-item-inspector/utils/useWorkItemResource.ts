@@ -31,6 +31,8 @@ export function useWorkItemResource(
   reference: () => string,
   target: () => { project: string; resource: PlanningSpaceEntityRef },
   failureReason: (failure: TypedFailure) => string,
+  /** What the record waits for before it is shown, so that the two arrive together. */
+  alongside?: (record: WorkItem) => Promise<void>,
 ) {
   const resource = ref(createResource<Observed<WorkItem>>()) as Ref<
     ResourceState<Observed<WorkItem>>
@@ -54,6 +56,7 @@ export function useWorkItemResource(
       const space = planningSpaceRef(scope.resource)
       if (space === undefined) throw new Error('Exact Planning space is required')
       const record = await fetchWorkItem(current, { project: scope.project, space })
+      await alongside?.(record)
       resource.value = resolveResource(resource.value, generation, key, {
         at: new Date().toISOString(),
         state: uiReady(record),

@@ -54,13 +54,13 @@ import { inspectorTarget } from '@/widgets/work-item-inspector/utils/inspectorTa
 import { provideDraftGuard } from '@/widgets/work-item-inspector/utils/useDraftGuard.ts'
 import { useFailureText } from '@/widgets/work-item-inspector/utils/useFailureText.ts'
 import { useInspectorExecution } from '@/widgets/work-item-inspector/utils/useInspectorExecution.ts'
+import { useInspectorRecord } from '@/widgets/work-item-inspector/utils/useInspectorRecord.ts'
 import { useInspectorReturn } from '@/widgets/work-item-inspector/utils/useInspectorReturn.ts'
 import { useInspectorSections } from '@/widgets/work-item-inspector/utils/useInspectorSections.ts'
 import { useInspectorWrites } from '@/widgets/work-item-inspector/utils/useInspectorWrites.ts'
 import { useQuestionReveal } from '@/widgets/work-item-inspector/utils/useQuestionReveal.ts'
 import { useTakeoverQuestion } from '@/widgets/work-item-inspector/utils/useTakeoverQuestion.ts'
 import { useWorkItemChain } from '@/widgets/work-item-inspector/utils/useWorkItemChain.ts'
-import { useWorkItemResource } from '@/widgets/work-item-inspector/utils/useWorkItemResource.ts'
 
 import { provideMissingPlaces } from '@/features/session-open/missingPlaces.ts'
 import LaunchDialog from '@/features/work-item-launch/LaunchDialog.vue'
@@ -90,6 +90,8 @@ const props = defineProps<{
   writable: boolean
   /** Moves when an agent changed; only the record is read again, not the chain. */
   agentsToken?: number
+  /** The item's kind as the host's model has it, so its usage can be read with its record. */
+  kind?: string
   /** The epic's reference, which the record names only by id; the host's model knows it. */
   parentReference?: string | null
   /** An address asked this card to go to its waiting question. */
@@ -133,11 +135,7 @@ const {
   pending,
   retryable: readRetryable,
   state,
-} = useWorkItemResource(
-  () => props.reference,
-  () => ({ project: props.projectId, resource: props.resourceRef }),
-  (failure) => failureText(failure, 'workItem.loadFailed'),
-)
+} = useInspectorRecord(props, (failure) => failureText(failure, 'workItem.loadFailed'))
 
 const { offersExecution, section, sections, shownSection, tabs } = useInspectorSections(
   () => props.writable,
@@ -344,6 +342,7 @@ defineExpose({ close, openFrom })
         @take-over="takeover.ask"
         @move="moveTo"
         @filter="(token) => emit('filter', token)"
+        @usage="section = 'agents'"
       />
     </template>
 

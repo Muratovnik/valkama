@@ -345,5 +345,9 @@ test('news of an agent reaches an open card, with no frame of the model and no p
   await stream.signal('agents')
   await expect(section.locator('.agent').first()).toContainText('Started just now')
   await expect(tabs(page).nth(1)).toHaveText('Agents 2')
-  expect(reads).toEqual(['/api/modules/planning/work-item'])
+  // The record and the numbers of the work: the chain and the space stay as they are.
+  expect(reads.toSorted()).toEqual([
+    '/api/modules/planning/work-item',
+    '/api/planning/work-item/usage',
+  ])
 })

@@ -24,6 +24,9 @@ vi.mock('@/shared/api/executionApi.ts', async (load) => ({
   fetchExecutionHistory: vi.fn(),
 }))
 
+// The usage read holds the head for a moment; these cases are about the record alone.
+vi.mock('@/shared/api/planningUsageApi.ts', () => ({ fetchItemUsage: vi.fn() }))
+
 vi.mock('@/shared/api/planningApi.ts', async (load) => ({
   ...(await load<typeof import('@/shared/api/planningApi.ts')>()),
   fetchWorkItem: vi.fn(),

@@ -24,6 +24,7 @@ import { workItemHeadMessages } from '@/shared/i18n/workItemHeadMessages.ts'
 import { workItemLinkMessages } from '@/shared/i18n/workItemLinkMessages.ts'
 import { workItemNextStepMessages } from '@/shared/i18n/workItemNextStepMessages.ts'
 import { workItemPreviewMessages } from '@/shared/i18n/workItemPreviewMessages.ts'
+import { workItemUsageMessages } from '@/shared/i18n/workItemUsageMessages.ts'
 
 export const ru = {
   workItemLink: workItemLinkMessages.ru.workItemLink,
@@ -676,6 +677,7 @@ export const ru = {
   },
   workItem: {
     agents: workItemAgentMessages.ru.agents,
+    usage: workItemUsageMessages.ru.usage,
     preview: workItemPreviewMessages.ru.preview,
     addDescription: 'Добавить описание',
     editDescription: 'Изменить описание',

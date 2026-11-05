@@ -22,11 +22,13 @@
  * Every row stands at the height of the state's own chip, so a head reads the same whichever
  * facts are present and however they wrap. The action ends the second row where the drawer
  * is wide and stands at full width under the labels where it is not, within reach of a
- * thumb. The host shows it again in the bar once this one has scrolled away.
+ * thumb. The host shows it again in the bar once this one has scrolled away. Under the labels
+ * stands how much work the item took, a quiet line of its own and only where there is some.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import InspectorUsageLine from '@/widgets/work-item-inspector/components/InspectorUsageLine.vue'
 import InspectorWriteActions from '@/widgets/work-item-inspector/components/InspectorWriteActions.vue'
 
 import ExecutorLink from '@/features/session-open/ExecutorLink.vue'
@@ -66,6 +68,7 @@ const emit = defineEmits<{
   'question': []
   'release': []
   'take-over': []
+  'usage': []
 }>()
 
 const { t, d } = useI18n()
@@ -283,6 +286,9 @@ defineExpose({ actionCell })
         />
       </li>
     </ul>
+    <div class="card-usage">
+      <InspectorUsageLine @details="emit('usage')" />
+    </div>
   </div>
 </template>
 
@@ -387,6 +393,16 @@ defineExpose({ actionCell })
   padding: 0;
   margin: 0;
   list-style: none;
+}
+
+/* Closer to the facts than they are to each other: it reads as a note on them. */
+.card-usage {
+  grid-column: 1 / -1;
+  margin-block-start: calc(-1 * var(--space-1));
+
+  &:empty {
+    display: none;
+  }
 }
 
 /* A phone-wide drawer: the one action stands under everything else, at the full width a thumb

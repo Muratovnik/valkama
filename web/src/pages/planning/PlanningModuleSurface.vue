@@ -484,6 +484,7 @@ defineExpose({ refresh, selectedId })
         :workflow="model.workflow"
         :writable="writable"
         :parent-reference="parentReference"
+        :kind="openRecord?.kind"
         :question-asked="questionAsked"
         @back="goBack"
         @changed="loadPlanning"
