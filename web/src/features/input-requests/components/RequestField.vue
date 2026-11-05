@@ -31,6 +31,10 @@
  * answers, and Ctrl+Enter sends the answer (`submit`). It takes no own variant and no
  * comment, being its author's own words already.
  *
+ * A comment on the field opens from the end of the line naming it, and only where the question
+ * has several: on the only field it would say what the comment on the question says. One an
+ * older answer wrote there stays, to be read and changed.
+ *
  * A refused field says why under itself, with the mark that tells a refusal from the text
  * around it where colour does not show (`FieldError`), and its control carries
  * `aria-invalid` and names that message with `aria-describedby`. The group is a `radiogroup` rather than a
@@ -43,7 +47,9 @@ import { useI18n } from 'vue-i18n'
 
 import RequestChosen from '@/features/input-requests/components/RequestChosen.vue'
 import RequestNote from '@/features/input-requests/components/RequestNote.vue'
+import RequestNoteToggle from '@/features/input-requests/components/RequestNoteToggle.vue'
 import RequestOption from '@/features/input-requests/components/RequestOption.vue'
+import { useRequestNote } from '@/features/input-requests/composables/useRequestNote.ts'
 import { fieldOptions } from '@/features/input-requests/utils/answerDisplay.ts'
 import { descriptionViews } from '@/features/input-requests/utils/optionDescriptions.ts'
 import { moveRadioChoice } from '@/features/input-requests/utils/radioArrows.ts'
@@ -72,6 +78,8 @@ const props = withDefaults(
     ownError?: string
     /** The element holding the question this field answers. */
     promptId?: string
+    /** The question has other fields, so a comment on this one means something of its own. */
+    several?: boolean
     suggest?: EditorSuggest
   }>(),
   {
@@ -81,6 +89,7 @@ const props = withDefaults(
     own: '',
     ownChosen: false,
     ownError: '',
+    several: false,
     promptId: undefined,
     suggest: undefined,
   },
@@ -187,6 +196,22 @@ function focus() {
     root.value?.querySelector<HTMLElement>('input')
   moveFocus(target)
 }
+const noteEditor = ref<InstanceType<typeof RequestNote> | null>(null)
+const {
+  open: noteOpen,
+  press: pressNote,
+  written: noteWritten,
+} = useRequestNote(
+  () => props.note,
+  preview,
+  () => noteEditor.value,
+)
+const offersNote = computed(() => props.several || noteOpen.value)
+/** Closed on the only field, its press is gone with it, and focus goes back to the options. */
+async function pressFieldNote() {
+  await pressNote()
+  if (!offersNote.value) focus()
+}
 defineExpose({ focus })
 </script>
 
@@ -219,11 +244,18 @@ defineExpose({ focus })
       :aria-describedby="errorId"
       :disabled="disabled"
     >
-      <legend
-        :id="legendId"
-        class="request-legend"
-      >
-        {{ label }}
+      <legend class="request-legend">
+        <span :id="legendId">{{ label }}</span>
+        <RequestNoteToggle
+          v-if="offersNote"
+          class="request-legend-note"
+          :disabled="disabled"
+          :name="t('requests.fieldNoteName', { field: field.label })"
+          :open="noteOpen"
+          :title="t('requests.fieldNote')"
+          :written="noteWritten"
+          @press="pressFieldNote"
+        />
       </legend>
       <RequestOption
         v-for="option in rows"
@@ -299,12 +331,13 @@ defineExpose({ focus })
       >{{ error }}</FieldError
     >
     <RequestNote
+      v-if="noteOpen"
+      ref="noteEditor"
       v-model:preview="preview"
       :disabled="disabled"
-      :label="t('requests.fieldNote')"
+      :label="t('requests.fieldNoteName', { field: field.label })"
       :maxlength="2000"
       :model-value="note"
-      :name="t('requests.fieldNoteName', { field: field.label })"
       :rows="2"
       :suggest="suggest"
       @update:model-value="emit('edit', { note: $event })"
@@ -330,12 +363,25 @@ defineExpose({ focus })
 }
 
 /* Read as the label of a text field reads, so the fields of one question do
-   not each wear a different caption. */
+   not each wear a different caption. The comment's press stands at its other end. */
 .request-legend {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: space-between;
+  align-items: center;
+  inline-size: 100%;
   padding: 0;
   margin-bottom: var(--space-label-value);
   color: var(--color-text-muted);
   font: var(--font-field-label);
+}
+
+/* Its glyph on the axis of the toggles in the rows below, whichever target it has. */
+.request-legend-note {
+  position: relative;
+  inset-inline-end: calc(
+    var(--space-half) + (var(--size-control-height-compact) - var(--size-control-inline)) / 2
+  );
 }
 
 /* Sized by the type and centred on the first line by its height, however the label wraps. Its

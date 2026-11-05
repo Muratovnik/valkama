@@ -127,6 +127,11 @@ checkouts are therefore distinguishable even at the same version.
 - **Opening something in the list of waiting questions moves nothing above it.** The dialog
   stands from the top instead of the middle, and the room for its scrollbar is kept from the
   start, so what is on screen neither jumps nor breaks into other lines.
+- **The presses that open a comment are quiet glyphs.** They used to take a line each on every
+  question. A comment on a field opens from the end of the line naming the field, and a comment
+  on the question from the left end of the row of buttons, above which it opens. A written comment
+  shows a filled glyph and says so in its name. A question with one field offers only the comment
+  on the question; a comment an older answer has on that field stays to read and change.
 - **The field of your own option has no caption over it.** The row right above it says what it
   is, and a screen reader hears the field named for the question it answers.
 

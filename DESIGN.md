@@ -1212,12 +1212,10 @@ same without closing the card or the list. Choosing or writing anything takes th
 so that Send is Send again by the time it is pressed. The step lasts only while attention is on
 its question: a press or focus landing outside it ends it, so a page holds one step at most, and
 so does its buttons moving for any reason, a question folding above or a scroll, since what the
-person pressed no longer stands where they left it. What is asked lies over what is above the
-buttons, taking no height, because any height would move them, and in a dialog, which stands
-centred, from either side. A comment on the question open is never lain on: its room is kept
-for as long as it stays open, in the buttons' row just before the two answers, or on a row of
-its own above them where that row has none, so that a person refuses seeing the end of what will
-not go, and no empty band stands between the comment and the buttons.
+person pressed no longer stands where they left it. What is asked lies on nothing, so that a
+person refuses seeing the end of what will not go, and moves nothing: its room is kept in the
+buttons' row just before the two answers, or on a row of its own above them where that row has
+none.
 Send with nothing chosen or written writes nothing on any question, required
 fields or not, and says at the first field what it wants; a question always has a field.
 A press following another can still do harm where something is held: folding lifts the next
@@ -1233,13 +1231,21 @@ does not stay empty to prevent it. The scrim follows the same rule, so a second 
 leaves its card open, and a press on the scrim that does not close takes no focus out of the
 surface. It is not a rule of the whole interface: those are the places where the press would
 choose or send without being meant, or take away what was just opened.
-A comment is one quiet press away, on a field under its options and on the whole question
-under them all, and it explains a choice without standing in for one; declining is as quiet. A
+A comment is one quiet press away and explains a choice without standing in for one. The press
+is a glyph with no line of its own: for a field at the end of the line naming it, its field
+opening under the options, and for the whole question at the left end of the row of buttons, its
+field opening above them. A question of one field offers only the second, since for the person
+both would say the same; one an older answer has on its field stays to be read and changed. Once
+written the glyph is filled and says so in its words, and the comment closes only empty. Opening
+anything moves nothing already read: an option's description goes on from where its excerpt
+stood, and «Needs my answer» stands from the top of its room, with its scrollbar's room kept, so
+that what opens in it only grows downward. Declining is as quiet. A
 selection or a comment held is a draft the guard asks about. A send that fails keeps all of it with the reason in
 the foot, and does not look sent; while a write is out, the buttons read as busy and keep
 focus. Answered, the question folds to its prompt with the reply under it, its author and its
 time, and every field keeps all it offered, so the answer can be read against what it was chosen
-from: the same rows with no control in them, the chosen one on a brighter ground and in full ink
+from: the same rows with no control in them and no room kept for one, the chosen one on a
+brighter ground and in full ink
 with the word «selected», the others stepped back. That word and a line in a forced palette are
 what carry it where colour does not. An own option stands as a chosen row with its words, a
 comment as a quote under its field and the one on the question last. They are a list, not disabled

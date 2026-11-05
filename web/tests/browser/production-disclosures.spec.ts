@@ -1,6 +1,5 @@
 /**
- * What shows more of something — earlier answers, a comment's field, the rest of a list, the
- * threads a view hides — is the bare text weight, its words in line with what it opens, apart
+ * What shows more of something — earlier answers, the rest of a list, the threads a view hides — is the bare text weight, its words in line with what it opens, apart
  * from the actions beside it, which rest on the ghost's fill.
  */
 import { expect } from '@playwright/test'
@@ -24,18 +23,13 @@ const look = (button: Locator) =>
 const startOf = (target: Locator) => target.evaluate((node) => node.getBoundingClientRect().left)
 
 for (const width of [1500, 390])
-  test(`a question's disclosures are bare and start where its fields do at ${width}`, async ({
-    page,
-  }) => {
+  test(`a question's comment press is bare beside the buttons at ${width}`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })
     const { card, drawer } = await openQuestion(page, [asked()])
     await expect(drawer).toHaveCSS('transform', 'none')
-    const column = await startOf(card.locator('.request-legend'))
-    for (const name of ['Comment on this field: Route', 'Comment on the question']) {
-      const toggle = await look(card.getByRole('button', { name, exact: true }))
-      expect(toggle.ground, name).toBe(BARE)
-      expect(Math.abs(toggle.words - column), name).toBeLessThanOrEqual(1)
-    }
+    const name = 'Comment on the question'
+    const toggle = await look(card.getByRole('button', { name, exact: true }))
+    expect(toggle.ground, name).toBe(BARE)
     const send = await look(card.locator('.request-onward'))
     expect(send.ground).not.toBe(BARE)
   })

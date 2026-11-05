@@ -29,6 +29,7 @@ import RequestActions from '@/features/input-requests/components/RequestActions.
 import RequestAnswerFields from '@/features/input-requests/components/RequestAnswerFields.vue'
 import RequestFold from '@/features/input-requests/components/RequestFold.vue'
 import RequestHeader from '@/features/input-requests/components/RequestHeader.vue'
+import RequestNoteToggle from '@/features/input-requests/components/RequestNoteToggle.vue'
 import { useAnswerChange } from '@/features/input-requests/composables/useAnswerChange.ts'
 import { useRequestWrites } from '@/features/input-requests/composables/useRequestWrites.ts'
 import { useStepAttention } from '@/features/input-requests/composables/useStepAttention.ts'
@@ -155,6 +156,8 @@ const sendDisabled = computed(() =>
     : !writable.value || requiresRefresh.value,
 )
 const noting = computed(() => answerFields.value?.noteOpen ?? false)
+const noteWritten = computed(() => answerFields.value?.noteWritten ?? false)
+const pressNote = () => answerFields.value?.pressNote()
 /** Why an answered question offers no change, where that is something to know. */
 const changeFact = computed(() => {
   if (request.value.status !== 'answered' || !props.entry.target.writable) return ''
@@ -357,15 +360,6 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
       v-if="hasFoot"
       class="request-foot"
     >
-      <p
-        v-if="error"
-        ref="errorLine"
-        class="request-error"
-        role="alert"
-        tabindex="-1"
-      >
-        {{ errorText }}
-      </p>
       <ConfirmStrip
         v-if="askingCancel"
         class="request-confirm"
@@ -384,7 +378,6 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
         :declining="declining"
         :disabled="sendDisabled"
         :dismissable="standalone && !inForm"
-        :noting="noting && !changing"
         :refreshable="canRefresh"
         :standalone="standalone"
         :waiting="waiting"
@@ -393,7 +386,25 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
         @open="emit('select', entry.target)"
         @refresh="refresh"
         @way-out="pressWayOut"
-      />
+      >
+        <RequestNoteToggle
+          v-if="inForm && supported"
+          :disabled="fieldsDisabled"
+          :open="noting"
+          :title="t('requests.questionNote')"
+          :written="noteWritten"
+          @press="pressNote"
+        />
+      </RequestActions>
+      <p
+        v-if="error"
+        ref="errorLine"
+        class="request-error"
+        role="alert"
+        tabindex="-1"
+      >
+        {{ errorText }}
+      </p>
     </footer>
   </article>
 </template>
@@ -456,7 +467,7 @@ defineExpose({ focus, focusOutcome, holdsFocus, reveal })
 }
 
 .request-error {
-  flex: 1 1 16rem;
+  flex: 1 1 100%;
   min-width: 0;
   margin: 0;
   color: var(--color-danger);

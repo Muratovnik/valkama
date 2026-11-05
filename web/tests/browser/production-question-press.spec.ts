@@ -169,10 +169,10 @@ test('a press repeated on the same control works as it always did', async ({ pag
   await press(page, atChevron, 2)
   await expect(chevron).toHaveAttribute('aria-expanded', 'false')
   const own = card.getByRole('button', { name: 'Comment on the question', exact: true })
-  const atOwn = await centre(own)
-  await press(page, atOwn)
+  await press(page, await centre(own))
   await expect(card.getByRole('textbox')).toBeFocused()
-  await press(page, atOwn, 2)
+  // Its field opens above it, so the press has moved down with the row of buttons.
+  await press(page, await centre(own), 2)
   await expect(card.getByRole('textbox')).toHaveCount(0)
 })
 
@@ -183,7 +183,9 @@ test('in the list of everything waiting a second press selects nothing of the ne
   const opened = await openQuestion(page, pair(6, 3))
   const { next, top } = await inTheList(page, opened)
   await press(page, await inReach(decline(top)))
-  const at = await centre(decline(top))
+  // Off the centre, so that the point falls on a row and not in the step between two.
+  const { x, y } = await centre(decline(top))
+  const at = { x, y: y + 8 }
   await press(page, at)
   await expect(top.locator('.request-state')).toBeVisible()
   // An option row of the next question stands where the press was, whichever of them it is.

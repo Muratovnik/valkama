@@ -165,8 +165,7 @@ test('a required boolean remains unanswered until No is submitted and confirmed'
   await expect(choice).not.toHaveAttribute('aria-invalid')
   await expectNoSilentClipping(page, 'Question at 390px')
   await page.screenshot({ path: testInfo.outputPath('question-narrow.png') })
-  // Past the comments, on the field and on the question, and the way not to answer at all.
-  await page.keyboard.press('Tab')
+  // Past the comment, on the question, and the way not to answer at all.
   await page.keyboard.press('Tab')
   await page.keyboard.press('Tab')
   await page.keyboard.press('Tab')

@@ -331,7 +331,9 @@ test('with nothing chosen the keyboard still meets one radio and one toggle', as
   await page.keyboard.press('Tab')
   await expect(card.locator('.request-option').first().getByRole('button')).toBeFocused()
   await page.keyboard.press('Tab')
-  await expect(card.getByRole('button', { name: /^Comment on this field/u })).toBeFocused()
+  await expect(
+    card.getByRole('button', { name: 'Comment on the question', exact: true }),
+  ).toBeFocused()
   await expect(card.getByRole('radio', { checked: true })).toHaveCount(0)
 })
 
@@ -350,8 +352,6 @@ test('the keyboard meets one description on its way to Send, not twelve', async 
   await page.keyboard.press('Tab')
   // The link inside what was just opened comes first, and then the way on.
   await expect(card.locator('.request-option').nth(1).getByRole('link')).toBeFocused()
-  await page.keyboard.press('Tab')
-  await expect(card.getByRole('button', { name: /^Comment on this field/u })).toBeFocused()
   await page.keyboard.press('Tab')
   await expect(
     card.getByRole('button', { name: 'Comment on the question', exact: true }),

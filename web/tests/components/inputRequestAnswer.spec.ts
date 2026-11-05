@@ -109,7 +109,7 @@ const buttonNamed = (wrapper: Wrapper, name: string | RegExp) =>
       .findAll('button')
       .find((control) =>
         typeof name === 'string'
-          ? control.text() === name
+          ? control.text() === name || control.attributes('aria-label') === name
           : name.test(control.attributes('aria-label') ?? control.text()),
       ),
     String(name),
@@ -151,7 +151,7 @@ describe('your own option', () => {
   it('is not offered on a text field, which is its author’s own words already', () => {
     const wrapper = card(asked([why]))
     expect(wrapper.text()).not.toContain(OWN)
-    expect(wrapper.text()).not.toContain('Comment on this field')
+    expect(wrapper.findAll('button[aria-label^="Comment on this field"]')).toHaveLength(0)
   })
 
   // A yes or no used to share one row; a row that opens a field cannot stand beside another.
@@ -240,27 +240,27 @@ describe('your own option', () => {
 
 describe('comments', () => {
   it('a comment on the field opens and closes on one press while it is empty', async () => {
-    const wrapper = card(asked([route]))
-    const toggle = () => buttonNamed(wrapper, 'Comment on this field')
-    expect(toggle().attributes('aria-expanded')).toBe('false')
-    await press(wrapper, 'Comment on this field')
-    expect(toggle().attributes('aria-expanded')).toBe('true')
-    const text = textareaNamed(wrapper, 'Comment on this field: Route')
+    const wrapper = card(asked([route, areas]))
+    const name = 'Comment on this field: Route'
+    expect(buttonNamed(wrapper, name).attributes('aria-expanded')).toBe('false')
+    await press(wrapper, name)
+    expect(buttonNamed(wrapper, name).attributes('aria-expanded')).toBe('true')
+    const text = textareaNamed(wrapper, name)
     expect(document.activeElement).toBe(text.element)
-    await press(wrapper, 'Comment on this field')
+    await press(wrapper, name)
     expect(wrapper.find('textarea').exists()).toBe(false)
-    await press(wrapper, 'Comment on this field')
-    await textareaNamed(wrapper, 'Comment on this field: Route').setValue('Words')
-    await press(wrapper, 'Comment on this field')
-    expect(textareaNamed(wrapper, 'Comment on this field: Route').exists()).toBe(true)
-    expect(toggle().attributes('aria-expanded')).toBe('true')
+    await press(wrapper, name)
+    await textareaNamed(wrapper, name).setValue('Words')
+    await press(wrapper, `${name}: written`)
+    expect(textareaNamed(wrapper, name).exists()).toBe(true)
+    expect(buttonNamed(wrapper, `${name}: written`).attributes('aria-expanded')).toBe('true')
   })
 
   it('goes with the choice and does not answer the field', async () => {
-    const entry = asked([route])
-    vi.mocked(answerInputRequest).mockResolvedValue(given([route], {}))
+    const entry = asked([route, why])
+    vi.mocked(answerInputRequest).mockResolvedValue(given([route, why], {}))
     const wrapper = card(entry)
-    await press(wrapper, 'Comment on this field')
+    await press(wrapper, 'Comment on this field: Route')
     await textareaNamed(wrapper, 'Comment on this field: Route').setValue('Because of the digest')
     await send(wrapper)
     expect(answerInputRequest).not.toHaveBeenCalled()

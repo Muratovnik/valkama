@@ -179,7 +179,7 @@ test('a press on a reference in a row selects, and nothing pressable stands in a
 test('a comment on a field goes under it with its own name, and is sent beside the choice', async ({
   page,
 }) => {
-  const { card, requests } = await openQuestion(page, [asked()])
+  const { card, requests } = await openQuestion(page, [asked({ fields: [routeField, ticks] })])
   await card.getByRole('radio', { name: 'Move them', exact: true }).check()
   const toggle = card.getByRole('button', { name: /^Comment on this field: Route/u })
   await toggle.focus()

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * The fields of a question being answered, and the comment on the whole question. A
- * comment explains an answer and does not stand in for one: it takes nothing away from
- * what is required.
+ * The fields of a question being answered, and the field of the comment on the whole
+ * question, whose press the card places among the buttons. A comment explains an answer and
+ * does not stand in for one: it takes nothing away from what is required.
  *
  * Text is markdown, and the fields share one Write | Preview choice: several text
  * answers are one answer being written, and a choice per field would let them disagree
@@ -14,6 +14,7 @@ import { useI18n } from 'vue-i18n'
 
 import RequestField from '@/features/input-requests/components/RequestField.vue'
 import RequestNote from '@/features/input-requests/components/RequestNote.vue'
+import { useRequestNote } from '@/features/input-requests/composables/useRequestNote.ts'
 import { chosenOwn } from '@/features/input-requests/utils/validateAnswers.ts'
 import type { FieldEdit, RequestDraft } from '@/features/input-requests/utils/validateAnswers.ts'
 
@@ -44,8 +45,17 @@ const { t } = useI18n()
 const previewing = ref(false)
 const controls: Record<string, { focus: () => void } | null> = {}
 const questionNote = ref<InstanceType<typeof RequestNote> | null>(null)
-const noteOpen = computed(() => questionNote.value?.open ?? false)
+const {
+  open: noteOpen,
+  press: pressNote,
+  written: noteWritten,
+} = useRequestNote(
+  () => props.draft.note,
+  previewing,
+  () => questionNote.value,
+)
 
+const several = computed(() => props.fields.length > 1)
 const isOwnChosen = (field: InputRequestField) => props.draft.ownChosen.includes(field.id)
 /** An own variant chosen and left empty, which is said on its own editor. */
 function ownRefused(field: InputRequestField) {
@@ -65,7 +75,7 @@ async function focusField(id: string) {
   await nextTick()
   controls[id]?.focus()
 }
-defineExpose({ focusField, noteOpen })
+defineExpose({ focusField, noteOpen, noteWritten, pressNote })
 </script>
 
 <template>
@@ -84,14 +94,15 @@ defineExpose({ focusField, noteOpen })
       :disabled="disabled"
       :error="fieldError(field)"
       :prompt-id="promptId"
+      :several="several"
       :suggest="suggest"
       @edit="emit('edit', field, $event)"
       @submit="emit('submit')"
     />
     <RequestNote
+      v-if="noteOpen"
       ref="questionNote"
       v-model:preview="previewing"
-      class="request-question-note"
       :disabled="disabled"
       :label="t('requests.questionNote')"
       :maxlength="8000"
@@ -109,14 +120,5 @@ defineExpose({ focusField, noteOpen })
   display: grid;
   gap: var(--space-3);
   min-width: 0;
-}
-
-/* The comment on the whole question is the question's, as the buttons under it are, and not
-   the last field's: a rule sets it apart from the fields, with more room above it than a field
-   keeps from the next. At the fields' own step it read as one more comment on the last one. */
-.request-question-note {
-  padding-top: var(--space-3);
-  margin-top: var(--space-1);
-  border-top: 1px solid var(--color-rule);
 }
 </style>

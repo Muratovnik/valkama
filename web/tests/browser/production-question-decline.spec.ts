@@ -381,7 +381,7 @@ async function reportUnder(page: Page, options: number) {
   return { ...opened, at: { x: (box?.x ?? 0) + 5, y }, outcome, top }
 }
 
-const OUTCOME_OPTIONS = 3
+const OUTCOME_OPTIONS = 4
 
 test('a second press lands on nothing in the thread, such as a report rising under it on a phone', async ({
   page,

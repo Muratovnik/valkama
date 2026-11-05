@@ -6,20 +6,20 @@
  * the pointer. Don't answer alone could write at one press, so it first asks whether it is
  * meant. Its two answers take the two buttons in their places, each holding room for its
  * other word, so that nothing moves: the way back stands in the very box of the press, and
- * pressing again without moving only goes back. The asking lies over what is above the
- * buttons and takes no height, since any height would move them. A comment on the question
- * that stands open is not to be lain on, since nobody should refuse without seeing the end of
- * what will not go, so while it is open the asking has its room kept, asked or not: in the
- * buttons' own row, just before the two it asks between, where the row has room for it, and
- * on a row of its own above them only where it has none. Kept on a row of its own at every
- * width, the room stood as a void of about 45px between the comment and the buttons, where
- * everything else is 12px.
+ * pressing again without moving only goes back. The asking moves nothing and lies on nothing,
+ * since nobody should refuse without seeing the end of what will not go: it has its room kept
+ * in the buttons' own row, just before the two it asks between, and on a row of its own above
+ * them only where that row has no room. Under them it fell out of the window with a foot at the
+ * window's edge, and no scroll can bring it back without ending the step.
  *
  * The same buttons stay under the keyboard for the same reason, so focus has nowhere to fall.
  *
  * While the form of a change is open, which an icon on the question's head opens, the same two
  * places hold Cancel and Save. Cancel is always there to press: whatever else is wrong, the way
  * out of the form is not.
+ *
+ * What the host puts in the slot stands first in the row: the press of the comment on the
+ * question, on the row's left end, as what comes before all of this.
  *
  * In the list of everything waiting, a question that no longer waits stays until it is
  * removed, so it offers that, last, where the next step of a question stands.
@@ -38,8 +38,6 @@ const props = defineProps<{
   disabled: boolean
   /** It stopped waiting, in a list it can be taken out of. */
   dismissable: boolean
-  /** A comment on the question stands open above the foot. */
-  noting: boolean
   refreshable: boolean
   standalone: boolean
   waiting: boolean
@@ -92,8 +90,8 @@ defineExpose({ focusWayOut })
   <div
     ref="root"
     class="request-actions"
-    :class="{ noting }"
   >
+    <slot />
     <VButton
       v-if="standalone"
       variant="ghost"
@@ -108,7 +106,7 @@ defineExpose({ focusWayOut })
     >
     <!-- Next to the two answers it asks between. -->
     <div
-      v-if="noting"
+      v-if="waiting"
       class="request-asked-room"
       :data-room="t('requests.declineAsked')"
     >
@@ -120,13 +118,6 @@ defineExpose({ focusWayOut })
         {{ t('requests.declineAsked') }}
       </p>
     </div>
-    <p
-      v-else-if="declining"
-      class="request-asked"
-      role="alert"
-    >
-      {{ t('requests.declineAsked') }}
-    </p>
     <VButton
       v-if="asksTwo"
       class="request-way-out request-held"
@@ -159,46 +150,24 @@ defineExpose({ focusWayOut })
 <style scoped>
 .request-actions {
   display: flex;
+  flex: 1 1 100%;
   flex-wrap: wrap;
   gap: var(--space-2);
   justify-content: flex-end;
-  margin-inline-start: auto;
-}
-
-/* Lying on what is above the buttons, against the foot around them, on the ground a question
-   like this has elsewhere: height pushed in here would take the buttons from under the pointer. */
-.request-asked {
-  position: absolute;
-  inset-inline-end: 0;
-  bottom: 100%;
-  padding: var(--space-1) var(--space-2);
-  margin: 0 0 var(--space-1);
-  color: var(--color-text);
-  font: var(--font-detail);
-  background: var(--color-surface-muted);
-  border-radius: var(--radius-control);
-}
-
-/* Where it cannot stand clear of the comment's press it covers that whole, not half a word. */
-@container (width <= 30rem) {
-  .request-asked {
-    inset-inline-start: 0;
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    min-height: var(--size-control-height);
-    text-align: end;
-  }
-}
-
-/* On the room kept for it, which lies just where it does, so nothing has to move when it comes.
-   The room takes what the row leaves before the buttons, and a row of its own only where the
-   row leaves less than its least. Its words, unseen, give it the height they will need. */
-.request-actions.noting {
-  flex: 0 0 100%;
   align-items: center;
 }
 
+/* What the host puts first stands on the row's left end, its glyph on the axis of the radios. */
+:slotted(*) {
+  position: relative;
+  inset-inline-start: calc(
+    var(--space-3) + (var(--font-size-interface) - var(--size-control-inline)) / 2
+  );
+  margin-inline-end: auto;
+}
+
+/* On the room kept for it, which lies just where it does, so nothing has to move when it comes.
+   Its words, unseen, give it the height they will need. */
 .request-asked-room {
   position: relative;
   flex: 1 1 10rem;
@@ -210,16 +179,24 @@ defineExpose({ focusWayOut })
     content: attr(data-room);
     visibility: hidden;
   }
+}
 
-  .request-asked {
-    inset: 0;
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    min-height: 0;
-    padding: 0;
-    margin: 0;
-    background: none;
+.request-asked {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin: 0;
+  color: var(--color-text);
+  font: var(--font-detail);
+}
+
+/* No room beside the buttons: a row of its own above them, the room kept as it is beside them. */
+@container (width <= 30rem) {
+  .request-asked-room {
+    flex: 0 0 100%;
+    order: -1;
   }
 }
 

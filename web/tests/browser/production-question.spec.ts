@@ -70,8 +70,6 @@ test('the options are a radio group by the keyboard, and Tab reaches Send', asyn
   await expect(group.getByRole('radio', { name: 'Move them', exact: true })).toBeChecked()
   expect(requests.writes).toEqual([])
   await page.keyboard.press('Tab')
-  await expect(card.getByRole('button', { name: /^Comment on this field/u })).toBeFocused()
-  await page.keyboard.press('Tab')
   await expect(
     card.getByRole('button', { name: 'Comment on the question', exact: true }),
   ).toBeFocused()
@@ -194,7 +192,7 @@ test('a comment on the question opens under the options and answers nothing', as
 
 test('an empty comment closes again, and one with text in it never hides it', async ({ page }) => {
   const { card } = await openQuestion(page, [asked()])
-  const own = card.getByRole('button', { name: 'Comment on the question', exact: true })
+  const own = card.getByRole('button', { name: /^Comment on the question/u })
   const field = card.getByRole('textbox', { name: 'Comment on the question', exact: true })
   await own.click()
   await own.click()
