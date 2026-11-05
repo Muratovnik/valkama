@@ -189,6 +189,55 @@ class TokenTests(Case):
         self.assertEqual(0.0, by_model["claude-fable-5-1"][0])
         self.assertAlmostEqual((100 * 10 + 200 * 50) / 1e6, by_model["claude-fable-5-1"][2])
 
+    def iterated(self, output: int) -> dict:
+        """A request of two iterations with two advisor calls, as a client writes its usage.
+
+        The top level adds up the iterations, except that its split of the writes is only
+        the first one's.
+        """
+
+        message = {"type": "message", "cache_read_input_tokens": 1, "input_tokens": 1}
+        advisor = {"type": "advisor_message", "model": "claude-fable-5-1"}
+        spent = usage(input_tokens=2, read=2, write_5m=100, output=output)
+        spent["cache_creation_input_tokens"] = 300
+        spent["iterations"] = [
+            {
+                **message,
+                "output_tokens": 1,
+                "cache_creation_input_tokens": 100,
+                "cache_creation": {"ephemeral_5m_input_tokens": 100},
+            },
+            {**advisor, "input_tokens": 1000, "output_tokens": 10},
+            {
+                **message,
+                "output_tokens": output - 1,
+                "cache_creation_input_tokens": 200,
+                "cache_creation": {"ephemeral_5m_input_tokens": 200},
+            },
+            {**advisor, "input_tokens": 2000, "output_tokens": 20},
+        ]
+        return spent
+
+    def test_a_request_of_several_iterations_counts_the_writes_of_each(self) -> None:
+        run = self.session()
+        self.ticks((0, HOUR))
+        run.prompt(0)
+        run.end_turn(5, spent=self.iterated(50))
+        self.read()
+        self.assertEqual(300, self.tokens("cache_write_5m_tokens"))
+
+    def test_two_advisor_calls_in_one_request_count_once_each_over_its_records(self) -> None:
+        run = self.session()
+        self.ticks((0, HOUR))
+        run.prompt(0)
+        run.reply(5, request="m1", spent=self.iterated(5))
+        run.reply(6, request="m1", stop="end_turn", spent=self.iterated(50))
+        self.read()
+        rows = [row for row in self.segments() if row["model"] == "claude-fable-5-1"]
+        self.assertEqual(3000, sum(row["input_tokens"] for row in rows))
+        self.assertEqual(30, sum(row["output_tokens"] for row in rows))
+        self.assertTrue(all(row["input_tokens"] >= 0 for row in self.segments()))
+
     def test_a_change_of_model_starts_a_new_row(self) -> None:
         run = self.session()
         self.ticks((0, HOUR))

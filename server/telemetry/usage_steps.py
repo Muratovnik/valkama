@@ -148,7 +148,10 @@ def _claude_parts(model: str, usage: Mapping[str, object]) -> list[Part]:
     """The executor's usage and each advisor call's, which the top level leaves out.
 
     A request that ran several iterations is priced per iteration, since its prompt
-    length is what a price tier reads.
+    length is what a price tier reads. Its top level adds up the iterations, except that
+    the split of its writes is only the first one's, so the writes are added up here.
+    Advisor calls are one part per model: a request's parts are matched record to record by
+    model, and two calls to one adviser would read as one call that shrank.
     """
 
     geo = usage.get("inference_geo")
@@ -169,6 +172,8 @@ def _claude_parts(model: str, usage: Mapping[str, object]) -> list[Part]:
     own = [item for item in iterations if item.get("type") == "message"]
     cost: float | None
     if len(own) > 1:
+        for kind in ("cache_write_5m", "cache_write_1h"):
+            tokens[kind] = sum(_claude_tokens(item).get(kind, 0) for item in own)
         costs = [
             request_cost(model, _claude_tokens(item), geo=geo_name, speed=speed_name)
             for item in own
@@ -178,13 +183,20 @@ def _claude_parts(model: str, usage: Mapping[str, object]) -> list[Part]:
             cost += (searches or 0) * 0.01
     else:
         cost = request_cost(model, tokens, geo=geo_name, speed=speed_name, searches=searches or 0)
-    parts = [Part(model, tokens, cost)]
+    advisers: dict[str, Part] = {}
     for item in iterations:
         if item.get("type") == "advisor_message":
             adviser = str(item.get("model") or "")
             spent = _claude_tokens(item)
-            parts.append(Part(adviser, spent, request_cost(adviser, spent, geo=geo_name), True))
-    return parts
+            price = request_cost(adviser, spent, geo=geo_name)
+            known = advisers.get(adviser)
+            if known is None:
+                advisers[adviser] = Part(adviser, spent, price, True)
+                continue
+            for kind, count in spent.items():
+                known.tokens[kind] = known.tokens.get(kind, 0) + count
+            known.cost = None if known.cost is None or price is None else known.cost + price
+    return [Part(model, tokens, cost), *advisers.values()]
 
 
 def _links(text: str) -> tuple[str, ...]:
