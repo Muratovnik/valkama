@@ -364,7 +364,7 @@ describe('opening in the Valkama app', () => {
     expect(outcomeWords(i18n.global.t, outcome, aPath)).toContain('runs in a terminal')
   })
 
-  it('asks for a file with its line and the editor, and for the owner’s command by itself', async () => {
+  it('asks for a file with its line and the editor, and for a configured command by itself', async () => {
     const call = app(
       { ok: true, mode: 'opened', next: null },
       { ok: false, mode: 'refused', reason: 'no-folder', next: null },

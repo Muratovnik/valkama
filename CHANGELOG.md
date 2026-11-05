@@ -67,28 +67,28 @@ checkouts are therefore distinguishable even at the same version.
   thread is one level deep, so the two buttons only ever did the same thing. Leaving the field
   brings focus back to the icon that opened it.
 - **A card's head reads as three rows with room between them.** The state, a waiting
-  question, the priority and the epic stand on the first; «Исполняет», the holder and the
+  question, the priority and the epic stand on the first; «Held by», the holder and the
   action about them on the second; the labels on the third, which an item without labels
   does not have. The holder is a bare link instead of a plate, and the rows stand 12px apart
   instead of 4px.
-- **The head's one action is bare text.** «Взять», «Забрать себе» and «Отпустить» carry no
+- **The head's one action is bare text.** «Claim», «Take over» and «Release» carry no
   fill until the pointer is on them. A claim keeps the text ink and a takeover or a release
   reads in the quieter one, so the claim still comes first.
 - **The identity line over a card's title and its state button align on their letters.** The
   texts of each line share one baseline, and the dot, the chevron and the icons stand on the
   middle of the lowercase letters beside them. A monospaced reference no longer sits a pixel
   above its neighbours.
-- **«Что дальше» on a card is now «Следующий шаг · 3 из 9».** A quiet line says it is a step
-  and where it stands in the list, the step's words follow it, and «Все шаги» goes to the
+- **«What comes next» on a card is now «Next step · 3 of 9».** A quiet line says it is a step
+  and where it stands in the list, the step's words follow it, and «All steps» goes to the
   checklist with focus on it. The only step has neither the count nor the way to itself.
-- **A card's agents have a tab of their own, «Агенты 44», after «Обзор».** The block no longer
+- **A card's agents have a tab of their own, «Agents 44», after «Overview».** The block no longer
   stands on the first screen of an open or a closed item, and a card without agents offers
-  no such tab. Every row stands at once, newest first, with no «Показать все», and rows stand
-  under their parent session, whose «Открыть родительскую сессию» stands once at their head
+  no such tab. Every row stands at once, newest first, with no «Show all», and rows stand
+  under their parent session, whose «Open the parent session» stands once at their head
   instead of in each row.
 - **An ambiguous link is said once for its group.** Under the group's head, one line gives the
-  coordinator's count, «неоднозначно: координатор держал 13 задач», or the range of its rows'
-  counts, «13–19 задач». The rows of that group no longer repeat it; each keeps its exact count
+  coordinator's count, «ambiguous: the coordinator held 13 items», or the range of its rows'
+  counts, «13–19 items». The rows of that group no longer repeat it; each keeps its exact count
   in its tooltip and its accessible description.
 - **The graph is easier to hit from a distance, and stops where the map still reads.** Below a
   quarter of full size, a press anywhere on the ground of an open epic's frame opens that epic,
@@ -107,11 +107,13 @@ checkouts are therefore distinguishable even at the same version.
   bar stays where it was, with the view, the grouping, the filter and New work item, and only
   the place under it says it is loading; it used to give way to a page that said «Loading».
 - **A chain's rows in a card line up, and their titles can be read.** The «Waiting on» mark stood
-  about 2px above the rest of its row and made that row taller, so the rows were spaced unevenly.
-  Every cell of a row now stands on one line and rows of one line are one height. In a card at its
-  usual width the mark goes under the title, so a title has about 340px instead of 177px and rows
-  without a mark are no longer cut for one; who holds the task keeps its column. A card widened
-  to nearly its full 720px keeps a row on one line.
+  about 2px above the rest of its row and made that row taller, and each row sized its own
+  columns, so a waiting mark or a holder began at a different place in every group. Every cell of
+  a row now stands on one line, rows of one line are one height, and the rows of all groups share
+  one set of columns, with a long holder cut short and its whole name in its tooltip. In a card at
+  its usual width the mark goes under the title, so a title has about 340px instead of 177px and
+  rows without a mark are no longer cut for one; who holds the task keeps its column. A card
+  widened to nearly its full 720px keeps a row on one line.
 - **A compacted context no longer hides that a session is waiting for you.** A session that
   had finished its turn or asked for attention lost that mark when its context was compacted
   while idle. The mark now stays until you answer.
@@ -146,9 +148,6 @@ checkouts are therefore distinguishable even at the same version.
   one lane its name was a filter that narrowed nothing. The key and the filter now appear
   only when there is a second state or lane, and the map, the figures and the list stand
   clearly apart.
-- **The rows of a chain line up across its groups.** Each row sized its own columns, so a
-  waiting mark or a holder began at a different place in every group. The rows now share one
-  set of columns, and a long holder is cut short with its whole name in its tooltip.
 - **On a phone a chain's titles keep the whole width.** A row's waiting mark or state word
   stands under its title, so one row's mark no longer squeezes the title of every row.
 - **A card opens on the first click after a drag.** However a drag ended, in another column,

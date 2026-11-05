@@ -18,7 +18,7 @@ import { briefAnswer } from './previewPage.ts'
 export const KINDS = ['bug', 'epic', 'improvement', 'task'] as const
 export type Kind = (typeof KINDS)[number]
 
-/** The defaults the owner's brief asks for, in the form a computed style reports them. */
+/** The kinds' default colours, in the form a computed style reports them. */
 export const DEFAULTS: Record<Kind, string> = {
   bug: 'rgb(255, 157, 181)',
   epic: 'rgb(207, 160, 255)',
