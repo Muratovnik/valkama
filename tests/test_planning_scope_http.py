@@ -98,6 +98,30 @@ class PlanningScopeHttpTests(unittest.TestCase):
         finally:
             client.close()
 
+    def test_the_usage_reads_answer_a_real_listener_where_the_interface_reads_them(self) -> None:
+        """`web/src/shared/api/planningUsageApi.ts` reads these paths with no data scope."""
+
+        status, item = self.request("/api/planning/work-item/usage?id=SAME-1&scope=epic")
+        self.assertEqual(200, status, item)
+        self.assertEqual("valkama-planning-api", item["interface_version"])
+        self.assertEqual(("SAME-1", "epic"), (item["usage"]["reference"], item["usage"]["scope"]))
+        self.assertEqual("primary-only", item["usage"]["title"])
+        self.assertIsNone(item["usage"]["tokens"]["input"])
+        self.assertEqual(["SAME-1"], [line["reference"] for line in item["usage"]["by_item"]])
+
+        status, session = self.request("/api/planning/session/usage?session_id=no-such-session")
+        self.assertEqual(200, status, session)
+        self.assertEqual("no-such-session", session["usage"]["session_id"])
+        self.assertEqual([], session["usage"]["by_item"])
+
+    def test_the_usage_read_refuses_a_scope_it_does_not_read(self) -> None:
+        """It answers for the primary store: naming another must not read as an answer for it."""
+
+        scope = urlencode(self.refs["attached"])
+        status, refusal = self.request(f"/api/planning/work-item/usage?id=SAME-1&{scope}")
+        self.assertEqual(400, status, refusal)
+        self.assertEqual("invalid_request", refusal["error"]["code"])
+
     def test_the_work_item_list_pages_honestly_over_http(self) -> None:
         """A space past one page: the cut is reported and paging reaches every item once."""
 
