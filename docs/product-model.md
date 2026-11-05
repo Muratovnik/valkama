@@ -202,11 +202,13 @@ is running, or when one of its subagents is active and started since the session
 really started. A compacted context is reported as a session start and is no such thing:
 the client runs on with its turn and its subagents. Then:
 
-- `working`: a session at work is seen working on this item. Since its last prompt it
-  wrote to the item through Planning, itself or through a subagent (a claim, a step, a
-  comment, a link, which names its source item), whether or not it holds the item; or one
-  of its subagents holds an open step of the item. An attempt Valkama runs on the item,
-  starting or running, is `working` with no session.
+- `working`: a session at work is seen working on this item, whether or not it holds it.
+  Since its last prompt it wrote to the item through Planning, itself or through a subagent
+  (a claim, a step, a comment, a link, which names its source item); or a live subagent of
+  it wrote to the item since it last started, holds an open step of it, or was launched with
+  a description that names the item's number. What its parent holds places a subagent on
+  nothing, so a coordinator holding many items moves only these. An attempt Valkama runs on
+  the item, starting or running, is `working` with no session.
 - `held`: the session is at work, but not on this item as far as the record shows. A
   session holding several items moves only the ones it is working on.
 - `waiting`: any other live session. Its turn ended, it waits for a person, or it was

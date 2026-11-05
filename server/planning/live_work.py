@@ -16,24 +16,37 @@ An item takes its state from the sessions behind it:
 | not `active`, no row, or `last_seen` older than `leases.LEASE_PERIOD` | none |
 | `last_seen` older than `LIVE_QUIET` | `quiet`, with `quiet_since` |
 | at work, and it wrote to this item since its last `prompt`, itself or through a subagent | `working` |
-| at work, and one of its subagents holds an open step of this item | `working` |
-| at work, and neither | `held` |
+| at work, and a live subagent of it wrote to this item since that subagent last started | `working` |
+| at work, and a live subagent of it holds an open step of this item | `working` |
+| at work, and the label of a live subagent of it names this item by its number | `working` |
+| at work, and none of those | `held` |
 | otherwise: the turn ended, it waits for a person, or it was opened with no prompt | `waiting` |
 
-A session at work that wrote to an item since its last `prompt` moves that item
-too when it holds neither its claim nor a step: what it writes to is what it is
-working on. Those writers are found among the active sessions heard from within
-`LIVE_QUIET`, since only such a session can be at work.
+A session at work that wrote to an item since its last `prompt`, or whose live
+subagent is seen on it, moves that item too when it holds neither its claim nor a
+step: what it writes to is what it is working on. Those sessions are found among
+the active ones heard from within `LIVE_QUIET`, since only such a session can be
+at work.
+
+A prompt comes with every notice that wakes a coordinator, so its own window says
+little about a subagent working for an hour. What places a live subagent is what
+it did itself, strongest first: it wrote to the item since it last started, it
+holds an open step, or the label its launch gave it names the item's number, as
+`mentions` reads a number in an agent's prose. Its parent's holds place it on
+nothing: `agents` may say a subagent stands on each item its parent held when it
+started and how many those were, but as a reason to move they would move them all.
 
 A session is at work when its last lifecycle event is a `prompt`, so a turn is
-running, or when a subagent row of it is `active` and started since its last
-real start. A compacted context is reported as a start too, and it is none: the
+running, or when it has a live subagent: a subagent row of it that is `active`
+and started since its last real start. A compacted context is reported as a start too, and it is none: the
 client runs on with its turn and its subagents (`sessions.COMPACTED_START`), so
-it counts neither as a lifecycle event nor as a start here. A write is any Planning write call this session confirmed and
+it counts neither as a lifecycle event nor as a start here. A subagent continued
+later starts again under its own id, and its row's `last_seen` says when, since
+only its start and its stop move that time. A write is any Planning write call this session confirmed and
 that names the item: a claim, a step, a comment, a link (which names its source
-item). A session at work moves only the items it is seen working on; the others
-it holds stand still, so a coordinator holding many items does not move them all
-on every turn. A session with no prompt recorded has written nothing since one.
+item). A session at work moves only the items it or its live subagents are seen
+working on; the others it holds stand still, so a coordinator holding many items
+does not move them all on every turn or for every subagent. A session with no prompt recorded has written nothing since one.
 Only the items the caller passes are mapped, whatever else a session wrote to.
 
 An item takes the strongest state of its sessions and attempts, `working`
@@ -53,9 +66,12 @@ last real start is taken to run.
 What the rule cannot see: a client that died in the middle of a turn reads as
 at work for a day and `quiet` after it, since only a check of the process could
 tell more. A long turn that writes nothing moves nothing: its items read `held`
-until its first write. A link moves only its source item, the one its call
-names. A session that is not at work puts nothing in the map for an item it only
-wrote to.
+until its first write, and so do a coordinator's while a subagent of it works
+having written nothing, held no step and been given a label with no number. A
+label says what its launch meant and not what the subagent does, so one that names
+an item it only reads moves that item. A link moves only its source item, the one
+its call names. A session that is not at work puts nothing in the map for an item
+it only wrote to.
 
 The map is five reads, whatever the number of items. A store an earlier build
 wrote may lack what they ask for, and then the map is empty rather than an error.
@@ -66,10 +82,12 @@ from __future__ import annotations
 import json
 import sqlite3
 from collections.abc import Iterable, Mapping
+from dataclasses import dataclass, field
 from datetime import timedelta
 
 from .. import sessions
-from . import calls, leases
+from ..hooks import normalize
+from . import calls, leases, mentions
 
 #: How long a live session may stay silent before it reads `quiet`.
 LIVE_QUIET = timedelta(hours=24)
@@ -87,12 +105,13 @@ _STAMP = "%Y-%m-%dT%H:%M:%SZ"
 #: is not there has no rows here, so one answer covers a missing table as well.
 _HOLDS_EVERYTHING = (
     "SELECT (SELECT COUNT(*) FROM pragma_table_info('work_items') WHERE name = 'claim_call_id')"
-    " + (SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name = 'parent_session_id')"
+    " + (SELECT COUNT(*) FROM pragma_table_info('sessions')"
+    "    WHERE name IN ('parent_session_id', 'agent_id', 'label'))"
     " + (SELECT COUNT(*) FROM pragma_table_info('execution_events')"
     "    WHERE name IN ('agent_id', 'work_item_id', 'source'))"
     " + (SELECT COUNT(*) FROM pragma_table_info('executions') WHERE name = 'status')"
 )
-_COLUMNS_ASKED = 6
+_COLUMNS_ASKED = 8
 
 #: The session of each confirmed call that took a claim on one of these items.
 _CLAIMS = (
@@ -112,19 +131,22 @@ _SESSIONS = (
     "WITH top AS (SELECT value AS id FROM json_each(?1)"
     " UNION SELECT id FROM sessions"
     "  WHERE status = 'active' AND parent_session_id = '' AND last_seen >= ?2)"
-    " SELECT id, '' AS parent, status, last_seen, started_at FROM sessions"
+    " SELECT id, '' AS parent, '' AS agent_id, '' AS label, status, last_seen FROM sessions"
     " WHERE id IN (SELECT id FROM top)"
     " UNION ALL"
-    " SELECT id, parent_session_id, status, last_seen, started_at FROM sessions"
+    " SELECT id, parent_session_id, agent_id, label, status, last_seen FROM sessions"
     " WHERE parent_session_id != '' AND status = 'active'"
     " AND parent_session_id IN (SELECT id FROM top)"
 )
 
 #: One row per session: its last lifecycle event of its own and when it last
-#: really started, a compacted context being neither. Then one row per item it wrote to since its last prompt: its own
-#: confirmed write calls and its subagents', which carry its id. Each subquery
-#: walks `execution_events_session` back from the newest event, and the writes
-#: are the range of that index past the prompt.
+#: really started, a compacted context being neither. Then one row per item it
+#: wrote to since its last prompt: its own confirmed write calls and its
+#: subagents', which carry its id. Then, in the order they happened, each start of
+#: a subagent of it and each of their writes since that real start: what a subagent
+#: wrote before it last started is not what it is doing now. Each subquery walks
+#: `execution_events_session` back from the newest event, and the writes are ranges
+#: of that index.
 _LIFECYCLE = (
     "WITH last AS (SELECT j.value AS session_id,"
     " (SELECT e.kind FROM execution_events e"
@@ -132,7 +154,7 @@ _LIFECYCLE = (
     "  AND e.kind IN ('session_start', 'prompt', 'turn_end', 'attention', 'session_end')"
     "  AND NOT (e.kind = 'session_start' AND COALESCE(e.source, '') = ?4)"
     "  AND COALESCE(e.agent_id, '') = '' ORDER BY e.id DESC LIMIT 1) AS last_kind,"
-    " (SELECT COALESCE(e.occurred_at, e.received_at) FROM execution_events e"
+    " (SELECT e.id FROM execution_events e"
     "  WHERE e.session_id = j.value AND e.session_id IS NOT NULL"
     "  AND e.kind = 'session_start' AND COALESCE(e.source, '') != ?4"
     "  AND COALESCE(e.agent_id, '') = '' ORDER BY e.id DESC LIMIT 1) AS last_start,"
@@ -141,11 +163,21 @@ _LIFECYCLE = (
     "  AND e.kind = 'prompt' AND COALESCE(e.agent_id, '') = ''"
     "  ORDER BY e.id DESC LIMIT 1) AS last_prompt"
     " FROM json_each(?1) j)"
-    " SELECT session_id, last_kind, last_start, NULL AS written FROM last"
+    " SELECT l.session_id, l.last_kind,"
+    " (SELECT COALESCE(s.occurred_at, s.received_at) FROM execution_events s"
+    "  WHERE s.id = l.last_start) AS started, NULL AS written, '' AS agent_id, 0 AS happened"
+    " FROM last l"
     " UNION ALL"
-    " SELECT DISTINCT l.session_id, NULL, NULL, e.work_item_id FROM last l"
+    " SELECT DISTINCT l.session_id, NULL, NULL, e.work_item_id, '', 0 FROM last l"
     " JOIN execution_events e ON e.session_id = l.session_id AND e.id > l.last_prompt"
     " WHERE e.kind = ?2 AND e.identity_state = ?3 AND e.work_item_id IS NOT NULL"
+    " UNION ALL"
+    " SELECT l.session_id, NULL, NULL, e.work_item_id, e.agent_id, e.id FROM last l"
+    " JOIN execution_events e ON e.session_id = l.session_id"
+    " AND e.id > COALESCE(l.last_start, 0)"
+    " WHERE COALESCE(e.agent_id, '') != '' AND (e.kind = 'subagent_start'"
+    " OR (e.kind = ?2 AND e.identity_state = ?3 AND e.work_item_id IS NOT NULL))"
+    " ORDER BY happened"
 )
 
 #: The items an attempt is running on.
@@ -160,44 +192,93 @@ def _holds_everything(conn: sqlite3.Connection) -> bool:
     return int(conn.execute(_HOLDS_EVERYTHING).fetchone()[0]) == _COLUMNS_ASKED
 
 
+@dataclass
+class _Lifecycle:
+    """What the lifecycle read says of one session."""
+
+    last_kind: str = ""
+    started: str = ""
+    written: set[str] = field(default_factory=set)
+    #: What each subagent wrote to since it last started.
+    by_agent: dict[str, set[str]] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class _SeenOn:
+    """What a session is seen doing, whether or not it is at work."""
+
+    items: set[str]
+    #: Its live subagents, each spelled as a holder's label spells it.
+    agents: set[str]
+
+
 def _behind(
     conn: sqlite3.Connection, listed: list[Mapping], identities: str
-) -> dict[str, dict[str, bool]]:
+) -> dict[str, dict[str, set[str]]]:
     """The sessions behind each item, its claim's and its open steps' holders'.
 
-    Each says whether a subagent of that session holds an open step of the item.
+    Each comes with the subagents of that session that hold an open step of the item.
     """
 
-    behind: dict[str, dict[str, bool]] = {}
+    behind: dict[str, dict[str, set[str]]] = {}
     for row in conn.execute(_CLAIMS, (identities, calls.CONFIRMED)):
-        behind.setdefault(str(row["work_item_id"]), {}).setdefault(str(row["session_id"]), False)
+        behind.setdefault(str(row["work_item_id"]), {}).setdefault(str(row["session_id"]), set())
     for item in listed:
         for step in item["checklist"]:
             holder = None if step["done"] else calls.holder_ids(str(step["claimed_by"] or ""))
             if holder is not None:
-                sessions = behind.setdefault(str(item["work_item_id"]), {})
-                sessions[holder[0]] = sessions.get(holder[0], False) or holder[1] is not None
+                agents = behind.setdefault(str(item["work_item_id"]), {}).setdefault(
+                    holder[0], set()
+                )
+                if holder[1] is not None:
+                    agents.add(holder[1])
     return behind
 
 
+def _lifecycle(conn: sqlite3.Connection, awake: list[str]) -> dict[str, _Lifecycle]:
+    found = {session: _Lifecycle() for session in awake}
+    parameters = (json.dumps(awake), calls.KIND, calls.CONFIRMED, sessions.COMPACTED_START)
+    for row in conn.execute(_LIFECYCLE, parameters):
+        read = found[str(row["session_id"])]
+        agent, item = str(row["agent_id"]), row["written"]
+        if agent and item is None:
+            read.by_agent[agent] = set()
+        elif agent:
+            read.by_agent.setdefault(agent, set()).add(str(item))
+        elif item is not None:
+            read.written.add(str(item))
+        else:
+            read.last_kind = str(row["last_kind"] or "")
+            read.started = str(row["started"] or "")[:_SECOND]
+    return found
+
+
+def _named_by(label: str, references: Mapping[str, str]) -> set[str]:
+    """The items a subagent's label names by number. A number its cut ran through names none."""
+
+    return {
+        references[found.reference]
+        for found in mentions.scan(label, mentions.ScanState(), final=True)
+        if found.reference in references and label[found.end :] != normalize.LABEL_CUT
+    }
+
+
 def _states(
-    conn: sqlite3.Connection, named: set[str]
-) -> tuple[dict[str, dict], dict[str, set[str]]]:
-    """The state of every live session, named or recently heard from, and its writes.
+    conn: sqlite3.Connection, named: set[str], references: Mapping[str, str]
+) -> tuple[dict[str, dict], dict[str, _SeenOn]]:
+    """The state of every live session, named or recently heard from, and what it is seen on.
 
     A session at work reads `working` here; which items it moves is the item's
-    question, answered in `live_work`. Its writes are the items it wrote to since
-    its last prompt.
+    question, answered in `live_work`. `references` are the items a label can name.
     """
 
-    written: dict[str, set[str]] = {}
     now = leases.utc_now()
     recent = (now - LIVE_QUIET).strftime(_STAMP)
     live: dict[str, dict] = {}
-    started: dict[str, list[str]] = {}
+    subagents: dict[str, list[sqlite3.Row]] = {}
     for row in conn.execute(_SESSIONS, (json.dumps(sorted(named)), recent)):
         if row["parent"]:
-            started.setdefault(str(row["parent"]), []).append(str(row["started_at"])[:_SECOND])
+            subagents.setdefault(str(row["parent"]), []).append(row)
             continue
         seen = leases.moment(row["last_seen"])
         if row["status"] != "active" or seen is None or seen < now - leases.LEASE_PERIOD:
@@ -208,21 +289,23 @@ def _states(
             live[str(row["id"])] = {"state": WAITING}
     awake = sorted(session for session, state in live.items() if state["state"] != QUIET)
     if not awake:
-        return live, written
-    for row in conn.execute(
-        _LIFECYCLE, (json.dumps(awake), calls.KIND, calls.CONFIRMED, sessions.COMPACTED_START)
-    ):
-        session = str(row["session_id"])
-        if row["written"] is not None:
-            written.setdefault(session, set()).add(str(row["written"]))
-            continue
-        since = str(row["last_start"] or "")[:_SECOND]
-        # A subagent started in the second its session started counts, as a
-        # claim and a launch in one second do in `agents`.
-        running = any(moment >= since for moment in started.get(session, []))
-        if row["last_kind"] == "prompt" or running:
+        return live, {}
+    seen_on: dict[str, _SeenOn] = {}
+    for session, read in _lifecycle(conn, awake).items():
+        items = set(read.written)
+        agents: set[str] = set()
+        for row in subagents.get(session, []):
+            # A subagent started in the second its session started counts, as a
+            # claim and a launch in one second do in `agents`.
+            if str(row["last_seen"])[:_SECOND] >= read.started:
+                agent = str(row["agent_id"])
+                agents.add(calls.label_id(agent))
+                items |= read.by_agent.get(agent, set())
+                items |= _named_by(str(row["label"] or ""), references)
+        seen_on[session] = _SeenOn(items, agents)
+        if read.last_kind == "prompt" or agents:
             live[session] = {"state": WORKING}
-    return live, written
+    return live, seen_on
 
 
 def _stronger(first: dict | None, second: dict) -> dict:
@@ -245,21 +328,26 @@ def live_work(conn: sqlite3.Connection, items: Iterable[Mapping]) -> dict[str, d
     order = [str(item["work_item_id"]) for item in listed]
     identities = json.dumps(order)
     behind = _behind(conn, listed, identities)
-    states, written = _states(conn, {session for held in behind.values() for session in held})
+    references = {
+        str(item["reference"]): str(item["work_item_id"]) for item in listed if "reference" in item
+    }
+    states, seen_on = _states(
+        conn, {session for held in behind.values() for session in held}, references
+    )
     found: dict[str, dict] = {}
     for identity, holders in behind.items():
-        for session, by_subagent in holders.items():
+        for session, holding in holders.items():
             state = states.get(session)
             if state is None:
                 continue
-            if state["state"] == WORKING and not by_subagent:
+            if state["state"] == WORKING and not holding & seen_on[session].agents:
                 state = {"state": HELD}
             found[identity] = _stronger(found.get(identity), state)
-    # What a session at work wrote to moves, whether it holds the item or not.
+    # What a session at work is seen on moves, whether it holds the item or not.
     mapped = set(order)
-    for session, items_written in written.items():
+    for session, seen in seen_on.items():
         if states[session]["state"] == WORKING:
-            for identity in items_written & mapped:
+            for identity in seen.items & mapped:
                 found[identity] = {"state": WORKING}
     for row in conn.execute(_ATTEMPTS, (identities,)):
         found[str(row["work_item_id"])] = {"state": WORKING}

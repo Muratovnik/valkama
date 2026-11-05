@@ -264,7 +264,7 @@ def _connect(store: str) -> sqlite3.Connection | None:
 
 
 def label_id(value: str) -> str:
-    """An id as a holder label carries it; `planning.calls._label_id`, held equal by a test."""
+    """An id as a holder label carries it; `planning.calls.label_id`, held equal by a test."""
 
     if 0 < len(value) <= 40 and all(ch in _PLAIN for ch in value):
         return value

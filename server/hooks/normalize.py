@@ -69,6 +69,9 @@ LIMITS = {
     "label": 120,
 }
 
+#: What ends a label cut at its limit, for a reader to know its last word may be part of one.
+LABEL_CUT = "…"
+
 #: Fields read from every lifecycle input; `turn_id` is filled from Codex
 #: `turn_id` or Claude `prompt_id`.
 _COMMON = (
@@ -183,7 +186,7 @@ def agent_label(value: object) -> str | None:
     cleaned = " ".join("".join(kept).split())
     limit = LIMITS["label"]
     if len(cleaned) > limit:
-        cleaned = cleaned[: limit - 1].rstrip() + "…"
+        cleaned = cleaned[: limit - 1].rstrip() + LABEL_CUT
     return cleaned or None
 
 

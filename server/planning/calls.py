@@ -317,8 +317,8 @@ def holder_label(name: str, session_id: str, agent_id: str | None = None) -> str
     """The text a holder is recorded as, for a reader asking who holds what."""
 
     if agent_id is not None:
-        name += f" agent {_label_id(agent_id)}"
-    return f"{name} (session {_label_id(session_id)})"
+        name += f" agent {label_id(agent_id)}"
+    return f"{name} (session {label_id(session_id)})"
 
 
 def holder_ids(label: str) -> tuple[str, str | None] | None:
@@ -333,7 +333,7 @@ def holder_ids(label: str) -> tuple[str, str | None] | None:
     return (found.group(2), found.group(1)) if found is not None else None
 
 
-def _label_id(value: str) -> str:
+def label_id(value: str) -> str:
     """An id as a holder carries it: itself, or a short digest of one that is not plain.
 
     The digest keeps a label inside the 128 characters a holder may have and

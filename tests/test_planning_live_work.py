@@ -7,8 +7,9 @@ nothing; one silent past a day is `quiet`; one whose last lifecycle event is a
 prompt, or with a subagent running since it really last started, is at work; any
 other is `waiting`, and a compacted context is no such start or event. A session
 at work makes an item `working` only when it wrote there since its last prompt,
-itself or through a subagent, or when one of its subagents holds an open step
-there; its other items are `held`.
+itself or through a subagent, or when a live subagent of it wrote there since that
+subagent last started, holds an open step there or names it by number in its
+label; its other items are `held`.
 
 Every case reads `planning_payload`, so the key is checked where views take it.
 Hook events go through the real ingest path and claims through the real write
@@ -260,13 +261,32 @@ def _compacted_after_a_turn(case: LiveWorkCase, reference: str) -> None:
     case.hook(session, "session-start", ago(minutes=30), source="compact")
 
 
-def _step_held_by_a_subagent(case: LiveWorkCase, reference: str) -> None:
-    """Its step taken before the prompt, so only the holder can make it move."""
+def _started_again_since_a_restart(case: LiveWorkCase, reference: str) -> None:
+    """A subagent continued after a restart: its row keeps its first start, and runs."""
 
     session = _session()
-    case.hold_step(reference, session, agent="a1")
-    case.hook(session, "session-start", ago(minutes=20))
-    case.hook(session, "user-prompt-submit", ago(minutes=10))
+    case.claim(reference, session)
+    case.hook(session, "session-start", ago(minutes=50), source="startup")
+    case.hook(session, "subagent-start", ago(minutes=45), agent="a1")
+    case.hook(session, "subagent-stop", ago(minutes=44), agent="a1")
+    case.hook(session, "session-start", ago(minutes=40), source="resume")
+    case.hook(session, "subagent-start", ago(minutes=30), agent="a1")
+    case.hook(session, "stop", ago(minutes=10))
+
+
+def _step_held_by_a_subagent(*, stopped: bool) -> _Build:
+    """Its step taken before the prompt, so only the holder can make it move."""
+
+    def build(case: LiveWorkCase, reference: str) -> None:
+        session = _session()
+        case.hook(session, "session-start", ago(minutes=30))
+        case.hook(session, "subagent-start", ago(minutes=25), agent="a1")
+        case.hold_step(reference, session, agent="a1")
+        if stopped:
+            case.hook(session, "subagent-stop", ago(minutes=15), agent="a1")
+        case.hook(session, "user-prompt-submit", ago(minutes=10))
+
+    return build
 
 
 def _held_beside_written(case: LiveWorkCase, reference: str) -> None:
@@ -421,7 +441,9 @@ CASES: list[tuple[str, list[str] | None, _Build, dict | None]] = [
     ("a subagent across a start with no source", None, _subagent_across(None), WAITING),
     ("a turn across a compaction", None, _compacted_in_a_turn, HELD),
     ("a turn over, then a compaction", None, _compacted_after_a_turn, WAITING),
-    ("a step a subagent holds", ["step"], _step_held_by_a_subagent, WORKING),
+    ("a subagent started again since a restart", None, _started_again_since_a_restart, HELD),
+    ("a step a subagent holds", ["step"], _step_held_by_a_subagent(stopped=False), WORKING),
+    ("a step a stopped subagent left", ["step"], _step_held_by_a_subagent(stopped=True), HELD),
     ("an attempt running with no session", None, _attempt("running"), WORKING),
     ("an attempt starting", None, _attempt("starting"), WORKING),
     ("an attempt that finished", None, _attempt("complete"), None),
@@ -539,6 +561,145 @@ class RuleTests(LiveWorkCase):
         self.assertEqual({}, views.planning_payload(self.conn)["live_work"])
 
 
+class SubagentWorkTests(LiveWorkCase):
+    """What a coordinator's live subagent is seen working on, whatever its parent's turn does."""
+
+    def coordinator(self, *held: str) -> str:
+        """A session holding these items, whose turn has ended."""
+
+        session = _session()
+        for reference in held:
+            self.claim(reference, session)
+        self.hook(session, "session-start", ago(minutes=59), source="startup")
+        self.hook(session, "user-prompt-submit", ago(minutes=58))
+        self.hook(session, "stop", ago(minutes=4))
+        return session
+
+    def subagent(self, session: str, agent: str, label: str = "") -> None:
+        """A subagent running since three minutes ago, named by its launch when `label` says."""
+
+        self.hook(session, "subagent-start", ago(minutes=3), agent=agent)
+        if label:
+            self.hook(
+                session,
+                "post-tool-use",
+                ago(minutes=3),
+                tool_name="Agent",
+                tool_response={"agentId": agent},
+                tool_input={"description": label},
+            )
+
+    def wake(self, session: str) -> None:
+        """A subagent's notice wakes the coordinator: a new prompt, and its turn ends again."""
+
+        self.hook(session, "user-prompt-submit", ago(minutes=1))
+        self.hook(session, "stop", ago(seconds=30))
+
+    def test_what_a_subagent_wrote_moves_past_its_parents_next_prompt(self) -> None:
+        reference = self.item()
+        session = self.coordinator(reference)
+        self.subagent(session, "a1")
+        self.comment(reference, session, "a1")
+        self.wake(session)
+        self.assertEqual(WORKING, self.state_of(reference))
+        self.hook(session, "user-prompt-submit", ago(seconds=10))
+        self.assertEqual(WORKING, self.state_of(reference), "in a turn of its parent as well")
+
+    def test_what_a_subagent_wrote_stops_moving_when_it_stops(self) -> None:
+        reference = self.item()
+        session = self.coordinator(reference)
+        self.subagent(session, "a1")
+        self.subagent(session, "a2")
+        self.comment(reference, session, "a1")
+        self.hook(session, "subagent-stop", ago(seconds=50), agent="a1")
+        self.wake(session)
+        self.assertEqual(HELD, self.state_of(reference), "a2 runs and is not seen on it")
+
+    def test_a_write_counts_from_the_subagents_last_start(self) -> None:
+        reference = self.item()
+        session = self.coordinator(reference)
+        self.subagent(session, "a1")
+        self.comment(reference, session, "a1")
+        self.hook(session, "subagent-stop", ago(minutes=2), agent="a1")
+        self.wake(session)
+        self.hook(session, "subagent-start", ago(seconds=20), agent="a1")
+        self.assertEqual(HELD, self.state_of(reference), "started again for something else")
+        self.comment(reference, session, "a1")
+        self.assertEqual(WORKING, self.state_of(reference))
+
+    def test_a_step_a_subagent_holds_moves_past_its_parents_next_prompt(self) -> None:
+        reference = self.item(["step"])
+        session = self.coordinator(reference)
+        self.subagent(session, "a1")
+        self.hold_step(reference, session, agent="a1")
+        self.wake(session)
+        self.assertEqual(WORKING, self.state_of(reference))
+
+    def test_a_label_moves_the_items_it_names_by_number_and_no_other(self) -> None:
+        first, second_named, other = self.item(), self.item(), self.item()
+        session = self.coordinator(first, second_named, other)
+        self.subagent(session, "a1", f"build: both of them ({first}, {second_named})")
+        self.assertEqual(
+            (WORKING, WORKING, HELD),
+            (self.state_of(first), self.state_of(second_named), self.state_of(other)),
+        )
+
+    def test_a_label_names_an_item_only_by_its_exact_number(self) -> None:
+        item = self.item()
+        self.assertEqual("LW-1", item)
+        session = self.coordinator(item)
+        for index, label in enumerate(
+            (
+                "the longer number LW-12",
+                "lw-1 in small letters",
+                "XLW-1 of another space",
+                "a file LW-1.md",
+                "in code `LW-1`",
+                "at http://host/LW-1",
+                # Cut to the label's limit in the middle of LW-123, so it reads LW-1.
+                "x" * 114 + " LW-123",
+            )
+        ):
+            with self.subTest(label):
+                agent = f"a{index}"
+                self.subagent(session, agent, label)
+                self.assertEqual(HELD, self.state_of(item))
+                self.hook(session, "subagent-stop", ago(seconds=1), agent=agent)
+
+    def test_a_label_moves_an_item_nobody_holds(self) -> None:
+        held, named = self.item(), self.item()
+        session = self.coordinator(held)
+        self.subagent(session, "a1", f"look at {named}")
+        self.assertEqual((HELD, WORKING), (self.state_of(held), self.state_of(named)))
+
+    def test_a_label_moves_nothing_once_its_subagent_stopped_or_was_cut_off(self) -> None:
+        reference = self.item()
+        session = self.coordinator(reference)
+        self.subagent(session, "a1", f"build {reference}")
+        self.assertEqual(WORKING, self.state_of(reference))
+        self.hook(session, "subagent-stop", ago(seconds=50), agent="a1")
+        self.assertEqual(WAITING, self.state_of(reference))
+        self.hook(session, "subagent-start", ago(seconds=40), agent="a1")
+        self.assertEqual(WORKING, self.state_of(reference))
+        self.hook(session, "session-start", ago(seconds=20), source="resume")
+        self.assertEqual(WAITING, self.state_of(reference))
+
+    def test_a_coordinator_holding_many_moves_only_what_its_subagents_are_seen_on(self) -> None:
+        references = [self.item(["step"]) for _ in range(17)]
+        written, stepped, named, *others = references
+        session = self.coordinator(*references)
+        for agent, label in (("a1", ""), ("a2", ""), ("a3", f"build {named}"), ("a4", "tests")):
+            self.subagent(session, agent, label)
+        self.comment(written, session, "a1")
+        self.hold_step(stepped, session, agent="a2")
+        self.wake(session)
+        self.assertEqual(
+            (WORKING, WORKING, WORKING),
+            (self.state_of(written), self.state_of(stepped), self.state_of(named)),
+        )
+        self.assertEqual([HELD] * 14, [self.state_of(reference) for reference in others])
+
+
 class StoreAgeTests(unittest.TestCase):
     """A store an earlier build wrote lacks what the map asks for, and reads empty."""
 
@@ -547,7 +708,11 @@ class StoreAgeTests(unittest.TestCase):
         conn.row_factory = sqlite3.Row
         self.addCleanup(conn.close)
         claim = ", claim_call_id INTEGER" if claim_column else ""
-        parent = ", parent_session_id TEXT NOT NULL DEFAULT ''" if parent_column else ""
+        parent = (
+            ", parent_session_id TEXT NOT NULL DEFAULT '', agent_id TEXT, label TEXT"
+            if parent_column
+            else ""
+        )
         conn.executescript(
             f"CREATE TABLE work_items(work_item_id TEXT, claim_ref TEXT{claim});"
             f"CREATE TABLE sessions(id TEXT, status TEXT, last_seen TEXT, started_at TEXT{parent});"

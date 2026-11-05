@@ -160,6 +160,11 @@ checkouts are therefore distinguishable even at the same version.
   compacted reads as it did before: a turn still running stays at work, and so do its
   subagents, so their cards no longer say «waiting». A client that really restarted still
   cuts off the subagents it left behind.
+- **A subagent's work moves on the graph for as long as it runs.** An item moves while a
+  live subagent wrote to it since it last started, holds one of its steps or was launched
+  with a description naming its number, however often its coordinator is woken in between.
+  An item a coordinator merely holds stays still, and a step a stopped subagent left moves
+  nothing.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 
