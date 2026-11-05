@@ -1082,18 +1082,22 @@ in one tertiary line — the kind (glyph and word), the reference (it copies its
 when it last changed and, where the item has one, its plan anchor as an icon, whose
 whole path stands in Relations with the item's other references, both opening the
 document at the anchor — and on its right
-Back and Close. The scroller holds the rest and moves it 1:1: the title, one line of
-facts in the registry's marks, the labels, the tabs, the content. The state is its
-own transition menu: said once, and a move the server refuses leaves the chip naming
-where the item is. Then the priority glyph and word, the holder, shortened to its name
-and the start of its session with the whole value and its lease in a tooltip and a
-warning dot once nobody is behind it, and the epic. Every fact stands in a row of one
-height, the state chip's, so a wrap adds a row of that height and never a half step.
-One action ends the first row on a wide drawer, level with it however the facts wrap,
-and stands at full width under the labels on a narrow one: «Взять», «Отпустить» on this
-client's claim, «Забрать себе» on another's. Where the facts argue against taking it
-the reason stands there instead — «Ждёт MAIN-12» while an open blocker remains, «Эпик —
-возьмите задачу из него» on an epic.
+Back and Close. The scroller holds the rest and moves it 1:1: the title, three rows of
+facts 12px apart, the tabs, the content. The first row is what the item is now: the
+state as its own transition menu, said once, so a move the server refuses leaves the
+chip naming where the item is, then a question waiting for its answer, the priority
+glyph and word, and the epic. The second is who is on it: a label in the quiet ink,
+«Исполняет», or «Ранее отвечал» on finished work, then the holder as bare words,
+shortened to its name and the start of its session with the whole value and its lease
+in a tooltip and a warning dot once nobody is behind it. A plate there read as one more
+chip of the row above. The third row is the labels, and an item with none has no such
+row and none of its room. Every fact stands at one height, the state chip's, so a wrap
+adds a row of that height and never a half step.
+One action ends the holder's row on a wide drawer and stands at full width under the
+labels on a narrow one: «Взять», «Отпустить» on this client's claim, «Забрать себе» on
+another's. Where the facts argue against taking it the reason stands there instead —
+«Ждёт MAIN-12» while an open blocker remains, «Эпик — возьмите задачу из него» on an
+epic.
 Reading down, the tabs stick to the top of the scroller, on one row that scrolls inside
 itself where it has to, the one shown and the one focused brought into it, and whatever
 is scrolled into view comes to rest under them. The bar answers with two fades on the

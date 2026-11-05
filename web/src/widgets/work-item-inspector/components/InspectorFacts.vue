@@ -1,32 +1,31 @@
 <script setup lang="ts">
 /**
- * What holds for an item, under its title: its state and priority beside the one
- * thing to do about it, its holder and epic on the whole line under them, and its
- * labels last. A question waiting for its answer is a fact too, and pressing it
- * goes there.
+ * What holds for an item, under its title, as three rows with room between them. The first
+ * is what the item is now: its state, a question waiting for its answer, its priority and
+ * its epic. The second is who is on it and the one thing to do about that, so the holder and
+ * the action stand together. The third is its labels, which add themselves to the Work
+ * filter, and an item with none has no such row.
  *
- * The state is said once, by the control that moves it: the chip is the
- * transition menu. It used to be a fact in a five-cell grid of equal-weight
- * labels and again a full-width «Перевести в» select above that grid, so the
- * state was read twice and found half way down the drawer. A refused move is
- * the host's to show; the chip keeps naming the state the item is in, so the
- * same move can be asked again.
+ * The state is said once, by the control that moves it: the chip is the transition menu. It
+ * used to be a fact in a five-cell grid of equal-weight labels and again a full-width
+ * «Перевести в» select above that grid, so the state was read twice and found half way down
+ * the drawer. A refused move is the host's to show; the chip keeps naming the state the item
+ * is in, so the same move can be asked again.
  *
- * Every mark is the facet registry's, so priority carries its glyph and its
- * hue here as it does on a tile. The holder's lease is a tooltip and, when
- * nobody is behind it any more, a warning dot: it is a detail of the holder,
- * not a fact of its own. A holder with a session behind them is the way to it,
- * on finished work too, where resuming whoever held it is often the point.
+ * Every mark is the facet registry's, so priority carries its glyph and its hue here as it
+ * does on a tile. The holder has a label of its own in the quiet ink, «Исполняет», or
+ * «Ранее отвечал» on finished work, where resuming whoever held it is often the point. The
+ * words after it are bare, a way to the session where there is one: a plate of the same
+ * weight as the chips above it made the row one more chip. The lease is a tooltip and, when
+ * nobody is behind it any more, a warning dot: a detail of the holder, not a fact of its own.
  *
- * Every fact stands in a row of one height, the height of the state's own chip,
- * so a line of them reads as one line whichever are present and however they wrap.
- * The action stands at the end of the first row where the drawer is wide, never
- * centred across a wrap, and at full width under the labels where it is not. The
- * host shows it again in the bar once this one has scrolled away. Labels are
- * buttons that add themselves to the Work filter.
+ * Every row stands at the height of the state's own chip, so a head reads the same whichever
+ * facts are present and however they wrap. The action ends the second row where the drawer
+ * is wide and stands at full width under the labels where it is not, within reach of a
+ * thumb. The host shows it again in the bar once this one has scrolled away.
  */
 import { computed, ref } from 'vue'
-import { Translation, useI18n } from 'vue-i18n'
+import { useI18n } from 'vue-i18n'
 
 import InspectorWriteActions from '@/widgets/work-item-inspector/components/InspectorWriteActions.vue'
 
@@ -40,6 +39,7 @@ import type { WorkFilterToken } from '@/entities/work-item/utils/workFilter.ts'
 
 import type { PlanningWorkflow, WorkItem } from '@/shared/api/planningModel.ts'
 import { isWebAuthor } from '@/shared/api/webAuthor.ts'
+import { holderName } from '@/shared/lib/actor.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import ChoiceSelect from '@/shared/ui/ChoiceSelect.vue'
 import SemanticState from '@/shared/ui/SemanticState.vue'
@@ -125,22 +125,16 @@ const leaseText = computed(() => {
   const state = t(`workItem.lease.${claim.state}`)
   return `${t('workItem.lease.label')}: ${state} — ${detail}`
 })
-/** Who the holder is to the item: responsible while it is open, history once it is done. */
-const ownerLabel = computed(() =>
-  t(props.item.state.is_terminal ? 'workItem.previousOwner' : 'workItem.owner'),
+const holder = computed(() => holderRef(props.item))
+/** What the row calls its holder; on finished work that nobody held, there is nobody to call. */
+const holderLabel = computed(() => {
+  if (!props.item.state.is_terminal) return t('workItem.head.holder')
+  return holder.value ? t('workItem.previousOwner') : ''
+})
+/** The holder as it was written, which the line shortens, and the lease behind the claim. */
+const holderTitle = computed(
+  () => [holder.value, leaseText.value].filter(Boolean).join('\n') || undefined,
 )
-/**
- * The holder as it was written, which the line shortens, and over it what the name is
- * to the item: the lease where one stands behind the claim, otherwise the name's role.
- */
-const holderTitle = computed(() =>
-  [holderRef(props.item), leaseText.value || ownerLabel.value].filter(Boolean).join('\n'),
-)
-/**
- * What a screen reader hears before the holder mark. On finished work the mark
- * already says «Ранее отвечал: X», so the label would say it twice.
- */
-const spokenOwner = computed(() => (props.item.state.is_terminal ? '' : `${ownerLabel.value}:`))
 
 /** The session behind the holder: its claim's, or on finished work its last claim's. */
 const holderExecutor = computed(() =>
@@ -208,6 +202,58 @@ defineExpose({ actionCell })
           :facets="['priority']"
         />
       </span>
+      <span
+        v-if="inEpic"
+        class="card-fact"
+      >
+        <FacetMarks
+          surface="card"
+          :item="item"
+          :facets="['parent']"
+          :context="context"
+        />
+      </span>
+    </div>
+    <div
+      class="card-holder"
+      :title="holderTitle"
+    >
+      <span
+        v-if="holderLabel"
+        class="card-holder-label"
+        >{{ holderLabel }}</span
+      >
+      <ExecutorLink
+        v-if="holderExecutor?.session"
+        class="card-holder-link"
+        :holder="holder"
+        :executor="holderExecutor"
+        :detail="leaseText"
+      />
+      <span
+        v-else-if="holder"
+        class="card-holder-name"
+        >{{ holderName(holder) }}</span
+      >
+      <FacetMarks
+        v-else
+        surface="card"
+        :item="item"
+        :facets="['holder']"
+      />
+      <SemanticState
+        v-if="lease?.state === 'stale'"
+        class="card-holder-stale"
+        dimension="claim-lease"
+        state="stale"
+        variant="dot"
+        :label="t('workItem.lease.mark')"
+      />
+      <span
+        v-if="leaseText"
+        class="visually-hidden"
+        >{{ leaseText }}</span
+      >
     </div>
     <div
       v-if="writable"
@@ -222,78 +268,7 @@ defineExpose({ actionCell })
         @take-over="emit('take-over')"
       />
     </div>
-    <!-- Under the first row and the action both, so a holder has the line to itself. -->
-    <div class="card-held">
-      <div class="card-held-line">
-        <span
-          class="card-fact card-holder"
-          :title="holderTitle"
-        >
-          <span
-            v-if="spokenOwner"
-            class="visually-hidden"
-            >{{ spokenOwner }}</span
-          >
-          <template v-if="holderExecutor?.session">
-            <Translation
-              v-if="item.state.is_terminal"
-              class="card-holder-past"
-              keypath="workItem.previousHolder"
-              tag="span"
-            >
-              <template #holder>
-                <ExecutorLink
-                  size="compact"
-                  variant="ghost"
-                  :holder="holderRef(item)"
-                  :executor="holderExecutor"
-                  :detail="ownerLabel"
-                />
-              </template>
-            </Translation>
-            <ExecutorLink
-              v-else
-              size="compact"
-              variant="ghost"
-              :holder="holderRef(item)"
-              :executor="holderExecutor"
-              :detail="leaseText || ownerLabel"
-            />
-          </template>
-          <FacetMarks
-            v-else
-            surface="card"
-            :item="item"
-            :facets="['holder']"
-          />
-          <SemanticState
-            v-if="lease?.state === 'stale'"
-            class="card-holder-stale"
-            dimension="claim-lease"
-            state="stale"
-            variant="dot"
-            :label="t('workItem.lease.mark')"
-          />
-          <span
-            v-if="leaseText"
-            class="visually-hidden"
-            >{{ leaseText }}</span
-          >
-        </span>
-        <span
-          v-if="inEpic"
-          class="card-fact"
-        >
-          <FacetMarks
-            surface="card"
-            :item="item"
-            :facets="['parent']"
-            :context="context"
-          />
-        </span>
-      </div>
-      <MissingPlaces />
-    </div>
+    <MissingPlaces class="card-missing" />
     <ul
       v-if="item.labels.length"
       class="card-labels"
@@ -312,11 +287,12 @@ defineExpose({ actionCell })
 </template>
 
 <style scoped>
+/* Auto-placed, so a row with nothing in it has no track and none of the room around it: named
+   areas keep an empty row's gaps, and a head without labels ended 12px lower than its action. */
 .card-facts-block {
   display: grid;
-  grid-template-areas: 'facts action' 'held held' 'labels labels';
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-1) var(--space-4);
+  gap: var(--space-3) var(--space-4);
   align-items: start;
   min-width: 0;
 }
@@ -324,27 +300,8 @@ defineExpose({ actionCell })
 .card-facts {
   display: flex;
   flex-wrap: wrap;
-  grid-area: facts;
-  gap: 0 var(--space-3);
-  align-items: center;
-  min-width: 0;
-}
-
-/* The holder and the epic take the whole width under the action, and what keeps the card's
-   sessions from opening, said once, stands under them. Beside the action a holder too long
-   for what was left wrapped its place onto a second line, and its plate kept the width of
-   the first: no box narrows to the longest of the lines it wrapped into. */
-.card-held {
-  display: grid;
-  grid-area: held;
-  gap: var(--space-1);
-  min-width: 0;
-}
-
-.card-held-line {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0 var(--space-3);
+  grid-column: 1 / -1;
+  gap: var(--space-2) var(--space-3);
   align-items: center;
   min-width: 0;
 }
@@ -363,56 +320,85 @@ defineExpose({ actionCell })
   min-height: var(--size-control-height-compact);
 }
 
-/* Short on the line, whole in its tooltip: the name and the start of the session, and
-   an ellipsis before a name long enough to push the row's other facts away. */
+/* The label and the first line of the holder share a baseline, in the middle of a row as high
+   as the action's. The label and the holder wrap as two words do: a holder too long to stand
+   beside the label takes a line of its own, and only there does its name give way. */
 .card-holder {
-  gap: var(--space-1);
-}
-
-.card-holder-stale {
-  flex: none;
-}
-
-/* «Ранее отвечал:» and the holder it names read as one fact, however the name is cut: the
-   colon is followed by a word's space to the edge of the holder's chip, as a word would be.
-   The gap between two facts stood there, so the label stood as far from its holder as from
-   the fact before it. */
-.card-holder-past {
-  display: inline-flex;
-  gap: var(--space-1);
-  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1;
+  gap: var(--space-1) var(--space-2);
+  place-content: center start;
+  align-items: baseline;
   min-width: 0;
+  min-height: var(--size-control-height-compact);
+}
+
+.card-holder-label {
+  flex: none;
   color: var(--color-text-muted);
   font: var(--font-detail);
   white-space: nowrap;
 }
 
+/* The words start where a plain holder's do: the margin takes back the inset its fill keeps
+   under the pointer. The name takes the ink a value has, against the label's quiet one. */
+.card-holder-link {
+  --color-open-action-name: var(--color-text);
+
+  margin-inline-start: calc(-1 * var(--space-2));
+}
+
+.card-holder-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  color: var(--color-text);
+  font: var(--font-detail);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-holder-stale {
+  flex: none;
+  align-self: center;
+}
+
 .card-action {
-  grid-area: action;
+  grid-column: 2;
 
   &:empty {
     display: none;
   }
 }
 
+/* A note on the holder's row rather than a row of its own, so it stands closer to it. */
+.card-missing {
+  grid-column: 1 / -1;
+  margin-block-start: calc(var(--space-1) - var(--space-3));
+}
+
 .card-labels {
   display: flex;
   flex-wrap: wrap;
-  grid-area: labels;
-  gap: 0 var(--space-1);
+  grid-column: 1 / -1;
+  gap: var(--space-1);
   min-width: 0;
   padding: 0;
   margin: 0;
   list-style: none;
 }
 
-/* A phone-wide drawer: the facts wrap, the labels follow them, and the one
-   action stands under both at the full width a thumb reaches. */
+/* A phone-wide drawer: the one action stands under everything else, at the full width a thumb
+   reaches. In the document it stays next to the holder it is about. */
 @container drawer (width < 520px) {
   .card-facts-block {
-    grid-template-areas: 'facts' 'held' 'labels' 'action';
     grid-template-columns: minmax(0, 1fr);
-    row-gap: var(--space-2);
+  }
+
+  .card-action {
+    grid-column: 1;
+    order: 1;
   }
 }
 </style>

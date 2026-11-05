@@ -247,15 +247,20 @@ for (const locale of ['en', 'ru'] as const)
   })
 
 for (const locale of ['en', 'ru'] as const)
-  test(`the last holder of finished work follows its colon by a space, in ${locale}`, async ({
+  test(`the last holder of finished work stands as far from its label as a holder does, in ${locale}`, async ({
     page,
   }) => {
     await openCard(page, { closed: true, locale })
-    const room = await separatorRoom(page.locator('.drawer .card-holder-past'))
-    expect(room?.separator).toBe(':')
-    expect(room?.before ?? 99).toBeLessThanOrEqual(0.5)
-    // A word's space at this size, to the edge of the holder's chip: it stood 8px off.
-    expect(room?.after ?? 99).toBeLessThanOrEqual(4.5)
+    const room = await page.locator('.drawer .card-holder').evaluate((holder) => {
+      const words = (node: Element | null) => {
+        const range = document.createRange()
+        if (node) range.selectNodeContents(node)
+        return range.getBoundingClientRect()
+      }
+      const label = words(holder.querySelector('.card-holder-label'))
+      return words(holder.querySelector('.open-action-name')).left - label.right
+    })
+    expect(room).toBeCloseTo(8, 0)
   })
 
 test('the card with its holders passes the accessibility rules, panel open or not', async ({

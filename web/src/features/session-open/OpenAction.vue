@@ -322,9 +322,11 @@ function finished(outcome: Outcome) {
   padding-block: var(--space-1);
 }
 
+/* A host whose label stands beside the name can lift it off the button's quiet ink. */
 .open-action-name {
   flex: 0 1 auto;
   min-width: 0;
+  color: var(--color-open-action-name, inherit);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

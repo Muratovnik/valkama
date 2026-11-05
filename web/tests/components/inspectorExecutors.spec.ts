@@ -122,7 +122,7 @@ describe('the holder in the head', () => {
       }),
     )
     await flushPromises()
-    expect(wrapper.get('.card-holder').text()).toContain('Previously responsible:')
+    expect(wrapper.get('.card-holder-label').text()).toBe('Previously responsible')
     expect(wrapper.getComponent(OpenAction).props('session')).toBe(SESSION)
   })
 
@@ -135,7 +135,8 @@ describe('the holder in the head', () => {
       }),
     )
     expect(wrapper.find('button.open-action').exists()).toBe(false)
-    expect(wrapper.get('.card-holder').text()).toContain('Previously responsible: the owner')
+    expect(wrapper.get('.card-holder-label').text()).toBe('Previously responsible')
+    expect(wrapper.get('.card-holder-name').text()).toBe('the owner')
   })
 })
 

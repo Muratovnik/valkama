@@ -17,6 +17,7 @@ export const workItemHeadMessages = {
       linkCopyFailed: 'Link not copied',
       state: 'State: {state}. Move to another state',
       epic: 'Epic — take a task from it',
+      holder: 'Held by',
     },
   },
   ru: {
@@ -30,6 +31,7 @@ export const workItemHeadMessages = {
       linkCopyFailed: 'Ссылка не скопирована',
       state: 'Состояние: {state}. Перевести в другое',
       epic: 'Эпик — возьмите задачу из него',
+      holder: 'Исполняет',
     },
   },
 } as const

@@ -75,6 +75,8 @@ type BackendOptions = {
   card?: (read: Record<string, unknown>) => object
   /** What `GET /api/open-plan` answers; an empty object by default, which no plan reads as. */
   openPlan?: (query: URLSearchParams) => object
+  /** What the space's read answers, where a test needs its items otherwise. */
+  space?: (model: Record<string, unknown>) => object
 }
 
 /** Paragraphs enough to scroll a drawer body well past any head. */
@@ -171,7 +173,8 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
         '/api/planning': () => {
           platformReads.push(`${path}?${url.searchParams.toString()}`)
           const response = planningReadFor(url.searchParams, options.includeAttachedDuplicate)
-          return fulfill(response.body, response.status)
+          const answer = options.space?.(response.body) ?? response.body
+          return fulfill(answer, response.status)
         },
         // Every card asks for its chain; these items head none.
         '/api/planning/work-item/chain': () =>

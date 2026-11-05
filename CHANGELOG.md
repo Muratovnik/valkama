@@ -62,6 +62,13 @@ checkouts are therefore distinguishable even at the same version.
   and it opens the one field under the last reply of that thread. Reply in thread is gone: a
   thread is one level deep, so the two buttons only ever did the same thing. Leaving the field
   brings focus back to the icon that opened it.
+### Changed
+
+- **A card's head reads as three rows with room between them.** The state, a waiting
+  question, the priority and the epic stand on the first; «Исполняет», the holder and the
+  action about them on the second; the labels on the third, which an item without labels
+  does not have. The holder is a bare link instead of a plate, and the rows stand 12px apart
+  instead of 4px.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 

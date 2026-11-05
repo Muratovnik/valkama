@@ -156,12 +156,12 @@ function press() {
 }
 
 /* Full width where the head stacks it under the labels; its own label's width
-   where it ends the facts line or stands in the bar. */
+   where it ends the holder's row or stands in the bar. */
 .write-action {
   width: 100%;
 }
 
-/* As tall as the action it stands in for, so it lines up with the facts' first row. */
+/* As tall as the action it stands in for, so it lines up with the holder's row. */
 .write-reason {
   display: inline-flex;
   gap: var(--space-1);

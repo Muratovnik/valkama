@@ -14,10 +14,10 @@
  *
  * The head scrolls with the content and reads as who the item is, then what holds
  * for it, then what to do: the identity line in the bar, the title under it, the
- * facts under that — the state as the menu that moves it, the priority, the holder,
- * the epic — with the one action at their end, the labels, and the sections. It used
- * to put a full-width write row and a section before the facts, which started half
- * way down the drawer. The writes refuse rather than force: a refusal shows the
+ * facts under that — the state as the menu that moves it, the priority and the epic,
+ * then the holder with the one action at its end, then the labels — and the sections.
+ * It used to put a full-width write row and a section before the facts, which started
+ * half way down the drawer. The writes refuse rather than force: a refusal shows the
  * server's reason in the band under the bar, where it is seen however far down the
  * write was made, and overriding is a second, explicit answer rather than a default.
  *

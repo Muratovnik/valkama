@@ -871,8 +871,6 @@ export const ru = {
     kindLabel: 'Тип',
     state: 'Состояние',
     priority: 'Приоритет',
-    holder: 'Ответственный: {holder}',
-    owner: 'Ответственный',
     previousOwner: 'Ранее отвечал',
     previousHolder: 'Ранее отвечал: {holder}',
     claim: 'Взять',

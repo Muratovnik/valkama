@@ -87,13 +87,14 @@ for (const width of [1440, 1024, 390]) {
     await expect(actions).toHaveText(['Забрать себе'])
     const action = await box(actions)
     const facts = await box(lead.locator('.card-facts'))
+    const holder = await box(lead.locator('.card-holder'))
     const labels = await box(lead.locator('.card-labels'))
-    // Wide: at the end of the facts' first row, above the labels, its top and height
-    // the row's. Narrow: under the labels, as wide as the facts.
+    // Wide: at the end of the holder's row, above the labels, its top and height the
+    // row's. Narrow: under the labels, as wide as the facts.
     expect(action.y < labels.y).toBe(!stacked)
-    expect(action.x >= facts.x + facts.width - 1).toBe(!stacked)
+    expect(action.x >= holder.x + holder.width - 1).toBe(!stacked)
     expect(Math.abs(action.width - facts.width) < 1).toBe(stacked)
-    expect(Math.abs(action.y - facts.y) < 1).toBe(!stacked)
+    expect(Math.abs(action.y - holder.y) < 1).toBe(!stacked)
     expect(action.height).toBe(36)
 
     // Labels are buttons that filter, each its own Tab stop.
@@ -415,9 +416,9 @@ for (const width of [1440, 390]) {
     const drawer = await openLongCard(page, width)
     // This item stands in no epic. An empty cell still takes a gap, and where the row is
     // full it wraps to a row of its own, which reads as a blank line under the facts. The
-    // state and priority stand beside the action, the holder on the line under them.
+    // state and priority make the first row, the holder the one under it.
     const widths = await drawer
-      .locator('.card-facts > *, .card-held-line > *')
+      .locator('.card-facts > *, .card-holder')
       .evaluateAll((facts) => facts.map((fact) => fact.getBoundingClientRect().width))
     expect(widths).toHaveLength(3)
     expect(Math.min(...widths)).toBeGreaterThan(0)

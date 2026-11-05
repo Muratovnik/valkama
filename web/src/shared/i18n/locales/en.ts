@@ -871,8 +871,6 @@ export const en = {
     kindLabel: 'Kind',
     state: 'State',
     priority: 'Priority',
-    holder: 'Responsible: {holder}',
-    owner: 'Responsible',
     previousOwner: 'Previously responsible',
     previousHolder: 'Previously responsible: {holder}',
     claim: 'Claim',
