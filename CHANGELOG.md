@@ -53,8 +53,10 @@ checkouts are therefore distinguishable even at the same version.
   and the counts follow, a word between the chips says which it is, a label pressed on a
   tile or in a card joins in the reading in force, and Reset takes it out. Only «any» is
   written into the address, so links made before read as they did.
-- **Labels stand higher in the filter menu.** They come right after the state and the kind,
-  so the way to combine them is in sight as the menu opens, with no scrolling.
+- **The way to combine labels is in sight as the filter menu opens.** The menu stands as tall
+  as the window lets it, and the label group, now last as the longest list, keeps its head
+  with «all» and «any» at the menu's lower edge until the list reaches it, so no scrolling is
+  needed on a real space or a short window.
 - **What can be done to an entry of a discussion is a quiet icon on its first line.** Reply,
   Resolve and its removal, folding a resolved thread, Change answer and Make task outcome
   stand beside the author and the time instead of as buttons in a row of their own under

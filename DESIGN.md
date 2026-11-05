@@ -809,9 +809,14 @@ be cut. The field is the way into the filter's menu, with no button of its own: 
 press in it, `/`, ↓ or a letter typed opens it, and Tab or focus coming back by
 itself does not, since Tab passes through to what the menu would cover. Typing
 narrows the menu, and with no value left it draws nothing, so a search by number
-keeps the work in sight. A group's head stays in sight while its values scroll, and
+keeps the work in sight. The menu stands as tall as the window
+lets it, down to 8px over its foot. A group's head stays in sight while its values scroll, and
 the label group's head says how the labels picked combine, «all» or «any», where the
-space has two to combine. The arrows reach that choice as they reach a value, because
+space has two to combine. That group stands last, as the longest list, and until the list
+reaches it its head waits at the menu's lower edge, so on a real space, with seven states and
+four kinds over it, the choice is in sight as the menu opens, on a short window too. The menu
+stood 420px tall with the head 37px under it, and the spec passed on a fixture of few entries.
+The arrows reach that choice as they reach a value, because
 a list has one focus and it stays in the field. The chips say the same in a word
 between two labels. On a phone the grouping gives its word up to the reset while a filter is on, so
 the work does not move as a filter turns on. Every number in the bar counts one population — the space, or a chain

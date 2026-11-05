@@ -43,6 +43,9 @@
      read in the window, and the page around it stays where it is. A floor is
      not a token any more: `rows` is what a field starts at. */
   --size-text-area-max-height: min(30lh, 60dvh);
+
+  /* A list of options in groups; a host that knows its room says so on the list. */
+  --size-option-groups-max-height: min(60dvh, 420px);
   --space-label-value: var(--space-2);
   --space-heading-content: var(--space-3);
 

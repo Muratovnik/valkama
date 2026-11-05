@@ -59,11 +59,12 @@ export interface FilterGroup {
 }
 
 /**
- * The menu's facets, in the order a reader narrows by them. Labels follow the state and the
- * kind, the two every space has and a reader starts from, and come ahead of the priority so
- * that how they combine stands in sight as the menu opens.
+ * The menu's facets, in the order a reader narrows by them: the closed vocabularies every space
+ * has, then who holds the work, then the labels, the longest list and the one whose head offers a
+ * choice. That head waits at the menu's lower edge until the list reaches it (`OptionGroups`), so
+ * how labels combine is in sight as the menu opens wherever the group stands.
  */
-const GROUP_ORDER: readonly ValueFacet[] = ['category', 'kind', 'labels', 'priority', 'holder']
+const GROUP_ORDER: readonly ValueFacet[] = ['category', 'kind', 'priority', 'holder', 'labels']
 
 /** The word for a token's value, in the reader's language. */
 function tokenValue(token: WorkFilterToken, t: Translate): string {

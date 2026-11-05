@@ -13,6 +13,10 @@
  * sight while its values scroll. A list holds options and nothing else, and a
  * second focus would take the caret from the field, so they are options too: the
  * arrows reach them first in the group, and each says in its own name what it is.
+ *
+ * Such a group stands last, because its head holds the whole list for its own: while
+ * the group is still below the fold the head waits at the list's lower edge, so what it
+ * offers is in sight as the list opens, however many values stand above it.
  */
 import { computed } from 'vue'
 
@@ -152,7 +156,7 @@ const highlighted = (place: number) => place === props.highlight || undefined
 <style scoped>
 /* The choice list's surface: the overlay edge is the one line it draws. */
 .option-groups {
-  max-height: min(60dvh, 420px);
+  max-height: var(--size-option-groups-max-height);
   padding: var(--space-1);
   border: 1px solid var(--color-rule-strong);
   background: var(--color-surface);
@@ -177,6 +181,18 @@ const highlighted = (place: number) => place === props.highlight || undefined
   justify-content: space-between;
   align-items: center;
   background: var(--color-surface);
+}
+
+/* With no box of its own the group leaves its head the list to stick in, at both edges. A sticky
+   box cannot leave what contains it, and a head inside its group could not rise above the group's
+   own top to wait at the edge. The group is still the group its options are read out in. */
+.option-group:has(.option-choices) {
+  display: contents;
+
+  .option-group-head {
+    bottom: calc(-1 * var(--space-1));
+    margin-top: var(--space-1);
+  }
 }
 
 .option-group-name {

@@ -24,11 +24,13 @@ const LABELS: Record<string, string[]> = {
 export const labelledSpace = (): Brief[] =>
   boardSpace().map((item) => ({ ...item, labels: LABELS[item.reference] ?? [] }))
 
-async function serveSpace(page: Page, items: Brief[] = labelledSpace()) {
+async function serveSpace(page: Page, items: Brief[] = labelledSpace(), workflow?: unknown) {
   await page.route('**/api/planning?*', async (route) => {
     const response = planningReadFor(new URL(route.request().url()).searchParams)
-    if (response.status === 200 && 'work_items' in response.body)
+    if (response.status === 200 && 'work_items' in response.body) {
       response.body.work_items = items as never[]
+      if (workflow) response.body.workflow = workflow as never
+    }
     await route.fulfill({
       status: response.status,
       contentType: 'application/json',
@@ -40,11 +42,11 @@ async function serveSpace(page: Page, items: Brief[] = labelledSpace()) {
 /** The flat board, or the view the state names, over the labelled space. */
 export async function openSpace(
   page: Page,
-  { height = 900, items, state = {}, width = 1440 }: OpenSpace = {},
+  { height = 900, items, state = {}, width = 1440, workflow }: OpenSpace = {},
 ) {
   await page.setViewportSize({ width, height })
   await installBackend(page)
-  await serveSpace(page, items)
+  await serveSpace(page, items, workflow)
   await page.goto(boardRoute(state))
   await expect(page.locator('.workspace-head')).toBeVisible()
 }
@@ -54,6 +56,8 @@ interface OpenSpace {
   items?: Brief[]
   state?: Record<string, string>
   width?: number
+  /** The space's own workflow, where the fixture's three states say too little. */
+  workflow?: unknown
 }
 
 export const field = (page: Page) => page.getByRole('combobox', { name: 'Filter work' })

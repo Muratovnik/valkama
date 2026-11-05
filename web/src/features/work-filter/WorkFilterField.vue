@@ -16,7 +16,8 @@
  * lies behind the menu, and focus also comes back here on its own, when a card
  * closes or the window returns; so nothing here listens for focus at all. Typing
  * narrows the menu, and with no value left to offer it draws nothing, which leaves
- * the work in sight for a search by number.
+ * the work in sight for a search by number. It stands as tall as the window lets it
+ * (`useMenuRoom`).
  *
  * The keyboard: `/` anywhere outside a text field comes here and opens the menu;
  * ↓ opens it and moves through it; Enter picks the highlighted value; Escape
@@ -33,6 +34,7 @@ import { useI18n } from 'vue-i18n'
 import { useEventListener } from '@vueuse/core'
 
 import { filterGroups, narrowGroups, picked } from '@/features/work-filter/filterOptions.ts'
+import { useMenuRoom } from '@/features/work-filter/useMenuRoom.ts'
 import WorkFilterPresets from '@/features/work-filter/WorkFilterPresets.vue'
 
 import {
@@ -159,6 +161,11 @@ const menuGroups = computed(() =>
       selected: (filter.value.labelsMatch ?? 'all') === choice.match,
     })),
   })),
+)
+const menuRoom = useMenuRoom(
+  () => root.value?.querySelector<HTMLElement>(`[id="${menuId}"]`),
+  () => shown.value,
+  () => tokens.value.length,
 )
 const activeOption = computed(() =>
   shown.value && highlight.value >= 0 ? optionGroupItemId(menuId, highlight.value) : undefined,
@@ -381,6 +388,7 @@ defineExpose({ focus: focusText })
       :id="menuId"
       v-model:highlight="highlight"
       class="filter-menu"
+      :style="{ '--size-option-groups-max-height': menuRoom }"
       :groups="menuGroups"
       :label="t('workItem.filter.menuLabel')"
       @choose="choose"
