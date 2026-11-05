@@ -80,7 +80,7 @@ test('a question answered elsewhere while this window wrote in it stays, saying 
     WRITTEN,
   ])
   // Focus went with the form to how it ended, never to the page.
-  await expect(touched.locator('.request-state')).toBeFocused()
+  await expect(touched).toBeFocused()
   expect(await activeTag(page)).not.toBe('BODY')
   // Nothing waits any more, and the list says so of the question it kept, not that there is
   // none: «No questions need your answer» stood over a question.
@@ -135,7 +135,7 @@ test('a send refused because the question closed keeps the promise that the draf
   await expect(touched).toHaveCount(1)
   await expect(touched.locator('.request-state')).toContainText('You answered')
   await expect(touched.locator('.request-unsent')).toContainText(WRITTEN)
-  await expect(touched.locator('.request-state')).toBeFocused()
+  await expect(touched).toBeFocused()
 })
 
 test('a question the keyboard is in stays when answered elsewhere, even with nothing written', async ({
@@ -148,7 +148,7 @@ test('a question the keyboard is in stays when answered elsewhere, even with not
   await touched.getByRole('button', { name: 'Comment on the question', exact: true }).focus()
   requests.settle(TOUCHED, answeredThere)
   await page.clock.runFor(POLL)
-  await expect(touched.locator('.request-state')).toBeFocused()
+  await expect(touched).toBeFocused()
   await expect(touched.locator('.request-unsent')).toHaveCount(0)
 })
 
@@ -218,7 +218,7 @@ test('a refresh that fails rings its sentence clear of the words, as the list ri
   const failure = dialog.locator('.request-toolbar .request-error')
   await expect(failure).toBeFocused()
   await expect(failure).toHaveCSS('outline-style', 'solid')
-  // The 4px a question's own lines keep their ring at (`.request-state`); 2px touched the letters.
+  // The 4px a question's deadline and failed send keep their ring at; 2px touched the letters.
   await expect(failure).toHaveCSS('outline-offset', '4px')
 })
 
@@ -238,11 +238,16 @@ for (const locale of ['en', 'ru'] as const) {
     const field = await touched.locator('.request-field').boundingBox()
     const note = touched.locator('.request-fields > .request-note')
     const zone = await note.boundingBox()
-    const held = await touched.locator('.request-held').first().boundingBox()
+    const row = await touched.locator('.request-actions').boundingBox()
     // Its own words say what it is, and a rule drawn for it alone would be one line too many.
     await expect(note).toHaveCSS('border-top-width', '0px')
     expect(Math.round((zone?.y ?? 0) - (field?.y ?? 0) - (field?.height ?? 0))).toBe(12)
-    // The buttons follow it at the card's own step, with no room left empty between.
-    expect(Math.round((held?.y ?? 0) - (zone?.y ?? 0) - (zone?.height ?? 0))).toBe(12)
+    // The buttons follow it at the card's own step, with no room left empty between; in
+    // Russian the two answers take the line under «Open task», as one pair.
+    expect(Math.round((row?.y ?? 0) - (zone?.y ?? 0) - (zone?.height ?? 0))).toBe(12)
+    const [wayOut, onward] = await touched.locator('.request-held').all()
+    const first = await wayOut?.boundingBox()
+    const second = await onward?.boundingBox()
+    expect(first?.y).toBe(second?.y)
   })
 }

@@ -18,6 +18,10 @@
  * places hold Cancel and Save. Cancel is always there to press: whatever else is wrong, the way
  * out of the form is not.
  *
+ * The two are one pair and wrap as one: on a row short of room they go to the next line
+ * together, at its end. Wrapped one by one, Send stood alone under Don't answer once Check
+ * status had joined the row, and Save under Cancel on a phone.
+ *
  * What the host puts in the slot stands first in the row: the press of the comment on the
  * question, on the row's left end, as what comes before all of this.
  *
@@ -118,26 +122,29 @@ defineExpose({ focusWayOut })
         {{ t('requests.declineAsked') }}
       </p>
     </div>
-    <VButton
+    <div
       v-if="asksTwo"
-      class="request-way-out request-held"
-      :aria-disabled="busyMark"
-      :data-room="wayOut.room"
-      :disabled="wayOutDisabled"
-      :variant="wayOut.variant"
-      @click="pressWayOut"
-      >{{ wayOut.word }}</VButton
+      class="request-pair"
     >
-    <VButton
-      v-if="asksTwo"
-      class="request-onward request-held"
-      :aria-disabled="busyMark"
-      :data-room="onward.room"
-      :disabled="disabled"
-      :variant="onward.variant"
-      @click="emit('onward')"
-      >{{ onward.word }}</VButton
-    >
+      <VButton
+        class="request-way-out request-held"
+        :aria-disabled="busyMark"
+        :data-room="wayOut.room"
+        :disabled="wayOutDisabled"
+        :variant="wayOut.variant"
+        @click="pressWayOut"
+        >{{ wayOut.word }}</VButton
+      >
+      <VButton
+        class="request-onward request-held"
+        :aria-disabled="busyMark"
+        :data-room="onward.room"
+        :disabled="disabled"
+        :variant="onward.variant"
+        @click="emit('onward')"
+        >{{ onward.word }}</VButton
+      >
+    </div>
     <VButton
       v-if="dismissable"
       variant="ghost"
@@ -198,6 +205,13 @@ defineExpose({ focusWayOut })
     flex: 0 0 100%;
     order: -1;
   }
+}
+
+.request-pair {
+  display: flex;
+  flex: none;
+  gap: var(--space-2);
+  align-items: center;
 }
 
 /* A button that holds room for its other word. */
