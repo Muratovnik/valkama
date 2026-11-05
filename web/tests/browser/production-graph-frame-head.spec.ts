@@ -340,14 +340,19 @@ async function openFarField(page: Page) {
   await expect(page.locator('.graph-frame.far').first()).toBeVisible()
 }
 
+/** Press «Приблизить» until the field is no longer far out. */
+async function nearerThanFar(page: Page) {
+  const zoomIn = page.getByRole('button', { name: 'Приблизить', exact: true })
+  for (let step = 0; step < 16 && (await page.locator('.graph-frame.far').count()) > 0; step += 1)
+    await zoomIn.click()
+}
+
 test('zoomed out, a header is its reference and edge, in one place folded and open', async ({
   page,
 }) => {
   await openFarField(page)
   // Far out a count takes a reference's place, so the places are read a step nearer.
-  const zoomIn = page.getByRole('button', { name: 'Приблизить', exact: true })
-  for (let step = 0; step < 16 && (await page.locator('.graph-frame.far').count()) > 0; step += 1)
-    await zoomIn.click()
+  await nearerThanFar(page)
   await expect(frameOf(page, OPEN)).toHaveClass(/overview/u)
   await expect(frameOf(page, OPEN)).not.toHaveClass(/folded/u)
   await expect(frameOf(page, CROWDED)).toHaveClass(/folded/u)

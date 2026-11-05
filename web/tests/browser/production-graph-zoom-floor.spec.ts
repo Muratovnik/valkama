@@ -34,6 +34,22 @@ async function wholeZoom(page: Page) {
   return await settledZoom(page)
 }
 
+/** Press «Zoom out» until it turns off. */
+async function zoomOutToTheLimit(page: Page) {
+  for (let step = 0; step < 3 && (await zoomOutButton(page).isEnabled()); step += 1)
+    await zoomOutButton(page).click()
+}
+
+/** Press a frame's fold from near enough: the overview hides it. */
+async function pressFold(page: Page, id: string) {
+  const zoomIn = page.getByRole('button', { name: ZOOM_IN, exact: true })
+  const overview = page.locator('.graph-frame.overview')
+  for (let step = 0; step < 30 && (await overview.count()) > 0; step += 1) await zoomIn.click()
+  await page.evaluate((target) => {
+    document.querySelector<HTMLElement>(`[data-walk-target="frame:${target}:fold"]`)?.click()
+  }, id)
+}
+
 const showAll = (page: Page) =>
   page.locator('.graph [role="radio"]', { hasText: 'All' }).first().click()
 const showOpen = (page: Page) =>
@@ -56,8 +72,7 @@ for (const width of [1500, 390]) {
     await page.getByRole('button', { name: ZOOM_IN, exact: true }).click()
     await expect.poll(async () => await zoomNow(page)).toBeGreaterThan(whole)
     await expect(zoomOutButton(page)).toBeEnabled()
-    for (let step = 0; step < 3 && (await zoomOutButton(page).isEnabled()); step += 1)
-      await zoomOutButton(page).click()
+    await zoomOutToTheLimit(page)
     await expect.poll(async () => await zoomNow(page)).toBe(whole)
     await expect(zoomOutButton(page)).toBeDisabled()
   })
@@ -90,27 +105,14 @@ test('the limit follows a fold: it moves with the drawing, and comes back when t
   const folded = page.locator('.graph-frame.folded.holding').first()
   const id = (await folded.getAttribute('data-frame')) ?? ''
   const frame = page.locator(`.graph-frame[data-frame="${id}"]`)
-  /** Press the frame's fold from near enough: the overview hides it. */
-  async function pressFold() {
-    const zoomIn = page.getByRole('button', { name: ZOOM_IN, exact: true })
-    for (
-      let step = 0;
-      step < 30 && (await page.locator('.graph-frame.overview').count()) > 0;
-      step += 1
-    )
-      await zoomIn.click()
-    await page.evaluate((target) => {
-      document.querySelector<HTMLElement>(`[data-walk-target="frame:${target}:fold"]`)?.click()
-    }, id)
-  }
-  await pressFold()
+  await pressFold(page, id)
   await expect(frame).not.toHaveClass(/folded/u)
   await expect(page.locator('.graph')).not.toHaveAttribute('aria-busy', 'true')
   // The layout rewraps round an opened frame, so the field can fit nearer as well as further.
   await expect.poll(() => wholeZoom(page)).not.toBe(before)
   await expect(zoomOutButton(page)).toBeDisabled()
 
-  await pressFold()
+  await pressFold(page, id)
   await expect(frame).toHaveClass(/folded/u)
   await expect(page.locator('.graph')).not.toHaveAttribute('aria-busy', 'true')
   await expect.poll(() => wholeZoom(page)).toBe(before)
