@@ -6,6 +6,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { present } from '../support/present.ts'
 import { installBackend } from './backend.ts'
 import { installDiscussionBackend } from './discussionBackend.ts'
+import { enableExecutionTab } from './executionFixtures.ts'
 import { installInputRequestBackend } from './inputRequestBackend.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import {
@@ -23,6 +24,8 @@ test('root keyboard finder opens the exact attached result with partial coverage
   page,
 }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 900 })
+  // On, so what keeps the attempts unread here is the attached store and not the default.
+  await enableExecutionTab(page)
   const backend = await installBackend(page, { includeAttachedDuplicate: true })
   const executionReads: string[] = []
   page.on('request', (request) => {

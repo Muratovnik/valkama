@@ -1,3 +1,4 @@
+import { createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 
 import { flushPromises, mount } from '@vue/test-utils'
@@ -10,6 +11,7 @@ import { fetchExecutionHistory } from '@/shared/api/executionApi.ts'
 import { fetchWorkItem } from '@/shared/api/planningApi.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import { messages } from '@/shared/i18n/index.ts'
+import { useSettingsStore } from '@/shared/stores/settingsStore.ts'
 
 // The card asks for its chain on every open; this spec is about something else.
 vi.mock('@/shared/api/planningChainApi.ts', async () => {
@@ -68,7 +70,10 @@ function mountInspector(realOverview = false) {
       writable: realOverview,
     },
     global: {
-      plugins: [createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages })],
+      plugins: [
+        createPinia(),
+        createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages }),
+      ],
       stubs: {
         ChoiceSelect: true,
         DrawerFrame: drawerFrame,
@@ -89,6 +94,7 @@ function mountInspector(realOverview = false) {
 
 describe('WorkItemInspector resource state', () => {
   beforeEach(() => {
+    localStorage.setItem('valkama-settings', JSON.stringify({ executionTab: true }))
     vi.mocked(fetchWorkItem).mockReset()
     vi.mocked(fetchExecutionHistory).mockReset().mockResolvedValue({
       interface_version: 'valkama-execution-api',
@@ -156,6 +162,23 @@ describe('WorkItemInspector resource state', () => {
     vi.mocked(fetchWorkItem).mockResolvedValueOnce(record('Found', 1))
     const wrapper = mountInspector(true)
     await flushPromises()
+    expect(fetchExecutionHistory).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
+  it('with the tab off it never asks about attempts and has no launch form, until turned on', async () => {
+    localStorage.clear()
+    vi.mocked(fetchWorkItem).mockResolvedValue(record('Found', 1))
+    const wrapper = mountInspector(true)
+    await flushPromises()
+    expect(wrapper.find('launch-dialog-stub').exists()).toBe(false)
+    await wrapper.setProps({ refreshToken: 1 })
+    await flushPromises()
+    expect(fetchExecutionHistory).not.toHaveBeenCalled()
+
+    useSettingsStore().settings.executionTab = true
+    await flushPromises()
+    expect(wrapper.find('launch-dialog-stub').exists()).toBe(true)
     expect(fetchExecutionHistory).toHaveBeenCalledTimes(1)
     wrapper.unmount()
   })

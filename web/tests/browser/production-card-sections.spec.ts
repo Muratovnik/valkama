@@ -4,9 +4,12 @@ import type { Locator, Page } from '@playwright/test'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
+import { enableExecutionTab } from './executionFixtures.ts'
 import { projectScope } from './planningFixtures.ts'
 import { pressWhereItStands } from './stuckPress.ts'
 import { test } from './test.ts'
+
+test.beforeEach(({ page }) => enableExecutionTab(page))
 
 async function topOf(locator: Locator): Promise<number> {
   const box = await locator.boundingBox()

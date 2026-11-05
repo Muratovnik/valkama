@@ -6,6 +6,7 @@ import { parsePlatformRoute, serializePlatformRoute } from '@/shared/api/platfor
 
 import { installBackend } from './backend.ts'
 import { largeChainHere, serve } from './chainFixtures.ts'
+import { enableExecutionTab } from './executionFixtures.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import {
   blockedWorkItem,
@@ -210,6 +211,7 @@ for (const width of [1440, 390]) {
     page,
   }) => {
     await page.addInitScript(() => localStorage.setItem('valkama-locale', 'ru'))
+    await enableExecutionTab(page)
     await page.setViewportSize({ width, height: 700 })
     await installBackend(page, { longRead: true })
     await page.goto(serializePlatformRoute({ module_id: 'planning', scope: projectScope }))

@@ -11,9 +11,11 @@ import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
-import { launchedSessionId } from './executionFixtures.ts'
+import { enableExecutionTab, launchedSessionId } from './executionFixtures.ts'
 import { globalScope, projectScope, spaceRef, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
+
+test.beforeEach(({ page }) => enableExecutionTab(page))
 
 test('the execution section shows the attempt and the launch form is built per client', async ({
   page,

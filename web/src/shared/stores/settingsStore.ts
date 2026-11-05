@@ -9,7 +9,7 @@ import type { PlatformSettings } from '@/shared/lib/settings'
  * Owner settings, shared by every screen that reads or writes them.
  *
  * Two useStorage instances on one key do not observe each other inside a single
- * window, so the settings page and session-opening flow must hold the same ref.
+ * window, so the settings page, the session-opening flow and a card must hold the same ref.
  * A store is what guarantees that; the hand-rolled module-level singleton
  * this replaces guaranteed it only for as long as nobody imported it twice.
  */

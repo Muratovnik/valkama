@@ -6,6 +6,7 @@ import { planningSpaceEntity, planningWorkItemRef } from '@/shared/api/platformP
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
+import { enableExecutionTab } from './executionFixtures.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import {
   attachedDataScopeId,
@@ -252,6 +253,8 @@ for (const width of [1440, 390]) {
 test('an attached same-key space stays readable but never reaches primary-only projections or writes', async ({
   page,
 }) => {
+  // On, so what keeps Execution off here is the attached store and not the default.
+  await enableExecutionTab(page)
   const executionReads: string[] = []
   page.on('request', (request) => {
     const path = new URL(request.url()).pathname

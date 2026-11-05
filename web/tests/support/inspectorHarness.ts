@@ -5,6 +5,7 @@
  * spec still declares its own `vi.mock` of the planning and execution clients,
  * because vitest hoists a mock per test file; this module only uses them.
  */
+import { createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 
 import { flushPromises, mount } from '@vue/test-utils'
@@ -101,6 +102,7 @@ export function mountInspector(
     },
     global: {
       plugins: [
+        createPinia(),
         createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages, pluralRules }),
       ],
       stubs: {
@@ -124,6 +126,7 @@ export async function choose(wrapper: VueWrapper, stateKey: string) {
 /** Fresh client doubles before each test, and no page or global left after it. */
 export function useInspectorHarness() {
   beforeEach(() => {
+    localStorage.setItem('valkama-settings', JSON.stringify({ executionTab: true }))
     vi.mocked(fetchWorkItem).mockReset()
     vi.mocked(fetchExecutionHistory).mockReset().mockResolvedValue({
       interface_version: 'valkama-execution-api',

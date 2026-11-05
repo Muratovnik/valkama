@@ -193,6 +193,9 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Changed
 
+- **The card's Execution tab is off by default.** Turn it on under Settings → General →
+  Interface. With it off, a card does not offer launching an agent; launching itself is
+  unchanged.
 - **The graph's open-or-all switch counts what the counts line counts.** Over the whole
   space every item is on the field, as a card or as the frame it heads, so «Open» and «All»
   now count epics and parent items too, and agree with «N open of M» above them rather

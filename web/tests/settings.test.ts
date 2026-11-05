@@ -95,7 +95,7 @@ test('settings stored with the notify fields of older builds read cleanly and lo
     notify: { itemCompleted: false, agentWaiting: true },
     openers: { claude: { kind: 'terminal', command: '' } },
   })
-  assert.deepEqual(Object.keys(merged).toSorted(), ['editor', 'sessions'])
+  assert.deepEqual(Object.keys(merged).toSorted(), ['editor', 'executionTab', 'sessions'])
   assert.equal(merged.sessions.claude.fallback, 'terminal')
 })
 
@@ -128,4 +128,16 @@ test('custom commands use one bounded inline validation contract', () => {
   assert.equal(validateCustomCommand('   '), 'required')
   assert.equal(validateCustomCommand('x'.repeat(401)), 'too-long')
   assert.equal(validateCustomCommand('codex resume {session}'), null)
+})
+
+test('the card offers Execution only once the owner turned it on', () => {
+  assert.equal(DEFAULT_SETTINGS.executionTab, false)
+  // What every build before this setting stored, in either of its shapes.
+  assert.equal(mergeSettings({ editor: 'cursor', sessions: {} }).executionTab, false)
+  assert.equal(mergeSettings({ openers: { claude: { kind: 'cursor' } } }).executionTab, false)
+  assert.equal(mergeSettings({ editor: 'cursor', executionTab: true }).executionTab, true)
+  // Only a stored `true` turns it on: a value this build did not write says nothing.
+  for (const odd of ['true', 1, {}, null]) {
+    assert.equal(mergeSettings({ executionTab: odd }).executionTab, false)
+  }
 })

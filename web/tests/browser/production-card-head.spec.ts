@@ -5,6 +5,7 @@ import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
+import { enableExecutionTab } from './executionFixtures.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { projectScope, workItem, workItemRef } from './planningFixtures.ts'
 import { test } from './test.ts'
@@ -203,6 +204,7 @@ const PINNED_AT_MOST: Readonly<Record<number, number>> = { 1440: 141, 1024: 141,
 
 async function openLongCard(page: Page, width: number, answer?: (page: Page) => Promise<unknown>) {
   await page.addInitScript(() => localStorage.setItem('valkama-locale', 'ru'))
+  await enableExecutionTab(page)
   await page.setViewportSize({ width, height: 844 })
   await installBackend(page, { longRead: true })
   // A route added after the backend's answers before it.

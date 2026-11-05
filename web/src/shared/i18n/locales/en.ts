@@ -13,6 +13,7 @@ import { openMessages } from '@/shared/i18n/openMessages.ts'
 /* English copy; tests/i18n.test.ts enforces parity with Russian keys. */
 import { platformIntegrationMessages } from '@/shared/i18n/platformIntegrationMessages.ts'
 import { richTextMessages } from '@/shared/i18n/richTextMessages.ts'
+import { settingsMessages } from '@/shared/i18n/settingsMessages.ts'
 import { timeMessages } from '@/shared/i18n/timeMessages.ts'
 import { workFilterMessages } from '@/shared/i18n/workFilterMessages.ts'
 import { workItemAgentMessages } from '@/shared/i18n/workItemAgentMessages.ts'
@@ -678,28 +679,7 @@ export const en = {
   work: {
     active: 'In work',
   },
-  settings: {
-    title: 'Valkama settings',
-    sectionLabel: 'Settings section',
-    section: {
-      general: 'General',
-      diagnostics: 'Diagnostics',
-    },
-    sectionIntro: {
-      general: 'Local preferences for this device.',
-      diagnostics: 'Checks the whole installation, regardless of the selected project.',
-    },
-    interface: 'Interface',
-    system: 'System',
-    interfaceIntro: 'Language and other local display preferences.',
-    languageHint: 'Applies to the entire Valkama interface on this device.',
-    searchOptions: 'Search options',
-    noOptions: 'No matching options',
-    diagnostics: {
-      needsAttention: 'Needs attention',
-      passed: 'Passed checks',
-    },
-  },
+  settings: settingsMessages.en.settings,
   session: {
     open: 'Open session',
   },

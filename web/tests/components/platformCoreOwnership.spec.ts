@@ -1,3 +1,4 @@
+import { createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 
 import { flushPromises, mount } from '@vue/test-utils'
@@ -154,7 +155,7 @@ async function render(
       },
       scope,
     },
-    global: { plugins: [i18n] },
+    global: { plugins: [createPinia(), i18n] },
   })
   await flushPromises()
   return wrapper

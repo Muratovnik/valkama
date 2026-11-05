@@ -13,6 +13,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { shot } from './boardPage.ts'
+import { enableExecutionTab } from './executionFixtures.ts'
 import {
   CRASHED,
   DESKTOP_LINK,
@@ -57,6 +58,7 @@ async function openCard(page: Page, { always, closed, locale = 'en', width = 128
     },
     { always, language: locale },
   )
+  await enableExecutionTab(page)
   await installBackend(page, {
     agents: threeAgents,
     card: closed ? finishedCard : heldCard,

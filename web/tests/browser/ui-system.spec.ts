@@ -2,10 +2,12 @@ import AxeBuilder from '@axe-core/playwright'
 import { expect } from '@playwright/test'
 
 import { asRoot } from '../support/threads.ts'
+import { enableExecutionTab } from './executionFixtures.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { test } from './test.ts'
 
 test.beforeEach(async ({ page }) => {
+  await enableExecutionTab(page)
   await page.route('**/api/agent-sessions/**', async (route) =>
     route.fulfill({
       status: 200,

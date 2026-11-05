@@ -6,9 +6,21 @@
  * and the fixture file follows the same split the read models do.
  */
 
+import type { Page } from '@playwright/test'
+
 import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 
 import { now, projectId, workItemRef } from './planningFixtures.ts'
+
+/**
+ * The owner has turned the card's Execution tab on, as Settings stores it, whatever
+ * else is stored. Off is the default, so a spec about the tab starts with this line.
+ */
+export const enableExecutionTab = (page: Page) =>
+  page.addInitScript(() => {
+    const stored = JSON.parse(localStorage.getItem('valkama-settings') ?? '{}') as object
+    localStorage.setItem('valkama-settings', JSON.stringify({ ...stored, executionTab: true }))
+  })
 
 /**
  * What the clients accept, as the server answers it.

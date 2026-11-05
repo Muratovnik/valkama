@@ -1,11 +1,14 @@
 /**
- * The owner's local preferences for opening sessions and files.
+ * The owner's local preferences: opening sessions and files, and whether a card
+ * offers its Execution tab.
  *
  * A session opens where it was last open; the server decides that. What the owner
  * sets here is only what the rule falls back to, per client family, and an
  * explicit "always open in …" that replaces the rule for a family. A file or a
- * folder opens in one editor. `mergeSettings` is the one reader of what a build
- * stored, including the shape every build before this one wrote.
+ * folder opens in one editor. The tab is off until the owner turns it on, which decides
+ * only whether a card offers a launch, never whether a launch can run. `mergeSettings` is
+ * the one reader of what a build stored, including the shape every build before this one
+ * wrote.
  */
 
 import { EDITORS } from '@/shared/api/openPlanModel.ts'
@@ -28,6 +31,7 @@ interface SessionOpening {
 
 export interface PlatformSettings {
   editor: Editor
+  executionTab: boolean
   sessions: Record<SessionFamily, SessionOpening>
 }
 
@@ -46,6 +50,7 @@ const DEFAULT_OPENING: SessionOpening = { fallback: 'vscode', always: '', comman
 
 export const DEFAULT_SETTINGS: PlatformSettings = {
   editor: 'vscode',
+  executionTab: false,
   sessions: {
     claude: { ...DEFAULT_OPENING },
     codex: { ...DEFAULT_OPENING },
@@ -118,7 +123,8 @@ export function mergeSettings(raw: unknown): PlatformSettings {
     else sessions[family] = { ...DEFAULT_OPENING }
   }
   const editor = EDITORS.includes(source.editor as Editor) ? (source.editor as Editor) : 'vscode'
-  return { editor, sessions }
+  // Only what this setting itself stored turns it on, so every older shape reads as off.
+  return { editor, executionTab: source.executionTab === true, sessions }
 }
 
 /** Which family's settings cover this session's client string. */

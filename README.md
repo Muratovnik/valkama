@@ -21,7 +21,8 @@ directory, and the MCP server only exists while a client is talking to it.
   agent session that took it, so it lapses once that session is gone, 12 hours
   after an ordinary end so that a resumed session keeps its work.
 - **Execution tracking on work items.** Launches carry an explicit delivery
-  contract, and outcomes are typed results rather than exit codes.
+  contract, and outcomes are typed results rather than exit codes. The card's
+  Execution tab is off by default; turn it on under Settings → General → Interface.
 - **Task finder** with Ctrl/Cmd+K across mapped projects. Results retain their
   exact store and space; unavailable sources and truncated results stay visible.
 - **Questions and decisions** in the task's discussion and a shared inbox. Agents
@@ -643,6 +644,11 @@ suffix `.unverified`, kept, and replaced by a fresh snapshot; remove it by hand
 once you no longer need it.
 
 ## Planning: launching agents from a card
+
+The launch dialog opens from the card's Execution tab, which is off by default.
+Turn it on under Settings → General → Interface, on each device you use; it takes
+effect at once. With the tab off, a card does not offer launching and does not read
+attempts, and launching itself keeps working as described here.
 
 The launch dialog records a delivery contract, not just a command: an
 `expected_effect` (`change_required`, `no_change_acceptable` or

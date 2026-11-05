@@ -56,6 +56,8 @@ const rows = (wrapper: VueWrapper, label: string) =>
     .find((group) => group.attributes('aria-label') === label)
     ?.findAll('.chain-row') ?? []
 
+const shown = (wrapper: VueWrapper) => wrapper.get('[role="tab"][aria-selected="true"]').text()
+
 const focusedReference = () => (document.activeElement as HTMLElement | null)?.dataset.reference
 
 describe('a card reopened by Back', () => {
@@ -97,6 +99,26 @@ describe('a card reopened by Back', () => {
       section: 'overview',
     })
     expect(focusedReference()).toBe(done?.reference)
+  })
+
+  it('comes back to Execution while the card offers it, and to Overview once it does not', async () => {
+    serveChain()
+    const point = {
+      chain: null,
+      opened: 'MAIN-1',
+      reference: ROOT.reference,
+      scroll: 0,
+      section: 'execution',
+    }
+    const on = await open(point)
+    expect(shown(on)).toBe('Execution')
+    expect(on.find('inspector-execution-stub').exists()).toBe(true)
+    on.unmount()
+
+    localStorage.clear()
+    const off = await open(point)
+    expect(shown(off)).toBe('Overview')
+    expect(off.find('inspector-execution-stub').exists()).toBe(false)
   })
 
   it('takes no return point meant for another card', async () => {

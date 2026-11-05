@@ -13,6 +13,7 @@ import { openMessages } from '@/shared/i18n/openMessages.ts'
 /* Русский каталог; tests/i18n.test.ts проверяет совпадение ключей. */
 import { platformIntegrationMessages } from '@/shared/i18n/platformIntegrationMessages.ts'
 import { richTextMessages } from '@/shared/i18n/richTextMessages.ts'
+import { settingsMessages } from '@/shared/i18n/settingsMessages.ts'
 import { timeMessages } from '@/shared/i18n/timeMessages.ts'
 import { workFilterMessages } from '@/shared/i18n/workFilterMessages.ts'
 import { workItemAgentMessages } from '@/shared/i18n/workItemAgentMessages.ts'
@@ -677,28 +678,7 @@ export const ru = {
   work: {
     active: 'В работе',
   },
-  settings: {
-    title: 'Настройки Valkama',
-    sectionLabel: 'Раздел настроек',
-    section: {
-      general: 'Общие',
-      diagnostics: 'Диагностика',
-    },
-    sectionIntro: {
-      general: 'Локальные параметры этого устройства.',
-      diagnostics: 'Проверка всей установки, независимо от выбранного проекта.',
-    },
-    interface: 'Интерфейс',
-    system: 'Система',
-    interfaceIntro: 'Язык и другие локальные параметры отображения.',
-    languageHint: 'Применяется ко всему интерфейсу Valkama на этом устройстве.',
-    searchOptions: 'Поиск по вариантам',
-    noOptions: 'Подходящих вариантов нет',
-    diagnostics: {
-      needsAttention: 'Требует внимания',
-      passed: 'Успешные проверки',
-    },
-  },
+  settings: settingsMessages.ru.settings,
   session: {
     open: 'Открыть сессию',
   },

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { storeToRefs } from 'pinia'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -7,12 +8,15 @@ import SettingsGroup from '@/pages/settings/components/SettingsGroup.vue'
 import SettingsOpening from '@/pages/settings/components/SettingsOpening.vue'
 import SettingsRow from '@/pages/settings/components/SettingsRow.vue'
 
+import { useSettingsStore } from '@/shared/stores/settingsStore.ts'
 import type { ChoiceOption } from '@/shared/ui/choiceControls.ts'
 import SelectionControl from '@/shared/ui/SelectionControl.vue'
+import ToggleSwitch from '@/shared/ui/ToggleSwitch.vue'
 
 defineProps<{ locale: string }>()
 const emit = defineEmits<{ locale: [locale: 'en' | 'ru'] }>()
 const { t } = useI18n()
+const { settings } = storeToRefs(useSettingsStore())
 
 const languageOptions = computed<ChoiceOption[]>(() => [
   { value: 'ru', label: t('language.ru'), icon: 'language' },
@@ -48,6 +52,19 @@ function emitLocale(value: string) {
             @update:model-value="emitLocale"
           />
         </SettingsRow>
+        <SettingsRow
+          :label="t('settings.executionTab.label')"
+          :hint="t('settings.executionTab.hint')"
+        >
+          <ToggleSwitch
+            class="settings-general-switch"
+            :model-value="settings.executionTab"
+            :label="t('settings.executionTab.label')"
+            :on-label="t('settings.executionTab.on')"
+            :off-label="t('settings.executionTab.off')"
+            @update:model-value="settings.executionTab = $event"
+          />
+        </SettingsRow>
       </SettingsGroup>
 
       <SettingsAlerts
@@ -79,5 +96,10 @@ function emitLocale(value: string) {
 .settings-general-control {
   width: 100%;
   min-width: 0;
+}
+
+/* Only as wide as what it says: a press beside a switch is not on it. */
+.settings-general-switch {
+  justify-self: start;
 }
 </style>

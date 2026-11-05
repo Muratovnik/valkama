@@ -52,12 +52,12 @@ import type { InspectorReturn } from '@/widgets/work-item-inspector/utils/inspec
 import { inspectorTarget } from '@/widgets/work-item-inspector/utils/inspectorTarget.ts'
 import { provideDraftGuard } from '@/widgets/work-item-inspector/utils/useDraftGuard.ts'
 import { useFailureText } from '@/widgets/work-item-inspector/utils/useFailureText.ts'
+import { useInspectorExecution } from '@/widgets/work-item-inspector/utils/useInspectorExecution.ts'
 import { useInspectorReturn } from '@/widgets/work-item-inspector/utils/useInspectorReturn.ts'
 import { useInspectorSections } from '@/widgets/work-item-inspector/utils/useInspectorSections.ts'
 import { useInspectorWrites } from '@/widgets/work-item-inspector/utils/useInspectorWrites.ts'
 import { useTakeoverQuestion } from '@/widgets/work-item-inspector/utils/useTakeoverQuestion.ts'
 import { useWorkItemChain } from '@/widgets/work-item-inspector/utils/useWorkItemChain.ts'
-import { useWorkItemExecutions } from '@/widgets/work-item-inspector/utils/useWorkItemExecutions.ts'
 import { useWorkItemResource } from '@/widgets/work-item-inspector/utils/useWorkItemResource.ts'
 
 import { provideMissingPlaces } from '@/features/session-open/missingPlaces.ts'
@@ -69,7 +69,6 @@ import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import type { PlanningWorkflow } from '@/shared/api/planningModel.ts'
 import { typedFailure } from '@/shared/api/typedFailure.ts'
-import type { LaunchPacket } from '@/shared/types/launch.ts'
 import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
 import DrawerFrame from '@/shared/ui/DrawerFrame.vue'
@@ -111,7 +110,7 @@ const { t } = useI18n()
 const busy = ref(false)
 const frame = ref<InstanceType<typeof DrawerFrame> | null>(null)
 const facts = ref<InstanceType<typeof InspectorFacts> | null>(null)
-const { leaveUnreadable, section, sections, shownSection, tabs } = useInspectorSections(
+const { offersExecution, section, sections, shownSection, tabs } = useInspectorSections(
   () => props.writable,
   () => frame.value?.scrollToContent(),
   () => props.projectId,
@@ -179,20 +178,14 @@ const {
   writable: () => props.writable,
 })
 
-// Read for an item the read found, again on every refresh. Execution endpoints
-// name primary-store items by reference only, so an attached one asks nothing.
-const running = useWorkItemExecutions(
-  () => props.reference,
+// Read for an item the read found, again on every refresh, while the card offers it.
+const { running, submitLaunch } = useInspectorExecution({
   busy,
-  reloaded,
-  () => (props.writable && item.value ? `${item.value.work_item_id}:${props.refreshToken}` : ''),
-)
-
-/** The refusal is worded here, where the catalog is, not inside the composable. */
-function submitLaunch(packet: LaunchPacket) {
-  if (!props.writable) return
-  void running.start(packet, (message) => t('execution.launchFailed', { message }))
-}
+  changed: reloaded,
+  offered: () => offersExecution.value,
+  readFor: () => (item.value ? `${item.value.work_item_id}:${props.refreshToken}` : ''),
+  reference: () => props.reference,
+})
 
 // A string key, because a getter that returns a fresh array compares two new
 // references every time and fires on any dependency touch rather than a change.
@@ -202,10 +195,7 @@ watch(
       `${props.projectId}:${props.resourceRef.resource_id}:${props.reference}:${props.refreshToken}`,
     () => props.writable,
   ],
-  () => {
-    void load()
-    leaveUnreadable()
-  },
+  () => void load(),
   { immediate: true },
 )
 
@@ -484,6 +474,7 @@ defineExpose({ close, openFrom })
   </DrawerFrame>
 
   <LaunchDialog
+    v-if="offersExecution"
     :open="running.launchOpen.value"
     :busy="busy"
     :error="running.launchError.value"

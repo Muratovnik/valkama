@@ -1276,7 +1276,8 @@ not call the session ended; it only stops moving its work.
 
 The related work/session/evidence context is one grouped relationship region,
 not a decorative sequence. Execution history and native session opening stay
-inside work-item context; Memory is a typed reference there.
+inside work-item context; Memory is a typed reference there. The card's Execution
+tab is off by default, and a switch in Settings turns it on.
 
 ### Settings
 

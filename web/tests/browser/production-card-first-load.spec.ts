@@ -5,6 +5,7 @@ import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
+import { enableExecutionTab } from './executionFixtures.ts'
 import {
   dataScopeId,
   projectId,
@@ -65,6 +66,7 @@ async function settle(page: Page, reads: readonly string[]) {
 }
 
 test('a card loaded from its address reads each of its parts once', async ({ page }) => {
+  await enableExecutionTab(page)
   await installBackend(page)
   const stream = await installStreamDouble(page)
   const reads = recordReads(page)

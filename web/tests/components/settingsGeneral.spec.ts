@@ -88,6 +88,17 @@ describe('SettingsGeneral opening sessions and files', () => {
     )
   })
 
+  it('keeps the Execution tab off until the switch turns it on, and saves that at once', async () => {
+    const wrapper = mountGeneral()
+    const toggle = wrapper.get('[role="switch"]')
+    expect(toggle.attributes('aria-label')).toMatch(/^Execution tab on a card/u)
+    expect(toggle.attributes('aria-checked')).toBe('false')
+    await toggle.trigger('click')
+    expect(toggle.attributes('aria-checked')).toBe('true')
+    await wrapper.vm.$nextTick()
+    expect(JSON.parse(localStorage.getItem('valkama-settings') ?? '{}').executionTab).toBe(true)
+  })
+
   it('offers every place and says so when what is installed cannot be read', async () => {
     answerPlaces([], 503)
     const wrapper = mountGeneral()
