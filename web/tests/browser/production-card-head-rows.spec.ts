@@ -80,6 +80,17 @@ async function box(locator: Locator) {
 
 const inkOf = (target: Locator) => target.evaluate((node) => getComputedStyle(node).color)
 
+/** A token's colour in the form the computed style reports it, read through a probe. */
+const tokenInk = (page: Page, token: string) =>
+  page.evaluate((name) => {
+    const probe = document.createElement('span')
+    probe.style.color = `var(${name})`
+    document.body.append(probe)
+    const ink = getComputedStyle(probe).color
+    probe.remove()
+    return ink
+  }, token)
+
 const middle = (bounds: { height: number; y: number }) => bounds.y + bounds.height / 2
 
 /** Where the words of a holder's name stand, which a button's inset does not move. */
@@ -242,6 +253,38 @@ test('a holder nobody can press is the same line, and the stale mark stays besid
   expect(Math.abs(nameWords.middle - labelWords.middle)).toBeLessThanOrEqual(1.5)
 })
 
+for (const width of [WIDE, PHONE]) {
+  test(`a claim is a bare action in the text ink, filled only under the pointer, at ${width}px`, async ({
+    page,
+  }) => {
+    const drawer = await openHead(page, {
+      width,
+      card: (read) => ({ ...read, claim: null, claim_ref: '', claim_state: null, links: [] }),
+    })
+    const action = drawer
+      .locator('.card-action')
+      .getByRole('button', { name: 'Взять', exact: true })
+    await expect(action).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+    expect(await inkOf(action)).toBe(await tokenInk(page, '--color-text'))
+    const actionBox = await box(action)
+    expect(actionBox.height).toBe(ROW_HEIGHT)
+    await action.hover()
+    await expect(action).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+    expect(await inkOf(action)).toBe(await tokenInk(page, '--color-text'))
+  })
+
+  test(`a takeover is a bare action in the quiet ink, at ${width}px`, async ({ page }) => {
+    const drawer = await openHead(page, { card: shortHolderCard, width })
+    const takeover = drawer
+      .locator('.card-action')
+      .getByRole('button', { name: 'Забрать себе', exact: true })
+    await expect(takeover).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+    expect(await inkOf(takeover)).toBe(await tokenInk(page, '--color-text-muted'))
+    const takeoverBox = await box(takeover)
+    expect(takeoverBox.height).toBe(ROW_HEIGHT)
+  })
+}
+
 test('on a phone the action stands under the labels at the whole width', async ({ page }) => {
   const drawer = await openHead(page, { card: shortHolderCard, width: PHONE })
   const action = await box(drawer.locator('.card-action').getByRole('button'))
@@ -289,6 +332,9 @@ for (const width of [WIDE, PHONE]) {
     await body.evaluate((node, at) => node.scrollTo({ top: at }), Math.ceil(gone) + 2)
     await expect(inBar).toBeVisible()
     await expect(inBar).toHaveText('Забрать себе')
+    // The bar takes the head's action as it is: the same bare, quiet takeover.
+    await expect(inBar).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+    expect(await inkOf(inBar)).toBe(await tokenInk(page, '--color-text-muted'))
     await inBar.click()
     await expect(drawer.locator('.drawer-frame-notices .confirm-strip')).toBeVisible()
   })

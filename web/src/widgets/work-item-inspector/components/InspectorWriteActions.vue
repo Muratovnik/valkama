@@ -92,9 +92,11 @@ const label = computed(() => {
   if (action.value === 'takeover') return t('workItem.takeOver')
   return action.value === 'release' ? t('workItem.release') : claimLabel.value
 })
-const weight = computed(() =>
-  action.value === 'takeover' || action.value === 'release' ? 'secondary' : 'primary',
-)
+/**
+ * A claim is the action the head offers first, so at rest it reads in the text ink, and a
+ * takeover or a release reads in the quiet one. Both are bare until the pointer is on them.
+ */
+const claims = computed(() => action.value !== 'takeover' && action.value !== 'release')
 /** Absent rather than false, because `aria-disabled="false"` is a claim and not a default. */
 const held = computed(() => props.busy || undefined)
 
@@ -140,7 +142,8 @@ function press() {
       v-else
       class="write-action"
       size="compact"
-      :variant="weight"
+      variant="text"
+      :class="{ 'write-action-claim': claims }"
       :aria-disabled="held"
       @click="press"
     >
@@ -159,6 +162,12 @@ function press() {
    where it ends the holder's row or stands in the bar. */
 .write-action {
   width: 100%;
+}
+
+/* The text weight sets its muted ink on its own root, so a claim names the ink it reads in
+   from here, one selector deeper than that weight. */
+.write-actions .write-action.write-action-claim {
+  --color-button-ink: var(--color-text);
 }
 
 /* As tall as the action it stands in for, so it lines up with the holder's row. */

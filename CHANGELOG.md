@@ -69,6 +69,9 @@ checkouts are therefore distinguishable even at the same version.
   action about them on the second; the labels on the third, which an item without labels
   does not have. The holder is a bare link instead of a plate, and the rows stand 12px apart
   instead of 4px.
+- **The head's one action is bare text.** «Взять», «Забрать себе» and «Отпустить» carry no
+  fill until the pointer is on them. A claim keeps the text ink and a takeover or a release
+  reads in the quieter one, so the claim still comes first.
 - **«Что дальше» on a card is now «Следующий шаг · 3 из 9».** A quiet line says it is a step
   and where it stands in the list, the step's words follow it, and «Все шаги» goes to the
   checklist with focus on it. The only step has neither the count nor the way to itself.

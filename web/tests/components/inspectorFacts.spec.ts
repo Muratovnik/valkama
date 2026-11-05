@@ -122,6 +122,23 @@ describe('the one action a card offers', () => {
   })
 })
 
+describe('the action at rest', () => {
+  it.each([
+    { case: 'a claim', record: item(), claims: true },
+    { case: 'a takeover', record: item({ claim_ref: 'codex' }), claims: false },
+    { case: 'a release', record: item({ claim_ref: 'user' }), claims: false },
+  ])(
+    'is a bare text action on $case, and only a claim reads in the text ink',
+    ({ record, claims }) => {
+      const button = facts(record).get('.write-actions button')
+      expect(button.classes()).toContain('variant-text')
+      expect(button.classes()).not.toContain('variant-primary')
+      expect(button.classes()).not.toContain('variant-secondary')
+      expect(button.classes().includes('write-action-claim')).toBe(claims)
+    },
+  )
+})
+
 describe('the state as the menu that moves it', () => {
   it('names where the item is, unchoosable, above where it may go', () => {
     const chip = facts(item()).getComponent(choiceStub)
