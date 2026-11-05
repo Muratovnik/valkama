@@ -86,13 +86,15 @@ const labels = computed(() =>
 /**
  * The lane the member list is narrowed to, chosen on the map. It is a reading
  * of the current answer, so a lane the answer no longer has — another scope,
- * another refresh — reads as no filter rather than as an empty list.
+ * another refresh — reads as no filter rather than as an empty list, and so does
+ * the only lane an answer has, which narrows nothing.
  */
 const chosenLane = ref<string | null>(null)
 const laneOf = (member: { parent_reference: string | null }) => member.parent_reference ?? ''
 const lane = computed(() => {
   const key = chosenLane.value
-  return key !== null && props.chain?.members.some((member) => laneOf(member) === key) ? key : null
+  const lanes = new Set(props.chain?.members.map((member) => laneOf(member)))
+  return key !== null && lanes.size > 1 && lanes.has(key) ? key : null
 })
 const listed = computed(() => {
   const chain = props.chain
@@ -147,6 +149,8 @@ const stats = computed<{ key: string; label: string; value: number | null; note?
       return [total, { key: 'none', label: t('workItem.chain.stat.noneOpen'), value: null }]
     const open = { key: 'open', label: t('workItem.chain.stat.open'), value: chain.open }
     if (!chain.ready) return [total, open]
+    // With all the work in one state there is no other group for the figure to exceed.
+    const several = Object.values(groups.value ?? {}).filter((group) => group.length > 0).length > 1
     return [
       total,
       open,
@@ -154,7 +158,7 @@ const stats = computed<{ key: string; label: string; value: number | null; note?
         key: 'workable',
         label: t('workItem.chain.stat.workable'),
         value: chain.ready,
-        note: t('workItem.chain.stat.workableNote'),
+        ...(several ? { note: t('workItem.chain.stat.workableNote') } : {}),
       },
     ]
   },
@@ -259,7 +263,10 @@ defineExpose({ restore, reveal, view })
       </VButton>
     </div>
 
-    <template v-if="chain && groups && listed && labels">
+    <div
+      v-if="chain && groups && listed && labels"
+      class="chain-body"
+    >
       <ChainBranchMap
         :chain="chain"
         :filter="lane"
@@ -293,14 +300,13 @@ defineExpose({ restore, reveal, view })
         >
           {{ verdict }}
         </p>
+        <ChainDetails
+          v-if="lane === null"
+          v-model:open="detailsOpen"
+          :pace="pace"
+          :series="chain.series"
+        />
       </div>
-
-      <ChainDetails
-        v-if="lane === null"
-        v-model:open="detailsOpen"
-        :pace="pace"
-        :series="chain.series"
-      />
 
       <div
         v-if="lane !== null"
@@ -344,7 +350,7 @@ defineExpose({ restore, reveal, view })
         :pace="pace"
         :series="chain.series"
       />
-    </template>
+    </div>
   </section>
 </template>
 
@@ -352,6 +358,14 @@ defineExpose({ restore, reveal, view })
 .chain {
   display: grid;
   gap: var(--space-heading-content);
+  min-width: 0;
+}
+
+/* Three parts, the map, its figures and the list, stand further apart than the rows inside
+   any one of them, or they read as one run of equal rows. */
+.chain-body {
+  display: grid;
+  gap: var(--space-5);
   min-width: 0;
 }
 

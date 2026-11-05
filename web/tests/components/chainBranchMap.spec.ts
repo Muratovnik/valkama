@@ -118,12 +118,48 @@ describe('the branch map', () => {
     expect(legend.find('[data-emphasis="strong"]').exists()).toBe(false)
     wrapper.unmount()
 
-    // Queued work alone is keyed as queued work, though it shares the backlog's grey.
-    const queued = mountMap(chainOf(ROOT, [mapMember('MAP-10', 'queued', 'MAP-1')]))
+    // Queued work is keyed as queued work, though it shares the backlog's grey.
+    const queued = mountMap(
+      chainOf(ROOT, [mapMember('MAP-10', 'queued', 'MAP-1'), mapMember('MAP-11', 'done', 'MAP-1')]),
+    )
     expect(queued.findAll('.branch-key .state-label').map((label) => label.text())).toEqual([
+      'Done',
       'Todo',
     ])
     queued.unmount()
+  })
+
+  it('keeps no key for one state, however many lanes hold it', () => {
+    const loneLane = mountMap(chainOf(ROOT, [mapMember('MAP-10', 'backlog', null)]))
+    expect(loneLane.find('.branch-key').exists()).toBe(false)
+    // The caption still says it: the key was only ever for the eye.
+    expect(loneLane.get('figcaption').text()).toContain('Backlog 1')
+    loneLane.unmount()
+
+    const twoLanes = mountMap(
+      chainOf(ROOT, [
+        mapMember('MAP-10', 'backlog', null),
+        mapMember('MAP-11', 'backlog', 'MAP-1'),
+      ]),
+    )
+    expect(twoLanes.find('.branch-key').exists()).toBe(false)
+    expect(twoLanes.findAll('button.branch-map-label')).toHaveLength(2)
+    twoLanes.unmount()
+  })
+
+  it('offers no choice of lane where there is one lane, and still names it', async () => {
+    const wrapper = mountMap(
+      chainOf(ROOT, [mapMember('MAP-10', 'backlog', null), mapMember('MAP-11', 'done', null)]),
+    )
+    expect(wrapper.find('button').exists()).toBe(false)
+    const label = wrapper.get('.branch-map-label')
+    expect(label.text()).toBe('no epic')
+    await label.trigger('click')
+    expect(wrapper.emitted('lane')).toBeUndefined()
+    // Its tasks are still a way into their cards, and the states still have their key.
+    expect(lanes(wrapper)).toHaveLength(1)
+    expect(wrapper.findAll('.branch-key-entry')).toHaveLength(2)
+    wrapper.unmount()
   })
 
   it('names the task under the pointer and marks it, and forgets it when the pointer leaves', async () => {

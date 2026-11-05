@@ -74,6 +74,8 @@ const guessed = computed(() => measured.value <= 0)
 const layout = computed(() => layoutBranches(props.chain))
 const keys = computed(() => legend(layout.value.lanes))
 const drawing = computed(() => drawBranches(layout.value, width.value, laneTexts))
+/** A lane's label narrows the list to it, which takes another lane to choose it over. */
+const choosable = computed(() => drawing.value.lanes.length > 1)
 
 const { announcement, cursorOf, enter, exit, leave, move, openAt, point, roomAbove, shown } =
   useBranchCursor({
@@ -144,7 +146,11 @@ function countId(lane: LaneDrawing): string {
 <template>
   <figure class="branch-map">
     <figcaption class="visually-hidden">{{ caption }}</figcaption>
-    <ChainBranchKey :entries="keys" />
+    <!-- A key tells states apart: one state is named, with its count, by the list's heading. -->
+    <ChainBranchKey
+      v-if="keys.length > 1"
+      :entries="keys"
+    />
     <div
       ref="canvas"
       class="branch-map-canvas"
@@ -213,8 +219,14 @@ function countId(lane: LaneDrawing): string {
           :class="{ before: lane.before, stacked: lane.stacked, receded: recedes(lane) }"
           :style="place(lane.head)"
         >
-          <button
+          <span
+            v-if="!choosable"
             class="branch-map-label"
+            >{{ laneName(lane.lane) }}</span
+          >
+          <button
+            v-else
+            class="branch-map-label chooses"
             type="button"
             :class="{ selected: isFiltered(lane) }"
             :aria-current="currentOf(lane)"
@@ -406,7 +418,6 @@ function countId(lane: LaneDrawing): string {
 
 .branch-map-label {
   flex: 0 0 auto;
-  min-block-size: 24px;
   padding: 0;
   border: 0;
   color: var(--color-text);
@@ -414,23 +425,27 @@ function countId(lane: LaneDrawing): string {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   background: none;
-  cursor: pointer;
 
-  &:hover,
-  &:focus-visible,
-  &.selected {
-    text-decoration: underline;
-    text-underline-offset: 3px;
-  }
+  &.chooses {
+    min-block-size: 24px;
+    cursor: pointer;
 
-  &.selected {
-    color: var(--color-accent);
-  }
+    &:hover,
+    &:focus-visible,
+    &.selected {
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
 
-  &:focus-visible {
-    border-radius: var(--radius-status);
-    outline: 2px solid var(--color-focus-ring);
-    outline-offset: 2px;
+    &.selected {
+      color: var(--color-accent);
+    }
+
+    &:focus-visible {
+      border-radius: var(--radius-status);
+      outline: 2px solid var(--color-focus-ring);
+      outline-offset: 2px;
+    }
   }
 }
 

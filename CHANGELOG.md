@@ -93,6 +93,11 @@ checkouts are therefore distinguishable even at the same version.
   what lay under both lit up for a moment, and it went too dark as the document closed. Each
   layer now keeps its dimming while it stands, so the screen under them only fades one way.
   This holds for any dialog over a card.
+- **A chain with nothing to tell apart says it once.** With all its work in one state the
+  chain block in a card named that state twice, in the map's key and over the list, and with
+  one lane its name was a filter that narrowed nothing. The key and the filter now appear
+  only when there is a second state or lane, and the map, the figures and the list stand
+  clearly apart.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 
