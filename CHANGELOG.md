@@ -93,6 +93,9 @@ checkouts are therefore distinguishable even at the same version.
   within 300 ms shows nothing in its place, and once «Loading» appears it stays at least
   400 ms, so a read that ends just after it does not blink it away. The same rule now holds
   for every loading panel and for a view whose code is still downloading.
+- A pointer resting on the hint under a field no longer lights the field as hovered, and a
+  press on the hint no longer puts the cursor in it. A field's label now names only the
+  field, and screen readers read the hint as the field's description.
 - The release check runs `npm ci` in `web` and `desktop` before anything else, so it
   verifies what the lockfiles pin rather than whatever `node_modules` holds, and it
   refuses a `node_modules` that is a link, because `npm ci` through a link empties its

@@ -47,7 +47,8 @@ describe('the card composer', () => {
       0,
     )
     // The section's heading names the field, so the label is left to a reader.
-    expect(wrapper.find('form label[for]').exists()).toBe(false)
+    const shown = wrapper.findAll('form label').filter((label) => !label.classes('visually-hidden'))
+    expect(shown).toHaveLength(0)
     expect(wrapper.get('button[type="submit"]').text()).toBe('Add note')
   })
 

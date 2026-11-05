@@ -159,6 +159,10 @@ const shownPlaceholder = computed(() =>
   cut.value && props.shortPlaceholder ? props.shortPlaceholder : props.placeholder,
 )
 
+/** The frame's error and hint, then a message the host draws apart from the field. */
+const described = (field: string | undefined) =>
+  [field, props.describedby].filter(Boolean).join(' ') || undefined
+
 function edited(event: Event) {
   emit('update:modelValue', (event.target as HTMLInputElement | HTMLTextAreaElement).value)
 }
@@ -170,10 +174,11 @@ defineExpose({
 </script>
 
 <template>
-  <!-- The wrapping element is the label, which is what associates the control. -->
+  <!-- The frame's label names the control by its id, which the frame hands down. -->
   <!-- eslint-disable vuejs-accessibility/no-autofocus -->
   <VField
-    v-slot="{ errorId }"
+    v-slot="{ controlId: fieldControlId, describedBy }"
+    :control-id="controlId"
     :label="label"
     :hint="hint"
     :error="error"
@@ -181,7 +186,7 @@ defineExpose({
   >
     <textarea
       v-if="rows"
-      :id="controlId"
+      :id="fieldControlId"
       ref="element"
       class="control"
       :class="{ bare }"
@@ -197,13 +202,13 @@ defineExpose({
       :autofocus="autofocus"
       :aria-label="label"
       :aria-invalid="invalidMark"
-      :aria-describedby="errorId ?? describedby"
+      :aria-describedby="described(describedBy)"
       @input="edited"
       @keydown="emit('keydown', $event)"
     />
     <input
       v-else
-      :id="controlId"
+      :id="fieldControlId"
       ref="element"
       class="control"
       :class="`size-${size}`"
@@ -221,7 +226,7 @@ defineExpose({
       :autofocus="autofocus"
       :aria-label="label"
       :aria-invalid="invalidMark"
-      :aria-describedby="errorId ?? describedby"
+      :aria-describedby="described(describedBy)"
       v-bind="combobox"
       @input="edited"
       @keydown="emit('keydown', $event)"

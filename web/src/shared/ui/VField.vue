@@ -9,13 +9,18 @@
  *
  * The frame is a component of its own because half of what it holds is not a
  * native control: `SelectionControl` and `SegmentedControl` carry their own
- * accessible name, so their frame must be a `div` rather than a `<label>` that
- * would wrap a second name around them.
+ * accessible name, so their frame is a `div` (`as="div"`) whose label names nothing.
  *
- * An error is part of the field too: it stands under the control, and its id
- * goes to the slot so the control can name it with `aria-describedby`. A form
- * that only says "fill in the required fields" at its foot leaves the reader to
- * find which field it meant. It carries a mark the hint has not (`FieldError`).
+ * Otherwise the label names the control through `for`, and holds nothing but its
+ * words. It used to wrap the whole frame, and a label passes a pointer on any of it
+ * to its control: resting on the hint under a field lit the field as hovered, and the
+ * hint stood inside what named the control instead of describing it. The id comes to
+ * the slot (`controlId`), unless the host names its own, and so does the id list the
+ * control describes itself by (`describedBy`): the hint and, while there is one, the error.
+ *
+ * An error is part of the field too: it stands under the control. A form that only
+ * says "fill in the required fields" at its foot leaves the reader to find which field
+ * it meant. It carries a mark the hint has not (`FieldError`).
  */
 import { computed, useId } from 'vue'
 
@@ -25,6 +30,8 @@ const props = withDefaults(
   defineProps<{
     label: string
     as?: 'label' | 'div'
+    /** The control's id, for a host that names it itself. */
+    controlId?: string
     error?: string
     /**
      * Keep the label for assistive technology only, for a field in a toolbar
@@ -33,24 +40,35 @@ const props = withDefaults(
     hideLabel?: boolean
     hint?: string
   }>(),
-  { hint: '', as: 'label', error: '', hideLabel: false },
+  { hint: '', as: 'label', controlId: undefined, error: '', hideLabel: false },
 )
+const ownId = useId()
 const errorId = useId()
-/** The message's id while there is a message, for the control to name. */
-const describedBy = computed(() => (props.error ? errorId : undefined))
+const hintId = useId()
+const control = computed(() => props.controlId ?? ownId)
+/** The label names its control; a frame whose control names itself shows words alone. */
+const labelTag = computed(() => (props.as === 'label' ? 'label' : 'span'))
+const labelFor = computed(() => (props.as === 'label' ? control.value : undefined))
+/** What the control is described by: the message while there is one, then the hint. */
+const describedBy = computed(
+  () =>
+    [props.error ? errorId : '', props.hint ? hintId : ''].filter(Boolean).join(' ') || undefined,
+)
 </script>
 
 <template>
-  <component
-    :is="as"
-    class="field"
-  >
-    <span
+  <div class="field">
+    <component
+      :is="labelTag"
       class="field-label"
       :class="{ 'visually-hidden': hideLabel }"
-      >{{ label }}</span
+      :for="labelFor"
+      >{{ label }}</component
     >
-    <slot :error-id="describedBy" />
+    <slot
+      :control-id="control"
+      :described-by="describedBy"
+    />
     <FieldError
       v-if="error"
       :id="errorId"
@@ -58,10 +76,11 @@ const describedBy = computed(() => (props.error ? errorId : undefined))
     >
     <small
       v-if="hint"
+      :id="hintId"
       class="field-hint"
       >{{ hint }}</small
     >
-  </component>
+  </div>
 </template>
 
 <style scoped>
