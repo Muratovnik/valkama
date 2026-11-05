@@ -35,6 +35,7 @@ from .platform import relations as platform_relations
 from .projects import project_registry
 from .store_identity import metadata as store_metadata
 from .store_identity.refs import planning_space_ref
+from .telemetry import usage_store
 
 # -- the legacy Board schema, kept only so a store can be migrated off it ----
 #
@@ -190,6 +191,9 @@ CREATE TABLE IF NOT EXISTS owner_alert_settings(
     updated_at TEXT NOT NULL
 );
 """
+    # How much was worked on what, added with schema 11. Additive and empty in an
+    # upgraded store, so this script is the whole of its migration.
+    + usage_store.SCHEMA
 )
 
 
@@ -228,7 +232,11 @@ MIGRATIONS = {
 # own, read the new answer keys as fields its own interface then refuses, carry
 # replies away from their root in a merge, and accept a note in place of a
 # required field; the ratchet makes it refuse a store at 10 instead.
-STORE_SCHEMA_VERSION = 10
+#
+# 11 added the usage tables, and no existing row changed its meaning. It is raised
+# so the upgrade takes a recovery point of its own, and because a build at 10 would
+# run on while nothing keeps those tables current, which reads as work that stopped.
+STORE_SCHEMA_VERSION = 11
 
 
 class StoreTooNewError(RuntimeError):
@@ -348,6 +356,7 @@ SCHEMA_TABLES = (
     *execution_store.SCHEMA_TABLES,
     *platform_core.SCHEMA_TABLES,
     "owner_alert_settings",
+    *usage_store.SCHEMA_TABLES,
 )
 
 #: What a session row learned to say about itself when session identity
@@ -708,7 +717,8 @@ def connect() -> sqlite3.Connection:
             # older than 8 still goes through the classification and the
             # historical row migrations, under the label those have always used;
             # a store at 8 needs the step that drops the retired tables and is
-            # labelled for it; a store at 9 needs only schema 10's steps.
+            # labelled for it; a store at 9 needs only schema 10's steps, and one at
+            # 10 only schema 11's.
             #
             # The schema-9 steps are bound to `stored_version < 9`, not to
             # "older than this build": bound to the ratchet, they would give a
@@ -733,7 +743,7 @@ def connect() -> sqlite3.Connection:
                 )
             elif upgrade:
                 _, source_identity = store_backups.verified_snapshot(
-                    conn, "preschema10", locate=_backups
+                    conn, "preschema10" if stored_version < 10 else "preschema11", locate=_backups
                 )
             else:
                 pretable_backup = _snapshot_before_new_tables(conn)

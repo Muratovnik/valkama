@@ -46,9 +46,16 @@ RETIRED = {
 RETIRED_INDEXES = {"platform_adapter_links_item", "platform_registry_audit_entity"}
 #: What the same upgrade adds: session identity is an additive step every store
 #: older than it takes on the way, schema 8 included, and so is schema 10's table
-#: of replaced answers. The chain ends at the build's own schema, under the one
-#: recovery point labelled for its oldest step.
-ADDED = {"execution_events", "work_item_request_answers", "owner_alert_settings"}
+#: of replaced answers and schema 11's usage tables. The chain ends at the build's
+#: own schema, under the one recovery point labelled for its oldest step.
+ADDED = {
+    "execution_events",
+    "work_item_request_answers",
+    "owner_alert_settings",
+    "usage_runs",
+    "usage_segments",
+    "usage_requests",
+}
 #: When the schema-8 build wrote the rows below.
 CREATED_AT = "2026-08-09T16:50:36Z"
 

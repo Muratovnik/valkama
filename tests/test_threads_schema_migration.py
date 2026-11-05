@@ -39,7 +39,14 @@ ADDED_COLUMNS = {
     "work_item_requests": ["answer_version"],
     "sessions": ["opened_in", "opened_host", "opened_folder", "host_session_id"],
 }
-ADDED_TABLES = {"work_item_request_answers", "owner_alert_settings"}
+#: Schema 11's tables are the rest of the chain to this build's own schema.
+ADDED_TABLES = {
+    "work_item_request_answers",
+    "owner_alert_settings",
+    "usage_runs",
+    "usage_segments",
+    "usage_requests",
+}
 ANSWER_COLUMNS = ["request_id", "version", "answers_json", "answered_by", "answered_at", "call_id"]
 ADDED_INDEXES = {
     "work_item_comments_reply_to",
@@ -248,7 +255,9 @@ class ThreadsSchemaMigrationTests(unittest.TestCase):
 
         conn = store.connect()
         self.addCleanup(conn.close)
-        self.assertEqual(10, conn.execute("PRAGMA user_version").fetchone()[0])
+        self.assertEqual(
+            store.STORE_SCHEMA_VERSION, conn.execute("PRAGMA user_version").fetchone()[0]
+        )
         self.assertEqual(set(shape) | ADDED_TABLES, _catalog(conn, "table"))
         for table, columns in shape.items():
             with self.subTest(table=table):
@@ -339,7 +348,9 @@ class ThreadsSchemaMigrationTests(unittest.TestCase):
         finally:
             raw.close()
         replayed = self.open_at(restored)
-        self.assertEqual(10, replayed.execute("PRAGMA user_version").fetchone()[0])
+        self.assertEqual(
+            store.STORE_SCHEMA_VERSION, replayed.execute("PRAGMA user_version").fetchone()[0]
+        )
         self.assertEqual(before, _values(replayed, shape))
         self.assertEqual(
             1,
@@ -373,14 +384,18 @@ class ThreadsSchemaMigrationTests(unittest.TestCase):
         self.assertEqual(1, len(self.snapshots()))
         conn = store.connect()
         self.addCleanup(conn.close)
-        self.assertEqual(10, conn.execute("PRAGMA user_version").fetchone()[0])
+        self.assertEqual(
+            store.STORE_SCHEMA_VERSION, conn.execute("PRAGMA user_version").fetchone()[0]
+        )
         self.assertEqual(1, len(self.snapshots()))
 
     def test_a_fresh_store_has_the_catalog_a_migrated_one_reaches(self) -> None:
         fresh = store.connect()
         self.addCleanup(fresh.close)
         self.assertEqual([], self.snapshots())
-        self.assertEqual(10, fresh.execute("PRAGMA user_version").fetchone()[0])
+        self.assertEqual(
+            store.STORE_SCHEMA_VERSION, fresh.execute("PRAGMA user_version").fetchone()[0]
+        )
         last = str(self.root / "last.sqlite3")
         self.populated_source(last)
         # The store an earlier schema-9 build left, before session identity,
@@ -403,7 +418,9 @@ class ThreadsSchemaMigrationTests(unittest.TestCase):
         schema8.build(self.path)
         conn = store.connect()
         self.addCleanup(conn.close)
-        self.assertEqual(10, conn.execute("PRAGMA user_version").fetchone()[0])
+        self.assertEqual(
+            store.STORE_SCHEMA_VERSION, conn.execute("PRAGMA user_version").fetchone()[0]
+        )
         self.assertEqual(1, len(self.snapshots("preschema9")))
         self.assertEqual([], self.snapshots())
         backup = sqlite3.connect(f"file:{self.snapshots('preschema9')[0]}?mode=ro", uri=True)
@@ -418,7 +435,9 @@ class ThreadsSchemaMigrationTests(unittest.TestCase):
         with mock.patch.object(store, "STORE_SCHEMA_VERSION", 9):
             with self.assertRaises(store.StoreTooNewError) as refusal:
                 store.connect()
-        self.assertEqual((10, 9), (refusal.exception.stored, refusal.exception.supported))
+        self.assertEqual(
+            (store.STORE_SCHEMA_VERSION, 9), (refusal.exception.stored, refusal.exception.supported)
+        )
         self.assertEqual(before, Path(self.path).read_bytes())
 
 
