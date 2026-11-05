@@ -116,9 +116,9 @@ describe('shared nested overlay ownership', () => {
     await flushPromises()
     button('.command-trigger').click()
     await flushPromises()
-    document
-      .querySelector('.overlay-layer-drawer .overlay-scrim')
-      ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    const covered = document.querySelector('.overlay-layer-drawer .overlay-scrim')
+    expect(covered).not.toBeNull()
+    covered?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     expect(drawer.value).toBe(true)
     const consumed = new KeyboardEvent('keydown', {
       key: 'Escape',

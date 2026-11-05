@@ -88,6 +88,11 @@ checkouts are therefore distinguishable even at the same version.
   coordinator's count, «неоднозначно: координатор держал 13 задач», or the range of its rows'
   counts, «13–19 задач». The rows of that group no longer repeat it; each keeps its exact count
   in its tooltip and its accessible description.
+- **The screen no longer blinks as a document opens over a card or the questions.** The
+  layer underneath dropped its dimming at once while the new one faded in from nothing, so
+  what lay under both lit up for a moment, and it went too dark as the document closed. Each
+  layer now keeps its dimming while it stands, so the screen under them only fades one way.
+  This holds for any dialog over a card.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 

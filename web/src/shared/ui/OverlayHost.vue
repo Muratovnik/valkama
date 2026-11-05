@@ -239,6 +239,12 @@ onUnmounted(release)
  * the grey ramp, which is the distance between two ordinary surfaces, so a dialog looked
  * like one more panel: it has to read as out of reach, not merely tinted.
  *
+ * Every host keeps its scrim for as long as it stands, covered or not, so each layer dims
+ * what is under it and a layer arriving or leaving only moves that by its own fade. Only the
+ * top one had a scrim: the one under a new layer went at once, while the new one started from
+ * nothing, so what lay under both lit up for a frame and then faded back, and darkened past
+ * its place as the top layer left. A covered scrim is out of reach under the layer on top.
+ *
  * The section's role is inside `modality`, which the a11y rule cannot look into: it reads
  * the attributes written on the element and this one carries a computed object. An
  * interactive surface is `role="dialog"` with a name and `aria-modal`, and a passive one is
@@ -271,7 +277,7 @@ onUnmounted(release)
       >
         <!-- eslint-disable-next-line vuejs-accessibility/click-events-have-key-events, vuejs-accessibility/no-static-element-interactions -->
         <div
-          v-if="active"
+          v-if="interactive"
           class="overlay-scrim"
           @click="pressOnScrim"
           @mousedown.prevent
