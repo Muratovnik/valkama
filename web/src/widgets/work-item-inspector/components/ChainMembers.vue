@@ -392,11 +392,24 @@ defineExpose({ restoreView, reveal, view })
   text-overflow: ellipsis;
 }
 
-/* On a narrow list the name gives way before the state word does, and who
-   holds a task gives way before its name: at a phone's width the holder took a
-   third of the row and left the title a dozen characters. The card of the task
-   names its holder. */
+/* On a narrow list a row's mark stands under its title, because one row's mark in a
+   shared column took the room from every title. Who holds a task gives way altogether:
+   at a phone's width the holder took a third of the row, and the card names it. */
 @container chain-members (width < 480px) {
+  .chain-row {
+    row-gap: var(--space-half);
+  }
+
+  .chain-row-title,
+  .chain-row-waiting,
+  .chain-row-detail {
+    grid-column: 2 / -1;
+  }
+
+  .chain-row-detail {
+    max-width: none;
+  }
+
   .chain-row-holder {
     display: none;
   }

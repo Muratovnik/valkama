@@ -3,7 +3,8 @@
  * whole list, so the reference, the title, the waiting mark and the holder start
  * at the same place in every row, whichever group the row is in and whether or
  * not the row has that cell. A long holder is cut short with its whole name in
- * its tooltip and takes no room from the titles.
+ * its tooltip and takes no room from the titles. On a narrow list a row's mark stands
+ * under its title, so that one row's mark takes no room from any title.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -125,6 +126,8 @@ for (const width of [1280, 390]) {
     expect(spread(rows.map((row) => row.title))).toBeLessThanOrEqual(1)
     // Every title is one track wide, so a holder in one row takes no room from another.
     expect(spread(rows.map((row) => row.titleWidth))).toBeLessThanOrEqual(1)
+    // A waiting mark in one row must not squeeze every title on a phone.
+    expect(rows[0]?.titleWidth ?? 0).toBeGreaterThanOrEqual(narrow ? 200 : 0)
     const waiting = rows.map((row) => row.waiting)
     expect(waiting.filter((value) => value !== null)).toHaveLength(2)
     expect(spread(waiting)).toBeLessThanOrEqual(1)
@@ -134,6 +137,101 @@ for (const width of [1280, 390]) {
     await section.screenshot(shot(info.outputPath(`chain-columns-${width}.png`)))
   })
 }
+
+/** A group of two states, so that a row in it says its own state beside any waiting mark. */
+const mixedChain = () =>
+  chainOf(
+    ROOT,
+    [
+      ...members,
+      {
+        ...mapMember('MAIN-1135', 'backlog', workItemRef.reference, {
+          ready: false,
+          title: 'Says its own state and what it waits on',
+        }),
+        state: { key: 'triage', name: 'Triage', category: 'backlog', is_terminal: false },
+      },
+    ],
+    { edges: [...edges, { from: mapId(998), to: mapId(1135), kind: 'blocks' as const }] },
+  )
+
+/** What a row draws: each cell's box, null where the cell is absent or hidden. */
+function boxesOf(section: Locator) {
+  return section.locator('.chain-row').evaluateAll((rows) =>
+    rows.map((row) => {
+      const box = (selector: string) => {
+        const node = row.querySelector(selector)
+        if (!node || node.getClientRects().length === 0) return null
+        const { bottom, left, right, top, width } = node.getBoundingClientRect()
+        return { bottom, left, right, top, width }
+      }
+      const detail = [...row.querySelectorAll('.chain-row-detail')]
+        .find((node) => node.getClientRects().length > 0)
+        ?.getBoundingClientRect()
+      const padding = Number.parseFloat(getComputedStyle(row).paddingRight)
+      return {
+        contentRight: row.getBoundingClientRect().right - padding,
+        detail: detail ? { left: detail.left, top: detail.top } : null,
+        title: box('.chain-row-title'),
+        waiting: box('.chain-row-waiting'),
+      }
+    }),
+  )
+}
+
+test('at a phone’s width a mark stands under its title and no title gives up room for one', async ({
+  page,
+}, info) => {
+  await page.setViewportSize({ width: 390, height: 1000 })
+  await installBackend(page)
+  await serve(page, mixedChain())
+  const section = await openCard(page)
+  await expect(section.locator('.chain-row')).toHaveCount(7)
+
+  const rows = await boxesOf(section)
+  const titles = rows.map((row) => row.title).filter((title) => title !== null)
+  expect(titles).toHaveLength(7)
+  // The whole width after the reference, in every row, with a mark in it or not.
+  for (const row of rows) {
+    expect(row.title?.width ?? 0).toBeGreaterThanOrEqual(200)
+    expect(Math.abs((row.title?.right ?? 0) - row.contentRight)).toBeLessThanOrEqual(1)
+  }
+  expect(spread(titles.map((title) => title.left))).toBeLessThanOrEqual(1)
+
+  const marked = rows.filter((row) => row.waiting !== null)
+  expect(marked).toHaveLength(3)
+  for (const row of marked) {
+    expect(row.waiting?.top ?? 0).toBeGreaterThanOrEqual((row.title?.bottom ?? 0) - 1)
+    expect(Math.abs((row.waiting?.left ?? 0) - (row.title?.left ?? 0))).toBeLessThanOrEqual(1)
+  }
+  const worded = rows.filter((row) => row.detail !== null)
+  expect(worded.length).toBeGreaterThan(0)
+  for (const row of worded) {
+    expect(row.detail?.top ?? 0).toBeGreaterThanOrEqual((row.title?.bottom ?? 0) - 1)
+    expect(Math.abs((row.detail?.left ?? 0) - (row.title?.left ?? 0))).toBeLessThanOrEqual(1)
+  }
+  await section.screenshot(shot(info.outputPath('chain-narrow-390.png')))
+})
+
+test('on a wide list a row stays one line, its mark and its holder in columns of their own', async ({
+  page,
+}, info) => {
+  await page.setViewportSize({ width: 1280, height: 1000 })
+  await installBackend(page)
+  await serve(page, mixedChain())
+  const section = await openCard(page)
+  await expect(section.locator('.chain-row')).toHaveCount(7)
+
+  const rows = await boxesOf(section)
+  const marked = rows.filter((row) => row.waiting !== null)
+  expect(marked).toHaveLength(3)
+  for (const row of marked) {
+    // Beside the title, on its line.
+    expect(row.waiting?.left ?? 0).toBeGreaterThanOrEqual(row.title?.right ?? Infinity)
+    expect(row.waiting?.top ?? Infinity).toBeLessThan(row.title?.bottom ?? 0)
+  }
+  await section.screenshot(shot(info.outputPath('chain-wide-1280.png')))
+})
 
 test('a long holder is cut short, keeps its whole name in its tooltip, and takes no room from titles', async ({
   page,

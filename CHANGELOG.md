@@ -123,6 +123,8 @@ checkouts are therefore distinguishable even at the same version.
 - **The rows of a chain line up across its groups.** Each row sized its own columns, so a
   waiting mark or a holder began at a different place in every group. The rows now share one
   set of columns, and a long holder is cut short with its whole name in its tooltip.
+- **On a phone a chain's titles keep the whole width.** A row's waiting mark or state word
+  stands under its title, so one row's mark no longer squeezes the title of every row.
 - **A card opens on the first click after a drag.** However a drag ended, in another column,
   in the same one, back where it began, refused by the server or over nothing that takes a
   tile, the next click on any tile was lost, and so was Enter on one. A click right after a
