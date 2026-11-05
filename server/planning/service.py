@@ -1228,7 +1228,8 @@ def merge_work_items(
     the steps someone ticked, the discussion, the commits, the links that made
     other work wait. Here the survivor takes all of that — the steps with their
     ids, ticks and step claims, the discussion threads whole, the questions with
-    their replies, the refs, and the links in their own direction — and each
+    their replies, a list with the comment it stands under, the refs, and the
+    links in their own direction — and each
     merged item is linked `duplicates` to it, given a summary naming it,
     released and closed in its cancelled state. What describes the merged item
     itself stays with it: its history, its reports with their threads, its
@@ -1408,19 +1409,24 @@ def _fold(
     for row, found, target in merging:
         identity = str(row["work_item_id"])
         reference = read_model.reference(conn, row)
+        # A list waits for nobody, so only a question is said to wait on the survivor.
         pending = conn.execute(
-            "SELECT COUNT(*) FROM work_item_requests WHERE work_item_id = ? AND status = 'pending'",
+            "SELECT COUNT(*) FROM work_item_requests WHERE work_item_id = ? AND status = 'pending'"
+            " AND comment_id IS NULL",
             (identity,),
         ).fetchone()[0]
+        roots = _moving_roots(conn, identity)
         # The question was about the work, and the work moves. Left here a pending
         # one would end with this item, and its answer would stay on a closed one.
+        # A list goes with the comment it stands under, so a report's stays here.
         conn.execute(
-            "UPDATE work_item_requests SET work_item_id = ? WHERE work_item_id = ?",
-            (survivor_id, identity),
+            "UPDATE work_item_requests SET work_item_id = ? WHERE work_item_id = ?"
+            " AND (comment_id IS NULL OR comment_id IN (SELECT value FROM json_each(?)))",
+            (survivor_id, identity, json.dumps(roots)),
         )
         moved = {
             "steps": len(found),
-            "comments": _move_threads(conn, identity, survivor_id),
+            "comments": _move_threads(conn, identity, survivor_id, roots),
             "refs": conn.execute(
                 "UPDATE OR IGNORE work_item_refs SET work_item_id = ? WHERE work_item_id = ?",
                 (survivor_id, identity),
@@ -1500,17 +1506,10 @@ def _fold(
     return answer
 
 
-def _move_threads(conn: sqlite3.Connection, identity: str, survivor_id: str) -> int:
-    """Move a merged item's discussion threads whole, and say how many rows moved.
+def _moving_roots(conn: sqlite3.Connection, identity: str) -> list[int]:
+    """The roots of a merged item's comment threads, which move; a report's stays."""
 
-    A comment's thread goes with its replies; a report's thread stays, report
-    and replies, because the report describes the merged item. Replies to the
-    questions go too, since the questions moved before this. One statement, so
-    no reply is ever on another item than its root, and the roots are chosen
-    before it runs rather than by a subquery over the rows it changes.
-    """
-
-    roots = [
+    return [
         int(found[0])
         for found in conn.execute(
             "SELECT id FROM work_item_comments WHERE work_item_id = ? AND report = ''"
@@ -1518,14 +1517,30 @@ def _move_threads(conn: sqlite3.Connection, identity: str, survivor_id: str) -> 
             (identity,),
         )
     ]
+
+
+def _move_threads(
+    conn: sqlite3.Connection, identity: str, survivor_id: str, roots: list[int]
+) -> int:
+    """Move a merged item's discussion threads whole, and say how many rows moved.
+
+    A comment's thread goes with its replies; a report's thread stays, report
+    and replies, because the report describes the merged item. Replies to the
+    questions that moved before this go too, and the replies to a list stay with
+    the report it stands under. One statement, so no reply is ever on another item
+    than its root, and the roots are chosen before it runs rather than by a
+    subquery over the rows it changes.
+    """
+
     listed = json.dumps(roots)
     return int(
         conn.execute(
             "UPDATE work_item_comments SET work_item_id = ? WHERE work_item_id = ?"
             " AND (id IN (SELECT value FROM json_each(?))"
             " OR reply_to IN (SELECT value FROM json_each(?))"
-            " OR reply_to_request IS NOT NULL)",
-            (survivor_id, identity, listed, listed),
+            " OR reply_to_request IN"
+            " (SELECT request_id FROM work_item_requests WHERE work_item_id = ?))",
+            (survivor_id, identity, listed, listed, survivor_id),
         ).rowcount
     )
 

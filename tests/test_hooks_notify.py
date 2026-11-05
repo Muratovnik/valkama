@@ -256,6 +256,34 @@ class AddressedTests(Harness):
 
         self.assertIsNone(self.hook(STRANGER), "the second subagent, in scope, is not addressed")
 
+    def test_a_ticked_list_reaches_the_agent_that_wrote_it_and_the_holder(self) -> None:
+        """A list is the question of the comment it stands under: its author asked it."""
+
+        self.agent("claim_work_item", id=self.ref)
+        listed = self.agent(
+            "comment_work_item",
+            SUBAGENT,
+            id=self.ref,
+            body="Findings",
+            list={"label": "Take on", "options": [{"id": "a", "label": "Widen the check"}]},
+        )["list_request_id"]
+        self.root_by({"sessionId": SESSION, "threadId": STRANGER}, "Another report")
+        self.settle(None, CHILD, STRANGER)
+        self.person(
+            "/api/planning/request/answer",
+            id=listed,
+            answers={"items": ["a"]},
+            expected_revision=0,
+        )
+        for agent in (CHILD, None):
+            with self.subTest(agent=agent):
+                told = self.hook(agent)
+                assert told is not None
+                self.assertIn("- question_answered at", told)
+                self.assertIn("Widen the check", told)
+                self.assertIsNone(self.hook(agent), "once each")
+        self.assertIsNone(self.hook(STRANGER), "a subagent that neither wrote it nor holds it")
+
     def test_nobody_holding_the_item_changes_nothing_for_the_thread(self) -> None:
         root = self.root_by(SUBAGENT)
         self.replies(root, "Before any hook read this item")

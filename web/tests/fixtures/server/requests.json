@@ -12,6 +12,63 @@
         "writable": true
       },
       "request": {
+        "request_id": "00000000-0000-4000-8000-000000000007",
+        "work_item_id": "00000000-0000-4000-8000-000000000002",
+        "reference": "MAIN-1",
+        "title": "Contract card",
+        "kind": "question",
+        "prompt": "What to take on",
+        "fields": [
+          {
+            "id": "items",
+            "label": "What to take on",
+            "options": [
+              {
+                "id": "a",
+                "label": "Widen the check",
+                "recommended": true
+              },
+              {
+                "description": "The two pages.",
+                "id": "b",
+                "label": "Fix the docs"
+              }
+            ],
+            "required": false,
+            "type": "multi_choice"
+          }
+        ],
+        "answers": null,
+        "own": null,
+        "field_notes": null,
+        "note": null,
+        "answer_version": 0,
+        "status": "pending",
+        "author": "agent",
+        "answered_by": "",
+        "execution_id": null,
+        "session_id": null,
+        "expires_at": null,
+        "created_at": "2026-01-02T03:04:05.000000Z",
+        "resolved_at": null,
+        "revision": 0,
+        "expired_reason": null,
+        "comment_id": 7,
+        "by_person": null,
+        "history": []
+      }
+    },
+    {
+      "target": {
+        "project_id": "example-project",
+        "space_ref": {
+          "data_scope_id": "00000000-0000-4000-8000-000000000001",
+          "space_key": "MAIN"
+        },
+        "reference": "MAIN-1",
+        "writable": true
+      },
+      "request": {
         "request_id": "00000000-0000-4000-8000-000000000006",
         "work_item_id": "00000000-0000-4000-8000-000000000002",
         "reference": "MAIN-1",
@@ -42,6 +99,7 @@
         "resolved_at": null,
         "revision": 0,
         "expired_reason": null,
+        "comment_id": null,
         "by_person": null,
         "history": []
       }
@@ -131,6 +189,7 @@
         "resolved_at": "2026-01-02T03:04:05.000000Z",
         "revision": 2,
         "expired_reason": null,
+        "comment_id": null,
         "by_person": false,
         "history": [
           {

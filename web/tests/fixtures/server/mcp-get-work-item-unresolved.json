@@ -54,6 +54,22 @@
         "at": "2026-01-02T03:04:05Z",
         "body": "Then the claims go in next."
       }
+    },
+    {
+      "id": 7,
+      "kind": "comment",
+      "report": null,
+      "checklist_item_id": null,
+      "checklist_item_text": null,
+      "author": "agent",
+      "body": "Two places misfire.",
+      "at": "2026-01-02T03:04:05Z",
+      "reply_to": null,
+      "reply_to_request": null,
+      "by_person": false,
+      "resolution": null,
+      "replies": 0,
+      "last_reply": null
     }
   ],
   "truncated": false,
@@ -129,18 +145,44 @@
         "session_id": null,
         "agent_id": null
       }
+    },
+    {
+      "action": "request_created",
+      "detail": "00000000-0000-4000-8000-000000000007",
+      "author": "agent",
+      "at": "2026-01-02T03:04:05Z",
+      "identity": {
+        "state": "unconfirmed",
+        "source": "mcp",
+        "session_id": null,
+        "agent_id": null
+      }
     }
   ],
-  "comments_total": 6,
-  "threads_total": 2,
-  "unresolved_total": 1,
-  "events_total": 6,
+  "comments_total": 7,
+  "threads_total": 3,
+  "unresolved_total": 2,
+  "events_total": 7,
   "history_truncated": true,
   "sessions": [],
   "questions": {
-    "total": 2,
-    "open": 1,
+    "total": 3,
+    "open": 2,
     "items": [
+      {
+        "id": "00000000-0000-4000-8000-000000000007",
+        "status": "pending",
+        "question": "What to take on",
+        "comment_id": 7,
+        "answer": [],
+        "note": null,
+        "answered_by": null,
+        "by_person": null,
+        "answered_at": null,
+        "answer_version": 0,
+        "replies": 0,
+        "last_reply": null
+      },
       {
         "id": "00000000-0000-4000-8000-000000000006",
         "status": "pending",

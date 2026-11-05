@@ -99,7 +99,7 @@ describe('the brief record', () => {
   it('is what the server answers with brief=true, and only the brief schema reads it', () => {
     const read = validatePlanningWorkItemBriefPayload(fixture('card-brief.json'))
     expect(read.state.status).toBe('ready')
-    if (read.state.status === 'ready') expect(read.state.payload.work_item.comment_count).toBe(6)
+    if (read.state.status === 'ready') expect(read.state.payload.work_item.comment_count).toBe(7)
     // Each strict schema refuses the other record, so neither read can pass for the other.
     expect(() => validatePlanningWorkItemPayload(fixture('card-brief.json'))).toThrow(/work_item/u)
     expect(() => validatePlanningWorkItemBriefPayload(fixture('card.json'))).toThrow(/work_item/u)

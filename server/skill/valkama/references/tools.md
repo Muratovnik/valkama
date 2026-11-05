@@ -36,7 +36,8 @@ full item instead; it carries `url` too.
 `claim_ready_work_item` answers with the item it took, or nothing when no item
 is ready. `comment_work_item` answers with `work_item`, `comment_count`,
 `comment_id`, and `reply_to` and `reply_to_request`: the root a reply joined,
-both null for a new root. `resolve_work_item_comment` answers with `work_item`,
+both null for a new root, and `list_request_id` when it carried a `list`, as
+`report_work_item` and `set_work_item_summary` do. `resolve_work_item_comment` answers with `work_item`,
 `comment_id` and `resolution`, the root's mark as it now stands.
 
 Any write to an item also answers with `from_person` when a person acted on it
@@ -91,11 +92,11 @@ and any of these groups, applied in this order:
 | `checklist_ticks` | `[{"item_id": "…", "done": true}]` | `tick_work_item_checklist_item` |
 | `refs` | `[{"kind": "commit", "value": "…", "label": "…"}]` | `attach_work_item_ref` |
 | `links` | `[{"other": "MAIN-20", "kind": "blocks", "remove": false}]` | `link_work_items` |
-| `comment` | `{"body": "…", "checklist_item_id": "…", "reply_to": 12, "reply_to_request": "…"}` | `comment_work_item` |
+| `comment` | `{"body": "…", "checklist_item_id": "…", "reply_to": 12, "reply_to_request": "…", "list": {"label": "…", "options": [...]}}` | `comment_work_item` |
 | `comments` | `[{"body": "…"}, {"body": "…", "reply_to": 12}]`, not with `comment` | `comment_work_item`, in order |
 | `resolutions` | `[{"comment_id": 12, "resolution": "…", "reopen": false}]` | `resolve_work_item_comment` |
 | `questions` | `[{"kind": "question", "prompt": "…", "fields": [...]}]` | `create_work_item_request` |
-| `summary` | `{"done": "…", "next": "…", "why": "…"}` | `set_work_item_summary` |
+| `summary` | `{"done": "…", "next": "…", "why": "…", "list": {"label": "…", "options": [...]}}` | `set_work_item_summary` |
 | `transition` | `{"state": "completed", "reason": "…", "force": false, "rank": "first"}` | `transition_work_item` |
 
 A list group holds at most 100 entries. `checklist_ticks` can name only steps
@@ -103,7 +104,9 @@ the item already had and a `checklist` in the same call kept; send a new step
 done as `{"text": "…", "done": true}` instead. Likewise a `reply_to` or a
 resolution names only a comment that existed before the call. `questions`
 beside a `transition` that closes the item is refused, `force` or not: the close
-would end them unanswered. A refusal
+would end them unanswered. So is a `list` in a comment or the summary of such a
+call. `applied.comment`, each entry of `applied.comments` and `applied.summary`
+carry `list_request_id` when they wrote a list. A refusal
 writes nothing and answers with the step:
 `{"error": {"code": "…", "message": "transition: …", "step": {"group": "transition", "index": 0}}}`.
 

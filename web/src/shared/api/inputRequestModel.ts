@@ -111,6 +111,8 @@ const requestSchema = strictObject({
   resolved_at: boundedText(ISO, 96).nullable(),
   revision: positiveInt(true),
   expired_reason: z.enum(['deadline', 'withdrawn', 'execution_closed', 'task_closed']).nullable(),
+  /** The comment a list stands under; null for any other question. */
+  comment_id: positiveInt().nullable().optional(),
 })
   .refine(
     (request) => new Set(request.fields.map((field) => field.id)).size === request.fields.length,

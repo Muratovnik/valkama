@@ -140,6 +140,20 @@
             "reply_to_request": "00000000-0000-4000-8000-000000000005",
             "by_person": true,
             "resolution": null
+          },
+          {
+            "id": 7,
+            "kind": "comment",
+            "report": null,
+            "checklist_item_id": null,
+            "checklist_item_text": null,
+            "author": "agent",
+            "body": "Two places misfire.",
+            "at": "2026-01-02T03:04:05Z",
+            "reply_to": null,
+            "reply_to_request": null,
+            "by_person": false,
+            "resolution": null
           }
         ],
         "events": [
@@ -207,6 +221,18 @@
             "action": "request_created",
             "detail": "00000000-0000-4000-8000-000000000006",
             "author": "asking-agent",
+            "at": "2026-01-02T03:04:05Z",
+            "identity": {
+              "state": "unconfirmed",
+              "source": "mcp",
+              "session_id": null,
+              "agent_id": null
+            }
+          },
+          {
+            "action": "request_created",
+            "detail": "00000000-0000-4000-8000-000000000007",
+            "author": "agent",
             "at": "2026-01-02T03:04:05Z",
             "identity": {
               "state": "unconfirmed",

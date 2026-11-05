@@ -138,6 +138,18 @@ replies in its thread rather than as new roots. A worker writes its report as
 the root of its own thread, posts what follows as replies there, and hands the
 root's `comment_id` back to the agent that delegated.
 
+**A list under a comment.** When a report or a comment offers several findings
+for the owner to choose from, put them under it as `list`: `{"label": "What to
+take on", "options": [{"id": "a", "label": "Widen the check", "recommended":
+true}, …]}`, up to 20 options written as a question's options are.
+`comment_work_item`, `report_work_item`, `set_work_item_summary` and the batch's
+`comment`, `comments` and `summary` take it, on a root only, and the comment and
+its list are one write; the answer adds `list_request_id`. It is a question of one
+`multi_choice` field, `items`, which the owner ticks with one button: its answer is
+`{"items": ["a"]}`, told to you and the holders as `question_answered`. Nobody
+waits for it: it raises no alert and is not among the questions waiting for the
+owner. Read it with the item's questions, where it carries `comment_id`.
+
 **Resolved threads.** `resolve_work_item_comment` marks a thread's root resolved
 with a one-line decision, and `reopen: true` removes the mark; the `resolutions`
 group does up to 100 roots in one call. Mark a thread only on the owner's
@@ -308,8 +320,11 @@ the answer arrives with the next read of the item, so go on with what does not
 depend on it. A question the work cannot go on without belongs in the client,
 where the person answers now. A request bound to an `execution_id` expires when
 that execution ends, and any pending request expires when its item closes, so an
-item holding an open request stays open. The owner's own rules on where to ask
-come first.
+item holding an open request stays open. A list under a comment does not hold it:
+the item closes with a list unticked, and the list then freezes, `expired` with
+`task_closed`, until the item reopens. To get the ticks, keep the item open, in
+review for instance; a call that writes a list and closes its item is refused. The
+owner's own rules on where to ask come first.
 
 ## Merging items that are one change
 
@@ -318,7 +333,8 @@ cause found from two places — `merge_work_items` folds them into the item that
 survives (`id`), with `items` the ones that fold in and a `reason`. The
 survivor takes their steps (ids, ticks and step claims kept), discussion
 threads whole, questions with their replies, refs and links; a report's thread
-stays on the merged item with the report. Each merged item is linked
+stays on the merged item with the report. A list goes with the comment it stands
+under, so a report's list stays with the report. Each merged item is linked
 `duplicates` to it, gets a summary naming it and closes in its cancelled state. It is refused, writing nothing,
 for an item another session holds (unless `force`), a closed item, an item in
 another space or a merged item with children. Merge before handing the work to

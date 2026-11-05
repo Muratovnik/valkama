@@ -912,10 +912,10 @@ these groups, and applies them in this order:
 | `checklist_ticks` | list of `{item_id, done?}`, `done` true by default | `tick_work_item_checklist_item` |
 | `refs` | list of `{kind, value, label?}` | `attach_work_item_ref` |
 | `links` | list of `{other, kind, remove?}`, linking from this item | `link_work_items` |
-| `comment` or `comments` | `{body, checklist_item_id?, reply_to?, reply_to_request?}`, or a list of them | `comment_work_item` |
+| `comment` or `comments` | `{body, checklist_item_id?, reply_to?, reply_to_request?, list?}`, or a list of them | `comment_work_item` |
 | `resolutions` | list of `{comment_id, resolution?, reopen?}` | `resolve_work_item_comment` |
 | `questions` | list of `{kind, prompt, fields, expires_at?, execution_id?, session_id?}` | `create_work_item_request` |
-| `summary` | `{done, next, why?}` | `set_work_item_summary` |
+| `summary` | `{done, next, why?, list?}` | `set_work_item_summary` |
 | `transition` | `{state, reason?, force?, rank?}` | `transition_work_item` |
 
 Each step is the write its single tool makes, with the same guards, events,
@@ -990,7 +990,8 @@ one call with its identity, and every row its steps write points to that call.
 The acknowledgement's `applied` names only the groups that changed something.
 `update` lists the fields sent, as `update_work_item` answers in `updated`;
 `comments` and `questions` list every comment and question the call wrote, so
-a reply or a withdrawal needs no read first:
+a reply or a withdrawal needs no read first. A comment or a summary that carried a
+[list](#a-list-on-a-comment) adds its `list_request_id`:
 
 ```json
 {"claim": true, "update": ["title", "priority"],
@@ -2150,7 +2151,8 @@ Refused with `invalid_request`, nothing written:
 | --- | --- |
 | a list on a reply | `a list stands on a root, and this is a reply` |
 | a key a list does not take, or options outside 1 to 20 | `list requires label and options and takes nothing else` |
-| a list in a call that closes the item | `a list on an item this call closes could never be answered; send it to review, or leave the list out` |
+| a list on an item that is closed | `a list on a closed item could never be answered; reopen it first, or leave the list out` |
+| a list in a call that closes the item | `transition: a list on an item this call closes could never be answered; send it to review, or leave the list out`, on the `transition` step |
 
 **What it does not do.** A list holds nothing: its item closes with a list
 unticked, as with no question at all. It raises no Windows notification and takes

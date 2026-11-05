@@ -202,10 +202,16 @@ def _write_dues(conn: sqlite3.Connection) -> list[Due]:
     written = calls.written(conn)
     if written is None:
         return []
+    # A list on a comment waits for nobody, so neither writing one nor ticking it is
+    # news for the owner's alert: left in, a list beside a real question would raise
+    # or take back that question's toast.
     events = conn.execute(
-        "SELECT id,work_item_id,action,detail FROM work_item_events WHERE call_id=? AND action IN"
+        "SELECT e.id,e.work_item_id,e.action,e.detail FROM work_item_events e WHERE e.call_id=?"
+        " AND e.action IN"
         " ('request_created','request_answered','request_declined','request_expired','transitioned')"
-        " ORDER BY id",
+        " AND NOT EXISTS (SELECT 1 FROM work_item_requests r"
+        " WHERE r.request_id = e.detail AND r.comment_id IS NOT NULL)"
+        " ORDER BY e.id",
         (written[0],),
     ).fetchall()
     if not events:

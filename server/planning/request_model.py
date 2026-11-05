@@ -781,7 +781,8 @@ def compact(record: dict, *, replies: int, last_reply: dict | None) -> dict:
     records who declined or withdrew a question and when. A changed answer shows
     the one it replaced as `previous`. `replies` counts the question's thread and
     `last_reply` quotes its latest reply as a thread's root carries it. A review
-    adds `verdicts` and `undecided`, which stand whole before any row.
+    adds `verdicts` and `undecided`, which stand whole before any row, and a list
+    on a comment `comment_id`, the comment it stands under.
     `clipped` appears when anything was left out or cut: past `MAX_COMPACT_TEXT`
     in a text, or past `MAX_COMPACT_JSON` the replaced answer first, then every
     label, then the later fields of the current one.
@@ -797,6 +798,8 @@ def compact(record: dict, *, replies: int, last_reply: dict | None) -> dict:
         "id": record["request_id"],
         "status": record["status"],
         "question": prompt[:QUESTION_PREVIEW] + ("…" if len(prompt) > QUESTION_PREVIEW else ""),
+        # Only a list stands under a comment, and only a list says which.
+        **({"comment_id": record["comment_id"]} if record.get("comment_id") is not None else {}),
         **(_verdicts(descriptors, record) if review else {}),
         "answer": [],
         "note": _clip(note) if note is not None else None,

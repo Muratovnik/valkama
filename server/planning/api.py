@@ -548,25 +548,60 @@ def _pin(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
 
 
 def _summary(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
-    return service.set_summary(
-        conn,
-        _text(payload, "id"),
-        _field(payload, "summary"),
-        expected_revision=_optional_int(payload, "expected_revision"),
-        author=_author(payload),
-    )
+    question = _list(payload)
+    with _all_or_nothing(conn):
+        answer = service.set_summary(
+            conn,
+            _text(payload, "id"),
+            _field(payload, "summary"),
+            expected_revision=_optional_int(payload, "expected_revision"),
+            author=_author(payload),
+        )
+        return _with_list(conn, answer, int(answer["summary_comment_id"]), question, payload)
 
 
 def _comment(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
-    return service.comment_work_item(
-        conn,
-        _text(payload, "id"),
-        _text(payload, "body"),
-        author=_author(payload),
-        checklist_item_id=_optional_text(payload, "checklist_item_id"),
-        reply_to=_optional_int(payload, "reply_to"),
-        reply_to_request=_optional_text(payload, "reply_to_request"),
-    )
+    """A comment, and in the same write the list it carries."""
+
+    question = _list(payload)
+    if question is not None and (
+        payload.get("reply_to") is not None or payload.get("reply_to_request") is not None
+    ):
+        raise model.PlanningError("a list stands on a root, and this is a reply")
+    with _all_or_nothing(conn):
+        written = service.comment_work_item(
+            conn,
+            _text(payload, "id"),
+            _text(payload, "body"),
+            author=_author(payload),
+            checklist_item_id=_optional_text(payload, "checklist_item_id"),
+            reply_to=_optional_int(payload, "reply_to"),
+            reply_to_request=_optional_text(payload, "reply_to_request"),
+        )
+        return _with_list(conn, written, int(written["comment_id"]), question, payload)
+
+
+def _list(payload: Mapping[str, object]) -> tuple[str, list[dict]] | None:
+    """The list a comment, a report or a summary carries, checked before anything is written."""
+
+    value = payload.get("list")
+    return None if value is None else requests.list_question(value)
+
+
+def _with_list(
+    conn: sqlite3.Connection,
+    answer: dict,
+    comment_id: int,
+    question: tuple[str, list[dict]] | None,
+    payload: Mapping[str, object],
+) -> dict:
+    """The answer of a write, with the list it put under its comment when it carried one."""
+
+    if question is None:
+        return answer
+    identity = str(read_model.item_row(conn, _text(payload, "id"))["work_item_id"])
+    request_id = requests.create_list(conn, identity, comment_id, question, _author(payload))
+    return {**answer, "list_request_id": request_id}
 
 
 def _comment_id(payload: Mapping[str, object]) -> int:
@@ -666,14 +701,18 @@ def _expire_request(conn: sqlite3.Connection, payload: Mapping[str, object]) -> 
 
 
 def _report(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
-    return service.report_work_item(
-        conn,
-        _text(payload, "id"),
-        _field(payload, "report"),
-        make_current=_flag(payload, "make_current"),
-        expected_revision=_optional_int(payload, "expected_revision"),
-        author=_author(payload),
-    )
+    question = _list(payload)
+    with _all_or_nothing(conn):
+        answer = service.report_work_item(
+            conn,
+            _text(payload, "id"),
+            _field(payload, "report"),
+            make_current=_flag(payload, "make_current"),
+            expected_revision=_optional_int(payload, "expected_revision"),
+            author=_author(payload),
+        )
+        # The report this call wrote is the item's newest comment.
+        return _with_list(conn, answer, int(answer["comments"][-1]["id"]), question, payload)
 
 
 def _select_summary(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
@@ -721,7 +760,7 @@ def _author(payload: Mapping[str, object]) -> str | None:
     return value
 
 
-_COMMENT_FIELDS = frozenset({"body", "checklist_item_id", "reply_to", "reply_to_request"})
+_COMMENT_FIELDS = frozenset({"body", "checklist_item_id", "reply_to", "reply_to_request", "list"})
 #: What a batch may change, in the order it applies them, with the fields each
 #: entry may name. The order is the contract: a closing transition is judged
 #: after the ticks and the summary sent beside it. `comment` is the one-entry
@@ -741,7 +780,7 @@ APPLY_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
         "questions",
         frozenset({"kind", "prompt", "fields", "execution_id", "session_id", "expires_at"}),
     ),
-    ("summary", frozenset({"done", "next", "why"})),
+    ("summary", frozenset({"done", "next", "why", "list"})),
     ("transition", frozenset({"state", "reason", "force", "rank"})),
 )
 #: What a creation may do to the item it just made, after making it and in this
@@ -759,6 +798,9 @@ _APPLY_LISTS = frozenset(
 _APPLY_LISTED = frozenset({"checklist_ticks", "comments", "resolutions", "questions"})
 #: The most entries one list in a batch may hold.
 MAX_APPLY_ENTRIES = 100
+#: What a batch says of each comment it wrote: the comment, the root a reply
+#: joined, and the list it carries when it carries one.
+_COMMENT_ANSWER = ("comment_id", "reply_to", "reply_to_request", "list_request_id")
 
 _Step = tuple[str, int, Mapping[str, object]]
 
@@ -855,8 +897,8 @@ def _apply_step(
         return {}, 1
     if group in ("comment", "comments"):
         written = _comment(conn, {**entry, **base})
-        # The root a reply joined, as the single tool's answer says it.
-        return {}, {name: written[name] for name in ("comment_id", "reply_to", "reply_to_request")}
+        # The root a reply joined, as the single tool's answer says it, and its list.
+        return {}, {name: written[name] for name in _COMMENT_ANSWER if name in written}
     if group == "resolutions":
         marked = _resolve(conn, {**entry, **base})
         return {}, {name: marked[name] for name in ("comment_id", "resolution")}
@@ -864,8 +906,14 @@ def _apply_step(
         asked = _create_request(conn, {**entry, **base})
         return {}, {name: asked[name] for name in ("request_id", "revision")}
     if group == "summary":
-        answer = _summary(conn, {**base, "summary": dict(entry)})
-        return {}, {"summary_comment_id": answer["summary_comment_id"]}
+        listed = {"list": entry["list"]} if "list" in entry else {}
+        summary = {name: value for name, value in entry.items() if name != "list"}
+        answer = _summary(conn, {**base, **listed, "summary": summary})
+        return {}, {
+            name: answer[name]
+            for name in ("summary_comment_id", "list_request_id")
+            if name in answer
+        }
     answer = _transition(conn, {**entry, **base})
     found = {name: answer[name] for name in ("warnings", "overridden") if answer.get(name)}
     moved = {"state": answer["state"]["key"]}
@@ -884,10 +932,11 @@ def _apply(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
     steps it took. `expected_revision` is checked once, against the item as the
     batch found it.
 
-    The one refusal no single tool makes: a question beside the transition that
-    closes its item. Closing reads a waiting question expired, which takes back
-    the owner's alert before it is seen, so the question would be asked and lost
-    in one write. `force` does not carry it: no guard is being overridden.
+    The one refusal no single tool makes: a question, or a list on a comment,
+    beside the transition that closes its item. Closing reads a waiting question
+    expired, which takes back the owner's alert before it is seen, so the question
+    would be asked and lost in one write, and a list would freeze unticked. `force`
+    does not carry it: no guard is being overridden.
     """
 
     reference = _text(payload, "id")
@@ -902,16 +951,38 @@ def _apply(conn: sqlite3.Connection, payload: Mapping[str, object]) -> dict:
             raise model.RevisionConflictError(expected, actual)
         findings, applied = _run_steps(conn, base, steps)
         answer = service.get_work_item(conn, reference)
-        # A closed item takes no question, so one asked here was asked before this close.
-        if "questions" in applied and answer["state"]["is_terminal"]:
-            raise PlanningHttpError(
-                400,
-                "invalid_request",
-                "transition: a question on an item this call closes could never be"
-                " answered; move it to review, or leave the question out",
-                {"step": {"group": "transition", "index": 0}},
-            )
+        # A closed item takes no question or list, so one written here came before this close.
+        if answer["state"]["is_terminal"]:
+            _refuse_unanswerable(applied)
     return {**answer, **findings, "applied": applied}
+
+
+def _refuse_unanswerable(applied: Mapping[str, Any]) -> None:
+    """Refuse a batch that closes its item over a question or a list it wrote itself.
+
+    A closed item reads a waiting question `expired`, which takes back the owner's
+    alert before it is seen, and freezes a list before anybody could tick it.
+    """
+
+    step = {"step": {"group": "transition", "index": 0}}
+    if "questions" in applied:
+        raise PlanningHttpError(
+            400,
+            "invalid_request",
+            "transition: a question on an item this call closes could never be"
+            " answered; move it to review, or leave the question out",
+            step,
+        )
+    comments = applied.get("comments", [])
+    written = [*comments, applied.get("comment", {}), applied.get("summary", {})]
+    if any("list_request_id" in entry for entry in written):
+        raise PlanningHttpError(
+            400,
+            "invalid_request",
+            "transition: a list on an item this call closes could never be answered;"
+            " send it to review, or leave the list out",
+            step,
+        )
 
 
 @contextlib.contextmanager

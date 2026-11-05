@@ -90,6 +90,18 @@ checkouts are therefore distinguishable even at the same version.
   for every point with its verdict and every step with what was chosen. «Change answer»
   opens the same form in place, and its previous answers read as what each change changed,
   row by row, as the agent is told it: «P12 put off → accepted», «P10 · Steps +… −…».
+- **An agent can put a list the owner ticks under its own comment.** `comment_work_item`,
+  `report_work_item`, `set_work_item_summary` and the batch's `comment`, `comments` and
+  `summary` take `list`, a label and up to 20 options, on a root only; the comment and its
+  list are one write, and the answer adds `list_request_id`. The list is a question of one
+  `multi_choice` field that carries `comment_id`, so it is answered, changed, searched and
+  exported as any question, and its answer reaches the agent that wrote it and the item's
+  holders. Nobody waits for it: it raises no Windows notification and takes none back, it
+  is not in the interface's read of open questions without an item, and it does not hold
+  the item open. On a closed item it reads `expired` with `task_closed` until the item
+  reopens; a list on a closed item, or in the call that closes it, is refused. A merge
+  moves a list with its comment, so a report's list stays with the report. See
+  [A list on a comment](docs/connection-contract.md#a-list-on-a-comment).
 
 ### Changed
 

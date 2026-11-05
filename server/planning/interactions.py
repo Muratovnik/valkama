@@ -375,12 +375,15 @@ def request_list(routing: PlanningRouting, parameters: Mapping[str, list[str]]) 
         try:
             with routing.planning_store(_store_parameters(project_id, space_ref)) as (conn, _key):
                 _capability(conn)
+                # Without an item this is what waits for the person, and a list on a
+                # comment waits for nobody: it is read with its item, under its comment.
                 found = requests.list_requests(
                     conn,
                     space=space_ref["space_key"],
                     status=status,
                     limit=limit + 1,
                     reference=reference,
+                    lists=reference is not None,
                 )
                 more = more or len(found) > limit
                 for record in found:

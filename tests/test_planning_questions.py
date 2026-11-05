@@ -73,6 +73,7 @@ WEB_REQUEST_KEYS = {
     "resolved_at",
     "revision",
     "expired_reason",
+    "comment_id",
 }
 #: Every key the web's strict schema must accept on a field, for the same reason:
 #: the four a field may add are on the way back only when they were given.

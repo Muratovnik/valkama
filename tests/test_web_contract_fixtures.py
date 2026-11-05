@@ -445,6 +445,19 @@ class _Scenario:
             fields=[TEXT],
             author="asking-agent",
         )
+        # A list under an agent's comment: a question with the comment it stands under.
+        self.tool(
+            "comment_work_item",
+            id=ref,
+            body="Two places misfire.",
+            list={
+                "label": "What to take on",
+                "options": [
+                    {"id": "a", "label": "Widen the check", "recommended": True},
+                    {"id": "b", "label": "Fix the docs", "description": "The two pages."},
+                ],
+            },
+        )
         executors = self.executor_card()
         return {
             "comment-reply": reply,

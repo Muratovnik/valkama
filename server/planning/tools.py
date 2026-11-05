@@ -142,6 +142,33 @@ _RESOLUTION = {
     " declined. Leave it out when the thread says it. Not together with reopen.",
 }
 _REOPEN = {"type": "boolean", "description": "true removes the mark. Not together with resolution."}
+#: A list the owner ticks under a root comment, a report or a summary: a question of
+#: one multi_choice field that nobody waits for.
+_LIST = {
+    "type": "object",
+    "description": "Options the owner may tick under this root, written as a question's"
+    " options; the answer adds list_request_id. Nobody waits for it: no alert, and it"
+    " does not hold the item open. Refused on a reply and beside a closing transition.",
+    "properties": {
+        "label": _STR,
+        "options": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": requests.MAX_LIST_OPTIONS,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": _STR,
+                    "label": _STR,
+                    "description": _STR,
+                    "recommended": _BOOL,
+                },
+                "required": ["id", "label"],
+            },
+        },
+    },
+    "required": ["label", "options"],
+}
 #: The most open members one page of get_work_item_chain carries.
 CHAIN_PAGE = 200
 #: How many of a chain's newest series entries get_work_item_chain carries.
@@ -636,6 +663,7 @@ TOOLS = [
                 "properties": {"done": _STR, "next": _STR, "why": _STR},
                 "required": ["done", "next"],
             },
+            "list": _LIST,
             "expected_revision": _EXPECTED_REVISION,
             "author": _AUTHOR,
             "verbose": _VERBOSE,
@@ -656,6 +684,7 @@ TOOLS = [
                 "required": ["done", "next"],
             },
             "make_current": _BOOL,
+            "list": _LIST,
             "expected_revision": _EXPECTED_REVISION,
             "author": _AUTHOR,
             "verbose": _VERBOSE,
@@ -693,6 +722,7 @@ TOOLS = [
             "checklist_item_id": _STR,
             "reply_to": _REPLY_TO,
             "reply_to_request": _REPLY_TO_REQUEST,
+            "list": _LIST,
         },
         ["id", "body"],
     ),
@@ -801,6 +831,7 @@ TOOLS = [
                     "checklist_item_id": _STR,
                     "reply_to": _REPLY_TO,
                     "reply_to_request": _REPLY_TO_REQUEST,
+                    "list": _LIST,
                 },
                 "required": ["body"],
             },
@@ -817,6 +848,7 @@ TOOLS = [
                         "checklist_item_id": _STR,
                         "reply_to": _INT,
                         "reply_to_request": _STR,
+                        "list": _LIST,
                     },
                     "required": ["body"],
                 },
@@ -858,7 +890,7 @@ TOOLS = [
             },
             "summary": {
                 "type": "object",
-                "properties": {"done": _STR, "next": _STR, "why": _STR},
+                "properties": {"done": _STR, "next": _STR, "why": _STR, "list": _LIST},
                 "required": ["done", "next"],
             },
             "transition": {

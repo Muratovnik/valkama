@@ -222,6 +222,48 @@ class BatchQuestionTests(EmitHarness):
         self.assertEqual([], requests.open_rows(self.conn))
 
 
+class ListTests(EmitHarness):
+    """A list under a comment waits for nobody, so it neither raises a toast nor takes one back."""
+
+    LIST: ClassVar[dict] = {"label": "Take on", "options": [{"id": "a", "label": "A"}]}
+
+    def listed(self) -> str:
+        answer = self.agent("comment_work_item", id=self.ref, body="Findings", list=self.LIST)
+        assert isinstance(answer, dict)
+        return str(answer["list_request_id"])
+
+    def test_a_list_raises_no_toast_and_a_question_beside_it_counts_alone(self) -> None:
+        self.listed()
+        self.settle()
+        self.assertEqual([], self.shown)
+        self.agent(
+            "apply_work_item_changes",
+            id=self.ref,
+            comments=[{"body": "More findings", "list": self.LIST}],
+            questions=[{"kind": "question", "prompt": "Which order?", "fields": [FIELD]}],
+        )
+        self.settle()
+        (message,) = self.shown
+        # One open question carries no count; two would read ": 2<".
+        self.assertNotRegex(message["xml"], r": \d+<", "the lists are no open questions")
+
+    def test_a_person_ticking_a_list_takes_no_toast_back(self) -> None:
+        listed = self.listed()
+        self.settle()
+        path = "/api/planning/request/answer"
+        with calls.bind(calls.browser(), path):
+            api.handle_post(
+                self.conn, path, {"id": listed, "expected_revision": 0, "answers": {"items": ["a"]}}
+            )
+            self.conn.commit()
+            emit.after_write(self.conn)
+        self.settle()
+        self.assertEqual([], self.removed)
+        self.agent("transition_work_item", id=self.ref, state="cancelled", force=True)
+        self.settle()
+        self.assertIn((self.ref, messages.GROUP), self.removed, "positive control: a close does")
+
+
 class WhoWroteTests(EmitHarness):
     def question_as(self, identity: calls.Identity) -> None:
         with calls.bind(identity, "test"):

@@ -93,6 +93,8 @@ def _present(conn: sqlite3.Connection, row: sqlite3.Row, at: str) -> dict:
         "resolved_at": row["resolved_at"],
         "revision": int(row["revision"]),
         "expired_reason": reason,
+        # The comment a list stands under; an attached store from before lists has none.
+        "comment_id": row["comment_id"] if "comment_id" in columns else None,
     }
 
 
@@ -124,6 +126,15 @@ def _has_table(conn: sqlite3.Connection, name: str) -> bool:
         conn.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
         ).fetchone()
+        is not None
+    )
+
+
+def _has_column(conn: sqlite3.Connection, table: str, column: str) -> bool:
+    """Whether a table has a column, for the same reason as `_has_table`."""
+
+    return (
+        conn.execute("SELECT 1 FROM pragma_table_info(?) WHERE name=?", (table, column)).fetchone()
         is not None
     )
 
@@ -278,10 +289,13 @@ def list_requests(
     status: str | None = None,
     limit: int = 100,
     reference: str | None = None,
+    lists: bool = True,
 ) -> list[dict]:
     """One page of requests, newest first, for a reader that asks for what it can draw."""
 
-    return list_page(conn, space=space, status=status, limit=limit, reference=reference)["requests"]
+    return list_page(
+        conn, space=space, status=status, limit=limit, reference=reference, lists=lists
+    )["requests"]
 
 
 def list_page(
@@ -293,6 +307,7 @@ def list_page(
     offset: int = 0,
     reference: str | None = None,
     answered_after: object = None,
+    lists: bool = True,
 ) -> dict:
     """One page of requests, and whether more follow.
 
@@ -301,6 +316,9 @@ def list_page(
     read moves forward through them. Such a page never ends between two answers of
     one time: it runs past `limit` by the tie, because the next page starts after
     that time and would otherwise skip the other one.
+
+    `lists=False` leaves out every list on a comment: a reader of what waits for a
+    person, which nobody waits on a list for.
     """
 
     if status is not None:
@@ -323,6 +341,8 @@ def list_page(
         # format `now` writes.
         clauses.append("r.status='answered' AND r.resolved_at>?")
         parameters.append(after)
+    if not lists and _has_column(conn, "work_item_requests", "comment_id"):
+        clauses.append("r.comment_id IS NULL")
     # Effective expiry depends on item/execution state. Filter after projection,
     # fetching in pages so terminal history cannot hide a pending request.
     query = service.with_clauses(
@@ -453,6 +473,79 @@ def create(
             )
         _event(conn, item["work_item_id"], "request_created", identity, author)
     return get(conn, identity)
+
+
+#: The most options a list on a comment offers: as many as a question's field.
+MAX_LIST_OPTIONS = 20
+#: The id of a list's one field, which its answer is keyed under: `{"items": [...]}`.
+LIST_FIELD = "items"
+
+
+def list_question(value: object) -> tuple[str, list[dict]]:
+    """A list as its question stores it: the label as the prompt, and one `multi_choice` field.
+
+    A list is a question that stands under a comment, so its options are a
+    question's options and are checked by the same rules. Read before anything is
+    written, so a refused list leaves no comment behind either.
+    """
+
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"label", "options"}
+        or not isinstance(value["options"], list)
+        or not 1 <= len(value["options"]) <= MAX_LIST_OPTIONS
+    ):
+        raise model.PlanningError("list requires label and options and takes nothing else")
+    label = model.text_field(value["label"], "list.label", limit=200)
+    field = {
+        "id": LIST_FIELD,
+        "label": label,
+        "type": "multi_choice",
+        "required": False,
+        "options": value["options"],
+    }
+    return label, request_model.fields([field])
+
+
+def create_list(
+    conn: sqlite3.Connection,
+    work_item_id: str,
+    comment_id: int,
+    question: tuple[str, list[dict]],
+    author: str | None = None,
+) -> str:
+    """Put a list under a root comment of its item; the answer is the list's request id.
+
+    Written by the call that wrote the comment, inside its transaction, so the two
+    are one write. A closed item takes none: it would read `expired` from the
+    start, and a list there could only be ticked after the item reopened.
+    """
+
+    prompt, fields = question
+    identity = model.new_id()
+    with _transaction(conn):
+        item = read_model.item_by_id(conn, work_item_id)
+        if read_model.state_by_id(conn, item["state_id"])["is_terminal"]:
+            raise model.PlanningError(
+                "a list on a closed item could never be answered; reopen it first,"
+                " or leave the list out"
+            )
+        conn.execute(
+            "INSERT INTO work_item_requests(request_id,work_item_id,comment_id,kind,prompt,"
+            "fields_json,author,created_at) VALUES(?,?,?,?,?,?,?,?)",
+            (
+                identity,
+                work_item_id,
+                comment_id,
+                "question",
+                prompt,
+                model.dumps(fields),
+                model.actor(author),
+                request_model.now(),
+            ),
+        )
+        _event(conn, work_item_id, "request_created", identity, author)
+    return identity
 
 
 def resolve(
@@ -609,13 +702,15 @@ def _stored(row: sqlite3.Row, answers: object, own: object, field_notes: object,
 
 
 def open_rows(conn: sqlite3.Connection, work_item_id: str | None = None) -> list[sqlite3.Row]:
-    """The questions still open, on one item or everywhere in this store.
+    """The questions still open for a person to answer, on one item or everywhere in this store.
 
     Open as a reader sees it: a pending row past its deadline, on a closed item or
-    on a finished execution has lapsed although nothing wrote that down.
+    on a finished execution has lapsed although nothing wrote that down. A list on
+    a comment is never one: nobody waits for it, so it raises no alert and holds
+    none up.
     """
 
-    query = "SELECT * FROM work_item_requests WHERE status='pending'"
+    query = "SELECT * FROM work_item_requests WHERE status='pending' AND comment_id IS NULL"
     parameters: tuple[str, ...] = ()
     if work_item_id is not None:
         query += " AND work_item_id=?"

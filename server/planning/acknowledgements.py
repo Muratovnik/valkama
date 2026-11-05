@@ -147,12 +147,13 @@ def merged(item: dict, _arguments: Mapping[str, object]) -> dict:
 
 
 def summarized(item: dict, _arguments: Mapping[str, object]) -> dict:
-    """That the summary is recorded; its text is the caller's own."""
+    """That the summary is recorded; its text is the caller's own. And its list, by id."""
 
     return {
         **_base(item),
         "summary_recorded": True,
         "summary_comment_id": item["summary_comment_id"],
+        **_written_beside(item),
     }
 
 
@@ -171,4 +172,11 @@ def reported(item: dict, _arguments: Mapping[str, object]) -> dict:
         **_base(item),
         "comment_id": item["comments"][-1]["id"],
         "summary_comment_id": item["summary_comment_id"],
+        **_written_beside(item),
     }
+
+
+def _written_beside(item: dict) -> dict:
+    """What a report's write put beside it: the list under it, when it carried one."""
+
+    return {name: item[name] for name in ("list_request_id",) if name in item}
