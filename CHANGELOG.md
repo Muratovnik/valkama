@@ -85,6 +85,11 @@ checkouts are therefore distinguishable even at the same version.
   at its bottom while the form is in view, without covering what has focus. Over «Send» the
   form says how many points are undecided; the agent reads those as undecided, and a
   required one stops the send. A question with none of this looks and works as before.
+- **An answered review reads as one line.** «Accepted 14 · put off 1 · rejected 1 · own
+  option 1 · undecided 1», the points not simply accepted by name, and «Show all 18 rows»
+  for every point with its verdict and every step with what was chosen. «Change answer»
+  opens the same form in place, and its previous answers read as what each change changed,
+  row by row, as the agent is told it: «P12 put off → accepted», «P10 · Steps +… −…».
 
 ### Changed
 

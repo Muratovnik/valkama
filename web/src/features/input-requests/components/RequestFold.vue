@@ -9,6 +9,9 @@
  * under it is there to be read on, and a live region around twelve options would read all
  * of them out each time an answer arrived.
  *
+ * A question answered row by row reads as a summary instead (`RequestSummary`): how its points
+ * were decided, with every row behind a press on a review that would run to a screen and more.
+ *
  * Words still in the form when the question closed some other way are the only copy of
  * what was written. They stay in view under their own words, and never join the reply. A
  * choice made there was never sent either, so it is said too, one line per field, ahead of
@@ -19,6 +22,8 @@ import { useI18n } from 'vue-i18n'
 
 import RequestFieldAnswer from '@/features/input-requests/components/RequestFieldAnswer.vue'
 import RequestHistory from '@/features/input-requests/components/RequestHistory.vue'
+import RequestSummary from '@/features/input-requests/components/RequestSummary.vue'
+import { isStructured } from '@/features/input-requests/utils/reviewForm.ts'
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import { actorName } from '@/shared/lib/actor.ts'
@@ -49,9 +54,12 @@ const replier = computed(() => {
   if (person) return t('requests.youAnswered')
   return by ? t('requests.agentAnswered', { actor: actorName(by) }) : t('requests.answered')
 })
+const structured = computed(() => isStructured(props.request.fields))
 /** One text field reads as the sentence it is, with nothing to tell it from. */
 const bareText = computed(() => props.request.fields.length === 1)
 const note = computed(() => props.request.note ?? '')
+/** Each field answered on its own, where the question is not answered row by row. */
+const plainFields = computed(() => (structured.value ? [] : props.request.fields))
 /** What the note over the unsent part says it is: what was chosen, written, or both. */
 const unsentNote = computed(() => {
   if (!props.unsentChosen.length) return t('requests.draftKept')
@@ -89,8 +97,12 @@ const closing = computed(() => {
         :when="answerTime"
         >{{ replier }}</MetaLine
       >
+      <RequestSummary
+        v-if="structured"
+        :request="request"
+      />
       <RequestFieldAnswer
-        v-for="field in request.fields"
+        v-for="field in plainFields"
         :key="field.id"
         :bare-text="bareText"
         :field="field"

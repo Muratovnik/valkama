@@ -3,11 +3,17 @@
  * The answers a change replaced, behind a press, newest first: what the agent was told
  * before, who said it and when. The answer in force stands above with its options; these
  * are the record of what stood, one line per field.
+ *
+ * A review's versions read as what the next answer changed in them, row by row, by the same
+ * rule the agent is told a change with (`answerDiff`): twenty-five lines a version are not read.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { answerDiff, diffText } from '@/features/input-requests/utils/answerDiff.ts'
+import type { AnswerSide } from '@/features/input-requests/utils/answerDiff.ts'
 import { versionLines } from '@/features/input-requests/utils/answerDisplay.ts'
+import { isReview } from '@/features/input-requests/utils/reviewForm.ts'
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import { actorName } from '@/shared/lib/actor.ts'
@@ -20,13 +26,34 @@ type Request = InputRequestEntry['request']
 const props = defineProps<{ request: Request }>()
 const { t, d } = useI18n()
 const open = ref(false)
+const review = computed(() => isReview(props.request.fields))
+/** The answer in force, as the last side a version is compared with. */
+const inForce = computed<AnswerSide>(() => ({
+  answers: props.request.answers ?? {},
+  field_notes: props.request.field_notes ?? {},
+  note: props.request.note,
+  own: props.request.own ?? {},
+}))
+/** A version's lines: each field it answered, or on a review what the next answer changed. */
+function linesOf(index: number) {
+  const { fields, history } = props.request
+  const version = history[index]
+  if (!version) return []
+  if (!review.value) return versionLines(fields, version, t)
+  return answerDiff(fields, version, history[index + 1] ?? inForce.value).map((row, at) => ({
+    id: `${at}`,
+    text: diffText(fields, row, t),
+  }))
+}
 const versions = computed(() =>
-  [...props.request.history].reverse().map((version) => ({
-    ...version,
-    lines: versionLines(props.request.fields, version, t),
-    who: who(version),
-    when: d(new Date(version.answered_at), 'activity'),
-  })),
+  props.request.history
+    .map((version, index) => ({
+      ...version,
+      lines: linesOf(index),
+      who: who(version),
+      when: d(new Date(version.answered_at), 'activity'),
+    }))
+    .reverse(),
 )
 /** "You" is the server's word about the call, as in the answer in force. */
 function who({ by_person: person, answered_by: by }: Request['history'][number]) {
@@ -67,7 +94,7 @@ function who({ by_person: person, answered_by: by }: Request['history'][number])
           {{ line.text }}
         </p>
         <p
-          v-if="version.note"
+          v-if="version.note && !review"
           class="request-history-line"
         >
           {{ t('requests.questionNoteSaid', { text: plainText(version.note) }) }}
