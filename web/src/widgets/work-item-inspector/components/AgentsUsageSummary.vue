@@ -24,14 +24,21 @@ import VButton from '@/shared/ui/VButton.vue'
 
 const { t } = useI18n()
 const { cost, count, figures: rowFigures, notes, span, time, tokenFigure } = useUsageWords()
-const read = injectInspectorUsage()?.read
+const inspector = injectInspectorUsage()
+const read = inspector?.read
+const runs = inspector?.runs
 
 const usage = computed(() => {
   const answer = read?.usage.value ?? null
   return answer && saysAnything({ ...answer, seconds: answer.agent_seconds }) ? answer : null
 })
 const failed = computed(() => Boolean(read?.failed.value))
-const retry = () => read?.read()
+/** An epic's rows read their own runs; when those fail, the rows say so and Retry reads both. */
+const runsFailed = computed(() => Boolean(runs?.failed.value))
+const retry = () => {
+  read?.read()
+  runs?.read()
+}
 
 const noData = computed(() => t('workItem.usage.noData'))
 const explained = computed(() => (usage.value ? notes(usage.value) : []))
@@ -185,6 +192,20 @@ const models = computed(() =>
   </section>
   <p
     v-else-if="failed"
+    class="work-usage-failed"
+    role="alert"
+  >
+    <span>{{ t('workItem.usage.failed') }}</span>
+    <VButton
+      variant="ghost"
+      size="inline"
+      @click="retry"
+    >
+      {{ t('platform.actions.retry') }}
+    </VButton>
+  </p>
+  <p
+    v-if="runsFailed && !failed"
     class="work-usage-failed"
     role="alert"
   >

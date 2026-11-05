@@ -4,6 +4,7 @@ import type { ComputedRef, InjectionKey } from 'vue'
 import { useWorkItemResource } from '@/widgets/work-item-inspector/utils/useWorkItemResource.ts'
 import { useWorkItemUsage } from '@/widgets/work-item-inspector/utils/useWorkItemUsage.ts'
 
+import type { ItemUsage } from '@/shared/api/planningUsageApi.ts'
 import type { TypedFailure } from '@/shared/api/typedFailure.ts'
 import type { PlanningSpaceEntityRef } from '@/shared/types/reference.ts'
 
@@ -12,6 +13,10 @@ interface InspectorUsage {
   isEpic: ComputedRef<boolean>
   /** The read of the card's own numbers. */
   read: ReturnType<typeof useWorkItemUsage>
+  /** The read whose runs the tab's rows and its count name: an epic's own, else the card's. */
+  rows: ComputedRef<ItemUsage | null>
+  /** An epic's own runs, read for its rows; no target, so no read, on any other item. */
+  runs: ReturnType<typeof useWorkItemUsage>
   /** What reads again with the item's numbers. */
   news: () => unknown
   /** The read reaches this item: it is in the primary store, not an attached one. */
@@ -25,8 +30,10 @@ const USAGE: InjectionKey<InspectorUsage> = Symbol('inspector-usage')
 /**
  * The card's record, and what work on the item took, read together.
  *
- * An epic reads its numbers with its whole scope, anything else alone. Like the chain and the
- * attempts, this answers for the primary store only.
+ * An epic reads its numbers with its whole scope, anything else alone. Its tab's rows name only its
+ * own runs, so an epic reads those as well, on the item's own scope: the whole scope names its
+ * children's runs too, and those have no row on the epic. Like the chain and the attempts, this
+ * answers for the primary store only.
  *
  * The usage read starts with the record's rather than after it, and the record is shown once it
  * has answered, because a line arriving later would push down everything under the head: the
@@ -56,10 +63,17 @@ export function useInspectorRecord(
     () => (props.writable ? { id: props.reference, scope: isEpic.value ? 'epic' : 'item' } : null),
     news,
   )
+  const runs = useWorkItemUsage(
+    () => (props.writable && isEpic.value ? { id: props.reference, scope: 'item' } : null),
+    news,
+  )
+  const rows = computed(() => (isEpic.value ? runs : read).usage.value)
   provide(USAGE, {
     isEpic,
     news,
     read,
+    runs,
+    rows,
     readable: () => props.writable,
     reference: () => props.reference,
   })
@@ -70,11 +84,11 @@ export function useInspectorRecord(
     failureReason,
     async (record) => {
       recordKind.value = record.kind
-      await read.settled()
+      await Promise.all([read.settled(), runs.settled()])
     },
   )
-  /** The runs the read counts, which the card's count of agents takes in with its record's. */
-  return { ...resource, spent: computed(() => read.usage.value?.agents ?? []) }
+  /** The runs the rows name, which the card's count of agents takes in with its record's. */
+  return { ...resource, spent: computed(() => rows.value?.agents ?? []) }
 }
 
 /** The card's usage reads; none in a part drawn outside a card. */

@@ -23,7 +23,7 @@
  * the session's under the session's way back, and each agent's beside its name, in columns the
  * group shares so that they compare down the list. Those who spent something on the item come
  * first, whether the record names them or not: the session's own run, which no row of the record
- * is, and on an epic everyone who worked under it.
+ * is, and on an epic the epic's own runs, while its children's time stands in the chain.
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -47,7 +47,8 @@ import RichText from '@/shared/ui/RichText.vue'
 const props = defineProps<{ agents: readonly WorkItemAgent[] }>()
 
 const { t, d } = useI18n()
-const usage = injectInspectorUsage()?.read
+const inspector = injectInspectorUsage()
+const usage = inspector?.read
 const { figures } = useUsageWords()
 
 /**
@@ -113,7 +114,8 @@ function groupAmbiguity(agents: readonly WorkItemAgent[]): string {
     : t('workItem.agents.linkAmbiguousRange', { from, to }, to)
 }
 
-const spent = computed(() => usage?.usage.value)
+/** The runs the rows name: an epic's own, which the whole read of an epic would widen. */
+const spent = computed(() => inspector?.rows.value ?? null)
 const estimated = computed(() => Boolean(spent.value && isEstimated(spent.value)))
 
 const groups = computed(() =>

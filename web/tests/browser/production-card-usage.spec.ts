@@ -247,7 +247,10 @@ test('an epic reads its whole scope, and each member of its chain says its share
   )
   await page.goto(CARD)
   await expect(line(page)).toContainText('Work on the epic')
-  expect(asked.at(-1)?.searchParams.get('scope')).toBe('epic')
+  // The whole scope for the summary and the chain; the item's own runs for the agents' rows.
+  expect(asked.map((url) => url.searchParams.get('scope'))).toEqual(
+    expect.arrayContaining(['epic', 'item']),
+  )
   const row = page.locator(`.drawer .chain-row[data-reference="${member.reference}"]`)
   await expect(row.locator('.chain-row-usage')).toHaveText(
     /≈\u{A0}2\u{A0}h\u{A0}18\u{A0}min\s*≈\u{A0}\$34\.89/u,

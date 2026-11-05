@@ -7,7 +7,8 @@ import type { UsageAgent } from '@/shared/api/planningUsageApi.ts'
  * The agents a card's record names and the runs its usage read counts are two lists of the same
  * people. The record names who stood on the item, by a claim as well as by a write; the read
  * counts who spent time on it, and that includes the session's own run, which the record never
- * names, and on an epic everyone under it. This joins them into one list per parent session.
+ * names. On an epic the read is of the epic's own runs, so its children's runs are not in it. This
+ * joins them into one list per parent session.
  */
 
 interface AgentRow {

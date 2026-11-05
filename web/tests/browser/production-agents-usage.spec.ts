@@ -8,6 +8,7 @@ import AxeBuilder from '@axe-core/playwright'
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
+import type { ItemUsage } from '@/shared/api/planningUsageApi.ts'
 import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
@@ -189,6 +190,125 @@ test('a failed read says so on the tab and reads again on request', async ({ pag
   )
   await failure.getByRole('button', { name: 'Retry' }).click()
   await expect(section.locator('.work-usage')).toBeVisible()
+  await expect(section.getByRole('alert')).toHaveCount(0)
+})
+
+/**
+ * The runs under an epic's children. Its whole read counts them, and no row of its own names
+ * them: their share stands under their titles in the chain.
+ */
+const CHILD_RUNS: ItemUsage['agents'] = [
+  {
+    session_id: PARENT_SESSION,
+    agent_id: 'a3a79fc900000000',
+    seconds: 9520,
+    tokens: NO_TOKENS,
+    estimated_api_cost_usd: 20,
+  },
+  {
+    session_id: PARENT_SESSION,
+    agent_id: 'a58241d000000000',
+    seconds: 10_000,
+    tokens: NO_TOKENS,
+    estimated_api_cost_usd: 21,
+  },
+]
+
+/**
+ * An epic card: the whole scope answers `epic`, the item's own runs answer `item`, and a null
+ * answer fails that read.
+ */
+async function serveEpic(page: Page, whole: ItemUsage, own: () => ItemUsage | null) {
+  const asked: string[] = []
+  await installBackend(page, {
+    agents: () => [named],
+    card: (read) => ({ ...read, kind: 'epic' }),
+  })
+  await page.route('**/api/planning/work-item/usage?*', (route) => {
+    const scope = new URL(route.request().url()).searchParams.get('scope') ?? ''
+    asked.push(scope)
+    const usage = scope === 'epic' ? whole : own()
+    return usage
+      ? route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify(usageAnswer(usage)),
+        })
+      : route.fulfill({ status: 500, contentType: 'application/json', body: '{}' })
+  })
+  await page.route('**/api/planning/session/usage?*', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify(usageAnswer(sessionUsage())),
+    }),
+  )
+  return asked
+}
+
+test('an epic’s tab lists its own agents, and its counter counts only them', async ({ page }) => {
+  const asked = await serveEpic(
+    page,
+    richUsage({
+      scope: 'epic',
+      agent_seconds: 60_000,
+      agents: [...richUsage().agents, ...CHILD_RUNS],
+    }),
+    () => richUsage(),
+  )
+  await page.goto(CARD)
+  await expect(page.locator('.drawer .inspector-tabs').getByRole('tab').nth(1)).toHaveText(
+    'Agents 2',
+  )
+  const section = await openAgents(page)
+  const rows = section.locator('.agent')
+  await expect(rows).toHaveCount(2)
+  await expect(rows.nth(0)).toContainText('Build the export')
+  await expect(rows.nth(0)).toContainText('≈\u{A0}8\u{A0}h\u{A0}20\u{A0}min')
+  await expect(rows.nth(1)).toContainText('The session itself')
+  // The children's runs have no row on the epic, so no short id stands in for them.
+  await expect(section).not.toContainText('a3a79fc9')
+  await expect(section).not.toContainText('a58241d0')
+  // The summary keeps the whole of the epic, the children's time included.
+  await expect(section.locator('.work-usage-figure').nth(1)).toHaveText(
+    'All agents ≈\u{A0}16\u{A0}h\u{A0}40\u{A0}min',
+  )
+  expect(asked).toEqual(expect.arrayContaining(['epic', 'item']))
+})
+
+test('an epic whose own runs did not read says so on the tab and reads them on request', async ({
+  page,
+}, info) => {
+  await page.setViewportSize({ width: 390, height: 900 })
+  let answering = false
+  await serveEpic(
+    page,
+    richUsage({
+      scope: 'epic',
+      agent_seconds: 60_000,
+      agents: [...richUsage().agents, ...CHILD_RUNS],
+    }),
+    () => (answering ? richUsage() : null),
+  )
+  await page.goto(CARD)
+  const section = await openAgents(page)
+  // The whole still stands; the rows stand without their figures, and say why.
+  await expect(section.locator('.work-usage')).toBeVisible()
+  await expect(section.locator('.agent')).toHaveCount(1)
+  await expect(section.locator('.agent-spent')).toHaveCount(0)
+  const failure = section.getByRole('alert')
+  await expect(failure).toContainText('Could not read how much work this took.')
+  await expectNoSilentClipping(page, 'own runs failed at 390px')
+  const results = await new AxeBuilder({ page })
+    .include('.drawer .agents')
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze()
+  expect(results.violations.map((violation) => violation.id)).toEqual([])
+  await page.screenshot(shot(info, 'agents-usage-own-runs-failed-390.png'))
+  answering = true
+  await failure.getByRole('button', { name: 'Retry' }).click()
+  await expect(section.locator('.agent')).toHaveCount(2)
+  await expect(section.locator('.agent-spent').first()).toContainText(
+    '≈\u{A0}8\u{A0}h\u{A0}20\u{A0}min',
+  )
   await expect(section.getByRole('alert')).toHaveCount(0)
 })
 
