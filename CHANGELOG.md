@@ -61,6 +61,8 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- A checklist step of 513 to 1000 characters is accepted. It was refused as if it held a
+  control character, because the character check also stopped at 512 characters.
 - The release check runs `npm ci` in `web` and `desktop` before anything else, so it
   verifies what the lockfiles pin rather than whatever `node_modules` holds, and it
   refuses a `node_modules` that is a link, because `npm ci` through a link empties its

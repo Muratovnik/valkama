@@ -101,7 +101,9 @@ _EVENT_ACTION_SET = frozenset(EVENT_ACTIONS)
 
 _SPACE_KEY = re.compile(r"^[A-Z][A-Z0-9]{1,7}$")
 _STATE_KEY = re.compile(r"^[a-z][a-z0-9-]{0,31}$")
-_SAFE_TEXT = re.compile(r"^[^\x00\r\n]{0,512}$")
+# Characters only: each caller's `limit` owns the length, so a step of up to
+# 1000 characters is not refused here as if it held a control character.
+_SAFE_TEXT = re.compile(r"^[^\x00\r\n]*$")
 #: The grammar of a work item reference, unanchored, for a scanner to embed.
 HUMAN_ID_SHAPE = r"([A-Z][A-Z0-9]{1,7})-([1-9][0-9]{0,8})"
 _HUMAN_ID = re.compile(rf"^{HUMAN_ID_SHAPE}$")
