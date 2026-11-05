@@ -601,7 +601,7 @@ def _stored(row: sqlite3.Row, answers: object, own: object, field_notes: object,
         field_notes, descriptors, "field_notes", limit=request_model.MAX_FIELD_NOTE
     )
     return request_model.stored_answers(
-        request_model.answers(answers, descriptors, own=variants),
+        request_model.answers(answers, descriptors, own=variants, field_notes=comments),
         note,
         own=variants,
         field_notes=comments,

@@ -209,18 +209,28 @@ lists that holder's items.
 
 `create_work_item_request` takes `id`, `kind` (`question` or `decision`),
 `prompt` and `fields`, each field
-`{"id": "…", "label": "…", "type": "text" | "choice" | "multi_choice" | "boolean", "required": true, "options": [{"id": "…", "label": "…"}]}`.
-An option also takes `description` (markdown, 1 to 8000 characters) and
-`recommended` (a boolean, true on at most one option of a `choice`). The fields of
-one question fit in 64 KiB as stored.
+`{"id": "…", "label": "…", "type": "text" | "choice" | "multi_choice" | "boolean" | "verdict", "required": true, "options": [{"id": "…", "label": "…"}]}`.
+A question holds 1 to 40 fields. An option also takes `description` (markdown, 1
+to 8000 characters) and `recommended` (a boolean, true on at most one option of a
+`choice`). A field also takes `description` (markdown, 1 to 8000 characters),
+`group` (1 to 200 characters; the fields of one group stand together), `under`
+(`{"field": "…", "option": "…"}`) and, on a `verdict` only, `recommended`
+(`accept`, `later` or `reject`). A `verdict` has `options: []` and is answered
+`accept`, `later` or `reject`. A field `under` another names an earlier
+`verdict`, `choice` or `multi_choice` field that is under nothing itself, and an
+option of it (a verdict's word under a verdict); it leaves `group` out or repeats
+its parent's, and it is shown and answered only while the parent's answer holds
+that option. The fields of one question fit in 64 KiB as stored.
 
 `answer_work_item_request` takes `id`, `answers` (field id to answer),
 `expected_revision` and optionally `own` (field id to an own variant, at most 8000
 characters), `field_notes` (field id to a comment, at most 2000 characters),
 `note` (a comment on the whole question, at most 8000 characters), `change` and
-`author`. Only a `choice`, `multi_choice` or `boolean` field takes an own variant
-or a comment; in a `choice` or `boolean` the own variant replaces the option, and
-giving both is refused. A required field needs a value or an own variant; a note
+`author`. Only a `choice`, `multi_choice`, `boolean` or `verdict` field takes an
+own variant or a comment; in a `choice`, `boolean` or `verdict` the own variant
+replaces the option, and giving both is refused. A hidden field takes nothing:
+"answer p4-steps stands under p4=accept, and p4 is later; leave it out"; a
+required one is required only while it is shown. A required field needs a value or an own variant; a note
 no longer stands in for it, and the refusal says so: "answer path is required;
 give an option or your own variant in own; a note no longer stands in for a
 field".
@@ -270,8 +280,16 @@ null with no answer. `answer_version` is 0 with no answer and 1 for a first one;
 `last_reply` quotes its latest reply, its `body` cut at 500 characters with
 `clipped: true`. A note, a written answer, an own variant, a comment and a label
 are cut at 500 characters with `…`, and one question is at most 2000 characters of
-JSON: `previous` is cut first, then the later fields; `clipped: true` says
-something was cut, and the key is absent otherwise.
+JSON: `previous` is cut first, then every label at once, then the later fields;
+`clipped: true` says something was cut, and the key is absent otherwise.
+
+A question with a `verdict` field adds `verdicts`
+(`{"accept": ["p1", "p4"], "later": ["p12"], "reject": []}`) and `undecided` (the
+shown verdict fields given neither a verdict nor an own variant), which stand
+whole before any row. Its `answer` has a row only for a field under another, which
+carries `under` (the parent's id) and, for a `multi_choice`, `of` (how many
+options it offers) and no label, and for a verdict with a comment or an own
+variant. `previous` has the same shape.
 
 `by_person` is true when the latest call that closed or changed the question came
 through Valkama's interface, false for any other call that answered, changed,

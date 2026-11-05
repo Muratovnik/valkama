@@ -222,9 +222,41 @@ refused without a linked blocker or a reason.
 ## Asking the owner
 
 `create_work_item_request` puts a typed `question` or `decision` on the item,
-with a `prompt` and up to 12 `fields` (`text`, `choice`, `multi_choice` or
-`boolean`). An option may add a markdown `description` of what choosing it means,
-and `recommended`: at most one in a `choice`, any number in a `multi_choice`.
+with a `prompt` and up to 40 `fields` (`text`, `choice`, `multi_choice`,
+`boolean` or `verdict`). An option may add a markdown `description` of what
+choosing it means, and `recommended`: at most one in a `choice`, any number in a
+`multi_choice`. A field may add a markdown `description`, a `group` (the heading
+its section stands under; the fields of one group stand together) and `under`
+(below); a `verdict` may add `recommended`: `accept`, `later` or `reject`.
+
+**A review of many points** is one `verdict` field per proposal: the owner
+accepts it, puts it off or rejects it, and may comment on it or give an own
+variant. The steps or the ways of a point are a field `under` it,
+`{"field": "p4", "option": "accept"}`, which stands right after it and is shown
+and answered only while the point is accepted; a `group` per area replaces a
+field per executor. Everything the owner chooses from is an option: never a step
+in a label or a description, never `p4a` in a field shared by several points.
+Put `recommended` wherever you have one, because one button fills a draft from it.
+Two points, one with its steps and one with its way:
+
+```json
+[{"id": "p4", "label": "P4 Checks: false alarms", "type": "verdict", "required": false,
+  "options": [], "group": "Checks", "recommended": "accept"},
+ {"id": "p4-steps", "label": "Steps", "type": "multi_choice", "required": true,
+  "under": {"field": "p4", "option": "accept"},
+  "options": [{"id": "p4a", "label": "Mark the refusals, then narrow the rule", "recommended": true},
+              {"id": "p4b", "label": "Skip the check on an intermediate stop"}]},
+ {"id": "p13", "label": "P13 A 400-line limit for .vue files", "type": "verdict",
+  "required": false, "options": [], "group": "Web code", "recommended": "accept"},
+ {"id": "p13-way", "label": "How", "type": "choice", "required": true,
+  "under": {"field": "p13", "option": "accept"},
+  "options": [{"id": "per_block", "label": "vue/max-lines-per-block", "recommended": true},
+              {"id": "split_first", "label": "Split the files first"}]}]
+```
+
+A field under another names an earlier `verdict`, `choice` or `multi_choice`
+field that is under nothing itself, and an option it has (`accept`, `later` or
+`reject` under a verdict). A refusal names the field and how to put it right.
 
 The owner answers it in Valkama. In a field with options the answer is an option
 or an own variant (`own`): in a `choice` or `boolean` instead of an option, in a
@@ -263,6 +295,13 @@ the prompt), `answer` as rows of `field`, `value` and `label` with `own` and
 changed it came through Valkama's interface, false when it came through a tool
 and null when no call wrote it. A note or a written answer longer than 500 characters is cut there and the
 question carries `clipped: true`; `get_work_item_request` has the whole text.
+
+A review adds `verdicts`, each verdict field under the word it was given, and
+`undecided`, the shown points given neither a verdict nor an own variant. Treat
+an undecided point as not decided, never as accepted. Its `answer` holds only
+what says more than a verdict: the fields under a point, with `under` and, for
+steps, `of` (how many were offered), and a point with a comment or an own
+variant. A point with its own variant is decided and in neither list.
 
 A request suits a question the work can go on without. No session waits for it:
 the answer arrives with the next read of the item, so go on with what does not

@@ -74,6 +74,19 @@ WEB_REQUEST_KEYS = {
     "revision",
     "expired_reason",
 }
+#: Every key the web's strict schema must accept on a field, for the same reason:
+#: the four a field may add are on the way back only when they were given.
+WEB_FIELD_KEYS = {
+    "id",
+    "label",
+    "type",
+    "required",
+    "options",
+    "description",
+    "group",
+    "under",
+    "recommended",
+}
 COMPACT_KEYS = {
     "id",
     "status",

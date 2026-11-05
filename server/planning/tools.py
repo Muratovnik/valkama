@@ -896,8 +896,41 @@ _REQUEST_FIELD = {
     "properties": {
         "id": _STR,
         "label": _STR,
-        "type": {"type": "string", "enum": ["text", "choice", "multi_choice", "boolean"]},
+        "type": {
+            "type": "string",
+            "enum": ["text", "choice", "multi_choice", "boolean", "verdict"],
+            "description": "verdict: one row of a review, a point the owner accepts, puts off or"
+            " rejects; its options is [] and its answer accept, later or reject.",
+        },
         "required": _BOOL,
+        "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": request_model.MAX_OPTION_DESCRIPTION,
+            "description": "Markdown: what the field asks, or the point a verdict decides.",
+        },
+        "group": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "The section heading; the fields of one group stand together."
+            " A field under another leaves it out.",
+        },
+        "under": {
+            "type": "object",
+            "description": "Shown and answered only while the answer of an earlier verdict,"
+            " choice or multi_choice field holds option: accept, later or reject under a"
+            " verdict, an option id otherwise. One level. Put the steps or ways of a point"
+            " here, as one more entry of fields, never in a label or a description.",
+            "properties": {"field": _STR, "option": _STR},
+            "required": ["field", "option"],
+        },
+        "recommended": {
+            "type": "string",
+            "enum": list(request_model.VERDICTS),
+            "description": "On a verdict only: what the asker recommends. A choice or"
+            " multi_choice recommends on its options.",
+        },
         "options": {
             "type": "array",
             "maxItems": 20,
@@ -930,13 +963,20 @@ TOOLS.extend(
             "create_work_item_request",
             "Ask for a human answer",
             "Create a typed question or decision on an item. The fields of one question fit in"
-            " 64 KiB as stored. Does not change workflow or execution lifecycle.",
+            " 64 KiB as stored. A review is a verdict field per proposal, its steps or ways in"
+            " a field under it, and a group per area. Does not change workflow or execution"
+            " lifecycle.",
             WRITES,
             {
                 "id": _REFERENCE,
                 "kind": {"type": "string", "enum": ["question", "decision"]},
                 "prompt": _STR,
-                "fields": {"type": "array", "minItems": 1, "maxItems": 12, "items": _REQUEST_FIELD},
+                "fields": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": request_model.MAX_FIELDS,
+                    "items": _REQUEST_FIELD,
+                },
                 "author": _AUTHOR,
                 "execution_id": _STR,
                 "session_id": _STR,
@@ -965,10 +1005,13 @@ TOOLS.extend(
             f" first {request_model.QUESTION_PREVIEW} characters of the prompt), answer as rows of"
             " field, value and label, with own and note when the field has them, note,"
             " answered_by, by_person, answered_at, answer_version, previous (the answer a change"
-            " replaced) from version 2, replies and last_reply. A note or a written answer is cut"
-            f" at {request_model.MAX_COMPACT_TEXT} characters and one question at"
-            f" {request_model.MAX_COMPACT_JSON} characters of JSON, previous first and then the"
-            " later fields, and carries clipped=true when anything was cut. full=true gives each"
+            " replaced) from version 2, replies and last_reply. A review adds verdicts (each"
+            " verdict field by its word) and undecided, and its answer holds only the fields under"
+            " another, with under and of, and verdicts with a comment or own variant. A note or a"
+            f" written answer is cut at {request_model.MAX_COMPACT_TEXT} characters and one"
+            f" question at {request_model.MAX_COMPACT_JSON} characters of JSON, previous first,"
+            " then every label, then the later fields, and carries clipped=true when anything was"
+            " cut. full=true gives each"
             " whole. With answered_after the oldest answer comes first, a changed answer comes"
             " again, and a page runs past limit rather than part two answers of one time."
             + _PAGING,

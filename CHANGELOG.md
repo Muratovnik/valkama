@@ -50,8 +50,25 @@ checkouts are therefore distinguishable even at the same version.
   says how many steps the task will hold of its 100. The chosen points join the checklist
   through the same write as any change of it, so whoever holds the task hears that its
   steps changed, and they are ordinary steps from then on.
+- **A question can be a review of many points.** A field of the new type `verdict` is
+  one point the owner accepts, puts off or rejects, with a comment or an own variant like
+  any choice. A field may now add a `description`, a `group` that the fields of one area
+  stand together under, and `under`, which shows and asks it only while an earlier field's
+  answer holds an option: the steps or the way of an accepted point. A verdict may add
+  `recommended`. Each mistake in such a schema or its answer is refused naming the field
+  and how to put it right. A question without the new keys is what it always was. The
+  compact read of a review gives `verdicts` and `undecided` whole before any row, and its
+  `answer` holds only the fields under a point, with `under` and `of`, and the points with
+  a comment or an own variant; a notice sums a review up by its verdicts. See
+  [Questions and decisions](docs/connection-contract.md#questions-and-decisions).
 
 ### Changed
+
+- **A question holds up to 40 fields instead of 12.** The 64 KiB the fields of one
+  question fit in are unchanged.
+- **A compact question past 2000 characters keeps every field it can.** It now leaves out
+  the replaced answer first, then every label at once, and only then the later fields, so
+  an answer with long labels shows each answered field instead of the first few.
 
 - **The skill keeps Valkama calls apart in Claude Code's auto mode.** It tells the
   agent to send them in a response of their own: the hook that adds the session to a
