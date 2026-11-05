@@ -182,7 +182,7 @@ const updated = computed(() => {
     </span>
     <span
       v-if="updated && dateShown"
-      class="identity-fact identity-updated"
+      class="identity-fact identity-updated trimmed-word"
       >{{ t('workItem.head.updated', { date: updated }) }}</span
     >
     <button
@@ -232,7 +232,6 @@ const updated = computed(() => {
    plan anchor's icon centres on the same middle as the reference beside it. */
 .identity-updated {
   display: block;
-  text-box: trim-both ex alphabetic;
 }
 
 .identity-fact + .identity-fact::before {

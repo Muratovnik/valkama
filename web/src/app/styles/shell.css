@@ -40,6 +40,19 @@
   container: main / inline-size;
 }
 
+/* A word whose box is trimmed to its letters, so that what stands beside it centres on their
+   middle rather than on the em box. The box is then one x-height tall, and capitals, marks
+   above the letters and descenders all stand outside it, so whatever clips at the box takes
+   them: `overflow: hidden` made «Высокий» read «Высокии» on every card. The trim and the overflow
+   it needs are therefore one rule, written here and nowhere else, and `check:ui-system` refuses
+   `text-box` in any other. Short of room the word is cut sideways only. Three components
+   write the class, so it belongs to no one of them, as the owner order in DESIGN.md has it. */
+.trimmed-word {
+  text-box: trim-both ex alphabetic;
+  overflow: clip visible;
+  text-overflow: ellipsis;
+}
+
 /* Five components render this — the platform state panel while it loads, and on
    the graph a card's live mark, a zoomed-out card, a frame's header and the
    key — so it is a recipe that belongs to no one of them and stays here, as the

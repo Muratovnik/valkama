@@ -108,19 +108,27 @@ export function drawChip(chip: ChipDrawing, extraClass = ''): VNode {
   )
 }
 
+/**
+ * A word on a card stands on its letters, which the glyphs and dots beside it centre on.
+ * Other surfaces keep the box they had.
+ */
+const wordClass = (surface: FacetSurface) =>
+  surface === 'card' ? 'facet-word trimmed-word' : 'facet-word'
+
 /** What a mark draws beside its glyph: its short words, its word alone, or its word. */
-function markWordsOf(mark: FacetMark, whole: string, words: MarkWords, named: boolean): VNode[] {
+function markWordsOf(mark: FacetMark, whole: string, run: MarkRun, named: boolean): VNode[] {
+  const word = wordClass(run.surface)
   if (mark.short !== undefined)
     return [
-      h('span', { 'class': 'facet-word', 'aria-hidden': 'true' }, words.say(mark.short)),
+      h('span', { 'class': word, 'aria-hidden': 'true' }, run.words.say(mark.short)),
       h('span', { class: 'facet-word-hidden' }, whole),
     ]
   // A word alone is a word of its own, which takes the mark's tone.
-  if (mark.form === 'word') return [h('span', { class: 'facet-word facet-word-alone' }, whole)]
+  if (mark.form === 'word') return [h('span', { class: `${word} facet-word-alone` }, whole)]
   const glyphOnly = mark.form === 'glyph' && mark.glyph !== null
   // A button's name is its label: a word kept out of sight would say nothing more.
   if (glyphOnly && named) return []
-  return [h('span', { class: glyphOnly ? 'facet-word facet-word-hidden' : 'facet-word' }, whole)]
+  return [h('span', { class: glyphOnly ? 'facet-word facet-word-hidden' : word }, whole)]
 }
 
 const isActive = (mark: FacetMark, run: MarkRun) =>
@@ -179,7 +187,7 @@ function drawMark(mark: FacetMark, run: MarkRun): VNode {
       'class': `${markShape(mark, filters)}${run.solo ? ' facet-marks' : ''}`,
       'data-surface': run.solo ? run.surface : undefined,
     },
-    [...glyph, ...markWordsOf(mark, whole, run.words, filters)],
+    [...glyph, ...markWordsOf(mark, whole, run, filters)],
   )
 }
 

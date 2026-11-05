@@ -26,6 +26,7 @@ import {
   scanTypeStyles,
   scanUiSources,
 } from './ui-system/styles.mjs'
+import { scanTrimmedWords } from './ui-system/trimmed-word.mjs'
 
 export function scanUiTree(root = defaultSourceRoot) {
   const sources = collectVueSources(root)
@@ -45,6 +46,7 @@ export function scanUiTree(root = defaultSourceRoot) {
     ...scanBorderBudget(sources, budget),
     ...scanMeaningFills(sources, fills),
     ...scanHiddenRules(sources),
+    ...scanTrimmedWords(sources),
     ...scanControlSizes(sources, sizes),
     ...scanScopeEscapes(sources),
     ...scanImportDirection(sources),

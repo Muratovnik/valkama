@@ -1,17 +1,18 @@
 /**
- * The identity line over a card's title and the state button in its facts, measured in the
- * built app. The texts of one line share a baseline, and each icon or dot stands on the middle
- * of the lowercase letters beside it, within a pixel.
+ * The identity line over a card's title and the row of facts under it, measured in the built
+ * app. The texts of one line share a baseline, each icon or dot stands on the middle of the
+ * lowercase letters beside it, within a pixel, and a word trimmed to its letters keeps them all.
  */
 import { expect } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 import { planningWorkItemEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 
 import { installBackend } from './backend.ts'
 import { openPlanFor } from './openSessionFixtures.ts'
-import { projectScope, workItemRef } from './planningFixtures.ts'
+import { blockedWorkItem, projectScope, workItem, workItemRef } from './planningFixtures.ts'
+import { asked, installQuestions } from './questionBackend.ts'
 import { test } from './test.ts'
 
 const CARD = serializePlatformRoute({
@@ -79,22 +80,90 @@ function measure(page: Page, spec: Spec): Promise<Measured> {
   }, spec)
 }
 
-/** The head of a card in the built app, with its state named as the owner's screenshot shows it. */
-async function openCard(page: Page, locale: 'ru' | 'en', width: number) {
+/** What a head holds beyond the state: each fact that prints a word beside its glyph. */
+interface Head {
+  asking?: boolean
+  /** The reference of the item's epic, which is a link in the first row. */
+  epic?: string
+  kind?: string
+  priority?: string
+  /** The name of the state the item stands in. */
+  state?: string
+}
+
+const FULL_HEAD: Head = { asking: true, epic: 'MAIN-12', kind: 'epic', priority: 'high' }
+
+/** The item under its epic: the card's read says the id, the space's whose reference that is. */
+function inEpic(model: Record<string, unknown>, reference: string) {
+  const items = model.work_items as { reference: string; work_item_id: string }[]
+  return {
+    ...model,
+    work_items: items.map((item) => {
+      if (item.work_item_id === workItem.work_item_id)
+        return { ...item, parent_id: blockedWorkItem.work_item_id }
+      return item.work_item_id === blockedWorkItem.work_item_id ? { ...item, reference } : item
+    }),
+  }
+}
+
+/** The head of a card in the built app, on a state that moves, with the facts it is given. */
+async function openCard(page: Page, locale: 'ru' | 'en', width: number, head: Head = {}) {
+  const { asking, epic, kind, priority, state = 'Review' } = head
   await page.addInitScript((chosen) => localStorage.setItem('valkama-locale', chosen), locale)
   await page.setViewportSize({ width, height: 900 })
   await installBackend(page, {
     openPlan: openPlanFor,
     card: (read) => ({
       ...read,
-      state: { ...(read.state as object), key: 'review', name: 'Review', category: 'review' },
+      state: { ...(read.state as object), key: 'review', name: state, category: 'review' },
+      ...(kind ? { kind } : {}),
+      ...(priority ? { priority } : {}),
+      ...(epic ? { parent_id: blockedWorkItem.work_item_id } : {}),
     }),
+    ...(epic ? { space: (model) => inEpic(model, epic) } : {}),
   })
+  if (asking) await installQuestions(page, [asked()])
   await page.goto(CARD)
   const drawer = page.locator('.drawer')
   await expect(drawer.locator('.card-facts')).toBeVisible()
   await expect(drawer.locator('.card-identity')).toBeVisible()
+  await expect(drawer).toHaveCSS('transform', 'none')
+  if (asking) await expect(drawer.locator('.card-question')).toBeVisible()
+  if (epic) await expect(drawer.getByText(epic, { exact: true }).first()).toBeVisible()
   return drawer
+}
+
+/** The drawn words trimmed to their letters, and which box of theirs cuts those letters. */
+function trimmedWords(page: Page) {
+  return page.evaluate(() => {
+    const words = [
+      ...document.querySelectorAll<HTMLElement>('.drawer :is(.card-identity, .card-facts) *'),
+    ].filter(
+      (element) =>
+        getComputedStyle(element).textBoxTrim !== 'none' &&
+        getComputedStyle(element).clipPath === 'none' &&
+        element.textContent?.trim(),
+    )
+    return words.map((word) => {
+      const range = document.createRange()
+      range.selectNodeContents(word)
+      const letters = range.getBoundingClientRect()
+      const cuts: string[] = []
+      for (
+        let box: HTMLElement | null = word;
+        box && !box.matches('.drawer');
+        box = box.parentElement
+      ) {
+        if (getComputedStyle(box).overflowY === 'visible') continue
+        const edge = box.getBoundingClientRect()
+        if (letters.top < edge.top - 0.5 || letters.bottom > edge.bottom + 0.5)
+          cuts.push(
+            `.${box.className} is ${edge.height}px tall over ${letters.height}px of letters`,
+          )
+      }
+      return { cuts, text: word.textContent?.trim() ?? '' }
+    })
+  })
 }
 
 /**
@@ -184,20 +253,98 @@ test('the state word is cut short sideways only, so its trimmed box cuts no lett
   expect(box).toEqual({ trimmed: true, overflowY: 'visible', textOverflow: 'ellipsis' })
 })
 
-test.describe('enlarged crops for the owner to see', () => {
+for (const locale of ['ru', 'en'] as const) {
+  for (const width of [1280, 390]) {
+    for (const priority of ['high', 'medium']) {
+      test(`a word trimmed to its letters keeps them all, ${priority}, ${locale} at ${width}px`, async ({
+        page,
+      }) => {
+        await openCard(page, locale, width, { ...FULL_HEAD, priority })
+        const words = await trimmedWords(page)
+        // State, question, priority and epic at least: a head cannot pass by trimming fewer.
+        expect(words.length).toBeGreaterThanOrEqual(4)
+        expect(words.map(({ text }) => text)).toContain('MAIN-12')
+        for (const { cuts, text } of words) expect(cuts, `the letters of “${text}”`).toEqual([])
+      })
+    }
+  }
+}
+
+/** What a word short of room shows: its end replaced, its box inside the row. */
+const shapeOf = (word: Locator) =>
+  word.evaluate((element) => ({
+    clipped: element.scrollWidth > element.clientWidth,
+    ending: getComputedStyle(element).textOverflow,
+    fits: element.getBoundingClientRect().right <= document.documentElement.clientWidth,
+  }))
+
+test('a long word on the first row is cut short sideways, with an ellipsis, and only there', async ({
+  page,
+}) => {
+  // Only a state's name can outrun a phone's row: a reference holds twenty letters at most.
+  const state = 'Согласование-'.repeat(8)
+  const drawer = await openCard(page, 'ru', 390, { ...FULL_HEAD, state })
+  const shortened = { clipped: true, ending: 'ellipsis', fits: true }
+  expect(await shapeOf(drawer.locator('.card-facts .state-label', { hasText: state }))).toEqual(
+    shortened,
+  )
+  const word = drawer.locator('.card-facts .card-fact .facet-word', { hasText: 'MAIN-12' })
+  await word.evaluate((element) => {
+    const fact = element.closest<HTMLElement>('.card-fact')
+    if (fact) fact.style.maxWidth = '48px'
+  })
+  expect(await shapeOf(word)).toEqual(shortened)
+  for (const { cuts, text } of await trimmedWords(page))
+    expect(cuts, `the letters of “${text}”`).toEqual([])
+})
+
+/**
+ * How many pixels of two pictures of one size stand apart by more than a word's edge can. A word
+ * cut sideways at its box dims a fringe pixel where a glyph overhangs it, by 23 of 255 on «Ж», and
+ * a letter cut across loses runs of them outright.
+ */
+function pixelsApart(page: Page, pictures: [Buffer, Buffer]) {
+  return page.evaluate(
+    async (encoded) => {
+      // This body is serialized and evaluated in the page, so a module-scope helper would not be
+      // in scope here.
+      // eslint-disable-next-line unicorn/consistent-function-scoping -- see above
+      const read = async (picture: string) => {
+        const answer = await fetch(`data:image/png;base64,${picture}`)
+        const bitmap = await createImageBitmap(await answer.blob())
+        const canvas = new OffscreenCanvas(bitmap.width, bitmap.height)
+        const context = canvas.getContext('2d')
+        if (!context) throw new Error('no canvas')
+        context.drawImage(bitmap, 0, 0)
+        return context.getImageData(0, 0, bitmap.width, bitmap.height).data
+      }
+      const [first, second] = await Promise.all(encoded.map((picture) => read(picture)))
+      let apart = 0
+      for (let channel = 0; channel < first.length; channel += 1)
+        if (Math.abs(first[channel] - second[channel]) > 48) apart += 1
+      return apart
+    },
+    pictures.map((picture) => picture.toString('base64')),
+  )
+}
+
+test.describe('at three device pixels', () => {
   test.use({ deviceScaleFactor: 3 })
 
   for (const width of [1280, 390]) {
-    test(`crops the identity line and the state button at ${width}px`, async ({ page }, info) => {
-      const drawer = await openCard(page, 'ru', width)
-      await expect(drawer.locator('.card-state')).toBeVisible()
-      await drawer.screenshot({ path: info.outputPath(`card-${width}.png`) })
-      await drawer.locator('.card-identity').screenshot({
-        path: info.outputPath(`identity-${width}.png`),
+    test(`the head draws the same with every trimmed word let out of its box, at ${width}px`, async ({
+      page,
+    }) => {
+      const drawer = await openCard(page, 'ru', width, FULL_HEAD)
+      const row = () => drawer.locator('.card-facts').screenshot({ animations: 'disabled' })
+      const line = () => drawer.locator('.card-identity').screenshot({ animations: 'disabled' })
+      const drawn = { line: await line(), row: await row() }
+      await page.evaluate(() => {
+        for (const element of document.querySelectorAll<HTMLElement>('.drawer *'))
+          if (getComputedStyle(element).textBoxTrim !== 'none') element.style.overflow = 'visible'
       })
-      await drawer.locator('.card-state').screenshot({
-        path: info.outputPath(`state-${width}.png`),
-      })
+      expect(await pixelsApart(page, [drawn.row, await row()]), 'the first row').toBe(0)
+      expect(await pixelsApart(page, [drawn.line, await line()]), 'the identity line').toBe(0)
     })
   }
 })

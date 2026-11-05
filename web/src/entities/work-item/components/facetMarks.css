@@ -98,10 +98,11 @@
   }
 }
 
+/* Short of room a word is cut sideways only, so no box of it can take a letter's top. */
 .facet-word {
   min-width: 0;
   white-space: nowrap;
-  overflow: hidden;
+  overflow: clip visible;
   text-overflow: ellipsis;
 
   /* A word alone carries the tone its glyph would have: with no glyph beside
@@ -130,12 +131,6 @@
 
   .facet-mark[data-active] & {
     color: var(--color-text);
-  }
-
-  /* On a card the word stands on its letters, which the glyphs and dots beside it centre on (see
-     SemanticState). Other surfaces keep the box they had. */
-  .facet-marks[data-surface='card'] & {
-    text-box: trim-both ex alphabetic;
   }
 }
 

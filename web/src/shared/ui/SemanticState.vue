@@ -24,7 +24,7 @@ const props = withDefaults(defineProps<Props>(), { compact: false, variant: 'inl
       class="state-dot"
       aria-hidden="true"
     />
-    <span class="state-label">{{ label }}</span>
+    <span class="state-label trimmed-word">{{ label }}</span>
   </span>
 </template>
 
@@ -33,6 +33,9 @@ const props = withDefaults(defineProps<Props>(), { compact: false, variant: 'inl
   display: inline-flex;
   gap: var(--space-2);
   align-items: center;
+
+  /* What holds it may be narrower than its word, and then the word is what gives way. */
+  max-width: 100%;
   min-height: 24px;
   color: var(--color-text-muted);
   font: var(--font-field-label);
@@ -51,15 +54,11 @@ const props = withDefaults(defineProps<Props>(), { compact: false, variant: 'inl
 /* The word takes the tone with the dot, unless the host says otherwise through
    `--color-state-label`: on a ground lighter than the ladder's, a tone that reads
    as a dot is too dark for words, and the dot alone keeps saying it. Its box is trimmed to
-   the letters (`text-box`), so the dot centres on their middle rather than on the em box,
-   which stood about a pixel high. A narrow column cuts the word short sideways only: the trimmed
-   box is one x-height tall, and `overflow: hidden` would cut every capital and descender at it. */
+   the letters (`.trimmed-word`), so the dot centres on their middle rather than on the em box,
+   which stood about a pixel high. */
 .state-label {
   min-width: 0;
   color: var(--color-state-label, currentcolor);
-  text-box: trim-both ex alphabetic;
-  overflow: clip visible;
-  text-overflow: ellipsis;
 }
 
 /* The badge variant keeps a ground so a state can sit in a dense column, but

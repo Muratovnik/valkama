@@ -539,6 +539,13 @@ chrome.
   `tests/browser/overflow.ts` reads the browser's own answer on every module at
   two widths; it is the only check here that can see a defect no element's
   declared style is wrong for.
+- A word whose neighbours centre on its letters is trimmed to them, by one class:
+  `.trimmed-word` in `shell.css`. The trimmed box is one x-height tall, so capitals, marks
+  above the letters and descenders stand outside it and anything that clips at it cuts them;
+  a card's words were written with the trim and an inherited `overflow: hidden`, and every
+  «Высокий» read «Высокии». The class says the trim and the sideways-only clip together, and
+  `check:ui-system` refuses `text-box` anywhere else. `production-card-alignment.spec.ts`
+  holds the rest: a word's own box or an ancestor's that would still cut it.
 - A row that carries anything but text aligns by centre. A flex or inline-flex
   box hands its baseline to its first item, so a row aligned by baseline lines
   its neighbours up with a 5px status dot or the bottom edge of a 13px icon
