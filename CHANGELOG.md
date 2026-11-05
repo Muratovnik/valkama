@@ -93,6 +93,12 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- **A chain's rows in a card line up, and their titles can be read.** The «Waiting on» mark stood
+  about 2px above the rest of its row and made that row taller, so the rows were spaced unevenly.
+  Every cell of a row now stands on one line and rows of one line are one height. In a card at its
+  usual width the mark goes under the title, so a title has about 340px instead of 177px and rows
+  without a mark are no longer cut for one; who holds the task keeps its column. A card widened
+  to nearly its full 720px keeps a row on one line.
 - **A compacted context no longer hides that a session is waiting for you.** A session that
   had finished its turn or asked for attention lost that mark when its context was compacted
   while idle. The mark now stays until you answer.

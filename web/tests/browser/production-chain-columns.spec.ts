@@ -3,8 +3,10 @@
  * whole list, so the reference, the title, the waiting mark and the holder start
  * at the same place in every row, whichever group the row is in and whether or
  * not the row has that cell. A long holder is cut short with its whole name in
- * its tooltip and takes no room from the titles. On a narrow list a row's mark stands
- * under its title, so that one row's mark takes no room from any title.
+ * its tooltip and takes no room from the titles. Where a list has no room for a title
+ * beside the mark, as in a card at its usual width, a row's mark stands under its title,
+ * so that one row's mark takes no room from any title. Every cell of a line stands on
+ * one baseline, and every row of one line is one height.
  */
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
@@ -66,6 +68,12 @@ const chain = () => chainOf(ROOT, members, { edges })
 
 const shot = (path: string) => ({ path, animations: 'disabled' as const })
 
+/** The card as wide as it goes, which is the one place a row has room for all its cells. */
+async function widestCard(page: Page) {
+  await page.addInitScript(() => localStorage.setItem('valkama-card-drawer-width', '960'))
+  await page.setViewportSize({ width: 1920, height: 1000 })
+}
+
 async function openCard(page: Page) {
   await page.goto(
     serializePlatformRoute({
@@ -116,7 +124,7 @@ for (const width of [1280, 390]) {
       'Development · 4',
       'Backlog · 2',
     ])
-    // Below 480px the holder is hidden and the state word or the waiting mark keeps its place.
+    // Below 480px the holder is hidden and the state word keeps its place.
     const list = await section.locator('.chain-members').boundingBox()
     const narrow = (list?.width ?? 0) < 480
 
@@ -216,7 +224,7 @@ test('at a phone’s width a mark stands under its title and no title gives up r
 test('on a wide list a row stays one line, its mark and its holder in columns of their own', async ({
   page,
 }, info) => {
-  await page.setViewportSize({ width: 1280, height: 1000 })
+  await widestCard(page)
   await installBackend(page)
   await serve(page, mixedChain())
   const section = await openCard(page)
@@ -229,9 +237,114 @@ test('on a wide list a row stays one line, its mark and its holder in columns of
     // Beside the title, on its line.
     expect(row.waiting?.left ?? 0).toBeGreaterThanOrEqual(row.title?.right ?? Infinity)
     expect(row.waiting?.top ?? Infinity).toBeLessThan(row.title?.bottom ?? 0)
+    // The card's widest list, 671px, with the longest references this chain has.
+    expect(row.title?.width ?? 0).toBeGreaterThanOrEqual(270)
   }
-  await section.screenshot(shot(info.outputPath('chain-wide-1280.png')))
+  await section.screenshot(shot(info.outputPath('chain-wide-1920.png')))
 })
+
+/**
+ * What a row stands on: each cell's baseline, read from its text's own box and its font's
+ * ascent, so a cell taller than its text or a glyph beside it cannot hide a shift; and how far
+ * the mark's glyph stands from the middle of the mark's words.
+ */
+function linesOf(section: Locator) {
+  return section.locator('.chain-row').evaluateAll((rows) => {
+    const context = document.createElement('canvas').getContext('2d')
+    const baseline = (cell: Element | null) => {
+      if (!cell || cell.getClientRects().length === 0) return null
+      const text = [...cell.childNodes].find(
+        (node) => node.nodeType === Node.TEXT_NODE && (node.textContent ?? '').trim() !== '',
+      )
+      if (!text || !context) return null
+      const range = document.createRange()
+      range.selectNodeContents(text)
+      // Not `font`, which reads empty for a cell with tabular figures.
+      const { fontFamily, fontSize, fontStyle, fontWeight } = getComputedStyle(cell)
+      context.font = `${fontStyle} ${fontWeight} ${fontSize} ${fontFamily}`
+      const { fontBoundingBoxAscent } = context.measureText(text.textContent ?? '')
+      const box = range.getBoundingClientRect()
+      return { line: box.top + fontBoundingBoxAscent, middle: (box.top + box.bottom) / 2 }
+    }
+    return rows.map((row) => {
+      const mark = baseline(row.querySelector('.chain-row-waiting'))
+      const glyph = row.querySelector('.chain-row-glyph')?.getBoundingClientRect()
+      const detail = [...row.querySelectorAll('.chain-row-detail')].find(
+        (node) => node.getClientRects().length > 0,
+      )
+      const title = baseline(row.querySelector('.chain-row-title'))?.line ?? null
+      const { height, top } = row.getBoundingClientRect()
+      return {
+        height,
+        // Where its first line stands in the row: the rows' lines are evenly spaced only if
+        // this is one number.
+        lineInRow: title === null ? null : title - top,
+        reference: baseline(row.querySelector('.chain-row-reference'))?.line ?? null,
+        title,
+        mark: mark?.line ?? null,
+        detail: baseline(detail ?? null)?.line ?? null,
+        glyphOff: glyph && mark ? Math.abs((glyph.top + glyph.bottom) / 2 - mark.middle) : null,
+      }
+    })
+  })
+}
+
+test('on a wide list every cell of a row stands on one baseline and every row is one height', async ({
+  page,
+}) => {
+  await widestCard(page)
+  await installBackend(page)
+  await serve(page, mixedChain())
+  const section = await openCard(page)
+  await expect(section.locator('.chain-row')).toHaveCount(7)
+  const rows = await linesOf(section)
+  expect(rows.filter((row) => row.mark !== null)).toHaveLength(3)
+  for (const row of rows) {
+    expect(spread([row.reference, row.title, row.mark, row.detail])).toBeLessThanOrEqual(0.75)
+    expect(row.glyphOff ?? 0).toBeLessThanOrEqual(1.5)
+  }
+  expect(spread(rows.map((row) => row.height))).toBeLessThanOrEqual(0.5)
+  expect(spread(rows.map((row) => row.lineInRow))).toBeLessThanOrEqual(0.5)
+})
+
+for (const width of [1280, 1440, 1920]) {
+  test(`in a card at its usual width a title has room at a ${width}px window, and its line one baseline`, async ({
+    page,
+  }, info) => {
+    await page.setViewportSize({ width, height: 1000 })
+    await installBackend(page)
+    await serve(page, mixedChain())
+    const section = await openCard(page)
+    await expect(section.locator('.chain-row')).toHaveCount(7)
+
+    const boxes = await boxesOf(section)
+    for (const row of boxes) expect(row.title?.width ?? 0).toBeGreaterThanOrEqual(300)
+    expect(spread(boxes.map((row) => row.title?.left ?? null))).toBeLessThanOrEqual(1)
+    const marked = boxes.filter((row) => row.waiting !== null)
+    expect(marked).toHaveLength(3)
+    for (const row of marked) {
+      expect(row.waiting?.top ?? 0).toBeGreaterThanOrEqual((row.title?.bottom ?? 0) - 1)
+      expect(Math.abs((row.waiting?.left ?? 0) - (row.title?.left ?? 0))).toBeLessThanOrEqual(1)
+    }
+
+    const rows = await linesOf(section)
+    for (const row of rows) {
+      // The mark has a line of its own here; everything else stands on the title's.
+      expect(spread([row.reference, row.title, row.detail])).toBeLessThanOrEqual(0.75)
+      expect(row.glyphOff ?? 0).toBeLessThanOrEqual(1.5)
+    }
+    // Rows of one line are one height, and rows of two lines are one height.
+    const oneLine = rows.filter((row) => row.mark === null).map((row) => row.height)
+    const twoLines = rows.filter((row) => row.mark !== null).map((row) => row.height)
+    expect(oneLine.length).toBeGreaterThan(0)
+    expect(spread(oneLine)).toBeLessThanOrEqual(0.5)
+    expect(spread(twoLines)).toBeLessThanOrEqual(0.5)
+    const lines = (kept: typeof rows) => spread(kept.map((row) => row.lineInRow))
+    expect(lines(rows.filter((row) => row.mark === null))).toBeLessThanOrEqual(0.5)
+    expect(lines(rows.filter((row) => row.mark !== null))).toBeLessThanOrEqual(0.5)
+    await section.screenshot(shot(info.outputPath(`chain-card-${width}.png`)))
+  })
+}
 
 test('a long holder is cut short, keeps its whole name in its tooltip, and takes no room from titles', async ({
   page,

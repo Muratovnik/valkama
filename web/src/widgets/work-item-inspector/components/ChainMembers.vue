@@ -329,6 +329,7 @@ defineExpose({ restoreView, reveal, view })
   grid-template-columns: subgrid;
   grid-column: 1 / -1;
   row-gap: var(--space-3);
+  align-content: center;
   align-items: baseline;
   width: 100%;
   min-height: var(--size-control-inline);
@@ -368,19 +369,25 @@ defineExpose({ restoreView, reveal, view })
 
 /* Workable is the norm of its group, so a row prints nothing for it; a member
    that waits on an open blocker says what it waits on, its glyph in the tone
-   the registry gives the mark. */
+   the registry gives the mark. The words give the mark its baseline: a glyph has
+   none, and first in a centred row its foot stood in for one, which lifted the
+   words above the row's line and made the row taller. It reads at the row's own line
+   height, since a taller one would stand a marked row's line lower than the others'. */
 .chain-row-waiting {
   display: inline-flex;
   grid-column: 3;
   gap: var(--space-1);
-  align-items: center;
+  align-items: baseline;
   color: var(--color-text-muted);
-  font: var(--font-detail);
   white-space: nowrap;
 
   &[data-tone='danger'] .chain-row-glyph {
     color: var(--color-danger);
   }
+}
+
+.chain-row-glyph {
+  align-self: center;
 }
 
 .chain-row-detail {
@@ -392,21 +399,38 @@ defineExpose({ restoreView, reveal, view })
   text-overflow: ellipsis;
 }
 
-/* On a narrow list a row's mark stands under its title, because one row's mark in a
-   shared column took the room from every title. Who holds a task gives way altogether:
-   at a phone's width the holder took a third of the row, and the card names it. */
-@container chain-members (width < 480px) {
+/* A row's mark stands under its title unless the list has room for both on one line,
+   because one row's mark in a shared column takes the room from every title: a card at
+   its usual width, 571px of list, left them 177px. The holder keeps its column. */
+@container chain-members (width < 660px) {
   .chain-row {
     row-gap: var(--space-half);
   }
 
+  .chain-row-title {
+    grid-column: 2 / 4;
+  }
+
+  .chain-row-waiting {
+    grid-row: 2;
+    grid-column: 2 / -1;
+  }
+
+  .chain-row-detail {
+    grid-row: 1;
+  }
+}
+
+/* Who holds a task gives way altogether at a phone's width, where the holder took a
+   third of the row, and the card names it. A state word stands under the title too. */
+@container chain-members (width < 480px) {
   .chain-row-title,
-  .chain-row-waiting,
   .chain-row-detail {
     grid-column: 2 / -1;
   }
 
   .chain-row-detail {
+    grid-row: auto;
     max-width: none;
   }
 
