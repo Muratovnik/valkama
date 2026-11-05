@@ -6,6 +6,7 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
+import { drawnColours } from './contrast.ts'
 import { expectDateHeld } from './metaLine.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { asked, openQuestion, QUESTION_ID, routeField } from './questionBackend.ts'
@@ -392,6 +393,9 @@ test('an icon rests muted and brightens under the pointer and under the keys', a
   await page.mouse.move(0, 0)
   const rest = await ink()
   expect(await ground()).toBe('rgba(0, 0, 0, 0)')
+  // Muted is not faint: an icon that carries a meaning holds WCAG 1.4.11's 3:1.
+  const { contrast } = await press.evaluate(drawnColours, 'own' as const)
+  expect(contrast).toBeGreaterThanOrEqual(3)
   await press.hover()
   await expect.poll(ink).not.toBe(rest)
   await page.mouse.move(0, 0)
@@ -401,3 +405,32 @@ test('an icon rests muted and brightens under the pointer and under the keys', a
   await expect(press).toBeFocused()
   await expect.poll(ink).not.toBe(rest)
 })
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`an icon keeps its drawing, its edge and its ring in the ${colorScheme} forced palette`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme, forcedColors: 'active' })
+    const { comment, words } = await openDiscussion(page)
+    const press = named(comment, words.resolve)
+    const look = () =>
+      press.evaluate((node) => {
+        const button = getComputedStyle(node)
+        const glyph = getComputedStyle(node.querySelector('svg') as Element)
+        return {
+          background: button.backgroundColor,
+          outline: `${button.outlineStyle} ${button.outlineWidth}`,
+          stroke: glyph.stroke,
+        }
+      })
+    const rest = await look()
+    expect(rest.outline).toBe('solid 1px')
+    // The drawing is in the colour of the words, and stands apart from the button's ground.
+    expect(rest.stroke).not.toBe(rest.background)
+    await named(comment, words.reply).first().focus()
+    await page.keyboard.press('Tab')
+    await expect(press).toBeFocused()
+    const ringed = await look()
+    expect(ringed.outline).toBe('solid 2px')
+  })
+}
