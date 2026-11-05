@@ -127,6 +127,8 @@ checkouts are therefore distinguishable even at the same version.
 - **Opening something in the list of waiting questions moves nothing above it.** The dialog
   stands from the top instead of the middle, and the room for its scrollbar is kept from the
   start, so what is on screen neither jumps nor breaks into other lines.
+- **The field of your own option has no caption over it.** The row right above it says what it
+  is, and a screen reader hears the field named for the question it answers.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 

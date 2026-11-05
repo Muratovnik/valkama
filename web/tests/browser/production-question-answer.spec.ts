@@ -20,7 +20,7 @@ import {
 import { test } from './test.ts'
 
 const OWN = 'Your own option'
-const OWN_TEXT = 'Your own option: text'
+const OWN_TEXT = /^Your own option: /u
 const yesNo: InputRequestField = {
   id: 'go',
   label: 'Go ahead',

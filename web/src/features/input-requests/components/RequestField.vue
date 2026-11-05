@@ -14,8 +14,9 @@
  * and leaves focus in the group, because an arrow both moves and chooses and taking focus
  * away would end the walk, and it would change the context with no warning (APG Radio
  * Group, WCAG 3.2.2, GOV.UK Radios). The field comes next on Tab and has no toolbar of its
- * own, or eight tab stops would stand between the row and the text. Taking the row back
- * hides the editor and keeps the words until the answer is sent.
+ * own, or eight tab stops would stand between the row and the text; the row right above it
+ * is its caption on screen, and a reader hears it named for the question's field it answers.
+ * Taking the row back hides the editor and keeps the words until the answer is sent.
  *
  * What is folded opens on its own press, stays open beside another and selects nothing.
  * What is chosen is never left folded: it stands whole under the options
@@ -278,13 +279,14 @@ defineExpose({ focus })
       ref="ownEditor"
       v-model:preview="preview"
       class="request-own-text"
-      :label="t('requests.ownVariantText')"
+      :label="t('requests.ownVariantName', { field: field.label })"
       :rows="2"
       :maxlength="8000"
       :model-value="own"
       :disabled="disabled"
       :error="ownError"
       :suggest="suggest"
+      hide-label
       hide-tools
       quiet-error
       @update:model-value="emit('edit', { own: $event })"

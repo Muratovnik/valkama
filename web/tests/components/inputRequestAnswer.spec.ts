@@ -166,7 +166,7 @@ describe('your own option', () => {
     expect(describedText(wrapper, own)).toBe('A field for your text opens below.')
     ;(own.element as HTMLInputElement).focus()
     await answer(wrapper, OWN)
-    expect(textareaNamed(wrapper, 'Your own option: text').exists()).toBe(true)
+    expect(textareaNamed(wrapper, 'Your own option: Route').exists()).toBe(true)
     expect(document.activeElement).toBe(own.element)
   })
 
@@ -179,7 +179,7 @@ describe('your own option', () => {
     await answer(wrapper, 'Keep')
     await answer(wrapper, OWN)
     expect(checkedLabels(wrapper)).toEqual([OWN])
-    await textareaNamed(wrapper, 'Your own option: text').setValue('  In a week ')
+    await textareaNamed(wrapper, 'Your own option: Route').setValue('  In a week ')
     await send(wrapper)
     expect(answerInputRequest).toHaveBeenCalledExactlyOnceWith(entry, {}, '', {
       own: { route: 'In a week' },
@@ -194,7 +194,7 @@ describe('your own option', () => {
     await wrapper.get('input[type="checkbox"][value="merge"]').setValue(true)
     await wrapper.get('input[type="checkbox"][value="_own"]').setValue(true)
     await flushPromises()
-    await textareaNamed(wrapper, 'Your own option: text').setValue('And this')
+    await textareaNamed(wrapper, 'Your own option: Areas').setValue('And this')
     await send(wrapper)
     expect(answerInputRequest).toHaveBeenCalledExactlyOnceWith(entry, { areas: ['merge'] }, '', {
       own: { areas: 'And this' },
@@ -207,7 +207,7 @@ describe('your own option', () => {
     await answer(wrapper, OWN)
     await send(wrapper)
     expect(answerInputRequest).not.toHaveBeenCalled()
-    const text = textareaNamed(wrapper, 'Your own option: text')
+    const text = textareaNamed(wrapper, 'Your own option: Route')
     expect(text.attributes('aria-invalid')).toBe('true')
     expect(describedText(wrapper, text)).toBe('Write your own option, or choose another.')
     expect(document.activeElement).toBe(text.element)
@@ -222,12 +222,12 @@ describe('your own option', () => {
     vi.mocked(answerInputRequest).mockResolvedValue(given([route], { answers: { route: 'keep' } }))
     const wrapper = card(entry)
     await answer(wrapper, OWN)
-    await textareaNamed(wrapper, 'Your own option: text').setValue('Mine')
+    await textareaNamed(wrapper, 'Your own option: Route').setValue('Mine')
     await answer(wrapper, 'Keep')
     expect(wrapper.find('textarea').exists()).toBe(false)
     await answer(wrapper, OWN)
     expect(
-      (textareaNamed(wrapper, 'Your own option: text').element as HTMLTextAreaElement).value,
+      (textareaNamed(wrapper, 'Your own option: Route').element as HTMLTextAreaElement).value,
     ).toBe('Mine')
     await answer(wrapper, 'Keep')
     await send(wrapper)
