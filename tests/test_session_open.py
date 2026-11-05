@@ -24,7 +24,7 @@ from typing import Any
 from unittest import mock
 from urllib.parse import quote, urlencode
 
-from server import documents, http_surface, processes, session_open, store
+from server import documents, http_surface, processes, session_open, sessions, store
 from server.ops import url_schemes
 from server.ops.url_schemes import Installed
 from server.planning import leases, service
@@ -216,7 +216,7 @@ class EveryRowOfTheClickTableTests(PlanCase):
         self.session(opened_in="app", opened_host="claude-desktop")
         self.assertEqual([{"kind": "desktop-resume", "session": UID}], self.plan()["steps"])
         self.assertEqual(
-            [{"kind": "copy", "text": f"claude --desktop --resume {UID}"}],
+            [{"kind": "copy", "text": f'cd "{self.folder}" && claude --desktop --resume {UID}'}],
             self.plan(surface="browser")["steps"],
         )
 
@@ -302,7 +302,8 @@ class EveryRowOfTheClickTableTests(PlanCase):
             self.plan()["steps"],
         )
         self.assertEqual(
-            [{"kind": "copy", "text": f"codex resume {UID}"}], self.plan(surface="browser")["steps"]
+            [{"kind": "copy", "text": f'cd "{self.folder}" && codex resume {UID}'}],
+            self.plan(surface="browser")["steps"],
         )
 
     def test_a_live_codex_terminal_gets_no_second_process(self) -> None:
@@ -373,12 +374,15 @@ class ASessionLongSilentTests(PlanCase):
     def test_a_browser_is_offered_the_command_to_copy(self) -> None:
         self.silent()
         plan = self.plan(surface="browser")
-        self.assertEqual({"kind": "copy", "text": f"claude --resume {UID}"}, plan["steps"][-1])
+        self.assertEqual(
+            {"kind": "copy", "text": f'cd "{self.folder}" && claude --resume {UID}'},
+            plan["steps"][-1],
+        )
 
     def test_a_codex_session_gets_its_own_command(self) -> None:
         self.silent(client="codex")
         self.assertEqual(
-            {"kind": "copy", "text": f"codex resume {UID}"},
+            {"kind": "copy", "text": f'cd "{self.folder}" && codex resume {UID}'},
             self.plan(surface="browser", fallback="codex-app")["steps"][-1],
         )
 
@@ -454,7 +458,10 @@ class WithoutWhatWasNotSeenTests(PlanCase):
     def test_the_cli_link_not_seen_working_gives_the_command_to_copy(self) -> None:
         self.session(opened_in="terminal")
         plan = self.plan(surface="browser", seen=self.seen_without(url_schemes.CLI_RESUME_LINK))
-        self.assertEqual([{"kind": "copy", "text": f"claude --resume {UID}"}], plan["steps"])
+        self.assertEqual(
+            [{"kind": "copy", "text": f'cd "{self.folder}" && claude --resume {UID}'}],
+            plan["steps"],
+        )
 
     def test_the_notice_not_seen_holding_leaves_only_the_hint_for_a_live_terminal(self) -> None:
         self.session(opened_in="terminal", status="active")
@@ -1120,6 +1127,174 @@ class FolderTargetTests(PathTargetCase):
 
 
 FOLDER_SAMPLES = Path(__file__).resolve().parent / "fixtures" / "folder-samples.json"
+
+
+def project_directory(folder: Path) -> str:
+    """Claude Code's documented name for a folder's transcripts: `-` for every non-alphanumeric."""
+
+    return "".join(c if c.isascii() and c.isalnum() else "-" for c in str(folder))
+
+
+class TheFolderASessionOpensInTests(PlanCase):
+    """A session started in one folder whose shell moved on, as a real row of that kind reads."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.nested = self.folder / "services" / "api"
+        self.nested.mkdir(parents=True)
+
+    def started_in(self, started: Path | str, **columns: str) -> str:
+        """A row whose transcript lies where the client keeps one for a start in `started`."""
+
+        name = started if isinstance(started, str) else project_directory(started)
+        directory = self.root / "projects" / name
+        directory.mkdir(parents=True, exist_ok=True)
+        transcript = directory / f"{UID}.jsonl"
+        transcript.write_text("{}\n", encoding="utf-8")
+        return self.session(transcript_path=str(transcript), **columns)
+
+    def moved_on(self) -> dict[str, str]:
+        """The columns of a row whose every record says the folder the shell reached."""
+
+        return {"opened_folder": str(self.nested), "cwd": str(self.nested)}
+
+    def test_the_window_is_the_folder_its_transcript_names_not_the_one_its_shell_reached(
+        self,
+    ) -> None:
+        self.started_in(self.folder, opened_in="ide", opened_host="vscode", **self.moved_on())
+        self.assertEqual(self.window_then_link(), self.plan()["steps"])
+
+    def test_the_terminal_and_the_command_get_that_same_folder(self) -> None:
+        self.started_in(self.folder, opened_in="terminal", **self.moved_on())
+        self.assertEqual(
+            [
+                {
+                    "kind": "resume-in-terminal",
+                    "client": "claude",
+                    "session": UID,
+                    "folder": str(self.folder),
+                }
+            ],
+            self.plan()["steps"],
+        )
+        self.assertEqual(
+            [{"kind": "copy", "text": f'cd "{self.folder}" && claude --resume {UID}'}],
+            self.plan(surface="browser", seen=frozenset())["steps"],
+        )
+
+    def test_cwd_alone_names_the_folder_when_the_record_of_the_start_is_empty(self) -> None:
+        self.started_in(
+            self.folder,
+            opened_in="ide",
+            opened_host="vscode",
+            opened_folder="",
+            cwd=str(self.nested),
+        )
+        self.assertEqual(str(self.folder), self.plan()["steps"][0]["folder"])
+
+    def test_a_moved_session_opens_where_its_transcript_moved_to(self) -> None:
+        # `/cd` relocates the transcript, so the record of the start is what is out of date.
+        self.started_in(
+            self.nested,
+            opened_in="ide",
+            opened_host="vscode",
+            opened_folder=str(self.folder),
+            cwd=str(self.nested),
+        )
+        self.assertEqual(str(self.nested), self.plan()["steps"][0]["folder"])
+
+    def test_a_drive_letter_written_either_way_is_the_same_folder(self) -> None:
+        self.started_in(
+            project_directory(self.folder).swapcase(),
+            opened_in="ide",
+            opened_host="vscode",
+            **self.moved_on(),
+        )
+        self.assertEqual(str(self.folder), self.plan()["steps"][0]["folder"])
+
+    def test_with_no_match_the_order_is_the_old_one(self) -> None:
+        self.started_in(
+            self.root / "elsewhere",
+            opened_in="ide",
+            opened_host="vscode",
+            opened_folder=str(self.nested),
+            cwd=str(self.folder),
+        )
+        self.assertEqual(str(self.nested), self.plan()["steps"][0]["folder"])
+
+    def test_a_folder_that_is_gone_gives_way_to_the_old_order(self) -> None:
+        self.started_in(self.nested / "gone", opened_in="ide", opened_host="vscode")
+        self.assertEqual(str(self.folder), self.plan()["steps"][0]["folder"])
+
+    def test_a_codex_rollout_says_nothing_of_a_folder(self) -> None:
+        self.started_in(
+            self.folder,
+            client="codex",
+            opened_in="terminal",
+            **self.moved_on(),
+        )
+        self.assertEqual(
+            f'cd "{self.nested}" && codex resume {UID}',
+            self.plan(surface="browser", seen=frozenset())["steps"][-1]["text"],
+        )
+
+    def test_a_session_context_names_the_same_folder_and_keeps_cwd_as_it_is(self) -> None:
+        self.started_in(self.folder, opened_in="ide", opened_host="vscode", **self.moved_on())
+        context = sessions.session_context(self.conn, UID)
+        self.assertEqual(str(self.folder), context["session_folder"])
+        self.assertEqual(str(self.nested), context["cwd"])
+        self.assertEqual(str(self.nested), context["session_cwd"])
+
+
+class ProjectDirectoryNameTests(unittest.TestCase):
+    """Which folder a transcript's directory names, by the rule Claude Code documents."""
+
+    def named(self, directory: str, *folders: str) -> str:
+        transcript = f"D:\\work\\.claude\\projects\\{directory}\\{UID}.jsonl"
+        return sessions.transcript_folder(transcript, *folders)
+
+    def test_every_other_character_is_a_dash_with_nothing_collapsed(self) -> None:
+        self.assertEqual(
+            "C:\\work\\my_app.v2 (old)",
+            self.named("C--work-my-app-v2--old-", "C:\\work\\my_app.v2 (old)\\sub"),
+        )
+
+    def test_the_extension_writes_the_drive_in_lower_case(self) -> None:
+        self.assertEqual("C:\\work\\demo", self.named("c--work-demo", "C:\\work\\demo\\sub\\deep"))
+
+    def test_the_first_folder_given_wins(self) -> None:
+        self.assertEqual(
+            "C:\\work\\a-b", self.named("C--work-a-b", "C:\\work\\a-b", "C:\\work\\a_b")
+        )
+
+    def test_the_drive_itself_can_be_where_it_started(self) -> None:
+        self.assertEqual("C:\\", self.named("C--", "C:\\work"))
+
+    def test_a_folder_that_only_looks_alike_is_no_match(self) -> None:
+        self.assertEqual("", self.named("C--work-demo", "C:\\work\\demo-two\\sub"))
+
+    def test_a_long_name_is_compared_where_the_client_cut_it(self) -> None:
+        long = "C:\\" + "a" * 210
+        cut = "C--" + "a" * 197 + "-1a2b3c"
+        self.assertEqual(long, self.named(cut, long))
+        self.assertEqual("", self.named("C--" + "a" * 197, long), "a cut name carries a hash")
+
+    def test_no_directory_names_nothing(self) -> None:
+        self.assertEqual("", sessions.transcript_folder("", "C:\\work"))
+
+
+class CopiedCommandTests(unittest.TestCase):
+    """What is pasted runs in the session's folder, or names none it cannot quote."""
+
+    def test_each_sample_is_taken_as_the_app_takes_it(self) -> None:
+        samples = json.loads(FOLDER_SAMPLES.read_text(encoding="utf-8"))["pasted"]
+        self.assertGreater(len(samples), 4)
+        command = f"claude --resume {UID}"
+        for sample in samples:
+            folder = sample["folder"] + "a" * sample.get("pad", 0)
+            with self.subTest(folder=folder[:60]):
+                expected = f'cd "{folder}" && {command}' if sample["pastes"] else command
+                self.assertEqual(expected, session_open._copied_command(command, folder))
 
 
 class FolderRuleTests(unittest.TestCase):

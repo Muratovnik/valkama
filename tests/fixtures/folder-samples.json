@@ -26,5 +26,22 @@
     {"folder": "C:\\work\\del\u007f", "opens": false, "terminal": false},
     {"folder": "C:\\", "pad": 1021, "opens": true, "terminal": true},
     {"folder": "C:\\", "pad": 1022, "opens": false, "terminal": false}
+  ],
+  "pasted_about": "Folders a copied command starts with `cd`, with nothing a person's shell would read inside the double quotes: no quote, `$`, backtick or `%`, and no backslash before the closing quote. A folder the terminal rule refuses, or one past the 400 characters a copied command may take, leaves the bare command. Both sides read these too.",
+  "pasted": [
+    {"folder": "C:\\work\\repo", "pastes": true},
+    {"folder": "C:/work/a b#c", "pastes": true},
+    {"folder": "C:\\work\\it's", "pastes": true},
+    {"folder": "C:\\work\\$HOME", "pastes": false},
+    {"folder": "C:\\work\\`tick", "pastes": false},
+    {"folder": "C:\\work\\%PATH%", "pastes": false},
+    {"folder": "C:\\work\\qu\"ote", "pastes": false},
+    {"folder": "C:\\work\\", "pastes": false},
+    {"folder": "C:\\", "pastes": false},
+    {"folder": "C:\\work\\my;folder", "pastes": false},
+    {"folder": "\\\\server\\share\\repo", "pastes": false},
+    {"folder": "", "pastes": false},
+    {"folder": "C:\\", "pad": 300, "pastes": true},
+    {"folder": "C:\\", "pad": 400, "pastes": false}
   ]
 }

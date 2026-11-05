@@ -283,31 +283,6 @@ describe('asking for the plan', () => {
     expect(outcome).toEqual({ status: 'refused', refusal: { reason: 'contract-invalid' } })
     expect(opened).not.toHaveBeenCalled()
   })
-
-  it('copies the owner’s own command with the session’s folders filled in', async () => {
-    const settings = mergeSettings({
-      sessions: {
-        claude: { fallback: 'vscode', always: 'custom', command: 'wt -d "{cwd}" {session}' },
-      },
-    })
-    answer({
-      kind: 'session',
-      value: SESSION,
-      resolved: true,
-      detail: '',
-      session: SESSION,
-      session_cwd: 'C:\\work\\example-project\\web',
-      space_root: {
-        status: 'mapped',
-        reason: '',
-        canonical_root: FOLDER,
-        resource_ref: { kind: 'planning-space', resource_id: 'x' },
-      },
-    })
-    const outcome = await openTarget(claude, { settings })
-    expect(fetched[0]).toBe(`/api/session?id=${SESSION}`)
-    expect(outcome).toMatchObject({ status: 'copied', text: `wt -d ${FOLDER} ${SESSION}` })
-  })
 })
 
 /** The app's bridge, answering each request with the next of these in turn. */

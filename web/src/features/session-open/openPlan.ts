@@ -347,7 +347,7 @@ async function runCustom(session: string, command: string): Promise<Outcome> {
   const values = {
     session: context.session ?? session,
     cwd: boundRoot(context),
-    session_cwd: context.session_cwd || context.cwd || '',
+    session_cwd: context.session_folder || context.session_cwd || context.cwd || '',
   }
   // As the app refuses it: an empty folder would change what the command means.
   if (

@@ -6,6 +6,8 @@ Historical session events remain stored; current ingestion admits lifecycle only
 from __future__ import annotations
 
 import json
+import os
+import re
 import sqlite3
 
 from .projects import project_registry
@@ -38,6 +40,13 @@ SESSION_FIELD_LIMITS = {
 }
 
 SESSION_DETAIL_LIMIT = 4096
+
+#: What Claude Code names a folder's transcripts by: its absolute path with every
+#: non-alphanumeric character a `-`. A longer name is cut at the limit and given a
+#: hash of the whole path, which only the client can compute, so it is compared up to
+#: the cut. The drive's letter comes in either case: the extension writes `c--Users-…`.
+_NOT_IN_A_PROJECT_NAME = re.compile(r"[^0-9A-Za-z]")
+_PROJECT_NAME_LIMIT = 200
 
 
 def client_family(client: str) -> str:
@@ -263,6 +272,55 @@ def touch(
     return current
 
 
+def _names_folder(directory: str, folder: str) -> bool:
+    """Whether a transcript's directory is the one its client keeps for this folder."""
+
+    name = _NOT_IN_A_PROJECT_NAME.sub("-", folder).casefold()
+    if len(name) <= _PROJECT_NAME_LIMIT:
+        return directory.casefold() == name
+    limit = _PROJECT_NAME_LIMIT
+    return len(directory) > limit and directory[:limit].casefold() == name[:limit]
+
+
+def transcript_folder(transcript_path: str, *folders: str) -> str:
+    """Which of these folders or their parents a Claude transcript's directory names.
+
+    The name goes one way only, so it is checked against the folders a session is known
+    to have stood in. Its client looks a session up there first and an extension link in
+    a window of any other folder starts an empty conversation, so this outranks what a
+    session's own record says of its folder.
+    """
+
+    directory = os.path.basename(os.path.dirname(transcript_path))
+    if not directory:
+        return ""
+    for start in folders:
+        folder = start
+        while folder:
+            if _names_folder(directory, folder):
+                return folder
+            parent = os.path.dirname(folder)
+            folder = parent if parent != folder else ""
+    return ""
+
+
+def session_folders(row: sqlite3.Row) -> tuple[str, ...]:
+    """A session's folder, likeliest first: the one every caller opens it in takes the first usable.
+
+    `opened_folder` says where the last start reported it and `cwd` where its shell stands
+    now; a Claude transcript says where it was started, or `/cd` moved it. A Codex rollout
+    does not say, and for Codex `cwd` is the session's working directory.
+    """
+
+    known = (row["opened_folder"], row["cwd"])
+    named = (
+        transcript_folder(row["transcript_path"], *known)
+        if client_family(row["client"]) == "claude"
+        else ""
+    )
+    return (named, *known)
+
+
 def record_place(
     conn: sqlite3.Connection,
     session_id: str,
@@ -272,6 +330,7 @@ def record_place(
     opened_folder: str,
     host_session_id: str,
     current: bool,
+    keep_folder: bool = False,
 ) -> None:
     """Say where a session start found its session open, inside the caller's transaction.
 
@@ -281,13 +340,26 @@ def record_place(
     Desktop. A start that is history (`current` is `touch`'s answer for it)
     places only a row that has no place yet: it waited in the spool while a
     later event went in directly, and nothing newer says where the session is.
+
+    `keep_folder` is for a start inside a run that goes on: it reports where the shell
+    has got to, which says nothing of where the session was started, so a folder the row
+    has stands.
     """
 
     conn.execute(
-        "UPDATE sessions SET opened_in = ?, opened_host = ?, opened_folder = ?,"
+        "UPDATE sessions SET opened_in = ?, opened_host = ?,"
+        " opened_folder = CASE WHEN ? AND opened_folder <> '' THEN opened_folder ELSE ? END,"
         " host_session_id = ? WHERE id = ? AND (? OR (opened_in = '' AND opened_host = ''"
         " AND opened_folder = '' AND host_session_id = ''))",
-        (opened_in, opened_host, opened_folder, host_session_id, session_id, current),
+        (
+            opened_in,
+            opened_host,
+            keep_folder,
+            opened_folder,
+            host_session_id,
+            session_id,
+            current,
+        ),
     )
 
 
@@ -517,7 +589,8 @@ def session_context(conn: sqlite3.Connection, value: str) -> dict:
         raise ValueError("a session value is required")
     escaped = text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     rows = conn.execute(
-        "SELECT s.id, s.client, s.cwd, s.status, s.last_seen,"
+        "SELECT s.id, s.client, s.cwd, s.opened_folder, s.transcript_path, s.status,"
+        " s.last_seen,"
         " (SELECT p.key || '-' || w.number FROM work_items w"
         "  JOIN planning_spaces p ON p.planning_space_id = w.planning_space_id"
         "  WHERE w.work_item_id = s.work_item_id) AS work_item"
@@ -543,6 +616,8 @@ def session_context(conn: sqlite3.Connection, value: str) -> dict:
             "detail": "no observed session matches this id",
         }
     row = exact[0] if exact else rows[0]
+    folders = [folder for folder in session_folders(row) if folder]
+    folder = next((folder for folder in folders if os.path.isdir(folder)), "".join(folders[:1]))
     scope = _session_associations(conn, row["id"], row["work_item"])
     ambiguous_scope = scope["status"] == "ambiguous"
     root = _session_root_context(scope["resource_ref"], row["cwd"], ambiguous=ambiguous_scope)
@@ -558,6 +633,7 @@ def session_context(conn: sqlite3.Connection, value: str) -> dict:
             "client_family": client_family(row["client"]),
             "cwd": row["cwd"],
             "session_cwd": row["cwd"],
+            "session_folder": folder,
             "work_item": None,
             "space_root": root,
             "at": row["last_seen"],
@@ -571,6 +647,7 @@ def session_context(conn: sqlite3.Connection, value: str) -> dict:
         "client_family": client_family(row["client"]),
         "cwd": row["cwd"],
         "session_cwd": row["cwd"],
+        "session_folder": folder,
         "status": row["status"],
         "work_item": scope["work_item"],
         "space_root": root,

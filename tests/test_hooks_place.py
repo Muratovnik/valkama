@@ -517,6 +517,56 @@ class PlaceStoreTests(PlaceStoreCase):
         )
         self.assertEqual(("", "", "C:/demo", ""), self.where())
 
+    def test_a_compaction_moves_the_place_and_leaves_the_folder(self) -> None:
+        # The agent's shell may stand anywhere by now, and `cwd` follows it; the session is
+        # still the run it was, started where it was started.
+        self.write(session_start("2026-10-31T10:00:00.000Z", cwd="C:/demo", where=VSCODE))
+        self.write(
+            session_start(
+                "2026-10-31T10:30:00.000Z",
+                uid=UID_B,
+                cwd="C:/demo/services/api",
+                where=DESKTOP,
+                source="compact",
+            )
+        )
+        self.assertEqual(("app", "claude-desktop", "C:/demo", DESKTOP_ID), self.where())
+
+    def test_a_clear_is_the_same_run_too(self) -> None:
+        self.write(session_start("2026-10-31T10:00:00.000Z", cwd="C:/demo", where=VSCODE))
+        self.write(
+            session_start(
+                "2026-10-31T10:30:00.000Z",
+                uid=UID_B,
+                cwd="C:/demo/services/api",
+                where=VSCODE,
+                source="clear",
+            )
+        )
+        self.assertEqual(("ide", "vscode", "C:/demo", ""), self.where())
+
+    def test_a_compaction_of_a_session_with_no_folder_says_the_only_one_known(self) -> None:
+        # A hook installed mid-session never heard the start; an empty folder would say less.
+        self.write(
+            session_start(
+                "2026-10-31T10:00:00.000Z", cwd="C:/demo/api", where=VSCODE, source="compact"
+            )
+        )
+        self.assertEqual(("ide", "vscode", "C:/demo/api", ""), self.where())
+
+    def test_a_fork_is_a_start_of_its_own(self) -> None:
+        self.write(session_start("2026-10-31T10:00:00.000Z", cwd="C:/demo", where=VSCODE))
+        self.write(
+            session_start(
+                "2026-10-31T10:30:00.000Z",
+                uid=UID_B,
+                cwd="C:/other",
+                where=VSCODE,
+                source="fork",
+            )
+        )
+        self.assertEqual(("ide", "vscode", "C:/other", ""), self.where())
+
     def test_an_old_spooled_start_does_not_overwrite_a_newer_place(self) -> None:
         self.spool_event(session_start("2026-10-31T10:00:00.000Z", cwd="C:/old", where=VSCODE))
         self.write(

@@ -193,8 +193,9 @@ Planning-space `resource_ref`, derived from the store's `data_scope_id` and the
 space's stable key. The server resolves only that exact owner binding in
 `%LOCALAPPDATA%\\Valkama\\projects.json`, returning typed `mapped`, `missing`,
 `ambiguous`, `malformed`, or `unavailable` status and validating the mapped
-directory. A mapped root is the effective `{cwd}`; `{session_cwd}` remains the
-observed session directory and never grants launch authority. Missing,
+directory. A mapped root is the effective `{cwd}`; `{session_cwd}` is the
+session's own folder, the one a click opens it in (`session_folder` here, which
+`cwd` need not be), and never grants launch authority. Missing,
 unbound, or cross-space sessions have no effective cwd.
 
 Electron receives the canonical `resource_ref`, re-reads the fixed registry in

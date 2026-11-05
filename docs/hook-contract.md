@@ -290,10 +290,18 @@ execution attempt is told apart by its attempt, not by the hook.
 **The session row.** A session start writes the place into `sessions` with the
 folder it started in (`opened_folder`, its `cwd`). A current start replaces all
 four columns, the empty ones too, so a session resumed in another client is
-open there from then on. A start older than the row's `last_seen` places the
-session only when the row has no place yet: it waited in the spool while a
-later event was written directly. The place never goes into
-`execution_events`.
+open there from then on. The exceptions are the `compact` and `clear` sources in
+both clients: they come inside a run that goes on, when `cwd` says only where the
+shell has got to, so a folder the row already has stands while the other three
+columns move. A start older than the row's `last_seen` places the session only
+when the row has no place yet: it waited in the spool while a later event was
+written directly. The place never goes into `execution_events`.
+
+A row's folder as a click reads it comes from `sessions.session_folders`: for
+Claude Code the folder or parent that its transcript's directory names, by the
+client's documented rule (every non-alphanumeric character a `-`, past 200
+characters cut and given a hash), and then `opened_folder` and `cwd`. So a row
+written before the exceptions above heals without a migration.
 
 **Tool calls.** A client can resume a session without `SessionStart`. For
 Claude Code, the identity transform reads the same variables, never the process

@@ -42,6 +42,8 @@ export interface ResolvedRef {
   /** Present when a session ref matched an observed session. */
   session?: string
   session_cwd?: string
+  /** The folder a click opens this session in, which `cwd` need not be: see `session_folders`. */
+  session_folder?: string
   space_root?: SpaceRootResolution
   /** A session's state: `active`, `ended`, `failed`; `missing` or `ambiguous` when unresolved. */
   status?: string

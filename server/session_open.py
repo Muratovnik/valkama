@@ -115,6 +115,11 @@ _LINE = re.compile(r"[1-9][0-9]{0,8}")
 MAX_PLAN_PATH = 1024
 _DRIVE_ROOTED = re.compile(r"[A-Za-z]:[\\/]")
 _CONTROL = re.compile(r"[\x00-\x1f\x7f]")
+#: The longest command a plan gives to copy, as the page and the app read one.
+_MAX_COPIED_COMMAND = 400
+#: What a person's shell would still read inside double quotes, or a backslash that
+#: would escape the closing one.
+_ACTIVE_IN_QUOTES = re.compile(r'["$`%]|\\$')
 
 #: A client that crashed sends no end, so its row says `active` for good. Silence this
 #: long is no proof either, so it only earns the person an offer, never a route.
@@ -260,14 +265,28 @@ def _usable_folder(folder: str, *, terminal: bool = False) -> bool:
     return _written_folder(folder, terminal=terminal) and os.path.isdir(folder)
 
 
-def _window_folder(conn: sqlite3.Connection, row: sqlite3.Row) -> str:
-    """The window a session belongs in: where it last started, its cwd, its project's root.
+def _copied_command(command: str, folder: str) -> str:
+    """A command to paste, led into the session's folder where the line can name it safely.
 
+    Claude Code's own picker copies a `cd` and a resume for a session of another project.
+    `desktop/session_opener.js` (`COPY_TEXT`) holds the same rule and reads the same samples.
+    """
+
+    if not _written_folder(folder, terminal=True) or _ACTIVE_IN_QUOTES.search(folder):
+        return command
+    line = f'cd "{folder}" && {command}'
+    return line if len(line) <= _MAX_COPIED_COMMAND else command
+
+
+def _window_folder(conn: sqlite3.Connection, row: sqlite3.Row) -> str:
+    """The one folder a click on a session uses, for a window, a terminal or a command.
+
+    The first of `sessions.session_folders` that can be opened, or its project's root.
     A link to the extension goes to the window in focus, and in a window of another
     folder it starts an empty conversation, so the window is chosen before the link.
     """
 
-    for folder in (row["opened_folder"], row["cwd"]):
+    for folder in sessions.session_folders(row):
         if _usable_folder(folder):
             return folder
     space_root = sessions.session_context(conn, row["id"]).get("space_root") or {}
@@ -379,9 +398,8 @@ class _Planner:
             return _Route(place, [{"kind": "open-link", "scheme": "claude", "link": link}])
         if self.surface == "desktop":
             return _Route(place, [{"kind": "desktop-resume", "session": self.session}])
-        return _Route(
-            place, [{"kind": "copy", "text": f"claude --desktop --resume {self.session}"}]
-        )
+        command = _copied_command(f"claude --desktop --resume {self.session}", self.folder)
+        return _Route(place, [{"kind": "copy", "text": command}])
 
     def _codex_app(self, place: Place) -> _Route | None:
         if "codex" not in self.installed.schemes:
@@ -419,7 +437,7 @@ class _Planner:
             step = {"kind": "open-link", "scheme": "claude-cli", "link": link}
         else:
             verb = "claude --resume" if self.family == "claude" else "codex resume"
-            step = {"kind": "copy", "text": f"{verb} {self.session}"}
+            step = {"kind": "copy", "text": _copied_command(f"{verb} {self.session}", self.folder)}
         return _Route(place, [step])
 
 
@@ -510,7 +528,7 @@ def _resume_offer(family: str, session: str, folder: str, ask: _Ask) -> dict[str
             "folder": folder,
         }
     verb = "claude --resume" if family == "claude" else "codex resume"
-    return {"kind": "copy", "text": f"{verb} {session}"}
+    return {"kind": "copy", "text": _copied_command(f"{verb} {session}", folder)}
 
 
 def _plan(

@@ -48,6 +48,11 @@ _TRANSITIONS = {
 }
 _SESSION_KINDS = frozenset({"session_start", "session_end"})
 _SUBAGENT_KINDS = frozenset({"subagent_start", "subagent_stop"})
+#: The session starts that come inside a run that goes on, in both clients' hook
+#: documentation: a compaction, and `/clear` in the same process. `cwd` then says where
+#: the shell has got to. `startup`, `resume` and `fork` are starts of a process or of a
+#: new session, whose `cwd` is where that happened.
+_SAME_RUN_SOURCES = frozenset({"compact", "clear"})
 
 
 class UnwritableError(Exception):
@@ -163,6 +168,7 @@ def _apply_to_sessions(conn: sqlite3.Connection, event: HookEvent) -> None:
             opened_folder=event.cwd or "",
             host_session_id=event.host_session_id or "",
             current=current,
+            keep_folder=event.source in _SAME_RUN_SOURCES,
         )
     if event.kind == AGENT_LAUNCH:
         # The event's agent is the one it started, not the one it came from. The

@@ -36,6 +36,11 @@ checkouts are therefore distinguishable even at the same version.
   stood when the click came, and opens as usual if the question has been answered by then.
   The notification's address has changed, so install the new desktop app before the new
   server: an older app refuses the new address and the click does nothing.
+- A session opens in the folder it was started from, not in the folder its agent's
+  shell had reached. A compaction or `/clear` no longer moves the recorded folder,
+  and sessions already recorded are read right from where their transcript is kept.
+  The window, the terminal and the command to copy all use that one folder, and the
+  copied command now starts with `cd` into it.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 

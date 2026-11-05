@@ -6,7 +6,7 @@ const { readFileSync } = require('node:fs')
 const path = require('node:path')
 const test = require('node:test')
 const { claudeLiveness } = require('./live_sessions')
-const { PAUSE_MS, openSessionRequest, writtenFolder } = require('./session_opener')
+const { PAUSE_MS, copyableCommand, openSessionRequest, writtenFolder } = require('./session_opener')
 
 const APP = 'http://127.0.0.1:8642/'
 const ID = 'f89d66c7-f023-4169-8d1a-2e69d4b1af68'
@@ -404,6 +404,23 @@ test('a folder is taken as the server takes it', () => {
     assert.equal(writtenFolder(folder), sample.opens, JSON.stringify(folder.slice(0, 60)))
     assert.equal(writtenFolder(folder, { terminal: true }), sample.terminal, JSON.stringify(folder.slice(0, 60)))
   }
+})
+
+// The same samples `_copied_command` reads: the server leads a command into a folder
+// only where this side would take the line it wrote.
+test('a command to copy is taken as the server writes it', () => {
+  const samples = JSON.parse(
+    readFileSync(path.join(__dirname, '..', 'tests', 'fixtures', 'folder-samples.json'), 'utf8'),
+  ).pasted
+  assert.ok(samples.length > 4)
+  for (const sample of samples) {
+    const folder = sample.folder + 'a'.repeat(sample.pad || 0)
+    assert.equal(copyableCommand(`cd "${folder}" && claude --resume ${ID}`), sample.pastes, JSON.stringify(folder.slice(0, 60)))
+  }
+  assert.equal(copyableCommand(`claude --resume ${ID}`), true)
+  assert.equal(copyableCommand(`cd "C:\\work" && calc.exe`), false)
+  assert.equal(copyableCommand(`cd "C:\\work" & claude --resume ${ID}`), false)
+  assert.equal(copyableCommand(`claude --resume ${ID} && calc.exe`), false)
 })
 
 test('a plan step runs only on a folder the shared rule takes', async () => {

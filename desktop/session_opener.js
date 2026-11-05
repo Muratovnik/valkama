@@ -58,7 +58,9 @@ const RESUME = Object.freeze({
   claude: { program: 'claude.exe', host: 'claude-cli', args: (id) => ['--resume', id] },
   codex: { program: 'codex.exe', host: 'codex-app', args: (id) => ['resume', id] },
 })
-const COPY_TEXT = /^(?:claude --resume|codex resume|claude --desktop --resume) [0-9A-Za-z][0-9A-Za-z._:-]{3,127}$/
+const COPY_TEXT = /^(?:cd "([^"]*)" && )?(?:claude --resume|codex resume|claude --desktop --resume) [0-9A-Za-z][0-9A-Za-z._:-]{3,127}$/
+/** What a person's shell would still read inside double quotes, or a backslash before the closing one. */
+const ACTIVE_IN_QUOTES = /["$`%]|\\$/
 const DETAIL = Object.freeze({
   host: (value) => typeof value === 'string' && /^[a-z][a-z-]{0,31}$/.test(value),
   archived: (value) => typeof value === 'boolean',
@@ -70,6 +72,7 @@ const MAX_STEPS = 8
 const MAX_LINK = 4096
 const MAX_COMMAND = 400
 const MAX_TEXT = 1024
+const MAX_COPIED = 400
 /** How long after a window opens before a link is sent, so it reaches that window. */
 const PAUSE_MS = 300
 /** A running editor's second instance exits once the window is open; a first one never does. */
@@ -161,6 +164,20 @@ function writtenFolder(folder, { terminal = false } = {}) {
   return !folder.split(/[\\/]/).includes('..')
 }
 
+/**
+ * Whether a command to copy is one the plan may give: a resume, led into a folder only
+ * where the terminal rule takes it and a shell would read it as written.
+ * `server/session_open.py` (`_copied_command`) holds the same rule and reads the `pasted`
+ * samples in the same file. The text reaches a person's terminal, so it is held to this.
+ */
+function copyableCommand(command) {
+  if (typeof command !== 'string' || command.length > MAX_COPIED) return false
+  const found = COPY_TEXT.exec(command)
+  if (!found) return false
+  const folder = found[1]
+  return folder === undefined || (writtenFolder(folder, { terminal: true }) && !ACTIVE_IN_QUOTES.test(folder))
+}
+
 /** An existing local folder the rule above takes. */
 function usableFolder(folder, isDirectory, options) {
   return writtenFolder(folder, options) && isDirectory(folder)
@@ -210,7 +227,7 @@ function validStep(step, checks) {
         usableFile(step.path, checks.isFile)
       )
     case 'copy':
-      return exactly(step, ['kind', 'text']) && typeof step.text === 'string' && COPY_TEXT.test(step.text)
+      return exactly(step, ['kind', 'text']) && copyableCommand(step.text)
     case 'explain':
       return (
         REASONS.includes(step.reason) &&
@@ -521,6 +538,7 @@ module.exports = {
   REFUSALS,
   SCHEMES,
   SESSION_ID,
+  copyableCommand,
   customArgv,
   openSessionRequest,
   parseRequest,
