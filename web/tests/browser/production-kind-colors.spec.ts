@@ -7,6 +7,7 @@
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
+import { boardId } from '../fixtures/board.ts'
 import {
   colorOf,
   contrastOf,
@@ -27,6 +28,7 @@ import {
   watchFirstGlyph,
   wordIn,
 } from './kindColorsPage.ts'
+import { projectId, spaceRef, workItem } from './planningFixtures.ts'
 import { card, held, openHub, reference, rest } from './previewPage.ts'
 import { test } from './test.ts'
 
@@ -150,6 +152,56 @@ test('a reference in a question shows the kind at 4.5:1 on the hover card, the l
   await expect(mark.locator('.facet-glyph')).toHaveCSS('color', DEFAULTS.epic)
   await expect(mark.locator('.facet-word')).toHaveCSS('color', DEFAULTS.epic)
   await reads(mark.locator('.facet-word'), WORD, 'the epic on the hover card')
+})
+
+test('a search result leads with its kind in its colour, at rest and highlighted', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await serveKinds(page)
+  await page.route('**/api/modules/planning/search?*', (route) =>
+    route.fulfill({
+      json: {
+        interface_version: 'valkama-planning-search',
+        query: 'MAIN',
+        limit: 50,
+        has_more: false,
+        items: (['epic', 'bug'] as const).map((kind, index) => ({
+          target: {
+            project_id: projectId,
+            space_ref: spaceRef,
+            reference: `MAIN-${901 + index}`,
+            writable: true,
+          },
+          item: {
+            work_item_id: boardId(901 + index),
+            planning_space_id: workItem.planning_space_id,
+            reference: `MAIN-${901 + index}`,
+            title: `A ${kind} to find`,
+            kind,
+            priority: 'medium',
+            state: { name: 'Dev', category: 'active' },
+            claim_ref: '',
+          },
+        })),
+        coverage: [
+          { project_id: projectId, space_ref: spaceRef, status: 'searched', reason: null },
+        ],
+      },
+    }),
+  )
+  await openList(page)
+  await page.getByRole('button', { name: 'Find a task' }).click()
+  await page.getByRole('combobox').last().fill('MAIN')
+  const rows = page.getByRole('option')
+  await expect(rows).toHaveCount(2)
+  const epic = rows.nth(0).locator('[data-kind="epic"] .facet-glyph')
+  const bug = rows.nth(1).locator('[data-kind="bug"] .facet-glyph')
+  await expect(epic).toHaveCSS('color', DEFAULTS.epic)
+  await expect(bug).toHaveCSS('color', DEFAULTS.bug)
+  await expect(rows.nth(0)).toHaveAttribute('data-highlighted', '')
+  await reads(epic, GLYPH, 'the epic on the highlighted result')
+  await reads(bug, GLYPH, 'the bug on a result at rest')
 })
 
 test('a colour chosen in Settings is everywhere at once and survives a reload without a flash', async ({
