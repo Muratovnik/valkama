@@ -29,6 +29,14 @@ SESSION_EVENT_KINDS = {
 # sign of work clears it again without anyone acknowledging anything.
 WAITING_ATTENTION = "waiting"
 
+#: The one `source` of a session start that starts nothing: the running client
+#: compacted its context, and its turn and its subagents go on, in the middle of a
+#: turn too. Claude Code and Codex both send it. Every other start is a new run:
+#: `startup`, `resume`, `clear`, `fork` and one that names no source, which an
+#: earlier client or a value not known here may be. So a reader asking whether the
+#: client really started compares with this and with nothing else.
+COMPACTED_START = "compact"
+
 SESSION_FIELD_LIMITS = {
     "session_id": 128,
     "client": 32,

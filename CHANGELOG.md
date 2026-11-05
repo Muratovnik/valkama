@@ -154,6 +154,12 @@ checkouts are therefore distinguishable even at the same version.
 - **Tabbing into the graph no longer moves the camera the operator set.** The keyboard
   entered on the first target whose centre was in sight, and pressing it centred the
   camera on it if the edge of the field cut it. It now enters on a target wholly in sight.
+### Fixed
+
+- **A compacted context no longer stops the work on the graph.** A session whose context was
+  compacted reads as it did before: a turn still running stays at work, and so do its
+  subagents, so their cards no longer say «waiting». A client that really restarted still
+  cuts off the subagents it left behind.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 

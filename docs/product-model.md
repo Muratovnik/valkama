@@ -199,7 +199,8 @@ than a claim's lease, fourteen days.
 
 A session is at work when its last lifecycle event of its own is a prompt, so a turn
 is running, or when one of its subagents is active and started since the session last
-started. Then:
+really started. A compacted context is reported as a session start and is no such thing:
+the client runs on with its turn and its subagents. Then:
 
 - `working`: a session at work is seen working on this item. Since its last prompt it
   wrote to the item through Planning, itself or through a subagent (a claim, a step, a

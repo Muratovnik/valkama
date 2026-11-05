@@ -4,10 +4,11 @@ The rule under test, from `live_work`: an item takes the strongest state of the
 sessions behind it (its claim, its open steps) and of the attempts running on
 it. A session that is not active, or silent past the lease period, stands for
 nothing; one silent past a day is `quiet`; one whose last lifecycle event is a
-prompt, or with a subagent running since it last started, is at work; any
-other is `waiting`. A session at work makes an item `working` only when it wrote
-there since its last prompt, itself or through a subagent, or when one of its
-subagents holds an open step there; its other items are `held`.
+prompt, or with a subagent running since it really last started, is at work; any
+other is `waiting`, and a compacted context is no such start or event. A session
+at work makes an item `working` only when it wrote there since its last prompt,
+itself or through a subagent, or when one of its subagents holds an open step
+there; its other items are `held`.
 
 Every case reads `planning_payload`, so the key is checked where views take it.
 Hook events go through the real ingest path and claims through the real write
@@ -90,9 +91,18 @@ class LiveWorkCase(unittest.TestCase):
     def identity(self, reference: str) -> str:
         return str(service.get_work_item(self.conn, reference)["work_item_id"])
 
-    def hook(self, session: str, event: str, when: str, agent: str | None = None) -> None:
+    def hook(
+        self,
+        session: str,
+        event: str,
+        when: str,
+        agent: str | None = None,
+        **fields: object,
+    ) -> None:
+        """One client hook through the real ingest path; `fields` go in as the input does."""
+
         self._uid += 1
-        payload: dict[str, object] = {"session_id": session}
+        payload: dict[str, object] = {"session_id": session, **fields}
         if agent is not None:
             payload["agent_id"] = agent
         record = normalize.lifecycle_event(
@@ -210,6 +220,44 @@ def _subagent(started_after_restart: bool) -> _Build:
         case.hook(session, "stop", ago(minutes=10))
 
     return build
+
+
+def _subagent_across(source: str | None, *, turn_ended: bool = True) -> _Build:
+    """A subagent of a session in a turn, then a session start with this `source`."""
+
+    def build(case: LiveWorkCase, reference: str) -> None:
+        session = _session()
+        case.claim(reference, session)
+        case.hook(session, "session-start", ago(minutes=50), source="startup")
+        case.hook(session, "user-prompt-submit", ago(minutes=45))
+        case.hook(session, "subagent-start", ago(minutes=40), agent="a1")
+        if turn_ended:
+            case.hook(session, "stop", ago(minutes=35))
+        case.hook(session, "session-start", ago(minutes=30), source=source)
+
+    return build
+
+
+def _compacted_in_a_turn(case: LiveWorkCase, reference: str) -> None:
+    """A context compacted while a turn runs: the turn goes on, and no prompt follows."""
+
+    session = _session()
+    case.claim(reference, session)
+    case.hook(session, "session-start", ago(minutes=50), source="startup")
+    case.hook(session, "user-prompt-submit", ago(minutes=40))
+    case.hook(session, "pre-compact", ago(minutes=31))
+    case.hook(session, "session-start", ago(minutes=30), source="compact")
+
+
+def _compacted_after_a_turn(case: LiveWorkCase, reference: str) -> None:
+    """A context compacted while nothing runs: the session goes on waiting."""
+
+    session = _session()
+    case.claim(reference, session)
+    case.hook(session, "session-start", ago(minutes=50), source="startup")
+    case.hook(session, "user-prompt-submit", ago(minutes=40))
+    case.hook(session, "stop", ago(minutes=35))
+    case.hook(session, "session-start", ago(minutes=30), source="compact")
 
 
 def _step_held_by_a_subagent(case: LiveWorkCase, reference: str) -> None:
@@ -365,6 +413,14 @@ CASES: list[tuple[str, list[str] | None, _Build, dict | None]] = [
     ),
     ("a waiting session with a subagent started since", None, _subagent(True), HELD),
     ("a waiting session with a subagent from before a restart", None, _subagent(False), WAITING),
+    ("a subagent across a compaction", None, _subagent_across("compact"), HELD),
+    ("a subagent across a startup", None, _subagent_across("startup"), WAITING),
+    ("a subagent across a resume", None, _subagent_across("resume"), WAITING),
+    ("a subagent across a clear", None, _subagent_across("clear"), WAITING),
+    ("a subagent across a fork", None, _subagent_across("fork"), WAITING),
+    ("a subagent across a start with no source", None, _subagent_across(None), WAITING),
+    ("a turn across a compaction", None, _compacted_in_a_turn, HELD),
+    ("a turn over, then a compaction", None, _compacted_after_a_turn, WAITING),
     ("a step a subagent holds", ["step"], _step_held_by_a_subagent, WORKING),
     ("an attempt running with no session", None, _attempt("running"), WORKING),
     ("an attempt starting", None, _attempt("starting"), WORKING),
@@ -496,7 +552,8 @@ class StoreAgeTests(unittest.TestCase):
             f"CREATE TABLE work_items(work_item_id TEXT, claim_ref TEXT{claim});"
             f"CREATE TABLE sessions(id TEXT, status TEXT, last_seen TEXT, started_at TEXT{parent});"
             "CREATE TABLE execution_events(id INTEGER, kind TEXT, session_id TEXT, agent_id TEXT,"
-            " identity_state TEXT, occurred_at TEXT, received_at TEXT, work_item_id TEXT);"
+            " identity_state TEXT, occurred_at TEXT, received_at TEXT, work_item_id TEXT,"
+            " source TEXT);"
             "CREATE TABLE executions(work_item_id TEXT, status TEXT);"
             "INSERT INTO work_items(work_item_id, claim_ref) VALUES ('w', '');"
         )

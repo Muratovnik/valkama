@@ -27,7 +27,9 @@ working on. Those writers are found among the active sessions heard from within
 
 A session is at work when its last lifecycle event is a `prompt`, so a turn is
 running, or when a subagent row of it is `active` and started since its last
-`session_start`. A write is any Planning write call this session confirmed and
+real start. A compacted context is reported as a start too, and it is none: the
+client runs on with its turn and its subagents (`sessions.COMPACTED_START`), so
+it counts neither as a lifecycle event nor as a start here. A write is any Planning write call this session confirmed and
 that names the item: a claim, a step, a comment, a link (which names its source
 item). A session at work moves only the items it is seen working on; the others
 it holds stand still, so a coordinator holding many items does not move them all
@@ -46,7 +48,7 @@ resumed: both read blank. The lifecycle events can, so they are what is read.
 A subagent's own events carry its parent's session id and are about the
 subagent, so only the session's own events count as its last one. A subagent a
 client restart cut off leaves no end, so only one started since the session's
-last start is taken to run.
+last real start is taken to run.
 
 What the rule cannot see: a client that died in the middle of a turn reads as
 at work for a day and `quiet` after it, since only a check of the process could
@@ -66,6 +68,7 @@ import sqlite3
 from collections.abc import Iterable, Mapping
 from datetime import timedelta
 
+from .. import sessions
 from . import calls, leases
 
 #: How long a live session may stay silent before it reads `quiet`.
@@ -86,10 +89,10 @@ _HOLDS_EVERYTHING = (
     "SELECT (SELECT COUNT(*) FROM pragma_table_info('work_items') WHERE name = 'claim_call_id')"
     " + (SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name = 'parent_session_id')"
     " + (SELECT COUNT(*) FROM pragma_table_info('execution_events')"
-    "    WHERE name IN ('agent_id', 'work_item_id'))"
+    "    WHERE name IN ('agent_id', 'work_item_id', 'source'))"
     " + (SELECT COUNT(*) FROM pragma_table_info('executions') WHERE name = 'status')"
 )
-_COLUMNS_ASKED = 5
+_COLUMNS_ASKED = 6
 
 #: The session of each confirmed call that took a claim on one of these items.
 _CLAIMS = (
@@ -118,7 +121,7 @@ _SESSIONS = (
 )
 
 #: One row per session: its last lifecycle event of its own and when it last
-#: started. Then one row per item it wrote to since its last prompt: its own
+#: really started, a compacted context being neither. Then one row per item it wrote to since its last prompt: its own
 #: confirmed write calls and its subagents', which carry its id. Each subquery
 #: walks `execution_events_session` back from the newest event, and the writes
 #: are the range of that index past the prompt.
@@ -127,11 +130,12 @@ _LIFECYCLE = (
     " (SELECT e.kind FROM execution_events e"
     "  WHERE e.session_id = j.value AND e.session_id IS NOT NULL"
     "  AND e.kind IN ('session_start', 'prompt', 'turn_end', 'attention', 'session_end')"
+    "  AND NOT (e.kind = 'session_start' AND COALESCE(e.source, '') = ?4)"
     "  AND COALESCE(e.agent_id, '') = '' ORDER BY e.id DESC LIMIT 1) AS last_kind,"
     " (SELECT COALESCE(e.occurred_at, e.received_at) FROM execution_events e"
     "  WHERE e.session_id = j.value AND e.session_id IS NOT NULL"
-    "  AND e.kind = 'session_start' AND COALESCE(e.agent_id, '') = ''"
-    "  ORDER BY e.id DESC LIMIT 1) AS last_start,"
+    "  AND e.kind = 'session_start' AND COALESCE(e.source, '') != ?4"
+    "  AND COALESCE(e.agent_id, '') = '' ORDER BY e.id DESC LIMIT 1) AS last_start,"
     " (SELECT e.id FROM execution_events e"
     "  WHERE e.session_id = j.value AND e.session_id IS NOT NULL"
     "  AND e.kind = 'prompt' AND COALESCE(e.agent_id, '') = ''"
@@ -205,7 +209,9 @@ def _states(
     awake = sorted(session for session, state in live.items() if state["state"] != QUIET)
     if not awake:
         return live, written
-    for row in conn.execute(_LIFECYCLE, (json.dumps(awake), calls.KIND, calls.CONFIRMED)):
+    for row in conn.execute(
+        _LIFECYCLE, (json.dumps(awake), calls.KIND, calls.CONFIRMED, sessions.COMPACTED_START)
+    ):
         session = str(row["session_id"])
         if row["written"] is not None:
             written.setdefault(session, set()).add(str(row["written"]))
@@ -241,8 +247,8 @@ def live_work(conn: sqlite3.Connection, items: Iterable[Mapping]) -> dict[str, d
     behind = _behind(conn, listed, identities)
     states, written = _states(conn, {session for held in behind.values() for session in held})
     found: dict[str, dict] = {}
-    for identity, sessions in behind.items():
-        for session, by_subagent in sessions.items():
+    for identity, holders in behind.items():
+        for session, by_subagent in holders.items():
             state = states.get(session)
             if state is None:
                 continue
