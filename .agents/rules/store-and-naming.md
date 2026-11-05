@@ -40,6 +40,13 @@ labelled `preschema9` (or `preproductmodel` for a store older than 8).
 interface ids inside them, because the historical migrations between the
 rename and the drop read and validate them under the current names.
 
+Schema 11 added the usage tables (`telemetry/usage_store.py`), which a store can lose
+and read again from the transcripts. The ticks of `telemetry/liveness.py` are the one
+thing beside them in a file of their own, `<store>.liveness`, because a tick in the
+store would move `PRAGMA data_version` every minute and wake every watcher and stream.
+That file is not in a store snapshot, and a lost one turns its time back to `estimated`
+only for rows read after the loss.
+
 Runtime state lives at `%USERPROFILE%\.valkama`. `store.adopt_legacy_store()`
 walks `LEGACY_LAYOUTS` newest-first, moves the whole directory once, and refuses
 loudly rather than opening an empty board. The store's `owner_id` is immutable

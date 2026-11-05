@@ -188,6 +188,11 @@ checkouts are therefore distinguishable even at the same version.
 - **Tabbing into the graph no longer moves the camera the operator set.** The keyboard
   entered on the first target whose centre was in sight, and pressing it centred the
   camera on it if the edge of the field cut it. It now enters on a target wholly in sight.
+- **A subagent started for no named item moves the one item its coordinator holds.** One
+  launched with a number in its first prompt moves that item, and a coordinator holding
+  several items still moves only what its subagents are seen on.
+- **A Codex session's token totals read its rollouts again.** The counters had moved inside
+  each record, so `GET /api/execution/usage` found none in a real rollout.
 - **A compacted context no longer stops the work on the graph.** A session whose context was
   compacted reads as it did before: a turn still running stays at work, and so do its
   subagents, so their cards no longer say «waiting». A client that really restarted still
@@ -230,6 +235,14 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Added
 
+- **How much work an item actually took, and what it would cost at API prices.** The server
+  now reads the clients' transcripts in the background and tells working time from waiting
+  for a person, for a subagent or for a failed service, and from a machine that was off.
+  `GET /api/planning/work-item/usage` reads an item or its whole chain and
+  `GET /api/planning/session/usage` a session, with what no item took on a line of its own.
+  Store schema 11 holds the rows, under a snapshot taken before the upgrade; no message or
+  command text is kept, and existing transcripts are read too. The cost is an estimate, not
+  a bill.
 - **The space's read model says which items an agent is at work on now.** `live_work` in
   `GET /api/planning` and its event stream maps each such item to `working` (a session
   in a turn wrote to it since its last prompt or a subagent of it holds one of its steps,
