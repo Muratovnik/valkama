@@ -12,6 +12,7 @@ export const workItemAgentMessages = {
       linkClaim: "by the coordinator's claim",
       linkAmbiguous:
         'ambiguous: the coordinator held {count} item | ambiguous: the coordinator held {count} items',
+      linkAmbiguousRange: 'ambiguous: the coordinator held {from}–{to} items',
     },
   },
   ru: {
@@ -27,6 +28,8 @@ export const workItemAgentMessages = {
       linkClaim: 'по захвату координатора',
       linkAmbiguous:
         'неоднозначно: координатор держал {count}\u{A0}задачу | неоднозначно: координатор держал {count}\u{A0}задачи | неоднозначно: координатор держал {count}\u{A0}задач',
+      linkAmbiguousRange:
+        'неоднозначно: координатор держал {from}–{to}\u{A0}задачу | неоднозначно: координатор держал {from}–{to}\u{A0}задачи | неоднозначно: координатор держал {from}–{to}\u{A0}задач',
     },
   },
 }

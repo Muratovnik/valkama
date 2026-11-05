@@ -145,23 +145,13 @@ describe('a row', () => {
     expect(wrapper.find('.agent img').exists()).toBe(false)
   })
 
-  it('tells the three links apart, in both languages', () => {
+  it('tells the exact link from the single-item claim, in both languages', () => {
     const cases: [Partial<WorkItemAgent>, string, string][] = [
       [{ link: 'exact' }, 'wrote to this item', 'писал в эту задачу'],
       [
         { link: 'claim', coordinator_items: 1 },
         "by the coordinator's claim",
         'по захвату координатора',
-      ],
-      [
-        { link: 'claim', coordinator_items: 3 },
-        'ambiguous: the coordinator held 3 items',
-        'неоднозначно: координатор держал 3\u{A0}задачи',
-      ],
-      [
-        { link: 'claim', coordinator_items: 20 },
-        'ambiguous: the coordinator held 20 items',
-        'неоднозначно: координатор держал 20\u{A0}задач',
       ],
     ]
     for (const [shape, english, russian] of cases) {
@@ -309,6 +299,114 @@ describe('rows of one parent', () => {
       'first-session',
       'second-session',
     ])
+  })
+})
+
+const claimed = (id: string, items: number, session = 'one') =>
+  agent({
+    agent_id: id,
+    session_id: session,
+    executor: executorOf(session),
+    link: 'claim',
+    coordinator_items: items,
+  })
+const groupLines = (wrapper: ReturnType<typeof mountAgents>) =>
+  wrapper.findAll('.agent-group-link').map((line) => line.text())
+
+describe('the ambiguity, said once for its group', () => {
+  it('says it once under the group head, and no row of the group says it again', () => {
+    const wrapper = mountAgents([claimed('a', 13), claimed('b', 13), claimed('c', 13)])
+    expect(groupLines(wrapper)).toEqual(['ambiguous: the coordinator held 13 items'])
+    for (const index of [0, 1, 2]) expect(row(wrapper, index)).not.toContain('ambiguous')
+  })
+
+  it('says the same once in Russian, declined to its count', () => {
+    const wrapper = mountAgents([claimed('a', 13), claimed('b', 13)], 'ru')
+    expect(groupLines(wrapper)).toEqual(['неоднозначно: координатор держал 13\u{A0}задач'])
+  })
+
+  it.each([
+    {
+      case: 'a range of counts in English',
+      counts: [13, 19],
+      locale: 'en' as const,
+      says: 'ambiguous: the coordinator held 13–19 items',
+    },
+    {
+      case: 'a range declined by its upper bound in Russian',
+      counts: [13, 19],
+      locale: 'ru' as const,
+      says: 'неоднозначно: координатор держал 13–19\u{A0}задач',
+    },
+    {
+      case: 'an upper bound of 21 in Russian takes the singular form',
+      counts: [13, 21],
+      locale: 'ru' as const,
+      says: 'неоднозначно: координатор держал 13–21\u{A0}задачу',
+    },
+  ])('gives $case', ({ counts, locale, says }) => {
+    const wrapper = mountAgents(
+      counts.map((items, index) => claimed(`agent-${index}`, items)),
+      locale,
+    )
+    expect(groupLines(wrapper)).toEqual([says])
+  })
+
+  it('keeps the words of exact and single-item rows in a mixed group, and says the ambiguity once', () => {
+    const wrapper = mountAgents([
+      agent({ agent_id: 'exact', executor: executorOf('one'), link: 'exact' }),
+      agent({
+        agent_id: 'single',
+        executor: executorOf('one'),
+        link: 'claim',
+        coordinator_items: 1,
+      }),
+      claimed('many', 19),
+    ])
+    expect(row(wrapper, 0)).toContain('wrote to this item')
+    expect(row(wrapper, 1)).toContain("by the coordinator's claim")
+    expect(row(wrapper, 2)).not.toContain('ambiguous')
+    expect(groupLines(wrapper)).toEqual(['ambiguous: the coordinator held 19 items'])
+  })
+
+  it("keeps an ambiguous row's exact count in its tooltip and its accessible description", () => {
+    const wrapper = mountAgents([claimed('a', 19)])
+    const item = wrapper.get('.agent')
+    expect(item.attributes('title')).toBe('ambiguous: the coordinator held 19 items')
+    expect(item.attributes('aria-description')).toBe('ambiguous: the coordinator held 19 items')
+  })
+
+  it('says it under a group with no way to its parent too', () => {
+    const wrapper = mountAgents([
+      agent({
+        agent_id: 'a',
+        session_id: 'orphan',
+        executor: NOBODY,
+        link: 'claim',
+        coordinator_items: 5,
+      }),
+    ])
+    expect(wrapper.find('.agent-group-head').exists()).toBe(false)
+    expect(groupLines(wrapper)).toEqual(['ambiguous: the coordinator held 5 items'])
+  })
+
+  it('says nothing where no row of the group is ambiguous', () => {
+    const wrapper = mountAgents([
+      agent({ agent_id: 'a', executor: executorOf('one'), link: 'exact' }),
+      agent({ agent_id: 'b', executor: executorOf('one'), link: 'claim', coordinator_items: 1 }),
+    ])
+    expect(groupLines(wrapper)).toEqual([])
+  })
+
+  it('says it under each group that has one, and not under the rest', () => {
+    const wrapper = mountAgents([
+      claimed('a', 7, 'one'),
+      agent({ agent_id: 'b', session_id: 'two', executor: executorOf('two'), link: 'exact' }),
+    ])
+    const groups = wrapper.findAll('.agent-group')
+    expect(groups).toHaveLength(2)
+    expect(groups[0].find('.agent-group-link').exists()).toBe(true)
+    expect(groups[1].find('.agent-group-link').exists()).toBe(false)
   })
 })
 

@@ -93,9 +93,11 @@ for (const width of [1440, 390]) {
     // Every row at once, in the order the read gives them, with no fold and no toggle.
     await expect(section.locator('.agent')).toHaveCount(94)
     await expect(section.locator('.agent').first()).toContainText(LONG_LABEL)
-    await expect(section.locator('.agent').first()).toContainText(
+    // Said once for the group, not in each of its 94 rows.
+    await expect(section.locator('.agent-group-link')).toHaveText([
       'ambiguous: the coordinator held 19 items',
-    )
+    ])
+    await expect(section.locator('.agent').first()).not.toContainText('ambiguous')
     await expect(page.locator('.drawer').getByRole('button', { name: /^Show /u })).toHaveCount(0)
     // The tab names it and counts it; nothing under the tab says it again.
     await expect(section.getByRole('heading')).toHaveCount(0)
@@ -183,7 +185,36 @@ test('rows with no session to open have no head and no button, and their facts s
   const section = await openAgents(page)
   await expect(section.locator('.agent')).toHaveCount(1)
   await expect(section.locator('button.open-action')).toHaveCount(0)
-  await expect(section.locator('.agent').first()).toContainText(
+  await expect(section.locator('.agent-group-link')).toHaveText([
+    'ambiguous: the coordinator held 19 items',
+  ])
+  await expect(section.locator('.agent').first()).not.toContainText('ambiguous')
+})
+
+test('a group says its ambiguity once as a range of its rows, and a row keeps its count in its tooltip', async ({
+  page,
+}) => {
+  const agents = [
+    agent(0, { executor: LIVE_PARENT, coordinator_items: 13 }),
+    agent(1, { executor: LIVE_PARENT, coordinator_items: 19 }),
+    agent(2, { executor: LIVE_PARENT, link: 'exact', coordinator_items: null }),
+  ]
+  await installBackend(page, { agents: () => agents, openPlan: openPlanFor })
+  await page.goto(CARD)
+  const section = await openAgents(page)
+  await expect(section.locator('.agent-group')).toHaveCount(1)
+  await expect(section.locator('.agent-group-link')).toHaveText([
+    'ambiguous: the coordinator held 13–19 items',
+  ])
+  await expect(section.locator('.agent').nth(0)).not.toContainText('ambiguous')
+  await expect(section.locator('.agent').nth(1)).not.toContainText('ambiguous')
+  await expect(section.locator('.agent').nth(2)).toContainText('wrote to this item')
+  await expect(section.locator('.agent').nth(0)).toHaveAttribute(
+    'title',
+    'ambiguous: the coordinator held 13 items',
+  )
+  await expect(section.locator('.agent').nth(1)).toHaveAttribute(
+    'aria-description',
     'ambiguous: the coordinator held 19 items',
   )
 })

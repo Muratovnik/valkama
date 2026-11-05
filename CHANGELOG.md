@@ -80,6 +80,10 @@ checkouts are therefore distinguishable even at the same version.
   no such tab. Every row stands at once, newest first, with no «Показать все», and rows stand
   under their parent session, whose «Открыть родительскую сессию» stands once at their head
   instead of in each row.
+- **An ambiguous link is said once for its group.** Under the group's head, one line gives the
+  coordinator's count, «неоднозначно: координатор держал 13 задач», or the range of its rows'
+  counts, «13–19 задач». The rows of that group no longer repeat it; each keeps its exact count
+  in its tooltip and its accessible description.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 
