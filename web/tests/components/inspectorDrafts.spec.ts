@@ -9,7 +9,6 @@ import type { VueWrapper } from '@vue/test-utils'
 import { flushPromises } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 
-import { messages } from '@/shared/i18n/index.ts'
 import { mayLeave } from '@/shared/lib/leaveGuard.ts'
 
 import { getButton, workItemFixture } from '../fixtures/workItem.ts'
@@ -54,8 +53,6 @@ const OPEN_STEP = {
 
 const comment = (wrapper: VueWrapper) =>
   (wrapper.get('textarea[aria-label="Comment"]').element as HTMLTextAreaElement).value
-
-const headings = (wrapper: VueWrapper) => wrapper.findAll('h3').map((heading) => heading.text())
 
 /** A cancelable `beforeunload`, as a reload or a closing tab sends it. */
 function unload() {
@@ -198,13 +195,13 @@ describe('inspector drafts and the ways of leaving them', () => {
     await flushPromises()
     // The control: the same item while it is live reports both.
     expect(live.get('.blockers').text()).toContain('Waiting on QA-100 — The step before')
-    expect(headings(live)).toContain(messages.en.workItem.summaryNext)
+    expect(live.get('.next-step-text').text()).toBe(OPEN_STEP.text)
     live.unmount()
 
     const closed = mountInspector({ ...open, state: DONE })
     await flushPromises()
     expect(closed.find('.blockers').exists()).toBe(false)
-    expect(headings(closed)).not.toContain(messages.en.workItem.summaryNext)
+    expect(closed.find('.next-step').exists()).toBe(false)
     expect(closed.text()).not.toContain('The step before')
     closed.unmount()
   })

@@ -61,7 +61,7 @@ describe('a checklist step’s text', () => {
     expect(text.get('code').text()).toBe('npm test')
     const link = text.get('.rich-reference')
     expect(link.text()).toBe('MAIN-12')
-    expect(wrapper.findAll('section p .rich-reference').map((ref) => ref.text())).toEqual([
+    expect(wrapper.findAll('.next-step-text .rich-reference').map((ref) => ref.text())).toEqual([
       'MAIN-12',
     ])
     wrapper.unmount()

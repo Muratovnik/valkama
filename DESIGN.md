@@ -1118,6 +1118,11 @@ a failed write, the question before a takeover or before a draft is lost — sta
 band between the bar and the scroller, at full width, however far down the write was made.
 Its height follows what it says and never the scroller. The body names only blockers
 that are still open.
+Overview opens with the next step, when there is one: a quiet line, «Следующий шаг · 3 из
+9», whose number is the step's place in the list and not how many are done, then the step's
+words as a description reads, with no heading over one sentence. «Все шаги» at the end of
+that line goes to the checklist and puts focus on its heading; the only step has neither
+the number nor a way to itself.
 A section of a card that holds nothing and offers nothing is absent, rather than a
 heading and a sentence saying so on the first screen: «Agents» and «Checklist» stand
 only while they have something in them, and a step arriving with the live stream's next

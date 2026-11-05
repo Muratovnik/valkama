@@ -17,6 +17,7 @@ import type { Component, VNode } from 'vue'
 
 import {
   Activity,
+  ArrowDown,
   Asterisk,
   Ban,
   BarChart3,
@@ -81,6 +82,8 @@ const ICONS: Record<string, Component> = {
   // What a press could not do, beside what it said; `check` is what it did.
   'alert': CircleAlert,
   'analytics': BarChart3,
+  // A way further down the same page, which a chevron would read as opening something.
+  'arrow-down': ArrowDown,
   'bell': Bell,
   'board': SquareKanban,
   'check': Check,

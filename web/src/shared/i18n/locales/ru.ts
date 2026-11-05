@@ -20,6 +20,7 @@ import { workItemAgentMessages } from '@/shared/i18n/workItemAgentMessages.ts'
 import { workItemFacetMessages } from '@/shared/i18n/workItemFacetMessages.ts'
 import { workItemHeadMessages } from '@/shared/i18n/workItemHeadMessages.ts'
 import { workItemLinkMessages } from '@/shared/i18n/workItemLinkMessages.ts'
+import { workItemNextStepMessages } from '@/shared/i18n/workItemNextStepMessages.ts'
 import { workItemPreviewMessages } from '@/shared/i18n/workItemPreviewMessages.ts'
 
 export const ru = {
@@ -867,6 +868,7 @@ export const ru = {
     },
     ...workItemFacetMessages.ru,
     ...workItemHeadMessages.ru,
+    ...workItemNextStepMessages.ru,
     filter: workFilterMessages.ru.filter,
     kindLabel: 'Тип',
     state: 'Состояние',

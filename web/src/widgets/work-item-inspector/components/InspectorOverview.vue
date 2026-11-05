@@ -16,11 +16,11 @@ import ExecutorLink from '@/features/session-open/ExecutorLink.vue'
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import type { WorkItem } from '@/shared/api/planningModel.ts'
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
+import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import { plainText } from '@/shared/lib/richText.ts'
 import { semanticStatePresentation, statePresentation } from '@/shared/lib/uiSystem.ts'
 import RichText from '@/shared/ui/RichText.vue'
 import SectionHeader from '@/shared/ui/SectionHeader.vue'
-import SectionHeading from '@/shared/ui/SectionHeading.vue'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -68,6 +68,7 @@ function answered(entry: InputRequestEntry) {
 }
 const discussion = ref<InstanceType<typeof InspectorDiscussion> | null>(null)
 const checklistSection = ref<HTMLElement | null>(null)
+const checklistHead = ref<InstanceType<typeof SectionHeader> | null>(null)
 function discussStep(stepId: string) {
   void discussion.value?.discussStep(stepId)
 }
@@ -77,10 +78,15 @@ function askOutcome(move: StateMove) {
   return discussion.value?.askOutcome(move)
 }
 
-/** After the flush: pressed from another section, Overview has not been shown yet. */
+/**
+ * After the flush: pressed from another section, Overview has not been shown yet. Focus
+ * goes with the view, to the heading of the list, ringed wherever the press came from:
+ * what was pressed stays far above, and the next Tab should start from the list.
+ */
 async function revealChecklist() {
   await nextTick()
   checklistSection.value?.scrollIntoView({ block: 'start' })
+  moveFocus(checklistHead.value?.$el as HTMLElement | undefined, { preventScroll: true })
 }
 
 // A closed item is neither blocked nor waiting on a next step: both read as
@@ -93,6 +99,15 @@ const steps = computed(() => checklistProgress(props.item))
 const stepCount = computed(() =>
   steps.value.total ? t('workItem.checklistProgress', steps.value) : '',
 )
+/** Where the next step stands in the list; the only step stands nowhere in particular. */
+const nextStepPlace = computed(() => {
+  const { checklist } = props.item
+  if (!nextStep.value || checklist.length < 2) return ''
+  return t('workItem.nextStep.place', {
+    at: checklist.indexOf(nextStep.value) + 1,
+    total: checklist.length,
+  })
+})
 function stepState(done: boolean) {
   return done ? 'done' : 'open'
 }
@@ -144,22 +159,41 @@ defineExpose({ askOutcome, readQuestions: questions.readNow, revealChecklist, re
         />
       </li>
     </ul>
-    <section
+    <!-- A line and the step's words, with no heading of its own: it answers the question
+         the card is opened with, and a heading stood over one sentence. -->
+    <div
       v-if="nextStep"
-      class="overview-section"
+      class="next-step"
     >
-      <SectionHeading
-        as="h3"
-        level="panel"
-        >{{ t('workItem.summaryNext') }}</SectionHeading
-      >
-      <p class="next-step">
+      <div class="next-step-line">
+        <p class="next-step-label">
+          {{ t('workItem.nextStep.label') }}
+          <template v-if="nextStepPlace">
+            <span aria-hidden="true">·</span>
+            {{ nextStepPlace }}
+          </template>
+        </p>
+        <VButton
+          v-if="nextStepPlace"
+          class="next-step-all"
+          variant="text"
+          size="inline"
+          @click="revealChecklist"
+        >
+          {{ t('workItem.nextStep.all') }}
+          <VIcon
+            name="arrow-down"
+            :size="14"
+          />
+        </VButton>
+      </div>
+      <p class="next-step-text">
         <RichText
           :source="nextStep.text"
           inline
         />
       </p>
-    </section>
+    </div>
     <!-- Who is on the work leads an open item. On a closed one the list is history
          and stands under the outcome, or it would stand over everything the card
          is opened for, with no next step above it. -->
@@ -186,6 +220,9 @@ defineExpose({ askOutcome, readQuestions: questions.readNow, revealChecklist, re
       class="overview-section"
     >
       <SectionHeader
+        ref="checklistHead"
+        class="checklist-head"
+        tabindex="-1"
         :title="t('workItem.checklist')"
         :count="stepCount"
       />

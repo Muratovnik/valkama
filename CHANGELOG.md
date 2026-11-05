@@ -69,6 +69,9 @@ checkouts are therefore distinguishable even at the same version.
   action about them on the second; the labels on the third, which an item without labels
   does not have. The holder is a bare link instead of a plate, and the rows stand 12px apart
   instead of 4px.
+- **«Что дальше» on a card is now «Следующий шаг · 3 из 9».** A quiet line says it is a step
+  and where it stands in the list, the step's words follow it, and «Все шаги» goes to the
+  checklist with focus on it. The only step has neither the count nor the way to itself.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 

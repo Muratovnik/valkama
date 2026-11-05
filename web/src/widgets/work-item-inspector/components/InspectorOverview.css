@@ -8,13 +8,47 @@
   gap: var(--space-heading-content);
 }
 
-/* The step's words are the text of the section, as a description's are under its heading:
-   left to the page, they stood at 16px under a 15px heading and outranked it. */
 .next-step {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* The quiet line over the step's words, the way to the rest at its end. It wraps under the
+   words where one line cannot hold both, which a long language can ask of a phone. */
+.next-step-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-3);
+  justify-content: space-between;
+  align-items: center;
+  min-width: 0;
+}
+
+.next-step-label {
+  margin: 0;
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+}
+
+/* Its words end where the step's text can, the margin taking back the inset its fill keeps
+   under the pointer. */
+.next-step-all {
+  margin-inline-end: calc(-1 * var(--space-2));
+}
+
+/* The step's words read as a description's do: left to the page, they stood at 16px. */
+.next-step-text {
   margin: 0;
   color: var(--color-text);
   font: var(--font-editor);
   overflow-wrap: anywhere;
+}
+
+/* The list's heading takes focus from the way here, and its ring stands clear of its words. */
+.checklist-head:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: var(--space-1);
 }
 
 .blockers {

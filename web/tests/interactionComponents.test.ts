@@ -179,7 +179,7 @@ test('the inspector keeps item facts and work-item relations in one surface', ()
   // The overview panel is its own component; what the inspector owns is which
   // panel shows and the item all of them read.
   assert.match(drawerDetails, /props\.item\.checklist|item\.checklist/)
-  assert.match(drawerDetails, /summary/)
+  assert.match(drawerDetails, /<InspectorSummary/)
   // The relations section is the links between work items and nothing that an
   // extension registry would have to authorize.
   assert.match(drawer, /<InspectorRelations/)
