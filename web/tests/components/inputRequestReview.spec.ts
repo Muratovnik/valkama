@@ -199,7 +199,7 @@ describe('Accept recommended', () => {
   })
 
   it('is not offered where nothing is recommended', () => {
-    const bare = reviewFields.map(({ recommended: _, ...field }) => field)
+    const bare = reviewFields.map((field) => ({ ...field, recommended: undefined }))
     expect(card(asked(bare)).text()).not.toContain('Accept recommended')
   })
 })
