@@ -11,6 +11,8 @@
 import { onBeforeUnmount, onMounted } from 'vue'
 import type { Ref } from 'vue'
 
+import { focusOnNothing } from '@/widgets/document-viewer/composables/useFocusRight.ts'
+
 export function useFocusKeeper(root: Ref<HTMLElement | null>, landing: () => void) {
   let held: Element | null = null
   const note = ({ target }: FocusEvent) => {
@@ -22,10 +24,7 @@ export function useFocusKeeper(root: Ref<HTMLElement | null>, landing: () => voi
       if (held === target && held?.isConnected) held = null
     })
   }
-  const lostToNothing = () => {
-    const active = document.activeElement
-    return held !== null && !held.isConnected && (active === null || active === document.body)
-  }
+  const lostToNothing = () => held !== null && !held.isConnected && focusOnNothing()
   const watcher = new MutationObserver(() => {
     if (!lostToNothing()) return
     held = null

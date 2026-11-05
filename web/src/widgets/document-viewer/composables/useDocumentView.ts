@@ -316,6 +316,7 @@ export function useDocumentView() {
     },
     /** The host is about to change, while the one being left can still say where the reader is. */
     handOver() {
+      focusRight.forgetInput()
       handedOver = reader.leave()
     },
     /** What the host before this one said of the reader, once. */

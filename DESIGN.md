@@ -691,9 +691,10 @@ data region that genuinely needs it, such as Kanban lanes or a wide table.
   into the document whatever its read comes to — its text, a file too large to show, a failed
   read, no file — so the first Escape is the document's: it closes it alone and hands focus
   back to the link that opened it, the next closes the card or the questions, and an Escape
-  in the card closes both. The document takes focus only on an opening or a step inside it
-  that the person began, until they move focus themselves, and never on a read the window's
-  return began. The edge between them is the document's width, kept under
+  in the card closes both. The document takes focus from where it stands only on an
+  opening or a step inside it that the person began, until they move focus themselves, and
+  never on a read the window's return began; a landing with focus on nothing takes it from
+  nobody, whoever began the read. The edge between them is the document's width, kept under
   `valkama-document-pane-width` and shared with the drawer, and Enter on it folds the
   document and brings it back. Folded, the strip it leaves is named by the words it shows,
   «Document: <title>», as a window splitter is named by its pane; «Document width» is its

@@ -1,19 +1,28 @@
 /**
- * Whether the document may move focus now. Every move that takes focus from wherever it stands
- * asks here, so the answer is one answer.
+ * Whether the document may move focus now. Every move that would take focus from where it
+ * stands asks here, so the answer is one answer.
  *
  * It may in answer to what the person did: an opening they began, a step they took inside the
  * document. That right is given as the read starts and lasts until the read has landed, or until
  * they move focus themselves, back to the link included. A read the window's return began is
- * given none, so it never takes focus, whatever it comes to: a person typing in the card lost
- * the letters that followed when a refused file turned readable while they were away.
+ * given none, so it takes focus from nothing that holds it, whatever it comes to: a person
+ * typing in the card lost the letters that followed when a refused file turned readable while
+ * they were away. With focus on nothing a landing takes it from nobody, so it needs no right:
+ * a page refused as it loaded and readable on the window's return answered no key that scrolls.
  *
  * A move is theirs when focus changes after a key or a press since the right was given, and is
  * not one of the document's own, which go through `take`. The overlay's own move, onto a
  * drawer as it opens, follows no such input, so it does not count, and the overlay need not
- * know of this. A key that moves nothing leaves the right where it was.
+ * know of this. A key that moves nothing leaves the right where it was, and a change of host
+ * because the window changed width is nobody's move, so what follows it follows no input.
  */
 import { useEventListener } from '@vueuse/core'
+
+/** The page itself has focus: what held it went, or nothing has taken it yet. */
+export function focusOnNothing() {
+  const active = document.activeElement
+  return active === null || active === document.body
+}
 
 export function useFocusRight() {
   let held = false
@@ -37,13 +46,20 @@ export function useFocusRight() {
       held = true
       touched = false
     },
+    /** The host is changing: the moves that come with that answer no key pressed before. */
+    forgetInput() {
+      touched = false
+    },
     /** The read has landed, or there is nothing left for it to land on. */
     spend() {
       held = false
     },
-    /** Makes the move if the right still stands; the right outlasts it, for the next one. */
+    /**
+     * Makes the move if the right still stands, or nothing holds focus to be taken from; the
+     * right outlasts it, for the next one.
+     */
     take(move: () => void) {
-      if (!held) return
+      if (!held && !focusOnNothing()) return
       moving = true
       try {
         move()
