@@ -139,6 +139,16 @@ export async function fetchPlanning(
 
 export type PlanningConnectionState = 'connecting' | 'live' | 'reconnecting'
 
+/** A frame of `event: live`, or the reason it is not one. */
+function readLiveFrame(event: MessageEvent<string>): LiveFrame {
+  return validateLiveFrame(JSON.parse(event.data) as unknown)
+}
+
+/**
+ * The space's stream. Beside the space's model it carries the live-work frame, which
+ * is the whole store's and not the space's: a frame that does not read is dropped
+ * alone and said through `invalid`, and the space goes on arriving.
+ */
 export function subscribePlanning(
   target: { project: string } & PlanningSpaceRef,
   callbacks: {
@@ -146,6 +156,8 @@ export function subscribePlanning(
     agents?: () => void
     connection: (state: PlanningConnectionState) => void
     invalid?: (error: unknown) => void
+    /** Where work is going on now, across the primary store. */
+    live?: (frame: LiveFrame) => void
     snapshot: (model: PlanningReadModel) => void
   },
 ): () => void {
@@ -161,8 +173,17 @@ export function subscribePlanning(
     clearTimeout(firstSnapshotDeadline)
     source.removeEventListener('message', onMessage)
     source.removeEventListener('agents', onAgents)
+    source.removeEventListener('live', onLive)
     source.removeEventListener('error', onError)
     source.close()
+  }
+  function onLive(event: MessageEvent<string>) {
+    if (closed) return
+    try {
+      callbacks.live?.(readLiveFrame(event))
+    } catch (error) {
+      callbacks.invalid?.(error)
+    }
   }
   function onMessage(event: MessageEvent<string>) {
     if (closed) return
@@ -188,6 +209,47 @@ export function subscribePlanning(
   }
   source.addEventListener('message', onMessage)
   source.addEventListener('agents', onAgents)
+  source.addEventListener('live', onLive)
+  source.addEventListener('error', onError)
+  return close
+}
+
+/**
+ * The live-work frame alone, for a page with no space stream: a tab holds one stream,
+ * so the shell opens this only while no space's stream is open. It is the whole of
+ * what this stream says, so a frame that does not read closes it as a bad model
+ * closes a space's stream, and the connection says it is reconnecting.
+ */
+export function subscribeLive(callbacks: {
+  connection: (state: PlanningConnectionState) => void
+  frame: (frame: LiveFrame) => void
+  invalid?: (error: unknown) => void
+}): () => void {
+  callbacks.connection('connecting')
+  const source = new EventSource(`/api/events${query({ view: 'live' })}`)
+  let closed = false
+  function close() {
+    if (closed) return
+    closed = true
+    source.removeEventListener('live', onLive)
+    source.removeEventListener('error', onError)
+    source.close()
+  }
+  function onLive(event: MessageEvent<string>) {
+    if (closed) return
+    try {
+      callbacks.frame(readLiveFrame(event))
+      callbacks.connection('live')
+    } catch (error) {
+      close()
+      callbacks.connection('reconnecting')
+      callbacks.invalid?.(error)
+    }
+  }
+  function onError() {
+    if (!closed) callbacks.connection('reconnecting')
+  }
+  source.addEventListener('live', onLive)
   source.addEventListener('error', onError)
   return close
 }

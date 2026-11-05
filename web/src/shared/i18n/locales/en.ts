@@ -10,6 +10,7 @@ import { doctorLoginMessages } from '@/shared/i18n/doctorLoginMessages.ts'
 import { globalFinderMessages } from '@/shared/i18n/globalFinderMessages.ts'
 import { graphFrameMessages } from '@/shared/i18n/graphFrameMessages.ts'
 import { inputRequestMessages } from '@/shared/i18n/inputRequestMessages.ts'
+import { liveWorkMessages } from '@/shared/i18n/liveWorkMessages.ts'
 import { memoryProviderMessages } from '@/shared/i18n/memoryProviderMessages.ts'
 import { mentionMessages } from '@/shared/i18n/mentionMessages.ts'
 import { openMessages } from '@/shared/i18n/openMessages.ts'
@@ -47,6 +48,7 @@ export const en = {
   textFrames: richTextMessages.en.textFrames,
   documentLinks: richTextMessages.en.documentLinks,
   ...connectionMessages.en,
+  liveWork: liveWorkMessages.en.liveWork,
   app: {
     title: 'Valkama',
   },

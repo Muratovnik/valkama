@@ -23,6 +23,7 @@ import {
   BarChart3,
   Bell,
   Bold,
+  Bot,
   Bug,
   Check,
   ChevronDown,
@@ -30,6 +31,7 @@ import {
   ChevronRight,
   ChevronsUp,
   ChevronUp,
+  Circle,
   CircleAlert,
   CircleCheck,
   CircleHelp,
@@ -60,6 +62,7 @@ import {
   Network,
   PanelRightOpen,
   Pause,
+  Pin,
   Play,
   Plus,
   RadioTower,
@@ -182,6 +185,12 @@ const ICONS: Record<string, Component> = {
   'resolve': CircleCheck,
   'reopen': RotateCcw,
   'outcome': Flag,
+  // The side panel's list of work going on now: its button on a phone's rail, the agents a
+  // row counts, the ring of a session that waits, and the pin that keeps an item there.
+  'live-work': List,
+  'agent': Bot,
+  'live-waiting': Circle,
+  'pin': Pin,
 }
 
 interface GlyphShape {

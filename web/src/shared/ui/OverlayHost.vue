@@ -34,6 +34,11 @@ const props = withDefaults(
     drawerDefaultWidth?: number
     drawerMaxWidth?: number
     drawerMinWidth?: number
+    /**
+     * The window's edge a drawer stands at. The end is where a card and a session stand;
+     * the start is beside the rail, where the side panel opens over the page on a phone.
+     */
+    edge?: 'end' | 'start'
     interactive?: boolean
     layer?: 'drawer' | 'command'
     /** A second pane in this surface, beside what it holds, while there is one to show. */
@@ -61,6 +66,7 @@ const props = withDefaults(
   {
     title: '',
     ariaLabel: '',
+    edge: 'end',
     variant: 'dialog',
     surfaceClass: '',
     resizable: false,
@@ -85,6 +91,11 @@ const mainNameId = `overlay-main-${useId()}`
 const ownership = shallowRef<OverlayOwnership | null>(null)
 const active = computed(() => props.open && props.interactive && ownsOverlay(ownership.value))
 const isResizableDrawer = computed(() => props.resizable && props.variant === 'drawer')
+const surfaceState = computed(() => ({
+  'is-resizing': resizing.value || paneResizing.value,
+  'has-pane': Boolean(props.pane),
+  'is-start': props.variant === 'drawer' && props.edge === 'start',
+}))
 const {
   beginResize,
   drawerMaximum,
@@ -298,11 +309,7 @@ onUnmounted(release)
           ref="surface"
           class="overlay-surface"
           tabindex="-1"
-          :class="[
-            `overlay-surface-${variant}`,
-            surfaceClass,
-            { 'is-resizing': resizing || paneResizing, 'has-pane': pane },
-          ]"
+          :class="[`overlay-surface-${variant}`, surfaceClass, surfaceState]"
           :style="surfaceStyle"
           v-bind="modality"
           @keydown="keydownInSurface"
@@ -364,154 +371,4 @@ onUnmounted(release)
   </Teleport>
 </template>
 
-<style scoped>
-.overlay-host {
-  position: fixed;
-  inset: 0;
-}
-
-.overlay-layer-drawer {
-  z-index: 90;
-}
-
-.overlay-layer-command {
-  z-index: 100;
-}
-
-.overlay-scrim {
-  position: absolute;
-  inset: 0;
-  background: var(--color-overlay-scrim);
-}
-
-/* The host holds still for as long as what it holds is moving. The Transition reads the
-   duration off this element and nothing here moves, so with none of its own it removed
-   the host a frame into its leave, before the surface had gone anywhere. An enter got
-   away with it only because a browser does not stop a transition it has begun. Opacity
-   never changes here and no end event comes: the Transition ends on its own timer, set
-   from this duration. Without this rule, unused as it looks, a close does not play. */
-.overlay-enter-active,
-.overlay-leave-active {
-  transition: opacity var(--duration-surface) var(--ease-out);
-}
-
-:is(.overlay-enter-active, .overlay-leave-active) .overlay-scrim {
-  transition: opacity var(--duration-surface) var(--ease-out);
-}
-
-:is(.overlay-enter-from, .overlay-leave-to) .overlay-scrim {
-  opacity: 0;
-}
-
-:is(.overlay-enter-active, .overlay-leave-active) .overlay-surface-drawer {
-  transition: transform var(--duration-surface) var(--ease-out);
-}
-
-:is(.overlay-enter-from, .overlay-leave-to) .overlay-surface-drawer {
-  transform: translateX(100%);
-}
-
-:is(.overlay-enter-active, .overlay-leave-active) .overlay-surface-dialog {
-  transition:
-    opacity var(--duration-surface) var(--ease-out),
-    transform var(--duration-surface) var(--ease-out);
-}
-
-:is(.overlay-enter-from, .overlay-leave-to) .overlay-surface-dialog {
-  opacity: 0;
-  transform: translateY(var(--space-2));
-}
-
-.overlay-surface {
-  position: relative;
-  z-index: 1;
-  max-height: 100dvh;
-  outline: none;
-}
-
-.overlay-dialog {
-  display: grid;
-  place-items: center;
-  padding: var(--space-dialog-gutter);
-}
-
-/* What the surface holds is its own measure and its own scroller. A dialog stops growing
-   at 640px however wide the monitor gets, so what its fields can afford is a question
-   about the dialog; the window kept answering a different one. */
-.overlay-pane-main {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  container: overlay / inline-size;
-}
-
-.overlay-surface-dialog {
-  display: flex;
-  flex-direction: column;
-  width: min(640px, calc(100vw - 2 * var(--space-dialog-gutter)));
-  max-height: calc(100dvh - 2 * var(--space-dialog-gutter));
-}
-
-/* Two panes side by side, the first at the surface's own width. A dialog and its pane
-   stand as one height, so their heads are level and neither moves as the other's text
-   grows; they are centred as a pair by the host. */
-.overlay-surface.has-pane {
-  flex-direction: row;
-  width: auto;
-
-  & .overlay-pane-main {
-    flex: 0 0 auto;
-  }
-
-  &.overlay-surface-dialog {
-    height: calc(100dvh - 2 * var(--space-dialog-gutter));
-
-    & .overlay-pane-main {
-      width: min(640px, calc(100vw - 2 * var(--space-dialog-gutter)));
-    }
-  }
-}
-
-/* The drawer's ground is `--color-surface`, so the default sheet — one step
-   above it — is already the right tone for an object lying on the drawer. It
-   used to be re-pointed to the drawer's own tone, which made every comment
-   card the same colour as the panel it lay on: an invisible box whose padding
-   read as the text sitting off its column. */
-.overlay-surface-drawer {
-  position: absolute;
-  inset: 0 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  width: min(700px, 96vw);
-  border-inline-start: 1px solid var(--color-rule-strong);
-  color: var(--color-text);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-overlay);
-
-  &.is-resizing,
-  &.is-resizing * {
-    /* stylelint-disable-next-line declaration-no-important -- during a drag the
-     pointer must not pick up the cursor of whatever it passes over */
-    cursor: col-resize !important;
-    user-select: none;
-  }
-}
-
-/* The one viewport question left in the overlay: how wide a surface stands. A container cannot. */
-@media (width <= 620px) {
-  .overlay-surface-drawer {
-    width: 100vw;
-    box-shadow: none;
-  }
-
-  .overlay-dialog {
-    --radius-dialog: 0;
-    --space-dialog-gutter: 0px;
-    --space-dialog-inset: var(--space-4);
-  }
-}
-</style>
+<style scoped src="./overlayHost.css"></style>

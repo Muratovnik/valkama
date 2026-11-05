@@ -57,7 +57,9 @@ export const LINE_BUDGET = new Map([
   ['shared/ui/PlatformStatePanel.vue', 2],
   ['shared/ui/InfoTip.vue', 1],
   ['shared/ui/OverlayHeader.vue', 1],
-  ['shared/ui/OverlayHost.vue', 1],
+  // A drawer's overlay edge, on the side it opens towards: the end drawer's start, the
+  // start drawer's end.
+  ['shared/ui/overlayHost.css', 2],
   // The divider between two panes on one ground, and the edge of a pane beside a dialog,
   // which is a frame as the dialog is.
   ['shared/ui/OverlayPane.vue', 2],

@@ -16,7 +16,11 @@ const svgOwners = new Set([
   'widgets/work-item-inspector/components/ChainBranchMap.vue',
   'widgets/work-item-inspector/components/ChainScopeChart.vue',
 ])
-const overlayOwners = new Set(['shared/ui/DialogFrame.vue', 'shared/ui/ResizableInspector.vue'])
+const overlayOwners = new Set([
+  'shared/ui/DialogFrame.vue',
+  'shared/ui/ResizableInspector.vue',
+  'shared/ui/SidePanel.vue',
+])
 const dialogOwners = new Set(['shared/ui/OverlayHost.vue'])
 /**
  * The file allowed to author a disclosure. Four screens used the browser's `<details>`, whose
@@ -123,7 +127,7 @@ const colorOwners = new Set([
  */
 const viewportQueryOwners = new Set([
   'widgets/app-nav/components/AppNav.vue',
-  'shared/ui/OverlayHost.vue',
+  'shared/ui/overlayHost.css',
 ])
 
 /**

@@ -5,6 +5,7 @@ import { subscribePlanning } from '@/shared/api/planningApi.ts'
 import type { PlanningConnectionState } from '@/shared/api/planningApi.ts'
 import type { PlanningReadModel } from '@/shared/api/planningModel.ts'
 import type { PlanningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
+import { useLiveWorkStore } from '@/shared/stores/liveWorkStore.ts'
 
 type Target = ({ project: string } & PlanningSpaceRef) | null
 
@@ -30,6 +31,10 @@ export function usePlanningSubscription(
           },
           connection: (state) => {
             if (current()) connection.value = state
+          },
+          // The tab's one stream carries the side panel's frame too, so the shell opens none.
+          live: (frame) => {
+            if (current()) useLiveWorkStore().accept(frame)
           },
           snapshot: (model) => {
             if (current()) snapshot(model, connection.value === 'reconnecting')

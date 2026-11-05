@@ -16,12 +16,15 @@
  * to prevent. Splitting the parts out is what made bringing the rules home
  * possible without this file growing past what one screen holds.
  */
-import { computed } from 'vue'
+import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import NavConnectionButton from '@/widgets/app-nav/components/NavConnectionButton.vue'
 import NavModuleList from '@/widgets/app-nav/components/NavModuleList.vue'
 import NavWorkActions from '@/widgets/app-nav/components/NavWorkActions.vue'
+import NavWorkGroup from '@/widgets/app-nav/components/NavWorkGroup.vue'
+import type { NavShown, NavTarget } from '@/widgets/app-nav/components/NavWorkTree.vue'
+import { useNavOpen } from '@/widgets/app-nav/composables/useNavOpen.ts'
 
 import type { PendingCount } from '@/features/input-requests/composables/useInputRequests.ts'
 
@@ -30,6 +33,8 @@ import type {
   ModuleManifest,
   NavigationGroup,
 } from '@/shared/api/platformModuleContract.ts'
+import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
+import { useLiveWorkStore } from '@/shared/stores/liveWorkStore.ts'
 import BrandMark from '@/shared/ui/BrandMark.vue'
 
 const props = withDefaults(
@@ -39,14 +44,26 @@ const props = withDefaults(
     modules: readonly ModuleManifest[]
     badges?: Partial<Record<ModuleId, number>>
     connection?: 'connecting' | 'live' | 'reconnecting'
+    /** The space and card on show, for the list of work going on now. */
+    liveShown?: NavShown | null
+    /** Where a row of that list leads; without it the list is not drawn. */
+    liveTarget?: NavTarget | null
     pendingRequestCount?: PendingCount | null
     refreshing?: boolean
   }>(),
-  { badges: () => ({}), connection: 'connecting', refreshing: false, pendingRequestCount: null },
+  {
+    badges: () => ({}),
+    connection: 'connecting',
+    liveShown: null,
+    liveTarget: null,
+    refreshing: false,
+    pendingRequestCount: null,
+  },
 )
 
 const emit = defineEmits<{
   find: []
+  go: [route: PlatformRoute]
   home: []
   navigate: [module: ModuleId]
   prefetch: [module: ModuleId, trigger: 'hover' | 'focus']
@@ -58,16 +75,49 @@ const { t } = useI18n()
 const GROUPS: readonly NavigationGroup[] = ['work', 'understand', 'capabilities']
 
 const groupedModules = computed(() =>
-  GROUPS.map((group) => ({
-    group,
-    heading: t(`platform.navigation.groups.${group}`),
-    modules: props.modules.filter((module) => module.navigation_group === group),
-  })).filter((entry) => entry.modules.length > 0),
+  GROUPS.map((group) => {
+    const modules = props.modules.filter((module) => module.navigation_group === group)
+    return {
+      group,
+      heading: t(`platform.navigation.groups.${group}`),
+      modules,
+      // Work going on now hangs under «Work», wherever the work module is listed.
+      live: props.liveTarget !== null && modules.some((module) => module.module_id === 'planning'),
+    }
+  }).filter((entry) => entry.modules.length > 0),
 )
 
 const systemModules = computed(() =>
   props.modules.filter((module) => module.navigation_group === 'system'),
 )
+
+/**
+ * Work going on now hangs under «Work», which folds it: the entry still goes to the
+ * board, and the fold at its end shows or hides the list.
+ */
+const navOpen = useNavOpen()
+const liveListId = `nav-live-${useId()}`
+const liveFold = computed(() => ({
+  module: 'planning' as ModuleId,
+  id: `${liveListId}-fold`,
+  controls: liveListId,
+  expanded: navOpen.isOpen('work'),
+  label: t('liveWork.list'),
+}))
+const liveStore = useLiveWorkStore()
+/** A row of the list, or its space's name, is the page on show. */
+const liveWithin = computed(() => {
+  const shown = props.liveShown
+  const space = shown ? liveStore.spaces.find((each) => each.key === shown.key) : undefined
+  return Boolean(
+    shown &&
+    space &&
+    (shown.reference === null || space.rows.some((row) => row.reference === shown.reference)),
+  )
+})
+const withinFor = (live: boolean) => live && liveWithin.value
+const toggleLive = () => navOpen.set('work', !navOpen.isOpen('work'))
+const foldFor = (live: boolean) => (live ? liveFold.value : null)
 
 /** A list reports what was chosen; the shell above decides what to do about it. */
 function forwardNavigate(module: ModuleId) {
@@ -108,13 +158,28 @@ function forwardPrefetch(module: ModuleId, trigger: 'hover' | 'focus') {
       <NavModuleList
         v-for="entry in groupedModules"
         :key="entry.group"
+        :class="{ 'nav-live-group': entry.live }"
         :active="active"
         :badges="badges"
         :heading="entry.heading"
         :modules="entry.modules"
+        :disclosure="foldFor(entry.live)"
+        :within="withinFor(entry.live)"
+        @fold="toggleLive"
         @navigate="forwardNavigate"
         @prefetch="forwardPrefetch"
-      />
+      >
+        <NavWorkGroup
+          v-if="entry.live && liveTarget"
+          class="nav-live"
+          :fold-id="liveFold.id"
+          :list-id="liveListId"
+          :open="navOpen"
+          :shown="liveShown"
+          :target="liveTarget"
+          @go="(route) => emit('go', route)"
+        />
+      </NavModuleList>
 
       <!-- Settings is a destination like every other entry, so it stands under
            the last of them, in a group of its own with no heading. It used to be
@@ -197,12 +262,29 @@ function forwardPrefetch(module: ModuleId, trigger: 'hover' | 'focus') {
   text-overflow: ellipsis;
 }
 
+/* The rail's middle: the actions and the groups, in a column whose one flexible part
+   is the list of work going on now. Everything else keeps its height, so the list gives
+   way first and scrolls, and the last group under it — Settings — stays in sight. */
 .app-nav {
-  display: grid;
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
   gap: var(--space-6);
-  align-content: start;
   min-width: 0;
+  min-height: 0;
   padding: var(--space-4) var(--space-3);
+
+  & > * {
+    flex: none;
+  }
+
+  & > .nav-live-group {
+    flex: 0 1 auto;
+  }
+}
+
+.nav-live {
+  flex: 0 1 auto;
 }
 
 .nav-utility {

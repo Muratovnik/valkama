@@ -58,7 +58,10 @@ const overlayHeader = readFileSync(
   new URL('../src/shared/ui/OverlayHeader.vue', import.meta.url),
   'utf8',
 )
-const overlay = readFileSync(new URL('../src/shared/ui/OverlayHost.vue', import.meta.url), 'utf8')
+// The host's markup and its stylesheet, which stands beside it as a file of its own.
+const overlay = ['OverlayHost.vue', 'overlayHost.css']
+  .map((name) => readFileSync(new URL(`../src/shared/ui/${name}`, import.meta.url), 'utf8'))
+  .join('\n')
 const app = readFileSync(new URL('../src/app/App.vue', import.meta.url), 'utf8')
 const cardDrawer = readFileSync(
   new URL('../src/pages/planning/PlanningCardDrawer.vue', import.meta.url),

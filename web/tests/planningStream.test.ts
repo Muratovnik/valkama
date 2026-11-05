@@ -1,8 +1,9 @@
 import { afterEach, expect, it, vi } from 'vitest'
 
-import { subscribePlanning } from '@/shared/api/planningApi.ts'
+import { subscribeLive, subscribePlanning } from '@/shared/api/planningApi.ts'
 
 import { planningReadModel, projectId, spaceRef } from './browser/planningFixtures.ts'
+import { busyFrame } from './support/liveFrame.ts'
 
 const sources: Source[] = []
 class Source extends EventTarget {
@@ -109,4 +110,51 @@ it('cleans up the initial stream deadline on scope disposal', () => {
   vi.advanceTimersByTime(15_000)
   expect(callbacks.connection.mock.calls).toEqual([['connecting']])
   expect(vi.getTimerCount()).toBe(0)
+})
+
+it('hands on the live-work frame the space stream carries, and drops a bad one alone', () => {
+  vi.stubGlobal('EventSource', Source)
+  const live = vi.fn()
+  const invalid = vi.fn()
+  const snapshot = vi.fn()
+  const close = subscribePlanning(
+    { project: projectId, ...spaceRef },
+    { live, invalid, snapshot, connection: vi.fn() },
+  )
+  const source = sources.at(-1)
+  if (!source) throw new Error('Expected an event source')
+  source.dispatchEvent(new MessageEvent('live', { data: JSON.stringify(busyFrame()) }))
+  expect(live).toHaveBeenCalledWith(busyFrame())
+  source.dispatchEvent(new MessageEvent('live', { data: JSON.stringify({ spaces: 'none' }) }))
+  expect(invalid).toHaveBeenCalledOnce()
+  expect(source.close).not.toHaveBeenCalled()
+  // The space keeps arriving on the same stream.
+  source.dispatchEvent(new MessageEvent('message', { data: JSON.stringify(planningReadModel) }))
+  expect(snapshot).toHaveBeenCalledOnce()
+  close()
+  source.dispatchEvent(new MessageEvent('live', { data: JSON.stringify(busyFrame()) }))
+  expect(live).toHaveBeenCalledOnce()
+})
+
+it('opens the live view alone for a page with no space stream', () => {
+  vi.stubGlobal('EventSource', Source)
+  const callbacks = { frame: vi.fn(), connection: vi.fn(), invalid: vi.fn() }
+  const close = subscribeLive(callbacks)
+  const source = sources.at(-1)
+  if (!source) throw new Error('Expected an event source')
+  expect(Object.fromEntries(new URL(source.url, 'http://127.0.0.1').searchParams)).toEqual({
+    view: 'live',
+  })
+  expect(callbacks.connection).toHaveBeenLastCalledWith('connecting')
+  source.dispatchEvent(new MessageEvent('live', { data: JSON.stringify(busyFrame()) }))
+  expect(callbacks.frame).toHaveBeenCalledWith(busyFrame())
+  expect(callbacks.connection).toHaveBeenLastCalledWith('live')
+  source.dispatchEvent(new Event('error'))
+  expect(callbacks.connection).toHaveBeenLastCalledWith('reconnecting')
+  // A frame that does not read is the whole of this stream gone wrong: it closes.
+  source.dispatchEvent(new MessageEvent('live', { data: '{}' }))
+  expect(callbacks.invalid).toHaveBeenCalledOnce()
+  expect(source.close).toHaveBeenCalledOnce()
+  close()
+  expect(source.close).toHaveBeenCalledOnce()
 })

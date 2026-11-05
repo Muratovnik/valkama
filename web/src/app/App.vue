@@ -13,6 +13,8 @@ import { useAppDocuments } from '@/app/composables/useAppDocuments.ts'
 import { useAppReferenceLinks } from '@/app/composables/useAppReferenceLinks.ts'
 import { useDocumentOpening } from '@/app/composables/useDocumentOpening.ts'
 import { useGlobalWorkActions } from '@/app/composables/useGlobalWorkActions.ts'
+import { useLiveWorkFeed } from '@/app/composables/useLiveWorkFeed.ts'
+import { useLiveWorkNav } from '@/app/composables/useLiveWorkNav.ts'
 import { useModuleRouteAuthority } from '@/app/composables/useModuleRouteAuthority.ts'
 import { usePlatformEntryRestore } from '@/app/composables/usePlatformEntryRestore.ts'
 import { usePlatformLiveFeed } from '@/app/composables/usePlatformLiveFeed.ts'
@@ -131,12 +133,6 @@ const {
   },
 })
 
-const displayedConnection = computed(() =>
-  activeModule.value === 'planning' && operatingScope.value.kind === 'project'
-    ? (planningConnection.value ?? connectionState.value)
-    : connectionState.value,
-)
-
 const {
   activeManifest,
   moduleTitle,
@@ -165,6 +161,29 @@ const { availableProjectResources, selectedResourceRef, selectResource } = usePr
 const routeRecoveryFailure = computed(
   () => routeFailure.value || (modulesAuthoritative.value ? '' : modulesFailure.value),
 )
+// A space's stream carries the live-work frame, so the shell opens its own only without one,
+// and only once it knows: the space a project shows is known once the context has been read.
+const { connection: liveConnection } = useLiveWorkFeed({
+  shell: () =>
+    documentPage.value === null &&
+    modulesSettled.value &&
+    !entryRestorePending.value &&
+    contextState.value.status !== 'loading',
+  spaceStream: () =>
+    activeModule.value === 'planning' &&
+    planningConnection.value !== null &&
+    workItemLink.value === null &&
+    !routeRecoveryFailure.value &&
+    !routeUnavailable.value &&
+    Boolean(modulesAuthoritative.value && activeManifest.value),
+})
+const { current: liveShown, target: liveTarget } = useLiveWorkNav(route, contextReady)
+
+const displayedConnection = computed(() => {
+  if (activeModule.value === 'planning' && operatingScope.value.kind === 'project')
+    return planningConnection.value ?? liveConnection.value ?? connectionState.value
+  return liveConnection.value === 'reconnecting' ? 'reconnecting' : connectionState.value
+})
 /**
  * The address names no section at all. The shell then says so in the context bar
  * and marks no section current: the rail and the bar used to name «Work» over a
@@ -284,7 +303,10 @@ usePlatformEntryRestore({
       :connection="displayedConnection"
       :refreshing="refreshing"
       :pending-request-count="pendingRequestCount"
+      :live-shown="liveShown"
+      :live-target="liveTarget"
       @find="finderOpen = true"
+      @go="(next) => writeRoute(next)"
       @requests="requestsOpen = true"
       @navigate="switchModule"
       @prefetch="prefetchModule"

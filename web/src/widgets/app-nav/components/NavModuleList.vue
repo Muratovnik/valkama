@@ -21,16 +21,35 @@ const props = withDefaults(
     active: ModuleId | null
     modules: readonly ModuleManifest[]
     badges?: Partial<Record<ModuleId, number>>
+    /**
+     * An entry that opens more under itself: a fold at its end, which says whether what it
+     * controls is shown. The entry still goes to its module; the fold only shows or hides.
+     */
+    disclosure?: {
+      controls: string
+      expanded: boolean
+      id: string
+      label: string
+      module: ModuleId
+    } | null
     /** Shown above the entries, and hidden from sight — never from readers — on a narrow rail. */
     heading?: string
+    /**
+     * The page on show is one of the entry's own rows, which says it is the page: the entry
+     * then says only that the reader is inside it, so one element of the rail is the page.
+     */
+    within?: boolean
   }>(),
-  { badges: () => ({}), heading: '' },
+  { badges: () => ({}), disclosure: null, heading: '', within: false },
 )
 
 const emit = defineEmits<{
+  fold: []
   navigate: [module: ModuleId]
   prefetch: [module: ModuleId, trigger: 'hover' | 'focus']
 }>()
+
+const folds = (module: ModuleManifest) => props.disclosure?.module === module.module_id
 
 const { t, te } = useI18n()
 
@@ -62,7 +81,8 @@ function moduleBadge(module: ModuleManifest): number {
  */
 function currentState(module: ModuleManifest) {
   const current = props.active === module.module_id
-  return { 'class': { active: current }, 'aria-current': current ? ('page' as const) : undefined }
+  const mark = props.within ? ('true' as const) : ('page' as const)
+  return { 'class': { active: current }, 'aria-current': current ? mark : undefined }
 }
 </script>
 
@@ -75,38 +95,111 @@ function currentState(module: ModuleManifest) {
     >
       {{ heading }}
     </h2>
-    <button
+    <div
       v-for="module in modules"
       :key="module.module_id"
-      type="button"
-      class="nav-item"
-      :class="`module-${module.module_id}`"
-      v-bind="currentState(module)"
-      :title="moduleTitle(module)"
-      @pointerenter="emit('prefetch', module.module_id, 'hover')"
-      @focus="emit('prefetch', module.module_id, 'focus')"
-      @click="emit('navigate', module.module_id)"
+      class="nav-entry"
     >
-      <VIcon
-        class="nav-item-icon"
-        :name="module.icon_key"
-        :size="20"
-      />
-      <span class="nav-item-label">{{ moduleTitle(module) }}</span>
-      <CountBadge
-        v-if="moduleBadge(module)"
-        class="nav-item-count"
-        placement="inline"
-        :value="moduleBadge(module)"
-      />
-    </button>
+      <button
+        type="button"
+        class="nav-item"
+        :class="[`module-${module.module_id}`, { 'has-fold': folds(module) }]"
+        v-bind="currentState(module)"
+        :title="moduleTitle(module)"
+        @pointerenter="emit('prefetch', module.module_id, 'hover')"
+        @focus="emit('prefetch', module.module_id, 'focus')"
+        @click="emit('navigate', module.module_id)"
+      >
+        <VIcon
+          class="nav-item-icon"
+          :name="module.icon_key"
+          :size="20"
+        />
+        <span class="nav-item-label">{{ moduleTitle(module) }}</span>
+        <CountBadge
+          v-if="moduleBadge(module)"
+          class="nav-item-count"
+          placement="inline"
+          :value="moduleBadge(module)"
+        />
+      </button>
+      <button
+        v-if="disclosure && folds(module)"
+        :id="disclosure.id"
+        class="nav-entry-fold"
+        type="button"
+        :aria-expanded="disclosure.expanded"
+        :aria-controls="disclosure.controls"
+        :aria-label="disclosure.label"
+        :title="disclosure.label"
+        @click="emit('fold')"
+      >
+        <VIcon
+          class="nav-entry-chevron"
+          name="chevron-down"
+          :size="16"
+        />
+      </button>
+    </div>
+    <slot />
   </section>
 </template>
 
 <style scoped>
 .nav-group {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: var(--space-half);
+  min-height: 0;
+}
+
+.nav-entry {
+  position: relative;
+  flex: none;
+}
+
+/* The fold stands inside the entry's own ground, at its end, so «Work» and its list read
+   as one control with one row; the entry keeps its room for it. */
+.nav-item.has-fold {
+  padding-inline-end: calc(var(--size-control-inline) + var(--space-2));
+}
+
+.nav-entry-fold {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: var(--space-1);
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  inline-size: var(--size-control-inline);
+  block-size: var(--size-control-inline);
+  padding: 0;
+  margin-block: auto;
+  border: 0;
+  color: var(--color-navigation-text-muted);
+  background: none;
+  border-radius: var(--radius-status);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--color-text-on-dark);
+  }
+
+  &:focus-visible {
+    outline-offset: 0;
+  }
+
+  &[aria-expanded='false'] .nav-entry-chevron {
+    rotate: -90deg;
+  }
+}
+
+.nav-entry-chevron {
+  transition: rotate var(--duration-quick) var(--ease-out);
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 }
 
 /* 13px, not 12px. A group heading is read to decide where to go, which is the
@@ -222,10 +315,16 @@ function currentState(module: ModuleManifest) {
     clip-path: inset(50%);
   }
 
-  .nav-item {
+  .nav-item,
+  .nav-item.has-fold {
     grid-template-columns: 1fr;
     justify-items: center;
     padding: 0;
+  }
+
+  /* No room for the list, so nothing to fold: a phone opens it from its own button. */
+  .nav-entry-fold {
+    display: none;
   }
 
   /* Out of sight, never out of the name. The entry is named by its content —
