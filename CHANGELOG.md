@@ -10,6 +10,16 @@ checkouts are therefore distinguishable even at the same version.
 
 ## [Unreleased]
 
+### Added
+
+- **Task types have colours, and you can change them.** A type's icon and word are now
+  purple for an epic, rose for a bug, turquoise for an improvement and grey-blue for a
+  task, on the board, in the list, on the card, in search, on the hover card, on the
+  graph and in the filter menu; the colour of a state does not change. Settings →
+  General → Task type colors picks another colour per type, applies it at once, says
+  when one is hard to read and lets you keep it, and resets one type or all. The choice
+  is kept on the device, so a browser and the desktop app each remember their own.
+
 ### Changed
 
 - **The skill keeps Valkama calls apart in Claude Code's auto mode.** It tells the
@@ -38,32 +48,6 @@ checkouts are therefore distinguishable even at the same version.
   and the counts follow, a word between the chips says which it is, a label pressed on a
   tile or in a card joins in the reading in force, and Reset takes it out. Only «any» is
   written into the address, so links made before read as they did.
-
-### Fixed
-
-- **A click on a notification about a question goes to the question.** It used to open
-  the card at its top and leave the question to be found further down. The card now
-  brings the waiting question into view with the keyboard on its first field, however it
-  stood when the click came, and opens as usual if the question has been answered by then.
-  The notification's address has changed, so install the new desktop app before the new
-  server: an older app refuses the new address and the click does nothing.
-- A session opens in the folder it was started from, not in the folder its agent's
-  shell had reached. A compaction or `/clear` no longer moves the recorded folder,
-  and sessions already recorded are read right from where their transcript is kept.
-  The window, the terminal and the command to copy all use that one folder, and the
-  copied command now starts with `cd` into it.
-- In the app, a session from VS Code or another editor opens with one press and no
-  dialog: the window, a short pause, then the conversation. If the editor was not
-  running, the conversation follows once its window has had time to appear. In the
-  rare case that the conversation reaches the window too early and starts empty,
-  pressing again opens the right one. The browser still takes two presses.
-- The notice in the corner no longer stays for good after something worked: it goes
-  after five seconds of being seen, and waits while the pointer or the focus is on it
-  or while another window is in front. A refusal stays until it is put away.
-- That notice now says what it is about: a session by its holder and its place, a file
-  or a folder by its name, and a copied command by its session.
-### Changed
-
 - **What can be done to an entry of a discussion is a quiet icon on its first line.** Reply,
   Resolve and its removal, folding a resolved thread, Change answer and Make task outcome
   stand beside the author and the time instead of as buttons in a row of their own under
@@ -73,8 +57,6 @@ checkouts are therefore distinguishable even at the same version.
   and it opens the one field under the last reply of that thread. Reply in thread is gone: a
   thread is one level deep, so the two buttons only ever did the same thing. Leaving the field
   brings focus back to the icon that opened it.
-### Changed
-
 - **A card's head reads as three rows with room between them.** The state, a waiting
   question, the priority and the epic stand on the first; «Исполняет», the holder and the
   action about them on the second; the labels on the third, which an item without labels
@@ -99,6 +81,30 @@ checkouts are therefore distinguishable even at the same version.
   coordinator's count, «неоднозначно: координатор держал 13 задач», or the range of its rows'
   counts, «13–19 задач». The rows of that group no longer repeat it; each keeps its exact count
   in its tooltip and its accessible description.
+
+### Fixed
+
+- **A click on a notification about a question goes to the question.** It used to open
+  the card at its top and leave the question to be found further down. The card now
+  brings the waiting question into view with the keyboard on its first field, however it
+  stood when the click came, and opens as usual if the question has been answered by then.
+  The notification's address has changed, so install the new desktop app before the new
+  server: an older app refuses the new address and the click does nothing.
+- A session opens in the folder it was started from, not in the folder its agent's
+  shell had reached. A compaction or `/clear` no longer moves the recorded folder,
+  and sessions already recorded are read right from where their transcript is kept.
+  The window, the terminal and the command to copy all use that one folder, and the
+  copied command now starts with `cd` into it.
+- In the app, a session from VS Code or another editor opens with one press and no
+  dialog: the window, a short pause, then the conversation. If the editor was not
+  running, the conversation follows once its window has had time to appear. In the
+  rare case that the conversation reaches the window too early and starts empty,
+  pressing again opens the right one. The browser still takes two presses.
+- The notice in the corner no longer stays for good after something worked: it goes
+  after five seconds of being seen, and waits while the pointer or the focus is on it
+  or while another window is in front. A refusal stays until it is put away.
+- That notice now says what it is about: a session by its holder and its place, a file
+  or a folder by its name, and a copied command by its session.
 - **The screen no longer blinks as a document opens over a card or the questions.** The
   layer underneath dropped its dimming at once while the new one faded in from nothing, so
   what lay under both lit up for a moment, and it went too dark as the document closed. Each
@@ -117,8 +123,6 @@ checkouts are therefore distinguishable even at the same version.
   tile, the next click on any tile was lost, and so was Enter on one. A click right after a
   drop is no longer taken for the drop, and the release itself still opens nothing. A press
   with a hand's small shake in it is now a click rather than a drag of a pixel or two.
-### Fixed
-
 - **An answered question keeps no empty room before its options.** Their words start at the
   row's inset, the same with a selection and without one. The selected option is told by its
   ground and the word «selected», so the tick beside it is gone.
@@ -134,8 +138,6 @@ checkouts are therefore distinguishable even at the same version.
   on the question; a comment an older answer has on that field stays to read and change.
 - **The field of your own option has no caption over it.** The row right above it says what it
   is, and a screen reader hears the field named for the question it answers.
-### Fixed
-
 - **An epic's header on the graph no longer moves when it folds or opens.** The two views
   had two heights, so the text and the progress edge stood in different places in each.
   The header is now one height, folded or open.
@@ -154,8 +156,6 @@ checkouts are therefore distinguishable even at the same version.
 - **Tabbing into the graph no longer moves the camera the operator set.** The keyboard
   entered on the first target whose centre was in sight, and pressing it centred the
   camera on it if the edge of the field cut it. It now enters on a target wholly in sight.
-### Fixed
-
 - **A compacted context no longer stops the work on the graph.** A session whose context was
   compacted reads as it did before: a turn still running stays at work, and so do its
   subagents, so their cards no longer say «waiting». A client that really restarted still
@@ -177,17 +177,6 @@ checkouts are therefore distinguishable even at the same version.
 - **A card on a graph zoomed far out no longer shows three unexplained dots.** Its number
   stands whole inside the block at any length, and what an agent is doing on it is in the
   card's tooltip and accessible name, on its lines and in its frame's count.
-### Added
-
-- **Task types have colours, and you can change them.** A type's icon and word are now
-  purple for an epic, rose for a bug, turquoise for an improvement and grey-blue for a
-  task, on the board, in the list, on the card, in search, on the hover card, on the
-  graph and in the filter menu; the colour of a state does not change. Settings →
-  General → Task type colors picks another colour per type, applies it at once, says
-  when one is hard to read and lets you keep it, and resets one type or all. The choice
-  is kept on the device, so a browser and the desktop app each remember their own.
-### Fixed
-
 - An answer given in the interface now reaches the agent: a person answering, changing,
   declining or withdrawing a question never produced a notice, a `from_person` line or the
   `person_spoke` refusal, because the interface answers through a route those reads did not
