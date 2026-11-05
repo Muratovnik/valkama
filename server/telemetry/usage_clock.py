@@ -57,9 +57,10 @@ LEFT_OUT = (HUMAN, SUBAGENT, EXTERNAL, GAP)
 #: none ended between 600 s and 900 s; the 17 over 900 s had a median of 264 tokens.
 MODEL_WAIT_LIMIT_SECONDS = 600.0
 LATE_SECONDS = 60.0
-#: A turn's end is written over a few records, hooks running between them. A record later
-#: than this after the end is not more of the ending: a person came back, and it may be
-#: a rollout's next turn, which need not say it started.
+#: A turn's end is written over a few records, hooks running between them. Of 2,224 ends
+#: followed by a stop hook's summary, the longest took 20 s, and of 805 followed by another
+#: reply, 3 took over a minute. A record later than this is not more of the ending: a person
+#: came back, and it may be a rollout's next turn, which need not say it started.
 _ENDING_SECONDS = 60.0
 
 _MOST_PENDING = 64
