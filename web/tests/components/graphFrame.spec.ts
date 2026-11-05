@@ -49,7 +49,10 @@ function frame(overrides: Partial<PlacedFrame> = {}): PlacedFrame {
   }
 }
 
-function header(props: { frame: PlacedFrame; overview?: boolean }, locale: 'en' | 'ru' = 'en') {
+function header(
+  props: { frame: PlacedFrame; far?: boolean; overview?: boolean },
+  locale: 'en' | 'ru' = 'en',
+) {
   return mount(GraphFrame, {
     attachTo: document.body,
     props,
@@ -118,7 +121,9 @@ describe("a frame's header", () => {
   it('folded, offers to expand it and keeps its counts and its edge', () => {
     const wrapper = header({ frame: frame({ folded: true, width: 288, height: 72 }) }, 'ru')
     const fold = wrapper.get('.graph-frame-fold')
-    expect(fold.attributes('aria-label')).toBe('Развернуть эпик MAIN-12 «Frames on the graph»')
+    expect(fold.attributes('aria-label')).toBe(
+      'Развернуть эпик MAIN-12 «Frames on the graph» · 13 открытых внутри',
+    )
     expect(fold.attributes('aria-expanded')).toBe('false')
     expect(wrapper.get('.graph-frame').classes()).toContain('folded')
     expect(countsOf(wrapper)).toEqual(['8 из 21 выполнено', '2 в работе', '1 заблокирована'])
@@ -222,6 +227,67 @@ describe('a frame with nothing to unfold', () => {
     expect(countsOf(wrapper)).toEqual(['No tasks'])
     expect(wrapper.find('.frame-progress').exists()).toBe(false)
     expect(wrapper.find('.graph-frame-fold').exists()).toBe(true)
+  })
+})
+
+const folded = () => frame({ folded: true, progress: progress({ done: 180, active: 90 }) })
+const inside = (props: { far?: boolean; overview?: boolean }) =>
+  header({ frame: folded(), ...props }, 'ru')
+    .get('.graph-frame-inside')
+    .text()
+
+describe('a folded frame', () => {
+  it('says what it hides at every zoom, shorter as the words stop being read', () => {
+    expect(inside({})).toBe('90 открытых внутри')
+    expect(inside({ overview: true })).toBe('90 внутри')
+    expect(inside({ overview: true, far: true })).toBe('+90')
+  })
+
+  it('takes the plural from its own number, and says the same in English', () => {
+    const one = frame({ folded: true, progress: progress({ done: 3, ahead: 1 }) })
+    expect(header({ frame: one }, 'ru').get('.graph-frame-inside').text()).toBe('1 открытая внутри')
+    expect(header({ frame: folded() }).get('.graph-frame-inside').text()).toBe('90 open inside')
+  })
+
+  it('tells the keyboard what the header shows, on each button and at every zoom', () => {
+    const near = header({ frame: folded() })
+    expect(near.get('.graph-frame-fold').attributes('aria-label')).toBe(
+      'Expand epic MAIN-12 “Frames on the graph” · 90 open inside',
+    )
+    const far = header({ frame: folded(), overview: true, far: true })
+    expect(far.get('button.graph-frame-open').attributes('aria-label')).toBe(
+      'Epic MAIN-12 “Frames on the graph” · 180 of 270 done · 90 in progress · 90 open inside',
+    )
+  })
+
+  it('with nothing open says what closed work it hides rather than none', () => {
+    const closed = frame({ folded: true, progress: progress({ done: 7 }) })
+    expect(header({ frame: closed }, 'ru').get('.graph-frame-inside').text()).toBe(
+      '7 закрытых внутри',
+    )
+  })
+
+  it('is marked as a stack by more than its words; an open one and one with nothing inside are not', () => {
+    expect(header({ frame: folded() }).get('.graph-frame').classes()).toContain('holding')
+    const open = header({ frame: frame({ progress: progress({ active: 90 }) }) })
+    expect(open.get('.graph-frame').classes()).not.toContain('holding')
+    expect(open.find('.graph-frame-inside').exists()).toBe(false)
+    const nothing = header({
+      frame: frame({ folded: true, foldable: false, progress: progress({ done: 7 }) }),
+    })
+    expect(nothing.get('.graph-frame').classes()).not.toContain('holding')
+    expect(nothing.find('.graph-frame-inside').exists()).toBe(false)
+  })
+
+  it('far out gives its band to the count, and an epic with nothing hidden keeps its reference', () => {
+    const counted = header({ frame: folded(), overview: true, far: true })
+    expect(counted.find('.graph-frame-reference').exists()).toBe(false)
+    const empty = header({
+      frame: frame({ folded: true, foldable: false, progress: progress({}) }),
+      overview: true,
+      far: true,
+    })
+    expect(empty.get('.graph-frame-reference').text()).toBe('MAIN-12')
   })
 })
 

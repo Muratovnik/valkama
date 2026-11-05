@@ -112,7 +112,7 @@ const framed = walkTargets({
   frames: [
     frame('E', { x: 0, y: 0, width: 640, height: 200 }),
     frame('G', { x: 700, y: 0, width: 288, height: FRAME_HEADER }, true),
-    frame(NO_EPIC_FRAME, { x: 700, y: 160, width: 288, height: FRAME_HEADER }, true),
+    frame(NO_EPIC_FRAME, { x: 700, y: 400, width: 288, height: FRAME_HEADER }, true),
   ],
   nodes: [
     { ...at('P', 0, 0), x: 16, y: FRAME_HEADER + 16, frameId: 'E' },

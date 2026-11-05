@@ -10,13 +10,18 @@ import { describe, expect, it } from 'vitest'
 import { graphCameraView } from '@/widgets/work-item-graph/utils/graphCamera.ts'
 import { frameProjection } from '@/widgets/work-item-graph/utils/graphFrames.ts'
 import type { FrameProjection } from '@/widgets/work-item-graph/utils/graphFrames.ts'
-import { MARGIN, NO_EPIC_FRAME } from '@/widgets/work-item-graph/utils/graphGeometry.ts'
+import {
+  FRAME_HEADER,
+  MARGIN,
+  NO_EPIC_FRAME,
+} from '@/widgets/work-item-graph/utils/graphGeometry.ts'
 import { layout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import type { GraphLayout } from '@/widgets/work-item-graph/utils/graphLayout.ts'
 import {
   FRAME_OPTIONS,
   frameGraph,
   HIERARCHY_OPTIONS,
+  layoutFrames,
   ROOT_OPTIONS,
   SHELF_FROM,
 } from '@/widgets/work-item-graph/utils/graphLayoutTree.ts'
@@ -287,4 +292,33 @@ describe('the options a hierarchical layout is given', () => {
     expect(field.frames.some((frame) => frame.folded)).toBe(true)
     expect(field.nodes.length).toBeGreaterThan(500)
   }, 30_000)
+})
+
+describe('a line reaching a frame', () => {
+  it('ends on the box the layout gave it, which is the box the frame draws', async () => {
+    const { model } = broadSpace()
+    const projection = frameProjection({
+      items: model.work_items,
+      links: model.links,
+      showDone: false,
+    })
+    const field = await layoutFrames(projection, new ELK())
+    const frames = new Map(field.frames.map((frame) => [frame.id, frame]))
+    const ending = field.edges.filter((edge) => frames.has(edge.target))
+    expect(ending.length).toBeGreaterThan(0)
+    for (const edge of ending) {
+      const box = frames.get(edge.target)
+      const end = edge.points.at(-1)
+      if (!box || !end) throw new Error(edge.id)
+      const onSide = Math.abs(end.x - box.x) <= 1 || Math.abs(end.x - box.x - box.width) <= 1
+      const onTopOrFoot = Math.abs(end.y - box.y) <= 1 || Math.abs(end.y - box.y - box.height) <= 1
+      expect(onSide || onTopOrFoot, edge.id).toBe(true)
+      expect(end.y).toBeGreaterThanOrEqual(box.y - 1)
+      expect(end.y).toBeLessThanOrEqual(box.y + box.height + 1)
+    }
+    for (const frame of field.frames) {
+      if (frame.folded) expect(frame.height, frame.id).toBe(FRAME_HEADER)
+      else expect(frame.height, frame.id).toBeGreaterThan(FRAME_HEADER)
+    }
+  })
 })

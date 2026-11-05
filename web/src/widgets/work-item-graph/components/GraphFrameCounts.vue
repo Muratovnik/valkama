@@ -75,11 +75,14 @@ function word(group: (typeof groups.value)[number]['group'], count: number): str
 </template>
 
 <style scoped>
+/* As wide as a folded header gives them on any frame, so they break at one place
+   and stand in one place whether the frame is folded or open. */
 .graph-frame-counts {
   display: flex;
   flex: 0 0 auto;
   flex-wrap: wrap;
   gap: 0 var(--space-2);
+  max-width: 236px;
 }
 
 .graph-frame-count {

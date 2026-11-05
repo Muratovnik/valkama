@@ -48,7 +48,7 @@ for (const [width, lang] of [
   [390, 'en'],
   [390, 'ru'],
 ] as const) {
-  test(`a frame keeps its title to two lines and cuts none of its counts at ${width}px in ${lang}`, async ({
+  test(`a frame keeps its title to three lines and cuts none of its counts at ${width}px in ${lang}`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 800 })
@@ -56,7 +56,7 @@ for (const [width, lang] of [
     await settled(page)
     const header = await longHeader(page)
     expect(header).toMatchObject({
-      clamp: '2',
+      clamp: '3',
       countsWhole: true,
       countsInside: true,
     })

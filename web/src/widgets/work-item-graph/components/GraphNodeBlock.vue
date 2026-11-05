@@ -53,8 +53,8 @@ const resting = computed(() => still || live?.state !== 'working')
       :data-tone="statePresentation('work-item-node-marker', markerState).tone"
     />
     <span class="flow-node-overview-reference"
-      >{{ reference
-      }}<span
+      ><span class="flow-node-overview-name">{{ reference }}</span
+      ><span
         v-if="live"
         class="work-dots flow-node-overview-live"
         aria-hidden="true"
@@ -100,6 +100,10 @@ const resting = computed(() => still || live?.state !== 'working')
    largest step, scaled with the drawing rather than set off the ramp. */
 .flow-node-overview-reference {
   position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: calc((100% + var(--space-6)) / 2.2);
   color: var(--color-text-on-action);
   font: var(--font-drawer-title);
   font-weight: 700;
@@ -109,8 +113,17 @@ const resting = computed(() => still || live?.state !== 'working')
   transform-origin: left center;
 }
 
-/* After the reference, grown with it. */
+.flow-node-overview-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* After the reference, grown with it; they give way before it does. */
 .flow-node-overview-live {
+  flex: 0 1000 auto;
+  min-width: 0;
   margin-inline-start: var(--space-1);
+  overflow: hidden;
 }
 </style>

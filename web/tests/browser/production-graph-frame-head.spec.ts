@@ -48,6 +48,11 @@ function item(n: number, key: string, overrides: Partial<WorkItemBrief> = {}): W
 const LONG_TITLE =
   'Reconcile the release notes with what the installer actually ships to the desktop'
 
+/** The longest reference the read model takes, on a card. */
+const LONG_REFERENCE = 'LONGKEYS-123456789'
+/** An ordinary reference, on a card with work live on it. */
+const LIVE_REFERENCE = 'MAIN-123'
+
 /** An open epic with two open tasks among finished ones: it starts open. */
 const OPEN = 1
 /** An open epic nothing was ever filed under. */
@@ -65,7 +70,9 @@ const repeat = (key: string, count: number) => Array.from({ length: count }, () 
 
 const SPACE: WorkItemBrief[] = [
   item(OPEN, 'dev', { kind: 'epic', container: true, title: LONG_TITLE }),
-  ...underEpic(OPEN, 2, ['todo', 'dev', 'done', 'done', 'done']),
+  item(2, 'todo', { parent_id: identity(OPEN), reference: LONG_REFERENCE }),
+  item(3, 'dev', { parent_id: identity(OPEN), reference: LIVE_REFERENCE }),
+  ...underEpic(OPEN, 4, ['done', 'done', 'done']),
   item(EMPTY, 'review', { kind: 'epic', title: LONG_TITLE }),
   item(FINISHED, 'dev', { kind: 'epic', container: true, title: 'Connect the release' }),
   ...underEpic(FINISHED, 21, repeat('done', 7)),
@@ -77,6 +84,8 @@ const SPACE: WorkItemBrief[] = [
     ...repeat('blocked', 12),
     ...repeat('backlog', 30),
   ]),
+  // The work under no epic, past the threshold, so it starts folded with its one button.
+  ...Array.from({ length: 25 }, (_, index) => item(400 + index, 'todo')),
 ]
 
 async function serveSpace(page: Page) {
@@ -88,6 +97,7 @@ async function serveSpace(page: Page) {
       body.workflow = model.workflow
       body.work_items = SPACE
       body.links = []
+      body.live_work = { [identity(3)]: { state: 'working' } }
     }
     await route.fulfill({
       status: response.status,
@@ -115,9 +125,11 @@ async function openField(page: Page, width = 1500) {
 const PARTS = [
   '.graph-frame-reference',
   '.graph-frame-title',
-  '.graph-frame-count',
+  '.graph-frame-counts .graph-frame-count',
   '.frame-progress',
 ]
+/** And the work moving under a frame that has some. */
+const LIVE_PARTS = [...PARTS, '.graph-frame-working']
 
 /** The top left of each part, from the frame's own, in the field's units. */
 async function headerPlaces(frame: Locator) {
@@ -131,7 +143,7 @@ async function headerPlaces(frame: Locator) {
         return found ? [[part, { x: (found.x - box.x) / scale, y: (found.y - box.y) / scale }]] : []
       }),
     )
-  }, PARTS)
+  }, LIVE_PARTS)
 }
 
 type Places = Awaited<ReturnType<typeof headerPlaces>>
@@ -164,9 +176,9 @@ for (const width of [1500, 390]) {
     const open = await headerPlaces(frame)
     await toggleAndSettle(page, OPEN)
     await expect(frame).toHaveClass(/folded/u)
-    expectSamePlaces(open, await headerPlaces(frame), PARTS)
+    expectSamePlaces(open, await headerPlaces(frame), LIVE_PARTS)
     await toggleAndSettle(page, OPEN)
-    expectSamePlaces(open, await headerPlaces(frame), PARTS)
+    expectSamePlaces(open, await headerPlaces(frame), LIVE_PARTS)
   })
 
   test(`an epic with no tasks says so, draws no edge and offers nothing to open at ${width}px`, async ({
@@ -250,16 +262,16 @@ test('work the view hides is still counted, and is offered once the view can dra
 
 test('a filter that finds nothing in an epic draws no «no tasks» for it', async ({ page }) => {
   await openField(page)
-  await page.getByPlaceholder('Номер или название').fill('MAIN-3')
+  await page.getByPlaceholder('Номер или название').fill(LIVE_REFERENCE)
   await expect(page.locator('.graph-flow .flow-node-card')).toHaveCount(1)
   await expect(page.getByText('Нет задач', { exact: true })).toHaveCount(0)
   // The frame the filter found its card in still counts its whole epic.
-  await expect(frameOf(page, OPEN).locator('.graph-frame-count').first()).toHaveText(
-    '3 из 5 выполнено',
-  )
+  await expect(
+    frameOf(page, OPEN).locator('.graph-frame-counts .graph-frame-count').first(),
+  ).toHaveText('3 из 5 выполнено')
 })
 
-test('a header gives its title two lines of the card’s width and keeps the rest in its names', async ({
+test('a header gives its title three lines of the card’s width and keeps the rest in its names', async ({
   page,
 }) => {
   await openField(page)
@@ -273,9 +285,11 @@ test('a header gives its title two lines of the card’s width and keeps the res
       width: html.offsetWidth,
     }
   })
-  expect(shape.lines).toBe(2)
-  // Past the 80px the row beside the reference and the state used to leave it.
+  // This title's eighty letters stand whole, where the row beside the reference
+  // and the state used to leave it 80px.
+  expect(shape.lines).toBe(3)
   expect(shape.width).toBeGreaterThan(200)
+  expect(await title.evaluate((element) => element.scrollHeight <= element.clientHeight)).toBe(true)
   await expect(title).toHaveAttribute('title', LONG_TITLE)
 })
 
@@ -352,4 +366,86 @@ test('zoomed out, a header is its reference and edge, in one place folded and op
   const empty = frameOf(page, EMPTY)
   await expect(empty.locator('.graph-frame-reference')).toBeVisible()
   await expect(empty.locator('.frame-progress')).toHaveCount(0)
+})
+
+test('a folded epic says what it hides, counted by the epic and not by a filter', async ({
+  page,
+}) => {
+  await openField(page)
+  const frame = frameOf(page, CROWDED)
+  await expect(frame.locator('.graph-frame-inside')).toHaveText('66 открытых внутри')
+  await expect(foldOf(page, CROWDED)).toHaveAccessibleName(/ · 66 открытых внутри$/u)
+  await expect(frame.locator('button.graph-frame-open')).toHaveAccessibleName(
+    /· 66 открытых внутри$/u,
+  )
+  // A filter opens the frame it found work in; folded again, it counts the epic.
+  await page.getByPlaceholder('Номер или название').fill('MAIN-225')
+  await expect(page.locator('.graph-frame')).toHaveCount(1)
+  await toggleAndSettle(page, CROWDED)
+  await expect(frame).toHaveClass(/folded/u)
+  await expect(frame.locator('.graph-frame-inside')).toHaveText('66 открытых внутри')
+})
+
+/** How far up and down a line through the header's left a press reaches its button. */
+async function targetOf(frame: Locator, target: string) {
+  return frame.evaluate((element, id) => {
+    const box = element.getBoundingClientRect()
+    const scale = box.width / (element as HTMLElement).offsetWidth
+    const x = box.left + 6 * scale
+    let height = 0
+    for (let y = box.top - 80 * scale; y < box.top + 300 * scale; y += 0.25) {
+      const hit = document.elementFromPoint(x, y)
+      if (hit?.closest<HTMLElement>('[data-walk-target]')?.dataset.walkTarget === id) height += 0.25
+    }
+    return { field: height / scale, screen: height, scale }
+  }, target)
+}
+
+test('zoomed far out, a header is a target as tall as it stands with the air round it', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1500, height: 900 })
+  await openField(page)
+  await zoomOutToOverview(page)
+  const zoomOut = page.getByRole('button', { name: 'Отдалить', exact: true })
+  await expect(async () => {
+    await zoomOut.click()
+    await expect(page.locator('.graph-frame.far').first()).toBeVisible({ timeout: 300 })
+  }).toPass()
+  const folded = await targetOf(frameOf(page, CROWDED), `frame:${identity(CROWDED)}`)
+  const open = await targetOf(frameOf(page, OPEN), `frame:${identity(OPEN)}`)
+  // The header's 160, and of the 36 of air above and below it what no neighbour's
+  // target takes, in the field's own units.
+  expect(folded.field).toBeGreaterThanOrEqual(200)
+  expect(open.field).toBeGreaterThanOrEqual(200)
+  await expect(frameOf(page, CROWDED).locator('.graph-frame-inside')).toHaveText('+66')
+  const loose = page.locator('.graph-frame[data-frame="none"]')
+  await expect(loose.locator('.graph-frame-inside')).toHaveText('+25')
+  const looseTarget = await targetOf(loose, 'frame:none:fold')
+  expect(looseTarget.field).toBeGreaterThanOrEqual(200)
+  await expect(frameOf(page, CROWDED).locator('button.graph-frame-open')).toHaveAccessibleName(
+    /· 66 открытых внутри$/u,
+  )
+})
+
+test('zoomed out, a card keeps the longest reference inside itself', async ({ page }) => {
+  await openField(page)
+  await zoomOutToOverview(page)
+  const card = page.locator(`.flow-node-card[data-walk-target="${identity(2)}"]`)
+  const inside = await card.evaluate((element) => {
+    const box = element.getBoundingClientRect()
+    const reference = element.querySelector('.flow-node-overview-reference')
+    const drawn = reference?.getBoundingClientRect()
+    return drawn !== undefined && drawn.right <= box.right
+  })
+  expect(inside).toBe(true)
+  await expect(card).toHaveAccessibleName(new RegExp(`^${LONG_REFERENCE} `, 'u'))
+  // An ordinary reference stands whole beside its working dots.
+  const name = page
+    .locator(`.flow-node-card[data-walk-target="${identity(3)}"]`)
+    .locator('.flow-node-overview-name')
+  // Within the pixel an integer width rounds off, as the suite's clipping check allows.
+  expect(await name.evaluate((element) => element.scrollWidth - element.clientWidth)).toBeLessThan(
+    2,
+  )
 })

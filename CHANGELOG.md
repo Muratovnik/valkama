@@ -138,14 +138,19 @@ checkouts are therefore distinguishable even at the same version.
 
 - **An epic's header on the graph no longer moves when it folds or opens.** The two views
   had two heights, so the text and the progress edge stood in different places in each.
-  The header is now one height, the height of a card, folded or open.
-- **An epic's title has room on the graph.** It stands on its own two lines under the
+  The header is now one height, folded or open.
+- **An epic's title has room on the graph.** It stands on up to three lines of its own under the
   reference and the state, as a card's does, instead of the 80 pixels left beside them.
 - **An epic with no tasks says «No tasks» on the graph,** with no empty progress edge and
   no chevron, in place of «0 of 0 done». A frame whose work the view hides keeps its
   counts and edge and offers no chevron until the view can draw that work; a stored
   «open» for such a frame is ignored and kept for when it can.
-
+- **A folded epic on the graph says what it hides.** Its header reads «90 open inside»,
+  «90 inside» zoomed out and «+90» far out, counted by the epic and not by a filter, with
+  the sheets of a stack under it; the keyboard and the accessible name say the same.
+- **An epic's header on the graph is easier to hit from far away.** It is taller, and
+  zoomed out the whole band and the air round it are one target, 24 pixels on the
+  screen down to a zoom of 0.104.
 - **Tabbing into the graph no longer moves the camera the operator set.** The keyboard
   entered on the first target whose centre was in sight, and pressing it centred the
   camera on it if the edge of the field cut it. It now enters on a target wholly in sight.

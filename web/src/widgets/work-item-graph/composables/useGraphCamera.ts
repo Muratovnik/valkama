@@ -45,6 +45,8 @@ import type { Box } from '@/widgets/work-item-graph/utils/graphWalk.ts'
  * chain is then a map of where the work stands, not a grid of grey specks.
  */
 const OVERVIEW_ZOOM = 0.5
+/** Below this the overview's grown words are under 10px on a screen, so a header says less, larger. */
+const FAR_ZOOM = 0.25
 
 /**
  * The last camera a field stood at, and the scope it stood on. Module-level on
@@ -179,6 +181,7 @@ export function useGraphCamera(input: CameraInput) {
 
   /** Zoomed out past reading: cards are blocks and headers bands, their folds hidden. */
   const overview = computed(() => (viewport?.value.zoom ?? 1) < OVERVIEW_ZOOM)
+  const far = computed(() => (viewport?.value.zoom ?? 1) < FAR_ZOOM)
 
   return {
     fitted,
@@ -201,6 +204,7 @@ export function useGraphCamera(input: CameraInput) {
     }),
     /** «Fit whole graph». */
     fitOptions: graphFitViewOptions(),
+    far,
     holdFrame,
     overview,
     onFlowInit: () => {

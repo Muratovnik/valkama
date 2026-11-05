@@ -63,12 +63,14 @@ export const NODE_HEIGHT = 112
 export const MARGIN = 24
 
 /**
- * A frame's header, the same one folded or open: folding changes what stands
- * under it and nothing in it. A card's height, which holds what a card holds —
- * its reference line, two lines of title and what stands at its foot — with the
- * progress edge beside that.
+ * A frame's header, the same one folded or open and at every zoom: folding
+ * changes what stands under it and nothing in it, and the layout's room for it
+ * is what is drawn. It holds the reference line, three lines of title, the counts,
+ * what a fold hides and the progress edge, and it is tall enough to hit from far
+ * off: with the air round it its target (`GraphFrame`) stays 24px on a screen
+ * down to a zoom of 0.104.
  */
-export const FRAME_HEADER = 112
+export const FRAME_HEADER = 160
 /** The air between an open frame's edge and the work inside it. */
 export const FRAME_PADDING = 16
 /** A folded frame is its header alone, a little wider than a card so its counts fit. */

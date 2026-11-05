@@ -135,7 +135,7 @@ describe('a frame with live work under it', () => {
     const wrapper = frame(2)
     expect(wrapper.get('.graph-frame-working').text().replaceAll(/\s+/gu, ' ')).toBe('2 работают')
     expect(wrapper.get('button.graph-frame-open').attributes('aria-label')).toBe(
-      'Эпик MAIN-12 «Frames» · 1 из 3 выполнено · 2 в работе · 2 работают',
+      'Эпик MAIN-12 «Frames» · 1 из 3 выполнено · 2 в работе · 2 открытых внутри · 2 работают',
     )
   })
 
