@@ -67,7 +67,17 @@ const kindOptions = computed(() =>
   WORK_ITEM_KINDS.map((value) => ({ value, label: t(`workItem.kind.${value}`) })),
 )
 const priorityOptions = computed(() =>
-  PRIORITIES.map((value) => ({ value, label: t(`priority.${value}`) })),
+  PRIORITIES.map((value) => {
+    const label = t(`priority.${value}`)
+    return {
+      value,
+      label,
+      title: t('priorityMeaning.hint', {
+        priority: label,
+        meaning: t(`priorityMeaning.meaning.${value}`),
+      }),
+    }
+  }),
 )
 
 const parentValid = computed(

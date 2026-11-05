@@ -157,6 +157,12 @@ Steps of the same change stay on the checklist; a link is for separate work.
 `after:MAIN-12`, naming an item in the same state. Placing an item first is
 what makes it next; priority only breaks a tie.
 
+**Priority.** `urgent`: blocks work or loses data. `high`: serious; could block
+work. `medium`: noticeably affects work, with a workaround. `low`: minor. A label
+is not a scale. How much an item matters goes in priority and what comes next
+goes in rank. Asked to rate work along something an item has no field for, ask
+the owner how it maps before writing it to many items.
+
 **Reading.** `get_work_item` returns the item with the 5 threads that saw the
 newest activity, its newest events and the sessions that wrote to it. Each root
 carries `replies`, how many it has, and `last_reply`, the newest one, so a reply

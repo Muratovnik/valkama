@@ -57,6 +57,17 @@ class PlanningCatalogueTests(unittest.TestCase):
         self.assertIn("source", schema["properties"])
         self.assertEqual("string", schema["properties"]["source"]["type"])
 
+    def test_both_write_schemas_define_every_priority_level(self) -> None:
+        # A level added to model.PRIORITIES without a definition in the schema
+        # fails here, on both tools that accept it.
+        for name in ("create_work_item", "update_work_item"):
+            with self.subTest(tool=name):
+                schema = next(tool for tool in planning_tools.TOOLS if tool["name"] == name)
+                priority = schema["inputSchema"]["properties"]["priority"]
+                self.assertEqual(list(model.PRIORITIES), priority["enum"])
+                for level in model.PRIORITIES:
+                    self.assertRegex(priority["description"], rf"\b{level}\b", msg=level)
+
 
 class PlanningToolCallTests(unittest.TestCase):
     """The neutral tools must reach the same boundary the HTTP surface uses."""

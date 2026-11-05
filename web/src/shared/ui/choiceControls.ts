@@ -22,6 +22,8 @@ export interface ChoiceOption {
   description?: string
   disabled?: boolean
   icon?: ControlIconName
+  /** A hover hint on the option and on the chosen value; it is not drawn. */
+  title?: string
 }
 
 export interface ChoiceValueCodec {

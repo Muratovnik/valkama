@@ -13,6 +13,7 @@ import { memoryProviderMessages } from '@/shared/i18n/memoryProviderMessages.ts'
 import { openMessages } from '@/shared/i18n/openMessages.ts'
 /* English copy; tests/i18n.test.ts enforces parity with Russian keys. */
 import { platformIntegrationMessages } from '@/shared/i18n/platformIntegrationMessages.ts'
+import { priorityMessages } from '@/shared/i18n/priorityMessages.ts'
 import { richTextMessages } from '@/shared/i18n/richTextMessages.ts'
 import { settingsMessages } from '@/shared/i18n/settingsMessages.ts'
 import { timeMessages } from '@/shared/i18n/timeMessages.ts'
@@ -26,6 +27,7 @@ import { workItemPreviewMessages } from '@/shared/i18n/workItemPreviewMessages.t
 
 export const en = {
   workItemLink: workItemLinkMessages.en.workItemLink,
+  priorityMeaning: priorityMessages.en.priorityMeaning,
   history: activityMessages.en.history,
   alerts: alertMessages.en.alerts,
   open: openMessages.en.open,

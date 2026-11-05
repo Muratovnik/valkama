@@ -47,9 +47,30 @@ describe('FacetMarks', () => {
     // The word is in the DOM, visually hidden, and the hover text says it too.
     expect(priority.get('.facet-word').text()).toBe('Urgent')
     expect(priority.get('.facet-word').classes()).toContain('facet-word-hidden')
-    expect(priority.attributes('title')).toBe('Urgent')
+    expect(priority.attributes('title')).toBe('Urgent — blocks work or loses data')
     expect(priority.find('svg').exists()).toBe(true)
     expect(wrapper.get('[data-facet="kind"] .facet-word').text()).toBe('Bug')
+  })
+
+  it('says what each priority means after its name on hover, in both languages', () => {
+    const hovers = [
+      ['en', 'urgent', 'Urgent — blocks work or loses data'],
+      ['en', 'high', 'High — serious; could block work'],
+      ['en', 'medium', 'Medium — noticeably affects work, with a workaround'],
+      ['en', 'low', 'Low — minor'],
+      ['ru', 'urgent', 'Срочный — блокирует работу или теряет данные'],
+      ['ru', 'high', 'Высокий — серьёзно, может заблокировать'],
+      ['ru', 'medium', 'Средний — заметно влияет, есть обход'],
+      ['ru', 'low', 'Низкий — мелочь'],
+    ] as const
+    for (const [locale, priority, hover] of hovers) {
+      // The card prints every level as a word, so each level has a mark to hover.
+      const mark = marks(
+        { item: boardItem(1, 'backlog', { priority }), surface: 'card', facets: ['priority'] },
+        locale,
+      ).get('[data-facet="priority"]')
+      expect(mark.attributes('title'), `${locale} ${priority}`).toBe(hover)
+    }
   })
 
   it('takes each tone from the state owner: urgent is danger, high warning, a kind none', () => {
@@ -195,7 +216,9 @@ describe('FacetMarks', () => {
       await glyph.trigger('click')
     }
     // The glyph keeps its word as the pointer's hover text, not a filter's name.
-    expect(wrapper.get('[data-facet="priority"]').attributes('title')).toBe('High')
+    expect(wrapper.get('[data-facet="priority"]').attributes('title')).toBe(
+      'High — serious; could block work',
+    )
     expect(wrapper.emitted('filter')).toBeUndefined()
     await wrapper.get('.label-chip').trigger('click')
     expect(wrapper.emitted('filter')).toEqual([[{ facet: 'labels', value: 'ui' }]])

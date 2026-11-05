@@ -129,6 +129,7 @@ function updateOpen(value: boolean) {
               <strong
                 class="choice-title"
                 :class="{ placeholder: !selected }"
+                :title="selected?.title"
                 >{{ selected?.label || placeholder }}</strong
               >
               <small
@@ -185,6 +186,7 @@ function updateOpen(value: boolean) {
               :value="optionToken(option.value)"
               :disabled="option.disabled"
               :text-value="`${option.label} ${option.description ?? ''}`"
+              :title="option.title"
             >
               <ControlIcon
                 v-if="option.icon"

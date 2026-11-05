@@ -38,6 +38,11 @@ checkouts are therefore distinguishable even at the same version.
   differs from its lockfile, says in which directory `npm ci` is needed, and no longer
   reports this as a failed step. Console messages in a step's summary are read in the
   console's code page instead of coming out garbled.
+- **Priority means how much an item matters, and rank sets the order.** Urgent blocks work
+  or loses data; high is serious and could block work; medium noticeably affects work, with
+  a workaround; low is minor. The definitions show when you hover a priority on a card, a
+  tile, a list row or the chooser, and the tool schema and the agent skill say the same. The
+  values themselves are unchanged.
 - **The filter opens in its own field.** The «Filter» button is gone: a press in the field
   or `/` opens the menu of values at once, all groups in sight and the picked ones marked,
   and the empty field says it searches and filters. Tab and focus coming back from a card,

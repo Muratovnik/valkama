@@ -62,6 +62,14 @@ more arguments act on the new item in the same call, all or nothing:
 
 A refused claim, step or link creates nothing and spends no number.
 
+`priority` on `create_work_item` and `update_work_item` is how much the item
+matters, not when to do it:
+
+- `urgent`: blocks work or loses data
+- `high`: serious; could block work
+- `medium`: noticeably affects work, with a workaround
+- `low`: minor
+
 ## Steps
 
 A step is text, or `{"text": "…", "done": true}` for one already done, which is

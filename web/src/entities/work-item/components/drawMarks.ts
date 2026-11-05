@@ -134,6 +134,7 @@ function markProps(mark: FacetMark, run: MarkRun, whole: string, filters: boolea
   const glyphOnly = mark.form === 'glyph' && mark.glyph !== null
   // A glyph whose word may fold out of sight tells the pointer its word.
   const foldable = run.fold === true && mark.glyph !== null
+  const hover = name ?? (glyphOnly || foldable || mark.short ? whole : undefined)
   return {
     'key': `${mark.facet}:${mark.value}`,
     'type': filters ? 'button' : undefined,
@@ -142,7 +143,15 @@ function markProps(mark: FacetMark, run: MarkRun, whole: string, filters: boolea
     'data-kind': mark.ink,
     'data-active': active || undefined,
     'aria-label': name,
-    'title': name ?? (glyphOnly || foldable || mark.short ? whole : undefined),
+    // What a value means follows the name the hover already gives it. A preview
+    // is the tooltip's own content and brings no hover text of its own.
+    'title':
+      mark.hint === undefined || run.surface === 'preview'
+        ? hover
+        : run.words.say({
+            key: 'priorityMeaning.hint',
+            params: { priority: hover ?? whole, meaning: run.words.say(mark.hint) },
+          }),
     'tabindex': filters && run.tabbable === false ? -1 : undefined,
     'onClick': filter
       ? (event: MouseEvent) => {

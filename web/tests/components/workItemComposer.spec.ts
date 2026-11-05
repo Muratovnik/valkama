@@ -12,11 +12,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import WorkItemComposer from '@/features/work-item-compose/WorkItemComposer.vue'
 
 import { createWorkItem } from '@/shared/api/planningApi.ts'
-import { validateWorkItemRecord } from '@/shared/api/planningModel.ts'
+import { PRIORITIES, validateWorkItemRecord } from '@/shared/api/planningModel.ts'
 import { searchPlanningWorkItems } from '@/shared/api/planningSearchApi.ts'
 import { messages } from '@/shared/i18n/index.ts'
 
 import { workItem } from '../browser/planningFixtures.ts'
+import { present } from '../support/present.ts'
 
 vi.mock('@/shared/api/planningApi.ts', () => ({ createWorkItem: vi.fn() }))
 vi.mock('@/shared/api/planningSearchApi.ts', () => ({ searchPlanningWorkItems: vi.fn() }))
@@ -120,5 +121,62 @@ describe('WorkItemComposer description', () => {
     await wrapper.setProps({ open: false })
     await wrapper.setProps({ open: true })
     expect(wrapper.get<HTMLTextAreaElement>('textarea').element.value).toBe('')
+  })
+})
+
+describe('WorkItemComposer priority', () => {
+  afterEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  it('says what each level means on the chosen value and on each option, in both languages', async () => {
+    const cases = [
+      {
+        locale: 'en',
+        label: 'Priority',
+        options: [
+          ['Low', 'Low — minor'],
+          ['Medium', 'Medium — noticeably affects work, with a workaround'],
+          ['High', 'High — serious; could block work'],
+          ['Urgent', 'Urgent — blocks work or loses data'],
+        ],
+      },
+      {
+        locale: 'ru',
+        label: 'Приоритет',
+        options: [
+          ['Низкий', 'Низкий — мелочь'],
+          ['Средний', 'Средний — заметно влияет, есть обход'],
+          ['Высокий', 'Высокий — серьёзно, может заблокировать'],
+          ['Срочный', 'Срочный — блокирует работу или теряет данные'],
+        ],
+      },
+    ] as const
+    for (const { locale, label, options } of cases) {
+      const wrapper = mountComposer(locale)
+      const trigger = wrapper.get(`.choice-trigger[aria-label="${label}"]`)
+      // The chosen value starts at medium, the default the model gives.
+      expect(trigger.get('.choice-title').attributes('title'), locale).toBe(options[1]?.[1])
+      await trigger.trigger('keydown', { key: 'Enter' })
+      await flushPromises()
+      for (const [name, hover] of options) {
+        const option = present(
+          [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((item) =>
+            item.textContent?.includes(name),
+          ),
+          `${locale} option ${name}`,
+        )
+        expect(option.getAttribute('title'), `${locale} ${name}`).toBe(hover)
+      }
+      wrapper.unmount()
+    }
+  })
+
+  it('has a meaning for every priority level in both catalogues', () => {
+    for (const locale of ['en', 'ru'] as const) {
+      for (const level of PRIORITIES) {
+        expect(messages[locale].priorityMeaning.meaning[level], `${locale} ${level}`).toBeTruthy()
+      }
+    }
   })
 })

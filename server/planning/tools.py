@@ -74,6 +74,13 @@ _RANK = {
     " before:MAIN-12 or after:MAIN-12, naming an item in that same state. The order"
     " is the one the board shows and claim_ready_work_item takes work in.",
 }
+#: The four levels of `priority`, each defined; a level added to model.PRIORITIES
+#: must be defined here, which the schema test checks.
+_PRIORITY_MEANING = (
+    "How much the item matters, not when to do it: urgent blocks work or loses data;"
+    " high is serious and could block work; medium noticeably affects work, with a"
+    " workaround; low is minor. Order is rank."
+)
 _VERBOSE = {
     "type": "boolean",
     "description": "Answer with the full work item instead of the short acknowledgement.",
@@ -213,7 +220,11 @@ TOOLS = [
             "title": _STR,
             "state": _STATE,
             "kind": {"type": "string", "enum": sorted(model.WORK_ITEM_KINDS)},
-            "priority": {"type": "string", "enum": list(model.PRIORITIES)},
+            "priority": {
+                "type": "string",
+                "enum": list(model.PRIORITIES),
+                "description": _PRIORITY_MEANING,
+            },
             "description": _STR,
             "labels": _LABELS,
             "source": {
@@ -397,7 +408,11 @@ TOOLS = [
                 " docs/plan.md#kb:a7f3. Update the existing marker without"
                 " changing the item's identity or copying plan text into it.",
             },
-            "priority": {"type": "string", "enum": list(model.PRIORITIES)},
+            "priority": {
+                "type": "string",
+                "enum": list(model.PRIORITIES),
+                "description": _PRIORITY_MEANING,
+            },
             "labels": _LABELS,
             "kind": {"type": "string", "enum": sorted(model.WORK_ITEM_KINDS)},
             "parent": _REFERENCE,

@@ -251,6 +251,11 @@ export interface FacetMark {
   tone: SemanticStatePair
   /** The facet's value: a kind, a priority, a category, `ready`/`waiting`, a label. */
   value: string
+  /**
+   * What the value means, which the hover says after the mark's name; absent
+   * where a value has no meaning to state.
+   */
+  hint?: FacetText
   /** The kind whose own colour this mark's glyph and word are drawn in. */
   ink?: WorkItemBrief['kind']
   /**
@@ -382,6 +387,7 @@ function priorityMark(item: FacetSubject, { form, plain }: FacetRule): FacetMark
     form,
     glyph: PRIORITY_GLYPHS[item.priority],
     text: { key: `priority.${item.priority}` },
+    hint: { key: `priorityMeaning.meaning.${item.priority}` },
     tone: { dimension: 'work-item-priority', state: item.priority },
     filter: plain ? null : { facet: 'priority', value: item.priority },
     quiet: item.priority === 'medium',
