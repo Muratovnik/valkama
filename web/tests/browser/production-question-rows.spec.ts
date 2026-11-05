@@ -29,6 +29,12 @@ const answered = (fields: InputRequestField[], answers: Asked['answers'], own?: 
     resolved_at: '2026-10-24T12:00:00Z',
   }) satisfies Asked
 
+/** A question long enough to be held, under a description that stands above it. */
+const LONG_PROMPT = Array.from(
+  { length: 24 },
+  (_, index) => `Line ${index + 1} of what is asked, which goes on for a little while.`,
+).join('\n\n')
+
 /** Where the first line of text under this element stands, and how it is set. */
 const firstLine = (element: Locator) =>
   element.evaluate((root) => {
@@ -212,4 +218,82 @@ for (const width of WIDTHS) {
     await expect(detail).toHaveCount(0)
     expectRowStill(await readRow(row, scroller), before)
   })
+}
+
+/** The question's text, what stands above it and the card's scroller, in a card at this size. */
+async function openPrompt(page: Page, change: Asked, width: number, height: number) {
+  await page.setViewportSize({ width, height })
+  const { drawer, card } = await openQuestion(page, [asked(change)])
+  const prompt = card.locator('.request-prompt').first()
+  await expect(prompt.locator('.collapsible-toggle')).toBeVisible()
+  return {
+    above: drawer.locator('.description-copy'),
+    prompt,
+    scroller: drawer.locator('.drawer-frame-body'),
+    text: prompt.locator('.collapsible-text'),
+    toggle: prompt.locator('.collapsible-toggle'),
+  }
+}
+type Prompt = Awaited<ReturnType<typeof openPrompt>>
+
+/** Where the text's first line, what is above it and the scroller stand now. */
+async function readPrompt({ above, prompt, scroller, text }: Prompt) {
+  await settledBox(prompt)
+  const { x, y } = await box(above)
+  return { held: await firstLine(text), x, y, scrolled: await scrollTop(scroller) }
+}
+
+function expectPromptStill(
+  now: Awaited<ReturnType<typeof readPrompt>>,
+  before: typeof now,
+  what: string,
+) {
+  expectSameLine(now.held, before.held, `${what}: first line of the question`)
+  expectNear(now.x, before.x, `${what}: above, across`)
+  expectNear(now.y, before.y, `${what}: above, down`)
+  expectNear(now.scrolled, before.scrolled, `${what}: scroller`)
+}
+
+for (const width of WIDTHS) {
+  for (const [state, change] of [
+    ['waiting', { prompt: LONG_PROMPT }],
+    ['answered', { prompt: LONG_PROMPT, ...answered([routeField], { route: 'keep' }) }],
+  ] as [string, Asked][]) {
+    test(`a question's text opens and closes with all of it in view, ${state}, at ${width}`, async ({
+      page,
+    }) => {
+      const shown = await openPrompt(page, change, width, 3200)
+      const before = await readPrompt(shown)
+      await press(page, shown.toggle)
+      await expect(shown.toggle).toHaveAttribute('aria-expanded', 'true')
+      await expect(shown.text).toContainText('Line 24')
+      expectPromptStill(await readPrompt(shown), before, 'open')
+      await press(page, shown.toggle)
+      await expect(shown.toggle).toHaveAttribute('aria-expanded', 'false')
+      expectPromptStill(await readPrompt(shown), before, 'closed')
+    })
+
+    test(`a question's text opens with the card scrolled to it, ${state}, at ${width}`, async ({
+      page,
+    }) => {
+      const shown = await openPrompt(page, change, width, 844)
+      await shown.prompt.scrollIntoViewIfNeeded()
+      const y = await topOf(shown.prompt)
+      await shown.scroller.evaluate((node, by) => node.scrollBy(0, by), y - 200)
+      await settledBox(shown.prompt)
+      await expect(shown.toggle).toBeInViewport()
+      const before = await readPrompt(shown)
+      await press(page, shown.toggle)
+      await expect(shown.toggle).toHaveAttribute('aria-expanded', 'true')
+      await expect(shown.text).toContainText('Line 24')
+      expectPromptStill(await readPrompt(shown), before, 'open')
+      // Read down to its end and closed from there: the press stays in view, not lost above.
+      await shown.toggle.scrollIntoViewIfNeeded()
+      await settledBox(shown.toggle)
+      await press(page, shown.toggle)
+      await expect(shown.toggle).toHaveAttribute('aria-expanded', 'false')
+      await settledBox(shown.toggle)
+      await expect(shown.toggle).toBeInViewport()
+    })
+  }
 }
