@@ -410,12 +410,6 @@ for (const readDelay of [0, 500]) {
 }
 
 test('a read that answers at once never shows the waiting mark', async ({ page }) => {
-  // On a slower token, so that a busy machine's read still counts as answering at once.
-  await page.addInitScript(() => {
-    document.addEventListener('DOMContentLoaded', () => {
-      document.documentElement.style.setProperty('--duration-surface', '1s')
-    })
-  })
   const frames = await framesOfLink(page, 0)
   expect(frames.filter(({ waiting }) => waiting)).toEqual([])
 })

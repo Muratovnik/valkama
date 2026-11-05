@@ -2,9 +2,11 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { uiLoading } from '@/shared/api/platformUiState.ts'
 import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
 import { statePresentation } from '@/shared/lib/uiSystem.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
+import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
 import VButton from '@/shared/ui/VButton.vue'
 import VIcon from '@/shared/ui/VIcon.vue'
 
@@ -14,6 +16,11 @@ const props = withDefaults(
     compact?: boolean
     emptyDescription?: string
     retryable?: boolean
+    /**
+     * When the wait began (`Date.now()`), for one that began before this panel was drawn,
+     * so the delay before it is shown is not counted twice.
+     */
+    since?: number
   }>(),
   {
     compact: false,
@@ -22,7 +29,28 @@ const props = withDefaults(
 )
 const emit = defineEmits<{ retry: [] }>()
 const { t, te } = useI18n()
-const reason = computed(() => ('reason' in props.state ? (props.state.reason ?? '') : ''))
+
+/**
+ * A read that answers quickly shows nothing, and a wait once shown stays long enough to
+ * be read: `loadingPresence` decides both. While the wait is not shown yet the panel
+ * stands with its box, its busy mark and its status text, and only the picture waits,
+ * so the place it holds does not collapse and grow back; and for the rest of the
+ * minimum after the wait ends, the panel goes on saying it is loading in place of what
+ * it was handed. A screen that hands this panel a wait gets the delay whatever it does,
+ * and the minimum as long as the panel stays; one whose own branch takes the panel away
+ * keeps that branch while the rule's `held` says so, as the workspace's stage does.
+ */
+const presence = useLoadingPresence(
+  () => props.state.status === 'loading',
+  () => props.since,
+)
+const LOADING = uiLoading<T>()
+const shownState = computed<PlatformUiState<T>>(() =>
+  presence.held.value && props.state.status !== 'loading' ? LOADING : props.state,
+)
+const pictureWaits = computed(() => shownState.value.status === 'loading' && !presence.shown.value)
+
+const reason = computed(() => ('reason' in shownState.value ? (shownState.value.reason ?? '') : ''))
 const reasonText = computed(() => (te(reason.value) ? t(reason.value) : reason.value))
 
 /**
@@ -36,7 +64,7 @@ const reasonText = computed(() => (te(reason.value) ? t(reason.value) : reason.v
  * while the operator was reading it.
  */
 const payload = computed<T | undefined>(() =>
-  'payload' in props.state ? props.state.payload : undefined,
+  'payload' in shownState.value ? shownState.value.payload : undefined,
 )
 
 /**
@@ -46,35 +74,39 @@ const payload = computed<T | undefined>(() =>
  * whole screen jumped 26px down and back every few seconds on a live board;
  * it is now announced to assistive technology alone.
  */
-const refreshInFlight = computed(() => props.state.status === 'degraded' && !reason.value)
+const refreshInFlight = computed(() => shownState.value.status === 'degraded' && !reason.value)
 
 /** A read that failed demands attention; every other state is a report. */
 const panelRole = computed(() =>
-  props.state.status === 'error' || props.state.status === 'permission-denied' ? 'alert' : 'status',
+  shownState.value.status === 'error' || shownState.value.status === 'permission-denied'
+    ? 'alert'
+    : 'status',
 )
 
 /** Absent rather than false, because `aria-busy="false"` is a claim and not a default. */
-const busyMark = computed(() => props.state.status === 'loading' || undefined)
+const busyMark = computed(() => shownState.value.status === 'loading' || undefined)
 
 /** A refusal is understood rather than broken, so it is marked with a check and not a warning. */
-const panelIcon = computed(() => (props.state.status === 'permission-denied' ? 'check' : 'info'))
+const panelIcon = computed(() =>
+  shownState.value.status === 'permission-denied' ? 'check' : 'info',
+)
 
 /**
  * A failure is marked with a danger disc, not with the information glyph: the app
  * has no error glyph, and "i" told the reader the failure was only information.
  */
 const failed = computed(
-  () => props.state.status === 'error' || props.state.status === 'unavailable',
+  () => shownState.value.status === 'error' || shownState.value.status === 'unavailable',
 )
 </script>
 
 <template>
   <template v-if="payload !== undefined">
     <aside
-      v-if="state.status === 'degraded' && reason"
+      v-if="shownState.status === 'degraded' && reason"
       class="platform-state-banner"
       role="status"
-      :data-tone="statePresentation('platform-ui-state', state.status).tone"
+      :data-tone="statePresentation('platform-ui-state', shownState.status).tone"
     >
       <VIcon
         name="info"
@@ -101,7 +133,7 @@ const failed = computed(
        left-anchored icon and 68ch reason fell apart into three loose pieces
        across a wide table. -->
   <DataEmptyState
-    v-else-if="state.status === 'empty'"
+    v-else-if="shownState.status === 'empty'"
     :title="reasonText || t('platform.states.empty')"
     :description="emptyDescription"
     :compact="compact"
@@ -115,13 +147,13 @@ const failed = computed(
   <section
     v-else
     class="platform-state-panel"
-    :class="{ compact }"
-    :data-tone="statePresentation('platform-ui-state', state.status).tone"
+    :class="{ compact, waiting: pictureWaits }"
+    :data-tone="statePresentation('platform-ui-state', shownState.status).tone"
     :role="panelRole"
     :aria-busy="busyMark"
   >
     <span
-      v-if="state.status === 'loading'"
+      v-if="shownState.status === 'loading'"
       class="work-dots"
       aria-hidden="true"
       ><i /><i /><i
@@ -137,7 +169,7 @@ const failed = computed(
       :size="22"
     />
     <div class="platform-state-copy">
-      <h2 class="platform-state-title">{{ t(`platform.states.${state.status}`) }}</h2>
+      <h2 class="platform-state-title">{{ t(`platform.states.${shownState.status}`) }}</h2>
       <p
         v-if="reason"
         class="platform-state-reason"
@@ -151,7 +183,7 @@ const failed = computed(
          third column standing empty above it. -->
     <slot name="action">
       <VButton
-        v-if="retryable && (state.status === 'error' || state.status === 'unavailable')"
+        v-if="retryable && (shownState.status === 'error' || shownState.status === 'unavailable')"
         class="platform-state-retry"
         @click="emit('retry')"
       >
@@ -190,6 +222,12 @@ const failed = computed(
   &[aria-busy='true'] {
     padding-inline: 0;
     background: transparent;
+  }
+
+  /* A wait not long enough to be shown keeps its box and its words for assistive
+     technology, and paints nothing. */
+  &.waiting > * {
+    opacity: 0;
   }
 }
 

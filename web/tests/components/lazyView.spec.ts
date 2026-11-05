@@ -5,7 +5,8 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { messages } from '@/shared/i18n/index.ts'
-import { LAZY_VIEW_LOADING_DELAY_MS, lazyView } from '@/shared/ui/lazyView.ts'
+import { lazyView } from '@/shared/ui/lazyView.ts'
+import { LOADING_DELAY_MS, LOADING_MIN_SHOWN_MS } from '@/shared/ui/loadingPresence.ts'
 
 const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages })
 
@@ -61,7 +62,7 @@ describe('a lazy view downloads on demand without blanking or flickering', () =>
     expect(wrapper.text()).toBe('')
     calls[0]?.resolve()
     await flushPromises()
-    vi.advanceTimersByTime(LAZY_VIEW_LOADING_DELAY_MS)
+    vi.advanceTimersByTime(LOADING_DELAY_MS)
     await flushPromises()
 
     expect(view.ready.value).toBe(true)
@@ -75,13 +76,32 @@ describe('a lazy view downloads on demand without blanking or flickering', () =>
     const { calls, loader } = controlledLoader()
     const wrapper = mountView(lazyView(loader).component)
 
-    vi.advanceTimersByTime(LAZY_VIEW_LOADING_DELAY_MS - 1)
+    vi.advanceTimersByTime(LOADING_DELAY_MS - 1)
     await flushPromises()
     expect(wrapper.find('[aria-busy="true"]').exists()).toBe(false)
     vi.advanceTimersByTime(1)
     await flushPromises()
     expect(wrapper.get('[aria-busy="true"]').text()).toContain('Loading')
 
+    // Shown, it stays long enough to be read, however soon the download lands after it.
+    calls[0]?.resolve()
+    await flushPromises()
+    vi.advanceTimersByTime(LOADING_MIN_SHOWN_MS - 1)
+    await flushPromises()
+    expect(wrapper.get('[aria-busy="true"]').text()).toContain('Loading')
+    expect(wrapper.find('.downloaded').exists()).toBe(false)
+    vi.advanceTimersByTime(1)
+    await flushPromises()
+    expect(wrapper.find('[aria-busy="true"]').exists()).toBe(false)
+    expect(wrapper.find('.downloaded').exists()).toBe(true)
+  })
+
+  it('a download that lands well after the panel appeared shows the view at once', async () => {
+    const { calls, loader } = controlledLoader()
+    const wrapper = mountView(lazyView(loader).component)
+    vi.advanceTimersByTime(LOADING_DELAY_MS + LOADING_MIN_SHOWN_MS)
+    await flushPromises()
+    expect(wrapper.get('[aria-busy="true"]').text()).toContain('Loading')
     calls[0]?.resolve()
     await flushPromises()
     expect(wrapper.find('[aria-busy="true"]').exists()).toBe(false)
@@ -94,10 +114,12 @@ describe('a lazy view downloads on demand without blanking or flickering', () =>
     const { calls, loader } = controlledLoader()
     const late = lazyView(loader)
     late.prefetch()
-    vi.advanceTimersByTime(LAZY_VIEW_LOADING_DELAY_MS)
+    vi.advanceTimersByTime(LOADING_DELAY_MS)
     const wrapper = mountView(late.component)
     expect(wrapper.get('[aria-busy="true"]').text()).toContain('Loading')
     calls[0]?.resolve()
+    await flushPromises()
+    vi.advanceTimersByTime(LOADING_MIN_SHOWN_MS)
     await flushPromises()
     expect(wrapper.find('[aria-busy="true"]').exists()).toBe(false)
 
@@ -105,7 +127,7 @@ describe('a lazy view downloads on demand without blanking or flickering', () =>
     const second = controlledLoader()
     const early = lazyView(second.loader)
     early.prefetch()
-    vi.advanceTimersByTime(LAZY_VIEW_LOADING_DELAY_MS - 50)
+    vi.advanceTimersByTime(LOADING_DELAY_MS - 50)
     const partway = mountView(early.component)
     expect(partway.find('[aria-busy="true"]').exists()).toBe(false)
     vi.advanceTimersByTime(49)
@@ -126,7 +148,7 @@ describe('a lazy view downloads on demand without blanking or flickering', () =>
     expect(alert.text()).toContain('Could not load this view')
     expect(alert.text()).toContain('This part of the interface did not download.')
     // A late timer from the failed attempt must not turn the failure back into a wait.
-    vi.advanceTimersByTime(LAZY_VIEW_LOADING_DELAY_MS * 2)
+    vi.advanceTimersByTime(LOADING_DELAY_MS * 2)
     await flushPromises()
     expect(wrapper.find('[role="alert"]').exists()).toBe(true)
 

@@ -18,7 +18,7 @@
 import { onScopeDispose, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { LAZY_VIEW_LOADING_DELAY_MS } from '@/shared/ui/lazyView.ts'
+import { LOADING_DELAY_MS } from '@/shared/ui/loadingPresence.ts'
 import VButton from '@/shared/ui/VButton.vue'
 
 const props = defineProps<{
@@ -52,7 +52,7 @@ watch(
       () => {
         noticed.value = true
       },
-      props.drawn ? RELAYOUT_NOTICE_DELAY_MS : LAZY_VIEW_LOADING_DELAY_MS,
+      props.drawn ? RELAYOUT_NOTICE_DELAY_MS : LOADING_DELAY_MS,
     )
   },
   { immediate: true },

@@ -16,6 +16,7 @@ import type { PlatformPlanningPayload } from '@/shared/api/platformPlanningTypes
 import type { OperatingScope } from '@/shared/api/platformRoute.ts'
 import { uiReady } from '@/shared/api/platformUiState.ts'
 import { messages } from '@/shared/i18n/index.ts'
+import { LOADING_DELAY_MS } from '@/shared/ui/loadingPresence.ts'
 
 import { executionHistory } from '../browser/executionFixtures.ts'
 
@@ -90,7 +91,7 @@ describe('background work leaves what is drawn in place', () => {
       props: { drawn: false, failed: false, pending: true },
       global: { plugins: [i18n] },
     })
-    await vi.advanceTimersByTimeAsync(199)
+    await vi.advanceTimersByTimeAsync(LOADING_DELAY_MS - 1)
     expect(status.find('[role="status"]').exists()).toBe(false)
     await vi.advanceTimersByTimeAsync(1)
     expect(status.find('[role="status"]').exists()).toBe(true)

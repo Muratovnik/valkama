@@ -514,6 +514,14 @@ chrome.
   the view's bar and never the bar: the controls that say how the work is looked at are the
   operator's, not the data's, and a switch of space that took them away for the length of
   a read read as the view being lost. What the bar counts it says only once it has read it.
+- A wait is said only once it has lasted, and then long enough to be read: nothing for
+  the first 300 ms, and once shown at least 400 ms, whatever arrives meanwhile.
+  `web/src/shared/ui/loadingPresence.ts` holds both numbers and the rule;
+  `PlatformStatePanel` and the downloaded views follow it, and a screen whose own branch
+  takes the panel away keeps the branch while the rule says the wait is held. While it
+  is not shown, the panel keeps its box and its busy mark and paints nothing, so the
+  place does not collapse and grow back. A switch of space on a two-megabyte board reads
+  in about 170–200 ms, which is why the delay is not shorter.
 - Interface copy leads with the useful action, state, or cause. Do not append
   self-justifying capability disclaimers, restate the inverse state, or use
   vague quality claims. Name a concrete boundary only where it changes the

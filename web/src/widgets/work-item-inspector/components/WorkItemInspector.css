@@ -13,16 +13,3 @@
   justify-content: flex-end;
   margin-bottom: var(--space-3);
 }
-
-/* Most reads answer inside a frame or two, and a mark shown for that long is a flicker.
-   It is for a read that has kept the reader waiting. */
-.inspector-frame :deep(.platform-state-panel[aria-busy='true']) {
-  animation: inspector-read-waiting var(--duration-surface) var(--ease-out) var(--duration-surface)
-    backwards;
-}
-
-@keyframes inspector-read-waiting {
-  from {
-    opacity: 0;
-  }
-}

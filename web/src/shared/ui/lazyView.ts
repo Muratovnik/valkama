@@ -5,9 +5,9 @@
  * draw. A lazy view is that boundary, and it owns the three things a bare
  * `defineAsyncComponent` gets wrong here:
  *
- * - A fast download shows nothing at all. A spinner that lives for 30ms is a
- *   flicker, so the loading panel appears only once a download has run for
- *   `LAZY_VIEW_LOADING_DELAY_MS`.
+ * - A fast download shows nothing at all, and a slow one shows the loading panel
+ *   for long enough to be read: `loadingPresence` decides when, for this boundary
+ *   as for every other wait.
  * - A failed download says so with the product's own failure panel and a Retry,
  *   rather than leaving the space blank. `defineAsyncComponent` keeps the
  *   rejected request and hands it to every later mount, so nothing short of a
@@ -23,11 +23,10 @@ import type { Component, ShallowRef } from 'vue'
 
 import { uiError, uiLoading } from '@/shared/api/platformUiState.ts'
 import type { PlatformUiState } from '@/shared/api/platformUiState.ts'
+import { useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 
-/** How long a download runs before the loading panel takes its place. */
-export const LAZY_VIEW_LOADING_DELAY_MS = 200
-
+const LOADING = uiLoading()
 const FAILURE_REASON = 'platform.failures.viewDownloadFailed'
 
 export interface LazyView<C extends Component> {
@@ -84,47 +83,50 @@ export function lazyView<C extends Component>(loader: () => Promise<{ default: C
     inheritAttrs: false,
     setup(_props, { attrs, slots }) {
       const view = shallowRef<Component | null>(resident)
-      const state = shallowRef<PlatformUiState | null>(null)
-      let timer: ReturnType<typeof setTimeout> | undefined
+      const failure = shallowRef<PlatformUiState | null>(null)
+      const downloading = shallowRef(false)
+      // The delay is the download's, not this boundary's: one drawn after its download
+      // has already run that long, such as the graph the workspace held its stage for,
+      // says at once that it is loading instead of leaving the stage blank a second delay.
+      let since = 0
       let mounted = true
 
       function attempt() {
-        clearTimeout(timer)
-        state.value = null
+        failure.value = null
         const download = load()
-        // The delay is the download's, not this boundary's: one drawn after its download
-        // has already run that long, such as the graph the workspace held its stage for,
-        // says at once that it is loading instead of leaving the stage blank a second delay.
-        const waited = Date.now() - pendingSince
-        if (waited >= LAZY_VIEW_LOADING_DELAY_MS) state.value = uiLoading()
-        else
-          timer = setTimeout(() => {
-            state.value = uiLoading()
-          }, LAZY_VIEW_LOADING_DELAY_MS - waited)
-        download
-          .then(
-            (loaded) => {
-              if (mounted) view.value = loaded
-            },
-            (error: unknown) => {
-              if (!mounted) return
-              console.error(error)
-              state.value = uiError(FAILURE_REASON)
-            },
-          )
-          .finally(() => clearTimeout(timer))
+        since = pendingSince
+        downloading.value = true
+        download.then(
+          (loaded) => {
+            if (!mounted) return
+            view.value = loaded
+            downloading.value = false
+          },
+          (error: unknown) => {
+            if (!mounted) return
+            console.error(error)
+            failure.value = uiError(FAILURE_REASON)
+            downloading.value = false
+          },
+        )
       }
 
       if (view.value === null) attempt()
+      // Made once the first download is under way, so a view drawn after it has already
+      // run for the delay says so in its first frame.
+      const presence = useLoadingPresence(
+        () => downloading.value,
+        () => since,
+      )
       onBeforeUnmount(() => {
         mounted = false
-        clearTimeout(timer)
       })
 
       return () => {
+        if (presence.shown.value) return h(PlatformStatePanel, { state: LOADING, since })
         if (view.value !== null) return h(view.value, attrs, slots)
-        if (state.value === null) return null
-        return h(PlatformStatePanel, { state: state.value, onRetry: attempt })
+        if (failure.value === null) return null
+        return h(PlatformStatePanel, { state: failure.value, onRetry: attempt })
       }
     },
   })

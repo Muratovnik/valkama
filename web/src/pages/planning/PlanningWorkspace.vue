@@ -37,7 +37,7 @@ import type { WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import type { PlanningReadModel } from '@/shared/api/planningModel.ts'
 import { uiLoading } from '@/shared/api/platformUiState.ts'
 import DataEmptyState from '@/shared/ui/DataEmptyState.vue'
-import { LAZY_VIEW_LOADING_DELAY_MS } from '@/shared/ui/lazyView.ts'
+import { LOADING_DELAY_MS, useLoadingPresence } from '@/shared/ui/loadingPresence.ts'
 import PlatformStatePanel from '@/shared/ui/PlatformStatePanel.vue'
 import VButton from '@/shared/ui/VButton.vue'
 
@@ -112,7 +112,7 @@ watch(
       stageView.value = mode
       return
     }
-    releaseTimer = setTimeout(releaseGraph, LAZY_VIEW_LOADING_DELAY_MS)
+    releaseTimer = setTimeout(releaseGraph, LOADING_DELAY_MS)
     graphView.load().then(releaseGraph, releaseGraph)
   },
 )
@@ -211,8 +211,15 @@ const barGrouping = computed(() => (stageView.value === 'kanban' ? boardGrouping
  */
 const barExclusion = computed(() => census.exclusion.value)
 
+/**
+ * The stage stays the read's for as long as the read is shown: a read that answered just
+ * after it said so keeps saying it long enough to be read, and only then gives way.
+ * Taken straight from `reading`, the panel went the moment the read answered, however
+ * recently it had appeared.
+ */
+const { held: stageReading } = useLoadingPresence(() => props.reading === true)
 /** A view takes the stage once its space is read and a chain the route names is too. */
-const staged = computed(() => !props.reading && !props.chainPending)
+const staged = computed(() => !stageReading.value && !props.chainPending)
 const READING = uiLoading()
 
 /** A mark pressed outside the views — the card beside them — reaches the same filter. */
@@ -253,7 +260,7 @@ defineExpose({ toggleFilter })
     />
     <div class="workspace-stage">
       <PlatformStatePanel
-        v-if="reading"
+        v-if="stageReading"
         class="workspace-reading"
         :state="READING"
         compact

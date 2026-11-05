@@ -2,6 +2,7 @@ import { expect } from '@playwright/test'
 import type { Page, Route, TestInfo } from '@playwright/test'
 
 import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
+import { LOADING_DELAY_MS } from '@/shared/ui/loadingPresence.ts'
 
 import { installBackend } from './backend.ts'
 import { projectScope } from './planningFixtures.ts'
@@ -16,8 +17,6 @@ import { test } from './test.ts'
 
 const GRAPH_CHUNK = /\/assets\/GraphView-[\w-]+\.js$/
 const SETTINGS_CHUNK = /\/assets\/SettingsView-[\w-]+\.js$/
-/** `LAZY_VIEW_LOADING_DELAY_MS`, which a spec cannot import: its module imports a `.vue` file. */
-const LOADING_DELAY_MS = 200
 
 function shot(info: TestInfo, name: string) {
   return { path: info.outputPath(name), animations: 'disabled' as const }
