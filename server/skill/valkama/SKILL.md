@@ -88,6 +88,15 @@ Item and step claims are independent: a step's holder need not hold the item.
 and index to correct. Pass the `revision` of the last acknowledgement as
 `expected_revision` to refuse a stale write.
 
+**A response of their own in Claude Code's auto mode.** There, send Valkama calls
+in a response of their own, with no other tool beside them, and call the other
+tools in the next response. Valkama's hook adds your session to the input of each
+Valkama call, which changes that call after auto mode reviewed the response, and
+a call beside it that needs the review then gets no verdict: it fails with "another
+call in this response was changed by a hook". That says nothing about the failed
+call. Issue it again exactly as it was, in a response of its own, once you have
+seen the other results. Another client or permission mode needs no such care.
+
 **Refs.** `attach_work_item_ref` (or the `refs` group) records a `commit`, a
 `memory` record id materially used, or a `url`. Your own session needs no ref:
 Valkama records the session of every write.
