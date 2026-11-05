@@ -49,6 +49,11 @@
   --space-label-value: var(--space-2);
   --space-heading-content: var(--space-3);
 
+  /* The step an answer stands in from what it answers: a reply from its root, an answer from
+     its prompt, the part a point's answer opens from the point. One step, so a column of them
+     keeps two edges; the review's opened parts stood at 16px beside 12px replies and rows. */
+  --space-set-in: var(--space-3);
+
   /* Section rhythm is wider; label/value and heading/content stay at 8px/12px. */
   --space-section: var(--space-9);
 

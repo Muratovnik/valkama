@@ -459,7 +459,7 @@ defineExpose({ askOutcome, discussStep, revealQuestion })
 }
 
 .step-quote {
-  padding-inline-start: var(--space-3);
+  padding-inline-start: var(--space-set-in);
   margin: 0;
   border-inline-start: 1px solid var(--color-rule-strong);
   color: var(--color-text-muted);

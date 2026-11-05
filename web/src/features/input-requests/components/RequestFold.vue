@@ -169,7 +169,7 @@ const closing = computed(() => {
   display: grid;
   gap: var(--space-3);
   min-width: 0;
-  padding-inline-start: var(--space-3);
+  padding-inline-start: var(--space-set-in);
   border-inline-start: 1px solid var(--color-rule-strong);
 }
 

@@ -229,7 +229,7 @@ function retryMark() {
   display: grid;
   gap: var(--space-3);
   min-width: 0;
-  padding: 0 0 0 var(--space-3);
+  padding: 0 0 0 var(--space-set-in);
   margin: 0;
   border-inline-start: 1px solid var(--color-rule-strong);
   list-style: none;

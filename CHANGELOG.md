@@ -176,6 +176,12 @@ checkouts are therefore distinguishable even at the same version.
   chosen with the keys does, instead of sending the next Tab to the top of the page. In the
   filter menu, the number of tasks in hand stands beside «Assigned»
   instead of at the menu's far edge.
+- **A review keeps one column of edges.** A group's heading put its chevron a few pixels
+  into the column and its title further in than anything else; the title now starts where
+  the rows do and the chevron ends the line after the count, pointing down while folded and
+  up while open. What a point's answer opens, its steps or its way, stood at a third edge
+  between them; it now starts under the point's words, and an answered review sets it in
+  by the step its reply is set in, the same step every reply and quote in the thread uses.
 - **An entry's time stands under its author on a phone, not in the middle of the line.**
   Where a question's or a comment's icons took the end of its head, the time that no longer
   fitted beside the name dropped to a line of its own and kept to the end of the words,

@@ -3,6 +3,12 @@
  * The points of a review under one heading, with how many of them are decided. Its heading
  * folds the group away and brings it back; it starts open and never folds by itself, so no
  * point is answered unseen. A run of points with no heading stands as it is.
+ *
+ * The heading's words start where its rows start, as the review's count above them does, and
+ * its chevron ends the line after the count, pointing down while the group is folded and up
+ * while it is open, as a thread's fold does. Before the words, the chevron drew its stroke
+ * four pixels into the column and put the words twenty-four pixels in, an edge nothing else
+ * in the column stands on.
  */
 import { useId } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -41,17 +47,17 @@ const bodyId = `${id}-body`
         :aria-expanded="open"
         @click="open = !open"
       >
-        <VIcon
-          class="request-group-glyph"
-          name="chevron-down"
-          :size="16"
-        />
         <span class="request-group-title">{{ title }}</span>
         <span
           v-if="total"
           class="request-group-count"
           >{{ t('requests.review.groupDecided', { done: decided, total }) }}</span
         >
+        <VIcon
+          class="request-group-glyph"
+          name="chevron-down"
+          :size="16"
+        />
       </button>
     </SectionHeading>
     <div
@@ -101,10 +107,10 @@ const bodyId = `${id}-body`
 .request-group-glyph {
   flex: none;
   align-self: center;
-  rotate: -90deg;
+  color: var(--color-text-muted);
 
   [aria-expanded='true'] > & {
-    rotate: 0deg;
+    rotate: 180deg;
   }
 }
 

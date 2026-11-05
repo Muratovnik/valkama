@@ -252,6 +252,6 @@ function wordOf(field: InputRequestField) {
 
 /* What a point's answer opened stands under it, set in as an answer to it. */
 .request-summary-under {
-  margin-inline-start: var(--space-4);
+  margin-inline-start: var(--space-set-in);
 }
 </style>

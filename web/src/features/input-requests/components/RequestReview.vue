@@ -271,8 +271,9 @@ defineExpose({ focusField, undecided: computed(() => undecided.value.length) })
   font: var(--font-strong);
 }
 
-/* What a point's answer opens stands under it, set in as an answer to it. */
+/* What a point's answer opens stands under it, set in as an answer to it: by the step the
+   point's own words stand in from its edge, so the opened rows start under those words. */
 .request-review-under {
-  margin-inline-start: var(--space-4);
+  margin-inline-start: var(--space-set-in);
 }
 </style>
