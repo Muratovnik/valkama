@@ -53,6 +53,9 @@ const RULES = 'Instructions'
 const CODE = 'Valkama: code'
 const SMALL = 'Lab and small things'
 
+export const REVIEW_PROMPT =
+  'Decisions on the review of MAIN-7 from 05.11; the evidence and the risks are in the comments.'
+
 export const reviewFields: InputRequestField[] = [
   verdict('p1', 'P1 `shell-guard`: in auto mode refuse with a ready command', HOOKS, long('It')),
   verdict('p2', 'P2 MAIN-21: the identity hook keeps the decision of a neighbour call', HOOKS),
