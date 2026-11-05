@@ -717,8 +717,10 @@ The time between two neighbouring records of one transcript counts as work, exce
 | `gap` | what falls outside the server's liveness intervals, and everything between the last record of a run that fell and the next one |
 
 Waiting for a script counts, including a background command from its start to its
-notice, even when the turn ended meanwhile. A background command that never sends a
-notice counts only up to the end of its turn.
+notice, even when the turn ended meanwhile, for at most three hours from its own start: past
+that it is a server left running rather than a script anyone waits for, and the wait is left
+out as a turn's that ended. A background command that never sends a notice counts only up to
+the end of its turn.
 
 A server ticks once a minute. Ticks no more than 180 s apart make one liveness interval
 in a file beside the store, `<store>.liveness`: a gap in them means the machine was off

@@ -13,11 +13,13 @@ Time with no tick to read has no `gap` of its own but the limit of `liveness`, s
 closed while a reply was due reads as `external` there. It stays out of the work either way.
 
 A script counts: the gap from a tool call to its result does, and so does a background
-command from its start to its notice, even when the turn ended meanwhile. That second
-one is only known at the notice, and a command may end without one, as a server killed
-with its session does. So what a command's turn left out is kept in `pending` while one
-runs, and what its span covers turns into work when its notice arrives. Without a
-notice it stays left out: a background wait never reaches past a run's records.
+command from its start to its notice, even when the turn ended meanwhile, for at most
+`BACKGROUND_LIMIT_SECONDS` from its own start. That second one is only known at the notice,
+and a command may end without one, as a server killed with its session does. So what a
+command's turn left out is kept in `pending` while one runs, and what its span covers, up
+to its limit, turns into work when its notice arrives. Without a notice it stays left out:
+a background wait never reaches past a run's records. Past every running command's limit
+the wait is left out as it would be with none running: a turn that ended waits on a person.
 
 Time only moves forward. A record older than the newest one seen moves nothing, and one
 over `LATE_SECONDS` older changes no state either: a resume writes old records again
@@ -57,6 +59,11 @@ LEFT_OUT = (HUMAN, SUBAGENT, EXTERNAL, GAP)
 #: none ended between 600 s and 900 s; the 17 over 900 s had a median of 264 tokens.
 MODEL_WAIT_LIMIT_SECONDS = 600.0
 LATE_SECONDS = 60.0
+#: A background command counts as work for this long from its start and no longer. Of 729
+#: background Bash commands in transcripts, the median ran 354 s and the 99th percentile
+#: 10,601 s (2.9 h); one notice came 73.7 h after its start, from a server left running and
+#: not a script anyone waited for. A foreground call is bounded by the client's tool timeout.
+BACKGROUND_LIMIT_SECONDS = 3 * 3600.0
 #: A turn's end is written over a few records, hooks running between them. Of 2,224 ends
 #: followed by a stop hook's summary, the longest took 20 s, and of 805 followed by another
 #: reply, 3 took over a minute. A record later than this is not more of the ending: a person
@@ -187,6 +194,24 @@ class Clock:
             return WORK if lost else SUBAGENT
         return HUMAN
 
+    def _script_horizon(self) -> float:
+        """Until when a running background script still counts: the latest of their limits."""
+
+        return max(
+            (
+                float(entry["at"]) + BACKGROUND_LIMIT_SECONDS
+                for entry in self.background.values()
+                if self._counts_as_script(entry)
+            ),
+            default=float("-inf"),
+        )
+
+    def _script_waited(self, at: float) -> None:
+        """The wait for a background script, up to `at`: work within its limit, a person's past it."""
+
+        self._to(min(at, self._script_horizon()), WORK)
+        self._to(at, HUMAN)
+
     def _linked(self, links: Iterable[str]) -> str | None:
         """Which background call a notice is about, by either id it may name."""
 
@@ -206,7 +231,8 @@ class Clock:
         entry = self.background[call]
         script = self._counts_as_script(entry)
         if script:
-            self._reclaim(float(entry["at"]), at)
+            since = float(entry["at"])
+            self._reclaim(since, min(at, since + BACKGROUND_LIMIT_SECONDS))
         if final:
             del self.background[call]
             if not self._script_runs():
@@ -255,7 +281,7 @@ class Clock:
         script = self._counts_as_script(self.background[call])
         if self.phase in (_IDLE, _FINISHING):
             if script:
-                self._to(step.at, WORK)
+                self._script_waited(step.at)
         else:
             self._to(step.at, self._running_class(step.at))
         self._settle(call, step.at, step.final)
@@ -275,6 +301,8 @@ class Clock:
             self._settle(call, step.at, step.final)
             return
         script = call is not None and self._counts_as_script(self.background[call])
+        if script:
+            self._script_waited(step.at)
         self._input(step, WORK if script else SUBAGENT)
         self._settle(call, step.at, step.final)
 

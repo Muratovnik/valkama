@@ -9,7 +9,7 @@ from __future__ import annotations
 import itertools
 import unittest
 
-from server.telemetry.usage_clock import MODEL_WAIT_LIMIT_SECONDS
+from server.telemetry.usage_clock import BACKGROUND_LIMIT_SECONDS, MODEL_WAIT_LIMIT_SECONDS
 from tests.usage_fixtures import HOUR, MINUTE, Case, stamp
 
 
@@ -145,6 +145,56 @@ class BackgroundTests(Case):
         self.assertEqual(HOUR + 11 - 1, round(self.seconds()))
         self.assertEqual(0, round(self.run_row()["human_seconds"]))
 
+    def _command_notifying_at(self, notice: float) -> None:
+        """A background command started at 12 s in a turn that ended at 20 s, heard of at `notice`."""
+
+        run = self.session()
+        self.ticks((0, notice + HOUR))
+        run.prompt(0)
+        run.reply(10, tools=(("b1", "Bash"),), background=True)
+        run.background_result(12, "b1", "task-1")
+        run.end_turn(20)
+        run.system(21, "stop_hook_summary")
+        run.enqueue(notice, tool="b1", task="task-1")
+        run.notice(notice + 1, tool="b1", task="task-1")
+        run.end_turn(notice + 11)
+        self.read()
+
+    def test_a_background_command_counts_for_three_hours_at_most(self) -> None:
+        self.assertEqual(3 * HOUR, BACKGROUND_LIMIT_SECONDS)
+        self._command_notifying_at(5 * HOUR)
+        # To 12 s plus three hours, then the ten seconds after the notice.
+        self.assertEqual(12 + 3 * HOUR + 10, round(self.seconds()))
+        # The rest of the wait is left out as a turn that ended waiting is.
+        self.assertEqual(5 * HOUR - (12 + 3 * HOUR), round(self.run_row()["human_seconds"]))
+
+    def test_a_background_command_inside_the_limit_counts_whole(self) -> None:
+        self._command_notifying_at(2 * HOUR)
+        self.assertEqual(2 * HOUR + 10, round(self.seconds()))
+        self.assertEqual(0, round(self.run_row()["human_seconds"]))
+
+    def test_each_background_command_counts_its_limit_from_its_own_start(self) -> None:
+        run = self.session()
+        self.ticks((0, 7 * HOUR))
+        run.prompt(0)
+        run.reply(10, tools=(("b1", "Bash"),), background=True)
+        run.background_result(12, "b1", "task-1")
+        run.end_turn(20)
+        run.system(21, "stop_hook_summary")
+        # A person comes back two hours later while the first still runs, and starts a second.
+        run.prompt(2 * HOUR)
+        run.reply(2 * HOUR + 10, tools=(("b2", "Bash"),), background=True)
+        run.background_result(2 * HOUR + 12, "b2", "task-2")
+        run.end_turn(2 * HOUR + 20)
+        run.system(2 * HOUR + 21, "stop_hook_summary")
+        run.enqueue(6 * HOUR, tool="b1", task="task-1")
+        run.enqueue(6 * HOUR + 60, tool="b2", task="task-2")
+        self.read()
+        # The first counts to 12 s plus three hours, which takes in the person's two hours;
+        # the second to 2 h 12 s plus three hours. Nothing after that is work.
+        self.assertEqual(2 * HOUR + 12 + 3 * HOUR, round(self.seconds()))
+        self.assertEqual((6 * HOUR + 60) - (5 * HOUR + 12), round(self.run_row()["human_seconds"]))
+
     def test_a_person_talking_while_it_runs_changes_nothing(self) -> None:
         run = self.session()
         self.ticks((0, 3 * HOUR))
@@ -178,15 +228,16 @@ class BackgroundTests(Case):
 
     def test_a_background_wait_through_a_machine_off_counts_only_the_ticked_part(self) -> None:
         run = self.session()
-        self.ticks((0, 10 * MINUTE), (3 * HOUR, 3 * HOUR + 10 * MINUTE))
+        # Within the command's limit: off from ten minutes in to two and a half hours.
+        self.ticks((0, 10 * MINUTE), (150 * MINUTE, 160 * MINUTE))
         run.prompt(0)
         run.reply(10, tools=(("b1", "Bash"),), background=True)
         run.background_result(12, "b1", "task-1")
         run.end_turn(20)
-        run.enqueue(3 * HOUR + 5 * MINUTE, tool="b1", task="task-1")
+        run.enqueue(155 * MINUTE, tool="b1", task="task-1")
         self.read()
         self.assertEqual(10 * MINUTE + 5 * MINUTE, self.seconds())
-        self.assertEqual(3 * HOUR - 10 * MINUTE, round(self.run_row()["gap_seconds"]))
+        self.assertEqual(140 * MINUTE, round(self.run_row()["gap_seconds"]))
 
     def test_a_monitor_counts_up_to_its_last_event(self) -> None:
         run = self.session()

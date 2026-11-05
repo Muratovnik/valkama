@@ -19,7 +19,8 @@ checkouts are therefore distinguishable even at the same version.
   `GET /api/planning/session/usage` a session, with what no item took on a line of its own.
   Store schema 11 holds the rows, under a snapshot taken before the upgrade; no message or
   command text is kept, and existing transcripts are read too. The cost is an estimate, not
-  a bill.
+  a bill. A background command counts as work for three hours from its start at most, so a
+  server left running is not read as a script someone waited for.
 - **Task types have colours, and you can change them.** A type's icon and word are now
   purple for an epic, rose for a bug, turquoise for an improvement and grey-blue for a
   task, on the board, in the list, on the card, in search, on the hover card, on the
