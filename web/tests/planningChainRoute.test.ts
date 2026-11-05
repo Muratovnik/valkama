@@ -13,6 +13,7 @@ import {
   chainTarget,
   closedOf,
   groupingOf,
+  lookAcrossScopes,
   usePlanningChainScope,
   withBranch,
   withChain,
@@ -102,6 +103,40 @@ test('the grouping key names only an epic grouping, and leaves the address witho
   const grouped = withGrouping({ view: 'kanban', chain: 'MAIN-12' }, 'epic')
   assert.deepEqual(grouped, { view: 'kanban', chain: 'MAIN-12', group: 'epic' })
   assert.deepEqual(withGrouping(grouped, 'none'), { view: 'kanban', chain: 'MAIN-12' })
+})
+
+test('only how the operator is looking goes to another scope, and only as a value it can be', () => {
+  const state = {
+    view: 'graph',
+    group: 'epic',
+    query: 'gateway',
+    status: 'open',
+    chain: 'MAIN-12',
+    chain_scope: 'epic',
+    closed: true,
+    branch: 'MAIN-3',
+    ready: true,
+    held: true,
+    cat: 'active',
+    kind: 'bug',
+    pri: 'high',
+    labels: 'one',
+    holder: 'someone',
+  }
+  assert.deepEqual(lookAcrossScopes(state), { view: 'graph', group: 'epic' })
+  assert.deepEqual(lookAcrossScopes({ view: 'list' }), { view: 'list' })
+  // The defaults, and what could name nothing, leave the address without the key.
+  const looksLikeNothing: Parameters<typeof lookAcrossScopes>[0][] = [
+    undefined,
+    {},
+    { view: 'kanban' },
+    { view: 'atlas' },
+    { view: 3 },
+    { group: 'parent' },
+    { group: true },
+  ]
+  for (const none of looksLikeNothing)
+    assert.deepEqual(lookAcrossScopes(none), {}, JSON.stringify(none))
 })
 
 test('withChain writes both keys and removes both, leaving every other key alone', () => {

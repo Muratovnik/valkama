@@ -15,6 +15,8 @@ import { isNavigationFailure, NavigationFailureType } from 'vue-router'
 
 import { router } from '@/app/router.ts'
 
+import { lookAcrossScopes } from '@/pages/planning/composables/usePlanningChainScope.ts'
+
 import { documentPageAddress } from '@/shared/api/documentPage.ts'
 import type { DocumentPageAddress } from '@/shared/api/documentPage.ts'
 import type { ModuleId } from '@/shared/api/platformModuleContract.ts'
@@ -37,6 +39,13 @@ import { secureFetch } from '@/shared/api/secureFetch.ts'
 
 export const DEFAULT_ROUTE: PlatformRoute = { module_id: 'planning', scope: { kind: 'global' } }
 const CLEAN_ENTRY_PATHS = new Set(['/', '/index.html'])
+/**
+ * What a module keeps of its route state when the scope changes. The module knows which of
+ * its keys those are; the shell knows only whom to ask.
+ */
+const STATE_ACROSS_SCOPES = new Map<ModuleId, typeof lookAcrossScopes>([
+  ['planning', lookAcrossScopes],
+])
 
 /**
  * "/" with no query, which is how both the desktop shell and a bookmark arrive.
@@ -252,23 +261,34 @@ export function usePlatformNavigation(
     writeRoute({ module_id: moduleId, scope: operatingScope.value })
   }
 
+  /**
+   * A module's place in another scope, with what the module says goes along when the
+   * operator is already in it. It starts fresh otherwise: the state is the module's own.
+   */
+  function inScope(moduleId: ModuleId, scope: OperatingScope): PlatformRoute {
+    const carried =
+      route.value.module_id === moduleId
+        ? STATE_ACROSS_SCOPES.get(moduleId)?.(route.value.state)
+        : undefined
+    return carried && Object.keys(carried).length
+      ? { module_id: moduleId, scope, state: carried }
+      : { module_id: moduleId, scope }
+  }
+
   function switchScope(value: string) {
     const scope: OperatingScope =
       value === 'global'
         ? { kind: 'global' }
         : { kind: 'project', project_ref: { project_id: value.replace(/^project:/u, '') } }
-    writeRoute({ module_id: activeModule.value, scope })
+    writeRoute(inScope(activeModule.value, scope))
   }
 
   function goHome() {
-    writeRoute(DEFAULT_ROUTE)
+    writeRoute(inScope(DEFAULT_ROUTE.module_id, DEFAULT_ROUTE.scope))
   }
 
   function openProject(projectId: string, moduleId: ModuleId = 'planning') {
-    writeRoute({
-      module_id: moduleId,
-      scope: { kind: 'project', project_ref: { project_id: projectId } },
-    })
+    writeRoute(inScope(moduleId, { kind: 'project', project_ref: { project_id: projectId } }))
   }
 
   function updateModuleState(state: Record<string, string | number | boolean>) {

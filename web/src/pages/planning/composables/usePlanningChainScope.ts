@@ -1,5 +1,7 @@
 import { computed, onScopeDispose, shallowRef, watch } from 'vue'
 
+import type { PlanningViewMode } from '@/pages/planning/PlanningWorkspace.vue'
+
 import { fetchWorkItemChain } from '@/shared/api/planningChainApi.ts'
 import type { ChainScope, WorkItemChain } from '@/shared/api/planningChainApi.ts'
 import { WORK_ITEM_REFERENCE } from '@/shared/api/planningModel.ts'
@@ -62,9 +64,28 @@ export function chainTarget(state: RouteState | undefined): ChainTarget {
   return { status: 'chain', reference, scope }
 }
 
+/** The view as the route state carries it; anything else is the board. */
+export function viewOf(state: RouteState | undefined): PlanningViewMode {
+  const value = state?.view
+  return value === 'graph' || value === 'list' ? value : 'kanban'
+}
+
 /** The board's grouping as the route state carries it; anything else is none. */
 export function groupingOf(state: RouteState | undefined): 'epic' | 'none' {
   return state?.group === 'epic' ? 'epic' : 'none'
+}
+
+/**
+ * What of the route state goes with the operator to another scope: how they are looking,
+ * which is theirs. What they are looking at, a filter or a chain, belongs to the space it
+ * was set in. Defaults leave their key out, as everywhere in the state.
+ */
+export function lookAcrossScopes(state: RouteState | undefined): RouteState {
+  const view = viewOf(state)
+  return {
+    ...(view === 'kanban' ? {} : { view }),
+    ...withGrouping(undefined, groupingOf(state)),
+  }
 }
 
 /** The same state grouping the board so; the default leaves the key out. */

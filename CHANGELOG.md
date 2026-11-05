@@ -93,6 +93,10 @@ checkouts are therefore distinguishable even at the same version.
 
 ### Fixed
 
+- **Changing the space keeps the view you were in.** The board, the list or the graph, and the
+  board's grouping by epic, stay as they were when you pick another project, go through all
+  projects or open a project from there. A filter, an open card and a chain stay with the space
+  they were set in, and Back returns to it with all of them.
 - **A chain's rows in a card line up, and their titles can be read.** The «Waiting on» mark stood
   about 2px above the rest of its row and made that row taller, so the rows were spaced unevenly.
   Every cell of a row now stands on one line and rows of one line are one height. In a card at its

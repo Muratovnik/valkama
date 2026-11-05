@@ -25,7 +25,11 @@
 import { computed, onBeforeUnmount, ref, shallowRef, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { groupingOf, withGrouping } from '@/pages/planning/composables/usePlanningChainScope.ts'
+import {
+  groupingOf,
+  viewOf,
+  withGrouping,
+} from '@/pages/planning/composables/usePlanningChainScope.ts'
 import { usePlanningChainView } from '@/pages/planning/composables/usePlanningChainView.ts'
 import { usePlanningMoves } from '@/pages/planning/composables/usePlanningMoves.ts'
 import { usePlanningPortfolio } from '@/pages/planning/composables/usePlanningPortfolio.ts'
@@ -110,10 +114,7 @@ const {
  */
 const inspectorProjectId = computed(() => projectId.value ?? '')
 
-const view = computed<PlanningViewMode>(() => {
-  const value = props.route.state?.view
-  return value === 'graph' || value === 'list' ? value : 'kanban'
-})
+const view = computed<PlanningViewMode>(() => viewOf(props.route.state))
 // An address that opens on the graph downloads it beside the space read, not after it.
 watch(view, (mode) => mode === 'graph' && graphView.prefetch(), { immediate: true })
 const grouping = computed(() => groupingOf(props.route.state))
