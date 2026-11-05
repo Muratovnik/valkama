@@ -287,7 +287,12 @@ class PlatformHttpBoundaryTests(unittest.TestCase):
                 said = {"live_work": "after"}
                 deadline = time.monotonic() + 3
                 line = response.readline()
-                while not line.startswith(b"data: ") and time.monotonic() < deadline:
+                # The live-work frame comes as a named event: the read model is unnamed.
+                named = False
+                while (named or not line.startswith(b"data: ")) and time.monotonic() < deadline:
+                    named = line.startswith(b"event: ") or (
+                        named and not line.startswith(b"data: ")
+                    )
                     line = response.readline()
                 self.assertIn(b"after", line)
         finally:

@@ -854,17 +854,32 @@ class PlanningScopeHttpTests(unittest.TestCase):
             {"view": "planning", "project": "example-project", **self.refs[source]}
         )
 
-    def read_frame(self, response: http.client.HTTPResponse) -> dict:
-        for _ in range(20):
+    def read_frame(self, response: http.client.HTTPResponse, event: str = "message") -> dict:
+        """The next event of this name, as `EventSource` tells them apart: unnamed is `message`."""
+
+        name = "message"
+        for _ in range(40):
             line = response.readline()
-            if line.startswith(b"data: "):
-                return json.loads(line[6:])
+            if line.startswith(b"event: "):
+                name = line[7:].decode().strip()
+            elif line.startswith(b"data: "):
+                if name == event:
+                    return json.loads(line[6:])
+                name = "message"
             if line == b"":
                 raise AssertionError("Planning stream closed before its next snapshot")
         raise AssertionError("Planning stream did not publish the changed model")
 
     def test_exact_stream_reads_and_observes_attached_store_without_primary_fallback(self) -> None:
         self.bind("attached")
+        for path in (self.primary, self.attached):
+            with mock.patch.dict(os.environ, {"VALKAMA_DB": str(path)}):
+                conn = store.connect()
+                try:
+                    service.pin_work_item(conn, "SAME-1", True)
+                    conn.commit()
+                finally:
+                    conn.close()
         before = hashlib.sha256(self.attached.read_bytes()).digest()
         client = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=3)
         self.addCleanup(client.close)
@@ -875,6 +890,9 @@ class PlanningScopeHttpTests(unittest.TestCase):
         first = self.read_frame(response)
         self.assertEqual(["attached-only"], [item["title"] for item in first["work_items"]])
         self.assertEqual(before, hashlib.sha256(self.attached.read_bytes()).digest())
+        # The live-work frame is the primary store's, whichever store the stream follows.
+        live = self.read_frame(response, "live")
+        self.assertEqual(["primary-only"], [row["title"] for row in live["spaces"][0]["rows"]])
         with contextlib.closing(sqlite3.connect(self.attached)) as changed:
             changed.execute("UPDATE work_items SET title='External update'")
             changed.commit()

@@ -47,7 +47,7 @@ from .ops import configuration, desktop_app, doctor
 from .planning import agents as planning_agents
 from .planning import api as planning_api
 from .planning import calls as planning_calls
-from .planning import display_links
+from .planning import display_links, live_frame
 from .planning import exact_api as planning_exact_api
 from .planning import interactions as planning_interactions
 from .planning import model as planning_model
@@ -105,6 +105,51 @@ class EventFrames:
         return None
 
 
+#: How often a stream may compute the live-work frame at most.
+LIVE_FRAME_SECONDS = 2.0
+
+
+class LiveFrames:
+    """When a stream computes the live-work frame, and whether it sends what it got.
+
+    The frame reads every open item of the primary store, and agents write to it
+    several times a second, so a change does not compute it at once: it is
+    computed when the stream opens, then at most once every `LIVE_FRAME_SECONDS`,
+    a change that lands sooner waiting until they have passed. A frame equal to the
+    one sent last is not sent, so a reread that finds nothing new writes nothing.
+    """
+
+    def __init__(
+        self, clock: Callable[[], float] = time.monotonic, interval: float = LIVE_FRAME_SECONDS
+    ) -> None:
+        self._clock = clock
+        self._interval = interval
+        self._sent: str | None = None
+        self._computed: float | None = None
+        self._due = True
+
+    def changed(self) -> None:
+        """Something the frame may read changed, or the stream's reread came."""
+
+        self._due = True
+
+    def frame(self, compute: Callable[[], str]) -> bytes | None:
+        """The event to write now: when the frame is due, may be computed and differs."""
+
+        if not self._due:
+            return None
+        now = self._clock()
+        if self._computed is not None and now - self._computed < self._interval:
+            return None
+        self._due = False
+        self._computed = now
+        payload = compute()
+        if payload == self._sent:
+            return None
+        self._sent = payload
+        return f"event: live\ndata: {payload}\n\n".encode()
+
+
 # notifications (no id) are ignored on purpose
 
 
@@ -129,8 +174,9 @@ CONTENT_TYPES = {
 _FRAME_ANCESTORS = "frame-ancestors 'none'"
 _NOT_FRAMED = {"Content-Security-Policy": _FRAME_ANCESTORS, "X-Frame-Options": "DENY"}
 
-#: The views an event stream can carry, each Planning's own.
-_SSE_VIEWS = frozenset({"planning", "spaces", "activity"})
+#: The views an event stream can carry, each Planning's own. `live` carries only the
+#: live-work frame, for a page with no space stream to take it from.
+_SSE_VIEWS = frozenset({"planning", "spaces", "activity", "live"})
 
 
 def _require_sse_view(view: str) -> None:
@@ -1258,11 +1304,29 @@ class Handler(BaseHTTPRequestHandler):
             stream = watchers.WATCHERS.subscribe()
             cleanup.callback(watchers.WATCHERS.unsubscribe, stream)
             frames = EventFrames()
+            # The live-work frame is the primary store's, whatever space the stream follows.
+            live = LiveFrames(interval=LIVE_FRAME_SECONDS) if view in ("planning", "live") else None
             observed_version = source.execute("PRAGMA data_version").fetchone()[0]
+            primary_version = conn.execute("PRAGMA data_version").fetchone()[0]
             agents_seen = planning_agents.signal(source)
+
+            def send_live() -> bool:
+                if live is None:
+                    return False
+                chunk = live.frame(
+                    lambda: json.dumps(
+                        live_frame.frame(conn), ensure_ascii=False, separators=(",", ":")
+                    )
+                )
+                if chunk is not None:
+                    self.wfile.write(chunk)
+                    self.wfile.flush()
+                return chunk is not None
 
             def push() -> None:
                 current: object
+                if view == "live":
+                    return
                 if exact_parameters is not None:
                     # A fresh routing on every push: a binding moved while the
                     # stream is open refuses here and closes the stream.
@@ -1293,6 +1357,7 @@ class Handler(BaseHTTPRequestHandler):
 
             try:
                 push()
+                send_live()
                 last_read = time.monotonic()
                 while True:
                     changed = False
@@ -1302,15 +1367,20 @@ class Handler(BaseHTTPRequestHandler):
                     except queue.Empty:
                         pass
                     current_version = source.execute("PRAGMA data_version").fetchone()[0]
-                    if (
-                        changed
-                        or current_version != observed_version
-                        or time.monotonic() - last_read >= STREAM_REREAD_SECONDS
+                    current_primary = conn.execute("PRAGMA data_version").fetchone()[0]
+                    reread = time.monotonic() - last_read >= STREAM_REREAD_SECONDS
+                    if live is not None and (
+                        changed or reread or current_primary != primary_version
                     ):
+                        primary_version = current_primary
+                        live.changed()
+                    pushed = changed or current_version != observed_version or reread
+                    if pushed:
                         observed_version = current_version
                         last_read = time.monotonic()
                         push()
-                    else:
+                    # A read model's frames say when the stream is quiet; `live` has none.
+                    if not send_live() and (view == "live" or not pushed):
                         self.wfile.write(b": keep-alive\n\n")
                         self.wfile.flush()
             except (ui_state.PlatformHttpError, planning_model.StoreSchemaError):
