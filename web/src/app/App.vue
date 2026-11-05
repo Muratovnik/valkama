@@ -41,13 +41,7 @@ import type { ResolvedRef } from '@/shared/types/reference.ts'
 import ReferencePreview from '@/shared/ui/ReferencePreview.vue'
 
 const { t, te, locale } = useI18n()
-const {
-  act: actOnNotice,
-  current: currentNotice,
-  dismiss: dismissNotice,
-  message: notice,
-  say,
-} = useShellNotice()
+const { act: actOnNotice, current: currentNotice, dismiss: dismissNotice, say } = useShellNotice()
 
 function localizedFailure(failure: TypedFailure): string {
   const message = failureMessage(failure)
@@ -77,7 +71,10 @@ const {
 } = usePlatformNavigation(
   () => t('platform.route.notFound'),
   (part) =>
-    say(t(part === 'state' ? 'platform.route.stateDropped' : 'platform.route.queryDropped')),
+    say(
+      t(part === 'state' ? 'platform.route.stateDropped' : 'platform.route.queryDropped'),
+      'done',
+    ),
 )
 
 // The destination an address names starts downloading before the module list settles.
@@ -120,7 +117,7 @@ const {
   refreshing,
   refreshAll,
 } = usePlatformLiveFeed({
-  notice,
+  say,
   loadContext,
   refreshSurface: async () => {
     await nextTick()
@@ -160,7 +157,7 @@ const { availableProjectResources, selectedResourceRef, selectResource } = usePr
   contextReady,
   modulesAuthoritative,
   refused: () => {
-    notice.value = t('platform.route.invalid')
+    say(t('platform.route.invalid'), 'refused')
   },
   route,
   writeRoute,
@@ -188,7 +185,7 @@ const contextTitle = computed(() => {
 watch(liveRouteFailure, (failure) => {
   if (!failure) return
   updateModuleState({})
-  say(t('platform.route.stateDropped'))
+  say(t('platform.route.stateDropped'), 'done')
 })
 const primaryWriteScopeId = computed(() =>
   contextReady.value?.primary.is_writable === true
@@ -222,7 +219,7 @@ async function openSession(sessionId: string, navigate = false) {
     }
     sessionContext.value = context
   } catch (error) {
-    notice.value = localizedFailure({ code: 'request_failed', status: null, retryable: true })
+    say(localizedFailure({ code: 'request_failed', status: null, retryable: true }), 'refused')
     console.error(error)
   }
 }
@@ -345,7 +342,7 @@ usePlatformEntryRestore({
           :locale="locale"
           @connection="(state) => (planningConnection = state)"
           @entity="openEntity"
-          @notice="(message) => (notice = message)"
+          @notice="(message) => say(message, 'refused')"
           @open-project="openProject"
           @question-taken="cardQuestionTaken"
           @switch-scope="switchScope"

@@ -6,16 +6,16 @@
 import { inject, provide } from 'vue'
 import type { InjectionKey } from 'vue'
 
-type Say = (message: string) => void
+import type { SayNotice } from '@/shared/lib/notice.ts'
 
-const OPEN_NOTICE: InjectionKey<Say> = Symbol('open-notice')
+const OPEN_NOTICE: InjectionKey<SayNotice> = Symbol('open-notice')
 
-const SAY_NOTHING: Say = () => {}
+const SAY_NOTHING: SayNotice = () => {}
 
-export function provideOpenNotice(say: Say): void {
+export function provideOpenNotice(say: SayNotice): void {
   provide(OPEN_NOTICE, say)
 }
 
-export function useOpenNotice(): Say {
+export function useOpenNotice(): SayNotice {
   return inject(OPEN_NOTICE, SAY_NOTHING)
 }

@@ -53,9 +53,12 @@ const busyMark = computed(() => busy.value || undefined)
 async function copyPath(path: string, why: string) {
   try {
     await navigator.clipboard.writeText(path)
-    say(why ? t('documentLinks.openRefused', { reason: why }) : t('documentLinks.openFailed'))
+    say(
+      why ? t('documentLinks.openRefused', { reason: why }) : t('documentLinks.openFailed'),
+      'refused',
+    )
   } catch {
-    say(t('documentLinks.copyFailed'))
+    say(t('documentLinks.copyFailed'), 'refused')
   }
 }
 

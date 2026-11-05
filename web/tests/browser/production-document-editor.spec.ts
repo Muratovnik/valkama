@@ -63,7 +63,7 @@ test.describe('over a card', () => {
     )
     await page.keyboard.press('Enter')
 
-    await expect(noticeOf(page)).toHaveText('Opened in VS Code')
+    await expect(noticeOf(page)).toHaveText('File plan.md opened in VS Code')
     expect(fileAsked(asked.at(-1))).toEqual({
       target: 'file',
       project: 'demo',
@@ -123,7 +123,7 @@ test('beside a card: the top block’s line once the reader has moved, and a ref
   await toStart(body)
   const editor = pane.getByRole('button', { name: EDITOR, exact: true })
   await editor.click()
-  await expect(noticeOf(page)).toHaveText('Opened in VS Code')
+  await expect(noticeOf(page)).toHaveText('File plan.md opened in VS Code')
   expect(fileAsked(asked.at(-1)).line).toBe('7')
 
   await page.unroute('**/api/open-plan*')
@@ -147,7 +147,7 @@ test('on its own page: at the line the address names, and by keyboard', async ({
   const editor = page.getByRole('button', { name: EDITOR, exact: true })
   await expect(editor).toBeFocused()
   await page.keyboard.press('Enter')
-  await expect(noticeOf(page)).toHaveText('Opened in VS Code')
+  await expect(noticeOf(page)).toHaveText('File plan.md opened in VS Code')
   expect(fileAsked(asked.at(-1))).toEqual({
     target: 'file',
     project: 'demo',

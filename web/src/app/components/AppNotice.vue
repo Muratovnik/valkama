@@ -10,10 +10,14 @@
  *
  * It lies above every overlay, because a card or a dialog is where most presses
  * that say something happen, and under them it was said to nobody.
+ *
+ * How long it stays is `useNoticeCountdown`'s, and going by itself is the same as being
+ * put away, for its region too.
  */
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { useNoticeCountdown } from '@/app/composables/useNoticeCountdown.ts'
 import type { ShellNotice } from '@/app/composables/useShellNotice.ts'
 
 import VButton from '@/shared/ui/VButton.vue'
@@ -22,6 +26,10 @@ import VIcon from '@/shared/ui/VIcon.vue'
 const props = defineProps<{ notice: ShellNotice | null }>()
 const emit = defineEmits<{ act: []; dismiss: [] }>()
 const { t } = useI18n()
+const { focused, hovered } = useNoticeCountdown(
+  () => props.notice,
+  () => emit('dismiss'),
+)
 /**
  * Long enough for a screen reader to take the empty region as a change. NVDA and
  * JAWS read an identical sentence a second time only after a clear and a pause;
@@ -52,6 +60,10 @@ watch(
   <div
     v-if="notice"
     class="notice"
+    @pointerenter="hovered = true"
+    @pointerleave="hovered = false"
+    @focusin="focused = true"
+    @focusout="focused = false"
   >
     <span
       class="notice-message"
@@ -105,9 +117,11 @@ watch(
   box-shadow: var(--shadow-overlay);
 }
 
+/* A notice names what it is about, and a file's name may be one long word. */
 .notice-message {
   flex: 1 1 auto;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .notice-action,

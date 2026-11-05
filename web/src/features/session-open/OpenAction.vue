@@ -20,10 +20,11 @@ import { currentSettings, prepareOpen } from '@/features/session-open/openPlan.t
 import type { OpenAction, OpenTarget, Outcome, Refusal } from '@/features/session-open/openPlan.ts'
 import { heardOfSession, previewOpen, sessionNews } from '@/features/session-open/openPreview.ts'
 import { openName, openView } from '@/features/session-open/openView.ts'
-import { outcomeWords } from '@/features/session-open/placeWords.ts'
+import { outcomeKind, outcomeWords } from '@/features/session-open/placeWords.ts'
 
 import type { Executor } from '@/shared/api/executorModel.ts'
 import type { OpenPlan, PlanOpens } from '@/shared/api/openPlanModel.ts'
+import { sessionName } from '@/shared/lib/actor.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import type { SessionFamily } from '@/shared/lib/settings.ts'
 import InfoTip from '@/shared/ui/InfoTip.vue'
@@ -143,7 +144,9 @@ interface Panel {
 const panel = shallowRef<Panel | null>(null)
 
 function report(outcome: Outcome) {
-  say(outcomeWords(t, outcome))
+  // The holder this button prints, or the session as a holder of it would print.
+  const name = props.name ?? sessionName(family.value ?? plan.value?.client ?? '', props.session)
+  say(outcomeWords(t, outcome, { kind: 'session', name }), outcomeKind(outcome))
   if (outcome.status === 'refused') heardOfSession(props.session)
 }
 

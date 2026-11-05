@@ -52,3 +52,9 @@ export function holderName(raw: string): string {
   const { name, session } = splitActor(raw)
   return session && name !== raw.trim() ? `${name} · ${session.slice(0, SESSION_PREFIX)}` : name
 }
+
+/** A session no holder names, as a holder of it would print: its client, if known, and its start. */
+export function sessionName(client: string, session: string): string {
+  const start = session.slice(0, SESSION_PREFIX)
+  return client ? `${client} · ${start}` : start
+}

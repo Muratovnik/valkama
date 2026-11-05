@@ -65,8 +65,23 @@ describe('the shell document opener', () => {
       path: 'src/a.ts',
       line: 12,
     })
-    expect(say).toHaveBeenCalledWith('Opened in VS Code')
+    expect(say).toHaveBeenCalledWith('File a.ts opened in VS Code', 'done')
     expect(opener.editor).toBe('VS Code')
+  })
+
+  it('calls a folder by its name, and the project’s root by the project', async () => {
+    const say = vi.fn()
+    openTarget.mockResolvedValue({
+      status: 'opened',
+      notice: null,
+      opens: { opened_in: 'ide', opened_host: 'vscode', source: 'fallback', missed: '' },
+    })
+    const opener = mountOpening(say)
+    const named = { project: 'example-project', path: 'src/lib/', line: null, suffix: '' }
+    await opener.openFolder?.(named)
+    expect(say).toHaveBeenLastCalledWith('Folder lib opened in VS Code', 'done')
+    await opener.openFolder?.({ ...named, path: '.' })
+    expect(say).toHaveBeenLastCalledWith('Folder example-project opened in VS Code', 'done')
   })
 
   it('hands a Markdown document to the viewer, not to the plan', async () => {

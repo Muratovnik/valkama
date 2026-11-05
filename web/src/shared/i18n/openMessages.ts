@@ -108,9 +108,18 @@ export const openMessages = {
         'desktop-resume': 'Open in Claude Desktop',
       },
       outcome: {
-        opened: 'Opened {where}',
-        openedPlain: 'Opened',
-        copied: 'Command copied — paste it into a terminal',
+        opened: {
+          session: 'Session {name} opened {where}',
+          file: 'File {name} opened {where}',
+          folder: 'Folder {name} opened {where}',
+        },
+        openedPlain: {
+          session: 'Session {name} opened',
+          file: 'File {name} opened',
+          folder: 'Folder {name} opened',
+        },
+        copied: 'Command for session {name} copied — paste it into a terminal',
+        about: 'Session {name}: {why}',
         next: 'The project window is opening. Now open the session in it.',
       },
       refused: {
@@ -291,9 +300,18 @@ export const openMessages = {
         'desktop-resume': 'Открыть в Claude Desktop',
       },
       outcome: {
-        opened: 'Открыто {where}',
-        openedPlain: 'Открыто',
-        copied: 'Команда скопирована — вставьте её в терминал',
+        opened: {
+          session: 'Сессия {name} открыта {where}',
+          file: 'Файл {name} открыт {where}',
+          folder: 'Папка {name} открыта {where}',
+        },
+        openedPlain: {
+          session: 'Сессия {name} открыта',
+          file: 'Файл {name} открыт',
+          folder: 'Папка {name} открыта',
+        },
+        copied: 'Команда для сессии {name} скопирована — вставьте её в терминал',
+        about: 'Сессия {name}: {why}',
         next: 'Окно проекта открывается. Теперь откройте сессию в нём.',
       },
       refused: {

@@ -20,8 +20,8 @@ import { useI18n } from 'vue-i18n'
 import type { OpenAction, Outcome, Refusal } from '@/features/session-open/openPlan.ts'
 import {
   actionWords,
-  outcomeWords,
   refusalWords,
+  unfinishedWords,
   whereWords,
 } from '@/features/session-open/placeWords.ts'
 
@@ -101,9 +101,9 @@ onMounted(async () => {
 })
 
 /** The same explanation twice says nothing new; the step's own word goes on instead. */
-function noteOf(outcome: Outcome): string {
+function noteOf(outcome: Extract<Outcome, { status: 'next' | 'refused' }>): string {
   const repeats = outcome.status === 'next' && outcome.notice?.reason === props.notice?.reason
-  return repeats ? t('open.outcome.next') : outcomeWords(t, outcome)
+  return repeats ? t('open.outcome.next') : unfinishedWords(t, outcome)
 }
 
 async function runOffer(event: MouseEvent) {
@@ -116,7 +116,7 @@ async function runOffer(event: MouseEvent) {
     running.value = false
   }
   if (outcome.status === 'opened' || outcome.status === 'copied') emit('finished', outcome)
-  else note.value = outcomeWords(t, outcome)
+  else note.value = unfinishedWords(t, outcome)
 }
 
 async function run(index: number) {

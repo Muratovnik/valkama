@@ -7,6 +7,8 @@
 
 import type { OpenAction, Outcome, Refusal } from '@/features/session-open/openPlan.ts'
 
+import type { NoticeKind } from '@/shared/lib/notice.ts'
+
 export type Translate = (key: string, values?: Record<string, unknown>) => string
 
 /** A place as the server names one: the host when there is one, else how it is open. */
@@ -69,14 +71,34 @@ export function refusalWords(t: Translate, refusal: Refusal): string {
   return refusal.reason === 'gone' && refusal.archived ? `${words} ${t('open.archived')}` : words
 }
 
-/** The one line a notice area shows for an outcome. */
-export function outcomeWords(t: Translate, outcome: Outcome): string {
+/** What a press was on, as the place that pressed it names it: a holder, a file, a folder. */
+export interface OpenSubject {
+  kind: 'file' | 'folder' | 'session'
+  name: string
+}
+
+type Unfinished = Extract<Outcome, { status: 'next' | 'refused' }>
+
+/** What a panel adds beside its actions, which says already whose they are. */
+export function unfinishedWords(t: Translate, outcome: Unfinished): string {
   if (outcome.status === 'refused') return refusalWords(t, outcome.refusal)
-  if (outcome.status === 'copied') return t('open.outcome.copied')
   // A notice before the next action says more than "now the next one".
-  if (outcome.status === 'next')
-    return outcome.notice ? refusalWords(t, outcome.notice) : t('open.outcome.next')
-  return outcome.opens?.opened_in
-    ? t('open.outcome.opened', { where: whereWords(t, outcome.opens) })
-    : t('open.outcome.openedPlain')
+  return outcome.notice ? refusalWords(t, outcome.notice) : t('open.outcome.next')
+}
+
+/** The one line the shell's corner shows for an outcome, which says what it is about. */
+export function outcomeWords(t: Translate, outcome: Outcome, subject: OpenSubject): string {
+  const { kind, name } = subject
+  if (outcome.status === 'copied') return t('open.outcome.copied', { name })
+  if (outcome.status === 'opened')
+    return outcome.opens?.opened_in
+      ? t(`open.outcome.opened.${kind}`, { name, where: whereWords(t, outcome.opens) })
+      : t(`open.outcome.openedPlain.${kind}`, { name })
+  const why = unfinishedWords(t, outcome)
+  return kind === 'session' ? t('open.outcome.about', { name, why }) : why
+}
+
+/** Which kind of notice an outcome makes: all but what was done asks something of the person. */
+export function outcomeKind(outcome: Outcome): NoticeKind {
+  return outcome.status === 'opened' || outcome.status === 'copied' ? 'done' : 'refused'
 }

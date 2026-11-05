@@ -112,9 +112,9 @@ export function underShell(content: Component, opener: Partial<DocumentOpener> =
         const notice = useShellNotice()
         provideDocumentOpener({
           ...opener,
-          say: (message) => {
+          say: (message, kind) => {
             spoken = [...spoken, message]
-            notice.say(message)
+            notice.say(message, kind)
           },
         })
         return () => [

@@ -18,6 +18,7 @@ import type { Confirmed } from '@/entities/project-document/pathMemory.ts'
 
 import type { DocumentBase } from '@/shared/api/documentApi.ts'
 import { documentPageHref } from '@/shared/api/documentPage.ts'
+import type { NoticeKind, SayNotice } from '@/shared/lib/notice.ts'
 import { provideReferenceLinks } from '@/shared/lib/referenceLinks.ts'
 import type { ReferenceLink } from '@/shared/lib/referenceLinks.ts'
 import { documentParts, suffixTarget } from '@/shared/lib/textReferences.ts'
@@ -39,13 +40,13 @@ export type OpenAnswer = boolean | string
 type OpenAttempt = (target: DocumentTarget) => OpenAnswer | Promise<OpenAnswer>
 
 export interface DocumentOpener {
+  /** Says the result in the status region its host keeps, which announces a repeat again. */
+  say: SayNotice
   /** The editor's name for a link's tooltip, once `openFile` or `openFolder` exist. */
   editor?: string
   openDocument?: OpenAttempt
   openFile?: OpenAttempt
   openFolder?: OpenAttempt
-  /** Says the result in the status region its host keeps, which announces a repeat again. */
-  say: (message: string) => void
 }
 
 const OPENER: InjectionKey<DocumentOpener> = Symbol('document-opener')
@@ -115,12 +116,12 @@ export function useDocumentLinks(
     return created
   }
 
-  async function copy(text: string, done = t('documentLinks.copied')) {
+  async function copy(text: string, said = t('documentLinks.copied'), kind: NoticeKind = 'done') {
     try {
       await navigator.clipboard.writeText(text)
-      opener.say(done)
+      opener.say(said, kind)
     } catch {
-      opener.say(t('documentLinks.copyFailed'))
+      opener.say(t('documentLinks.copyFailed'), 'refused')
     }
   }
 
@@ -148,6 +149,7 @@ export function useDocumentLinks(
     await copy(
       written,
       why ? t('documentLinks.openRefused', { reason: why }) : t('documentLinks.openFailed'),
+      'refused',
     )
   }
 

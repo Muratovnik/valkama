@@ -105,7 +105,7 @@ test('a session with one action opens on Enter or Space, and the result is said'
   await page.keyboard.press('Enter')
   await expect.poll(() => openedLinks(page)).toEqual([DESKTOP_LINK])
   await expect(
-    page.locator('.app-notice, [role="status"]').getByText('Opened in Claude Desktop'),
+    page.locator('.app-notice, [role="status"]').getByText(/opened in Claude Desktop$/),
   ).toBeVisible()
   await expect(desktop).toBeFocused()
 
@@ -133,7 +133,7 @@ test('two steps stand in order, the second after the first, and focus goes with 
   await page.keyboard.press('Enter')
   await expect(panel).toBeHidden()
   await expect.poll(() => openedLinks(page)).toEqual([FOLDER_LINK, SESSION_LINK])
-  await expect(page.getByRole('status').filter({ hasText: 'Opened in VS Code' })).toHaveCount(1)
+  await expect(page.getByRole('status').filter({ hasText: /opened in VS Code$/ })).toHaveCount(1)
   await expect(page.locator('.drawer .card-holder button.open-action')).toBeFocused()
 })
 
@@ -196,7 +196,9 @@ test('a session long silent warns first, and resumes only on its own press', asy
   await resume.click()
   await expect(panel).toBeHidden()
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(RESUME_COMMAND)
-  await expect(page.getByRole('status').filter({ hasText: 'Command copied' })).toHaveCount(1)
+  await expect(
+    page.getByRole('status').filter({ hasText: /^Command for session .* copied/ }),
+  ).toHaveCount(1)
 })
 
 test('a reason with nothing to press is reachable from the keyboard', async ({ page }) => {

@@ -10,6 +10,7 @@ import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import type { PlatformContextReady } from '@/shared/api/platformApiTypes.ts'
 import { planningSpaceRef } from '@/shared/api/platformPlanningRefs.ts'
 import { workItemLinkAddress } from '@/shared/api/platformRoute.ts'
+import type { SayNotice } from '@/shared/lib/notice.ts'
 import { provideReferenceLinks, referenceSpaceKey } from '@/shared/lib/referenceLinks.ts'
 
 type Project = PlatformContextReady['projects'][number]
@@ -58,12 +59,12 @@ function spacesByKey(projects: readonly Project[], primary: string | undefined) 
  *   here. The card and the question provide the layer that answers for one.
  */
 export function useAppReferenceLinks(options: {
+  say: SayNotice
   openSession: (id: string) => void
   openTarget: (target: PlanningTarget) => void
   /** The store whose space a press finds first when two stores hold one key. */
   primaryScope: () => string | undefined
   projects: () => readonly PlatformContextReady['projects'][number][]
-  say: (message: string) => void
 }) {
   const { t } = useI18n()
   /** Per session id the server answered for: whether it knows it. */
@@ -92,9 +93,9 @@ export function useAppReferenceLinks(options: {
       const found = await searchGlobalPlanningWorkItems(reference, new AbortController().signal)
       const entry = found.items.find((candidate) => candidate.item.reference === reference)
       if (entry) options.openTarget(entry.target)
-      else options.say(t('textLinks.notFound', { reference }))
+      else options.say(t('textLinks.notFound', { reference }), 'refused')
     } catch {
-      options.say(t('textLinks.notFound', { reference }))
+      options.say(t('textLinks.notFound', { reference }), 'refused')
     }
   }
 

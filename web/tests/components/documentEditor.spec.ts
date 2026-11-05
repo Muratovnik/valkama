@@ -226,7 +226,7 @@ describe('what a press comes to', () => {
     await shown()
     await press()
     expect(copied).toHaveBeenCalledExactlyOnceWith('docs/plan.md')
-    expect(said).toHaveBeenCalledExactlyOnceWith('Nothing is there. The path was copied')
+    expect(said).toHaveBeenCalledExactlyOnceWith('Nothing is there. The path was copied', 'refused')
   })
 
   it('failed with no reason: the path is copied and the shell says only that', async () => {
@@ -236,7 +236,10 @@ describe('what a press comes to', () => {
     await shown()
     await press()
     expect(copied).toHaveBeenCalledExactlyOnceWith('docs/plan.md')
-    expect(said).toHaveBeenCalledExactlyOnceWith('Could not open it, so the path was copied')
+    expect(said).toHaveBeenCalledExactlyOnceWith(
+      'Could not open it, so the path was copied',
+      'refused',
+    )
   })
 
   it('takes no second press while the first is out, and is busy meanwhile', async () => {

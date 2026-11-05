@@ -1261,11 +1261,15 @@ since only the plan knows what a row older than the place record comes to, what 
 installed here and whether the client still keeps the session; the card's own read paints
 first, so nothing waits and a failed read leaves that standing. A session nothing can open
 is no button: why stands in the quiet ink, its reason a press of a small mark away so that
-neither a finger nor the keyboard is left without it. One press opens. A plan of two steps,
-or one that must explain itself first, opens a panel: focus stands on the first action, the
-next is offered once the one before it has run and takes focus then, and Escape goes back
-to the button. A button keeps focus while it works, marked busy and taking no second press.
-What came of a press is said in the shell's notice. A session in a terminal that has said
+neither a finger nor the keyboard is left without it. One press opens. In a browser a plan
+of two steps, and on either surface one that must explain itself first, opens a panel: focus
+stands on the first action, the next is offered once the one before it has run and takes
+focus then, and Escape goes back to the button. A button keeps focus while it works, marked
+busy and taking no second press. What came of a press is said in the shell's notice, which
+names what it is about as the button does. What was done goes after five seconds of being
+seen: the time stands while the pointer or the focus is on it and while another window is in
+front, as it is the moment a session opens. A refusal stays until it is put away.
+A session in a terminal that has said
 nothing for more than a day, and whose process nobody saw alive, may have crashed with its
 row still saying it runs. Silence proves nothing, so it still says it runs; its panel says
 since when, warns about two processes on one transcript, and offers to resume apart from

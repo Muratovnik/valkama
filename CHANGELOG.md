@@ -46,6 +46,11 @@ checkouts are therefore distinguishable even at the same version.
   running, the conversation follows once its window has had time to appear. In the
   rare case that the conversation reaches the window too early and starts empty,
   pressing again opens the right one. The browser still takes two presses.
+- The notice in the corner no longer stays for good after something worked: it goes
+  after five seconds of being seen, and waits while the pointer or the focus is on it
+  or while another window is in front. A refusal stays until it is put away.
+- That notice now says what it is about: a session by its holder and its place, a file
+  or a folder by its name, and a copied command by its session.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 

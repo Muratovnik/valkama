@@ -12,9 +12,10 @@ import {
 import type { ResourceState } from '@/shared/api/resourceState.ts'
 import { typedFailure } from '@/shared/api/typedFailure.ts'
 import type { TypedFailure } from '@/shared/api/typedFailure.ts'
+import type { SayNotice } from '@/shared/lib/notice.ts'
 export type ConnectionState = 'connecting' | 'live' | 'reconnecting'
 interface LiveFeedInputs {
-  notice: Ref<string>
+  say: SayNotice
   text: { failure: (failure: TypedFailure) => string; refreshed: () => string }
   loadContext: () => Promise<void>
   refreshSurface: () => Promise<void>
@@ -58,10 +59,10 @@ export function usePlatformLiveFeed(inputs: LiveFeedInputs) {
       await Promise.all([loadModules(), inputs.loadContext()])
       await inputs.refreshSurface()
       connectionState.value = 'live'
-      inputs.notice.value = inputs.text.refreshed()
+      inputs.say(inputs.text.refreshed(), 'done')
     } catch (error) {
       connectionState.value = 'reconnecting'
-      inputs.notice.value = inputs.text.failure(typedFailure(error, 'request_failed'))
+      inputs.say(inputs.text.failure(typedFailure(error, 'request_failed')), 'refused')
     } finally {
       refreshing.value = false
     }

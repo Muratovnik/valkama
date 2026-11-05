@@ -13,6 +13,7 @@ const refreshedText = () => 'refreshed'
 const renderFeed = () => h('div')
 function mountFeed() {
   const notice = ref('')
+  const kinds: string[] = []
   let feed!: ReturnType<typeof usePlatformLiveFeed>
   const loadContext = vi.fn(async () => {})
   const refreshSurface = vi.fn(async () => {})
@@ -20,7 +21,10 @@ function mountFeed() {
     defineComponent({
       setup() {
         feed = usePlatformLiveFeed({
-          notice,
+          say: (message, kind) => {
+            notice.value = message
+            kinds.push(kind)
+          },
           text: { failure: (failure) => `failure:${failure.code}`, refreshed: refreshedText },
           loadContext,
           refreshSurface,
@@ -31,6 +35,7 @@ function mountFeed() {
   )
   return {
     feed,
+    kinds,
     notice,
     loadContext,
     refreshSurface,
@@ -71,7 +76,7 @@ it('retains committed authority after refresh fails with safe typed copy', async
 
 it('announces refresh only after the current surface has loaded and reports its failure', async () => {
   fetchModules.mockResolvedValue(modulesPayload())
-  const { feed, notice, refreshSurface, wrapper } = mountFeed()
+  const { feed, kinds, notice, refreshSurface, wrapper } = mountFeed()
   await flushPromises()
   let finish!: () => void
   refreshSurface.mockReturnValueOnce(
@@ -86,9 +91,11 @@ it('announces refresh only after the current surface has loaded and reports its 
   finish()
   await refreshing
   expect(notice.value).toBe('refreshed')
+  expect(kinds).toEqual(['done'])
   refreshSurface.mockRejectedValueOnce(new Error('Surface failed'))
   await feed.refreshAll()
   expect(notice.value).toBe('failure:request_failed')
+  expect(kinds).toEqual(['done', 'refused'])
   expect(feed.connectionState.value).toBe('reconnecting')
   wrapper.unmount()
 })

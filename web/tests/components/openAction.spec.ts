@@ -77,7 +77,7 @@ describe('what stands before any press', () => {
     await wrapper.get('button.open-action').trigger('click')
     await flushPromises()
     expect(opened.mock.calls.map(([link]) => link)).toEqual([DESKTOP_LINK])
-    expect(say).toHaveBeenCalledWith('Opened in Claude Desktop')
+    expect(say).toHaveBeenCalledWith(`Session ${NAME} opened in Claude Desktop`, 'done')
     expect(document.querySelector('[role="dialog"]')).toBeNull()
     wrapper.unmount()
   })

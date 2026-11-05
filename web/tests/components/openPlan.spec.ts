@@ -83,6 +83,9 @@ afterEach(() => {
 })
 
 const claude = { kind: 'session', session: SESSION, family: 'claude' } as const
+const aSession = { kind: 'session', name: 'claude · 6f1c2a8e-0000' } as const
+/** What a path is called by: a refusal of one reads as the plain reason. */
+const aPath = { kind: 'file', name: 'plan.md' } as const
 const defaults = { settings: DEFAULT_SETTINGS }
 
 describe('opening in a browser', () => {
@@ -128,7 +131,9 @@ describe('opening in a browser', () => {
       defaults,
     )
     expect(opened.mock.calls).toEqual([[link, '_blank', 'noreferrer']])
-    expect(outcomeWords(i18n.global.t, outcome)).toBe('Opened in Codex')
+    expect(outcomeWords(i18n.global.t, outcome, aSession)).toBe(
+      'Session claude · 6f1c2a8e-0000 opened in Codex',
+    )
   })
 
   it('follows a claude-cli link that types /resume, and copies a command where there is none', async () => {
@@ -158,7 +163,7 @@ describe('opening in a browser', () => {
     answer(plan({ one_action: true, steps: [{ kind: 'copy', text: 'codex resume x' }] }))
     const outcome = await openTarget(claude, defaults)
     expect(outcome).toEqual({ status: 'refused', refusal: { reason: 'copy-failed' } })
-    expect(outcomeWords(i18n.global.t, outcome)).not.toContain('private')
+    expect(outcomeWords(i18n.global.t, outcome, aPath)).not.toContain('private')
   })
 
   it('refuses with the plan’s reason when the plan only explains', async () => {
@@ -172,7 +177,7 @@ describe('opening in a browser', () => {
     const outcome = await openTarget(claude, defaults)
     expect(opened).not.toHaveBeenCalled()
     expect(outcome).toEqual({ status: 'refused', refusal: { reason: 'gone', archived: true } })
-    expect(outcomeWords(i18n.global.t, outcome)).toBe(
+    expect(outcomeWords(i18n.global.t, outcome, aPath)).toBe(
       'The client no longer has this session. A copy is kept in Valkama.',
     )
   })
@@ -217,9 +222,13 @@ describe('opening in a browser', () => {
       }),
     )
     const outcome = await openTarget(claude, defaults)
-    expect(outcomeWords(i18n.global.t, outcome)).toBe('Opened in a terminal')
+    expect(outcomeWords(i18n.global.t, outcome, aSession)).toBe(
+      'Session claude · 6f1c2a8e-0000 opened in a terminal',
+    )
     i18n.global.locale.value = 'ru'
-    expect(outcomeWords(i18n.global.t, outcome)).toBe('Открыто в терминале')
+    expect(outcomeWords(i18n.global.t, outcome, aSession)).toBe(
+      'Сессия claude · 6f1c2a8e-0000 открыта в терминале',
+    )
   })
 
   it('reads a refused file as its path code', async () => {
@@ -247,7 +256,7 @@ describe('opening in a browser', () => {
       surface: 'browser',
       fallback: 'cursor',
     })
-    expect(outcomeWords(i18n.global.t, outcome)).toBe('The path lies outside the project.')
+    expect(outcomeWords(i18n.global.t, outcome, aPath)).toBe('The path lies outside the project.')
   })
 })
 
@@ -298,11 +307,11 @@ describe('naming what is not installed', () => {
     answer(
       plan({ opens: null, steps: [{ kind: 'explain', reason: 'not-installed', host: 'cursor' }] }),
     )
-    expect(outcomeWords(i18n.global.t, await openTarget(claude, defaults))).toBe(
+    expect(outcomeWords(i18n.global.t, await openTarget(claude, defaults), aPath)).toBe(
       'Cursor is not installed.',
     )
     app({ ok: false, mode: 'refused', reason: 'not-installed', host: 'nano', next: null })
-    expect(outcomeWords(i18n.global.t, await openTarget(claude, defaults))).toBe(
+    expect(outcomeWords(i18n.global.t, await openTarget(claude, defaults), aPath)).toBe(
       'The program it opens in is not installed.',
     )
   })
@@ -352,7 +361,7 @@ describe('opening in the Valkama app', () => {
     app({ ok: false, mode: 'explained', reason: 'live-in-terminal', next: 1, plan: desktopPlan })
     const outcome = await openTarget(claude, defaults)
     expect(outcome).toMatchObject({ status: 'next', notice: { reason: 'live-in-terminal' } })
-    expect(outcomeWords(i18n.global.t, outcome)).toContain('runs in a terminal')
+    expect(outcomeWords(i18n.global.t, outcome, aPath)).toContain('runs in a terminal')
   })
 
   it('asks for a file with its line and the editor, and for the owner’s command by itself', async () => {

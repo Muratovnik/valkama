@@ -9,24 +9,34 @@ import { useI18n } from 'vue-i18n'
 
 import { openTarget } from '@/features/session-open/openPlan.ts'
 import type { OpenTarget } from '@/features/session-open/openPlan.ts'
-import { outcomeWords, refusalWords } from '@/features/session-open/placeWords.ts'
+import { outcomeKind, outcomeWords, refusalWords } from '@/features/session-open/placeWords.ts'
 
 import { provideDocumentOpener } from '@/entities/project-document/documentLinks.ts'
 import type { DocumentTarget, OpenAnswer } from '@/entities/project-document/documentLinks.ts'
 
+import type { SayNotice } from '@/shared/lib/notice.ts'
 import { useSettingsStore } from '@/shared/stores/settingsStore.ts'
 
+/** The name a notice calls a path by: its last segment, or for the project's root, the project. */
+function shownName(project: string, path: string): string {
+  const named = path.split(/[\\/]/u).filter((segment) => segment && segment !== '.')
+  return named.at(-1) ?? project
+}
+
+type PathTarget = Extract<OpenTarget, { kind: 'file' | 'folder' }>
+
 export function useDocumentOpening(
-  say: (message: string) => void,
+  say: SayNotice,
   openDocument: (target: DocumentTarget) => boolean,
 ): void {
   const { t } = useI18n()
   const settingsStore = useSettingsStore()
 
-  async function open(target: OpenTarget): Promise<OpenAnswer> {
+  async function open(target: PathTarget): Promise<OpenAnswer> {
     const outcome = await openTarget(target)
     if (outcome.status === 'refused') return refusalWords(t, outcome.refusal)
-    say(outcomeWords(t, outcome))
+    const name = shownName(target.project, target.path)
+    say(outcomeWords(t, outcome, { kind: target.kind, name }), outcomeKind(outcome))
     return true
   }
 

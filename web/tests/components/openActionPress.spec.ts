@@ -15,6 +15,7 @@ import {
   executor,
   FOLDER_LINK,
   mountAction,
+  NAME,
   opened,
   plan,
   resetOutsideWorld,
@@ -76,7 +77,7 @@ describe('a press', () => {
     await flushPromises()
     expect(opened.mock.calls.map(([link]) => link)).toEqual([FOLDER_LINK, SESSION_LINK])
     await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull())
-    expect(say).toHaveBeenCalledWith('Opened in VS Code')
+    expect(say).toHaveBeenCalledWith(`Session ${NAME} opened in VS Code`, 'done')
     wrapper.unmount()
   })
 
@@ -140,7 +141,7 @@ describe('a press', () => {
     await flushPromises()
     expect(openSession).toHaveBeenLastCalledWith({ session: SESSION, fallback: 'vscode', step: 1 })
     await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull())
-    expect(say).toHaveBeenCalledWith('Opened in VS Code')
+    expect(say).toHaveBeenCalledWith(`Session ${NAME} opened in VS Code`, 'done')
     wrapper.unmount()
   })
 
@@ -172,7 +173,10 @@ describe('a press', () => {
     expect(reads).toHaveBeenCalledTimes(1)
     await wrapper.get('button.open-action').trigger('click')
     await flushPromises()
-    expect(say).toHaveBeenCalledWith('The Valkama app could not open it.')
+    expect(say).toHaveBeenCalledWith(
+      `Session ${NAME}: The Valkama app could not open it.`,
+      'refused',
+    )
     expect(reads).toHaveBeenCalledTimes(2)
     wrapper.unmount()
   })
@@ -256,7 +260,10 @@ describe('a session long silent', () => {
     await flushPromises()
     expect(writeText).toHaveBeenCalledWith(RESUME_COMMAND)
     await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull())
-    expect(say).toHaveBeenCalledWith('Command copied — paste it into a terminal')
+    expect(say).toHaveBeenCalledWith(
+      `Command for session ${NAME} copied — paste it into a terminal`,
+      'done',
+    )
     wrapper.unmount()
   })
 
@@ -325,7 +332,7 @@ describe('a session long silent', () => {
     expect(openSession).toHaveBeenLastCalledWith({ session: SESSION, fallback: 'vscode', step: 3 })
     await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull())
     // Where it went, and not where the plan's route would have.
-    expect(say).toHaveBeenCalledWith('Opened in a terminal')
+    expect(say).toHaveBeenCalledWith(`Session ${NAME} opened in a terminal`, 'done')
     wrapper.unmount()
   })
 

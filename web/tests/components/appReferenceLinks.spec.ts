@@ -121,7 +121,7 @@ describe('the shell layer of reference links', () => {
     await wrapper.get('.rich-reference').trigger('click')
     await flushPromises()
     expect(openTarget).not.toHaveBeenCalled()
-    expect(say).toHaveBeenCalledExactlyOnceWith('Task MAIN-12 was not found.')
+    expect(say).toHaveBeenCalledExactlyOnceWith('Task MAIN-12 was not found.', 'refused')
   })
 
   it('keeps a session id as text until the server knows it, then opens it', async () => {
