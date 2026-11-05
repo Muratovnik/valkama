@@ -176,6 +176,9 @@ checkouts are therefore distinguishable even at the same version.
   chosen with the keys does, instead of sending the next Tab to the top of the page. In the
   filter menu, the number of tasks in hand stands beside «Assigned»
   instead of at the menu's far edge.
+- **A time inside a sentence no longer breaks in two.** A closed question's line, a thread's
+  mark and a question's deadline could end one line with «05 нояб. 2026 г.,» and start the
+  next with «23:47»; the time now moves to the next line whole.
 - **The buttons of «Make steps» stay at the form's end on a phone.** Wrapped under the count
   they went to the start, unlike every other form's.
 - **A question's two answers wrap together.** Once «Check status» joined the row after a

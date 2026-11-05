@@ -51,6 +51,7 @@ import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
 import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 import { actorName, actorSession } from '@/shared/lib/actor.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
+import { unbroken } from '@/shared/lib/unbroken.ts'
 import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
 import EntryAction from '@/shared/ui/EntryAction.vue'
 import EntryHead from '@/shared/ui/EntryHead.vue'
@@ -203,7 +204,7 @@ const askingCancel = change.asking
 const stamp = (value: string) => d(new Date(value), 'activity')
 const deadlineLabel = computed(() =>
   t(pastDue.value ? 'requests.deadline' : 'requests.expires', {
-    time: request.value.expires_at ? stamp(request.value.expires_at) : '',
+    time: request.value.expires_at ? unbroken(stamp(request.value.expires_at)) : '',
   }),
 )
 /** An agent asks, whatever name it signs with: this interface asks nothing. */

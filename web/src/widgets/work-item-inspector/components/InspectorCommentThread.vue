@@ -36,6 +36,7 @@ import { actorName, actorSession } from '@/shared/lib/actor.ts'
 import { moveFocus } from '@/shared/lib/moveFocus.ts'
 import { referenceSpaceKey } from '@/shared/lib/referenceLinks.ts'
 import { plainText } from '@/shared/lib/richText.ts'
+import { unbroken } from '@/shared/lib/unbroken.ts'
 import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
 import EntryAction from '@/shared/ui/EntryAction.vue'
 import EntryHead from '@/shared/ui/EntryHead.vue'
@@ -118,7 +119,7 @@ const markLine = computed(() => {
   const given = mark.value
   if (!given) return ''
   const who = given.by_person === true ? t('threads.you') : actorName(given.by)
-  const when = props.when(given.at)
+  const when = unbroken(props.when(given.at))
   return given.text
     ? t('threads.resolvedWith', { who, when, decision: given.text })
     : t('threads.resolvedLine', { who, when })

@@ -27,6 +27,7 @@ import { isStructured } from '@/features/input-requests/utils/reviewForm.ts'
 
 import type { InputRequestEntry } from '@/shared/api/inputRequestModel.ts'
 import { actorName } from '@/shared/lib/actor.ts'
+import { unbroken } from '@/shared/lib/unbroken.ts'
 import CollapsibleText from '@/shared/ui/CollapsibleText.vue'
 import MetaLine from '@/shared/ui/MetaLine.vue'
 import RichText from '@/shared/ui/RichText.vue'
@@ -44,7 +45,7 @@ const { t, d } = useI18n()
 const answered = computed(() => props.request.status === 'answered')
 const when = computed(() => {
   const at = props.request.resolved_at
-  return at ? d(new Date(at), 'activity') : ''
+  return at ? unbroken(d(new Date(at), 'activity')) : ''
 })
 /** The time of the answer in force, which says it replaced another once there is one. */
 const answerTime = computed(() =>
