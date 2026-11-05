@@ -208,6 +208,12 @@ checkouts are therefore distinguishable even at the same version.
 - **A card on a graph zoomed far out no longer shows three unexplained dots.** Its number
   stands whole inside the block at any length, and what an agent is doing on it is in the
   card's tooltip and accessible name, on its lines and in its frame's count.
+- **A frame on a graph zoomed out says what its number counts.** Its header showed three
+  dots and «5» with no word; it now says «5 working» at every zoom, on the reference's line
+  where there is room and on the line under it where a fold leaves that free. Where neither
+  has room the mark gives way whole rather than as dots or a bare number, and the header's
+  hover text and accessible name say it. The number now takes the size and colour of its
+  word close up too.
 - An answer given in the interface now reaches the agent: a person answering, changing,
   declining or withdrawing a question never produced a notice, a `from_person` line or the
   `person_spoke` refusal, because the interface answers through a route those reads did not

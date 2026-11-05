@@ -107,6 +107,13 @@ const openType = computed(() => asButton('button'))
 const openName = computed(() => asButton(openLabel.value))
 const openWalk = computed(() => asButton(openTarget.value))
 const openTab = computed(() => asButton(tabIndex(openTarget.value)))
+/**
+ * Zoomed out, the band's second row is free where a fold hides nothing and the words are not
+ * grown past it, and what the reference leaves no room for on the first row takes it.
+ */
+const bandWraps = computed(() => overview && !far && !inside.value)
+/** Zoomed out a header shows less than it is, so the pointer is told the rest, as a card is. */
+const openHint = computed(() => (overview ? openName.value : undefined))
 
 /** A frame inside a frame is a well cut into the one it stands in. */
 const nested = computed(() => frame.parentId !== null)
@@ -191,6 +198,7 @@ function onOpenBlur() {
         class="graph-frame-open"
         :type="openType"
         :aria-label="openName"
+        :title="openHint"
         :data-walk-target="openWalk"
         :tabindex="openTab"
         @click="onOpen"
@@ -198,6 +206,7 @@ function onOpenBlur() {
         @blur="onOpenBlur"
       >
         <GraphFrameLine
+          :class="{ 'graph-frame-band-wraps': bandWraps }"
           :epic="epic"
           :named="referenceShown"
           :overview="overview"
@@ -455,6 +464,10 @@ function onOpenBlur() {
     grid-row: 2;
     height: 12px;
     pointer-events: none;
+  }
+
+  .graph-frame-band-wraps {
+    flex-wrap: wrap;
   }
 }
 

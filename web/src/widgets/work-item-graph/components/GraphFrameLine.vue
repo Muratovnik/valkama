@@ -4,8 +4,9 @@
  * state once it has moved, and at the far end the work moving under it. The state
  * gives way first when the line is full, then the reference; the header's button
  * keeps both whole in its name. Over the work under no epic the line is its name.
- * Zoomed out it is the reference alone, grown with the field by the `--grow` the
- * header sets, and far out it gives way to what a fold hides (`named`).
+ * Zoomed out it is the reference and the work moving, the whole line grown with the
+ * field by the `--grow` the header sets, and far out the reference gives way to what
+ * a fold hides (`named`).
  */
 import { computed } from 'vue'
 
@@ -93,8 +94,18 @@ const stateShown = computed(() => (epic ? printsFacet('state', 'lane', epic) : f
   min-width: 0;
   font: var(--font-detail);
 
+  /* Grown as one line, so that what stands on it is measured at the size it is drawn: a
+     word grown on its own took its room unscaled and could stand over the reference. Its
+     height is the one the growth draws, which the header keeps for it. */
   &.overview {
+    gap: 0;
     align-items: flex-start;
+    width: calc(100% / var(--grow));
+    height: calc(1lh * var(--grow));
+    font: var(--font-drawer-title);
+    font-weight: 700;
+    transform: scale(var(--grow));
+    transform-origin: left top;
   }
 }
 
@@ -130,18 +141,15 @@ const stateShown = computed(() => (epic ? printsFacet('state', 'lane', epic) : f
   }
 }
 
+/* The reference keeps its room, and the work moving gives way before it does. */
 .overview :is(.graph-frame-reference, .graph-frame-title) {
   display: block;
   flex: 0 0 auto;
-  max-width: calc(100% / var(--grow));
-  height: calc(1lh * var(--grow));
+  max-width: 100%;
   color: var(--color-text);
-  font: var(--font-drawer-title);
-  font-weight: 700;
+  font: inherit;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  transform: scale(var(--grow));
-  transform-origin: left top;
 }
 </style>

@@ -827,6 +827,9 @@ Epic progress, lane state, and active work share the same semantic palette.
 Aggregate epic activity belongs to the epic index, including its compact state,
 and to an epic's frame on the graph, where it is the one sign of work moving
 inside a folded frame; bundle headers on the board do not repeat a “working” label.
+A frame says that sign in words at every zoom, «5 working», and never as dots or a number
+alone: zoomed out it gives way whole when its band has no room, and the header's hover text
+says it, as a zoomed-out card's does.
 On a phone the list's folded orders are one choice in the title's heading, in the
 heading's font and with the least around it, and an order's name is never cut: the
 longest takes a line of its own under the title's sort.
