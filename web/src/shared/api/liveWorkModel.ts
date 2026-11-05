@@ -5,14 +5,18 @@
  * person, or it has been silent for over a day. Only a silent one says since
  * when; the others carry no time, so a frame of the stream changes when a state
  * does and not with every event. The read model carries the map, keyed by item
- * id, with only the items that have live work.
+ * id, with only the items that have live work; the live-work frame
+ * (`liveFrameModel.ts`) carries the same states row by row.
  */
 
 import { boundedText, strictObject, z } from '@/shared/api/contract.ts'
 import { enumField, ISO, UUID } from '@/shared/api/platformApiGuards.ts'
 
+/** Every live state but `quiet`, the one that says since when. */
+export const TIMELESS_LIVE_STATES = ['working', 'held', 'waiting'] as const
+
 const liveWorkSchema = z.union([
-  strictObject({ state: enumField(['working', 'held', 'waiting'] as const) }),
+  strictObject({ state: enumField(TIMELESS_LIVE_STATES) }),
   strictObject({ state: z.literal('quiet'), quiet_since: boundedText(ISO, 96) }),
 ])
 

@@ -16,6 +16,7 @@ import {
   validateInputRequestDetail,
   validateInputRequestList,
 } from '@/shared/api/inputRequestModel.ts'
+import { validateLiveFrame } from '@/shared/api/liveFrameModel.ts'
 import {
   OPEN_PLACES,
   PATH_REFUSALS,
@@ -54,6 +55,7 @@ const readers: Record<string, (value: unknown) => unknown> = {
   'documents-refused.json': validateRefusal,
   'documents-resolve-unbound.json': validateResolved,
   'documents-resolve.json': validateResolved,
+  'live-frame.json': validateLiveFrame,
   'open-places.json': validateOpenPlaces,
   'open-plan-copy.json': validateOpenPlan,
   'open-plan-file-desktop.json': validateOpenPlan,

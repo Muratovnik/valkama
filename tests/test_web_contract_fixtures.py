@@ -260,6 +260,53 @@ class _Scenario:
             conn.close()
         return self.http(f"/api/modules/planning/work-item?{self.scope(reference=ref)}")
 
+    def live_frame(self) -> dict:
+        """The frame a pin answers with: the pinned card, a waiting row, a quiet one under an epic."""
+
+        quiet = "6f1c2a8e-0000-4000-8000-000000000004"
+        conn = store.connect()
+        try:
+            epic = str(
+                service.create_work_item(conn, space=SPACE, title="Live epic", kind="epic")[
+                    "reference"
+                ]
+            )
+            task = str(
+                service.create_work_item(conn, space=SPACE, title="Quiet task", parent=epic)[
+                    "reference"
+                ]
+            )
+            with calls.bind(
+                calls.Identity(
+                    state=calls.CONFIRMED,
+                    source=calls.CLAUDE_HOOK,
+                    session_id=quiet,
+                    tool_use_id="t",
+                    client="claude",
+                ),
+                "claim_work_item",
+            ):
+                service.claim_work_item(conn, task, move_state=False)
+            sessions.record_place(
+                conn,
+                quiet,
+                opened_in="terminal",
+                opened_host="",
+                opened_folder="",
+                host_session_id="",
+                current=True,
+            )
+            # Silent for two days: past the day that makes a row quiet, within the lease.
+            conn.execute(
+                "UPDATE sessions SET last_seen = strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-2 days')"
+                " WHERE id = ?",
+                (quiet,),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        return self.http("/api/planning/work-item/pin", {"id": self.reference, "pinned": True})
+
     def open_plans(self) -> dict[str, object]:
         """What a click is told to do: each form of a plan, for the files `documents` wrote."""
 
@@ -423,6 +470,7 @@ class _Scenario:
             "mcp-get-work-item-unresolved": self.tool("get_work_item", id=ref, unresolved=True),
             **self.documents(),
             **self.open_plans(),
+            "live-frame": self.live_frame(),
         }
 
 

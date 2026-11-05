@@ -65,7 +65,7 @@ const EVENT_ACTIONS = [
 
 /** `MAIN-142`: what a person types and what a URL carries. */
 export const WORK_ITEM_REFERENCE = /^[A-Z][A-Z0-9]{1,7}-[1-9]\d{0,8}$/u
-const SPACE_KEY = /^[A-Z][A-Z0-9]{1,7}$/u
+export const SPACE_KEY = /^[A-Z][A-Z0-9]{1,7}$/u
 export const STATE_KEY = /^[a-z][a-z0-9-]{0,31}$/u
 export const TITLE = /^[^\u{0}]{1,200}$/u
 

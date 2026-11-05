@@ -7,6 +7,8 @@
  * refused it, so a view can say which rather than showing a stack.
  */
 
+import { validateLiveFrame } from '@/shared/api/liveFrameModel.ts'
+import type { LiveFrame } from '@/shared/api/liveFrameModel.ts'
 import {
   readPending,
   readRefusal,
@@ -372,4 +374,19 @@ export async function selectWorkItemSummary(input: {
   author?: string
 }): Promise<WorkItem> {
   return validateWorkItemRecord(await write('/api/planning/work-item/summary/select', { ...input }))
+}
+
+/**
+ * Pin an item to the side panel, or remove its pin. A pin is the person's own list,
+ * not a change to the item, so it names no author and no revision; the answer is the
+ * live-work frame as it now stands.
+ */
+export async function pinWorkItem(input: { id: string; pinned: boolean }): Promise<LiveFrame> {
+  return validateLiveFrame(
+    await request('/api/planning/work-item/pin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: input.id, pinned: input.pinned }),
+    }),
+  )
 }
