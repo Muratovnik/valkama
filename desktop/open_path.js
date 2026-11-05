@@ -3,7 +3,8 @@
 // The address a launch asks the window to show. Two callers ask. The listener starts
 // the app with a route when a person follows a link to a work item, and Windows starts
 // it with `valkama://open/<number>` when a person clicks a toast, at first start or on
-// top of a running window. A command line is untrusted: anything on this machine can
+// top of a running window; a toast about a question adds `?reveal=question`, an order the
+// page takes out of the address as it obeys it. A command line is untrusted: anything on this machine can
 // write one, and any page can call the scheme, whose address Windows may split into
 // more arguments than it was. So only the shapes these two issue are taken. Any other
 // switch value leaves the window where it was, and a scheme address of any other shape
@@ -18,16 +19,17 @@
 const OPEN_PATH_SWITCH = '--open-path='
 
 // `_CARD_ROUTE` in server/http_surface.py; tests/test_work_item_link.py compares them.
-const CARD_ROUTE = /^(?:\/modules\/planning\/project\/[a-z][a-z0-9-]{0,159}\?entity=[A-Za-z0-9_-]+|\/modules\/planning\/global\?panel=questions)$/
+const CARD_ROUTE = /^(?:\/modules\/planning\/project\/[a-z][a-z0-9-]{0,159}\?entity=[A-Za-z0-9_-]+(?:&reveal=question)?|\/modules\/planning\/global\?panel=questions)$/
 
 // `_QUESTIONS_ROUTE` in server/http_surface.py, compared with it by the same test.
 const QUESTIONS_ROUTE = '/modules/planning/global?panel=questions'
 
 const ANY_SCHEME_ADDRESS = /^valkama:/i
 
-// `messages.QUESTIONS` and `_HUMAN_ID` in server/, compared by the same test. Nothing
-// else: no other host, path, query, fragment, percent escape or lower-case spelling.
-const SCHEME_ADDRESS = /^valkama:\/\/open\/(questions|[A-Z][A-Z0-9]{1,7}-[1-9][0-9]{0,8})$/
+// `messages.QUESTIONS`, `_HUMAN_ID` and `messages.REVEAL_QUESTION` in server/, compared by
+// the same test. Nothing else: no other host, path, query, fragment, percent escape or
+// lower-case spelling.
+const SCHEME_ADDRESS = /^valkama:\/\/open\/(?:(questions)|([A-Z][A-Z0-9]{1,7}-[1-9][0-9]{0,8})(\?reveal=question)?)$/
 
 function isAddress(argument) {
   return (
@@ -43,7 +45,8 @@ function routeOf(argument) {
   }
   const named = SCHEME_ADDRESS.exec(argument)
   if (named === null) return null
-  return named[1] === 'questions' ? QUESTIONS_ROUTE : `/open/${named[1]}?in=browser`
+  if (named[1]) return QUESTIONS_ROUTE
+  return `/open/${named[2]}?in=browser${named[3] ? '&reveal=question' : ''}`
 }
 
 /** The route one command line asks for, or null. Two answers are no answer. */

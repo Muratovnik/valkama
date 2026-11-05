@@ -309,7 +309,7 @@ class HelperDryRunTests(unittest.TestCase):
                 "group": "valkama",
                 "expires_at": "2099-01-01T09:30:00Z",
                 "expired": False,
-                "launch": "valkama://open/MAIN-12",
+                "launch": "valkama://open/MAIN-12?reveal=question",
                 "activation": "protocol",
                 "texts": [
                     "Valkama: нужен ваш ответ",

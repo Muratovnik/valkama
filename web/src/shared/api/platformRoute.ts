@@ -408,6 +408,13 @@ export function workItemLinkText(path: string): string | null {
   }
 }
 
+function withoutOrder(url: URL, name: string, value: string): string | null {
+  if (url.searchParams.getAll(name).join(',') !== value) return null
+  const rest = new URL(url)
+  rest.searchParams.delete(name)
+  return `${rest.pathname}${rest.search}`
+}
+
 /**
  * What is left of an address that asks for the panel of open questions, or null when
  * it does not ask. `?panel=questions` is an order rather than part of a route: the shell
@@ -415,10 +422,16 @@ export function workItemLinkText(path: string): string | null {
  * canonical grammar above never sees it.
  */
 export function withoutQuestionsAsk(url: URL): string | null {
-  if (url.searchParams.getAll('panel').join(',') !== 'questions') return null
-  const rest = new URL(url)
-  rest.searchParams.delete('panel')
-  return `${rest.pathname}${rest.search}`
+  return withoutOrder(url, 'panel', 'questions')
+}
+
+/**
+ * What is left of an address that asks for its card's waiting question, or null when it
+ * does not ask. `&reveal=question` is an order of the same kind, and what a click on a
+ * notification about a question adds to the card's route.
+ */
+export function withoutQuestionReveal(url: URL): string | null {
+  return withoutOrder(url, 'reveal', 'question')
 }
 
 /**

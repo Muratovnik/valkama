@@ -116,7 +116,7 @@ async function revealQuestion() {
   discussion.value?.revealQuestion()
 }
 
-defineExpose({ askOutcome, revealChecklist, revealQuestion })
+defineExpose({ askOutcome, readQuestions: questions.readNow, revealChecklist, revealQuestion })
 </script>
 
 <template>

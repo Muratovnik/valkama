@@ -56,6 +56,8 @@ function localizedFailure(failure: TypedFailure): string {
 
 const {
   activeModule,
+  cardQuestionAsked,
+  cardQuestionTaken,
   documentPage,
   entryRestorePending,
   goHome,
@@ -84,6 +86,7 @@ watch(activeModule, prefetchModule, { immediate: true })
 const { finderOpen, requestsOpen, pendingRequestCount, openTarget } = useGlobalWorkActions(
   writeRoute,
   questionsAsked,
+  cardQuestionAsked,
 )
 const mainContent = ref<HTMLElement | null>(null)
 function focusMainContent() {
@@ -332,6 +335,7 @@ usePlatformEntryRestore({
           v-else-if="modulesAuthoritative && activeManifest"
           ref="moduleStage"
           :active-module="activeModule"
+          :question-asked="cardQuestionAsked"
           :module-title="moduleTitle"
           :scope="operatingScope"
           :primary-write-scope-id="primaryWriteScopeId"
@@ -343,6 +347,7 @@ usePlatformEntryRestore({
           @entity="openEntity"
           @notice="(message) => (notice = message)"
           @open-project="openProject"
+          @question-taken="cardQuestionTaken"
           @switch-scope="switchScope"
           @state="updateModuleState"
           @locale="selectLocale"

@@ -1,5 +1,7 @@
 import { computed, watch } from 'vue'
 
+import { until } from '@vueuse/core'
+
 import { useInputRequests } from '@/features/input-requests/composables/useInputRequests.ts'
 
 import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
@@ -13,7 +15,7 @@ import type { PlanningTarget } from '@/shared/api/planningTarget.ts'
  * whenever the card's stream says something moved.
  */
 export function useItemQuestions(target: () => PlanningTarget | undefined, stream: () => unknown) {
-  const { entries, failed, partial, refresh, result, changed } = useInputRequests(
+  const { entries, failed, loading, partial, refresh, result, changed } = useInputRequests(
     () => target() ?? null,
   )
   const waiting = computed(() => entries.value.some((entry) => entry.request.status === 'pending'))
@@ -22,5 +24,16 @@ export function useItemQuestions(target: () => PlanningTarget | undefined, strea
   /** More of them than one read brings: the newest are here and those waiting, not the rest. */
   const cut = computed(() => result.value?.has_more ?? false)
   watch(stream, () => void refresh())
-  return { changed, cut, entries, refresh, unread, waiting }
+  /**
+   * Whether a question waits, as the read that answers next says. One already on its way
+   * is that read; a window out of sight reads once it is back, as it does anyway.
+   */
+  async function readNow() {
+    await refresh()
+    await until(
+      () => !loading.value && (target() === undefined || result.value !== null || failed.value),
+    ).toBe(true)
+    return waiting.value
+  }
+  return { changed, cut, entries, readNow, refresh, unread, waiting }
 }

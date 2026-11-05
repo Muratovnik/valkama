@@ -23,12 +23,14 @@ import {
   recoverWorkRoute,
   resolvePlatformRoute,
   serializePlatformRoute,
+  withoutQuestionReveal,
   withoutQuestionsAsk,
   workItemLinkText,
 } from '@/shared/api/platformRoute.ts'
 import type {
   OperatingScope,
   PlatformRoute,
+  PlatformRouteResolution,
   PlatformRouteUnavailable,
 } from '@/shared/api/platformRoute.ts'
 import { secureFetch } from '@/shared/api/secureFetch.ts'
@@ -46,6 +48,9 @@ function isCleanEntry(): boolean {
   const current = router.currentRoute.value
   return CLEAN_ENTRY_PATHS.has(current.path) && !current.fullPath.includes('?')
 }
+
+/** What identifies the item a route opens, as a value two routes can be compared by. */
+const entityKey = (route: PlatformRoute) => JSON.stringify(route.entity ?? null)
 
 /** What a readable address lost on the way in: its module state, or its whole query. */
 export type DroppedRoutePart = 'query' | 'state'
@@ -99,6 +104,29 @@ export function usePlatformNavigation(
   const pendingSession = ref('')
   /** How many times an address has asked for the panel of questions, which the shell holds. */
   const questionsAsked = ref(0)
+  /**
+   * The card an address asked to be taken to the waiting question of, until that card has
+   * taken the order. It is one order and not a place to be in: a move refused, or any other
+   * card opened first, ends it, so an ordinary opening later on scrolls nowhere. The route
+   * may stand on this card already, and then only this moves, as nothing in the address does.
+   */
+  const askedCard = ref<string | null>(null)
+  const cardQuestionAsked = computed(
+    () => askedCard.value !== null && askedCard.value === entityKey(route.value),
+  )
+  function cardQuestionTaken() {
+    askedCard.value = null
+  }
+  function askForQuestion(next: PlatformRouteResolution) {
+    if (isPlatformRouteUnavailable(next) || next.entity?.kind !== 'work-item') return
+    askedCard.value = entityKey(next)
+  }
+  watch(
+    () => entityKey(route.value),
+    (now) => {
+      if (askedCard.value !== now) askedCard.value = null
+    },
+  )
 
   function applyLocation() {
     // The window's address and not the router's: the first read comes before the router has
@@ -115,14 +143,26 @@ export function usePlatformNavigation(
     route.value = DEFAULT_ROUTE
   }
 
-  function applyShellLocation() {
-    const rest = withoutQuestionsAsk(new URL(router.currentRoute.value.fullPath, location.origin))
-    if (rest !== null) {
-      questionsAsked.value += 1
-      // This moves the address, and the move comes back here without the ask.
-      void router.replace(rest)
-      return
+  /** An order is taken out of the address. That moves it, and the move comes back without it. */
+  function obeyAddressOrder() {
+    const address = new URL(router.currentRoute.value.fullPath, location.origin)
+    const rest = withoutQuestionsAsk(address)
+    const card = withoutQuestionReveal(address)
+    if (rest !== null) questionsAsked.value += 1
+    else if (card !== null) {
+      try {
+        askForQuestion(resolvePlatformRoute(new URL(card, location.origin)))
+      } catch {
+        // The shell reads what is left once it is back, and says what it finds.
+      }
     }
+    const left = rest ?? card
+    if (left !== null) void router.replace(left)
+    return left !== null
+  }
+
+  function applyShellLocation() {
+    if (obeyAddressOrder()) return
     routeFailure.value = ''
     workItemLink.value = workItemLinkText(router.currentRoute.value.path)
     if (workItemLink.value !== null) {
@@ -193,8 +233,10 @@ export function usePlatformNavigation(
     if (
       isNavigationFailure(failure, NavigationFailureType.aborted) ||
       isNavigationFailure(failure, NavigationFailureType.cancelled)
-    )
+    ) {
+      if (askedCard.value === entityKey(next)) askedCard.value = null
       return
+    }
     routeFailure.value = ''
     routeUnavailable.value = null
     workItemLink.value = null
@@ -233,6 +275,16 @@ export function usePlatformNavigation(
     writeRoute({ ...route.value, state: Object.keys(state).length ? state : undefined }, 'replace')
   }
 
+  /** Moves to a route asked for from outside, with the order it carries. False if it cannot. */
+  function moveToAddress(address: URL) {
+    const card = withoutQuestionReveal(address)
+    const resolved = resolvePlatformRoute(card === null ? address : new URL(card, address.origin))
+    if (isPlatformRouteUnavailable(resolved)) return false
+    if (card !== null) askForQuestion(resolved)
+    writeRoute(resolved)
+    return true
+  }
+
   /**
    * A toast knows an item's number and not its route, which only the server can work
    * out. Its redirect says where the card is. An address it does not redirect is left
@@ -241,12 +293,7 @@ export function usePlatformNavigation(
   async function followWorkItemAddress(address: URL) {
     try {
       const response = await secureFetch(address)
-      const resolved =
-        response.ok && response.redirected ? resolvePlatformRoute(new URL(response.url)) : null
-      if (resolved !== null && !isPlatformRouteUnavailable(resolved)) {
-        writeRoute(resolved)
-        return
-      }
+      if (response.ok && response.redirected && moveToAddress(new URL(response.url))) return
     } catch {
       // The shell asks again below, and says what it finds.
     }
@@ -272,8 +319,7 @@ export function usePlatformNavigation(
         void followWorkItemAddress(address)
         return
       }
-      const resolved = resolvePlatformRoute(address)
-      if (!isPlatformRouteUnavailable(resolved)) writeRoute(resolved)
+      moveToAddress(address)
     } catch {
       // Nothing to show for an address nobody here asked for.
     }
@@ -284,6 +330,8 @@ export function usePlatformNavigation(
 
   return {
     activeModule,
+    cardQuestionAsked,
+    cardQuestionTaken,
     documentPage,
     entryRestorePending,
     goHome,

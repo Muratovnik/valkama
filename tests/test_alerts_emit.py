@@ -125,7 +125,7 @@ class OneQuestionTests(EmitHarness):
         self.assertEqual(self.ref, message["tag"])
         self.assertEqual(messages.GROUP, message["group"])
         self.assertEqual("2099-01-01T09:30:00Z", message["expires_at"])
-        self.assertIn(f"valkama://open/{self.ref}", message["xml"])
+        self.assertIn(f'"valkama://open/{self.ref}?reveal=question"', message["xml"])
         self.assertIn("Rollout order", message["xml"])
         reader = store.connect()
         self.addCleanup(reader.close)

@@ -93,7 +93,7 @@ class ReviewAfterALaunchTests(ReaperHarness):
         (message,) = self.shown
         self.assertEqual(reference, message["tag"])
         self.assertIn("ready for review", message["xml"])
-        self.assertIn(f"valkama://open/{reference}", message["xml"])
+        self.assertIn(f'"valkama://open/{reference}"', message["xml"])
         item_id = str(planning.get_work_item(self.conn, reference)["work_item_id"])
         self.assertEqual([(item_id, False)], self.asked, "only its card silences a review")
 

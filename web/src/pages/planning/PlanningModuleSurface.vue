@@ -72,6 +72,8 @@ const props = defineProps<{
   scope: OperatingScope
   /** The planning manifest's bound on the route state. */
   stateBytes: number
+  /** An address asked the open card to go to its waiting question. */
+  questionAsked?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -80,6 +82,7 @@ const emit = defineEmits<{
   'entity': [entity?: EntityRef]
   'notice': [message: string]
   'open-project': [projectId: string]
+  'question-taken': []
   'state': [state: Record<string, string | number | boolean>]
 }>()
 
@@ -466,12 +469,14 @@ defineExpose({ refresh, selectedId })
         :workflow="model.workflow"
         :writable="writable"
         :parent-reference="parentReference"
+        :question-asked="questionAsked"
         @back="goBack"
         @changed="loadPlanning"
         @chain="showChain"
         @close="closeItem"
         @filter="filterFromCard"
         @open="(reference, left) => openItem(reference, true, left)"
+        @question-taken="emit('question-taken')"
       />
     </PlanningCardDrawer>
   </div>

@@ -14,8 +14,10 @@ XML 1.0 cannot carry at all are dropped rather than left to fail the load.
 A click opens the item through `valkama://open/<REF>`, the scheme the desktop
 app registers, as a protocol activation: it works after the process that showed
 the toast has exited, which is the usual case, since that process is an agent's
-session or a short-lived reaper pass. A toast that stands for several questions,
-and the trial, open `valkama://open/questions`, the panel that lists them.
+session or a short-lived reaper pass. A toast about a question asks for the question
+too, `valkama://open/<REF>?reveal=question`, which is what it was shown for. A toast
+that stands for several questions, and the trial, open `valkama://open/questions`, the
+panel that lists them.
 
 `Tag` is the item's reference and `Group` is `valkama`, so a newer toast about
 the same item replaces the older one in the action centre and either can be
@@ -39,6 +41,10 @@ SUMMARY_TAG = "summary"
 #: header a summary carries. `desktop/open_path.js` takes it and no reference can be
 #: spelled this way, because every reference ends in `-<number>`.
 QUESTIONS = "questions"
+#: What a click on a toast about a question adds to the item's address: the card opens
+#: at the question still waiting. The toast does not name which: the card reads that as
+#: it stands by then, and an answered one leaves the card simply opened.
+REVEAL_QUESTION = "reveal=question"
 #: The tag of the toast the settings screen sends to try the channel.
 TRIAL_TAG = "trial"
 TITLE_LIMIT = 80
@@ -91,10 +97,11 @@ class Message(TypedDict):
     expires_at: str | None
 
 
-def launch_uri(reference: str) -> str:
+def launch_uri(reference: str, *, reveal_question: bool = False) -> str:
     """The address a click on an item's toast opens."""
 
-    return f"valkama://open/{reference}"
+    order = f"?{REVEAL_QUESTION}" if reveal_question else ""
+    return f"valkama://open/{reference}{order}"
 
 
 def _clean(text: str) -> str:
@@ -198,7 +205,7 @@ def build(
         "aumid": AUMID,
         "tag": reference,
         "group": GROUP,
-        "xml": _toast(launch_uri(reference), lines, logo),
+        "xml": _toast(launch_uri(reference, reveal_question=event == "question"), lines, logo),
         "expires_at": _expiry(expires_at),
     }
 

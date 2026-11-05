@@ -28,6 +28,14 @@ checkouts are therefore distinguishable even at the same version.
   differs from its lockfile, says in which directory `npm ci` is needed, and no longer
   reports this as a failed step. Console messages in a step's summary are read in the
   console's code page instead of coming out garbled.
+### Fixed
+
+- **A click on a notification about a question goes to the question.** It used to open
+  the card at its top and leave the question to be found further down. The card now
+  brings the waiting question into view with the keyboard on its first field, however it
+  stood when the click came, and opens as usual if the question has been answered by then.
+  The notification's address has changed, so install the new desktop app before the new
+  server: an older app refuses the new address and the click does nothing.
 
 ## [2.5.0](https://github.com/Muratovnik/valkama/compare/v2.4.0...v2.5.0) - 2026-11-05
 

@@ -32,6 +32,10 @@ _OPEN_PATH_SWITCH = "--open-path="
 #: Every reference ends in `-<number>`, so none can be spelled this way.
 QUESTIONS = "questions"
 
+#: The one thing an item's address may ask of the page besides opening the card: to go on
+#: to the card's waiting question. The page takes it out of the address as it obeys it.
+REVEAL_QUESTION = "reveal=question"
+
 _MESSAGES = {
     "en": {
         "opened": "{reference} opened in the Valkama app",
@@ -123,16 +127,20 @@ def _language(accept_language: str | None) -> str:
     return "ru" if any(item.strip().lower().startswith("ru") for item in languages) else "en"
 
 
-def opened_page(reference: str, accept_language: str | None) -> tuple[bytes, str]:
+def opened_page(
+    reference: str, accept_language: str | None, *, reveal_question: bool = False
+) -> tuple[bytes, str]:
     """The page answered for what the app was started on, and its content policy.
 
-    `reference` is an item's reference, or `QUESTIONS` for the panel.
+    `reference` is an item's reference, or `QUESTIONS` for the panel. `reveal_question`
+    says the address asked for the card's question, so opening it here asks the same.
     """
 
     language = _language(accept_language)
     text = _MESSAGES[language]
     name = html.escape(reference)
     heading = text["questions"] if reference == QUESTIONS else text["opened"].format(reference=name)
+    order = html.escape(f"&{REVEAL_QUESTION}") if reveal_question else ""
     page = f"""<!doctype html>
 <html lang="{language}">
 <head>
@@ -145,7 +153,7 @@ def opened_page(reference: str, accept_language: str | None) -> tuple[bytes, str
 <p class="brand">Valkama</p>
 <h1>{heading}</h1>
 <p>{text["close"]}</p>
-<p><a href="/open/{name}?in=browser">{text["here"]}</a></p>
+<p><a href="/open/{name}?in=browser{order}">{text["here"]}</a></p>
 </main>
 <script>{_SCRIPT}</script>
 </body>
@@ -156,4 +164,4 @@ def opened_page(reference: str, accept_language: str | None) -> tuple[bytes, str
     return page.encode("utf-8"), policy
 
 
-__all__ = ["QUESTIONS", "installed_path", "open_card", "opened_page"]
+__all__ = ["QUESTIONS", "REVEAL_QUESTION", "installed_path", "open_card", "opened_page"]

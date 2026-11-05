@@ -157,7 +157,9 @@ class MarkupTests(unittest.TestCase):
         message = question(TITLE_RU, reference='MAIN-1" activationType="foreground')
         root = parsed(message)
         self.assertEqual("protocol", root.get("activationType"))
-        self.assertEqual('valkama://open/MAIN-1" activationType="foreground', root.get("launch"))
+        self.assertEqual(
+            'valkama://open/MAIN-1" activationType="foreground?reveal=question', root.get("launch")
+        )
 
 
 class EnvelopeTests(unittest.TestCase):
@@ -165,13 +167,31 @@ class EnvelopeTests(unittest.TestCase):
         message = question(TITLE_RU)
         root = parsed(message)
         self.assertEqual("toast", root.tag)
-        self.assertEqual("valkama://open/MAIN-12", root.get("launch"))
+        self.assertEqual("valkama://open/MAIN-12?reveal=question", root.get("launch"))
         self.assertEqual("protocol", root.get("activationType"))
         self.assertEqual("ToastGeneric", root.find("./visual/binding").get("template"))
         self.assertEqual(
             {"aumid": "local.valkama", "tag": "MAIN-12", "group": "valkama", "expires_at": None},
             {key: value for key, value in message.items() if key != "xml"},
         )
+
+    def test_only_a_toast_about_a_question_leads_to_the_question(self) -> None:
+        decision = question(TITLE_RU, kind="decision")
+        self.assertEqual("valkama://open/MAIN-12?reveal=question", parsed(decision).get("launch"))
+        for event in ("review", "launchFailed"):
+            with self.subTest(event=event):
+                message = messages.build(
+                    event, reference="MAIN-12", title="Pick", settings=TITLE_RU, kind=None
+                )
+                self.assertEqual("valkama://open/MAIN-12", parsed(message).get("launch"))
+
+    def test_the_address_survives_the_markup_at_its_longest(self) -> None:
+        # What Windows hands back is the attribute as XML reads it. The longest number a
+        # reference can have still leaves the address far under what a launch carries.
+        address = "valkama://open/ABCDEFGH-999999999?reveal=question"
+        message = question(TITLE_RU, reference="ABCDEFGH-999999999")
+        self.assertEqual(address, parsed(message).get("launch"))
+        self.assertIn(f'launch="{address}"', message["xml"], "nothing in it needs an entity")
 
     def test_an_expiry_is_carried_in_utc_seconds(self) -> None:
         cases = {

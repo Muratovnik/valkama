@@ -56,6 +56,7 @@ import { useInspectorExecution } from '@/widgets/work-item-inspector/utils/useIn
 import { useInspectorReturn } from '@/widgets/work-item-inspector/utils/useInspectorReturn.ts'
 import { useInspectorSections } from '@/widgets/work-item-inspector/utils/useInspectorSections.ts'
 import { useInspectorWrites } from '@/widgets/work-item-inspector/utils/useInspectorWrites.ts'
+import { useQuestionReveal } from '@/widgets/work-item-inspector/utils/useQuestionReveal.ts'
 import { useTakeoverQuestion } from '@/widgets/work-item-inspector/utils/useTakeoverQuestion.ts'
 import { useWorkItemChain } from '@/widgets/work-item-inspector/utils/useWorkItemChain.ts'
 import { useWorkItemResource } from '@/widgets/work-item-inspector/utils/useWorkItemResource.ts'
@@ -90,19 +91,23 @@ const props = defineProps<{
   agentsToken?: number
   /** The epic's reference, which the record names only by id; the host's model knows it. */
   parentReference?: string | null
+  /** An address asked this card to go to its waiting question. */
+  questionAsked?: boolean
   /** Where this card was left, when Back is what opened it again. */
   returnTo?: InspectorReturn | null
 }>()
 
 const emit = defineEmits<{
-  back: []
-  chain: [chain: WorkItemChain, branch: string | null]
-  changed: []
-  close: []
+  'back': []
+  'chain': [chain: WorkItemChain, branch: string | null]
+  'changed': []
+  'close': []
   /** A label pressed on the card, for the Work filter. */
-  filter: [token: WorkFilterToken]
+  'filter': [token: WorkFilterToken]
   /** Another card opened from this one, and where this one was left. */
-  open: [reference: string, from: InspectorReturn]
+  'open': [reference: string, from: InspectorReturn]
+  /** The address's order has reached this card and is spent, whatever it finds. */
+  'question-taken': []
 }>()
 
 const { t } = useI18n()
@@ -212,6 +217,9 @@ watch(
 const chainRoot = computed(() => (props.writable ? (item.value?.work_item_id ?? '') : ''))
 const chain = useWorkItemChain(chainRoot, toRef(props, 'refreshToken'))
 
+/** The item and its chain have both answered, so the body is as tall as it will be. */
+const settled = () => item.value !== null && chain.answered.value
+
 const chainSection = ref<InstanceType<typeof InspectorChain> | null>(null)
 const { capture, holding } = useInspectorReturn({
   chain: chainSection,
@@ -221,10 +229,7 @@ const { capture, holding } = useInspectorReturn({
   reference: () => props.reference,
   scope: chain.scope,
   section: shownSection,
-  settled: () =>
-    item.value !== null &&
-    !chain.loading.value &&
-    (chainRoot.value === '' || chain.chain.value !== null || chain.failed.value),
+  settled,
 })
 
 /** Open another card from this one, after the draft guard, saying where this one was left. */
@@ -257,10 +262,13 @@ function followGuard(guard: string) {
   else if (guard === 'checklist') void overview.value?.revealChecklist()
 }
 
-function revealQuestion() {
-  section.value = 'overview'
-  void overview.value?.revealQuestion()
-}
+const { revealQuestion } = useQuestionReveal({
+  asked: () => Boolean(props.questionAsked),
+  overview,
+  section,
+  settled,
+  taken: () => emit('question-taken'),
+})
 
 /**
  * Leave this item — close it, step back, or open another — after asking when

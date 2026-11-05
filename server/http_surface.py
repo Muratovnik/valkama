@@ -283,13 +283,19 @@ _WORK_ITEM_LINK = "/open"
 #: page takes the parameter out of the address as it opens the panel, so a reload after
 #: the panel was closed does not bring it back.
 _QUESTIONS_ROUTE = "/modules/planning/global?panel=questions"
-#: All a work item link may redirect to: one card, or the panel of questions, on this
-#: origin. Spelled whole rather than parsed, because a URL parser quietly drops the line
-#: breaks a response header must never carry.
+#: All a work item link may redirect to: one card, which may also ask for its waiting
+#: question, or the panel of questions, on this origin. Spelled whole rather than parsed,
+#: because a URL parser quietly drops the line breaks a response header must never carry.
 _CARD_ROUTE = re.compile(
     r"(?:/modules/planning/project/[a-z][a-z0-9-]{0,159}\?entity=[A-Za-z0-9_-]+"
+    r"(?:&reveal=question)?"
     r"|/modules/planning/global\?panel=questions)"
 )
+
+
+def _asks_for_question(query: str) -> bool:
+    name, _, value = desktop_app.REVEAL_QUESTION.partition("=")
+    return parse_qs(query, keep_blank_values=True).get(name) == [value]
 
 
 def _is_page_path(path: str) -> bool:
@@ -960,7 +966,11 @@ class Handler(BaseHTTPRequestHandler):
             return False
         if not desktop_app.open_card(location, port=self.server.server_port):
             return False
-        page, policy = desktop_app.opened_page(reference, self.headers.get("Accept-Language"))
+        page, policy = desktop_app.opened_page(
+            reference,
+            self.headers.get("Accept-Language"),
+            reveal_question=location.endswith(f"&{desktop_app.REVEAL_QUESTION}"),
+        )
         self._send(
             200,
             page,
@@ -985,6 +995,9 @@ class Handler(BaseHTTPRequestHandler):
 
         An address that leads to a card goes to the desktop app first when it is
         installed and this is a person's click; nothing else starts it.
+
+        Of the address's query only the one order to the page goes on, spelled here and not
+        copied from the request, and only in the one spelling the page reads.
         """
 
         text = unquote(path[len(_WORK_ITEM_LINK) + 1 :])
@@ -1002,6 +1015,8 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:  # the shell's own read reports what went wrong
             self._send_index(503)
             return
+        if location is not None and _asks_for_question(query):
+            location = f"{location}&{desktop_app.REVEAL_QUESTION}"
         if location is None or _CARD_ROUTE.fullmatch(location) is None:
             self._send_index(404)
             return

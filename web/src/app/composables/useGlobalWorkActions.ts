@@ -10,6 +10,7 @@ import type { PlatformRoute } from '@/shared/api/platformRoute.ts'
 export function useGlobalWorkActions(
   writeRoute: (route: PlatformRoute) => void,
   questionsAsked: Readonly<Ref<number>>,
+  cardQuestionAsked: Readonly<Ref<boolean>>,
 ) {
   const finderOpen = ref(false)
   const requestsOpen = ref(false)
@@ -31,6 +32,13 @@ export function useGlobalWorkActions(
     },
     { immediate: true },
   )
+
+  // The card's question takes the keyboard, which a surface over the card would hold.
+  watch(cardQuestionAsked, (asked) => {
+    if (!asked) return
+    finderOpen.value = false
+    requestsOpen.value = false
+  })
 
   function findShortcut(event: KeyboardEvent) {
     if (

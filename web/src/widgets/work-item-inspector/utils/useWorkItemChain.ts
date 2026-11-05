@@ -1,4 +1,4 @@
-import { onBeforeUnmount, ref, shallowRef, toValue, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, shallowRef, toValue, watch } from 'vue'
 import type { MaybeRefOrGetter } from 'vue'
 
 import { fetchWorkItemChain } from '@/shared/api/planningChainApi.ts'
@@ -26,6 +26,10 @@ export function useWorkItemChain(
   const scope = ref<ChainScope>('chain')
   const loading = ref(false)
   const failed = ref(false)
+  /** Nothing more is coming: the section stands as tall as it will. */
+  const answered = computed(
+    () => !loading.value && (toValue(root) === '' || chain.value !== null || failed.value),
+  )
   let identity = ''
   let generation = 0
   let controller: AbortController | undefined
@@ -75,5 +79,5 @@ export function useWorkItemChain(
   )
 
   onBeforeUnmount(cancel)
-  return { chain, failed, load, loading, scope, setScope }
+  return { answered, chain, failed, load, loading, scope, setScope }
 }

@@ -7,6 +7,7 @@ import {
   resolvePlatformRoute,
   roundTripPlatformRoute,
   serializePlatformRoute,
+  withoutQuestionReveal,
   withoutQuestionsAsk,
 } from '@/shared/api/platformRoute.ts'
 
@@ -27,6 +28,30 @@ test('an address asks for the panel of questions in one spelling, and leaves the
     '/modules/planning/global?state=panel',
   ])
     assert.equal(ask(other), null, other)
+})
+
+const reveal = (address: string) => withoutQuestionReveal(new URL(address, 'http://127.0.0.1:8642'))
+
+test('an address asks for a card’s waiting question in one spelling, and leaves the rest', () => {
+  // The address the listener and the desktop app send, spelled by hand from their copies.
+  assert.equal(
+    reveal('/modules/planning/project/example?entity=abc&reveal=question'),
+    '/modules/planning/project/example?entity=abc',
+  )
+  assert.equal(
+    reveal('/modules/planning/project/example?entity=abc&state=e30&reveal=question'),
+    '/modules/planning/project/example?entity=abc&state=e30',
+  )
+  for (const other of [
+    '/modules/planning/project/example?entity=abc',
+    '/modules/planning/project/example?entity=abc&reveal=other',
+    '/modules/planning/project/example?entity=abc&reveal=',
+    '/modules/planning/project/example?entity=abc&reveal=question&reveal=question',
+    '/modules/planning/global?panel=questions',
+  ])
+    assert.equal(reveal(other), null, other)
+  // The order is not part of a route, and the canonical grammar never reads it as one.
+  assert.throws(() => parsePlatformRoute('/modules/planning/global?reveal=question'))
 })
 
 test('canonical route round-trips every built-in at global and project scope', () => {

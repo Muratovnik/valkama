@@ -198,6 +198,71 @@ class WorkItemLinkTests(LinkedStoreCase):
         self.assertEqual(200, landed.status)
         self.assertIn(b'<div id="app"', landed.read())
 
+    def test_an_address_may_also_ask_for_the_card_s_waiting_question(self) -> None:
+        plain = self.get("/open/MAIN-1")
+        plain.read()
+        route = plain.getheader("Location")
+        for path in ("/open/MAIN-1?reveal=question", "/open/MAIN-1?in=browser&reveal=question"):
+            with self.subTest(path=path):
+                response = self.get(path)
+                response.read()
+                self.assertEqual(302, response.status)
+                self.assertEqual(f"{route}&reveal=question", response.getheader("Location"))
+
+    def test_nothing_else_in_an_address_reaches_the_redirect(self) -> None:
+        plain = self.get("/open/MAIN-1")
+        plain.read()
+        route = plain.getheader("Location")
+        for query in (
+            "x=1",
+            "reveal=other",
+            "reveal=",
+            "reveal",
+            "Reveal=question",
+            "reveal=QUESTION",
+            "reveal=question&reveal=question",
+            "reveal=question%0d%0aSet-Cookie:%20a=1",
+            "reveal=question%26x=1",
+            "state=e30",
+        ):
+            with self.subTest(query=query):
+                response = self.get(f"/open/MAIN-1?{query}")
+                response.read()
+                self.assertEqual(302, response.status)
+                self.assertEqual(route, response.getheader("Location"))
+
+    def test_a_foreign_part_goes_and_the_order_stays(self) -> None:
+        plain = self.get("/open/MAIN-1")
+        plain.read()
+        response = self.get("/open/MAIN-1?x=1&reveal=question&state=e30")
+        response.read()
+        self.assertEqual(
+            f"{plain.getheader('Location')}&reveal=question", response.getheader("Location")
+        )
+
+    def test_asking_for_a_question_changes_no_other_answer(self) -> None:
+        response = self.get("/open/questions?reveal=question")
+        response.read()
+        self.assertEqual("/modules/planning/global?panel=questions", response.getheader("Location"))
+        self.assert_shell_says_why("/open/MAIN-99?reveal=question")
+        self.assert_shell_says_why("/open/QUESTIONS?reveal=question")
+
+    def test_the_route_it_may_redirect_to_is_written_whole(self) -> None:
+        match = http_surface._CARD_ROUTE.fullmatch
+        self.assertIsNotNone(match(TWIN_ROUTE))
+        self.assertIsNotNone(match(f"{TWIN_ROUTE}&reveal=question"))
+        for route in (
+            f"{TWIN_ROUTE}&reveal=other",
+            f"{TWIN_ROUTE}&reveal=question&x=1",
+            f"{TWIN_ROUTE}&reveal=question&reveal=question",
+            f"{TWIN_ROUTE}&reveal=question\r\nX: y",
+            f"{TWIN_ROUTE}?reveal=question",
+            "/modules/planning/global?panel=questions&reveal=question",
+            "/modules/planning/project/example-project?reveal=question",
+        ):
+            with self.subTest(route=route):
+                self.assertIsNone(match(route))
+
     def test_the_reserved_word_is_one_exact_spelling(self) -> None:
         for path in ("/open/QUESTIONS", "/open/Questions", "/open/questions/x", "/open/question"):
             self.assert_shell_says_why(path)
@@ -411,6 +476,18 @@ class WorkItemLinkInAppTests(LinkedStoreCase):
         assert isinstance(environment, dict)
         self.assertNotIn("ELECTRON_RUN_AS_NODE", environment)
         self.assertEqual(str(self.server.server_port), environment["VALKAMA_PORT"])
+
+    @unittest.skipUnless(sys.platform == "win32", "the app is looked for only on Windows")
+    def test_a_person_s_click_that_asks_for_the_question_carries_that_to_the_app(self) -> None:
+        route = self.card_route("/open/MAIN-1")
+        response = self.get("/open/MAIN-1?reveal=question", headers=PERSON)
+        body = response.read().decode("utf-8")
+        self.assertEqual(200, response.status)
+        [(argv, _options)] = self.started
+        self.assertEqual([str(self.app), f"--open-path={route}&reveal=question"], argv)
+        # Opening it here instead means the same. The page's script takes the address from
+        # this attribute, which the parser hands back with its ampersand.
+        self.assertIn('href="/open/MAIN-1?in=browser&amp;reveal=question"', body)
 
     @unittest.skipUnless(sys.platform == "win32", "the app is looked for only on Windows")
     def test_a_person_s_click_on_the_panel_address_starts_the_app_on_the_panel(self) -> None:
@@ -636,11 +713,13 @@ class DesktopContractTests(unittest.TestCase):
         assert found is not None
         pattern = found.group(1).replace(r"\/", "/")
         spelled = planning_model._HUMAN_ID.pattern.strip("^$").replace("(", "").replace(")", "")
+        reveal = messages.REVEAL_QUESTION
         self.assertEqual(
-            f"{messages.launch_uri('')}({messages.QUESTIONS}|{spelled})",
+            f"{messages.launch_uri('')}(?:({messages.QUESTIONS})|({spelled})(\\?{reveal})?)",
             pattern,
         )
         self.assertEqual(desktop_app.QUESTIONS, messages.QUESTIONS)
+        self.assertEqual(desktop_app.REVEAL_QUESTION, reveal)
 
 
 class WorkItemUrlTests(unittest.TestCase):

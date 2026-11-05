@@ -1015,7 +1015,9 @@ listener answers a notification's one question without loading the server.
 
 **What it does:**
 
-- A click opens the item. Several items within a few seconds become one notification,
+- A click opens the item; a click on a notification about a question goes on to that
+  question, with the keyboard on its first field. Several items within a few seconds become
+  one notification,
   and a click on that one opens the panel «Needs my answer» when any of them is a question.
 - A question already on your screen, in a focused Valkama page, shows nothing. Another
   screen in the same window does not count as showing it.

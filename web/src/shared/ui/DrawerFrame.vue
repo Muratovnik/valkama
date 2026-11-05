@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import { useEventListener, useResizeObserver } from '@vueuse/core'
 
@@ -76,6 +76,10 @@ useEventListener(window, 'blur', pressOver)
 const tabsHeight = ref(0)
 useResizeObserver(tabs, (entries) => {
   tabsHeight.value = entries[0]?.borderBoxSize[0]?.blockSize ?? 0
+})
+// The observer first answers at the next paint, and a host may scroll before that.
+watch(tabs, (element) => (tabsHeight.value = element?.getBoundingClientRect().height ?? 0), {
+  flush: 'post',
 })
 const scrollPadding = computed(() => ({ scrollPaddingBlockStart: `${tabsHeight.value}px` }))
 

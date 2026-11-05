@@ -539,6 +539,22 @@ and takes the parameter out of the address, so a reload or Back does not open it
 after it was closed. A window already showing a current page opens the panel over what
 it shows and does not move, so a draft stays where it is.
 
+### The card's waiting question
+
+`/open/<reference>?reveal=question` leads to the card as the plain address does, under the
+same conditions, and asks it to go on to the question still waiting there. The route gets
+`&reveal=question`, written by the server and never copied from the request. Any other value
+or a repeated key is dropped and the card opens as usual; the rest of the query never reaches
+the route, and `/open/questions` ignores the parameter.
+
+This is an order to the page too. The page takes it out of the address before it obeys, so a
+reload or Back opens the card without moving. It obeys once the card, its chain and a fresh
+read of its questions have answered: the question comes into view under the tabs with the
+keyboard on its first field, whichever section the card showed. A question answered or closed
+by then leaves the card simply opened. A window already on this card obeys though its address
+does not change, and a window on another card asks about a draft first and drops the order if
+the draft is kept.
+
 ### The `valkama:` scheme
 
 The desktop installer registers `valkama:` for the user in `HKCU\Software\Classes` and
@@ -547,20 +563,22 @@ after the process that showed the notification has exited and with nothing liste
 the port: the app starts the server itself. Without the app there are no notifications,
 so there is no fallback through a browser.
 
-The app takes two addresses and treats a page calling the scheme like any other caller:
+The app takes three addresses and treats a page calling the scheme like any other caller:
 
 | Address | What the window does |
 | --- | --- |
 | `valkama://open/<REFERENCE>` | opens the card; the reference is in upper case, as Valkama writes it |
+| `valkama://open/<REFERENCE>?reveal=question` | opens the card at its waiting question; a notification about a question opens this |
 | `valkama://open/questions` | opens the panel of open questions |
 
-Anything else is refused: another host, an extra path, a query, a fragment, a percent
+Anything else is refused: another host, an extra path, any other query, a fragment, a percent
 escape, a lower-case reference, or a command line holding a second address. The process
 exits without a window and does not raise a running one. Windows starts the app before
 anything can read the address, so a refused launch still starts a process briefly.
 
 The app knows only the number, so it reads the card's route from
-`/open/<REFERENCE>?in=browser`, which starts nothing. At first start the window loads
+`/open/<REFERENCE>?in=browser`, with `&reveal=question` when the address asked for it, which
+starts nothing. At first start the window loads
 that address. A page already up asks for it and moves with its own router, as it does
 for a route the listener hands over; a number that leads nowhere is shown by the app page
 at that address.

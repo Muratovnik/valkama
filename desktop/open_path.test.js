@@ -102,6 +102,56 @@ test('a toast names an item or the panel, and either reaches the window as a rou
   assert.equal(refusesLaunch(['Valkama.exe', 'valkama://open/questions']), false)
 })
 
+test('a toast about a question asks for the question, in one spelling', () => {
+  const address = 'valkama://open/MAIN-12?reveal=question'
+  assert.equal(openPathFromArgv(['Valkama.exe', address]), '/open/MAIN-12?in=browser&reveal=question')
+  assert.equal(
+    openPathFromArgv(['Valkama.exe', '--no-sandbox', address, '--flag']),
+    '/open/MAIN-12?in=browser&reveal=question',
+  )
+  assert.equal(refusesLaunch(['Valkama.exe', address]), false)
+  for (const refused of [
+    'valkama://open/questions?reveal=question',
+    'valkama://open/MAIN-12?reveal=other',
+    'valkama://open/MAIN-12?reveal=',
+    'valkama://open/MAIN-12?reveal',
+    'valkama://open/MAIN-12?Reveal=question',
+    'valkama://open/MAIN-12?reveal=QUESTION',
+    'valkama://open/MAIN-12?reveal=question&x=1',
+    'valkama://open/MAIN-12?x=1&reveal=question',
+    'valkama://open/MAIN-12?reveal=question&reveal=question',
+    'valkama://open/MAIN-12?reveal=question#x',
+    'valkama://open/MAIN-12?in=browser&reveal=question',
+    'valkama://open/MAIN-12?reveal=question%0d%0a',
+    'valkama://open/MAIN-12?reveal=question\n',
+    'valkama://open/MAIN-12/?reveal=question',
+    'valkama://open/main-12?reveal=question',
+  ]) {
+    assert.equal(openPathFromArgv(['Valkama.exe', refused]), null, refused)
+    assert.equal(refusesLaunch(['Valkama.exe', refused]), true, refused)
+  }
+  // Split or doubled, as with any other address.
+  const doubled = ['Valkama.exe', address, address]
+  assert.equal(openPathFromArgv(doubled), null)
+  assert.equal(refusesLaunch(doubled), true)
+})
+
+test('the listener may ask for the question on the route it hands to the app', () => {
+  const route = `${ROUTE}&reveal=question`
+  assert.equal(openPathFromArgv(['Valkama.exe', `--open-path=${route}`]), route)
+  for (const refused of [
+    `${ROUTE}&reveal=other`,
+    `${ROUTE}&reveal=question&x=1`,
+    `${ROUTE}&x=1&reveal=question`,
+    `${ROUTE}&reveal=question&reveal=question`,
+    `${ROUTE}&reveal=question\n`,
+    '/modules/planning/global?panel=questions&reveal=question',
+    '/modules/planning/project/example-project?reveal=question',
+  ]) {
+    assert.equal(openPathFromArgv(['Valkama.exe', `--open-path=${refused}`]), null, refused)
+  }
+})
+
 test('any other scheme address opens nothing, and the launch does not touch the window', () => {
   for (const address of [
     'valkama:',

@@ -18,6 +18,8 @@ const props = defineProps<{
   locale: string
   moduleTitle: string
   primaryWriteScopeId: string | null
+  /** An address asked the card on show to go to its waiting question. */
+  questionAsked: boolean
   route: PlatformRoute
   scope: OperatingScope
   /** The active manifest's bound on the route state a module writes. */
@@ -29,6 +31,7 @@ const emit = defineEmits<{
   'locale': [value: string]
   'notice': [message: string]
   'open-project': [projectId: string, moduleId?: ModuleId]
+  'question-taken': []
   'state': [state: Record<string, string | number | boolean>]
 }>()
 const SettingsView = settingsView.component
@@ -51,7 +54,9 @@ defineExpose({ openCardId, refresh })
     :route="route"
     :context="context"
     :primary-write-scope-id="primaryWriteScopeId"
+    :question-asked="questionAsked"
     :state-bytes="stateBytes"
+    @question-taken="emit('question-taken')"
     @connection="(state) => emit('connection', state)"
     @entity="(entity) => emit('entity', entity)"
     @state="(state) => emit('state', state)"
