@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fetchItemUsage, fetchSessionUsage } from '@/shared/api/planningUsageApi.ts'
 
 import { noUsage, richUsage, sessionUsage, usageAnswer } from './fixtures/usage.ts'
-import { withSecurityBootstrap } from './support/request.ts'
+import { requestUrl, withSecurityBootstrap } from './support/request.ts'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -17,7 +17,7 @@ function serve(payload: unknown, status = 200) {
     'fetch',
     vi.fn<typeof fetch>().mockImplementation(
       withSecurityBootstrap(async (input) => {
-        asked.push(new URL(String(input), 'http://127.0.0.1'))
+        asked.push(new URL(requestUrl(input), 'http://127.0.0.1'))
         return new Response(JSON.stringify(payload), { status })
       }),
     ),

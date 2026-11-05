@@ -64,7 +64,7 @@ export function useInspectorRecord(
     reference: () => props.reference,
   })
 
-  return useWorkItemResource(
+  const resource = useWorkItemResource(
     () => props.reference,
     () => ({ project: props.projectId, resource: props.resourceRef }),
     failureReason,
@@ -73,6 +73,8 @@ export function useInspectorRecord(
       await read.settled()
     },
   )
+  /** The runs the read counts, which the card's count of agents takes in with its record's. */
+  return { ...resource, spent: computed(() => read.usage.value?.agents ?? []) }
 }
 
 /** The card's usage reads; none in a part drawn outside a card. */

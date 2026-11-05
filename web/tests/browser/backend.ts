@@ -15,7 +15,7 @@ import type { Page } from '@playwright/test'
 import { planningSpaceEntity } from '@/shared/api/platformPlanningRefs.ts'
 
 import { chainResponse, emptyChain } from '../fixtures/chain.ts'
-import { noUsage, usageAnswer } from '../fixtures/usage.ts'
+import { noSessionUsage, noUsage, usageAnswer } from '../fixtures/usage.ts'
 import { requestList } from '../support/inputRequests.ts'
 import { moduleRegistrations } from '../support/moduleRegistrations.ts'
 import { ALERT_SETTINGS, ALERT_STATUS_READY, TRIAL_SHOWN } from './alertsFixtures.ts'
@@ -189,6 +189,7 @@ export async function installBackend(page: Page, options: BackendOptions = {}) {
           ),
         // Nobody's work has reached these items unless a test says so.
         '/api/planning/work-item/usage': () => fulfill(usageAnswer(noUsage())),
+        '/api/planning/session/usage': () => fulfill(usageAnswer(noSessionUsage())),
         '/api/planning/activity': () =>
           fulfill({ interface_version: 'valkama-planning-api', activity: activityRows() }),
         '/api/sessions': () => fulfill({ sessions: structuredClone(monitorSessions), inbox: [] }),

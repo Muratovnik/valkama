@@ -18,12 +18,25 @@
  * one item, and they are what the tab is opened for. The rows stand under the parent session they all open, whose way
  * back stands once at their head: in each row it was the same button down the whole list. Two
  * parents' heads can read alike, so where there are two each says which session it is.
+ *
+ * It is also where a card says how much work the item took. The whole of it stands at the head,
+ * the session's under the session's way back, and each agent's beside its name, in columns the
+ * group shares so that they compare down the list. Those who spent something on the item come
+ * first, whether the record names them or not: the session's own run, which no row of the record
+ * is, and on an epic everyone who worked under it.
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { agentFacts, agentsByParent } from '@/widgets/work-item-inspector/utils/agentFacts.ts'
+import AgentSessionUsage from '@/widgets/work-item-inspector/components/AgentSessionUsage.vue'
+import AgentsUsageSummary from '@/widgets/work-item-inspector/components/AgentsUsageSummary.vue'
+import UsageFacts from '@/widgets/work-item-inspector/components/UsageFacts.vue'
+import { agentFacts } from '@/widgets/work-item-inspector/utils/agentFacts.ts'
 import type { TimeWords } from '@/widgets/work-item-inspector/utils/agentFacts.ts'
+import { agentRowGroups } from '@/widgets/work-item-inspector/utils/agentUsage.ts'
+import { injectInspectorUsage } from '@/widgets/work-item-inspector/utils/useInspectorRecord.ts'
+import { useSessionUsage } from '@/widgets/work-item-inspector/utils/useSessionUsage.ts'
+import { isEstimated, useUsageWords } from '@/widgets/work-item-inspector/utils/useUsageWords.ts'
 
 import OpenAction from '@/features/session-open/OpenAction.vue'
 
@@ -34,6 +47,8 @@ import RichText from '@/shared/ui/RichText.vue'
 const props = defineProps<{ agents: readonly WorkItemAgent[] }>()
 
 const { t, d } = useI18n()
+const usage = injectInspectorUsage()?.read
+const { figures } = useUsageWords()
 
 /**
  * What «3 minutes ago» is measured from. It moves on its own only while a row
@@ -98,34 +113,61 @@ function groupAmbiguity(agents: readonly WorkItemAgent[]): string {
     : t('workItem.agents.linkAmbiguousRange', { from, to }, to)
 }
 
+const spent = computed(() => usage?.usage.value)
+const estimated = computed(() => Boolean(spent.value && isEstimated(spent.value)))
+
 const groups = computed(() =>
-  agentsByParent(props.agents).map((group) => ({
+  agentRowGroups(props.agents, spent.value?.agents ?? []).map((group) => ({
     ...group,
     ambiguity: groupAmbiguity(group.agents),
-    rows: group.agents.map((agent) => ({
+    spends: group.rows.some((row) => row.spent),
+    rows: group.rows.map(({ agent, key, spent: run }) => ({
+      key,
       agent,
-      ambiguous: isAmbiguous(agent),
-      facts: agentFacts(agent, now.value, words.value),
-      link: linkWords(agent),
-      /** The exact count of an ambiguous row, which the group's line does not repeat. */
-      hint: isAmbiguous(agent) ? linkWords(agent) : undefined,
+      /** The run's short id, where the record names no agent to call it by. */
+      runId: run?.agent_id?.slice(0, 8) ?? '',
+      figures: run ? figures({ ...run }, estimated.value) : [],
+      ...(agent
+        ? {
+            ambiguous: isAmbiguous(agent),
+            facts: agentFacts(agent, now.value, words.value),
+            link: linkWords(agent),
+            /** The exact count of an ambiguous row, which the group's line does not repeat. */
+            hint: isAmbiguous(agent) ? linkWords(agent) : undefined,
+          }
+        : { ambiguous: false, facts: null, link: '', hint: undefined }),
     })),
   })),
 )
+
+const sessions = useSessionUsage(
+  () => (usage ? groups.value.map((group) => group.usageSession) : []),
+  () => usage?.version.value ?? 0,
+)
+
+type Group = (typeof groups.value)[number]
+/** What the group's session took as a whole, once its read has answered. */
+const sessionOf = (group: Group) => sessions.answers.value.get(group.usageSession) ?? null
+const sessionWaits = (group: Group) => sessions.waiting.value.has(group.usageSession)
+/** Figures stand in the group's columns where any of its rows, or its session, has some. */
+const hasUsage = (group: Group) => group.spends || sessionOf(group) !== null
 </script>
 
 <template>
   <div class="agents">
+    <AgentsUsageSummary />
     <div
       v-for="group in groups"
       :key="group.session"
       class="agent-group"
+      :class="{ 'has-usage': hasUsage(group) }"
     >
       <div
-        v-if="group.executor?.session"
+        v-if="group.executor?.session || groups.length > 1"
         class="agent-group-head"
       >
         <OpenAction
+          v-if="group.executor?.session"
           :session="group.executor.session"
           :executor="group.executor"
           :action="t('open.action.parent')"
@@ -138,6 +180,10 @@ const groups = computed(() =>
           >{{ group.shortSession }}</span
         >
       </div>
+      <AgentSessionUsage
+        :session="sessionOf(group)"
+        :waiting="sessionWaits(group)"
+      />
       <p
         v-if="group.ambiguity"
         class="agent-group-link"
@@ -146,98 +192,121 @@ const groups = computed(() =>
       </p>
       <ul class="agent-list">
         <li
-          v-for="{ agent, ambiguous, facts, hint, link } in group.rows"
-          :key="`${agent.session_id}:${agent.agent_id}`"
+          v-for="{
+            agent,
+            ambiguous,
+            facts,
+            figures: spentFigures,
+            hint,
+            key,
+            link,
+            runId,
+          } in group.rows"
+          :key="key"
           class="agent"
           :title="hint"
           :aria-description="hint"
         >
           <RichText
-            v-if="agent.label"
+            v-if="agent?.label"
             class="agent-name"
             :source="agent.label"
             inline
           />
           <span
-            v-else
+            v-else-if="agent"
             class="agent-name"
             :class="{ 'agent-id': !agent.agent_type }"
-            >{{ agent.agent_type || facts.shortId }}</span
+            >{{ agent.agent_type || facts?.shortId }}</span
           >
-          <p
-            v-for="step in agent.steps"
-            :key="step.id"
-            class="agent-step"
+          <span
+            v-else
+            class="agent-name"
+            :class="{ 'agent-id': runId }"
+            >{{ runId || t('workItem.usage.ownRun') }}</span
           >
-            {{ t('workItem.agents.holdsStep') }}
-            <RichText
-              :source="step.text"
-              inline
-            />
-          </p>
-          <p class="agent-times">
-            <span class="agent-fact">
-              {{ t('workItem.agents.started') }}
-              <time
-                :datetime="facts.started.at"
-                :title="facts.started.full"
-                >{{ facts.started.text }}</time
-              ><template v-if="facts.quiet">, {{ facts.quiet }}</template>
-            </span>
-            <span
-              v-if="facts.ended"
-              class="agent-fact"
+          <UsageFacts
+            v-if="spentFigures.length"
+            class="agent-spent"
+            :facts="spentFigures"
+            columns
+          />
+          <template v-if="agent && facts">
+            <p
+              v-for="step in agent.steps"
+              :key="step.id"
+              class="agent-step"
             >
-              {{ t('workItem.agents.ended') }}
-              <time
-                :datetime="facts.ended.at"
-                :title="facts.ended.full"
-                >{{ facts.ended.text }}</time
+              {{ t('workItem.agents.holdsStep') }}
+              <RichText
+                :source="step.text"
+                inline
+              />
+            </p>
+            <p class="agent-times">
+              <span class="agent-fact">
+                {{ t('workItem.agents.started') }}
+                <time
+                  :datetime="facts.started.at"
+                  :title="facts.started.full"
+                  >{{ facts.started.text }}</time
+                ><template v-if="facts.quiet">, {{ facts.quiet }}</template>
+              </span>
+              <span
+                v-if="facts.ended"
+                class="agent-fact"
               >
-            </span>
-            <span
-              v-else-if="facts.activity"
-              class="agent-fact"
-            >
-              {{ t('workItem.agents.lastActivity') }}
-              <time
-                :datetime="facts.activity.at"
-                :title="facts.activity.full"
-                >{{ facts.activity.text }}</time
-              >, {{ facts.ago }}
-            </span>
-            <span
-              v-else
-              class="agent-fact"
-              >{{ t('workItem.agents.noSignal') }}</span
-            >
-            <span
-              v-if="facts.elapsed"
-              class="agent-fact"
-              >{{ t('workItem.agents.fromStart', { time: facts.elapsed }) }}</span
-            >
-          </p>
-          <p class="agent-source">
-            <span
-              v-if="agent.label && agent.agent_type"
-              class="agent-fact"
-              >{{ agent.agent_type }}</span
-            >
-            <span
-              v-if="agent.label || agent.agent_type"
-              class="agent-fact"
-              ><span
-                class="agent-id"
-                :title="agent.agent_id"
-                >{{ facts.shortId }}</span
-              ></span
-            >
-            <span
-              v-if="!ambiguous"
-              class="agent-fact"
-              >{{ link }}</span
-            >
-          </p>
+                {{ t('workItem.agents.ended') }}
+                <time
+                  :datetime="facts.ended.at"
+                  :title="facts.ended.full"
+                  >{{ facts.ended.text }}</time
+                >
+              </span>
+              <span
+                v-else-if="facts.activity"
+                class="agent-fact"
+              >
+                {{ t('workItem.agents.lastActivity') }}
+                <time
+                  :datetime="facts.activity.at"
+                  :title="facts.activity.full"
+                  >{{ facts.activity.text }}</time
+                >, {{ facts.ago }}
+              </span>
+              <span
+                v-else
+                class="agent-fact"
+                >{{ t('workItem.agents.noSignal') }}</span
+              >
+              <span
+                v-if="facts.elapsed"
+                class="agent-fact"
+                >{{ t('workItem.agents.fromStart', { time: facts.elapsed }) }}</span
+              >
+            </p>
+            <p class="agent-source">
+              <span
+                v-if="agent.label && agent.agent_type"
+                class="agent-fact"
+                >{{ agent.agent_type }}</span
+              >
+              <span
+                v-if="agent.label || agent.agent_type"
+                class="agent-fact"
+                ><span
+                  class="agent-id"
+                  :title="agent.agent_id"
+                  >{{ facts.shortId }}</span
+                ></span
+              >
+              <span
+                v-if="!ambiguous"
+                class="agent-fact"
+                >{{ link }}</span
+              >
+            </p>
+          </template>
         </li>
       </ul>
     </div>
@@ -250,10 +319,22 @@ const groups = computed(() =>
   gap: var(--space-8);
 }
 
+/* Where the group's figures stand in columns they are the grid's, so that they compare down the
+   list; everything else in the group takes the whole width. */
 .agent-group {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-heading-content);
   min-width: 0;
+
+  &.has-usage {
+    grid-template-columns: minmax(0, 1fr) repeat(3, auto);
+    column-gap: var(--space-3);
+  }
+
+  > * {
+    grid-column: 1 / -1;
+  }
 }
 
 .agent-group-head {
@@ -279,7 +360,8 @@ const groups = computed(() =>
 
 .agent-list {
   display: grid;
-  gap: var(--space-4);
+  grid-template-columns: subgrid;
+  row-gap: var(--space-4);
   padding: 0;
   margin: 0;
   list-style: none;
@@ -289,14 +371,37 @@ const groups = computed(() =>
    them would be one more divider on a card that holds few. */
 .agent {
   display: grid;
-  gap: var(--space-1);
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  row-gap: var(--space-1);
+  align-items: baseline;
   min-width: 0;
+
+  > * {
+    grid-column: 1 / -1;
+  }
 }
 
 .agent-name {
   color: var(--color-text);
   font: var(--font-field-label);
   overflow-wrap: anywhere;
+}
+
+/* What it spent, in the quiet ink of the row's facts. */
+.agent-spent {
+  color: var(--color-text-muted);
+  font: var(--font-detail);
+}
+
+@container drawer (width >= 560px) {
+  .agent-name:has(+ .agent-spent) {
+    grid-column: 1;
+  }
+
+  .agent-spent {
+    grid-column: 2 / -1;
+  }
 }
 
 .agent-step {

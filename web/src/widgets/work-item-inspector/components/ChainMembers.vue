@@ -13,10 +13,13 @@
  * list grows below where the reader was; «Show fewer», at the end of the list,
  * closes it again and returns focus to itself. The toggle stays mounted through
  * both, which is what kept focus from falling to the page when it vanished.
+ *
+ * On an epic a row says under its title that member's share of the epic's work.
  */
 import { computed, nextTick, reactive, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import ChainMemberUsage from '@/widgets/work-item-inspector/components/ChainMemberUsage.vue'
 import { rowStateName } from '@/widgets/work-item-inspector/utils/chainSummary.ts'
 import type { ChainGroups, GroupLabels } from '@/widgets/work-item-inspector/utils/chainSummary.ts'
 import type { MembersView } from '@/widgets/work-item-inspector/utils/inspectorReturn.ts'
@@ -260,6 +263,10 @@ defineExpose({ restoreView, reveal, view })
                 class="chain-row-detail"
                 >{{ stateWord(group, member) }}</span
               >
+              <ChainMemberUsage
+                class="chain-row-usage"
+                :member="member.work_item_id"
+              />
             </button>
           </li>
         </ul>
@@ -390,6 +397,12 @@ defineExpose({ restoreView, reveal, view })
   align-self: center;
 }
 
+.chain-row-usage {
+  grid-row: 2;
+  grid-column: 2 / -1;
+  color: var(--color-text-tertiary);
+}
+
 .chain-row-detail {
   grid-column: 4;
   max-width: 14ch;
@@ -419,17 +432,23 @@ defineExpose({ restoreView, reveal, view })
   .chain-row-detail {
     grid-row: 1;
   }
+
+  .chain-row:has(.chain-row-waiting) .chain-row-usage {
+    grid-row: 3;
+  }
 }
 
 /* Who holds a task gives way altogether at a phone's width, where the holder took a
    third of the row, and the card names it. A state word stands under the title too. */
 @container chain-members (width < 480px) {
   .chain-row-title,
-  .chain-row-detail {
+  .chain-row-detail,
+  .chain-row-usage {
     grid-column: 2 / -1;
   }
 
-  .chain-row-detail {
+  .chain-row-detail,
+  .chain-row-usage {
     grid-row: auto;
     max-width: none;
   }

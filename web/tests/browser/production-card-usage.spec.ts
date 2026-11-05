@@ -12,6 +12,7 @@ import { serializePlatformRoute } from '@/shared/api/platformRoute.ts'
 import { noUsage, richUsage, usageAnswer } from '../fixtures/usage.ts'
 import { deferred } from '../fixtures/workItem.ts'
 import { installBackend } from './backend.ts'
+import { largeChainHere, serve } from './chainFixtures.ts'
 import { expectNoSilentClipping } from './overflow.ts'
 import { attachedWorkItemRef, projectScope, workItemRef } from './planningFixtures.ts'
 import { installStreamDouble } from './streamDouble.ts'
@@ -208,4 +209,49 @@ test('an item of an attached store asks nothing of a read that answers for the p
   await expect(page.locator('.drawer .overview')).toBeVisible()
   await expect(line(page)).toHaveCount(0)
   expect(asked).toEqual([])
+})
+
+/** A member of the chain with work under way, which its open groups list. */
+function workUnderWay(chain: ReturnType<typeof largeChainHere>) {
+  const member = chain.members.find((entry) => entry.state.category === 'active')
+  if (!member) throw new Error('the chain has work under way')
+  return member
+}
+
+test('an epic reads its whole scope, and each member of its chain says its share', async ({
+  page,
+}) => {
+  const chain = largeChainHere()
+  const member = workUnderWay(chain)
+  await installBackend(page, { card: (read) => ({ ...read, kind: 'epic' }) })
+  await serve(page, chain)
+  const asked = await serveUsage(
+    page,
+    fulfil(
+      richUsage({
+        scope: 'epic',
+        by_item: [
+          ...richUsage().by_item,
+          {
+            work_item_id: member.work_item_id,
+            reference: member.reference,
+            title: member.title,
+            elapsed_seconds: 8280,
+            agent_seconds: 9000,
+            tokens: richUsage().tokens,
+            estimated_api_cost_usd: 34.89,
+          },
+        ],
+      }),
+    ),
+  )
+  await page.goto(CARD)
+  await expect(line(page)).toContainText('Work on the epic')
+  expect(asked.at(-1)?.searchParams.get('scope')).toBe('epic')
+  const row = page.locator(`.drawer .chain-row[data-reference="${member.reference}"]`)
+  await expect(row.locator('.chain-row-usage')).toHaveText(
+    /≈\u{A0}2\u{A0}h\u{A0}18\u{A0}min\s*≈\u{A0}\$34\.89/u,
+  )
+  // A member nobody worked on says nothing, not a zero.
+  await expect(page.locator('.drawer .chain-row-usage')).toHaveCount(1)
 })

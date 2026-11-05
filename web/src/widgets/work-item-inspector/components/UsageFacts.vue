@@ -30,7 +30,8 @@ withDefaults(
         v-if="fact.label"
         class="usage-fact-label"
         >{{ fact.label }}</span
-      >{{ fact.text }}</span
+      >
+      {{ fact.text }}</span
     >
   </span>
 </template>
@@ -60,7 +61,6 @@ withDefaults(
 }
 
 .usage-fact-label {
-  margin-inline-end: var(--space-2);
   color: var(--color-text-tertiary);
 }
 

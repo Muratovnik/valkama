@@ -49,6 +49,7 @@ import InspectorRelations from '@/widgets/work-item-inspector/components/Inspect
 import InspectorTabs from '@/widgets/work-item-inspector/components/InspectorTabs.vue'
 import InspectorTitle from '@/widgets/work-item-inspector/components/InspectorTitle.vue'
 import InspectorWriteActions from '@/widgets/work-item-inspector/components/InspectorWriteActions.vue'
+import { agentCount } from '@/widgets/work-item-inspector/utils/agentUsage.ts'
 import type { InspectorReturn } from '@/widgets/work-item-inspector/utils/inspectorReturn.ts'
 import { inspectorTarget } from '@/widgets/work-item-inspector/utils/inspectorTarget.ts'
 import { provideDraftGuard } from '@/widgets/work-item-inspector/utils/useDraftGuard.ts'
@@ -134,6 +135,7 @@ const {
   missing,
   pending,
   retryable: readRetryable,
+  spent,
   state,
 } = useInspectorRecord(props, (failure) => failureText(failure, 'workItem.loadFailed'))
 
@@ -141,7 +143,7 @@ const { offersExecution, section, sections, shownSection, tabs } = useInspectorS
   () => props.writable,
   () => frame.value?.scrollToContent(),
   () => props.projectId,
-  () => (pending.value ? null : (item.value?.agents?.length ?? 0)),
+  () => (pending.value ? null : agentCount(item.value?.agents ?? [], spent.value)),
 )
 
 async function load() {

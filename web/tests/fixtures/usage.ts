@@ -9,7 +9,7 @@ import type {
   UsageTokens,
 } from '@/shared/api/planningUsageApi.ts'
 
-export const WORK_ITEM_ID = '00000000-0000-4000-8000-000000000012'
+const WORK_ITEM_ID = '00000000-0000-4000-8000-000000000012'
 export const PARENT_SESSION = '6f1c2a8e-0000-4000-8000-000000000001'
 
 const COST_BASIS =
@@ -33,7 +33,7 @@ export const SPENT: UsageTokens = {
   reasoning: 600_000,
 }
 
-export function usageLine(overrides: Partial<UsageLine> = {}): UsageLine {
+function usageLine(overrides: Partial<UsageLine> = {}): UsageLine {
   return {
     work_item_id: WORK_ITEM_ID,
     reference: 'MAIN-12',
@@ -158,6 +158,25 @@ export function sessionUsage(overrides: Partial<SessionUsage> = {}): SessionUsag
     ],
     ...overrides,
   }
+}
+
+/** What the read says of a session it has not read yet: empty rather than unknown. */
+export function noSessionUsage(): SessionUsage {
+  return sessionUsage({
+    elapsed_seconds: 0,
+    agent_seconds: 0,
+    tokens: NO_TOKENS,
+    estimated_api_cost_usd: null,
+    agents: [],
+    models: [],
+    signals: [],
+    quality: null,
+    estimated_seconds: 0,
+    first_at: null,
+    last_at: null,
+    runs: [],
+    by_item: [],
+  })
 }
 
 export const usageAnswer = (usage: ItemUsage | SessionUsage) => ({
